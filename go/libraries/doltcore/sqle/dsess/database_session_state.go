@@ -15,6 +15,8 @@
 package dsess
 
 import (
+	"strings"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -57,6 +59,9 @@ type DatabaseSessionState struct {
 
 	TblStats map[string]sql.TableStatistics
 
+	// cache of indexes
+	indexCache map[doltdb.DataCacheKey]map[string][]sql.Index
+
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a
 	// DatabaseSessionState with Err != nil will return that err.
@@ -76,6 +81,38 @@ func (d DatabaseSessionState) GetRoots() doltdb.Roots {
 		Working: d.WorkingSet.WorkingRoot(),
 		Staged:  d.WorkingSet.StagedRoot(),
 	}
+}
+
+func (d *DatabaseSessionState) CacheTableIndexes(key doltdb.DataCacheKey, table string, indexes []sql.Index) {
+	table = strings.ToLower(table)
+
+	if d.indexCache == nil {
+		d.indexCache = make(map[doltdb.DataCacheKey]map[string][]sql.Index)
+	}
+
+	tableIndexes, ok := d.indexCache[key]
+	if !ok {
+		tableIndexes = make(map[string][]sql.Index)
+		d.indexCache[key] = tableIndexes
+	}
+
+	tableIndexes[table] = indexes
+}
+
+func (d *DatabaseSessionState) GetTableIndexesCache(key doltdb.DataCacheKey, table string) ([]sql.Index, bool) {
+	table = strings.ToLower(table)
+
+	if d.indexCache == nil {
+		return nil, false
+	}
+
+	tableIndexes, ok := d.indexCache[key]
+	if !ok {
+		return nil, false
+	}
+
+	indexes, ok := tableIndexes[table]
+	return indexes, ok
 }
 
 func (d DatabaseSessionState) EditOpts() editor.Options {

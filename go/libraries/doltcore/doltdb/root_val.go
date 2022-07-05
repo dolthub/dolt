@@ -1561,9 +1561,14 @@ func (r fbRvStorage) nomsValue() types.Value {
 }
 
 type DataCacheKey struct {
-	rv *RootValue
+	hash.Hash
 }
 
-func NewDataCacheKey(rv *RootValue) DataCacheKey {
-	return DataCacheKey{rv}
+func NewDataCacheKey(rv *RootValue) (DataCacheKey, error) {
+	hash, err := rv.HashOf()
+	if err != nil {
+		return DataCacheKey{}, err
+	}
+
+	return DataCacheKey{hash}, nil
 }

@@ -248,7 +248,12 @@ func (t *DoltTable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, e
 	if err != nil {
 		return doltdb.DataCacheKey{}, false, err
 	}
-	return doltdb.NewDataCacheKey(r), true, nil
+	key, err := doltdb.NewDataCacheKey(r)
+	if err != nil {
+		return doltdb.DataCacheKey{}, false, err
+	}
+
+	return key, true, nil
 }
 
 func (t *DoltTable) workingRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
@@ -267,12 +272,46 @@ func (t *DoltTable) getRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 
 // GetIndexes implements sql.IndexedTable
 func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	key, ok, err := t.DataCacheKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		tbl, err := t.DoltTable(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return index.DoltIndexesFromTable(ctx, t.db.Name(), t.tableName, tbl)
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.Name())
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, fmt.Errorf("couldn't find db state for database %s", t.db.Name())
+	}
+
+	indexes, ok := dbState.GetTableIndexesCache(key, t.Name())
+	if ok {
+		return indexes, nil
+	}
+
 	tbl, err := t.DoltTable(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return index.DoltIndexesFromTable(ctx, t.db.Name(), t.tableName, tbl)
+	indexes, err = index.DoltIndexesFromTable(ctx, t.db.Name(), t.tableName, tbl)
+	if err != nil {
+		return nil, err
+	}
+
+	dbState.CacheTableIndexes(key, t.Name(), indexes)
+	return indexes, nil
 }
 
 // HasIndex returns whether the given index is present in the table
