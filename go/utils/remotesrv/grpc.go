@@ -326,7 +326,7 @@ func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRe
 
 	if err != nil {
 		logger(fmt.Sprintf("error occurred during processing of Commit of %s/%s last %s curr: %s details: %v", req.RepoId.Org, req.RepoId.RepoName, lastHash.String(), currHash.String(), err))
-		return nil, status.Errorf(codes.Internal, "failed to rebase: %v", err)
+		return nil, status.Errorf(codes.Internal, "failed to commit: %v", err)
 	}
 
 	logger(fmt.Sprintf("committed %s/%s moved from %s -> %s", req.RepoId.Org, req.RepoId.RepoName, currHash.String(), lastHash.String()))
