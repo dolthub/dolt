@@ -16,6 +16,9 @@ package commands
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -141,12 +144,15 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	return HandleVErrAndExitCode(verr, usagePrt)
 }
 
+// checkoutRemoteBranchOrSuggestNew checks out a new branch guessing the remote branch,
+// if there is a branch with matching name from exactly one remote.
 func checkoutRemoteBranchOrSuggestNew(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
-	if ref, refExists, err := actions.GetRemoteBranchRef(ctx, dEnv.DoltDB, name); err != nil {
+	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dEnv.DoltDB, name)
+	if err != nil {
 		return errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
-	} else if refExists {
-		return checkoutNewBranchFromStartPt(ctx, dEnv, name, ref.String())
-	} else {
+	}
+
+	if len(remoteRefs) == 0 {
 		// Check if the user is trying to enter a detached head state
 		commit, _ := actions.MaybeGetCommit(ctx, dEnv, name)
 		if commit != nil {
@@ -159,6 +165,15 @@ func checkoutRemoteBranchOrSuggestNew(ctx context.Context, dEnv *env.DoltEnv, na
 			return errhand.BuildDError(str, name).Build()
 		}
 		return errhand.BuildDError("error: could not find %s", name).Build()
+	} else if len(remoteRefs) == 1 {
+		verr := checkoutNewBranchFromStartPt(ctx, dEnv, name, remoteRefs[0].String())
+		if verr == nil {
+			verr = setRemoteUpstreamForCheckout(dEnv, remoteRefs[0])
+		}
+		return verr
+	} else {
+		// TODO : add hint of using `dolt checkout --track <remote>/<branch>` when --track flag is supported
+		return errhand.BuildDError("'%s' matched multiple (%v) remote tracking branches", name, len(remoteRefs)).Build()
 	}
 }
 
@@ -235,7 +250,7 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string, force b
 			return bdr.Build()
 		} else if err == doltdb.ErrAlreadyOnBranch {
 			// Being on the same branch shouldn't be an error
-			cli.Printf("Already on branch '%s'", name)
+			cli.Printf("Already on branch '%s'\n", name)
 			return nil
 		} else {
 			bdr := errhand.BuildDError("fatal: Unexpected error checking out branch '%s'", name)
@@ -245,6 +260,35 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string, force b
 	}
 
 	cli.Printf("Switched to branch '%s'\n", name)
+
+	return nil
+}
+
+// setRemoteUpstreamForCheckout sets upstream for checked out branch. This applies `dolt checkout <bn>`,
+// if <bn> matches any remote branch name. This should not happen for `dolt checkout -b <bn>` case.
+func setRemoteUpstreamForCheckout(dEnv *env.DoltEnv, branchRef ref.RemoteRef) errhand.VerboseError {
+	refSpec, err := ref.ParseRefSpecForRemote(branchRef.GetRemote(), branchRef.GetBranch())
+	if err != nil {
+		return errhand.BuildDError(fmt.Errorf("%w: '%s'", err, branchRef.GetRemote()).Error()).Build()
+	}
+
+	src := refSpec.SrcRef(dEnv.RepoStateReader().CWBHeadRef())
+	dest := refSpec.DestRef(src)
+
+	err = dEnv.RepoStateWriter().UpdateBranch(src.GetPath(), env.BranchConfig{
+		Merge: ref.MarshalableRef{
+			Ref: dest,
+		},
+		Remote: branchRef.GetRemote(),
+	})
+	if err != nil {
+		return errhand.BuildDError(err.Error()).Build()
+	}
+	err = dEnv.RepoState.Save(dEnv.FS)
+	if err != nil {
+		return errhand.BuildDError(actions.ErrFailedToSaveRepoState.Error()).AddCause(err).Build()
+	}
+	cli.Printf("branch '%s' set up to track '%s'.\n", src.GetPath(), branchRef.GetPath())
 
 	return nil
 }
