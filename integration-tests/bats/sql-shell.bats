@@ -57,7 +57,7 @@ teardown() {
 
     # check that ./doltcfg/privileges.db does not exist
     run ls .doltcfg
-    [[ "$output" =~ "privileges.db" ]] || false
+    ! [[ "$output" =~ "privileges.db" ]] || false
 
     # create a new user
     run dolt sql <<< "create user new_user;"
@@ -76,69 +76,75 @@ teardown() {
     run ls .doltcfg
     [[ "$output" =~ "privileges.db" ]] || false
 
-    # there shouldn't be any mysql.db files
-    run ls .dolt
-    ! [[ "$output" =~ "mysql.db" ]] || false
-
     # remove mysql.db just in case
     rm -f .dolt/mysql.db
 }
 
-@test "sql-shell: dolt sql shell has mysql db" {
-    # mysql database exists and has privilege tables
-    run dolt sql <<< "show tables from mysql;"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "user" ]] || false
-    [[ "$output" =~ "role_edges" ]] || false
+@test "sql-shell: dolt sql shell specify doltcfg directory" {
+    # remove existing .doltcfg
+    rm -rf .doltcfg
 
     # show users, expect just root user
-    run dolt sql <<< "select user from mysql.user;"
+    run dolt sql --doltcfg-dir=thisisthedoltcfgdir <<< "select user from mysql.user;"
     [[ "$output" =~ "root" ]] || false
     ! [[ "$output" =~ "new_user" ]] || false
 
-    # create a new user, fails when no privilege file is specified
-    run dolt sql <<< "create user new_user;"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "no privilege file specified, to persist users/grants run with --privilege-file=<file_path>" ]] || false
+    # check that .doltcfg does not exist
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
 
-    # there shouldn't be any mysql.db files
-    run ls .dolt
-    ! [[ "$output" =~ "mysql.db" ]] || false
-
-    # remove mysql.db just in case
-    rm -f .dolt/mysql.db
-}
-
-@test "sql-shell: dolt sql shell can create users" {
-    # remove existing privs.db
-    rm -f privs.db
-
-    # mysql database exists and has privilege tables
-    run dolt sql <<< "show tables from mysql;"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "user" ]] || false
-    [[ "$output" =~ "role_edges" ]] || false
-
-    # show users, expect root user
-    run dolt sql <<< "select user from mysql.user;"
-    [[ "$output" =~ "root" ]] || false
-    ! [[ "$output" =~ "new_user" ]] || false
+    # check that custom doltcfg dir exists
+    run ls -a
+    [[ "$output" =~ "thisisthedoltcfgdir" ]] || false
 
     # create a new user
-    run dolt sql --privilege-file=privs.db <<< "create user new_user;"
+    run dolt sql --doltcfg-dir=thisisthedoltcfgdir <<< "create user new_user;"
     [ "$status" -eq 0 ]
 
-    # there is now a privs.db file
-    run ls
-    [[ "$output" =~ "privs.db" ]] || false
-
     # show users, expect root user and new_user
-    run dolt sql --privilege-file=privs.db <<< "select user from mysql.user;"
+    run dolt sql --doltcfg-dir=thisisthedoltcfgdir <<< "select user from mysql.user;"
     [[ "$output" =~ "root" ]] || false
     [[ "$output" =~ "new_user" ]] || false
 
+    # check that ./thisisthedoltcfgdir/privileges.db exists
+    run ls thisisthedoltcfgdir
+    [[ "$output" =~ "privileges.db" ]] || false
+
+    # remove config files
+    rm -rf .doltcfg
+    rm -rf thisisthedoltcfgdir
+}
+
+@test "sql-shell: dolt sql shell specify privilege file" {
+    # remove existing files
+    rm -rf .doltcfg
+    rm -rf privileges.db
+
+    # show users, expect just root user
+    run dolt sql --privilege-file=privileges.db <<< "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    # check that .doltcfg does not exist
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
+
+    # create a new user
+    run dolt sql --privilege-file=privileges.db <<< "create user new_user;"
+    [ "$status" -eq 0 ]
+
+    # show users, expect root user and new_user
+    run dolt sql --privilege-file=privileges.db <<< "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    # check that privileges.db exists
+    run ls
+    [[ "$output" =~ "privileges.db" ]] || false
+
     # remove mysql.db just in case
-    rm -f privs.db
+    rm -rf .doltcfg
+    rm -rf privileges.db
 }
 
 @test "sql-shell: bad sql in sql shell should error" {
