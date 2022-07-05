@@ -204,6 +204,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 // TestDoltMultiSessionBehavior runs tests that exercise multi-session logic on a running SQL server. Statements
 // are sent through the server, from out of process, instead of directly to the in-process engine API.
 func TestDoltMultiSessionBehavior(t *testing.T) {
+	t.Skip("skip for now")
 	testMultiSessionScriptTests(t, DoltBranchMultiSessionScriptTests)
 }
 
