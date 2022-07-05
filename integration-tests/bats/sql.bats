@@ -39,6 +39,60 @@ teardown() {
     teardown_common
 }
 
+@test "sql: dolt sql -q default doltcfg directory" {
+    # remove any previous config directories
+    rm -rf .doltcfg
+
+    # show users, expect just root user
+    run dolt sql -q "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    # check for config directory
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
+
+    # check for no privileges.db file
+    run ls .doltcfg
+    ! [[ "$output" =~ "privileges.db" ]] || false
+
+    # create new_user
+    dolt sql -q "create user new_user"
+
+    # show users, expect root user and new_user
+    run dolt sql -q "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    # check for config directory
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
+
+    # check for no privileges.db file
+    run ls .doltcfg
+    [[ "$output" =~ "privileges.db" ]] || false
+
+    # remove config directory just in case
+    rm -rf .doltcfg
+}
+
+@test "sql: dolt sql -q specify doltcfg dir" {
+    # remove any previous config directories
+    rm -rf .doltcfg
+    rm -rf testdoltcfg
+
+    run dolt sql --doltcfg-dir=testdoltcfgdir -q "show tables from mysql;"
+    [ "$status" -eq 0 ]
+
+    # check for config directory
+    run ls -a
+
+    # remove config directory just in case
+    rm -rf .doltcfg
+}
+
 @test "sql: dolt sql -q without privilege file doesn't persist" {
     # mysql database exists and has privilege tables
     run dolt sql -q "show tables from mysql;"

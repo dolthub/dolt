@@ -42,6 +42,48 @@ teardown() {
     [[ "$output" =~ "+---------------------" ]] || false
 }
 
+@test "sql-shell: dolt sql shell with default doltcfg directory" {
+    # remove existing .doltcfg
+    rm -rf .doltcfg
+
+    # show users, expect just root user
+    run dolt sql <<< "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    # check that .doltcfg exists
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
+
+    # check that ./doltcfg/privileges.db does not exist
+    run ls .doltcfg
+    [[ "$output" =~ "privileges.db" ]] || false
+
+    # create a new user
+    run dolt sql <<< "create user new_user;"
+    [ "$status" -eq 0 ]
+
+    # show users, expect root user and new_user
+    run dolt sql <<< "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    # check that .doltcfg exists
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
+
+    # check that ./doltcfg/privileges.db exists
+    run ls .doltcfg
+    [[ "$output" =~ "privileges.db" ]] || false
+
+    # there shouldn't be any mysql.db files
+    run ls .dolt
+    ! [[ "$output" =~ "mysql.db" ]] || false
+
+    # remove mysql.db just in case
+    rm -f .dolt/mysql.db
+}
+
 @test "sql-shell: dolt sql shell has mysql db" {
     # mysql database exists and has privilege tables
     run dolt sql <<< "show tables from mysql;"
