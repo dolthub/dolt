@@ -32,17 +32,6 @@ type Persister struct {
 var _ mysql_db.MySQLDbPersistence = &Persister{}
 
 func NewPersister(fp string) *Persister {
-	// Create file if it does not exist, panic if something goes wrong
-	if len(fp) > 0 {
-		_, err := os.Stat(fp)
-		if err != nil && errors.Is(err, os.ErrNotExist) {
-			err = ioutil.WriteFile(fp, []byte{}, 0644)
-		}
-		if err != nil {
-			panic(err)
-		}
-	}
-
 	return &Persister{
 		privsFilePath: fp,
 		fileMutex:     &sync.Mutex{},
@@ -52,21 +41,10 @@ func NewPersister(fp string) *Persister {
 func (p *Persister) Persist(ctx *sql.Context, data []byte) error {
 	p.fileMutex.Lock()
 	defer p.fileMutex.Unlock()
-
-	// Create file if it does not exist, panic if something goes wrong
-	_, err := os.Stat(p.privsFilePath)
-	if err != nil && errors.Is(err, os.ErrNotExist) {
-		err = ioutil.WriteFile(p.privsFilePath, []byte{}, 0777)
-	}
-	if err != nil {
-		panic(err)
-	}
-
 	return ioutil.WriteFile(p.privsFilePath, data, 0777)
 }
 
 // SetPrivilegeFilePath sets the file path that will be used for loading privileges.
-// TODO: this is probably not needed
 func (p Persister) SetPrivilegeFilePath(fp string) {
 	// do nothing for empty file path
 	if len(fp) == 0 {
