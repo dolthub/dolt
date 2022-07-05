@@ -60,18 +60,20 @@ func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, ilu sql.IndexLooku
 	}
 }
 
-func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, columns []string, durableState *durableIndexState) (sql.RowIter2, error) {
+func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, projections []string, durableState *durableIndexState) (sql.RowIter2, error) {
+	if projections == nil {
+		projections = idx.Schema().GetAllCols().GetColumnNames()
+	}
 	if sql.IsKeyless(pkSch.Schema) {
 		// in order to resolve row cardinality, keyless indexes must always perform
 		// an indirect lookup through the clustered index.
-		return newProllyKeylessIndexIter(ctx, idx, r, pkSch, durableState.Primary, durableState.Secondary)
+		return newProllyKeylessIndexIter(ctx, idx, r, pkSch, projections, durableState.Primary, durableState.Secondary)
 	}
-
-	covers := idx.coversColumns(durableState, columns)
+	covers := idx.coversColumns(durableState, projections)
 	if covers {
-		return newProllyCoveringIndexIter(ctx, idx, r, pkSch, durableState.Secondary)
+		return newProllyCoveringIndexIter(ctx, idx, r, pkSch, projections, durableState.Secondary)
 	}
-	return newProllyIndexIter(ctx, idx, r, pkSch, durableState.Primary, durableState.Secondary)
+	return newProllyIndexIter(ctx, idx, r, pkSch, projections, durableState.Primary, durableState.Secondary)
 }
 
 func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, columns []string, durableState *durableIndexState) (sql.RowIter, error) {
