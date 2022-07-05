@@ -17,19 +17,19 @@ package env
 import (
 	"context"
 	"fmt"
-	"gopkg.in/src-d/go-errors.v1"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"gopkg.in/src-d/go-errors.v1"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 

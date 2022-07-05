@@ -17,12 +17,12 @@ package indexcmds
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"strings"
 
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
