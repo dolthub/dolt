@@ -47,7 +47,7 @@ func RefFromConflictIndex(ctx context.Context, vrw types.ValueReadWriter, idx Co
 }
 
 // NewEmptyConflictIndex returns an ConflictIndex with no rows.
-func NewEmptyConflictIndex(ctx context.Context, vrw types.ValueReadWriter, oursSch, theirsSch, baseSch schema.Schema) (ConflictIndex, error) {
+func NewEmptyConflictIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, oursSch, theirsSch, baseSch schema.Schema) (ConflictIndex, error) {
 	switch vrw.Format() {
 	case types.Format_LD_1, types.Format_7_18, types.Format_DOLT_DEV:
 		m, err := types.NewMap(ctx, vrw)
@@ -60,7 +60,6 @@ func NewEmptyConflictIndex(ctx context.Context, vrw types.ValueReadWriter, oursS
 		kd, oursVD := shim.MapDescriptorsFromSchema(oursSch)
 		theirsVD := shim.ValueDescriptorFromSchema(theirsSch)
 		baseVD := shim.ValueDescriptorFromSchema(baseSch)
-		ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(vrw))
 
 		m := prolly.NewEmptyConflictMap(ns, kd, oursVD, theirsVD, baseVD)
 

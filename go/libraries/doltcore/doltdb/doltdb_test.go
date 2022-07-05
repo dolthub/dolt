@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/test"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -69,8 +70,8 @@ func createTestSchema(t *testing.T) schema.Schema {
 	return sch
 }
 
-func CreateTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*Table, error) {
-	tbl, err := NewNomsTable(context.Background(), vrw, tSchema, rowData, nil, nil)
+func CreateTestTable(vrw types.ValueReadWriter, ns tree.NodeStore, tSchema schema.Schema, rowData types.Map) (*Table, error) {
+	tbl, err := NewNomsTable(context.Background(), vrw, ns, tSchema, rowData, nil, nil)
 
 	if err != nil {
 		return nil, err
@@ -283,7 +284,7 @@ func TestLDNoms(t *testing.T) {
 
 		tSchema := createTestSchema(t)
 		rowData, _ := createTestRowData(t, ddb.vrw, tSchema)
-		tbl, err = CreateTestTable(ddb.vrw, tSchema, rowData)
+		tbl, err = CreateTestTable(ddb.vrw, ddb.ns, tSchema, rowData)
 
 		if err != nil {
 			t.Fatal("Failed to create test table with data")

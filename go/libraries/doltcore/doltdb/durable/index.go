@@ -114,7 +114,7 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sc
 }
 
 // NewEmptyIndex returns an index with no rows.
-func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (Index, error) {
+func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (Index, error) {
 	switch vrw.Format() {
 	case types.Format_LD_1, types.Format_7_18, types.Format_DOLT_DEV:
 		m, err := types.NewMap(ctx, vrw)
@@ -125,7 +125,6 @@ func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sc
 
 	case types.Format_DOLT_1:
 		kd, vd := shim.MapDescriptorsFromSchema(sch)
-		ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(vrw))
 		m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
 		if err != nil {
 			return nil, err
@@ -318,9 +317,8 @@ func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSche
 }
 
 // NewIndexSet returns an empty IndexSet.
-func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter) IndexSet {
+func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore) IndexSet {
 	if vrw.Format().UsesFlatbuffers() {
-		ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(vrw))
 		emptyam := prolly.NewEmptyAddressMap(ns)
 		return doltDevIndexSet{vrw, emptyam}
 	}
@@ -332,10 +330,10 @@ func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter) IndexSet {
 	}
 }
 
-func NewIndexSetWithEmptyIndexes(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (IndexSet, error) {
-	s := NewIndexSet(ctx, vrw)
+func NewIndexSetWithEmptyIndexes(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (IndexSet, error) {
+	s := NewIndexSet(ctx, vrw, ns)
 	for _, index := range sch.Indexes().AllIndexes() {
-		empty, err := NewEmptyIndex(ctx, vrw, index.Schema())
+		empty, err := NewEmptyIndex(ctx, vrw, ns, index.Schema())
 		if err != nil {
 			return nil, err
 		}

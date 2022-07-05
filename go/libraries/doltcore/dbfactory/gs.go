@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -32,12 +33,12 @@ type GSFactory struct {
 }
 
 // CreateDB creates an GCS backed database
-func (fact GSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, error) {
+func (fact GSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	var db datas.Database
 	gcs, err := storage.NewClient(ctx)
 
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	bs := blobstore.NewGCSBlobstore(gcs, urlObj.Host, urlObj.Path)
@@ -45,13 +46,14 @@ func (fact GSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, ur
 	gcsStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
 
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	vrw := types.NewValueStore(gcsStore)
 	db = datas.NewTypesDatabase(vrw)
+	ns := tree.NewNodeStore(gcsStore)
 
-	return db, vrw, nil
+	return db, vrw, ns, nil
 }
 
 // LocalBSFactory is a DBFactory implementation for creating a local filesystem blobstore backed databases for testing
@@ -59,12 +61,12 @@ type LocalBSFactory struct {
 }
 
 // CreateDB creates a local filesystem blobstore backed database
-func (fact LocalBSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, error) {
+func (fact LocalBSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	var db datas.Database
 	absPath, err := filepath.Abs(filepath.Join(urlObj.Host, urlObj.Path))
 
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	bs := blobstore.NewLocalBlobstore(absPath)
@@ -72,11 +74,12 @@ func (fact LocalBSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinForma
 	bsStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
 
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	vrw := types.NewValueStore(bsStore)
 	db = datas.NewTypesDatabase(vrw)
+	ns := tree.NewNodeStore(bsStore)
 
-	return db, vrw, err
+	return db, vrw, ns, err
 }

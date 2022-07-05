@@ -254,7 +254,7 @@ func getParentAndCherryRoots(ctx context.Context, ddb *doltdb.DoltDB, cherryComm
 			return nil, nil, err
 		}
 	} else {
-		parentRoot, err = doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
+		parentRoot, err = doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter(), ddb.NodeStore())
 		if err != nil {
 			return nil, nil, err
 		}

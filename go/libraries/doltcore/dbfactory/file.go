@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -43,11 +44,11 @@ type FileFactory struct {
 }
 
 // CreateDB creates an local filesys backed database
-func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, error) {
+func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	path, err := url.PathUnescape(urlObj.Path)
 
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	path = filepath.FromSlash(path)
@@ -55,40 +56,41 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 
 	err = validateDir(path)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	q := nbs.NewUnlimitedMemQuotaProvider()
 	newGenSt, err := nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q)
 
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	oldgenPath := filepath.Join(path, "oldgen")
 	err = validateDir(oldgenPath)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		err = os.Mkdir(oldgenPath, os.ModePerm)
 		if err != nil && !errors.Is(err, os.ErrExist) {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 
 	oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenPath, defaultMemTableSize, q)
 
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	st := nbs.NewGenerationalCS(oldGenSt, newGenSt)
 	// metrics?
 
 	vrw := types.NewValueStore(st)
+	ns := tree.NewNodeStore(st)
 
-	return datas.NewTypesDatabase(vrw), vrw, nil
+	return datas.NewTypesDatabase(vrw), vrw, ns, nil
 }
 
 func validateDir(path string) error {

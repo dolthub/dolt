@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -107,18 +108,19 @@ type AWSFactory struct {
 }
 
 // CreateDB creates an AWS backed database
-func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, error) {
+func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	var db datas.Database
 	cs, err := fact.newChunkStore(ctx, nbf, urlObj, params)
 
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	vrw := types.NewValueStore(cs)
 	db = datas.NewTypesDatabase(vrw)
+	ns := tree.NewNodeStore(cs)
 
-	return db, vrw, nil
+	return db, vrw, ns, nil
 }
 
 func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (chunks.ChunkStore, error) {

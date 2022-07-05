@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -106,6 +107,7 @@ type prollyConflictRowIter struct {
 	itr     prolly.ConflictArtifactIter
 	tblName string
 	vrw     types.ValueReadWriter
+	ns      tree.NodeStore
 	ourRows prolly.Map
 	keyless bool
 
@@ -157,6 +159,7 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 		itr:      itr,
 		tblName:  ct.tblName,
 		vrw:      ct.tbl.ValueReadWriter(),
+		ns:       ct.tbl.NodeStore(),
 		ourRows:  ourRows,
 		keyless:  keyless,
 		kd:       kd,
@@ -325,7 +328,7 @@ func (itr *prollyConflictRowIter) nextConflictVals(ctx *sql.Context) (c conf, er
 // the currently loaded maps. |baseHash| and |theirHash| are table hashes.
 func (itr *prollyConflictRowIter) loadTableMaps(ctx context.Context, baseHash, theirHash hash.Hash) error {
 	if itr.baseHash.Compare(baseHash) != 0 {
-		rv, err := doltdb.LoadRootValueFromRootIshAddr(ctx, itr.vrw, baseHash)
+		rv, err := doltdb.LoadRootValueFromRootIshAddr(ctx, itr.vrw, itr.ns, baseHash)
 		if err != nil {
 			return err
 		}
@@ -346,7 +349,7 @@ func (itr *prollyConflictRowIter) loadTableMaps(ctx context.Context, baseHash, t
 	}
 
 	if itr.theirHash.Compare(theirHash) != 0 {
-		rv, err := doltdb.LoadRootValueFromRootIshAddr(ctx, itr.vrw, theirHash)
+		rv, err := doltdb.LoadRootValueFromRootIshAddr(ctx, itr.vrw, itr.ns, theirHash)
 		if err != nil {
 			return err
 		}

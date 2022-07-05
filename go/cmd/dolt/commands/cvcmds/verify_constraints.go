@@ -92,7 +92,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get head root.").AddCause(err).Build(), nil)
 	}
 	if verifyAllRows {
-		comparingRoot, err = doltdb.EmptyRootValue(ctx, comparingRoot.VRW())
+		comparingRoot, err = doltdb.EmptyRootValue(ctx, comparingRoot.VRW(), comparingRoot.NodeStore())
 		if err != nil {
 			return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to create an empty root.").AddCause(err).Build(), nil)
 		}

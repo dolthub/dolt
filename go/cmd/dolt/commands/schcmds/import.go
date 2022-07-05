@@ -296,7 +296,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 			return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
 		}
 
-		empty, err := durable.NewEmptyIndex(ctx, root.VRW(), sch)
+		empty, err := durable.NewEmptyIndex(ctx, root.VRW(), root.NodeStore(), sch)
 		if err != nil {
 			return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
 		}
@@ -308,13 +308,13 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 				return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
 			}
 		} else {
-			indexSet, err = durable.NewIndexSetWithEmptyIndexes(ctx, root.VRW(), sch)
+			indexSet, err = durable.NewIndexSetWithEmptyIndexes(ctx, root.VRW(), root.NodeStore(), sch)
 			if err != nil {
 				return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
 			}
 		}
 
-		tbl, err = doltdb.NewTable(ctx, root.VRW(), sch, empty, indexSet, nil)
+		tbl, err = doltdb.NewTable(ctx, root.VRW(), root.NodeStore(), sch, empty, indexSet, nil)
 		if err != nil {
 			return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
 		}

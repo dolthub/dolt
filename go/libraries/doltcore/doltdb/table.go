@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -79,8 +78,8 @@ type Table struct {
 }
 
 // NewNomsTable creates a noms Struct which stores row data, index data, and schema.
-func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows types.Map, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
-	dt, err := durable.NewNomsTable(ctx, vrw, sch, rows, indexes, autoIncVal)
+func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, rows types.Map, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
+	dt, err := durable.NewNomsTable(ctx, vrw, ns, sch, rows, indexes, autoIncVal)
 	if err != nil {
 		return nil, err
 	}
@@ -89,8 +88,8 @@ func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sch
 }
 
 // NewTable creates a durable object which stores row data, index data, and schema.
-func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows durable.Index, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
-	dt, err := durable.NewTable(ctx, vrw, sch, rows, indexes, autoIncVal)
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, rows durable.Index, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
+	dt, err := durable.NewTable(ctx, vrw, ns, sch, rows, indexes, autoIncVal)
 	if err != nil {
 		return nil, err
 	}
@@ -108,12 +107,8 @@ func (t *Table) ValueReadWriter() types.ValueReadWriter {
 	return durable.VrwFromTable(t.table)
 }
 
-// NodeStore returns the NodeStore for this table.
 func (t *Table) NodeStore() tree.NodeStore {
-	if t == nil {
-		return nil
-	}
-	return tree.NewNodeStore(shim.ChunkStoreFromVRW(t.ValueReadWriter()))
+	return durable.NodeStoreFromTable(t.table)
 }
 
 // SetConflicts sets the merge conflicts for this table.
@@ -279,11 +274,11 @@ func (t *Table) getProllyConflictSchemas(ctx context.Context, tblName string) (b
 		return nil, nil, nil, err
 	}
 
-	baseTbl, err := tableFromRootIsh(ctx, t.ValueReadWriter(), art.Metadata.BaseRootIsh, tblName)
+	baseTbl, err := tableFromRootIsh(ctx, t.ValueReadWriter(), t.NodeStore(), art.Metadata.BaseRootIsh, tblName)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	theirTbl, err := tableFromRootIsh(ctx, t.ValueReadWriter(), art.TheirRootIsh, tblName)
+	theirTbl, err := tableFromRootIsh(ctx, t.ValueReadWriter(), t.NodeStore(), art.TheirRootIsh, tblName)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -300,8 +295,8 @@ func (t *Table) getProllyConflictSchemas(ctx context.Context, tblName string) (b
 	return baseSch, ourSch, theirSch, nil
 }
 
-func tableFromRootIsh(ctx context.Context, vrw types.ValueReadWriter, h hash.Hash, tblName string) (*Table, error) {
-	rv, err := LoadRootValueFromRootIshAddr(ctx, vrw, h)
+func tableFromRootIsh(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, h hash.Hash, tblName string) (*Table, error) {
+	rv, err := LoadRootValueFromRootIshAddr(ctx, vrw, ns, h)
 	if err != nil {
 		return nil, err
 	}

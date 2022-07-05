@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -28,12 +29,13 @@ type MemFactory struct {
 }
 
 // CreateDB creates an in memory backed database
-func (fact MemFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, error) {
+func (fact MemFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	var db datas.Database
 	storage := &chunks.MemoryStorage{}
 	cs := storage.NewViewWithDefaultFormat()
 	vrw := types.NewValueStore(cs)
 	db = datas.NewTypesDatabase(vrw)
+	ns := tree.NewNodeStore(cs)
 
-	return db, vrw, nil
+	return db, vrw, ns, nil
 }
