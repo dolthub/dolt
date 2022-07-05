@@ -47,6 +47,8 @@ const (
 	defaultQueryParallelism    = 2
 	defaultPersistenceBahavior = loadPerisistentGlobals
 	defaultDataDir             = "."
+	defaultCfgDir              = "./.doltcfg"
+	defaultPrivilegeFilePath   = "./.doltcfg/privileges.db"
 	defaultMetricsHost         = ""
 	defaultMetricsPort         = -1
 )
@@ -324,6 +326,11 @@ func (cfg *commandLineServerConfig) withDataDir(dataDir string) *commandLineServ
 	return cfg
 }
 
+func (cfg *commandLineServerConfig) withCfgDir(cfgDir string) *commandLineServerConfig {
+	cfg.cfgDir = cfgDir
+	return cfg
+}
+
 func (cfg *commandLineServerConfig) withPersistenceBehavior(persistenceBehavior string) *commandLineServerConfig {
 	cfg.persistenceBehavior = persistenceBehavior
 	return cfg
@@ -349,6 +356,8 @@ func DefaultServerConfig() *commandLineServerConfig {
 		queryParallelism:    defaultQueryParallelism,
 		persistenceBehavior: defaultPersistenceBahavior,
 		dataDir:             defaultDataDir,
+		cfgDir:              defaultCfgDir,
+		privilegeFilePath:   defaultPrivilegeFilePath,
 	}
 }
 
