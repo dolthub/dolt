@@ -90,11 +90,11 @@ func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (ty
 }
 
 // indexFromRef reads the types.Ref from storage and returns the Index it points to.
-func indexFromRef(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, r types.Ref) (Index, error) {
-	return indexFromAddr(ctx, vrw, sch, r.TargetHash())
+func indexFromRef(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, r types.Ref) (Index, error) {
+	return indexFromAddr(ctx, vrw, ns, sch, r.TargetHash())
 }
 
-func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, addr hash.Hash) (Index, error) {
+func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, addr hash.Hash) (Index, error) {
 	v, err := vrw.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
@@ -102,10 +102,10 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sc
 
 	switch vrw.Format() {
 	case types.Format_LD_1, types.Format_7_18, types.Format_DOLT_DEV:
-		return IndexFromNomsMap(v.(types.Map), vrw), nil
+		return IndexFromNomsMap(v.(types.Map), vrw, ns), nil
 
 	case types.Format_DOLT_1:
-		pm := shim.MapFromValue(v, sch, vrw)
+		pm := shim.MapFromValue(v, sch, ns)
 		return IndexFromProllyMap(pm), nil
 
 	default:
@@ -121,7 +121,7 @@ func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		if err != nil {
 			return nil, err
 		}
-		return IndexFromNomsMap(m, vrw), nil
+		return IndexFromNomsMap(m, vrw, ns), nil
 
 	case types.Format_DOLT_1:
 		kd, vd := shim.MapDescriptorsFromSchema(sch)
@@ -139,6 +139,7 @@ func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 type nomsIndex struct {
 	index types.Map
 	vrw   types.ValueReadWriter
+	ns    tree.NodeStore
 }
 
 var _ Index = nomsIndex{}
@@ -167,10 +168,11 @@ func NomsMapFromIndex(i Index) types.Map {
 }
 
 // IndexFromNomsMap wraps a types.Map and returns it as an Index.
-func IndexFromNomsMap(m types.Map, vrw types.ValueReadWriter) Index {
+func IndexFromNomsMap(m types.Map, vrw types.ValueReadWriter, ns tree.NodeStore) Index {
 	return nomsIndex{
 		index: m,
 		vrw:   vrw,
+		ns:    ns,
 	}
 }
 
@@ -320,7 +322,7 @@ func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSche
 func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore) IndexSet {
 	if vrw.Format().UsesFlatbuffers() {
 		emptyam := prolly.NewEmptyAddressMap(ns)
-		return doltDevIndexSet{vrw, emptyam}
+		return doltDevIndexSet{vrw, ns, emptyam}
 	}
 
 	empty, _ := types.NewMap(ctx, vrw)
@@ -348,6 +350,7 @@ func NewIndexSetWithEmptyIndexes(ctx context.Context, vrw types.ValueReadWriter,
 type nomsIndexSet struct {
 	indexes types.Map
 	vrw     types.ValueReadWriter
+	ns      tree.NodeStore
 }
 
 var _ IndexSet = nomsIndexSet{}
@@ -372,12 +375,12 @@ func (s nomsIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name stri
 		return nil, fmt.Errorf("index not found: %s", name)
 	}
 
-	return indexFromRef(ctx, s.vrw, idx.Schema(), v.(types.Ref))
+	return indexFromRef(ctx, s.vrw, s.ns, idx.Schema(), v.(types.Ref))
 }
 
 // PutIndex implements IndexSet.
 func (s nomsIndexSet) PutNomsIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error) {
-	return s.PutIndex(ctx, name, IndexFromNomsMap(idx, s.vrw))
+	return s.PutIndex(ctx, name, IndexFromNomsMap(idx, s.vrw, s.ns))
 }
 
 // PutIndex implements IndexSet.
@@ -392,7 +395,7 @@ func (s nomsIndexSet) PutIndex(ctx context.Context, name string, idx Index) (Ind
 		return nil, err
 	}
 
-	return nomsIndexSet{indexes: im, vrw: s.vrw}, nil
+	return nomsIndexSet{indexes: im, vrw: s.vrw, ns: s.ns}, nil
 }
 
 // DropIndex implements IndexSet.
@@ -402,7 +405,7 @@ func (s nomsIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, err
 		return nil, err
 	}
 
-	return nomsIndexSet{indexes: im, vrw: s.vrw}, nil
+	return nomsIndexSet{indexes: im, vrw: s.vrw, ns: s.ns}, nil
 }
 
 func (s nomsIndexSet) RenameIndex(ctx context.Context, oldName, newName string) (IndexSet, error) {
@@ -420,7 +423,7 @@ func (s nomsIndexSet) RenameIndex(ctx context.Context, oldName, newName string) 
 		return nil, err
 	}
 
-	return nomsIndexSet{indexes: im, vrw: s.vrw}, nil
+	return nomsIndexSet{indexes: im, vrw: s.vrw, ns: s.ns}, nil
 }
 
 func mapFromIndexSet(ic IndexSet) types.Map {
@@ -429,6 +432,7 @@ func mapFromIndexSet(ic IndexSet) types.Map {
 
 type doltDevIndexSet struct {
 	vrw types.ValueReadWriter
+	ns  tree.NodeStore
 	am  prolly.AddressMap
 }
 
@@ -450,7 +454,7 @@ func (is doltDevIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name 
 	if idxSch == nil {
 		return nil, fmt.Errorf("index schema not found: %s", name)
 	}
-	return indexFromAddr(ctx, is.vrw, idxSch.Schema(), addr)
+	return indexFromAddr(ctx, is.vrw, is.ns, idxSch.Schema(), addr)
 }
 
 func (is doltDevIndexSet) PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error) {
@@ -469,11 +473,11 @@ func (is doltDevIndexSet) PutIndex(ctx context.Context, name string, idx Index) 
 		return nil, err
 	}
 
-	return doltDevIndexSet{is.vrw, am}, nil
+	return doltDevIndexSet{is.vrw, is.ns, am}, nil
 }
 
 func (is doltDevIndexSet) PutNomsIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error) {
-	return is.PutIndex(ctx, name, IndexFromNomsMap(idx, is.vrw))
+	return is.PutIndex(ctx, name, IndexFromNomsMap(idx, is.vrw, is.ns))
 }
 
 func (is doltDevIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, error) {
@@ -486,7 +490,7 @@ func (is doltDevIndexSet) DropIndex(ctx context.Context, name string) (IndexSet,
 	if err != nil {
 		return nil, err
 	}
-	return doltDevIndexSet{is.vrw, am}, nil
+	return doltDevIndexSet{is.vrw, is.ns, am}, nil
 }
 
 func (is doltDevIndexSet) RenameIndex(ctx context.Context, oldName, newName string) (IndexSet, error) {
@@ -520,5 +524,5 @@ func (is doltDevIndexSet) RenameIndex(ctx context.Context, oldName, newName stri
 		return nil, err
 	}
 
-	return doltDevIndexSet{is.vrw, am}, nil
+	return doltDevIndexSet{is.vrw, is.ns, am}, nil
 }

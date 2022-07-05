@@ -91,11 +91,11 @@ func ProllyMapFromConflictIndex(i ConflictIndex) prolly.ConflictMap {
 	return i.(prollyConflictIndex).index
 }
 
-func conflictIndexFromRef(ctx context.Context, vrw types.ValueReadWriter, ourSch, theirSch, baseSch schema.Schema, r types.Ref) (ConflictIndex, error) {
-	return conflictIndexFromAddr(ctx, vrw, ourSch, theirSch, baseSch, r.TargetHash())
+func conflictIndexFromRef(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, ourSch, theirSch, baseSch schema.Schema, r types.Ref) (ConflictIndex, error) {
+	return conflictIndexFromAddr(ctx, vrw, ns, ourSch, theirSch, baseSch, r.TargetHash())
 }
 
-func conflictIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ourSch, theirSch, baseSch schema.Schema, addr hash.Hash) (ConflictIndex, error) {
+func conflictIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, ourSch, theirSch, baseSch schema.Schema, addr hash.Hash) (ConflictIndex, error) {
 	v, err := vrw.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
@@ -106,7 +106,7 @@ func conflictIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ourSc
 		return ConflictIndexFromNomsMap(v.(types.Map), vrw), nil
 
 	case types.Format_DOLT_1:
-		m := shim.ConflictMapFromValue(v, ourSch, theirSch, baseSch, vrw)
+		m := shim.ConflictMapFromValue(v, ourSch, theirSch, baseSch, ns)
 		return ConflictIndexFromProllyMap(m), nil
 
 	default:

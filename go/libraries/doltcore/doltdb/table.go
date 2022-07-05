@@ -405,7 +405,7 @@ func (t *Table) HashOf() (hash.Hash, error) {
 // Calls to UpdateNomsRows will not be written to the database.  The root must
 // be updated with the updated table, and the root must be committed or written.
 func (t *Table) UpdateNomsRows(ctx context.Context, updatedRows types.Map) (*Table, error) {
-	table, err := t.table.SetTableRows(ctx, durable.IndexFromNomsMap(updatedRows, t.ValueReadWriter()))
+	table, err := t.table.SetTableRows(ctx, durable.IndexFromNomsMap(updatedRows, t.ValueReadWriter(), t.NodeStore()))
 	if err != nil {
 		return nil, err
 	}

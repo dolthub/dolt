@@ -28,16 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func hackVRToCS(vr types.ValueReader) chunks.ChunkStore {
-	switch v := vr.(type) {
-	case Database:
-		return ChunkStoreFromDatabase(v)
-	case *types.ValueStore:
-		return v.ChunkStore()
-	}
-	panic("unknown ValueReader implementation...")
-}
-
 func newParentsClosureIterator(ctx context.Context, c *Commit, vr types.ValueReader, ns tree.NodeStore) (parentsClosureIter, error) {
 	sv := c.NomsValue()
 

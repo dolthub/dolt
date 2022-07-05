@@ -142,7 +142,7 @@ func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Inde
 		if err != nil {
 			return nil, err
 		}
-		return durable.IndexFromNomsMap(m, tbl.ValueReadWriter()), nil
+		return durable.IndexFromNomsMap(m, tbl.ValueReadWriter(), tbl.NodeStore()), nil
 
 	case types.Format_DOLT_1:
 		sch, err := tbl.GetSchema(ctx)

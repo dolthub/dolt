@@ -317,7 +317,7 @@ func (t nomsTable) GetTableRows(ctx context.Context) (Index, error) {
 		return nil, err
 	}
 
-	return indexFromRef(ctx, t.vrw, sch, val.(types.Ref))
+	return indexFromRef(ctx, t.vrw, t.ns, sch, val.(types.Ref))
 }
 
 // GetIndexes implements Table.
@@ -338,6 +338,7 @@ func (t nomsTable) GetIndexes(ctx context.Context) (IndexSet, error) {
 	return nomsIndexSet{
 		indexes: im.(types.Map),
 		vrw:     t.vrw,
+		ns:      t.ns,
 	}, nil
 }
 
@@ -443,7 +444,7 @@ func (t nomsTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema, C
 		return conflict.ConflictSchema{}, confIndex, nil
 	}
 
-	i, err := conflictIndexFromRef(ctx, t.vrw, schemas.Schema, schemas.MergeSchema, schemas.Base, conflictsVal.(types.Ref))
+	i, err := conflictIndexFromRef(ctx, t.vrw, t.ns, schemas.Schema, schemas.MergeSchema, schemas.Base, conflictsVal.(types.Ref))
 	if err != nil {
 		return conflict.ConflictSchema{}, nil, err
 	}
@@ -864,13 +865,13 @@ func (t doltDevTable) GetTableRows(ctx context.Context) (Index, error) {
 		if err != nil {
 			return nil, err
 		}
-		return IndexFromNomsMap(tv.(types.Map), t.vrw), nil
+		return IndexFromNomsMap(tv.(types.Map), t.vrw, t.ns), nil
 	} else {
 		sch, err := t.GetSchema(ctx)
 		if err != nil {
 			return nil, err
 		}
-		m := shim.MapFromValue(types.TupleRowStorage(rowbytes), sch, t.vrw)
+		m := shim.MapFromValue(types.TupleRowStorage(rowbytes), sch, t.ns)
 		return IndexFromProllyMap(m), nil
 	}
 }
@@ -892,7 +893,7 @@ func (t doltDevTable) GetIndexes(ctx context.Context) (IndexSet, error) {
 	ambytes := t.msg.SecondaryIndexesBytes()
 	node := tree.NodeFromBytes(ambytes)
 	ns := t.ns
-	return doltDevIndexSet{t.vrw, prolly.NewAddressMap(node, ns)}, nil
+	return doltDevIndexSet{t.vrw, t.ns, prolly.NewAddressMap(node, ns)}, nil
 }
 
 func (t doltDevTable) SetIndexes(ctx context.Context, indexes IndexSet) (Table, error) {
@@ -948,7 +949,7 @@ func (t doltDevTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema
 			return conflict.ConflictSchema{}, nil, err
 		}
 	} else {
-		conflictIdx, err = conflictIndexFromAddr(ctx, t.vrw, ourschema, theirschema, baseschema, mapaddr)
+		conflictIdx, err = conflictIndexFromAddr(ctx, t.vrw, t.ns, ourschema, theirschema, baseschema, mapaddr)
 		if err != nil {
 			return conflict.ConflictSchema{}, nil, err
 		}
