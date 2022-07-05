@@ -26,12 +26,6 @@ import (
 
 type ConflictVersion string
 
-const (
-	ConflictVersionBase   = "base"
-	ConflictVersionOurs   = "ours"
-	ConflictVersionTheirs = "theirs"
-)
-
 type FixedWidthConflictTableWriter struct {
 	tableWriter *FixedWidthTableWriter
 }
@@ -61,7 +55,7 @@ func NewFixedWidthConflictTableWriter(schema sql.Schema, wr io.WriteCloser, numS
 
 func (w FixedWidthConflictTableWriter) WriteRow(
 	ctx context.Context,
-	version ConflictVersion,
+	version string,
 	row sql.Row,
 	rowDiffType diff.ChangeType,
 ) error {
@@ -75,29 +69,24 @@ func (w FixedWidthConflictTableWriter) WriteRow(
 		diffMarker = " * "
 	}
 
-	versionStr := "      "
-	switch version {
-	case ConflictVersionBase:
-		versionStr = "base  "
-	case ConflictVersionOurs:
-		versionStr = "ours  "
-	case ConflictVersionTheirs:
-		versionStr = "theirs"
-	}
-
-	newRow := append(sql.Row{diffMarker, versionStr}, row...)
-	return w.tableWriter.WriteRow(ctx, newRow, rowColorsForDiffType(rowDiffType, len(row)+2))
+	newRow := append(sql.Row{diffMarker, version}, row...)
+	return w.tableWriter.WriteRow(ctx, newRow, rowColorsForDiffType(rowDiffType, 2, len(row)))
 }
 
 func (w FixedWidthConflictTableWriter) Close(ctx context.Context) error {
 	return w.tableWriter.Close(ctx)
 }
 
-func rowColorsForDiffType(diffType diff.ChangeType, n int) []*color.Color {
+// |n| columns with no colors, |m| columns with a color corresponding to |diffType|.
+func rowColorsForDiffType(diffType diff.ChangeType, n int, m int) []*color.Color {
 	c := rowConflictColors[diffType]
-	colors := make([]*color.Color, n)
-	for i := 0; i < n; i++ {
-		colors[i] = c
+	colors := make([]*color.Color, n+m)
+	for i := 0; i < n+m; i++ {
+		if i < n {
+			colors[i] = nil
+		} else {
+			colors[i] = c
+		}
 	}
 	return colors
 }
