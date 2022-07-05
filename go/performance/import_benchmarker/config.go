@@ -58,12 +58,6 @@ func NewDefaultImportBenchmarkConfig() *ImportBenchmarkConfig {
 			Sorted:  false,
 			Format:  csvExt,
 		},
-		{
-			Name:    "dolt_import_medium",
-			NumRows: mediumSet,
-			Sorted:  false,
-			Format:  csvExt,
-		},
 	}
 
 	return &ImportBenchmarkConfig{

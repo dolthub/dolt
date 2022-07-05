@@ -31,6 +31,7 @@ var configPath = flag.String("config", "", "the path to a config file")
 func main() {
 	flag.Parse()
 
+	// Construct a config
 	config := import_benchmarker.NewDefaultImportBenchmarkConfig()
 	var err error
 	if *configPath != "" {
@@ -44,7 +45,7 @@ func main() {
 	tests := import_benchmarker.NewImportBenchmarkTests(config)
 	results := import_benchmarker.RunBenchmarkTests(config, tests)
 
-	// write results data
+	// Write the results of the benchmark to a csv file
 	wd, err := os.Getwd()
 	if err != nil {
 		panic(err.Error())

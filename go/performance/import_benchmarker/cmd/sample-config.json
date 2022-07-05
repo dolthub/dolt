@@ -1,0 +1,11 @@
+{
+  "Jobs": [
+    {
+      "Name": "Medium Dolt import with Sorted Columns",
+      "NumRows": 1000000,
+      "Sorted": true,
+      "Format": "csv",
+      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/100k-random.csv"
+    }
+  ]
+}

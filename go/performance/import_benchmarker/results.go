@@ -36,7 +36,7 @@ type result struct {
 	br               testing.BenchmarkResult
 }
 
-// RDSImpl is a Dataset containing results of benchmarking
+// RSImpl is a Dataset containing results of benchmarking
 type RSImpl struct {
 	// Schema defines the structure of the Dataset
 	Schema *SeedSchema

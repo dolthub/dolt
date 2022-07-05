@@ -34,33 +34,6 @@ import (
 
 type doltCommandFunc func(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
 
-func RemoveTempDoltDataDir(fs filesys.Filesys, dir string) {
-	doltDir := filepath.Join(dir, dbfactory.DoltDir)
-	exists, _ := fs.Exists(doltDir)
-	if exists {
-		err := fs.Delete(doltDir, true)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-}
-
-func getWorkingDir() string {
-	wd, _ := os.Getwd()
-	return wd
-}
-
-func initializeDoltRepoAtWorkingDir(fs filesys.Filesys, workingDir string) {
-	RemoveTempDoltDataDir(fs, workingDir)
-
-	init := execCommand(context.Background(), "dolt", "init")
-	init.Dir = workingDir
-	err := init.Run()
-	if err != nil {
-		panic(err.Error()) // Fix
-	}
-}
-
 // BenchmarkDoltImport returns a function that runs benchmarks for importing
 // a test dataset into Dolt
 func BenchmarkDoltImport(importTest *ImportBenchmarkTest) func(b *testing.B) {
@@ -159,6 +132,7 @@ func execCommand(ctx context.Context, name string, arg ...string) *exec.Cmd {
 	return e
 }
 
+// getAmountOfGarbageGenerated computes the amount of garbage created by an import operation.
 func getAmountOfGarbageGenerated() float64 {
 	// 1. Get the size of the current .dolt directory
 	originalSize, err := dirSizeMB(getWorkingDir())
@@ -197,4 +171,33 @@ func dirSizeMB(path string) (float64, error) {
 	sizeMB := float64(size) / 1024.0 / 1024.0
 
 	return sizeMB, err
+}
+
+// RemoveTempDoltDataDir is used to remove the .dolt repository
+func RemoveTempDoltDataDir(fs filesys.Filesys, dir string) {
+	doltDir := filepath.Join(dir, dbfactory.DoltDir)
+	exists, _ := fs.Exists(doltDir)
+	if exists {
+		err := fs.Delete(doltDir, true)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
+func getWorkingDir() string {
+	wd, _ := os.Getwd()
+	return wd
+}
+
+// initializeDoltRepoAtWorkingDir calls the `dolt init` command on the workingDir to create a new Dolt repository.
+func initializeDoltRepoAtWorkingDir(fs filesys.Filesys, workingDir string) {
+	RemoveTempDoltDataDir(fs, workingDir)
+
+	init := execCommand(context.Background(), "dolt", "init")
+	init.Dir = workingDir
+	err := init.Run()
+	if err != nil {
+		panic(err.Error()) // Fix
+	}
 }
