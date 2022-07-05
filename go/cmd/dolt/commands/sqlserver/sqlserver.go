@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -47,7 +48,10 @@ const (
 	maxConnectionsFlag      = "max-connections"
 	persistenceBehaviorFlag = "persistence-behavior"
 	privilegeFilePathFlag   = "privilege-file"
+	cfgDirName              = ".doltcfg"
 )
+
+var ErrMultipleDoltCfgDirs = errors.New("multiple .doltcfg directories detected")
 
 func indentLines(s string) string {
 	sb := strings.Builder{}
@@ -281,10 +285,40 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	}
 
 	// TODO: check for existence of this directory in parent and child here?
-	if cfgDir, ok := apr.GetValue(cfgDirFlag); ok {
-		if cfgDir == "" {
+	var cfgDirPath string
+	dataDir := serverConfig.DataDir()
+	cfgDir, ok := apr.GetValue(cfgDirFlag)
+	if ok {
+		// doltcfg directory specified; create at path if DNE, else add it to mrEnv
+		path := filepath.Join(dataDir, cfgDir)
+		if exists, _ := dEnv.FS.Exists(path); !exists {
+			if err := dEnv.FS.MkDirs(path); err != nil {
+				return nil, err
+			}
+		}
+		cfgDirPath = path
+	} else {
+		// Look in parent directory for doltcfg
+		path := filepath.Join("..", cfgDirName)
+		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
+			cfgDirPath = path
+		}
+
+		// Look in current directory for doltcfg, create one here if none found so far
+		path = filepath.Join(dataDir, cfgDirName)
+		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
+			if len(cfgDirPath) != 0 {
+				return nil, ErrMultipleDoltCfgDirs
+			}
+			cfgDirPath = path
+		} else if len(cfgDirPath) == 0 {
+			if err := dEnv.FS.MkDirs(path); err != nil {
+				return nil, err
+			}
+			cfgDirPath = path
 		}
 	}
+	serverConfig.withCfgDir(cfgDirPath)
 
 	if queryParallelism, ok := apr.GetInt(queryParallelismFlag); ok {
 		serverConfig.withQueryParallelism(queryParallelism)

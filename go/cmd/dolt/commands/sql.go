@@ -82,6 +82,8 @@ By default this command uses the dolt database in the current working directory,
 	},
 }
 
+var ErrMultipleDoltCfgDirs = errors.New("multiple .doltcfg directories detected")
+
 const (
 	QueryFlag             = "query"
 	FormatFlag            = "result-format"
@@ -210,7 +212,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		path = filepath.Join(dataDir, cfgDirName)
 		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
 			if len(cfgDirPath) != 0 {
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("multiple .doltcfg directories detected")), usage)
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(ErrMultipleDoltCfgDirs), usage)
 			}
 			cfgDirPath = path
 		} else if len(cfgDirPath) == 0 {
