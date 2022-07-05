@@ -18,10 +18,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 const (
@@ -97,7 +97,7 @@ func newConflictSplitter(conflictQuerySch sql.Schema, targetSch sql.Schema) (*co
 }
 
 type conflictRow struct {
-	version  string
+	version  tabular.ConflictVersion
 	row      sql.Row
 	diffType diff.ChangeType
 }
@@ -120,15 +120,15 @@ func (cs conflictSplitter) splitConflictRow(row sql.Row) ([]conflictRow, error) 
 
 	if ourDiffType == diff.Added || theirDiffType == diff.Added {
 		return []conflictRow{
-			{version: "ours", row: ourRow, diffType: ourDiffType},
-			{version: "theirs", row: theirRow, diffType: theirDiffType},
+			{version: tabular.ConflictVersionOurs, row: ourRow, diffType: ourDiffType},
+			{version: tabular.ConflictVersionTheirs, row: theirRow, diffType: theirDiffType},
 		}, nil
 	}
 
 	return []conflictRow{
-		{version: "base", row: baseRow, diffType: diff.None},
-		{version: "ours", row: ourRow, diffType: ourDiffType},
-		{version: "theirs", row: theirRow, diffType: theirDiffType},
+		{version: tabular.ConflictVersionBase, row: baseRow, diffType: diff.None},
+		{version: tabular.ConflictVersionOurs, row: ourRow, diffType: ourDiffType},
+		{version: tabular.ConflictVersionTheirs, row: theirRow, diffType: theirDiffType},
 	}, nil
 }
 

@@ -24,6 +24,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 )
 
+type ConflictVersion string
+
+const (
+	ConflictVersionBase   = "base"
+	ConflictVersionOurs   = "ours"
+	ConflictVersionTheirs = "theirs"
+)
+
 type FixedWidthConflictTableWriter struct {
 	tableWriter *FixedWidthTableWriter
 }
@@ -53,21 +61,31 @@ func NewFixedWidthConflictTableWriter(schema sql.Schema, wr io.WriteCloser, numS
 
 func (w FixedWidthConflictTableWriter) WriteRow(
 	ctx context.Context,
-	version string,
+	version ConflictVersion,
 	row sql.Row,
 	rowDiffType diff.ChangeType,
 ) error {
 	diffMarker := ""
 	switch rowDiffType {
 	case diff.Removed:
-		diffMarker = "-"
+		diffMarker = " - "
 	case diff.Added:
-		diffMarker = "+"
+		diffMarker = " + "
 	case diff.ModifiedNew:
-		diffMarker = "*"
+		diffMarker = " * "
 	}
 
-	newRow := append(sql.Row{diffMarker, version}, row...)
+	versionStr := "      "
+	switch version {
+	case ConflictVersionBase:
+		versionStr = "base  "
+	case ConflictVersionOurs:
+		versionStr = "ours  "
+	case ConflictVersionTheirs:
+		versionStr = "theirs"
+	}
+
+	newRow := append(sql.Row{diffMarker, versionStr}, row...)
 	return w.tableWriter.WriteRow(ctx, newRow, rowColorsForDiffType(rowDiffType, len(row)+2))
 }
 
