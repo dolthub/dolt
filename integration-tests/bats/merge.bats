@@ -786,7 +786,7 @@ SQL
     # commit it so we can merge again
     dolt commit -afm "committing merge conflicts"
 
-    skip_nbf_dolt_1
+    skip_nbf_dolt_1 "behavior in new format diverges"
 
     # Merge should fail due to conflict and previous conflict and violation state should be retained
     run dolt merge other2

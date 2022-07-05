@@ -39,7 +39,7 @@ type enumType struct {
 var _ TypeInfo = (*enumType)(nil)
 
 func CreateEnumTypeFromParams(params map[string]string) (TypeInfo, error) {
-	var collation sql.Collation
+	var collation sql.CollationID
 	var err error
 	if collationStr, ok := params[enumTypeParam_Collation]; ok {
 		collation, err = sql.ParseCollation(nil, &collationStr, false)

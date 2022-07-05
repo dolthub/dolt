@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -107,6 +108,7 @@ type prollyConflictRowIter struct {
 	tblName string
 	vrw     types.ValueReadWriter
 	ourRows prolly.Map
+	keyless bool
 
 	kd                       val.TupleDesc
 	baseVD, oursVD, theirsVD val.TupleDesc
@@ -121,6 +123,7 @@ type prollyConflictRowIter struct {
 
 var _ sql.RowIter = &prollyConflictRowIter{}
 
+// base_cols, our_cols, our_diff_type, their_cols, their_diff_type
 func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*prollyConflictRowIter, error) {
 	idx, err := ct.tbl.GetRowData(ctx)
 	if err != nil {
@@ -133,21 +136,31 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 		return nil, err
 	}
 
+	keyless := schema.IsKeyless(ct.ourSch)
+
 	kd := shim.KeyDescriptorFromSchema(ct.baseSch)
 	baseVD := shim.ValueDescriptorFromSchema(ct.baseSch)
 	oursVD := shim.ValueDescriptorFromSchema(ct.ourSch)
 	theirsVD := shim.ValueDescriptorFromSchema(ct.theirSch)
 
 	b := 1
-	o := b + kd.Count() + baseVD.Count()
-	t := o + kd.Count() + oursVD.Count()
-	n := t + kd.Count() + theirsVD.Count()
+	var o, t, n int
+	if !keyless {
+		o = b + kd.Count() + baseVD.Count()
+		t = o + kd.Count() + oursVD.Count() + 1
+		n = t + kd.Count() + theirsVD.Count() + 1
+	} else {
+		o = b + baseVD.Count() - 1
+		t = o + oursVD.Count()
+		n = t + theirsVD.Count()
+	}
 
 	return &prollyConflictRowIter{
 		itr:      itr,
 		tblName:  ct.tblName,
 		vrw:      ct.tbl.ValueReadWriter(),
 		ourRows:  ourRows,
+		keyless:  keyless,
 		kd:       kd,
 		baseVD:   baseVD,
 		oursVD:   oursVD,
@@ -168,27 +181,43 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	r := make(sql.Row, itr.n)
 	r[0] = c.h.String()
 
-	for i := 0; i < itr.kd.Count(); i++ {
-		f, err := index.GetField(ctx, itr.kd, i, c.k, itr.baseRows.NodeStore())
+	if !itr.keyless {
+		for i := 0; i < itr.kd.Count(); i++ {
+			f, err := index.GetField(ctx, itr.kd, i, c.k, itr.baseRows.NodeStore())
+			if err != nil {
+				return nil, err
+			}
+			if c.bV != nil {
+				r[itr.b+i] = f
+			}
+			if c.oV != nil {
+				r[itr.o+i] = f
+			}
+			if c.tV != nil {
+				r[itr.t+i] = f
+			}
+		}
+
+		err = itr.putConflictRowVals(ctx, c, r)
 		if err != nil {
 			return nil, err
 		}
-		if c.bV != nil {
-			r[itr.b+i] = f
-		}
-		if c.oV != nil {
-			r[itr.o+i] = f
-		}
-		if c.tV != nil {
-			r[itr.t+i] = f
+	} else {
+		err = itr.putKeylessConflictRowVals(ctx, c, r)
+		if err != nil {
+			return nil, err
 		}
 	}
 
+	return r, nil
+}
+
+func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r sql.Row) error {
 	if c.bV != nil {
 		for i := 0; i < itr.baseVD.Count(); i++ {
 			f, err := index.GetField(ctx, itr.baseVD, i, c.bV, itr.baseRows.NodeStore())
 			if err != nil {
-				return nil, err
+				return err
 			}
 			r[itr.b+itr.kd.Count()+i] = f
 		}
@@ -198,23 +227,72 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		for i := 0; i < itr.oursVD.Count(); i++ {
 			f, err := index.GetField(ctx, itr.oursVD, i, c.oV, itr.baseRows.NodeStore())
 			if err != nil {
-				return nil, err
+				return err
 			}
 			r[itr.o+itr.kd.Count()+i] = f
 		}
 	}
+	r[itr.o+itr.kd.Count()+itr.oursVD.Count()] = getDiffType(c.bV, c.oV)
 
 	if c.tV != nil {
 		for i := 0; i < itr.theirsVD.Count(); i++ {
 			f, err := index.GetField(ctx, itr.theirsVD, i, c.tV, itr.baseRows.NodeStore())
 			if err != nil {
-				return nil, err
+				return err
 			}
 			r[itr.t+itr.kd.Count()+i] = f
 		}
 	}
+	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()] = getDiffType(c.bV, c.tV)
 
-	return r, nil
+	return nil
+}
+
+func getDiffType(base val.Tuple, other val.Tuple) string {
+	if base == nil {
+		return merge.ConflictDiffTypeAdded
+	} else if other == nil {
+		return merge.ConflictDiffTypeRemoved
+	}
+
+	// There has to be some edit, otherwise it wouldn't be a conflict...
+	return merge.ConflictDiffTypeModified
+}
+
+func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c conf, r sql.Row) error {
+	if c.bV != nil {
+		for i := 0; i < itr.baseVD.Count()-1; i++ {
+			f, err := index.GetField(ctx, itr.baseVD, i+1, c.bV, itr.baseRows.NodeStore())
+			if err != nil {
+				return err
+			}
+			r[itr.b+i] = f
+		}
+	}
+
+	if c.oV != nil {
+		for i := 0; i < itr.oursVD.Count()-1; i++ {
+			f, err := index.GetField(ctx, itr.oursVD, i+1, c.oV, itr.baseRows.NodeStore())
+			if err != nil {
+				return err
+			}
+			r[itr.o+i] = f
+		}
+	}
+	r[itr.o+itr.oursVD.Count()-1] = getDiffType(c.bV, c.oV)
+
+	if c.tV != nil {
+		for i := 0; i < itr.theirsVD.Count()-1; i++ {
+			f, err := index.GetField(ctx, itr.theirsVD, i+1, c.tV, itr.baseRows.NodeStore())
+			if err != nil {
+				return err
+			}
+			r[itr.t+i] = f
+		}
+	}
+	r[itr.t+itr.theirsVD.Count()-1] = getDiffType(c.bV, c.tV)
+
+	return nil
 }
 
 type conf struct {
@@ -337,6 +415,9 @@ func newProllyConflictDeleter(ct ProllyConflictsTable) *prollyConflictDeleter {
 }
 
 func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) error {
+	if schema.IsKeyless(cd.ct.ourSch) {
+		panic("conflict deleter for keyless tables not implemented")
+	}
 
 	// get keys from either base, ours, or theirs
 	o := func() int {
@@ -414,7 +495,7 @@ func (cd *prollyConflictDeleter) Close(ctx *sql.Context) error {
 }
 
 func CalculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, error) {
-	cols := make([]schema.Column, 1+ours.GetAllCols().Size()+theirs.GetAllCols().Size()+base.GetAllCols().Size())
+	cols := make([]schema.Column, 3+ours.GetAllCols().Size()+theirs.GetAllCols().Size()+base.GetAllCols().Size())
 
 	// the commit hash or working set hash of the right side during merge
 	cols[0] = schema.NewColumn("from_root_ish", 0, types.StringKind, false)
@@ -453,10 +534,13 @@ func CalculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, e
 	if err != nil {
 		return nil, err
 	}
+	cols[i] = schema.NewColumn("our_diff_type", uint64(i), types.StringKind, false)
+	i++
 	err = putWithPrefix("their_", theirs)
 	if err != nil {
 		return nil, err
 	}
+	cols[i] = schema.NewColumn("their_diff_type", uint64(i), types.StringKind, false)
 
 	return schema.UnkeyedSchemaFromCols(schema.NewColCollection(cols...)), nil
 }

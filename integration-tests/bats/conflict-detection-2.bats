@@ -471,7 +471,6 @@ SQL
 }
 
 @test "conflict-detection-2: dolt_force_transaction_commit along with dolt_allow_commit_conflicts ignores conflicts" {
-    skip_nbf_dolt_1
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);
 INSERT INTO test VALUES (1, 1), (2, 2);

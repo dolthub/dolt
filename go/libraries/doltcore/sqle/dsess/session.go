@@ -49,7 +49,15 @@ func init() {
 	}
 }
 
-const TransactionMergeStompEnvKey = "DOLT_TRANSACTION_MERGE_STOMP"
+const (
+	ReplicateToRemoteKey        = "dolt_replicate_to_remote"
+	ReadReplicaRemoteKey        = "dolt_read_replica_remote"
+	SkipReplicationErrorsKey    = "dolt_skip_replication_errors"
+	ReplicateHeadsKey           = "dolt_replicate_heads"
+	ReplicateAllHeadsKey        = "dolt_replicate_all_heads"
+	AsyncReplicationKey         = "dolt_async_replication"
+	TransactionMergeStompEnvKey = "DOLT_TRANSACTION_MERGE_STOMP"
+)
 
 var transactionMergeStomp = false
 var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
@@ -193,9 +201,11 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacte
 		return DisabledTransaction{}, nil
 	}
 
-	err = sessionState.dbData.Ddb.Rebase(ctx)
-	if err != nil {
-		return nil, err
+	if _, v, ok := sql.SystemVariables.GetGlobal("dolt_read_replica_remote"); ok && v != "" {
+		err = sessionState.dbData.Ddb.Rebase(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	wsRef := sessionState.WorkingSet.Ref()

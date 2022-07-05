@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -568,8 +569,8 @@ func TestDelete(t *testing.T) {
 func TestCommitHooksNoErrors(t *testing.T) {
 	dEnv := dtestutils.CreateEnvWithSeedData(t)
 	sqle.AddDoltSystemVariables()
-	sql.SystemVariables.SetGlobal(sqle.SkipReplicationErrorsKey, true)
-	sql.SystemVariables.SetGlobal(sqle.ReplicateToRemoteKey, "unknown")
+	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrorsKey, true)
+	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemoteKey, "unknown")
 	hooks, err := engine.GetCommitHooks(context.Background(), dEnv)
 	assert.NoError(t, err)
 	if len(hooks) < 1 {

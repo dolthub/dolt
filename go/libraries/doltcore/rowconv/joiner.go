@@ -137,7 +137,10 @@ func (j *Joiner) Split(r row.Row) (map[string]row.Row, error) {
 	}
 
 	_, err := r.IterCols(func(tag uint64, val types.Value) (stop bool, err error) {
-		schemaNameAndTag := j.revTagMap[tag]
+		schemaNameAndTag, ok := j.revTagMap[tag]
+		if !ok {
+			return false, nil
+		}
 		colVals[schemaNameAndTag.str][schemaNameAndTag.u64] = val
 
 		return false, nil

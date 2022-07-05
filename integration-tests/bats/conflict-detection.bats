@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 }
 
 teardown() {
@@ -18,6 +17,8 @@ teardown() {
 }
 
 @test "conflict-detection: cannot merge into dirty working table" {
+    skip_nbf_dolt_1 "needs merge stats"
+
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -59,6 +60,8 @@ SQL
 }
 
 @test "conflict-detection: two branches modify different cell different row. merge. no conflict" {
+    skip_nbf_dolt_1 "needs merge stats"
+
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -95,6 +98,8 @@ SQL
 }
 
 @test "conflict-detection: two branches modify different cell same row. merge. no conflict" {
+    skip_nbf_dolt_1 "needs merge stats"
+
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -162,6 +167,8 @@ SQL
 }
 
 @test "conflict-detection: two branches add a different row. merge. no conflict" {
+    skip_nbf_dolt_1 "needs merge stats"
+
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,

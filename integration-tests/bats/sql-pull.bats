@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 
     TMPDIRS=$(pwd)/tmpdirs
     mkdir -p $TMPDIRS/{rem1,repo1}
@@ -23,7 +22,7 @@ setup() {
     dolt branch feature
     dolt remote add test-remote file://../rem1
 
-    # table and comits only present on repo1, rem1 at start
+    # table and commits only present on repo1, rem1 at start
     cd $TMPDIRS/repo1
     dolt sql -q "create table t1 (a int primary key, b int)"
     dolt commit -am "First commit"
@@ -176,7 +175,7 @@ teardown() {
     dolt checkout feature
     run dolt sql -q "select dolt_pull('origin')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "branch not found" ]] || false
+    [[ "$output" =~ "You asked to pull from the remote 'origin', but did not specify a branch" ]] || false
     [[ ! "$output" =~ "panic" ]] || false
 }
 
@@ -185,18 +184,24 @@ teardown() {
     dolt checkout feature
     run dolt sql -q "CALL dolt_pull('origin')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "branch not found" ]] || false
+    [[ "$output" =~ "You asked to pull from the remote 'origin', but did not specify a branch" ]] || false
     [[ ! "$output" =~ "panic" ]] || false
 }
 
 @test "sql-pull: dolt_pull feature branch" {
     cd repo1
     dolt checkout feature
-    dolt merge main
-    dolt push origin feature
+    dolt push --set-upstream origin feature
 
     cd ../repo2
     dolt checkout feature
+    dolt push --set-upstream origin feature
+
+    cd ../repo1
+    dolt merge main
+    dolt push
+
+    cd ../repo2
     dolt sql -q "select dolt_pull('origin')"
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
@@ -208,11 +213,17 @@ teardown() {
 @test "sql-pull: CALL dolt_pull feature branch" {
     cd repo1
     dolt checkout feature
-    dolt merge main
-    dolt push origin feature
+    dolt push --set-upstream origin feature
 
     cd ../repo2
     dolt checkout feature
+    dolt push --set-upstream origin feature
+
+    cd ../repo1
+    dolt merge main
+    dolt push
+
+    cd ../repo2
     dolt sql -q "CALL dolt_pull('origin')"
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
@@ -429,4 +440,44 @@ teardown() {
     [[ "$output" =~ "v1" ]] || false
     [[ "$output" =~ "v2" ]] || false
     [[ ! "$output" =~ "v3" ]] || false
+}
+
+@test "sql-pull: dolt_pull also fetches, but does not merge other branches" {
+    cd repo1
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+    dolt checkout feature
+    dolt push origin feature
+
+    cd ../repo2
+    dolt fetch
+    # this checkout will set upstream because 'other' branch is a new branch that matches one of remote tracking branch
+    dolt checkout other
+    # this checkout will not set upstream because this 'feature' branch existed before matching remote tracking branch was created
+    dolt checkout feature
+    dolt push --set-upstream origin feature
+
+    cd ../repo1
+    dolt merge main
+    dolt push origin feature
+    dolt checkout other
+    dolt commit --allow-empty -m "new commit on other"
+    dolt push
+
+    cd ../repo2
+    dolt sql -q "select dolt_pull()"
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "Table" ]] || false
+    [[ "$output" =~ "t1" ]] || false
+
+    dolt checkout other
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "new commit on other" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "behind 'origin/other' by 1 commit" ]] || false
 }

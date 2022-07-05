@@ -95,14 +95,14 @@ func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristi
 }
 
 func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
-	_, headsArg, ok := sql.SystemVariables.GetGlobal(ReplicateHeadsKey)
+	_, headsArg, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateHeadsKey)
 	if !ok {
-		return sql.ErrUnknownSystemVariable.New(ReplicateHeadsKey)
+		return sql.ErrUnknownSystemVariable.New(dsess.ReplicateHeadsKey)
 	}
 
-	_, allHeads, ok := sql.SystemVariables.GetGlobal(ReplicateAllHeadsKey)
+	_, allHeads, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateAllHeadsKey)
 	if !ok {
-		return sql.ErrUnknownSystemVariable.New(ReplicateAllHeadsKey)
+		return sql.ErrUnknownSystemVariable.New(dsess.ReplicateAllHeadsKey)
 	}
 
 	switch {
@@ -111,7 +111,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 	case headsArg != "":
 		heads, ok := headsArg.(string)
 		if !ok {
-			return sql.ErrInvalidSystemVariableValue.New(ReplicateHeadsKey)
+			return sql.ErrInvalidSystemVariableValue.New(dsess.ReplicateHeadsKey)
 		}
 		branches := parseBranches(heads)
 		err := rrd.srcDB.Rebase(ctx)

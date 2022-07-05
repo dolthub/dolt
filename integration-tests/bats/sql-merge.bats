@@ -787,7 +787,6 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE(--abort) clears session state and allows additional edits" {
-    skip_nbf_dolt_1
 
     run dolt sql  << SQL
 set autocommit = off;
@@ -828,7 +827,6 @@ SQL
 }
 
 @test "sql-merge: CALL DOLT_MERGE(--abort) clears session state and allows additional edits" {
-    skip_nbf_dolt_1
 
     run dolt sql  << SQL
 set autocommit = off;

@@ -39,11 +39,18 @@ const (
 	baseStr   = "base"
 )
 
+const (
+	ConflictDiffTypeAdded    = "added"
+	ConflictDiffTypeModified = "modified"
+	ConflictDiffTypeRemoved  = "removed"
+)
+
 // ConflictReader is a class providing a NextConflict function which can be used in a pipeline as a pipeline.SourceFunc,
 // or it can be used to read each conflict
 type ConflictReader struct {
 	confItr types.MapIterator
 	joiner  *rowconv.Joiner
+	sch     schema.Schema
 	nbf     *types.NomsBinFormat
 }
 
@@ -76,6 +83,16 @@ func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader,
 		return nil, err
 	}
 
+	readerSch := joiner.GetSchema()
+	readerSch, err = readerSch.AddColumn(schema.NewColumn("our_diff_type", schema.DoltConflictsOurDiffTypeTag, types.StringKind, false), nil)
+	if err != nil {
+		return nil, err
+	}
+	readerSch, err = readerSch.AddColumn(schema.NewColumn("their_diff_type", schema.DoltConflictsTheirDiffTypeTag, types.StringKind, false), nil)
+	if err != nil {
+		return nil, err
+	}
+
 	_, confIdx, err := tbl.GetConflicts(ctx)
 	if err != nil {
 		return nil, err
@@ -91,7 +108,7 @@ func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader,
 		return nil, err
 	}
 
-	return &ConflictReader{confItr, joiner, tbl.Format()}, nil
+	return &ConflictReader{confItr: confItr, joiner: joiner, sch: readerSch, nbf: tbl.Format()}, nil
 }
 
 func tagMappingConverter(ctx context.Context, vrw types.ValueReadWriter, src, dest schema.Schema) (*rowconv.RowConverter, error) {
@@ -106,7 +123,7 @@ func tagMappingConverter(ctx context.Context, vrw types.ValueReadWriter, src, de
 
 // GetSchema gets the schema of the rows that this reader will return
 func (cr *ConflictReader) GetSchema() schema.Schema {
-	return cr.joiner.GetSchema()
+	return cr.sch
 }
 
 // GetJoiner returns the joiner used to join a row with its base, and merge versions
@@ -162,11 +179,26 @@ func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.I
 
 	joinedRow, err := cr.joiner.Join(namedRows)
 
+	ourDiffType := getDiffType(conflict.Base, conflict.Value)
+	theirDiffType := getDiffType(conflict.Base, conflict.MergeValue)
+	joinedRow, err = joinedRow.SetColVal(schema.DoltConflictsOurDiffTypeTag, types.String(ourDiffType), cr.sch)
+	joinedRow, err = joinedRow.SetColVal(schema.DoltConflictsTheirDiffTypeTag, types.String(theirDiffType), cr.sch)
+
 	if err != nil {
 		return nil, pipeline.NoProps, err
 	}
 
 	return joinedRow, pipeline.NoProps, nil
+}
+
+func getDiffType(base types.Value, other types.Value) string {
+	if types.IsNull(base) {
+		return ConflictDiffTypeAdded
+	} else if types.IsNull(other) {
+		return ConflictDiffTypeRemoved
+	}
+
+	return ConflictDiffTypeModified
 }
 
 // GetKeyForConflicts returns the pk for a conflict row

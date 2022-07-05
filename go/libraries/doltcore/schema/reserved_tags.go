@@ -99,3 +99,9 @@ const (
 	DoltConstraintViolationsTypeTag = 0
 	DoltConstraintViolationsInfoTag = math.MaxUint64
 )
+
+// Tags for the dolt_conflicts_table_name table
+const (
+	DoltConflictsOurDiffTypeTag = iota + SystemTableReservedMin + uint64(7000)
+	DoltConflictsTheirDiffTypeTag
+)

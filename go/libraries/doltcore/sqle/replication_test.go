@@ -24,13 +24,14 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 func TestCommitHooksNoErrors(t *testing.T) {
 	dEnv := dtestutils.CreateEnvWithSeedData(t)
 	AddDoltSystemVariables()
-	sql.SystemVariables.SetGlobal(SkipReplicationErrorsKey, true)
-	sql.SystemVariables.SetGlobal(ReplicateToRemoteKey, "unknown")
+	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrorsKey, true)
+	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemoteKey, "unknown")
 	bThreads := sql.NewBackgroundThreads()
 	hooks, err := GetCommitHooks(context.Background(), bThreads, dEnv, &buffer.Buffer{})
 	assert.NoError(t, err)
