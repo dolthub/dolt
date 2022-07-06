@@ -903,11 +903,28 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 		return view, true, nil
 	}
 
+	key, err := doltdb.NewDataCacheKey(root)
+	if err != nil {
+		return "", false, err
+	}
+
+	ds := dsess.DSessFromSess(ctx.Session)
+	dbState, _, err := ds.LookupDbState(ctx, db.name)
+	if err != nil {
+		return "", false, err
+	}
+
+	if dbState.ViewsCached(key) {
+		view, ok := dbState.GetCachedView(key, viewName)
+		return view, ok, nil
+	}
+
 	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return "", false, err
 	}
 	if !ok {
+		dbState.CacheViews(key, nil, nil)
 		return "", false, nil
 	}
 
@@ -916,13 +933,23 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 		return "", false, err
 	}
 
-	for _, fragment := range fragments {
+	found := false
+	viewDef := ""
+	viewNames := make([]string, len(fragments))
+	viewDefs := make([]string, len(fragments))
+	for i, fragment := range fragments {
 		if strings.ToLower(fragment.name) == strings.ToLower(viewName) {
-			return fragment.fragment, true, nil
+			found = true
+			viewDef = fragments[i].fragment
 		}
+
+		viewNames[i] = fragments[i].name
+		viewDefs[i] = fragments[i].fragment
 	}
 
-	return "", false, nil
+	dbState.CacheViews(key, viewNames, viewDefs)
+
+	return viewDef, found, nil
 }
 
 // AllViews implements sql.ViewDatabase

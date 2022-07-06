@@ -65,6 +65,9 @@ type DatabaseSessionState struct {
 	// cache of tables
 	tableCache map[doltdb.DataCacheKey]map[string]sql.Table
 
+	// cache of views
+	viewCache map[doltdb.DataCacheKey]map[string]string
+
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a
 	// DatabaseSessionState with Err != nil will return that err.
@@ -150,6 +153,47 @@ func (d *DatabaseSessionState) GetCachedTable(key doltdb.DataCacheKey, tableName
 	return table, ok
 }
 
+func (d *DatabaseSessionState) CacheViews(key doltdb.DataCacheKey, viewNames []string, viewDefs []string) {
+	if d.viewCache == nil {
+		d.viewCache = make(map[doltdb.DataCacheKey]map[string]string)
+	}
+
+	viewsForKey, ok := d.viewCache[key]
+	if !ok {
+		viewsForKey = make(map[string]string)
+		d.viewCache[key] = viewsForKey
+	}
+
+	for i := range viewNames {
+		viewName := strings.ToLower(viewNames[i])
+		viewsForKey[viewName] = viewDefs[i]
+	}
+}
+
+func (d *DatabaseSessionState) ViewsCached(key doltdb.DataCacheKey) bool {
+	if d.viewCache == nil {
+		return false
+	}
+
+	_, ok := d.viewCache[key]
+	return ok
+}
+
+func (d *DatabaseSessionState) GetCachedView(key doltdb.DataCacheKey, viewName string) (string, bool) {
+	viewName = strings.ToLower(viewName)
+
+	if d.viewCache == nil {
+		return "", false
+	}
+
+	viewsForKey, ok := d.viewCache[key]
+	if !ok {
+		return "", false
+	}
+
+	table, ok := viewsForKey[viewName]
+	return table, ok
+}
 
 func (d DatabaseSessionState) EditOpts() editor.Options {
 	return d.WriteSession.GetOptions()
