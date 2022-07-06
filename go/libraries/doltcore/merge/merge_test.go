@@ -311,7 +311,7 @@ func TestMergeCommits(t *testing.T) {
 	merger := NewMerger(context.Background(), rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, vrw)
 	opts := editor.TestEditorOptions(vrw)
 	// TODO: stats
-	merged, _, err := merger.MergeTable(context.Background(), tableName, opts, false)
+	merged, _, err := merger.MergeTable(context.Background(), tableName, opts, MergeOpts{ConflictStrategy: ConflictStompStrategyNone, IsCherryPick: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +361,7 @@ func TestNomsMergeCommits(t *testing.T) {
 
 	merger := NewMerger(context.Background(), rightCmHash, ancCmHash, root, mergeRoot, ancRoot, vrw)
 	opts := editor.TestEditorOptions(vrw)
-	merged, stats, err := merger.MergeTable(context.Background(), tableName, opts, false)
+	merged, stats, err := merger.MergeTable(context.Background(), tableName, opts, MergeOpts{ConflictStrategy: ConflictStompStrategyNone, IsCherryPick: false})
 	if err != nil {
 		t.Fatal(err)
 	}
