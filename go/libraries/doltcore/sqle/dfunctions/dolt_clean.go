@@ -55,9 +55,9 @@ func DoDoltClean(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	// Get all the needed roots.
-	roots, ok := dSess.GetRoots(ctx, dbName)
-	if !ok {
-		return 1, fmt.Errorf("Could not load database %s", dbName)
+	roots, err := dSess.GetRoots(ctx, dbName)
+	if err != nil {
+		return 1, err
 	}
 
 	roots, err = actions.CleanUntracked(ctx, roots, apr.Args, apr.ContainsAll(cli.DryRunFlag))

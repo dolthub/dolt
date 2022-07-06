@@ -88,9 +88,9 @@ func DoDoltMerge(ctx *sql.Context, args []string) (int, int, error) {
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, err
 	}
-	roots, ok := sess.GetRoots(ctx, dbName)
-	if !ok {
-		return noConflictsOrViolations, threeWayMerge, sql.ErrDatabaseNotFound.New(dbName)
+	roots, err := sess.GetRoots(ctx, dbName)
+	if err != nil {
+		return noConflictsOrViolations, threeWayMerge, err
 	}
 
 	if apr.Contains(cli.AbortParam) {
@@ -314,7 +314,10 @@ func executeNoFFMerge(
 	}
 
 	// The roots need refreshing after the above
-	roots, _ := dSess.GetRoots(ctx, dbName)
+	roots, err := dSess.GetRoots(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
 
 	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
 		Message:    spec.Msg,
@@ -371,9 +374,9 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 		}
 	}
 
-	roots, ok := sess.GetRoots(ctx, dbName)
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
+	roots, err := sess.GetRoots(ctx, dbName)
+	if err != nil {
+		return nil, err
 	}
 
 	mergeSpec, _, err := merge.NewMergeSpec(ctx, dbData.Rsr, ddb, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), t)

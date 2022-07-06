@@ -400,12 +400,11 @@ func (sess *Session) doCommit(ctx *sql.Context, dbName string, tx sql.Transactio
 
 // PendingCommitAllStaged returns a pending commit with all tables staged. Returns nil if there are no changes to stage.
 func (sess *Session) PendingCommitAllStaged(ctx *sql.Context, dbName string, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
-	roots, ok := sess.GetRoots(ctx, dbName)
-	if !ok {
-		return nil, fmt.Errorf("Couldn't get info for database %s", dbName)
+	roots, err := sess.GetRoots(ctx, dbName)
+	if err != nil {
+		return nil, err
 	}
 
-	var err error
 	roots, err = actions.StageAllTablesNoDocs(ctx, roots)
 	if err != nil {
 		return nil, err
@@ -485,7 +484,7 @@ func (sess *Session) CreateSavepoint(ctx *sql.Context, savepointName, dbName str
 		return err
 	}
 
-	dtx.CreateSavepoint(savepointName, dbState.GetRoots().Working)
+	dtx.CreateSavepoint(savepointName, dbState.WorkingRoot())
 	return nil
 }
 
@@ -560,16 +559,16 @@ func (sess *Session) GetDbData(ctx *sql.Context, dbName string) (env.DbData, boo
 }
 
 // GetRoots returns the current roots for a given database associated with the session
-func (sess *Session) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, bool) {
+func (sess *Session) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, error) {
 	dbState, ok, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
-		return doltdb.Roots{}, false
+		return doltdb.Roots{}, err
 	}
 	if !ok {
-		return doltdb.Roots{}, false
+		return doltdb.Roots{}, fmt.Errorf("couldn't find database state for %s", dbName)
 	}
 
-	return dbState.GetRoots(), true
+	return dbState.GetRoots(ctx)
 }
 
 // ResolveRootForRef returns the root value for the ref given, which refers to either a commit spec or is one of the
@@ -580,7 +579,11 @@ func (sess *Session) ResolveRootForRef(ctx *sql.Context, dbName, hashStr string)
 		// TODO: get from working set / staged update time
 		now := types.Timestamp(time.Now())
 		// TODO: no current database
-		roots, _ := sess.GetRoots(ctx, ctx.GetCurrentDatabase())
+		roots, err := sess.GetRoots(ctx, ctx.GetCurrentDatabase())
+		if err != nil {
+			return nil, nil, err
+		}
+
 		if hashStr == doltdb.Working {
 			return roots.Working, &now, nil
 		} else if hashStr == doltdb.Staged {
@@ -638,7 +641,7 @@ func (sess *Session) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 		return err
 	}
 
-	if rootsEqual(sessionState.GetRoots().Working, newRoot) {
+	if rootsEqual(sessionState.WorkingRoot(), newRoot) {
 		return nil
 	}
 
@@ -680,28 +683,6 @@ func (sess *Session) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.W
 		return fmt.Errorf("must switch working sets with SwitchWorkingSet")
 	}
 	sessionState.WorkingSet = ws
-
-	// cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
-	// if err != nil {
-	// 	return err
-	// }
-	//
-	// branchRef, err := ws.Ref().ToHeadRef()
-	// if err != nil {
-	// 	return err
-	// }
-	//
-	// cm, err := sessionState.dbData.Ddb.Resolve(ctx, cs, branchRef)
-	// if err != nil {
-	// 	return err
-	// }
-	// sessionState.headCommit = cm
-	//
-	// headRoot, err := cm.GetRootValue(ctx)
-	// if err != nil {
-	// 	return err
-	// }
-	// sessionState.headRoot = headRoot
 
 	err = sess.setSessionVarsForDb(ctx, dbName)
 	if err != nil {
@@ -750,27 +731,8 @@ func (sess *Session) SwitchWorkingSet(
 
 	// TODO: just call SetWorkingSet?
 	sessionState.WorkingSet = ws
-
-	// cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
-	// if err != nil {
-	// 	return err
-	// }
-	//
-	// branchRef, err := ws.Ref().ToHeadRef()
-	// if err != nil {
-	// 	return err
-	// }
-	//
-	// cm, err := sessionState.dbData.Ddb.Resolve(ctx, cs, branchRef)
-	// if err != nil {
-	// 	return err
-	// }
-	//
-	// sessionState.headCommit = cm
-	// sessionState.headRoot, err = cm.GetRootValue(ctx)
-	// if err != nil {
-	// 	return err
-	// }
+	sessionState.readOnlyHead = nil
+	sessionState.readOnlyHeadRoot = nil
 
 	err = sess.setSessionVarsForDb(ctx, dbName)
 	if err != nil {
@@ -836,7 +798,22 @@ func (sess *Session) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Com
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	return dbState.headCommit, nil
+	if dbState.WorkingSet == nil {
+		return dbState.readOnlyHead, nil
+	}
+
+	ws := dbState.WorkingSet
+	cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
+	if err != nil {
+		return nil, err
+	}
+
+	branchRef, err := ws.Ref().ToHeadRef()
+	if err != nil {
+		return nil, err
+	}
+
+	return dbState.dbData.Ddb.Resolve(ctx, cs, branchRef)
 }
 
 // SetSessionVariable is defined on sql.Session. We intercept it here to interpret the special semantics of the system
@@ -937,10 +914,8 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	}
 	sessionState.globalState = stateProvider.GetGlobalState()
 
-	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.Err != nil {
 		sessionState.Err = dbState.Err
-
 	} else if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
 		tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx, sessionState.WorkingSet)
@@ -951,7 +926,16 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 		if err = sess.SetWorkingSet(ctx, db.Name(), dbState.WorkingSet); err != nil {
 			return err
 		}
+	} else {
+		// WorkingSet is nil in the case of a read only, detached head DB
+		sessionState.readOnlyHead = dbState.HeadCommit
 
+		headRoot, err := dbState.HeadCommit.GetRootValue(ctx)
+		if err != nil {
+			return err
+		}
+
+		sessionState.readOnlyHeadRoot = headRoot
 	}
 
 	// After setting the initial root we have no state to commit
@@ -1032,7 +1016,10 @@ func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error 
 		}
 	}
 
-	roots := state.GetRoots()
+	roots, err := state.GetRoots(ctx)
+	if err != nil {
+		return err
+	}
 
 	h, err := roots.Working.HashOf()
 	if err != nil {
@@ -1051,15 +1038,6 @@ func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error 
 	if err != nil {
 		return err
 	}
-
-	// h, err = state.headCommit.HashOf()
-	// if err != nil {
-	// 	return err
-	// }
-	// err = sess.Session.SetSessionVariable(ctx, HeadKey(dbName), h.String())
-	// if err != nil {
-	// 	return err
-	// }
 
 	return nil
 }

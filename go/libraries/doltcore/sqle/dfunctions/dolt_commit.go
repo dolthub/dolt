@@ -60,9 +60,9 @@ func DoDoltCommit(ctx *sql.Context, args []string) (string, error) {
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
-	roots, ok := dSess.GetRoots(ctx, dbName)
-	if !ok {
-		return "", fmt.Errorf("Could not load database %s", dbName)
+	roots, err := dSess.GetRoots(ctx, dbName)
+	if err != nil {
+		return "", err
 	}
 
 	if apr.Contains(cli.AllFlag) {

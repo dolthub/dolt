@@ -15,7 +15,7 @@
 package dsess
 
 import (
-	"hash"
+	"context"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -47,8 +47,13 @@ type InitialDbState struct {
 
 type DatabaseSessionState struct {
 	dbName       string
-	headHash     hash.Hash
+
 	WorkingSet   *doltdb.WorkingSet
+
+	// readOnlyHead and readOnlyHeadRoot are only set for revision dbs pinned to a commit, in which case WorkingSet is nil
+	readOnlyHead *doltdb.Commit
+	readOnlyHeadRoot *doltdb.RootValue
+
 	dbData       env.DbData
 	WriteSession writer.WriteSession
 	globalState  globalstate.GlobalState
@@ -74,19 +79,48 @@ type DatabaseSessionState struct {
 	Err error
 }
 
-func (d DatabaseSessionState) GetRoots() doltdb.Roots {
+func (d DatabaseSessionState) GetRoots(ctx context.Context) (doltdb.Roots, error) {
 	if d.WorkingSet == nil {
 		return doltdb.Roots{
-			Head:    d.headRoot,
-			Working: d.headRoot,
-			Staged:  d.headRoot,
-		}
+			Head:    d.readOnlyHeadRoot,
+			Working: d.readOnlyHeadRoot,
+			Staged:  d.readOnlyHeadRoot,
+		}, nil
 	}
+
+	ws := d.WorkingSet
+	cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	branchRef, err := ws.Ref().ToHeadRef()
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	cm, err := d.dbData.Ddb.Resolve(ctx, cs, branchRef)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	headRoot, err := cm.GetRootValue(ctx)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
 	return doltdb.Roots{
-		Head:    d.headRoot,
+		Head:    headRoot,
 		Working: d.WorkingSet.WorkingRoot(),
 		Staged:  d.WorkingSet.StagedRoot(),
+	}, nil
+}
+
+func (d DatabaseSessionState) WorkingRoot() *doltdb.RootValue {
+	if d.WorkingSet == nil {
+		return d.readOnlyHeadRoot
 	}
+	return d.WorkingSet.WorkingRoot()
 }
 
 func (d *DatabaseSessionState) CacheTableIndexes(key doltdb.DataCacheKey, table string, indexes []sql.Index) {

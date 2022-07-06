@@ -101,9 +101,10 @@ func (dt *UnscopedDiffTable) PartitionRows(ctx *sql.Context, partition sql.Parti
 
 func (dt *UnscopedDiffTable) newWorkingSetRowItr(ctx *sql.Context) (sql.RowIter, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
-	roots, ok := sess.GetRoots(ctx, ctx.GetCurrentDatabase())
-	if !ok {
-		return nil, fmt.Errorf("unable to lookup roots for database %s", ctx.GetCurrentDatabase())
+
+	roots, err := sess.GetRoots(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return nil, err
 	}
 
 	staged, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)

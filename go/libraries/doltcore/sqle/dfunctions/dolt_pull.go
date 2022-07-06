@@ -151,9 +151,9 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 				continue
 			}
 
-			roots, ok := sess.GetRoots(ctx, dbName)
-			if !ok {
-				return noConflictsOrViolations, threeWayMerge, sql.ErrDatabaseNotFound.New(dbName)
+			roots, err := sess.GetRoots(ctx, dbName)
+			if err != nil {
+				return noConflictsOrViolations, threeWayMerge, err
 			}
 
 			mergeSpec, err := createMergeSpec(ctx, sess, dbName, apr, remoteTrackRef.String())

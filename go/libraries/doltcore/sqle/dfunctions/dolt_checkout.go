@@ -71,9 +71,9 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	roots, ok := dSess.GetRoots(ctx, dbName)
-	if !ok {
-		return 1, fmt.Errorf("Could not load database %s", dbName)
+	roots, err := dSess.GetRoots(ctx, dbName)
+	if err != nil {
+		return 1, err
 	}
 
 	if newBranch, newBranchOk := apr.GetValue(cli.CheckoutCoBranch); newBranchOk {

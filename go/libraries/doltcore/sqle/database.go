@@ -301,12 +301,7 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 		return cachedTable, true, nil
 	}
 
-	head, err := ds.GetHeadCommit(ctx, db.Name())
-	if err != nil {
-		return nil, false, err
-	}
-
-	tbl, ok, err := db.getTableInsensitive(ctx, head, root, tblName)
+	tbl, ok, err := db.getTableInsensitive(ctx, nil, root, tblName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -367,6 +362,7 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 	}
 }
 
+// getTableInsensitive returns the table with the name given from the root given. For certain system tables,
 func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, root *doltdb.RootValue, tblName string) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 
@@ -375,6 +371,16 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ro
 	switch {
 	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
 		suffix := tblName[len(doltdb.DoltDiffTablePrefix):]
+
+		if head == nil {
+			ds := dsess.DSessFromSess(ctx.Session)
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.Name())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
 		dt, err := dtables.NewDiffTable(ctx, suffix, db.ddb, root, head)
 		if err != nil {
 			return nil, false, err
@@ -398,6 +404,16 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ro
 		if !ok {
 			return nil, false, nil
 		}
+
+		if head == nil {
+			ds := dsess.DSessFromSess(ctx.Session)
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.Name())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
 		return NewHistoryTable(baseTable.(*AlterableDoltTable).DoltTable, db.ddb, head), true, nil
 
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
@@ -421,8 +437,26 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ro
 	found := false
 	switch lwrName {
 	case doltdb.LogTableName:
+		if head == nil {
+			ds := dsess.DSessFromSess(ctx.Session)
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.Name())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
 		dt, found = dtables.NewLogTable(ctx, db.ddb, head), true
 	case doltdb.DiffTableName:
+		if head == nil {
+			ds := dsess.DSessFromSess(ctx.Session)
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.Name())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
 		dt, found = dtables.NewUnscopedDiffTable(ctx, db.ddb, head), true
 	case doltdb.TableOfTablesInConflictName:
 		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.name, db.ddb), true
@@ -651,7 +685,7 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 		return nil, fmt.Errorf("no root value found in session")
 	}
 
-	return dbState.GetRoots().Working, nil
+	return dbState.WorkingRoot(), nil
 }
 
 func (db Database) GetWorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
@@ -671,16 +705,6 @@ func (db Database) GetWorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	sess := dsess.DSessFromSess(ctx.Session)
 	return sess.SetRoot(ctx, db.name, newRoot)
-}
-
-// GetHeadRoot returns root value for the current session head
-func (db Database) GetHeadRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
-	sess := dsess.DSessFromSess(ctx.Session)
-	head, err := sess.GetHeadCommit(ctx, db.name)
-	if err != nil {
-		return nil, err
-	}
-	return head.GetRootValue(ctx)
 }
 
 // DropTable drops the table with the name given.
@@ -756,7 +780,13 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 		return sql.ErrTableAlreadyExists.New(tableName)
 	}
 
-	headRoot, err := db.GetHeadRoot(ctx)
+	sess := dsess.DSessFromSess(ctx.Session)
+	headCommit, err := sess.GetHeadCommit(ctx, db.name)
+	if err != nil {
+		return err
+	}
+
+	headRoot, err := headCommit.GetRootValue(ctx)
 	if err != nil {
 		return err
 	}

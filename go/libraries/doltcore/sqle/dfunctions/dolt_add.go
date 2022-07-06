@@ -55,12 +55,13 @@ func DoDoltAdd(ctx *sql.Context, args []string) (int, error) {
 	allFlag := apr.Contains(cli.AllFlag)
 
 	dSess := dsess.DSessFromSess(ctx.Session)
-	roots, ok := dSess.GetRoots(ctx, dbName)
+	roots, err := dSess.GetRoots(ctx, dbName)
+
 	if apr.NArg() == 0 && !allFlag {
 		return 1, fmt.Errorf("Nothing specified, nothing added. Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		if !ok {
-			return 1, fmt.Errorf("db session not found")
+		if err != nil {
+			return 1, err
 		}
 
 		roots, err = actions.StageAllTablesNoDocs(ctx, roots)

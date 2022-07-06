@@ -106,9 +106,11 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 	ctx := sql.NewEmptyContext()
 	sess, err := dsess.NewDoltSession(ctx, ctx.Session.(*sql.BaseSession), pro, config.NewEmptyMapConfig(), getDbState(t, db, dEnv))
 	require.NoError(t, err)
-	roots, ok := sess.GetRoots(ctx, db.Name())
-	require.True(t, ok)
+
+	roots, err := sess.GetRoots(ctx, db.Name())
+	require.NoError(t, err)
 	err = sess.SetRoot(sqlCtx, db.Name(), roots.Working)
+	require.NoError(t, err)
 
 	it := []*indexTuple{
 		idxv1ToTuple,

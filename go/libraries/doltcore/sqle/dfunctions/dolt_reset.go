@@ -66,9 +66,9 @@ func DoDoltReset(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	// Get all the needed roots.
-	roots, ok := dSess.GetRoots(ctx, dbName)
-	if !ok {
-		return 1, fmt.Errorf("Could not load database %s", dbName)
+	roots, err := dSess.GetRoots(ctx, dbName)
+	if err != nil {
+		return 1, err
 	}
 
 	if apr.Contains(cli.HardResetParam) {

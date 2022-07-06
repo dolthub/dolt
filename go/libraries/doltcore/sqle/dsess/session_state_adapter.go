@@ -40,7 +40,12 @@ func (s SessionStateAdapter) UpdateStagedRoot(ctx context.Context, newRoot *dolt
 	if !ok {
 		return fmt.Errorf("non-sql context passed to SessionStateAdapter")
 	}
-	roots, _ := s.session.GetRoots(sqlCtx, s.dbName)
+
+	roots, err := s.session.GetRoots(sqlCtx, s.dbName)
+	if err != nil {
+		return err
+	}
+
 	roots.Staged = newRoot
 	return s.session.SetRoots(ctx.(*sql.Context), s.dbName, roots)
 }
@@ -50,7 +55,12 @@ func (s SessionStateAdapter) UpdateWorkingRoot(ctx context.Context, newRoot *dol
 	if !ok {
 		return fmt.Errorf("non-sql context passed to SessionStateAdapter")
 	}
-	roots, _ := s.session.GetRoots(sqlCtx, s.dbName)
+
+	roots, err := s.session.GetRoots(sqlCtx, s.dbName)
+	if err != nil {
+		return err
+	}
+
 	roots.Working = newRoot
 	return s.session.SetRoots(ctx.(*sql.Context), s.dbName, roots)
 }
@@ -83,7 +93,7 @@ func NewSessionStateAdapter(session *Session, dbName string, remotes map[string]
 }
 
 func (s SessionStateAdapter) GetRoots(ctx context.Context) (doltdb.Roots, error) {
-	return s.session.GetDbStates()[s.dbName].GetRoots(), nil
+	return s.session.GetDbStates()[s.dbName].GetRoots(ctx)
 }
 
 func (s SessionStateAdapter) CWBHeadRef() ref.DoltRef {
