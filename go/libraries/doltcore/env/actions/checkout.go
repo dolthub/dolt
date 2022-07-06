@@ -18,7 +18,6 @@ import (
 	"context"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
@@ -28,27 +27,20 @@ func CheckoutAllTables(ctx context.Context, roots doltdb.Roots, dbData env.DbDat
 		return err
 	}
 
-	docs := doltdocs.SupportedDocs
-	return checkoutTablesAndDocs(ctx, dbData, roots, tbls, docs)
+	return checkoutTables(ctx, dbData, roots, tbls)
 }
 
-// CheckoutTablesAndDocs takes in a set of tables and docs and checks them out to another branch.
-func CheckoutTablesAndDocs(ctx context.Context, roots doltdb.Roots, dbData env.DbData, tables []string, docs doltdocs.Docs) error {
-	return checkoutTablesAndDocs(ctx, dbData, roots, tables, docs)
+// CheckoutTables takes in a set of tables and docs and checks them out to another branch.
+func CheckoutTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData, tables []string) error {
+	return checkoutTables(ctx, dbData, roots, tables)
 }
 
-func checkoutTables(ctx context.Context, dbData env.DbData, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
+func checkoutTables(ctx context.Context, dbData env.DbData, roots doltdb.Roots, tbls []string) error {
 	roots, err := MoveTablesFromHeadToWorking(ctx, roots, tbls)
 	if err != nil {
-		return doltdb.Roots{}, err
+		return err
 	}
-
-	err = dbData.Rsw.UpdateWorkingRoot(ctx, roots.Working)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	return roots, nil
+	return dbData.Rsw.UpdateWorkingRoot(ctx, roots.Working)
 }
 
 // MoveTablesFromHeadToWorking replaces the tables named from the given head to the given working root, overwriting any
@@ -101,31 +93,4 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 	}
 
 	return roots, nil
-}
-
-func checkoutDocs(ctx context.Context, dbData env.DbData, roots doltdb.Roots, docs doltdocs.Docs) error {
-	if len(docs) > 0 {
-		var err error
-		roots, docs, err = getUpdatedWorkingAndStagedWithDocs(ctx, roots, docs)
-		if err != nil {
-			return err
-		}
-	}
-
-	err := dbData.Rsw.UpdateWorkingRoot(ctx, roots.Working)
-	if err != nil {
-		return err
-	}
-
-	return dbData.Drw.WriteDocsToDisk(docs)
-}
-
-func checkoutTablesAndDocs(ctx context.Context, dbData env.DbData, roots doltdb.Roots, tbls []string, docs doltdocs.Docs) error {
-	var err error
-	roots, err = checkoutTables(ctx, dbData, roots, tbls)
-	if err != nil {
-		return err
-	}
-
-	return checkoutDocs(ctx, dbData, roots, docs)
 }

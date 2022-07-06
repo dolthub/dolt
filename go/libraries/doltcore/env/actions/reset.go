@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
@@ -116,11 +115,6 @@ func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, roots do
 		return err
 	}
 
-	err = SaveTrackedDocsFromWorking(ctx, dEnv)
-	if err != nil {
-		return err
-	}
-
 	if newHead != nil {
 		err = dEnv.DoltDB.SetHeadToCommit(ctx, dEnv.RepoStateReader().CWBHeadRef(), newHead)
 		if err != nil {
@@ -154,37 +148,15 @@ func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 // ResetSoft resets the staged value from HEAD for the tables given and returns the updated roots.
 func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, roots doltdb.Roots) (doltdb.Roots, error) {
 	tables, err := getUnionedTables(ctx, tables, roots.Staged, roots.Head)
-
 	if err != nil {
 		return doltdb.Roots{}, err
-	}
-
-	tables, docs, err := GetTablesOrDocs(dbData.Drw, tables)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	if len(docs) > 0 {
-		tables = RemoveDocsTable(tables)
 	}
 
 	err = ValidateTables(context.TODO(), tables, roots.Staged, roots.Head)
-
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
-
-	roots, err = resetDocs(ctx, roots, docs)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	roots, err = resetStaged(ctx, roots, tables)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	return roots, nil
+	return resetStaged(ctx, roots, tables)
 }
 
 // ResetSoftToRef matches the `git reset --soft <REF>` pattern. It resets both staged and head to the previous ref
@@ -230,26 +202,6 @@ func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot
 	}
 
 	return tables, nil
-}
-
-// resetDocs resets the working and staged docs with docs from head.
-func resetDocs(ctx context.Context, roots doltdb.Roots, docs doltdocs.Docs) (doltdb.Roots, error) {
-	docs, err := doltdocs.GetDocsFromRoot(ctx, roots.Head, doltdocs.GetDocNamesFromDocs(docs)...)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	roots.Staged, err = doltdocs.UpdateRootWithDocs(ctx, roots.Staged, docs)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	return roots, nil
 }
 
 func resetStaged(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {

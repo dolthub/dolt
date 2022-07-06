@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -89,9 +88,6 @@ type DoltEnv struct {
 	RepoState *RepoState
 	RSLoadErr error
 
-	Docs        doltdocs.Docs
-	DocsLoadErr error
-
 	DoltDB      *doltdb.DoltDB
 	DBLoadError error
 
@@ -105,7 +101,6 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 	config, cfgErr := LoadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
 
-	docs, docsErr := doltdocs.LoadDocs(fs)
 	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr, fs)
 
 	dEnv := &DoltEnv{
@@ -114,8 +109,6 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 		CfgLoadErr:  cfgErr,
 		RepoState:   repoState,
 		RSLoadErr:   rsErr,
-		Docs:        docs,
-		DocsLoadErr: docsErr,
 		DoltDB:      ddb,
 		DBLoadError: dbLoadErr,
 		FS:          fs,
@@ -666,38 +659,6 @@ func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {
 	return &repoStateWriter{dEnv}
 }
 
-type docsReadWriter struct {
-	FS filesys.Filesys
-}
-
-// GetDocsOnDisk reads the filesystem and returns all docs.
-func (d *docsReadWriter) GetDocsOnDisk(docNames ...string) (doltdocs.Docs, error) {
-	if docNames != nil {
-		ret := make(doltdocs.Docs, len(docNames))
-
-		for i, name := range docNames {
-			doc, err := doltdocs.GetDoc(d.FS, name)
-			if err != nil {
-				return nil, err
-			}
-			ret[i] = doc
-		}
-
-		return ret, nil
-	}
-
-	return doltdocs.GetSupportedDocs(d.FS)
-}
-
-// WriteDocsToDisk creates or updates the dolt_docs table with docs.
-func (d *docsReadWriter) WriteDocsToDisk(docs doltdocs.Docs) error {
-	return docs.Save(d.FS)
-}
-
-func (dEnv *DoltEnv) DocsReadWriter() DocsReadWriter {
-	return &docsReadWriter{dEnv.FS}
-}
-
 func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
 	commit, err := dEnv.HeadCommit(ctx)
 	if err != nil {
@@ -716,7 +677,6 @@ func (dEnv *DoltEnv) DbData() DbData {
 		Ddb: dEnv.DoltDB,
 		Rsw: dEnv.RepoStateWriter(),
 		Rsr: dEnv.RepoStateReader(),
-		Drw: dEnv.DocsReadWriter(),
 	}
 }
 

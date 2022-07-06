@@ -66,7 +66,7 @@ func DoDoltCommit(ctx *sql.Context, args []string) (string, error) {
 	}
 
 	if apr.Contains(cli.AllFlag) {
-		roots, err = actions.StageAllTablesNoDocs(ctx, roots)
+		roots, err = actions.StageAllTables(ctx, roots)
 		if err != nil {
 			return "", fmt.Errorf(err.Error())
 		}

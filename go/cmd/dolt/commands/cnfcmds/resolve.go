@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
@@ -141,12 +140,10 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 	} else {
 		err = merge.AutoResolveTables(ctx, dEnv, autoResolveFunc, tbls)
 	}
-
 	if err != nil {
 		return errhand.BuildDError("error: failed to resolve").AddCause(err).Build()
 	}
-
-	return saveDocsOnResolve(ctx, dEnv)
+	return nil
 }
 
 func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
@@ -225,14 +222,5 @@ func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 
 	valid := len(keysToResolve) - len(invalid) - len(notFound)
 	cli.Println(valid, "rows resolved successfully")
-
-	return saveDocsOnResolve(ctx, dEnv)
-}
-
-func saveDocsOnResolve(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseError {
-	err := actions.SaveTrackedDocsFromWorking(ctx, dEnv)
-	if err != nil {
-		return errhand.BuildDError("error: failed to update docs on the filesystem").AddCause(err).Build()
-	}
 	return nil
 }

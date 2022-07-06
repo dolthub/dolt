@@ -408,7 +408,7 @@ func (sess *Session) PendingCommitAllStaged(ctx *sql.Context, dbName string, pro
 	}
 
 	var err error
-	roots, err = actions.StageAllTablesNoDocs(ctx, roots)
+	roots, err = actions.StageAllTables(ctx, roots)
 	if err != nil {
 		return nil, err
 	}

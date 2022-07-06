@@ -272,7 +272,7 @@ func UpdateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *d
 	return roots, nil
 }
 
-func CheckoutBranchNoDocs(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, rsw env.RepoStateWriter, branchRef ref.BranchRef, force bool) error {
+func checkoutBranchNoDocs(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, rsw env.RepoStateWriter, branchRef ref.BranchRef, force bool) error {
 	roots, err := UpdateRootsForBranch(ctx, roots, branchRoot, force)
 	if err != nil {
 		return err
@@ -321,17 +321,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		return err
 	}
 
-	unstagedDocs, err := GetUnstagedDocsFromRoots(ctx, dEnv, roots)
-	if err != nil {
-		return err
-	}
-
-	err = CheckoutBranchNoDocs(ctx, roots, branchRoot, dEnv.RepoStateWriter(), branchRef, force)
-	if err != nil {
-		return err
-	}
-
-	return SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
+	return checkoutBranchNoDocs(ctx, roots, branchRoot, dEnv.RepoStateWriter(), branchRef, force)
 }
 
 // BranchRoot returns the root value at the branch with the name given

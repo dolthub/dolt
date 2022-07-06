@@ -194,15 +194,11 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 
 	// If we couldn't find a branch but the repo cloned successfully, it's empty. Initialize it instead of pulling from
 	// the remote.
-	performPull := true
 	if branch == "" {
-		err = InitEmptyClonedRepo(ctx, dEnv)
-		if err != nil {
+		if err = InitEmptyClonedRepo(ctx, dEnv); err != nil {
 			return nil
 		}
-
 		branch = env.GetDefaultInitBranch(dEnv.Config)
-		performPull = false
 	}
 
 	cs, _ := doltdb.NewCommitSpec(branch)
@@ -243,13 +239,6 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 			if err != nil {
 				return fmt.Errorf("%w: %s; %s", ErrFailedToDeleteBranch, brnch.String(), err.Error())
 			}
-		}
-	}
-
-	if performPull {
-		err = SaveDocsFromRoot(ctx, rootVal, dEnv)
-		if err != nil {
-			return ErrFailedToUpdateDocs
 		}
 	}
 

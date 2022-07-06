@@ -18,45 +18,13 @@ import (
 	"context"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 )
 
-func StageTables(ctx context.Context, roots doltdb.Roots, docs doltdocs.Docs, tbls []string) (doltdb.Roots, error) {
-	if len(docs) > 0 {
-		var err error
-		roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
-		if err != nil {
-			return doltdb.Roots{}, err
-		}
-	}
-
+func StageTables(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
 	return stageTables(ctx, roots, tbls)
 }
 
-func StageTablesNoDocs(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
-	return stageTables(ctx, roots, tbls)
-}
-
-func StageAllTables(ctx context.Context, roots doltdb.Roots, docs doltdocs.Docs) (doltdb.Roots, error) {
-	var err error
-
-	// To stage all docs for removal, use an empty slice instead of nil
-	if docs != nil {
-		roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
-		if err != nil {
-			return doltdb.Roots{}, err
-		}
-	}
-
-	tbls, err := doltdb.UnionTableNames(ctx, roots.Staged, roots.Working)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	return stageTables(ctx, roots, tbls)
-}
-
-func StageAllTablesNoDocs(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
+func StageAllTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
 	tbls, err := doltdb.UnionTableNames(ctx, roots.Staged, roots.Working)
 	if err != nil {
 		return doltdb.Roots{}, err

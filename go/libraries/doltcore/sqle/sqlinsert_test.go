@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -377,14 +376,6 @@ func TestExecuteInsert(t *testing.T) {
 }
 
 var systemTableInsertTests = []InsertTest{
-	{
-		Name: "insert into dolt_docs",
-		AdditionalSetup: CreateTableFn("dolt_docs",
-			doltdocs.DocsSchema,
-			NewRow(types.String("LICENSE.md"), types.String("A license"))),
-		InsertQuery: "insert into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
-		ExpectedErr: "cannot insert into table",
-	},
 	{
 		Name: "insert into dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,

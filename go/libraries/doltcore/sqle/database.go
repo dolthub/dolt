@@ -86,7 +86,6 @@ type Database struct {
 	ddb      *doltdb.DoltDB
 	rsr      env.RepoStateReader
 	rsw      env.RepoStateWriter
-	drw      env.DocsReadWriter
 	gs       globalstate.GlobalState
 	editOpts editor.Options
 }
@@ -173,7 +172,6 @@ func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Databa
 		ddb:      dbData.Ddb,
 		rsr:      dbData.Rsr,
 		rsw:      dbData.Rsw,
-		drw:      dbData.Drw,
 		gs:       globalstate.NewGlobalStateStore(),
 		editOpts: editOpts,
 	}
@@ -250,16 +248,11 @@ func (db Database) GetStateWriter() env.RepoStateWriter {
 	return db.rsw
 }
 
-func (db Database) GetDocsReadWriter() env.DocsReadWriter {
-	return db.drw
-}
-
 func (db Database) DbData() env.DbData {
 	return env.DbData{
 		Ddb: db.ddb,
 		Rsw: db.rsw,
 		Rsr: db.rsr,
-		Drw: db.drw,
 	}
 }
 
@@ -413,7 +406,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ro
 			map[string]env.Remote{},
 			map[string]env.BranchConfig{},
 			map[string]env.Remote{})
-		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, adapter, db.drw), true
+		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, adapter), true
 	}
 	if found {
 		return dt, found, nil

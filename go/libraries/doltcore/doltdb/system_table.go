@@ -20,9 +20,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
-
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -152,6 +153,20 @@ var generatedSystemTablePrefixes = []string{
 	DoltConfTablePrefix,
 	DoltConstViolTablePrefix,
 }
+
+const (
+	// LicenseDoc is the key for accessing the license within the docs table
+	LicenseDoc = "LICENSE.md"
+	// ReadmeDoc is the key for accessing the readme within the docs table
+	ReadmeDoc = "README.md"
+)
+
+// todo(andy)
+var doltDocsColumns = schema.NewColCollection(
+	schema.NewColumn(DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn(DocTextColumnName, schema.DocTextTag, types.StringKind, false),
+)
+var DocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
 
 const (
 	// DocTableName is the name of the dolt table containing documents such as the license and readme

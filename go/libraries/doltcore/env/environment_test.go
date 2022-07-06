@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,7 +26,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -103,10 +101,6 @@ func TestNonRepoDir(t *testing.T) {
 	if dEnv.RSLoadErr == nil {
 		t.Error("File doesn't exist.  There should be an error if the directory doesn't exist.")
 	}
-
-	if dEnv.DocsLoadErr != nil {
-		t.Error("There shouldn't be an error if the directory doesn't exist.")
-	}
 }
 
 func TestRepoDir(t *testing.T) {
@@ -119,7 +113,6 @@ func TestRepoDir(t *testing.T) {
 	assert.Equal(t, "bheni", userName)
 
 	assert.NoError(t, dEnv.CfgLoadErr)
-	assert.NoError(t, dEnv.DocsLoadErr)
 	// RSLoadErr will be set because the above method of creating the repo doesn't initialize a valid working or staged
 }
 
@@ -133,7 +126,6 @@ func TestRepoDirNoLocal(t *testing.T) {
 	}
 
 	require.NoError(t, dEnv.CfgLoadErr)
-	require.NoError(t, dEnv.DocsLoadErr)
 	// RSLoadErr will be set because the above method of creating the repo doesn't initialize a valid working or staged
 
 	err := dEnv.Config.CreateLocalConfig(map[string]string{"user.name": "bheni"})
@@ -158,13 +150,6 @@ func TestInitRepo(t *testing.T) {
 
 	_, err = dEnv.StagedRoot(context.Background())
 	require.NoError(t, err)
-
-	for _, doc := range doltdocs.SupportedDocs {
-		docPath := doltdocs.GetDocFilePath(doc.File)
-		if len(docPath) > 0 && !strings.Contains(doc.File, docPath) {
-			t.Error("Doc file path should exist: ", doc.File)
-		}
-	}
 }
 
 // TestMigrateWorkingSet tests migrating a repo with the old RepoState fields to a new one
@@ -172,7 +157,6 @@ func TestMigrateWorkingSet(t *testing.T) {
 	t.Skip("This fails under race on ubuntu / mac")
 
 	// TODO: t.TempDir breaks on windows because of automatic cleanup (files still in use)
-	// dir := t.TempDir()
 	working, err := os.MkdirTemp("", "TestMigrateWorkingSet*")
 	require.NoError(t, err)
 
@@ -229,7 +213,6 @@ func TestMigrateWorkingSet(t *testing.T) {
 	dEnv = Load(context.Background(), testHomeDirFunc, dEnv.FS, doltdb.LocalDirDoltDB, "test")
 	assert.NoError(t, dEnv.RSLoadErr)
 	assert.NoError(t, dEnv.CfgLoadErr)
-	assert.NoError(t, dEnv.DocsLoadErr)
 
 	ws, err = dEnv.WorkingSet(context.Background())
 	require.NoError(t, err)

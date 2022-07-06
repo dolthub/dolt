@@ -86,17 +86,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return handleStatusVErr(err)
 	}
 
-	docsOnDisk, err := dEnv.DocsReadWriter().GetDocsOnDisk()
-	if err != nil {
-		return handleStatusVErr(err)
-	}
-
-	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, roots, docsOnDisk)
-	if err != nil {
-		return handleStatusVErr(err)
-	}
-
-	err = PrintStatus(ctx, dEnv, staged, notStaged, workingTblsInConflict, workingTblsWithViolations, stagedDocDiffs, notStagedDocDiffs)
+	err = PrintStatus(ctx, dEnv, staged, notStaged, workingTblsInConflict, workingTblsWithViolations)
 	if err != nil {
 		return handleStatusVErr(err)
 	}
@@ -105,7 +95,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 }
 
 // TODO: working docs in conflict param not used here
-func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, workingTblsInConflict, workingTblsWithViolations []string, stagedDocs, notStagedDocs *diff.DocDiffs) error {
+func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, workingTblsInConflict, workingTblsWithViolations []string) error {
 	cli.Printf(branchHeader, dEnv.RepoStateReader().CWBHeadRef().GetPath())
 
 	err := printRemoteRefTrackingInfo(ctx, dEnv)
@@ -130,8 +120,8 @@ func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTb
 		}
 	}
 
-	n := printStagedDiffs(cli.CliOut, stagedTbls, stagedDocs, true)
-	n = PrintDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, true, n, workingTblsInConflict, workingTblsWithViolations)
+	n := printStagedDiffs(cli.CliOut, stagedTbls, true)
+	n = PrintDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, true, n, workingTblsInConflict, workingTblsWithViolations)
 
 	if !mergeActive && n == 0 {
 		cli.Println("nothing to commit, working tree clean")

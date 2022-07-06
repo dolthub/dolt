@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -47,18 +46,10 @@ type RepoStateWriter interface {
 	UpdateBranch(name string, new BranchConfig) error
 }
 
-type DocsReadWriter interface {
-	// GetDocsOnDisk returns the docs in the filesytem optionally filtered by docNames.
-	GetDocsOnDisk(docNames ...string) (doltdocs.Docs, error)
-	// WriteDocsToDisk updates the documents stored in the filesystem with the contents in docs.
-	WriteDocsToDisk(docs doltdocs.Docs) error
-}
-
 type DbData struct {
 	Ddb *doltdb.DoltDB
 	Rsw RepoStateWriter
 	Rsr RepoStateReader
-	Drw DocsReadWriter
 }
 
 type BranchConfig struct {

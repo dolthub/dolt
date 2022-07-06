@@ -87,17 +87,12 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if apr.NArg() == 0 && !allFlag {
 		cli.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		roots, err = actions.StageAllTables(ctx, roots, dEnv.Docs)
+		roots, err = actions.StageAllTables(ctx, roots)
 		if err != nil {
 			return handleStageError(err)
 		}
 	} else {
-		tables, docs, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), apr.Args)
-		if err != nil {
-			return handleStageError(err)
-		}
-
-		roots, err = actions.StageTables(ctx, roots, docs, tables)
+		roots, err = actions.StageTables(ctx, roots, apr.Args)
 		if err != nil {
 			return handleStageError(err)
 		}

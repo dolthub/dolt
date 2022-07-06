@@ -168,7 +168,6 @@ func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *do
 		Ddb: ddb,
 		Rsw: dEnv.RepoStateWriter(),
 		Rsr: dEnv.RepoStateReader(),
-		Drw: dEnv.DocsReadWriter(),
 	}
 
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
