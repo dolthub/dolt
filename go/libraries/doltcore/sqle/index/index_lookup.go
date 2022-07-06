@@ -60,18 +60,25 @@ func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, ilu sql.IndexLooku
 	}
 }
 
-func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, columns []string, durableState *durableIndexState) (sql.RowIter2, error) {
+func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, projections []string, durableState *durableIndexState) (sql.RowIter2, error) {
+	if projections == nil {
+		projections = make([]string, len(pkSch.Schema))
+		for i := range projections {
+			projections[i] = pkSch.Schema[i].Name
+		}
+	}
+
 	if sql.IsKeyless(pkSch.Schema) {
 		// in order to resolve row cardinality, keyless indexes must always perform
 		// an indirect lookup through the clustered index.
-		return newProllyKeylessIndexIter(ctx, idx, r, pkSch, durableState.Primary, durableState.Secondary)
+		return newProllyKeylessIndexIter(ctx, idx, r, pkSch, projections, durableState.Primary, durableState.Secondary)
 	}
 
-	covers := idx.coversColumns(durableState, columns)
+	covers := idx.coversColumns(durableState, projections)
 	if covers {
-		return newProllyCoveringIndexIter(ctx, idx, r, pkSch, durableState.Secondary)
+		return newProllyCoveringIndexIter(ctx, idx, r, pkSch, projections, durableState.Secondary)
 	}
-	return newProllyIndexIter(ctx, idx, r, pkSch, durableState.Primary, durableState.Secondary)
+	return newProllyIndexIter(ctx, idx, r, pkSch, projections, durableState.Primary, durableState.Secondary)
 }
 
 func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, columns []string, durableState *durableIndexState) (sql.RowIter, error) {
@@ -89,10 +96,6 @@ func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRa
 type IndexLookupKeyIterator interface {
 	// NextKey returns the next key if it exists, and io.EOF if it does not.
 	NextKey(ctx *sql.Context) (row.TaggedValues, error)
-}
-
-func DoltIndexFromLookup(lookup sql.IndexLookup) DoltIndex {
-	return lookup.(*doltIndexLookup).idx
 }
 
 func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup) (sql.PartitionIter, error) {
