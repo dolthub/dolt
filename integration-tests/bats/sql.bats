@@ -58,7 +58,8 @@ teardown() {
     ! [[ "$output" =~ "privileges.db" ]] || false
 
     # create new_user
-    dolt sql -q "create user new_user"
+    run dolt sql -q "create user new_user"
+    [ "$status" -eq 0 ]
 
     # show users, expect root user and new_user
     run dolt sql -q "select user from mysql.user;"
@@ -81,46 +82,44 @@ teardown() {
 @test "sql: dolt sql -q specify doltcfg dir" {
     # remove any previous config directories
     rm -rf .doltcfg
-    rm -rf testdoltcfg
+    rm -rf thisisthedoltdir
 
-    run dolt sql --doltcfg-dir=testdoltcfgdir -q "show tables from mysql;"
+    # show users, expect just root user
+    run dolt sql --doltcfg-dir=thisisthedoltdir -q "select user from mysql.user;"
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    # check that only custom doltcfg directory exists
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ "thisisthedoltdir" ]] || false
+
+    # check for no privileges.db file
+    run ls thisisthedoltdir
+    ! [[ "$output" =~ "privileges.db" ]] || false
+
+    # create new_user
+    dolt sql --doltcfg-dir=thisisthedoltdir -q "create user new_user"
+
+    # show users, expect root user and new_user
+    run dolt sql --doltcfg-dir=thisisthedoltdir -q "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
 
     # check for config directory
     run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ "thisisthedoltdir" ]] || false
+
+    # check for no privileges.db file
+    run ls thisisthedoltdir
+    [[ "$output" =~ "privileges.db" ]] || false
 
     # remove config directory just in case
     rm -rf .doltcfg
-}
-
-@test "sql: dolt sql -q without privilege file doesn't persist" {
-    # mysql database exists and has privilege tables
-    run dolt sql -q "show tables from mysql;"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "user" ]] || false
-    [[ "$output" =~ "role_edges" ]] || false
-
-    # show users, expect just root user
-    run dolt sql -q "select user from mysql.user;"
-    [[ "$output" =~ "root" ]] || false
-    ! [[ "$output" =~ "new_user" ]] || false
-
-    # create a new user, fails
-    run dolt sql -q "create user new_user;"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "no privilege file specified, to persist users/grants run with --privilege-file=<file_path>" ]] || false
-
-    # there shouldn't be a mysql.db file
-    run ls
-    ! [[ "$output" =~ "privs.db" ]] || false
-
-    # show users, expect just root user
-    run dolt sql -q "select user from mysql.user;"
-    [[ "$output" =~ "root" ]] || false
-    ! [[ "$output" =~ "new_user" ]] || false
-
-    # remove privs.db just in case
-    rm -f privs.db
+    rm -rf thisisthedoltdir
 }
 
 @test "sql: dolt sql -q with privilege file persists" {
@@ -178,6 +177,17 @@ teardown() {
 
     cd ..
     rm -f privs.db
+}
+
+@test "sql: dolt sql -q .doltcfg in parent directory errors" {
+    mkdir .doltcfg
+    mkdir inner_db
+    cd inner_db
+    mkdir .doltcfg
+
+    run dolt sql -q "show databases;"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "multiple .doltcfg directories detected" ]] || false
 }
 
 @test "sql: errors do not write incomplete rows" {

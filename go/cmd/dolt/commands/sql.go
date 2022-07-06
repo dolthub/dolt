@@ -254,7 +254,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
-		return queryMode(ctx, mrEnv, initialRoots, apr, query, currentDb, format, usage)
+		return queryMode(ctx, mrEnv, initialRoots, apr, query, currentDb, format, usage, privsFp)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
 		return savedQueryMode(ctx, mrEnv, initialRoots, savedQueryName, currentDb, format, usage, privsFp)
 	} else if apr.Contains(listSavedFlag) {
@@ -358,6 +358,7 @@ func queryMode(
 	currentDb string,
 	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
+	privsFp string,
 ) int {
 
 	// query mode has 3 sub modes:
@@ -369,7 +370,6 @@ func queryMode(
 
 	_, continueOnError := apr.GetValue(continueFlag)
 
-	privsFp, _ := apr.GetValue(privilegeFilePathFlag)
 	if saveName != "" {
 		verr := execQuery(ctx, mrEnv, query, format, currentDb, privsFp)
 		if verr != nil {
