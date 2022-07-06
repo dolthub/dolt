@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -93,6 +92,7 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		unique:                        true,
 		comment:                       "",
 		vrw:                           t.ValueReadWriter(),
+		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: false,
@@ -216,6 +216,7 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 		isPk:                          true,
 		comment:                       "",
 		vrw:                           t.ValueReadWriter(),
+		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
@@ -245,6 +246,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		isPk:                          false,
 		comment:                       idx.Comment(),
 		vrw:                           t.ValueReadWriter(),
+		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
@@ -357,6 +359,7 @@ type doltIndex struct {
 	constrainedToLookupExpression bool
 
 	vrw    types.ValueReadWriter
+	ns     tree.NodeStore
 	keyBld *val.TupleBuilder
 
 	cache cachedDurableIndexes
@@ -383,7 +386,7 @@ func (di *doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.Index
 	}
 
 	if types.IsFormat_DOLT_1(di.vrw.Format()) {
-		return di.newProllyLookup(ctx, tree.NewNodeStore(shim.ChunkStoreFromVRW(di.vrw)), ranges...)
+		return di.newProllyLookup(ctx, di.ns, ranges...)
 	}
 
 	return di.newNomsLookup(ctx, ranges...)

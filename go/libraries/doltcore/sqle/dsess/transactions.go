@@ -437,7 +437,7 @@ func (tx *DoltTransaction) stompConflicts(ctx *sql.Context, mergedRoot *doltdb.R
 	var err error
 	root := mergedRoot
 	for _, tblName := range tablesWithConflicts {
-		root, err = merge.ResolveTable(ctx, mergedRoot.VRW(), tblName, root, merge.Theirs, tx.mergeEditOpts)
+		root, err = merge.ResolveTable(ctx, mergedRoot.VRW(), mergedRoot.NodeStore(), tblName, root, merge.Theirs, tx.mergeEditOpts)
 		if err != nil {
 			return nil, err
 		}

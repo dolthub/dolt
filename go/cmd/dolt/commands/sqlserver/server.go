@@ -185,7 +185,7 @@ func Serve(
 	}
 
 	if ok, f := mrEnv.IsLocked(); ok {
-		startError = fmt.Errorf("%w: '%s'", env.ErrActiveServerLock, f)
+		startError = env.ErrActiveServerLock.New(f)
 		return
 	}
 	if err = mrEnv.Lock(); err != nil {

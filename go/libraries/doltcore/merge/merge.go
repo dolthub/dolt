@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/valutil"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -60,11 +61,12 @@ type Merger struct {
 	mergeRoot    *doltdb.RootValue
 	ancRoot      *doltdb.RootValue
 	vrw          types.ValueReadWriter
+	ns           tree.NodeStore
 }
 
 // NewMerger creates a new merger utility object.
-func NewMerger(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, root, mergeRoot, ancRoot *doltdb.RootValue, vrw types.ValueReadWriter) *Merger {
-	return &Merger{theirRootIsh, ancRootIsh, root, mergeRoot, ancRoot, vrw}
+func NewMerger(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, root, mergeRoot, ancRoot *doltdb.RootValue, vrw types.ValueReadWriter, ns tree.NodeStore) *Merger {
+	return &Merger{theirRootIsh, ancRootIsh, root, mergeRoot, ancRoot, vrw, ns}
 }
 
 // MergeTable merges schema and table data for the table tblName.
@@ -118,11 +120,11 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 					// If both added the same table, pretend it was in the ancestor all along with no data
 					// Don't touch ancHash to avoid triggering other short-circuit logic below
 					ancHasTable, ancSchema, ancTbl = true, rootSchema, tbl
-					ancRows, err = durable.NewEmptyIndex(ctx, merger.vrw, ancSchema)
+					ancRows, err = durable.NewEmptyIndex(ctx, merger.vrw, merger.ns, ancSchema)
 					if err != nil {
 						return nil, nil, err
 					}
-					ancIndexSet, err = durable.NewIndexSetWithEmptyIndexes(ctx, merger.vrw, ancSchema)
+					ancIndexSet, err = durable.NewIndexSetWithEmptyIndexes(ctx, merger.vrw, merger.ns, ancSchema)
 					if err != nil {
 						return nil, nil, err
 					}
@@ -208,6 +210,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 		updatedTbl, stats, err = mergeTableData(
 			ctx,
 			merger.vrw,
+			merger.ns,
 			tblName,
 			postMergeSchema, rootSchema, mergeSchema, ancSchema,
 			tbl, mergeTbl, updatedTbl,
@@ -996,7 +999,7 @@ func MergeRoots(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, ourRoot
 	// Merge tables one at a time. This is done based on name. With table names from ourRoot being merged first,
 	// renaming a table will return delete/modify conflict error consistently.
 	// TODO: merge based on a more durable table identity that persists across renames
-	merger := NewMerger(ctx, theirRootIsh, ancRootIsh, ourRoot, theirRoot, ancRoot, ourRoot.VRW())
+	merger := NewMerger(ctx, theirRootIsh, ancRootIsh, ourRoot, theirRoot, ancRoot, ourRoot.VRW(), ourRoot.NodeStore())
 	for _, tblName := range tblNames {
 		mergedTable, stats, err := merger.MergeTable(ctx, tblName, opts, isCherryPick)
 		if err != nil {

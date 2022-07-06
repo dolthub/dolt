@@ -538,7 +538,7 @@ func (itr artifactIterImpl) Next(ctx context.Context) (Artifact, error) {
 
 func (itr artifactIterImpl) getSrcKeyFromArtKey(k val.Tuple) val.Tuple {
 	for i := 0; i < itr.numPks; i++ {
-		itr.tb.PutRaw(0, k.GetField(i))
+		itr.tb.PutRaw(i, k.GetField(i))
 	}
 	return itr.tb.Build(itr.pool)
 }
