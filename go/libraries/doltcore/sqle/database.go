@@ -282,12 +282,42 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 		return nil, false, err
 	}
 
+	dbState, ok, err := ds.LookupDbState(ctx, db.name)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if !ok {
+		return nil, false, fmt.Errorf("no state for database %s", db.name)
+	}
+
+	key, err := doltdb.NewDataCacheKey(root)
+	if err != nil {
+		return nil, false, err
+	}
+
+	cachedTable, ok := dbState.GetCachedTable(key, tblName)
+	if ok {
+		return cachedTable, true, nil
+	}
+
 	head, err := ds.GetHeadCommit(ctx, db.Name())
 	if err != nil {
 		return nil, false, err
 	}
 
-	return db.getTableInsensitive(ctx, head, root, tblName)
+	tbl, ok, err := db.getTableInsensitive(ctx, head, root, tblName)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if !ok {
+		return nil, false, nil
+	}
+
+	dbState.CacheTable(key, tblName, tbl)
+
+	return tbl, true, nil
 }
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase

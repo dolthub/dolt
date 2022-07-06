@@ -62,6 +62,9 @@ type DatabaseSessionState struct {
 	// cache of indexes
 	indexCache map[doltdb.DataCacheKey]map[string][]sql.Index
 
+	// cache of tables
+	tableCache map[doltdb.DataCacheKey]map[string]sql.Table
+
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a
 	// DatabaseSessionState with Err != nil will return that err.
@@ -114,6 +117,39 @@ func (d *DatabaseSessionState) GetTableIndexesCache(key doltdb.DataCacheKey, tab
 	indexes, ok := tableIndexes[table]
 	return indexes, ok
 }
+
+func (d *DatabaseSessionState) CacheTable(key doltdb.DataCacheKey, tableName string, table sql.Table) {
+	tableName = strings.ToLower(tableName)
+
+	if d.tableCache == nil {
+		d.tableCache = make(map[doltdb.DataCacheKey]map[string]sql.Table)
+	}
+
+	tablesForKey, ok := d.tableCache[key]
+	if !ok {
+		tablesForKey = make(map[string]sql.Table)
+		d.tableCache[key] = tablesForKey
+	}
+
+	tablesForKey[tableName] = table
+}
+
+func (d *DatabaseSessionState) GetCachedTable(key doltdb.DataCacheKey, tableName string) (sql.Table, bool) {
+	tableName = strings.ToLower(tableName)
+
+	if d.tableCache == nil {
+		return nil, false
+	}
+
+	tablesForKey, ok := d.tableCache[key]
+	if !ok {
+		return nil, false
+	}
+
+	table, ok := tablesForKey[tableName]
+	return table, ok
+}
+
 
 func (d DatabaseSessionState) EditOpts() editor.Options {
 	return d.WriteSession.GetOptions()
