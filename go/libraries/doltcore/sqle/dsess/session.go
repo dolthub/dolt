@@ -1016,21 +1016,24 @@ func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error 
 		}
 	}
 
-	roots, err := state.GetRoots(ctx)
+	var working, staged *doltdb.RootValue
+	if state.WorkingSet != nil {
+		working, staged = state.WorkingSet.WorkingRoot(), state.WorkingSet.StagedRoot()
+	} else {
+		working, staged = state.readOnlyHeadRoot, state.readOnlyHeadRoot
+	}
+
+	h, err := working.HashOf()
 	if err != nil {
 		return err
 	}
 
-	h, err := roots.Working.HashOf()
-	if err != nil {
-		return err
-	}
 	err = sess.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
 	if err != nil {
 		return err
 	}
 
-	h, err = roots.Staged.HashOf()
+	h, err = staged.HashOf()
 	if err != nil {
 		return err
 	}
