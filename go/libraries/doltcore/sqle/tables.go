@@ -889,6 +889,9 @@ func (t *DoltTable) Projections() []string {
 
 // WithProjections implements sql.ProjectedTable
 func (t *DoltTable) WithProjections(colNames []string) sql.Table {
+	for i := range colNames {
+		colNames[i] = strings.ToLower(colNames[i])
+	}
 	nt := *t
 	nt.projectedCols = colNames
 	return &nt

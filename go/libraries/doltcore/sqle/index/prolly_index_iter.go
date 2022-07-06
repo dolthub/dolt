@@ -17,6 +17,7 @@ package index
 import (
 	"context"
 	"io"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
@@ -70,8 +71,7 @@ func newProllyIndexIter(
 	kd, _ := primary.Descriptors()
 	pkBld := val.NewTupleBuilder(kd)
 	pkMap := ordinalMappingFromIndex(idx)
-	sch := idx.Schema()
-	km, vm := projectionMappings(sch, projections)
+	km, vm := projectionMappings(idx.Schema(), projections)
 
 	eg, c := errgroup.WithContext(ctx)
 
@@ -174,15 +174,6 @@ func (p prollyIndexIter) Close(*sql.Context) error {
 }
 
 func ordinalMappingFromIndex(idx DoltIndex) (m val.OrdinalMapping) {
-	if idx.IsPrimaryKey() {
-		// todo(andy)
-		m = make(val.OrdinalMapping, idx.Schema().GetPKCols().Size())
-		for i := range m {
-			m[i] = i
-		}
-		return m
-	}
-
 	def := idx.Schema().Indexes().GetByName(idx.ID())
 	pks := def.PrimaryKeyTags()
 	if len(pks) == 0 { // keyless index
@@ -192,7 +183,6 @@ func ordinalMappingFromIndex(idx DoltIndex) (m val.OrdinalMapping) {
 	}
 
 	m = make(val.OrdinalMapping, len(pks))
-
 	for i, pk := range pks {
 		for j, tag := range def.AllTags() {
 			if tag == pk {
@@ -201,7 +191,7 @@ func ordinalMappingFromIndex(idx DoltIndex) (m val.OrdinalMapping) {
 			}
 		}
 	}
-	return m
+	return
 }
 
 type prollyCoveringIndexIter struct {
@@ -340,38 +330,56 @@ func (p prollyCoveringIndexIter) Close(*sql.Context) error {
 	return nil
 }
 
-func coveringIndexMapping(idx DoltIndex, projections []string) (keyMap val.OrdinalMapping) {
-	allCols := idx.Schema().GetAllCols()
-	idxCols := idx.IndexSchema().GetAllCols()
+func coveringIndexMapping(d DoltIndex, projections []string) (keyMap val.OrdinalMapping) {
+	all := d.Schema().GetAllCols()
+	idx := d.IndexSchema().GetAllCols()
 
-	keyMap = make(val.OrdinalMapping, allCols.Size())
-	for i, col := range allCols.GetColumns() {
-		j, ok := idxCols.TagToIdx[col.Tag]
-		if ok && contains(projections, col.Name) {
-			keyMap[i] = j
-		} else {
-			keyMap[i] = -1
+	keyMap = make(val.OrdinalMapping, all.Size())
+	for i := range keyMap {
+		keyMap[i] = -1
+	}
+	for _, p := range projections {
+		p = strings.ToLower(p)
+		if col, ok := idx.LowerNameToCol[p]; ok {
+			i := all.TagToIdx[col.Tag]
+			keyMap[i] = idx.TagToIdx[col.Tag]
 		}
 	}
 	return
 }
 
-func primaryIndexMapping(idx DoltIndex, pkSch sql.PrimaryKeySchema, projections []string) (km, vm val.OrdinalMapping) {
-	sch := idx.Schema()
-	km = make(val.OrdinalMapping, len(pkSch.Schema))
-	for i, col := range pkSch.Schema {
-		km[i] = -1
-		if contains(projections, col.Name) {
-			// if |col.Name| not found, IndexOf returns -1
-			km[i] = sch.GetPKCols().IndexOf(col.Name)
+func primaryIndexMapping(idx DoltIndex, sqlSch sql.PrimaryKeySchema, projections []string) (keyMap, valMap val.OrdinalMapping) {
+	all := idx.Schema().GetAllCols()
+	pks := idx.Schema().GetPKCols()
+	nonPks := idx.Schema().GetNonPKCols()
+
+	keyMap = make(val.OrdinalMapping, all.Size())
+	for i := range keyMap {
+		keyMap[i] = -1
+	}
+	valMap = make(val.OrdinalMapping, all.Size())
+	for i := range valMap {
+		valMap[i] = -1
+	}
+
+	for _, p := range projections {
+		p = strings.ToLower(p)
+		if col, ok := pks.LowerNameToCol[p]; ok {
+			i := all.TagToIdx[col.Tag]
+			keyMap[i] = pks.TagToIdx[col.Tag]
+		}
+		if col, ok := nonPks.LowerNameToCol[p]; ok {
+			i := all.TagToIdx[col.Tag]
+			valMap[i] = nonPks.TagToIdx[col.Tag]
 		}
 	}
-	vm = make(val.OrdinalMapping, len(pkSch.Schema))
-	for i, col := range pkSch.Schema {
-		vm[i] = -1
-		if contains(projections, col.Name) {
-			// if |col.Name| not found, IndexOf returns -1
-			vm[i] = sch.GetNonPKCols().IndexOf(col.Name)
+	return
+}
+
+func contains(slice []string, str string) (ok bool) {
+	for _, x := range slice {
+		if strings.ToLower(x) == strings.ToLower(str) {
+			ok = true
 		}
 	}
 	return

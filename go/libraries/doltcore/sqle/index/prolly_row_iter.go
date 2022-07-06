@@ -96,25 +96,27 @@ func NewProllyRowIter(sch schema.Schema, sqlSch sql.Schema, rows prolly.Map, ite
 
 func projectionMappings(sch schema.Schema, projections []string) (keyMap, valMap val.OrdinalMapping) {
 	keyMap = make(val.OrdinalMapping, sch.GetPKCols().Size())
-	valMap = make(val.OrdinalMapping, sch.GetNonPKCols().Size())
 	for i := range keyMap {
 		keyMap[i] = -1
 	}
+	valMap = make(val.OrdinalMapping, sch.GetNonPKCols().Size())
 	for i := range valMap {
 		valMap[i] = -1
 	}
 
 	all := sch.GetAllCols()
-	for i := range keyMap {
-		col := sch.GetPKCols().GetAtIndex(i)
-		if contains(projections, col.Name) {
-			keyMap[i] = all.IndexOf(col.Name)
+	pks := sch.GetPKCols()
+	nonPks := sch.GetNonPKCols()
+
+	for _, p := range projections {
+		p = strings.ToLower(p)
+		if col, ok := pks.LowerNameToCol[p]; ok {
+			i := pks.TagToIdx[col.Tag]
+			keyMap[i] = all.TagToIdx[col.Tag]
 		}
-	}
-	for i := range valMap {
-		col := sch.GetNonPKCols().GetAtIndex(i)
-		if contains(projections, col.Name) {
-			valMap[i] = all.IndexOf(col.Name)
+		if col, ok := nonPks.LowerNameToCol[p]; ok {
+			i := nonPks.TagToIdx[col.Tag]
+			valMap[i] = all.TagToIdx[col.Tag]
 		}
 	}
 	if schema.IsKeyless(sch) {
@@ -245,13 +247,4 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 
 func (it *prollyKeylessIter) Close(ctx *sql.Context) error {
 	return nil
-}
-
-func contains(slice []string, str string) (ok bool) {
-	for _, x := range slice {
-		if strings.ToLower(x) == strings.ToLower(str) {
-			ok = true
-		}
-	}
-	return
 }

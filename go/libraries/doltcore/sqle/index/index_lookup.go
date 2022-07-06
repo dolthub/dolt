@@ -62,13 +62,18 @@ func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, ilu sql.IndexLooku
 
 func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, projections []string, durableState *durableIndexState) (sql.RowIter2, error) {
 	if projections == nil {
-		projections = idx.Schema().GetAllCols().GetColumnNames()
+		projections = make([]string, len(pkSch.Schema))
+		for i := range projections {
+			projections[i] = pkSch.Schema[i].Name
+		}
 	}
+
 	if sql.IsKeyless(pkSch.Schema) {
 		// in order to resolve row cardinality, keyless indexes must always perform
 		// an indirect lookup through the clustered index.
 		return newProllyKeylessIndexIter(ctx, idx, r, pkSch, projections, durableState.Primary, durableState.Secondary)
 	}
+
 	covers := idx.coversColumns(durableState, projections)
 	if covers {
 		return newProllyCoveringIndexIter(ctx, idx, r, pkSch, projections, durableState.Secondary)
