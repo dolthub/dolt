@@ -175,8 +175,11 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     [[ "$output" =~ "new_user" ]] || false
 
+    rm -rf .doltcfg
     cd ..
+
     rm -f privs.db
+    rm -rf .doltcfg
 }
 
 @test "sql: dolt sql -q .doltcfg in parent directory errors" {
