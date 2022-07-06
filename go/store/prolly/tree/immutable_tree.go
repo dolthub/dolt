@@ -36,7 +36,8 @@ var ErrInvalidChunkSize = errors.New("invalid chunkSize; value must be > 1")
 // tree, returning the root node or an error if applicable. |chunkSize|
 // fixes the split size of leaf and intermediate node chunks.
 func buildImmutableTree(ctx context.Context, r io.Reader, ns NodeStore, S message.Serializer, chunkSize int) (Node, error) {
-	if chunkSize <= 1 {
+	if chunkSize < hash.ByteLen*2 || chunkSize > int(message.MaxVectorOffset)/2 {
+		// internal nodes must fit at least two 20-byte hashes
 		return Node{}, ErrInvalidChunkSize
 	}
 
@@ -89,7 +90,8 @@ func buildImmutableTree(ctx context.Context, r io.Reader, ns NodeStore, S messag
 
 			levels[i][levelCnts[i]] = novel
 			levelCnts[i]++
-			if levelCnts[i] < chunkSize {
+			// note: the size of an internal node will be the key count times key length (hash)
+			if levelCnts[i]*hash.ByteLen < chunkSize {
 				// current level is not full
 				if !finalize {
 					// only continue and chunk this level if finalizing all in-progress nodes

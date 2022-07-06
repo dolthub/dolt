@@ -595,11 +595,6 @@ func TestLoadDataErrors(t *testing.T) {
 }
 
 func TestJsonScripts(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		// The new storage engine fails when trying to save data larger than 65kb
-		t.Skip()
-	}
-
 	enginetest.TestJsonScripts(t, newDoltHarness(t))
 }
 
