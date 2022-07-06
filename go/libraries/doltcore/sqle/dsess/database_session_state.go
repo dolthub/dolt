@@ -46,12 +46,12 @@ type InitialDbState struct {
 }
 
 type DatabaseSessionState struct {
-	dbName       string
+	dbName string
 
-	WorkingSet   *doltdb.WorkingSet
+	WorkingSet *doltdb.WorkingSet
 
 	// readOnlyHead and readOnlyHeadRoot are only set for revision dbs pinned to a commit, in which case WorkingSet is nil
-	readOnlyHead *doltdb.Commit
+	readOnlyHead     *doltdb.Commit
 	readOnlyHeadRoot *doltdb.RootValue
 
 	dbData       env.DbData
