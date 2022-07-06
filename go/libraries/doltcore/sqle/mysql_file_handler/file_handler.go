@@ -44,18 +44,6 @@ func (p *Persister) Persist(ctx *sql.Context, data []byte) error {
 	return ioutil.WriteFile(p.privsFilePath, data, 0777)
 }
 
-// SetPrivilegeFilePath sets the file path that will be used for loading privileges.
-func (p Persister) SetPrivilegeFilePath(fp string) {
-	// do nothing for empty file path
-	if len(fp) == 0 {
-		return
-	}
-
-	p.fileMutex.Lock()
-	defer p.fileMutex.Unlock()
-	p.privsFilePath = fp
-}
-
 // LoadData reads the mysql.db file, returns nil if empty or not found
 func (p Persister) LoadData() ([]byte, error) {
 	// do nothing if no filepath specified
