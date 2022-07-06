@@ -84,14 +84,15 @@ func NewTempTable(
 		return nil, err
 	}
 	vrw := ddb.ValueReadWriter()
+	ns := ddb.NodeStore()
 
-	idx, err := durable.NewEmptyIndex(ctx, vrw, sch)
+	idx, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
 	if err != nil {
 		return nil, err
 	}
-	set := durable.NewIndexSet(ctx, vrw)
+	set := durable.NewIndexSet(ctx, vrw, ns)
 
-	tbl, err := doltdb.NewTable(ctx, ddb.ValueReadWriter(), sch, idx, set, nil)
+	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, idx, set, nil)
 	if err != nil {
 		return nil, err
 	}
