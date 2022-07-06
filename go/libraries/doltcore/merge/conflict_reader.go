@@ -31,9 +31,6 @@ import (
 )
 
 const (
-	mergeVersionProp  = "merge_version"
-	mergeRowOperation = "row_operation"
-
 	oursStr   = "our"
 	theirsStr = "their"
 	baseStr   = "base"
@@ -109,16 +106,6 @@ func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader,
 	}
 
 	return &ConflictReader{confItr: confItr, joiner: joiner, sch: readerSch, nbf: tbl.Format()}, nil
-}
-
-func tagMappingConverter(ctx context.Context, vrw types.ValueReadWriter, src, dest schema.Schema) (*rowconv.RowConverter, error) {
-	mapping, err := rowconv.TagMapping(src, dest)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return rowconv.NewRowConverter(ctx, vrw, mapping)
 }
 
 // GetSchema gets the schema of the rows that this reader will return

@@ -35,7 +35,6 @@ teardown() {
 }
 
 @test "sql-conflicts: add conflict" {
-  skip_nbf_dolt_1
   dolt branch feature_branch main
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0)"
   dolt SQL -q "INSERT INTO two_pk (pk1,pk2,c1,c2) VALUES (0,0,0,0)"
@@ -94,7 +93,6 @@ SQL
 }
 
 @test "sql-conflicts: modify conflict" {
-  skip_nbf_dolt_1
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0)"
   dolt SQL -q "INSERT INTO two_pk (pk1,pk2,c1,c2) VALUES (0,0,0,0)"
   dolt add .
@@ -153,7 +151,6 @@ SQL
 }
 
 @test "sql-conflicts: delete modify conflict" {
-  skip_nbf_dolt_1
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0)"
   dolt SQL -q "INSERT INTO two_pk (pk1,pk2,c1,c2) VALUES (0,0,0,0)"
   dolt add .
