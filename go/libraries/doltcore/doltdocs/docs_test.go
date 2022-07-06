@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -46,7 +47,7 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	sch := createTestDocsSchema()
 	rows := []row.Row{}
 	m, _ := createTestRows(t, ddb.ValueReadWriter(), sch, rows)
-	tbl, err := CreateTestTable(ddb.ValueReadWriter(), sch, m)
+	tbl, err := CreateTestTable(ddb.ValueReadWriter(), ddb.NodeStore(), sch, m)
 	require.NoError(t, err)
 
 	// If a table doesn't have doc row, doc Text and Value should remain nil
@@ -66,7 +67,7 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	// Update tbl to have 2 doc rows, readme and license
 	rows = getDocRows(t, sch, types.String("text in doc_text"))
 	m, _ = createTestRows(t, ddb.ValueReadWriter(), sch, rows)
-	tbl, err = CreateTestTable(ddb.ValueReadWriter(), sch, m)
+	tbl, err = CreateTestTable(ddb.ValueReadWriter(), ddb.NodeStore(), sch, m)
 	require.NoError(t, err)
 
 	// If a table has a doc row, Text and Value and should be updated to the `doc_text` value in that row.
@@ -133,8 +134,8 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 	assert.Equal(t, LicenseDoc, doc3.DocPk)
 }
 
-func CreateTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*doltdb.Table, error) {
-	tbl, err := doltdb.NewNomsTable(context.Background(), vrw, tSchema, rowData, nil, nil)
+func CreateTestTable(vrw types.ValueReadWriter, ns tree.NodeStore, tSchema schema.Schema, rowData types.Map) (*doltdb.Table, error) {
+	tbl, err := doltdb.NewNomsTable(context.Background(), vrw, ns, tSchema, rowData, nil, nil)
 
 	if err != nil {
 		return nil, err

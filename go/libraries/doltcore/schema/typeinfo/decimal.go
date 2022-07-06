@@ -108,7 +108,12 @@ func (ti *decimalType) ConvertValueToNomsValue(ctx context.Context, vrw types.Va
 	if !decVal.Valid {
 		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a null value from embedded type`, ti.String())
 	}
-	return types.Decimal(decVal.Decimal), nil
+	dec, err := ti.sqlDecimalType.BoundsCheck(decVal.Decimal)
+	if err != nil {
+		return nil, err
+	}
+
+	return types.Decimal(dec), nil
 }
 
 // Equals implements TypeInfo interface.

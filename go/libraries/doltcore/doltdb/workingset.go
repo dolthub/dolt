@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -128,7 +129,7 @@ func (ws WorkingSet) Meta() *datas.WorkingSetMeta {
 }
 
 // NewWorkingSet creates a new WorkingSet object.
-func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, ds datas.Dataset) (*WorkingSet, error) {
+func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, ns tree.NodeStore, ds datas.Dataset) (*WorkingSet, error) {
 	dsws, err := ds.HeadWorkingSet()
 	if err != nil {
 		return nil, err
@@ -148,7 +149,7 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 	if err != nil {
 		return nil, err
 	}
-	workingRoot, err := newRootValue(vrw, workingRootVal)
+	workingRoot, err := newRootValue(vrw, ns, workingRootVal)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +161,7 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			return nil, err
 		}
 
-		stagedRoot, err = newRootValue(vrw, stagedRootVal)
+		stagedRoot, err = newRootValue(vrw, ns, stagedRootVal)
 		if err != nil {
 			return nil, err
 		}
@@ -177,7 +178,7 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			return nil, err
 		}
 
-		commit, err := NewCommit(ctx, vrw, fromDCommit)
+		commit, err := NewCommit(ctx, vrw, ns, fromDCommit)
 		if err != nil {
 			return nil, err
 		}
@@ -187,7 +188,7 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			return nil, err
 		}
 
-		preMergeWorkingRoot, err := newRootValue(vrw, preMergeWorkingV)
+		preMergeWorkingRoot, err := newRootValue(vrw, ns, preMergeWorkingV)
 		if err != nil {
 			return nil, err
 		}

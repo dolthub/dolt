@@ -696,7 +696,7 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 // truncate returns an empty copy of the table given by setting the rows and indexes to empty. The schema can be
 // updated at the same time.
 func truncate(ctx *sql.Context, table *doltdb.Table, sch schema.Schema) (*doltdb.Table, error) {
-	empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), sch)
+	empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), table.NodeStore(), sch)
 	if err != nil {
 		return nil, err
 	}
@@ -714,7 +714,7 @@ func truncate(ctx *sql.Context, table *doltdb.Table, sch schema.Schema) (*doltdb
 	}
 
 	// truncate table resets auto-increment value
-	return doltdb.NewTable(ctx, table.ValueReadWriter(), sch, empty, idxSet, nil)
+	return doltdb.NewTable(ctx, table.ValueReadWriter(), table.NodeStore(), sch, empty, idxSet, nil)
 }
 
 // Updater implements sql.UpdatableTable

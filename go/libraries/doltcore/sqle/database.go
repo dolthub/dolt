@@ -486,7 +486,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ro
 	return db.getTable(ctx, root, tblName)
 }
 
-// resolveAsOf resolved given expression to a commit, if one exists.
+// resolveAsOf resolves given expression to a commit, if one exists.
 func resolveAsOf(ctx *sql.Context, db Database, asOf interface{}) (*doltdb.Commit, *doltdb.RootValue, error) {
 	head := db.rsr.CWBHeadRef()
 	switch x := asOf.(type) {

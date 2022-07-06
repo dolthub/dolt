@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -335,8 +336,8 @@ func assertProllyConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table,
 		c++
 
 		ours := mustGetRowValueFromTable(t, ctx, tbl, conf.Key)
-		theirs := mustGetRowValueFromRootIsh(t, ctx, tbl.ValueReadWriter(), conf.TheirRootIsh, tblName, conf.Key)
-		base := mustGetRowValueFromRootIsh(t, ctx, tbl.ValueReadWriter(), conf.Metadata.BaseRootIsh, tblName, conf.Key)
+		theirs := mustGetRowValueFromRootIsh(t, ctx, tbl.ValueReadWriter(), tbl.NodeStore(), conf.TheirRootIsh, tblName, conf.Key)
+		base := mustGetRowValueFromRootIsh(t, ctx, tbl.ValueReadWriter(), tbl.NodeStore(), conf.Metadata.BaseRootIsh, tblName, conf.Key)
 
 		copy(h[:], conf.Key.GetField(0))
 		expectedConf, ok := expectedSet[h]
@@ -401,8 +402,8 @@ func mustGetRowValueFromTable(t *testing.T, ctx context.Context, tbl *doltdb.Tab
 	return value
 }
 
-func mustGetRowValueFromRootIsh(t *testing.T, ctx context.Context, vrw types.ValueReadWriter, rootIsh hash.Hash, tblName string, key val.Tuple) val.Tuple {
-	rv, err := doltdb.LoadRootValueFromRootIshAddr(ctx, vrw, rootIsh)
+func mustGetRowValueFromRootIsh(t *testing.T, ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, rootIsh hash.Hash, tblName string, key val.Tuple) val.Tuple {
+	rv, err := doltdb.LoadRootValueFromRootIshAddr(ctx, vrw, ns, rootIsh)
 	require.NoError(t, err)
 	tbl, ok, err := rv.GetTable(ctx, tblName)
 	require.NoError(t, err)

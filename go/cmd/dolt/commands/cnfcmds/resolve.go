@@ -107,6 +107,10 @@ func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, resDocumentation, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	if dEnv.IsLocked() {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), usage)
+	}
+
 	var verr errhand.VerboseError
 	if apr.ContainsAny(autoResolverParams...) {
 		verr = autoResolve(ctx, apr, dEnv)

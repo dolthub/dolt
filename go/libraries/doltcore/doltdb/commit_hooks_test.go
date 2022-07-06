@@ -106,7 +106,7 @@ func TestPushOnWriteHook(t *testing.T) {
 
 	tSchema := createTestSchema(t)
 	rowData, _ := createTestRowData(t, ddb.vrw, tSchema)
-	tbl, err := CreateTestTable(ddb.vrw, tSchema, rowData)
+	tbl, err := CreateTestTable(ddb.vrw, ddb.ns, tSchema, rowData)
 
 	if err != nil {
 		t.Fatal("Failed to create test table with data")
@@ -244,7 +244,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 
 			tSchema := createTestSchema(t)
 			rowData, _ := createTestRowData(t, ddb.vrw, tSchema)
-			tbl, err := CreateTestTable(ddb.vrw, tSchema, rowData)
+			tbl, err := CreateTestTable(ddb.vrw, ddb.ns, tSchema, rowData)
 
 			if err != nil {
 				t.Fatal("Failed to create test table with data")

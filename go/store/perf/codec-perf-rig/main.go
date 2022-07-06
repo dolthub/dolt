@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/profile"
 )
@@ -72,8 +73,10 @@ func main() {
 
 			// Build One-Time
 			storage := &chunks.MemoryStorage{}
-			vrw := types.NewValueStore(storage.NewViewWithDefaultFormat())
-			db := datas.NewTypesDatabase(vrw)
+			cs := storage.NewViewWithDefaultFormat()
+			ns := tree.NewNodeStore(cs)
+			vrw := types.NewValueStore(cs)
+			db := datas.NewTypesDatabase(vrw, ns)
 			ds, err := db.GetDataset(context.Background(), "test")
 			d.Chk.NoError(err)
 			t1 := time.Now()
@@ -93,8 +96,10 @@ func main() {
 
 			// Build Incrementally
 			storage = &chunks.MemoryStorage{}
-			vrw = types.NewValueStore(storage.NewViewWithDefaultFormat())
-			db = datas.NewTypesDatabase(vrw)
+			cs = storage.NewViewWithDefaultFormat()
+			ns = tree.NewNodeStore(cs)
+			vrw = types.NewValueStore(cs)
+			db = datas.NewTypesDatabase(vrw, ns)
 			ds, err = db.GetDataset(context.Background(), "test")
 			d.Chk.NoError(err)
 			t1 = time.Now()
@@ -115,8 +120,10 @@ func main() {
 	fmt.Printf("Testing Blob: \t\tbuild %d MB\t\t\tscan %d MB\n", *blobSize/1000000, *blobSize/1000000)
 
 	storage := &chunks.MemoryStorage{}
-	vrw := types.NewValueStore(storage.NewViewWithDefaultFormat())
-	db := datas.NewTypesDatabase(vrw)
+	cs := storage.NewViewWithDefaultFormat()
+	ns := tree.NewNodeStore(cs)
+	vrw := types.NewValueStore(cs)
+	db := datas.NewTypesDatabase(vrw, ns)
 	ds, err := db.GetDataset(context.Background(), "test")
 	d.Chk.NoError(err)
 

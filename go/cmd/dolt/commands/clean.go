@@ -70,6 +70,10 @@ func (cmd CleanCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cleanDocContent, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
+
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
