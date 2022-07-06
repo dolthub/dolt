@@ -77,13 +77,23 @@ func TestWriteImmutableTree(t *testing.T) {
 			chunkSize: 500,
 		},
 		{
-			inputSize: 50_000_000,
+			inputSize: 1_000,
 			chunkSize: 47,
 			checkSum:  false,
 		},
 		{
-			inputSize: 50_000_000,
+			inputSize: 1_000,
+			chunkSize: 53,
+			checkSum:  false,
+		},
+		{
+			inputSize: 1_000,
 			chunkSize: 67,
+			checkSum:  false,
+		},
+		{
+			inputSize: 10_000,
+			chunkSize: 89,
 			checkSum:  false,
 		},
 		{
@@ -140,6 +150,8 @@ func TestWriteImmutableTree(t *testing.T) {
 			expSum := expectedSum(tt.inputSize)
 			expUnfilled := expectedUnfilled(tt.inputSize, tt.chunkSize)
 
+			intChunkSize := int(math.Ceil(float64(tt.chunkSize) / float64(hash.ByteLen)))
+
 			unfilledCnt := 0
 			sum := 0
 			byteCnt := 0
@@ -156,7 +168,7 @@ func TestWriteImmutableTree(t *testing.T) {
 					}
 				} else {
 					keyCnt = n.Count()
-					if keyCnt < (tt.chunkSize / hash.ByteLen) {
+					if keyCnt < intChunkSize {
 						unfilledCnt += 1
 					}
 				}
@@ -180,7 +192,7 @@ func expectedLevel(size, chunk int) int {
 	}
 	size = int(math.Ceil(float64(size) / float64(chunk)))
 	l := 1
-	intChunk := chunk / hash.ByteLen
+	intChunk := int(math.Ceil(float64(chunk) / float64(hash.ByteLen)))
 	for size > intChunk {
 		size = int(math.Ceil(float64(size) / float64(intChunk)))
 		l += 1
@@ -195,7 +207,7 @@ func expectedSubtrees(size, chunk int) SubtreeCounts {
 	l := expectedLevel(size, chunk)
 
 	size = int(math.Ceil(float64(size) / float64(chunk)))
-	intChunk := chunk / hash.ByteLen
+	intChunk := int(math.Ceil(float64(chunk) / float64(hash.ByteLen)))
 
 	filledSubtree := int(math.Pow(float64(intChunk), float64(l-1)))
 
@@ -231,7 +243,7 @@ func expectedUnfilled(size, chunk int) int {
 	}
 	size = int(math.Ceil(float64(size) / float64(chunk)))
 
-	intChunk := chunk / hash.ByteLen
+	intChunk := int(math.Ceil(float64(chunk) / float64(hash.ByteLen)))
 	for size > intChunk {
 		if size%intChunk != 0 {
 			unfilled += 1
@@ -251,33 +263,43 @@ func TestImmutableTreeWalk(t *testing.T) {
 		keyCnt    int
 	}{
 		{
-			blobLen:   25,
-			chunkSize: 6,
+			blobLen:   250,
+			chunkSize: 41,
 			keyCnt:    4,
 		},
 		{
-			blobLen:   25,
-			chunkSize: 5,
+			blobLen:   250,
+			chunkSize: 40,
 			keyCnt:    4,
 		},
 		{
 			blobLen:   378,
-			chunkSize: 5,
+			chunkSize: 43,
 			keyCnt:    12,
 		},
 		{
 			blobLen:   5000,
-			chunkSize: 12,
+			chunkSize: 40,
 			keyCnt:    6,
 		},
 		{
 			blobLen:   1,
-			chunkSize: 12,
+			chunkSize: 40,
 			keyCnt:    6,
 		},
 		{
 			blobLen:   0,
-			chunkSize: 12,
+			chunkSize: 40,
+			keyCnt:    6,
+		},
+		{
+			blobLen:   50_000_000,
+			chunkSize: 4000,
+			keyCnt:    1,
+		},
+		{
+			blobLen:   10_000,
+			chunkSize: 83,
 			keyCnt:    6,
 		},
 	}
@@ -291,21 +313,28 @@ func TestImmutableTreeWalk(t *testing.T) {
 				cnt++
 				return nil
 			})
-			require.Equal(t, leafAddrCnt(tt.blobLen, tt.chunkSize)*tt.keyCnt+1, cnt)
+			require.Equal(t, blobAddrCnt(tt.blobLen, tt.chunkSize)*tt.keyCnt+1, cnt)
 		})
 	}
 }
 
-func leafAddrCnt(size, chunk int) int {
+func blobAddrCnt(size, chunk int) int {
 	if size == 0 {
 		return 0
 	}
-	l := 1
-	for size > chunk {
-		size = int(math.Ceil(float64(size) / float64(chunk)))
-		l += size
+	if size <= chunk {
+		return 1
 	}
-	return l
+	size = int(math.Ceil(float64(size) / float64(chunk)))
+	l := 1
+	sum := size
+	intChunk := int(math.Ceil(float64(chunk) / float64(hash.ByteLen)))
+	for size > intChunk {
+		size = int(math.Ceil(float64(size) / float64(intChunk)))
+		sum += size
+		l += 1
+	}
+	return sum + 1
 }
 
 func newTree(t *testing.T, ns NodeStore, keyCnt, blobLen, chunkSize int) Node {
