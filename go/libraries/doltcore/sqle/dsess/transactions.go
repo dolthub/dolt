@@ -416,25 +416,6 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 	return nil
 }
 
-// stompConflicts resolves the conflicted tables in the root given by blindly accepting theirs, and returns the
-// updated root value
-func (tx *DoltTransaction) stompConflicts(ctx *sql.Context, mergedRoot *doltdb.RootValue, tablesWithConflicts []string) (*doltdb.RootValue, error) {
-	start := time.Now()
-
-	var err error
-	root := mergedRoot
-	for _, tblName := range tablesWithConflicts {
-		root, err = merge.ResolveTable(ctx, mergedRoot.VRW(), tblName, root, merge.Theirs, tx.mergeEditOpts)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	logrus.Tracef("resolving conflicts took %s", time.Since(start))
-
-	return root, nil
-}
-
 // CreateSavepoint creates a new savepoint with the name and root value given. If a savepoint with the name given
 // already exists, it's overwritten.
 func (tx *DoltTransaction) CreateSavepoint(name string, root *doltdb.RootValue) {
