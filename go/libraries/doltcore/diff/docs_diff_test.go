@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -57,7 +58,7 @@ func TestDocDiff(t *testing.T) {
 	sch := createTestDocsSchema()
 	licRow := makeDocRow(t, sch, doltdocs.LicenseDoc, types.String("license row"))
 	m, _ := createTestRows(t, ddb.ValueReadWriter(), sch, []row.Row{licRow})
-	tbl1, err := CreateTestTable(ddb.ValueReadWriter(), sch, m)
+	tbl1, err := CreateTestTable(ddb.ValueReadWriter(), ddb.NodeStore(), sch, m)
 	assert.NoError(t, err)
 
 	// Create root2 with tbl1 on it (one doc: license)
@@ -75,7 +76,7 @@ func TestDocDiff(t *testing.T) {
 	// Create tbl2 with one readme row
 	readmeRow := makeDocRow(t, sch, doltdocs.ReadmeDoc, types.String("readme row"))
 	m, _ = createTestRows(t, ddb.ValueReadWriter(), sch, []row.Row{readmeRow})
-	tbl2, err := CreateTestTable(ddb.ValueReadWriter(), sch, m)
+	tbl2, err := CreateTestTable(ddb.ValueReadWriter(), ddb.NodeStore(), sch, m)
 	assert.NoError(t, err)
 
 	// Create root3 with tbl2 on it (one doc: readme)
@@ -93,7 +94,7 @@ func TestDocDiff(t *testing.T) {
 	// Create tbl3 with 2 doc rows (readme, license)
 	readmeRowUpdated := makeDocRow(t, sch, doltdocs.ReadmeDoc, types.String("a different readme"))
 	m, _ = createTestRows(t, ddb.ValueReadWriter(), sch, []row.Row{readmeRowUpdated, licRow})
-	tbl3, err := CreateTestTable(ddb.ValueReadWriter(), sch, m)
+	tbl3, err := CreateTestTable(ddb.ValueReadWriter(), ddb.NodeStore(), sch, m)
 	assert.NoError(t, err)
 
 	// Create root4 with tbl3 on it (two docs: readme and license)
@@ -117,8 +118,8 @@ func TestDocDiff(t *testing.T) {
 	}
 }
 
-func CreateTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*doltdb.Table, error) {
-	tbl, err := doltdb.NewNomsTable(context.Background(), vrw, tSchema, rowData, nil, nil)
+func CreateTestTable(vrw types.ValueReadWriter, ns tree.NodeStore, tSchema schema.Schema, rowData types.Map) (*doltdb.Table, error) {
+	tbl, err := doltdb.NewNomsTable(context.Background(), vrw, ns, tSchema, rowData, nil, nil)
 
 	if err != nil {
 		return nil, err

@@ -28,6 +28,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/verbose"
@@ -130,13 +131,13 @@ func (r *Resolver) ResolvePathSpec(str string) string {
 // Resolve string to database spec. If a config is present,
 //   - resolve a db alias to its db spec
 //   - resolve "" to the default db spec
-func (r *Resolver) GetDatabase(ctx context.Context, str string) (datas.Database, types.ValueReadWriter, error) {
+func (r *Resolver) GetDatabase(ctx context.Context, str string) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	dbc := r.DbConfigForDbSpec(str)
 	sp, err := spec.ForDatabaseOpts(r.verbose(ctx, str, dbc.Url), specOptsForConfig(r.config, dbc))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return sp.GetDatabase(ctx), sp.GetVRW(ctx), nil
+	return sp.GetDatabase(ctx), sp.GetVRW(ctx), sp.GetNodeStore(ctx), nil
 }
 
 // Resolve string to a chunkstore. Like ResolveDatabase, but returns the underlying ChunkStore

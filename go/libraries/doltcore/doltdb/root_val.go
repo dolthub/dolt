@@ -54,6 +54,7 @@ var DoltFeatureVersion FeatureVersion = 3 // last bumped when storing creation t
 // RootValue is the value of the Database and is the committed value in every Dolt commit.
 type RootValue struct {
 	vrw types.ValueReadWriter
+	ns  tree.NodeStore
 	st  rvStorage
 	fkc *ForeignKeyCollection // cache the first load
 }
@@ -81,7 +82,7 @@ func tmIterAll(ctx context.Context, tm tableMap, cb func(name string, addr hash.
 type rvStorage interface {
 	GetFeatureVersion() (FeatureVersion, bool, error)
 
-	GetTablesMap(ctx context.Context, vr types.ValueReadWriter) (tableMap, error)
+	GetTablesMap(ctx context.Context, vr types.ValueReadWriter, ns tree.NodeStore) (tableMap, error)
 	GetSuperSchemaMap(ctx context.Context, vr types.ValueReader) (types.Map, bool, error)
 	GetForeignKeys(ctx context.Context, vr types.ValueReader) (types.Value, bool, error)
 
@@ -89,7 +90,7 @@ type rvStorage interface {
 	SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, m types.Value) (rvStorage, error)
 	SetFeatureVersion(v FeatureVersion) (rvStorage, error)
 
-	EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, edits []tableEdit) (rvStorage, error)
+	EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error)
 
 	DebugString(ctx context.Context) string
 	nomsValue() types.Value
@@ -111,7 +112,7 @@ func (r nomsRvStorage) GetFeatureVersion() (FeatureVersion, bool, error) {
 	}
 }
 
-func (r nomsRvStorage) GetTablesMap(context.Context, types.ValueReadWriter) (tableMap, error) {
+func (r nomsRvStorage) GetTablesMap(context.Context, types.ValueReadWriter, tree.NodeStore) (tableMap, error) {
 	v, found, err := r.valueSt.MaybeGet(tablesKey)
 	if err != nil {
 		return nil, err
@@ -175,8 +176,8 @@ func (r nomsRvStorage) SetSuperSchemaMap(ctx context.Context, vrw types.ValueRea
 	return nomsRvStorage{st}, nil
 }
 
-func (r nomsRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, edits []tableEdit) (rvStorage, error) {
-	m, err := r.GetTablesMap(ctx, vrw)
+func (r nomsRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error) {
+	m, err := r.GetTablesMap(ctx, vrw, ns)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +251,7 @@ func (r nomsRvStorage) nomsValue() types.Value {
 	return r.valueSt
 }
 
-func newRootValue(vrw types.ValueReadWriter, v types.Value) (*RootValue, error) {
+func newRootValue(vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value) (*RootValue, error) {
 	var storage rvStorage
 
 	if vrw.Format().UsesFlatbuffers() {
@@ -277,20 +278,20 @@ func newRootValue(vrw types.ValueReadWriter, v types.Value) (*RootValue, error) 
 		}
 	}
 
-	return &RootValue{vrw, storage, nil}, nil
+	return &RootValue{vrw, ns, storage, nil}, nil
 }
 
 // LoadRootValueFromRootIshAddr takes the hash of the commit or the hash of a
 // working set and returns the corresponding RootValue.
-func LoadRootValueFromRootIshAddr(ctx context.Context, vrw types.ValueReadWriter, h hash.Hash) (*RootValue, error) {
+func LoadRootValueFromRootIshAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, h hash.Hash) (*RootValue, error) {
 	val, err := datas.LoadRootNomsValueFromRootIshAddr(ctx, vrw, h)
 	if err != nil {
 		return nil, err
 	}
-	return decodeRootNomsValue(vrw, val)
+	return decodeRootNomsValue(vrw, ns, val)
 }
 
-func decodeRootNomsValue(vrw types.ValueReadWriter, val types.Value) (*RootValue, error) {
+func decodeRootNomsValue(vrw types.ValueReadWriter, ns tree.NodeStore, val types.Value) (*RootValue, error) {
 	if val == nil {
 		return nil, ErrNoRootValAtHash
 	}
@@ -299,7 +300,7 @@ func decodeRootNomsValue(vrw types.ValueReadWriter, val types.Value) (*RootValue
 		return nil, ErrNoRootValAtHash
 	}
 
-	return newRootValue(vrw, val)
+	return newRootValue(vrw, ns, val)
 }
 
 func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {
@@ -315,11 +316,10 @@ func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {
 	return false
 }
 
-func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue, error) {
+func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore) (*RootValue, error) {
 	if vrw.Format().UsesFlatbuffers() {
 		builder := flatbuffers.NewBuilder(80)
 
-		ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(vrw))
 		emptyam := prolly.NewEmptyAddressMap(ns)
 		ambytes := []byte(tree.ValueFromNode(emptyam.Node()).(types.TupleRowStorage))
 		tablesoff := builder.CreateByteVector(ambytes)
@@ -334,7 +334,7 @@ func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue,
 		serial.RootValueAddSuperSchemasAddr(builder, ssoff)
 		builder.FinishWithFileIdentifier(serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
 		bs := builder.FinishedBytes()
-		return newRootValue(vrw, types.SerialMessage(bs))
+		return newRootValue(vrw, ns, types.SerialMessage(bs))
 	}
 
 	empty, err := types.NewMap(ctx, vrw)
@@ -354,11 +354,15 @@ func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue,
 		return nil, err
 	}
 
-	return newRootValue(vrw, st)
+	return newRootValue(vrw, ns, st)
 }
 
 func (root *RootValue) VRW() types.ValueReadWriter {
 	return root.vrw
+}
+
+func (root *RootValue) NodeStore() tree.NodeStore {
+	return root.ns
 }
 
 // GetFeatureVersion returns the feature version of this root, if one is written
@@ -375,7 +379,7 @@ func (root *RootValue) setFeatureVersion(v FeatureVersion) (*RootValue, error) {
 }
 
 func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error) {
-	tableMap, err := root.st.GetTablesMap(ctx, root.vrw)
+	tableMap, err := root.st.GetTablesMap(ctx, root.vrw, root.ns)
 	if err != nil {
 		return false, err
 	}
@@ -671,7 +675,7 @@ func (root *RootValue) GetTable(ctx context.Context, tName string) (*Table, bool
 		return nil, false, nil
 	}
 
-	table, err := durable.TableFromAddr(ctx, root.VRW(), addr)
+	table, err := durable.TableFromAddr(ctx, root.VRW(), root.ns, addr)
 	if err != nil {
 		return nil, false, err
 	}
@@ -745,7 +749,7 @@ func (root *RootValue) GetTableNames(ctx context.Context) ([]string, error) {
 }
 
 func (root *RootValue) getTableMap(ctx context.Context) (tableMap, error) {
-	return root.st.GetTablesMap(ctx, root.vrw)
+	return root.st.GetTablesMap(ctx, root.vrw, root.ns)
 }
 
 func (root *RootValue) TablesInConflict(ctx context.Context) ([]string, error) {
@@ -827,7 +831,7 @@ func (root *RootValue) IterTables(ctx context.Context, cb func(name string, tabl
 	}
 
 	return tm.Iter(ctx, func(name string, addr hash.Hash) (bool, error) {
-		nt, err := durable.TableFromAddr(ctx, root.VRW(), addr)
+		nt, err := durable.TableFromAddr(ctx, root.VRW(), root.ns, addr)
 		if err != nil {
 			return true, err
 		}
@@ -896,7 +900,7 @@ func (root *RootValue) PutSuperSchema(ctx context.Context, tName string, ss *sch
 }
 
 func (root *RootValue) withStorage(st rvStorage) *RootValue {
-	return &RootValue{root.vrw, st, nil}
+	return &RootValue{root.vrw, root.ns, st, nil}
 }
 
 func (root *RootValue) nomsValue() types.Value {
@@ -923,7 +927,7 @@ func putTable(ctx context.Context, root *RootValue, tName string, ref types.Ref)
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}
 
-	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, []tableEdit{{name: tName, ref: &ref}})
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{name: tName, ref: &ref}})
 	if err != nil {
 		return nil, err
 	}
@@ -933,12 +937,12 @@ func putTable(ctx context.Context, root *RootValue, tName string, ref types.Ref)
 
 // CreateEmptyTable creates an empty table in this root with the name and schema given, returning the new root value.
 func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch schema.Schema) (*RootValue, error) {
-	empty, err := durable.NewEmptyIndex(ctx, root.vrw, sch)
+	empty, err := durable.NewEmptyIndex(ctx, root.vrw, root.ns, sch)
 	if err != nil {
 		return nil, err
 	}
 
-	indexes := durable.NewIndexSet(ctx, root.VRW())
+	indexes := durable.NewIndexSet(ctx, root.VRW(), root.ns)
 	err = sch.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
 		// create an empty map for every index
 		indexes, err = indexes.PutIndex(ctx, index.Name(), empty)
@@ -948,7 +952,7 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 		return nil, err
 	}
 
-	tbl, err := NewTable(ctx, root.VRW(), sch, empty, indexes, nil)
+	tbl, err := NewTable(ctx, root.VRW(), root.ns, sch, empty, indexes, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1040,7 +1044,7 @@ func (root *RootValue) UpdateSuperSchemasFromOther(ctx context.Context, tblNames
 // column tag information, use this method instead of a table drop + add.
 func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string) (*RootValue, error) {
 
-	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, []tableEdit{{old_name: oldName, name: newName}})
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{old_name: oldName, name: newName}})
 	if err != nil {
 		return nil, err
 	}
@@ -1089,7 +1093,7 @@ func (root *RootValue) RemoveTables(ctx context.Context, skipFKHandling bool, al
 		edits[i].name = name
 	}
 
-	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, edits)
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, edits)
 	if err != nil {
 		return nil, err
 	}
@@ -1387,15 +1391,14 @@ func (r fbRvStorage) GetFeatureVersion() (FeatureVersion, bool, error) {
 	return FeatureVersion(r.srv.FeatureVersion()), true, nil
 }
 
-func (r fbRvStorage) getAddressMap(vrw types.ValueReadWriter) prolly.AddressMap {
+func (r fbRvStorage) getAddressMap(vrw types.ValueReadWriter, ns tree.NodeStore) prolly.AddressMap {
 	tbytes := r.srv.TablesBytes()
 	node := shim.NodeFromValue(types.TupleRowStorage(tbytes))
-	ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(vrw))
 	return prolly.NewAddressMap(node, ns)
 }
 
-func (r fbRvStorage) GetTablesMap(ctx context.Context, vrw types.ValueReadWriter) (tableMap, error) {
-	am := r.getAddressMap(vrw)
+func (r fbRvStorage) GetTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore) (tableMap, error) {
+	am := r.getAddressMap(vrw, ns)
 	return fbTableMap{am}, nil
 }
 
@@ -1457,10 +1460,10 @@ func (r fbRvStorage) SetSuperSchemaMap(ctx context.Context, vrw types.ValueReadW
 	return ret, nil
 }
 
-func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, edits []tableEdit) (rvStorage, error) {
+func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error) {
 	builder := flatbuffers.NewBuilder(80)
 
-	am := r.getAddressMap(vrw)
+	am := r.getAddressMap(vrw, ns)
 	ae := am.Editor()
 	for _, e := range edits {
 		if e.old_name != "" {
