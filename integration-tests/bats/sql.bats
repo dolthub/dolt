@@ -157,6 +157,11 @@ teardown() {
 }
 
 @test "sql: dolt sql -q create database and specify privilege file" {
+    # remove existing directories
+    rm -rf .doltcfg
+    rm -rf inner_db
+    rm -f privs.db
+
     run dolt sql --privilege-file=privs.db -q "create database inner_db;"
     [ "$status" -eq 0 ]
 
@@ -175,14 +180,19 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     [[ "$output" =~ "new_user" ]] || false
 
-    rm -rf .doltcfg
     cd ..
 
-    rm -f privs.db
+    # remove existing directories
     rm -rf .doltcfg
+    rm -rf inner_db
+    rm -f privs.db
 }
 
 @test "sql: dolt sql -q .doltcfg in parent directory errors" {
+    # remove existing directories
+    rm -rf .doltcfg
+    rm -rf inner_db
+
     mkdir .doltcfg
     mkdir inner_db
     cd inner_db
@@ -191,6 +201,10 @@ teardown() {
     run dolt sql -q "show databases;"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "multiple .doltcfg directories detected" ]] || false
+
+    # remove existing directories
+    rm -rf .doltcfg
+    rm -rf inner_db
 }
 
 @test "sql: errors do not write incomplete rows" {
