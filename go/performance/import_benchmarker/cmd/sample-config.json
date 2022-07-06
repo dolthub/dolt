@@ -1,11 +1,46 @@
 {
   "Jobs": [
     {
-      "Name": "Medium Dolt import with Sorted Columns",
+      "Name": "Small Dolt import with randomly order columns",
+      "NumRows": 100000,
+      "Sorted": false,
+      "Format": "csv",
+      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/100k-random.csv"
+    },
+    {
+      "Name": "Small Dolt import with sorted columns",
+      "NumRows": 100000,
+      "Sorted": true,
+      "Format": "csv",
+      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/100k-sorted.csv"
+    },
+    {
+      "Name": "Medium Dolt import with randomly ordered columns",
+      "NumRows": 1000000,
+      "Sorted": false,
+      "Format": "csv",
+      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/1m-random.csv"
+    },
+    {
+      "Name": "Medium Dolt import with sorted columns",
       "NumRows": 1000000,
       "Sorted": true,
       "Format": "csv",
-      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/100k-random.csv"
+      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/1m-sorted.csv"
+    },
+    {
+      "Name": "Large Dolt import with randomly ordered columns",
+      "NumRows": 10000000,
+      "Sorted": false,
+      "Format": "csv",
+      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/10m-random.csv"
+    },
+    {
+      "Name": "Large Dolt import with sorted columns",
+      "NumRows": 10000000,
+      "Sorted": true,
+      "Format": "csv",
+      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/10m-sorted.csv"
     }
   ]
 }

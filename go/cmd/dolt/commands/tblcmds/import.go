@@ -596,6 +596,8 @@ func moveRows(
 		return err
 	}
 
+	shouldApply := shouldApplyMapper(wr.RowOperationSchema(), rdSqlSch)
+
 	for {
 		sqlRow, err := rd.ReadSqlRow(ctx)
 		if err == io.EOF {
@@ -613,7 +615,7 @@ func moveRows(
 				return err
 			}
 		} else {
-			sqlRow, err = NameAndTypeTransform(sqlRow, wr.RowOperationSchema(), rdSqlSch, options.nameMapper)
+			sqlRow, err = NameAndTypeTransform(sqlRow, wr.RowOperationSchema(), rdSqlSch, options.nameMapper, shouldApply)
 			if err != nil {
 				return err
 			}
@@ -729,8 +731,11 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 
 // NameAndTypeTransform does 1) match the read and write schema with subsetting and name matching. 2) Address any
 // type inconsistencies.
-func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, rdSchema sql.PrimaryKeySchema, nameMapper rowconv.NameMapper) (sql.Row, error) {
-	row = applyMapperToRow(row, rowOperationSchema, rdSchema, nameMapper)
+func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, rdSchema sql.PrimaryKeySchema, nameMapper rowconv.NameMapper, shouldApplyMapper bool) (sql.Row, error) {
+	// Optimization to prevent unnecessary slice allocations
+	if shouldApplyMapper {
+		row = applyMapperToRow(row, rowOperationSchema, rdSchema, nameMapper)
+	}
 
 	for i, col := range rowOperationSchema.Schema {
 		// Check if this a string that can be converted to a boolean
@@ -844,4 +849,23 @@ func applyMapperToRow(row sql.Row, rowOperationSchema, rdSchema sql.PrimaryKeySc
 	}
 
 	return returnRow
+}
+
+// shouldApplyMapper returns whether we need to apply the computed nameMapper in the import path. The name mapper
+// is needed whenever a mapping file is provided or if there are any differences between the table's schema and the import
+// file's schema
+func shouldApplyMapper(rowOperationSchema, rdSchema sql.PrimaryKeySchema) bool {
+	if len(rowOperationSchema.Schema) != len(rdSchema.Schema) {
+		return true
+	}
+
+	for i, opCol := range rowOperationSchema.Schema {
+		rdCol := rdSchema.Schema[i]
+
+		if opCol.Name != rdCol.Name {
+			return true
+		}
+	}
+
+	return true
 }
