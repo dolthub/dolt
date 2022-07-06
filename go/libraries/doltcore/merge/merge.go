@@ -53,6 +53,22 @@ var ErrConflictsIncompatible = errors.New("the existing conflicts are of a diffe
 
 var ErrMultipleViolationsForRow = errors.New("multiple violations for row not supported")
 
+type MergeOpts struct {
+	ConflictStrategy ConflictStompStrategy
+	IsCherryPick     bool
+}
+
+type ConflictStompStrategy int
+
+const (
+	// ConflictStompStrategyNone does not stomp conflicts
+	ConflictStompStrategyNone ConflictStompStrategy = iota
+	// ConflictStompStrategyPickOurs picks the value of ours
+	ConflictStompStrategyPickOurs
+	// ConflictStompStrategyPickTheirs picks the value of theirs
+	ConflictStompStrategyPickTheirs
+)
+
 type Merger struct {
 	theirRootIsh hash.Hash
 	ancRootIsh   hash.Hash
@@ -68,7 +84,7 @@ func NewMerger(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, root, me
 }
 
 // MergeTable merges schema and table data for the table tblName.
-func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts editor.Options, isCherryPick bool) (*doltdb.Table, *MergeStats, error) {
+func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*doltdb.Table, *MergeStats, error) {
 	rootHasTable, tbl, rootSchema, rootHash, err := getTableInfoFromRoot(ctx, tblName, merger.root)
 	if err != nil {
 		return nil, nil, err
@@ -145,7 +161,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 
 		// Deleted in root or in merge, either a conflict (if any changes in other root) or else a fast-forward
 		if ancHasTable && (!rootHasTable || !mergeHasTable) {
-			if isCherryPick && rootHasTable && !mergeHasTable {
+			if mergeOpts.IsCherryPick && rootHasTable && !mergeHasTable {
 				// TODO : this is either drop table or rename table case
 				// We can delete only if the table in current HEAD and parent commit contents are exact the same (same schema and same data);
 				// otherwise, return ErrTableDeletedAndModified
@@ -168,7 +184,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 
 		// Changes only in merge root, fast-forward
 		// TODO : no fast-forward when cherry-picking for now
-		if !isCherryPick && rootHash == ancHash {
+		if !mergeOpts.IsCherryPick && rootHash == ancHash {
 			ms := MergeStats{Operation: TableModified}
 			if rootHash != mergeHash {
 				ms, err = calcTableMergeStats(ctx, tbl, mergeTbl)
@@ -180,7 +196,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 		}
 	}
 
-	if isCherryPick && !schema.SchemasAreEqual(rootSchema, mergeSchema) {
+	if mergeOpts.IsCherryPick && !schema.SchemasAreEqual(rootSchema, mergeSchema) {
 		return nil, nil, errors.New(fmt.Sprintf("schema changes not supported: %s table schema does not match in current HEAD and cherry-pick commit.", tblName))
 	}
 
@@ -214,7 +230,8 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 			ancRows,
 			ancIndexSet,
 			merger.theirRootIsh,
-			merger.ancRootIsh)
+			merger.ancRootIsh,
+			mergeOpts.ConflictStrategy)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -266,7 +283,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 		return nil, nil, err
 	}
 
-	resultTbl, cons, stats, err := mergeNomsTableData(ctx, merger.vrw, tblName, postMergeSchema, rows, mergeRows, durable.NomsMapFromIndex(ancRows), updatedTblEditor)
+	resultTbl, cons, stats, err := mergeNomsTableData(ctx, merger.vrw, tblName, postMergeSchema, rows, mergeRows, durable.NomsMapFromIndex(ancRows), updatedTblEditor, mergeOpts.ConflictStrategy)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -398,7 +415,14 @@ type rowMerger func(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Sc
 
 type applicator func(ctx context.Context, sch schema.Schema, tableEditor editor.TableEditor, rowData types.Map, stats *MergeStats, change types.ValueChanged) error
 
-func mergeNomsTableData(ctx context.Context, vrw types.ValueReadWriter, tblName string, sch schema.Schema, rows, mergeRows, ancRows types.Map, tblEdit editor.TableEditor) (*doltdb.Table, types.Map, *MergeStats, error) {
+func mergeNomsTableData(
+	ctx context.Context,
+	vrw types.ValueReadWriter,
+	tblName string,
+	sch schema.Schema,
+	rows, mergeRows, ancRows types.Map,
+	tblEdit editor.TableEditor,
+	strategy ConflictStompStrategy) (*doltdb.Table, types.Map, *MergeStats, error) {
 	var rowMerge rowMerger
 	var applyChange applicator
 	if schema.IsKeyless(sch) {
@@ -504,7 +528,8 @@ func mergeNomsTableData(ctx context.Context, vrw types.ValueReadWriter, tblName 
 				if err != nil {
 					return err
 				}
-
+				// we might need to stomp a conflict
+				rowMergeResult = transformMergeResultForStrategy(rowMergeResult, strategy, r, mergeRow)
 				if rowMergeResult.isConflict {
 					conflictTuple, err := conflict.NewConflict(ancRow, r, mergeRow).ToNomsList(vrw)
 					if err != nil {
@@ -555,6 +580,23 @@ func mergeNomsTableData(ctx context.Context, vrw types.ValueReadWriter, tblName 
 	}
 
 	return mergedTable, conflicts, stats, nil
+}
+
+func transformMergeResultForStrategy(res rowMergeResult, strategy ConflictStompStrategy, ourRow, theirRow types.Value) rowMergeResult {
+	if !res.isConflict {
+		return res
+	}
+
+	switch strategy {
+	case ConflictStompStrategyNone:
+		return res
+	case ConflictStompStrategyPickOurs:
+		return rowMergeResult{mergedRow: ourRow, didCellMerge: true, isConflict: false}
+	case ConflictStompStrategyPickTheirs:
+		return rowMergeResult{mergedRow: theirRow, didCellMerge: true, isConflict: false}
+	default:
+		panic("unhandled stomp strategy")
+	}
 }
 
 func addConflict(conflictChan chan types.Value, done <-chan struct{}, key types.Value, value types.Tuple) error {
@@ -943,7 +985,7 @@ func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit, opts 
 		return nil, nil, err
 	}
 
-	return MergeRoots(ctx, theirCmHash, ancCmHash, ourRoot, theirRoot, ancRoot, opts, false)
+	return MergeRoots(ctx, theirCmHash, ancCmHash, ourRoot, theirRoot, ancRoot, opts, MergeOpts{ConflictStompStrategyNone, false})
 }
 
 // MergeRoots three-way merges |ourRoot|, |theirRoot|, and |ancRoot| and returns
@@ -959,7 +1001,7 @@ func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit, opts 
 // |theirRootIsh| is the hash of their's working set or commit. It is used to
 // key any artifacts generated by this merge. |ancRootIsh| is similar and is
 // used to retrieve the base value for a conflict.
-func MergeRoots(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, ourRoot, theirRoot, ancRoot *doltdb.RootValue, opts editor.Options, isCherryPick bool) (*doltdb.RootValue, map[string]*MergeStats, error) {
+func MergeRoots(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, ourRoot, theirRoot, ancRoot *doltdb.RootValue, opts editor.Options, mergeOpts MergeOpts) (*doltdb.RootValue, map[string]*MergeStats, error) {
 	var conflictStash *conflictStash
 	var violationStash *violationStash
 	var err error
@@ -998,7 +1040,7 @@ func MergeRoots(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, ourRoot
 	// TODO: merge based on a more durable table identity that persists across renames
 	merger := NewMerger(ctx, theirRootIsh, ancRootIsh, ourRoot, theirRoot, ancRoot, ourRoot.VRW())
 	for _, tblName := range tblNames {
-		mergedTable, stats, err := merger.MergeTable(ctx, tblName, opts, isCherryPick)
+		mergedTable, stats, err := merger.MergeTable(ctx, tblName, opts, mergeOpts)
 		if err != nil {
 			return nil, nil, err
 		}
