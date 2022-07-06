@@ -537,7 +537,7 @@ func UpdateTables(t *testing.T, ctx context.Context, root *doltdb.RootValue, tbl
 			require.NoError(t, err)
 		}
 
-		tbl, err = doltdb.NewNomsTable(ctx, root.VRW(), sch, rowData, indexData, nil)
+		tbl, err = doltdb.NewNomsTable(ctx, root.VRW(), root.NodeStore(), sch, rowData, indexData, nil)
 		require.NoError(t, err)
 
 		root, err = root.PutTable(ctx, tblName, tbl)

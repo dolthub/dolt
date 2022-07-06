@@ -22,6 +22,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -95,7 +96,7 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		usage()
 		return 0
 	} else if apr.NArg() != 2 {
-		return HandleErr(errhand.BuildDError("Both the table and index names must be provided.").Build(), usage)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Both the table and index names must be provided.").Build(), usage)
 	}
 
 	cmd.resultFormat = formatTabular
@@ -108,13 +109,13 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		case "json":
 			cmd.resultFormat = formatJson
 		default:
-			return HandleErr(errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build(), usage)
+			return commands.HandleVErrAndExitCode(errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build(), usage)
 		}
 	}
 
 	working, err := dEnv.WorkingRoot(context.Background())
 	if err != nil {
-		return HandleErr(errhand.BuildDError("Unable to get working.").AddCause(err).Build(), nil)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get working.").AddCause(err).Build(), nil)
 	}
 
 	tableName := apr.Arg(0)
@@ -122,27 +123,27 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	table, ok, err := working.GetTable(ctx, tableName)
 	if err != nil {
-		return HandleErr(errhand.BuildDError("Unable to get table `%s`.", tableName).AddCause(err).Build(), nil)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get table `%s`.", tableName).AddCause(err).Build(), nil)
 	}
 	if !ok {
-		return HandleErr(errhand.BuildDError("The table `%s` does not exist.", tableName).Build(), nil)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("The table `%s` does not exist.", tableName).Build(), nil)
 	}
 	tblSch, err := table.GetSchema(ctx)
 	if err != nil {
-		return HandleErr(errhand.BuildDError("Unable to get schema for `%s`.", tableName).AddCause(err).Build(), nil)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get schema for `%s`.", tableName).AddCause(err).Build(), nil)
 	}
 	index := tblSch.Indexes().GetByName(indexName)
 	if index == nil {
-		return HandleErr(errhand.BuildDError("The index `%s` does not exist on table `%s`.", indexName, tableName).Build(), nil)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("The index `%s` does not exist on table `%s`.", indexName, tableName).Build(), nil)
 	}
 	indexRowData, err := table.GetNomsIndexRowData(ctx, index.Name())
 	if err != nil {
-		return HandleErr(errhand.BuildDError("The index `%s` does not have a data map.", indexName).Build(), nil)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("The index `%s` does not have a data map.", indexName).Build(), nil)
 	}
 
 	err = cmd.prettyPrintResults(ctx, index.Schema(), indexRowData)
 	if err != nil {
-		return HandleErr(errhand.BuildDError("Unable to display data for `%s`.", indexName).AddCause(err).Build(), nil)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to display data for `%s`.", indexName).AddCause(err).Build(), nil)
 	}
 
 	return 0

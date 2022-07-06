@@ -17,6 +17,7 @@ package index
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -27,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -91,6 +91,7 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		unique:                        true,
 		comment:                       "",
 		vrw:                           t.ValueReadWriter(),
+		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
@@ -214,6 +215,7 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 		isPk:                          true,
 		comment:                       "",
 		vrw:                           t.ValueReadWriter(),
+		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
@@ -243,6 +245,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		isPk:                          false,
 		comment:                       idx.Comment(),
 		vrw:                           t.ValueReadWriter(),
+		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
@@ -355,6 +358,7 @@ type doltIndex struct {
 	constrainedToLookupExpression bool
 
 	vrw    types.ValueReadWriter
+	ns     tree.NodeStore
 	keyBld *val.TupleBuilder
 
 	cache cachedDurableIndexes
@@ -381,7 +385,7 @@ func (di *doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.Index
 	}
 
 	if types.IsFormat_DOLT_1(di.vrw.Format()) {
-		return di.newProllyLookup(ctx, tree.NewNodeStore(shim.ChunkStoreFromVRW(di.vrw)), ranges...)
+		return di.newProllyLookup(ctx, di.ns, ranges...)
 	}
 
 	return di.newNomsLookup(ctx, ranges...)
@@ -444,11 +448,6 @@ func (di *doltIndex) newProllyLookup(ctx *sql.Context, ns tree.NodeStore, irange
 		return nil, err
 	}
 
-	ranges, err = SplitNullsFromRanges(ranges)
-	if err != nil {
-		return nil, err
-	}
-
 	prs := make([]prolly.Range, len(ranges))
 	for i, sr := range ranges {
 		prs[i], err = prollyRangeFromSqlRange(ctx, ns, sr, di.keyBld)
@@ -457,14 +456,9 @@ func (di *doltIndex) newProllyLookup(ctx *sql.Context, ns tree.NodeStore, irange
 		}
 	}
 
-	// the sql engine provides ranges that are logically disjoint in value space.
-	// however, these ranges may overlap physically within the index. Here we merge
-	// physically overlapping ranges to avoid returning duplicate tuples/rows.
-	merged := prolly.MergeOverlappingRanges(prs...)
-
 	return &doltIndexLookup{
 		idx:          di,
-		prollyRanges: merged,
+		prollyRanges: prs,
 		sqlRanges:    iranges,
 	}, nil
 }
@@ -752,25 +746,21 @@ func pruneEmptyRanges(sqlRanges []sql.Range) (pruned []sql.Range, err error) {
 
 func prollyRangeFromSqlRange(ctx context.Context, ns tree.NodeStore, rng sql.Range, tb *val.TupleBuilder) (prolly.Range, error) {
 	prollyRange := prolly.Range{
-		Start: make([]prolly.RangeCut, len(rng)),
-		Stop:  make([]prolly.RangeCut, len(rng)),
-		Desc:  tb.Desc,
+		Fields: make([]prolly.RangeField, len(rng)),
+		Desc:   tb.Desc,
 	}
 
 	for i, expr := range rng {
-		if _, isnull := expr.LowerBound.(sql.BelowNull); isnull {
-			prollyRange.Start[i] = prolly.RangeCut{
-				Inclusive: true,
-				Null:      true,
+		if rangeCutIsBinding(expr.LowerBound) {
+			bound := expr.LowerBound.TypeAsLowerBound()
+			prollyRange.Fields[i].Lo = prolly.Bound{
+				Binding:   true,
+				Inclusive: bound == sql.Closed,
 			}
-		} else if sql.RangeCutIsBinding(expr.LowerBound) {
+			// accumulate bound values in |tb|
 			v, err := getRangeCutValue(expr.LowerBound, rng[i].Typ)
 			if err != nil {
 				return prolly.Range{}, err
-			}
-			bound := expr.LowerBound.TypeAsLowerBound()
-			prollyRange.Start[i] = prolly.RangeCut{
-				Inclusive: bound == sql.Closed,
 			}
 			if err = PutField(ctx, ns, tb, i, v); err != nil {
 				return prolly.Range{}, err
@@ -780,47 +770,66 @@ func prollyRangeFromSqlRange(ctx context.Context, ns tree.NodeStore, rng sql.Ran
 
 	// BuildPermissive() allows nulls in non-null fields
 	tup := tb.BuildPermissive(sharePool)
-	for i, expr := range rng {
-		if sql.RangeCutIsBinding(expr.LowerBound) {
-			prollyRange.Start[i].Value = tup.GetField(i)
-		}
+	for i := range prollyRange.Fields {
+		prollyRange.Fields[i].Lo.Value = tup.GetField(i)
 	}
 
 	for i, expr := range rng {
-		if _, isnull := expr.UpperBound.(sql.AboveNull); isnull {
-			prollyRange.Stop[i] = prolly.RangeCut{
-				Inclusive: true,
-				Null:      true,
+		if rangeCutIsBinding(expr.UpperBound) {
+			bound := expr.UpperBound.TypeAsUpperBound()
+			prollyRange.Fields[i].Hi = prolly.Bound{
+				Binding:   true,
+				Inclusive: bound == sql.Closed,
 			}
-		} else if sql.RangeCutIsBinding(expr.UpperBound) {
+			// accumulate bound values in |tb|
 			v, err := getRangeCutValue(expr.UpperBound, rng[i].Typ)
 			if err != nil {
 				return prolly.Range{}, err
-			}
-			bound := expr.UpperBound.TypeAsUpperBound()
-			prollyRange.Stop[i] = prolly.RangeCut{
-				Inclusive: bound == sql.Closed,
 			}
 			if err = PutField(ctx, ns, tb, i, v); err != nil {
 				return prolly.Range{}, err
 			}
 		}
 	}
+
 	tup = tb.BuildPermissive(sharePool)
-	for i, expr := range rng {
-		if sql.RangeCutIsBinding(expr.UpperBound) {
-			prollyRange.Stop[i].Value = tup.GetField(i)
+	for i := range prollyRange.Fields {
+		prollyRange.Fields[i].Hi.Value = tup.GetField(i)
+	}
+
+	order := prollyRange.Desc.Comparator()
+	for i, field := range prollyRange.Fields {
+		if !field.Hi.Binding || !field.Lo.Binding {
+			continue
 		}
+		// maybe set RangeField.Exact
+		typ := prollyRange.Desc.Types[i]
+		cmp := order.CompareValues(field.Hi.Value, field.Lo.Value, typ)
+		prollyRange.Fields[i].Exact = cmp == 0
 	}
 
 	return prollyRange, nil
 }
 
+func rangeCutIsBinding(c sql.RangeCut) bool {
+	switch c.(type) {
+	case sql.Below, sql.Above, sql.AboveNull:
+		return true
+	case sql.BelowNull, sql.AboveAll:
+		return false
+	default:
+		panic(fmt.Errorf("unknown range cut %v", c))
+	}
+}
+
 func getRangeCutValue(cut sql.RangeCut, typ sql.Type) (interface{}, error) {
+	if _, ok := cut.(sql.AboveNull); ok {
+		return nil, nil
+	}
 	return typ.Convert(sql.GetRangeCutKey(cut))
 }
 
-// Returns the Range with any |AllColumnExprs| at the end of it removed.
+// DropTrailingAllColumnExprs returns the Range with any |AllColumnExprs| at the end of it removed.
 //
 // Sometimes when we construct read ranges against laid out index structures,
 // we want to ignore these trailing clauses.
@@ -835,7 +844,7 @@ func DropTrailingAllColumnExprs(r sql.Range) sql.Range {
 	return r[:i]
 }
 
-// Given a sql.Range, split it up into multiple ranges, where each column expr
+// SplitNullsFromRange given a sql.Range, splits it up into multiple ranges, where each column expr
 // that could be NULL and non-NULL is replaced with two column expressions, one
 // matching only NULL, and one matching the non-NULL component.
 //
@@ -883,6 +892,7 @@ func SplitNullsFromRange(r sql.Range) ([]sql.Range, error) {
 	return res, nil
 }
 
+// SplitNullsFromRanges splits nulls from ranges.
 func SplitNullsFromRanges(rs []sql.Range) ([]sql.Range, error) {
 	var ret []sql.Range
 	for _, r := range rs {

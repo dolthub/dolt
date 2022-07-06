@@ -330,6 +330,7 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 func createTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema, errhand func(args ...interface{}), rs ...row.Row) {
 	ctx := context.Background()
 	vrw := dEnv.DoltDB.ValueReadWriter()
+	ns := dEnv.DoltDB.NodeStore()
 
 	rowMap, err := types.NewMap(ctx, vrw)
 	if err != nil {
@@ -346,7 +347,7 @@ func createTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema, err
 		errhand(err)
 	}
 
-	tbl, err := doltdb.NewNomsTable(ctx, vrw, sch, rowMap, nil, nil)
+	tbl, err := doltdb.NewNomsTable(ctx, vrw, ns, sch, rowMap, nil, nil)
 	if err != nil {
 		errhand(err)
 	}
@@ -380,7 +381,8 @@ func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema
 	}
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
-	tbl, err := doltdb.NewNomsTable(ctx, vrw, sch, rows, indexData, autoVal)
+	ns := dEnv.DoltDB.NodeStore()
+	tbl, err := doltdb.NewNomsTable(ctx, vrw, ns, sch, rows, indexData, autoVal)
 	if err != nil {
 		return err
 	}

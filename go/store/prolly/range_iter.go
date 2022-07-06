@@ -109,26 +109,21 @@ func (it mutableMapIter[K, V, O]) compareKeys(memKey, proKey K) int {
 }
 
 func memIterFromRange(list *skip.List, rng Range) *memRangeIter {
-	var iter *skip.ListIter
-	if rng.Start == nil {
-		iter = list.IterAtStart()
-	} else {
-		// use the lower bound of |rng| to construct a skip.ListIter
-		iter = list.GetIterFromSearchFn(skipSearchFromRange(rng))
-	}
+	// use the lower bound of |rng| to construct a skip.ListIter
+	iter := list.GetIterFromSearchFn(skipSearchFromRange(rng))
 
 	// enforce range start
 	var key val.Tuple
 	for {
 		key, _ = iter.Current()
-		if key == nil || rng.AboveStart(key) {
+		if key == nil || rng.aboveStart(key) {
 			break // |i| inside |rng|
 		}
 		iter.Advance()
 	}
 
 	// enforce range end
-	if key == nil || !rng.BelowStop(key) {
+	if key == nil || !rng.belowStop(key) {
 		iter = nil
 	}
 
@@ -147,7 +142,7 @@ func skipSearchFromRange(rng Range) skip.SearchFn {
 		if nodeKey == nil {
 			return false
 		}
-		return !rng.AboveStart(nodeKey)
+		return !rng.aboveStart(nodeKey)
 	}
 }
 
@@ -176,7 +171,7 @@ func (it *memRangeIter) iterate(context.Context) (err error) {
 		it.iter.Advance()
 
 		k, _ := it.current()
-		if k == nil || !it.rng.BelowStop(k) {
+		if k == nil || !it.rng.belowStop(k) {
 			it.iter = nil // range exhausted
 		}
 
@@ -193,3 +188,23 @@ func (e emptyIter) Next(context.Context) (val.Tuple, val.Tuple, error) {
 func (e emptyIter) iterate(ctx context.Context) (err error) { return }
 
 func (e emptyIter) current() (key, value val.Tuple) { return }
+
+type filteredIter struct {
+	iter MapIter
+	rng  Range
+}
+
+var _ MapIter = filteredIter{}
+
+func (f filteredIter) Next(ctx context.Context) (k, v val.Tuple, err error) {
+	for {
+		k, v, err = f.iter.Next(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !f.rng.matches(k) {
+			continue
+		}
+		return
+	}
+}

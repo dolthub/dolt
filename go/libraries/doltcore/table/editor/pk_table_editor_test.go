@@ -42,7 +42,7 @@ const (
 
 func TestTableEditorConcurrency(t *testing.T) {
 	format := types.Format_Default
-	_, vrw, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
+	_, vrw, ns, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	opts := TestEditorOptions(vrw)
 	colColl := schema.NewColCollection(
@@ -53,7 +53,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), vrw)
 	require.NoError(t, err)
-	table, err := doltdb.NewNomsTable(context.Background(), vrw, tableSch, emptyMap, nil, nil)
+	table, err := doltdb.NewNomsTable(context.Background(), vrw, ns, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
@@ -137,7 +137,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 
 func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 	format := types.Format_Default
-	_, vrw, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
+	_, vrw, ns, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	opts := TestEditorOptions(vrw)
 	colColl := schema.NewColCollection(
@@ -148,7 +148,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), vrw)
 	require.NoError(t, err)
-	table, err := doltdb.NewNomsTable(context.Background(), vrw, tableSch, emptyMap, nil, nil)
+	table, err := doltdb.NewNomsTable(context.Background(), vrw, ns, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 
 	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, opts)
@@ -230,7 +230,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 
 func TestTableEditorWriteAfterFlush(t *testing.T) {
 	format := types.Format_Default
-	_, vrw, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
+	_, vrw, ns, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	opts := TestEditorOptions(vrw)
 	colColl := schema.NewColCollection(
@@ -241,7 +241,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), vrw)
 	require.NoError(t, err)
-	table, err := doltdb.NewNomsTable(context.Background(), vrw, tableSch, emptyMap, nil, nil)
+	table, err := doltdb.NewNomsTable(context.Background(), vrw, ns, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 
 	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, opts)
@@ -300,7 +300,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 
 func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 	format := types.Format_Default
-	_, vrw, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
+	_, vrw, ns, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	opts := TestEditorOptions(vrw)
 	colColl := schema.NewColCollection(
@@ -311,7 +311,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), vrw)
 	require.NoError(t, err)
-	table, err := doltdb.NewNomsTable(context.Background(), vrw, tableSch, emptyMap, nil, nil)
+	table, err := doltdb.NewNomsTable(context.Background(), vrw, ns, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 
 	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, opts)
@@ -379,7 +379,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 	ctx := context.Background()
 	format := types.Format_Default
-	_, vrw, err := dbfactory.MemFactory{}.CreateDB(ctx, format, nil, nil)
+	_, vrw, ns, err := dbfactory.MemFactory{}.CreateDB(ctx, format, nil, nil)
 	require.NoError(t, err)
 	opts := TestEditorOptions(vrw)
 	colColl := schema.NewColCollection(
@@ -398,7 +398,7 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(ctx, vrw)
 	require.NoError(t, err)
-	table, err := doltdb.NewNomsTable(ctx, vrw, tableSch, emptyMap, nil, nil)
+	table, err := doltdb.NewNomsTable(ctx, vrw, ns, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 	table, err = RebuildAllIndexes(ctx, table, opts)
 	require.NoError(t, err)

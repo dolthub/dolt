@@ -84,6 +84,7 @@ func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 
 	oldName := apr.Arg(0)
 	newName := apr.Arg(1)
+
 	queryStr := ""
 	if force := apr.Contains(forceParam); force {
 		queryStr = fmt.Sprintf("DROP TABLE IF EXISTS `%s`;", newName)
