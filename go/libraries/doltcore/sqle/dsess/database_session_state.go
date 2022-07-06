@@ -15,6 +15,7 @@
 package dsess
 
 import (
+	"hash"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -46,8 +47,7 @@ type InitialDbState struct {
 
 type DatabaseSessionState struct {
 	dbName       string
-	headCommit   *doltdb.Commit
-	headRoot     *doltdb.RootValue
+	headHash     hash.Hash
 	WorkingSet   *doltdb.WorkingSet
 	dbData       env.DbData
 	WriteSession writer.WriteSession

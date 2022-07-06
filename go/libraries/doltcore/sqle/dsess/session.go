@@ -220,8 +220,6 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacte
 		return nil, err
 	}
 
-	// logrus.Tracef("starting transaction with working root %s", ws.WorkingRoot().DebugString(ctx, true))
-
 	// TODO: this is going to do 2 resolves to get the head root, not ideal
 	err = sess.SetWorkingSet(ctx, dbName, ws)
 
@@ -683,27 +681,27 @@ func (sess *Session) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.W
 	}
 	sessionState.WorkingSet = ws
 
-	cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
-	if err != nil {
-		return err
-	}
-
-	branchRef, err := ws.Ref().ToHeadRef()
-	if err != nil {
-		return err
-	}
-
-	cm, err := sessionState.dbData.Ddb.Resolve(ctx, cs, branchRef)
-	if err != nil {
-		return err
-	}
-	sessionState.headCommit = cm
-
-	headRoot, err := cm.GetRootValue(ctx)
-	if err != nil {
-		return err
-	}
-	sessionState.headRoot = headRoot
+	// cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// branchRef, err := ws.Ref().ToHeadRef()
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// cm, err := sessionState.dbData.Ddb.Resolve(ctx, cs, branchRef)
+	// if err != nil {
+	// 	return err
+	// }
+	// sessionState.headCommit = cm
+	//
+	// headRoot, err := cm.GetRootValue(ctx)
+	// if err != nil {
+	// 	return err
+	// }
+	// sessionState.headRoot = headRoot
 
 	err = sess.setSessionVarsForDb(ctx, dbName)
 	if err != nil {
@@ -753,26 +751,26 @@ func (sess *Session) SwitchWorkingSet(
 	// TODO: just call SetWorkingSet?
 	sessionState.WorkingSet = ws
 
-	cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
-	if err != nil {
-		return err
-	}
-
-	branchRef, err := ws.Ref().ToHeadRef()
-	if err != nil {
-		return err
-	}
-
-	cm, err := sessionState.dbData.Ddb.Resolve(ctx, cs, branchRef)
-	if err != nil {
-		return err
-	}
-
-	sessionState.headCommit = cm
-	sessionState.headRoot, err = cm.GetRootValue(ctx)
-	if err != nil {
-		return err
-	}
+	// cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// branchRef, err := ws.Ref().ToHeadRef()
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// cm, err := sessionState.dbData.Ddb.Resolve(ctx, cs, branchRef)
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// sessionState.headCommit = cm
+	// sessionState.headRoot, err = cm.GetRootValue(ctx)
+	// if err != nil {
+	// 	return err
+	// }
 
 	err = sess.setSessionVarsForDb(ctx, dbName)
 	if err != nil {
@@ -828,7 +826,7 @@ func (sess *Session) WorkingSet(ctx *sql.Context, dbName string) (*doltdb.Workin
 	return sessionState.WorkingSet, nil
 }
 
-// GetHeadCommit returns the parent commit of the current session.
+// GetHeadCommit returns the HEAD commit of the current session.
 func (sess *Session) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Commit, error) {
 	dbState, ok, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
@@ -954,17 +952,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 			return err
 		}
 
-	} else {
-		headRoot, err := dbState.HeadCommit.GetRootValue(ctx)
-		if err != nil {
-			return err
-		}
-		sessionState.headRoot = headRoot
 	}
-
-	// This has to happen after SetRoot above, since it does a stale check before its work
-	// TODO: this needs to be kept up to date as the working set ref changes
-	sessionState.headCommit = dbState.HeadCommit
 
 	// After setting the initial root we have no state to commit
 	sessionState.dirty = false
@@ -1064,14 +1052,14 @@ func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error 
 		return err
 	}
 
-	h, err = state.headCommit.HashOf()
-	if err != nil {
-		return err
-	}
-	err = sess.Session.SetSessionVariable(ctx, HeadKey(dbName), h.String())
-	if err != nil {
-		return err
-	}
+	// h, err = state.headCommit.HashOf()
+	// if err != nil {
+	// 	return err
+	// }
+	// err = sess.Session.SetSessionVariable(ctx, HeadKey(dbName), h.String())
+	// if err != nil {
+	// 	return err
+	// }
 
 	return nil
 }
