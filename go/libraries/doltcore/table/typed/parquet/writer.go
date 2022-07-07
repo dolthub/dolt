@@ -37,16 +37,16 @@ type ParquetWriter struct {
 }
 
 var typeMap = map[typeinfo.Identifier]string{
-	typeinfo.DatetimeTypeIdentifier:   "type=INT64, convertedtype=TIME_MICROS",
+	typeinfo.DatetimeTypeIdentifier:   "type=INT64, convertedtype=TIMESTAMP_MICROS",
 	typeinfo.DecimalTypeIdentifier:    "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.EnumTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.InlineBlobTypeIdentifier: "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.SetTypeIdentifier:        "type=BYTE_ARRAY, convertedtype=UTF8",
-	typeinfo.TimeTypeIdentifier:       "type=INT64, convertedtype=TIME_MICROS",
+	typeinfo.TimeTypeIdentifier:       "type=INT64, convertedtype=TIMESPAN",
 	typeinfo.TupleTypeIdentifier:      "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.UuidTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.VarBinaryTypeIdentifier:  "type=BYTE_ARRAY, convertedtype=UTF8",
-	typeinfo.YearTypeIdentifier:       "type=INT32, convertedtype=DATE",
+	typeinfo.YearTypeIdentifier:       "type=INT32, convertedtype=INT_32",
 	typeinfo.UnknownTypeIdentifier:    "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.JSONTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.BlobStringTypeIdentifier: "type=BYTE_ARRAY, convertedtype=UTF8",
@@ -114,10 +114,10 @@ func (pwr *ParquetWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 			// convert datetime and time types to int64
 			switch colT.TypeInfo.GetTypeIdentifier() {
 			case typeinfo.DatetimeTypeIdentifier:
-				val = val.(time.Time).Unix()
+				val = val.(time.Time).UnixMicro()
 				sqlType = sql.Int64
 			case typeinfo.TimeTypeIdentifier:
-				val = int64(val.(sql.Timespan))
+				val = int64(val.(sql.Timespan).AsTimeDuration())
 				sqlType = sql.Int64
 			case typeinfo.BitTypeIdentifier:
 				sqlType = sql.Uint64

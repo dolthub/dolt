@@ -294,6 +294,7 @@ func (tx *DoltTransaction) mergeRoots(
 	if err != nil {
 		return nil, err
 	}
+
 	return workingSet.WithWorkingRoot(mergedRoot), nil
 }
 
