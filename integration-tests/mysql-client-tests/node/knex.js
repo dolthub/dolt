@@ -1,7 +1,8 @@
 const knex = require("knex");
+const wtfnode = require("wtfnode")
+Socket = require('net').Socket;
 
 const args = process.argv.slice(2);
-
 const user = args[0];
 const port = args[1];
 const dbName  = args[2];
@@ -17,7 +18,7 @@ const db = knex({
 });
 
 async function createTable() {
-    val = await db.schema.createTable('test2', (table) => {
+    let val = await db.schema.createTable('test2', (table) => {
         table.integer('id').primary()
         table.integer('foo')
     });
@@ -25,12 +26,12 @@ async function createTable() {
 }
 
 async function upsert(table, data) {
-    val = await db(table).insert(data).onConflict().merge();
+    let val = await db(table).insert(data).onConflict().merge();
     return val
 }
 
 async function select() {
-    val = await db.select('id', 'foo').from('test2');
+    let val = await db.select('id', 'foo').from('test2');
     return val
 }
 
@@ -50,7 +51,28 @@ async function main() {
         throw new Error("Query failed")
     }
 
-    await db.destroy()
+    await db.destroy();
+    let sockets = await getOpenSockets();
+
+    // cc: https://github.com/dolthub/dolt/issues/3752
+    if (sockets.length > 0) {
+        throw new Error("Database not properly destroyed. Hanging server connections")
+    }
+}
+
+// cc: https://github.com/myndzi/wtfnode/blob/master/index.js#L457
+async function getOpenSockets() {
+    let sockets = []
+    process._getActiveHandles().forEach(function (h) {
+        // handles can be null now? early exit to guard against this
+        if (!h) { return; }
+
+        if (h instanceof Socket) {
+            if ((h.fd == null)) { sockets.push(h); }
+        }
+    });
+
+    return sockets
 }
 
 main();
