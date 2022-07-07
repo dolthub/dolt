@@ -150,7 +150,7 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(cfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt ")
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
 	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given")
-	ap.SupportsString(privilegeFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Without this flag, the database has a single user with all permissions, and more cannot be added.")
+	ap.SupportsString(privilegeFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants.")
 	return ap
 }
 
