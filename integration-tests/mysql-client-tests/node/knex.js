@@ -50,8 +50,7 @@ async function main() {
         throw new Error("Query failed")
     }
 
-    db.destroy()
-    process.exit(0)
+    await db.destroy()
 }
 
 main();
