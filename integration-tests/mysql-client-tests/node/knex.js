@@ -1,5 +1,4 @@
 const knex = require("knex");
-const wtfnode = require("wtfnode")
 Socket = require('net').Socket;
 
 const args = process.argv.slice(2);
