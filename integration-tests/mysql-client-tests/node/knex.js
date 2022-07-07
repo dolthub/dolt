@@ -1,4 +1,5 @@
 const knex = require("knex");
+const wtfnode = require("wtfnode")
 Socket = require('net').Socket;
 
 const args = process.argv.slice(2);
@@ -51,13 +52,18 @@ async function main() {
     }
 
     await db.destroy();
-    let sockets = await getOpenSockets();
 
     // cc: https://github.com/dolthub/dolt/issues/3752
-    if (sockets.length > 0) {
-        process.exit(1);
-        throw new Error("Database not properly destroyed. Hanging server connections");
-    }
+    setTimeout(async () => {
+        let sockets = await getOpenSockets();
+
+        if (sockets.length > 0) {
+            wtfnode.dump();
+            process.exit(1);
+            throw new Error("Database not properly destroyed. Hanging server connections");
+        }
+
+    }, 3000);
 }
 
 // cc: https://github.com/myndzi/wtfnode/blob/master/index.js#L457
@@ -68,7 +74,7 @@ async function getOpenSockets() {
         if (!h) { return; }
 
         if (h instanceof Socket) {
-            if ((h.fd == null)) { sockets.push(h); }
+            if ((h.fd == null) && (h.localAddress) && !(h.destroyed)) { sockets.push(h); }
         }
     });
 
