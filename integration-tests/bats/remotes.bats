@@ -1879,4 +1879,17 @@ setup_ref_test() {
     run dolt pull
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Everything up-to-date." ]] || false
+
+    dolt checkout main
+    dolt branch -D newbranch
+
+    # branch.autosetupmerge configuration defaults to --track, so the upstream is set
+    run dolt checkout -b newbranch origin/feature
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'newbranch'" ]] || false
+    [[ "$output" =~ "branch 'newbranch' set up to track 'origin/feature'." ]] || false
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
 }

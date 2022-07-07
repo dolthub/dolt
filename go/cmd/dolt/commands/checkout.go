@@ -143,9 +143,8 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 }
 
 func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	var err error
 	var newBranchName string
-	var remote env.Remote
+	var remoteName string
 	var remoteBranchName string
 	var startPt = "head"
 
@@ -160,11 +159,16 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Ar
 		} else if trackVal == "inherit" {
 			return errhand.VerboseErrorFromError(fmt.Errorf("--track='inherit' is not supported yet"))
 		}
-
-		remote, remoteBranchName, err = getRemoteTrackingBranch(dEnv, startPt)
+		remoteName, remoteBranchName = parseRemoteBranchName(startPt)
+		remotes, err := dEnv.RepoStateReader().GetRemotes()
 		if err != nil {
 			return errhand.BuildDError(err.Error()).Build()
 		}
+		_, remoteOk := remotes[remoteName]
+		if !remoteOk {
+			return errhand.BuildDError(fmt.Errorf("'%s' is not a commit and a branch '%s' cannot be created from it", startPt, remoteBranchName).Error()).Build()
+		}
+		newBranchName = remoteBranchName
 	}
 
 	if newBranch, ok := apr.GetValue(cli.CheckoutCoBranch); ok {
@@ -172,8 +176,6 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Ar
 			return errhand.BuildDError("error: cannot checkout empty string").Build()
 		}
 		newBranchName = newBranch
-	} else {
-		newBranchName = remoteBranchName
 	}
 
 	verr := checkoutNewBranchFromStartPt(ctx, dEnv, newBranchName, startPt)
@@ -181,9 +183,25 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Ar
 		return verr
 	}
 
+	// the new branch is checked out at this point
 	if setTrackUpstream {
-		// the new branch is checked out at this point
-		verr = setRemoteUpstreamForCheckout(dEnv, remote.Name, remoteBranchName)
+		verr = setRemoteUpstreamForCheckout(dEnv, remoteName, remoteBranchName)
+		if verr != nil {
+			return verr
+		}
+	} else if autoSetupMerge, err := dEnv.Config.GetString("branch.autosetupmerge"); err != nil || autoSetupMerge != "false" {
+		// do guess remote branch if branch.autosetupmerge is not 'false', or if it is not set, it should default to 'true'.
+		// if no remote, it should not return an error
+		remotes, err := dEnv.RepoStateReader().GetRemotes()
+		if err != nil {
+			return nil
+		}
+		remoteName, remoteBranchName = parseRemoteBranchName(startPt)
+		_, remoteOk := remotes[remoteName]
+		if !remoteOk {
+			return nil
+		}
+		verr = setRemoteUpstreamForCheckout(dEnv, remoteName, remoteBranchName)
 		if verr != nil {
 			return verr
 		}
@@ -326,29 +344,17 @@ func setRemoteUpstreamForCheckout(dEnv *env.DoltEnv, remName, remBranchName stri
 	return nil
 }
 
-func getRemoteTrackingBranch(dEnv *env.DoltEnv, startPt string) (env.Remote, string, error) {
-	remotes, err := dEnv.RepoStateReader().GetRemotes()
-	if err != nil {
-		return env.Remote{}, "", err
-	}
-
-	var remote env.Remote
-	refSpecStr := strings.TrimPrefix(startPt, "remotes/")
-	names := strings.Split(startPt, "/")
-	if r, remoteOK := remotes[names[0]]; remoteOK {
-		remote = r
-		refSpecStr = strings.Join(names[1:], "/")
-	} else if r, remoteOK = remotes["origin"]; remoteOK {
-		remote = r
-	} else {
-		return env.Remote{}, "", fmt.Errorf("invalid remote-tracking path")
-	}
-
-	return remote, refSpecStr, nil
-}
-
 func unreadableRootToVErr(err error) errhand.VerboseError {
 	rt := doltdb.GetUnreachableRootType(err)
 	bdr := errhand.BuildDError("error: unable to read the %s", rt.String())
 	return bdr.AddCause(doltdb.GetUnreachableRootCause(err)).Build()
+}
+
+func parseRemoteBranchName(startPt string) (string, string) {
+	startPt = strings.TrimPrefix(startPt, "remotes/")
+	names := strings.Split(startPt, "/")
+	if len(names) < 2 {
+		return "", ""
+	}
+	return names[0], strings.Join(names[1:], "/")
 }
