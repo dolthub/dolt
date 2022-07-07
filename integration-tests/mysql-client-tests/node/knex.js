@@ -56,7 +56,8 @@ async function main() {
 
     // cc: https://github.com/dolthub/dolt/issues/3752
     if (sockets.length > 0) {
-        throw new Error("Database not properly destroyed. Hanging server connections")
+        process.exit(1);
+        throw new Error("Database not properly destroyed. Hanging server connections");
     }
 }
 
