@@ -166,7 +166,7 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Ar
 		}
 		_, remoteOk := remotes[remoteName]
 		if !remoteOk {
-			return errhand.BuildDError(fmt.Errorf("'%s' is not a commit and a branch '%s' cannot be created from it", startPt, remoteBranchName).Error()).Build()
+			return errhand.BuildDError(fmt.Errorf("'%s' is not a valid remote ref and a branch '%s' cannot be created from it", startPt, remoteBranchName).Error()).Build()
 		}
 		newBranchName = remoteBranchName
 	}
@@ -316,10 +316,10 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string, force b
 
 // setRemoteUpstreamForCheckout sets upstream for checked out branch. This applies `dolt checkout <bn>`,
 // if <bn> matches any remote branch name. This should not happen for `dolt checkout -b <bn>` case.
-func setRemoteUpstreamForCheckout(dEnv *env.DoltEnv, remName, remBranchName string) errhand.VerboseError {
-	refSpec, err := ref.ParseRefSpecForRemote(remName, remBranchName)
+func setRemoteUpstreamForCheckout(dEnv *env.DoltEnv, remote, remoteBranch string) errhand.VerboseError {
+	refSpec, err := ref.ParseRefSpecForRemote(remote, remoteBranch)
 	if err != nil {
-		return errhand.BuildDError(fmt.Errorf("%w: '%s'", err, remName).Error()).Build()
+		return errhand.BuildDError(fmt.Errorf("%w: '%s'", err, remote).Error()).Build()
 	}
 
 	currentBranch := dEnv.RepoStateReader().CWBHeadRef()
@@ -330,7 +330,7 @@ func setRemoteUpstreamForCheckout(dEnv *env.DoltEnv, remName, remBranchName stri
 		Merge: ref.MarshalableRef{
 			Ref: dest,
 		},
-		Remote: remName,
+		Remote: remote,
 	})
 	if err != nil {
 		return errhand.BuildDError(err.Error()).Build()
@@ -339,7 +339,7 @@ func setRemoteUpstreamForCheckout(dEnv *env.DoltEnv, remName, remBranchName stri
 	if err != nil {
 		return errhand.BuildDError(actions.ErrFailedToSaveRepoState.Error()).AddCause(err).Build()
 	}
-	cli.Printf("branch '%s' set up to track '%s/%s'.\n", currentBranch.GetPath(), remName, remBranchName)
+	cli.Printf("branch '%s' set up to track '%s/%s'.\n", currentBranch.GetPath(), remote, remoteBranch)
 
 	return nil
 }
