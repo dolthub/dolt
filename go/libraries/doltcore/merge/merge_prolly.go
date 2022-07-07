@@ -56,7 +56,9 @@ func mergeTableData(
 	ancRows durable.Index,
 	ancIndexSet durable.IndexSet,
 	mergeRootIsh hash.Hash,
-	ancRootIsh hash.Hash) (*doltdb.Table, *MergeStats, error) {
+	ancRootIsh hash.Hash,
+	strategy ConflictStompStrategy,
+) (*doltdb.Table, *MergeStats, error) {
 	group, gCtx := errgroup.WithContext(ctx)
 
 	indexEdits := make(chan indexEdit, 128)
@@ -65,7 +67,14 @@ func mergeTableData(
 
 	group.Go(func() error {
 		var err error
-		updatedTbl, mergedData, err = mergeProllyRowData(gCtx, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, updatedTbl, ancRows, indexEdits, conflicts)
+		updatedTbl, mergedData, err = mergeProllyRowData(
+			gCtx,
+			postMergeSchema, rootSchema, mergeSchema, ancSchema,
+			tbl, mergeTbl, updatedTbl,
+			ancRows,
+			indexEdits,
+			conflicts,
+			strategy)
 		if err != nil {
 			return err
 		}
@@ -229,7 +238,15 @@ func isNewConflictsCompatible(ctx context.Context, tbl *doltdb.Table, tblName st
 
 // mergeProllyRowData merges the primary row table indexes of |tbl|, |mergeTbl|,
 // and |ancTbl|. It stores the merged row data into |tableToUpdate| and returns the new value along with the row data.
-func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch, ancSch schema.Schema, tbl, mergeTbl, tableToUpdate *doltdb.Table, ancRows durable.Index, indexEdits chan indexEdit, conflicts chan confVals) (*doltdb.Table, durable.Index, error) {
+func mergeProllyRowData(
+	ctx context.Context,
+	postMergeSchema, rootSch, mergeSch, ancSch schema.Schema,
+	tbl, mergeTbl, tableToUpdate *doltdb.Table,
+	ancRows durable.Index,
+	indexEdits chan indexEdit,
+	conflicts chan confVals,
+	strategy ConflictStompStrategy) (*doltdb.Table, durable.Index, error) {
+
 	rootR, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -250,16 +267,16 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 		if left.Type == right.Type && bytes.Equal(left.To, right.To) {
 			if keyless {
 				// convergent edits are conflicts for keyless tables
-				_ = sendConflict(ctx, conflicts, indexEdits, left, right)
-				return tree.Diff{}, false
+				d, b, _ := processConflict(ctx, conflicts, indexEdits, left, right, strategy)
+				return d, b
 			}
 			return left, true
 		}
 
 		merged, isConflict := vMerger.tryMerge(val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
 		if isConflict {
-			_ = sendConflict(ctx, conflicts, indexEdits, left, right)
-			return tree.Diff{}, false
+			d, b, _ := processConflict(ctx, conflicts, indexEdits, left, right, strategy)
+			return d, b
 		}
 
 		d := tree.Diff{
@@ -290,28 +307,47 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 	return updatedTbl, durable.IndexFromProllyMap(mergedRP), nil
 }
 
-func sendConflict(ctx context.Context, confs chan confVals, edits chan indexEdit, left, right tree.Diff) error {
-	c := confVals{
-		key:      val.Tuple(left.Key),
-		ourVal:   val.Tuple(left.To),
-		theirVal: val.Tuple(right.To),
-		baseVal:  val.Tuple(left.From),
+func processConflict(ctx context.Context, confs chan confVals, edits chan indexEdit, left, right tree.Diff, strategy ConflictStompStrategy) (tree.Diff, bool, error) {
+	switch strategy {
+	case ConflictStompStrategyNone:
+		c := confVals{
+			key:      val.Tuple(left.Key),
+			ourVal:   val.Tuple(left.To),
+			theirVal: val.Tuple(right.To),
+			baseVal:  val.Tuple(left.From),
+		}
+		select {
+		case confs <- c:
+		case <-ctx.Done():
+			return tree.Diff{}, false, ctx.Err()
+		}
+		// Reset the change on the right
+		e := conflictEdit{right: right}
+		select {
+		case edits <- e:
+		case <-ctx.Done():
+			return tree.Diff{}, false, ctx.Err()
+		}
+		return tree.Diff{}, false, nil
+	case ConflictStompStrategyPickOurs:
+		e := cellWiseMergeEdit{left: left, right: right, merged: left}
+		select {
+		case edits <- e:
+		case <-ctx.Done():
+			return tree.Diff{}, false, ctx.Err()
+		}
+		return left, true, nil
+	case ConflictStompStrategyPickTheirs:
+		e := cellWiseMergeEdit{left: left, right: right, merged: right}
+		select {
+		case edits <- e:
+		case <-ctx.Done():
+			return tree.Diff{}, false, ctx.Err()
+		}
+		return right, true, nil
+	default:
+		panic("unhandled conflict stomp strategy")
 	}
-	select {
-	case confs <- c:
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	// Reset the change on the right
-	e := conflictEdit{
-		right: right,
-	}
-	select {
-	case edits <- e:
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	return nil
 }
 
 type valueMerger struct {
