@@ -33,15 +33,23 @@ const (
 )
 
 type ImportBenchmarkJob struct {
+	// Name of the job
 	Name string
 
+	// NumRows represents the number of rows being imported in the job.
 	NumRows int
 
+	// Sorted represents whether the data is sorted or not.
 	Sorted bool
 
+	// Format is either csv, json or sql.
 	Format string
 
+	// Filepath is the path to the csv file. If empty data is generated instead.
 	Filepath string
+
+	// DoltVersion tracks the current version of Dolt being used.
+	DoltVersion string
 }
 
 type ImportBenchmarkConfig struct {
@@ -53,10 +61,11 @@ type ImportBenchmarkConfig struct {
 func NewDefaultImportBenchmarkConfig() *ImportBenchmarkConfig {
 	jobs := []*ImportBenchmarkJob{
 		{
-			Name:    "dolt_import_small",
-			NumRows: smallSet,
-			Sorted:  false,
-			Format:  csvExt,
+			Name:        "dolt_import_small",
+			NumRows:     smallSet,
+			Sorted:      false,
+			Format:      csvExt,
+			DoltVersion: "HEAD", // Use whatever dolt is installed locally
 		},
 	}
 
@@ -88,6 +97,8 @@ type ImportBenchmarkTest struct {
 	fileFormat string
 
 	filePath string // path to file
+
+	doltVersion string
 }
 
 // NewImportBenchmarkTests creates the test conditions for an import benchmark to execute. In the case that the config
@@ -102,6 +113,8 @@ func NewImportBenchmarkTests(config *ImportBenchmarkConfig) []*ImportBenchmarkTe
 		} else {
 			ret[i] = getGeneratedBenchmarkTest(job)
 		}
+
+		ret[i].doltVersion = job.DoltVersion
 	}
 
 	return ret
@@ -145,6 +158,7 @@ func RunBenchmarkTests(config *ImportBenchmarkConfig, tests []*ImportBenchmarkTe
 			columns:          len(genSampleCols()),
 			garbageGenerated: getAmountOfGarbageGenerated(),
 			br:               br,
+			doltVersion:      test.doltVersion,
 		}
 		results = append(results, res)
 	}

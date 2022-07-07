@@ -34,6 +34,7 @@ type result struct {
 	columns          int
 	garbageGenerated float64
 	br               testing.BenchmarkResult
+	doltVersion      string
 }
 
 // RSImpl is a Dataset containing results of benchmarking
@@ -104,37 +105,40 @@ func getResultsRow(res result, cols []*SeedColumn) []string {
 
 	// set name
 	row[0] = res.name
+	// set version
+	row[1] = res.doltVersion
 	// set format
-	row[1] = res.format
+	row[2] = res.format
 	// set rows
-	row[2] = fmt.Sprintf("%d", res.rows)
+	row[3] = fmt.Sprintf("%d", res.rows)
 	// set cols
-	row[3] = fmt.Sprintf("%d", res.columns)
+	row[4] = fmt.Sprintf("%d", res.columns)
 	// set iterations
-	row[4] = fmt.Sprintf("%d", res.br.N)
+	row[5] = fmt.Sprintf("%d", res.br.N)
 	// set time
-	row[5] = res.br.T.String()
+	row[6] = res.br.T.String()
 	// set bytes
-	row[6] = fmt.Sprintf("%v", res.br.Bytes)
+	row[7] = fmt.Sprintf("%v", res.br.Bytes)
 	// set mem_allocs
-	row[7] = fmt.Sprintf("%v", res.br.MemAllocs)
+	row[8] = fmt.Sprintf("%v", res.br.MemAllocs)
 	// set mem_bytes
-	row[8] = fmt.Sprintf("%v", res.br.MemBytes)
+	row[9] = fmt.Sprintf("%v", res.br.MemBytes)
 	// set alloced_bytes_per_op
-	row[9] = fmt.Sprintf("%v", res.br.AllocedBytesPerOp())
+	row[10] = fmt.Sprintf("%v", res.br.AllocedBytesPerOp())
 	//set allocs_per_op
-	row[10] = fmt.Sprintf("%v", res.br.AllocsPerOp())
-	// set garbage_generaged
-	row[11] = fmt.Sprintf("%v", res.garbageGenerated)
+	row[11] = fmt.Sprintf("%v", res.br.AllocsPerOp())
+	// set garbage_generated
+	row[12] = fmt.Sprintf("%v", res.garbageGenerated)
 	// set datetime
 	t := time.Now()
-	row[12] = fmt.Sprintf("%04d-%02d-%02d %02d:%02d", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute())
+	row[13] = fmt.Sprintf("%04d-%02d-%02d %02d:%02d", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute())
 	return row
 }
 
 func genResultsCols() []*SeedColumn {
 	return []*SeedColumn{
 		NewSeedColumn("name", false, types.StringKind, supplied),
+		NewSeedColumn("dolt_version", false, types.StringKind, supplied),
 		NewSeedColumn("format", false, types.StringKind, supplied),
 		NewSeedColumn("rows", false, types.StringKind, supplied),
 		NewSeedColumn("columns", false, types.StringKind, supplied),
