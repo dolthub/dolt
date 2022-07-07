@@ -643,7 +643,7 @@ SQL
     SELECT commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');
     INSERT INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
 
-    dolt add .
+    server_query repo1 1 "call dolt_add('.')" "status\n0"
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
@@ -652,7 +652,7 @@ SQL
     [ "$status" -eq 1 ]
 
     server_query repo1 1 "drop table one_pk" ""
-    dolt commit -am "Dropped table one_pk"
+    multi_query repo1 1 "call dolt_commit('-am', 'Dropped table one_pk')"
 
     run dolt ls
     [ "$status" -eq 0 ]

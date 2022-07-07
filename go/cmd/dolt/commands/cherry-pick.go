@@ -77,7 +77,9 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 	ap := cli.CreateCherryPickArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cherryPickDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
 	// This command creates a commit, so we need user identity
 	if !cli.CheckUserNameAndEmail(dEnv) {
 		return 1
@@ -255,7 +257,7 @@ func getParentAndCherryRoots(ctx context.Context, ddb *doltdb.DoltDB, cherryComm
 			return nil, nil, err
 		}
 	} else {
-		parentRoot, err = doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
+		parentRoot, err = doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter(), ddb.NodeStore())
 		if err != nil {
 			return nil, nil, err
 		}

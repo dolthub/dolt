@@ -115,6 +115,7 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/marshal"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -304,7 +305,8 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 		memCS := storage.NewView()
 		suite.DatabaseSpec = "mem://"
 		suite.VS = types.NewValueStore(memCS)
-		suite.Database = datas.NewTypesDatabase(suite.VS)
+		ns := tree.NewNodeStore(memCS)
+		suite.Database = datas.NewTypesDatabase(suite.VS, ns)
 		defer suite.Database.Close()
 
 		if t, ok := suiteT.(SetupRepSuite); ok {

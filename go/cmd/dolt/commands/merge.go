@@ -92,6 +92,10 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 1
 	}
 
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
+
 	var verr errhand.VerboseError
 	if apr.Contains(cli.AbortParam) {
 		mergeActive, err := dEnv.IsMergeActive(ctx)

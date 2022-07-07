@@ -37,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/merge"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/status"
 	"github.com/dolthub/dolt/go/store/util/verbose"
@@ -75,7 +76,7 @@ func runMerge(ctx context.Context, args []string) int {
 	if len(args) != 4 {
 		util.CheckErrorNoUsage(fmt.Errorf("incorrect number of arguments"))
 	}
-	db, vrw, err := cfg.GetDatabase(ctx, args[0])
+	db, vrw, ns, err := cfg.GetDatabase(ctx, args[0])
 	util.CheckError(err)
 	defer db.Close()
 
@@ -86,7 +87,7 @@ func runMerge(ctx context.Context, args []string) int {
 		return 1
 	}
 
-	left, right, ancestor, err := getMergeCandidates(ctx, db, vrw, leftDS, rightDS)
+	left, right, ancestor, err := getMergeCandidates(ctx, db, vrw, ns, leftDS, rightDS)
 
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -149,14 +150,14 @@ func resolveDatasets(ctx context.Context, db datas.Database, leftName, rightName
 	return
 }
 
-func getMergeCandidates(ctx context.Context, db datas.Database, vrw types.ValueReadWriter, leftDS, rightDS datas.Dataset) (left, right, ancestor types.Value, err error) {
+func getMergeCandidates(ctx context.Context, db datas.Database, vrw types.ValueReadWriter, ns tree.NodeStore, leftDS, rightDS datas.Dataset) (left, right, ancestor types.Value, err error) {
 	leftRef, ok, err := leftDS.MaybeHeadRef()
 	d.PanicIfError(err)
 	checkIfTrue(!ok, "Dataset %s has no data", leftDS.ID())
 	rightRef, ok, err := rightDS.MaybeHeadRef()
 	d.PanicIfError(err)
 	checkIfTrue(!ok, "Dataset %s has no data", rightDS.ID())
-	ancestorCommit, ok := getCommonAncestor(ctx, leftRef, rightRef, vrw)
+	ancestorCommit, ok := getCommonAncestor(ctx, leftRef, rightRef, vrw, ns)
 	checkIfTrue(!ok, "Datasets %s and %s have no common ancestor", leftDS.ID(), rightDS.ID())
 
 	leftHead, ok, err := leftDS.MaybeHeadValue()
@@ -180,12 +181,12 @@ func getMergeCandidates(ctx context.Context, db datas.Database, vrw types.ValueR
 
 }
 
-func getCommonAncestor(ctx context.Context, r1, r2 types.Ref, vr types.ValueReader) (a types.Struct, found bool) {
+func getCommonAncestor(ctx context.Context, r1, r2 types.Ref, vr types.ValueReader, ns tree.NodeStore) (a types.Struct, found bool) {
 	c1, err := datas.LoadCommitRef(ctx, vr, r1)
 	d.PanicIfError(err)
 	c2, err := datas.LoadCommitRef(ctx, vr, r2)
 	d.PanicIfError(err)
-	aaddr, found, err := datas.FindCommonAncestor(ctx, c1, c2, vr, vr)
+	aaddr, found, err := datas.FindCommonAncestor(ctx, c1, c2, vr, vr, ns, ns)
 	d.PanicIfError(err)
 	if !found {
 		return

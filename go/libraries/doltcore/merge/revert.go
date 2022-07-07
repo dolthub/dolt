@@ -72,7 +72,7 @@ func Revert(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, hea
 				return nil, "", err
 			}
 		} else {
-			theirRoot, err = doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
+			theirRoot, err = doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter(), ddb.NodeStore())
 			if err != nil {
 				return nil, "", err
 			}

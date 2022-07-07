@@ -104,6 +104,10 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
+
 	query := apr.Arg(0)
 	notFound := make(missingTbls)
 	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (*doltdb.RootValue, error) {

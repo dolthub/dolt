@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nomdl"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -289,7 +290,7 @@ func toRefList(vrw types.ValueReadWriter, commits ...types.Struct) (types.List, 
 	return le.List(context.Background())
 }
 
-func commonAncWithSetClosure(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) (a hash.Hash, ok bool, err error) {
+func commonAncWithSetClosure(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader, ns1, ns2 tree.NodeStore) (a hash.Hash, ok bool, err error) {
 	closure, err := NewSetCommitClosure(ctx, vr1, c1)
 	if err != nil {
 		return hash.Hash{}, false, err
@@ -297,14 +298,14 @@ func commonAncWithSetClosure(ctx context.Context, c1, c2 *Commit, vr1, vr2 types
 	return FindClosureCommonAncestor(ctx, closure, c2, vr2)
 }
 
-func commonAncWithLazyClosure(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) (a hash.Hash, ok bool, err error) {
+func commonAncWithLazyClosure(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader, ns1, ns2 tree.NodeStore) (a hash.Hash, ok bool, err error) {
 	closure := NewLazyCommitClosure(c1, vr1)
 	return FindClosureCommonAncestor(ctx, closure, c2, vr2)
 }
 
 // Assert that c is the common ancestor of a and b, using multiple common ancestor methods.
 func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *database, desc string) {
-	type caFinder func(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) (a hash.Hash, ok bool, err error)
+	type caFinder func(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader, ns1, ns2 tree.NodeStore) (a hash.Hash, ok bool, err error)
 
 	methods := map[string]caFinder{
 		"FindCommonAncestor":                 FindCommonAncestor,
@@ -324,7 +325,7 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *da
 		t.Run(fmt.Sprintf("%s/%s", name, desc), func(t *testing.T) {
 			assert := assert.New(t)
 			ctx := context.Background()
-			found, ok, err := method(ctx, ac, bc, ldb, rdb)
+			found, ok, err := method(ctx, ac, bc, ldb, rdb, ldb.ns, rdb.ns)
 			assert.NoError(err)
 			if assert.True(ok) {
 				tv, err := ldb.ReadValue(context.Background(), found)
@@ -424,7 +425,7 @@ func TestCommitParentsClosure(t *testing.T) {
 		if !assert.NoError(err) {
 			return
 		}
-		iter, err := newParentsClosureIterator(ctx, c, db)
+		iter, err := newParentsClosureIterator(ctx, c, db, db.ns)
 		if !assert.NoError(err) {
 			return
 		}
@@ -555,7 +556,7 @@ func TestFindCommonAncestor(t *testing.T) {
 	require.NoError(t, err)
 	a6c, err := LoadCommitRef(ctx, db, mustRef(types.NewRef(a6, db.Format())))
 	require.NoError(t, err)
-	found, ok, err := FindCommonAncestor(ctx, d2c, a6c, db, db)
+	found, ok, err := FindCommonAncestor(ctx, d2c, a6c, db, db, db.ns, db.ns)
 	require.NoError(t, err)
 
 	if !assert.False(ok) {
@@ -637,7 +638,7 @@ func TestFindCommonAncestor(t *testing.T) {
 		require.NoError(t, err)
 		ra9c, err := commitFromValue(rdb.Format(), ra9)
 		require.NoError(t, err)
-		_, _, err = FindCommonAncestor(context.Background(), ra9c, a9c, db, rdb)
+		_, _, err = FindCommonAncestor(context.Background(), ra9c, a9c, db, rdb, db.ns, rdb.ns)
 		assert.Error(err)
 	})
 }

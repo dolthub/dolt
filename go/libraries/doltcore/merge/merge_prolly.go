@@ -49,6 +49,7 @@ import (
 func mergeTableData(
 	ctx context.Context,
 	vrw types.ValueReadWriter,
+	ns tree.NodeStore,
 	tblName string,
 	postMergeSchema, rootSchema, mergeSchema, ancSchema schema.Schema,
 	tbl, mergeTbl, updatedTbl *doltdb.Table,
@@ -139,6 +140,7 @@ func mergeTableData(
 	updatedTbl, err = mergeProllySecondaryIndexes(
 		ctx,
 		vrw,
+		ns,
 		postMergeSchema, rootSchema, mergeSchema, ancSchema,
 		mergedData,
 		tbl, mergeTbl, updatedTbl,
