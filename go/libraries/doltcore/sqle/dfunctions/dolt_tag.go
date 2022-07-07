@@ -16,10 +16,10 @@ package dfunctions
 
 import (
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/expression"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"

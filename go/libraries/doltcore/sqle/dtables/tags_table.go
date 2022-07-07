@@ -15,12 +15,13 @@
 package dtables
 
 import (
-	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/go-mysql-server/sql"
 	"io"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var _ sql.Table = (*TagsTable)(nil)
