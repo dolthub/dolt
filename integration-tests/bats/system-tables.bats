@@ -138,7 +138,7 @@ teardown() {
 
 @test "system-tables: query dolt_remotes system table" {
     skip_nbf_dolt_1 "dolt remote not supported"
-    
+
     run dolt sql -q "select count(*) from dolt_remotes" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ 0 ]] || false
@@ -163,7 +163,7 @@ teardown() {
 
 @test "system-tables: check unsupported dolt_remote behavior" {
     skip_nbf_dolt_1 "dolt remote not supported"
-    
+
     run dolt sql -q "insert into dolt_remotes (name, url) values ('origin1', 'file://remote')"
     [ $status -ne 0 ]
     [[ "$output" =~ "cannot insert remote in an SQL session" ]] || false
@@ -483,7 +483,7 @@ teardown() {
     remotesrv_pid=$!
     cd dolt-repo-$$
     mkdir "dolt-repo-clones"
-    
+
     # Create a remote with a test branch
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push test-remote main
@@ -544,4 +544,23 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1,1" ]] || false
     [[ "$output" =~ "2,2" ]] || false
+}
+
+@test "system-tables: query dolt_tags" {
+    dolt sql -q "CREATE TABLE test(pk int primary key, val int)"
+    dolt sql -q "INSERT INTO test VALUES (1,1)"
+    dolt commit -am "cm1"
+    dolt tag v1 head -m "tag v1 from main"
+
+    dolt checkout -b branch1
+    dolt sql -q "INSERT INTO test VALUES (2,2)"
+    dolt commit -am "cm2"
+    dolt tag v2 branch1~ -m "tag v2 from branch1"
+    dolt tag v3 branch1 -m "tag v3 from branch1"
+
+    run dolt sql -q "SELECT * FROM dolt_tags" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "tag v1 from main" ]] || false
+    [[ "$output" =~ "tag v2 from branch1" ]] || false
+    [[ "$output" =~ "tag v3 from branch1" ]] || false
 }

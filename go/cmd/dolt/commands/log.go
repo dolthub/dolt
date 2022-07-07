@@ -208,12 +208,12 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 		return 1
 	}
 	for _, t := range tags {
-		refName := t.Ref.String()
+		tagName := t.Tag.GetDoltRef().String()
 		if opts.decoration != "full" {
-			refName = t.Ref.GetPath() // trim out "refs/tags/"
+			tagName = t.Tag.Name // trim out "refs/tags/"
 		}
-		refName = fmt.Sprintf("\033[33;1mtag: %s\033[0m", refName) // tags names are bright yellow (33;1m)
-		cHashToRefs[t.Hash] = append(cHashToRefs[t.Hash], refName)
+		tagName = fmt.Sprintf("\033[33;1mtag: %s\033[0m", tagName) // tags names are bright yellow (33;1m)
+		cHashToRefs[t.Hash] = append(cHashToRefs[t.Hash], tagName)
 	}
 
 	h, err := commit.HashOf()

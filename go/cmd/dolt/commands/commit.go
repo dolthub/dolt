@@ -114,7 +114,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return handleCommitErr(ctx, dEnv, err, usage)
 	}
 
-	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
+	msg, msgOk := apr.GetValue(cli.MessageArg)
 	if !msgOk {
 		msg, err = getCommitMessageFromEditor(ctx, dEnv)
 		if err != nil {
