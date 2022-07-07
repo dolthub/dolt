@@ -347,7 +347,6 @@ SQL
 }
 
 @test "merge: Add views on two branches, merge" {
-    skip_nbf_dolt_1
     dolt branch other
     dolt sql -q "CREATE VIEW pkpk AS SELECT pk*pk FROM test1;"
     dolt add . && dolt commit -m "added view on table test1"

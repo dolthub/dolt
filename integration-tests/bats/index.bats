@@ -2297,7 +2297,7 @@ SQL
     dolt commit -m "other changes"
     dolt checkout main
     dolt merge other
-    dolt conflicts resolve onepk 4
+    dolt sql -q "DELETE from dolt_conflicts_onepk where pk1 = 4;"
     dolt sql  <<SQL
 set autocommit = off;
 UPDATE onepk SET v1 = -11, v2 = 11 WHERE pk1 = 1;

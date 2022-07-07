@@ -65,6 +65,7 @@ func newNomsConflictsTable(ctx *sql.Context, tbl *doltdb.Table, tblName string, 
 }
 
 var _ sql.Table = ConflictsTable{}
+var _ sql.DeletableTable = ConflictsTable{}
 
 // ConflictsTable is a sql.Table implementation that provides access to the conflicts that exist for a user table
 type ConflictsTable struct {

@@ -983,7 +983,6 @@ SQL
 }
 
 @test "remotes: generate a merge with a conflict with a remote branch" {
-    skip_nbf_dolt_1 "uses dolt conflicts resolve"
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (

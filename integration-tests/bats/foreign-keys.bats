@@ -1259,8 +1259,6 @@ SQL
 }
 
 @test "foreign-keys: Resolve catches violations" {
-    skip_nbf_dolt_1 "resolve not implemented"
-
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);
 INSERT INTO parent VALUES (0,0,0);
