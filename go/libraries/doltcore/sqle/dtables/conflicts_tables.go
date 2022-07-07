@@ -102,7 +102,12 @@ func (ct ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error)
 
 // PartitionRows returns a RowIter for the given partition
 func (ct ConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return conflictRowIter{ct.rd}, nil
+	// conflict reader must be reset each time partitionRows is called.
+	rd, err := merge.NewConflictReader(ctx, ct.tbl)
+	if err != nil {
+		return nil, err
+	}
+	return conflictRowIter{rd}, nil
 }
 
 // Deleter returns a RowDeleter for this table. The RowDeleter will get one call to Delete for each row to be deleted,
