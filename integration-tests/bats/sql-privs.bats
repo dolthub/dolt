@@ -123,6 +123,7 @@ teardown() {
     rm -rf .doltcfg
     rm -rf cfgdir
 
+    mkdir cfgdir
     start_sql_server_with_args --doltcfg-dir=cfgdir repo1
 
     # expect dolt user and new_user
