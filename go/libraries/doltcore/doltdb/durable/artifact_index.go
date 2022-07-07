@@ -55,14 +55,13 @@ func RefFromArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, idx Ar
 }
 
 // NewEmptyArtifactIndex returns an ArtifactIndex with no artifacts.
-func NewEmptyArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, tableSch schema.Schema) (ArtifactIndex, error) {
+func NewEmptyArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, tableSch schema.Schema) (ArtifactIndex, error) {
 	switch vrw.Format() {
 	case types.Format_LD_1, types.Format_7_18, types.Format_DOLT_DEV:
 		panic("TODO")
 
 	case types.Format_DOLT_1:
 		kd := shim.KeyDescriptorFromSchema(tableSch)
-		ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(vrw))
 		m, err := prolly.NewArtifactMapFromTuples(ctx, ns, kd)
 		if err != nil {
 			return nil, err
@@ -84,11 +83,11 @@ func ProllyMapFromArtifactIndex(i ArtifactIndex) prolly.ArtifactMap {
 	return i.(prollyArtifactIndex).index
 }
 
-func artifactIndexFromRef(ctx context.Context, vrw types.ValueReadWriter, tableSch schema.Schema, r types.Ref) (ArtifactIndex, error) {
-	return artifactIndexFromAddr(ctx, vrw, tableSch, r.TargetHash())
+func artifactIndexFromRef(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, tableSch schema.Schema, r types.Ref) (ArtifactIndex, error) {
+	return artifactIndexFromAddr(ctx, vrw, ns, tableSch, r.TargetHash())
 }
 
-func artifactIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, tableSch schema.Schema, addr hash.Hash) (ArtifactIndex, error) {
+func artifactIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, tableSch schema.Schema, addr hash.Hash) (ArtifactIndex, error) {
 	v, err := vrw.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
@@ -101,7 +100,6 @@ func artifactIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, table
 	case types.Format_DOLT_1:
 		root := shim.NodeFromValue(v)
 		kd := shim.KeyDescriptorFromSchema(tableSch)
-		ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(vrw))
 		m := prolly.NewArtifactMap(root, ns, kd)
 		return ArtifactIndexFromProllyMap(m), nil
 

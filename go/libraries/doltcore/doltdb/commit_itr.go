@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -132,7 +133,7 @@ func (cmItr *commitItr) Next(ctx context.Context) (hash.Hash, *Commit, error) {
 
 	next := cmItr.unprocessed[numUnprocessed-1]
 	cmItr.unprocessed = cmItr.unprocessed[:numUnprocessed-1]
-	cmItr.curr, err = hashToCommit(ctx, cmItr.ddb.ValueReadWriter(), next)
+	cmItr.curr, err = hashToCommit(ctx, cmItr.ddb.ValueReadWriter(), cmItr.ddb.ns, next)
 
 	if err != nil {
 		return hash.Hash{}, nil, err
@@ -141,12 +142,12 @@ func (cmItr *commitItr) Next(ctx context.Context) (hash.Hash, *Commit, error) {
 	return next, cmItr.curr, nil
 }
 
-func hashToCommit(ctx context.Context, vrw types.ValueReadWriter, h hash.Hash) (*Commit, error) {
+func hashToCommit(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, h hash.Hash) (*Commit, error) {
 	dc, err := datas.LoadCommitAddr(ctx, vrw, h)
 	if err != nil {
 		return nil, err
 	}
-	return NewCommit(ctx, vrw, dc)
+	return NewCommit(ctx, vrw, ns, dc)
 }
 
 // CommitFilter is a function that returns true if a commit should be filtered out, and false if it should be kept

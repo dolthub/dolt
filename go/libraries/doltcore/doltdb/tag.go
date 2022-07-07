@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -32,7 +33,7 @@ type Tag struct {
 }
 
 // NewTag creates a new Tag object.
-func NewTag(ctx context.Context, name string, ds datas.Dataset, vrw types.ValueReadWriter) (*Tag, error) {
+func NewTag(ctx context.Context, name string, ds datas.Dataset, vrw types.ValueReadWriter, ns tree.NodeStore) (*Tag, error) {
 	meta, commitAddr, err := ds.HeadTag()
 	if err != nil {
 		return nil, err
@@ -41,7 +42,7 @@ func NewTag(ctx context.Context, name string, ds datas.Dataset, vrw types.ValueR
 	if err != nil {
 		return nil, err
 	}
-	commit, err := NewCommit(ctx, vrw, dc)
+	commit, err := NewCommit(ctx, vrw, ns, dc)
 	if err != nil {
 		return nil, err
 	}

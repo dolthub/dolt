@@ -45,6 +45,7 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -166,6 +167,7 @@ type Spec struct {
 	// db is lazily created, so it needs to be a pointer to a Database.
 	db  *datas.Database
 	vrw *types.ValueReadWriter
+	ns  *tree.NodeStore
 }
 
 func newSpec(dbSpec string, opts SpecOptions) (Spec, error) {
@@ -180,6 +182,7 @@ func newSpec(dbSpec string, opts SpecOptions) (Spec, error) {
 		Options:      opts,
 		db:           new(datas.Database),
 		vrw:          new(types.ValueReadWriter),
+		ns:           new(tree.NodeStore),
 	}, nil
 }
 
@@ -273,18 +276,30 @@ func (sp Spec) String() string {
 // is called. If the Spec is closed, it is re-opened with a new Database.
 func (sp Spec) GetDatabase(ctx context.Context) datas.Database {
 	if *sp.db == nil {
-		db, vrw := sp.createDatabase(ctx)
+		db, vrw, ns := sp.createDatabase(ctx)
 		*sp.db = db
 		*sp.vrw = vrw
+		*sp.ns = ns
 	}
 	return *sp.db
 }
 
-func (sp Spec) GetVRW(ctx context.Context) types.ValueReadWriter {
+func (sp Spec) GetNodeStore(ctx context.Context) tree.NodeStore {
 	if *sp.db == nil {
-		db, vrw := sp.createDatabase(ctx)
+		db, vrw, ns := sp.createDatabase(ctx)
 		*sp.db = db
 		*sp.vrw = vrw
+		*sp.ns = ns
+	}
+	return *sp.ns
+}
+
+func (sp Spec) GetVRW(ctx context.Context) types.ValueReadWriter {
+	if *sp.db == nil {
+		db, vrw, ns := sp.createDatabase(ctx)
+		*sp.db = db
+		*sp.vrw = vrw
+		*sp.ns = ns
 	}
 	return *sp.vrw
 }
@@ -465,16 +480,18 @@ func (sp Spec) Close() error {
 	return db.Close()
 }
 
-func (sp Spec) createDatabase(ctx context.Context) (datas.Database, types.ValueReadWriter) {
+func (sp Spec) createDatabase(ctx context.Context) (datas.Database, types.ValueReadWriter, tree.NodeStore) {
 	switch sp.Protocol {
 	case "aws":
 		cs := parseAWSSpec(ctx, sp.Href(), sp.Options)
+		ns := tree.NewNodeStore(cs)
 		vrw := types.NewValueStore(cs)
-		return datas.NewTypesDatabase(vrw), vrw
+		return datas.NewTypesDatabase(vrw, ns), vrw, ns
 	case "gs":
 		cs := parseGCSSpec(ctx, sp.Href(), sp.Options)
+		ns := tree.NewNodeStore(cs)
 		vrw := types.NewValueStore(cs)
-		return datas.NewTypesDatabase(vrw), vrw
+		return datas.NewTypesDatabase(vrw, ns), vrw, ns
 	case "nbs":
 		// If the database is the oldgen database return a standard NBS store.
 		if strings.Contains(sp.DatabaseName, "oldgen") {
@@ -497,13 +514,15 @@ func (sp Spec) createDatabase(ctx context.Context) (datas.Database, types.ValueR
 
 		cs := nbs.NewGenerationalCS(oldGenSt, newGenSt)
 
+		ns := tree.NewNodeStore(cs)
 		vrw := types.NewValueStore(cs)
-		return datas.NewTypesDatabase(vrw), vrw
+		return datas.NewTypesDatabase(vrw, ns), vrw, ns
 	case "mem":
 		storage := &chunks.MemoryStorage{}
 		cs := storage.NewViewWithDefaultFormat()
+		ns := tree.NewNodeStore(cs)
 		vrw := types.NewValueStore(cs)
-		return datas.NewTypesDatabase(vrw), vrw
+		return datas.NewTypesDatabase(vrw, ns), vrw, ns
 	default:
 		impl, ok := ExternalProtocols[sp.Protocol]
 		if !ok {
@@ -512,18 +531,20 @@ func (sp Spec) createDatabase(ctx context.Context) (datas.Database, types.ValueR
 		cs, err := impl.NewChunkStore(sp)
 		d.PanicIfError(err)
 		vrw := types.NewValueStore(cs)
-		return datas.NewTypesDatabase(vrw), vrw
+		ns := tree.NewNodeStore(cs)
+		return datas.NewTypesDatabase(vrw, ns), vrw, ns
 	}
 }
 
-func getStandardLocalStore(ctx context.Context, dbName string) (datas.Database, types.ValueReadWriter) {
+func getStandardLocalStore(ctx context.Context, dbName string) (datas.Database, types.ValueReadWriter, tree.NodeStore) {
 	os.Mkdir(dbName, 0777)
 
 	cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), dbName, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 	d.PanicIfError(err)
 
 	vrw := types.NewValueStore(cs)
-	return datas.NewTypesDatabase(vrw), vrw
+	ns := tree.NewNodeStore(cs)
+	return datas.NewTypesDatabase(vrw, ns), vrw, ns
 }
 
 func validateDir(path string) error {

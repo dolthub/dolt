@@ -108,7 +108,7 @@ func (mut *MutableMap) DiscardPending(context.Context) {
 
 // IterAll returns a mutableMapIter that iterates over the entire MutableMap.
 func (mut MutableMap) IterAll(ctx context.Context) (MapIter, error) {
-	rng := Range{Start: nil, Stop: nil, Desc: mut.keyDesc}
+	rng := Range{Fields: nil, Desc: mut.keyDesc}
 	return mut.IterRange(ctx, rng)
 }
 
@@ -118,14 +118,15 @@ func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapIter, error)
 	if err != nil {
 		return nil, err
 	}
-
 	memIter := memIterFromRange(mut.tuples.edits, rng)
 
-	return &mutableMapIter[val.Tuple, val.Tuple, val.TupleDesc]{
+	iter := &mutableMapIter[val.Tuple, val.Tuple, val.TupleDesc]{
 		memory: memIter,
 		prolly: treeIter,
 		order:  rng.Desc,
-	}, nil
+	}
+
+	return filteredIter{iter: iter, rng: rng}, err
 }
 
 // HasEdits returns true when the MutableMap has performed at least one Put or Delete operation. This does not indicate
