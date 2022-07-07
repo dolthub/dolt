@@ -124,7 +124,7 @@ teardown() {
     rm -rf cfgdir
 
     mkdir cfgdir
-    start_sql_server_with_args --doltcfg-dir=cfgdir repo1
+    start_sql_server_with_args --doltcfg-dir cfgdir repo1
 
     # expect dolt user and new_user
     run show_users
@@ -156,7 +156,7 @@ teardown() {
     [ "${lines[8]}" = '+----------+' ]
 
     stop_sql_server
-    start_sql_server_with_args --doltcfg-dir=cfgdir repo1
+    start_sql_server_with_args --doltcfg-dir cfgdir repo1
 
     # expect only dolt user and new_user
     run show_users
