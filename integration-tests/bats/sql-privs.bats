@@ -104,7 +104,7 @@ teardown() {
     mkdir .doltcfg
     dolt init
 
-    start_sql_server_with_args inner_db
+    run start_sql_server_with_args inner_db
     [ "$status" -eq 1 ]
     [[ "$output" =~ "multiple .doltcfg directories detected" ]] || false
 
