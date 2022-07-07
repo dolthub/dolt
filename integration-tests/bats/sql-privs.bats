@@ -31,9 +31,10 @@ teardown() {
     teardown_common
 }
 
-@test "sql-privs: no mysql.db, throws error when attempting to persist" {
+@test "sql-privs: no doltcfg directory, makes one" {
     skiponwindows "redirecting SQL to sql-client returns nothing after welcome messages"
     cd repo1
+    rm -rf .doltcfg
 
     start_sql_server repo1
 
@@ -49,11 +50,10 @@ teardown() {
     [ "${lines[6]}" = '| dolt |' ]
     [ "${lines[7]}" = '+------+' ]
 
-    # create user, expect error
+    # create user
     run create_user
-    [[ "$output" =~ "no privilege file specified, to persist users/grants run with --privilege-file=<file_path>" ]] || false
 
-    # expect dolt user and new_user
+    # expect dolt user
     run show_users
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
@@ -69,7 +69,61 @@ teardown() {
     stop_sql_server
     start_sql_server repo1
 
-    # expect only dolt user
+    # expect only dolt user and new_user
+    run show_users
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
+    [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
+    [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
+    [ "${lines[3]}" = '+----------+' ]
+    [ "${lines[4]}" = '| User     |' ]
+    [ "${lines[5]}" = '+----------+' ]
+    [ "${lines[6]}" = '| dolt     |' ]
+    [ "${lines[7]}" = '| new_user |' ]
+    [ "${lines[8]}" = '+----------+' ]
+
+    # remove config file
+    rm -rf .doltcfg
+
+    # leave the directory
+    cd ..
+}
+
+@test "sql-privs: multiple doltcfg directories causes error" {
+    skiponwindows "redirecting SQL to sql-client returns nothing after welcome messages"
+    cd repo1
+
+    rm -rf .doltcfg
+    rm -rf inner_db
+
+    mkdir .doltcfg
+
+    mkdir inner_db
+    cd inner_db
+    mkdir .doltcfg
+
+    start_sql_server_with_args inner_db
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "multiple .doltcfg directories detected" ]] || false
+
+    stop_sql_server
+
+    # remove mysql.db if they exist
+    cd ..
+    rm -rf .doltcfg
+    rm -rf inner_db
+}
+
+@test "sql-privs: specify doltcfg directory" {
+    skiponwindows "redirecting SQL to sql-client returns nothing after welcome messages"
+    cd repo1
+
+    rm -rf .doltcfg
+    rm -rf cfgdir
+
+    start_sql_server_with_args --doltcfg-dir=cfgdir repo1
+
+    # expect dolt user and new_user
     run show_users
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
@@ -81,72 +135,40 @@ teardown() {
     [ "${lines[6]}" = '| dolt |' ]
     [ "${lines[7]}" = '+------+' ]
 
-    # remove mysql.db and privs.json if they exist
-    rm -f mysql.db
-
-    # leave the directory
-    cd ..
-}
-
-@test "sql-privs: has mysql.db, reads from mysql.db" {
-    skiponwindows "redirecting SQL to sql-client returns nothing after welcome messages"
-    cd repo1
-
-    # remove/replace mysql.db if they exist
-    rm -f mysql.db
-    cp $BATS_TEST_DIRNAME/mysql.db .
-
-    start_sql_server_with_args --privilege-file=mysql.db repo1
-
-    # expect dolt and mysql_user
-    run show_users
-    [ "$status" -eq 0 ]
-    [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
-    [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
-    [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
-    [ "${lines[3]}" = '+------------+' ]
-    [ "${lines[4]}" = '| User       |' ]
-    [ "${lines[5]}" = '+------------+' ]
-    [ "${lines[6]}" = '| dolt       |' ]
-    [ "${lines[7]}" = '| mysql_user |' ]
-    [ "${lines[8]}" = '+------------+' ]
-
     # create user
     run create_user
     [ "$status" -eq 0 ]
 
-    # expect dolt, new_user, and mysql_user
+    # expect only dolt user and new_user
     run show_users
+    [ "$status" -eq 0 ]
     [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
     [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
     [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
-    [ "${lines[3]}" = '+------------+' ]
-    [ "${lines[4]}" = '| User       |' ]
-    [ "${lines[5]}" = '+------------+' ]
-    [ "${lines[6]}" = '| dolt       |' ]
-    [ "${lines[7]}" = '| mysql_user |' ]
-    [ "${lines[8]}" = '| new_user   |' ]
-    [ "${lines[9]}" = '+------------+' ]
+    [ "${lines[3]}" = '+----------+' ]
+    [ "${lines[4]}" = '| User     |' ]
+    [ "${lines[5]}" = '+----------+' ]
+    [ "${lines[6]}" = '| dolt     |' ]
+    [ "${lines[7]}" = '| new_user |' ]
+    [ "${lines[8]}" = '+----------+' ]
 
     stop_sql_server
-    start_sql_server_with_args --privilege-file=mysql.db repo1
+    start_sql_server_with_args --doltcfg-dir=cfgdir repo1
 
-    # expect dolt, new_user, and mysql_user
+    # expect only dolt user and new_user
     run show_users
+    [ "$status" -eq 0 ]
     [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
     [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
     [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
-    [ "${lines[3]}" = '+------------+' ]
-    [ "${lines[4]}" = '| User       |' ]
-    [ "${lines[5]}" = '+------------+' ]
-    [ "${lines[6]}" = '| dolt       |' ]
-    [ "${lines[7]}" = '| mysql_user |' ]
-    [ "${lines[8]}" = '| new_user   |' ]
-    [ "${lines[9]}" = '+------------+' ]
+    [ "${lines[3]}" = '+----------+' ]
+    [ "${lines[4]}" = '| User     |' ]
+    [ "${lines[5]}" = '+----------+' ]
+    [ "${lines[6]}" = '| dolt     |' ]
+    [ "${lines[7]}" = '| new_user |' ]
+    [ "${lines[8]}" = '+----------+' ]
 
-    # remove mysql.db if they exist
-    rm -f mysql.db
-
-    # leave the directory
+    rm -rf .doltcfg
+    rm -rf cfgdir
     cd ..
 }
