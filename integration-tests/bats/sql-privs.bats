@@ -102,6 +102,7 @@ teardown() {
     mkdir inner_db
     cd inner_db
     mkdir .doltcfg
+    dolt init
 
     start_sql_server_with_args inner_db
     [ "$status" -eq 1 ]
