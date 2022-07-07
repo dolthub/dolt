@@ -84,29 +84,92 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "new table",
+			Name: "Group Concat Queries",
 			SetUpScript: []string{
-				"create table t1 (a int primary key, b int)",
-				"insert into t1 values (1,2)",
+				"CREATE TABLE x (pk int)",
+				"INSERT INTO x VALUES (1),(2),(3),(4),(NULL)",
+
+				"create table t (o_id int, attribute longtext, value longtext)",
+				"INSERT INTO t VALUES (2, 'color', 'red'), (2, 'fabric', 'silk')",
+				"INSERT INTO t VALUES (3, 'color', 'green'), (3, 'shape', 'square')",
+
+				"create table nulls(pk int)",
+				"INSERT INTO nulls VALUES (NULL)",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD', 'WORKING')",
-					Expected: []sql.Row{{1, 2, "HEAD", "WORKING", "added"}},
+					Query:    `SELECT group_concat(pk ORDER BY pk) FROM x;`,
+					Expected: []sql.Row{{"1,2,3,4"}},
 				},
 				{
-					Query:       "select to_a, from_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD', 'WORKING')",
-					ExpectedErr: sql.ErrColumnNotFound,
+					Query:    `SELECT group_concat(DISTINCT pk ORDER BY pk) FROM x;`,
+					Expected: []sql.Row{{"1,2,3,4"}},
 				},
 				{
-					Query:    "select from_a, from_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'WORKING', 'HEAD')",
-					Expected: []sql.Row{{1, 2, "WORKING", "HEAD", "removed"}},
+					Query:    `SELECT group_concat(DISTINCT pk ORDER BY pk SEPARATOR '-') FROM x;`,
+					Expected: []sql.Row{{"1-2-3-4"}},
+				},
+				{
+					Query:    "SELECT group_concat(`attribute` ORDER BY `attribute`) FROM t group by o_id order by o_id asc",
+					Expected: []sql.Row{{"color,fabric"}, {"color,shape"}},
+				},
+				{
+					Query:    "SELECT group_concat(DISTINCT `attribute` ORDER BY value DESC SEPARATOR ';') FROM t group by o_id order by o_id asc",
+					Expected: []sql.Row{{"fabric;color"}, {"shape;color"}},
+				},
+				{
+					Query:    "SELECT group_concat(DISTINCT `attribute` ORDER BY `attribute`) FROM t",
+					Expected: []sql.Row{{"color,fabric,shape"}},
+				},
+				{
+					Query:    "SELECT group_concat(`attribute` ORDER BY `attribute`) FROM t",
+					Expected: []sql.Row{{"color,color,fabric,shape"}},
+				},
+				{
+					Query:    `SELECT group_concat((SELECT 2)) FROM x;`,
+					Expected: []sql.Row{{"2,2,2,2,2"}},
+				},
+				{
+					Query:    `SELECT group_concat(DISTINCT (SELECT 2)) FROM x;`,
+					Expected: []sql.Row{{"2"}},
+				},
+				{
+					Query:    "SELECT group_concat(DISTINCT `attribute` ORDER BY `attribute` ASC) FROM t",
+					Expected: []sql.Row{{"color,fabric,shape"}},
+				},
+				{
+					Query:    "SELECT group_concat(DISTINCT `attribute` ORDER BY `attribute` DESC) FROM t",
+					Expected: []sql.Row{{"shape,fabric,color"}},
+				},
+				{
+					Query:    `SELECT group_concat(pk) FROM nulls`,
+					Expected: []sql.Row{{nil}},
+				},
+				{
+					Query:       `SELECT group_concat((SELECT * FROM t LIMIT 1)) from t`,
+					ExpectedErr: sql.ErrInvalidOperandColumns,
+				},
+				{
+					Query:       `SELECT group_concat((SELECT * FROM x)) from t`,
+					ExpectedErr: sql.ErrExpectedSingleRow,
+				},
+				{
+					Query:    "SELECT group_concat(`attribute`) FROM t where o_id=2 order by attribute",
+					Expected: []sql.Row{{"color,fabric"}},
+				},
+				{
+					Query:    "SELECT group_concat(DISTINCT `attribute` ORDER BY value DESC SEPARATOR ';') FROM t group by o_id order by o_id asc",
+					Expected: []sql.Row{{"fabric;color"}, {"shape;color"}},
+				},
+				{
+					Query:    "SELECT group_concat(o_id) FROM t WHERE `attribute`='color' order by o_id",
+					Expected: []sql.Row{{"2,3"}},
 				},
 			},
 		},
 	}
 
-	harness := newDoltHarness(t)
+	harness := newDoltHarness(t).WithParallelism(1)
 	harness.Setup(setup.MydbData)
 	for _, test := range scripts {
 		enginetest.TestScript(t, harness, test)
@@ -207,15 +270,7 @@ func TestQueryPlans(t *testing.T) {
 	// Parallelism introduces Exchange nodes into the query plans, so disable.
 	// TODO: exchange nodes should really only be part of the explain plan under certain debug settings
 	harness := newDoltHarness(t).WithParallelism(1).WithSkippedQueries(skipped)
-
-	var plans []queries.QueryPlanTest
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		plans = NewFormatQueryPlanTests
-	} else {
-		plans = queries.PlanTests
-	}
-
-	enginetest.TestQueryPlans(t, harness, plans)
+	enginetest.TestQueryPlans(t, harness, queries.PlanTests)
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
@@ -225,14 +280,7 @@ func TestDoltDiffQueryPlans(t *testing.T) {
 	require.NoError(t, err)
 	defer e.Close()
 
-	var planTests []queries.QueryPlanTest
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		planTests = DoltDiffPlanNewFormatTests
-	} else {
-		planTests = DoltDiffPlanTests
-	}
-
-	for _, tt := range planTests {
+	for _, tt := range DoltDiffPlanTests {
 		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan)
 	}
 }
@@ -595,11 +643,6 @@ func TestLoadDataErrors(t *testing.T) {
 }
 
 func TestJsonScripts(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		// The new storage engine fails when trying to save data larger than 65kb
-		t.Skip()
-	}
-
 	enginetest.TestJsonScripts(t, newDoltHarness(t))
 }
 
@@ -1012,10 +1055,6 @@ func TestComplexIndexQueriesPrepared(t *testing.T) {
 }
 
 func TestJsonScriptsPrepared(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		// The new storage engine fails when trying to save data larger than 65kb
-		t.Skip()
-	}
 	skipPreparedTests(t)
 	enginetest.TestJsonScriptsPrepared(t, newDoltHarness(t))
 }
