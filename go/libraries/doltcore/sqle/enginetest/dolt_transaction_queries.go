@@ -756,6 +756,121 @@ var DoltTransactionTests = []queries.TransactionTest{
 	},
 }
 
+var DoltTransactionMergeStompTests = []queries.TransactionTest{
+	{
+		Name: "dolt_transaction_merge_stomp picks the last transaction's value (b commits last)",
+		SetUpScript: []string{
+			"SET GLOBAL dolt_transaction_merge_stomp = ON;",
+			"CREATE table t (pk int PRIMARY KEY, col1 int, INDEX col1_idx (col1));",
+			"CREATE table keyless (col1 int);",
+			"INSERT INTO t VALUES (1, 1);",
+			"INSERT INTO keyless VALUES (1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ START TRANSACTION",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ START TRANSACTION",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ UPDATE t SET col1 = -100 where pk = 1;",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "/* client b */ UPDATE t SET col1 = 100 where pk = 1;",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "/* client a */ INSERT into KEYLESS VALUES (1);",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ INSERT into KEYLESS VALUES (1), (1);",
+				Expected: []sql.Row{{sql.NewOkResult(2)}},
+			},
+			{
+				Query:    "/* client a */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ SELECT * from t;",
+				Expected: []sql.Row{{1, 100}},
+			},
+			{
+				Query:    "/* client b */ SELECT * from keyless;",
+				Expected: []sql.Row{{1}, {1}, {1}},
+			},
+			{
+				Query:    "/* client b */ SELECT * from t where col1 = 100;",
+				Expected: []sql.Row{{1, 100}},
+			},
+		},
+	},
+	{
+		Name: "dolt_transaction_merge_stomp picks the last transaction's value (a commits last)",
+		SetUpScript: []string{
+			"SET GLOBAL dolt_transaction_merge_stomp = ON;",
+			"CREATE table t (pk int PRIMARY KEY, col1 int, INDEX col1_idx (col1));",
+			"CREATE table keyless (col1 int);",
+			"INSERT INTO t VALUES (1, 1);",
+			"INSERT INTO keyless VALUES (1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ START TRANSACTION",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ START TRANSACTION",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ UPDATE t SET col1 = -100 where pk = 1;",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "/* client b */ UPDATE t SET col1 = 100 where pk = 1;",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "/* client a */ INSERT into KEYLESS VALUES (1);",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ INSERT into KEYLESS VALUES (1), (1);",
+				Expected: []sql.Row{{sql.NewOkResult(2)}},
+			},
+			{
+				Query:    "/* client b */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ SELECT * from t;",
+				Expected: []sql.Row{{1, -100}},
+			},
+			{
+				Query:    "/* client b */ SELECT * from keyless;",
+				Expected: []sql.Row{{1}, {1}},
+			},
+			{
+				Query:    "/* client b */ SELECT * from t where col1 = -100;",
+				Expected: []sql.Row{{1, -100}},
+			},
+		},
+	},
+}
+
 var DoltConflictHandlingTests = []queries.TransactionTest{
 	{
 		Name: "default behavior (rollback on commit conflict)",
