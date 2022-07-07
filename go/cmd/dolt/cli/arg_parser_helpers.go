@@ -95,6 +95,7 @@ const (
 	DeleteFlag       = "delete"
 	DeleteForceFlag  = "D"
 	OutputOnlyFlag   = "output-only"
+	TrackFlag        = "track"
 )
 
 const (
@@ -163,6 +164,7 @@ func CreateCheckoutArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(CheckoutCoBranch, "", "branch", "Create a new branch named {{.LessThan}}new_branch{{.GreaterThan}} and start it at {{.LessThan}}start_point{{.GreaterThan}}.")
 	ap.SupportsFlag(ForceFlag, "f", "If there is any changes in working set, the force flag will wipe out the current changes and checkout the new branch.")
+	ap.SupportsString(TrackFlag, "t", "", "When creating a new branch, set up 'upstream' configuration.")
 	return ap
 }
 
