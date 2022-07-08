@@ -154,7 +154,7 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 	} else {
 		o = b + baseVD.Count() - 1
 		t = o + oursVD.Count()
-		n = t + theirsVD.Count()
+		n = t + theirsVD.Count() + 3
 	}
 
 	return &prollyConflictRowIter{
@@ -262,38 +262,65 @@ func getDiffType(base val.Tuple, other val.Tuple) string {
 	return merge.ConflictDiffTypeModified
 }
 
-func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c conf, r sql.Row) error {
+func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c conf, r sql.Row) (err error) {
+	ns := itr.baseRows.NodeStore()
+
 	if c.bV != nil {
+		// Cardinality
+		r[itr.n-3], err = index.GetField(ctx, itr.baseVD, 0, c.bV, ns)
+		if err != nil {
+			return err
+		}
+
 		for i := 0; i < itr.baseVD.Count()-1; i++ {
-			f, err := index.GetField(ctx, itr.baseVD, i+1, c.bV, itr.baseRows.NodeStore())
+			f, err := index.GetField(ctx, itr.baseVD, i+1, c.bV, ns)
 			if err != nil {
 				return err
 			}
 			r[itr.b+i] = f
 		}
+	} else {
+		r[itr.n-3] = uint64(0)
 	}
 
 	if c.oV != nil {
+		r[itr.n-2], err = index.GetField(ctx, itr.oursVD, 0, c.oV, ns)
+		if err != nil {
+			return err
+		}
+
 		for i := 0; i < itr.oursVD.Count()-1; i++ {
-			f, err := index.GetField(ctx, itr.oursVD, i+1, c.oV, itr.baseRows.NodeStore())
+			f, err := index.GetField(ctx, itr.oursVD, i+1, c.oV, ns)
 			if err != nil {
 				return err
 			}
 			r[itr.o+i] = f
 		}
+	} else {
+		r[itr.n-2] = uint64(0)
 	}
+
 	r[itr.o+itr.oursVD.Count()-1] = getDiffType(c.bV, c.oV)
 
 	if c.tV != nil {
+		r[itr.n-1], err = index.GetField(ctx, itr.theirsVD, 0, c.tV, ns)
+		if err != nil {
+			return err
+		}
+
 		for i := 0; i < itr.theirsVD.Count()-1; i++ {
-			f, err := index.GetField(ctx, itr.theirsVD, i+1, c.tV, itr.baseRows.NodeStore())
+			f, err := index.GetField(ctx, itr.theirsVD, i+1, c.tV, ns)
 			if err != nil {
 				return err
 			}
 			r[itr.t+i] = f
 		}
+	} else {
+		r[itr.n-1] = uint64(0)
 	}
-	r[itr.t+itr.theirsVD.Count()-1] = getDiffType(c.bV, c.tV)
+
+	o := itr.t + itr.theirsVD.Count() - 1
+	r[o] = getDiffType(c.bV, c.tV)
 
 	return nil
 }
@@ -394,34 +421,73 @@ func (itr *prollyConflictRowIter) Close(ctx *sql.Context) error {
 }
 
 type prollyConflictDeleter struct {
-	kd                        val.TupleDesc
-	kB                        *val.TupleBuilder
-	pool                      pool.BuffPool
-	ed                        prolly.ArtifactsEditor
-	ct                        ProllyConflictsTable
-	rs                        RootSetter
-	baseSch, ourSch, theirSch schema.Schema
+	kd, vd         val.TupleDesc
+	kB, vB         *val.TupleBuilder
+	pool           pool.BuffPool
+	ed             prolly.ArtifactsEditor
+	ct             ProllyConflictsTable
+	rs             RootSetter
+	ourDiffTypeIdx int
+	baseColSize    int
+	ourColSize     int
 }
 
 func newProllyConflictDeleter(ct ProllyConflictsTable) *prollyConflictDeleter {
 	kd, _ := ct.artM.Descriptors()
 	ed := ct.artM.Editor()
 	kB := val.NewTupleBuilder(kd)
+
+	vd := shim.ValueDescriptorFromSchema(ct.ourSch)
+	vB := val.NewTupleBuilder(vd)
 	p := ct.artM.Pool()
+
+	baseColSize := ct.baseSch.GetAllCols().Size()
+	ourColSize := ct.ourSch.GetAllCols().Size()
+	// root_ish, base_cols..., our_cols, our_diff_type
+	ourDiffTypeIdx := 1 + baseColSize + ourColSize
+
 	return &prollyConflictDeleter{
-		kd:   kd,
-		kB:   kB,
-		pool: p,
-		ed:   ed,
-		ct:   ct,
+		kd:             kd,
+		vd:             vd,
+		kB:             kB,
+		vB:             vB,
+		pool:           p,
+		ed:             ed,
+		ct:             ct,
+		ourDiffTypeIdx: ourDiffTypeIdx,
+		baseColSize:    baseColSize,
+		ourColSize:     ourColSize,
 	}
 }
 
-func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) error {
-	if schema.IsKeyless(cd.ct.ourSch) {
-		panic("conflict deleter for keyless tables not implemented")
+func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) (err error) {
+	// first part of the artifact key is the keys of the source table
+	if !schema.IsKeyless(cd.ct.ourSch) {
+		err = cd.putPrimaryKeys(ctx, r)
+	} else {
+		err = cd.putKeylessHash(ctx, r)
+	}
+	if err != nil {
+		return err
 	}
 
+	// then the hash follows. It is the first column of the row and the second to last in the key
+	h := hash.Parse(r[0].(string))
+	cd.kB.PutCommitAddr(cd.kd.Count()-2, h)
+
+	// Finally the artifact type which is always a conflict
+	cd.kB.PutUint8(cd.kd.Count()-1, uint8(prolly.ArtifactTypeConflict))
+
+	key := cd.kB.Build(cd.pool)
+	err = cd.ed.Delete(ctx, key)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cd *prollyConflictDeleter) putPrimaryKeys(ctx *sql.Context, r sql.Row) error {
 	// get keys from either base, ours, or theirs
 	o := func() int {
 		if o := 1; r[o] != nil {
@@ -435,7 +501,6 @@ func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 		}
 	}()
 
-	// first part of the artifact key is the keys of the source table
 	for i := 0; i < cd.kd.Count()-2; i++ {
 		err := index.PutField(ctx, cd.ed.Mut.NodeStore(), cd.kB, i, r[o+i])
 
@@ -444,19 +509,31 @@ func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 		}
 	}
 
-	// then the hash follows. It is the first column of the row and the second to last in the key
-	h := hash.Parse(r[0].(string))
-	cd.kB.PutCommitAddr(cd.kd.Count()-2, h)
+	return nil
+}
 
-	// Finally the artifact type which is always a conflict
-	cd.kB.PutUint8(cd.kd.Count()-1, uint8(prolly.ArtifactTypeConflict))
-
-	key := cd.kB.Build(cd.pool)
-	err := cd.ed.Delete(ctx, key)
-	if err != nil {
-		return err
+func (cd *prollyConflictDeleter) putKeylessHash(ctx *sql.Context, r sql.Row) error {
+	var rowVals sql.Row
+	if r[cd.ourDiffTypeIdx] == merge.ConflictDiffTypeAdded {
+		// use our cols
+		rowVals = r[1+cd.baseColSize : 1+cd.baseColSize+cd.ourColSize]
+	} else {
+		// use base cols
+		rowVals = r[1 : 1+cd.baseColSize]
 	}
 
+	// init cardinality to 0
+	cd.vB.PutUint64(0, 0)
+	for i, v := range rowVals {
+		err := index.PutField(ctx, cd.ed.Mut.NodeStore(), cd.vB, i+1, v)
+		if err != nil {
+			return err
+		}
+	}
+
+	v := cd.vB.Build(cd.pool)
+	k := val.HashTupleFromValue(cd.pool, v)
+	cd.kB.PutHash128(0, k.GetField(0))
 	return nil
 }
 
@@ -498,7 +575,13 @@ func (cd *prollyConflictDeleter) Close(ctx *sql.Context) error {
 }
 
 func CalculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, error) {
-	cols := make([]schema.Column, 3+ours.GetAllCols().Size()+theirs.GetAllCols().Size()+base.GetAllCols().Size())
+	keyless := schema.IsKeyless(ours)
+	n := 3 + ours.GetAllCols().Size() + theirs.GetAllCols().Size() + base.GetAllCols().Size()
+	if keyless {
+		n += 3
+	}
+
+	cols := make([]schema.Column, n)
 
 	// the commit hash or working set hash of the right side during merge
 	cols[0] = schema.NewColumn("from_root_ish", 0, types.StringKind, false)
@@ -544,6 +627,16 @@ func CalculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, e
 		return nil, err
 	}
 	cols[i] = schema.NewColumn("their_diff_type", uint64(i), types.StringKind, false)
+	i++
+
+	if keyless {
+		cols[i] = schema.NewColumn("base_cardinality", uint64(i), types.UintKind, false)
+		i++
+		cols[i] = schema.NewColumn("our_cardinality", uint64(i), types.UintKind, false)
+		i++
+		cols[i] = schema.NewColumn("their_cardinality", uint64(i), types.UintKind, false)
+		i++
+	}
 
 	return schema.UnkeyedSchemaFromCols(schema.NewColCollection(cols...)), nil
 }
