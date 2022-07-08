@@ -142,13 +142,13 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsInt(timeoutFlag, "t", "connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout (default `%v`)", serverConfig.ReadTimeout()))
 	ap.SupportsFlag(readonlyFlag, "r", "Disable modification of the database")
 	ap.SupportsString(logLevelFlag, "l", "log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `trace', `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel()))
-	ap.SupportsString(dataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases.")
-	ap.SupportsString(cfgDirFlag, "", "directory", "Defines a directory that contains configura.")
+	ap.SupportsString(dataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults the the current directory.")
+	ap.SupportsString(cfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to $data-dir/.doltcfg.")
 	ap.SupportsFlag(noAutoCommitFlag, "", "Set @@autocommit = off for the server")
 	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", fmt.Sprintf("Set the number of go routines spawned to handle each query (default `%d`)", serverConfig.QueryParallelism()))
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server (default `%d`)", serverConfig.MaxConnections()))
 	ap.SupportsString(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables (default `%s`)", serverConfig.PersistenceBehavior()))
-	ap.SupportsString(privilegeFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants.")
+	ap.SupportsString(privilegeFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to $doltcfg-dir/privileges.db")
 	return ap
 }
 
