@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"io"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -63,6 +64,7 @@ type HistoryTable struct {
 	commitFilters []sql.Expression
 	cmItr         doltdb.CommitItr
 	indexLookup   sql.IndexLookup
+	projectedCols []uint64
 }
 
 func (ht *HistoryTable) ShouldParallelizeAccess() bool {
@@ -88,11 +90,12 @@ func (ht HistoryTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 // NewHistoryTable creates a history table
 func NewHistoryTable(table *DoltTable, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	cmItr := doltdb.CommitItrForRoots(ddb, head)
-
-	return &HistoryTable{
+	//targetSchema := historyTableSchema(, table)
+	h := &HistoryTable{
 		doltTable: table,
 		cmItr:     cmItr,
 	}
+	return h
 }
 
 // History table schema returns the corresponding history table schema for the base table given, which consists of
@@ -208,14 +211,60 @@ func transformFilters(ctx *sql.Context, filters ...sql.Expression) []sql.Express
 	return filters
 }
 
-func (ht HistoryTable) WithProjections(colNames []string) sql.Table {
-	projectedTable := ht.doltTable.WithProjections(colNames)
-	ht.doltTable = projectedTable.(*DoltTable)
-	return &ht
+const (
+	commitHashTag uint64 = iota
+	committerTag
+	commitDateTag
+)
+
+func (ht *HistoryTable) WithProjections(colNames []string) sql.Table {
+	// TODO do we still have to update the dolt table?
+	nt := *ht
+	nt.projectedCols = make([]uint64, len(colNames))
+	nonHistoryCols := make([]string, 0)
+	cols := ht.doltTable.sch.GetAllCols()
+	for i := range colNames {
+		col, ok := cols.LowerNameToCol[strings.ToLower(colNames[i])]
+		if !ok {
+			switch colNames[i] {
+			case CommitHashCol:
+				nt.projectedCols[i] = commitHashTag
+			case CommitterCol:
+				nt.projectedCols[i] = committerTag
+			case CommitDateCol:
+				nt.projectedCols[i] = commitDateTag
+			default:
+			}
+		} else {
+			nt.projectedCols[i] = col.Tag
+			nonHistoryCols = append(nonHistoryCols, col.Name)
+		}
+	}
+	projectedTable := ht.doltTable.WithProjections(nonHistoryCols)
+	nt.doltTable = projectedTable.(*DoltTable)
+	return &nt
 }
 
 func (ht *HistoryTable) Projections() []string {
-	return ht.doltTable.Projections()
+	names := make([]string, len(ht.projectedCols))
+	cols := ht.doltTable.sch.GetAllCols()
+	for i := range ht.projectedCols {
+		if col, ok := cols.TagToCol[ht.projectedCols[i]]; ok {
+			names[i] = col.Name
+
+		} else {
+			switch ht.projectedCols[i] {
+			case commitHashTag:
+				names[i] = CommitHashCol
+			case committerTag:
+				names[i] = CommitterCol
+			case commitDateTag:
+				names[i] = CommitDateCol
+			default:
+			}
+		}
+	}
+	return names
 }
 
 // Name returns the name of the history table

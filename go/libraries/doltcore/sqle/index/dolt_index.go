@@ -604,7 +604,6 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
 	covers := true
 	for _, colTag := range cols {
 		if _, ok := idxCols.TagToIdx[colTag]; !ok {
-			//if _, ok := idxCols.GetByNameCaseInsensitive(colName); !ok {
 			covers = false
 			break
 		}
