@@ -97,12 +97,7 @@ func (itr *TagsItr) Next(ctx *sql.Context) (sql.Row, error) {
 	}()
 
 	twh := itr.tagsWithHash[itr.idx]
-	return sql.NewRow(twh.Tag.Name,
-		twh.Hash.String(),
-		twh.Tag.Meta.Name,
-		twh.Tag.Meta.Email,
-		twh.Tag.Meta.Time(),
-		twh.Tag.Meta.Description), nil
+	return sql.NewRow(twh.Tag.Name, twh.Hash.String(), twh.Tag.Meta.Name, twh.Tag.Meta.Email, twh.Tag.Meta.Time(), twh.Tag.Meta.Description), nil
 }
 
 // Close closes the iterator.

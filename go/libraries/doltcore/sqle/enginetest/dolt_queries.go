@@ -4637,7 +4637,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 
 var DoltTagTestScripts = []queries.ScriptTest{
 	{
-		Name: "dolt-tag: SQL create tag explicit ref without message",
+		Name: "dolt-tag: SQL create tags",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk int primary key);",
 			"INSERT INTO test VALUES (0),(1),(2);",
@@ -4652,72 +4652,18 @@ var DoltTagTestScripts = []queries.ScriptTest{
 				Query:    "SELECT tag_name, message from dolt_tags",
 				Expected: []sql.Row{{"v1", ""}},
 			},
-		},
-	},
-	{
-		Name: "dolt-tag: SQL no violations implicit ref with message",
-		SetUpScript: []string{
-			"CREATE TABLE test(pk int primary key);",
-			"INSERT INTO test VALUES (0),(1),(2);",
-			"CALL DOLT_COMMIT('-am','created table test')",
-		},
-		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "CALL DOLT_TAG('v1', '-m', 'create tag v1')",
+				Query:    "CALL DOLT_TAG('v2', '-m', 'create tag v2')",
 				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "SELECT tag_name, message from dolt_tags",
-				Expected: []sql.Row{{"v1", "create tag v1"}},
+				Expected: []sql.Row{{"v1", ""}, {"v2", "create tag v2"}},
 			},
 		},
 	},
 	{
-		Name: "dolt-tag: SQL no input error",
-		SetUpScript: []string{
-			"CREATE TABLE test(pk int primary key);",
-			"INSERT INTO test VALUES (0),(1),(2);",
-			"CALL DOLT_COMMIT('-am','created table test')",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:          "CALL DOLT_TAG()",
-				ExpectedErrStr: "error: invalid argument, use 'dolt_tags' system table to list tags",
-			},
-			{
-				Query:    "SELECT tag_name, message from dolt_tags",
-				Expected: []sql.Row{},
-			},
-		},
-	},
-	{
-		Name: "dolt-tag: SQL delete a tag",
-		SetUpScript: []string{
-			"CREATE TABLE test(pk int primary key);",
-			"INSERT INTO test VALUES (0),(1),(2);",
-			"CALL DOLT_COMMIT('-am','created table test')",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "CALL DOLT_TAG('v1', '-m', 'create tag v1')",
-				Expected: []sql.Row{{0}},
-			},
-			{
-				Query:    "SELECT tag_name, message from dolt_tags",
-				Expected: []sql.Row{{"v1", "create tag v1"}},
-			},
-			{
-				Query:    "CALL DOLT_TAG('-d','v1')",
-				Expected: []sql.Row{{0}},
-			},
-			{
-				Query:    "SELECT tag_name, message from dolt_tags",
-				Expected: []sql.Row{},
-			},
-		},
-	},
-	{
-		Name: "dolt-tag: SQL delete multiple tags",
+		Name: "dolt-tag: SQL delete tags",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk int primary key);",
 			"INSERT INTO test VALUES (0),(1),(2);",
@@ -4732,17 +4678,25 @@ var DoltTagTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"v1", "create tag v1"}, {"v2", "create tag v2"}, {"v3", "create tag v3"}},
 			},
 			{
-				Query:    "CALL DOLT_TAG('-d','v1','v3')",
+				Query:    "CALL DOLT_TAG('-d','v1')",
 				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "SELECT tag_name, message from dolt_tags",
-				Expected: []sql.Row{{"v2", "create tag v2"}},
+				Expected: []sql.Row{{"v2", "create tag v2"}, {"v3", "create tag v3"}},
+			},
+			{
+				Query:    "CALL DOLT_TAG('-d','v2','v3')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT tag_name, message from dolt_tags",
+				Expected: []sql.Row{},
 			},
 		},
 	},
 	{
-		Name: "dolt-tag: SQL delete multiple tags",
+		Name: "dolt-tag: SQL use a tag as a ref for merge",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk int primary key);",
 			"INSERT INTO test VALUES (0),(1),(2);",
