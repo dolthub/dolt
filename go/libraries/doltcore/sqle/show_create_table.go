@@ -23,16 +23,13 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
 // These functions cannot be in the sqlfmt package as the reliance on the sqle package creates a circular reference.
 
 func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Context, *sqle.Engine, *dsess.Session) {
 	sess := dsess.DefaultSession()
-	sqlCtx := sql.NewContext(ctx,
-		sql.WithSession(sess),
-		sql.WithTracer(tracing.Tracer(ctx)))
+	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
 
 	pro := NewDoltDatabaseProvider(env.DefaultInitBranch, nil, sqlDb)
 	engine := sqle.NewDefault(pro)

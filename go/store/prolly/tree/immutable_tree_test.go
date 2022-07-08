@@ -22,6 +22,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -175,13 +176,17 @@ func TestWriteImmutableTree(t *testing.T) {
 				return nil
 			})
 
-			require.Equal(t, expLevel, root.Level())
+			assert.Equal(t, expLevel, root.Level())
 			if tt.checkSum {
-				require.Equal(t, expSum, sum)
+				assert.Equal(t, expSum, sum)
 			}
-			require.Equal(t, tt.inputSize, byteCnt)
-			require.Equal(t, expUnfilled, unfilledCnt)
-			require.Equal(t, expSubtrees, root.getSubtreeCounts())
+			assert.Equal(t, tt.inputSize, byteCnt)
+			assert.Equal(t, expUnfilled, unfilledCnt)
+			if expLevel > 0 {
+				for i := range expSubtrees {
+					assert.Equal(t, expSubtrees[i], root.getSubtreeCount(i))
+				}
+			}
 		})
 	}
 }
@@ -200,9 +205,9 @@ func expectedLevel(size, chunk int) int {
 	return l
 }
 
-func expectedSubtrees(size, chunk int) SubtreeCounts {
+func expectedSubtrees(size, chunk int) subtreeCounts {
 	if size <= chunk {
-		return SubtreeCounts{0}
+		return subtreeCounts{0}
 	}
 	l := expectedLevel(size, chunk)
 
@@ -211,7 +216,7 @@ func expectedSubtrees(size, chunk int) SubtreeCounts {
 
 	filledSubtree := int(math.Pow(float64(intChunk), float64(l-1)))
 
-	subtrees := make(SubtreeCounts, 0)
+	subtrees := make(subtreeCounts, 0)
 	for size > filledSubtree {
 		subtrees = append(subtrees, uint64(filledSubtree))
 		size -= filledSubtree
