@@ -262,7 +262,7 @@ func execute(ctx *sql.Context, eng *engine.SqlEngine, query string) error {
 		return err
 	}
 	_, err = itr.Next(ctx)
-	for err != nil {
+	for err != nil && err != io.EOF {
 		return err
 	}
 	return nil
