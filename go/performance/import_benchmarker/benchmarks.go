@@ -64,12 +64,12 @@ func runBenchmark(b *testing.B, commandFunc doltCommandFunc, commandStr string, 
 func getBenchmarkingTools(importTest *ImportBenchmarkTest) (commandFunc doltCommandFunc, commandStr string, args []string, dEnv *env.DoltEnv) {
 	switch importTest.fileFormat {
 	case csvExt:
-		dEnv = getImportEnv(filesys.LocalFS, getWorkingDir())
+		dEnv = getImportEnv(filesys.LocalFS, getWorkingDir(), importTest.doltExecPath)
 		args = []string{"-c", "-f", testTable, importTest.filePath}
 		commandStr = "dolt table import"
 		commandFunc = tblcmds.ImportCmd{}.Exec
 	case sqlExt:
-		dEnv = getImportEnv(filesys.LocalFS, getWorkingDir())
+		dEnv = getImportEnv(filesys.LocalFS, getWorkingDir(), importTest.doltExecPath)
 		args = []string{}
 		commandStr = "dolt sql"
 		commandFunc = commands.SqlCmd{}.Exec
@@ -78,7 +78,7 @@ func getBenchmarkingTools(importTest *ImportBenchmarkTest) (commandFunc doltComm
 		os.Stdin = stdin
 	case jsonExt:
 		pathToSchemaFile := filepath.Join(getWorkingDir(), fmt.Sprintf("testSchema%s", importTest.fileFormat))
-		dEnv = getImportEnv(filesys.LocalFS, getWorkingDir())
+		dEnv = getImportEnv(filesys.LocalFS, getWorkingDir(), importTest.doltExecPath)
 		args = []string{"-c", "-f", "-s", pathToSchemaFile, testTable, importTest.filePath}
 		commandStr = "dolt table import"
 		commandFunc = tblcmds.ImportCmd{}.Exec
@@ -89,8 +89,8 @@ func getBenchmarkingTools(importTest *ImportBenchmarkTest) (commandFunc doltComm
 	return commandFunc, commandStr, args, dEnv
 }
 
-func getImportEnv(fs filesys.Filesys, workingDir string) *env.DoltEnv {
-	initializeDoltRepoAtWorkingDir(fs, workingDir)
+func getImportEnv(fs filesys.Filesys, workingDir, doltExec string) *env.DoltEnv {
+	initializeDoltRepoAtWorkingDir(fs, workingDir, doltExec)
 
 	err := os.Chdir(workingDir)
 	if err != nil {
@@ -133,7 +133,7 @@ func execCommand(ctx context.Context, name string, arg ...string) *exec.Cmd {
 }
 
 // getAmountOfGarbageGenerated computes the amount of garbage created by an import operation.
-func getAmountOfGarbageGenerated() float64 {
+func getAmountOfGarbageGenerated(doltExec string) float64 {
 	// 1. Get the size of the current .dolt directory
 	originalSize, err := dirSizeMB(getWorkingDir())
 	if err != nil {
@@ -141,7 +141,7 @@ func getAmountOfGarbageGenerated() float64 {
 	}
 
 	// 2. Execute Garbage Collection
-	init := execCommand(context.Background(), "dolt", "gc")
+	init := execCommand(context.Background(), doltExec, "gc")
 	init.Dir = getWorkingDir()
 	err = init.Run()
 	if err != nil {
@@ -191,10 +191,10 @@ func getWorkingDir() string {
 }
 
 // initializeDoltRepoAtWorkingDir calls the `dolt init` command on the workingDir to create a new Dolt repository.
-func initializeDoltRepoAtWorkingDir(fs filesys.Filesys, workingDir string) {
+func initializeDoltRepoAtWorkingDir(fs filesys.Filesys, workingDir, doltExec string) {
 	RemoveTempDoltDataDir(fs, workingDir)
 
-	init := execCommand(context.Background(), "dolt", "init")
+	init := execCommand(context.Background(), doltExec, "init")
 	init.Dir = workingDir
 	err := init.Run()
 	if err != nil {
