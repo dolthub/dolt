@@ -147,9 +147,8 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(listSavedFlag, "l", "List all saved queries")
 	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
 	ap.SupportsFlag(BatchFlag, "b", "Use to enable more efficient batch processing for large SQL import scripts consisting of only INSERT statements. Other statements types are not guaranteed to work in this mode.")
-	ap.SupportsString(dataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
-	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
-	ap.SupportsString(cfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt ")
+	ap.SupportsString(dataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults the the current directory.")
+	ap.SupportsString(cfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to $data-dir/.doltcfg/privileges.db")
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
 	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given")
 	ap.SupportsString(privilegeFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants.")
@@ -194,7 +193,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	var cfgDirPath string
 	dataDir, _ := apr.GetValue(dataDirFlag)
 	if multiDbDir, ok := apr.GetValue(multiDBDirFlag); ok {
-		cli.PrintErrf("--multi-db-dir is deprecated, use --data-dir instead")
+		cli.PrintErrf("WARNING: --multi-db-dir is deprecated, use --data-dir instead\n")
 		dataDir = multiDbDir
 	}
 	cfgDir, hasCfg := apr.GetValue(cfgDirFlag)
