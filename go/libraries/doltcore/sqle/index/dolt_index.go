@@ -584,7 +584,7 @@ func (di *doltIndex) lookupTags(s *durableIndexState) map[uint64]int {
 }
 
 func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
-	if cols == nil {
+	if len(cols) == 0 {
 		return s.coversAllColumns(di)
 	}
 
