@@ -100,6 +100,7 @@ func (cmd BranchCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(allFlag, "a", "When in list mode, shows remote tracked branches")
 	ap.SupportsFlag(remoteFlag, "r", "When in list mode, show only remote tracked branches. When with -d, delete a remote tracking branch.")
 	ap.SupportsFlag(showCurrentFlag, "", "Print the name of the current branch")
+	ap.SupportsString(cli.TrackFlag, "t", "", "When creating a new branch, set up 'upstream' configuration.")
 	return ap
 }
 
@@ -311,16 +312,57 @@ func createBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return 1
 	}
 
-	newBranch := apr.Arg(0)
+	var newBranch string
+	var remote string
+	var remoteBranch string
 	startPt := "head"
 
-	if apr.NArg() == 2 {
-		startPt = apr.Arg(1)
+	trackVal, setTrackUpstream := apr.GetValue(cli.TrackFlag)
+	if setTrackUpstream {
+		if trackVal == "inherit" {
+			return BuildVerrAndExit(fmt.Sprintf("--track='inherit' is not supported yet"), nil)
+		} else if trackVal == "direct" && apr.NArg() != 2 {
+			return BuildVerrAndExit(fmt.Sprintf("invalid arguments"), nil)
+		}
+		if apr.NArg() == 2 {
+			newBranch = apr.Arg(0)
+			startPt = apr.Arg(1)
+		} else {
+			newBranch = trackVal
+			startPt = apr.Arg(0)
+		}
+		remote, remoteBranch = ParseRemoteBranchName(startPt)
+		remotes, err := dEnv.RepoStateReader().GetRemotes()
+		if err != nil {
+			return BuildVerrAndExit(err.Error(), nil)
+		}
+		_, remoteOk := remotes[remote]
+		if !remoteOk {
+			return BuildVerrAndExit(fmt.Sprintf("'%s' is not a valid remote ref and a branch '%s' cannot be created from it", startPt, newBranch), nil)
+		}
+	} else {
+		newBranch = apr.Arg(0)
+		if apr.NArg() == 2 {
+			startPt = apr.Arg(1)
+		}
 	}
 
 	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, apr.Contains(forceFlag))
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usage)
+	}
+
+	if setTrackUpstream {
+		branchRef := ref.NewBranchRef(newBranch)
+		hasRef, err := dEnv.DoltDB.HasRef(ctx, branchRef)
+		if err != nil {
+			return BuildVerrAndExit(err.Error(), nil)
+		}
+		if !hasRef {
+			return BuildVerrAndExit(fmt.Sprintf(""), nil)
+		}
+		verr := SetRemoteUpstreamForBranchRef(dEnv, remote, remoteBranch, branchRef)
+		return HandleVErrAndExitCode(verr, usage)
 	}
 
 	return 0
