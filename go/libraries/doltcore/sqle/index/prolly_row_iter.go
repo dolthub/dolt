@@ -107,10 +107,12 @@ func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap
 	nonPks := sch.GetNonPKCols()
 
 	for _, t := range projections {
-		i := pks.TagToIdx[t]
-		keyMap[i] = all.TagToIdx[t]
-		j := nonPks.TagToIdx[t]
-		valMap[j] = all.TagToIdx[t]
+		if i, ok := pks.TagToIdx[t]; ok {
+			keyMap[i] = all.TagToIdx[t]
+		}
+		if j, ok := nonPks.TagToIdx[t]; ok {
+			valMap[j] = all.TagToIdx[t]
+		}
 	}
 	if schema.IsKeyless(sch) {
 		skip := val.OrdinalMapping{-1}
