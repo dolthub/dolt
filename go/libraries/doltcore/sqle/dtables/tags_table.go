@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var _ sql.Table = (*TagsTable)(nil)
@@ -72,9 +71,8 @@ func (dt *TagsTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIt
 
 // TagsItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type TagsItr struct {
-	tags   []*doltdb.Tag
-	hashes []hash.Hash
-	idx    int
+	tagsWithHash []doltdb.TagWithHash
+	idx          int
 }
 
 // NewTagsItr creates a TagsItr from the current environment.
@@ -84,21 +82,13 @@ func NewTagsItr(ctx *sql.Context, ddb *doltdb.DoltDB) (*TagsItr, error) {
 		return nil, err
 	}
 
-	var tags = make([]*doltdb.Tag, len(tagsWithHash))
-	var hashes = make([]hash.Hash, len(tagsWithHash))
-
-	for i, tagWithHash := range tagsWithHash {
-		tags[i] = tagWithHash.Tag
-		hashes[i] = tagWithHash.Hash
-	}
-
-	return &TagsItr{tags, hashes, 0}, nil
+	return &TagsItr{tagsWithHash, 0}, nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
 func (itr *TagsItr) Next(ctx *sql.Context) (sql.Row, error) {
-	if itr.idx >= len(itr.tags) {
+	if itr.idx >= len(itr.tagsWithHash) {
 		return nil, io.EOF
 	}
 
@@ -106,9 +96,13 @@ func (itr *TagsItr) Next(ctx *sql.Context) (sql.Row, error) {
 		itr.idx++
 	}()
 
-	tag := itr.tags[itr.idx]
-	h := itr.hashes[itr.idx]
-	return sql.NewRow(tag.Name, h.String(), tag.Meta.Name, tag.Meta.Email, tag.Meta.Time(), tag.Meta.Description), nil
+	twh := itr.tagsWithHash[itr.idx]
+	return sql.NewRow(twh.Tag.Name,
+		twh.Hash.String(),
+		twh.Tag.Meta.Name,
+		twh.Tag.Meta.Email,
+		twh.Tag.Meta.Time(),
+		twh.Tag.Meta.Description), nil
 }
 
 // Close closes the iterator.
