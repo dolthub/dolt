@@ -28,10 +28,12 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/profile"
-	"github.com/uber/jaeger-client-go"
-	"github.com/uber/jaeger-client-go/transport"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/sdk/resource"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -203,13 +205,21 @@ func runMain() int {
 			// and browse to http://localhost:16686
 			case jaegerFlag:
 				cli.Println("running with jaeger tracing reporting to localhost")
-				transport := transport.NewHTTPTransport("http://localhost:14268/api/traces?format=jaeger.thrift", transport.HTTPBatchSize(128000))
-				reporter := jaeger.NewRemoteReporter(transport)
-				tracer, closer := jaeger.NewTracer("dolt", jaeger.NewConstSampler(true), reporter)
-				opentracing.SetGlobalTracer(tracer)
-				defer closer.Close()
-				args = args[1:]
-
+				exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint("http://localhost:14268/api/traces")))
+				if err != nil {
+					cli.Println(color.YellowString("could not create jaeger collector: %v", err))
+				} else {
+					tp := tracesdk.NewTracerProvider(
+						tracesdk.WithBatcher(exp),
+						tracesdk.WithResource(resource.NewWithAttributes(
+							semconv.SchemaURL,
+							semconv.ServiceNameKey.String("dolt"),
+						)),
+					)
+					otel.SetTracerProvider(tp)
+					defer tp.Shutdown(context.Background())
+					args = args[1:]
+				}
 			// Currently goland doesn't support running with a different working directory when using go modules.
 			// This is a hack that allows a different working directory to be set after the application starts using
 			// chdir=<DIR>.  The syntax is not flexible and must match exactly this.
