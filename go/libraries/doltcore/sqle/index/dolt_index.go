@@ -48,7 +48,7 @@ type DoltIndex interface {
 	IsPrimaryKey() bool
 
 	getDurableState(*sql.Context, DoltTableable) (*durableIndexState, error)
-	coversColumns(s *durableIndexState, columns []string) bool
+	coversColumns(s *durableIndexState, columns []uint64) bool
 	sqlRowConverter(s *durableIndexState) *KVToSqlRowConverter
 	lookupTags(s *durableIndexState) map[uint64]int
 }
@@ -583,7 +583,7 @@ func (di *doltIndex) lookupTags(s *durableIndexState) map[uint64]int {
 	return s.lookupTags(di)
 }
 
-func (di *doltIndex) coversColumns(s *durableIndexState, cols []string) bool {
+func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
 	if cols == nil {
 		return s.coversAllColumns(di)
 	}
@@ -602,8 +602,9 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []string) bool {
 	}
 
 	covers := true
-	for _, colName := range cols {
-		if _, ok := idxCols.GetByNameCaseInsensitive(colName); !ok {
+	for _, colTag := range cols {
+		if _, ok := idxCols.TagToIdx[colTag]; !ok {
+			//if _, ok := idxCols.GetByNameCaseInsensitive(colName); !ok {
 			covers = false
 			break
 		}

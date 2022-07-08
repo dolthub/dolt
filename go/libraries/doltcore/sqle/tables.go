@@ -116,7 +116,7 @@ type DoltTable struct {
 	sch          schema.Schema
 	autoIncCol   schema.Column
 
-	projectedCols []string
+	projectedCols []uint64
 
 	opts editor.Options
 
@@ -505,7 +505,7 @@ func (t DoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.Row
 	return iter.(sql.RowIter2), err
 }
 
-func partitionRows(ctx *sql.Context, t *doltdb.Table, sqlSch sql.Schema, projCols []string, partition sql.Partition) (sql.RowIter, error) {
+func partitionRows(ctx *sql.Context, t *doltdb.Table, sqlSch sql.Schema, projCols []uint64, partition sql.Partition) (sql.RowIter, error) {
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:
 		return newRowIterator(ctx, t, sqlSch, projCols, typedPartition)
@@ -884,13 +884,27 @@ func (t DoltTable) GetForeignKeyUpdater(ctx *sql.Context) sql.ForeignKeyUpdater 
 
 // Projections implements sql.ProjectedTable
 func (t *DoltTable) Projections() []string {
-	return t.projectedCols
+	names := make([]string, len(t.projectedCols))
+	cols := t.sch.GetAllCols()
+	for i := range t.projectedCols {
+		col := cols.TagToCol[t.projectedCols[i]]
+		names[i] = col.Name
+	}
+	return names
 }
 
 // WithProjections implements sql.ProjectedTable
 func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 	nt := *t
-	nt.projectedCols = colNames
+	nt.projectedCols = make([]uint64, len(colNames))
+	cols := t.sch.GetAllCols()
+	for i := range colNames {
+		col, ok := cols.LowerNameToCol[strings.ToLower(colNames[i])]
+		if !ok {
+			panic("column does not exist")
+		}
+		nt.projectedCols[i] = col.Tag
+	}
 	return &nt
 }
 

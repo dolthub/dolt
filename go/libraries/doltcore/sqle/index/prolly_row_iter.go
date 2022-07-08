@@ -15,8 +15,6 @@
 package index
 
 import (
-	"strings"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
@@ -64,9 +62,9 @@ type prollyRowIter struct {
 var _ sql.RowIter = prollyRowIter{}
 var _ sql.RowIter2 = prollyRowIter{}
 
-func NewProllyRowIter(sch schema.Schema, sqlSch sql.Schema, rows prolly.Map, iter prolly.MapIter, projections []string) (sql.RowIter, error) {
+func NewProllyRowIter(sch schema.Schema, sqlSch sql.Schema, rows prolly.Map, iter prolly.MapIter, projections []uint64) (sql.RowIter, error) {
 	if len(projections) == 0 {
-		projections = sch.GetAllCols().GetColumnNames()
+		projections = sch.GetAllCols().Tags
 	}
 
 	keyProj, valProj := projectionMappings(sch, projections)
@@ -94,7 +92,7 @@ func NewProllyRowIter(sch schema.Schema, sqlSch sql.Schema, rows prolly.Map, ite
 	}, nil
 }
 
-func projectionMappings(sch schema.Schema, projections []string) (keyMap, valMap val.OrdinalMapping) {
+func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap val.OrdinalMapping) {
 	keyMap = make(val.OrdinalMapping, sch.GetPKCols().Size())
 	for i := range keyMap {
 		keyMap[i] = -1
@@ -108,16 +106,11 @@ func projectionMappings(sch schema.Schema, projections []string) (keyMap, valMap
 	pks := sch.GetPKCols()
 	nonPks := sch.GetNonPKCols()
 
-	for _, p := range projections {
-		p = strings.ToLower(p)
-		if col, ok := pks.LowerNameToCol[p]; ok {
-			i := pks.TagToIdx[col.Tag]
-			keyMap[i] = all.TagToIdx[col.Tag]
-		}
-		if col, ok := nonPks.LowerNameToCol[p]; ok {
-			i := nonPks.TagToIdx[col.Tag]
-			valMap[i] = all.TagToIdx[col.Tag]
-		}
+	for _, t := range projections {
+		i := pks.TagToIdx[t]
+		keyMap[i] = all.TagToIdx[t]
+		j := nonPks.TagToIdx[t]
+		valMap[j] = all.TagToIdx[t]
 	}
 	if schema.IsKeyless(sch) {
 		skip := val.OrdinalMapping{-1}
