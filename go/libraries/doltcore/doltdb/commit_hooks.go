@@ -83,15 +83,14 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir
 	}
 
 	puller, err := pull.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcCS, destCS, waf, addr, nil)
-	if err == pull.ErrDBUpToDate {
-		return nil
-	} else if err != nil {
+	if err != nil && err != pull.ErrDBUpToDate {
 		return err
 	}
-
-	err = puller.Pull(ctx)
-	if err != nil {
-		return err
+	if err != pull.ErrDBUpToDate {
+		err = puller.Pull(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	ds, err = destDB.GetDataset(ctx, rf.String())
