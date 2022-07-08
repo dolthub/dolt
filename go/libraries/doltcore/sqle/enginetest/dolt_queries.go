@@ -139,15 +139,13 @@ var DoltScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{sql.OkResult{}}},
 			},
 			{
-				// TODO: GMS has a bug in show table... backticks in column/table/index/etc names
-				//       need to be escaped/doubled to match MySQL's behavior.
 				Query: "show create table t;",
 				Expected: []sql.Row{{"t",
 					"CREATE TABLE `t` (\n" +
 						"  `pk` int NOT NULL,\n" +
 						"  `c1` int,\n" +
 						"  PRIMARY KEY (`pk`),\n" +
-						"  KEY ``i`` (`c1`)\n" +
+						"  KEY ```i``` (`c1`)\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
