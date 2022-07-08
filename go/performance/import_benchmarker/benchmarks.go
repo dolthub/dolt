@@ -23,6 +23,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -191,12 +193,23 @@ func getWorkingDir() string {
 }
 
 // initializeDoltRepoAtWorkingDir calls the `dolt init` command on the workingDir to create a new Dolt repository.
-func initializeDoltRepoAtWorkingDir(fs filesys.Filesys, workingDir, doltExec string) {
+func initializeDoltRepoAtWorkingDir(fs filesys.Filesys, workingDir, doltExecPath string) {
 	RemoveTempDoltDataDir(fs, workingDir)
 
-	init := execCommand(context.Background(), doltExec, "init")
+	err := sysbench_runner.DoltVersion(context.Background(), doltExecPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = sysbench_runner.UpdateDoltConfig(context.Background(), doltExecPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	init := execCommand(context.Background(), doltExecPath, "init")
+
 	init.Dir = workingDir
-	err := init.Run()
+	err = init.Run()
 	if err != nil {
 		panic(err.Error()) // Fix
 	}
