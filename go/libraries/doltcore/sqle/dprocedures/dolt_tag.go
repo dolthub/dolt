@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-// doltTag is the stored procedure version of the function `dolt tag`.
+// doltTag is the stored procedure version of the CLI `dolt tag` command
 func doltTag(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltTag(ctx, args)
 	if err != nil {
