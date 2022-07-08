@@ -1624,7 +1624,7 @@ var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 	},
 }
 
-var DoltConflictDiffTypeScripts = []queries.ScriptTest{
+var DoltConflictTableNameTableTests = []queries.ScriptTest{
 	{
 		Name: "conflict diff types",
 		SetUpScript: []string{
@@ -1662,6 +1662,50 @@ var DoltConflictDiffTypeScripts = []queries.ScriptTest{
 					{2, 2, nil, nil, "removed", 2, 0, "modified"},
 					{3, 3, 3, 0, "modified", nil, nil, "removed"},
 					{nil, nil, 4, 4, "added", 4, -4, "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "keyless cardinality columns",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			"CREATE table t (col1 int);",
+			"INSERT INTO t VALUES (1), (2), (3), (4), (6);",
+			"CALL DOLT_COMMIT('-am', 'init');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"INSERT INTO t VALUES (1);",
+			"DELETE FROM t where col1 = 2;",
+			"INSERT INTO t VALUES (3);",
+			"INSERT INTO t VALUES (4), (4);",
+			"INSERT INTO t VALUES (5);",
+			"DELETE from t where col1 = 6;",
+			"CALL DOLT_COMMIT('-am', 'right');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"DELETE FROM t WHERE col1 = 1;",
+			"INSERT INTO t VALUES (2);",
+			"INSERT INTO t VALUES (3);",
+			"INSERT INTO t VALUES (4);",
+			"INSERT INTO t VALUES (5);",
+			"DELETE from t where col1 = 6;",
+			"CALL DOLT_COMMIT('-am', 'left');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query: "SELECT base_col1, our_col1, their_col1, our_diff_type, their_diff_type, base_cardinality, our_cardinality, their_cardinality from dolt_conflicts_t ORDER BY COALESCE(base_col1, our_col1, their_col1) ASC;",
+				Expected: []sql.Row{
+					{1, nil, 1, "removed", "modified", uint64(1), uint64(0), uint64(2)},
+					{2, 2, nil, "modified", "removed", uint64(1), uint64(2), uint64(0)},
+					{3, 3, 3, "modified", "modified", uint64(1), uint64(2), uint64(2)},
+					{4, 4, 4, "modified", "modified", uint64(1), uint64(2), uint64(3)},
+					{nil, 5, 5, "added", "added", uint64(0), uint64(1), uint64(1)},
+					{6, nil, nil, "removed", "removed", uint64(1), uint64(0), uint64(0)},
 				},
 			},
 		},

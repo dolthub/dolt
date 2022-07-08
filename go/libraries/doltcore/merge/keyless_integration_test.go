@@ -263,10 +263,6 @@ func TestKeylessMergeConflicts(t *testing.T) {
 		// conflict resolution
 
 		t.Run(test.name+"_resolved_ours", func(t *testing.T) {
-			if types.IsFormat_DOLT_1(types.Format_Default) {
-				// TODO (dhruv): unskip when resolve command is implemented
-				t.Skip()
-			}
 			dEnv := dtu.CreateTestEnv()
 
 			setupTest(t, ctx, dEnv, test.setup)
@@ -284,10 +280,6 @@ func TestKeylessMergeConflicts(t *testing.T) {
 			assertKeylessRows(t, ctx, tbl, test.oursExpected)
 		})
 		t.Run(test.name+"_resolved_theirs", func(t *testing.T) {
-			if types.IsFormat_DOLT_1(types.Format_Default) {
-				// TODO (dhruv): unskip when resolve command is implemented
-				t.Skip()
-			}
 			dEnv := dtu.CreateTestEnv()
 
 			setupTest(t, ctx, dEnv, test.setup)

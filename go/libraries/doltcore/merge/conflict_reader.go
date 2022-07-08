@@ -49,6 +49,7 @@ type ConflictReader struct {
 	joiner  *rowconv.Joiner
 	sch     schema.Schema
 	nbf     *types.NomsBinFormat
+	keyless bool
 }
 
 // NewConflictReader returns a new conflict reader for a given table
@@ -79,7 +80,6 @@ func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader,
 	if err != nil {
 		return nil, err
 	}
-
 	readerSch := joiner.GetSchema()
 	readerSch, err = readerSch.AddColumn(schema.NewColumn("our_diff_type", schema.DoltConflictsOurDiffTypeTag, types.StringKind, false), nil)
 	if err != nil {
@@ -88,6 +88,41 @@ func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader,
 	readerSch, err = readerSch.AddColumn(schema.NewColumn("their_diff_type", schema.DoltConflictsTheirDiffTypeTag, types.StringKind, false), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	var keyless bool
+	if schema.IsKeyless(sch) {
+		keyless = true
+		readerSch, err = readerSch.AddColumn(
+			schema.NewColumn(
+				"base_cardinality",
+				schema.DoltConflictsBaseCardinalityTag,
+				types.UintKind,
+				false),
+			nil)
+		if err != nil {
+			return nil, err
+		}
+		readerSch, err = readerSch.AddColumn(
+			schema.NewColumn(
+				"our_cardinality",
+				schema.DoltConflictsOurCardinalityTag,
+				types.UintKind,
+				false),
+			nil)
+		if err != nil {
+			return nil, err
+		}
+		readerSch, err = readerSch.AddColumn(
+			schema.NewColumn(
+				"their_cardinality",
+				schema.DoltConflictsTheirCardinalityTag,
+				types.UintKind,
+				false),
+			nil)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	_, confIdx, err := tbl.GetConflicts(ctx)
@@ -105,7 +140,13 @@ func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader,
 		return nil, err
 	}
 
-	return &ConflictReader{confItr: confItr, joiner: joiner, sch: readerSch, nbf: tbl.Format()}, nil
+	return &ConflictReader{
+		confItr: confItr,
+		joiner:  joiner,
+		sch:     readerSch,
+		nbf:     tbl.Format(),
+		keyless: keyless,
+	}, nil
 }
 
 // GetSchema gets the schema of the rows that this reader will return
@@ -134,48 +175,115 @@ func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.I
 
 	keyTpl := key.(types.Tuple)
 	conflict, err := conflict.ConflictFromTuple(value.(types.Tuple))
-
 	if err != nil {
 		return nil, pipeline.NoProps, err
 	}
 
-	namedRows := make(map[string]row.Row)
-	if !types.IsNull(conflict.Base) {
-		namedRows[baseStr], err = row.FromNoms(cr.joiner.SchemaForName(baseStr), keyTpl, conflict.Base.(types.Tuple))
-
-		if err != nil {
-			return nil, pipeline.NoProps, err
-		}
+	var joinedRow row.Row
+	if !cr.keyless {
+		joinedRow, err = cr.pkJoinedRow(keyTpl, conflict)
+	} else {
+		joinedRow, err = cr.keylessJoinedRow(keyTpl, conflict)
 	}
-
-	if !types.IsNull(conflict.Value) {
-		namedRows[oursStr], err = row.FromNoms(cr.joiner.SchemaForName(oursStr), keyTpl, conflict.Value.(types.Tuple))
-
-		if err != nil {
-			return nil, pipeline.NoProps, err
-		}
+	if err != nil {
+		return nil, pipeline.NoProps, err
 	}
-
-	if !types.IsNull(conflict.MergeValue) {
-		namedRows[theirsStr], err = row.FromNoms(cr.joiner.SchemaForName(theirsStr), keyTpl, conflict.MergeValue.(types.Tuple))
-
-		if err != nil {
-			return nil, pipeline.NoProps, err
-		}
-	}
-
-	joinedRow, err := cr.joiner.Join(namedRows)
 
 	ourDiffType := getDiffType(conflict.Base, conflict.Value)
 	theirDiffType := getDiffType(conflict.Base, conflict.MergeValue)
 	joinedRow, err = joinedRow.SetColVal(schema.DoltConflictsOurDiffTypeTag, types.String(ourDiffType), cr.sch)
+	if err != nil {
+		return nil, pipeline.NoProps, err
+	}
 	joinedRow, err = joinedRow.SetColVal(schema.DoltConflictsTheirDiffTypeTag, types.String(theirDiffType), cr.sch)
-
 	if err != nil {
 		return nil, pipeline.NoProps, err
 	}
 
 	return joinedRow, pipeline.NoProps, nil
+}
+
+func (cr *ConflictReader) pkJoinedRow(key types.Tuple, conflict conflict.Conflict) (row.Row, error) {
+	var err error
+	namedRows := make(map[string]row.Row)
+
+	if !types.IsNull(conflict.Base) {
+		namedRows[baseStr], err = row.FromNoms(cr.joiner.SchemaForName(baseStr), key, conflict.Base.(types.Tuple))
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !types.IsNull(conflict.Value) {
+		namedRows[oursStr], err = row.FromNoms(cr.joiner.SchemaForName(oursStr), key, conflict.Value.(types.Tuple))
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !types.IsNull(conflict.MergeValue) {
+		namedRows[theirsStr], err = row.FromNoms(cr.joiner.SchemaForName(theirsStr), key, conflict.MergeValue.(types.Tuple))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	joinedRow, err := cr.joiner.Join(namedRows)
+	if err != nil {
+		return nil, err
+	}
+
+	return joinedRow, nil
+}
+
+func (cr *ConflictReader) keylessJoinedRow(key types.Tuple, conflict conflict.Conflict) (row.Row, error) {
+	var err error
+	namedRows := make(map[string]row.Row)
+	var baseCard, ourCard, theirCard uint64
+
+	if !types.IsNull(conflict.Base) {
+		namedRows[baseStr], baseCard, err = row.KeylessRowsFromTuples(key, conflict.Base.(types.Tuple))
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !types.IsNull(conflict.Value) {
+		namedRows[oursStr], ourCard, err = row.KeylessRowsFromTuples(key, conflict.Value.(types.Tuple))
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !types.IsNull(conflict.MergeValue) {
+		namedRows[theirsStr], theirCard, err = row.KeylessRowsFromTuples(key, conflict.MergeValue.(types.Tuple))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	joinedRow, err := cr.joiner.Join(namedRows)
+	if err != nil {
+		return nil, err
+	}
+	joinedRow, err = setCardinalities(types.Uint(baseCard), types.Uint(ourCard), types.Uint(theirCard), joinedRow, cr.sch)
+	if err != nil {
+		return nil, err
+	}
+
+	return joinedRow, nil
+}
+
+func setCardinalities(base, ours, theirs types.Uint, joinedRow row.Row, sch schema.Schema) (row.Row, error) {
+	joinedRow, err := joinedRow.SetColVal(schema.DoltConflictsBaseCardinalityTag, base, sch)
+	if err != nil {
+		return nil, err
+	}
+	joinedRow, err = joinedRow.SetColVal(schema.DoltConflictsOurCardinalityTag, ours, sch)
+	if err != nil {
+		return nil, err
+	}
+	joinedRow, err = joinedRow.SetColVal(schema.DoltConflictsTheirCardinalityTag, theirs, sch)
+	if err != nil {
+		return nil, err
+	}
+	return joinedRow, nil
 }
 
 func getDiffType(base types.Value, other types.Value) string {

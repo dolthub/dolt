@@ -104,4 +104,7 @@ const (
 const (
 	DoltConflictsOurDiffTypeTag = iota + SystemTableReservedMin + uint64(7000)
 	DoltConflictsTheirDiffTypeTag
+	DoltConflictsBaseCardinalityTag
+	DoltConflictsOurCardinalityTag
+	DoltConflictsTheirCardinalityTag
 )

@@ -172,6 +172,9 @@ func TestSystemTableTags(t *testing.T) {
 		doltConflictsMin := sysTableMin + uint64(7000)
 		assert.Equal(t, doltConflictsMin+0, schema.DoltConflictsOurDiffTypeTag)
 		assert.Equal(t, doltConflictsMin+1, schema.DoltConflictsTheirDiffTypeTag)
+		assert.Equal(t, doltConflictsMin+2, schema.DoltConflictsBaseCardinalityTag)
+		assert.Equal(t, doltConflictsMin+3, schema.DoltConflictsOurCardinalityTag)
+		assert.Equal(t, doltConflictsMin+4, schema.DoltConflictsTheirCardinalityTag)
 	})
 }
 
