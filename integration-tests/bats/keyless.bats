@@ -404,7 +404,6 @@ SQL
 }
 
 @test "keyless: merge duplicate deletes" {
-    skip_nbf_dolt_1 "conflicts resolve not implemented"
 
     make_dupe_table
 
@@ -455,7 +454,6 @@ SQL
 }
 
 @test "keyless: merge duplicate updates" {
-    skip_nbf_dolt_1 "conflicts resolve not implemented"
 
     make_dupe_table
 
@@ -624,7 +622,6 @@ CSV
 }
 
 @test "keyless: merge with in-place updates (branches)" {
-    skip_nbf_dolt_1 "conflicts resolve not implemented"
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
     dolt commit -am "added rows"
@@ -660,7 +657,6 @@ CSV
 }
 
 @test "keyless: diff branches with reordered mutation history" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
 
     dolt branch other
 
@@ -721,7 +717,6 @@ SQL
 }
 
 @test "keyless: merge branches with convergent mutation history" {
-    skip_nbf_dolt_1 "conflicts resolve not implemented"
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -767,7 +762,6 @@ SQL
 }
 
 @test "keyless: merge branches with offset mutation history" {
-    skip_nbf_dolt_1 "conflicts resolve not implemented"
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -827,7 +821,6 @@ SQL
 }
 
 @test "keyless: merge delete+add on two branches" {
-    skip_nbf_dolt_1 "conflicts resolve not implemented"
     dolt branch left
     dolt checkout -b right
 
