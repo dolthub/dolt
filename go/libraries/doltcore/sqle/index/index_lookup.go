@@ -61,7 +61,7 @@ func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, ilu sql.IndexLooku
 }
 
 func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, durableState *durableIndexState) (sql.RowIter2, error) {
-	if projections == nil {
+	if len(projections) == 0 {
 		projections = idx.Schema().GetAllCols().Tags
 	}
 
