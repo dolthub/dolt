@@ -148,7 +148,6 @@ func getTagToResColIdx(ctx context.Context, tbl *doltdb.Table, projectedCols []u
 	cols := sch.GetAllCols().GetColumns()
 	tagToSqlColIdx := make(map[uint64]int)
 
-	//resultColSet := set.NewCaseInsensitiveStrSet(projectedCols)
 	resultColSet := make(map[uint64]bool)
 	for i := range projectedCols {
 		resultColSet[projectedCols[i]] = true

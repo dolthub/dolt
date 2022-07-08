@@ -236,7 +236,6 @@ func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter *no
 	tagToSqlColIdx := make(map[uint64]int)
 	isPrimaryKeyIdx := idx.ID() == "PRIMARY"
 
-	//resultColSet := set.NewCaseInsensitiveStrSet(resultCols)
 	resultColSet := make(map[uint64]bool)
 	for _, k := range resultCols {
 		resultColSet[k] = true

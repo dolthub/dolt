@@ -42,6 +42,12 @@ const (
 
 	// CommitDateCol is the name of the column containing the commit date in the result set
 	CommitDateCol = "commit_date"
+
+	// history tags implement new projection interface, they should not correspond to real tags
+	// and are private to the history table
+	commitHashTag uint64 = iota
+	committerTag
+	commitDateTag
 )
 
 var (
@@ -90,7 +96,6 @@ func (ht HistoryTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 // NewHistoryTable creates a history table
 func NewHistoryTable(table *DoltTable, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	cmItr := doltdb.CommitItrForRoots(ddb, head)
-	//targetSchema := historyTableSchema(, table)
 	h := &HistoryTable{
 		doltTable: table,
 		cmItr:     cmItr,
@@ -211,16 +216,10 @@ func transformFilters(ctx *sql.Context, filters ...sql.Expression) []sql.Express
 	return filters
 }
 
-const (
-	commitHashTag uint64 = iota
-	committerTag
-	commitDateTag
-)
-
 func (ht *HistoryTable) WithProjections(colNames []string) sql.Table {
-	// TODO do we still have to update the dolt table?
 	nt := *ht
 	nt.projectedCols = make([]uint64, len(colNames))
+	// todo(max): is updating the child table necessary?
 	nonHistoryCols := make([]string, 0)
 	cols := ht.doltTable.sch.GetAllCols()
 	for i := range colNames {
