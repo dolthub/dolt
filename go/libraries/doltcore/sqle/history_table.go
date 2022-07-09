@@ -362,10 +362,6 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 	var sqlTable sql.Table
 	sqlTable = table
 	if lookup != nil {
-		//todo make indexes call against table
-		// find the matching index
-		// build lookup
-		// call with lookup with the correct index
 		indexes, err := table.GetIndexes(ctx)
 		if err != nil {
 			return nil, err
@@ -383,17 +379,6 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 		if newLookup != nil {
 			sqlTable = table.WithIndexLookup(newLookup)
 		}
-
-		// This revision of the table may not have the index we need (which was determined based on HEAD)
-		// Only apply the lookup if the index is there
-		//hasIndex, err := table.HasIndex(ctx, lookup.Index())
-		//if err != nil {
-		//	return nil, err
-		//}
-		//
-		//if hasIndex {
-		//	sqlTable = table.WithIndexLookup(lookup)
-		//}
 	}
 
 	tablePartitions, err := sqlTable.Partitions(ctx)
