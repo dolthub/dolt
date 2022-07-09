@@ -23,8 +23,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -32,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
 )
 
 type doltCommandFunc func(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
@@ -66,12 +65,12 @@ func runBenchmark(b *testing.B, commandFunc doltCommandFunc, commandStr string, 
 func getBenchmarkingTools(importTest *ImportBenchmarkTest) (commandFunc doltCommandFunc, commandStr string, args []string, dEnv *env.DoltEnv) {
 	switch importTest.fileFormat {
 	case csvExt:
-		dEnv = getImportEnv(filesys.LocalFS, getWorkingDir(), importTest.doltExecPath)
+		dEnv = getImportEnv(filesys.LocalFS, GetWorkingDir(), importTest.doltExecPath)
 		args = []string{"-c", "-f", testTable, importTest.filePath}
 		commandStr = "dolt table import"
 		commandFunc = tblcmds.ImportCmd{}.Exec
 	case sqlExt:
-		dEnv = getImportEnv(filesys.LocalFS, getWorkingDir(), importTest.doltExecPath)
+		dEnv = getImportEnv(filesys.LocalFS, GetWorkingDir(), importTest.doltExecPath)
 		args = []string{}
 		commandStr = "dolt sql"
 		commandFunc = commands.SqlCmd{}.Exec
@@ -79,8 +78,8 @@ func getBenchmarkingTools(importTest *ImportBenchmarkTest) (commandFunc doltComm
 		stdin := getStdinForSQLBenchmark(filesys.LocalFS, importTest.filePath)
 		os.Stdin = stdin
 	case jsonExt:
-		pathToSchemaFile := filepath.Join(getWorkingDir(), fmt.Sprintf("testSchema%s", importTest.fileFormat))
-		dEnv = getImportEnv(filesys.LocalFS, getWorkingDir(), importTest.doltExecPath)
+		pathToSchemaFile := filepath.Join(GetWorkingDir(), fmt.Sprintf("testSchema%s", importTest.fileFormat))
+		dEnv = getImportEnv(filesys.LocalFS, GetWorkingDir(), importTest.doltExecPath)
 		args = []string{"-c", "-f", "-s", pathToSchemaFile, testTable, importTest.filePath}
 		commandStr = "dolt table import"
 		commandFunc = tblcmds.ImportCmd{}.Exec
@@ -129,69 +128,6 @@ func getStdinForSQLBenchmark(fs filesys.Filesys, pathToImportFile string) *os.Fi
 	return f
 }
 
-func execCommand(ctx context.Context, name string, arg ...string) *exec.Cmd {
-	e := exec.CommandContext(ctx, name, arg...)
-	return e
-}
-
-// getAmountOfGarbageGenerated computes the amount of garbage created by an import operation.
-func getAmountOfGarbageGenerated(doltExec string) float64 {
-	// 1. Get the size of the current .dolt directory
-	originalSize, err := dirSizeMB(getWorkingDir())
-	if err != nil {
-		panic(err.Error())
-	}
-
-	// 2. Execute Garbage Collection
-	init := execCommand(context.Background(), doltExec, "gc")
-	init.Dir = getWorkingDir()
-	err = init.Run()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	// 3. Get the new size of the current .dolt directory
-	newSize, err := dirSizeMB(getWorkingDir())
-
-	// 4. Return result
-	return originalSize - newSize
-}
-
-// cc: https://stackoverflow.com/questions/32482673/how-to-get-directory-total-size
-func dirSizeMB(path string) (float64, error) {
-	var size int64
-	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			size += info.Size()
-		}
-		return err
-	})
-
-	sizeMB := float64(size) / 1024.0 / 1024.0
-
-	return sizeMB, err
-}
-
-// RemoveTempDoltDataDir is used to remove the .dolt repository
-func RemoveTempDoltDataDir(fs filesys.Filesys, dir string) {
-	doltDir := filepath.Join(dir, dbfactory.DoltDir)
-	exists, _ := fs.Exists(doltDir)
-	if exists {
-		err := fs.Delete(doltDir, true)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-}
-
-func getWorkingDir() string {
-	wd, _ := os.Getwd()
-	return wd
-}
-
 // initializeDoltRepoAtWorkingDir calls the `dolt init` command on the workingDir to create a new Dolt repository.
 func initializeDoltRepoAtWorkingDir(fs filesys.Filesys, workingDir, doltExecPath string) {
 	RemoveTempDoltDataDir(fs, workingDir)
@@ -213,4 +149,67 @@ func initializeDoltRepoAtWorkingDir(fs filesys.Filesys, workingDir, doltExecPath
 	if err != nil {
 		panic(err.Error()) // Fix
 	}
+}
+
+// RemoveTempDoltDataDir is used to remove the .dolt repository
+func RemoveTempDoltDataDir(fs filesys.Filesys, dir string) {
+	doltDir := filepath.Join(dir, dbfactory.DoltDir)
+	exists, _ := fs.Exists(doltDir)
+	if exists {
+		err := fs.Delete(doltDir, true)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
+func GetWorkingDir() string {
+	wd, _ := os.Getwd()
+	return wd
+}
+
+func execCommand(ctx context.Context, name string, arg ...string) *exec.Cmd {
+	e := exec.CommandContext(ctx, name, arg...)
+	return e
+}
+
+// getAmountOfGarbageGenerated computes the amount of garbage created by an import operation.
+func getAmountOfGarbageGenerated(doltExec string) float64 {
+	// 1. Get the size of the current .dolt directory
+	originalSize, err := dirSizeMB(GetWorkingDir())
+	if err != nil {
+		panic(err.Error())
+	}
+
+	// 2. Execute Garbage Collection
+	init := execCommand(context.Background(), doltExec, "gc")
+	init.Dir = GetWorkingDir()
+	err = init.Run()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	// 3. Get the new size of the current .dolt directory
+	newSize, err := dirSizeMB(GetWorkingDir())
+
+	// 4. Return result
+	return originalSize - newSize
+}
+
+// cc: https://stackoverflow.com/questions/32482673/how-to-get-directory-total-size
+func dirSizeMB(path string) (float64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+
+	sizeMB := float64(size) / 1024.0 / 1024.0
+
+	return sizeMB, err
 }

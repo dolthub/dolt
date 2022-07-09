@@ -16,9 +16,11 @@ package main
 
 import (
 	"flag"
+	"log"
 	"os"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+
 	"github.com/dolthub/dolt/go/performance/import_benchmarker"
 )
 
@@ -39,22 +41,20 @@ func main() {
 	}
 
 	if err != nil {
-		panic(err.Error())
+		log.Fatal(err.Error())
 	}
 
+	// Get the working directory the tests will be executing in
+	wd := import_benchmarker.GetWorkingDir()
+
+	// Delete any .dolt directories even in the case of an error created by the benchmarker.
+	defer import_benchmarker.RemoveTempDoltDataDir(filesys.LocalFS, wd)
+
+	// Generate the tests and the benchmarker.
 	tests := import_benchmarker.NewImportBenchmarkTests(config)
 	results := import_benchmarker.RunBenchmarkTests(config, tests)
 
-	// Write the results of the benchmark to a csv file
-	wd, err := os.Getwd()
-	if err != nil {
-		panic(err.Error())
-	}
-
 	import_benchmarker.SerializeResults(results, wd, resultsTableName, "csv")
-
-	// cleanup temp dolt data dir
-	import_benchmarker.RemoveTempDoltDataDir(filesys.LocalFS, wd)
 
 	os.Exit(0)
 }

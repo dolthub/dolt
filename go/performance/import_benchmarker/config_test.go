@@ -26,6 +26,8 @@ import (
 )
 
 func TestGeneratedConfigCanBeImported(t *testing.T) {
+	t.Skip() // Skipping since dolt isn't installed on a vm
+
 	config := NewDefaultImportBenchmarkConfig()
 
 	tests := NewImportBenchmarkTests(config)
@@ -44,4 +46,27 @@ func TestGeneratedConfigCanBeImported(t *testing.T) {
 
 	RemoveTempDoltDataDir(filesys.LocalFS, wd)
 	os.RemoveAll(filepath.Join(wd, "testData.csv"))
+}
+
+func TestCanGenerateFilesForAllFormats(t *testing.T) {
+	for _, format := range supportedFormats {
+		config := NewDefaultImportBenchmarkConfig()
+		assert.Equal(t, 1, len(config.Jobs))
+
+		config.Jobs[0].Format = format
+
+		tests := NewImportBenchmarkTests(config)
+		assert.Equal(t, 1, len(tests))
+
+		test := tests[0]
+
+		file, err := os.Open(test.filePath)
+		assert.NoError(t, err)
+
+		err = file.Close()
+		assert.NoError(t, err)
+
+		err = os.Remove(test.filePath)
+		assert.NoError(t, err)
+	}
 }

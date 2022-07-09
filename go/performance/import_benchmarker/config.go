@@ -69,7 +69,7 @@ func NewDefaultImportBenchmarkConfig() *ImportBenchmarkConfig {
 			Sorted:       false,
 			Format:       csvExt,
 			DoltVersion:  "HEAD", // Use whatever dolt is installed locally
-			DoltExecPath: "dolt",
+			DoltExecPath: "dolt", // Assumes dolt is installed locally
 		},
 	}
 
@@ -97,13 +97,18 @@ func FromFileConfig(configPath string) (*ImportBenchmarkConfig, error) {
 	return config, nil
 }
 
+// ImportBenchmarkTest executes the benchmark on a particular import file
 type ImportBenchmarkTest struct {
+	// fileFormat is either csv, json or sql
 	fileFormat string
 
+	// filePath contains the path the test file
 	filePath string // path to file
 
+	// doltVersion tracks the current version of Dolt being used.
 	doltVersion string
 
+	// doltExecPath is a path towards a Dolt executable. This is useful for executing Dolt against a particular version.
 	doltExecPath string
 }
 
@@ -124,6 +129,7 @@ func NewImportBenchmarkTests(config *ImportBenchmarkConfig) []*ImportBenchmarkTe
 	return ret
 }
 
+// getGeneratedBenchmarkTest is used to create a generated test case with a randomly generated csv file.
 func getGeneratedBenchmarkTest(job *ImportBenchmarkJob) *ImportBenchmarkTest {
 	sch := NewSeedSchema(job.NumRows, genSampleCols(), job.Format)
 	testFile := generateTestFile(filesys.LocalFS, sch)
@@ -137,7 +143,7 @@ func getGeneratedBenchmarkTest(job *ImportBenchmarkJob) *ImportBenchmarkTest {
 }
 
 func generateTestFile(fs filesys.Filesys, sch *SeedSchema) string {
-	pathToImportFile := filepath.Join(getWorkingDir(), fmt.Sprintf("testData.%s", sch.FileFormatExt))
+	pathToImportFile := filepath.Join(GetWorkingDir(), fmt.Sprintf("testData.%s", sch.FileFormatExt))
 	wc, err := fs.OpenForWrite(pathToImportFile, os.ModePerm)
 	if err != nil {
 		panic(err.Error())
