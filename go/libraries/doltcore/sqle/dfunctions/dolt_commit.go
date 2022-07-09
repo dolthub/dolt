@@ -83,7 +83,7 @@ func DoDoltCommit(ctx *sql.Context, args []string) (string, error) {
 		email = dSess.Email()
 	}
 
-	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
+	msg, msgOk := apr.GetValue(cli.MessageArg)
 	if !msgOk {
 		return "", fmt.Errorf("Must provide commit message.")
 	}

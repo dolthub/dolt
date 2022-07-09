@@ -243,7 +243,7 @@ func getUnmergedTableCount(ctx context.Context, root *doltdb.RootValue) (int, er
 }
 
 func getCommitMessage(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, spec *merge.MergeSpec) (string, errhand.VerboseError) {
-	if m, ok := apr.GetValue(cli.CommitMessageArg); ok {
+	if m, ok := apr.GetValue(cli.MessageArg); ok {
 		return m, nil
 	}
 

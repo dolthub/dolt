@@ -4656,3 +4656,102 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 		},
 	},
 }
+
+var DoltTagTestScripts = []queries.ScriptTest{
+	{
+		Name: "dolt-tag: SQL create tags",
+		SetUpScript: []string{
+			"CREATE TABLE test(pk int primary key);",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"CALL DOLT_COMMIT('-am','created table test')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_TAG('v1', 'HEAD')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT tag_name, IF(CHAR_LENGTH(tag_hash) < 0, NULL, 'not null'), tagger, email, IF(date IS NULL, NULL, 'not null'), message from dolt_tags",
+				Expected: []sql.Row{{"v1", "not null", "billy bob", "bigbillieb@fake.horse", "not null", ""}},
+			},
+			{
+				Query:    "CALL DOLT_TAG('v2', '-m', 'create tag v2')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT tag_name, message from dolt_tags",
+				Expected: []sql.Row{{"v1", ""}, {"v2", "create tag v2"}},
+			},
+		},
+	},
+	{
+		Name: "dolt-tag: SQL delete tags",
+		SetUpScript: []string{
+			"CREATE TABLE test(pk int primary key);",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"CALL DOLT_COMMIT('-am','created table test')",
+			"CALL DOLT_TAG('v1', '-m', 'create tag v1')",
+			"CALL DOLT_TAG('v2', '-m', 'create tag v2')",
+			"CALL DOLT_TAG('v3', '-m', 'create tag v3')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT tag_name, message from dolt_tags",
+				Expected: []sql.Row{{"v1", "create tag v1"}, {"v2", "create tag v2"}, {"v3", "create tag v3"}},
+			},
+			{
+				Query:    "CALL DOLT_TAG('-d','v1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT tag_name, message from dolt_tags",
+				Expected: []sql.Row{{"v2", "create tag v2"}, {"v3", "create tag v3"}},
+			},
+			{
+				Query:    "CALL DOLT_TAG('-d','v2','v3')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT tag_name, message from dolt_tags",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "dolt-tag: SQL use a tag as a ref for merge",
+		SetUpScript: []string{
+			"CREATE TABLE test(pk int primary key);",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"CALL DOLT_COMMIT('-am','created table test')",
+			"DELETE FROM test WHERE pk = 0",
+			"INSERT INTO test VALUES (3)",
+			"CALL DOLT_COMMIT('-am','made changes')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_TAG('v1','HEAD')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('-b','other','HEAD^')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "INSERT INTO test VALUES (8), (9)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2}}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-am','made changes in other')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_MERGE('v1')",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "SELECT * FROM test",
+				Expected: []sql.Row{{1}, {2}, {3}, {8}, {9}},
+			},
+		},
+	},
+}

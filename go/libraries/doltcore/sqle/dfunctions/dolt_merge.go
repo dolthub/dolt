@@ -345,7 +345,7 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 
 	dbData, ok := sess.GetDbData(ctx, dbName)
 
-	msg, ok := apr.GetValue(cli.CommitMessageArg)
+	msg, ok := apr.GetValue(cli.MessageArg)
 	if !ok {
 		// TODO probably change, but we can't open editor so it'll have to be automated
 		msg = "automatic SQL merge"
