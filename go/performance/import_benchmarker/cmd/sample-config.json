@@ -1,7 +1,7 @@
 {
   "Jobs": [
     {
-      "Name": "Medium Dolt import with Sorted Columns",
+      "Name": "Medium Dolt import with Random Columns",
       "NumRows": 1000000,
       "Sorted": true,
       "Format": "csv",
