@@ -18,10 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 
@@ -40,15 +42,11 @@ const (
 	timeoutFlag             = "timeout"
 	readonlyFlag            = "readonly"
 	logLevelFlag            = "loglevel"
-	dataDirFlag             = "data-dir"
-	cfgDirFlag              = "doltcfg-dir"
 	noAutoCommitFlag        = "no-auto-commit"
 	configFileFlag          = "config"
 	queryParallelismFlag    = "query-parallelism"
 	maxConnectionsFlag      = "max-connections"
 	persistenceBehaviorFlag = "persistence-behavior"
-	privilegeFilePathFlag   = "privilege-file"
-	cfgDirName              = ".doltcfg"
 )
 
 var ErrMultipleDoltCfgDirs = errors.New("multiple .doltcfg directories detected")
@@ -142,13 +140,13 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsInt(timeoutFlag, "t", "connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout (default `%v`)", serverConfig.ReadTimeout()))
 	ap.SupportsFlag(readonlyFlag, "r", "Disable modification of the database")
 	ap.SupportsString(logLevelFlag, "l", "log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `trace', `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel()))
-	ap.SupportsString(dataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults the the current directory.")
-	ap.SupportsString(cfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to $data-dir/.doltcfg.")
+	ap.SupportsString(commands.DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults the the current directory.")
+	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to $data-dir/.doltcfg.")
 	ap.SupportsFlag(noAutoCommitFlag, "", "Set @@autocommit = off for the server")
 	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", fmt.Sprintf("Set the number of go routines spawned to handle each query (default `%d`)", serverConfig.QueryParallelism()))
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server (default `%d`)", serverConfig.MaxConnections()))
 	ap.SupportsString(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables (default `%s`)", serverConfig.PersistenceBehavior()))
-	ap.SupportsString(privilegeFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to $doltcfg-dir/privileges.db")
+	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to $doltcfg-dir/privileges.db")
 	return ap
 }
 
@@ -274,7 +272,7 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		serverConfig.withLogLevel(LogLevel(logLevel))
 	}
 
-	if dataDir, ok := apr.GetValue(dataDirFlag); ok {
+	if dataDir, ok := apr.GetValue(commands.DataDirFlag); ok {
 		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, dataDir)
 
 		if err != nil {
@@ -287,7 +285,7 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	// TODO: check for existence of this directory in parent and child here?
 	var cfgDirPath string
 	dataDir := serverConfig.DataDir()
-	cfgDir, ok := apr.GetValue(cfgDirFlag)
+	cfgDir, ok := apr.GetValue(commands.CfgDirFlag)
 	if ok {
 		// doltcfg directory specified; create at path if DNE, else add it to mrEnv
 		path := filepath.Join(dataDir, cfgDir)
@@ -299,13 +297,13 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		cfgDirPath = path
 	} else {
 		// Look in parent directory for doltcfg
-		path := filepath.Join("..", cfgDirName)
+		path := filepath.Join("..", commands.DefaultCfgDirName)
 		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
 			cfgDirPath = path
 		}
 
 		// Look in current directory for doltcfg, create one here if none found so far
-		path = filepath.Join(dataDir, cfgDirName)
+		path = filepath.Join(dataDir, commands.DefaultCfgDirName)
 		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
 			if len(cfgDirPath) != 0 {
 				return nil, ErrMultipleDoltCfgDirs
@@ -333,7 +331,7 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	}
 
 	serverConfig.autoCommit = !apr.Contains(noAutoCommitFlag)
-	if privilegeFilePath, ok := apr.GetValue(privilegeFilePathFlag); ok {
+	if privilegeFilePath, ok := apr.GetValue(commands.PrivsFilePathFlag); ok {
 		serverConfig.withPrivilegeFilePath(privilegeFilePath)
 	}
 
