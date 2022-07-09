@@ -601,6 +601,9 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
 		idxCols = di.IndexSchema().GetPKCols()
 	}
 
+	//if len(cols) > len(idxCols) {
+	// return false
+	// }
 	covers := true
 	for _, colTag := range cols {
 		if _, ok := idxCols.TagToIdx[colTag]; !ok {
