@@ -105,7 +105,7 @@ type ServerConfig interface {
 	// DataDir is the path to a directory to use as the data dir, both to create new databases and locate existing ones.
 	DataDir() string
 	// CfgDir is the path to a directory to use to store the dolt configuration files.
-	//CfgDir() string
+	CfgDir() string
 	// MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1
 	MaxConnections() uint64
 	// QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
