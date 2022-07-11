@@ -43,12 +43,6 @@ const (
 
 	// CommitDateCol is the name of the column containing the commit date in the result set
 	CommitDateCol = "commit_date"
-
-	// history tags implement new projection interface, they should not correspond to real tags
-	// and are private to the history table
-	commitHashTag uint64 = iota
-	committerTag
-	commitDateTag
 )
 
 var (
