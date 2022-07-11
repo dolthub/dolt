@@ -25,7 +25,6 @@ import (
 
 	"gopkg.in/src-d/go-errors.v1"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -218,7 +217,7 @@ func getRepoRootDir(path, pathSeparator string) string {
 // DoltEnvAsMultiEnv returns a MultiRepoEnv which wraps the DoltEnv and names it based on the directory DoltEnv refers
 // to. If the env given doesn't contain a valid dolt database, creates a MultiEnvRepo from any databases found in the
 // directory at the root of the filesystem and returns that.
-func DoltEnvAsMultiEnv(ctx context.Context, dEnv *DoltEnv) (*MultiRepoEnv, error) {
+func DoltEnvAsMultiEnv(ctx context.Context, dEnv *DoltEnv, dataDir string) (*MultiRepoEnv, error) {
 	if !dEnv.Valid() {
 		cfg := dEnv.Config.WriteableConfig()
 		return MultiEnvForDirectory(ctx, cfg, dEnv.FS, dEnv.Version)
@@ -266,7 +265,7 @@ func DoltEnvAsMultiEnv(ctx context.Context, dEnv *DoltEnv) (*MultiRepoEnv, error
 	mrEnv.AddEnv(dbName, dEnv)
 
 	// If there are other directories in the same root, try to load them as additional databases
-	dEnv.FS.Iter(".", false, func(path string, size int64, isDir bool) (stop bool) {
+	dEnv.FS.Iter(dataDir, false, func(path string, size int64, isDir bool) (stop bool) {
 		if !isDir {
 			return false
 		}
@@ -408,30 +407,6 @@ func DBNamesAndPathsFromDir(fs filesys.Filesys, path string) ([]EnvNameAndPath, 
 	}
 
 	return envNamesAndPaths, nil
-}
-
-// LoadMultiEnvFromDir looks at each subfolder of the given path as a Dolt repository and attempts to return a MultiRepoEnv
-// with initialized environments for each of those subfolder data repositories. subfolders whose name starts with '.' are
-// skipped.
-func LoadMultiEnvFromDir(
-	ctx context.Context,
-	hdp HomeDirProvider,
-	cfg config.ReadWriteConfig,
-	fs filesys.Filesys,
-	path, version string,
-) (*MultiRepoEnv, error) {
-	envNamesAndPaths, err := DBNamesAndPathsFromDir(fs, path)
-
-	if err != nil {
-		return nil, err
-	}
-
-	multiDbDirFs, err := fs.WithWorkingDir(path)
-	if err != nil {
-		return nil, errhand.VerboseErrorFromError(err)
-	}
-
-	return MultiEnvForPaths(ctx, hdp, cfg, multiDbDirFs, version, envNamesAndPaths...)
 }
 
 func dirToDBName(dirName string) string {

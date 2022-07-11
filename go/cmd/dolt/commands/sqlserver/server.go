@@ -101,7 +101,7 @@ func Serve(
 			}
 		} else {
 			var err error
-			mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
+			mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv, serverConfig.DataDir())
 			if err != nil {
 				return err, nil
 			}

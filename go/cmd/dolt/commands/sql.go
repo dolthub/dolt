@@ -415,25 +415,22 @@ func queryMode(
 // getMultiRepoEnv returns an appropriate MultiRepoEnv for this invocation of the command
 func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, cmd SqlCmd) (*env.MultiRepoEnv, errhand.VerboseError) {
 	var mrEnv *env.MultiRepoEnv
-	dataDir, multiDbMode := apr.GetValue(DataDirFlag)
+	dataDir, _ := apr.GetValue(DataDirFlag)
 	// TODO: this is deprecated, eventually delete
 	// Deprecation warning is thrown somewhere else
 	if dataDir2, ok := apr.GetValue(MultiDBDirFlag); ok {
 		dataDir = dataDir2
 	}
 
-	if multiDbMode {
-		var err error
-		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), dEnv.FS, dataDir, cmd.VersionStr)
-		if err != nil {
-			return nil, errhand.VerboseErrorFromError(err)
-		}
-	} else {
-		var err error
-		mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
-		if err != nil {
-			return nil, errhand.VerboseErrorFromError(err)
-		}
+	// default dataDir to current directory
+	if len(dataDir) == 0 {
+		dataDir = "."
+	}
+
+	var err error
+	mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv, dataDir)
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
 	}
 
 	return mrEnv, nil

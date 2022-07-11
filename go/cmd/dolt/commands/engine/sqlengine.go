@@ -370,7 +370,7 @@ func getInitialDBStateWithDefaultBranch(ctx context.Context, db dsqle.SqlDatabas
 
 // NewSqlEngineForEnv returns a SqlEngine configured for the environment provided, with a single root user
 func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, error) {
-	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv)
+	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv, ".")
 	if err != nil {
 		return nil, err
 	}

@@ -65,7 +65,7 @@ type SqlEngineTableWriter struct {
 }
 
 func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTableSchema, rowOperationSchema schema.Schema, options *MoverOptions, statsCB noms.StatsCB) (*SqlEngineTableWriter, error) {
-	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv)
+	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv, ".'")
 	if err != nil {
 		return nil, err
 	}

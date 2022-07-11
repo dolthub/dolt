@@ -39,7 +39,7 @@ type sqlEngineTableReader struct {
 }
 
 func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string) (*sqlEngineTableReader, error) {
-	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv)
+	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv, ".")
 	if err != nil {
 		return nil, err
 	}

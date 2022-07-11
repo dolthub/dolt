@@ -73,7 +73,7 @@ var _ enginetest.ValidatingHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
 	dEnv := dtestutils.CreateTestEnv()
-	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
+	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv, ".")
 	require.NoError(t, err)
 	b := env.GetDefaultInitBranch(dEnv.Config)
 	pro := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem())
@@ -322,7 +322,7 @@ func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDataba
 	// NewDatabases must be called before NewDatabaseProvider, we grab the DoltEnvs
 	// previously created by NewDatabases and re-add them to the new MultiRepoEnv.
 	dEnv := dtestutils.CreateTestEnv()
-	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
+	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv, ".")
 	require.NoError(d.t, err)
 	d.multiRepoEnv = mrEnv
 	for _, db := range dbs {

@@ -104,7 +104,7 @@ func TestDoltEnvAsMultiEnv(t *testing.T) {
 	envPath := filepath.Join(rootPath, " test---name _ 123")
 	dEnv := initRepoWithRelativePath(t, envPath, hdp)
 
-	mrEnv, err := DoltEnvAsMultiEnv(context.Background(), dEnv)
+	mrEnv, err := DoltEnvAsMultiEnv(context.Background(), dEnv, ".")
 	require.NoError(t, err)
 	assert.Len(t, mrEnv.envs, 1)
 
@@ -124,7 +124,7 @@ func TestDoltEnvAsMultiEnvWithMultipleRepos(t *testing.T) {
 	subEnv1 := initRepoWithRelativePath(t, filepath.Join(envPath, "abc"), hdp)
 	subEnv2 := initRepoWithRelativePath(t, filepath.Join(envPath, "def"), hdp)
 
-	mrEnv, err := DoltEnvAsMultiEnv(context.Background(), dEnv)
+	mrEnv, err := DoltEnvAsMultiEnv(context.Background(), dEnv, ".")
 	require.NoError(t, err)
 	assert.Len(t, mrEnv.envs, 3)
 
@@ -189,31 +189,5 @@ func TestLoadMultiEnv(t *testing.T) {
 	for _, name := range names {
 		e := mrEnv.GetEnv(name)
 		assert.NotNil(t, e)
-	}
-}
-
-func TestLoadMultiEnvFromDir(t *testing.T) {
-	dirNameToDBName := map[string]string{
-		"env 1":   "env_1",
-		" env  2": "env_2",
-		"env-3":   "env_3",
-	}
-
-	names := make([]string, 0, len(dirNameToDBName))
-	for k := range dirNameToDBName {
-		names = append(names, k)
-	}
-
-	rootPath, hdp, envs := initMultiEnv(t, "TestLoadMultiEnvFromDir", names)
-	mrEnv, err := LoadMultiEnvFromDir(context.Background(), hdp, config.NewEmptyMapConfig(), filesys.LocalFS, rootPath, "test")
-	require.NoError(t, err)
-
-	assert.Len(t, mrEnv.envs, len(names))
-	for _, dirName := range names {
-		dbName := dirNameToDBName[dirName]
-		_, ok := envs[dirName]
-		require.True(t, ok)
-		e := mrEnv.GetEnv(dbName)
-		require.NotNil(t, e)
 	}
 }
