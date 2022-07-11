@@ -17,8 +17,10 @@ package sqlserver
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"net"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -101,6 +103,19 @@ func Serve(
 		mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version)
 		if err != nil {
 			return err, nil
+		}
+
+		if dEnv.Valid() {
+			if _, ok := fs.(*filesys.InMemFS); ok {
+				mrEnv.AddEnv("dolt", dEnv)
+			} else {
+				path, err := dEnv.FS.Abs(".")
+				if err != nil {
+					return nil, err
+				}
+				dbName := filepath.Base(path)
+				mrEnv.AddEnv(dbName, dEnv)
+			}
 		}
 	} else {
 		if len(serverConfig.DataDir()) > 0 {

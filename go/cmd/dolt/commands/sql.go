@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"io"
 	"os"
 	"os/signal"
@@ -435,6 +436,19 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
+	}
+
+	if dEnv.Valid() {
+		if _, ok := fs.(*filesys.InMemFS); ok {
+			mrEnv.AddEnv("dolt", dEnv)
+		} else {
+			path, err := dEnv.FS.Abs(".")
+			if err != nil {
+				return nil, errhand.VerboseErrorFromError(err)
+			}
+			dbName := filepath.Base(path)
+			mrEnv.AddEnv(dbName, dEnv)
+		}
 	}
 
 	return mrEnv, nil

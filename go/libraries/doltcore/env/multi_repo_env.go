@@ -225,35 +225,6 @@ func MultiEnvForDirectory(
 		fs:   fs,
 		cfg:  config,
 	}
-	path, err := fs.Abs(".")
-	if err != nil {
-		return nil, err
-	}
-	dirName := getRepoRootDir(path, string(os.PathSeparator))
-	dbName := dirToDBName(dirName)
-	var newEnv *DoltEnv
-	if _, ok := fs.(*filesys.InMemFS); ok {
-		// TODO: this is literally testing code
-		dbName = "dolt" // TODO: how and where does this happen?????????????????
-		const name = "billy bob"
-		const email = "bigbillieb@fake.horse"
-		TestHomeDirPrefix := "/user/dolt/"
-		WorkingDirPrefix := "/user/dolt/datasets/" + dirName
-		//initialDirs := []string{TestHomeDirPrefix + dirName, WorkingDirPrefix + dirName}
-		homeDirFunc := func() (string, error) { return TestHomeDirPrefix + dirName, nil }
-		//fs := filesys.NewInMemFS(initialDirs, nil, WorkingDirPrefix+dirName)
-		fs, err = fs.WithWorkingDir(WorkingDirPrefix)
-		if err != nil {
-			return nil, err
-		}
-		newEnv = Load(ctx, homeDirFunc, fs, doltdb.InMemDoltDB+dirName, "test")
-		//newEnv.InitRepo(context.Background(), types.Format_Default, name, email, "main")
-	} else {
-		newEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
-	}
-	if newEnv.Valid() {
-		mrEnv.AddEnv(dbName, newEnv)
-	}
 
 	// TODO: need to know if current directory is a database
 	// If there are other directories in the directory, try to load them as additional databases
