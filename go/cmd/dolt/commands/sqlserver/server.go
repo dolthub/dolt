@@ -17,7 +17,6 @@ package sqlserver
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -35,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
