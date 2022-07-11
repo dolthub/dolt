@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var ErrActiveServerLock = errors.NewKind("database locked by another sql-server; either clone the database to run a second server, or delete the '%s' if no other sql-servers are active")
@@ -235,16 +234,20 @@ func MultiEnvForDirectory(
 	var newEnv *DoltEnv
 	if _, ok := fs.(*filesys.InMemFS); ok {
 		// TODO: this is literally testing code
-		dbName = "dolt"
+		dbName = "dolt" // TODO: how and where does this happen?????????????????
 		const name = "billy bob"
 		const email = "bigbillieb@fake.horse"
 		TestHomeDirPrefix := "/user/dolt/"
-		WorkingDirPrefix := "/user/dolt/datasets/"
-		initialDirs := []string{TestHomeDirPrefix + dirName, WorkingDirPrefix + dirName}
+		WorkingDirPrefix := "/user/dolt/datasets/" + dirName
+		//initialDirs := []string{TestHomeDirPrefix + dirName, WorkingDirPrefix + dirName}
 		homeDirFunc := func() (string, error) { return TestHomeDirPrefix + dirName, nil }
-		fs := filesys.NewInMemFS(initialDirs, nil, WorkingDirPrefix+dirName)
+		//fs := filesys.NewInMemFS(initialDirs, nil, WorkingDirPrefix+dirName)
+		fs, err = fs.WithWorkingDir(WorkingDirPrefix)
+		if err != nil {
+			return nil, err
+		}
 		newEnv = Load(ctx, homeDirFunc, fs, doltdb.InMemDoltDB+dirName, "test")
-		newEnv.InitRepo(context.Background(), types.Format_Default, name, email, "main")
+		//newEnv.InitRepo(context.Background(), types.Format_Default, name, email, "main")
 	} else {
 		newEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
 	}
