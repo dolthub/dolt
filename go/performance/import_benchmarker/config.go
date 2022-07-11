@@ -161,7 +161,7 @@ func RunBenchmarkTests(config *ImportBenchmarkConfig, tests []*ImportBenchmarkTe
 	results := make([]result, 0)
 
 	for i, test := range tests {
-		benchmarkFunc := BenchmarkDoltImport(test)
+		benchmarkFunc := SetupDoltImportBenchmark(test)
 		br := testing.Benchmark(benchmarkFunc)
 		res := result{
 			name:             config.Jobs[i].Name,
@@ -173,6 +173,7 @@ func RunBenchmarkTests(config *ImportBenchmarkConfig, tests []*ImportBenchmarkTe
 			doltVersion:      test.doltVersion,
 		}
 		results = append(results, res)
+		RemoveTempDoltDataDir(filesys.LocalFS, GetWorkingDir()) // remove the repo each time
 	}
 
 	return results

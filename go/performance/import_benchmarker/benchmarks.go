@@ -23,21 +23,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
 )
 
-type doltCommandFunc func(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
-
-// BenchmarkDoltImport returns a function that runs benchmarks for importing
+// SetupDoltImportBenchmark returns a function that runs benchmarks for importing
 // a test dataset into Dolt
-func BenchmarkDoltImport(importTest *ImportBenchmarkTest) func(b *testing.B) {
+func SetupDoltImportBenchmark(importTest *ImportBenchmarkTest) func(b *testing.B) {
 	return func(b *testing.B) {
 		doltImport(b, importTest)
 	}
@@ -47,58 +41,45 @@ func doltImport(b *testing.B, importTest *ImportBenchmarkTest) {
 	oldStdin := os.Stdin
 	defer func() { os.Stdin = oldStdin }()
 
-	commandFunc, commandStr, args, dEnv := getBenchmarkingTools(importTest)
+	commandStr, args := getBenchmarkingTools(importTest)
 
-	runBenchmark(b, commandFunc, commandStr, args, dEnv)
+	runBenchmark(b, commandStr, args)
 }
 
-func runBenchmark(b *testing.B, commandFunc doltCommandFunc, commandStr string, args []string, dEnv *env.DoltEnv) {
+func runBenchmark(b *testing.B, commandStr string, args []string) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		status := commandFunc(context.Background(), commandStr, args, dEnv)
-		if status != 0 {
-			log.Fatalf("running benchmark failed with exit code... %d \n", status)
+		cmd := execCommand(context.Background(), commandStr, args...)
+		cmd.Dir = GetWorkingDir()
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err := cmd.Run()
+		if err != nil {
+			log.Fatalf("error running benchmark: %v", err)
 		}
 	}
 }
 
-func getBenchmarkingTools(importTest *ImportBenchmarkTest) (commandFunc doltCommandFunc, commandStr string, args []string, dEnv *env.DoltEnv) {
+// getBenchmarkingTools setups up the relevant environment for testing.
+func getBenchmarkingTools(importTest *ImportBenchmarkTest) (commandStr string, args []string) {
+	initializeDoltRepoAtWorkingDir(filesys.LocalFS, GetWorkingDir(), importTest.doltExecPath)
+
 	switch importTest.fileFormat {
 	case csvExt:
-		dEnv = getImportEnv(filesys.LocalFS, GetWorkingDir(), importTest.doltExecPath)
-		args = []string{"-c", "-f", testTable, importTest.filePath}
-		commandStr = "dolt table import"
-		commandFunc = tblcmds.ImportCmd{}.Exec
+		args = []string{"table", "import", "-c", "-f", testTable, importTest.filePath}
 	case sqlExt:
-		dEnv = getImportEnv(filesys.LocalFS, GetWorkingDir(), importTest.doltExecPath)
-		args = []string{}
-		commandStr = "dolt sql"
-		commandFunc = commands.SqlCmd{}.Exec
-
 		stdin := getStdinForSQLBenchmark(filesys.LocalFS, importTest.filePath)
 		os.Stdin = stdin
+
+		args = []string{"sql"}
 	case jsonExt:
 		pathToSchemaFile := filepath.Join(GetWorkingDir(), fmt.Sprintf("testSchema%s", importTest.fileFormat))
-		dEnv = getImportEnv(filesys.LocalFS, GetWorkingDir(), importTest.doltExecPath)
-		args = []string{"-c", "-f", "-s", pathToSchemaFile, testTable, importTest.filePath}
-		commandStr = "dolt table import"
-		commandFunc = tblcmds.ImportCmd{}.Exec
+		args = []string{"table", "import", "-c", "-f", "-s", pathToSchemaFile, testTable, importTest.filePath}
 	default:
 		log.Fatalf("cannot import file, unsupported file format %s \n", importTest.fileFormat)
 	}
 
-	return commandFunc, commandStr, args, dEnv
-}
-
-func getImportEnv(fs filesys.Filesys, workingDir, doltExec string) *env.DoltEnv {
-	initializeDoltRepoAtWorkingDir(fs, workingDir, doltExec)
-
-	err := os.Chdir(workingDir)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	return env.Load(context.Background(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
+	return importTest.doltExecPath, args
 }
 
 func getStdinForSQLBenchmark(fs filesys.Filesys, pathToImportFile string) *os.File {
@@ -134,12 +115,12 @@ func initializeDoltRepoAtWorkingDir(fs filesys.Filesys, workingDir, doltExecPath
 
 	err := sysbench_runner.DoltVersion(context.Background(), doltExecPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(err.Error())
 	}
 
 	err = sysbench_runner.UpdateDoltConfig(context.Background(), doltExecPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(err.Error())
 	}
 
 	init := execCommand(context.Background(), doltExecPath, "init")
@@ -147,7 +128,7 @@ func initializeDoltRepoAtWorkingDir(fs filesys.Filesys, workingDir, doltExecPath
 	init.Dir = workingDir
 	err = init.Run()
 	if err != nil {
-		panic(err.Error()) // Fix
+		log.Fatal(err.Error())
 	}
 }
 
@@ -182,9 +163,9 @@ func getAmountOfGarbageGenerated(doltExec string) float64 {
 	}
 
 	// 2. Execute Garbage Collection
-	init := execCommand(context.Background(), doltExec, "gc")
-	init.Dir = GetWorkingDir()
-	err = init.Run()
+	gc := execCommand(context.Background(), doltExec, "gc")
+	gc.Dir = GetWorkingDir()
+	err = gc.Run()
 	if err != nil {
 		log.Fatal(err.Error())
 	}

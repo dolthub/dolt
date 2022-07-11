@@ -117,21 +117,11 @@ func getResultsRow(res result, cols []*SeedColumn) []string {
 	row[5] = fmt.Sprintf("%d", res.br.N)
 	// set time
 	row[6] = res.br.T.String()
-	// set bytes
-	row[7] = fmt.Sprintf("%v", res.br.Bytes)
-	// set mem_allocs
-	row[8] = fmt.Sprintf("%v", res.br.MemAllocs)
-	// set mem_bytes
-	row[9] = fmt.Sprintf("%v", res.br.MemBytes)
-	// set alloced_bytes_per_op
-	row[10] = fmt.Sprintf("%v", res.br.AllocedBytesPerOp())
-	//set allocs_per_op
-	row[11] = fmt.Sprintf("%v", res.br.AllocsPerOp())
 	// set garbage_generated
-	row[12] = fmt.Sprintf("%v", res.garbageGenerated)
+	row[7] = fmt.Sprintf("%v", res.garbageGenerated)
 	// set datetime
 	t := time.Now()
-	row[13] = fmt.Sprintf("%04d-%02d-%02d %02d:%02d", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute())
+	row[8] = fmt.Sprintf("%04d-%02d-%02d %02d:%02d", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute())
 	return row
 }
 
@@ -144,11 +134,6 @@ func genResultsCols() []*SeedColumn {
 		NewSeedColumn("columns", false, types.StringKind, supplied),
 		NewSeedColumn("iterations", false, types.StringKind, supplied),
 		NewSeedColumn("time", false, types.TimestampKind, supplied),
-		NewSeedColumn("bytes", false, types.IntKind, supplied),
-		NewSeedColumn("mem_allocs", false, types.IntKind, supplied),
-		NewSeedColumn("mem_bytes", false, types.IntKind, supplied),
-		NewSeedColumn("alloced_bytes_per_op", false, types.StringKind, supplied),
-		NewSeedColumn("allocs_per_op", false, types.StringKind, supplied),
 		NewSeedColumn("garbage_generated(MB)", false, types.StringKind, supplied),
 		NewSeedColumn("date_time", false, types.StringKind, supplied),
 	}
