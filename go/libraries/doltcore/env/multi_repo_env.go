@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/types"
 	"os"
 	"path/filepath"
 	"strings"
@@ -233,8 +234,17 @@ func MultiEnvForDirectory(
 	dbName := dirToDBName(dirName)
 	var newEnv *DoltEnv
 	if _, ok := fs.(*filesys.InMemFS); ok {
+		// TODO: this is literally testing code
 		dbName = "dolt"
-		newEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.InMemDoltDB+dirName, version)
+		const name = "billy bob"
+		const email = "bigbillieb@fake.horse"
+		TestHomeDirPrefix := "/user/dolt/"
+		WorkingDirPrefix := "/user/dolt/datasets/"
+		initialDirs := []string{TestHomeDirPrefix + dirName, WorkingDirPrefix + dirName}
+		homeDirFunc := func() (string, error) { return TestHomeDirPrefix + dirName, nil }
+		fs := filesys.NewInMemFS(initialDirs, nil, WorkingDirPrefix+dirName)
+		newEnv = Load(ctx, homeDirFunc, fs, doltdb.InMemDoltDB+dirName, "test")
+		newEnv.InitRepo(context.Background(), types.Format_Default, name, email, "main")
 	} else {
 		newEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
 	}
