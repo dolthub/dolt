@@ -28,13 +28,13 @@ import (
 )
 
 type result struct {
-	name             string
-	format           string
-	rows             int
-	columns          int
-	garbageGenerated float64
-	br               testing.BenchmarkResult
-	doltVersion      string
+	name        string
+	format      string
+	rows        int
+	columns     int
+	sizeOnDisk  float64
+	br          testing.BenchmarkResult
+	doltVersion string
 }
 
 // RSImpl is a Dataset containing results of benchmarking
@@ -118,10 +118,12 @@ func getResultsRow(res result, cols []*SeedColumn) []string {
 	// set time
 	row[6] = res.br.T.String()
 	// set garbage_generated
-	row[7] = fmt.Sprintf("%v", res.garbageGenerated)
+	row[7] = fmt.Sprintf("%v", res.sizeOnDisk)
+	// set rows_per_second
+	row[8] = fmt.Sprintf("%.2f", float64(res.rows)/res.br.T.Seconds())
 	// set datetime
 	t := time.Now()
-	row[8] = fmt.Sprintf("%04d-%02d-%02d %02d:%02d", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute())
+	row[9] = fmt.Sprintf("%04d-%02d-%02d %02d:%02d", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute())
 	return row
 }
 
@@ -134,7 +136,8 @@ func genResultsCols() []*SeedColumn {
 		NewSeedColumn("columns", false, types.StringKind, supplied),
 		NewSeedColumn("iterations", false, types.StringKind, supplied),
 		NewSeedColumn("time", false, types.TimestampKind, supplied),
-		NewSeedColumn("garbage_generated(MB)", false, types.StringKind, supplied),
+		NewSeedColumn("size_on_disk(MB)", false, types.StringKind, supplied),
+		NewSeedColumn("rows_per_second", false, types.StringKind, supplied),
 		NewSeedColumn("date_time", false, types.StringKind, supplied),
 	}
 }

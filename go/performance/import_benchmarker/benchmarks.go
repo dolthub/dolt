@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -43,14 +44,14 @@ func doltImport(b *testing.B, importTest *ImportBenchmarkTest) {
 
 	commandStr, args := getBenchmarkingTools(importTest)
 
-	runBenchmark(b, commandStr, args)
+	runBenchmark(b, commandStr, args, importTest)
 }
 
-func runBenchmark(b *testing.B, commandStr string, args []string) {
+func runBenchmark(b *testing.B, commandStr string, args []string, test *ImportBenchmarkTest) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		cmd := execCommand(context.Background(), commandStr, args...)
-		cmd.Dir = GetWorkingDir()
+		cmd.Dir = test.workingDir
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		err := cmd.Run()
@@ -62,7 +63,7 @@ func runBenchmark(b *testing.B, commandStr string, args []string) {
 
 // getBenchmarkingTools setups up the relevant environment for testing.
 func getBenchmarkingTools(importTest *ImportBenchmarkTest) (commandStr string, args []string) {
-	initializeDoltRepoAtWorkingDir(filesys.LocalFS, GetWorkingDir(), importTest.doltExecPath)
+	initializeDoltRepoAtWorkingDir(filesys.LocalFS, importTest.workingDir, importTest.doltExecPath)
 
 	switch importTest.fileFormat {
 	case csvExt:
@@ -73,7 +74,7 @@ func getBenchmarkingTools(importTest *ImportBenchmarkTest) (commandStr string, a
 
 		args = []string{"sql"}
 	case jsonExt:
-		pathToSchemaFile := filepath.Join(GetWorkingDir(), fmt.Sprintf("testSchema%s", importTest.fileFormat))
+		pathToSchemaFile := filepath.Join(importTest.workingDir, fmt.Sprintf("testSchema%s", importTest.fileFormat))
 		args = []string{"table", "import", "-c", "-f", "-s", pathToSchemaFile, testTable, importTest.filePath}
 	default:
 		log.Fatalf("cannot import file, unsupported file format %s \n", importTest.fileFormat)
@@ -154,29 +155,25 @@ func execCommand(ctx context.Context, name string, arg ...string) *exec.Cmd {
 	return e
 }
 
-// getAmountOfGarbageGenerated computes the amount of garbage created by an import operation.
-func getAmountOfGarbageGenerated(doltExec string) float64 {
-	// 1. Get the size of the current .dolt directory
-	originalSize, err := dirSizeMB(GetWorkingDir())
+// getSizeOnDisk returns the size of the .dolt repo. This is useful for understanding how a repo grows in size in
+// proportion to the number of rows.
+func getSizeOnDisk(fs filesys.Filesys, workingDir string) float64 {
+	doltDir := filepath.Join(workingDir, dbfactory.DoltDir)
+	exists, _ := fs.Exists(doltDir)
+
+	if !exists {
+		return 0
+	}
+
+	size, err := dirSizeMB(doltDir)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	// 2. Execute Garbage Collection
-	gc := execCommand(context.Background(), doltExec, "gc")
-	gc.Dir = GetWorkingDir()
-	gc.Stdout = os.Stdout
-	gc.Stderr = os.Stderr
-	err = gc.Run()
-	if err != nil {
-		panic(err.Error())
-	}
+	roundedStr := fmt.Sprintf("%.2f", size)
+	rounded, _ := strconv.ParseFloat(roundedStr, 2)
 
-	// 3. Get the new size of the current .dolt directory
-	newSize, err := dirSizeMB(GetWorkingDir())
-
-	// 4. Return result
-	return originalSize - newSize
+	return rounded
 }
 
 // cc: https://stackoverflow.com/questions/32482673/how-to-get-directory-total-size

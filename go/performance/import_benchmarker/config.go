@@ -110,6 +110,9 @@ type ImportBenchmarkTest struct {
 
 	// doltExecPath is a path towards a Dolt executable. This is useful for executing Dolt against a particular version.
 	doltExecPath string
+
+	// workindDir is the path where the benchmark is being run
+	workingDir string
 }
 
 // NewImportBenchmarkTests creates the test conditions for an import benchmark to execute. In the case that the config
@@ -120,7 +123,7 @@ func NewImportBenchmarkTests(config *ImportBenchmarkConfig) []*ImportBenchmarkTe
 	for i, job := range config.Jobs {
 		// Preset csv path
 		if job.Filepath != "" {
-			ret[i] = &ImportBenchmarkTest{fileFormat: job.Format, filePath: job.Filepath, doltVersion: job.DoltVersion, doltExecPath: job.DoltExecPath}
+			ret[i] = &ImportBenchmarkTest{fileFormat: job.Format, filePath: job.Filepath, doltVersion: job.DoltVersion, doltExecPath: job.DoltExecPath, workingDir: GetWorkingDir()}
 		} else {
 			ret[i] = getGeneratedBenchmarkTest(job)
 		}
@@ -132,18 +135,19 @@ func NewImportBenchmarkTests(config *ImportBenchmarkConfig) []*ImportBenchmarkTe
 // getGeneratedBenchmarkTest is used to create a generated test case with a randomly generated csv file.
 func getGeneratedBenchmarkTest(job *ImportBenchmarkJob) *ImportBenchmarkTest {
 	sch := NewSeedSchema(job.NumRows, genSampleCols(), job.Format)
-	testFile := generateTestFile(filesys.LocalFS, sch)
+	testFile := generateTestFile(filesys.LocalFS, sch, GetWorkingDir())
 
 	return &ImportBenchmarkTest{
 		fileFormat:   sch.FileFormatExt,
 		filePath:     testFile,
 		doltVersion:  job.DoltVersion,
 		doltExecPath: job.DoltExecPath,
+		workingDir:   GetWorkingDir(),
 	}
 }
 
-func generateTestFile(fs filesys.Filesys, sch *SeedSchema) string {
-	pathToImportFile := filepath.Join(GetWorkingDir(), fmt.Sprintf("testData.%s", sch.FileFormatExt))
+func generateTestFile(fs filesys.Filesys, sch *SeedSchema, wd string) string {
+	pathToImportFile := filepath.Join(wd, fmt.Sprintf("testData.%s", sch.FileFormatExt))
 	wc, err := fs.OpenForWrite(pathToImportFile, os.ModePerm)
 	if err != nil {
 		panic(err.Error())
@@ -164,16 +168,16 @@ func RunBenchmarkTests(config *ImportBenchmarkConfig, tests []*ImportBenchmarkTe
 		benchmarkFunc := SetupDoltImportBenchmark(test)
 		br := testing.Benchmark(benchmarkFunc)
 		res := result{
-			name:             config.Jobs[i].Name,
-			format:           config.Jobs[i].Format,
-			rows:             config.Jobs[i].NumRows,
-			columns:          len(genSampleCols()),
-			garbageGenerated: getAmountOfGarbageGenerated(test.doltExecPath),
-			br:               br,
-			doltVersion:      test.doltVersion,
+			name:        config.Jobs[i].Name,
+			format:      config.Jobs[i].Format,
+			rows:        config.Jobs[i].NumRows,
+			columns:     len(genSampleCols()),
+			sizeOnDisk:  getSizeOnDisk(filesys.LocalFS, test.workingDir),
+			br:          br,
+			doltVersion: test.doltVersion,
 		}
 		results = append(results, res)
-		RemoveTempDoltDataDir(filesys.LocalFS, GetWorkingDir()) // remove the repo each time
+		RemoveTempDoltDataDir(filesys.LocalFS, test.workingDir) // remove the repo each time
 	}
 
 	return results
