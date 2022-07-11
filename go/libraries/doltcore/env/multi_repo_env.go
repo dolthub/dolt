@@ -261,7 +261,6 @@ func MultiEnvForDirectory(
 		mrEnv.AddEnv(dbName, dEnv)
 	}
 
-	// TODO: need to know if current directory is a database
 	// If there are other directories in the directory, try to load them as additional databases
 	fs.Iter(".", false, func(path string, size int64, isDir bool) (stop bool) {
 		if !isDir {

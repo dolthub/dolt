@@ -707,6 +707,7 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 	_, list := apr.GetValue(listSavedFlag)
 	_, execute := apr.GetValue(executeFlag)
 	_, dataDir := apr.GetValue(DataDirFlag)
+	_, multiDbDir := apr.GetValue(MultiDBDirFlag)
 
 	if len(apr.Args) > 0 && !query {
 		return errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build()
@@ -721,7 +722,7 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --message|-m").Build()
 		} else if save {
 			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --save|-s").Build()
-		} else if dataDir {
+		} else if dataDir || multiDbDir {
 			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --data-dir").Build()
 		}
 	}
@@ -735,12 +736,12 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 			return errhand.BuildDError("Invalid Argument: --list-saved is not compatible with --message|-m").Build()
 		} else if save {
 			return errhand.BuildDError("Invalid Argument: --list-saved is not compatible with --save|-s").Build()
-		} else if dataDir {
+		} else if dataDir || multiDbDir {
 			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --data-dir").Build()
 		}
 	}
 
-	if save && dataDir {
+	if save && dataDir || multiDbDir {
 		return errhand.BuildDError("Invalid Argument: --data-dir queries cannot be saved").Build()
 	}
 
