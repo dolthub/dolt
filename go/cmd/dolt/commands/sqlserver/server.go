@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -34,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -100,22 +98,9 @@ func Serve(
 		}
 
 		// TODO: this should be the global config, probably?
-		mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version)
+		mrEnv, err = env.MultiEnvForDirectory(ctx, fs, dEnv)
 		if err != nil {
 			return err, nil
-		}
-
-		if dEnv.Valid() {
-			if _, ok := fs.(*filesys.InMemFS); ok {
-				mrEnv.AddEnv("dolt", dEnv)
-			} else {
-				path, err := dEnv.FS.Abs(".")
-				if err != nil {
-					return nil, err
-				}
-				dbName := filepath.Base(path)
-				mrEnv.AddEnv(dbName, dEnv)
-			}
 		}
 	} else {
 		if len(serverConfig.DataDir()) > 0 {

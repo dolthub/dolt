@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -216,14 +217,48 @@ func getRepoRootDir(path, pathSeparator string) string {
 // MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given
 func MultiEnvForDirectory(
 	ctx context.Context,
-	config config.ReadWriteConfig,
 	fs filesys.Filesys,
-	version string,
+	dEnv *DoltEnv,
 ) (*MultiRepoEnv, error) {
 	mrEnv := &MultiRepoEnv{
 		envs: make([]NamedEnv, 0),
 		fs:   fs,
-		cfg:  config,
+		cfg:  dEnv.Config.WriteableConfig(),
+	}
+
+	if dEnv.Valid() {
+		dbName := "dolt"
+		if dEnv.RSLoadErr != nil {
+			return nil, fmt.Errorf("error loading environment: %s", dEnv.RSLoadErr.Error())
+		} else if dEnv.DBLoadError != nil {
+			return nil, fmt.Errorf("error loading environment: %s", dEnv.DBLoadError.Error())
+		} else if dEnv.CfgLoadErr != nil {
+			return nil, fmt.Errorf("error loading environment: %s", dEnv.CfgLoadErr.Error())
+		}
+		u, err := earl.Parse(dEnv.urlStr)
+		if err != nil {
+			return nil, err
+		}
+
+		if u.Scheme == dbfactory.FileScheme {
+			path, err := url.PathUnescape(u.Path)
+			if err != nil {
+				return nil, err
+			}
+
+			path, err = dEnv.FS.Abs(path)
+			if err != nil {
+				return nil, err
+			}
+
+			dirName := getRepoRootDir(path, string(os.PathSeparator))
+
+			if dirName != "" {
+				dbName = dirToDBName(dirName)
+			}
+		}
+
+		mrEnv.AddEnv(dbName, dEnv)
 	}
 
 	// TODO: need to know if current directory is a database
@@ -240,7 +275,7 @@ func MultiEnvForDirectory(
 			return false
 		}
 
-		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, version)
+		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, dEnv.Version)
 		if newEnv.Valid() {
 			mrEnv.AddEnv(dirToDBName(dir), newEnv)
 		}

@@ -111,7 +111,7 @@ func setupBenchmark(t *testing.B, dEnv *env.DoltEnv) (*sql.Context, *engine.SqlE
 		Autocommit:   true,
 	}
 
-	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version)
+	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.FS, dEnv)
 	require.NoError(t, err)
 
 	eng, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatNull, config)

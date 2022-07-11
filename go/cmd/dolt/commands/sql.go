@@ -50,7 +50,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 )
@@ -442,22 +441,9 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, fs, dEnv)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
-	}
-
-	if dEnv.Valid() {
-		if _, ok := fs.(*filesys.InMemFS); ok {
-			mrEnv.AddEnv("dolt", dEnv)
-		} else {
-			path, err := dEnv.FS.Abs(".")
-			if err != nil {
-				return nil, errhand.VerboseErrorFromError(err)
-			}
-			dbName := filepath.Base(path)
-			mrEnv.AddEnv(dbName, dEnv)
-		}
 	}
 
 	return mrEnv, nil
