@@ -82,6 +82,12 @@ func NewProllyRowConverter(inSch, outSch schema.Schema, warnFn rowconv.WarnFunct
 		valProj[i] = outSch.GetAllCols().TagToIdx[t]
 	}
 
+	if len(valProj) != 0 && schema.IsKeyless(inSch) {
+		// Adjust for cardinality
+		valProj = append(val.OrdinalMapping{-1}, valProj...)
+		nonPkTargetTypes = append([]sql.Type{nil}, nonPkTargetTypes...)
+	}
+
 	kd, vd := shim.MapDescriptorsFromSchema(inSch)
 	return ProllyRowConverter{
 		inSchema:         inSch,
