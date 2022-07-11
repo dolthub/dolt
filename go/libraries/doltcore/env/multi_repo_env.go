@@ -326,9 +326,9 @@ func MultiEnvForDirectory(
 	return mrEnv, nil
 }
 
-// LoadMultiEnv takes a variable list of EnvNameAndPath objects loads each of the environments, and returns a new
+// MultiEnvForPaths takes a variable list of EnvNameAndPath objects loads each of the environments, and returns a new
 // MultiRepoEnv
-func LoadMultiEnv(
+func MultiEnvForPaths(
 	ctx context.Context,
 	hdp HomeDirProvider,
 	cfg config.ReadWriteConfig,
@@ -431,7 +431,7 @@ func LoadMultiEnvFromDir(
 		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	return LoadMultiEnv(ctx, hdp, cfg, multiDbDirFs, version, envNamesAndPaths...)
+	return MultiEnvForPaths(ctx, hdp, cfg, multiDbDirFs, version, envNamesAndPaths...)
 }
 
 func dirToDBName(dirName string) string {

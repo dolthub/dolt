@@ -183,7 +183,7 @@ func TestLoadMultiEnv(t *testing.T) {
 		envNamesAndPaths[i] = EnvNameAndPath{name, filepath.Join(rootPath, name)}
 	}
 
-	mrEnv, err := LoadMultiEnv(context.Background(), hdp, config.NewEmptyMapConfig(), filesys.LocalFS, "test", envNamesAndPaths...)
+	mrEnv, err := MultiEnvForPaths(context.Background(), hdp, config.NewEmptyMapConfig(), filesys.LocalFS, "test", envNamesAndPaths...)
 	require.NoError(t, err)
 
 	for _, name := range names {

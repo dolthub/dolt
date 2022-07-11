@@ -117,7 +117,7 @@ func Serve(
 		}
 
 		// TODO: this should be the global config, probably?
-		mrEnv, err = env.LoadMultiEnv(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), fs, version, dbNamesAndPaths...)
+		mrEnv, err = env.MultiEnvForPaths(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), fs, version, dbNamesAndPaths...)
 
 		if err != nil {
 			return err, nil
