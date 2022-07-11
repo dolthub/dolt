@@ -128,7 +128,7 @@ func initializeDoltRepoAtWorkingDir(fs filesys.Filesys, workingDir, doltExecPath
 	init.Dir = workingDir
 	err = init.Run()
 	if err != nil {
-		log.Fatal(err.Error())
+		panic(err.Error())
 	}
 }
 
@@ -165,9 +165,11 @@ func getAmountOfGarbageGenerated(doltExec string) float64 {
 	// 2. Execute Garbage Collection
 	gc := execCommand(context.Background(), doltExec, "gc")
 	gc.Dir = GetWorkingDir()
+	gc.Stdout = os.Stdout
+	gc.Stderr = os.Stderr
 	err = gc.Run()
 	if err != nil {
-		log.Fatal(err.Error())
+		panic(err.Error())
 	}
 
 	// 3. Get the new size of the current .dolt directory
