@@ -331,6 +331,7 @@ func createBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 			newBranch = apr.Arg(0)
 			startPt = apr.Arg(1)
 		} else {
+			// if track option is defined with no value, the branch name is taken as track value
 			newBranch = trackVal
 			startPt = apr.Arg(0)
 		}
