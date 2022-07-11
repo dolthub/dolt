@@ -232,6 +232,9 @@ func MultiEnvForDirectory(
 	}
 	dirName := getRepoRootDir(path, string(os.PathSeparator))
 	dbName := dirToDBName(dirName)
+	if dirName == "" {
+		dbName = "dolt"
+	}
 	newEnv := Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
 	if newEnv.Valid() {
 		mrEnv.AddEnv(dbName, newEnv)
