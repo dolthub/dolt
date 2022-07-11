@@ -295,7 +295,6 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(dataDir)
 	}
 
-	// TODO: check for existence of this directory in parent and child here?
 	var cfgDirPath string
 	dataDir := serverConfig.DataDir()
 	cfgDir, ok := apr.GetValue(commands.CfgDirFlag)
