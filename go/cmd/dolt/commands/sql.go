@@ -17,8 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"gopkg.in/src-d/go-errors.v1"
-
 	"io"
 	"os"
 	"os/signal"
@@ -38,6 +36,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
