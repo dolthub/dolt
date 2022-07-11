@@ -96,7 +96,7 @@ func initRepoWithRelativePath(t *testing.T, envPath string, hdp HomeDirProvider)
 	return Load(context.Background(), hdp, fs, urlStr, "test")
 }
 
-func TestDoltEnvAsMultiEnv(t *testing.T) {
+func TestMultiEnvForDirectory(t *testing.T) {
 	rootPath, err := test.ChangeToTestDir("TestDoltEnvAsMultiEnv")
 	require.NoError(t, err)
 
@@ -104,7 +104,7 @@ func TestDoltEnvAsMultiEnv(t *testing.T) {
 	envPath := filepath.Join(rootPath, " test---name _ 123")
 	dEnv := initRepoWithRelativePath(t, envPath, hdp)
 
-	mrEnv, err := DoltEnvAsMultiEnv(context.Background(), dEnv, ".")
+	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version)
 	require.NoError(t, err)
 	assert.Len(t, mrEnv.envs, 1)
 
@@ -114,7 +114,7 @@ func TestDoltEnvAsMultiEnv(t *testing.T) {
 	}
 }
 
-func TestDoltEnvAsMultiEnvWithMultipleRepos(t *testing.T) {
+func TestMultiEnvForDirectoryWithMultipleRepos(t *testing.T) {
 	rootPath, err := test.ChangeToTestDir("TestDoltEnvAsMultiEnvWithMultipleRepos")
 	require.NoError(t, err)
 
@@ -124,7 +124,7 @@ func TestDoltEnvAsMultiEnvWithMultipleRepos(t *testing.T) {
 	subEnv1 := initRepoWithRelativePath(t, filepath.Join(envPath, "abc"), hdp)
 	subEnv2 := initRepoWithRelativePath(t, filepath.Join(envPath, "def"), hdp)
 
-	mrEnv, err := DoltEnvAsMultiEnv(context.Background(), dEnv, ".")
+	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version)
 	require.NoError(t, err)
 	assert.Len(t, mrEnv.envs, 3)
 

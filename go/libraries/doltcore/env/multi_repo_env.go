@@ -17,7 +17,6 @@ package env
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -212,80 +211,6 @@ func getRepoRootDir(path, pathSeparator string) string {
 	}
 
 	return name
-}
-
-// DoltEnvAsMultiEnv returns a MultiRepoEnv which wraps the DoltEnv and names it based on the directory DoltEnv refers
-// to. If the env given doesn't contain a valid dolt database, creates a MultiEnvRepo from any databases found in the
-// directory at the root of the filesystem and returns that.
-func DoltEnvAsMultiEnv(ctx context.Context, dEnv *DoltEnv, dataDir string) (*MultiRepoEnv, error) {
-	if !dEnv.Valid() {
-		cfg := dEnv.Config.WriteableConfig()
-		return MultiEnvForDirectory(ctx, cfg, dEnv.FS, dEnv.Version)
-	}
-
-	dbName := "dolt"
-
-	if dEnv.RSLoadErr != nil {
-		return nil, fmt.Errorf("error loading environment: %s", dEnv.RSLoadErr.Error())
-	} else if dEnv.DBLoadError != nil {
-		return nil, fmt.Errorf("error loading environment: %s", dEnv.DBLoadError.Error())
-	} else if dEnv.CfgLoadErr != nil {
-		return nil, fmt.Errorf("error loading environment: %s", dEnv.CfgLoadErr.Error())
-	}
-
-	u, err := earl.Parse(dEnv.urlStr)
-
-	if err == nil {
-		if u.Scheme == dbfactory.FileScheme {
-			path, err := url.PathUnescape(u.Path)
-
-			if err == nil {
-				path, err = dEnv.FS.Abs(path)
-
-				if err == nil {
-					dirName := getRepoRootDir(path, string(os.PathSeparator))
-
-					if dirName != "" {
-						dbName = dirToDBName(dirName)
-					}
-				}
-			}
-		}
-	}
-
-	// TODO: revisit this, callers should specify which config they want to use in a multi-DB environment
-	localCfg := dEnv.Config.WriteableConfig()
-
-	mrEnv := &MultiRepoEnv{
-		envs: make([]NamedEnv, 0),
-		fs:   dEnv.FS,
-		cfg:  localCfg,
-	}
-
-	mrEnv.AddEnv(dbName, dEnv)
-
-	// If there are other directories in the same root, try to load them as additional databases
-	dEnv.FS.Iter(dataDir, false, func(path string, size int64, isDir bool) (stop bool) {
-		if !isDir {
-			return false
-		}
-
-		dir := filepath.Base(path)
-
-		newFs, err := dEnv.FS.WithWorkingDir(dir)
-		if err != nil {
-			return false
-		}
-
-		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, dEnv.Version)
-		if newEnv.Valid() {
-			mrEnv.AddEnv(dirToDBName(dir), newEnv)
-		}
-
-		return false
-	})
-
-	return mrEnv, nil
 }
 
 // MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given
