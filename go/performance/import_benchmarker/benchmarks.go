@@ -178,7 +178,7 @@ func getAmountOfGarbageGenerated(doltExec string) float64 {
 	// 1. Get the size of the current .dolt directory
 	originalSize, err := dirSizeMB(GetWorkingDir())
 	if err != nil {
-		panic(err.Error())
+		log.Fatal(err.Error())
 	}
 
 	// 2. Execute Garbage Collection
@@ -186,7 +186,7 @@ func getAmountOfGarbageGenerated(doltExec string) float64 {
 	init.Dir = GetWorkingDir()
 	err = init.Run()
 	if err != nil {
-		panic(err.Error())
+		log.Fatal(err.Error())
 	}
 
 	// 3. Get the new size of the current .dolt directory

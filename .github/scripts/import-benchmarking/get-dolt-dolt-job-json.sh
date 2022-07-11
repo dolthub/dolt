@@ -50,10 +50,12 @@ echo '
               "--region=us-west-2",
               "--results-dir='$timePrefix'",
               "--results-prefix='$actorPrefix'",
-              "--csvFileNames=100k-sorted.csv",
-              "--csvFileNames=100k-random.csv",
-              "--csvFileNames=1m-sorted.csv",
-              "--csvFileNames=1m-random.csv"
+              "--fileNames=100k-sorted.csv",
+              "--fileNames=100k-random.csv",
+              "--fileNames=1m-sorted.csv",
+              "--fileNames=1m-random.csv",
+              "--fileNames=10m-sorted.csv",
+              "--fileNames=10m-random.csv"
             ]
           }
         ],
