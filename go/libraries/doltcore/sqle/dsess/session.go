@@ -57,6 +57,8 @@ const (
 	ReplicateHeadsKey        = "dolt_replicate_heads"
 	ReplicateAllHeadsKey     = "dolt_replicate_all_heads"
 	AsyncReplicationKey      = "dolt_async_replication"
+	AwsCredsFileKey          = "aws_credentials_file"
+	AwsCredsProfileKey       = "aws_credentials_profile"
 	// Transactions merges will stomp if either if the below keys are set
 	TransactionMergeStompKey    = "dolt_transaction_merge_stomp"
 	TransactionMergeStompEnvKey = "DOLT_TRANSACTION_MERGE_STOMP"

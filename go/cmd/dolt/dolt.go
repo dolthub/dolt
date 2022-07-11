@@ -123,6 +123,8 @@ const stdInFlag = "--stdin"
 const stdOutFlag = "--stdout"
 const stdErrFlag = "--stderr"
 const stdOutAndErrFlag = "--out-and-err"
+const ignoreLocksFlag = "--ignore-locks"
+
 const cpuProf = "cpu"
 const memProf = "mem"
 const blockingProf = "blocking"
@@ -138,6 +140,7 @@ func runMain() int {
 	args := os.Args[1:]
 
 	csMetrics := false
+	ignoreLocks := false
 	if len(args) > 0 {
 		var doneDebugFlags bool
 		for !doneDebugFlags && len(args) > 0 {
@@ -274,6 +277,10 @@ func runMain() int {
 				csMetrics = true
 				args = args[1:]
 
+			case ignoreLocksFlag:
+				ignoreLocks = true
+				args = args[1:]
+
 			case featureVersionFlag:
 				if featureVersion, err := strconv.Atoi(args[1]); err == nil {
 					doltdb.DoltFeatureVersion = doltdb.FeatureVersion(featureVersion)
@@ -297,6 +304,7 @@ func runMain() int {
 
 	ctx := context.Background()
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
+	dEnv.IgnoreLocks = ignoreLocks
 
 	root, err := env.GetCurrentUserHomeDir()
 	if err != nil {

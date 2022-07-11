@@ -45,9 +45,10 @@ type EnvNameAndPath struct {
 
 // MultiRepoEnv is a type used to store multiple environments which can be retrieved by name
 type MultiRepoEnv struct {
-	envs []NamedEnv
-	fs   filesys.Filesys
-	cfg  config.ReadWriteConfig
+	envs        []NamedEnv
+	fs          filesys.Filesys
+	cfg         config.ReadWriteConfig
+	ignoreLocks bool
 }
 
 type NamedEnv struct {
@@ -141,6 +142,10 @@ func (mrEnv *MultiRepoEnv) GetWorkingRoots(ctx context.Context) (map[string]*dol
 
 // IsLocked returns true if any env is locked
 func (mrEnv *MultiRepoEnv) IsLocked() (bool, string) {
+	if mrEnv.ignoreLocks {
+		return false, ""
+	}
+
 	for _, e := range mrEnv.envs {
 		if e.env.IsLocked() {
 			return true, e.env.LockFile()
@@ -152,6 +157,10 @@ func (mrEnv *MultiRepoEnv) IsLocked() (bool, string) {
 // Lock locks all child envs. If an error is returned, all
 // child envs will be returned with their initial lock state.
 func (mrEnv *MultiRepoEnv) Lock() error {
+	if mrEnv.ignoreLocks {
+		return nil
+	}
+
 	if ok, f := mrEnv.IsLocked(); ok {
 		return ErrActiveServerLock.New(f)
 	}
@@ -169,6 +178,10 @@ func (mrEnv *MultiRepoEnv) Lock() error {
 
 // Unlock unlocks all child envs.
 func (mrEnv *MultiRepoEnv) Unlock() error {
+	if mrEnv.ignoreLocks {
+		return nil
+	}
+
 	var err, retErr error
 	for _, e := range mrEnv.envs {
 		err = e.env.Unlock()
@@ -221,7 +234,7 @@ func getRepoRootDir(path, pathSeparator string) string {
 func DoltEnvAsMultiEnv(ctx context.Context, dEnv *DoltEnv) (*MultiRepoEnv, error) {
 	if !dEnv.Valid() {
 		cfg := dEnv.Config.WriteableConfig()
-		return MultiEnvForDirectory(ctx, cfg, dEnv.FS, dEnv.Version)
+		return MultiEnvForDirectory(ctx, cfg, dEnv.FS, dEnv.Version, dEnv.IgnoreLocks)
 	}
 
 	dbName := "dolt"
@@ -295,11 +308,13 @@ func MultiEnvForDirectory(
 	config config.ReadWriteConfig,
 	fs filesys.Filesys,
 	version string,
+	ignoreLocks bool,
 ) (*MultiRepoEnv, error) {
 	mrEnv := &MultiRepoEnv{
-		envs: make([]NamedEnv, 0),
-		fs:   fs,
-		cfg:  config,
+		envs:        make([]NamedEnv, 0),
+		fs:          fs,
+		cfg:         config,
+		ignoreLocks: ignoreLocks,
 	}
 
 	// If there are other directories in the directory, try to load them as additional databases
@@ -334,6 +349,7 @@ func LoadMultiEnv(
 	cfg config.ReadWriteConfig,
 	fs filesys.Filesys,
 	version string,
+	ignoreLocks bool,
 	envNamesAndPaths ...EnvNameAndPath,
 ) (*MultiRepoEnv, error) {
 	nameToPath := make(map[string]string)
@@ -352,9 +368,10 @@ func LoadMultiEnv(
 	}
 
 	mrEnv := &MultiRepoEnv{
-		envs: make([]NamedEnv, 0),
-		fs:   fs,
-		cfg:  cfg,
+		envs:        make([]NamedEnv, 0),
+		fs:          fs,
+		cfg:         cfg,
+		ignoreLocks: ignoreLocks,
 	}
 
 	for name, path := range nameToPath {
@@ -419,6 +436,7 @@ func LoadMultiEnvFromDir(
 	cfg config.ReadWriteConfig,
 	fs filesys.Filesys,
 	path, version string,
+	ignoreLocks bool,
 ) (*MultiRepoEnv, error) {
 	envNamesAndPaths, err := DBNamesAndPathsFromDir(fs, path)
 
@@ -431,7 +449,7 @@ func LoadMultiEnvFromDir(
 		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	return LoadMultiEnv(ctx, hdp, cfg, multiDbDirFs, version, envNamesAndPaths...)
+	return LoadMultiEnv(ctx, hdp, cfg, multiDbDirFs, version, ignoreLocks, envNamesAndPaths...)
 }
 
 func dirToDBName(dirName string) string {
