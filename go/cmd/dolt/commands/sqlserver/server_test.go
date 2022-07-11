@@ -187,7 +187,7 @@ func TestServerGoodParams(t *testing.T) {
 
 func TestServerSelect(t *testing.T) {
 	env := dtestutils.CreateEnvWithSeedData(t)
-	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15300)
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15300).withHost("127.0.0.1")
 
 	sc := NewServerController()
 	defer sc.StopServer()
@@ -262,7 +262,7 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 
 func TestServerSetDefaultBranch(t *testing.T) {
 	dEnv := dtestutils.CreateEnvWithSeedData(t)
-	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15302)
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15302).withHost("127.0.0.1")
 
 	sc := NewServerController()
 	defer sc.StopServer()
@@ -412,7 +412,7 @@ func TestReadReplica(t *testing.T) {
 
 	// start server as read replica
 	sc := NewServerController()
-	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15303)
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15303).withHost("127.0.0.1")
 
 	func() {
 		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
