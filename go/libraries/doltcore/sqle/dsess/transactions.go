@@ -380,7 +380,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 				return rollbackErr
 			}
 
-			return ErrRetryTransaction
+			return sql.ErrLockDeadlock.New(ErrRetryTransaction)
 		}
 
 		// If there were conflicts before merge with the persisted working set, whether we allow it to be committed is a
