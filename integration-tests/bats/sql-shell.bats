@@ -118,7 +118,7 @@ teardown() {
 @test "sql-shell: dolt sql shell specify privilege file" {
     # remove existing files
     rm -rf .doltcfg
-    rm -rf privileges.db
+    rm -f privileges.db
 
     # show users, expect just root user
     run dolt sql --privilege-file=privileges.db <<< "select user from mysql.user;"
@@ -142,9 +142,59 @@ teardown() {
     run ls
     [[ "$output" =~ "privileges.db" ]] || false
 
-    # remove mysql.db just in case
+    # remove files
     rm -rf .doltcfg
-    rm -rf privileges.db
+    rm -f privileges.db
+}
+
+@test "sql-shell: dolt sql shell specify data directory, cfg directory, and privilege file" {
+    # remove files
+    rm -rf .doltcfg
+    rm -rf cfgdir
+    rm -rf datadir
+    rm -f privileges.db
+
+    mkdir datadir
+    cd datadir
+
+    mkdir db1
+    cd db1
+    dolt init
+    cd ..
+
+    mkdir db2
+    cd db2
+    dolt init
+    cd ..
+
+    mkdir db3
+    cd db3
+    dolt init
+    cd ..
+
+    mkdir cfgdir
+
+    run dolt sql --data-dir=datadir --doltcfg-dir=cfgdir --privilege-file=privileges.db << "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "db1" ]] || false
+    [[ $output =~ "db2" ]] || false
+    [[ $output =~ "db3" ]] || false
+
+    run dolt sql --data-dir=datadir --doltcfg-dir=cfgdir --privilege-file=privileges.db << "create user new_user"
+    [ $status -eq 0 ]
+
+    run ls
+    [[ $output =~ "privileges.db" ]] || false
+
+    run ls cfgdir
+    ! [[ $output =~ "privileges.db" ]] || false
+
+    # remove files
+    rm -rf .doltcfg
+    rm -rf cfgdir
+    rm -rf datadir
+    rm -f privileges.db
+
 }
 
 @test "sql-shell: bad sql in sql shell should error" {
