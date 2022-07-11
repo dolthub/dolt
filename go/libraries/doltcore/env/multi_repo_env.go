@@ -234,7 +234,7 @@ func MultiEnvForDirectory(
 	var newEnv *DoltEnv
 	if _, ok := fs.(*filesys.InMemFS); ok {
 		dbName = "dolt"
-		newEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.InMemDoltDB, version)
+		newEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.InMemDoltDB+dirName, version)
 	} else {
 		newEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
 	}
