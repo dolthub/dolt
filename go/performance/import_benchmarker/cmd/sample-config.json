@@ -5,7 +5,7 @@
       "NumRows": 1000000,
       "Sorted": true,
       "Format": "csv",
-      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/100k-random.csv",
+      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/100k-sorted.csv",
       "DoltVersion": "HEAD",
       "DoltExec": "/Users/vinairachakonda/go/bin/dolt"
     }
