@@ -172,22 +172,39 @@ teardown() {
     dolt init
     cd ..
 
+    cd ..
+
     mkdir cfgdir
 
-    run dolt sql --data-dir=datadir --doltcfg-dir=cfgdir --privilege-file=privileges.db << "show databases"
+    run dolt sql --data-dir=datadir --doltcfg-dir=cfgdir --privilege-file=privileges.db <<< "show databases"
     [ $status -eq 0 ]
     [[ $output =~ "db1" ]] || false
     [[ $output =~ "db2" ]] || false
     [[ $output =~ "db3" ]] || false
 
-    run dolt sql --data-dir=datadir --doltcfg-dir=cfgdir --privilege-file=privileges.db << "create user new_user"
+    run dolt sql --data-dir=datadir --doltcfg-dir=cfgdir --privilege-file=privileges.db <<< "create user new_user"
     [ $status -eq 0 ]
 
-    run ls
+    run ls -a
+    [[ $output =~ "datadir" ]] || false
+    [[ $output =~ "cfgdir" ]] || false
     [[ $output =~ "privileges.db" ]] || false
+    ! [[ $output =~ ".doltcfg" ]] || false
 
     run ls cfgdir
     ! [[ $output =~ "privileges.db" ]] || false
+
+    run dolt sql --data-dir=datadir --doltcfg-dir=cfgdir --privilege-file=privileges.db <<< "use db1; select user from mysql.user"
+    [ $status -eq 0 ]
+    [[ $output =~ "new_user" ]] || false
+
+    run dolt sql --data-dir=datadir --doltcfg-dir=cfgdir --privilege-file=privileges.db <<< "use db2; select user from mysql.user"
+    [ $status -eq 0 ]
+    [[ $output =~ "new_user" ]] || false
+
+    run dolt sql --data-dir=datadir --doltcfg-dir=cfgdir --privilege-file=privileges.db <<< "use db3; select user from mysql.user"
+    [ $status -eq 0 ]
+    [[ $output =~ "new_user" ]] || false
 
     # remove files
     rm -rf .doltcfg

@@ -233,7 +233,9 @@ func MultiEnvForDirectory(
 	dirName := getRepoRootDir(path, string(os.PathSeparator))
 	dbName := dirToDBName(dirName)
 	newEnv := Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
-	mrEnv.AddEnv(dbName, newEnv)
+	if newEnv.Valid() {
+		mrEnv.AddEnv(dbName, newEnv)
+	}
 
 	// TODO: need to know if current directory is a database
 	// If there are other directories in the directory, try to load them as additional databases
