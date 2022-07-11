@@ -10,9 +10,9 @@ fi
 jobName="$1"
 fromVersion="$2"
 toVersion="$3"
-timePrefix="$4" # TODO: Use this to better configure the results directory
-actorPrefix="$5" # Todo: Use this to better configure the results directory
-issueNumber="$6" # TODO: Use this to pase the results onto the github issue
+timePrefix="$4"
+actorPrefix="$5"
+issueNumber="$6" # TODO: Use this to paste the results onto the github issue
 
 echo '
 {
@@ -48,6 +48,8 @@ echo '
               "--to-version='$toVersion'",
               "--bucket=import-benchmarking-github-actions-results",
               "--region=us-west-2",
+              "--results-dir='$timePrefix'",
+              "--results-prefix='$actorPrefix'",
               "--csvFileNames=100k-sorted.csv",
               "--csvFileNames=100k-random.csv",
               "--csvFileNames=1m-sorted.csv",
