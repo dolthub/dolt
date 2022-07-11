@@ -111,6 +111,7 @@ type prollyConflictRowIter struct {
 	ns      tree.NodeStore
 	ourRows prolly.Map
 	keyless bool
+	ourSch  schema.Schema
 
 	kd                       val.TupleDesc
 	baseVD, oursVD, theirsVD val.TupleDesc
@@ -164,6 +165,7 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 		ns:       ct.tbl.NodeStore(),
 		ourRows:  ourRows,
 		keyless:  keyless,
+		ourSch:   ct.ourSch,
 		kd:       kd,
 		baseVD:   baseVD,
 		oursVD:   oursVD,
@@ -380,14 +382,18 @@ func (itr *prollyConflictRowIter) loadTableMaps(ctx context.Context, baseHash, t
 		if err != nil {
 			return err
 		}
+
+		var idx durable.Index
 		if !ok {
-			return fmt.Errorf("failed to find table %s in base root value", itr.tblName)
+			idx, err = durable.NewEmptyIndex(ctx, itr.vrw, itr.ns, itr.ourSch)
+		} else {
+			idx, err = baseTbl.GetRowData(ctx)
 		}
 
-		idx, err := baseTbl.GetRowData(ctx)
 		if err != nil {
 			return err
 		}
+
 		itr.baseRows = durable.ProllyMapFromIndex(idx)
 		itr.baseHash = baseHash
 	}
@@ -492,9 +498,9 @@ func (cd *prollyConflictDeleter) putPrimaryKeys(ctx *sql.Context, r sql.Row) err
 	o := func() int {
 		if o := 1; r[o] != nil {
 			return o
-		} else if o = 1 + cd.kd.Count(); r[o] != nil {
+		} else if o = 1 + cd.kd.Count() - 2 + cd.vd.Count(); r[o] != nil {
 			return o
-		} else if o = 1 + cd.kd.Count()*2; r[o] != nil {
+		} else if o = 1 + (cd.kd.Count()-2+cd.vd.Count())*2 + 1; r[o] != nil {
 			return o
 		} else {
 			panic("neither base, ours, or theirs had a key")

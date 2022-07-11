@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -25,8 +27,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 var ShowCreateTableAsOfScriptTest = queries.ScriptTest{
@@ -1524,6 +1524,81 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * from t;",
 				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+		},
+	},
+	{
+		Name: "insert two tables with the same name and different schema",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			"CALL DOLT_CHECKOUT('-b', 'other');",
+			"CREATE TABLE t (pk int PRIMARY key, col1 int, extracol int);",
+			"INSERT into t VALUES (1, 1, 1);",
+			"CALL DOLT_COMMIT('-am', 'right');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"CREATE TABLE t (pk int PRIMARY key, col1 int);",
+			"INSERT into t VALUES (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'left');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('other');",
+				ExpectedErrStr: "table with same name added in 2 commits can't be merged",
+			},
+		},
+	},
+	{
+		Name: "insert two tables with the same name and schema that don't conflict",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			"CALL DOLT_CHECKOUT('-b', 'other');",
+			"CREATE TABLE t (pk int PRIMARY key, col1 int);",
+			"INSERT into t VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'right');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"CREATE TABLE t (pk int PRIMARY key, col1 int);",
+			"INSERT into t VALUES (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'left');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "SELECT * from t;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+		},
+	},
+	{
+		Name: "insert two tables with the same name and schema that conflict",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			"CALL DOLT_CHECKOUT('-b', 'other');",
+			"CREATE TABLE t (pk int PRIMARY key, col1 int);",
+			"INSERT into t VALUES (1, -1);",
+			"CALL DOLT_COMMIT('-am', 'right');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"CREATE TABLE t (pk int PRIMARY key, col1 int);",
+			"INSERT into t VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'left');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{{nil, nil, 1, 1, 1, -1}},
+			},
+			{
+				Query:    "SELECT * from t;",
+				Expected: []sql.Row{{1, 1}},
 			},
 		},
 	},
