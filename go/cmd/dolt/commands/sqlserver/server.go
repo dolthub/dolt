@@ -35,6 +35,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
 
+const SockAddr = "/tmp/mysql.sock"
+
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(
 	ctx context.Context,
@@ -240,6 +242,13 @@ func newSessionBuilder(se *engine.SqlEngine) server.SessionBuilder {
 // getConfigFromServerConfig processes ServerConfig and returns server.Config for sql-server.
 func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error, error) {
 	serverConf := server.Config{Protocol: "tcp"}
+	portAsString := strconv.Itoa(serverConfig.Port())
+	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
+	serverConf.Address = hostPort
+	if serverConfig.Host() == "localhost" {
+		serverConf = server.Config{Protocol: "unix"}
+		serverConf.Address = SockAddr
+	}
 	serverConf.DisableClientMultiStatements = serverConfig.DisableClientMultiStatements()
 
 	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
@@ -249,9 +258,6 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 	if err != nil {
 		return server.Config{}, nil, err
 	}
-
-	portAsString := strconv.Itoa(serverConfig.Port())
-	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
 
 	if portInUse(hostPort) {
 		portInUseError := fmt.Errorf("Port %s already in use.", portAsString)
@@ -274,7 +280,6 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 
 	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
 	// to the value of mysql that we support.
-	serverConf.Address = hostPort
 	serverConf.ConnReadTimeout = readTimeout
 	serverConf.ConnWriteTimeout = writeTimeout
 	serverConf.MaxConnections = serverConfig.MaxConnections()

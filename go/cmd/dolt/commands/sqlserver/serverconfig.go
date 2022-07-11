@@ -345,7 +345,7 @@ func DefaultServerConfig() *commandLineServerConfig {
 	}
 }
 
-// Validate returns an `error` if any field is not valid.
+// ValidateConfig returns an `error` if any field is not valid.
 func ValidateConfig(config ServerConfig) error {
 	if config.Host() != "localhost" {
 		ip := net.ParseIP(config.Host())
