@@ -211,7 +211,6 @@ teardown() {
     rm -rf cfgdir
     rm -rf datadir
     rm -f privileges.db
-
 }
 
 @test "sql-shell: bad sql in sql shell should error" {

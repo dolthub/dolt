@@ -207,6 +207,72 @@ teardown() {
     rm -rf inner_db
 }
 
+@test "sql: dolt sql -q specify data directory, cfg directory, and privilege file" {
+    # remove files
+    rm -rf .doltcfg
+    rm -rf cfgdir
+    rm -rf datadir
+    rm -f privileges.db
+
+    mkdir datadir
+    cd datadir
+
+    mkdir db1
+    cd db1
+    dolt init
+    cd ..
+
+    mkdir db2
+    cd db2
+    dolt init
+    cd ..
+
+    mkdir db3
+    cd db3
+    dolt init
+    cd ..
+
+    cd ..
+
+    mkdir cfgdir
+
+    run dolt sql --data-dir=datadir --doltcfg-dir=cfgdir --privilege-file=privileges.db -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "db1" ]] || false
+    [[ $output =~ "db2" ]] || false
+    [[ $output =~ "db3" ]] || false
+
+    run dolt sql --data-dir=datadir --doltcfg-dir=cfgdir --privilege-file=privileges.db -q "create user new_user"
+    [ $status -eq 0 ]
+
+    run ls -a
+    [[ $output =~ "datadir" ]] || false
+    [[ $output =~ "cfgdir" ]] || false
+    [[ $output =~ "privileges.db" ]] || false
+    ! [[ $output =~ ".doltcfg" ]] || false
+
+    run ls cfgdir
+    ! [[ $output =~ "privileges.db" ]] || false
+
+    run dolt sql --data-dir=datadir --doltcfg-dir=cfgdir --privilege-file=privileges.db -q "use db1; select user from mysql.user"
+    [ $status -eq 0 ]
+    [[ $output =~ "new_user" ]] || false
+
+    run dolt sql --data-dir=datadir --doltcfg-dir=cfgdir --privilege-file=privileges.db -q "use db2; select user from mysql.user"
+    [ $status -eq 0 ]
+    [[ $output =~ "new_user" ]] || false
+
+    run dolt sql --data-dir=datadir --doltcfg-dir=cfgdir --privilege-file=privileges.db -q "use db3; select user from mysql.user"
+    [ $status -eq 0 ]
+    [[ $output =~ "new_user" ]] || false
+
+    # remove files
+    rm -rf .doltcfg
+    rm -rf cfgdir
+    rm -rf datadir
+    rm -f privileges.db
+}
+
 @test "sql: errors do not write incomplete rows" {
     dolt sql <<"SQL"
 CREATE TABLE test (
