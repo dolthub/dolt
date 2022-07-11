@@ -252,8 +252,8 @@ func (cfg *commandLineServerConfig) DataDir() string {
 	return cfg.dataDir
 }
 
-// withHost updates the host and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
-func (cfg *commandLineServerConfig) withHost(host string) *commandLineServerConfig {
+// WithHost updates the host and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
+func (cfg *commandLineServerConfig) WithHost(host string) *commandLineServerConfig {
 	cfg.host = host
 	return cfg
 }
