@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -32,9 +33,10 @@ import (
 
 type ReadReplicaDatabase struct {
 	Database
-	remote env.Remote
-	srcDB  *doltdb.DoltDB
-	tmpDir string
+	remote  env.Remote
+	srcDB   *doltdb.DoltDB
+	tmpDir  string
+	limiter *limiter
 }
 
 var _ SqlDatabase = ReadReplicaDatabase{}
@@ -75,6 +77,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		remote:   remote,
 		tmpDir:   dEnv.TempTableFilesDir(),
 		srcDB:    srcDB,
+		limiter:  newLimiter(),
 	}, nil
 }
 
@@ -163,7 +166,11 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string) 
 		}
 	}
 
-	err = actions.FetchFollowTags(ctx, rrd.rsw.TempTableFilesDir(), rrd.srcDB, rrd.ddb, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	_, err = rrd.limiter.Run(ctx, "___tags", func() (any, error) {
+		// TODO: Not sure about this; see comment about the captured ctx below.
+
+		return nil, actions.FetchFollowTags(ctx, rrd.rsw.TempTableFilesDir(), rrd.srcDB, rrd.ddb, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	})
 	if err != nil {
 		return err
 	}
@@ -172,20 +179,36 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string) 
 }
 
 func fetchRef(ctx *sql.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.DoltRef) error {
-	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, headRef, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
-	if err != nil {
-		return err
-	}
+	fetchCtx := ctx.Context
 
-	err = rrd.ddb.FastForward(ctx, rtRef, srcDBCommit)
-	if err != nil {
-		return err
-	}
+	srcDBCommitA, err := rrd.limiter.Run(ctx, headRef.String(), func() (any, error) {
+		// TODO: The captured ctx here should be the server's context,
+		// not the session's *sql.Context.  As is, this can cause
+		// spurious failures for other sessions when their calls get
+		// coalesced with a call that uses a Context that ends up
+		// getting canceled by something like `KILL PID` or a client
+		// disconnect.
 
-	err = rrd.ddb.FastForward(ctx, headRef, srcDBCommit)
+		srcDBCommit, err := actions.FetchRemoteBranch(fetchCtx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, headRef, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+		if err != nil {
+			return nil, err
+		}
+
+		err = rrd.ddb.FastForward(fetchCtx, rtRef, srcDBCommit)
+		if err != nil {
+			return nil, err
+		}
+
+		err = rrd.ddb.FastForward(fetchCtx, headRef, srcDBCommit)
+		if err != nil {
+			return nil, err
+		}
+		return srcDBCommit, nil
+	})
 	if err != nil {
 		return err
 	}
+	srcDBCommit := srcDBCommitA.(*doltdb.Commit)
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 
@@ -229,4 +252,96 @@ func parseBranches(arg string) []string {
 		branches = append(branches, head)
 	}
 	return branches
+}
+
+type res struct {
+	v   any
+	err error
+}
+
+type blocked struct {
+	f       func() (any, error)
+	waiters []chan res
+}
+
+func newLimiter() *limiter {
+	return &limiter{
+		blocked: make(map[string]*blocked),
+	}
+}
+
+// *limiter allows a caller to limit performing concurrent work for a given string key.
+type limiter struct {
+	mu      sync.Mutex
+	blocked map[string]*blocked
+}
+
+// |Run| invokes |f|, returning its result. It does not allow two |f|s
+// submitted with the same |s| to be running in concurrently.
+// Only one of the |f|s that arrives with the same |s| while another |f| with
+// that key is running will ultimately be run. The result of invoking that |f|
+// will be returned from the |Run| call to all blockers on that key.
+//
+// 1) A caller provides a string key, |s|, and an |f func() error| which will
+// perform the work when invoked.
+//
+// 2) If there is no outstanding call for the key, |f| is invoked and the
+// result is returned.
+//
+// 3) Otherwise, the caller blocks until the outstanding call is completed.
+// When the outstanding call completes, one of the blocked |f|s that was
+// provided for that key is run. The result of that invocation is returned to
+// all blocked callers.
+//
+// A caller's |Run| invocation can return early if the context is cancelled.
+// If the |f| captures a context, and that context is canceled, and the |f|
+// allows the error from that context cancelation to escape, then multiple
+// callers will see ContextCanceled / DeadlineExceeded, even if their contexts
+// are not canceled.
+//
+// This implementation is very naive and is not not optimized for high
+// contention on |l.blocked|/|l.mu|.
+func (l *limiter) Run(ctx context.Context, s string, f func() (any, error)) (any, error) {
+	l.mu.Lock()
+	if b, ok := l.blocked[s]; ok {
+		ch := make(chan res)
+		if b.f == nil {
+			b.f = f
+		}
+		b.waiters = append(b.waiters, ch)
+		l.mu.Unlock()
+		select {
+		case r := <-ch:
+			return r.v, r.err
+		case <-ctx.Done():
+			go func() { <-ch }()
+			return nil, ctx.Err()
+		}
+	} else {
+		l.blocked[s] = new(blocked)
+		l.mu.Unlock()
+	}
+
+	res, err := f()
+	l.finish(s)
+	return res, err
+}
+
+func (l *limiter) finish(s string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	b := l.blocked[s]
+	if len(b.waiters) != 0 {
+		go func() {
+			r, err := b.f()
+			for _, ch := range b.waiters {
+				ch <- res{r, err}
+				close(ch)
+			}
+			l.finish(s)
+		}()
+		l.blocked[s] = new(blocked)
+	} else {
+		delete(l.blocked, s)
+	}
 }
