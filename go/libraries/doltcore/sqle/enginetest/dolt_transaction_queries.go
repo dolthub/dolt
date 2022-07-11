@@ -140,7 +140,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
@@ -291,7 +291,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
@@ -559,7 +559,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
 			},
 			{
 				Query:    "/* client b */ rollback",
@@ -756,6 +756,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 	},
 }
 
+// TODO(andy): update with serialization failure error
 var DoltTransactionMergeStompTests = []queries.TransactionTest{
 	{
 		Name: "dolt_transaction_merge_stomp picks the last transaction's value (b commits last)",
@@ -910,7 +911,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
 			},
 			{ // no conflicts, transaction got rolled back
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
@@ -960,7 +961,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
 			},
 			{ // We see the merge value from a's commit here because we were rolled back and a new transaction begun
 				Query:    "/* client b */ select * from test order by 1",
@@ -1010,7 +1011,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
 			},
 			{ // We see the merge value from a's commit here because we were rolled back and a new transaction begun
 				Query:    "/* client b */ select * from test order by 1",
@@ -1326,7 +1327,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			{
 				Query: "/* client b */ COMMIT;",
 				// TODO: No it didn't! Client b contains conflicts from an internal merge! Retrying will not help.
-				ExpectedErrStr: "this transaction conflicts with a committed transaction from another client, please retry",
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
 			},
 			{
 				Query:    "/* client b */ INSERT into t VALUES (3, 3);",
