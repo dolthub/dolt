@@ -282,7 +282,6 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(dataDir)
 	}
 
-	// TODO: eventually delete this
 	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
 		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, dataDir)
 		cli.PrintErrln("WARNING: --multi-db-dir is deprecated, use --data-dir instead")

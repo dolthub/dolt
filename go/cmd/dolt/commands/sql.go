@@ -192,10 +192,13 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	// Handle doltcfg directory
 	var cfgDirPath string
-	dataDir, _ := apr.GetValue(DataDirFlag)
+	var dataDir string
 	if multiDbDir, ok := apr.GetValue(MultiDBDirFlag); ok {
 		cli.PrintErrln("WARNING: --multi-db-dir is deprecated, use --data-dir instead")
 		dataDir = multiDbDir
+	}
+	if dataDirPath, ok := apr.GetValue(DataDirFlag); ok {
+		dataDir = dataDirPath
 	}
 	cfgDir, hasCfg := apr.GetValue(CfgDirFlag)
 	if hasCfg {
@@ -417,8 +420,6 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 	var err error
 	fs := dEnv.FS
 
-	// TODO: this is deprecated, eventually delete
-	// Deprecation warning is thrown somewhere else
 	if dataDir, ok := apr.GetValue(MultiDBDirFlag); ok {
 		fs, err = dEnv.FS.WithWorkingDir(dataDir)
 	}

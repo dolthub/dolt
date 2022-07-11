@@ -226,6 +226,16 @@ func MultiEnvForDirectory(
 		cfg:  config,
 	}
 
+	path, err := fs.Abs(".")
+	if err != nil {
+		return nil, err
+	}
+	dirName := getRepoRootDir(path, string(os.PathSeparator))
+	dbName := dirToDBName(dirName)
+	newEnv := Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
+	mrEnv.AddEnv(dbName, newEnv)
+
+	// TODO: need to know if current directory is a database
 	// If there are other directories in the directory, try to load them as additional databases
 	fs.Iter(".", false, func(path string, size int64, isDir bool) (stop bool) {
 		if !isDir {
