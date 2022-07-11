@@ -1315,6 +1315,6 @@ func (dEnv *DoltEnv) Unlock() error {
 	if dEnv.IgnoreLocks {
 		return nil
 	}
-	
+
 	return dEnv.FS.DeleteFile(dEnv.LockFile())
 }
