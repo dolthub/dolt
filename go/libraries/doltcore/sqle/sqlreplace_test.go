@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -252,14 +251,14 @@ func TestExecuteReplace(t *testing.T) {
 }
 
 var systemTableReplaceTests = []ReplaceTest{
-	{
-		Name: "replace into dolt_docs",
-		AdditionalSetup: CreateTableFn("dolt_docs",
-			doltdocs.DocsSchema,
-			NewRow(types.String("LICENSE.md"), types.String("A license"))),
-		ReplaceQuery: "replace into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
-		ExpectedErr:  "cannot insert into table",
-	},
+	//{
+	//	Name: "replace into dolt_docs",
+	//	AdditionalSetup: CreateTableFn("dolt_docs",
+	//		doltdocs.DocsSchema,
+	//		NewRow(types.String("LICENSE.md"), types.String("A license"))),
+	//	ReplaceQuery: "replace into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
+	//	ExpectedErr:  "cannot insert into table",
+	//},
 	{
 		Name: "replace into dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
@@ -267,7 +266,7 @@ var systemTableReplaceTests = []ReplaceTest{
 			NewRow(types.String("existingEntry"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
 		ReplaceQuery: "replace into dolt_query_catalog (id, display_order, name, query, description) values ('existingEntry', 1, 'example', 'select 1+1 from dual', 'description')",
 		SelectQuery:  "select * from dolt_query_catalog",
-		ExpectedRows: ToSqlRows(dtables.DoltQueryCatalogSchema,
+		ExpectedRows: ToSqlRows(CompressSchema(dtables.DoltQueryCatalogSchema),
 			NewRow(types.String("existingEntry"), types.Uint(1), types.String("example"), types.String("select 1+1 from dual"), types.String("description")),
 		),
 		ExpectedSchema: CompressSchema(dtables.DoltQueryCatalogSchema),
@@ -276,20 +275,18 @@ var systemTableReplaceTests = []ReplaceTest{
 		Name: "replace into dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
 			SchemasTableSchema(),
-			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
-		ReplaceQuery: "replace into dolt_schemas (type, name, fragment) values ('view', 'name', 'select 1+1 from dual')",
-		SelectQuery:  "select * from dolt_schemas",
-		ExpectedRows: ToSqlRows(SchemasTableSchema(),
-			NewRow(types.String("view"), types.String("name"), types.String("select 1+1 from dual")),
-		),
+			NewRowWithSchema(SchemasTableSchema(), types.String("view"), types.String("name"), types.String("select 2+2 from dual"), types.Int(1), types.NullValue)),
+		ReplaceQuery:   "replace into dolt_schemas (id, type, name, fragment) values ('1', 'view', 'name', 'select 1+1 from dual')",
+		SelectQuery:    "select type, name, fragment, id, extra from dolt_schemas",
+		ExpectedRows:   []sql.Row{{"view", "name", "select 1+1 from dual", int64(1), nil}},
 		ExpectedSchema: CompressSchema(SchemasTableSchema()),
 	},
 }
 
 func TestReplaceIntoSystemTables(t *testing.T) {
-	for _, test := range systemTableInsertTests {
+	for _, test := range systemTableReplaceTests {
 		t.Run(test.Name, func(t *testing.T) {
-			testInsertQuery(t, test)
+			testReplaceQuery(t, test)
 		})
 	}
 }
