@@ -194,7 +194,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	var cfgDirPath string
 	dataDir, _ := apr.GetValue(DataDirFlag)
 	if multiDbDir, ok := apr.GetValue(MultiDBDirFlag); ok {
-		cli.PrintErrf("WARNING: --multi-db-dir is deprecated, use --data-dir instead\n")
+		cli.PrintErrln("WARNING: --multi-db-dir is deprecated, use --data-dir instead")
 		dataDir = multiDbDir
 	}
 	cfgDir, hasCfg := apr.GetValue(CfgDirFlag)

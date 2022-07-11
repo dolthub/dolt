@@ -105,7 +105,7 @@ SUPPORTED CONFIG FILE FIELDS:
 If a config file is not provided many of these settings may be configured on the command line.`,
 	Synopsis: []string{
 		"--config {{.LessThan}}file{{.GreaterThan}}",
-		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--data-dir {{.LessThan}}directory{{.GreaterThan}}] [--query-parallelism {{.LessThan}}num-go-routines{{.GreaterThan}}] [-r]",
+		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--data-dir {{.LessThan}}directory{{.GreaterThan}}] [--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}] [--query-parallelism {{.LessThan}}num-go-routines{{.GreaterThan}}] [-r]",
 	},
 }
 
@@ -141,6 +141,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(readonlyFlag, "r", "Disable modification of the database")
 	ap.SupportsString(logLevelFlag, "l", "log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `trace', `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel()))
 	ap.SupportsString(commands.DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults the the current directory.")
+	ap.SupportsString(commands.MultiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults the the current directory. This is deprecated, you should use --data-dir instead.")
 	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to $data-dir/.doltcfg.")
 	ap.SupportsFlag(noAutoCommitFlag, "", "Set @@autocommit = off for the server")
 	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", fmt.Sprintf("Set the number of go routines spawned to handle each query (default `%d`)", serverConfig.QueryParallelism()))
@@ -274,6 +275,18 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 
 	if dataDir, ok := apr.GetValue(commands.DataDirFlag); ok {
 		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, dataDir)
+
+		if err != nil {
+			return nil, errors.New("failed to read databases in path specified by --data-dir. error: " + err.Error())
+		}
+
+		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(dataDir)
+	}
+
+	// TODO: eventually delete this
+	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
+		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, dataDir)
+		cli.PrintErrln("WARNING: --multi-db-dir is deprecated, use --data-dir instead")
 
 		if err != nil {
 			return nil, errors.New("failed to read databases in path specified by --data-dir. error: " + err.Error())
