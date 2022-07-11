@@ -16,9 +16,9 @@ package commands
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"gopkg.in/src-d/go-errors.v1"
+
 	"io"
 	"os"
 	"os/signal"
@@ -50,6 +50,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 )
@@ -83,7 +84,7 @@ By default this command uses the dolt database in the current working directory,
 	},
 }
 
-var ErrMultipleDoltCfgDirs = errors.New("multiple .doltcfg directories detected")
+var ErrMultipleDoltCfgDirs = errors.NewKind("multiple .doltcfg directories detected: '%s' and '%s'; pass one of the directories using option --doltcfg-dir")
 
 const (
 	QueryFlag         = "query"
@@ -223,7 +224,15 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		path = filepath.Join(dataDir, DefaultCfgDirName)
 		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
 			if len(cfgDirPath) != 0 {
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(ErrMultipleDoltCfgDirs), usage)
+				p1, err := dEnv.FS.Abs(cfgDirPath)
+				if err != nil {
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+				}
+				p2, err := dEnv.FS.Abs(path)
+				if err != nil {
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+				}
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(ErrMultipleDoltCfgDirs.New(p1, p2)), usage)
 			}
 			cfgDirPath = path
 		} else if len(cfgDirPath) == 0 {

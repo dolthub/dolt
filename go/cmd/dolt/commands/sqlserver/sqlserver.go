@@ -48,8 +48,6 @@ const (
 	persistenceBehaviorFlag = "persistence-behavior"
 )
 
-var ErrMultipleDoltCfgDirs = errors.New("multiple .doltcfg directories detected")
-
 func indentLines(s string) string {
 	sb := strings.Builder{}
 	lines := strings.Split(s, "\n")
@@ -316,7 +314,15 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		path = filepath.Join(dataDir, commands.DefaultCfgDirName)
 		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
 			if len(cfgDirPath) != 0 {
-				return nil, ErrMultipleDoltCfgDirs
+				p1, err := dEnv.FS.Abs(cfgDirPath)
+				if err != nil {
+					return nil, err
+				}
+				p2, err := dEnv.FS.Abs(path)
+				if err != nil {
+					return nil, err
+				}
+				return nil, commands.ErrMultipleDoltCfgDirs.New(p1, p2)
 			}
 			cfgDirPath = path
 		} else if len(cfgDirPath) == 0 {
