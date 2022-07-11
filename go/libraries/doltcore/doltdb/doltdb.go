@@ -705,11 +705,11 @@ func (ddb *DoltDB) GetTags(ctx context.Context) ([]ref.DoltRef, error) {
 }
 
 type TagWithHash struct {
-	Ref  ref.DoltRef
+	Tag  *Tag
 	Hash hash.Hash
 }
 
-// GetTagsWithHashes returns a list of objects containing TagRefs with their associated Commit's hash
+// GetTagsWithHashes returns a list of objects containing Tags with their associated Commit's hashes
 func (ddb *DoltDB) GetTagsWithHashes(ctx context.Context) ([]TagWithHash, error) {
 	var refs []TagWithHash
 	err := ddb.VisitRefsOfType(ctx, tagsRefFilter, func(r ref.DoltRef, _ hash.Hash) error {
@@ -722,7 +722,7 @@ func (ddb *DoltDB) GetTagsWithHashes(ctx context.Context) ([]TagWithHash, error)
 			if err != nil {
 				return err
 			}
-			refs = append(refs, TagWithHash{r, h})
+			refs = append(refs, TagWithHash{tag, h})
 		}
 		return nil
 	})

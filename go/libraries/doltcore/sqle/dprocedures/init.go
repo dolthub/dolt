@@ -29,6 +29,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_push", Schema: int64Schema("success"), Function: doltPush},
 	{Name: "dolt_reset", Schema: int64Schema("status"), Function: doltReset},
 	{Name: "dolt_revert", Schema: int64Schema("status"), Function: doltRevert},
+	{Name: "dolt_tag", Schema: int64Schema("status"), Function: doltTag},
 	{Name: "dolt_verify_constraints", Schema: int64Schema("violations"), Function: doltVerifyConstraints},
 	{Name: "dadd", Schema: int64Schema("status"), Function: doltAdd},
 	{Name: "dbranch", Schema: int64Schema("status"), Function: doltBranch},
@@ -41,6 +42,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dpush", Schema: int64Schema("success"), Function: doltPush},
 	{Name: "dreset", Schema: int64Schema("status"), Function: doltReset},
 	{Name: "drevert", Schema: int64Schema("status"), Function: doltRevert},
+	{Name: "dtag", Schema: int64Schema("status"), Function: doltTag},
 	{Name: "dverify_constraints", Schema: int64Schema("violations"), Function: doltVerifyConstraints},
 }
 

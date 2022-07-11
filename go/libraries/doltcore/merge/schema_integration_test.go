@@ -670,7 +670,8 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	require.NoError(t, err)
 
 	opts := editor.TestEditorOptions(dEnv.DoltDB.ValueReadWriter())
-	mergedRoot, _, err := merge.MergeRoots(ctx, hash.Of(nil), hash.Of(nil), mainRoot, otherRoot, ancRoot, opts, false)
+	mo := merge.MergeOpts{ConflictStrategy: merge.ConflictStompStrategyNone, IsCherryPick: false}
+	mergedRoot, _, err := merge.MergeRoots(ctx, hash.Of(nil), hash.Of(nil), mainRoot, otherRoot, ancRoot, opts, mo)
 	assert.NoError(t, err)
 
 	fkc, err := mergedRoot.GetForeignKeyCollection(ctx)

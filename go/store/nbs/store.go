@@ -35,9 +35,11 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -71,6 +73,8 @@ var (
 	makeManifestManager func(manifest) manifestManager
 	globalFDCache       *fdCache
 )
+
+var tracer = otel.Tracer("github.com/dolthub/dolt/go/store/nbs")
 
 func makeGlobalCaches() {
 	globalFDCache = newFDCache(defaultMaxTables)
@@ -624,10 +628,8 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, h addr, data []byte) bo
 }
 
 func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
-	span, ctx := tracing.StartSpan(ctx, "nbs.Get")
-	defer func() {
-		span.Finish()
-	}()
+	ctx, span := tracer.Start(ctx, "nbs.Get")
+	defer span.End()
 
 	t1 := time.Now()
 	defer func() {
@@ -673,22 +675,16 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 }
 
 func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
-	span, ctx := tracing.StartSpan(ctx, "nbs.GetMany")
-	span.LogKV("num_hashes", len(hashes))
-	defer func() {
-		span.Finish()
-	}()
+	ctx, span := tracer.Start(ctx, "nbs.GetMany", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
+	span.End()
 	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, stats *Stats) (bool, error) {
 		return cr.getMany(ctx, eg, reqs, found, nbs.stats)
 	})
 }
 
 func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
-	span, ctx := tracing.StartSpan(ctx, "nbs.GetManyCompressed")
-	span.LogKV("num_hashes", len(hashes))
-	defer func() {
-		span.Finish()
-	}()
+	ctx, span := tracer.Start(ctx, "nbs.GetManyCompressed", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
+	defer span.End()
 	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, stats *Stats) (bool, error) {
 		return cr.getManyCompressed(ctx, eg, reqs, found, nbs.stats)
 	})

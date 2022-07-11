@@ -31,12 +31,13 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"github.com/opentracing/opentracing-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -76,6 +77,8 @@ const (
 	downRetryCount   = 5
 	uploadRetryCount = 5
 )
+
+var tracer = otel.Tracer("github.com/dolthub/dolt/go/libraries/doltcore/remotestorage")
 
 var uploadRetryParams = backoff.NewExponentialBackOff()
 var downRetryParams = backoff.NewExponentialBackOff()
@@ -271,9 +274,7 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		atomic.AddUint64(&decompressedSize, uint64(len(c.Data())))
 		found(ctx, &c)
 	})
-	if span := opentracing.SpanFromContext(ctx); span != nil {
-		span.LogKV("decompressed_bytes", decompressedSize)
-	}
+	trace.SpanFromContext(ctx).SetAttributes(attribute.Int64("decompressed_bytes", int64(decompressedSize)))
 	if err != nil {
 		return err
 	}
@@ -286,12 +287,12 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 // GetMany gets the Chunks with |hashes| from the store. On return, |foundChunks| will have been fully sent all chunks
 // which have been found. Any non-present chunks will silently be ignored.
 func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.CompressedChunk)) error {
-	span, ctx := tracing.StartSpan(ctx, "remotestorage.GetManyCompressed")
-	defer span.Finish()
+	ctx, span := tracer.Start(ctx, "remotestorage.GetManyCompressed")
+	defer span.End()
 
 	hashToChunk := dcs.cache.Get(hashes)
 
-	span.LogKV("num_hashes", len(hashes), "cache_hits", len(hashToChunk))
+	span.SetAttributes(attribute.Int("num_hashes", len(hashes)), attribute.Int("cache_hits", len(hashToChunk)))
 	atomic.AddUint32(&dcs.stats.Hits, uint32(len(hashToChunk)))
 
 	notCached := make([]hash.Hash, 0, len(hashes))
@@ -517,9 +518,8 @@ func (l *dlLocations) Add(resp *remotesapi.DownloadLoc) {
 }
 
 func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (dlLocations, error) {
-	span, ctx := tracing.StartSpan(ctx, "remotestorage.getDLLocs")
-	span.LogKV("num_hashes", len(hashes))
-	defer span.Finish()
+	ctx, span := tracer.Start(ctx, "remotestorage.getDLLocs", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
+	defer span.End()
 
 	res := newDlLocations()
 
@@ -1030,7 +1030,7 @@ var defaultConcurrency ConcurrencyParams = ConcurrencyParams{
 	LargeFetchSize:         2 * 1024 * 1024,
 }
 
-func logDownloadStats(span opentracing.Span, originalGets map[string]*GetRange, computedGets []*GetRange) {
+func logDownloadStats(span trace.Span, originalGets map[string]*GetRange, computedGets []*GetRange) {
 	chunkCount := 0
 	originalBytes := uint64(0)
 	for _, r := range originalGets {
@@ -1041,14 +1041,20 @@ func logDownloadStats(span opentracing.Span, originalGets map[string]*GetRange, 
 	for _, r := range computedGets {
 		downloadBytes += r.RangeLen()
 	}
-	span.LogKV("num_files", len(originalGets), "num_chunks", chunkCount, "num_batches", len(computedGets), "original_bytes", originalBytes, "download_bytes", downloadBytes)
+	span.SetAttributes(
+		attribute.Int("num_files", len(originalGets)),
+		attribute.Int("num_chunks", chunkCount),
+		attribute.Int("num_batches", len(computedGets)),
+		attribute.Int64("original_bytes", int64(originalBytes)),
+		attribute.Int64("download_bytes", int64(downloadBytes)),
+	)
 }
 
 // creates work functions for each download and executes them in parallel.  The work functions write downloaded chunks
 // to chunkChan
 func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, dlLocs dlLocations, chunkChan chan nbs.CompressedChunk) error {
-	span, ctx := tracing.StartSpan(ctx, "remotestorage.downloadChunks")
-	defer span.Finish()
+	ctx, span := tracer.Start(ctx, "remotestorage.downloadChunks")
+	defer span.End()
 
 	resourceGets := dlLocs.ranges
 

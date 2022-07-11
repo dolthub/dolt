@@ -43,7 +43,7 @@ const (
 	// IndexNameRegexStr is the regular expression that valid indexes must match.
 	// From the unquoted identifiers: https://dev.mysql.com/doc/refman/8.0/en/identifiers.html
 	// We also allow the '-' character from quoted identifiers.
-	IndexNameRegexStr = `^[-$_0-9a-zA-Z]+$`
+	IndexNameRegexStr = "^[-`$_0-9a-zA-Z]+$"
 )
 
 var (
