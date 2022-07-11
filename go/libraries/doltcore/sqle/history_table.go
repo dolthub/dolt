@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -219,7 +220,6 @@ func transformFilters(ctx *sql.Context, filters ...sql.Expression) []sql.Express
 func (ht *HistoryTable) WithProjections(colNames []string) sql.Table {
 	nt := *ht
 	nt.projectedCols = make([]uint64, len(colNames))
-	// todo(max): is updating the child table necessary?
 	nonHistoryCols := make([]string, 0)
 	cols := ht.doltTable.sch.GetAllCols()
 	for i := range colNames {
@@ -227,11 +227,11 @@ func (ht *HistoryTable) WithProjections(colNames []string) sql.Table {
 		if !ok {
 			switch colNames[i] {
 			case CommitHashCol:
-				nt.projectedCols[i] = commitHashTag
+				nt.projectedCols[i] = schema.HistoryCommitHashTag
 			case CommitterCol:
-				nt.projectedCols[i] = committerTag
+				nt.projectedCols[i] = schema.HistoryCommitterTag
 			case CommitDateCol:
-				nt.projectedCols[i] = commitDateTag
+				nt.projectedCols[i] = schema.HistoryCommitDateTag
 			default:
 			}
 		} else {
@@ -253,11 +253,11 @@ func (ht *HistoryTable) Projections() []string {
 
 		} else {
 			switch ht.projectedCols[i] {
-			case commitHashTag:
+			case schema.HistoryCommitHashTag:
 				names[i] = CommitHashCol
-			case committerTag:
+			case schema.HistoryCommitterTag:
 				names[i] = CommitterCol
-			case commitDateTag:
+			case schema.HistoryCommitDateTag:
 				names[i] = CommitDateCol
 			default:
 			}
