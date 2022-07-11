@@ -23,8 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/store/prolly/message"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -71,6 +69,9 @@ func TestMutableMapWrites(t *testing.T) {
 			})
 		})
 	}
+	t.Run("test internal node splits", func(t *testing.T) {
+		testInternalNodeSplits(t)
+	})
 }
 
 func testPointUpdates(t *testing.T, mapCount int) {
@@ -425,32 +426,60 @@ func testBulkInserts(t *testing.T, size int) {
 	}
 }
 
+func testInternalNodeSplits(t *testing.T) {
+	const n = 100_000
+	var err error
+	ctx := context.Background()
+
+	kd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int32Enc},
+		val.Type{Enc: val.Int32Enc},
+	)
+	vd := val.NewTupleDescriptor()
+	bld := val.NewTupleBuilder(kd)
+
+	tuples := make([][2]val.Tuple, n)
+	for i := range tuples {
+		bld.PutInt32(0, int32(i))
+		bld.PutInt32(1, int32(0))
+		tuples[i][0] = bld.Build(sharedPool)
+		tuples[i][1] = val.EmptyTuple
+	}
+	pm := prollyMapFromTuples(t, kd, vd, tuples).(Map)
+
+	// reproduces chunker panic (k = 10_600)
+	repro := 20_000
+
+	for k := 100; k <= repro; k += 100 {
+		mut := pm.Mutate()
+		for j := 1; j <= k; j++ {
+			bld.PutInt32(0, int32(j))
+			bld.PutInt32(1, int32(j))
+			key := bld.Build(sharedPool)
+			value := val.EmptyTuple
+			err = mut.Put(ctx, key, value)
+			require.NoError(t, err)
+		}
+		pm, err = mut.Map(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, n+k, pm.Count())
+	}
+}
+
+// utilities
+
 func ascendingIntMap(t *testing.T, count int) Map {
 	return ascendingIntMapWithStep(t, count, 1)
 }
 
 func ascendingIntMapWithStep(t *testing.T, count, step int) Map {
-	ctx := context.Background()
-	ns := tree.NewTestNodeStore()
-
 	tuples := make([][2]val.Tuple, count)
 	for i := range tuples {
 		v := int64(i * step)
 		tuples[i][0], tuples[i][1] = makePut(v, v)
 	}
-
-	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
-	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
-	require.NoError(t, err)
-
-	for _, pair := range tuples {
-		err = chunker.AddPair(ctx, tree.Item(pair[0]), tree.Item(pair[1]))
-		require.NoError(t, err)
-	}
-	root, err := chunker.Done(ctx)
-	require.NoError(t, err)
-
-	return NewMap(root, ns, mutKeyDesc, mutKeyDesc)
+	pm := prollyMapFromTuples(t, mutKeyDesc, mutValDesc, tuples)
+	return pm.(Map)
 }
 
 var mutKeyDesc = val.NewTupleDescriptor(

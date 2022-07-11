@@ -66,7 +66,7 @@ func newNodeBuilder[S message.Serializer](serializer S, level int) (nb *nodeBuil
 type nodeBuilder[S message.Serializer] struct {
 	keys, values [][]byte
 	size, level  int
-	subtrees     SubtreeCounts
+	subtrees     subtreeCounts
 	serializer   S
 }
 
