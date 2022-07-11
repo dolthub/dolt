@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -245,7 +246,7 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 	portAsString := strconv.Itoa(serverConfig.Port())
 	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
 	serverConf.Address = hostPort
-	if serverConfig.Host() == "localhost" {
+	if runtime.GOOS != "windows" && serverConfig.Host() == "localhost" {
 		serverConf = server.Config{Protocol: "unix"}
 		serverConf.Address = SockAddr
 	}

@@ -96,7 +96,7 @@ teardown() {
     rm -f mysql.db
     cp $BATS_TEST_DIRNAME/mysql.db .
 
-    start_sql_server_with_args --privilege-file=mysql.db repo1
+    start_sql_server_with_args --host=0.0.0.0 --privilege-file=mysql.db repo1
 
     # expect dolt and mysql_user
     run show_users
@@ -129,7 +129,7 @@ teardown() {
     [ "${lines[9]}" = '+------------+' ]
 
     stop_sql_server
-    start_sql_server_with_args --privilege-file=mysql.db repo1
+    start_sql_server_with_args --host=0.0.0.0 --privilege-file=mysql.db repo1
 
     # expect dolt, new_user, and mysql_user
     run show_users
