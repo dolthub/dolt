@@ -271,12 +271,22 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
+	// TODO: just create config here
+	config := &engine.SqlEngineConfig{
+		InitialDb:    currentDb,
+		IsReadOnly:   false,
+		PrivFilePath: privsFp,
+		ServerUser:   "root",
+		ServerPass:   "",
+		Autocommit:   true,
+	}
+
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
-		return queryMode(ctx, mrEnv, initialRoots, apr, query, currentDb, format, usage, privsFp)
+		return queryMode(ctx, mrEnv, initialRoots, apr, query, format, usage, config)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		return savedQueryMode(ctx, mrEnv, initialRoots, savedQueryName, currentDb, format, usage, privsFp)
+		return savedQueryMode(ctx, mrEnv, initialRoots, savedQueryName, format, usage, config)
 	} else if apr.Contains(listSavedFlag) {
-		return listSavedQueriesMode(ctx, mrEnv, initialRoots, currentDb, format, usage, privsFp)
+		return listSavedQueriesMode(ctx, mrEnv, initialRoots, format, usage, config)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		isTty := false
@@ -303,17 +313,17 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if isTty {
-			verr := execShell(ctx, mrEnv, format, currentDb, privsFp)
+			verr := execShell(ctx, mrEnv, format, config)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else if runInBatchMode {
-			verr := execBatch(ctx, continueOnError, mrEnv, input, format, currentDb, privsFp)
+			verr := execBatch(ctx, continueOnError, mrEnv, input, format, config)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else {
-			verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, currentDb, privsFp)
+			verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, config)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
@@ -327,12 +337,11 @@ func listSavedQueriesMode(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
 	initialRoots map[string]*doltdb.RootValue,
-	currentDb string,
 	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) int {
-	hasQC, err := initialRoots[currentDb].HasTable(ctx, doltdb.DoltQueryCatalogTableName)
+	hasQC, err := initialRoots[config.InitialDb].HasTable(ctx, doltdb.DoltQueryCatalogTableName)
 
 	if err != nil {
 		verr := errhand.BuildDError("error: Failed to read from repository.").AddCause(err).Build()
@@ -344,7 +353,7 @@ func listSavedQueriesMode(
 	}
 
 	query := "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
-	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, query, format, currentDb, privsFp), usage)
+	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, query, format, config), usage)
 }
 
 func savedQueryMode(
@@ -352,19 +361,18 @@ func savedQueryMode(
 	mrEnv *env.MultiRepoEnv,
 	initialRoots map[string]*doltdb.RootValue,
 	savedQueryName string,
-	currentDb string,
 	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) int {
-	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoots[currentDb], savedQueryName)
+	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoots[config.InitialDb], savedQueryName)
 
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, sq.Query, format, currentDb, privsFp), usage)
+	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, sq.Query, format, config), usage)
 }
 
 func queryMode(
@@ -373,10 +381,9 @@ func queryMode(
 	initialRoots map[string]*doltdb.RootValue,
 	apr *argparser.ArgParseResults,
 	query string,
-	currentDb string,
 	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) int {
 
 	// query mode has 3 sub modes:
@@ -389,32 +396,32 @@ func queryMode(
 	_, continueOnError := apr.GetValue(continueFlag)
 
 	if saveName != "" {
-		verr := execQuery(ctx, mrEnv, query, format, currentDb, privsFp)
+		verr := execQuery(ctx, mrEnv, query, format, config)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
 
 		if saveName != "" {
 			saveMessage := apr.GetValueOrDefault(messageFlag, "")
-			newRoot, verr := saveQuery(ctx, initialRoots[currentDb], query, saveName, saveMessage)
+			newRoot, verr := saveQuery(ctx, initialRoots[config.InitialDb], query, saveName, saveMessage)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 
-			verr = UpdateWorkingWithVErr(mrEnv.GetEnv(currentDb), newRoot)
+			verr = UpdateWorkingWithVErr(mrEnv.GetEnv(config.InitialDb), newRoot)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		}
 	} else if batchMode {
 		batchInput := strings.NewReader(query)
-		verr := execBatch(ctx, continueOnError, mrEnv, batchInput, format, currentDb, privsFp)
+		verr := execBatch(ctx, continueOnError, mrEnv, batchInput, format, config)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
 	} else {
 		input := strings.NewReader(query)
-		verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, currentDb, privsFp)
+		verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, config)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
@@ -452,17 +459,8 @@ func execShell(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
 	format engine.PrintResultFormat,
-	initialDb string,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) errhand.VerboseError {
-	config := &engine.SqlEngineConfig{
-		InitialDb:    initialDb,
-		IsReadOnly:   false,
-		PrivFilePath: privsFp,
-		ServerUser:   "root",
-		ServerPass:   "",
-		Autocommit:   true,
-	}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
@@ -487,17 +485,8 @@ func execBatch(
 	mrEnv *env.MultiRepoEnv,
 	batchInput io.Reader,
 	format engine.PrintResultFormat,
-	initialDb string,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) errhand.VerboseError {
-	config := &engine.SqlEngineConfig{
-		InitialDb:    initialDb,
-		IsReadOnly:   false,
-		PrivFilePath: privsFp,
-		ServerUser:   "root",
-		ServerPass:   "",
-		Autocommit:   true,
-	}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
@@ -539,17 +528,8 @@ func execMultiStatements(
 	mrEnv *env.MultiRepoEnv,
 	batchInput io.Reader,
 	format engine.PrintResultFormat,
-	initialDb string,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) errhand.VerboseError {
-	config := &engine.SqlEngineConfig{
-		InitialDb:    initialDb,
-		IsReadOnly:   false,
-		PrivFilePath: privsFp,
-		ServerUser:   "root",
-		ServerPass:   "",
-		Autocommit:   true,
-	}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
@@ -578,17 +558,8 @@ func execQuery(
 	mrEnv *env.MultiRepoEnv,
 	query string,
 	format engine.PrintResultFormat,
-	initialDb string,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) errhand.VerboseError {
-	config := &engine.SqlEngineConfig{
-		InitialDb:    initialDb,
-		IsReadOnly:   false,
-		PrivFilePath: privsFp,
-		ServerUser:   "root",
-		ServerPass:   "",
-		Autocommit:   true,
-	}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
