@@ -39,760 +39,760 @@ teardown() {
     teardown_common
 }
 
-#@test "sql: dolt sql -q without privilege file doesn't persist" {
-    ## mysql database exists and has privilege tables
-    #run dolt sql -q "show tables from mysql;"
-    #[ "$status" -eq 0 ]
-    #[[ "$output" =~ "user" ]] || false
-    #[[ "$output" =~ "role_edges" ]] || false
+@test "sql: dolt sql -q without privilege file doesn't persist" {
+    # mysql database exists and has privilege tables
+    run dolt sql -q "show tables from mysql;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "user" ]] || false
+    [[ "$output" =~ "role_edges" ]] || false
 
-    ## show users, expect just root user
-    #run dolt sql -q "select user from mysql.user;"
-    #[[ "$output" =~ "root" ]] || false
-    #! [[ "$output" =~ "new_user" ]] || false
+    # show users, expect just root user
+    run dolt sql -q "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
 
-    ## create a new user, fails
-    #run dolt sql -q "create user new_user;"
-    #[ "$status" -eq 1 ]
-    #[[ "$output" =~ "no privilege file specified, to persist users/grants run with --privilege-file=<file_path>" ]] || false
+    # create a new user, fails
+    run dolt sql -q "create user new_user;"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no privilege file specified, to persist users/grants run with --privilege-file=<file_path>" ]] || false
 
-    ## there shouldn't be a mysql.db file
-    #run ls
-    #! [[ "$output" =~ "privs.db" ]] || false
+    # there shouldn't be a mysql.db file
+    run ls
+    ! [[ "$output" =~ "privs.db" ]] || false
 
-    ## show users, expect just root user
-    #run dolt sql -q "select user from mysql.user;"
-    #[[ "$output" =~ "root" ]] || false
-    #! [[ "$output" =~ "new_user" ]] || false
+    # show users, expect just root user
+    run dolt sql -q "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
 
-    ## remove privs.db just in case
-    #rm -f privs.db
-#}
+    # remove privs.db just in case
+    rm -f privs.db
+}
 
-#@test "sql: dolt sql -q with privilege file persists" {
-    ## mysql database exists and has privilege tables
-    #run dolt sql --privilege-file=privs.db -q "show tables from mysql;"
-    #[ "$status" -eq 0 ]
-    #[[ "$output" =~ "user" ]] || false
-    #[[ "$output" =~ "role_edges" ]] || false
+@test "sql: dolt sql -q with privilege file persists" {
+    # mysql database exists and has privilege tables
+    run dolt sql --privilege-file=privs.db -q "show tables from mysql;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "user" ]] || false
+    [[ "$output" =~ "role_edges" ]] || false
 
-    ## show users, expect just root user
-    #run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
-    #[[ "$output" =~ "root" ]] || false
-    #! [[ "$output" =~ "new_user" ]] || false
+    # show users, expect just root user
+    run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
 
-    ## create a new user, fails
-    #run dolt sql --privilege-file=privs.db -q "create user new_user;"
-    #[ "$status" -eq 0 ]
+    # create a new user, fails
+    run dolt sql --privilege-file=privs.db -q "create user new_user;"
+    [ "$status" -eq 0 ]
 
-    ## show users, expect just root user
-    #run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
-    #[[ "$output" =~ "root" ]] || false
-    #[[ "$output" =~ "new_user" ]] || false
+    # show users, expect just root user
+    run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
 
-    ## there should now be a mysql.db file
-    #run ls
-    #[[ "$output" =~ "privs.db" ]] || false
+    # there should now be a mysql.db file
+    run ls
+    [[ "$output" =~ "privs.db" ]] || false
 
-    ## show users, expect root and new_user
-    #run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
-    #[[ "$output" =~ "root" ]] || false
-    #[[ "$output" =~ "new_user" ]] || false
+    # show users, expect root and new_user
+    run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
 
-    ## remove mysql.db
-    #rm -f privs.db
-#}
+    # remove mysql.db
+    rm -f privs.db
+}
 
-#@test "sql: dolt sql -q create database and specify privilege file" {
-    #run dolt sql --privilege-file=privs.db -q "create database inner_db;"
-    #[ "$status" -eq 0 ]
+@test "sql: dolt sql -q create database and specify privilege file" {
+    run dolt sql --privilege-file=privs.db -q "create database inner_db;"
+    [ "$status" -eq 0 ]
 
-    #run dolt sql --privilege-file=privs.db -q "create user new_user;"
-    #[ "$status" -eq 0 ]
+    run dolt sql --privilege-file=privs.db -q "create user new_user;"
+    [ "$status" -eq 0 ]
 
-    #run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
-    #[ "$status" -eq 0 ]
-    #[[ "$output" =~ "root" ]] || false
-    #[[ "$output" =~ "new_user" ]] || false
+    run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
 
-    #cd inner_db
+    cd inner_db
 
-    #run dolt sql --privilege-file=../privs.db -q "select user from mysql.user;"
-    #[ "$status" -eq 0 ]
-    #[[ "$output" =~ "root" ]] || false
-    #[[ "$output" =~ "new_user" ]] || false
+    run dolt sql --privilege-file=../privs.db -q "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
 
-    #cd ..
-    #rm -f privs.db
-#}
+    cd ..
+    rm -f privs.db
+}
 
-#@test "sql: errors do not write incomplete rows" {
-    #dolt sql <<"SQL"
-#CREATE TABLE test (
-    #pk BIGINT PRIMARY KEY,
-    #v1 BIGINT,
-    #INDEX (v1)
-#);
-#INSERT INTO test VALUES (1,1), (4,4), (5,5);
-#SQL
-    #run dolt sql -q "INSERT INTO test VALUES (2,2), (3,3), (1,1);"
-    #[ "$status" -eq "1" ]
-    #[[ "$output" =~ "duplicate" ]] || false
-    #run dolt sql -q "SELECT * FROM test" -r=csv
-    #[ "$status" -eq "0" ]
-    #[[ "$output" =~ "pk,v1" ]] || false
-    #[[ "$output" =~ "1,1" ]] || false
-    #[[ "$output" =~ "4,4" ]] || false
-    #[[ "$output" =~ "5,5" ]] || false
-    #[[ ! "$output" =~ "2,2" ]] || false
-    #[[ ! "$output" =~ "3,3" ]] || false
-    #[[ "${#lines[@]}" = "4" ]] || false
-    #run dolt sql -q "UPDATE test SET pk = pk + 1;"
-    #[ "$status" -eq "1" ]
-    #[[ "$output" =~ "duplicate" ]] || false
-    #run dolt sql -q "SELECT * FROM test" -r=csv
-    #[ "$status" -eq "0" ]
-    #[[ "$output" =~ "pk,v1" ]] || false
-    #[[ "$output" =~ "1,1" ]] || false
-    #[[ "$output" =~ "4,4" ]] || false
-    #[[ "$output" =~ "5,5" ]] || false
-    #[[ ! "$output" =~ "2,2" ]] || false
-    #[[ ! "$output" =~ "3,3" ]] || false
-    #[[ "${#lines[@]}" = "4" ]] || false
+@test "sql: errors do not write incomplete rows" {
+    dolt sql <<"SQL"
+CREATE TABLE test (
+    pk BIGINT PRIMARY KEY,
+    v1 BIGINT,
+    INDEX (v1)
+);
+INSERT INTO test VALUES (1,1), (4,4), (5,5);
+SQL
+    run dolt sql -q "INSERT INTO test VALUES (2,2), (3,3), (1,1);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "duplicate" ]] || false
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "$output" =~ "5,5" ]] || false
+    [[ ! "$output" =~ "2,2" ]] || false
+    [[ ! "$output" =~ "3,3" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    run dolt sql -q "UPDATE test SET pk = pk + 1;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "duplicate" ]] || false
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "$output" =~ "5,5" ]] || false
+    [[ ! "$output" =~ "2,2" ]] || false
+    [[ ! "$output" =~ "3,3" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
 
-    #dolt sql <<"SQL"
-#CREATE TABLE test2 (
-    #pk BIGINT PRIMARY KEY,
-    #CONSTRAINT fk_test FOREIGN KEY (pk) REFERENCES test (v1)
-#);
-#INSERT INTO test2 VALUES (4);
-#SQL
-    #run dolt sql -q "DELETE FROM test WHERE pk > 0;"
-    #[ "$status" -eq "1" ]
-    #[[ "$output" =~ "violation" ]] || false
-    #run dolt sql -q "SELECT * FROM test" -r=csv
-    #[ "$status" -eq "0" ]
-    #[[ "$output" =~ "pk,v1" ]] || false
-    #[[ "$output" =~ "1,1" ]] || false
-    #[[ "$output" =~ "4,4" ]] || false
-    #[[ "$output" =~ "5,5" ]] || false
-    #[[ ! "$output" =~ "2,2" ]] || false
-    #[[ ! "$output" =~ "3,3" ]] || false
-    #[[ "${#lines[@]}" = "4" ]] || false
-    #run dolt sql -q "SELECT * FROM test2" -r=csv
-    #[ "$status" -eq "0" ]
-    #[[ "$output" =~ "pk" ]] || false
-    #[[ "$output" =~ "4" ]] || false
-    #[[ "${#lines[@]}" = "2" ]] || false
-    #run dolt sql -q "REPLACE INTO test VALUES (1,7), (4,8), (5,9);"
-    #[ "$status" -eq "1" ]
-    #[[ "$output" =~ "violation" ]] || false
-    #run dolt sql -q "SELECT * FROM test" -r=csv
-    #[ "$status" -eq "0" ]
-    #[[ "$output" =~ "pk,v1" ]] || false
-    #[[ "$output" =~ "1,1" ]] || false
-    #[[ "$output" =~ "4,4" ]] || false
-    #[[ "$output" =~ "5,5" ]] || false
-    #[[ ! "$output" =~ "2,2" ]] || false
-    #[[ ! "$output" =~ "3,3" ]] || false
-    #[[ "${#lines[@]}" = "4" ]] || false
-    #run dolt sql -q "SELECT * FROM test2" -r=csv
-    #[ "$status" -eq "0" ]
-    #[[ "$output" =~ "pk" ]] || false
-    #[[ "$output" =~ "4" ]] || false
-    #[[ "${#lines[@]}" = "2" ]] || false
-#}
+    dolt sql <<"SQL"
+CREATE TABLE test2 (
+    pk BIGINT PRIMARY KEY,
+    CONSTRAINT fk_test FOREIGN KEY (pk) REFERENCES test (v1)
+);
+INSERT INTO test2 VALUES (4);
+SQL
+    run dolt sql -q "DELETE FROM test WHERE pk > 0;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "$output" =~ "5,5" ]] || false
+    [[ ! "$output" =~ "2,2" ]] || false
+    [[ ! "$output" =~ "3,3" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    run dolt sql -q "SELECT * FROM test2" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "4" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    run dolt sql -q "REPLACE INTO test VALUES (1,7), (4,8), (5,9);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "$output" =~ "5,5" ]] || false
+    [[ ! "$output" =~ "2,2" ]] || false
+    [[ ! "$output" =~ "3,3" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    run dolt sql -q "SELECT * FROM test2" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "4" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+}
 
-#@test "sql: select from multiple tables" {
-    #run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk"
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 20 ]
-    #run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1"
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 8 ]
-    #run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk,two_pk where one_pk.c1=two_pk.c1"
-    #[ "$status" -eq 0 ]
-    #[[ "$output" =~ foo ]] || false
-    #[[ "$output" =~ bar ]] || false
-    #[ "${#lines[@]}" -eq 8 ]
-#}
+@test "sql: select from multiple tables" {
+    run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 20 ]
+    run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 8 ]
+    run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk,two_pk where one_pk.c1=two_pk.c1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ foo ]] || false
+    [[ "$output" =~ bar ]] || false
+    [ "${#lines[@]}" -eq 8 ]
+}
 
-#@test "sql: AS OF queries" {
-    #dolt add .
-    #dolt commit -m "Initial main commit" --date "2020-03-01T12:00:00Z"
+@test "sql: AS OF queries" {
+    dolt add .
+    dolt commit -m "Initial main commit" --date "2020-03-01T12:00:00Z"
 
-    #main_commit=`dolt log | head -n1 | cut -d' ' -f2`
-    #dolt sql -q "update one_pk set c1 = c1 + 1"
-    #dolt sql -q "drop table two_pk"
-    #dolt checkout -b new_branch
-    #dolt add .
-    #dolt commit -m "Updated a table, dropped a table" --date "2020-03-01T13:00:00Z"
-    #new_commit=`dolt log | head -n1 | cut -d' ' -f2`
+    main_commit=`dolt log | head -n1 | cut -d' ' -f2`
+    dolt sql -q "update one_pk set c1 = c1 + 1"
+    dolt sql -q "drop table two_pk"
+    dolt checkout -b new_branch
+    dolt add .
+    dolt commit -m "Updated a table, dropped a table" --date "2020-03-01T13:00:00Z"
+    new_commit=`dolt log | head -n1 | cut -d' ' -f2`
     
-    #run dolt sql -r csv -q "select pk,c1 from one_pk order by c1"
-    #[ $status -eq 0 ]
-    #[[ "$output" =~ "0,1" ]] || false
-    #[[ "$output" =~ "1,11" ]] || false
-    #[[ "$output" =~ "2,21" ]] || false
-    #[[ "$output" =~ "3,31" ]] || false
+    run dolt sql -r csv -q "select pk,c1 from one_pk order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,1" ]] || false
+    [[ "$output" =~ "1,11" ]] || false
+    [[ "$output" =~ "2,21" ]] || false
+    [[ "$output" =~ "3,31" ]] || false
     
-    #run dolt sql -r csv -q "select pk,c1 from one_pk as of 'main' order by c1"
-    #[ $status -eq 0 ]
-    #[[ "$output" =~ "0,0" ]] || false
-    #[[ "$output" =~ "1,10" ]] || false
-    #[[ "$output" =~ "2,20" ]] || false
-    #[[ "$output" =~ "3,30" ]] || false
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of 'main' order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
 
-    #run dolt sql -r csv -q "select pk,c1 from one_pk as of '$main_commit' order by c1"
-    #[ $status -eq 0 ]
-    #[[ "$output" =~ "0,0" ]] || false
-    #[[ "$output" =~ "1,10" ]] || false
-    #[[ "$output" =~ "2,20" ]] || false
-    #[[ "$output" =~ "3,30" ]] || false
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of '$main_commit' order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
     
-    #run dolt sql -r csv -q "select count(*) from two_pk as of 'main'"
-    #[ $status -eq 0 ]
-    #[[ "$output" =~ "4" ]] || false
+    run dolt sql -r csv -q "select count(*) from two_pk as of 'main'"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
 
-    #run dolt sql -r csv -q "select count(*) from two_pk as of '$main_commit'"
-    #[ $status -eq 0 ]
-    #[[ "$output" =~ "4" ]] || false
+    run dolt sql -r csv -q "select count(*) from two_pk as of '$main_commit'"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
 
-    #run dolt sql -r csv -q "select pk,c1 from one_pk as of 'HEAD~' order by c1"
-    #[ $status -eq 0 ]
-    #[[ "$output" =~ "0,0" ]] || false
-    #[[ "$output" =~ "1,10" ]] || false
-    #[[ "$output" =~ "2,20" ]] || false
-    #[[ "$output" =~ "3,30" ]] || false
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of 'HEAD~' order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
 
-    #run dolt sql -r csv -q "select pk,c1 from one_pk as of 'new_branch^' order by c1"
-    #[ $status -eq 0 ]
-    #[[ "$output" =~ "0,0" ]] || false
-    #[[ "$output" =~ "1,10" ]] || false
-    #[[ "$output" =~ "2,20" ]] || false
-    #[[ "$output" =~ "3,30" ]] || false
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of 'new_branch^' order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
     
-    #dolt checkout main
-    #run dolt sql -r csv -q "select pk,c1 from one_pk as of 'new_branch' order by c1"
-    #[ $status -eq 0 ]
-    #[[ "$output" =~ "0,1" ]] || false
-    #[[ "$output" =~ "1,11" ]] || false
-    #[[ "$output" =~ "2,21" ]] || false
-    #[[ "$output" =~ "3,31" ]] || false
+    dolt checkout main
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of 'new_branch' order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,1" ]] || false
+    [[ "$output" =~ "1,11" ]] || false
+    [[ "$output" =~ "2,21" ]] || false
+    [[ "$output" =~ "3,31" ]] || false
 
-    #run dolt sql -r csv -q "select pk,c1 from one_pk as of '$new_commit' order by c1"
-    #[ $status -eq 0 ]
-    #[[ "$output" =~ "0,1" ]] || false
-    #[[ "$output" =~ "1,11" ]] || false
-    #[[ "$output" =~ "2,21" ]] || false
-    #[[ "$output" =~ "3,31" ]] || false
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of '$new_commit' order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,1" ]] || false
+    [[ "$output" =~ "1,11" ]] || false
+    [[ "$output" =~ "2,21" ]] || false
+    [[ "$output" =~ "3,31" ]] || false
 
-    #dolt checkout new_branch
-    #run dolt sql -r csv -q "select pk,c1 from one_pk as of CONVERT('2020-03-01 12:00:00', DATETIME) order by c1"
-    #[ $status -eq 0 ]
-    #[[ "$output" =~ "0,0" ]] || false
-    #[[ "$output" =~ "1,10" ]] || false
-    #[[ "$output" =~ "2,20" ]] || false
-    #[[ "$output" =~ "3,30" ]] || false
+    dolt checkout new_branch
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of CONVERT('2020-03-01 12:00:00', DATETIME) order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
 
-    #run dolt sql -r csv -q "select pk,c1 from one_pk as of CONVERT('2020-03-01 12:15:00', DATETIME) order by c1"
-    #[ $status -eq 0 ]
-    #[[ "$output" =~ "0,0" ]] || false
-    #[[ "$output" =~ "1,10" ]] || false
-    #[[ "$output" =~ "2,20" ]] || false
-    #[[ "$output" =~ "3,30" ]] || false
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of CONVERT('2020-03-01 12:15:00', DATETIME) order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
 
-    #run dolt sql -r csv -q "select pk,c1 from one_pk as of CONVERT('2020-03-01 13:00:00', DATETIME) order by c1"
-    #[ $status -eq 0 ]
-    #[[ "$output" =~ "0,1" ]] || false
-    #[[ "$output" =~ "1,11" ]] || false
-    #[[ "$output" =~ "2,21" ]] || false
-    #[[ "$output" =~ "3,31" ]] || false
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of CONVERT('2020-03-01 13:00:00', DATETIME) order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,1" ]] || false
+    [[ "$output" =~ "1,11" ]] || false
+    [[ "$output" =~ "2,21" ]] || false
+    [[ "$output" =~ "3,31" ]] || false
 
-    #run dolt sql -r csv -q "select pk,c1 from one_pk as of CONVERT('2020-03-01 13:15:00', DATETIME) order by c1"
-    #[ $status -eq 0 ]
-    #[[ "$output" =~ "0,1" ]] || false
-    #[[ "$output" =~ "1,11" ]] || false
-    #[[ "$output" =~ "2,21" ]] || false
-    #[[ "$output" =~ "3,31" ]] || false
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of CONVERT('2020-03-01 13:15:00', DATETIME) order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,1" ]] || false
+    [[ "$output" =~ "1,11" ]] || false
+    [[ "$output" =~ "2,21" ]] || false
+    [[ "$output" =~ "3,31" ]] || false
 
-    #run dolt sql -r csv -q "select pk,c1 from one_pk as of CONVERT('2020-03-01 11:59:59', DATETIME) order by c1"
-    #[ $status -eq 1 ]
-    #[[ "$output" =~ "not found" ]] || false
-#}
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of CONVERT('2020-03-01 11:59:59', DATETIME) order by c1"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "not found" ]] || false
+}
 
-#@test "sql: output formats" {
-    #dolt sql <<SQL
-    #CREATE TABLE test (
-    #a int primary key,
-    #b float,
-    #c varchar(80),
-    #d datetime
-#);
-#SQL
-    #dolt sql <<SQL
-    #insert into test values (1, 1.5, "1", "2020-01-01");
-    #insert into test values (2, 2.5, "2", "2020-02-02");
-    #insert into test values (3, NULL, "3", "2020-03-03");
-    #insert into test values (4, 4.5, NULL, "2020-04-04");
-    #insert into test values (5, 5.5, "5", NULL);
-#SQL
+@test "sql: output formats" {
+    dolt sql <<SQL
+    CREATE TABLE test (
+    a int primary key,
+    b float,
+    c varchar(80),
+    d datetime
+);
+SQL
+    dolt sql <<SQL
+    insert into test values (1, 1.5, "1", "2020-01-01");
+    insert into test values (2, 2.5, "2", "2020-02-02");
+    insert into test values (3, NULL, "3", "2020-03-03");
+    insert into test values (4, 4.5, NULL, "2020-04-04");
+    insert into test values (5, 5.5, "5", NULL);
+SQL
 
-    #run dolt sql -r csv -q "select * from test order by a"
-    #[ $status -eq 0 ]
-    #[[ "$output" =~ "a,b,c,d" ]] || false
-    #[[ "$output" =~ '1,1.5,1,2020-01-01 00:00:00' ]] || false
-    #[[ "$output" =~ '2,2.5,2,2020-02-02 00:00:00' ]] || false
-    #[[ "$output" =~ '3,,3,2020-03-03 00:00:00' ]] || false
-    #[[ "$output" =~ '4,4.5,,2020-04-04 00:00:00' ]] || false
-    #[[ "$output" =~ '5,5.5,5,' ]] || false
-    #[ "${#lines[@]}" -eq 6 ]
+    run dolt sql -r csv -q "select * from test order by a"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "a,b,c,d" ]] || false
+    [[ "$output" =~ '1,1.5,1,2020-01-01 00:00:00' ]] || false
+    [[ "$output" =~ '2,2.5,2,2020-02-02 00:00:00' ]] || false
+    [[ "$output" =~ '3,,3,2020-03-03 00:00:00' ]] || false
+    [[ "$output" =~ '4,4.5,,2020-04-04 00:00:00' ]] || false
+    [[ "$output" =~ '5,5.5,5,' ]] || false
+    [ "${#lines[@]}" -eq 6 ]
 
-    #run dolt sql -r json -q "select * from test order by a"
-    #[ $status -eq 0 ]
-    #echo $output
-    #[ "$output" == '{"rows": [{"a":1,"b":1.5,"c":"1","d":"2020-01-01 00:00:00"},{"a":2,"b":2.5,"c":"2","d":"2020-02-02 00:00:00"},{"a":3,"c":"3","d":"2020-03-03 00:00:00"},{"a":4,"b":4.5,"d":"2020-04-04 00:00:00"},{"a":5,"b":5.5,"c":"5"}]}' ]
-#}
+    run dolt sql -r json -q "select * from test order by a"
+    [ $status -eq 0 ]
+    echo $output
+    [ "$output" == '{"rows": [{"a":1,"b":1.5,"c":"1","d":"2020-01-01 00:00:00"},{"a":2,"b":2.5,"c":"2","d":"2020-02-02 00:00:00"},{"a":3,"c":"3","d":"2020-03-03 00:00:00"},{"a":4,"b":4.5,"d":"2020-04-04 00:00:00"},{"a":5,"b":5.5,"c":"5"}]}' ]
+}
 
-#@test "sql: output for escaped longtext exports properly" {
- #dolt sql <<SQL
-    #CREATE TABLE test (
-    #a int primary key,
-    #v LONGTEXT
-#);
-#SQL
-#dolt sql <<SQL
-    #insert into test values (1, "{""key"": ""value""}");
-    #insert into test values (2, """Hello""");
-#SQL
+@test "sql: output for escaped longtext exports properly" {
+ dolt sql <<SQL
+    CREATE TABLE test (
+    a int primary key,
+    v LONGTEXT
+);
+SQL
+dolt sql <<SQL
+    insert into test values (1, "{""key"": ""value""}");
+    insert into test values (2, """Hello""");
+SQL
 
-    #run dolt sql -r json -q "select * from test order by a"
-    #[ $status -eq 0 ]
-    #[ "$output" == '{"rows": [{"a":1,"v":"{\"key\": \"value\"}"},{"a":2,"v":"\"Hello\""}]}' ]
+    run dolt sql -r json -q "select * from test order by a"
+    [ $status -eq 0 ]
+    [ "$output" == '{"rows": [{"a":1,"v":"{\"key\": \"value\"}"},{"a":2,"v":"\"Hello\""}]}' ]
 
-    #run dolt sql -r csv -q "select * from test order by a"
-    #[ $status -eq 0 ]
-    #[[ "$output" =~ "a,v" ]] || false
-    #[[ "$output" =~ '1,"{""key"": ""value""}"' ]] || false
-    #[[ "$output" =~ '2,"""Hello"""' ]] || false
-#}
+    run dolt sql -r csv -q "select * from test order by a"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "a,v" ]] || false
+    [[ "$output" =~ '1,"{""key"": ""value""}"' ]] || false
+    [[ "$output" =~ '2,"""Hello"""' ]] || false
+}
 
-#@test "sql: ambiguous column name" {
-    #run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where c1=0"
-    #[ "$status" -eq 1 ]
-    #[[ "$output" =~ "ambiguous column name \"c1\", it's present in all these tables: one_pk, two_pk" ]] || false
-#}
+@test "sql: ambiguous column name" {
+    run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where c1=0"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "ambiguous column name \"c1\", it's present in all these tables: one_pk, two_pk" ]] || false
+}
 
-#@test "sql: select with and and or clauses" {
-    #run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where pk=0 and pk1=0 or pk2=1"
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 13 ]
-#}
+@test "sql: select with and and or clauses" {
+    run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where pk=0 and pk1=0 or pk2=1"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 13 ]
+}
 
-#@test "sql: select the same column twice using column aliases" {
-    #run dolt sql -q "select pk,c1 as foo,c1 as bar from one_pk"
-    #[ "$status" -eq 0 ]
-    #[[ ! "$output" =~ "NULL" ]] || false
-    #[[ "$output" =~ "foo" ]] || false
-    #[[ "$output" =~ "bar" ]] || false
-#}
+@test "sql: select the same column twice using column aliases" {
+    run dolt sql -q "select pk,c1 as foo,c1 as bar from one_pk"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "NULL" ]] || false
+    [[ "$output" =~ "foo" ]] || false
+    [[ "$output" =~ "bar" ]] || false
+}
 
-#@test "sql: select same column twice using table aliases" {
-    #run dolt sql -q "select foo.pk,foo.c1,bar.c1 from one_pk as foo, one_pk as bar"
-    #[ "$status" -eq 0 ]
-    #[[ ! "$output" =~ "NULL" ]] || false
-    #[[ "$output" =~ "c1" ]] || false
-#}
+@test "sql: select same column twice using table aliases" {
+    run dolt sql -q "select foo.pk,foo.c1,bar.c1 from one_pk as foo, one_pk as bar"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "NULL" ]] || false
+    [[ "$output" =~ "c1" ]] || false
+}
 
-#@test "sql: select ambiguous column using table aliases" {
-    #run dolt sql -q "select pk,foo.c1,bar.c1 from one_pk as foo, one_pk as bar"
-    #[ "$status" -eq 1 ]
-    #[[ "$output" =~ "ambiguous" ]] || false
-#}
+@test "sql: select ambiguous column using table aliases" {
+    run dolt sql -q "select pk,foo.c1,bar.c1 from one_pk as foo, one_pk as bar"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "ambiguous" ]] || false
+}
 
-#@test "sql: basic inner join" {
-    #run dolt sql -q "select pk,pk1,pk2 from one_pk join two_pk on one_pk.c1=two_pk.c1 order by pk"
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 8 ]
-    #first_join_output=$output
-    #run dolt sql -q "select pk,pk1,pk2 from two_pk join one_pk on one_pk.c1=two_pk.c1 order by pk"
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 8 ]
-    #[ "$output" = "$first_join_output" ]
-    #run dolt sql -q "select pk,pk1,pk2 from one_pk join two_pk on one_pk.c1=two_pk.c1 where pk=1 order by pk"
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 5 ]
-    #run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk join two_pk on one_pk.c1=two_pk.c1 order by pk"
-    #[ "$status" -eq 0 ]
-    #[[ "$output" =~ foo ]] || false
-    #[[ "$output" =~ bar ]] || false
-    #[ "${#lines[@]}" -eq 8 ]
-    #run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk join two_pk on one_pk.c1=two_pk.c1 where one_pk.c1=10 order by pk"
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 5 ]
-    #[[ "$output" =~ "10" ]] || false
-#}
+@test "sql: basic inner join" {
+    run dolt sql -q "select pk,pk1,pk2 from one_pk join two_pk on one_pk.c1=two_pk.c1 order by pk"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 8 ]
+    first_join_output=$output
+    run dolt sql -q "select pk,pk1,pk2 from two_pk join one_pk on one_pk.c1=two_pk.c1 order by pk"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 8 ]
+    [ "$output" = "$first_join_output" ]
+    run dolt sql -q "select pk,pk1,pk2 from one_pk join two_pk on one_pk.c1=two_pk.c1 where pk=1 order by pk"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk join two_pk on one_pk.c1=two_pk.c1 order by pk"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ foo ]] || false
+    [[ "$output" =~ bar ]] || false
+    [ "${#lines[@]}" -eq 8 ]
+    run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk join two_pk on one_pk.c1=two_pk.c1 where one_pk.c1=10 order by pk"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "10" ]] || false
+}
 
-#@test "sql: select two tables and join to one" {
-    #run dolt sql -q "select op.pk,pk1,pk2 from one_pk,two_pk join one_pk as op on op.pk=pk1"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 20 ]
-#}
+@test "sql: select two tables and join to one" {
+    run dolt sql -q "select op.pk,pk1,pk2 from one_pk,two_pk join one_pk as op on op.pk=pk1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 20 ]
+}
 
-#@test "sql: non unique table alias" {
-    #run dolt sql -q "select pk from one_pk,one_pk"
-    #skip "This should be an error. MySQL gives: Not unique table/alias: 'one_pk'"
-    #[ $status -eq 1 ]
-#}
+@test "sql: non unique table alias" {
+    run dolt sql -q "select pk from one_pk,one_pk"
+    skip "This should be an error. MySQL gives: Not unique table/alias: 'one_pk'"
+    [ $status -eq 1 ]
+}
 
-#@test "sql: is null and is not null statements" {
-    #dolt sql -q "insert into one_pk (pk,c1,c2) values (11,0,0)"
-    #run dolt sql -q "select pk from one_pk where c3 is null"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 5 ]
-    #[[ "$output" =~ "11" ]] || false
-    #run dolt sql -q "select pk from one_pk where c3 is not null"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 8 ]
-    #[[ ! "$output" =~ "11" ]] || false
-#}
+@test "sql: is null and is not null statements" {
+    dolt sql -q "insert into one_pk (pk,c1,c2) values (11,0,0)"
+    run dolt sql -q "select pk from one_pk where c3 is null"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "11" ]] || false
+    run dolt sql -q "select pk from one_pk where c3 is not null"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 8 ]
+    [[ ! "$output" =~ "11" ]] || false
+}
 
-#@test "sql: addition and subtraction" {
-    #dolt sql -q "insert into one_pk (pk,c1,c2,c3,c4,c5) values (11,0,5,10,15,20)"
-    #run dolt sql -q "select pk from one_pk where c2-c1>=5"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 5 ]
-    #[[ "$output" =~ "11" ]] || false
-    #run dolt sql -q "select pk from one_pk where c3-c2-c1>=5"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 5 ]
-    #[[ "$output" =~ "11" ]] || false
-    #run dolt sql -q "select pk from one_pk where c2+c1<=5"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 6 ]
-    #[[ "$output" =~ "0" ]] || false
-    #[[ "$output" =~ "11" ]] || false
-#}
+@test "sql: addition and subtraction" {
+    dolt sql -q "insert into one_pk (pk,c1,c2,c3,c4,c5) values (11,0,5,10,15,20)"
+    run dolt sql -q "select pk from one_pk where c2-c1>=5"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "11" ]] || false
+    run dolt sql -q "select pk from one_pk where c3-c2-c1>=5"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "11" ]] || false
+    run dolt sql -q "select pk from one_pk where c2+c1<=5"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ "0" ]] || false
+    [[ "$output" =~ "11" ]] || false
+}
 
-#@test "sql: order by and limit" {
-    #run dolt sql -q "select * from one_pk order by pk limit 1"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 5 ]
-    #[[ "$output" =~ " 0 " ]] || false
-    #[[ ! "$output" =~ " 10 " ]] || false
-    #run dolt sql -q "select * from one_pk order by pk limit 0,1"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 5 ]
-    #[[ "$output" =~ " 0 " ]] || false
-    #[[ ! "$output" =~ " 10 " ]] || false
-    #run dolt sql -q "select * from one_pk order by pk limit 1,1"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 5 ]
-    #[[ "$output" =~ " 10 " ]] || false
-    #[[ ! "$output" =~ " 0 " ]] || false
-    #run dolt sql -q "select * from one_pk order by pk limit 1,0"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 4 ]
-    #[[ ! "$output" =~ " 0 " ]] || false
-    #run dolt sql -q "select * from one_pk order by pk desc limit 1"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 5 ]
-    #[[ "$output" =~ "30" ]] || false
-    #[[ ! "$output" =~ "10" ]] || false
-    #run dolt sql -q "select * from two_pk order by pk1, pk2 desc limit 1"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 5 ]
-    #[[ "$output" =~ "10" ]] || false
-    #run dolt sql -q "select pk,c2 from one_pk order by c1 limit 1"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 5 ]
-    #[[ "$output" =~ "0" ]] || false
-    #[[ ! "$output" =~ "10" ]] || false
-    #run dolt sql -q "select * from one_pk,two_pk order by pk1,pk2,pk limit 1"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 5 ]
-    #[[ "$output" =~ "0" ]] || false
-    #[[ ! "$output" =~ "10" ]] || false
-    #dolt sql -q "select * from one_pk join two_pk order by pk1,pk2,pk limit 1"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 5 ]
-    #[[ "$output" =~ "0" ]] || false
-    #[[ ! "$output" =~ "10" ]] || false
-    #run dolt sql -q "select * from one_pk order by limit 1"
-    #[ $status -eq 1 ]
-    #run dolt sql -q "select * from one_pk order by bad limit 1"
-    #[ $status -eq 1 ]
-    #[[ "$output" =~ "column \"bad\" could not be found" ]] || false
-    #run dolt sql -q "select * from one_pk order pk by limit"
-    #[ $status -eq 1 ]
-#}
+@test "sql: order by and limit" {
+    run dolt sql -q "select * from one_pk order by pk limit 1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ " 0 " ]] || false
+    [[ ! "$output" =~ " 10 " ]] || false
+    run dolt sql -q "select * from one_pk order by pk limit 0,1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ " 0 " ]] || false
+    [[ ! "$output" =~ " 10 " ]] || false
+    run dolt sql -q "select * from one_pk order by pk limit 1,1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ " 10 " ]] || false
+    [[ ! "$output" =~ " 0 " ]] || false
+    run dolt sql -q "select * from one_pk order by pk limit 1,0"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ ! "$output" =~ " 0 " ]] || false
+    run dolt sql -q "select * from one_pk order by pk desc limit 1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "30" ]] || false
+    [[ ! "$output" =~ "10" ]] || false
+    run dolt sql -q "select * from two_pk order by pk1, pk2 desc limit 1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "10" ]] || false
+    run dolt sql -q "select pk,c2 from one_pk order by c1 limit 1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "0" ]] || false
+    [[ ! "$output" =~ "10" ]] || false
+    run dolt sql -q "select * from one_pk,two_pk order by pk1,pk2,pk limit 1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "0" ]] || false
+    [[ ! "$output" =~ "10" ]] || false
+    dolt sql -q "select * from one_pk join two_pk order by pk1,pk2,pk limit 1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "0" ]] || false
+    [[ ! "$output" =~ "10" ]] || false
+    run dolt sql -q "select * from one_pk order by limit 1"
+    [ $status -eq 1 ]
+    run dolt sql -q "select * from one_pk order by bad limit 1"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "column \"bad\" could not be found" ]] || false
+    run dolt sql -q "select * from one_pk order pk by limit"
+    [ $status -eq 1 ]
+}
 
-#@test "sql: limit less than zero" {
-    #run dolt sql -q "select * from one_pk order by pk limit -1"
-    #[ $status -eq 1 ]
-    #[[ "$output" =~ "syntax error" ]] || false
-    #run dolt sql -q "select * from one_pk order by pk limit -2"
-    #[ $status -eq 1 ]
-    #[[ "$output" =~ "syntax error" ]] || false
-    #run dolt sql -q "select * from one_pk order by pk limit -1,1"
-    #[ $status -eq 1 ]
-    #[[ "$output" =~ "syntax error" ]] || false
-#}
+@test "sql: limit less than zero" {
+    run dolt sql -q "select * from one_pk order by pk limit -1"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "syntax error" ]] || false
+    run dolt sql -q "select * from one_pk order by pk limit -2"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "syntax error" ]] || false
+    run dolt sql -q "select * from one_pk order by pk limit -1,1"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "syntax error" ]] || false
+}
 
-#@test "sql: addition on both left and right sides of comparison operator" {
-    #dolt sql -q "insert into one_pk (pk,c1,c2,c3,c4,c5) values (11,5,5,10,15,20)"
-    #run dolt sql -q "select pk from one_pk where c2+c1<=5+5"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 6 ]
-    #[[ "$output" =~ 0 ]] || false
-    #[[ "$output" =~ 11 ]] || false
-#}
+@test "sql: addition on both left and right sides of comparison operator" {
+    dolt sql -q "insert into one_pk (pk,c1,c2,c3,c4,c5) values (11,5,5,10,15,20)"
+    run dolt sql -q "select pk from one_pk where c2+c1<=5+5"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ 0 ]] || false
+    [[ "$output" =~ 11 ]] || false
+}
 
-#@test "sql: select with in list" {
-    #run dolt sql -q "select pk from one_pk where c1 in (10,20)"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 6 ]
-    #[[ "$output" =~ "1" ]] || false
-    #[[ "$output" =~ "2" ]] || false
-    #run dolt sql -q "select pk from one_pk where c1 in (11,21)"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 4 ]
-    #run dolt sql -q "select pk from one_pk where c1 not in (10,20)"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 6 ]
-    #[[ "$output" =~ "0" ]] || false
-    #[[ "$output" =~ "3" ]] || false
-    #run dolt sql -q "select pk from one_pk where c1 not in (10,20) and c1 in (30)"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 5 ]
-    #[[ "$output" =~ "3" ]] || false
-#}
+@test "sql: select with in list" {
+    run dolt sql -q "select pk from one_pk where c1 in (10,20)"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    run dolt sql -q "select pk from one_pk where c1 in (11,21)"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    run dolt sql -q "select pk from one_pk where c1 not in (10,20)"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ "0" ]] || false
+    [[ "$output" =~ "3" ]] || false
+    run dolt sql -q "select pk from one_pk where c1 not in (10,20) and c1 in (30)"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "3" ]] || false
+}
 
-#@test "sql: parser does not support empty list" {
-    #run dolt sql -q "select pk from one_pk where c1 not in ()"
-    #[ $status -eq 1 ]
-    #[[ "$output" =~ "Error parsing SQL" ]] || false
-#}
+@test "sql: parser does not support empty list" {
+    run dolt sql -q "select pk from one_pk where c1 not in ()"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Error parsing SQL" ]] || false
+}
 
-#@test "sql: addition in join statement" {
-    #run dolt sql -q "select * from one_pk join two_pk on pk1-pk>0 and pk2<1"
-    #[ $status -eq 0 ]
-    #[ "${#lines[@]}" -eq 5 ]
-    #[[ "$output" =~ "20" ]] || false
-#}
+@test "sql: addition in join statement" {
+    run dolt sql -q "select * from one_pk join two_pk on pk1-pk>0 and pk2<1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "20" ]] || false
+}
 
-#@test "sql: leave off table name in select" {
-    #dolt sql -q "insert into one_pk (pk,c1,c2) values (11,0,0)"
-    #run dolt sql -q "select pk where c3 is null"
-    #[ $status -eq 1 ]
-    #[[ "$output" =~ "column \"c3\" could not be found in any table in scope" ]] || false
-#}
+@test "sql: leave off table name in select" {
+    dolt sql -q "insert into one_pk (pk,c1,c2) values (11,0,0)"
+    run dolt sql -q "select pk where c3 is null"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "column \"c3\" could not be found in any table in scope" ]] || false
+}
 
-#@test "sql: show tables" {
-    #run dolt sql -q "show tables"
-    #[ $status -eq 0 ]
-    #echo ${#lines[@]}
-    #[ "${#lines[@]}" -eq 7 ]
-    #[[ "$output" =~ "one_pk" ]] || false
-    #[[ "$output" =~ "two_pk" ]] || false
-    #[[ "$output" =~ "has_datetimes" ]] || false
-#}
+@test "sql: show tables" {
+    run dolt sql -q "show tables"
+    [ $status -eq 0 ]
+    echo ${#lines[@]}
+    [ "${#lines[@]}" -eq 7 ]
+    [[ "$output" =~ "one_pk" ]] || false
+    [[ "$output" =~ "two_pk" ]] || false
+    [[ "$output" =~ "has_datetimes" ]] || false
+}
 
-#@test "sql: show tables AS OF" {
-    #dolt add .; dolt commit -m 'commit tables'
-    #dolt sql <<SQL
-#CREATE TABLE table_a(x int primary key);
-#CREATE TABLE table_b(x int primary key);
-#SQL
-    #dolt add .; dolt commit -m 'commit tables'
+@test "sql: show tables AS OF" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt sql <<SQL
+CREATE TABLE table_a(x int primary key);
+CREATE TABLE table_b(x int primary key);
+SQL
+    dolt add .; dolt commit -m 'commit tables'
     
-    #run dolt sql -q "show tables" -r csv
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 6 ]
-    #[[ "$output" =~ table_a ]] || false
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ table_a ]] || false
 
-    #run dolt sql -q "show tables AS OF 'HEAD~'" -r csv
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 4 ]
-    #[[ ! "$output" =~ table_a ]] || false    
-#}
+    run dolt sql -q "show tables AS OF 'HEAD~'" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ ! "$output" =~ table_a ]] || false    
+}
 
-#@test "sql: USE branch" {
-    #dolt add .; dolt commit -m 'commit tables'
-    #dolt checkout -b feature-branch
-    #dolt checkout main
+@test "sql: USE branch" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    dolt checkout main
     
-    #dolt sql  <<SQL
-#USE \`dolt_repo_$$/feature-branch\`;
-#CREATE TABLE table_a(x int primary key);
-#CREATE TABLE table_b(x int primary key);
-#SELECT DOLT_COMMIT('-a', '-m', 'two new tables');
-#SQL
+    dolt sql  <<SQL
+USE \`dolt_repo_$$/feature-branch\`;
+CREATE TABLE table_a(x int primary key);
+CREATE TABLE table_b(x int primary key);
+SELECT DOLT_COMMIT('-a', '-m', 'two new tables');
+SQL
     
-    #run dolt sql -q "show tables" -r csv
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 4 ]
-    #[[ ! "$output" =~ table_a ]] || false
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ ! "$output" =~ table_a ]] || false
 
-    #dolt checkout feature-branch
-    #run dolt sql -q "show tables" -r csv
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 6 ]
-    #[[ "$output" =~ table_a ]] || false
-#}
+    dolt checkout feature-branch
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ table_a ]] || false
+}
 
-#@test "sql: create new database" {
-    #dolt add .; dolt commit -m 'commit tables'
-    #dolt checkout -b feature-branch
-    #dolt checkout main
+@test "sql: create new database" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    dolt checkout main
     
-    #dolt sql  <<SQL
-#CREATE DATABASE test1;
-#USE test1;
-#CREATE TABLE table_a(x int primary key);
-#insert into table_a values (1), (2);
-#SELECT DOLT_COMMIT('-a', '-m', 'created table_a');
-#SQL
+    dolt sql  <<SQL
+CREATE DATABASE test1;
+USE test1;
+CREATE TABLE table_a(x int primary key);
+insert into table_a values (1), (2);
+SELECT DOLT_COMMIT('-a', '-m', 'created table_a');
+SQL
 
-    #cd test1
+    cd test1
     
-    #run dolt sql -q "show tables" -r csv
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 2 ]
-    #[[ "$output" =~ table_a ]] || false
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ table_a ]] || false
 
-    #run dolt log
-    #[ "$status" -eq 0 ]
-    #[[ "$output" =~ "created table_a" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "created table_a" ]] || false
 
-    #cd ../
-    #run dolt sql  <<SQL
-#use test1;
-#show tables;
-#SQL
+    cd ../
+    run dolt sql  <<SQL
+use test1;
+show tables;
+SQL
 
-    #[ "$status" -eq 0 ]
-    #[[ "$output" =~ "table_a" ]] || false
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "table_a" ]] || false
     
-    #dolt sql -q "create database test2"
-    #[ -d "test2" ]
+    dolt sql -q "create database test2"
+    [ -d "test2" ]
 
-    ## the current db should always be the one that the SQL command was
-    ## run in, not any nested dbs
-    #run dolt sql -q "select database()"
-    #[ "$status" -eq 0 ]
-    #[[ "$output" =~ "dolt_repo" ]] || false
+    # the current db should always be the one that the SQL command was
+    # run in, not any nested dbs
+    run dolt sql -q "select database()"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_repo" ]] || false
 
-    #run dolt sql -q "show databases"
-    #[ "$status" -eq 0 ]
-    #[[ "$output" =~ "dolt_repo" ]] || false
-    #[[ "$output" =~ "test1" ]] || false
-    #[[ "$output" =~ "test2" ]] || false
-    #[[ "$output" =~ "information_schema" ]] || false
+    run dolt sql -q "show databases"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_repo" ]] || false
+    [[ "$output" =~ "test1" ]] || false
+    [[ "$output" =~ "test2" ]] || false
+    [[ "$output" =~ "information_schema" ]] || false
 
-    #touch existing_file
-    #mkdir existing_dir
+    touch existing_file
+    mkdir existing_dir
 
-    #run dolt sql -q "create database existing_file"
-    #[ "$status" -eq 1 ]
-    #[[ "$output" =~ "exists" ]] || false
+    run dolt sql -q "create database existing_file"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "exists" ]] || false
 
-    #run dolt sql -q "create database existing_dir"
-    #[ "$status" -eq 1 ]
-    #[[ "$output" =~ "exists" ]] || false
-#}
+    run dolt sql -q "create database existing_dir"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "exists" ]] || false
+}
 
-#@test "sql: run outside a dolt directory" {
-    #mkdir new && cd new
+@test "sql: run outside a dolt directory" {
+    mkdir new && cd new
 
-    #mkdir decoy
-    #touch decoy/file.txt
+    mkdir decoy
+    touch decoy/file.txt
 
-    #dolt sql  <<SQL
-#CREATE DATABASE test1;
-#USE test1;
-#CREATE TABLE table_a(x int primary key);
-#insert into table_a values (1), (2);
-#SELECT DOLT_COMMIT('-a', '-m', 'created table_a');
-#SQL
+    dolt sql  <<SQL
+CREATE DATABASE test1;
+USE test1;
+CREATE TABLE table_a(x int primary key);
+insert into table_a values (1), (2);
+SELECT DOLT_COMMIT('-a', '-m', 'created table_a');
+SQL
 
-    #cd test1
+    cd test1
     
-    #run dolt sql -q "show tables" -r csv
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 2 ]
-    #[[ "$output" =~ table_a ]] || false
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ table_a ]] || false
 
-    #run dolt log
-    #[ "$status" -eq 0 ]
-    #[[ "$output" =~ "created table_a" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "created table_a" ]] || false
 
-    #cd ../
+    cd ../
     
-    #run dolt sql -q "show databases"
-    #[ "$status" -eq 0 ]
-    #[[ "$output" =~ "test1" ]] || false
-    #[[ "$output" =~ "information_schema" ]] || false
-    #[[ ! "$output" =~ "decoy" ]] || false
+    run dolt sql -q "show databases"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test1" ]] || false
+    [[ "$output" =~ "information_schema" ]] || false
+    [[ ! "$output" =~ "decoy" ]] || false
 
-    ## There's a bug in the teardown logic that means we need to cd
-    ## into the repo directory before the test ends
-    #cd ../
-#}
+    # There's a bug in the teardown logic that means we need to cd
+    # into the repo directory before the test ends
+    cd ../
+}
 
-#@test "sql: drop database with branches in use" {
-    #skiponwindows "Dropping databases can fail on windows due to file in use errors, need to fix"
+@test "sql: drop database with branches in use" {
+    skiponwindows "Dropping databases can fail on windows due to file in use errors, need to fix"
     
-    #mkdir new && cd new
+    mkdir new && cd new
 
-    ## this works fine, no attempt to use a dropped database
-    #dolt sql  <<SQL
-#CREATE DATABASE test1;
-#CREATE DATABASE test2;
-#USE test1;
-#CALL DOLT_CHECKOUT('-b', 'newBranch');
-#USE \`test1/newBranch\`;
-#USE test2;
-#DROP DATABASE test1;
-#SHOW TABLES;
-#SQL
+    # this works fine, no attempt to use a dropped database
+    dolt sql  <<SQL
+CREATE DATABASE test1;
+CREATE DATABASE test2;
+USE test1;
+CALL DOLT_CHECKOUT('-b', 'newBranch');
+USE \`test1/newBranch\`;
+USE test2;
+DROP DATABASE test1;
+SHOW TABLES;
+SQL
 
-    ## this fails, we're using test1 after dropping it
-    #run dolt sql  <<SQL
-#CREATE DATABASE test1;
-#USE test1;
-#CALL DOLT_CHECKOUT('-b', 'newBranch');
-#USE \`TEST1/newBranch\`;
-#USE test2;
-#DROP DATABASE Test1;
-#SHOW TABLES;
-#USE \`test1/newBranch\`;
-#SQL
+    # this fails, we're using test1 after dropping it
+    run dolt sql  <<SQL
+CREATE DATABASE test1;
+USE test1;
+CALL DOLT_CHECKOUT('-b', 'newBranch');
+USE \`TEST1/newBranch\`;
+USE test2;
+DROP DATABASE Test1;
+SHOW TABLES;
+USE \`test1/newBranch\`;
+SQL
 
-    #[ $status -ne 0 ]
-    #[[ "$output" =~ "database not found: test1/newBranch" ]] || false
+    [ $status -ne 0 ]
+    [[ "$output" =~ "database not found: test1/newBranch" ]] || false
 
-    #cd ../
-#}
+    cd ../
+}
 
-#@test "sql: bad dolt db" {
-    #mkdir new && cd new
+@test "sql: bad dolt db" {
+    mkdir new && cd new
 
-    #mkdir -p decoy/.dolt/noms/oldgen
-    #mkdir -p decoy/.dolt/noms/temptf
-    #echo '{}' > decoy/config.json
+    mkdir -p decoy/.dolt/noms/oldgen
+    mkdir -p decoy/.dolt/noms/temptf
+    echo '{}' > decoy/config.json
 
-    ## Not doing this cd ../ results in the teardown method failing on
-    ## a skip, not sure why. It's not part of the actual test
-    #cd ../
-    #skip "This results in a panic right now"
+    # Not doing this cd ../ results in the teardown method failing on
+    # a skip, not sure why. It's not part of the actual test
+    cd ../
+    skip "This results in a panic right now"
     
-    #run dolt sql -q "show databases" -r csv
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 2 ]
-    #[[ "$output" =~ "information_schema" ]] || false
-    #[[ ! "$output" =~ "decoy" ]] || false
-#}
+    run dolt sql -q "show databases" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "information_schema" ]] || false
+    [[ ! "$output" =~ "decoy" ]] || false
+}
 
 @test "sql: set head ref session var" {
     dolt add .; dolt commit -m 'commit tables'
