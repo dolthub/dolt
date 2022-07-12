@@ -37,7 +37,7 @@ const (
 	maxTxCommitRetries = 5
 )
 
-var ErrRetryTransaction = errors.New("this transaction conflicts with a committed transaction from another client, please retry")
+var ErrRetryTransaction = errors.New("this transaction conflicts with a committed transaction from another client")
 var ErrUnresolvedConflictsCommit = errors.New("Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1")
 var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transaction resulted in a working set with constraint violations, transaction rolled back. " +
 	"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
