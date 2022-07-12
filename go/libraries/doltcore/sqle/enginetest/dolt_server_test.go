@@ -329,10 +329,44 @@ func startServer(t *testing.T) (*sqlserver.ServerController, sqlserver.ServerCon
 	return sc, serverConfig
 }
 
+func startServerWithDefaultConfigOnly(t *testing.T) (*sqlserver.ServerController, sqlserver.ServerConfig) {
+	dEnv := dtestutils.CreateTestEnv()
+	serverConfig := sqlserver.DefaultServerConfig()
+
+	sc := sqlserver.NewServerController()
+	go func() {
+		_, _ = sqlserver.Serve(context.Background(), "", serverConfig, sc, dEnv)
+	}()
+	err := sc.WaitForStart()
+	require.NoError(t, err)
+
+	return sc, serverConfig
+}
+
 func newConnection(t *testing.T, serverConfig sqlserver.ServerConfig) (*dbr.Connection, *dbr.Session) {
 	const dbName = "dolt"
 	conn, err := dbr.Open("mysql", sqlserver.ConnectionString(serverConfig)+dbName, nil)
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 	return conn, sess
+}
+
+func TestDoltServerRunningUnixSocket(t *testing.T) {
+	// with default host = 'localhost', the server will use unix socket located in /tmp/mysql.sock
+	sc, serverConfig := startServerWithDefaultConfigOnly(t)
+	sc.WaitForStart()
+
+	t.Run("connecting mysql works", func(t *testing.T) {
+		conn, sess := newConnection(t, serverConfig)
+		// Assertions
+		rows, err := sess.Query("select 1")
+		require.NoError(t, err)
+		assertResultsEqual(t, []sql.Row{{1}}, rows)
+		require.NoError(t, conn.Close())
+
+	})
+
+	sc.StopServer()
+	sc.WaitForClose()
+
 }

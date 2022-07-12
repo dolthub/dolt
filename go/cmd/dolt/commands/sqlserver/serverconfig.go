@@ -18,6 +18,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"runtime"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
@@ -370,6 +371,9 @@ func ValidateConfig(config ServerConfig) error {
 
 // ConnectionString returns a Data Source Name (DSN) to be used by go clients for connecting to a running server.
 func ConnectionString(config ServerConfig) string {
+	if runtime.GOOS != "windows" && config.Host() == "localhost" {
+		return fmt.Sprintf("%v:%v@unix(%v)/", config.User(), config.Password(), SockAddr)
+	}
 	return fmt.Sprintf("%v:%v@tcp(%v:%v)/", config.User(), config.Password(), config.Host(), config.Port())
 }
 
