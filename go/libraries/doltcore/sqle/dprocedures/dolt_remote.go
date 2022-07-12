@@ -16,13 +16,14 @@ package dprocedures
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 )
