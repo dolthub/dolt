@@ -17,7 +17,6 @@ package dsess
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -28,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
@@ -44,13 +42,6 @@ const (
 	Batched
 )
 
-func init() {
-	_, ok := os.LookupEnv(TransactionMergeStompEnvKey)
-	if ok {
-		transactionMergeStompEnv = true
-	}
-}
-
 const (
 	ReplicateToRemoteKey     = "dolt_replicate_to_remote"
 	ReadReplicaRemoteKey     = "dolt_read_replica_remote"
@@ -60,12 +51,8 @@ const (
 	AsyncReplicationKey      = "dolt_async_replication"
 	AwsCredsFileKey          = "aws_credentials_file"
 	AwsCredsProfileKey       = "aws_credentials_profile"
-	// Transactions merges will stomp if either if the below keys are set
-	TransactionMergeStompKey    = "dolt_transaction_merge_stomp"
-	TransactionMergeStompEnvKey = "DOLT_TRANSACTION_MERGE_STOMP"
 )
 
-var transactionMergeStompEnv = false
 var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
 	"Rollback or commit changes before changing working sets.")
 
@@ -234,15 +221,7 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacte
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
 
-	return NewDoltTransaction(
-		dbName,
-		ws,
-		wsRef,
-		sessionState.dbData,
-		sessionState.WriteSession.GetOptions(),
-		getTransactionMergeStrategy(),
-		tCharacteristic,
-	), nil
+	return NewDoltTransaction(dbName, ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic), nil
 }
 
 func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
@@ -815,27 +794,10 @@ func (sess *Session) SwitchWorkingSet(
 		wsRef,
 		sessionState.dbData,
 		sessionState.WriteSession.GetOptions(),
-		getTransactionMergeStrategy(),
 		tCharacteristic,
 	))
 
 	return nil
-}
-
-func getTransactionMergeStrategy() merge.ConflictStompStrategy {
-	_, stompVar, ok := sql.SystemVariables.GetGlobal(TransactionMergeStompKey)
-	if ok {
-		s := stompVar.(int8)
-		if s == 1 {
-			return merge.ConflictStompStrategyPickTheirs
-		}
-	}
-
-	if transactionMergeStompEnv {
-		return merge.ConflictStompStrategyPickTheirs
-	}
-
-	return merge.ConflictStompStrategyNone
 }
 
 func (sess *Session) WorkingSet(ctx *sql.Context, dbName string) (*doltdb.WorkingSet, error) {
