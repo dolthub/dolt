@@ -15,6 +15,7 @@
 package dsess
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -744,13 +745,7 @@ func (sess *Session) SwitchWorkingSet(
 	}
 
 	ws, err := sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
-	if err == doltdb.ErrWorkingSetNotFound {
-		// no working set for this HEAD yet
-		ws, err = sess.newWorkingSetForHead(ctx, wsRef, dbName)
-		if err != nil {
-			return err
-		}
-	} else if err != nil {
+	if err != nil {
 		return err
 	}
 
@@ -895,7 +890,11 @@ func (sess *Session) setHeadRefSessionVar(ctx *sql.Context, db, value string) er
 	if err != nil {
 		return err
 	}
-	return sess.SwitchWorkingSet(ctx, db, ws)
+	err = sess.SwitchWorkingSet(ctx, db, ws)
+	if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
+		return fmt.Errorf("%w; %s: '%s'", doltdb.ErrBranchNotFound, err, value)
+	}
+	return err
 }
 
 func (sess *Session) setForeignKeyChecksSessionVar(ctx *sql.Context, key string, value interface{}) error {
