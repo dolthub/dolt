@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	textdiff "github.com/andreyvit/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/go-mysql-server/sql"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
@@ -42,7 +43,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -572,7 +572,7 @@ func diffRows(ctx context.Context, se *engine.SqlEngine, td diff.TableDelta, dAr
 		tableName = td.FromName
 	}
 
-	columns := getColumnNamesString(td.FromSch, td.ToSch, dArgs)
+	columns := getColumnNamesString(td.FromSch, td.ToSch)
 	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", tableName, from, to)
 
 	if len(dArgs.where) > 0 {
@@ -695,29 +695,17 @@ func writeDiffResults(
 	}
 }
 
-func getColumnNamesString(fromSch, toSch schema.Schema, args *diffArgs) string {
+func getColumnNamesString(fromSch, toSch schema.Schema) string {
 	var cols []string
 	if fromSch != nil {
 		fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			if args.diffOutput == TabularDiffOutput {
-				cols = append(cols, fmt.Sprintf("cast (from_%s as char) as `from_%s`", col.Name, col.Name))
-			} else if args.diffOutput == SQLDiffOutput {
-				cols = append(cols, fmt.Sprintf("from_%s", col.Name))
-			} else {
-				panic("unexpected format")
-			}
+			cols = append(cols, fmt.Sprintf("from_%s", col.Name))
 			return false, nil
 		})
 	}
 	if toSch != nil {
 		toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			if args.diffOutput == TabularDiffOutput {
-				cols = append(cols, fmt.Sprintf("cast (to_%s as char) as `to_%s`", col.Name, col.Name))
-			} else if args.diffOutput == SQLDiffOutput {
-				cols = append(cols, fmt.Sprintf("to_%s", col.Name))
-			} else {
-				panic("unexpected format")
-			}
+			cols = append(cols, fmt.Sprintf("to_%s", col.Name))
 			return false, nil
 		})
 	}
