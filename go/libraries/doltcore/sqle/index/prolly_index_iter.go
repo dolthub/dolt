@@ -58,7 +58,7 @@ func newProllyIndexIter(
 	idx DoltIndex,
 	rng prolly.Range,
 	pkSch sql.PrimaryKeySchema,
-	projections []string,
+	projections []uint64,
 	dprimary, dsecondary durable.Index,
 ) (prollyIndexIter, error) {
 	secondary := durable.ProllyMapFromIndex(dsecondary)
@@ -218,7 +218,7 @@ func newProllyCoveringIndexIter(
 	idx DoltIndex,
 	rng prolly.Range,
 	pkSch sql.PrimaryKeySchema,
-	projections []string,
+	projections []uint64,
 	indexdata durable.Index,
 ) (prollyCoveringIndexIter, error) {
 	secondary := durable.ProllyMapFromIndex(indexdata)
@@ -330,7 +330,7 @@ func (p prollyCoveringIndexIter) Close(*sql.Context) error {
 	return nil
 }
 
-func coveringIndexMapping(d DoltIndex, projections []string) (keyMap val.OrdinalMapping) {
+func coveringIndexMapping(d DoltIndex, projections []uint64) (keyMap val.OrdinalMapping) {
 	all := d.Schema().GetAllCols()
 	idx := d.IndexSchema().GetAllCols()
 
@@ -339,16 +339,15 @@ func coveringIndexMapping(d DoltIndex, projections []string) (keyMap val.Ordinal
 		keyMap[i] = -1
 	}
 	for _, p := range projections {
-		p = strings.ToLower(p)
-		if col, ok := idx.LowerNameToCol[p]; ok {
-			i := all.TagToIdx[col.Tag]
-			keyMap[i] = idx.TagToIdx[col.Tag]
+		i := all.TagToIdx[p]
+		if idx, ok := idx.TagToIdx[p]; ok {
+			keyMap[i] = idx
 		}
 	}
 	return
 }
 
-func primaryIndexMapping(idx DoltIndex, sqlSch sql.PrimaryKeySchema, projections []string) (keyMap, valMap val.OrdinalMapping) {
+func primaryIndexMapping(idx DoltIndex, sqlSch sql.PrimaryKeySchema, projections []uint64) (keyMap, valMap val.OrdinalMapping) {
 	all := idx.Schema().GetAllCols()
 	pks := idx.Schema().GetPKCols()
 	nonPks := idx.Schema().GetNonPKCols()
@@ -363,14 +362,14 @@ func primaryIndexMapping(idx DoltIndex, sqlSch sql.PrimaryKeySchema, projections
 	}
 
 	for _, p := range projections {
-		p = strings.ToLower(p)
-		if col, ok := pks.LowerNameToCol[p]; ok {
-			i := all.TagToIdx[col.Tag]
-			keyMap[i] = pks.TagToIdx[col.Tag]
+		i := all.TagToIdx[p]
+		if iidx, ok := pks.TagToIdx[p]; ok {
+			keyMap[i] = iidx
 		}
-		if col, ok := nonPks.LowerNameToCol[p]; ok {
-			i := all.TagToIdx[col.Tag]
-			valMap[i] = nonPks.TagToIdx[col.Tag]
+
+		j := all.TagToIdx[p]
+		if jidx, ok := nonPks.TagToIdx[p]; ok {
+			valMap[j] = jidx
 		}
 	}
 	return
@@ -413,7 +412,7 @@ func newProllyKeylessIndexIter(
 	idx DoltIndex,
 	rng prolly.Range,
 	pkSch sql.PrimaryKeySchema,
-	projections []string,
+	projections []uint64,
 	rows, dsecondary durable.Index,
 ) (prollyKeylessIndexIter, error) {
 	secondary := durable.ProllyMapFromIndex(dsecondary)

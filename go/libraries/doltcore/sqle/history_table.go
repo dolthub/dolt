@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"io"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -24,6 +25,7 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -63,6 +65,7 @@ type HistoryTable struct {
 	commitFilters []sql.Expression
 	cmItr         doltdb.CommitItr
 	indexLookup   sql.IndexLookup
+	projectedCols []uint64
 }
 
 func (ht *HistoryTable) ShouldParallelizeAccess() bool {
@@ -88,11 +91,11 @@ func (ht HistoryTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 // NewHistoryTable creates a history table
 func NewHistoryTable(table *DoltTable, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	cmItr := doltdb.CommitItrForRoots(ddb, head)
-
-	return &HistoryTable{
+	h := &HistoryTable{
 		doltTable: table,
 		cmItr:     cmItr,
 	}
+	return h
 }
 
 // History table schema returns the corresponding history table schema for the base table given, which consists of
@@ -208,14 +211,53 @@ func transformFilters(ctx *sql.Context, filters ...sql.Expression) []sql.Express
 	return filters
 }
 
-func (ht HistoryTable) WithProjections(colNames []string) sql.Table {
-	projectedTable := ht.doltTable.WithProjections(colNames)
-	ht.doltTable = projectedTable.(*DoltTable)
-	return &ht
+func (ht *HistoryTable) WithProjections(colNames []string) sql.Table {
+	nt := *ht
+	nt.projectedCols = make([]uint64, len(colNames))
+	nonHistoryCols := make([]string, 0)
+	cols := ht.doltTable.sch.GetAllCols()
+	for i := range colNames {
+		col, ok := cols.LowerNameToCol[strings.ToLower(colNames[i])]
+		if !ok {
+			switch colNames[i] {
+			case CommitHashCol:
+				nt.projectedCols[i] = schema.HistoryCommitHashTag
+			case CommitterCol:
+				nt.projectedCols[i] = schema.HistoryCommitterTag
+			case CommitDateCol:
+				nt.projectedCols[i] = schema.HistoryCommitDateTag
+			default:
+			}
+		} else {
+			nt.projectedCols[i] = col.Tag
+			nonHistoryCols = append(nonHistoryCols, col.Name)
+		}
+	}
+	projectedTable := ht.doltTable.WithProjections(nonHistoryCols)
+	nt.doltTable = projectedTable.(*DoltTable)
+	return &nt
 }
 
 func (ht *HistoryTable) Projections() []string {
-	return ht.doltTable.Projections()
+	names := make([]string, len(ht.projectedCols))
+	cols := ht.doltTable.sch.GetAllCols()
+	for i := range ht.projectedCols {
+		if col, ok := cols.TagToCol[ht.projectedCols[i]]; ok {
+			names[i] = col.Name
+
+		} else {
+			switch ht.projectedCols[i] {
+			case schema.HistoryCommitHashTag:
+				names[i] = CommitHashCol
+			case schema.HistoryCommitterTag:
+				names[i] = CommitterCol
+			case schema.HistoryCommitDateTag:
+				names[i] = CommitDateCol
+			default:
+			}
+		}
+	}
+	return names
 }
 
 // Name returns the name of the history table
@@ -314,15 +356,22 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 	var sqlTable sql.Table
 	sqlTable = table
 	if lookup != nil {
-		// This revision of the table may not have the index we need (which was determined based on HEAD)
-		// Only apply the lookup if the index is there
-		hasIndex, err := table.HasIndex(ctx, lookup.Index())
+		indexes, err := table.GetIndexes(ctx)
 		if err != nil {
 			return nil, err
 		}
-
-		if hasIndex {
-			sqlTable = table.WithIndexLookup(lookup)
+		var newLookup sql.IndexLookup
+		for i := range indexes {
+			if indexes[i].ID() == lookup.Index().ID() {
+				newLookup, err = indexes[i].NewLookup(ctx, lookup.Ranges()...)
+				if err != nil {
+					return nil, err
+				}
+				break
+			}
+		}
+		if newLookup != nil {
+			sqlTable = table.WithIndexLookup(newLookup)
 		}
 	}
 
