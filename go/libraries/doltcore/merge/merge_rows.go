@@ -36,50 +36,53 @@ type MergeOpts struct {
 	IsCherryPick bool
 }
 
-type Merger struct {
-	theirRootIsh hash.Hash
-	ancRootIsh   hash.Hash
-	root         *doltdb.RootValue
-	mergeRoot    *doltdb.RootValue
-	ancRoot      *doltdb.RootValue
-	vrw          types.ValueReadWriter
-	ns           tree.NodeStore
+type RootMerger struct {
+	left  *doltdb.RootValue
+	right *doltdb.RootValue
+	anc   *doltdb.RootValue
+
+	rightHash hash.Hash
+	ancHash   hash.Hash
+
+	vrw types.ValueReadWriter
+	ns  tree.NodeStore
 }
 
 // NewMerger creates a new merger utility object.
-func NewMerger(root, mergeRoot, ancRoot *doltdb.RootValue, vrw types.ValueReadWriter, ns tree.NodeStore) (*Merger, error) {
-	ancRootIsh, err := ancRoot.HashOf()
+func NewMerger(left, right, anc *doltdb.RootValue, vrw types.ValueReadWriter, ns tree.NodeStore) (*RootMerger, error) {
+	rightHash, err := right.HashOf()
 	if err != nil {
 		return nil, err
 	}
-	theirRootIsh, err := mergeRoot.HashOf()
+	ancHash, err := anc.HashOf()
 	if err != nil {
 		return nil, err
 	}
-	return &Merger{
-		theirRootIsh: theirRootIsh,
-		ancRootIsh:   ancRootIsh,
-		root:         root,
-		mergeRoot:    mergeRoot,
-		ancRoot:      ancRoot,
-		vrw:          vrw,
-		ns:           ns,
+
+	return &RootMerger{
+		left:      left,
+		right:     right,
+		anc:       anc,
+		rightHash: rightHash,
+		ancHash:   ancHash,
+		vrw:       vrw,
+		ns:        ns,
 	}, nil
 }
 
 // MergeTable merges schema and table data for the table tblName.
-func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*doltdb.Table, *MergeStats, error) {
-	rootHasTable, tbl, rootSchema, rootHash, err := getTableInfoFromRoot(ctx, tblName, merger.root)
+func (merger *RootMerger) MergeTable(ctx context.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*doltdb.Table, *MergeStats, error) {
+	rootHasTable, tbl, rootSchema, rootHash, err := getTableInfoFromRoot(ctx, tblName, merger.left)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	mergeHasTable, mergeTbl, mergeSchema, mergeHash, err := getTableInfoFromRoot(ctx, tblName, merger.mergeRoot)
+	mergeHasTable, mergeTbl, mergeSchema, mergeHash, err := getTableInfoFromRoot(ctx, tblName, merger.right)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	ancHasTable, ancTbl, ancSchema, ancHash, err := getTableInfoFromRoot(ctx, tblName, merger.ancRoot)
+	ancHasTable, ancTbl, ancSchema, ancHash, err := getTableInfoFromRoot(ctx, tblName, merger.anc)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -214,8 +217,8 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 			tbl, mergeTbl, updatedTbl,
 			ancRows,
 			ancIndexSet,
-			merger.theirRootIsh,
-			merger.ancRootIsh)
+			merger.rightHash,
+			merger.ancHash)
 		if err != nil {
 			return nil, nil, err
 		}
