@@ -162,7 +162,7 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Ar
 		} else if trackVal == "inherit" {
 			return errhand.VerboseErrorFromError(fmt.Errorf("--track='inherit' is not supported yet"))
 		}
-		remoteName, remoteBranchName = parseRemoteBranchName(startPt)
+		remoteName, remoteBranchName = ParseRemoteBranchName(startPt)
 		remotes, err := dEnv.RepoStateReader().GetRemotes()
 		if err != nil {
 			return errhand.BuildDError(err.Error()).Build()
@@ -188,7 +188,7 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Ar
 
 	// the new branch is checked out at this point
 	if setTrackUpstream {
-		verr = setRemoteUpstreamForCheckout(dEnv, remoteName, remoteBranchName)
+		verr = SetRemoteUpstreamForBranchRef(dEnv, remoteName, remoteBranchName, dEnv.RepoStateReader().CWBHeadRef())
 		if verr != nil {
 			return verr
 		}
@@ -199,12 +199,12 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Ar
 		if err != nil {
 			return nil
 		}
-		remoteName, remoteBranchName = parseRemoteBranchName(startPt)
+		remoteName, remoteBranchName = ParseRemoteBranchName(startPt)
 		_, remoteOk := remotes[remoteName]
 		if !remoteOk {
 			return nil
 		}
-		verr = setRemoteUpstreamForCheckout(dEnv, remoteName, remoteBranchName)
+		verr = SetRemoteUpstreamForBranchRef(dEnv, remoteName, remoteBranchName, dEnv.RepoStateReader().CWBHeadRef())
 		if verr != nil {
 			return verr
 		}
@@ -239,7 +239,7 @@ func checkoutRemoteBranchOrSuggestNew(ctx context.Context, dEnv *env.DoltEnv, na
 		if verr != nil {
 			return verr
 		}
-		return setRemoteUpstreamForCheckout(dEnv, remoteRefs[0].GetRemote(), remoteRefs[0].GetBranch())
+		return SetRemoteUpstreamForBranchRef(dEnv, remoteRefs[0].GetRemote(), remoteRefs[0].GetBranch(), dEnv.RepoStateReader().CWBHeadRef())
 	} else {
 		// TODO : add hint of using `dolt checkout --track <remote>/<branch>` when --track flag is supported
 		return errhand.BuildDError("'%s' matched multiple (%v) remote tracking branches", name, len(remoteRefs)).Build()
@@ -317,19 +317,18 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string, force b
 	return nil
 }
 
-// setRemoteUpstreamForCheckout sets upstream for checked out branch. This applies `dolt checkout <bn>`,
+// SetRemoteUpstreamForBranchRef sets upstream for checked out branch. This applies `dolt checkout <bn>`,
 // if <bn> matches any remote branch name. This should not happen for `dolt checkout -b <bn>` case.
-func setRemoteUpstreamForCheckout(dEnv *env.DoltEnv, remote, remoteBranch string) errhand.VerboseError {
+func SetRemoteUpstreamForBranchRef(dEnv *env.DoltEnv, remote, remoteBranch string, branchRef ref.DoltRef) errhand.VerboseError {
 	refSpec, err := ref.ParseRefSpecForRemote(remote, remoteBranch)
 	if err != nil {
 		return errhand.BuildDError(fmt.Errorf("%w: '%s'", err, remote).Error()).Build()
 	}
 
-	currentBranch := dEnv.RepoStateReader().CWBHeadRef()
-	src := refSpec.SrcRef(currentBranch)
+	src := refSpec.SrcRef(branchRef)
 	dest := refSpec.DestRef(src)
 
-	err = dEnv.RepoStateWriter().UpdateBranch(currentBranch.GetPath(), env.BranchConfig{
+	err = dEnv.RepoStateWriter().UpdateBranch(branchRef.GetPath(), env.BranchConfig{
 		Merge: ref.MarshalableRef{
 			Ref: dest,
 		},
@@ -342,7 +341,7 @@ func setRemoteUpstreamForCheckout(dEnv *env.DoltEnv, remote, remoteBranch string
 	if err != nil {
 		return errhand.BuildDError(actions.ErrFailedToSaveRepoState.Error()).AddCause(err).Build()
 	}
-	cli.Printf("branch '%s' set up to track '%s/%s'.\n", currentBranch.GetPath(), remote, remoteBranch)
+	cli.Printf("branch '%s' set up to track '%s/%s'.\n", branchRef.GetPath(), remote, remoteBranch)
 
 	return nil
 }
@@ -353,7 +352,7 @@ func unreadableRootToVErr(err error) errhand.VerboseError {
 	return bdr.AddCause(doltdb.GetUnreachableRootCause(err)).Build()
 }
 
-func parseRemoteBranchName(startPt string) (string, string) {
+func ParseRemoteBranchName(startPt string) (string, string) {
 	startPt = strings.TrimPrefix(startPt, "remotes/")
 	names := strings.Split(startPt, "/")
 	if len(names) < 2 {
