@@ -44,9 +44,10 @@ type EnvNameAndPath struct {
 
 // MultiRepoEnv is a type used to store multiple environments which can be retrieved by name
 type MultiRepoEnv struct {
-	envs []NamedEnv
-	fs   filesys.Filesys
-	cfg  config.ReadWriteConfig
+	envs           []NamedEnv
+	fs             filesys.Filesys
+	cfg            config.ReadWriteConfig
+	ignoreLockFile bool
 }
 
 type NamedEnv struct {
@@ -140,6 +141,10 @@ func (mrEnv *MultiRepoEnv) GetWorkingRoots(ctx context.Context) (map[string]*dol
 
 // IsLocked returns true if any env is locked
 func (mrEnv *MultiRepoEnv) IsLocked() (bool, string) {
+	if mrEnv.ignoreLockFile {
+		return false, ""
+	}
+
 	for _, e := range mrEnv.envs {
 		if e.env.IsLocked() {
 			return true, e.env.LockFile()
@@ -151,6 +156,10 @@ func (mrEnv *MultiRepoEnv) IsLocked() (bool, string) {
 // Lock locks all child envs. If an error is returned, all
 // child envs will be returned with their initial lock state.
 func (mrEnv *MultiRepoEnv) Lock() error {
+	if mrEnv.ignoreLockFile {
+		return nil
+	}
+
 	if ok, f := mrEnv.IsLocked(); ok {
 		return ErrActiveServerLock.New(f)
 	}
@@ -168,6 +177,10 @@ func (mrEnv *MultiRepoEnv) Lock() error {
 
 // Unlock unlocks all child envs.
 func (mrEnv *MultiRepoEnv) Unlock() error {
+	if mrEnv.ignoreLockFile {
+		return nil
+	}
+
 	var err, retErr error
 	for _, e := range mrEnv.envs {
 		err = e.env.Unlock()
@@ -221,9 +234,10 @@ func MultiEnvForDirectory(
 	dEnv *DoltEnv,
 ) (*MultiRepoEnv, error) {
 	mrEnv := &MultiRepoEnv{
-		envs: make([]NamedEnv, 0),
-		fs:   fs,
-		cfg:  dEnv.Config.WriteableConfig(),
+		envs:           make([]NamedEnv, 0),
+		fs:             fs,
+		cfg:            dEnv.Config.WriteableConfig(),
+		ignoreLockFile: dEnv.IgnoreLockFile,
 	}
 
 	if dEnv.Valid() && fs == dEnv.FS {
@@ -293,6 +307,7 @@ func MultiEnvForPaths(
 	cfg config.ReadWriteConfig,
 	fs filesys.Filesys,
 	version string,
+	ignoreLockFile bool,
 	envNamesAndPaths ...EnvNameAndPath,
 ) (*MultiRepoEnv, error) {
 	nameToPath := make(map[string]string)
@@ -311,9 +326,10 @@ func MultiEnvForPaths(
 	}
 
 	mrEnv := &MultiRepoEnv{
-		envs: make([]NamedEnv, 0),
-		fs:   fs,
-		cfg:  cfg,
+		envs:           make([]NamedEnv, 0),
+		fs:             fs,
+		cfg:            cfg,
+		ignoreLockFile: ignoreLockFile,
 	}
 
 	for name, path := range nameToPath {
