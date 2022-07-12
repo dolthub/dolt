@@ -24,6 +24,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -43,6 +44,8 @@ type CSVWriter struct {
 	sch     schema.Schema
 	useCRLF bool // True to use \r\n as the line terminator
 }
+
+var _ table.SqlTableWriter = (*CSVWriter)(nil)
 
 // NewCSVWriter writes rows to the given WriteCloser based on the Schema and CSVFileInfo provided
 func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {

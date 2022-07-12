@@ -76,7 +76,7 @@ func TestFixedWidthWriter(t *testing.T) {
 		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
 
 		for _, r := range rows {
-			err := tableWr.WriteRow(context.Background(), r, nil)
+			err := tableWr.WriteSqlRow(context.Background(), r)
 			assert.NoError(t, err)
 		}
 
@@ -104,7 +104,7 @@ func TestFixedWidthWriter(t *testing.T) {
 		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
 
 		for _, r := range rows {
-			err := tableWr.WriteRow(context.Background(), r, nil)
+			err := tableWr.WriteSqlRow(context.Background(), r)
 			assert.NoError(t, err)
 		}
 
@@ -132,7 +132,7 @@ func TestFixedWidthWriter(t *testing.T) {
 		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
 
 		for _, r := range rows {
-			err := tableWr.WriteRow(context.Background(), r, nil)
+			err := tableWr.WriteSqlRow(context.Background(), r)
 			assert.NoError(t, err)
 		}
 

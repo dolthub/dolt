@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/source"
@@ -35,6 +36,8 @@ type ParquetWriter struct {
 	pwriter    *writer.CSVWriter
 	sch        schema.Schema
 }
+
+var _ table.SqlTableWriter = (*ParquetWriter)(nil)
 
 var typeMap = map[typeinfo.Identifier]string{
 	typeinfo.DatetimeTypeIdentifier:   "type=INT64, convertedtype=TIMESTAMP_MICROS",

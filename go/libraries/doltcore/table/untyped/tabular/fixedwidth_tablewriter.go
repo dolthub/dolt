@@ -21,6 +21,9 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 
@@ -53,6 +56,8 @@ type FixedWidthTableWriter struct {
 	// flushedSampleBuffer records whether we've already written buffered rows to output
 	flushedSampleBuffer bool
 }
+
+var _ table.SqlTableWriter = (*FixedWidthTableWriter)(nil)
 
 type tableRow struct {
 	columns []string
@@ -121,7 +126,11 @@ var colDiffColors = map[diff.ChangeType]*color.Color{
 	diff.Removed:     color.New(color.Bold, color.FgRed),
 }
 
-func (w *FixedWidthTableWriter) WriteRow(ctx context.Context, r sql.Row, colors []*color.Color) error {
+func (w *FixedWidthTableWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
+	return w.WriteColoredRow(ctx, r, nil)
+}
+
+func (w *FixedWidthTableWriter) WriteColoredRow(ctx context.Context, r sql.Row, colors []*color.Color) error {
 	if colors == nil {
 		colors = make([]*color.Color, len(r))
 	}
@@ -144,7 +153,7 @@ func (w *FixedWidthTableWriter) WriteRow(ctx context.Context, r sql.Row, colors 
 			return err
 		}
 
-		row, err := rowToTableRow(r, colors)
+		row, err := w.rowToTableRow(r, colors)
 		if err != nil {
 			return err
 		}
@@ -158,6 +167,10 @@ func (w *FixedWidthTableWriter) WriteRow(ctx context.Context, r sql.Row, colors 
 	return nil
 }
 
+func (w *FixedWidthTableWriter) WriteRow(ctx context.Context, r row.Row) error {
+	panic("unimplemented")
+}
+
 func (w *FixedWidthTableWriter) sampleRow(r sql.Row, colors []*color.Color) (tableRow, error) {
 	row := tableRow{
 		columns: make([]string, len(r)),
@@ -165,7 +178,7 @@ func (w *FixedWidthTableWriter) sampleRow(r sql.Row, colors []*color.Color) (tab
 	}
 
 	for i := range r {
-		str, err := stringValue(r[i])
+		str, err := w.stringValue(i, r[i])
 		if err != nil {
 			return row, err
 		}
@@ -213,18 +226,8 @@ func (w *FixedWidthTableWriter) flushSampleBuffer() error {
 	return nil
 }
 
-func stringValue(i interface{}) (string, error) {
-	str := ""
-	if i == nil {
-		str = "NULL"
-	} else {
-		strVal, ok := i.(string)
-		if !ok {
-			return "", fmt.Errorf("expected string but got %T", i)
-		}
-		str = strVal
-	}
-	return str, nil
+func (w *FixedWidthTableWriter) stringValue(idx int, i interface{}) (string, error) {
+	return sqlutil.SqlColToStr(w.schema[idx].Type, i)
 }
 
 func (w *FixedWidthTableWriter) writeRow(row tableRow) error {
@@ -254,7 +257,7 @@ func (w *FixedWidthTableWriter) writeRow(row tableRow) error {
 	return iohelp.WriteLine(w.wr, rowStr.String())
 }
 
-func rowToTableRow(row sql.Row, colors []*color.Color) (tableRow, error) {
+func (w *FixedWidthTableWriter) rowToTableRow(row sql.Row, colors []*color.Color) (tableRow, error) {
 	tRow := tableRow{
 		columns: make([]string, len(row)),
 		colors:  colors,
@@ -262,7 +265,7 @@ func rowToTableRow(row sql.Row, colors []*color.Color) (tableRow, error) {
 
 	var err error
 	for i := range row {
-		tRow.columns[i], err = stringValue(row[i])
+		tRow.columns[i], err = w.stringValue(i, row[i])
 		if err != nil {
 			return tableRow{}, err
 		}

@@ -21,6 +21,7 @@ import (
 	"io"
 
 	"github.com/bcicen/jstream"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -39,6 +40,8 @@ type JSONReader struct {
 	rowChan    chan *jstream.MetaValue
 	sampleRow  sql.Row
 }
+
+var _ table.SqlTableReader = (*JSONReader)(nil)
 
 func OpenJSONReader(vrw types.ValueReadWriter, path string, fs filesys.ReadableFS, sch schema.Schema) (*JSONReader, error) {
 	r, err := fs.OpenForRead(path)
