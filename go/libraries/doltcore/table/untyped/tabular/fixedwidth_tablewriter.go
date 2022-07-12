@@ -229,6 +229,9 @@ func (w *FixedWidthTableWriter) flushSampleBuffer() error {
 }
 
 func (w *FixedWidthTableWriter) stringValue(idx int, i interface{}) (string, error) {
+	if i == nil {
+		return "NULL", nil
+	}
 	return sqlutil.SqlColToStr(w.schema[idx].Type, i)
 }
 
