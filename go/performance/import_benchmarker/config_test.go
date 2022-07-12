@@ -21,17 +21,15 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 func TestGeneratedConfigCanBeImported(t *testing.T) {
-	t.Skip() // Skipping since dolt isn't installed on a vm
+	t.Skip() // Skipping since dolt isn't installed on the github actions vm
 
 	config := NewDefaultImportBenchmarkConfig()
+	wd := GetWorkingDir()
 
-	tests := NewImportBenchmarkTests(config)
-	results := RunBenchmarkTests(config, tests)
+	results := RunBenchmarkTests(config, wd)
 
 	assert.Equal(t, 1, len(results))
 	assert.Equal(t, "dolt_import_small", results[0].name)
@@ -39,34 +37,38 @@ func TestGeneratedConfigCanBeImported(t *testing.T) {
 	// Sanity check: An import of 100,000 should never take more than 15 seconds
 	assert.LessOrEqual(t, results[0].br.T, time.Second*15)
 
-	wd, err := os.Getwd()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	RemoveTempDoltDataDir(filesys.LocalFS, wd)
 	os.RemoveAll(filepath.Join(wd, "testData.csv"))
 }
 
 func TestCanGenerateFilesForAllFormats(t *testing.T) {
+	config := &ImportBenchmarkConfig{Jobs: make([]*ImportBenchmarkJob, 0)}
+
+	// Create jobs for all configs
 	for _, format := range supportedFormats {
-		config := NewDefaultImportBenchmarkConfig()
-		assert.Equal(t, 1, len(config.Jobs))
+		job := &ImportBenchmarkJob{
+			Name:         "dolt_import_small",
+			NumRows:      smallSet,
+			Sorted:       false,
+			Format:       format,
+			DoltVersion:  "HEAD", // Use whatever dolt is installed locally
+			DoltExecPath: "dolt", // Assumes dolt is installed locally
+		}
 
-		config.Jobs[0].Format = format
+		config.Jobs = append(config.Jobs, job)
+	}
 
-		tests := NewImportBenchmarkTests(config)
-		assert.Equal(t, 1, len(tests))
+	assert.Equal(t, 3, len(config.Jobs))
 
-		test := tests[0]
+	config = generateTestFilesIfNeeded(config)
 
-		file, err := os.Open(test.filePath)
+	for _, job := range config.Jobs {
+		file, err := os.Open(job.Filepath)
 		assert.NoError(t, err)
 
 		err = file.Close()
 		assert.NoError(t, err)
 
-		err = os.Remove(test.filePath)
+		err = os.Remove(job.Filepath)
 		assert.NoError(t, err)
 	}
 }

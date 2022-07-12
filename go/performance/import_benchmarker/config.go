@@ -20,7 +20,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
@@ -97,53 +96,34 @@ func FromFileConfig(configPath string) (*ImportBenchmarkConfig, error) {
 	return config, nil
 }
 
-// ImportBenchmarkTest executes the benchmark on a particular import file
-type ImportBenchmarkTest struct {
-	// fileFormat is either csv, json or sql
-	fileFormat string
-
-	// filePath contains the path the test file
-	filePath string // path to file
-
-	// doltVersion tracks the current version of Dolt being used.
-	doltVersion string
-
-	// doltExecPath is a path towards a Dolt executable. This is useful for executing Dolt against a particular version.
-	doltExecPath string
-
-	// workingDir is the path where the benchmark is being run
-	workingDir string
-}
-
-// NewImportBenchmarkTests creates the test conditions for an import benchmark to execute. In the case that the config
+// generateTestFilesIfNeeded creates the test conditions for an import benchmark to execute. In the case that the config
 // dictates that data needs to be generated, this function handles that
-func NewImportBenchmarkTests(config *ImportBenchmarkConfig) []*ImportBenchmarkTest {
-	ret := make([]*ImportBenchmarkTest, len(config.Jobs))
+func generateTestFilesIfNeeded(config *ImportBenchmarkConfig) *ImportBenchmarkConfig {
+	returnConfig := &ImportBenchmarkConfig{Jobs: make([]*ImportBenchmarkJob, 0)}
 
-	for i, job := range config.Jobs {
+	for _, job := range config.Jobs {
 		// Preset csv path
 		if job.Filepath != "" {
-			ret[i] = &ImportBenchmarkTest{fileFormat: job.Format, filePath: job.Filepath, doltVersion: job.DoltVersion, doltExecPath: job.DoltExecPath, workingDir: GetWorkingDir()}
+			returnConfig.Jobs = append(returnConfig.Jobs, job)
 		} else {
-			ret[i] = getGeneratedBenchmarkTest(job)
+			filePath, fileFormat := getGeneratedBenchmarkTest(job)
+
+			job.Filepath = filePath
+			job.Format = fileFormat
+
+			returnConfig.Jobs = append(returnConfig.Jobs, job)
 		}
 	}
 
-	return ret
+	return returnConfig
 }
 
 // getGeneratedBenchmarkTest is used to create a generated test case with a randomly generated csv file.
-func getGeneratedBenchmarkTest(job *ImportBenchmarkJob) *ImportBenchmarkTest {
+func getGeneratedBenchmarkTest(job *ImportBenchmarkJob) (string, string) {
 	sch := NewSeedSchema(job.NumRows, genSampleCols(), job.Format)
-	testFile := generateTestFile(filesys.LocalFS, sch, GetWorkingDir())
+	testFilePath := generateTestFile(filesys.LocalFS, sch, GetWorkingDir())
 
-	return &ImportBenchmarkTest{
-		fileFormat:   sch.FileFormatExt,
-		filePath:     testFile,
-		doltVersion:  job.DoltVersion,
-		doltExecPath: job.DoltExecPath,
-		workingDir:   GetWorkingDir(),
-	}
+	return testFilePath, sch.FileFormatExt
 }
 
 func generateTestFile(fs filesys.Filesys, sch *SeedSchema, wd string) string {
@@ -161,23 +141,13 @@ func generateTestFile(fs filesys.Filesys, sch *SeedSchema, wd string) string {
 	return pathToImportFile
 }
 
-func RunBenchmarkTests(config *ImportBenchmarkConfig, tests []*ImportBenchmarkTest) []result {
+func RunBenchmarkTests(config *ImportBenchmarkConfig, workingDir string) []result {
+	config = generateTestFilesIfNeeded(config)
+
 	results := make([]result, 0)
 
-	for i, test := range tests {
-		benchmarkFunc := SetupDoltImportBenchmark(test)
-		br := testing.Benchmark(benchmarkFunc)
-		res := result{
-			name:        config.Jobs[i].Name,
-			format:      config.Jobs[i].Format,
-			rows:        config.Jobs[i].NumRows,
-			columns:     len(genSampleCols()),
-			sizeOnDisk:  getSizeOnDisk(filesys.LocalFS, test.workingDir),
-			br:          br,
-			doltVersion: test.doltVersion,
-		}
-		results = append(results, res)
-		RemoveTempDoltDataDir(filesys.LocalFS, test.workingDir) // remove the repo each time
+	for _, job := range config.Jobs {
+		results = append(results, RunDoltBenchmarkImportTest(job, workingDir))
 	}
 
 	return results

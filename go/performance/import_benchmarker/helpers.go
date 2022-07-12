@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"os"
 	"strconv"
 	"strings"
 
@@ -187,4 +188,9 @@ func getSQLHeader(cols []*SeedColumn, tableName, format string) string {
 	statement = append(statement, schemaStatement+"; \n")
 
 	return strings.Join(statement, "")
+}
+
+func GetWorkingDir() string {
+	wd, _ := os.Getwd()
+	return wd
 }

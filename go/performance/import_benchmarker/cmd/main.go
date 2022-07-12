@@ -19,8 +19,6 @@ import (
 	"log"
 	"os"
 
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-
 	"github.com/dolthub/dolt/go/performance/import_benchmarker"
 )
 
@@ -47,12 +45,8 @@ func main() {
 	// Get the working directory the tests will be executing in
 	wd := import_benchmarker.GetWorkingDir()
 
-	// Delete any .dolt directories even in the case of an error created by the benchmarker.
-	defer import_benchmarker.RemoveTempDoltDataDir(filesys.LocalFS, wd)
-
 	// Generate the tests and the benchmarker.
-	tests := import_benchmarker.NewImportBenchmarkTests(config)
-	results := import_benchmarker.RunBenchmarkTests(config, tests)
+	results := import_benchmarker.RunBenchmarkTests(config, wd)
 
 	import_benchmarker.SerializeResults(results, wd, resultsTableName, "csv")
 

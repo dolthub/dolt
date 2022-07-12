@@ -33,7 +33,8 @@ echo '
             "image": "407903926827.dkr.ecr.us-west-2.amazonaws.com/liquidata/import-benchmarking:latest",
             "resources": {
               "limits": {
-                "cpu": "7000m"
+                "cpu": "7000m",
+                "ephemeral-storage": "25Gi"
               }
             },
             "env": [
