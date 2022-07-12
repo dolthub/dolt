@@ -47,21 +47,25 @@ user_session_vars:
     run mysql --host=127.0.0.1 --port=$PORT --user=user0  --password=pass0<<SQL
 SELECT @@aws_credentials_file, @@aws_credentials_profile;
 SQL
+    echo $output
     [[ "$output" =~ /Users/user0/.aws/config.*default ]] || false
 
     run mysql --host=127.0.0.1 --port=$PORT --user=user1 --password=pass1<<SQL
 SELECT @@aws_credentials_file, @@aws_credentials_profile;
 SQL
+    echo $output
     [[ "$output" =~ /Users/user1/.aws/config.*lddev ]] || false
 
     run mysql --host=127.0.0.1 --port=$PORT --user=user2 --password=pass2<<SQL
 SELECT @@aws_credentials_file, @@aws_credentials_profile;
 SQL
+    echo $output
     [[ "$output" =~ NULL.*NULL ]] || false
 
     run mysql --host=127.0.0.1 --port=$PORT --user=user2 --password=pass2<<SQL
 SET @@aws_credentials_file="/Users/should_fail";
 SQL
+    echo $output
     [[ "$output" =~ "Variable 'aws_credentials_file' is a read only variable" ]] || false
 }
 
