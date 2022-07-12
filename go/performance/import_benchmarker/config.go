@@ -111,7 +111,7 @@ type ImportBenchmarkTest struct {
 	// doltExecPath is a path towards a Dolt executable. This is useful for executing Dolt against a particular version.
 	doltExecPath string
 
-	// workindDir is the path where the benchmark is being run
+	// workingDir is the path where the benchmark is being run
 	workingDir string
 }
 

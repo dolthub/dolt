@@ -117,7 +117,7 @@ func getResultsRow(res result, cols []*SeedColumn) []string {
 	row[5] = fmt.Sprintf("%d", res.br.N)
 	// set time
 	row[6] = res.br.T.String()
-	// set garbage_generated
+	// set size_on_disk
 	row[7] = fmt.Sprintf("%v", res.sizeOnDisk)
 	// set rows_per_second
 	row[8] = fmt.Sprintf("%.2f", float64(res.rows)/res.br.T.Seconds())
