@@ -179,7 +179,7 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 		return nil, nil, err
 	}
 
-	mergedRoot, _, err = AddForeignKeyViolations(ctx, mergedRoot, ancRoot, nil, merger.theirRootIsh)
+	mergedRoot, _, err = AddForeignKeyViolations(ctx, mergedRoot, ancRoot, nil, merger.rightHash)
 	if err != nil {
 		return nil, nil, err
 	}
