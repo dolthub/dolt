@@ -291,12 +291,14 @@ func (t *Table) getProllyConflictSchemas(ctx context.Context, tblName string) (b
 		return nil, nil, nil, err
 	}
 
-	// If the table does not exist in the ancestor, pretend it did exist and
-	// that it was completely empty.
-	if !baseOk && schema.SchemasAreEqual(ourSch, theirSch) {
-		return ourSch, ourSch, ourSch, nil
-	} else if !schema.SchemasAreEqual(ourSch, theirSch) {
-		return nil, nil, nil, fmt.Errorf("expected our schema to equal their schema since the table did not exist in the ancestor")
+	// If the table does not exist in the ancestor, pretend it existed and that
+	// it was completely empty.
+	if !baseOk {
+		if schema.SchemasAreEqual(ourSch, theirSch) {
+			return ourSch, ourSch, theirSch, nil
+		} else {
+			return nil, nil, nil, fmt.Errorf("expected our schema to equal their schema since the table did not exist in the ancestor")
+		}
 	}
 
 	baseSch, err := baseTbl.GetSchema(ctx)

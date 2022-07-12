@@ -1918,10 +1918,12 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			"CALL DOLT_COMMIT('-am', 'create table');",
 			"INSERT INTO t VALUES (1, 1);",
 			"CALL DOLT_COMMIT('-am', 'insert pk 1');",
+
 			"CALL DOLT_BRANCH('other');",
 			"UPDATE t set col1 = 100 where pk = 1;",
 			"CALL DOLT_COMMIT('-am', 'left edit');",
 			"CALL DOLT_CHECKOUT('other');",
+
 			"UPDATE T set col1 = -100 where pk = 1;",
 			"CALL DOLT_COMMIT('-am', 'right edit');",
 			"CALL DOLT_CHECKOUT('main');",
