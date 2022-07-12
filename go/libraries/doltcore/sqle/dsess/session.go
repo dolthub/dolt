@@ -744,13 +744,7 @@ func (sess *Session) SwitchWorkingSet(
 	}
 
 	ws, err := sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
-	if err == doltdb.ErrWorkingSetNotFound {
-		// no working set for this HEAD yet
-		ws, err = sess.newWorkingSetForHead(ctx, wsRef, dbName)
-		if err != nil {
-			return err
-		}
-	} else if err != nil {
+	if err != nil {
 		return err
 	}
 
