@@ -95,7 +95,7 @@ func Serve(
 			}
 
 			// TODO: this should be the global config, probably?
-			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLocks)
+			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile)
 			if err != nil {
 				return err, nil
 			}
@@ -117,7 +117,7 @@ func Serve(
 		}
 
 		// TODO: this should be the global config, probably?
-		mrEnv, err = env.LoadMultiEnv(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), fs, version, dEnv.IgnoreLocks, dbNamesAndPaths...)
+		mrEnv, err = env.LoadMultiEnv(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), fs, version, dEnv.IgnoreLockFile, dbNamesAndPaths...)
 
 		if err != nil {
 			return err, nil

@@ -99,7 +99,7 @@ type DoltEnv struct {
 	urlStr string
 	hdp    HomeDirProvider
 
-	IgnoreLocks bool
+	IgnoreLockFile bool
 }
 
 // Load loads the DoltEnv for the current directory of the cli
@@ -1290,7 +1290,7 @@ func (dEnv *DoltEnv) LockFile() string {
 
 // IsLocked returns true if this database's lockfile exists
 func (dEnv *DoltEnv) IsLocked() bool {
-	if dEnv.IgnoreLocks {
+	if dEnv.IgnoreLockFile {
 		return false
 	}
 
@@ -1300,7 +1300,7 @@ func (dEnv *DoltEnv) IsLocked() bool {
 
 // Lock writes this database's lockfile or errors if it already exists
 func (dEnv *DoltEnv) Lock() error {
-	if dEnv.IgnoreLocks {
+	if dEnv.IgnoreLockFile {
 		return nil
 	}
 
@@ -1312,7 +1312,7 @@ func (dEnv *DoltEnv) Lock() error {
 
 // Unlock deletes this database's lockfile
 func (dEnv *DoltEnv) Unlock() error {
-	if dEnv.IgnoreLocks {
+	if dEnv.IgnoreLockFile {
 		return nil
 	}
 
