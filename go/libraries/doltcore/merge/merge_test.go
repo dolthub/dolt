@@ -307,8 +307,11 @@ func TestMergeCommits(t *testing.T) {
 		t.Skip()
 	}
 
-	vrw, ns, rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedArtifacts := setupMergeTest(t)
-	merger := NewMerger(context.Background(), rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, vrw, ns)
+	vrw, ns, _, _, root, mergeRoot, ancRoot, expectedRows, expectedArtifacts := setupMergeTest(t)
+	merger, err := NewMerger(root, mergeRoot, ancRoot, vrw, ns)
+	if err != nil {
+		t.Fatal(err)
+	}
 	opts := editor.TestEditorOptions(vrw)
 	// TODO: stats
 	merged, _, err := merger.MergeTable(context.Background(), tableName, opts, MergeOpts{IsCherryPick: false})
@@ -357,9 +360,12 @@ func TestNomsMergeCommits(t *testing.T) {
 		t.Skip()
 	}
 
-	vrw, ns, rightCmHash, ancCmHash, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, expectedStats := setupNomsMergeTest(t)
+	vrw, ns, _, _, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, expectedStats := setupNomsMergeTest(t)
 
-	merger := NewMerger(context.Background(), rightCmHash, ancCmHash, root, mergeRoot, ancRoot, vrw, ns)
+	merger, err := NewMerger(root, mergeRoot, ancRoot, vrw, ns)
+	if err != nil {
+		t.Fatal(err)
+	}
 	opts := editor.TestEditorOptions(vrw)
 	merged, stats, err := merger.MergeTable(context.Background(), tableName, opts, MergeOpts{IsCherryPick: false})
 	if err != nil {

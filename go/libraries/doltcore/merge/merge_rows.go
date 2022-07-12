@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -28,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
-	"strings"
 )
 
 type MergeOpts struct {
@@ -46,8 +47,24 @@ type Merger struct {
 }
 
 // NewMerger creates a new merger utility object.
-func NewMerger(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, root, mergeRoot, ancRoot *doltdb.RootValue, vrw types.ValueReadWriter, ns tree.NodeStore) *Merger {
-	return &Merger{theirRootIsh, ancRootIsh, root, mergeRoot, ancRoot, vrw, ns}
+func NewMerger(root, mergeRoot, ancRoot *doltdb.RootValue, vrw types.ValueReadWriter, ns tree.NodeStore) (*Merger, error) {
+	ancRootIsh, err := ancRoot.HashOf()
+	if err != nil {
+		return nil, err
+	}
+	theirRootIsh, err := mergeRoot.HashOf()
+	if err != nil {
+		return nil, err
+	}
+	return &Merger{
+		theirRootIsh: theirRootIsh,
+		ancRootIsh:   ancRootIsh,
+		root:         root,
+		mergeRoot:    mergeRoot,
+		ancRoot:      ancRoot,
+		vrw:          vrw,
+		ns:           ns,
+	}, nil
 }
 
 // MergeTable merges schema and table data for the table tblName.
