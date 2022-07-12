@@ -174,31 +174,34 @@ teardown() {
 }
 
 @test "system-tables: insert into dolt_remotes system table" {
-    skip "Remotes table not yet mutable in SQL session"
     run dolt sql -q "insert into dolt_remotes (name, url) values ('origin', 'file://remote')"
     [ $status -ne 0 ]
     [[ ! "$output" =~ panic ]] || false
 
     mkdir remote
-    dolt sql -q "insert into dolt_remotes (name, url) values ('origin1', 'file://remote')"
-    dolt sql -q "insert into dolt_remotes (name, url) values ('origin2', 'aws://[dynamo_db_table:s3_bucket]/repo_name')"
+    dolt sql -q "CALL DOLT_REMOTE('add', 'origin1', 'file://remote/')"
+    dolt sql -q "CALL DOLT_REMOTE('add', 'origin2', 'aws://[dynamo_db_table:s3_bucket]/repo_name')"
 
     run dolt sql -q "select count(*) from dolt_remotes" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ 2 ]] || false
 
+    run dolt sql -q "select name, fetch_specs, params from dolt_remotes" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = name,fetch_specs,params ]] || false
+    [[ "$output" =~ "origin1,\"[\"\"refs/heads/*:refs/remotes/origin1/*\"\"]\",{}" ]] || false
+    [[ "$output" =~ "origin2,\"[\"\"refs/heads/*:refs/remotes/origin2/*\"\"]\",{}" ]] || false
+
     file_regex='file://.*/remote'
     aws_regex='aws://.*/repo_name'
-    run dolt sql -q "select * from dolt_remotes" -r csv
+    run dolt sql -q "select url from dolt_remotes" -r csv
     [ $status -eq 0 ]
-    [[ "${lines[0]}" = name,url,fetch_specs,params ]] || false
-    [[ "${lines[1]}" =~ origin1,$file_regex,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
-    [[ "${lines[2]}" =~ origin2,$aws_regex,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
-
+    [[ "${lines[0]}" = url ]] || false
+    [[ "$output" =~ $file_regex ]] || false
+    [[ "$output" =~ $aws_regex ]] || false
 }
 
 @test "system-tables: delete from dolt_remotes system table" {
-    skip "Remotes table not yet mutable in SQL session"
     mkdir remote
     dolt remote add origin file://remote/
 
@@ -206,20 +209,26 @@ teardown() {
     [ $status -eq 0 ]
     [[ "$output" =~ 1 ]] || false
 
-    regex='file://.*/remote'
-    run dolt sql -q "select * from dolt_remotes" -r csv
+    run dolt sql -q "select name, fetch_specs, params from dolt_remotes" -r csv
     [ $status -eq 0 ]
-    [[ "${lines[0]}" = name,url,fetch_specs,params ]] || false
-    [[ "${lines[1]}" =~ origin,$regex,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
+    [[ "${lines[0]}" =~ "name,fetch_specs,params" ]] || false
+    [[ "${lines[1]}" =~ "origin,\"[\"\"refs/heads/*:refs/remotes/origin/*\"\"]\",{}" ]] || false
 
-    dolt sql -q "delete from dolt_remotes where name = 'origin1'"
+    regex='file://.*/remote'
+    run dolt sql -q "select url from dolt_remotes" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = url ]] || false
+    [[ "$output" =~ $regex ]] || false
+
+    run dolt sql -q "CALL DOLT_REMOTE('remove', 'origin1')"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "error: unknown remote: 'origin1'" ]] || false
 
     run dolt sql -q "select count(*) from dolt_remotes"
     [ $status -eq 0 ]
     [[ "$output" =~ 1 ]] || false
 
-    dolt sql -q "delete from dolt_remotes where name = 'origin'"
-
+    dolt sql -q "CALL DOLT_REMOTE('remove', 'origin')"
     run dolt sql -q "select count(*) from dolt_remotes" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ 0 ]] || false
