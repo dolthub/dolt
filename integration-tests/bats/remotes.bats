@@ -1893,3 +1893,52 @@ setup_ref_test() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Everything up-to-date." ]] || false
 }
+
+@test "remotes: dolt branch track flag sets upstream" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt sql -q "CREATE TABLE a (pk int)"
+    dolt commit -am "add table a"
+    dolt push --set-upstream origin main
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    dolt branch
+    [[ ! "$output" =~ "other" ]] || false
+
+    run dolt branch --track other origin/other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "branch 'other' set up to track 'origin/other'" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+
+    dolt checkout other
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+
+    run dolt branch --track direct feature origin/other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "branch 'feature' set up to track 'origin/other'" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch other" ]] || false
+
+    dolt commit --allow-empty -m "new commit to other"
+    dolt push
+    dolt checkout feature
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Fast-forward" ]] || false
+}
