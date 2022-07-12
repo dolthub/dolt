@@ -104,7 +104,7 @@ func NewTestSQLCtx(ctx context.Context) *sql.Context {
 	return NewTestSQLCtxWithProvider(ctx, dsess.EmptyDatabaseProvider())
 }
 
-func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.RevisionDatabaseProvider) *sql.Context {
+func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider) *sql.Context {
 	s, err := dsess.NewDoltSession(
 		sql.NewEmptyContext(),
 		sql.NewBaseSession(),

@@ -17,6 +17,8 @@ package dsess
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"gopkg.in/src-d/go-errors.v1"
+
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // ErrRevisionDbNotFound is thrown when a RevisionDatabaseProvider cannot find a specified revision database.
@@ -34,11 +36,27 @@ type RevisionDatabaseProvider interface {
 	DropRevisionDb(ctx *sql.Context, revDB string) error
 }
 
-func EmptyDatabaseProvider() RevisionDatabaseProvider {
+type DoltDatabaseProvider interface {
+	RevisionDatabaseProvider
+	// CloneDatabaseFromRemote clones the database from the remote given as a new database in this provider
+	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error
+	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases
+	FileSystem() filesys.Filesys
+}
+
+func EmptyDatabaseProvider() DoltDatabaseProvider {
 	return emptyRevisionDatabaseProvider{}
 }
 
 type emptyRevisionDatabaseProvider struct{}
+
+func (e emptyRevisionDatabaseProvider) FileSystem() filesys.Filesys {
+	return nil
+}
+
+func (e emptyRevisionDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error {
+	return nil
+}
 
 func (e emptyRevisionDatabaseProvider) DropRevisionDb(ctx *sql.Context, revDB string) error {
 	return nil

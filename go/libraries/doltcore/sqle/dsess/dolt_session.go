@@ -39,7 +39,7 @@ var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
-func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabaseProvider, conf config.ReadWriteConfig, dbs ...InitialDbState) (*DoltSession, error) {
+func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro DoltDatabaseProvider, conf config.ReadWriteConfig, dbs ...InitialDbState) (*DoltSession, error) {
 	sess, err := NewSession(ctx, sqlSess, pro, conf, dbs...)
 	if err != nil {
 		return nil, err
