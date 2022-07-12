@@ -190,20 +190,29 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	// Handle doltcfg directory
 	var cfgDirPath string
 	var dataDir string
+	dataDirSpecified := false
 	if multiDbDir, ok := apr.GetValue(MultiDBDirFlag); ok {
 		cli.PrintErrln("WARNING: --multi-db-dir is deprecated, use --data-dir instead")
 		dataDir = multiDbDir
+		dataDirSpecified = true
 	}
 	if dataDirPath, ok := apr.GetValue(DataDirFlag); ok {
 		dataDir = dataDirPath
+		dataDirSpecified = true
 	}
-	cfgDir, hasCfg := apr.GetValue(CfgDirFlag)
-	if hasCfg {
-		// doltcfg directory specified; create at path if DNE, else add it to mrEnv
-		path := filepath.Join(dataDir, cfgDir)
+	cfgDir, cfgDirSpecified := apr.GetValue(CfgDirFlag)
+	if cfgDirSpecified {
+		if exists, _ := dEnv.FS.Exists(cfgDir); !exists {
+			if err := dEnv.FS.MkDirs(cfgDir); err != nil {
+				absPath, _ := dEnv.FS.Abs(cfgDir)
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("couldn't create directory at %s", absPath)), usage)
+			}
+		}
+		cfgDirPath = cfgDir
+	} else if dataDirSpecified {
+		path := filepath.Join(dataDir, DefaultCfgDirName)
 		if exists, _ := dEnv.FS.Exists(path); !exists {
 			if err := dEnv.FS.MkDirs(path); err != nil {
 				absPath, _ := dEnv.FS.Abs(path)
@@ -218,7 +227,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			cfgDirPath = path
 		}
 
-		// Look in current directory for doltcfg, create one here if none found so far
+		// Look in data directory (which is necessarily current directory) for doltcfg, create one here if none found
 		path = filepath.Join(dataDir, DefaultCfgDirName)
 		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
 			if len(cfgDirPath) != 0 {
@@ -241,7 +250,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	// If no privilege filepath specified, default to cfg directory
+	// If no privilege filepath specified, default to doltcfg directory
 	privsFp, hasPrivsFp := apr.GetValue(PrivsFilePathFlag)
 	if !hasPrivsFp {
 		privsFp, err = dEnv.FS.Abs(filepath.Join(cfgDirPath, DefaultPrivsName))

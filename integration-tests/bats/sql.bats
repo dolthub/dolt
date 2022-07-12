@@ -207,6 +207,76 @@ teardown() {
     rm -rf inner_db
 }
 
+@test "sql: dolt sql -q specify data directory dolt repo" {
+    # remove files
+    rm -rf datadir
+    rm -rf new_repo
+
+    # initialize data directory and inner dbs
+    mkdir datadir
+    cd datadir
+
+    mkdir db1
+    cd db1
+    dolt init
+    cd ..
+
+    mkdir db2
+    cd db2
+    dolt init
+    cd ..
+
+    mkdir db3
+    cd db3
+    dolt init
+    cd ..
+
+    cd ..
+
+    # initialize new repo
+    mkdir new_repo
+    cd new_repo
+
+    run dolt sql --data-dir=$BATS_TEST_DIRNAME/datadir -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "db1" ]] || false
+    [[ $output =~ "db2" ]] || false
+    [[ $output =~ "db3" ]] || false
+
+    run dolt sql --data-dir=$BATS_TEST_DIRNAME/datadir -q "create user new_user"
+    [ $status -eq 0 ]
+
+    run dolt sql --data-dir=$BATS_TEST_DIRNAME/datadir -q "use db1; select user from mysql.user"
+    [ $status -eq 0 ]
+    [[ $output =~ "new_user" ]] || false
+
+    run dolt sql --data-dir=$BATS_TEST_DIRNAME/datadir -q "use db2; select user from mysql.user"
+    [ $status -eq 0 ]
+    [[ $output =~ "new_user" ]] || false
+
+    run dolt sql --data-dir=$BATS_TEST_DIRNAME/datadir -q "use db3; select user from mysql.user"
+    [ $status -eq 0 ]
+    [[ $output =~ "new_user" ]] || false
+
+    # check that correct files exist
+    cd ..
+
+    run ls -a
+    [[ $output =~ "datadir" ]] || false
+    [[ $output =~ "new_repo" ]] || false
+    ! [[ $output =~ ".doltcfg" ]] || false
+
+    run ls datadir
+    [[ $output =~ ".doltcfg" ]] || false
+
+    run ls datadir/.doltcfg
+    [[ $output =~ "privileges.db" ]] || false
+
+    # remove files
+    rm -rf new_repo
+    rm -rf datadir
+}
+
 @test "sql: dolt sql -q specify data directory, cfg directory, and privilege file" {
     # remove files
     rm -rf .doltcfg

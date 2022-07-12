@@ -270,16 +270,7 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		serverConfig.withLogLevel(LogLevel(logLevel))
 	}
 
-	if dataDir, ok := apr.GetValue(commands.DataDirFlag); ok {
-		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, dataDir)
-
-		if err != nil {
-			return nil, errors.New("failed to read databases in path specified by --data-dir. error: " + err.Error())
-		}
-
-		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(dataDir)
-	}
-
+	dataDirSpecified := false
 	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
 		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, dataDir)
 		cli.PrintErrln("WARNING: --multi-db-dir is deprecated, use --data-dir instead")
@@ -289,13 +280,32 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		}
 
 		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(dataDir)
+		dataDirSpecified = true
 	}
 
+	if dataDir, ok := apr.GetValue(commands.DataDirFlag); ok {
+		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, dataDir)
+
+		if err != nil {
+			return nil, errors.New("failed to read databases in path specified by --data-dir. error: " + err.Error())
+		}
+
+		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(dataDir)
+		dataDirSpecified = true
+	}
+
+	// TODO: make sure absolute paths also work
 	var cfgDirPath string
 	dataDir := serverConfig.DataDir()
-	cfgDir, ok := apr.GetValue(commands.CfgDirFlag)
-	if ok {
-		// doltcfg directory specified; create at path if DNE, else add it to mrEnv
+	cfgDir, cfgDirSpecified := apr.GetValue(commands.CfgDirFlag)
+	if cfgDirSpecified {
+		if exists, _ := dEnv.FS.Exists(cfgDir); !exists {
+			if err := dEnv.FS.MkDirs(cfgDir); err != nil {
+				return nil, err
+			}
+		}
+		cfgDirPath = cfgDir
+	} else if dataDirSpecified {
 		path := filepath.Join(dataDir, cfgDir)
 		if exists, _ := dEnv.FS.Exists(path); !exists {
 			if err := dEnv.FS.MkDirs(path); err != nil {
@@ -310,7 +320,7 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 			cfgDirPath = path
 		}
 
-		// Look in current directory for doltcfg, create one here if none found so far
+		// Look in data directory (which is necessarily current directory) for doltcfg, create one here if none found
 		path = filepath.Join(dataDir, commands.DefaultCfgDirName)
 		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
 			if len(cfgDirPath) != 0 {
