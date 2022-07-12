@@ -256,7 +256,7 @@ func TestMergeConflicts(t *testing.T) {
 
 const (
 	concurrentScale   = 10_000
-	concurrentIters   = 100
+	concurrentIters   = 500
 	concurrentThreads = 8
 	concurrentTable   = "CREATE TABLE concurrent (" +
 		"  id int NOT NULL," +
