@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type testCommand struct {
@@ -671,7 +670,7 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 
 	opts := editor.TestEditorOptions(dEnv.DoltDB.ValueReadWriter())
 	mo := merge.MergeOpts{IsCherryPick: false}
-	mergedRoot, _, err := merge.MergeRoots(ctx, hash.Of(nil), hash.Of(nil), mainRoot, otherRoot, ancRoot, opts, mo)
+	mergedRoot, _, err := merge.MergeRoots(ctx, mainRoot, otherRoot, ancRoot, opts, mo)
 	assert.NoError(t, err)
 
 	fkc, err := mergedRoot.GetForeignKeyCollection(ctx)
