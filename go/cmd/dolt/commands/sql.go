@@ -100,6 +100,10 @@ const (
 	DefaultPrivsName  = "privileges.db"
 	continueFlag      = "continue"
 	fileInputFlag     = "file"
+	UserFlag          = "user"
+	PasswordFlag      = "password"
+	DefaultUser       = "root"
+	DefaultPassword   = ""
 
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
@@ -153,6 +157,8 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
 	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given")
 	ap.SupportsString(PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to $doltcfg-dir/privileges.db")
+	ap.SupportsString(UserFlag, "u", "user", fmt.Sprintf("Defines the server user (default `%v`)", DefaultUser))
+	ap.SupportsString(PasswordFlag, "p", "password", fmt.Sprintf("Defines the server password (default `%v`)", DefaultPassword))
 	return ap
 }
 
@@ -184,6 +190,17 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	// We need a username and password for many SQL commands, so set defaults if they don't exist
 	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
+
+	// Retrieve username and password from command line, if provided
+	// TODO: persist if user and pass provided
+	username := DefaultUser
+	password := DefaultPassword
+	if user, ok := apr.GetValue(UserFlag); ok {
+		username = user
+	}
+	if pass, ok := apr.GetValue(PasswordFlag); ok {
+		password = pass
+	}
 
 	mrEnv, verr := getMultiRepoEnv(ctx, apr, dEnv, cmd)
 	if verr != nil {
@@ -241,6 +258,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
+	// TODO: some logic involving user and password
 	// If no privilege filepath specified, default to cfg directory
 	privsFp, hasPrivsFp := apr.GetValue(PrivsFilePathFlag)
 	if !hasPrivsFp {
@@ -276,8 +294,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		InitialDb:    currentDb,
 		IsReadOnly:   false,
 		PrivFilePath: privsFp,
-		ServerUser:   "root",
-		ServerPass:   "",
+		ServerUser:   username,
+		ServerPass:   password,
 		Autocommit:   true,
 	}
 
@@ -503,9 +521,6 @@ func execBatch(
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	// Add root client
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
-
 	// In batch mode, we need to set a couple flags on the session to prevent constant flushes to disk
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 	err = runBatchMode(sqlCtx, se, batchInput, continueOnErr)
@@ -546,9 +561,6 @@ func execMultiStatements(
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	// Add root client
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
-
 	err = runMultiStatementMode(sqlCtx, se, batchInput, continueOnErr)
 	return errhand.VerboseErrorFromError(err)
 }
@@ -575,9 +587,6 @@ func execQuery(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-
-	// Add root client
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	sqlSch, rowIter, err := ProcessQuery(sqlCtx, query, se)
 	if err != nil {
@@ -846,9 +855,6 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 
 	currentDB := sqlCtx.Session.GetCurrentDatabase()
 	currEnv := mrEnv.GetEnv(currentDB)
-
-	// Add root client
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
 	initialPrompt := fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())

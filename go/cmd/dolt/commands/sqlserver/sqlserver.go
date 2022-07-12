@@ -36,8 +36,6 @@ import (
 const (
 	hostFlag                = "host"
 	portFlag                = "port"
-	userFlag                = "user"
-	passwordFlag            = "password"
 	timeoutFlag             = "timeout"
 	readonlyFlag            = "readonly"
 	logLevelFlag            = "loglevel"
@@ -132,8 +130,8 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(configFileFlag, "", "file", "When provided configuration is taken from the yaml config file and all command line parameters are ignored.")
 	ap.SupportsString(hostFlag, "H", "host address", fmt.Sprintf("Defines the host address that the server will run on (default `%v`)", serverConfig.Host()))
 	ap.SupportsUint(portFlag, "P", "port", fmt.Sprintf("Defines the port that the server will run on (default `%v`)", serverConfig.Port()))
-	ap.SupportsString(userFlag, "u", "user", fmt.Sprintf("Defines the server user (default `%v`)", serverConfig.User()))
-	ap.SupportsString(passwordFlag, "p", "password", fmt.Sprintf("Defines the server password (default `%v`)", serverConfig.Password()))
+	ap.SupportsString(commands.UserFlag, "u", "user", fmt.Sprintf("Defines the server user (default `%v`)", serverConfig.User()))
+	ap.SupportsString(commands.PasswordFlag, "p", "password", fmt.Sprintf("Defines the server password (default `%v`)", serverConfig.Password()))
 	ap.SupportsInt(timeoutFlag, "t", "connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout (default `%v`)", serverConfig.ReadTimeout()))
 	ap.SupportsFlag(readonlyFlag, "r", "Disable modification of the database")
 	ap.SupportsString(logLevelFlag, "l", "log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `trace', `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel()))
@@ -231,11 +229,12 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		serverConfig.WithPort(port)
 	}
 
-	if user, ok := apr.GetValue(userFlag); ok {
+	// TODO: need to immediately persist if user and password provided
+	if user, ok := apr.GetValue(commands.UserFlag); ok {
 		serverConfig.withUser(user)
 	}
 
-	if password, ok := apr.GetValue(passwordFlag); ok {
+	if password, ok := apr.GetValue(commands.PasswordFlag); ok {
 		serverConfig.withPassword(password)
 	}
 

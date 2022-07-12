@@ -104,12 +104,20 @@ func NewSqlEngine(
 	}
 
 	// Set up engine
-	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: config.IsReadOnly, TemporaryUsers: tempUsers}).WithBackgroundThreads(bThreads)
+	engine := gms.New(
+		analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(),
+		&gms.Config{IsReadOnly: config.IsReadOnly, TemporaryUsers: tempUsers},
+	).WithBackgroundThreads(bThreads)
 	engine.Analyzer.Catalog.MySQLDb.SetPersister(persister)
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {
 		return nil, err
 	}
+
+	// Immediately persist upon first starting
+	defer func() {
+		engine.Analyzer.Catalog.MySQLDb.Persist(sql.NewEmptyContext())
+	}()
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
@@ -135,6 +143,9 @@ func NewSqlEngine(
 	if err != nil {
 		return nil, err
 	}
+
+	// TODO: check password
+	sess.SetClient(sql.Client{User: config.ServerUser, Address: "%", Capabilities: 0})
 
 	// this is overwritten only for server sessions
 	for _, db := range dbs {
