@@ -182,11 +182,10 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string) 
 		{
 			branchExists, err := rrd.ddb.HasBranch(ctx, branch.GetPath())
 			switch {
+			case err != nil:
 			case branchExists:
 				err = rrd.ddb.FastForward(ctx, branch, srcDBCommit)
-			case err != nil:
 			default:
-				//err = actions.CreateBranchOnDB(ctx, rrd.ddb, branch.GetPath(), rtRef.GetPath(), )
 				err = rrd.ddb.NewBranchAtCommit(ctx, branch, srcDBCommit)
 			}
 			if err != nil {
