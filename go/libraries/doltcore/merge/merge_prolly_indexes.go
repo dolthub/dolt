@@ -40,8 +40,8 @@ import (
 //
 // It is invalid for |From| and |To| to be both be nil.
 type indexEdit interface {
-	leftEdit() *tree.Diff
-	rightEdit() *tree.Diff
+	leftEdit() tree.Diff
+	rightEdit() tree.Diff
 }
 
 // cellWiseMergeEdit implements indexEdit. It resets the left and updates the
@@ -54,18 +54,18 @@ type cellWiseMergeEdit struct {
 
 var _ indexEdit = cellWiseMergeEdit{}
 
-func (m cellWiseMergeEdit) leftEdit() *tree.Diff {
+func (m cellWiseMergeEdit) leftEdit() tree.Diff {
 	// Reset left
-	return &tree.Diff{
+	return tree.Diff{
 		Key:  m.left.Key,
 		From: m.left.To,
 		To:   m.left.From,
 	}
 }
 
-func (m cellWiseMergeEdit) rightEdit() *tree.Diff {
+func (m cellWiseMergeEdit) rightEdit() tree.Diff {
 	// Update right to merged val
-	return &tree.Diff{
+	return tree.Diff{
 		Key:  m.merged.Key,
 		From: m.right.To,
 		To:   m.merged.To,
@@ -79,14 +79,14 @@ type conflictEdit struct {
 
 var _ indexEdit = conflictEdit{}
 
-func (c conflictEdit) leftEdit() *tree.Diff {
+func (c conflictEdit) leftEdit() tree.Diff {
 	// Noop left
-	return nil
+	return tree.Diff{}
 }
 
-func (c conflictEdit) rightEdit() *tree.Diff {
+func (c conflictEdit) rightEdit() tree.Diff {
 	// Reset right
-	return &tree.Diff{
+	return tree.Diff{
 		Key:  c.right.Key,
 		From: c.right.To,
 		To:   c.right.From,
@@ -286,49 +286,20 @@ func buildIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStor
 // |rootIndexSet| and |mergeIndexSet| such that when the index sets are merged,
 // they produce entries consistent with the cell-wise merges. The updated
 // |rootIndexSet| and |mergeIndexSet| are returned.
-func updateProllySecondaryIndexes(
-	ctx context.Context,
-	cellWiseChan chan indexEdit,
-	rootSchema, mergeSchema schema.Schema,
-	tbl, mergeTbl *doltdb.Table,
-	rootIndexSet, mergeIndexSet durable.IndexSet) (durable.IndexSet, durable.IndexSet, error) {
+func updateProllySecondaryIndexes(ctx context.Context, leftSch, rightSch schema.Schema, leftIdxSet, rightIdxSet durable.IndexSet, cellWiseEdits chan indexEdit) (durable.IndexSet, durable.IndexSet, error) {
 
-	rootIdxs, err := getMutableSecondaryIdxs(ctx, rootSchema, tbl)
+	rootIdxs, err := getMutableSecondaryIdxs(ctx, leftSch, leftIdxSet)
 	if err != nil {
 		return nil, nil, err
 	}
-	mergeIdxs, err := getMutableSecondaryIdxs(ctx, mergeSchema, mergeTbl)
+	mergeIdxs, err := getMutableSecondaryIdxs(ctx, rightSch, rightIdxSet)
 	if err != nil {
 		return nil, nil, err
 	}
 
-OUTER:
-	for {
-		select {
-		case e, ok := <-cellWiseChan:
-			if !ok {
-				break OUTER
-			}
-			// See cellWiseMergeEdit and conflictEdit for implementations of leftEdit and rightEdit
-			if edit := e.leftEdit(); edit != nil {
-				for _, idx := range rootIdxs {
-					err := applyEdit(ctx, idx, edit)
-					if err != nil {
-						return nil, nil, err
-					}
-				}
-			}
-			if edit := e.rightEdit(); edit != nil {
-				for _, idx := range mergeIdxs {
-					err := applyEdit(ctx, idx, edit)
-					if err != nil {
-						return nil, nil, err
-					}
-				}
-			}
-		case <-ctx.Done():
-			return nil, nil, ctx.Err()
-		}
+	err = applyCellwiseEdits(ctx, rootIdxs, mergeIdxs, cellWiseEdits)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	persistIndexMuts := func(indexSet durable.IndexSet, idxs []MutableSecondaryIdx) (durable.IndexSet, error) {
@@ -342,16 +313,15 @@ OUTER:
 				return nil, err
 			}
 		}
-
 		return indexSet, nil
 	}
 
-	updatedRootIndexSet, err := persistIndexMuts(rootIndexSet, rootIdxs)
+	updatedRootIndexSet, err := persistIndexMuts(leftIdxSet, rootIdxs)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	updatedMergeIndexSet, err := persistIndexMuts(mergeIndexSet, mergeIdxs)
+	updatedMergeIndexSet, err := persistIndexMuts(rightIdxSet, mergeIdxs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -359,50 +329,50 @@ OUTER:
 	return updatedRootIndexSet, updatedMergeIndexSet, nil
 }
 
-// getMutableSecondaryIdxs returns a MutableSecondaryIdx for each secondary index
-// defined in |schema| and |tbl|.
-func getMutableSecondaryIdxs(ctx context.Context, sch schema.Schema, tbl *doltdb.Table) ([]MutableSecondaryIdx, error) {
-	indexSet, err := tbl.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
+func applyCellwiseEdits(ctx context.Context, rootIdxs, mergeIdxs []MutableSecondaryIdx, edits chan indexEdit) error {
+	for {
+		select {
+		case e, ok := <-edits:
+			if !ok {
+				return nil
+			}
+			// See cellWiseMergeEdit and conflictEdit for implementations of leftEdit and rightEdit
+			if edit := e.leftEdit(); !emptyDiff(edit) {
+				for _, idx := range rootIdxs {
+					if err := applyEdit(ctx, idx, edit); err != nil {
+						return err
+					}
+				}
+			}
+			if edit := e.rightEdit(); !emptyDiff(edit) {
+				for _, idx := range mergeIdxs {
+					if err := applyEdit(ctx, idx, edit); err != nil {
+						return err
+					}
+				}
+			}
 
-	mods := make([]MutableSecondaryIdx, sch.Indexes().Count())
-	for i, index := range sch.Indexes().AllIndexes() {
-		idx, err := indexSet.GetIndex(ctx, sch, index.Name())
-		if err != nil {
-			return nil, err
+		case <-ctx.Done():
+			return ctx.Err()
 		}
-		m := durable.ProllyMapFromIndex(idx)
-		if schema.IsKeyless(sch) {
-			m = prolly.ConvertToSecondaryKeylessIndex(m)
-		}
-
-		mods[i] = NewMutableSecondaryIdx(m, sch, index, m.Pool())
 	}
-
-	return mods, nil
 }
 
 // applyEdit applies |edit| to |idx|. If |len(edit.To)| == 0, then action is
 // a delete, if |len(edit.From)| == 0 then it is an insert, otherwise it is an
 // update.
-func applyEdit(ctx context.Context, idx MutableSecondaryIdx, edit *tree.Diff) error {
-	if len(edit.From) == 0 {
-		err := idx.InsertEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.To))
-		if err != nil {
-			return err
-		}
-	} else if len(edit.To) == 0 {
-		err := idx.DeleteEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.From))
-		if err != nil {
-			return err
-		}
-	} else {
-		err := idx.UpdateEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.From), val.Tuple(edit.To))
-		if err != nil {
-			return err
-		}
+func applyEdit(ctx context.Context, idx MutableSecondaryIdx, edit tree.Diff) (err error) {
+	switch edit.Type {
+	case tree.AddedDiff:
+		err = idx.InsertEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.To))
+	case tree.RemovedDiff:
+		err = idx.DeleteEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.From))
+	case tree.ModifiedDiff:
+		err = idx.UpdateEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.From), val.Tuple(edit.To))
 	}
-	return nil
+	return
+}
+
+func emptyDiff(d tree.Diff) bool {
+	return d.Key == nil
 }

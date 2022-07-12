@@ -101,7 +101,7 @@ func mergeTableData(
 
 	group.Go(func() error {
 		var err error
-		updatedRootIndexSet, updatedMergeIndexSet, err = updateProllySecondaryIndexes(gCtx, indexEdits, rootSchema, mergeSchema, tbl, mergeTbl, rootIndexSet, mergeIndexSet)
+		updatedRootIndexSet, updatedMergeIndexSet, err = updateProllySecondaryIndexes(gCtx, rootSchema, mergeSchema, rootIndexSet, mergeIndexSet, indexEdits)
 		return err
 	})
 
@@ -469,12 +469,11 @@ func newInsertingProcessor(theirRootIsh, baseRootIsh hash.Hash) (*insertingProce
 }
 
 func (p *insertingProcessor) process(ctx context.Context, conflictChan chan confVals, artEditor prolly.ArtifactsEditor) error {
-OUTER:
 	for {
 		select {
 		case conflict, ok := <-conflictChan:
 			if !ok {
-				break OUTER
+				return nil
 			}
 			err := artEditor.Add(ctx, conflict.key, p.theirRootIsh, prolly.ArtifactTypeConflict, p.jsonMetaData)
 			if err != nil {
@@ -484,7 +483,6 @@ OUTER:
 			return ctx.Err()
 		}
 	}
-
 	return nil
 }
 
