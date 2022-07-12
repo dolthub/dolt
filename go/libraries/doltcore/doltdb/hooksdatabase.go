@@ -83,3 +83,27 @@ func (db hooksDatabase) CommitWithWorkingSet(
 	}
 	return commitDS, workingSetDS, err
 }
+
+func (db hooksDatabase) Commit(ctx context.Context, ds datas.Dataset, v types.Value, opts datas.CommitOptions) (datas.Dataset, error) {
+	ds, err := db.Database.Commit(ctx, ds, v, opts)
+	if err == nil {
+		db.ExecuteCommitHooks(ctx, ds)
+	}
+	return ds, err
+}
+
+func (db hooksDatabase) SetHead(ctx context.Context, ds datas.Dataset, newHeadAddr hash.Hash) (datas.Dataset, error) {
+	ds, err := db.Database.SetHead(ctx, ds, newHeadAddr)
+	if err == nil {
+		db.ExecuteCommitHooks(ctx, ds)
+	}
+	return ds, err
+}
+
+func (db hooksDatabase) FastForward(ctx context.Context, ds datas.Dataset, newHeadAddr hash.Hash) (datas.Dataset, error) {
+	ds, err := db.Database.FastForward(ctx, ds, newHeadAddr)
+	if err == nil {
+		db.ExecuteCommitHooks(ctx, ds)
+	}
+	return ds, err
+}

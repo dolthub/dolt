@@ -67,7 +67,7 @@ func TestRoundTripNodeItems(t *testing.T) {
 
 func TestNodeSize(t *testing.T) {
 	sz := unsafe.Sizeof(Node{})
-	assert.Equal(t, 128, int(sz))
+	assert.Equal(t, 152, int(sz))
 }
 
 func TestNodeHashValueCompatibility(t *testing.T) {

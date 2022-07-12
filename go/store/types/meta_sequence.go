@@ -25,12 +25,17 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/libraries/utils/tracing"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var emptyKey = orderedKey{}
+
+var tracer = otel.Tracer("github.com/dolthub/dolt/go/store/types")
 
 func newMetaTuple(ref Ref, key orderedKey, numLeaves uint64) (metaTuple, error) {
 	d.PanicIfTrue(ref.buff == nil)
@@ -416,10 +421,8 @@ func (ms metaSequence) isLeaf() bool {
 
 // metaSequence interface
 func (ms metaSequence) getChildSequence(ctx context.Context, idx int) (sequence, error) {
-	span, ctx := tracing.StartSpan(ctx, "metaSequence.getChildSequence")
-	defer func() {
-		span.Finish()
-	}()
+	ctx, span := tracer.Start(ctx, "metaSequence.getChildSequence")
+	span.End()
 
 	item, err := ms.getItem(idx)
 
@@ -438,11 +441,11 @@ func (ms metaSequence) getChildSequence(ctx context.Context, idx int) (sequence,
 // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
 // concatentation as one long composite sequence
 func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint64, length uint64) (sequence, error) {
-	span, ctx := tracing.StartSpan(ctx, "metaSequence.getChildSequence")
-	span.LogKV("level", ms.treeLevel(), "length", length)
-	defer func() {
-		span.Finish()
-	}()
+	ctx, span := tracer.Start(ctx, "metaSequence.getChildSequence", trace.WithAttributes(
+		attribute.Int64("level", int64(ms.treeLevel())),
+		attribute.Int64("length", int64(length)),
+	))
+	defer span.End()
 
 	level := ms.treeLevel()
 	d.PanicIfFalse(level > 0)

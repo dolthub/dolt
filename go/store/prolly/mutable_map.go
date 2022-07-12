@@ -16,6 +16,9 @@ package prolly
 
 import (
 	"context"
+	"io"
+	"strconv"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -133,4 +136,52 @@ func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapIter, error)
 // whether the materialized map contains different values to the contained unedited map.
 func (mut MutableMap) HasEdits() bool {
 	return mut.tuples.edits.Count() > 0
+}
+
+func debugFormat(ctx context.Context, m MutableMap) (string, error) {
+	kd, vd := m.keyDesc, m.valDesc
+
+	editIter := m.tuples.edits.IterAtStart()
+	tupleIter, err := m.tuples.tree.iterAll(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Mutable Map {\n")
+
+	c := strconv.Itoa(m.tuples.edits.Count())
+	sb.WriteString("\tedits (count: " + c + ") {\n")
+	for {
+		k, v := editIter.Current()
+		if k == nil {
+			break
+		}
+		sb.WriteString("\t\t")
+		sb.WriteString(kd.Format(k))
+		sb.WriteString(": ")
+		sb.WriteString(vd.Format(v))
+		sb.WriteString(",\n")
+		editIter.Advance()
+	}
+	sb.WriteString("\t},\n")
+
+	c = strconv.Itoa(m.tuples.tree.count())
+	sb.WriteString("\ttree (count: " + c + ") {\n")
+	for {
+		k, v, err := tupleIter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		sb.WriteString("\t\t")
+		sb.WriteString(kd.Format(k))
+		sb.WriteString(": ")
+		sb.WriteString(vd.Format(v))
+		sb.WriteString(",\n")
+	}
+	sb.WriteString("\t}\n}\n")
+	return sb.String(), nil
 }

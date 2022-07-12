@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
@@ -276,9 +275,7 @@ func dsqleDBsAsSqlDBs(dbs []dsqle.SqlDatabase) []sql.Database {
 
 func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.Context) (*sql.Context, error) {
 	return func(ctx context.Context) (*sql.Context, error) {
-		sqlCtx := sql.NewContext(ctx,
-			sql.WithSession(sess),
-			sql.WithTracer(tracing.Tracer(ctx)))
+		sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
 
 		// If the session was already updated with a database then continue using it in the new session. Otherwise
 		// use the initial one.

@@ -103,6 +103,64 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
+@test "replication: push on call dolt_branch(..." {
+    cd repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_branch
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "call dolt_commit('-am', 'commit')"
+    dolt sql -q "call dolt_branch('new_branch')"
+
+    cd ..
+    dolt clone file://./bac1 repo2
+    cd repo2
+    run dolt branch -av
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "remotes/origin/main" ]] || false
+    [[ "$output" =~ "remotes/origin/new_branch" ]] || false
+}
+
+@test "replication: push on call dolt_checkout(-b..." {
+    cd repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_branch
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "call dolt_commit('-am', 'commit')"
+    dolt sql -q "call dolt_checkout('-b', 'new_branch')"
+
+    cd ..
+    dolt clone file://./bac1 repo2
+    cd repo2
+    run dolt branch -av
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "remotes/origin/main" ]] || false
+    [[ "$output" =~ "remotes/origin/new_branch" ]] || false
+}
+
+@test "replication: push on call dolt_merge, fast-forward merge" {
+    cd repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_branch
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "call dolt_commit('-am', 'commit')"
+    dolt sql -q "call dolt_checkout('-b', 'new_branch')"
+    dolt sql -q "create table t2 (b int primary key)"
+    dolt sql -q "call dolt_commit('-am', 'commit')"
+    dolt sql -q "call dolt_checkout('main')"
+    dolt sql -q "call dolt_merge('new_branch')"
+
+    cd ..
+    dolt clone file://./bac1 repo2
+    cd repo2
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "t1" ]] || false
+    [[ "$output" =~ "t2" ]] || false
+}
+
 @test "replication: pull non-main head" {
     dolt clone file://./rem1 repo2
     cd repo2

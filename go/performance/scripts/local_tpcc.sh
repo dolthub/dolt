@@ -105,12 +105,12 @@ echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
 
 ./tpcc.lua --db-driver="mysql" --mysql-db="sbtest" --mysql-host="0.0.0.0" --mysql-port="$PORT" --mysql-user="user" --mysql-password="pass" --time=10 --report_interval=1 --threads=2 --tables=1 --scale=1 --trx_level="RR" run
 
+echo "benchmark TPC-C complete at $WORKING_DIR"
+echo "DOLT_DEFAULT_BIN_FORMAT='$DOLT_DEFAULT_BIN_FORMAT'"
+echo ""
+
 unset DOLT_TRANSACTION_MERGE_STOMP
 unset DOLT_DEFAULT_BIN_FORMAT
 unset ENABLE_ROW_ITER_2
 unset SINGLE_THREAD_FEATURE_FLAG
 unset GOMAXPROCS
-
-echo "benchmark TPC-C complete at $WORKING_DIR"
-echo "DOLT_DEFAULT_BIN_FORMAT='$DOLT_DEFAULT_BIN_FORMAT'"
-echo ""
