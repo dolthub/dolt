@@ -102,6 +102,9 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	} else if isBranch {
 		err = checkoutBranch(ctx, dbName, roots, dbData, name)
+		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
+			err = checkoutRemoteBranch(ctx, dbName, dbData, roots, name)
+		}
 		if err != nil {
 			return 1, err
 		}

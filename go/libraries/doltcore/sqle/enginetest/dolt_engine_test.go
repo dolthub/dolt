@@ -685,13 +685,6 @@ func TestTransactions(t *testing.T) {
 	}
 }
 
-// TODO(andy): convert to err tests
-//func TestTransactionStomping(t *testing.T) {
-//	for _, script := range DoltTransactionMergeStompTests {
-//		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
-//	}
-//}
-
 func TestConcurrentTransactions(t *testing.T) {
 	enginetest.TestConcurrentTransactions(t, newDoltHarness(t))
 }

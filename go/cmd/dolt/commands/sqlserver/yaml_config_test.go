@@ -59,6 +59,18 @@ metrics:
         label1: value1
         label2: 2
         label3: true
+
+user_session_vars:
+    - name: user0
+      vars:
+          var1: val0_1
+          var2: val0_2
+          var3: val0_3
+    - name: user1
+      vars:
+          var1: val1_1
+          var2: val1_2
+          var4: val1_4
 `
 
 	expected := serverConfigAsYAMLConfig(DefaultServerConfig())
@@ -82,6 +94,24 @@ metrics:
 		},
 	}
 	expected.DataDirStr = strPtr("some nonsense")
+	expected.Vars = []UserSessionVars{
+		{
+			Name: "user0",
+			Vars: map[string]string{
+				"var1": "val0_1",
+				"var2": "val0_2",
+				"var3": "val0_3",
+			},
+		},
+		{
+			Name: "user1",
+			Vars: map[string]string{
+				"var1": "val1_1",
+				"var2": "val1_2",
+				"var4": "val1_4",
+			},
+		},
+	}
 
 	config, err := NewYamlConfig([]byte(testStr))
 	require.NoError(t, err)
