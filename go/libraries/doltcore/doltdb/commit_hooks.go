@@ -64,11 +64,8 @@ func (ph *PushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
 
 // replicate pushes a dataset from srcDB to destDB and force sets the destDB ref to the new dataset value
 func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir string, ds datas.Dataset) error {
-	addr, ok := ds.MaybeHeadAddr()
-	if !ok {
-		// No head, return
-		return nil
-	}
+	addr, _ := ds.MaybeHeadAddr()
+	// follow through if addr == nil
 
 	rf, err := ref.Parse(ds.ID())
 	if err != nil {

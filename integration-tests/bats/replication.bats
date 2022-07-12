@@ -58,6 +58,32 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
+@test "replication: push branch delete" {
+    cd repo1
+    dolt checkout feature
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "select dolt_commit('-am', 'cm')"
+
+    cd ..
+    dolt clone file://./bac1 repo2
+    cd repo2
+    dolt checkout feature
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
+
+    cd ../repo1
+    dolt checkout main
+    dolt sql -q "call dolt_branch('-df', 'feature');"
+
+    cd ..
+    dolt clone file://./bac1 repo3
+    cd repo3
+    dolt checkout feature
+}
+
 @test "replication: tag does not trigger replication" {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
