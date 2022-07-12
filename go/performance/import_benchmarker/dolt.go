@@ -31,21 +31,20 @@ import (
 	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
 )
 
-// RunDoltBenchmarkImportTest returns a function that runs benchmarks for importing
+// BenchmarkDoltImportJob returns a function that runs benchmarks for importing
 // a test dataset into Dolt
-func RunDoltBenchmarkImportTest(job *ImportBenchmarkJob, workingDir string) result {
+func BenchmarkDoltImportJob(job *ImportBenchmarkJob, workingDir string) result {
 	oldStdin := os.Stdin
 	defer func() { os.Stdin = oldStdin }()
 
-	setupAndInitializeDoltRepo(filesys.LocalFS, workingDir, job.DoltExecPath)
+	setupAndInitializeDoltRepo(filesys.LocalFS, workingDir, job.ExecPath)
+	defer RemoveDoltDataDir(filesys.LocalFS, workingDir) // remove the repo each time
 
 	commandStr, args := getBenchmarkingTools(job, workingDir)
 
 	br := testing.Benchmark(func(b *testing.B) {
 		runBenchmarkCommand(b, commandStr, args, workingDir)
 	})
-
-	RemoveDoltDataDir(filesys.LocalFS, workingDir) // remove the repo each time
 
 	return result{
 		name:        job.Name,
@@ -54,7 +53,7 @@ func RunDoltBenchmarkImportTest(job *ImportBenchmarkJob, workingDir string) resu
 		columns:     len(genSampleCols()),
 		sizeOnDisk:  getSizeOnDisk(filesys.LocalFS, workingDir),
 		br:          br,
-		doltVersion: job.DoltVersion,
+		doltVersion: job.Version,
 	}
 }
 
@@ -98,11 +97,12 @@ func getBenchmarkingTools(job *ImportBenchmarkJob, workingDir string) (commandSt
 		log.Fatalf("cannot import file, unsupported file format %s \n", job.Format)
 	}
 
-	return job.DoltExecPath, args
+	return job.ExecPath, args
 }
 
 // runBenchmarkCommand runs and times the benchmark. This is the critical portion of the code
 func runBenchmarkCommand(b *testing.B, commandStr string, args []string, wd string) {
+	// TODO: Write a note as to why this works
 	for i := 0; i < b.N; i++ {
 		cmd := execCommand(context.Background(), commandStr, args...)
 		var errBytes bytes.Buffer

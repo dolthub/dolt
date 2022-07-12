@@ -46,12 +46,12 @@ func TestCanGenerateFilesForAllFormats(t *testing.T) {
 	// Create jobs for all configs
 	for _, format := range supportedFormats {
 		job := &ImportBenchmarkJob{
-			Name:         "dolt_import_small",
-			NumRows:      smallSet,
-			Sorted:       false,
-			Format:       format,
-			DoltVersion:  "HEAD", // Use whatever dolt is installed locally
-			DoltExecPath: "dolt", // Assumes dolt is installed locally
+			Name:     "dolt_import_small",
+			NumRows:  smallSet,
+			Sorted:   false,
+			Format:   format,
+			Version:  "HEAD", // Use whatever dolt is installed locally
+			ExecPath: "dolt", // Assumes dolt is installed locally
 		}
 
 		config.Jobs = append(config.Jobs, job)

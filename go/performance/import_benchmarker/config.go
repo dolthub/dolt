@@ -18,8 +18,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
@@ -28,7 +30,7 @@ const (
 	smallSet  = 100000
 	mediumSet = 1000000
 	largeSet  = 10000000
-	testTable = "testTable"
+	testTable = "test"
 )
 
 type ImportBenchmarkJob struct {
@@ -47,11 +49,18 @@ type ImportBenchmarkJob struct {
 	// Filepath is the path to the csv file. If empty data is generated instead.
 	Filepath string
 
-	// DoltVersion tracks the current version of Dolt being used.
-	DoltVersion string
+	// Program is either Dolt or MySQL.
+	Program string
 
-	// DoltExecPath is a path towards a Dolt executable. This is useful for executing Dolt against a particular version.
-	DoltExecPath string
+	// Version tracks the current version of Dolt or MySQL being used
+	Version string
+
+	// ExecPath is a path towards a Dolt or MySQL executable. This is also useful when running different versions of Dolt.
+	ExecPath string
+
+	// SchemaPath is a path towards a generated schema. It is needed for MySQL testing and optional for Dolt testing
+	// TODO: Make sure the schema file is used for Dolt import i.e the -s parameter. Speeds things up!
+	SchemaPath string
 }
 
 type ImportBenchmarkConfig struct {
@@ -63,12 +72,12 @@ type ImportBenchmarkConfig struct {
 func NewDefaultImportBenchmarkConfig() *ImportBenchmarkConfig {
 	jobs := []*ImportBenchmarkJob{
 		{
-			Name:         "dolt_import_small",
-			NumRows:      smallSet,
-			Sorted:       false,
-			Format:       csvExt,
-			DoltVersion:  "HEAD", // Use whatever dolt is installed locally
-			DoltExecPath: "dolt", // Assumes dolt is installed locally
+			Name:     "dolt_import_small",
+			NumRows:  smallSet,
+			Sorted:   false,
+			Format:   csvExt,
+			Version:  "HEAD", // Use whatever dolt is installed locally
+			ExecPath: "dolt", // Assumes dolt is installed locally
 		},
 	}
 
@@ -144,11 +153,30 @@ func generateTestFile(fs filesys.Filesys, sch *SeedSchema, wd string) string {
 func RunBenchmarkTests(config *ImportBenchmarkConfig, workingDir string) []result {
 	config = generateTestFilesIfNeeded(config)
 
-	results := make([]result, 0)
+	// Split into the two jobs because we want
+	doltJobs := make([]*ImportBenchmarkJob, 0)
+	mySQLJobs := make([]*ImportBenchmarkJob, 0)
 
 	for _, job := range config.Jobs {
-		results = append(results, RunDoltBenchmarkImportTest(job, workingDir))
+		switch strings.ToLower(job.Program) {
+		case "dolt":
+			doltJobs = append(doltJobs, job)
+		case "mysql":
+			if job.Format != csvExt {
+				log.Fatal("mysql import benchmarking only supports csv files")
+			}
+			mySQLJobs = append(mySQLJobs, job)
+		default:
+			log.Fatal("error: Invalid program. Must use dolt or mysql. See the sample config")
+		}
 	}
+
+	results := make([]result, 0)
+	for _, doltJob := range doltJobs {
+		results = append(results, BenchmarkDoltImportJob(doltJob, workingDir))
+	}
+
+	results = append(results, BenchmarkMySQLImportJobs(mySQLJobs, workingDir)...)
 
 	return results
 }
