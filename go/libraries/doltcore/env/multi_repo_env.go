@@ -226,7 +226,7 @@ func MultiEnvForDirectory(
 		cfg:  dEnv.Config.WriteableConfig(),
 	}
 
-	if dEnv.Valid() {
+	if dEnv.Valid() && fs == dEnv.FS {
 		dbName := "dolt"
 		if dEnv.RSLoadErr != nil {
 			return nil, fmt.Errorf("error loading environment: %s", dEnv.RSLoadErr.Error())
