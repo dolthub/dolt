@@ -38,7 +38,7 @@ func doltRemote(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 }
 
 // doDoltRemote is used as sql dolt_remote command for only creating or deleting remotes, not listing.
-// To list tags, dolt_remotes system table is used.
+// To list remotes, dolt_remotes system table is used.
 func doDoltRemote(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 	if len(dbName) == 0 {
@@ -56,7 +56,7 @@ func doDoltRemote(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	if apr.NArg() == 0 {
-		return 1, fmt.Errorf("error: invalid argument, use 'dolt_remotes' system table to list tags")
+		return 1, fmt.Errorf("error: invalid argument, use 'dolt_remotes' system table to list remotes")
 	}
 
 	switch apr.Arg(0) {
