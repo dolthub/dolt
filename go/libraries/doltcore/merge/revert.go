@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/store/hash"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
@@ -49,7 +51,13 @@ func Revert(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, hea
 		}
 		revertMessage = fmt.Sprintf(`%s "%s"`, revertMessage, baseMeta.Description)
 
+		baseCmHash, err := baseRoot.HashOf()
+		if err != nil {
+			return nil, "", err
+		}
+
 		var theirRoot *doltdb.RootValue
+		var theirCmHash hash.Hash
 		if len(baseCommit.DatasParents()) > 0 {
 			parentCM, err := ddb.ResolveParent(ctx, baseCommit, 0)
 			if err != nil {
@@ -59,14 +67,22 @@ func Revert(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, hea
 			if err != nil {
 				return nil, "", err
 			}
+			theirCmHash, err = parentCM.HashOf()
+			if err != nil {
+				return nil, "", err
+			}
 		} else {
 			theirRoot, err = doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter(), ddb.NodeStore())
 			if err != nil {
 				return nil, "", err
 			}
+			// Because we error on any conflicts or constraint violations,
+			// writing a constant hash here will not produce conflicts in the
+			// future.
+			theirCmHash = hash.Of(nil)
 		}
 
-		root, _, err = MergeRoots(ctx, root, theirRoot, baseRoot, opts, MergeOpts{IsCherryPick: false})
+		root, _, err = MergeRoots(ctx, root, theirRoot, baseRoot, theirCmHash, baseCmHash, opts, MergeOpts{IsCherryPick: false})
 		if err != nil {
 			return nil, "", err
 		}

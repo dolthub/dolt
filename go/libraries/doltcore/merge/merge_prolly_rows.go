@@ -112,7 +112,7 @@ func mergeTableData(ctx context.Context, tm TableMerger, mergeSch schema.Schema,
 	if can, err := isNewConflictsCompatible(ctx, tm.left, tm.name, tm.ancSch, tm.leftSch, tm.rightSch); err != nil {
 		return nil, nil, err
 	} else if can {
-		p, err = newInsertingProcessor(tm.rightRootHash, tm.ancestorRootHash)
+		p, err = newInsertingProcessor(tm.rightCommitHash, tm.ancestorCommitHash)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -148,7 +148,7 @@ func mergeTableData(ctx context.Context, tm TableMerger, mergeSch schema.Schema,
 		tm.left, tm.right, finalTbl,
 		ancIndexSet,
 		artifactEditor,
-		tm.rightRootHash,
+		tm.rightCommitHash,
 		tm.name)
 	if err != nil {
 		return nil, nil, err

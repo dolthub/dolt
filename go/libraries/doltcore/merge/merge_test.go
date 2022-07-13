@@ -307,8 +307,8 @@ func TestMergeCommits(t *testing.T) {
 		t.Skip()
 	}
 
-	vrw, ns, _, _, root, mergeRoot, ancRoot, expectedRows, expectedArtifacts := setupMergeTest(t)
-	merger, err := NewMerger(root, mergeRoot, ancRoot, vrw, ns)
+	vrw, ns, rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedArtifacts := setupMergeTest(t)
+	merger, err := NewMerger(root, mergeRoot, ancRoot, rightCommitHash, ancCommitHash, vrw, ns)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,9 +360,9 @@ func TestNomsMergeCommits(t *testing.T) {
 		t.Skip()
 	}
 
-	vrw, ns, _, _, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, expectedStats := setupNomsMergeTest(t)
+	vrw, ns, rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, expectedStats := setupNomsMergeTest(t)
 
-	merger, err := NewMerger(root, mergeRoot, ancRoot, vrw, ns)
+	merger, err := NewMerger(root, mergeRoot, ancRoot, rightCommitHash, ancCommitHash, vrw, ns)
 	if err != nil {
 		t.Fatal(err)
 	}

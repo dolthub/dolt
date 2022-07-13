@@ -205,9 +205,19 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 		return nil, "", errhand.BuildDError("failed to get cherry-picked commit and its parent commit").AddCause(err).Build()
 	}
 
+	// todo(andy): these should be commit hashes
+	fromHash, err := fromRoot.HashOf()
+	if err != nil {
+		return nil, "", err
+	}
+	toHash, err := toRoot.HashOf()
+	if err != nil {
+		return nil, "", err
+	}
+
 	// use parent of cherry-pick as ancestor to merge
 	mo := merge.MergeOpts{IsCherryPick: true}
-	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, workingRoot, toRoot, fromRoot, opts, mo)
+	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, workingRoot, toRoot, fromRoot, toHash, fromHash, opts, mo)
 	if err != nil {
 		return nil, "", err
 	}
