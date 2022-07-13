@@ -152,6 +152,8 @@ func benchmarkLoadData(ctx context.Context, b *testing.B, mConfig sysbench_runne
 	// Register the local file as per https://github.com/go-sql-driver/mysql#load-data-local-infile-support
 	mysql.RegisterLocalFile(job.Filepath)
 
+	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		// Since dolt also creates the table on import we'll add dropping and creating the table to the benchmark
 		_, err = db.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", testTable))

@@ -12,7 +12,7 @@ if [ -z "$TEMPLATE_SCRIPT" ]; then
     exit 1
 fi
 
-if [ -z "$FROM_VERSION" ] || [ -z "$TO_VERSION" ]; then
+if [ -z "$FROM_SERVER" ] || [ -z "$FROM_VERSION" ] || [ -z "$TO_SERVER" ] || [ -z "$TO_VERSION" ]; then
     echo  "Must set FROM_SERVER FROM_VERSION TO_SERVER and TO_VERSION"
     exit 1
 fi

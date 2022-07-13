@@ -3,7 +3,7 @@
 set -e
 
 if [ "$#" -lt 8 ]; then
-    echo  "Usage: ./get-dolt-dolt-job-json.sh <jobName> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <issueNumber>"
+    echo  "Usage: ./get-mysql-dolt-job-json.sh <jobName> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <issueNumber>"
     exit 1
 fi
 
@@ -54,6 +54,8 @@ echo '
               "--region=us-west-2",
               "--results-dir='$timePrefix'",
               "--results-prefix='$actorPrefix'",
+              "--mysql-exec=/usr/sbin/mysqld",
+              "--mysql-schema-file=schema.sql",
               "--fileNames=100k-sorted.csv",
               "--fileNames=100k-random.csv",
               "--fileNames=1m-sorted.csv",

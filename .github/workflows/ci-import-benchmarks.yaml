@@ -86,7 +86,9 @@ jobs:
         id: run-benchmarks
         run: ./.github/scripts/import-benchmarking/run-benchmarks.sh
         env:
+          FROM_SERVER: "dolt"
           FROM_VERSION: ${{ github.sha }}
+          TO_SERVER: "dolt"
           TO_VERSION: ${{ steps.comment-branch.outputs.head_sha }}
           MODE: 'pullRequest'
           ISSUE_NUMBER: ${{ steps.get_pull_number.outputs.pull_number }}
