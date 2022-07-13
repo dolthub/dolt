@@ -120,20 +120,11 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 		return finished, stats, err
 	}
 
-	ancRows, err := tm.anc.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	ancIndexSet, err := tm.anc.GetIndexSet(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	if mergeOpts.IsCherryPick && !schema.SchemasAreEqual(tm.leftSch, tm.rightSch) {
 		return nil, nil, errors.New(fmt.Sprintf("schema changes not supported: %s table schema does not match in current HEAD and cherry-pick commit.", tblName))
 	}
 
-	postMergeSchema, schConflicts, err := SchemaMerge(tm.leftSch, tm.rightSch, tm.ancSch, tblName)
+	mergeSch, schConflicts, err := SchemaMerge(tm.leftSch, tm.rightSch, tm.ancSch, tblName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -142,66 +133,56 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 		return nil, nil, schConflicts.AsError()
 	}
 
-	updatedTbl, err := tm.left.UpdateSchema(ctx, postMergeSchema)
+	mergeTbl, err := tm.left.UpdateSchema(ctx, mergeSch)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if types.IsFormat_DOLT_1(updatedTbl.Format()) {
-		updatedTbl, err = mergeTableArtifacts(ctx, tblName, tm.left, tm.right, tm.anc, updatedTbl)
+	if types.IsFormat_DOLT_1(mergeTbl.Format()) {
+		mergeTbl, err = mergeTableArtifacts(ctx, tblName, tm.left, tm.right, tm.anc, mergeTbl)
 		if err != nil {
 			return nil, nil, err
 		}
 
 		var stats *MergeStats
-		updatedTbl, stats, err = mergeTableData(
-			ctx,
-			rm.vrw,
-			rm.ns,
-			tblName,
-			postMergeSchema, tm.leftSch, tm.rightSch, tm.ancSch,
-			tm.left, tm.right, updatedTbl,
-			ancRows,
-			ancIndexSet,
-			rm.rightHash,
-			rm.ancHash)
+		mergeTbl, stats, err = mergeTableData(ctx, tm, mergeSch, mergeTbl)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		n, err := updatedTbl.NumRowsInConflict(ctx)
+		n, err := mergeTbl.NumRowsInConflict(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
 		stats.Conflicts = int(n)
 
-		updatedTbl, err = mergeAutoIncrementValues(ctx, tm.left, tm.right, updatedTbl)
+		mergeTbl, err = mergeAutoIncrementValues(ctx, tm.left, tm.right, mergeTbl)
 		if err != nil {
 			return nil, nil, err
 		}
-		return updatedTbl, stats, nil
+		return mergeTbl, stats, nil
 	}
 
 	// If any indexes were added during the merge, then we need to generate their row data to add to our updated table.
 	addedIndexesSet := make(map[string]string)
-	for _, index := range postMergeSchema.Indexes().AllIndexes() {
+	for _, index := range mergeSch.Indexes().AllIndexes() {
 		addedIndexesSet[strings.ToLower(index.Name())] = index.Name()
 	}
 	for _, index := range tm.leftSch.Indexes().AllIndexes() {
 		delete(addedIndexesSet, strings.ToLower(index.Name()))
 	}
 	for _, addedIndex := range addedIndexesSet {
-		newIndexData, err := editor.RebuildIndex(ctx, updatedTbl, addedIndex, opts)
+		newIndexData, err := editor.RebuildIndex(ctx, mergeTbl, addedIndex, opts)
 		if err != nil {
 			return nil, nil, err
 		}
-		updatedTbl, err = updatedTbl.SetNomsIndexRows(ctx, addedIndex, newIndexData)
+		mergeTbl, err = mergeTbl.SetNomsIndexRows(ctx, addedIndex, newIndexData)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
-	updatedTblEditor, err := editor.NewTableEditor(ctx, updatedTbl, postMergeSchema, tblName, opts)
+	updatedTblEditor, err := editor.NewTableEditor(ctx, mergeTbl, mergeSch, tblName, opts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -216,7 +197,12 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 		return nil, nil, err
 	}
 
-	resultTbl, cons, stats, err := mergeNomsTableData(ctx, rm.vrw, tblName, postMergeSchema, rows, mergeRows, durable.NomsMapFromIndex(ancRows), updatedTblEditor)
+	ancRows, err := tm.anc.GetRowData(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	resultTbl, cons, stats, err := mergeNomsTableData(ctx, rm.vrw, tblName, mergeSch, rows, mergeRows, durable.NomsMapFromIndex(ancRows), updatedTblEditor)
 	if err != nil {
 		return nil, nil, err
 	}

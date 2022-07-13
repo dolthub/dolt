@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -46,18 +45,7 @@ import (
 // entries are set to values consistent the cell-wise merge result. When the
 // root and merge secondary indexes are merged, they will produce entries
 // consistent with the primary row data.
-func mergeTableData(
-	ctx context.Context,
-	vrw types.ValueReadWriter,
-	ns tree.NodeStore,
-	tblName string,
-	postMergeSchema, rootSchema, mergeSchema, ancSchema schema.Schema,
-	tbl, mergeTbl, updatedTbl *doltdb.Table,
-	ancRows durable.Index,
-	ancIndexSet durable.IndexSet,
-	mergeRootIsh hash.Hash,
-	ancRootIsh hash.Hash,
-) (*doltdb.Table, *MergeStats, error) {
+func mergeTableData(ctx context.Context, tm TableMerger, mergeSch schema.Schema, mergeTbl *doltdb.Table) (*doltdb.Table, *MergeStats, error) {
 	group, gCtx := errgroup.WithContext(ctx)
 
 	var (
@@ -73,12 +61,21 @@ func mergeTableData(
 		conflicts  = make(chan confVals, 128)
 	)
 
+	ancRows, err := tm.anc.GetRowData(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	ancIndexSet, err := tm.anc.GetIndexSet(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	group.Go(func() error {
 		var err error
 		finalTbl, finalRows, err = mergeProllyRowData(
 			gCtx,
-			postMergeSchema, rootSchema, mergeSchema, ancSchema,
-			tbl, mergeTbl, updatedTbl,
+			mergeSch, tm.leftSch, tm.rightSch, tm.ancSch,
+			tm.left, tm.right, mergeTbl,
 			ancRows,
 			indexEdits,
 			conflicts)
@@ -90,32 +87,32 @@ func mergeTableData(
 		return nil
 	})
 
-	rootIndexSet, err := tbl.GetIndexSet(ctx)
+	rootIndexSet, err := tm.left.GetIndexSet(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	mergeIndexSet, err := mergeTbl.GetIndexSet(ctx)
+	mergeIndexSet, err := tm.right.GetIndexSet(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	group.Go(func() error {
 		var err error
-		updatedRootIndexSet, updatedMergeIndexSet, err = updateProllySecondaryIndexes(gCtx, rootSchema, mergeSchema, rootIndexSet, mergeIndexSet, indexEdits)
+		updatedRootIndexSet, updatedMergeIndexSet, err = updateProllySecondaryIndexes(gCtx, tm.leftSch, tm.rightSch, rootIndexSet, mergeIndexSet, indexEdits)
 		return err
 	})
 
-	artIdx, err := updatedTbl.GetArtifacts(ctx)
+	artIdx, err := mergeTbl.GetArtifacts(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 	artM := durable.ProllyMapFromArtifactIndex(artIdx)
 	artifactEditor := artM.Editor()
 
-	if can, err := isNewConflictsCompatible(ctx, tbl, tblName, ancSchema, rootSchema, mergeSchema); err != nil {
+	if can, err := isNewConflictsCompatible(ctx, tm.left, tm.name, tm.ancSch, tm.leftSch, tm.rightSch); err != nil {
 		return nil, nil, err
 	} else if can {
-		p, err = newInsertingProcessor(mergeRootIsh, ancRootIsh)
+		p, err = newInsertingProcessor(tm.rightRootHash, tm.ancestorRootHash)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -132,26 +129,27 @@ func mergeTableData(
 		return nil, nil, err
 	}
 
-	tbl, err = tbl.SetIndexSet(ctx, updatedRootIndexSet)
+	tm.left, err = tm.left.SetIndexSet(ctx, updatedRootIndexSet)
 	if err != nil {
 		return nil, nil, err
 	}
-	mergeTbl, err = mergeTbl.SetIndexSet(ctx, updatedMergeIndexSet)
+
+	tm.right, err = tm.right.SetIndexSet(ctx, updatedMergeIndexSet)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	finalTbl, err = mergeProllySecondaryIndexes(
 		ctx,
-		vrw,
-		ns,
-		postMergeSchema, rootSchema, mergeSchema, ancSchema,
+		tm.vrw,
+		tm.ns,
+		mergeSch, tm.leftSch, tm.rightSch, tm.ancSch,
 		finalRows,
-		tbl, mergeTbl, finalTbl,
+		tm.left, tm.right, finalTbl,
 		ancIndexSet,
 		artifactEditor,
-		mergeRootIsh,
-		tblName)
+		tm.rightRootHash,
+		tm.name)
 	if err != nil {
 		return nil, nil, err
 	}
