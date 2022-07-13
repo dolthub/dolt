@@ -16,6 +16,7 @@ package commands
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -117,7 +118,8 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 			oldRow.row[ds.queryToTarget[i]] = row[i]
 
 			if diffTypeStr == "modified" {
-				if row[i] != row[ds.fromTo[i]] {
+				// need this to compare map[string]interface{} and other incomparable result types
+				if !reflect.DeepEqual(row[i], row[ds.fromTo[i]]) {
 					oldRow.colDiffs[ds.queryToTarget[i]] = diff.ModifiedOld
 				}
 			} else {
@@ -138,7 +140,8 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 			newRow.row[ds.queryToTarget[i]] = row[i]
 
 			if diffTypeStr == "modified" {
-				if row[i] != row[ds.toFrom[i]] {
+				// need this to compare map[string]interface{} and other incomparable result types
+				if !reflect.DeepEqual(row[i], row[ds.toFrom[i]]) {
 					newRow.colDiffs[ds.queryToTarget[i]] = diff.ModifiedNew
 				}
 			} else {
