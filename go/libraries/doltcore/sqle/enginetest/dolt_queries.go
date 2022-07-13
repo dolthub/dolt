@@ -4762,39 +4762,35 @@ var DoltRemoteTestScripts = []queries.ScriptTest{
 		SetUpScript: []string{},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "CALL DOLT_REMOTE('add','origin','aws://[dynamo_db_table:s3_bucket]/repo_name')",
+				Query:    "CALL DOLT_REMOTE('add','origin','file://../test')",
 				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "SELECT * FROM DOLT_REMOTES",
-				Expected: []sql.Row{{"origin", "aws://[dynamo_db_table:s3_bucket]/repo_name", sql.MustJSON(`["refs/heads/*:refs/remotes/origin/*"]`), sql.MustJSON(`{}`)}},
-			},
-			{
-				Query:    "CALL DOLT_PUSH('origin', 'main')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{"origin", "file:///user/dolt/datasets/test", sql.MustJSON(`["refs/heads/*:refs/remotes/origin/*"]`), sql.MustJSON(`{}`)}},
 			},
 		},
 	},
 	{
 		Name: "dolt-remote: SQL remove remotes",
 		SetUpScript: []string{
-			"CALL DOLT_REMOTE('add','origin1','aws://[dynamo_db_table:s3_bucket]/repo_name')",
+			"CALL DOLT_REMOTE('add','origin1','file://.')",
 			"CALL DOLT_REMOTE('add','origin2','aws://[dynamo_db_table:s3_bucket]/repo_name')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT * FROM DOLT_REMOTES",
 				Expected: []sql.Row{
-					{"origin1", "aws://[dynamo_db_table:s3_bucket]/repo_name", sql.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), sql.MustJSON(`{}`)},
+					{"origin1", "file:///user/dolt/datasets/test", sql.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), sql.MustJSON(`{}`)},
 					{"origin2", "aws://[dynamo_db_table:s3_bucket]/repo_name", sql.MustJSON(`["refs/heads/*:refs/remotes/origin2/*"]`), sql.MustJSON(`{}`)}},
 			},
 			{
-				Query:    "CALL DOLT_REMOTE('remove','origin1')",
+				Query:    "CALL DOLT_REMOTE('remove','origin2')",
 				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "SELECT * FROM DOLT_REMOTES",
-				Expected: []sql.Row{{"origin2", "aws://[dynamo_db_table:s3_bucket]/repo_name", sql.MustJSON(`["refs/heads/*:refs/remotes/origin2/*"]`), sql.MustJSON(`{}`)}},
+				Expected: []sql.Row{{"origin1", "file:///user/dolt/datasets/test", sql.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), sql.MustJSON(`{}`)}},
 			},
 		},
 	},

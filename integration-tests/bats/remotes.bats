@@ -246,7 +246,6 @@ teardown() {
     run dolt sql << SQL
 SELECT DOLT_CHECKOUT('test-branch');
 SELECT * FROM test;
-SELECT DOLT_PULL();
 SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "pk" ]] || false
@@ -1949,8 +1948,10 @@ setup_ref_test() {
 
     cd repo1
     dolt init
-    dolt sql -q "CALL dolt_remote('add', 'origin', 'file://../remote')"
-    dolt push origin main
+    dolt sql <<SQL
+CALL dolt_remote('add', 'origin', 'file://../remote');
+CALL dolt_push('origin', 'main');
+SQL
 
     cd ..
     dolt clone file://./remote repo2

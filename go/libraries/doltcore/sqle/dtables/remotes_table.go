@@ -90,16 +90,12 @@ func NewRemoteItr(ctx *sql.Context, ddb *doltdb.DoltDB) (*RemoteItr, error) {
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
-
-	// dolt_remote() procedure saves changed to repoState file,
-	// so dolt_remotes table needs most recent data from repoState file
-	fs := sess.Provider().FileSystem()
-	repoState, err := env.LoadRepoState(fs)
-	if err != nil {
-		return nil, err
+	dbData, ok := sess.GetDbData(ctx, dbName)
+	if !ok {
+		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
-	remoteMap := repoState.Remotes
 
+	remoteMap, err := dbData.Rsr.GetRemotes()
 	if err != nil {
 		return nil, err
 	}

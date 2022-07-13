@@ -119,7 +119,12 @@ func (s SessionStateAdapter) GetPreMergeWorking(ctx context.Context) (*doltdb.Ro
 }
 
 func (s SessionStateAdapter) GetRemotes() (map[string]env.Remote, error) {
-	return s.remotes, nil
+	fs := s.session.Provider().FileSystem()
+	repoState, err := env.LoadRepoState(fs)
+	if err != nil {
+		return nil, err
+	}
+	return repoState.Remotes, nil
 }
 
 func (s SessionStateAdapter) GetBackups() (map[string]env.Remote, error) {
