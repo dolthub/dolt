@@ -248,11 +248,3 @@ func buildConflictQuery(base, sch, mergeSch schema.Schema, tblName string) strin
 	query := fmt.Sprintf("SELECT %s, our_diff_type, their_diff_type from dolt_conflicts_%s", colNames, tblName)
 	return query
 }
-
-func withPrefix(arr []string, prefix string) []string {
-	out := make([]string, len(arr))
-	for i := range arr {
-		out[i] = prefix + arr[i]
-	}
-	return out
-}
