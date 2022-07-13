@@ -39,12 +39,15 @@ const (
 	defaultHost = "127.0.0.1"
 	defaultPort = 3306
 
-	defaultSocket   = "/var/run/mysqld/mysqld.sock"
-	defaultProtocol = "unix"
-	dbName          = "test"
+	defaultSocket = "/var/run/mysqld/mysqld.sock"
+	dbName        = "test"
 )
 
-func BenchmarkMySQLImportJobs(jobs []*ImportBenchmarkJob, workingDir string) []result {
+func BenchmarkMySQLImportJobs(jobs []*ImportBenchmarkJob, mConfig sysbench_runner.MysqlConfig) []result {
+	if len(jobs) == 0 {
+		return nil
+	}
+
 	ctx := context.Background()
 	withCancelCtx, cancel := context.WithCancel(ctx)
 
@@ -70,8 +73,6 @@ func BenchmarkMySQLImportJobs(jobs []*ImportBenchmarkJob, workingDir string) []r
 	time.Sleep(5 * time.Second)
 
 	// setup the relevant testing database and permissions
-	// TODO: Switch to supporting connection protocol of unix and so forth
-	mConfig := sysbench_runner.MysqlConfig{Socket: defaultSocket, ConnectionProtocol: "tcp", Port: defaultPort, Host: defaultHost}
 	err := sysbench_runner.SetupDB(ctx, mConfig, dbName)
 
 	if err != nil {
@@ -94,7 +95,7 @@ func BenchmarkMySQLImportJobs(jobs []*ImportBenchmarkJob, workingDir string) []r
 	results := make([]result, len(jobs))
 
 	for i, job := range jobs {
-		// run the actual test
+		// benchmark the actual job
 		br := testing.Benchmark(func(b *testing.B) {
 			benchmarkLoadData(ctx, b, mConfig, job)
 		})
@@ -104,7 +105,7 @@ func BenchmarkMySQLImportJobs(jobs []*ImportBenchmarkJob, workingDir string) []r
 			format:      job.Format,
 			rows:        job.NumRows,
 			columns:     len(genSampleCols()),
-			sizeOnDisk:  0, // TODO: size on disk for MySQL?
+			sizeOnDisk:  -1, // TODO: Think about how to collect MySQL table size
 			br:          br,
 			doltVersion: job.Version,
 		}
@@ -119,7 +120,6 @@ func benchmarkLoadData(ctx context.Context, b *testing.B, mConfig sysbench_runne
 		log.Fatal(err)
 	}
 
-	// TODO make sure this can work on windows
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		log.Fatal(err)
@@ -141,27 +141,30 @@ func benchmarkLoadData(ctx context.Context, b *testing.B, mConfig sysbench_runne
 		log.Fatal(err)
 	}
 
-	_, err = db.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", testTable))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// CREATE TABLE
-	// TODO: Assumes that table schema uses testTable
+	// Load the schema for the test table. This assumes the table has the same name as testTable
 	data, err := ioutil.ReadFile(job.SchemaPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Register the local file as per https://github.com/go-sql-driver/mysql#load-data-local-infile-support
 	mysql.RegisterLocalFile(job.Filepath)
 
-	_, err = db.ExecContext(ctx, string(data))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// TODO: Write a note about replace
 	for i := 0; i < b.N; i++ {
+		// Since dolt also creates the table on import we'll add dropping and creating the table to the benchmark
+		_, err = db.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", testTable))
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Run the CREATE TABLE command stored in the schema file
+		// TODO: This schema file must have the same name as testTable.
+		_, err = db.ExecContext(ctx, string(data))
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Run LOAD DATA on the csv file
 		_, err = db.ExecContext(ctx, fmt.Sprintf(`LOAD DATA LOCAL INFILE '%s' REPLACE INTO TABLE %s FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' IGNORE 1 LINES`, job.Filepath, testTable))
 		if err != nil {
 			log.Fatal(err)

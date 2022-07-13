@@ -23,6 +23,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
+
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
@@ -46,7 +48,7 @@ type ImportBenchmarkJob struct {
 	// Format is either csv, json or sql.
 	Format string
 
-	// Filepath is the path to the csv file. If empty data is generated instead.
+	// Filepath is the path to the data file. If empty data is generated instead.
 	Filepath string
 
 	// Program is either Dolt or MySQL.
@@ -65,6 +67,16 @@ type ImportBenchmarkJob struct {
 
 type ImportBenchmarkConfig struct {
 	Jobs []*ImportBenchmarkJob
+
+	// MysqlConnectionProtocol is either tcp or unix. On our kubernetes benchmarking deployments unix is needed. To run this
+	// locally you want tcp
+	MysqlConnectionProtocol string
+
+	// MysqlPort is used to connect with a MySQL port
+	MysqlPort int
+
+	// MysqlHost is used to connect with a MySQL host
+	MysqlHost string
 }
 
 // NewDefaultImportBenchmarkConfig returns a default import configuration where data is generated with accordance to
@@ -78,12 +90,17 @@ func NewDefaultImportBenchmarkConfig() *ImportBenchmarkConfig {
 			Format:   csvExt,
 			Version:  "HEAD", // Use whatever dolt is installed locally
 			ExecPath: "dolt", // Assumes dolt is installed locally
+			Program:  "dolt",
 		},
 	}
 
-	return &ImportBenchmarkConfig{
+	config := &ImportBenchmarkConfig{
 		Jobs: jobs,
 	}
+
+	config.updateDefaults()
+
+	return config
 }
 
 // FromFileConfig takes in a configuration file (encoded as JSON) and returns the relevant importBenchmark config
@@ -102,29 +119,64 @@ func FromFileConfig(configPath string) (*ImportBenchmarkConfig, error) {
 		return nil, err
 	}
 
+	config.updateDefaults()
+
 	return config, nil
+}
+
+func (c *ImportBenchmarkConfig) updateDefaults() {
+	if c.MysqlConnectionProtocol == "" {
+		c.MysqlConnectionProtocol = "tcp"
+	}
+
+	if c.MysqlHost == "" {
+		c.MysqlHost = defaultHost
+	}
+
+	if c.MysqlPort == 0 {
+		c.MysqlPort = defaultPort
+	}
+
+	for _, job := range c.Jobs {
+		job.updateDefaultsAndValidate()
+	}
+}
+
+func (j *ImportBenchmarkJob) updateDefaultsAndValidate() {
+	j.Program = strings.ToLower(j.Program)
+
+	if j.Program == "mysql" {
+		if j.SchemaPath == "" {
+			log.Fatalf("error: Must supply schema file for mysql jobs")
+		}
+	}
+}
+
+func getMysqlConfigFromConfig(c *ImportBenchmarkConfig) sysbench_runner.MysqlConfig {
+	return sysbench_runner.MysqlConfig{Socket: defaultSocket, Host: c.MysqlHost, ConnectionProtocol: c.MysqlConnectionProtocol, Port: c.MysqlPort}
 }
 
 // generateTestFilesIfNeeded creates the test conditions for an import benchmark to execute. In the case that the config
 // dictates that data needs to be generated, this function handles that
 func generateTestFilesIfNeeded(config *ImportBenchmarkConfig) *ImportBenchmarkConfig {
-	returnConfig := &ImportBenchmarkConfig{Jobs: make([]*ImportBenchmarkJob, 0)}
+	jobs := make([]*ImportBenchmarkJob, 0)
 
 	for _, job := range config.Jobs {
 		// Preset csv path
 		if job.Filepath != "" {
-			returnConfig.Jobs = append(returnConfig.Jobs, job)
+			jobs = append(jobs, job)
 		} else {
 			filePath, fileFormat := getGeneratedBenchmarkTest(job)
 
 			job.Filepath = filePath
 			job.Format = fileFormat
 
-			returnConfig.Jobs = append(returnConfig.Jobs, job)
+			jobs = append(jobs, job)
 		}
 	}
 
-	return returnConfig
+	config.Jobs = jobs
+	return config
 }
 
 // getGeneratedBenchmarkTest is used to create a generated test case with a randomly generated csv file.
@@ -176,7 +228,7 @@ func RunBenchmarkTests(config *ImportBenchmarkConfig, workingDir string) []resul
 		results = append(results, BenchmarkDoltImportJob(doltJob, workingDir))
 	}
 
-	results = append(results, BenchmarkMySQLImportJobs(mySQLJobs, workingDir)...)
+	results = append(results, BenchmarkMySQLImportJobs(mySQLJobs, getMysqlConfigFromConfig(config))...)
 
 	return results
 }

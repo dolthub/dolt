@@ -21,5 +21,6 @@
       "Version": "HEAD",
       "ExecPath": "/Users/vinairachakonda/go/bin/dolt"
     }
-  ]
+  ],
+  "MysqlConnectionProtocol": "tcp"
 }

@@ -10,3 +10,7 @@ which represent different sort order, primary keys, etc.
 
 You can use the sample-config in the cmd package to benchmark against a sample set of files. If a filepath
 is not specified, Dolt will generate a random test file for you.
+
+### Notes
+
+* You should name your table "test" in the schema file for the mysql provisioning.
