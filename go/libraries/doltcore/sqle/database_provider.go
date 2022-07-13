@@ -392,8 +392,14 @@ func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDa
 		}
 	}
 
+	dSess := dsess.DSessFromSess(ctx.Session)
+	currentBranchRef, err := dSess.CWBHeadRef(ctx, db.name)
+	if err != nil {
+		return err
+	}
+
 	// create workingSets/heads/branch and update the working set
-	err = pullBranches(ctx, db, []string{branch})
+	err = pullBranches(ctx, db, []string{branch}, currentBranchRef)
 	if err != nil {
 		return err
 	}

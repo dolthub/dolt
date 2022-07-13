@@ -105,6 +105,11 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		return sql.ErrUnknownSystemVariable.New(dsess.ReplicateAllHeadsKey)
 	}
 
+	dSess := dsess.DSessFromSess(ctx.Session)
+	currentBranchRef, err := dSess.CWBHeadRef(ctx, rrd.name)
+	if err != nil {
+		return err
+	}
 	switch {
 	case headsArg != "" && allHeads == SysVarTrue:
 		return fmt.Errorf("%w; cannot set both 'dolt_replicate_heads' and 'dolt_replicate_all_heads'", ErrInvalidReplicateHeadsSetting)
@@ -118,7 +123,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		if err != nil {
 			return err
 		}
-		err = pullBranches(ctx, rrd, branches)
+		err = pullBranches(ctx, rrd, branches, currentBranchRef)
 		if err != nil {
 			return err
 		}
@@ -127,18 +132,12 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		if err != nil {
 			return err
 		}
-
-		refs, err := rrd.srcDB.GetBranches(ctx)
+		toPull, toDelete, err := getReplicationBranches(ctx, rrd)
+		err = pullBranches(ctx, rrd, toPull, currentBranchRef)
 		if err != nil {
 			return err
 		}
-
-		allBranches := make([]string, 0, len(refs))
-		for _, r := range refs {
-			allBranches = append(allBranches, r.GetPath())
-		}
-
-		err = pullBranches(ctx, rrd, allBranches)
+		err = deleteBranches(ctx, rrd, toDelete, currentBranchRef)
 		if err != nil {
 			return err
 		}
@@ -148,14 +147,8 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 	return nil
 }
 
-func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string) error {
+func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string, currentBranchRef ref.DoltRef) error {
 	refSpecs, err := env.ParseRSFromArgs(rrd.remote.Name, branches)
-	if err != nil {
-		return err
-	}
-
-	dSess := dsess.DSessFromSess(ctx.Session)
-	currentBranchRef, err := dSess.CWBHeadRef(ctx, rrd.name)
 	if err != nil {
 		return err
 	}
@@ -227,6 +220,58 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string) 
 		return err
 	}
 
+	return nil
+}
+
+func getReplicationBranches(ctx *sql.Context, rrd ReadReplicaDatabase) ([]string, []ref.DoltRef, error) {
+	srcRefs, err := rrd.srcDB.GetBranches(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	localRefs, err := rrd.Database.ddb.GetBranches(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	allBranches := make([]string, 0, len(srcRefs))
+	deletedBranches := make([]ref.DoltRef, 0, len(localRefs))
+	var i, j int
+	for i < len(srcRefs) && j < len(localRefs) {
+		rem := srcRefs[i].GetPath()
+		local := localRefs[j].GetPath()
+		if rem == local {
+			allBranches = append(allBranches, rem)
+			i++
+			j++
+		} else if rem < local {
+			allBranches = append(allBranches, rem)
+			i++
+		} else {
+			deletedBranches = append(deletedBranches, localRefs[j])
+			j++
+		}
+	}
+	for i < len(srcRefs) {
+		allBranches = append(allBranches, srcRefs[i].GetPath())
+		i++
+	}
+	for j < len(localRefs) {
+		deletedBranches = append(deletedBranches, localRefs[i])
+		j++
+	}
+	return allBranches, deletedBranches, nil
+}
+
+func deleteBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []ref.DoltRef, currentBranchRef ref.DoltRef) error {
+	for _, b := range branches {
+		err := rrd.ddb.DeleteBranch(ctx, b)
+		if errors.Is(err, doltdb.ErrBranchNotFound) {
+			continue
+		} else if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

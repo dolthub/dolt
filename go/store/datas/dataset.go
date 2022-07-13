@@ -522,3 +522,11 @@ func (ds Dataset) MaybeHeadValue() (types.Value, bool, error) {
 func IsValidDatasetName(name string) bool {
 	return DatasetFullRe.MatchString(name)
 }
+
+func NewHeadlessDataset(db Database, id string) Dataset {
+	return Dataset{
+		id:   id,
+		head: nil,
+		db:   db.(*database),
+	}
+}
