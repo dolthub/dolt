@@ -434,7 +434,7 @@ const (
   (use "dolt checkout <table>" to discard changes in working directory)`
 
 	untrackedHeader     = `Untracked files:`
-	untrackedHeaderHelp = `  (use "dolt add table" to include in what will be committed)`
+	untrackedHeaderHelp = `  (use "dolt add <table>" to include in what will be committed)`
 
 	statusFmt         = "\t%-16s%s"
 	statusRenameFmt   = "\t%-16s%s -> %s"
