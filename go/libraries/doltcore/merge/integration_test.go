@@ -256,7 +256,7 @@ func TestMergeConflicts(t *testing.T) {
 
 const (
 	concurrentScale   = 10_000
-	concurrentIters   = 500
+	concurrentIters   = 100
 	concurrentThreads = 8
 	concurrentTable   = "CREATE TABLE concurrent (" +
 		"  id int NOT NULL," +
@@ -273,29 +273,32 @@ const (
 func TestMergeConcurrency(t *testing.T) {
 	ctx := context.Background()
 	dEnv := setupConcurrencyTest(t, ctx)
+	eng := engineFromEnvironment(ctx, dEnv)
+
 	eg, ctx := errgroup.WithContext(ctx)
 	for i := 0; i < concurrentThreads; i++ {
 		seed := i
 		eg.Go(func() error {
-			return runConcurrentTxs(ctx, dEnv, seed)
+			return runConcurrentTxs(ctx, eng, seed)
 		})
 	}
 	assert.NoError(t, eg.Wait())
 }
 
-func runConcurrentTxs(ctx context.Context, dEnv *env.DoltEnv, seed int) error {
-	eng := engineFromEnvironment(ctx, dEnv)
-	sqlCtx, err := eng.NewContext(ctx)
+func runConcurrentTxs(ctx context.Context, eng *engine.SqlEngine, seed int) error {
+	sess, err := eng.NewDoltSession(ctx, sql.NewBaseSession())
 	if err != nil {
 		return err
 	}
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%"})
+	sctx := sql.NewContext(ctx, sql.WithSession(sess))
+	sctx.SetCurrentDatabase("dolt")
+	sctx.Session.SetClient(sql.Client{User: "root", Address: "%"})
 
 	rnd := rand.New(rand.NewSource(int64(seed)))
 	zipf := rand.NewZipf(rnd, 1.1, 1.0, concurrentScale)
 
 	for i := 0; i < concurrentIters; i++ {
-		if err = executeQuery(sqlCtx, eng, "BEGIN"); err != nil {
+		if err := executeQuery(sctx, eng, "BEGIN"); err != nil {
 			return err
 		}
 
@@ -306,16 +309,16 @@ func runConcurrentTxs(ctx context.Context, dEnv *env.DoltEnv, seed int) error {
 			"SET c0 = c0 + %d, c1 = c1 + %d WHERE id = %d",
 			seed, seed, id)
 
-		if err = executeQuery(sqlCtx, eng, sum); err != nil {
+		if err := executeQuery(sctx, eng, sum); err != nil {
 			return err
 		}
-		if err = executeQuery(sqlCtx, eng, update); err != nil {
+		if err := executeQuery(sctx, eng, update); err != nil {
 			return err
 		}
-		if err = executeQuery(sqlCtx, eng, sum); err != nil {
+		if err := executeQuery(sctx, eng, sum); err != nil {
 			return err
 		}
-		if err = executeQuery(sqlCtx, eng, "COMMIT"); err != nil {
+		if err := executeQuery(sctx, eng, "COMMIT"); err != nil {
 			// allow serialization errors
 			if !sql.ErrLockDeadlock.Is(err) {
 				return err

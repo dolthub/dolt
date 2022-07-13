@@ -1187,16 +1187,13 @@ func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- pul
 }
 
 func (ddb *DoltDB) SetCommitHooks(ctx context.Context, postHooks []CommitHook) *DoltDB {
-	cp := *ddb
-	cp.db = ddb.db.SetCommitHooks(ctx, postHooks)
-	return &cp
+	ddb.db = ddb.db.SetCommitHooks(ctx, postHooks)
+	return ddb
 }
 
 func (ddb *DoltDB) SetCommitHookLogger(ctx context.Context, wr io.Writer) *DoltDB {
 	if ddb.db.Database != nil {
-		cp := *ddb
-		cp.db = ddb.db.SetCommitHookLogger(ctx, wr)
-		return &cp
+		ddb.db = ddb.db.SetCommitHookLogger(ctx, wr)
 	}
 	return ddb
 }
