@@ -177,13 +177,13 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string) 
 				if err != nil {
 					return nil, err
 				}
-	
+
 				err = rrd.ddb.FastForward(fetchCtx, rtRef, srcDBCommit)
 				if err != nil {
 					return nil, err
 				}
 			}
-	
+
 			// either ff or create local tracking branch
 			{
 				branchExists, err := rrd.ddb.HasBranch(fetchCtx, branch.GetPath())
