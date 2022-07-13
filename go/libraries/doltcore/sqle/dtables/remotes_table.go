@@ -220,64 +220,19 @@ func validateRow(ctx *sql.Context, r sql.Row, sess *dsess.DoltSession) (*env.Rem
 // for the insert operation, which may involve many rows. After all rows in an operation have been processed, Close
 // is called.
 func (bWr remoteWriter) Insert(ctx *sql.Context, r sql.Row) error {
-	dbName := ctx.GetCurrentDatabase()
-
-	if len(dbName) == 0 {
-		return fmt.Errorf("Empty database name.")
-	}
-
-	sess := dsess.DSessFromSess(ctx.Session)
-	dbData, ok := sess.GetDbData(ctx, dbName)
-	if !ok {
-		return sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	remote, err := validateRow(ctx, r, sess)
-
-	if err != nil {
-		return err
-	}
-
-	err = dbData.Rsw.AddRemote(remote.Name, remote.Url, remote.FetchSpecs, remote.Params)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return fmt.Errorf("cannot insert remote in an SQL session")
 }
 
 // Update the given row. Provides both the old and new rows.
 func (bWr remoteWriter) Update(ctx *sql.Context, old sql.Row, new sql.Row) error {
-	return bWr.Insert(ctx, new)
+	return fmt.Errorf("cannot update remote in an SQL session")
 }
 
 // Delete deletes the given row. Returns ErrDeleteRowNotFound if the row was not found. Delete will be called once for
 // each row to process for the delete operation, which may involve many rows. After all rows have been processed,
 // Close is called.
 func (bWr remoteWriter) Delete(ctx *sql.Context, r sql.Row) error {
-	dbName := ctx.GetCurrentDatabase()
-
-	if len(dbName) == 0 {
-		return fmt.Errorf("Empty database name.")
-	}
-
-	sess := dsess.DSessFromSess(ctx.Session)
-	dbData, ok := sess.GetDbData(ctx, dbName)
-	if !ok {
-		return sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	remote, err := validateRow(ctx, r, sess)
-	if err != nil {
-		return err
-	}
-
-	err = dbData.Rsw.RemoveRemote(ctx, remote.Name)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return fmt.Errorf("cannot delete remote in an SQL session")
 }
 
 // StatementBegin implements the interface sql.TableEditor. Currently a no-op.

@@ -161,8 +161,12 @@ teardown() {
 }
 
 @test "system-tables: insert into dolt_remotes system table using dolt_remote procedure" {
+    run dolt sql -q "insert into dolt_remotes (name, url) values ('origin', 'file://remote')"
+    [ $status -ne 0 ]
+    [[ ! "$output" =~ panic ]] || false
+
     mkdir remote
-    dolt sql -q "insert into dolt_remotes (name, url) values ('origin1', 'file://remote')"
+    dolt sql -q "CALL DOLT_REMOTE('add', 'origin1', 'file://remote')"
     dolt sql -q "CALL DOLT_REMOTE('add', 'origin2', 'aws://[dynamo_db_table:s3_bucket]/repo_name')"
 
     run dolt sql -q "select count(*) from dolt_remotes" -r csv
