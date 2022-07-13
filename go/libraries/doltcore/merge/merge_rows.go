@@ -36,6 +36,41 @@ type MergeOpts struct {
 	IsCherryPick bool
 }
 
+type TableMerger struct {
+	left  *doltdb.Table
+	right *doltdb.Table
+	anc   *doltdb.Table
+
+	leftSch  schema.Schema
+	rightSch schema.Schema
+	ancSch   schema.Schema
+
+	rightRootHash    hash.Hash
+	ancestorRootHash hash.Hash
+
+	vrw types.ValueReadWriter
+	ns  tree.NodeStore
+}
+
+func (tm TableMerger) tableHashes() (left, right, anc hash.Hash, err error) {
+	if tm.left != nil {
+		if left, err = tm.left.HashOf(); err != nil {
+			return
+		}
+	}
+	if tm.right != nil {
+		if right, err = tm.right.HashOf(); err != nil {
+			return
+		}
+	}
+	if tm.anc != nil {
+		if anc, err = tm.anc.HashOf(); err != nil {
+			return
+		}
+	}
+	return
+}
+
 type RootMerger struct {
 	left  *doltdb.RootValue
 	right *doltdb.RootValue
@@ -71,31 +106,30 @@ func NewMerger(left, right, anc *doltdb.RootValue, vrw types.ValueReadWriter, ns
 }
 
 // MergeTable merges schema and table data for the table tblName.
-func (merger *RootMerger) MergeTable(ctx context.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*doltdb.Table, *MergeStats, error) {
-	rootHasTable, tbl, rootSchema, rootHash, err := getTableInfoFromRoot(ctx, tblName, merger.left)
+func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*doltdb.Table, *MergeStats, error) {
+	tm, err := rm.makeTableMerger(ctx, tblName)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	mergeHasTable, mergeTbl, mergeSchema, mergeHash, err := getTableInfoFromRoot(ctx, tblName, merger.right)
+	rootHash, mergeHash, ancHash, err := tm.tableHashes()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	ancHasTable, ancTbl, ancSchema, ancHash, err := getTableInfoFromRoot(ctx, tblName, merger.anc)
-	if err != nil {
-		return nil, nil, err
-	}
+	rootHasTable := tm.left != nil
+	mergeHasTable := tm.right != nil
+	ancHasTable := tm.anc != nil
 
 	var ancRows durable.Index
 	// only used by new storage format
 	var ancIndexSet durable.IndexSet
 	if ancHasTable {
-		ancRows, err = ancTbl.GetRowData(ctx)
+		ancRows, err = tm.anc.GetRowData(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
-		ancIndexSet, err = ancTbl.GetIndexSet(ctx)
+		ancIndexSet, err = tm.anc.GetIndexSet(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -105,27 +139,27 @@ func (merger *RootMerger) MergeTable(ctx context.Context, tblName string, opts e
 
 		// Nothing changed
 		if rootHasTable && mergeHasTable && ancHasTable && rootHash == mergeHash && rootHash == ancHash {
-			return tbl, &MergeStats{Operation: TableUnmodified}, nil
+			return tm.left, &MergeStats{Operation: TableUnmodified}, nil
 		}
 
 		// Both made identical changes
 		// For keyless tables, this counts as a conflict
-		if rootHasTable && mergeHasTable && rootHash == mergeHash && !schema.IsKeyless(rootSchema) {
-			return tbl, &MergeStats{Operation: TableUnmodified}, nil
+		if rootHasTable && mergeHasTable && rootHash == mergeHash && !schema.IsKeyless(tm.leftSch) {
+			return tm.left, &MergeStats{Operation: TableUnmodified}, nil
 		}
 
 		// One or both added this table
 		if !ancHasTable {
 			if mergeHasTable && rootHasTable {
-				if schema.SchemasAreEqual(rootSchema, mergeSchema) {
+				if schema.SchemasAreEqual(tm.leftSch, tm.rightSch) {
 					// If both added the same table, pretend it was in the ancestor all along with no data
 					// Don't touch ancHash to avoid triggering other short-circuit logic below
-					ancHasTable, ancSchema, ancTbl = true, rootSchema, tbl
-					ancRows, err = durable.NewEmptyIndex(ctx, merger.vrw, merger.ns, ancSchema)
+					ancHasTable, tm.ancSch, tm.anc = true, tm.leftSch, tm.left
+					ancRows, err = durable.NewEmptyIndex(ctx, rm.vrw, rm.ns, tm.ancSch)
 					if err != nil {
 						return nil, nil, err
 					}
-					ancIndexSet, err = durable.NewIndexSetWithEmptyIndexes(ctx, merger.vrw, merger.ns, ancSchema)
+					ancIndexSet, err = durable.NewIndexSetWithEmptyIndexes(ctx, rm.vrw, rm.ns, tm.ancSch)
 					if err != nil {
 						return nil, nil, err
 					}
@@ -134,10 +168,10 @@ func (merger *RootMerger) MergeTable(ctx context.Context, tblName string, opts e
 				}
 			} else if rootHasTable {
 				// fast-forward
-				return tbl, &MergeStats{Operation: TableUnmodified}, nil
+				return tm.left, &MergeStats{Operation: TableUnmodified}, nil
 			} else {
 				// fast-forward
-				return mergeTbl, &MergeStats{Operation: TableAdded}, nil
+				return tm.right, &MergeStats{Operation: TableAdded}, nil
 			}
 		}
 
@@ -166,7 +200,7 @@ func (merger *RootMerger) MergeTable(ctx context.Context, tblName string, opts e
 
 		// Changes only in root, table unmodified
 		if mergeHash == ancHash {
-			return tbl, &MergeStats{Operation: TableUnmodified}, nil
+			return tm.left, &MergeStats{Operation: TableUnmodified}, nil
 		}
 
 		// Changes only in merge root, fast-forward
@@ -174,20 +208,20 @@ func (merger *RootMerger) MergeTable(ctx context.Context, tblName string, opts e
 		if !mergeOpts.IsCherryPick && rootHash == ancHash {
 			ms := MergeStats{Operation: TableModified}
 			if rootHash != mergeHash {
-				ms, err = calcTableMergeStats(ctx, tbl, mergeTbl)
+				ms, err = calcTableMergeStats(ctx, tm.left, tm.right)
 				if err != nil {
 					return nil, nil, err
 				}
 			}
-			return mergeTbl, &ms, nil
+			return tm.right, &ms, nil
 		}
 	}
 
-	if mergeOpts.IsCherryPick && !schema.SchemasAreEqual(rootSchema, mergeSchema) {
+	if mergeOpts.IsCherryPick && !schema.SchemasAreEqual(tm.leftSch, tm.rightSch) {
 		return nil, nil, errors.New(fmt.Sprintf("schema changes not supported: %s table schema does not match in current HEAD and cherry-pick commit.", tblName))
 	}
 
-	postMergeSchema, schConflicts, err := SchemaMerge(rootSchema, mergeSchema, ancSchema, tblName)
+	postMergeSchema, schConflicts, err := SchemaMerge(tm.leftSch, tm.rightSch, tm.ancSch, tblName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -196,13 +230,13 @@ func (merger *RootMerger) MergeTable(ctx context.Context, tblName string, opts e
 		return nil, nil, schConflicts.AsError()
 	}
 
-	updatedTbl, err := tbl.UpdateSchema(ctx, postMergeSchema)
+	updatedTbl, err := tm.left.UpdateSchema(ctx, postMergeSchema)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	if types.IsFormat_DOLT_1(updatedTbl.Format()) {
-		updatedTbl, err = mergeTableArtifacts(ctx, tblName, tbl, mergeTbl, ancTbl, updatedTbl)
+		updatedTbl, err = mergeTableArtifacts(ctx, tblName, tm.left, tm.right, tm.anc, updatedTbl)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -210,15 +244,15 @@ func (merger *RootMerger) MergeTable(ctx context.Context, tblName string, opts e
 		var stats *MergeStats
 		updatedTbl, stats, err = mergeTableData(
 			ctx,
-			merger.vrw,
-			merger.ns,
+			rm.vrw,
+			rm.ns,
 			tblName,
-			postMergeSchema, rootSchema, mergeSchema, ancSchema,
-			tbl, mergeTbl, updatedTbl,
+			postMergeSchema, tm.leftSch, tm.rightSch, tm.ancSch,
+			tm.left, tm.right, updatedTbl,
 			ancRows,
 			ancIndexSet,
-			merger.rightHash,
-			merger.ancHash)
+			rm.rightHash,
+			rm.ancHash)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -229,7 +263,7 @@ func (merger *RootMerger) MergeTable(ctx context.Context, tblName string, opts e
 		}
 		stats.Conflicts = int(n)
 
-		updatedTbl, err = mergeAutoIncrementValues(ctx, tbl, mergeTbl, updatedTbl)
+		updatedTbl, err = mergeAutoIncrementValues(ctx, tm.left, tm.right, updatedTbl)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -241,7 +275,7 @@ func (merger *RootMerger) MergeTable(ctx context.Context, tblName string, opts e
 	for _, index := range postMergeSchema.Indexes().AllIndexes() {
 		addedIndexesSet[strings.ToLower(index.Name())] = index.Name()
 	}
-	for _, index := range rootSchema.Indexes().AllIndexes() {
+	for _, index := range tm.leftSch.Indexes().AllIndexes() {
 		delete(addedIndexesSet, strings.ToLower(index.Name()))
 	}
 	for _, addedIndex := range addedIndexesSet {
@@ -260,35 +294,77 @@ func (merger *RootMerger) MergeTable(ctx context.Context, tblName string, opts e
 		return nil, nil, err
 	}
 
-	rows, err := tbl.GetNomsRowData(ctx)
+	rows, err := tm.left.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	mergeRows, err := mergeTbl.GetNomsRowData(ctx)
+	mergeRows, err := tm.right.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	resultTbl, cons, stats, err := mergeNomsTableData(ctx, merger.vrw, tblName, postMergeSchema, rows, mergeRows, durable.NomsMapFromIndex(ancRows), updatedTblEditor)
+	resultTbl, cons, stats, err := mergeNomsTableData(ctx, rm.vrw, tblName, postMergeSchema, rows, mergeRows, durable.NomsMapFromIndex(ancRows), updatedTblEditor)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	if cons.Len() > 0 {
-		resultTbl, err = setConflicts(ctx, durable.ConflictIndexFromNomsMap(cons, merger.vrw), tbl, mergeTbl, ancTbl, resultTbl)
+		resultTbl, err = setConflicts(ctx, durable.ConflictIndexFromNomsMap(cons, rm.vrw), tm.left, tm.right, tm.anc, resultTbl)
 		if err != nil {
 			return nil, nil, err
 		}
 		stats.Conflicts = int(cons.Len())
 	}
 
-	resultTbl, err = mergeAutoIncrementValues(ctx, tbl, mergeTbl, resultTbl)
+	resultTbl, err = mergeAutoIncrementValues(ctx, tm.left, tm.right, resultTbl)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return resultTbl, stats, nil
+}
+
+func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (TableMerger, error) {
+	tm := TableMerger{
+		vrw: rm.vrw,
+		ns:  rm.ns,
+	}
+
+	var ok bool
+	var err error
+
+	tm.left, ok, err = rm.left.GetTable(ctx, tblName)
+	if err != nil {
+		return TableMerger{}, err
+	}
+	if ok {
+		if tm.leftSch, err = tm.left.GetSchema(ctx); err != nil {
+			return TableMerger{}, err
+		}
+	}
+
+	tm.right, ok, err = rm.right.GetTable(ctx, tblName)
+	if err != nil {
+		return TableMerger{}, err
+	}
+	if ok {
+		if tm.rightSch, err = tm.right.GetSchema(ctx); err != nil {
+			return TableMerger{}, err
+		}
+	}
+
+	tm.anc, ok, err = rm.anc.GetTable(ctx, tblName)
+	if err != nil {
+		return TableMerger{}, err
+	}
+	if ok {
+		if tm.ancSch, err = tm.anc.GetSchema(ctx); err != nil {
+			return TableMerger{}, err
+		}
+	}
+
+	return tm, nil
 }
 
 func setConflicts(ctx context.Context, cons durable.ConflictIndex, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
