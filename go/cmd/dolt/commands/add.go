@@ -65,14 +65,6 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	helpPr, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, addDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, helpPr)
 
-	if apr.ContainsArg(doltdb.DocTableName) {
-		// Only allow adding the dolt_docs table if it has a conflict to resolve
-		hasConflicts, _ := docCnfsOnWorkingRoot(ctx, dEnv)
-		if !hasConflicts {
-			return HandleDocTableVErrAndExitCode()
-		}
-	}
-
 	allFlag := apr.Contains(cli.AllFlag)
 
 	if dEnv.IsLocked() {

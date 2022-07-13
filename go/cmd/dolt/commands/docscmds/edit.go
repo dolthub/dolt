@@ -18,55 +18,71 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/kioopi/extedit"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 var writeDocs = cli.CommandDocumentationContent{
-	ShortDesc: "",
+	ShortDesc: "Edits Dolt docs using the default editor",
 	LongDesc:  ``,
 	Synopsis:  []string{},
 }
 
-type WriteCmd struct{}
+type EditCmd struct{}
 
 // Name implements cli.Command.
-func (cmd WriteCmd) Name() string {
-	return "write"
+func (cmd EditCmd) Name() string {
+	return "edit"
 }
 
 // Description implements cli.Command.
-func (cmd WriteCmd) Description() string {
+func (cmd EditCmd) Description() string {
 	return writeDocs.ShortDesc
 }
 
 // RequiresRepo implements cli.Command.
-func (cmd WriteCmd) RequiresRepo() bool {
+func (cmd EditCmd) RequiresRepo() bool {
 	return true
 }
 
 // Docs implements cli.Command.
-func (cmd WriteCmd) Docs() *cli.CommandDocumentation {
+func (cmd EditCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.NewCommandDocumentation(diffDocs, ap)
+	return cli.NewCommandDocumentation(writeDocs, ap)
 }
 
 // ArgParser implements cli.Command.
-func (cmd WriteCmd) ArgParser() *argparser.ArgParser {
+func (cmd EditCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"doc", "Dolt doc to be edited."})
 	return ap
 }
 
 // Exec implements cli.Command.
-func (cmd WriteCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	panic("dolt docs write")
+func (cmd EditCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, readDocs, ap))
+	apr := cli.ParseArgsOrDie(ap, args, help)
+
+	if apr.NArg() != 1 {
+		verr := errhand.BuildDError("dolt docs edit takes exactly one argument").Build()
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	var verr errhand.VerboseError
+	if err := editDoltDoc(ctx, dEnv, apr.Arg(0)); err != nil {
+		verr = errhand.VerboseErrorFromError(err)
+	}
+
+	return commands.HandleVErrAndExitCode(verr, usage)
 }
 
 func editDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName string) error {
@@ -83,38 +99,46 @@ func editDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName string) error {
 	if err != nil {
 		return err
 	}
+	fmt.Printf("old doc: %s", doc)
 
 	// open an editor to edit the file
-	diff, err := extedit.Invoke(strings.NewReader(doc))
+	//diff, err := extedit.Invoke(strings.NewReader(doc))
+	//if err != nil {
+	//	return err
+	//}
+	update := "this is a new doc"
+
+	root, err := writeDocToTable(ctx, eng, docName, update)
 	if err != nil {
 		return err
 	}
 
-	return writeDocToTable(ctx, eng, docName, diff.Content.String())
+	return dEnv.UpdateWorkingRoot(ctx, root)
 }
 
 const (
-	writeDocTemplate = "INSERT INTO dolt_docs VALUES (%s, %s)"
+	writeDocTemplate = "REPLACE INTO dolt_docs VALUES ('%s', '%s')"
 )
 
-func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, content string) (err error) {
+func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, content string) (*doltdb.RootValue, error) {
 	fmt.Printf("write doc %s with new contents %s", docName, content)
 
 	var (
-		sctx *sql.Context
-		iter sql.RowIter
-		row  sql.Row
+		sctx  *sql.Context
+		iter  sql.RowIter
+		err   error
+		roots map[string]*doltdb.RootValue
 	)
 
 	sctx, err = eng.NewContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	sctx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	_, iter, err = eng.Query(sctx, fmt.Sprintf(writeDocTemplate, docName, content))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() {
 		if cerr := iter.Close(sctx); err == nil {
@@ -122,10 +146,26 @@ func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, conten
 		}
 	}()
 
-	row, err = iter.Next(sctx)
-	assertTrue(err == io.EOF)
-	assertTrue(row == nil)
-	return
+	for {
+		_, err = iter.Next(sctx)
+		if err == io.EOF {
+			err = nil
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if roots, err = eng.GetRoots(sctx); err != nil {
+		return nil, err
+	}
+	assertTrue(len(roots) == 1)
+
+	for _, rv := range roots {
+		return rv, nil
+	}
+	panic("unreachable")
 }
 
 func maybeCreateDoltDocs(ctx context.Context, dEnv *env.DoltEnv) error {

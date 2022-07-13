@@ -364,10 +364,6 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) (ve
 			printTableDiffSummary(td)
 		}
 
-		if tblName == doltdb.DocTableName {
-			continue
-		}
-
 		fromSch, toSch, err := td.GetSchemas(ctx)
 		if err != nil {
 			return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()

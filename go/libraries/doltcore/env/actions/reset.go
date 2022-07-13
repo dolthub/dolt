@@ -77,9 +77,7 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 
 	newWkRoot := roots.Head
 	for tblName, tbl := range untrackedTables {
-		if tblName != doltdb.DocTableName {
-			newWkRoot, err = newWkRoot.PutTable(ctx, tblName, tbl)
-		}
+		newWkRoot, err = newWkRoot.PutTable(ctx, tblName, tbl)
 		if err != nil {
 			return nil, doltdb.Roots{}, errors.New("error: failed to write table back to database")
 		}
@@ -127,7 +125,6 @@ func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, roots do
 
 func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, roots doltdb.Roots) (doltdb.Roots, error) {
 	tables, err := getUnionedTables(ctx, apr.Args, roots.Staged, roots.Head)
-	tables = RemoveDocsTable(tables)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -260,7 +257,6 @@ func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dr
 	for _, name := range headTblNames {
 		delete(untrackedTables, name)
 	}
-	delete(untrackedTables, doltdb.DocTableName)
 
 	newRoot := roots.Working
 	var toDelete []string

@@ -48,10 +48,6 @@ func checkoutTables(ctx context.Context, dbData env.DbData, roots doltdb.Roots, 
 func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
 	var unknownTbls []string
 	for _, tblName := range tbls {
-		// TODO: not at all clear why this should be excluded (this code was moved from elsewhere)
-		if tblName == doltdb.DocTableName {
-			continue
-		}
 		tbl, ok, err := roots.Staged.GetTable(ctx, tblName)
 
 		if err != nil {

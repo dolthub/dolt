@@ -86,10 +86,6 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, resetDocContent, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.ContainsArg(doltdb.DocTableName) {
-		return HandleDocTableVErrAndExitCode()
-	}
-
 	if dEnv.IsLocked() {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}

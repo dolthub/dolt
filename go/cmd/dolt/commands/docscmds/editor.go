@@ -13,12 +13,3 @@
 // limitations under the License.
 
 package docscmds
-
-import (
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-)
-
-var Commands = cli.NewSubCommandHandler("docs", "Commands for working with Dolt documents.", []cli.Command{
-	ReadCmd{},
-	EditCmd{},
-})

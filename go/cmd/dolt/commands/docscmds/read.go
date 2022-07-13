@@ -31,8 +31,8 @@ import (
 )
 
 var readDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Reads Dolt Docs to stdout",
-	LongDesc:  "Reads Dolt Docs to stdout",
+	ShortDesc: "Reads Dolt docs to stdout",
+	LongDesc:  "Reads Dolt docs to stdout",
 	Synopsis: []string{
 		"[{{.LessThan}}dolt doc{{.GreaterThan}}]",
 	},
@@ -58,12 +58,13 @@ func (cmd ReadCmd) RequiresRepo() bool {
 // Docs implements cli.Command.
 func (cmd ReadCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.NewCommandDocumentation(diffDocs, ap)
+	return cli.NewCommandDocumentation(readDocs, ap)
 }
 
 // ArgParser implements cli.Command.
 func (cmd ReadCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"doc", "Dolt doc to be read."})
 	return ap
 }
 

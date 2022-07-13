@@ -291,23 +291,6 @@ func parseCommitMessage(cm string) string {
 	return strings.Join(filtered, "\n")
 }
 
-func docCnfsOnWorkingRoot(ctx context.Context, dEnv *env.DoltEnv) (bool, error) {
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	docTbl, found, err := workingRoot.GetTable(ctx, doltdb.DocTableName)
-	if err != nil {
-		return false, err
-	}
-	if !found {
-		return false, nil
-	}
-
-	return docTbl.HasConflicts(ctx)
-}
-
 func PrintDiffsNotStaged(
 	ctx context.Context,
 	dEnv *env.DoltEnv,
@@ -363,28 +346,22 @@ func PrintDiffsNotStaged(
 	}
 
 	numRemovedOrModified := removeModified
-	docsInCnf, _ := docCnfsOnWorkingRoot(ctx, dEnv)
 
 	if numRemovedOrModified-inCnfSet.Size()-violationSet.Size() > 0 {
 		if linesPrinted > 0 {
 			cli.Println()
 		}
 
-		printChanges := !(removeModified == 1 && docsInCnf)
+		iohelp.WriteLine(wr, workingHeader)
 
-		if printChanges {
-			iohelp.WriteLine(wr, workingHeader)
-
-			if printHelp {
-				iohelp.WriteLine(wr, workingHeaderHelp)
-			}
-
-			lines := getModifiedAndRemovedNotStaged(notStagedTbls, inCnfSet, violationSet)
-
-			iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
-			linesPrinted += len(lines)
+		if printHelp {
+			iohelp.WriteLine(wr, workingHeaderHelp)
 		}
 
+		lines := getModifiedAndRemovedNotStaged(notStagedTbls, inCnfSet, violationSet)
+
+		iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
+		linesPrinted += len(lines)
 	}
 
 	if added > 0 {
@@ -392,22 +369,16 @@ func PrintDiffsNotStaged(
 			cli.Println()
 		}
 
-		printChanges := !(added == 1 && docsInCnf)
+		iohelp.WriteLine(wr, untrackedHeader)
 
-		if printChanges {
-			iohelp.WriteLine(wr, untrackedHeader)
-
-			if printHelp {
-				iohelp.WriteLine(wr, untrackedHeaderHelp)
-			}
-
-			lines := getAddedNotStaged(notStagedTbls)
-
-			iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
-			linesPrinted += len(lines)
-
+		if printHelp {
+			iohelp.WriteLine(wr, untrackedHeaderHelp)
 		}
 
+		lines := getAddedNotStaged(notStagedTbls)
+
+		iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
+		linesPrinted += len(lines)
 	}
 
 	return linesPrinted
@@ -416,7 +387,7 @@ func PrintDiffsNotStaged(
 func getModifiedAndRemovedNotStaged(notStagedTbls []diff.TableDelta, inCnfSet, violationSet *set.StrSet) (lines []string) {
 	lines = make([]string, 0, len(notStagedTbls))
 	for _, td := range notStagedTbls {
-		if td.IsAdd() || inCnfSet.Contains(td.CurName()) || violationSet.Contains(td.CurName()) || td.CurName() == doltdb.DocTableName {
+		if td.IsAdd() || inCnfSet.Contains(td.CurName()) || violationSet.Contains(td.CurName()) {
 			continue
 		}
 		if td.IsDrop() {
@@ -463,7 +434,7 @@ const (
   (use "dolt checkout <table>" to discard changes in working directory)`
 
 	untrackedHeader     = `Untracked files:`
-	untrackedHeaderHelp = `  (use "dolt add <table|doc>" to include in what will be committed)`
+	untrackedHeaderHelp = `  (use "dolt add table" to include in what will be committed)`
 
 	statusFmt         = "\t%-16s%s"
 	statusRenameFmt   = "\t%-16s%s -> %s"

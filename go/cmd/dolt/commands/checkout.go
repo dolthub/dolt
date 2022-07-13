@@ -93,11 +93,6 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return 1
 	}
 
-	if apr.ContainsArg(doltdb.DocTableName) {
-		verr := errhand.BuildDError("Use dolt checkout <filename> to check out individual docs.").Build()
-		return HandleVErrAndExitCode(verr, usagePrt)
-	}
-
 	if branchOrTrack {
 		verr := checkoutNewBranch(ctx, dEnv, apr)
 		return HandleVErrAndExitCode(verr, usagePrt)
