@@ -266,14 +266,14 @@ type blocked struct {
 
 func newLimiter() *limiter {
 	return &limiter{
-		blocked: make(map[string]*blocked),
+		running: make(map[string]*blocked),
 	}
 }
 
 // *limiter allows a caller to limit performing concurrent work for a given string key.
 type limiter struct {
 	mu      sync.Mutex
-	blocked map[string]*blocked
+	running map[string]*blocked
 }
 
 // |Run| invokes |f|, returning its result. It does not allow two |f|s
@@ -300,12 +300,14 @@ type limiter struct {
 // are not canceled.
 //
 // This implementation is very naive and is not not optimized for high
-// contention on |l.blocked|/|l.mu|.
+// contention on |l.running|/|l.mu|.
 func (l *limiter) Run(ctx context.Context, s string, f func() (any, error)) (any, error) {
 	l.mu.Lock()
-	if b, ok := l.blocked[s]; ok {
+	if b, ok := l.running[s]; ok {
+		// Something is already running; add ourselves to waiters.
 		ch := make(chan res)
 		if b.f == nil {
+			// We are the first waiter; we set what |f| will be invoked.
 			b.f = f
 		}
 		b.waiters = append(b.waiters, ch)
@@ -318,7 +320,9 @@ func (l *limiter) Run(ctx context.Context, s string, f func() (any, error)) (any
 			return nil, ctx.Err()
 		}
 	} else {
-		l.blocked[s] = new(blocked)
+		// We can run immediately and return the result of |f|.
+		// Register ourselves as running.
+		l.running[s] = new(blocked)
 		l.mu.Unlock()
 	}
 
@@ -327,10 +331,12 @@ func (l *limiter) Run(ctx context.Context, s string, f func() (any, error)) (any
 	return res, err
 }
 
+// Called anytime work is finished on a given key. Responsible for
+// starting any blocked work on |s| and delivering the results to waiters.
 func (l *limiter) finish(s string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	b := l.blocked[s]
+	b := l.running[s]
 	if len(b.waiters) != 0 {
 		go func() {
 			r, err := b.f()
@@ -340,8 +346,12 @@ func (l *limiter) finish(s string) {
 			}
 			l.finish(s)
 		}()
-		l.blocked[s] = new(blocked)
+		// Just started work for the existing |*blocked|, make a new
+		// |*blocked| for work that arrives from this point forward.
+		l.running[s] = new(blocked)
 	} else {
-		delete(l.blocked, s)
+		// No work is pending. Delete l.running[s] since nothing is
+		// running anymore.
+		delete(l.running, s)
 	}
 }
