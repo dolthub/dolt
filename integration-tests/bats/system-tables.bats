@@ -160,11 +160,20 @@ teardown() {
     [[ "${lines[1]}" =~ $regex ]] || false
 }
 
-@test "system-tables: insert into dolt_remotes system table using dolt_remote procedure" {
+@test "system-tables: check unsupported dolt_remote behavior" {
     run dolt sql -q "insert into dolt_remotes (name, url) values ('origin', 'file://remote')"
     [ $status -ne 0 ]
     [[ ! "$output" =~ panic ]] || false
+    [[ "$output" =~ "the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes" ]] || false
 
+    mkdir remote
+    dolt remote add origin file://remote/
+    run dolt sql -q "delete from dolt_remotes where name = 'origin'"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes" ]] || false
+}
+
+@test "system-tables: insert into dolt_remotes system table using dolt_remote procedure" {
     mkdir remote
     dolt sql -q "CALL DOLT_REMOTE('add', 'origin1', 'file://remote')"
     dolt sql -q "CALL DOLT_REMOTE('add', 'origin2', 'aws://[dynamo_db_table:s3_bucket]/repo_name')"

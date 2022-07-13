@@ -4758,8 +4758,7 @@ var DoltTagTestScripts = []queries.ScriptTest{
 
 var DoltRemoteTestScripts = []queries.ScriptTest{
 	{
-		Name:        "dolt-remote: SQL add remotes",
-		SetUpScript: []string{},
+		Name: "dolt-remote: SQL add remotes",
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_REMOTE('add','origin','file://../test')",
@@ -4768,6 +4767,18 @@ var DoltRemoteTestScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
 				Expected: []sql.Row{{"origin", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin/*"]`), sql.MustJSON(`{}`)}},
+			},
+			{
+				Query:          "CALL DOLT_REMOTE()",
+				ExpectedErrStr: "error: invalid argument, use 'dolt_remotes' system table to list remotes",
+			},
+			{
+				Query:          "CALL DOLT_REMOTE('origin')",
+				ExpectedErrStr: "error: invalid argument",
+			},
+			{
+				Query:          "INSERT INTO dolt_remotes (name, url) VALUES ('origin', 'file://../test')",
+				ExpectedErrStr: "the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes",
 			},
 		},
 	},
@@ -4791,6 +4802,11 @@ var DoltRemoteTestScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
 				Expected: []sql.Row{{"origin1", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), sql.MustJSON(`{}`)}},
+			},
+			// 'origin1' remote must exist in order this error to be returned; otherwise, no error from EOF
+			{
+				Query:          "DELETE FROM dolt_remotes WHERE name = 'origin1'",
+				ExpectedErrStr: "the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes",
 			},
 		},
 	},

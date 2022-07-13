@@ -220,19 +220,19 @@ func validateRow(ctx *sql.Context, r sql.Row, sess *dsess.DoltSession) (*env.Rem
 // for the insert operation, which may involve many rows. After all rows in an operation have been processed, Close
 // is called.
 func (bWr remoteWriter) Insert(ctx *sql.Context, r sql.Row) error {
-	return fmt.Errorf("cannot insert remote in an SQL session")
+	return fmt.Errorf("the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes")
 }
 
 // Update the given row. Provides both the old and new rows.
 func (bWr remoteWriter) Update(ctx *sql.Context, old sql.Row, new sql.Row) error {
-	return fmt.Errorf("cannot update remote in an SQL session")
+	return fmt.Errorf("the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes")
 }
 
 // Delete deletes the given row. Returns ErrDeleteRowNotFound if the row was not found. Delete will be called once for
 // each row to process for the delete operation, which may involve many rows. After all rows have been processed,
 // Close is called.
 func (bWr remoteWriter) Delete(ctx *sql.Context, r sql.Row) error {
-	return fmt.Errorf("cannot delete remote in an SQL session")
+	return fmt.Errorf("the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes")
 }
 
 // StatementBegin implements the interface sql.TableEditor. Currently a no-op.
