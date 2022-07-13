@@ -157,12 +157,81 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string) 
 		return err
 	}
 
+	dSess := dsess.DSessFromSess(ctx.Session)
+	currentBranchRef, err := dSess.CWBHeadRef(ctx, rrd.name)
+	if err != nil {
+		return err
+	}
+
 	for i, refSpec := range refSpecs {
 		branch := ref.NewBranchRef(branches[i])
 		rtRef := refSpec.DestRef(branch)
-		err := fetchRef(ctx, rrd, branch, rtRef)
+
+		fetchCtx := ctx.Context
+
+		srcDBCommitA, err := rrd.limiter.Run(ctx, branch.String(), func() (any, error) {
+			// fetch remote tracking ref only
+			var srcDBCommit *doltdb.Commit
+			{
+				srcDBCommit, err = actions.FetchRemoteBranch(fetchCtx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, branch, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+				if err != nil {
+					return nil, err
+				}
+	
+				err = rrd.ddb.FastForward(fetchCtx, rtRef, srcDBCommit)
+				if err != nil {
+					return nil, err
+				}
+			}
+	
+			// either ff or create local tracking branch
+			{
+				branchExists, err := rrd.ddb.HasBranch(fetchCtx, branch.GetPath())
+				switch {
+				case err != nil:
+				case branchExists:
+					err = rrd.ddb.FastForward(fetchCtx, branch, srcDBCommit)
+				default:
+					err = rrd.ddb.NewBranchAtCommit(fetchCtx, branch, srcDBCommit)
+				}
+				if err != nil {
+					return nil, err
+				}
+			}
+			return srcDBCommit, nil
+		})
 		if err != nil {
 			return err
+		}
+
+		srcDBCommit := srcDBCommitA.(*doltdb.Commit)
+
+		// if ref is active head, update the current working set
+		{
+			if branch == currentBranchRef {
+				wsRef, err := ref.WorkingSetRefForHead(branch)
+				if err != nil {
+					return err
+				}
+
+				ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
+				if err != nil {
+					return err
+				}
+
+				commitRoot, err := srcDBCommit.GetRootValue(ctx)
+				if err != nil {
+					return err
+				}
+
+				ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
+				h, err := ws.HashOf()
+				if err != nil {
+					return err
+				}
+
+				rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
+			}
 		}
 	}
 
@@ -173,73 +242,6 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string) 
 	})
 	if err != nil {
 		return err
-	}
-
-	return nil
-}
-
-func fetchRef(ctx *sql.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.DoltRef) error {
-	fetchCtx := ctx.Context
-
-	srcDBCommitA, err := rrd.limiter.Run(ctx, headRef.String(), func() (any, error) {
-		// TODO: The captured ctx here should be the server's context,
-		// not the session's *sql.Context.  As is, this can cause
-		// spurious failures for other sessions when their calls get
-		// coalesced with a call that uses a Context that ends up
-		// getting canceled by something like `KILL PID` or a client
-		// disconnect.
-
-		srcDBCommit, err := actions.FetchRemoteBranch(fetchCtx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, headRef, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
-		if err != nil {
-			return nil, err
-		}
-
-		err = rrd.ddb.FastForward(fetchCtx, rtRef, srcDBCommit)
-		if err != nil {
-			return nil, err
-		}
-
-		err = rrd.ddb.FastForward(fetchCtx, headRef, srcDBCommit)
-		if err != nil {
-			return nil, err
-		}
-		return srcDBCommit, nil
-	})
-	if err != nil {
-		return err
-	}
-	srcDBCommit := srcDBCommitA.(*doltdb.Commit)
-
-	dSess := dsess.DSessFromSess(ctx.Session)
-
-	currentBranchRef, err := dSess.CWBHeadRef(ctx, rrd.name)
-	if err != nil {
-		return err
-	}
-
-	if headRef == currentBranchRef {
-		wsRef, err := ref.WorkingSetRefForHead(headRef)
-		if err != nil {
-			return err
-		}
-
-		ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
-		if err != nil {
-			return err
-		}
-
-		commitRoot, err := srcDBCommit.GetRootValue(ctx)
-		if err != nil {
-			return err
-		}
-
-		ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-		h, err := ws.HashOf()
-		if err != nil {
-			return err
-		}
-
-		rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
 	}
 
 	return nil

@@ -179,6 +179,24 @@ teardown() {
     [[ "${lines[1]}" =~ "t1" ]] || false
 }
 
+@test "replication: pull on sql checkout" {
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt checkout -b new_feature
+    dolt sql -q "create table t1 (a int)"
+    dolt commit -am "cm"
+    dolt push origin new_feature
+
+    cd ../repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads new_feature
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    run dolt sql -q "call dolt_checkout('new_feature'); show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "${lines[2]}" =~ "Table" ]] || false
+    [[ "${lines[3]}" =~ "t1" ]] || false
+}
+
 @test "replication: pull multiple heads" {
     dolt clone file://./rem1 repo2
     cd repo2

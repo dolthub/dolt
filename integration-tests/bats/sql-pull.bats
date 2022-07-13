@@ -232,6 +232,23 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
+@test "sql-pull: CALL dolt_checkout after dolt_fetch a new feature branch" {
+    cd repo1
+    dolt checkout -b feature2
+    dolt sql -q "create table t2 (i int primary key);"
+    dolt sql -q "call dolt_commit('-am', 'create t2')"
+    dolt push --set-upstream origin feature2
+
+    cd ../repo2
+    dolt sql -q "CALL dolt_fetch('origin', 'feature2')"
+    run dolt sql -q "call dolt_checkout('feature2'); show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "Table" ]] || false
+    [[ "$output" =~ "t1" ]] || false
+    [[ "$output" =~ "t2" ]] || false
+}
+
 @test "sql-pull: dolt_pull force" {
     skip "todo: support dolt pull --force (cli too)"
     cd repo2
