@@ -124,7 +124,6 @@ teardown() {
 }
 
 @test "sql-reset: DOLT_RESET --hard does not ignore staged docs" {
-    skip_nbf_dolt_1 "uses docs"
     # New docs gets referred as untracked file.
     echo ~license~ > LICENSE.md
     dolt docs update LICENSE.md LICENSE.md
@@ -140,7 +139,6 @@ teardown() {
 }
 
 @test "sql-reset: CALL DOLT_RESET --hard does not ignore staged docs" {
-    skip_nbf_dolt_1 "uses docs"
     # New docs gets referred as untracked file.
     echo ~license~ > LICENSE.md
     dolt docs update LICENSE.md LICENSE.md
@@ -215,7 +213,6 @@ teardown() {
 }
 
 @test "sql-reset: DOLT_RESET --soft ignores staged docs" {
-    skip_nbf_dolt_1 "uses docs"
     echo ~license~ > LICENSE.md
     dolt docs update LICENSE.md LICENSE.md
     dolt add .
@@ -229,7 +226,6 @@ teardown() {
 }
 
 @test "sql-reset: CALL DOLT_RESET --soft ignores staged docs" {
-    skip_nbf_dolt_1 "uses docs"
     echo ~license~ > LICENSE.md
     dolt docs update LICENSE.md LICENSE.md
     dolt add .

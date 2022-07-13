@@ -377,8 +377,6 @@ SQL
 }
 
 @test "remotes: push and pull with docs from remote" {
-    skip_nbf_dolt_1 "uses docs"
-
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     echo "license-text" > LICENSE.md
     dolt docs update LICENSE.md LICENSE.md
@@ -577,8 +575,6 @@ SQL
 }
 
 @test "remotes: clone a remote with docs" {
-    skip_nbf_dolt_1 "uses docs"
-
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     echo "license-text" > LICENSE.md
     dolt docs update LICENSE.md LICENSE.md
@@ -794,8 +790,6 @@ SQL
 }
 
 @test "remotes: dolt fetch with docs" {
-    skip_nbf_dolt_1 "uses docs"
-
     # Initial commit of docs on remote
     echo "initial-license" > LICENSE.md
     dolt docs update LICENSE.md LICENSE.md
