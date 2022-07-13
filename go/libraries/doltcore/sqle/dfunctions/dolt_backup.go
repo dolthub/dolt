@@ -84,6 +84,13 @@ func DoDoltBackup(ctx *sql.Context, args []string) (int, error) {
 		return statusErr, err
 	}
 
+	invalidParams := []string{dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile, dbfactory.AWSCredsTypeParam, dbfactory.AWSRegionParam}
+	for _, param := range invalidParams {
+		if apr.Contains(param) {
+			return statusErr, fmt.Errorf("parameter '%s' is not supported when running this command via SQL", param)
+		}
+	}
+
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := sess.GetDbData(ctx, dbName)
 	if !ok {
@@ -120,6 +127,18 @@ func DoDoltBackup(ctx *sql.Context, args []string) (int, error) {
 		params, err := cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
 		if err != nil {
 			return statusErr, err
+		}
+
+		credsFile, _ := sess.GetSessionVariable(ctx, dsess.AwsCredsFileKey)
+		credsFileStr, isStr := credsFile.(string)
+		if isStr && len(credsFileStr) > 0 {
+			params[dbfactory.AWSCredsFileParam] = credsFileStr
+		}
+
+		credsProfile, err := sess.GetSessionVariable(ctx, dsess.AwsCredsProfileKey)
+		profStr, isStr := credsProfile.(string)
+		if isStr && len(profStr) > 0 {
+			params[dbfactory.AWSCredsProfile] = profStr
 		}
 
 		b = env.NewRemote("__temp__", backupUrl, params, nil)
