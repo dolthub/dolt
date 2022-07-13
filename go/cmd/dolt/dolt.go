@@ -40,6 +40,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cnfcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/credcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cvcmds"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/docscmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/indexcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/schcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
@@ -106,6 +107,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.InspectCmd{},
 	dumpDocsCommand,
 	dumpZshCommand,
+	docscmds.Commands,
 })
 
 func init() {
