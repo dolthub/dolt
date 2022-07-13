@@ -295,7 +295,7 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 		return nil, fmt.Errorf("couldn't find db state for database %s", t.db.Name())
 	}
 
-	indexes, ok := dbState.GetTableIndexesCache(key, t.Name())
+	indexes, ok := dbState.SessionCache().GetTableIndexesCache(key, t.Name())
 	if ok {
 		return indexes, nil
 	}
@@ -310,7 +310,7 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 		return nil, err
 	}
 
-	dbState.CacheTableIndexes(key, t.Name(), indexes)
+	dbState.SessionCache().CacheTableIndexes(key, t.Name(), indexes)
 	return indexes, nil
 }
 

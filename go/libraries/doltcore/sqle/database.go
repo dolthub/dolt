@@ -296,7 +296,7 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 		return nil, false, err
 	}
 
-	cachedTable, ok := dbState.GetCachedTable(key, tblName)
+	cachedTable, ok := dbState.SessionCache().GetCachedTable(key, tblName)
 	if ok {
 		return cachedTable, true, nil
 	}
@@ -315,7 +315,7 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 		return nil, false, nil
 	}
 
-	dbState.CacheTable(key, tblName, tbl)
+	dbState.SessionCache().CacheTable(key, tblName, tbl)
 
 	return tbl, true, nil
 }
@@ -914,8 +914,8 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 		return "", false, err
 	}
 
-	if dbState.ViewsCached(key) {
-		view, ok := dbState.GetCachedView(key, viewName)
+	if dbState.SessionCache().ViewsCached(key) {
+		view, ok := dbState.SessionCache().GetCachedView(key, viewName)
 		return view, ok, nil
 	}
 
@@ -924,7 +924,7 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 		return "", false, err
 	}
 	if !ok {
-		dbState.CacheViews(key, nil, nil)
+		dbState.SessionCache().CacheViews(key, nil, nil)
 		return "", false, nil
 	}
 
@@ -947,7 +947,7 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 		viewDefs[i] = fragments[i].fragment
 	}
 
-	dbState.CacheViews(key, viewNames, viewDefs)
+	dbState.SessionCache().CacheViews(key, viewNames, viewDefs)
 
 	return viewDef, found, nil
 }
