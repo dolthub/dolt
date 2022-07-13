@@ -264,6 +264,12 @@ func (cfg *commandLineServerConfig) withHost(host string) *commandLineServerConf
 	return cfg
 }
 
+// WithAutocommit updates the autocommit setting and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
+func (cfg *commandLineServerConfig) WithAutocommit(autocommit bool) *commandLineServerConfig {
+	cfg.autoCommit = autocommit
+	return cfg
+}
+
 // WithPort updates the port and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
 func (cfg *commandLineServerConfig) WithPort(port int) *commandLineServerConfig {
 	cfg.port = port

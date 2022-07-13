@@ -201,12 +201,88 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 	},
 }
 
-// TestDoltMultiSessionBehavior runs tests that exercise multi-session logic on a running SQL server. Statements
-// are sent through the server, from out of process, instead of directly to the in-process engine API.
-func TestDoltMultiSessionBehavior(t *testing.T) {
+var DoltTransactionMultiSessionScriptTests = []queries.ScriptTest{
+	{
+		// TODO: Can we repro this with the transaction tests instead?
+		Name: "tx isolation testing – https://github.com/dolthub/dolt/issues/3800",
+		SetUpScript: []string{
+			"create table t(c0 int, c1 varchar(100));",
+			"commit",
+		},
+		/*
+		 * Experiment: How do Dolt/MySQL handle tx visibility differently when explicitly starting a
+		 * transaction versus just starting a session.
+		 *
+		 * For each test case below, I tested whether a session can see a committed change (inserting a
+		 * row into table t) from another session, with and without starting an explicit session. Both
+		 * servers had global configuration for all sessions to disable autocommit.
+		 *
+		 * MySQL:
+		 * Test 1: set @foo='bar'; (start tx: YES) (start session: NO)
+		 * Test 2: select 2 from dual; (start tx: YES) (start session: NO)
+		 * Test 3: select * from t; (start tx: NO) (start session: NO)
+		 * Test 4: select * from t0; (start tx: NO) (start session: NO)
+		 *
+		 * I assumed starting a session would implicitly create a transaction and have the same behavior,
+		 * but it does not appear so.
+		 *
+		 * Dolt:
+		 * Test 1: set @foo='bar'; (start tx: NO) (start session: NO)
+		 * Test 2: select 2 from dual; (start tx: NO) (start session: NO)
+		 * Test 3: select * from t; (start tx: NO) (start session: NO)
+		 * Test 4: select * from t0; (start tx: NO) (start session: NO)
+		 *
+		 * Dolt is very close to MySQL's behavior, but seems to set the db snapshot for the transaction
+		 * more eagerly than MySQL.
+		 */
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// This query should NOT cause the session to lock to a db snapshot version yet
+				Query:    "/* client a */ select concat('foo', 'bar');",
+				Expected: []sql.Row{{"foobar"}},
+			},
+			{
+				Query:    "/* client b */ insert into t values (0, 'foo');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t;",
+				Expected: []sql.Row{{0, "foo"}},
+			},
+			{
+				// Client A should be able to see the updates from the committed transaction from Client B, since
+				// Client A hasn't done anything in their transaction that should have locked the db snapshot.
+				Query:    "/* client a */ select * from t;",
+				Expected: []sql.Row{{0, "foo"}},
+			},
+			{
+				Query:    "/* client a */ select @@autocommit;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ select @@autocommit;",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+}
+
+// TestDoltMultiSessionBehavior runs tests on a sql-server that cover dolt_branch stored procedure behavior across multiple sessions.
+func TestDoltBranchMultiSessionBehavior(t *testing.T) {
 	testMultiSessionScriptTests(t, DoltBranchMultiSessionScriptTests)
 }
 
+// TestDoltTransactionMultiSessionBehavior runs tests on a sql-server that cover transaction behavior across multiple sessions.
+func TestDoltTransactionMultiSessionBehavior(t *testing.T) {
+	testMultiSessionScriptTests(t, DoltTransactionMultiSessionScriptTests)
+}
+
+// testMultiSessionScriptTests launches a Dolt sql-server with autocommit turned off globally and runs the
+// specified ScriptTests.
 func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 	for _, test := range tests {
 		sc, serverConfig := startServer(t)
@@ -216,10 +292,12 @@ func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 		conn2, sess2 := newConnection(t, serverConfig)
 
 		t.Run(test.Name, func(t *testing.T) {
+			conn3, sess3 := newConnection(t, serverConfig)
 			for _, setupStatement := range test.SetUpScript {
-				_, err := sess1.Exec(setupStatement)
+				_, err := sess3.Exec(setupStatement)
 				require.NoError(t, err)
 			}
+			conn3.Close()
 
 			for _, assertion := range test.Assertions {
 				t.Run(assertion.Query, func(t *testing.T) {
@@ -266,7 +344,7 @@ func makeDestinationSlice(t *testing.T, columnTypes []*gosql.ColumnType) []inter
 		case "int", "tinyint", "bigint":
 			var integer int
 			dest[i] = &integer
-		case "text":
+		case "text", "varchar":
 			var s string
 			dest[i] = &s
 		default:
@@ -294,7 +372,7 @@ func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
 
 		for j, expectedValue := range expectedRow {
 			switch strings.ToUpper(columnTypes[j].DatabaseTypeName()) {
-			case "TEXT":
+			case "TEXT", "VARCHAR":
 				actualValue, ok := dest[j].(*string)
 				require.True(t, ok)
 				require.Equal(t, expectedValue, *actualValue)
@@ -303,7 +381,7 @@ func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
 				require.True(t, ok)
 				require.Equal(t, expectedValue, *actualValue)
 			default:
-				require.Fail(t, "Unsupported datatype: %s", columnTypes[j].DatabaseTypeName())
+				require.Fail(t, "Unsupported datatype: "+columnTypes[j].DatabaseTypeName())
 			}
 		}
 	}
@@ -317,7 +395,7 @@ func startServer(t *testing.T) (*sqlserver.ServerController, sqlserver.ServerCon
 	dEnv := dtestutils.CreateTestEnv()
 	rand.Seed(time.Now().UnixNano())
 	port := 15403 + rand.Intn(25)
-	serverConfig := sqlserver.DefaultServerConfig().WithPort(port)
+	serverConfig := sqlserver.DefaultServerConfig().WithPort(port).WithAutocommit(false)
 
 	sc := sqlserver.NewServerController()
 	go func() {
