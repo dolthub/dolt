@@ -424,8 +424,6 @@ DELIM
     [[ "$output" =~ "(3 Entries vs 4 Entries)" ]] || false
 
     dolt sql -q "replace into employees values (0, 'tim', 'sehn', 'ceo', '2 years ago', '', 'Santa Monica')"
-
-    skip_nbf_dolt_1 "invalid cell change count"
     
     dolt diff --summary
     run dolt diff --summary
@@ -707,7 +705,6 @@ SQL
 }
 
 @test "diff: keyless sql diffs" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
     
     dolt sql -q "create table t(pk int, val int)"
     dolt commit -am "cm1"
@@ -730,11 +727,11 @@ SQL
     dolt diff -r sql
     run dolt diff -r sql
     [ $status -eq 0 ]
-    # TODO: this needs a limit
-    [ "${lines[0]}" = 'DELETE FROM `t` WHERE `pk`=1 AND `val`=1;' ]
-    [ "${lines[1]}" = 'DELETE FROM `t` WHERE `pk`=1 AND `val`=1;' ]
-    [ "${lines[2]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]
-    [ "${lines[3]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]
+    [[ "$output" =~ 'DELETE FROM `t` WHERE `pk`=1 AND `val`=1;' ]]
+    [[ "$output" =~ 'DELETE FROM `t` WHERE `pk`=1 AND `val`=1;' ]]
+    [[ "$output" =~ 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]]
+    [[ "$output" =~ 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]]
+    [ "${#lines[@]}" = "4" ]
 
     dolt commit -am "cm4"
 
