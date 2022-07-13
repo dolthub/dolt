@@ -22,42 +22,42 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
-var syncDocs = cli.CommandDocumentationContent{
+var readDocs = cli.CommandDocumentationContent{
 	ShortDesc: "",
 	LongDesc:  ``,
 	Synopsis:  []string{},
 }
 
-type SyncCmd struct{}
+type ReadCmd struct{}
 
 // Name implements cli.Command.
-func (cmd SyncCmd) Name() string {
-	return "sync"
+func (cmd ReadCmd) Name() string {
+	return "read"
 }
 
 // Description implements cli.Command.
-func (cmd SyncCmd) Description() string {
-	return "Synchronizes Dolt Docs with the database."
+func (cmd ReadCmd) Description() string {
+	return readDocs.ShortDesc
 }
 
 // RequiresRepo implements cli.Command.
-func (cmd SyncCmd) RequiresRepo() bool {
+func (cmd ReadCmd) RequiresRepo() bool {
 	return true
 }
 
 // Docs implements cli.Command.
-func (cmd SyncCmd) Docs() *cli.CommandDocumentation {
+func (cmd ReadCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.NewCommandDocumentation(syncDocs, ap)
+	return cli.NewCommandDocumentation(diffDocs, ap)
 }
 
 // ArgParser implements cli.Command.
-func (cmd SyncCmd) ArgParser() *argparser.ArgParser {
+func (cmd ReadCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	return ap
 }
 
 // Exec implements cli.Command.
-func (cmd SyncCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	panic("dolt docs sync")
+func (cmd ReadCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	panic("dolt docs read")
 }
