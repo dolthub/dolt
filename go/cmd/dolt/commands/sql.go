@@ -449,7 +449,7 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	mrEnv, err := env.MultiEnvForDirectory(ctx, fs, dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}

@@ -17,7 +17,6 @@ package env
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -230,48 +229,37 @@ func getRepoRootDir(path, pathSeparator string) string {
 // MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given
 func MultiEnvForDirectory(
 	ctx context.Context,
+	config config.ReadWriteConfig,
 	fs filesys.Filesys,
-	dEnv *DoltEnv,
+	version string,
+	ignoreLockFile bool,
+	oldDEnv *DoltEnv, // TODO: eventually get rid of this
 ) (*MultiRepoEnv, error) {
 	mrEnv := &MultiRepoEnv{
 		envs:           make([]NamedEnv, 0),
 		fs:             fs,
-		cfg:            dEnv.Config.WriteableConfig(),
-		ignoreLockFile: dEnv.IgnoreLockFile,
+		cfg:            config,
+		ignoreLockFile: ignoreLockFile,
 	}
 
-	if dEnv.Valid() && fs == dEnv.FS {
-		dbName := "dolt"
-		if dEnv.RSLoadErr != nil {
-			return nil, fmt.Errorf("error loading environment: %s", dEnv.RSLoadErr.Error())
-		} else if dEnv.DBLoadError != nil {
-			return nil, fmt.Errorf("error loading environment: %s", dEnv.DBLoadError.Error())
-		} else if dEnv.CfgLoadErr != nil {
-			return nil, fmt.Errorf("error loading environment: %s", dEnv.CfgLoadErr.Error())
-		}
-		u, err := earl.Parse(dEnv.urlStr)
+	// add method to filesys interface to convert path to url?
+	// Load current fs and put into mr env
+	var dEnv *DoltEnv
+	var dbName string
+	if _, ok := fs.(*filesys.InMemFS); ok {
+		dbName = "dolt"
+		dEnv = oldDEnv
+	} else {
+		path, err := fs.Abs("")
 		if err != nil {
 			return nil, err
 		}
+		envName := getRepoRootDir(path, string(os.PathSeparator))
+		dbName = dirToDBName(envName)
+		dEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
+	}
 
-		if u.Scheme == dbfactory.FileScheme {
-			path, err := url.PathUnescape(u.Path)
-			if err != nil {
-				return nil, err
-			}
-
-			path, err = dEnv.FS.Abs(path)
-			if err != nil {
-				return nil, err
-			}
-
-			dirName := getRepoRootDir(path, string(os.PathSeparator))
-
-			if dirName != "" {
-				dbName = dirToDBName(dirName)
-			}
-		}
-
+	if dEnv.Valid() {
 		mrEnv.AddEnv(dbName, dEnv)
 	}
 
