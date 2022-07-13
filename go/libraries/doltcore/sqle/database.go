@@ -301,12 +301,7 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 		return cachedTable, true, nil
 	}
 
-	head, err := ds.GetHeadCommit(ctx, db.Name())
-	if err != nil {
-		return nil, false, err
-	}
-
-	tbl, ok, err := db.getTableInsensitive(ctx, head, root, tblName)
+	tbl, ok, err := db.getTableInsensitive(ctx, nil, ds, root, tblName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -367,13 +362,21 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 	}
 }
 
-func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, root *doltdb.RootValue, tblName string) (sql.Table, bool, error) {
+func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root *doltdb.RootValue, tblName string) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 
 	// TODO: these tables that cache a root value at construction time should not, they need to get it from the session
 	//  at runtime
 	switch {
 	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.Name())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
 		suffix := tblName[len(doltdb.DoltDiffTablePrefix):]
 		dt, err := dtables.NewDiffTable(ctx, suffix, db.ddb, root, head)
 		if err != nil {
@@ -398,6 +401,15 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ro
 		if !ok {
 			return nil, false, nil
 		}
+
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.Name())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
 		return NewHistoryTable(baseTable.(*AlterableDoltTable).DoltTable, db.ddb, head), true, nil
 
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
@@ -421,8 +433,24 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ro
 	found := false
 	switch lwrName {
 	case doltdb.LogTableName:
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.Name())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
 		dt, found = dtables.NewLogTable(ctx, db.ddb, head), true
 	case doltdb.DiffTableName:
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.Name())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
 		dt, found = dtables.NewUnscopedDiffTable(ctx, db.ddb, head), true
 	case doltdb.TableOfTablesInConflictName:
 		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.name, db.ddb), true
