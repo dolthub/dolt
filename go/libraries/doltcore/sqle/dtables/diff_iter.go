@@ -373,12 +373,12 @@ func (itr prollyDiffIter) makeDiffRowItr(ctx context.Context, d tree.Diff) (*rep
 func (itr prollyDiffIter) getDiffRowAndCardinality(ctx context.Context, d tree.Diff) (r sql.Row, n uint64, err error) {
 	switch d.Type {
 	case tree.AddedDiff:
-		n = extractCardinality(val.Tuple(d.To), itr.toVD)
+		n = val.ReadKeylessCardinality(val.Tuple(d.To))
 	case tree.RemovedDiff:
-		n = extractCardinality(val.Tuple(d.From), itr.fromVD)
+		n = val.ReadKeylessCardinality(val.Tuple(d.From))
 	case tree.ModifiedDiff:
-		fN := extractCardinality(val.Tuple(d.From), itr.fromVD)
-		tN := extractCardinality(val.Tuple(d.To), itr.toVD)
+		fN := val.ReadKeylessCardinality(val.Tuple(d.From))
+		tN := val.ReadKeylessCardinality(val.Tuple(d.To))
 		if fN < tN {
 			n = tN - fN
 			d.Type = tree.AddedDiff
@@ -394,14 +394,6 @@ func (itr prollyDiffIter) getDiffRowAndCardinality(ctx context.Context, d tree.D
 	}
 
 	return r, n, nil
-}
-
-func extractCardinality(tup val.Tuple, desc val.TupleDesc) uint64 {
-	c, ok := desc.GetUint64(0, tup)
-	if !ok {
-		panic("cardinality was null")
-	}
-	return c
 }
 
 func (itr prollyDiffIter) getDiffRow(ctx context.Context, d tree.Diff) (r sql.Row, err error) {
