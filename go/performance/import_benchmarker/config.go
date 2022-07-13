@@ -98,7 +98,7 @@ func NewDefaultImportBenchmarkConfig() *ImportBenchmarkConfig {
 		Jobs: jobs,
 	}
 
-	config.updateDefaults()
+	config.ValidateAndUpdateDefaults()
 
 	return config
 }
@@ -119,12 +119,12 @@ func FromFileConfig(configPath string) (*ImportBenchmarkConfig, error) {
 		return nil, err
 	}
 
-	config.updateDefaults()
+	config.ValidateAndUpdateDefaults()
 
 	return config, nil
 }
 
-func (c *ImportBenchmarkConfig) updateDefaults() {
+func (c *ImportBenchmarkConfig) ValidateAndUpdateDefaults() {
 	if c.MysqlConnectionProtocol == "" {
 		c.MysqlConnectionProtocol = "tcp"
 	}

@@ -34,6 +34,7 @@ type result struct {
 	columns     int
 	sizeOnDisk  float64
 	br          testing.BenchmarkResult
+	program     string
 	doltVersion string
 }
 
@@ -105,32 +106,35 @@ func getResultsRow(res result, cols []*SeedColumn) []string {
 
 	// set name
 	row[0] = res.name
+	// set program
+	row[1] = res.program
 	// set version
-	row[1] = res.doltVersion
+	row[2] = res.doltVersion
 	// set format
-	row[2] = res.format
+	row[3] = res.format
 	// set rows
-	row[3] = fmt.Sprintf("%d", res.rows)
+	row[4] = fmt.Sprintf("%d", res.rows)
 	// set cols
-	row[4] = fmt.Sprintf("%d", res.columns)
+	row[5] = fmt.Sprintf("%d", res.columns)
 	// set iterations
-	row[5] = fmt.Sprintf("%d", res.br.N)
+	row[6] = fmt.Sprintf("%d", res.br.N)
 	// set time
-	row[6] = res.br.T.String()
+	row[7] = res.br.T.String()
 	// set size_on_disk
-	row[7] = fmt.Sprintf("%v", res.sizeOnDisk)
+	row[8] = fmt.Sprintf("%v", res.sizeOnDisk)
 	// set rows_per_second
-	row[8] = fmt.Sprintf("%.2f", float64(res.rows)/res.br.T.Seconds())
+	row[9] = fmt.Sprintf("%.2f", float64(res.rows)/res.br.T.Seconds())
 	// set datetime
 	t := time.Now()
-	row[9] = fmt.Sprintf("%04d-%02d-%02d %02d:%02d", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute())
+	row[10] = fmt.Sprintf("%04d-%02d-%02d %02d:%02d", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute())
 	return row
 }
 
 func genResultsCols() []*SeedColumn {
 	return []*SeedColumn{
 		NewSeedColumn("name", false, types.StringKind, supplied),
-		NewSeedColumn("dolt_version", false, types.StringKind, supplied),
+		NewSeedColumn("program", false, types.StringKind, supplied),
+		NewSeedColumn("version", false, types.StringKind, supplied),
 		NewSeedColumn("format", false, types.StringKind, supplied),
 		NewSeedColumn("rows", false, types.StringKind, supplied),
 		NewSeedColumn("columns", false, types.StringKind, supplied),

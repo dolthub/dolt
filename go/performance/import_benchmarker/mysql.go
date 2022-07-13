@@ -108,6 +108,7 @@ func BenchmarkMySQLImportJobs(jobs []*ImportBenchmarkJob, mConfig sysbench_runne
 			sizeOnDisk:  -1, // TODO: Think about how to collect MySQL table size
 			br:          br,
 			doltVersion: job.Version,
+			program:     "mysql",
 		}
 	}
 

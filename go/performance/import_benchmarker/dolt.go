@@ -54,6 +54,7 @@ func BenchmarkDoltImportJob(job *ImportBenchmarkJob, workingDir string) result {
 		sizeOnDisk:  getSizeOnDisk(filesys.LocalFS, workingDir),
 		br:          br,
 		doltVersion: job.Version,
+		program:     "dolt",
 	}
 }
 
