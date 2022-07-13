@@ -81,7 +81,7 @@ func DoDoltConstraintsVerify(ctx *sql.Context, args []string) (int, error) {
 
 	var comparingRoot *doltdb.RootValue
 	if verifyAll {
-		comparingRoot, err = doltdb.EmptyRootValue(ctx, workingRoot.VRW())
+		comparingRoot, err = doltdb.EmptyRootValue(ctx, workingRoot.VRW(), workingRoot.NodeStore())
 		if err != nil {
 			return 1, err
 		}

@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -28,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -48,7 +48,7 @@ type DoltIndex interface {
 	IsPrimaryKey() bool
 
 	getDurableState(*sql.Context, DoltTableable) (*durableIndexState, error)
-	coversColumns(s *durableIndexState, columns []string) bool
+	coversColumns(s *durableIndexState, columns []uint64) bool
 	sqlRowConverter(s *durableIndexState) *KVToSqlRowConverter
 	lookupTags(s *durableIndexState) map[uint64]int
 }
@@ -92,9 +92,10 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		unique:                        true,
 		comment:                       "",
 		vrw:                           t.ValueReadWriter(),
+		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
 		order:                         sql.IndexOrderAsc,
-		constrainedToLookupExpression: true,
+		constrainedToLookupExpression: false,
 	}
 
 	// TODO: need to add from_ columns
@@ -215,6 +216,7 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 		isPk:                          true,
 		comment:                       "",
 		vrw:                           t.ValueReadWriter(),
+		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
@@ -244,6 +246,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		isPk:                          false,
 		comment:                       idx.Comment(),
 		vrw:                           t.ValueReadWriter(),
+		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
@@ -356,6 +359,7 @@ type doltIndex struct {
 	constrainedToLookupExpression bool
 
 	vrw    types.ValueReadWriter
+	ns     tree.NodeStore
 	keyBld *val.TupleBuilder
 
 	cache cachedDurableIndexes
@@ -382,7 +386,7 @@ func (di *doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.Index
 	}
 
 	if types.IsFormat_DOLT_1(di.vrw.Format()) {
-		return di.newProllyLookup(ctx, tree.NewNodeStore(shim.ChunkStoreFromVRW(di.vrw)), ranges...)
+		return di.newProllyLookup(ctx, di.ns, ranges...)
 	}
 
 	return di.newNomsLookup(ctx, ranges...)
@@ -579,8 +583,8 @@ func (di *doltIndex) lookupTags(s *durableIndexState) map[uint64]int {
 	return s.lookupTags(di)
 }
 
-func (di *doltIndex) coversColumns(s *durableIndexState, cols []string) bool {
-	if cols == nil {
+func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
+	if len(cols) == 0 {
 		return s.coversAllColumns(di)
 	}
 
@@ -597,9 +601,13 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []string) bool {
 		idxCols = di.IndexSchema().GetPKCols()
 	}
 
+	if len(cols) > len(idxCols.Tags) {
+		return false
+	}
+
 	covers := true
-	for _, colName := range cols {
-		if _, ok := idxCols.GetByNameCaseInsensitive(colName); !ok {
+	for _, colTag := range cols {
+		if _, ok := idxCols.TagToIdx[colTag]; !ok {
 			covers = false
 			break
 		}
@@ -609,15 +617,18 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []string) bool {
 }
 
 func (di *doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
-	if types.IsFormat_DOLT_1(di.vrw.Format()) {
-		// todo(andy): handle first column filters
-		return nil
-	} else {
-		if di.constrainedToLookupExpression {
-			return filters
-		}
+	if !di.constrainedToLookupExpression {
 		return nil
 	}
+
+	var handled []sql.Expression
+	for _, f := range filters {
+		if expression.ContainsImpreciseComparison(f) {
+			continue
+		}
+		handled = append(handled, f)
+	}
+	return handled
 }
 
 func (di *doltIndex) Order() sql.IndexOrder {

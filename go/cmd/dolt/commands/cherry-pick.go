@@ -216,7 +216,8 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 	}
 
 	// use parent of cherry-pick as ancestor to merge
-	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, toHash, fromHash, workingRoot, toRoot, fromRoot, opts, true)
+	mo := merge.MergeOpts{IsCherryPick: true}
+	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, toHash, fromHash, workingRoot, toRoot, fromRoot, opts, mo)
 	if err != nil {
 		return nil, "", err
 	}
@@ -256,7 +257,7 @@ func getParentAndCherryRoots(ctx context.Context, ddb *doltdb.DoltDB, cherryComm
 			return nil, nil, err
 		}
 	} else {
-		parentRoot, err = doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
+		parentRoot, err = doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter(), ddb.NodeStore())
 		if err != nil {
 			return nil, nil, err
 		}

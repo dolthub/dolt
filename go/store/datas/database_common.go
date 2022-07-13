@@ -36,6 +36,7 @@ import (
 type database struct {
 	*types.ValueStore
 	rt rootTracker
+	ns tree.NodeStore
 }
 
 var (
@@ -50,10 +51,11 @@ type rootTracker interface {
 	Commit(ctx context.Context, current, last hash.Hash) (bool, error)
 }
 
-func newDatabase(vs *types.ValueStore) *database {
+func newDatabase(vs *types.ValueStore, ns tree.NodeStore) *database {
 	return &database{
 		ValueStore: vs, // ValueStore is responsible for closing |cs|
 		rt:         vs,
+		ns:         ns,
 	}
 }
 
@@ -65,6 +67,10 @@ var _ GarbageCollector = &types.ValueStore{}
 
 func (db *database) chunkStore() chunks.ChunkStore {
 	return db.ChunkStore()
+}
+
+func (db *database) nodeStore() tree.NodeStore {
+	return db.ns
 }
 
 func (db *database) Stats() interface{} {
@@ -95,7 +101,7 @@ func (db *database) loadDatasetsNomsMap(ctx context.Context, rootHash hash.Hash)
 
 func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) (prolly.AddressMap, error) {
 	if rootHash == (hash.Hash{}) {
-		return prolly.NewEmptyAddressMap(tree.NewNodeStore(db.chunkStore())), nil
+		return prolly.NewEmptyAddressMap(db.ns), nil
 	}
 
 	val, err := db.ReadValue(ctx, rootHash)
@@ -107,7 +113,7 @@ func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) 
 		return prolly.AddressMap{}, errors.New("Root hash doesn't exist")
 	}
 
-	return parse_storeroot([]byte(val.(types.SerialMessage)), db.chunkStore()), nil
+	return parse_storeroot([]byte(val.(types.SerialMessage)), db.nodeStore()), nil
 }
 
 type refmapDatasetsMap struct {
@@ -385,7 +391,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 		if err != nil {
 			return err
 		}
-		ancestorHash, found, err := FindCommonAncestor(ctx, currCommit, newCommit, db, db)
+		ancestorHash, found, err := FindCommonAncestor(ctx, currCommit, newCommit, db, db, db.ns, db.ns)
 		if err != nil {
 			return err
 		}
@@ -873,7 +879,7 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 		}
 	}
 
-	return newCommitForValue(ctx, ds.db.chunkStore(), ds.db, v, opts)
+	return newCommitForValue(ctx, ds.db.chunkStore(), ds.db, ds.db.nodeStore(), v, opts)
 }
 
 func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {

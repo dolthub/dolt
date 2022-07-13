@@ -67,7 +67,7 @@ func (w SqlDiffWriter) WriteRow(
 
 		return iohelp.WriteLine(w.writeCloser, stmt)
 	case diff.Removed:
-		stmt, err := sqlfmt.SqlRowAsDeleteStmt(row, w.tableName, w.sch)
+		stmt, err := sqlfmt.SqlRowAsDeleteStmt(row, w.tableName, w.sch, 0)
 		if err != nil {
 			return err
 		}

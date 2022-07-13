@@ -49,13 +49,15 @@ import (
 func mergeTableData(
 	ctx context.Context,
 	vrw types.ValueReadWriter,
+	ns tree.NodeStore,
 	tblName string,
 	postMergeSchema, rootSchema, mergeSchema, ancSchema schema.Schema,
 	tbl, mergeTbl, updatedTbl *doltdb.Table,
 	ancRows durable.Index,
 	ancIndexSet durable.IndexSet,
 	mergeRootIsh hash.Hash,
-	ancRootIsh hash.Hash) (*doltdb.Table, *MergeStats, error) {
+	ancRootIsh hash.Hash,
+) (*doltdb.Table, *MergeStats, error) {
 	group, gCtx := errgroup.WithContext(ctx)
 
 	indexEdits := make(chan indexEdit, 128)
@@ -64,7 +66,13 @@ func mergeTableData(
 
 	group.Go(func() error {
 		var err error
-		updatedTbl, mergedData, err = mergeProllyRowData(gCtx, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, updatedTbl, ancRows, indexEdits, conflicts)
+		updatedTbl, mergedData, err = mergeProllyRowData(
+			gCtx,
+			postMergeSchema, rootSchema, mergeSchema, ancSchema,
+			tbl, mergeTbl, updatedTbl,
+			ancRows,
+			indexEdits,
+			conflicts)
 		if err != nil {
 			return err
 		}
@@ -130,6 +138,7 @@ func mergeTableData(
 	updatedTbl, err = mergeProllySecondaryIndexes(
 		ctx,
 		vrw,
+		ns,
 		postMergeSchema, rootSchema, mergeSchema, ancSchema,
 		mergedData,
 		tbl, mergeTbl, updatedTbl,
@@ -227,7 +236,15 @@ func isNewConflictsCompatible(ctx context.Context, tbl *doltdb.Table, tblName st
 
 // mergeProllyRowData merges the primary row table indexes of |tbl|, |mergeTbl|,
 // and |ancTbl|. It stores the merged row data into |tableToUpdate| and returns the new value along with the row data.
-func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch, ancSch schema.Schema, tbl, mergeTbl, tableToUpdate *doltdb.Table, ancRows durable.Index, indexEdits chan indexEdit, conflicts chan confVals) (*doltdb.Table, durable.Index, error) {
+func mergeProllyRowData(
+	ctx context.Context,
+	postMergeSchema, rootSch, mergeSch, ancSch schema.Schema,
+	tbl, mergeTbl, tableToUpdate *doltdb.Table,
+	ancRows durable.Index,
+	indexEdits chan indexEdit,
+	conflicts chan confVals,
+) (*doltdb.Table, durable.Index, error) {
+
 	rootR, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -248,16 +265,16 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 		if left.Type == right.Type && bytes.Equal(left.To, right.To) {
 			if keyless {
 				// convergent edits are conflicts for keyless tables
-				_ = sendConflict(ctx, conflicts, indexEdits, left, right)
-				return tree.Diff{}, false
+				d, b, _ := processConflict(ctx, conflicts, indexEdits, left, right)
+				return d, b
 			}
 			return left, true
 		}
 
 		merged, isConflict := vMerger.tryMerge(val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
 		if isConflict {
-			_ = sendConflict(ctx, conflicts, indexEdits, left, right)
-			return tree.Diff{}, false
+			d, b, _ := processConflict(ctx, conflicts, indexEdits, left, right)
+			return d, b
 		}
 
 		d := tree.Diff{
@@ -288,7 +305,7 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 	return updatedTbl, durable.IndexFromProllyMap(mergedRP), nil
 }
 
-func sendConflict(ctx context.Context, confs chan confVals, edits chan indexEdit, left, right tree.Diff) error {
+func processConflict(ctx context.Context, confs chan confVals, edits chan indexEdit, left, right tree.Diff) (tree.Diff, bool, error) {
 	c := confVals{
 		key:      val.Tuple(left.Key),
 		ourVal:   val.Tuple(left.To),
@@ -298,18 +315,16 @@ func sendConflict(ctx context.Context, confs chan confVals, edits chan indexEdit
 	select {
 	case confs <- c:
 	case <-ctx.Done():
-		return ctx.Err()
+		return tree.Diff{}, false, ctx.Err()
 	}
 	// Reset the change on the right
-	e := conflictEdit{
-		right: right,
-	}
+	e := conflictEdit{right: right}
 	select {
 	case edits <- e:
 	case <-ctx.Done():
-		return ctx.Err()
+		return tree.Diff{}, false, ctx.Err()
 	}
-	return nil
+	return tree.Diff{}, false, nil
 }
 
 type valueMerger struct {

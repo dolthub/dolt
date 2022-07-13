@@ -140,7 +140,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
@@ -291,7 +291,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
@@ -559,7 +559,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
 			},
 			{
 				Query:    "/* client b */ rollback",
@@ -795,7 +795,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
 			},
 			{ // no conflicts, transaction got rolled back
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
@@ -845,7 +845,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
 			},
 			{ // We see the merge value from a's commit here because we were rolled back and a new transaction begun
 				Query:    "/* client b */ select * from test order by 1",
@@ -895,7 +895,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
 			},
 			{ // We see the merge value from a's commit here because we were rolled back and a new transaction begun
 				Query:    "/* client b */ select * from test order by 1",
@@ -1211,7 +1211,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			{
 				Query: "/* client b */ COMMIT;",
 				// TODO: No it didn't! Client b contains conflicts from an internal merge! Retrying will not help.
-				ExpectedErrStr: "this transaction conflicts with a committed transaction from another client, please retry",
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
 			},
 			{
 				Query:    "/* client b */ INSERT into t VALUES (3, 3);",
@@ -1221,6 +1221,116 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 				Query: "/* client b */ COMMIT;",
 				// Retrying did not help. But at-least the error makes sense.
 				ExpectedErrStr: "Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1",
+			},
+		},
+	},
+	{
+		Name: "transaction conflicts follows first-write-wins (a commits first)",
+		SetUpScript: []string{
+			"CREATE table t (pk int PRIMARY KEY, col1 int, INDEX col1_idx (col1));",
+			"CREATE table keyless (col1 int);",
+			"INSERT INTO t VALUES (1, 1);",
+			"INSERT INTO keyless VALUES (1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ START TRANSACTION",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ START TRANSACTION",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ UPDATE t SET col1 = -100 where pk = 1;",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "/* client b */ UPDATE t SET col1 = 100 where pk = 1;",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "/* client a */ INSERT into KEYLESS VALUES (1);",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ INSERT into KEYLESS VALUES (1), (1);",
+				Expected: []sql.Row{{sql.NewOkResult(2)}},
+			},
+			{
+				Query:    "/* client a */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:       "/* client b */ COMMIT;",
+				ExpectedErr: sql.ErrLockDeadlock,
+			},
+			{
+				Query:    "/* client b */ SELECT * from t;",
+				Expected: []sql.Row{{1, -100}},
+			},
+			{
+				Query:    "/* client b */ SELECT * from keyless;",
+				Expected: []sql.Row{{1}, {1}},
+			},
+			{
+				Query:    "/* client b */ SELECT * from t where col1 = -100;",
+				Expected: []sql.Row{{1, -100}},
+			},
+		},
+	},
+	{
+		Name: "transaction conflicts follows first-write-wins (b commits first)",
+		SetUpScript: []string{
+			"CREATE table t (pk int PRIMARY KEY, col1 int, INDEX col1_idx (col1));",
+			"CREATE table keyless (col1 int);",
+			"INSERT INTO t VALUES (1, 1);",
+			"INSERT INTO keyless VALUES (1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ START TRANSACTION",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ START TRANSACTION",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ UPDATE t SET col1 = -100 where pk = 1;",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "/* client b */ UPDATE t SET col1 = 100 where pk = 1;",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "/* client a */ INSERT into KEYLESS VALUES (1);",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ INSERT into KEYLESS VALUES (1), (1);",
+				Expected: []sql.Row{{sql.NewOkResult(2)}},
+			},
+			{
+				Query:    "/* client b */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:       "/* client a */ COMMIT;",
+				ExpectedErr: sql.ErrLockDeadlock,
+			},
+			{
+				Query:    "/* client b */ SELECT * from t;",
+				Expected: []sql.Row{{1, 100}},
+			},
+			{
+				Query:    "/* client b */ SELECT * from keyless;",
+				Expected: []sql.Row{{1}, {1}, {1}},
+			},
+			{
+				Query:    "/* client b */ SELECT * from t where col1 = 100;",
+				Expected: []sql.Row{{1, 100}},
 			},
 		},
 	},

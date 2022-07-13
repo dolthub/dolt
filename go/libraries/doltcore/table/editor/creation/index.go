@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -141,7 +142,7 @@ func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Inde
 		if err != nil {
 			return nil, err
 		}
-		return durable.IndexFromNomsMap(m, tbl.ValueReadWriter()), nil
+		return durable.IndexFromNomsMap(m, tbl.ValueReadWriter(), tbl.NodeStore()), nil
 
 	case types.Format_DOLT_1:
 		sch, err := tbl.GetSchema(ctx)
@@ -153,7 +154,7 @@ func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Inde
 			return nil, err
 		}
 		primary := durable.ProllyMapFromIndex(m)
-		return BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), sch, idx, primary)
+		return BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, idx, primary)
 
 	default:
 		return nil, fmt.Errorf("unknown NomsBinFormat")
@@ -162,15 +163,15 @@ func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Inde
 
 // BuildSecondaryProllyIndex builds secondary index data for the given primary
 // index row data |primary|. |sch| is the current schema of the table.
-func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, idx schema.Index, primary prolly.Map) (durable.Index, error) {
+func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, idx schema.Index, primary prolly.Map) (durable.Index, error) {
 	if idx.IsUnique() {
 		kd := shim.KeyDescriptorFromSchema(idx.Schema())
-		return BuildUniqueProllyIndex(ctx, vrw, sch, idx, primary, func(ctx context.Context, existingKey, newKey val.Tuple) error {
+		return BuildUniqueProllyIndex(ctx, vrw, ns, sch, idx, primary, func(ctx context.Context, existingKey, newKey val.Tuple) error {
 			return sql.ErrDuplicateEntry.Wrap(&prollyUniqueKeyErr{k: newKey, kd: kd, IndexName: idx.Name()}, idx.Name())
 		})
 	}
 
-	empty, err := durable.NewEmptyIndex(ctx, vrw, idx.Schema())
+	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, idx.Schema())
 	if err != nil {
 		return nil, err
 	}
@@ -233,8 +234,8 @@ type DupEntryCb func(ctx context.Context, existingKey, newKey val.Tuple) error
 // BuildUniqueProllyIndex builds a unique index based on the given |primary| row
 // data. If any duplicate entries are found, they are passed to |cb|. If |cb|
 // returns a non-nil error then the process is stopped.
-func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, idx schema.Index, primary prolly.Map, cb DupEntryCb) (durable.Index, error) {
-	empty, err := durable.NewEmptyIndex(ctx, vrw, idx.Schema())
+func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, idx schema.Index, primary prolly.Map, cb DupEntryCb) (durable.Index, error) {
+	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, idx.Schema())
 	if err != nil {
 		return nil, err
 	}

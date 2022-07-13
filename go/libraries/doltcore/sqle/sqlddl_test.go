@@ -773,7 +773,7 @@ func TestRenameTableStatements(t *testing.T) {
 }
 
 func TestAlterSystemTables(t *testing.T) {
-	systemTableNames := []string{"dolt_docs", "dolt_log", "dolt_history_people", "dolt_diff_people", "dolt_commit_diff_people"}
+	systemTableNames := []string{"dolt_log", "dolt_history_people", "dolt_diff_people", "dolt_commit_diff_people"} // "dolt_docs",
 	reservedTableNames := []string{"dolt_schemas", "dolt_query_catalog"}
 
 	var dEnv *env.DoltEnv

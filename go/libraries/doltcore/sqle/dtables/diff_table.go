@@ -229,7 +229,7 @@ func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (durable
 	var err error
 
 	if tbl == nil {
-		data, err = durable.NewEmptyIndex(ctx, ddb.ValueReadWriter(), schema.EmptySchema)
+		data, err = durable.NewEmptyIndex(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), schema.EmptySchema)
 		if err != nil {
 			return nil, nil, err
 		}

@@ -256,16 +256,16 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, ddb *doltdb.DoltDB, t
 	}
 	to := durable.ProllyMapFromIndex(t)
 
-	fromConverter, err := NewProllyRowConverter(fSch, targetFromSchema, ctx.Warn, dp.from.NodeStore())
-	if err != nil {
-		return prollyDiffIter{}, err
-	}
-
 	var nodeStore tree.NodeStore
 	if dp.to != nil {
 		nodeStore = dp.to.NodeStore()
 	} else {
 		nodeStore = dp.from.NodeStore()
+	}
+
+	fromConverter, err := NewProllyRowConverter(fSch, targetFromSchema, ctx.Warn, nodeStore)
+	if err != nil {
+		return prollyDiffIter{}, err
 	}
 
 	toConverter, err := NewProllyRowConverter(tSch, targetToSchema, ctx.Warn, nodeStore)

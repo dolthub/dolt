@@ -983,7 +983,6 @@ SQL
 }
 
 @test "remotes: generate a merge with a conflict with a remote branch" {
-    skip_nbf_dolt_1 "uses dolt conflicts resolve"
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
@@ -1823,4 +1822,122 @@ setup_ref_test() {
     run dolt status
     [[ "$output" =~ "ahead" ]] || false
     [[ "$output" =~ "2 commit" ]] || false
+}
+
+@test "remotes: dolt checkout --track origin/feature checks out new local branch 'feature' with upstream set" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push --set-upstream origin main
+    dolt checkout -b feature
+    dolt push --set-upstream origin feature
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    run dolt branch
+    [[ ! "$output" =~ "feature" ]] || false
+
+    run dolt checkout --track origin/feature
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'feature'" ]] || false
+    [[ "$output" =~ "branch 'feature' set up to track 'origin/feature'." ]] || false
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+}
+
+@test "remotes: dolt checkout -b newbranch --track origin/feature checks out new local branch 'newbranch' with upstream set" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push --set-upstream origin main
+    dolt checkout -b feature
+    dolt push --set-upstream origin feature
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    run dolt branch
+    [[ ! "$output" =~ "feature" ]] || false
+
+    run dolt checkout -b newbranch --track origin/feature
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'newbranch'" ]] || false
+    [[ "$output" =~ "branch 'newbranch' set up to track 'origin/feature'." ]] || false
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+
+    dolt checkout main
+    dolt branch -D newbranch
+
+    # branch.autosetupmerge configuration defaults to --track, so the upstream is set
+    run dolt checkout -b newbranch origin/feature
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'newbranch'" ]] || false
+    [[ "$output" =~ "branch 'newbranch' set up to track 'origin/feature'." ]] || false
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+}
+
+@test "remotes: dolt branch track flag sets upstream" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt sql -q "CREATE TABLE a (pk int)"
+    dolt commit -am "add table a"
+    dolt push --set-upstream origin main
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    dolt branch
+    [[ ! "$output" =~ "other" ]] || false
+
+    run dolt branch --track other origin/other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "branch 'other' set up to track 'origin/other'" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+
+    dolt checkout other
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+
+    run dolt branch --track direct feature origin/other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "branch 'feature' set up to track 'origin/other'" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch other" ]] || false
+
+    dolt commit --allow-empty -m "new commit to other"
+    dolt push
+    dolt checkout feature
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Fast-forward" ]] || false
 }
