@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -177,7 +178,7 @@ func TestNBSDatabaseSpec(t *testing.T) {
 			cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), store1, 8*(1<<20), nbs.NewUnlimitedMemQuotaProvider())
 			assert.NoError(err)
 			vrw := types.NewValueStore(cs)
-			db := datas.NewTypesDatabase(vrw)
+			db := datas.NewTypesDatabase(vrw, tree.NewNodeStore(cs))
 			defer db.Close()
 			r, err := vrw.WriteValue(context.Background(), s)
 			assert.NoError(err)

@@ -39,6 +39,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -66,6 +67,8 @@ type PullSuite struct {
 	sourceCS    *chunks.TestStoreView
 	sinkVRW     types.ValueReadWriter
 	sourceVRW   types.ValueReadWriter
+	sinkDB      datas.Database
+	sourceDB    datas.Database
 	commitReads int // The number of reads triggered by commit differs across chunk store impls
 }
 
@@ -80,7 +83,11 @@ type LocalToLocalSuite struct {
 
 func (suite *LocalToLocalSuite) SetupTest() {
 	suite.sinkCS, suite.sourceCS = makeTestStoreViews()
-	suite.sinkVRW, suite.sourceVRW = types.NewValueStore(suite.sinkCS), types.NewValueStore(suite.sourceCS)
+
+	sinkVRW, sourceVRW := types.NewValueStore(suite.sinkCS), types.NewValueStore(suite.sourceCS)
+	suite.sinkVRW, suite.sourceVRW = sinkVRW, sourceVRW
+	suite.sourceDB = datas.NewTypesDatabase(sourceVRW, tree.NewNodeStore(suite.sourceCS))
+	suite.sinkDB = datas.NewTypesDatabase(sinkVRW, tree.NewNodeStore(suite.sinkCS))
 }
 
 type RemoteToLocalSuite struct {
@@ -89,7 +96,10 @@ type RemoteToLocalSuite struct {
 
 func (suite *RemoteToLocalSuite) SetupTest() {
 	suite.sinkCS, suite.sourceCS = makeTestStoreViews()
-	suite.sinkVRW, suite.sourceVRW = types.NewValueStore(suite.sinkCS), types.NewValueStore(suite.sourceCS)
+	sinkVRW, sourceVRW := types.NewValueStore(suite.sinkCS), types.NewValueStore(suite.sourceCS)
+	suite.sinkVRW, suite.sourceVRW = sinkVRW, sourceVRW
+	suite.sourceDB = datas.NewTypesDatabase(sourceVRW, tree.NewNodeStore(suite.sourceCS))
+	suite.sinkDB = datas.NewTypesDatabase(sinkVRW, tree.NewNodeStore(suite.sinkCS))
 }
 
 type LocalToRemoteSuite struct {
@@ -98,7 +108,10 @@ type LocalToRemoteSuite struct {
 
 func (suite *LocalToRemoteSuite) SetupTest() {
 	suite.sinkCS, suite.sourceCS = makeTestStoreViews()
-	suite.sinkVRW, suite.sourceVRW = types.NewValueStore(suite.sinkCS), types.NewValueStore(suite.sourceCS)
+	sinkVRW, sourceVRW := types.NewValueStore(suite.sinkCS), types.NewValueStore(suite.sourceCS)
+	suite.sinkVRW, suite.sourceVRW = sinkVRW, sourceVRW
+	suite.sourceDB = datas.NewTypesDatabase(sourceVRW, tree.NewNodeStore(suite.sourceCS))
+	suite.sinkDB = datas.NewTypesDatabase(sinkVRW, tree.NewNodeStore(suite.sinkCS))
 	suite.commitReads = 1
 }
 
@@ -108,7 +121,10 @@ type RemoteToRemoteSuite struct {
 
 func (suite *RemoteToRemoteSuite) SetupTest() {
 	suite.sinkCS, suite.sourceCS = makeTestStoreViews()
-	suite.sinkVRW, suite.sourceVRW = types.NewValueStore(suite.sinkCS), types.NewValueStore(suite.sourceCS)
+	sinkVRW, sourceVRW := types.NewValueStore(suite.sinkCS), types.NewValueStore(suite.sourceCS)
+	suite.sinkVRW, suite.sourceVRW = sinkVRW, sourceVRW
+	suite.sourceDB = datas.NewTypesDatabase(sourceVRW, tree.NewNodeStore(suite.sourceCS))
+	suite.sinkDB = datas.NewTypesDatabase(sinkVRW, tree.NewNodeStore(suite.sinkCS))
 	suite.commitReads = 1
 }
 
@@ -337,7 +353,7 @@ func (suite *PullSuite) TestPullUpdates() {
 }
 
 func (suite *PullSuite) commitToSource(v types.Value, p []hash.Hash) hash.Hash {
-	db := datas.NewTypesDatabase(suite.sourceVRW.(*types.ValueStore))
+	db := suite.sourceDB
 	ds, err := db.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
 	ds, err = db.Commit(context.Background(), ds, v, datas.CommitOptions{Parents: p})
@@ -346,7 +362,7 @@ func (suite *PullSuite) commitToSource(v types.Value, p []hash.Hash) hash.Hash {
 }
 
 func (suite *PullSuite) commitToSink(v types.Value, p []hash.Hash) hash.Hash {
-	db := datas.NewTypesDatabase(suite.sinkVRW.(*types.ValueStore))
+	db := suite.sinkDB
 	ds, err := db.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
 	ds, err = db.Commit(context.Background(), ds, v, datas.CommitOptions{Parents: p})

@@ -19,35 +19,15 @@ import (
 	"errors"
 	"io"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
-
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/types/edits"
 )
-
-type capacityMonitor interface {
-	capacityExceeded(size int) bool
-}
-
-type uncapped struct{}
-
-func (cap uncapped) capacityExceeded(size int) bool {
-	return false
-}
-
-type fixedCapacity struct {
-	capacity int64
-	currSize int64
-}
-
-func (cap *fixedCapacity) capacityExceeded(size int) bool {
-	cap.currSize += int64(size)
-	return cap.currSize > cap.capacity
-}
 
 var _ TableEditAccumulator = (*BulkImportTEA)(nil)
 
@@ -55,7 +35,7 @@ var _ TableEditAccumulator = (*BulkImportTEA)(nil)
 // commit and rollback
 type BulkImportTEA struct {
 	teaf       DbEaFactory
-	capMon     capacityMonitor
+	capMon     remotestorage.CapacityMonitor
 	emptyTuple types.Tuple
 
 	ea      types.EditAccumulator
@@ -72,7 +52,7 @@ func (tea *BulkImportTEA) Delete(keyHash hash.Hash, key types.Tuple) error {
 	// key is stored in the tea.ea, hash is stored in tea.deletes. Capacity is just an estimate and gets off if a
 	//	// key is added and/or deleted more than once.
 	size := key.Size() + hash.ByteLen
-	if tea.capMon.capacityExceeded(size) {
+	if tea.capMon.CapacityExceeded(size) {
 		return errors.New("capacity exceeded")
 	}
 
@@ -89,7 +69,7 @@ func (tea *BulkImportTEA) Insert(keyHash hash.Hash, key types.Tuple, val types.T
 	// key and val are stored in the tea.ea, hash is stored in tea.adds. Capacity is just an estimate and gets off if a
 	// key is added and/or deleted more than once.
 	size := key.Size() + val.Size() + hash.ByteLen
-	if tea.capMon.capacityExceeded(size) {
+	if tea.capMon.CapacityExceeded(size) {
 		return errors.New("capacity exceeded")
 	}
 
@@ -163,7 +143,7 @@ var _ IndexEditAccumulator = (*BulkImportIEA)(nil)
 // commit and rollback
 type BulkImportIEA struct {
 	teaf       DbEaFactory
-	capMon     capacityMonitor
+	capMon     remotestorage.CapacityMonitor
 	emptyTuple types.Tuple
 
 	ea      types.EditAccumulator
@@ -179,7 +159,7 @@ type BulkImportIEA struct {
 // Delete adds a row to be deleted when these edits are eventually applied.
 func (iea *BulkImportIEA) Delete(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, value types.Tuple) error {
 	// key is stored in iea.ea, keyHash is stored in iea.deletes.  Capacity is just an estimate and gets off if a key is added and/or deleted more than once.
-	if iea.capMon.capacityExceeded(key.Size()) {
+	if iea.capMon.CapacityExceeded(key.Size()) {
 		return errors.New("capacity exceeded")
 	}
 
@@ -198,7 +178,7 @@ func (iea *BulkImportIEA) Insert(ctx context.Context, keyHash, partialKeyHash ha
 	// key and val are stored in the iea.ea, keyHash is stored in iea.adds, and iea.partialAdds. partialKeyHash is stored in iea.partialAdds[keyHash].
 	// Capacity is just an estimate and gets off if a key is added and/or deleted more than once.
 	size := key.Size() + val.Size() + (3 * hash.ByteLen)
-	if iea.capMon.capacityExceeded(size) {
+	if iea.capMon.CapacityExceeded(size) {
 		return errors.New("capacity exceeded")
 	}
 
@@ -344,7 +324,7 @@ func (b *BulkImportTEAFactory) NewTableEA(ctx context.Context, rowData types.Map
 	ea := edits.NewDiskBackedEditAcc(ctx, b.nbf, b.vrw, flushInterval, b.directory, createMapEA)
 	return &BulkImportTEA{
 		teaf:       b,
-		capMon:     uncapped{},
+		capMon:     remotestorage.NewUncappedCapacityMonitor(),
 		rowData:    rowData,
 		ea:         ea,
 		adds:       make(map[hash.Hash]bool),
@@ -363,7 +343,7 @@ func (b *BulkImportTEAFactory) NewIndexEA(ctx context.Context, rowData types.Map
 	ea := edits.NewDiskBackedEditAcc(ctx, b.nbf, b.vrw, flushInterval, b.directory, createMapEA)
 	return &BulkImportIEA{
 		teaf:        b,
-		capMon:      uncapped{},
+		capMon:      remotestorage.NewUncappedCapacityMonitor(),
 		rowData:     rowData,
 		ea:          ea,
 		adds:        make(map[hash.Hash]struct{}),
@@ -377,15 +357,15 @@ var _ DbEaFactory = (*InMemDEAF)(nil)
 
 type InMemDEAF struct {
 	nbf    *types.NomsBinFormat
-	capMon capacityMonitor
+	capMon remotestorage.CapacityMonitor
 }
 
 func NewInMemDeafWithMaxCapacity(nbf *types.NomsBinFormat, maxCapacity int64) DbEaFactory {
-	var capMon capacityMonitor
+	var capMon remotestorage.CapacityMonitor
 	if maxCapacity > 0 {
-		capMon = &fixedCapacity{capacity: maxCapacity}
+		capMon = remotestorage.NewFixedCapacityMonitor(maxCapacity)
 	} else {
-		capMon = uncapped{}
+		capMon = remotestorage.NewUncappedCapacityMonitor()
 	}
 
 	return &InMemDEAF{nbf: nbf, capMon: capMon}

@@ -444,6 +444,8 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ro
 			map[string]env.BranchConfig{},
 			map[string]env.Remote{})
 		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, adapter, db.drw), true
+	case doltdb.TagsTableName:
+		dt, found = dtables.NewTagsTable(ctx, db.ddb), true
 	}
 	if found {
 		return dt, found, nil
@@ -452,7 +454,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ro
 	return db.getTable(ctx, root, tblName)
 }
 
-// resolveAsOf resolved given expression to a commit, if one exists.
+// resolveAsOf resolves given expression to a commit, if one exists.
 func resolveAsOf(ctx *sql.Context, db Database, asOf interface{}) (*doltdb.Commit, *doltdb.RootValue, error) {
 	head := db.rsr.CWBHeadRef()
 	switch x := asOf.(type) {

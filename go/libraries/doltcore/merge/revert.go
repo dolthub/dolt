@@ -72,7 +72,7 @@ func Revert(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, hea
 				return nil, "", err
 			}
 		} else {
-			theirRoot, err = doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
+			theirRoot, err = doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter(), ddb.NodeStore())
 			if err != nil {
 				return nil, "", err
 			}
@@ -82,7 +82,7 @@ func Revert(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, hea
 			theirCmHash = hash.Of(nil)
 		}
 
-		root, _, err = MergeRoots(ctx, theirCmHash, baseCmHash, root, theirRoot, baseRoot, opts, false)
+		root, _, err = MergeRoots(ctx, theirCmHash, baseCmHash, root, theirRoot, baseRoot, opts, MergeOpts{IsCherryPick: false})
 		if err != nil {
 			return nil, "", err
 		}

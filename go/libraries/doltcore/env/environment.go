@@ -98,6 +98,8 @@ type DoltEnv struct {
 	FS     filesys.Filesys
 	urlStr string
 	hdp    HomeDirProvider
+
+	IgnoreLockFile bool
 }
 
 // Load loads the DoltEnv for the current directory of the cli
@@ -1281,25 +1283,38 @@ func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
 	return editor.NewBulkImportTEAFactory(dEnv.DoltDB.Format(), dEnv.DoltDB.ValueReadWriter(), dEnv.TempTableFilesDir())
 }
 
-func (dEnv *DoltEnv) lockFile() string {
-	return filepath.Join(dbfactory.DoltDir, ServerLockFile)
+func (dEnv *DoltEnv) LockFile() string {
+	f, _ := dEnv.FS.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
+	return f
 }
 
 // IsLocked returns true if this database's lockfile exists
 func (dEnv *DoltEnv) IsLocked() bool {
-	ok, _ := dEnv.FS.Exists(dEnv.lockFile())
+	if dEnv.IgnoreLockFile {
+		return false
+	}
+
+	ok, _ := dEnv.FS.Exists(dEnv.LockFile())
 	return ok
 }
 
 // Lock writes this database's lockfile or errors if it already exists
 func (dEnv *DoltEnv) Lock() error {
-	if dEnv.IsLocked() {
-		return ErrActiveServerLock
+	if dEnv.IgnoreLockFile {
+		return nil
 	}
-	return dEnv.FS.WriteFile(dEnv.lockFile(), []byte{})
+
+	if dEnv.IsLocked() {
+		return ErrActiveServerLock.New(dEnv.LockFile())
+	}
+	return dEnv.FS.WriteFile(dEnv.LockFile(), []byte{})
 }
 
 // Unlock deletes this database's lockfile
 func (dEnv *DoltEnv) Unlock() error {
-	return dEnv.FS.DeleteFile(dEnv.lockFile())
+	if dEnv.IgnoreLockFile {
+		return nil
+	}
+
+	return dEnv.FS.DeleteFile(dEnv.LockFile())
 }

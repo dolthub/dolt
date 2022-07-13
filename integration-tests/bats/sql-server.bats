@@ -21,6 +21,55 @@ teardown() {
     teardown_common
 }
 
+
+
+@test "sql-server: user session variables from config" {
+  cd repo1
+  echo "
+privilege_file: privs.json
+user_session_vars:
+- name: user0
+  vars:
+    aws_credentials_file: /Users/user0/.aws/config
+    aws_credentials_profile: default
+- name: user1
+  vars:
+    aws_credentials_file: /Users/user1/.aws/config
+    aws_credentials_profile: lddev" > server.yaml
+
+    dolt sql --privilege-file=privs.json -q "CREATE USER dolt@'127.0.0.1'"
+    dolt sql --privilege-file=privs.json -q "CREATE USER user0@'127.0.0.1' IDENTIFIED BY 'pass0'"
+    dolt sql --privilege-file=privs.json -q "CREATE USER user1@'127.0.0.1' IDENTIFIED BY 'pass1'"
+    dolt sql --privilege-file=privs.json -q "CREATE USER user2@'127.0.0.1' IDENTIFIED BY 'pass2'"
+
+    start_sql_server_with_config "" server.yaml
+
+    run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user0  --password=pass0<<SQL
+SELECT @@aws_credentials_file, @@aws_credentials_profile;
+SQL
+    echo $output
+    [[ "$output" =~ /Users/user0/.aws/config.*default ]] || false
+
+    run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user1 --password=pass1<<SQL
+SELECT @@aws_credentials_file, @@aws_credentials_profile;
+SQL
+    echo $output
+    [[ "$output" =~ /Users/user1/.aws/config.*lddev ]] || false
+
+    run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user2 --password=pass2<<SQL
+SELECT @@aws_credentials_file, @@aws_credentials_profile;
+SQL
+    echo $output
+    [[ "$output" =~ NULL.*NULL ]] || false
+
+    run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user2 --password=pass2<<SQL
+SET @@aws_credentials_file="/Users/should_fail";
+SQL
+    echo $output
+    [[ "$output" =~ "Variable 'aws_credentials_file' is a read only variable" ]] || false
+}
+
+
 @test "sql-server: port in use" {
     cd repo1
 
@@ -643,7 +692,7 @@ SQL
     SELECT commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');
     INSERT INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
 
-    dolt add .
+    server_query repo1 1 "call dolt_add('.')" "status\n0"
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
@@ -652,7 +701,7 @@ SQL
     [ "$status" -eq 1 ]
 
     server_query repo1 1 "drop table one_pk" ""
-    dolt commit -am "Dropped table one_pk"
+    multi_query repo1 1 "call dolt_commit('-am', 'Dropped table one_pk')"
 
     run dolt ls
     [ "$status" -eq 0 ]

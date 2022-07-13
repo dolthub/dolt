@@ -2,9 +2,15 @@
 set -e
 set -o pipefail
 
+
+HOST="127.0.0.1"
+PORT=3316
+DBNAME="tpcc_test"
+USER="root"
+PASS="toor"
+
 SYSBENCH_TEST="oltp_point_select"
-WORKING_DIR=`mktemp -d`
-PPROF=0
+
 # parse options
 # superuser.com/questions/186272/
 while test $# -gt 0
@@ -27,28 +33,28 @@ pushd sysbench-lua-scripts
 
 
 sysbench \
-  --mysql-host="127.0.0.1" \
-  --mysql-user="root" \
-  --mysql-password="toor" \
-  --mysql-port=3316 \
+  --mysql-host="$HOST" \
+  --mysql-user="$USER" \
+  --mysql-password="$PASS" \
+  --mysql-port="$PORT" \
   --db-ps-mode=disable \
   "$SYSBENCH_TEST" cleanup
 
 sysbench \
-  --mysql-host="127.0.0.1" \
-  --mysql-user="root" \
-  --mysql-password="toor" \
-  --mysql-port=3316 \
+  --mysql-host="$HOST" \
+  --mysql-user="$USER" \
+  --mysql-password="$PASS" \
+  --mysql-port="$PORT" \
   "$SYSBENCH_TEST" prepare
 
 # run benchmark
 echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
 
 sysbench \
-  --mysql-host="127.0.0.1" \
-  --mysql-user="root" \
-  --mysql-password="toor" \
-  --mysql-port=3316 \
+  --mysql-host="$HOST" \
+  --mysql-user="$USER" \
+  --mysql-password="$PASS" \
+  --mysql-port="$PORT" \
   --db-ps-mode=disable \
   --rand-type="uniform" \
   "$SYSBENCH_TEST" run

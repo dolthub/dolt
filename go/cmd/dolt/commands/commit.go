@@ -82,6 +82,10 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	allFlag := apr.Contains(cli.AllFlag)
 
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
+
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working root").AddCause(err).Build(), usage)
@@ -110,7 +114,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return handleCommitErr(ctx, dEnv, err, usage)
 	}
 
-	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
+	msg, msgOk := apr.GetValue(cli.MessageArg)
 	if !msgOk {
 		msg, err = getCommitMessageFromEditor(ctx, dEnv)
 		if err != nil {

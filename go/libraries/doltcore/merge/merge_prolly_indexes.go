@@ -106,6 +106,7 @@ type confVals struct {
 func mergeProllySecondaryIndexes(
 	ctx context.Context,
 	vrw types.ValueReadWriter,
+	ns tree.NodeStore,
 	postMergeSchema, rootSch, mergeSch, ancSch schema.Schema,
 	mergedData durable.Index,
 	tbl, mergeTbl, tableToUpdate *doltdb.Table,
@@ -125,6 +126,7 @@ func mergeProllySecondaryIndexes(
 	mergedSet, err := mergeProllyIndexSets(
 		ctx,
 		vrw,
+		ns,
 		postMergeSchema, rootSch, mergeSch, ancSch,
 		mergedData,
 		rootSet, mergeSet, ancSet,
@@ -146,13 +148,14 @@ func mergeProllySecondaryIndexes(
 func mergeProllyIndexSets(
 	ctx context.Context,
 	vrw types.ValueReadWriter,
+	ns tree.NodeStore,
 	postMergeSchema, rootSch, mergeSch, ancSch schema.Schema,
 	mergedData durable.Index,
 	root, merge, anc durable.IndexSet,
 	artEditor prolly.ArtifactsEditor,
 	theirRootIsh hash.Hash,
 	tblName string) (durable.IndexSet, error) {
-	mergedIndexSet := durable.NewIndexSet(ctx, vrw)
+	mergedIndexSet := durable.NewIndexSet(ctx, vrw, ns)
 
 	mergedM := durable.ProllyMapFromIndex(mergedData)
 
@@ -191,7 +194,7 @@ func mergeProllyIndexSets(
 
 		mergedIndex, err := func() (durable.Index, error) {
 			if !rootOK || !mergeOK || !ancOK {
-				return buildIndex(ctx, vrw, postMergeSchema, index, mergedM, artEditor, theirRootIsh, tblName)
+				return buildIndex(ctx, vrw, ns, postMergeSchema, index, mergedM, artEditor, theirRootIsh, tblName)
 			}
 
 			if index.IsUnique() {
@@ -232,7 +235,7 @@ func mergeProllyIndexSets(
 	return mergedIndexSet, nil
 }
 
-func buildIndex(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema schema.Schema, index schema.Index, m prolly.Map, artEditor prolly.ArtifactsEditor, theirRootIsh hash.Hash, tblName string) (durable.Index, error) {
+func buildIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, postMergeSchema schema.Schema, index schema.Index, m prolly.Map, artEditor prolly.ArtifactsEditor, theirRootIsh hash.Hash, tblName string) (durable.Index, error) {
 	if index.IsUnique() {
 		meta, err := makeUniqViolMeta(postMergeSchema, index)
 		if err != nil {
@@ -249,6 +252,7 @@ func buildIndex(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema 
 		mergedMap, err := creation.BuildUniqueProllyIndex(
 			ctx,
 			vrw,
+			ns,
 			postMergeSchema,
 			index,
 			m,
@@ -271,7 +275,7 @@ func buildIndex(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema 
 		return mergedMap, nil
 	}
 
-	mergedIndex, err := creation.BuildSecondaryProllyIndex(ctx, vrw, postMergeSchema, index, m)
+	mergedIndex, err := creation.BuildSecondaryProllyIndex(ctx, vrw, ns, postMergeSchema, index, m)
 	if err != nil {
 		return nil, err
 	}

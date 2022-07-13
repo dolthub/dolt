@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -73,7 +74,8 @@ func WriteValueFile(ctx context.Context, filepath string, store *FileValueStore,
 // WriteToWriter writes the values out to the provided writer in the value file format
 func WriteToWriter(ctx context.Context, wr io.Writer, store *FileValueStore, values ...types.Value) error {
 	vrw := types.NewValueStore(store)
-	db := datas.NewTypesDatabase(vrw)
+	ns := tree.NewNodeStore(store)
+	db := datas.NewTypesDatabase(vrw, ns)
 	ds, err := db.GetDataset(ctx, env.DefaultInitBranch)
 
 	if err != nil {

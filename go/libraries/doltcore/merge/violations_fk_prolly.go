@@ -71,7 +71,7 @@ func prollyParentFkConstraintViolations(
 				return nil
 			}
 
-			partialKeyRange := prolly.ClosedRange(partialKey, partialKey, partialDesc)
+			partialKeyRange := prolly.PrefixRange(partialKey, partialDesc)
 			itr, err := postParentIndexData.IterRange(ctx, partialKeyRange)
 			if err != nil {
 				return err

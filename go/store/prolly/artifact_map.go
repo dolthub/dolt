@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -332,8 +333,7 @@ func (e *ErrMergeArtifactCollision) Error() string {
 // existing violation exists but has a different |meta.VInfo| value then
 // ErrMergeArtifactCollision is a returned.
 func (wr ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, artType ArtifactType, meta ConstraintViolationMeta) error {
-	rng := ClosedRange(srcKey, srcKey, wr.srcKeyDesc)
-	itr, err := wr.Mut.IterRange(ctx, rng)
+	itr, err := wr.Mut.IterRange(ctx, PrefixRange(srcKey, wr.srcKeyDesc))
 	if err != nil {
 		return err
 	}
@@ -539,7 +539,7 @@ func (itr artifactIterImpl) Next(ctx context.Context) (Artifact, error) {
 
 func (itr artifactIterImpl) getSrcKeyFromArtKey(k val.Tuple) val.Tuple {
 	for i := 0; i < itr.numPks; i++ {
-		itr.tb.PutRaw(0, k.GetField(i))
+		itr.tb.PutRaw(i, k.GetField(i))
 	}
 	return itr.tb.Build(itr.pool)
 }
@@ -574,4 +574,33 @@ func calcArtifactsDescriptors(srcKd val.TupleDesc) (kd, vd val.TupleDesc) {
 	valTypes := []val.Type{{Enc: val.JSONEnc, Nullable: false}}
 
 	return val.NewTupleDescriptor(keyTypes...), val.NewTupleDescriptor(valTypes...)
+}
+
+func ArtifactDebugFormat(ctx context.Context, m ArtifactMap) (string, error) {
+	kd, vd := m.Descriptors()
+	iter, err := m.tuples.iterAll(ctx)
+	if err != nil {
+		return "", err
+	}
+	c := m.Count()
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Artifact Map (count: %d) {\n", c))
+	for {
+		k, v, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+
+		sb.WriteString("\t")
+		sb.WriteString(kd.Format(k))
+		sb.WriteString(": ")
+		sb.WriteString(vd.Format(v))
+		sb.WriteString(",\n")
+	}
+	sb.WriteString("}")
+	return sb.String(), nil
 }

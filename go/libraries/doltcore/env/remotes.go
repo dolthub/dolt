@@ -379,7 +379,8 @@ func NewPullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, sq
 		return nil, err
 	}
 
-	if _, hasUpstream := trackedBranches[branch.GetPath()]; !hasUpstream {
+	trackedBranch, hasUpstream := trackedBranches[branch.GetPath()]
+	if !hasUpstream {
 		if remoteOnly {
 			return nil, fmt.Errorf(ErrPullWithRemoteNoUpstream.Error(), remoteName)
 		} else {
@@ -399,7 +400,7 @@ func NewPullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, sq
 		RemoteName: remoteName,
 		Remote:     remote,
 		RefSpecs:   refSpecs,
-		Branch:     branch,
+		Branch:     trackedBranch.Merge.Ref,
 		Force:      force,
 	}, nil
 }

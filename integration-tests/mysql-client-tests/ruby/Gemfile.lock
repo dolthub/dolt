@@ -1,13 +1,13 @@
 GEM
   remote: https://rubygems.org/
   specs:
-    ruby-mysql (2.9.14)
+    ruby-mysql (2.10.0)
 
 PLATFORMS
   ruby
 
 DEPENDENCIES
-  ruby-mysql (~> 2.9, >= 2.9.14)
+  ruby-mysql (~> 2.10)
 
 BUNDLED WITH
    2.1.4
