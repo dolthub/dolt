@@ -282,25 +282,6 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 		return nil, false, err
 	}
 
-	dbState, ok, err := ds.LookupDbState(ctx, db.name)
-	if err != nil {
-		return nil, false, err
-	}
-
-	if !ok {
-		return nil, false, fmt.Errorf("no state for database %s", db.name)
-	}
-
-	key, err := doltdb.NewDataCacheKey(root)
-	if err != nil {
-		return nil, false, err
-	}
-
-	cachedTable, ok := dbState.SessionCache().GetCachedTable(key, tblName)
-	if ok {
-		return cachedTable, true, nil
-	}
-
 	tbl, ok, err := db.getTableInsensitive(ctx, nil, ds, root, tblName)
 	if err != nil {
 		return nil, false, err
@@ -309,8 +290,6 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 	if !ok {
 		return nil, false, nil
 	}
-
-	dbState.SessionCache().CacheTable(key, tblName, tbl)
 
 	return tbl, true, nil
 }
@@ -324,7 +303,9 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 		return nil, false, nil
 	}
 
-	table, ok, err := db.getTableInsensitive(ctx, head, root, tableName)
+	sess := dsess.DSessFromSess(ctx.Session)
+
+	table, ok, err := db.getTableInsensitive(ctx, head, sess, root, tableName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -556,6 +537,7 @@ func resolveAsOfCommitRef(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef
 	}
 
 	cs, err := doltdb.NewCommitSpec(commitRef)
+
 	if err != nil {
 		return nil, nil, err
 	}
@@ -589,15 +571,33 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 	return filterDoltInternalTables(tblNames), nil
 }
 
-// getTable gets the table with the exact name given at the root value given. The database caches tables for all root
-// values to avoid doing schema lookups on every table lookup, which are expensive.
+// getTable returns the user table with the given name from the root given
 func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName string) (sql.Table, bool, error) {
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbState, ok, err := sess.LookupDbState(ctx, db.name)
+	if err != nil {
+		return nil, false, err
+	}
+	if !ok {
+		return nil, false, fmt.Errorf("no state for database %s", db.name)
+	}
+
+	key, err := doltdb.NewDataCacheKey(root)
+	if err != nil {
+		return nil, false, err
+	}
+
+	cachedTable, ok := dbState.SessionCache().GetCachedTable(key, tableName)
+	if ok {
+		return cachedTable, true, nil
+	}
+
 	tableNames, err := getAllTableNames(ctx, root)
 	if err != nil {
 		return nil, true, err
 	}
 
-	tableName, ok := sql.GetTableNameInsensitive(tableName, tableNames)
+	tableName, ok = sql.GetTableNameInsensitive(tableName, tableNames)
 	if !ok {
 		return nil, false, nil
 	}
@@ -628,6 +628,8 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 	} else {
 		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable, db: db}}
 	}
+
+	dbState.SessionCache().CacheTable(key, tableName, table)
 
 	return table, true, nil
 }
