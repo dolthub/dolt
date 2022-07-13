@@ -26,7 +26,9 @@ import (
 func TestGeneratedConfigCanBeImported(t *testing.T) {
 	t.Skip() // Skipping since dolt isn't installed on the github actions vm
 
-	config := NewDefaultImportBenchmarkConfig()
+	config, err := NewDefaultImportBenchmarkConfig()
+	assert.NoError(t, err)
+
 	wd := GetWorkingDir()
 
 	results := RunBenchmarkTests(config, wd)
@@ -71,4 +73,77 @@ func TestCanGenerateFilesForAllFormats(t *testing.T) {
 		err = os.Remove(job.Filepath)
 		assert.NoError(t, err)
 	}
+}
+
+func TestBadConfigurations(t *testing.T) {
+	t.Run("non csv format MySQL Job is considered invalid", func(t *testing.T) {
+		mysqlJob := createSampleMysqlJob()
+		mysqlJob.Format = jsonExt
+
+		config := &ImportBenchmarkConfig{Jobs: []*ImportBenchmarkJob{mysqlJob}}
+		err := config.ValidateAndUpdateDefaults()
+
+		assert.Error(t, err)
+		assert.Equal(t, ErrImproperMysqlFileFormat, err)
+	})
+
+	t.Run("MySQL Job with no schema file errors", func(t *testing.T) {
+		mysqlJob := createSampleMysqlJob()
+		mysqlJob.SchemaPath = ""
+
+		config := &ImportBenchmarkConfig{Jobs: []*ImportBenchmarkJob{mysqlJob}}
+		err := config.ValidateAndUpdateDefaults()
+
+		assert.Error(t, err)
+		assert.Equal(t, ErrMissingMysqlSchemaFile, err)
+	})
+
+	t.Run("improper program type passed in ", func(t *testing.T) {
+		doltJob := createSampleDoltJob()
+		doltJob.Program = "fake-program"
+
+		config := &ImportBenchmarkConfig{Jobs: []*ImportBenchmarkJob{doltJob}}
+		err := config.ValidateAndUpdateDefaults()
+
+		assert.Error(t, err)
+		assert.Equal(t, ErrUnsupportedProgram, err)
+	})
+
+	t.Run("improper file extension passed in", func(t *testing.T) {
+		doltJob := createSampleDoltJob()
+		doltJob.Format = "psv"
+
+		config := &ImportBenchmarkConfig{Jobs: []*ImportBenchmarkJob{doltJob}}
+		err := config.ValidateAndUpdateDefaults()
+		assert.Error(t, err)
+		assert.Equal(t, ErrUnsupportedFileFormat, err)
+	})
+}
+
+// createSampleMysqlJob creates a simple MySQL job that is particularly valuable for the future
+func createSampleMysqlJob() *ImportBenchmarkJob {
+	job := ImportBenchmarkJob{
+		Name:       "Mysql Dummy",
+		Format:     csvExt,
+		Version:    "8.0.22",     // Use whatever dolt is installed locally
+		ExecPath:   "/usr/mysql", // Assumes dolt is installed locally
+		Program:    "mysql",
+		SchemaPath: "/schema",
+	}
+
+	return &job
+}
+
+func createSampleDoltJob() *ImportBenchmarkJob {
+	job := &ImportBenchmarkJob{
+		Name:     "dolt_import_small",
+		NumRows:  smallSet,
+		Sorted:   false,
+		Format:   csvExt,
+		Version:  "HEAD", // Use whatever dolt is installed locally
+		ExecPath: "dolt", // Assumes dolt is installed locally
+		Program:  "dolt",
+	}
+
+	return job
 }

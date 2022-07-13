@@ -19,7 +19,8 @@
       "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/100k-sorted.csv",
       "Program": "dolt",
       "Version": "HEAD",
-      "ExecPath": "/Users/vinairachakonda/go/bin/dolt"
+      "ExecPath": "/Users/vinairachakonda/go/bin/dolt",
+      "SchemaPath": "/Users/vinairachakonda/go/src/dolthub/dolt/go/performance/import_benchmarker/cmd/schema.sql"
     }
   ],
   "MysqlConnectionProtocol": "tcp"

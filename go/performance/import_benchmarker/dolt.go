@@ -77,7 +77,7 @@ func setupAndInitializeDoltRepo(fs filesys.Filesys, workingDir, doltExecPath str
 	init.Dir = workingDir
 	err = init.Run()
 	if err != nil {
-		panic(err.Error())
+		log.Fatal(err.Error())
 	}
 }
 
@@ -86,6 +86,9 @@ func getBenchmarkingTools(job *ImportBenchmarkJob, workingDir string) (commandSt
 	switch job.Format {
 	case csvExt:
 		args = []string{"table", "import", "-c", "-f", testTable, job.Filepath}
+		if job.SchemaPath != "" {
+			args = append(args, "-s", job.SchemaPath)
+		}
 	case sqlExt:
 		stdin := getStdinForSQLBenchmark(filesys.LocalFS, job.Filepath)
 		os.Stdin = stdin
@@ -93,6 +96,10 @@ func getBenchmarkingTools(job *ImportBenchmarkJob, workingDir string) (commandSt
 		args = []string{"sql"}
 	case jsonExt:
 		pathToSchemaFile := filepath.Join(workingDir, fmt.Sprintf("testSchema%s", job.Format))
+		if job.SchemaPath != "" {
+			pathToSchemaFile = job.SchemaPath
+		}
+
 		args = []string{"table", "import", "-c", "-f", "-s", pathToSchemaFile, testTable, job.Filepath}
 	default:
 		log.Fatalf("cannot import file, unsupported file format %s \n", job.Format)

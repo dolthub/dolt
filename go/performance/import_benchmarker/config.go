@@ -16,6 +16,7 @@ package import_benchmarker
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -33,6 +34,13 @@ const (
 	mediumSet = 1000000
 	largeSet  = 10000000
 	testTable = "test"
+)
+
+var (
+	ErrMissingMysqlSchemaFile  = errors.New("error: Must supply schema file for mysql jobs")
+	ErrImproperMysqlFileFormat = errors.New("error: Improper schema file for mysql")
+	ErrUnsupportedProgram      = errors.New("error: Unsupported program only dolt or mysql used")
+	ErrUnsupportedFileFormat   = errors.New("error: Unsupport formated. Only csv, json or sql allowed")
 )
 
 type ImportBenchmarkJob struct {
@@ -61,7 +69,6 @@ type ImportBenchmarkJob struct {
 	ExecPath string
 
 	// SchemaPath is a path towards a generated schema. It is needed for MySQL testing and optional for Dolt testing
-	// TODO: Make sure the schema file is used for Dolt import i.e the -s parameter. Speeds things up!
 	SchemaPath string
 }
 
@@ -81,7 +88,7 @@ type ImportBenchmarkConfig struct {
 
 // NewDefaultImportBenchmarkConfig returns a default import configuration where data is generated with accordance to
 // the medium set.
-func NewDefaultImportBenchmarkConfig() *ImportBenchmarkConfig {
+func NewDefaultImportBenchmarkConfig() (*ImportBenchmarkConfig, error) {
 	jobs := []*ImportBenchmarkJob{
 		{
 			Name:     "dolt_import_small",
@@ -98,9 +105,12 @@ func NewDefaultImportBenchmarkConfig() *ImportBenchmarkConfig {
 		Jobs: jobs,
 	}
 
-	config.ValidateAndUpdateDefaults()
+	err := config.ValidateAndUpdateDefaults()
+	if err != nil {
+		return nil, err
+	}
 
-	return config
+	return config, nil
 }
 
 // FromFileConfig takes in a configuration file (encoded as JSON) and returns the relevant importBenchmark config
@@ -119,12 +129,15 @@ func FromFileConfig(configPath string) (*ImportBenchmarkConfig, error) {
 		return nil, err
 	}
 
-	config.ValidateAndUpdateDefaults()
+	err = config.ValidateAndUpdateDefaults()
+	if err != nil {
+		return nil, err
+	}
 
 	return config, nil
 }
 
-func (c *ImportBenchmarkConfig) ValidateAndUpdateDefaults() {
+func (c *ImportBenchmarkConfig) ValidateAndUpdateDefaults() error {
 	if c.MysqlConnectionProtocol == "" {
 		c.MysqlConnectionProtocol = "tcp"
 	}
@@ -138,18 +151,46 @@ func (c *ImportBenchmarkConfig) ValidateAndUpdateDefaults() {
 	}
 
 	for _, job := range c.Jobs {
-		job.updateDefaultsAndValidate()
-	}
-}
-
-func (j *ImportBenchmarkJob) updateDefaultsAndValidate() {
-	j.Program = strings.ToLower(j.Program)
-
-	if j.Program == "mysql" {
-		if j.SchemaPath == "" {
-			log.Fatalf("error: Must supply schema file for mysql jobs")
+		err := job.updateDefaultsAndValidate()
+		if err != nil {
+			return err
 		}
 	}
+
+	return nil
+}
+
+func (j *ImportBenchmarkJob) updateDefaultsAndValidate() error {
+	j.Program = strings.ToLower(j.Program)
+
+	programAsServerType := sysbench_runner.ServerType(j.Program)
+	switch programAsServerType {
+	case sysbench_runner.MySql:
+		if j.SchemaPath == "" {
+			return ErrMissingMysqlSchemaFile
+		}
+
+		if j.Format != csvExt {
+			return ErrImproperMysqlFileFormat
+		}
+	case sysbench_runner.Dolt:
+	default:
+		return ErrUnsupportedProgram
+	}
+
+	j.Format = strings.ToLower(j.Format)
+
+	seen := false
+	for _, f := range supportedFormats {
+		if f == j.Format {
+			seen = true
+		}
+	}
+	if !seen {
+		return ErrUnsupportedFileFormat
+	}
+
+	return nil
 }
 
 func getMysqlConfigFromConfig(c *ImportBenchmarkConfig) sysbench_runner.MysqlConfig {
@@ -186,7 +227,7 @@ func generateTestFile(job *ImportBenchmarkJob) (string, string) {
 	pathToImportFile := filepath.Join(GetWorkingDir(), fmt.Sprintf("testData.%s", sch.FileFormatExt))
 	wc, err := filesys.LocalFS.OpenForWrite(pathToImportFile, os.ModePerm)
 	if err != nil {
-		panic(err.Error())
+		log.Fatalf(err.Error())
 	}
 
 	defer wc.Close()

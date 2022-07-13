@@ -32,8 +32,7 @@ func main() {
 	flag.Parse()
 
 	// Construct a config
-	config := import_benchmarker.NewDefaultImportBenchmarkConfig()
-	var err error
+	config, err := import_benchmarker.NewDefaultImportBenchmarkConfig()
 	if *configPath != "" {
 		config, err = import_benchmarker.FromFileConfig(*configPath)
 	}
