@@ -23,7 +23,7 @@ ask questions.
 
 Lots of things! Dolt is a generally useful tool with countless
 applications. But if you want some ideas, [here's how people are using
-it so far](https://www.dolthub.com/blog/2021-03-09-dolt-use-cases-in-the-wild/).
+it so far](https://www.dolthub.com/blog/2022-07-11-dolt-case-studies/).
 
 # Dolt CLI
 

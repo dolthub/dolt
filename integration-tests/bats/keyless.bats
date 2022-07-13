@@ -185,7 +185,6 @@ CSV
 }
 
 @test "keyless: diff against working set" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
 
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 0;
@@ -194,17 +193,17 @@ UPDATE keyless SET c1 = 9 WHERE c0 = 1;
 SQL
     run dolt diff
     [ $status -eq 0 ]
-    # output order is random
-    [[ "${lines[6]}"  =~ "| + | 8  | 8  |" ]] || false
-    [[ "${lines[7]}"  =~ "| - | 1  | 1  |" ]] || false
-    [[ "${lines[8]}"  =~ "| - | 1  | 1  |" ]] || false
-    [[ "${lines[9]}"  =~ "| + | 1  | 9  |" ]] || false
-    [[ "${lines[10]}" =~ "| + | 1  | 9  |" ]] || false
-    [[ "${lines[11]}" =~ "| - | 0  | 0  |" ]] || false
+    # output order differs between formats
+    [[ "$output"  =~ "| + | 8  | 8  |" ]] || false
+    [[ "$output"  =~ "| - | 1  | 1  |" ]] || false
+    [[ "$output"  =~ "| - | 1  | 1  |" ]] || false
+    [[ "$output"  =~ "| + | 1  | 9  |" ]] || false
+    [[ "$output" =~ "| + | 1  | 9  |" ]] || false
+    [[ "$output" =~ "| - | 0  | 0  |" ]] || false
+    [[ "${#lines[@]}" = "13" ]] || false
 }
 
 @test "keyless: diff --summary" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
 
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 0;
@@ -218,7 +217,6 @@ SQL
 }
 
 @test "keyless: dolt_diff_ table" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
 
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 0;
@@ -228,20 +226,20 @@ SQL
     run dolt sql -q "
         SELECT to_c0, to_c1, from_c0, from_c1
         FROM dolt_diff_keyless
-        ORDER BY to_commit_date" -r csv
+        ORDER BY to_commit_date, to_c0 DESC, to_c1 DESC" -r csv
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}"  = "to_c0,to_c1,from_c0,from_c1"  ]] || false
     [[ "${lines[1]}"  = "8,8,,"  ]] || false
-    [[ "${lines[2]}"  = ",,1,1"  ]] || false
-    [[ "${lines[3]}"  = ",,1,1"  ]] || false
-    [[ "${lines[4]}"  = "1,9,,"  ]] || false
-    [[ "${lines[5]}"  = "1,9,,"  ]] || false
+    [[ "${lines[2]}"  = "1,9,,"  ]] || false
+    [[ "${lines[3]}"  = "1,9,,"  ]] || false
+    [[ "${lines[4]}"  = ",,1,1"  ]] || false
+    [[ "${lines[5]}"  = ",,1,1"  ]] || false
     [[ "${lines[6]}"  = ",,0,0"  ]] || false
-    [[ "${lines[7]}"  = "1,1,,"  ]] || false
-    [[ "${lines[8]}"  = "1,1,,"  ]] || false
-    [[ "${lines[9]}"  = "0,0,,"  ]] || false
-    [[ "${lines[10]}" = "2,2,,"  ]] || false
+    [[ "${lines[7]}" = "2,2,,"  ]] || false
+    [[ "${lines[9]}"  = "1,1,,"  ]] || false
+    [[ "${lines[9]}"  = "1,1,,"  ]] || false
+    [[ "${lines[10]}"  = "0,0,,"  ]] || false
 }
 
 @test "keyless: diff column add/drop" {
@@ -279,7 +277,6 @@ SQL
 }
 
 @test "keyless: diff branches with identical mutation history" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
 
     dolt branch other
 
@@ -316,7 +313,6 @@ SQL
 }
 
 @test "keyless: diff deletes from two branches" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
 
     dolt branch left
     dolt checkout -b right
@@ -338,7 +334,6 @@ SQL
 }
 
 @test "keyless: merge deletes from two branches" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
 
     dolt branch left
     dolt checkout -b right
@@ -372,7 +367,6 @@ SQL
 }
 
 @test "keyless: diff duplicate deletes" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
 
     make_dupe_table
 
@@ -404,7 +398,6 @@ SQL
 }
 
 @test "keyless: merge duplicate deletes" {
-    skip_nbf_dolt_1 "conflicts resolve not implemented"
 
     make_dupe_table
 
@@ -431,8 +424,6 @@ SQL
 }
 
 @test "keyless: diff duplicate updates" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
-
     make_dupe_table
 
     dolt branch left
@@ -455,7 +446,6 @@ SQL
 }
 
 @test "keyless: merge duplicate updates" {
-    skip_nbf_dolt_1 "conflicts resolve not implemented"
 
     make_dupe_table
 
@@ -522,7 +512,6 @@ SQL
 }
 
 @test "keyless: table replace" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
 
     cat <<CSV > data.csv
 c0,c1
@@ -555,7 +544,6 @@ CSV
 
 # in-place updates create become drop/add
 @test "keyless: diff with in-place updates (working set)" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
 
     dolt sql -q "UPDATE keyless SET c1 = 9 where c0 = 2;"
     run dolt diff
@@ -599,7 +587,6 @@ CSV
 
 # in-place updates diff as drop/add
 @test "keyless: diff with in-place updates (branches)" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
     dolt commit -am "added rows"
@@ -624,7 +611,6 @@ CSV
 }
 
 @test "keyless: merge with in-place updates (branches)" {
-    skip_nbf_dolt_1 "conflicts resolve not implemented"
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
     dolt commit -am "added rows"
@@ -660,7 +646,6 @@ CSV
 }
 
 @test "keyless: diff branches with reordered mutation history" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
 
     dolt branch other
 
@@ -699,7 +684,6 @@ CSV
 }
 
 @test "keyless: diff branches with convergent mutation history" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
 
     dolt branch other
 
@@ -721,7 +705,6 @@ SQL
 }
 
 @test "keyless: merge branches with convergent mutation history" {
-    skip_nbf_dolt_1 "conflicts resolve not implemented"
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -750,7 +733,6 @@ SQL
 }
 
 @test "keyless: diff branches with offset mutation history" {
-     skip_nbf_dolt_1 "keyless diff not implemented"
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -767,7 +749,6 @@ SQL
 }
 
 @test "keyless: merge branches with offset mutation history" {
-    skip_nbf_dolt_1 "conflicts resolve not implemented"
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -793,7 +774,6 @@ SQL
 }
 
 @test "keyless: diff delete+add against working" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
 
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 2;
@@ -805,7 +785,6 @@ SQL
 }
 
 @test "keyless: diff delete+add on two branches" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
 
     dolt branch left
     dolt checkout -b right
@@ -827,7 +806,6 @@ SQL
 }
 
 @test "keyless: merge delete+add on two branches" {
-    skip_nbf_dolt_1 "conflicts resolve not implemented"
     dolt branch left
     dolt checkout -b right
 

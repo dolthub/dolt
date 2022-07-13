@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -43,6 +44,8 @@ type JSONWriter struct {
 	sch         schema.Schema
 	rowsWritten int
 }
+
+var _ table.SqlTableWriter = (*JSONWriter)(nil)
 
 func NewJSONWriter(wr io.WriteCloser, outSch schema.Schema) (*JSONWriter, error) {
 	bwr := bufio.NewWriterSize(wr, WriteBufSize)

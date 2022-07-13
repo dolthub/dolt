@@ -70,7 +70,7 @@ func (w FixedWidthConflictTableWriter) WriteRow(
 	}
 
 	newRow := append(sql.Row{diffMarker, version}, row...)
-	return w.tableWriter.WriteRow(ctx, newRow, rowColorsForDiffType(rowDiffType, 2, len(row)))
+	return w.tableWriter.WriteColoredRow(ctx, newRow, rowColorsForDiffType(rowDiffType, 2, len(row)))
 }
 
 func (w FixedWidthConflictTableWriter) Close(ctx context.Context) error {

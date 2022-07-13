@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 )
 
 type ParquetWriter struct {
@@ -35,6 +36,8 @@ type ParquetWriter struct {
 	pwriter    *writer.CSVWriter
 	sch        schema.Schema
 }
+
+var _ table.SqlTableWriter = (*ParquetWriter)(nil)
 
 var typeMap = map[typeinfo.Identifier]string{
 	typeinfo.DatetimeTypeIdentifier:   "type=INT64, convertedtype=TIMESTAMP_MICROS",
