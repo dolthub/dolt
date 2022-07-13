@@ -108,10 +108,27 @@ func TestMultiEnvForDirectory(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, mrEnv.envs, 1)
 
-	for _, e := range mrEnv.envs {
-		assert.Equal(t, "test_name_123", e.name)
-		assert.Equal(t, dEnv, e.env)
+	type envCmp struct {
+		name    string
+		doltDir string
 	}
+
+	expected := []envCmp{
+		{
+			name:    "test_name_123",
+			doltDir: dEnv.GetDoltDir(),
+		},
+	}
+
+	var actual []envCmp
+	for _, env := range mrEnv.envs {
+		actual = append(actual, envCmp{
+			name:    env.name,
+			doltDir: env.env.GetDoltDir(),
+		})
+	}
+
+	assert.Equal(t, expected, actual)
 }
 
 func TestMultiEnvForDirectoryWithMultipleRepos(t *testing.T) {
