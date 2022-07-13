@@ -667,6 +667,14 @@ func TestStoredProcedures(t *testing.T) {
 	enginetest.TestStoredProcedures(t, newDoltHarness(t))
 }
 
+func TestLargeJsonObjects(t *testing.T) {
+	sqle.SkipByDefaultInCI(t)
+	harness := newDoltHarness(t)
+	for _, script := range LargeJsonObjectScriptTests {
+		enginetest.TestScript(t, harness, script)
+	}
+}
+
 func TestTransactions(t *testing.T) {
 	for _, script := range queries.TransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
