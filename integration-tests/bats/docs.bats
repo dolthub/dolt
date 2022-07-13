@@ -68,3 +68,36 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "${#lines[@]}" = "0" ]] || false
 }
+
+@test "docs: docs can be staged" {
+    dolt docs update LICENSE.md LICENSE.md
+    dolt add .
+
+    dolt status
+    run dolt status
+    [ "$status" -eq 0 ]
+}
+
+@test "docs: doc can be committed" {
+    dolt docs update LICENSE.md LICENSE.md
+    dolt add .
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new table:      dolt_docs" ]] || false
+
+    dolt commit -am "added a license file"
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "docs: docs are available from SQL" {
+    dolt docs update LICENSE.md LICENSE.md
+    dolt sql -q "SELECT doc_name FROM dolt_docs" -r csv
+    run dolt sql -q "SELECT doc_name FROM dolt_docs" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "doc_name" ]] || false
+    [[ "$output" =~ "LICENSE.md" ]] || false
+}
