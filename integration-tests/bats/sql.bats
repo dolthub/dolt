@@ -207,9 +207,10 @@ teardown() {
     rm -rf inner_db
 }
 
-@test "sql: dolt sql -q specify data directory dolt repo" {
+@test "sql: dolt sql -q specify data directory outside of dolt repo" {
     # remove files
     rm -rf datadir
+    rm -rf .doltcfg
     rm -rf new_repo
 
     # initialize data directory and inner dbs
@@ -231,30 +232,33 @@ teardown() {
     dolt init
     cd ..
 
+    # save data path
+    DATADIR=$(pwd)
+
     cd ..
 
     # initialize new repo
     mkdir new_repo
     cd new_repo
 
-    run dolt sql --data-dir=$BATS_TEST_DIRNAME/datadir -q "show databases"
+    run dolt sql --data-dir=$DATADIR -q "show databases"
     [ $status -eq 0 ]
     [[ $output =~ "db1" ]] || false
     [[ $output =~ "db2" ]] || false
     [[ $output =~ "db3" ]] || false
 
-    run dolt sql --data-dir=$BATS_TEST_DIRNAME/datadir -q "create user new_user"
+    run dolt sql --data-dir=$DATADIR -q "create user new_user"
     [ $status -eq 0 ]
 
-    run dolt sql --data-dir=$BATS_TEST_DIRNAME/datadir -q "use db1; select user from mysql.user"
-    [ $status -eq 0 ]
-    [[ $output =~ "new_user" ]] || false
-
-    run dolt sql --data-dir=$BATS_TEST_DIRNAME/datadir -q "use db2; select user from mysql.user"
+    run dolt sql --data-dir=$DATADIR -q "use db1; select user from mysql.user"
     [ $status -eq 0 ]
     [[ $output =~ "new_user" ]] || false
 
-    run dolt sql --data-dir=$BATS_TEST_DIRNAME/datadir -q "use db3; select user from mysql.user"
+    run dolt sql --data-dir=$DATADIR -q "use db2; select user from mysql.user"
+    [ $status -eq 0 ]
+    [[ $output =~ "new_user" ]] || false
+
+    run dolt sql --data-dir=$DATADIR -q "use db3; select user from mysql.user"
     [ $status -eq 0 ]
     [[ $output =~ "new_user" ]] || false
 
@@ -266,10 +270,10 @@ teardown() {
     [[ $output =~ "new_repo" ]] || false
     ! [[ $output =~ ".doltcfg" ]] || false
 
-    run ls datadir
+    run ls -a datadir
     [[ $output =~ ".doltcfg" ]] || false
 
-    run ls datadir/.doltcfg
+    run ls -a datadir/.doltcfg
     [[ $output =~ "privileges.db" ]] || false
 
     # remove files

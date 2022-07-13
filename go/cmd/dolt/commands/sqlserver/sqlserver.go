@@ -173,6 +173,14 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 	return startServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
 }
 
+func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
+	_, multiDbDir := apr.GetValue(commands.MultiDBDirFlag)
+	if multiDbDir {
+		cli.PrintErrln("WARNING: --multi-db-dir is deprecated, use --data-dir instead")
+	}
+	return nil
+}
+
 func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
 	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
@@ -181,6 +189,9 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
+	if err := validateSqlServerArgs(apr); err != nil {
+		return 1
+	}
 	serverConfig, err := GetServerConfig(dEnv, apr)
 
 	if err != nil {
@@ -273,7 +284,6 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	dataDirSpecified := false
 	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
 		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, dataDir)
-		cli.PrintErrln("WARNING: --multi-db-dir is deprecated, use --data-dir instead")
 
 		if err != nil {
 			return nil, errors.New("failed to read databases in path specified by --data-dir. error: " + err.Error())
