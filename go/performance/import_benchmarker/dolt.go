@@ -102,7 +102,7 @@ func getBenchmarkingTools(job *ImportBenchmarkJob, workingDir string) (commandSt
 
 // runBenchmarkCommand runs and times the benchmark. This is the critical portion of the code
 func runBenchmarkCommand(b *testing.B, commandStr string, args []string, wd string) {
-	// TODO: Write a note as to why this works
+	// Note that we can rerun this because dolt import uses the -f parameter
 	for i := 0; i < b.N; i++ {
 		cmd := execCommand(context.Background(), commandStr, args...)
 		var errBytes bytes.Buffer

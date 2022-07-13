@@ -166,7 +166,7 @@ func generateTestFilesIfNeeded(config *ImportBenchmarkConfig) *ImportBenchmarkCo
 		if job.Filepath != "" {
 			jobs = append(jobs, job)
 		} else {
-			filePath, fileFormat := getGeneratedBenchmarkTest(job)
+			filePath, fileFormat := generateTestFile(job)
 
 			job.Filepath = filePath
 			job.Format = fileFormat
@@ -179,17 +179,12 @@ func generateTestFilesIfNeeded(config *ImportBenchmarkConfig) *ImportBenchmarkCo
 	return config
 }
 
-// getGeneratedBenchmarkTest is used to create a generated test case with a randomly generated csv file.
-func getGeneratedBenchmarkTest(job *ImportBenchmarkJob) (string, string) {
+// generateTestFile is used to create a generated test case with a randomly generated csv file.
+func generateTestFile(job *ImportBenchmarkJob) (string, string) {
 	sch := NewSeedSchema(job.NumRows, genSampleCols(), job.Format)
-	testFilePath := generateTestFile(filesys.LocalFS, sch, GetWorkingDir())
 
-	return testFilePath, sch.FileFormatExt
-}
-
-func generateTestFile(fs filesys.Filesys, sch *SeedSchema, wd string) string {
-	pathToImportFile := filepath.Join(wd, fmt.Sprintf("testData.%s", sch.FileFormatExt))
-	wc, err := fs.OpenForWrite(pathToImportFile, os.ModePerm)
+	pathToImportFile := filepath.Join(GetWorkingDir(), fmt.Sprintf("testData.%s", sch.FileFormatExt))
+	wc, err := filesys.LocalFS.OpenForWrite(pathToImportFile, os.ModePerm)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -199,7 +194,7 @@ func generateTestFile(fs filesys.Filesys, sch *SeedSchema, wd string) string {
 	ds := NewDSImpl(wc, sch, seedRandom, testTable)
 	ds.GenerateData()
 
-	return pathToImportFile
+	return pathToImportFile, sch.FileFormatExt
 }
 
 func RunBenchmarkTests(config *ImportBenchmarkConfig, workingDir string) []result {

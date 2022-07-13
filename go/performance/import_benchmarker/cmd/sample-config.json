@@ -12,7 +12,7 @@
       "SchemaPath": "/Users/vinairachakonda/go/src/dolthub/dolt/go/performance/import_benchmarker/cmd/schema.sql"
     },
     {
-      "Name": "Medium Dolt import with Random Columns",
+      "Name": "Medium MySQL import with Random Columns",
       "NumRows": 1000000,
       "Sorted": true,
       "Format": "csv",
