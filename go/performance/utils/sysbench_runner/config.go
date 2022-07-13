@@ -184,7 +184,7 @@ func fromConfigTestParams(ct *ConfigTest, serverConfig *ServerConfig) []string {
 	params = append(params, defaultSysbenchParams...)
 	params = append(params, fmt.Sprintf("--mysql-host=%s", serverConfig.Host))
 	if serverConfig.Port != 0 {
-		params = append(params, fmt.Sprintf("--mysql-Port=%d", serverConfig.Port))
+		params = append(params, fmt.Sprintf("--mysql-port=%d", serverConfig.Port))
 	}
 
 	// handle sysbench user for local mysql server
@@ -208,7 +208,7 @@ type ServerConfig struct {
 	// Host is the server host
 	Host string
 
-	// Port is the server Port
+	// Port is the server port
 	Port int
 
 	// Server is the type of server
@@ -229,7 +229,7 @@ type ServerConfig struct {
 	// ConnectionProtocol defines the protocol for connecting to the server
 	ConnectionProtocol string
 
-	// Socket is the path to the server Socket
+	// Socket is the path to the server socket
 	Socket string
 }
 
@@ -256,7 +256,7 @@ func (sc *ServerConfig) GetServerArgs() []string {
 		params = append(params, fmt.Sprintf("--host=%s", sc.Host))
 	}
 	if sc.Port != 0 {
-		params = append(params, fmt.Sprintf("--Port=%d", sc.Port))
+		params = append(params, fmt.Sprintf("--port=%d", sc.Port))
 	}
 	params = append(params, sc.ServerArgs...)
 	return params
@@ -387,14 +387,14 @@ func (c *Config) setDefaults() error {
 	return nil
 }
 
-// CheckUpdatePortMap returns an error if multiple servers have specified the same Port
+// CheckUpdatePortMap returns an error if multiple servers have specified the same port
 func CheckUpdatePortMap(serverConfig *ServerConfig, portMap map[int]ServerType) (map[int]ServerType, error) {
 	if serverConfig.Port == 0 {
 		serverConfig.Port = defaultPort
 	}
 	srv, ok := portMap[serverConfig.Port]
 	if ok && srv != serverConfig.Server {
-		return nil, fmt.Errorf("servers have Port conflict on Port: %d\n", serverConfig.Port)
+		return nil, fmt.Errorf("servers have port conflict on port: %d\n", serverConfig.Port)
 	}
 	if !ok {
 		portMap[serverConfig.Port] = serverConfig.Server
