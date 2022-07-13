@@ -78,16 +78,6 @@ func init() {
 			Type:              sql.NewSystemBoolType(AllowCommitConflicts),
 			Default:           int8(0),
 		},
-		// If true, any conflicts produced by a transaction merge are
-		// automatically resolved with the latest transaction's values.
-		{
-			Name:              TransactionMergeStompKey,
-			Scope:             sql.SystemVariableScope_Global,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(TransactionMergeStompKey),
-			Default:           int8(0),
-		},
 	})
 }
 
@@ -136,6 +126,22 @@ func defineSystemVariables(name string) {
 				SetVarHintApplies: false,
 				Type:              sql.NewSystemStringType(DefaultBranchKey(name)),
 				Default:           "",
+			},
+			{
+				Name:              AwsCredsFileKey,
+				Scope:             sql.SystemVariableScope_Session,
+				Dynamic:           false,
+				SetVarHintApplies: false,
+				Type:              sql.NewSystemStringType(AwsCredsFileKey),
+				Default:           nil,
+			},
+			{
+				Name:              AwsCredsProfileKey,
+				Scope:             sql.SystemVariableScope_Session,
+				Dynamic:           false,
+				SetVarHintApplies: false,
+				Type:              sql.NewSystemStringType(AwsCredsProfileKey),
+				Default:           nil,
 			},
 		})
 	}

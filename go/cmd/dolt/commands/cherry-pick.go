@@ -216,7 +216,7 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 	}
 
 	// use parent of cherry-pick as ancestor to merge
-	mo := merge.MergeOpts{ConflictStrategy: merge.ConflictStompStrategyNone, IsCherryPick: true}
+	mo := merge.MergeOpts{IsCherryPick: true}
 	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, toHash, fromHash, workingRoot, toRoot, fromRoot, opts, mo)
 	if err != nil {
 		return nil, "", err

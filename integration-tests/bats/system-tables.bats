@@ -137,7 +137,6 @@ teardown() {
 }
 
 @test "system-tables: query dolt_remotes system table" {
-    skip_nbf_dolt_1 "dolt remote not supported"
 
     run dolt sql -q "select count(*) from dolt_remotes" -r csv
     [ $status -eq 0 ]
@@ -162,7 +161,6 @@ teardown() {
 }
 
 @test "system-tables: check unsupported dolt_remote behavior" {
-    skip_nbf_dolt_1 "dolt remote not supported"
 
     run dolt sql -q "insert into dolt_remotes (name, url) values ('origin1', 'file://remote')"
     [ $status -ne 0 ]

@@ -389,7 +389,6 @@ teardown() {
 }
 
 @test "1pk5col-ints: generate a merge conflict and resolve with ours" {
-    skip_nbf_dolt_1
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
@@ -434,7 +433,6 @@ teardown() {
 }
 
 @test "1pk5col-ints: generate a merge conflict and try to roll back using dolt merge --abort" {
-    skip_nbf_dolt_1
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
@@ -466,7 +464,6 @@ teardown() {
 }
 
 @test "1pk5col-ints: generate a merge conflict and resolve with theirs" {
-    skip_nbf_dolt_1
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
