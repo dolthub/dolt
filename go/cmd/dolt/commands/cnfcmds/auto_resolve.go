@@ -43,6 +43,8 @@ const (
 
 var ErrConfSchIncompatible = errors.New("the conflict schema's columns are not equal to the current schema's columns, please resolve manually")
 
+// AutoResolveAll resolves all conflicts in all tables according to the given
+// |strategy|.
 func AutoResolveAll(ctx context.Context, dEnv *env.DoltEnv, strategy AutoResolveStrategy) error {
 	root, err := dEnv.WorkingRoot(ctx)
 
@@ -59,6 +61,8 @@ func AutoResolveAll(ctx context.Context, dEnv *env.DoltEnv, strategy AutoResolve
 	return AutoResolveTables(ctx, dEnv, strategy, tbls)
 }
 
+// AutoResolveTables resolves all conflicts in the given tables according to the
+// given |strategy|.
 func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, strategy AutoResolveStrategy, tbls []string) error {
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
@@ -75,6 +79,9 @@ func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, strategy AutoReso
 	return nil
 }
 
+// ResolveTable resolves all conflicts in the given table according to the given
+// |strategy|. It errors if the schema of the conflict version you are choosing
+// differs from the current schema.
 func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, tblName string, strategy AutoResolveStrategy) error {
 	tbl, ok, err := root.GetTable(ctx, tblName)
 	if err != nil {
