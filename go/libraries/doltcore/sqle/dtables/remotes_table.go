@@ -17,6 +17,7 @@ package dtables
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -172,7 +173,7 @@ type remoteWriter struct {
 	bt *RemotesTable
 }
 
-func validateRow(ctx *sql.Context, r sql.Row) (*env.Remote, error) {
+func validateRow(ctx *sql.Context, r sql.Row, sess *dsess.DoltSession) (*env.Remote, error) {
 	name, ok := r[0].(string)
 	if !ok {
 		return nil, errors.New("invalid type for name")
@@ -181,6 +182,10 @@ func validateRow(ctx *sql.Context, r sql.Row) (*env.Remote, error) {
 	url, ok := r[1].(string)
 	if !ok {
 		return nil, errors.New("invalid value type for url")
+	}
+	_, absRemoteUrl, err := env.GetAbsRemoteUrl(sess.Provider().FileSystem(), &config.MapConfig{}, url)
+	if err != nil {
+		return nil, err
 	}
 
 	var fetchSpecs []string
@@ -207,7 +212,7 @@ func validateRow(ctx *sql.Context, r sql.Row) (*env.Remote, error) {
 		params = map[string]string{}
 	}
 
-	remote := env.Remote{Name: name, Url: url, FetchSpecs: fetchSpecs, Params: params}
+	remote := env.Remote{Name: name, Url: absRemoteUrl, FetchSpecs: fetchSpecs, Params: params}
 	return &remote, nil
 }
 
@@ -227,7 +232,7 @@ func (bWr remoteWriter) Insert(ctx *sql.Context, r sql.Row) error {
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	remote, err := validateRow(ctx, r)
+	remote, err := validateRow(ctx, r, sess)
 
 	if err != nil {
 		return err
@@ -250,11 +255,6 @@ func (bWr remoteWriter) Update(ctx *sql.Context, old sql.Row, new sql.Row) error
 // each row to process for the delete operation, which may involve many rows. After all rows have been processed,
 // Close is called.
 func (bWr remoteWriter) Delete(ctx *sql.Context, r sql.Row) error {
-	remote, err := validateRow(ctx, r)
-
-	if err != nil {
-		return err
-	}
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
@@ -265,6 +265,11 @@ func (bWr remoteWriter) Delete(ctx *sql.Context, r sql.Row) error {
 	dbData, ok := sess.GetDbData(ctx, dbName)
 	if !ok {
 		return sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	remote, err := validateRow(ctx, r, sess)
+	if err != nil {
+		return err
 	}
 
 	err = dbData.Rsw.RemoveRemote(ctx, remote.Name)

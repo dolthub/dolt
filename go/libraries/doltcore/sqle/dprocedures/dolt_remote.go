@@ -61,9 +61,9 @@ func doDoltRemote(ctx *sql.Context, args []string) (int, error) {
 
 	switch apr.Arg(0) {
 	case "add":
-		err = addRemote(apr, dSess)
+		err = addRemote(ctx, dbData, apr, dSess)
 	case "remove", "rm":
-		err = removeRemote(ctx, dbData, apr, dSess)
+		err = removeRemote(ctx, dbData, apr)
 	default:
 		err = fmt.Errorf("error: invalid argument")
 	}
@@ -74,7 +74,7 @@ func doDoltRemote(ctx *sql.Context, args []string) (int, error) {
 	return 0, nil
 }
 
-func addRemote(apr *argparser.ArgParseResults, sess *dsess.DoltSession) error {
+func addRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResults, sess *dsess.DoltSession) error {
 	if apr.NArg() != 3 {
 		return fmt.Errorf("error: invalid argument")
 	}
@@ -91,32 +91,22 @@ func addRemote(apr *argparser.ArgParseResults, sess *dsess.DoltSession) error {
 	if err != nil {
 		return err
 	}
-
-	fs := sess.Provider().FileSystem()
-	r := env.NewRemote(remoteName, absRemoteUrl, params, nil)
-
-	repoState, err := env.LoadRepoState(fs)
-	if err != nil {
-		return err
-	}
-	repoState.AddRemote(r)
-	return repoState.Save(fs)
+	return dbd.Rsw.AddRemote(remoteName, absRemoteUrl, nil, params)
 }
 
-func removeRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResults, sess *dsess.DoltSession) error {
+func removeRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResults) error {
 	if apr.NArg() != 2 {
 		return fmt.Errorf("error: invalid argument")
 	}
 
 	old := strings.TrimSpace(apr.Arg(1))
 
-	fs := sess.Provider().FileSystem()
-	repoState, err := env.LoadRepoState(fs)
+	remotes, err := dbd.Rsr.GetRemotes()
 	if err != nil {
 		return err
 	}
 
-	remote, ok := repoState.Remotes[old]
+	remote, ok := remotes[old]
 	if !ok {
 		return fmt.Errorf("error: unknown remote: '%s'", old)
 	}
@@ -139,6 +129,5 @@ func removeRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResul
 		}
 	}
 
-	delete(repoState.Remotes, remote.Name)
-	return repoState.Save(fs)
+	return dbd.Rsw.RemoveRemote(ctx, remote.Name)
 }

@@ -246,6 +246,7 @@ teardown() {
     run dolt sql << SQL
 SELECT DOLT_CHECKOUT('test-branch');
 SELECT * FROM test;
+SELECT DOLT_PULL();
 SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "pk" ]] || false

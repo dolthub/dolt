@@ -119,12 +119,7 @@ func (s SessionStateAdapter) GetPreMergeWorking(ctx context.Context) (*doltdb.Ro
 }
 
 func (s SessionStateAdapter) GetRemotes() (map[string]env.Remote, error) {
-	fs := s.session.Provider().FileSystem()
-	repoState, err := env.LoadRepoState(fs)
-	if err != nil {
-		return nil, err
-	}
-	return repoState.Remotes, nil
+	return s.remotes, nil
 }
 
 func (s SessionStateAdapter) GetBackups() (map[string]env.Remote, error) {
@@ -141,7 +136,16 @@ func (s SessionStateAdapter) UpdateBranch(name string, new env.BranchConfig) err
 }
 
 func (s SessionStateAdapter) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
-	return fmt.Errorf("cannot insert remote in an SQL session")
+	r := env.NewRemote(name, url, params, nil)
+	s.remotes[name] = r
+
+	fs := s.session.Provider().FileSystem()
+	repoState, err := env.LoadRepoState(fs)
+	if err != nil {
+		return err
+	}
+	repoState.AddRemote(r)
+	return repoState.Save(fs)
 }
 
 func (s SessionStateAdapter) AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error {
@@ -149,7 +153,15 @@ func (s SessionStateAdapter) AddBackup(name string, url string, fetchSpecs []str
 }
 
 func (s SessionStateAdapter) RemoveRemote(ctx context.Context, name string) error {
-	return fmt.Errorf("cannot delete remote in an SQL session")
+	delete(s.remotes, name)
+
+	fs := s.session.Provider().FileSystem()
+	repoState, err := env.LoadRepoState(fs)
+	if err != nil {
+		return err
+	}
+	delete(repoState.Remotes, name)
+	return repoState.Save(fs)
 }
 
 func (s SessionStateAdapter) RemoveBackup(ctx context.Context, name string) error {
