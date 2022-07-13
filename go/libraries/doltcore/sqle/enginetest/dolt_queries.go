@@ -4755,3 +4755,47 @@ var DoltTagTestScripts = []queries.ScriptTest{
 		},
 	},
 }
+
+var DoltRemoteTestScripts = []queries.ScriptTest{
+	{
+		Name:        "dolt-remote: SQL add remotes",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_REMOTE('add','origin','aws://[dynamo_db_table:s3_bucket]/repo_name')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * FROM DOLT_REMOTES",
+				Expected: []sql.Row{{"origin", "aws://[dynamo_db_table:s3_bucket]/repo_name", sql.MustJSON(`["refs/heads/*:refs/remotes/origin/*"]`), sql.MustJSON(`{}`)}},
+			},
+			{
+				Query:    "CALL DOLT_PUSH('origin', 'main')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "dolt-remote: SQL remove remotes",
+		SetUpScript: []string{
+			"CALL DOLT_REMOTE('add','origin1','aws://[dynamo_db_table:s3_bucket]/repo_name')",
+			"CALL DOLT_REMOTE('add','origin2','aws://[dynamo_db_table:s3_bucket]/repo_name')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM DOLT_REMOTES",
+				Expected: []sql.Row{
+					{"origin1", "aws://[dynamo_db_table:s3_bucket]/repo_name", sql.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), sql.MustJSON(`{}`)},
+					{"origin2", "aws://[dynamo_db_table:s3_bucket]/repo_name", sql.MustJSON(`["refs/heads/*:refs/remotes/origin2/*"]`), sql.MustJSON(`{}`)}},
+			},
+			{
+				Query:    "CALL DOLT_REMOTE('remove','origin1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * FROM DOLT_REMOTES",
+				Expected: []sql.Row{{"origin2", "aws://[dynamo_db_table:s3_bucket]/repo_name", sql.MustJSON(`["refs/heads/*:refs/remotes/origin2/*"]`), sql.MustJSON(`{}`)}},
+			},
+		},
+	},
+}

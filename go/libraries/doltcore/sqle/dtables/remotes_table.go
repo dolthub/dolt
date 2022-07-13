@@ -90,12 +90,16 @@ func NewRemoteItr(ctx *sql.Context, ddb *doltdb.DoltDB) (*RemoteItr, error) {
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbData, ok := sess.GetDbData(ctx, dbName)
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
 
-	remoteMap, err := dbData.Rsr.GetRemotes()
+	// dolt_remote() procedure saves changed to repoState file,
+	// so dolt_remotes table needs most recent data from repoState file
+	fs := sess.Provider().FileSystem()
+	repoState, err := env.LoadRepoState(fs)
+	if err != nil {
+		return nil, err
+	}
+	remoteMap := repoState.Remotes
+
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +126,16 @@ func (itr *RemoteItr) Next(*sql.Context) (sql.Row, error) {
 
 	remote := itr.remotes[itr.idx]
 
-	return sql.NewRow(remote.Name, remote.Url, remote.FetchSpecs, remote.Params), nil
+	fs, err := sql.JSON.Convert(remote.FetchSpecs)
+	if err != nil {
+		return nil, err
+	}
+	params, err := sql.JSON.Convert(remote.Params)
+	if err != nil {
+		return nil, err
+	}
+
+	return sql.NewRow(remote.Name, remote.Url, fs, params), nil
 }
 
 // Close closes the iterator.

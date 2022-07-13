@@ -1942,3 +1942,42 @@ setup_ref_test() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Fast-forward" ]] || false
 }
+
+@test "remotes: dolt_remote add and remove works with other commands" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt sql -q "CALL dolt_remote('add', 'origin', 'file://../remote')"
+    dolt push origin main
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    run dolt branch -va
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "other" ]] || false
+
+    cd ../repo1
+    dolt checkout -b other
+    dolt push origin other
+
+    cd ../repo2
+    dolt pull
+    run dolt branch -va
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "other" ]] || false
+
+    dolt checkout main
+    dolt sql -q "CREATE TABLE a(pk int primary key)"
+    dolt commit -am "add table a"
+    dolt push
+
+    cd ../repo1
+    dolt sql -q "CALL dolt_remote('remove', 'origin')"
+    run dolt pull
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no remote" ]] || false
+}

@@ -179,7 +179,7 @@ teardown() {
     [[ ! "$output" =~ panic ]] || false
 
     mkdir remote
-    dolt sql -q "CALL DOLT_REMOTE('add', 'origin1', 'file://remote/')"
+    dolt sql -q "CALL DOLT_REMOTE('add', 'origin1', 'file://remote')"
     dolt sql -q "CALL DOLT_REMOTE('add', 'origin2', 'aws://[dynamo_db_table:s3_bucket]/repo_name')"
 
     run dolt sql -q "select count(*) from dolt_remotes" -r csv

@@ -100,11 +100,7 @@ func addRemote(apr *argparser.ArgParseResults, sess *dsess.DoltSession) error {
 		return err
 	}
 	repoState.AddRemote(r)
-	err = repoState.Save(fs)
-	if err != nil {
-		return err
-	}
-	return nil
+	return repoState.Save(fs)
 }
 
 func removeRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResults, sess *dsess.DoltSession) error {
@@ -144,10 +140,5 @@ func removeRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResul
 	}
 
 	delete(repoState.Remotes, remote.Name)
-	err = repoState.Save(fs)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return repoState.Save(fs)
 }
