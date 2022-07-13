@@ -37,6 +37,8 @@ type MergeOpts struct {
 }
 
 type TableMerger struct {
+	name string
+
 	left  *doltdb.Table
 	right *doltdb.Table
 	anc   *doltdb.Table
@@ -112,109 +114,19 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 		return nil, nil, err
 	}
 
-	rootHash, mergeHash, ancHash, err := tm.tableHashes()
+	// short-circuit here if we can
+	finished, stats, err := rm.maybeShortCircuit(ctx, tm, mergeOpts)
+	if finished != nil || stats != nil || err != nil {
+		return finished, stats, err
+	}
+
+	ancRows, err := tm.anc.GetRowData(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	rootHasTable := tm.left != nil
-	mergeHasTable := tm.right != nil
-	ancHasTable := tm.anc != nil
-
-	var ancRows durable.Index
-	// only used by new storage format
-	var ancIndexSet durable.IndexSet
-	if ancHasTable {
-		ancRows, err = tm.anc.GetRowData(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		ancIndexSet, err = tm.anc.GetIndexSet(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	{ // short-circuit logic
-
-		// Nothing changed
-		if rootHasTable && mergeHasTable && ancHasTable && rootHash == mergeHash && rootHash == ancHash {
-			return tm.left, &MergeStats{Operation: TableUnmodified}, nil
-		}
-
-		// Both made identical changes
-		// For keyless tables, this counts as a conflict
-		if rootHasTable && mergeHasTable && rootHash == mergeHash && !schema.IsKeyless(tm.leftSch) {
-			return tm.left, &MergeStats{Operation: TableUnmodified}, nil
-		}
-
-		// One or both added this table
-		if !ancHasTable {
-			if mergeHasTable && rootHasTable {
-				if schema.SchemasAreEqual(tm.leftSch, tm.rightSch) {
-					// If both added the same table, pretend it was in the ancestor all along with no data
-					// Don't touch ancHash to avoid triggering other short-circuit logic below
-					ancHasTable, tm.ancSch, tm.anc = true, tm.leftSch, tm.left
-					ancRows, err = durable.NewEmptyIndex(ctx, rm.vrw, rm.ns, tm.ancSch)
-					if err != nil {
-						return nil, nil, err
-					}
-					ancIndexSet, err = durable.NewIndexSetWithEmptyIndexes(ctx, rm.vrw, rm.ns, tm.ancSch)
-					if err != nil {
-						return nil, nil, err
-					}
-				} else {
-					return nil, nil, ErrSameTblAddedTwice
-				}
-			} else if rootHasTable {
-				// fast-forward
-				return tm.left, &MergeStats{Operation: TableUnmodified}, nil
-			} else {
-				// fast-forward
-				return tm.right, &MergeStats{Operation: TableAdded}, nil
-			}
-		}
-
-		// Deleted in both, fast-forward
-		if ancHasTable && !rootHasTable && !mergeHasTable {
-			return nil, &MergeStats{Operation: TableRemoved}, nil
-		}
-
-		// Deleted in root or in merge, either a conflict (if any changes in other root) or else a fast-forward
-		if ancHasTable && (!rootHasTable || !mergeHasTable) {
-			if mergeOpts.IsCherryPick && rootHasTable && !mergeHasTable {
-				// TODO : this is either drop table or rename table case
-				// We can delete only if the table in current HEAD and parent commit contents are exact the same (same schema and same data);
-				// otherwise, return ErrTableDeletedAndModified
-				// We need to track renaming of a table --> the renamed table could be added as new table
-				return nil, &MergeStats{Operation: TableModified}, errors.New(fmt.Sprintf("schema changes not supported: %s table was renamed or dropped in cherry-pick commit", tblName))
-			}
-
-			if (mergeHasTable && mergeHash != ancHash) ||
-				(rootHasTable && rootHash != ancHash) {
-				return nil, nil, ErrTableDeletedAndModified
-			}
-			// fast-forward
-			return nil, &MergeStats{Operation: TableRemoved}, nil
-		}
-
-		// Changes only in root, table unmodified
-		if mergeHash == ancHash {
-			return tm.left, &MergeStats{Operation: TableUnmodified}, nil
-		}
-
-		// Changes only in merge root, fast-forward
-		// TODO : no fast-forward when cherry-picking for now
-		if !mergeOpts.IsCherryPick && rootHash == ancHash {
-			ms := MergeStats{Operation: TableModified}
-			if rootHash != mergeHash {
-				ms, err = calcTableMergeStats(ctx, tm.left, tm.right)
-				if err != nil {
-					return nil, nil, err
-				}
-			}
-			return tm.right, &ms, nil
-		}
+	ancIndexSet, err := tm.anc.GetIndexSet(ctx)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	if mergeOpts.IsCherryPick && !schema.SchemasAreEqual(tm.leftSch, tm.rightSch) {
@@ -327,8 +239,9 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 
 func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (TableMerger, error) {
 	tm := TableMerger{
-		vrw: rm.vrw,
-		ns:  rm.ns,
+		name: tblName,
+		vrw:  rm.vrw,
+		ns:   rm.ns,
 	}
 
 	var ok bool
@@ -362,9 +275,98 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (Tabl
 		if tm.ancSch, err = tm.anc.GetSchema(ctx); err != nil {
 			return TableMerger{}, err
 		}
+	} else if schema.SchemasAreEqual(tm.leftSch, tm.rightSch) && tm.left != nil {
+		// If left & right added the same table, fill tm.anc with an empty table
+		tm.ancSch = tm.leftSch
+		tm.anc, err = doltdb.NewEmptyTable(ctx, rm.vrw, rm.ns, tm.ancSch)
+		if err != nil {
+			return TableMerger{}, err
+		}
 	}
 
 	return tm, nil
+}
+
+func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm TableMerger, opts MergeOpts) (*doltdb.Table, *MergeStats, error) {
+	rootHash, mergeHash, ancHash, err := tm.tableHashes()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	leftExists := tm.left != nil
+	rightExists := tm.right != nil
+	ancExists := tm.anc != nil
+
+	// Nothing changed
+	if leftExists && rightExists && ancExists && rootHash == mergeHash && rootHash == ancHash {
+		return tm.left, &MergeStats{Operation: TableUnmodified}, nil
+	}
+
+	// Both made identical changes
+	// For keyless tables, this counts as a conflict
+	if leftExists && rightExists && rootHash == mergeHash && !schema.IsKeyless(tm.leftSch) {
+		return tm.left, &MergeStats{Operation: TableUnmodified}, nil
+	}
+
+	// One or both added this table
+	if !ancExists {
+		if rightExists && leftExists {
+			if !schema.SchemasAreEqual(tm.leftSch, tm.rightSch) {
+				return nil, nil, ErrSameTblAddedTwice
+			}
+		} else if leftExists {
+			// fast-forward
+			return tm.left, &MergeStats{Operation: TableUnmodified}, nil
+		} else {
+			// fast-forward
+			return tm.right, &MergeStats{Operation: TableAdded}, nil
+		}
+	}
+
+	// Deleted in both, fast-forward
+	if ancExists && !leftExists && !rightExists {
+		return nil, &MergeStats{Operation: TableRemoved}, nil
+	}
+
+	// Deleted in root or in merge, either a conflict (if any changes in other root) or else a fast-forward
+	if ancExists && (!leftExists || !rightExists) {
+		if opts.IsCherryPick && leftExists && !rightExists {
+			// TODO : this is either drop table or rename table case
+			// We can delete only if the table in current HEAD and parent commit contents are exact the same (same schema and same data);
+			// otherwise, return ErrTableDeletedAndModified
+			// We need to track renaming of a table --> the renamed table could be added as new table
+			err = fmt.Errorf("schema changes not supported: %s table was renamed or dropped in cherry-pick commit", tm.name)
+			return nil, &MergeStats{Operation: TableModified}, err
+		}
+
+		if (rightExists && mergeHash != ancHash) ||
+			(leftExists && rootHash != ancHash) {
+			return nil, nil, ErrTableDeletedAndModified
+		}
+		// fast-forward
+		return nil, &MergeStats{Operation: TableRemoved}, nil
+	}
+
+	// Changes only in root, table unmodified
+	if mergeHash == ancHash {
+		return tm.left, &MergeStats{Operation: TableUnmodified}, nil
+	}
+
+	// Changes only in merge root, fast-forward
+	// TODO : no fast-forward when cherry-picking for now
+	if !opts.IsCherryPick && rootHash == ancHash {
+		ms := MergeStats{Operation: TableModified}
+		if rootHash != mergeHash {
+			ms, err = calcTableMergeStats(ctx, tm.left, tm.right)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		return tm.right, &ms, nil
+	}
+
+	// no short-circuit
+	return nil, nil, nil
 }
 
 func setConflicts(ctx context.Context, cons durable.ConflictIndex, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {

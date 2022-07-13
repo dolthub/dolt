@@ -93,7 +93,23 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore,
 	if err != nil {
 		return nil, err
 	}
+	return &Table{table: dt}, nil
+}
 
+func NewEmptyTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (*Table, error) {
+	rows, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
+	if err != nil {
+		return nil, err
+	}
+	indexes, err := durable.NewIndexSetWithEmptyIndexes(ctx, vrw, ns, sch)
+	if err != nil {
+		return nil, err
+	}
+
+	dt, err := durable.NewTable(ctx, vrw, ns, sch, rows, indexes, nil)
+	if err != nil {
+		return nil, err
+	}
 	return &Table{table: dt}, nil
 }
 
