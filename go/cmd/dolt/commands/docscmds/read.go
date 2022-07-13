@@ -98,7 +98,7 @@ func readDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName string) error {
 		return err
 	}
 
-	cli.Println(doc)
+	cli.Print(doc)
 	return nil
 }
 

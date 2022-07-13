@@ -130,7 +130,7 @@ func editDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName, fileName strin
 }
 
 const (
-	writeDocTemplate = "REPLACE INTO dolt_docs VALUES ('%s', '%s')"
+	writeDocTemplate = `REPLACE INTO dolt_docs VALUES ("%s", "%s")`
 )
 
 func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, content string) (*doltdb.RootValue, error) {
@@ -149,6 +149,7 @@ func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, conten
 	}
 	sctx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
+	content = strings.ReplaceAll(content, `"`, `\"`)
 	_, iter, err = eng.Query(sctx, fmt.Sprintf(writeDocTemplate, docName, content))
 	if err != nil {
 		return nil, err
