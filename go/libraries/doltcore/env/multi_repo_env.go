@@ -242,10 +242,10 @@ func MultiEnvForDirectory(
 		ignoreLockFile: ignoreLockFile,
 	}
 
-	// add method to filesys interface to convert path to url?
 	// Load current fs and put into mr env
 	var dEnv *DoltEnv
 	var dbName string
+	// Only directly copy the oldDEnv for in-memory filesystems; something is wrong with loading them
 	if _, ok := fs.(*filesys.InMemFS); ok {
 		dbName = "dolt"
 		dEnv = oldDEnv
