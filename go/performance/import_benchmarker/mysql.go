@@ -74,11 +74,12 @@ func BenchmarkMySQLImportJobs(jobs []*ImportBenchmarkJob, mConfig sysbench_runne
 
 	// setup the relevant testing database and permissions
 	err := sysbench_runner.SetupDB(ctx, mConfig, dbName)
-
 	if err != nil {
 		cancel()
 		log.Fatal(err.Error())
 	}
+
+	log.Println("successfully setup the database")
 
 	// handle user interrupt
 	quit := make(chan os.Signal, 1)
