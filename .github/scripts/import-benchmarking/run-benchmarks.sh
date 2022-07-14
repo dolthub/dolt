@@ -27,7 +27,7 @@ if [ -z "$MODE" ]; then
     exit 1
 fi
 
-echo "Setting from $FROM_SERVER: $FROM_VERSION"
+echo "Setting das from $FROM_SERVER: $FROM_VERSION"
 
 # use first 8 characters of TO_VERSION to differentiate
 # jobs
