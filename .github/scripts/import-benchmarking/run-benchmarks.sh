@@ -52,11 +52,15 @@ issuenumber=${ISSUE_NUMBER:-"-1"}
 source \
   "$TEMPLATE_SCRIPT" \
   "$jobname"         \
+  "$FROM_SERVER"     \
   "$FROM_VERSION"    \
+  "$TO_SERVER"       \
   "$TO_VERSION"      \
   "$timeprefix"      \
   "$actorprefix"     \
   "$issuenumber"      > job.json
+  "$issuenumber"     \
+  "$NOMS_BIN_FORMAT" > job.json
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
 

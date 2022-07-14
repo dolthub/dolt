@@ -33,11 +33,11 @@ import (
 
 // BenchmarkDoltImportJob returns a function that runs benchmarks for importing
 // a test dataset into Dolt
-func BenchmarkDoltImportJob(job *ImportBenchmarkJob, workingDir string) result {
+func BenchmarkDoltImportJob(job *ImportBenchmarkJob, workingDir, nbf string) result {
 	oldStdin := os.Stdin
 	defer func() { os.Stdin = oldStdin }()
 
-	setupAndInitializeDoltRepo(filesys.LocalFS, workingDir, job.ExecPath)
+	setupAndInitializeDoltRepo(filesys.LocalFS, workingDir, job.ExecPath, nbf)
 	defer RemoveDoltDataDir(filesys.LocalFS, workingDir) // remove the repo each time
 
 	commandStr, args := getBenchmarkingTools(job, workingDir)
@@ -59,7 +59,7 @@ func BenchmarkDoltImportJob(job *ImportBenchmarkJob, workingDir string) result {
 }
 
 // setupAndInitializeDoltRepo calls the `dolt init` command on the workingDir to create a new Dolt repository.
-func setupAndInitializeDoltRepo(fs filesys.Filesys, workingDir, doltExecPath string) {
+func setupAndInitializeDoltRepo(fs filesys.Filesys, workingDir, doltExecPath, nbf string) {
 	RemoveDoltDataDir(fs, workingDir)
 
 	err := sysbench_runner.DoltVersion(context.Background(), doltExecPath)
@@ -70,6 +70,13 @@ func setupAndInitializeDoltRepo(fs filesys.Filesys, workingDir, doltExecPath str
 	err = sysbench_runner.UpdateDoltConfig(context.Background(), doltExecPath)
 	if err != nil {
 		log.Fatal(err.Error())
+	}
+
+	if nbf != "" {
+		err = os.Setenv("DOLT_DEFAULT_BIN_FORMAT", nbf)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	init := execCommand(context.Background(), doltExecPath, "init")
