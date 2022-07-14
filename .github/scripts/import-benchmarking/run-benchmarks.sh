@@ -36,7 +36,7 @@ actorShort="$lowered-$short"
 # random sleep
 sleep 0.$[ ( $RANDOM % 10 )  + 1 ]s
 
-timesuffix=`date +%s%N`
+timesuffix=`date +%s`
 jobname="$actorShort-$timesuffix"
 
 timeprefix=$(date +%Y/%m/%d)
