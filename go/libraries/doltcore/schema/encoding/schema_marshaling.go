@@ -363,7 +363,7 @@ type schCacheData struct {
 }
 
 var schemaCacheMu *sync.Mutex = &sync.Mutex{}
-var unmarshalledSchemaCache = map[hash.Hash]schCacheData{}
+var unmarshalledSchemaCache = map[hash.Hash]schema.Schema{}
 
 // UnmarshalSchemaNomsValue takes a types.Value instance and Unmarshalls it into a Schema.
 func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, schemaVal types.Value) (schema.Schema, error) {
@@ -373,18 +373,11 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 	}
 
 	schemaCacheMu.Lock()
-	cachedData, ok := unmarshalledSchemaCache[h]
+	cached, ok := unmarshalledSchemaCache[h]
 	schemaCacheMu.Unlock()
 
 	if ok {
-		cachedSch := schema.SchemaFromColCollections(cachedData.all, cachedData.pk, cachedData.nonPK)
-		sd := cachedData.sd.Copy()
-		err := sd.addChecksIndexesAndPkOrderingToSchema(cachedSch)
-		if err != nil {
-			return nil, err
-		}
-
-		return cachedSch, nil
+		return cached, nil
 	}
 
 	var sd schemaData
@@ -417,15 +410,8 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 		return nil, err
 	}
 
-	d := schCacheData{
-		all:   sch.GetAllCols(),
-		pk:    sch.GetPKCols(),
-		nonPK: sch.GetNonPKCols(),
-		sd:    sd.Copy(),
-	}
-
 	schemaCacheMu.Lock()
-	unmarshalledSchemaCache[h] = d
+	unmarshalledSchemaCache[h] = sch
 	schemaCacheMu.Unlock()
 
 	return sch, nil
