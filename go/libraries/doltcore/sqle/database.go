@@ -1189,15 +1189,15 @@ func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) 
 //  aren't needed at initialization time and for most code paths.
 func getInitialDBStateForUserSpaceDb(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
 	return dsess.InitialDbState{
-		Db:          db,
-		DbData:      env.DbData{
+		Db: db,
+		DbData: env.DbData{
 			Rsw: noopRepoStateWriter{},
 		},
 	}, nil
 }
 
 // noopRepoStateWriter is a minimal implementation of RepoStateWriter that does nothing
-type noopRepoStateWriter struct {}
+type noopRepoStateWriter struct{}
 
 func (n noopRepoStateWriter) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
 	return nil
