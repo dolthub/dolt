@@ -39,7 +39,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -226,19 +225,6 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 // we set manually with the one at the working set of the HEAD being rebased.
 // Some functionality will not work on this kind of engine, e.g. many DOLT_ functions.
 func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*sql.Context, *engine.SqlEngine, error) {
-	sess := dsess.DefaultSession().NewDoltSession(config.NewMapConfig(make(map[string]string)))
-
-	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
-	err := sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = sqlCtx.SetSessionVariable(sqlCtx, dsess.TransactionsDisabledSysVar, true)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 	db := dsqle.NewDatabase(dbName, dEnv.DbData(), opts)
 
@@ -249,6 +235,19 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 
 	b := env.GetDefaultInitBranch(dEnv.Config)
 	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), db)
+
+	sess := dsess.DefaultSession(pro)
+
+	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
+	err = sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = sqlCtx.SetSessionVariable(sqlCtx, dsess.TransactionsDisabledSysVar, true)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	parallelism := runtime.GOMAXPROCS(0)
 	azr := analyzer.NewBuilder(pro).WithParallelism(parallelism).Build()
