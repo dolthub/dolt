@@ -332,7 +332,7 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 			}
 
 			var detail = fmt.Sprintf("the remote: %s %s '%s' should be in the format 'organization/repo'", opts.Remote.Name, opts.Remote.Url, path)
-			mr.Errhand(fmt.Sprintf("%w; %s; %s", actions.ErrFailedToGetRemoteDb, detail, err.Error()))
+			mr.Errhand(fmt.Sprintf("%s; %s; %s", actions.ErrFailedToGetRemoteDb, detail, err.Error()))
 		}
 		mr.Errhand(fmt.Sprintf("Failed to get remote database: %s", err.Error()))
 	}
