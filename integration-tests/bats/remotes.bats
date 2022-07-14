@@ -402,18 +402,15 @@ SQL
     dolt push test-remote main
 
     cd dolt-repo-clones/test-repo
-    echo "this text should remain after pull :p" > README.md
     run dolt pull
     [[ "$output" =~ "Updating" ]] || false
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "updated license" ]] || false
+    dolt docs read LICENSE.md > LICENSE.md
     run cat LICENSE.md
     [ "$status" -eq 0 ]
     [[ "$output" =~ "updated-license" ]] || false
-    run cat README.md
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "this text should remain after pull :p" ]] || false
 }
 
 @test "remotes: push and pull tags to/from remote" {
@@ -595,6 +592,8 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "LICENSE.md" ]] || false
     [[ ! "$output" =~ "README.md" ]] || false
+    dolt docs read LICENSE.md > LICENSE.md
+    dolt docs read README.md > README.md
     run ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "LICENSE.md" ]] || false
@@ -813,6 +812,8 @@ SQL
     cd "dolt-repo-clones"
     run dolt clone http://localhost:50051/test-org/test-repo
     cd test-repo
+    dolt docs read LICENSE.md > LICENSE.md
+    dolt docs read README.md > README.md
     run cat LICENSE.md
     [ "$status" -eq 0 ]
     [[ "$output" =~ "initial-license" ]] || false
