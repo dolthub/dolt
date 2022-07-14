@@ -181,6 +181,11 @@ func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Databa
 
 // GetInitialDBState returns the InitialDbState for |db|.
 func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
+	switch db := db.(type) {
+	case *UserSpaceDatabase:
+		return getInitialDBStateForUserSpaceDb(ctx, db)
+	}
+
 	rsr := db.DbData().Rsr
 	ddb := db.DbData().Ddb
 
@@ -1177,4 +1182,55 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 	return sess.GetAllTemporaryTables(ctx, db.Name())
+}
+
+// TODO: this is a hack to make user space DBs appear to the analyzer as full DBs with state etc., but the state is
+//  really skeletal. We need to reexamine the DB / session initialization to make this simpler -- most of these things
+//  aren't needed at initialization time and for most code paths.
+func getInitialDBStateForUserSpaceDb(ctx context.Context, db *UserSpaceDatabase) (dsess.InitialDbState, error) {
+	return dsess.InitialDbState{
+		Db:          db,
+		DbData:      env.DbData{
+			Rsw: noopRepoStateWriter{},
+		},
+	}, nil
+}
+
+// noopRepoStateWriter is a minimal implementation of RepoStateWriter that does nothing
+type noopRepoStateWriter struct {}
+
+func (n noopRepoStateWriter) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.MarshalableRef) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) RemoveRemote(ctx context.Context, name string) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) RemoveBackup(ctx context.Context, name string) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) TempTableFilesDir() string {
+	return ""
+}
+
+func (n noopRepoStateWriter) UpdateBranch(name string, new env.BranchConfig) error {
+	return nil
 }

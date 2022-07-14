@@ -923,7 +923,10 @@ func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	sessionState.readOnly, sessionState.readReplica = dbState.ReadOnly, dbState.ReadReplica
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
-	nbf := sessionState.dbData.Ddb.Format()
+	nbf := types.Format_Default
+	if sessionState.dbData.Ddb != nil {
+		nbf = sessionState.dbData.Ddb.Format()
+	}
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
 
 	stateProvider, ok := db.(globalstate.StateProvider)
