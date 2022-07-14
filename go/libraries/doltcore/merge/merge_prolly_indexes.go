@@ -105,36 +105,9 @@ type confVals struct {
 func mergeProllySecondaryIndexes(
 	ctx context.Context,
 	tm TableMerger,
-	postMergeSchema schema.Schema,
-	mergedData durable.Index,
-	finalTbl *doltdb.Table,
-	artEditor prolly.ArtifactsEditor,
-) (*doltdb.Table, error) {
-
-	mergedSet, err := mergeProllyIndexSets(
-		ctx,
-		tm,
-		postMergeSchema,
-		mergedData,
-		artEditor)
-	if err != nil {
-		return nil, err
-	}
-	updatedTbl, err := finalTbl.SetIndexSet(ctx, mergedSet)
-	if err != nil {
-		return nil, err
-	}
-	return updatedTbl, nil
-}
-
-// mergeProllyIndexSets merges the |root|, |merge|, and |anc| index sets based
-// on the provided |postMergeSchema|. It returns the merged index set.
-func mergeProllyIndexSets(
-	ctx context.Context,
-	tm TableMerger,
-	postMergeSchema schema.Schema,
-	mergedData durable.Index,
-	artEditor prolly.ArtifactsEditor,
+	finalSch schema.Schema,
+	finalRows durable.Index,
+	artifacts prolly.ArtifactsEditor,
 ) (durable.IndexSet, error) {
 
 	root, err := tm.left.GetIndexSet(ctx)
@@ -151,7 +124,7 @@ func mergeProllyIndexSets(
 	}
 	mergedIndexSet := durable.NewIndexSet(ctx, tm.vrw, tm.ns)
 
-	mergedM := durable.ProllyMapFromIndex(mergedData)
+	mergedM := durable.ProllyMapFromIndex(finalRows)
 
 	tryGetIdx := func(sch schema.Schema, iS durable.IndexSet, indexName string) (prolly.Map, bool, error) {
 		ok := sch.Indexes().Contains(indexName)
@@ -171,7 +144,7 @@ func mergeProllyIndexSets(
 
 	// Based on the indexes in the post merge schema, merge the root, merge,
 	// and ancestor indexes.
-	for _, index := range postMergeSchema.Indexes().AllIndexes() {
+	for _, index := range finalSch.Indexes().AllIndexes() {
 
 		rootI, rootOK, err := tryGetIdx(tm.leftSch, root, index.Name())
 		if err != nil {
@@ -188,11 +161,11 @@ func mergeProllyIndexSets(
 
 		mergedIndex, err := func() (durable.Index, error) {
 			if !rootOK || !mergeOK || !ancOK {
-				return buildIndex(ctx, tm.vrw, tm.ns, postMergeSchema, index, mergedM, artEditor, tm.rightSrc, tm.name)
+				return buildIndex(ctx, tm.vrw, tm.ns, finalSch, index, mergedM, artifacts, tm.rightSrc, tm.name)
 			}
 
 			if index.IsUnique() {
-				err = addUniqIdxViols(ctx, postMergeSchema, index, rootI, mergeI, ancI, mergedM, artEditor, tm.rightSrc, tm.name)
+				err = addUniqIdxViols(ctx, finalSch, index, rootI, mergeI, ancI, mergedM, artifacts, tm.rightSrc, tm.name)
 				if err != nil {
 					return nil, err
 				}
