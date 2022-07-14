@@ -1941,3 +1941,39 @@ setup_ref_test() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Fast-forward" ]] || false
 }
+
+@test "remotes: dolt_clone procedure" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push origin main
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+
+    cd ..
+    
+    run dolt sql <<SQL
+call dolt_clone('file://./remote', 'repo2');
+use repo2;
+create table new_table(a int primary key);
+insert into new_table values (1), (2);
+SQL
+    [ "$status" -eq 0 ]
+
+    cd repo2
+    dolt commit -am "a commit for main from repo2"
+    dolt push origin main
+    
+    run dolt branch
+    [[ ! "$output" =~ "other" ]] || false
+
+    run dolt checkout other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "branch 'other' set up to track 'origin/other'." ]] || false
+
+    run dolt status
+    [[ "$output" =~ "Your branch is up to date with 'origin/other'." ]] || false
+}
