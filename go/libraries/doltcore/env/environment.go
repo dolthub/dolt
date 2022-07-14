@@ -1026,7 +1026,7 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 		}
 	}
 
-	dEnv.RepoState.RemoveBackup(remote)
+	dEnv.RepoState.RemoveRemote(remote)
 	err = dEnv.RepoState.Save(dEnv.FS)
 	if err != nil {
 		return ErrFailedToWriteRepoState
