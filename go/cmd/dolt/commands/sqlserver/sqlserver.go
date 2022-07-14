@@ -316,7 +316,7 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		}
 		cfgDirPath = cfgDir
 	} else if dataDirSpecified {
-		path := filepath.Join(dataDir, cfgDir)
+		path := filepath.Join(dataDir, commands.DefaultCfgDirName)
 		if exists, _ := dEnv.FS.Exists(path); !exists {
 			if err := dEnv.FS.MkDirs(path); err != nil {
 				return nil, err
