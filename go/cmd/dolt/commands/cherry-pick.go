@@ -189,35 +189,41 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 	if err != nil {
 		return nil, "", err
 	}
-	cherryCommit, err := dEnv.DoltDB.Resolve(ctx, cherrySpec, dEnv.RepoStateReader().CWBHeadRef())
+	cherryCm, err := dEnv.DoltDB.Resolve(ctx, cherrySpec, dEnv.RepoStateReader().CWBHeadRef())
 	if err != nil {
 		return nil, "", err
 	}
 
-	cherryCM, err := cherryCommit.GetCommitMeta(ctx)
+	if len(cherryCm.DatasParents()) > 1 {
+		return nil, "", errhand.BuildDError("cherry-picking a merge commit is not supported.").Build()
+	}
+	if len(cherryCm.DatasParents()) == 0 {
+		return nil, "", errhand.BuildDError("cherry-picking a commit without parents is not supported.").Build()
+	}
+
+	cherryCM, err := cherryCm.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, "", err
 	}
 	commitMsg := cherryCM.Description
 
-	fromRoot, toRoot, err := getParentAndCherryRoots(ctx, dEnv.DoltDB, cherryCommit)
-	if err != nil {
-		return nil, "", errhand.BuildDError("failed to get cherry-picked commit and its parent commit").AddCause(err).Build()
-	}
-
-	// todo(andy): these should be commit hashes
-	fromHash, err := fromRoot.HashOf()
+	cherryRoot, err := cherryCm.GetRootValue(ctx)
 	if err != nil {
 		return nil, "", err
 	}
-	toHash, err := toRoot.HashOf()
+
+	parentCm, err := dEnv.DoltDB.ResolveParent(ctx, cherryCm, 0)
+	if err != nil {
+		return nil, "", err
+	}
+	parentRoot, err := parentCm.GetRootValue(ctx)
 	if err != nil {
 		return nil, "", err
 	}
 
 	// use parent of cherry-pick as ancestor to merge
 	mo := merge.MergeOpts{IsCherryPick: true}
-	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, workingRoot, toRoot, fromRoot, toHash, fromHash, opts, mo)
+	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, workingRoot, cherryRoot, parentRoot, cherryCm, parentCm, opts, mo)
 	if err != nil {
 		return nil, "", err
 	}
@@ -235,30 +241,4 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 	}
 
 	return mergedRoot, commitMsg, nil
-}
-
-// getParentAndCherryRoots return root values of parent commit of cherry-picked commit and cherry-picked commit itself.
-func getParentAndCherryRoots(ctx context.Context, ddb *doltdb.DoltDB, cherryCommit *doltdb.Commit) (*doltdb.RootValue, *doltdb.RootValue, error) {
-	if len(cherryCommit.DatasParents()) > 1 {
-		return nil, nil, errhand.BuildDError("cherry-picking a merge commit is not supported.").Build()
-	}
-	if len(cherryCommit.DatasParents()) == 0 {
-		return nil, nil, errhand.BuildDError("cherry-picking a commit without parents is not supported.").Build()
-	}
-
-	cherryRoot, err := cherryCommit.GetRootValue(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	parentCM, err := ddb.ResolveParent(ctx, cherryCommit, 0)
-	if err != nil {
-		return nil, nil, err
-	}
-	parentRoot, err := parentCM.GetRootValue(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return parentRoot, cherryRoot, nil
 }

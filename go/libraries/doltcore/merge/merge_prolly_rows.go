@@ -112,7 +112,7 @@ func mergeTableData(ctx context.Context, tm TableMerger, mergeSch schema.Schema,
 	if can, err := isNewConflictsCompatible(ctx, tm.left, tm.name, tm.ancSch, tm.leftSch, tm.rightSch); err != nil {
 		return nil, nil, err
 	} else if can {
-		p, err = newInsertingProcessor(tm.rightCommitHash, tm.ancestorCommitHash)
+		p, err = newInsertingProcessor(tm.rightSrc, tm.ancestorSrc)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -148,7 +148,7 @@ func mergeTableData(ctx context.Context, tm TableMerger, mergeSch schema.Schema,
 		tm.left, tm.right, finalTbl,
 		ancIndexSet,
 		artifactEditor,
-		tm.rightCommitHash,
+		tm.rightSrc,
 		tm.name)
 	if err != nil {
 		return nil, nil, err
@@ -451,16 +451,26 @@ type insertingProcessor struct {
 	jsonMetaData []byte
 }
 
-func newInsertingProcessor(theirRootIsh, baseRootIsh hash.Hash) (*insertingProcessor, error) {
+func newInsertingProcessor(theirRootIsh, baseRootIsh doltdb.Rootish) (*insertingProcessor, error) {
+	theirHash, err := theirRootIsh.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	baseHash, err := baseRootIsh.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
 	m := prolly.ConflictMetadata{
-		BaseRootIsh: baseRootIsh,
+		BaseRootIsh: baseHash,
 	}
 	data, err := json.Marshal(m)
 	if err != nil {
 		return nil, err
 	}
 	p := insertingProcessor{
-		theirRootIsh: theirRootIsh,
+		theirRootIsh: theirHash,
 		jsonMetaData: data,
 	}
 	return &p, nil

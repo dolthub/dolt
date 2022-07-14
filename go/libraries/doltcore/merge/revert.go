@@ -59,11 +59,6 @@ func Revert(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, hea
 		}
 		revertMessage = fmt.Sprintf(`%s "%s"`, revertMessage, baseMeta.Description)
 
-		baseCmHash, err := baseRoot.HashOf()
-		if err != nil {
-			return nil, "", err
-		}
-
 		parentCM, err := ddb.ResolveParent(ctx, baseCommit, 0)
 		if err != nil {
 			return nil, "", err
@@ -72,12 +67,8 @@ func Revert(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, hea
 		if err != nil {
 			return nil, "", err
 		}
-		theirCmHash, err := parentCM.HashOf()
-		if err != nil {
-			return nil, "", err
-		}
 
-		root, _, err = MergeRoots(ctx, root, theirRoot, baseRoot, theirCmHash, baseCmHash, opts, MergeOpts{IsCherryPick: false})
+		root, _, err = MergeRoots(ctx, root, theirRoot, baseRoot, parentCM, baseCommit, opts, MergeOpts{IsCherryPick: false})
 		if err != nil {
 			return nil, "", err
 		}

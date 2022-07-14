@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -112,7 +111,7 @@ func mergeProllySecondaryIndexes(
 	tbl, mergeTbl, tableToUpdate *doltdb.Table,
 	ancSet durable.IndexSet,
 	artEditor prolly.ArtifactsEditor,
-	theirRootIsh hash.Hash,
+	theirRootish doltdb.Rootish,
 	tblName string) (*doltdb.Table, error) {
 
 	rootSet, err := tbl.GetIndexSet(ctx)
@@ -131,7 +130,7 @@ func mergeProllySecondaryIndexes(
 		mergedData,
 		rootSet, mergeSet, ancSet,
 		artEditor,
-		theirRootIsh,
+		theirRootish,
 		tblName)
 	if err != nil {
 		return nil, err
@@ -153,7 +152,7 @@ func mergeProllyIndexSets(
 	mergedData durable.Index,
 	root, merge, anc durable.IndexSet,
 	artEditor prolly.ArtifactsEditor,
-	theirRootIsh hash.Hash,
+	theirRootish doltdb.Rootish,
 	tblName string) (durable.IndexSet, error) {
 	mergedIndexSet := durable.NewIndexSet(ctx, vrw, ns)
 
@@ -194,11 +193,11 @@ func mergeProllyIndexSets(
 
 		mergedIndex, err := func() (durable.Index, error) {
 			if !rootOK || !mergeOK || !ancOK {
-				return buildIndex(ctx, vrw, ns, postMergeSchema, index, mergedM, artEditor, theirRootIsh, tblName)
+				return buildIndex(ctx, vrw, ns, postMergeSchema, index, mergedM, artEditor, theirRootish, tblName)
 			}
 
 			if index.IsUnique() {
-				err = addUniqIdxViols(ctx, postMergeSchema, index, rootI, mergeI, ancI, mergedM, artEditor, theirRootIsh, tblName)
+				err = addUniqIdxViols(ctx, postMergeSchema, index, rootI, mergeI, ancI, mergedM, artEditor, theirRootish, tblName)
 				if err != nil {
 					return nil, err
 				}
@@ -235,7 +234,7 @@ func mergeProllyIndexSets(
 	return mergedIndexSet, nil
 }
 
-func buildIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, postMergeSchema schema.Schema, index schema.Index, m prolly.Map, artEditor prolly.ArtifactsEditor, theirRootIsh hash.Hash, tblName string) (durable.Index, error) {
+func buildIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, postMergeSchema schema.Schema, index schema.Index, m prolly.Map, artEditor prolly.ArtifactsEditor, theirRootIsh doltdb.Rootish, tblName string) (durable.Index, error) {
 	if index.IsUnique() {
 		meta, err := makeUniqViolMeta(postMergeSchema, index)
 		if err != nil {

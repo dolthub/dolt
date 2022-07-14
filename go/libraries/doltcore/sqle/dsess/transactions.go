@@ -266,25 +266,14 @@ func (tx *DoltTransaction) mergeRoots(
 	existingWorkingRoot *doltdb.WorkingSet,
 	workingSet *doltdb.WorkingSet,
 ) (*doltdb.WorkingSet, error) {
-
-	theirH, err := workingSet.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	baseH, err := tx.startState.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
 	mo := merge.MergeOpts{IsCherryPick: false}
 	mergedRoot, _, err := merge.MergeRoots(
 		ctx,
 		existingWorkingRoot.WorkingRoot(),
 		workingSet.WorkingRoot(),
 		tx.startState.WorkingRoot(),
-		theirH,
-		baseH,
+		workingSet,
+		tx.startState,
 		tx.mergeEditOpts, mo)
 	if err != nil {
 		return nil, err

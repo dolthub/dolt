@@ -47,8 +47,8 @@ type TableMerger struct {
 	rightSch schema.Schema
 	ancSch   schema.Schema
 
-	rightCommitHash    hash.Hash
-	ancestorCommitHash hash.Hash
+	rightSrc    doltdb.Rootish
+	ancestorSrc doltdb.Rootish
 
 	vrw types.ValueReadWriter
 	ns  tree.NodeStore
@@ -78,8 +78,8 @@ type RootMerger struct {
 	right *doltdb.RootValue
 	anc   *doltdb.RootValue
 
-	rightCommitHash hash.Hash
-	ancCommitHash   hash.Hash
+	rightSrc doltdb.Rootish
+	ancSrc   doltdb.Rootish
 
 	vrw types.ValueReadWriter
 	ns  tree.NodeStore
@@ -88,18 +88,18 @@ type RootMerger struct {
 // NewMerger creates a new merger utility object.
 func NewMerger(
 	left, right, anc *doltdb.RootValue,
-	rightCmHash, ancCmHash hash.Hash,
+	rightSrc, ancestorSrc doltdb.Rootish,
 	vrw types.ValueReadWriter,
 	ns tree.NodeStore,
 ) (*RootMerger, error) {
 	return &RootMerger{
-		left:            left,
-		right:           right,
-		anc:             anc,
-		rightCommitHash: rightCmHash,
-		ancCommitHash:   ancCmHash,
-		vrw:             vrw,
-		ns:              ns,
+		left:     left,
+		right:    right,
+		anc:      anc,
+		rightSrc: rightSrc,
+		ancSrc:   ancestorSrc,
+		vrw:      vrw,
+		ns:       ns,
 	}, nil
 }
 
@@ -221,11 +221,11 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 
 func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (TableMerger, error) {
 	tm := TableMerger{
-		name:               tblName,
-		rightCommitHash:    rm.rightCommitHash,
-		ancestorCommitHash: rm.ancCommitHash,
-		vrw:                rm.vrw,
-		ns:                 rm.ns,
+		name:        tblName,
+		rightSrc:    rm.rightSrc,
+		ancestorSrc: rm.ancSrc,
+		vrw:         rm.vrw,
+		ns:          rm.ns,
 	}
 
 	var ok bool

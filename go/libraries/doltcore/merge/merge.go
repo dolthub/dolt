@@ -64,17 +64,7 @@ func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit, opts 
 		return nil, nil, err
 	}
 
-	theirCommitHash, err := mergeCommit.HashOf()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	ancCommitHash, err := ancCommit.HashOf()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return MergeRoots(ctx, ourRoot, theirRoot, ancRoot, theirCommitHash, ancCommitHash, opts, MergeOpts{IsCherryPick: false})
+	return MergeRoots(ctx, ourRoot, theirRoot, ancRoot, mergeCommit, ancCommit, opts, MergeOpts{IsCherryPick: false})
 }
 
 // MergeRoots three-way merges |ourRoot|, |theirRoot|, and |ancRoot| and returns
@@ -93,7 +83,7 @@ func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit, opts 
 func MergeRoots(
 	ctx context.Context,
 	ourRoot, theirRoot, ancRoot *doltdb.RootValue,
-	theirCommitHash, ancCommitHash hash.Hash,
+	theirs, ancestor doltdb.Rootish,
 	opts editor.Options,
 	mergeOpts MergeOpts,
 ) (*doltdb.RootValue, map[string]*MergeStats, error) {
@@ -133,7 +123,7 @@ func MergeRoots(
 	// Merge tables one at a time. This is done based on name. With table names from ourRoot being merged first,
 	// renaming a table will return delete/modify conflict error consistently.
 	// TODO: merge based on a more durable table identity that persists across renames
-	merger, err := NewMerger(ourRoot, theirRoot, ancRoot, theirCommitHash, ancCommitHash, ourRoot.VRW(), ourRoot.NodeStore())
+	merger, err := NewMerger(ourRoot, theirRoot, ancRoot, theirs, ancestor, ourRoot.VRW(), ourRoot.NodeStore())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -195,7 +185,12 @@ func MergeRoots(
 		return nil, nil, err
 	}
 
-	mergedRoot, _, err = AddForeignKeyViolations(ctx, mergedRoot, ancRoot, nil, merger.rightCommitHash)
+	h, err := merger.rightSrc.HashOf()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergedRoot, _, err = AddForeignKeyViolations(ctx, mergedRoot, ancRoot, nil, h)
 	if err != nil {
 		return nil, nil, err
 	}

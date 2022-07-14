@@ -58,6 +58,7 @@ const (
 )
 
 // AddForeignKeyViolations adds foreign key constraint violations to each table.
+// todo(andy): pass doltdb.Rootish
 func AddForeignKeyViolations(ctx context.Context, newRoot, baseRoot *doltdb.RootValue, tables *set.StrSet, theirRootIsh hash.Hash) (*doltdb.RootValue, *set.StrSet, error) {
 	fkColl, err := newRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
