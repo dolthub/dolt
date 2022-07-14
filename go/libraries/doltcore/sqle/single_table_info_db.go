@@ -21,8 +21,10 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 // SingleTableInfoDatabase is intended to allow a sole schema to make use of any display functionality in `go-mysql-server`.
@@ -37,6 +39,7 @@ type SingleTableInfoDatabase struct {
 }
 
 var _ doltReadOnlyTableInterface = (*SingleTableInfoDatabase)(nil)
+var _ SqlDatabase = (*SingleTableInfoDatabase)(nil)
 
 func NewSingleTableDatabase(tableName string, sch schema.Schema, foreignKeys []doltdb.ForeignKey, parentSchs map[string]schema.Schema) *SingleTableInfoDatabase {
 	return &SingleTableInfoDatabase{
@@ -208,6 +211,26 @@ func (db *SingleTableInfoDatabase) PrimaryKeySchema() sql.PrimaryKeySchema {
 	if err != nil {
 	}
 	return sqlSch
+}
+
+func (db *SingleTableInfoDatabase) GetRoot(context *sql.Context) (*doltdb.RootValue, error) {
+	return nil, nil
+}
+
+func (db *SingleTableInfoDatabase) DbData() env.DbData {
+	panic("SingleTableInfoDatabase doesn't have DbData")
+}
+
+func (db *SingleTableInfoDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
+	panic("SingleTableInfoDatabase cannot start transaction")
+}
+
+func (db *SingleTableInfoDatabase) Flush(context *sql.Context) error {
+	panic("SingleTableInfoDatabase cannot Flush")
+}
+
+func (db *SingleTableInfoDatabase) EditOptions() editor.Options {
+	return editor.Options{}
 }
 
 // fmtIndex is used for CREATE TABLE statements only.

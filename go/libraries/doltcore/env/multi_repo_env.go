@@ -17,7 +17,6 @@ package env
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,9 +43,10 @@ type EnvNameAndPath struct {
 
 // MultiRepoEnv is a type used to store multiple environments which can be retrieved by name
 type MultiRepoEnv struct {
-	envs []NamedEnv
-	fs   filesys.Filesys
-	cfg  config.ReadWriteConfig
+	envs           []NamedEnv
+	fs             filesys.Filesys
+	cfg            config.ReadWriteConfig
+	ignoreLockFile bool
 }
 
 type NamedEnv struct {
@@ -140,6 +140,10 @@ func (mrEnv *MultiRepoEnv) GetWorkingRoots(ctx context.Context) (map[string]*dol
 
 // IsLocked returns true if any env is locked
 func (mrEnv *MultiRepoEnv) IsLocked() (bool, string) {
+	if mrEnv.ignoreLockFile {
+		return false, ""
+	}
+
 	for _, e := range mrEnv.envs {
 		if e.env.IsLocked() {
 			return true, e.env.LockFile()
@@ -151,6 +155,10 @@ func (mrEnv *MultiRepoEnv) IsLocked() (bool, string) {
 // Lock locks all child envs. If an error is returned, all
 // child envs will be returned with their initial lock state.
 func (mrEnv *MultiRepoEnv) Lock() error {
+	if mrEnv.ignoreLockFile {
+		return nil
+	}
+
 	if ok, f := mrEnv.IsLocked(); ok {
 		return ErrActiveServerLock.New(f)
 	}
@@ -168,6 +176,10 @@ func (mrEnv *MultiRepoEnv) Lock() error {
 
 // Unlock unlocks all child envs.
 func (mrEnv *MultiRepoEnv) Unlock() error {
+	if mrEnv.ignoreLockFile {
+		return nil
+	}
+
 	var err, retErr error
 	for _, e := range mrEnv.envs {
 		err = e.env.Unlock()
@@ -217,47 +229,39 @@ func getRepoRootDir(path, pathSeparator string) string {
 // MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given
 func MultiEnvForDirectory(
 	ctx context.Context,
+	config config.ReadWriteConfig,
 	fs filesys.Filesys,
-	dEnv *DoltEnv,
+	version string,
+	ignoreLockFile bool,
+	oldDEnv *DoltEnv, // TODO: eventually get rid of this
 ) (*MultiRepoEnv, error) {
 	mrEnv := &MultiRepoEnv{
-		envs: make([]NamedEnv, 0),
-		fs:   fs,
-		cfg:  dEnv.Config.WriteableConfig(),
+		envs:           make([]NamedEnv, 0),
+		fs:             fs,
+		cfg:            config,
+		ignoreLockFile: ignoreLockFile,
 	}
 
-	if dEnv.Valid() && fs == dEnv.FS {
-		dbName := "dolt"
-		if dEnv.RSLoadErr != nil {
-			return nil, fmt.Errorf("error loading environment: %s", dEnv.RSLoadErr.Error())
-		} else if dEnv.DBLoadError != nil {
-			return nil, fmt.Errorf("error loading environment: %s", dEnv.DBLoadError.Error())
-		} else if dEnv.CfgLoadErr != nil {
-			return nil, fmt.Errorf("error loading environment: %s", dEnv.CfgLoadErr.Error())
-		}
-		u, err := earl.Parse(dEnv.urlStr)
+	// Load current fs and put into mr env
+	var dEnv *DoltEnv
+	var dbName string
+	// Only directly copy the oldDEnv for in-memory filesystems; something is wrong with loading them
+	if _, ok := fs.(*filesys.InMemFS); ok {
+		dbName = "dolt"
+		dEnv = oldDEnv
+	} else {
+		path, err := fs.Abs("")
 		if err != nil {
 			return nil, err
 		}
+		envName := getRepoRootDir(path, string(os.PathSeparator))
+		dbName = dirToDBName(envName)
+		dEnv = oldDEnv
+		// TODO: idk how or why, but this breaks docs.bats
+		//dEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
+	}
 
-		if u.Scheme == dbfactory.FileScheme {
-			path, err := url.PathUnescape(u.Path)
-			if err != nil {
-				return nil, err
-			}
-
-			path, err = dEnv.FS.Abs(path)
-			if err != nil {
-				return nil, err
-			}
-
-			dirName := getRepoRootDir(path, string(os.PathSeparator))
-
-			if dirName != "" {
-				dbName = dirToDBName(dirName)
-			}
-		}
-
+	if dEnv.Valid() {
 		mrEnv.AddEnv(dbName, dEnv)
 	}
 
@@ -293,6 +297,7 @@ func MultiEnvForPaths(
 	cfg config.ReadWriteConfig,
 	fs filesys.Filesys,
 	version string,
+	ignoreLockFile bool,
 	envNamesAndPaths ...EnvNameAndPath,
 ) (*MultiRepoEnv, error) {
 	nameToPath := make(map[string]string)
@@ -311,9 +316,10 @@ func MultiEnvForPaths(
 	}
 
 	mrEnv := &MultiRepoEnv{
-		envs: make([]NamedEnv, 0),
-		fs:   fs,
-		cfg:  cfg,
+		envs:           make([]NamedEnv, 0),
+		fs:             fs,
+		cfg:            cfg,
+		ignoreLockFile: ignoreLockFile,
 	}
 
 	for name, path := range nameToPath {

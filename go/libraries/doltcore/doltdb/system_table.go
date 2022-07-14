@@ -121,6 +121,7 @@ var writeableSystemTables = []string{
 	DoltQueryCatalogTableName,
 	SchemasTableName,
 	ProceduresTableName,
+	DocTableName,
 }
 
 var persistedSystemTables = []string{

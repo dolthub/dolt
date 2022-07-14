@@ -104,14 +104,31 @@ func TestMultiEnvForDirectory(t *testing.T) {
 	envPath := filepath.Join(rootPath, " test---name _ 123")
 	dEnv := initRepoWithRelativePath(t, envPath, hdp)
 
-	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.FS, dEnv)
+	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	require.NoError(t, err)
 	assert.Len(t, mrEnv.envs, 1)
 
-	for _, e := range mrEnv.envs {
-		assert.Equal(t, "test_name_123", e.name)
-		assert.Equal(t, dEnv, e.env)
+	type envCmp struct {
+		name    string
+		doltDir string
 	}
+
+	expected := []envCmp{
+		{
+			name:    "test_name_123",
+			doltDir: dEnv.GetDoltDir(),
+		},
+	}
+
+	var actual []envCmp
+	for _, env := range mrEnv.envs {
+		actual = append(actual, envCmp{
+			name:    env.name,
+			doltDir: env.env.GetDoltDir(),
+		})
+	}
+
+	assert.Equal(t, expected, actual)
 }
 
 func TestMultiEnvForDirectoryWithMultipleRepos(t *testing.T) {
@@ -124,7 +141,7 @@ func TestMultiEnvForDirectoryWithMultipleRepos(t *testing.T) {
 	subEnv1 := initRepoWithRelativePath(t, filepath.Join(envPath, "abc"), hdp)
 	subEnv2 := initRepoWithRelativePath(t, filepath.Join(envPath, "def"), hdp)
 
-	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.FS, dEnv)
+	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	require.NoError(t, err)
 	assert.Len(t, mrEnv.envs, 3)
 
@@ -183,7 +200,7 @@ func TestLoadMultiEnv(t *testing.T) {
 		envNamesAndPaths[i] = EnvNameAndPath{name, filepath.Join(rootPath, name)}
 	}
 
-	mrEnv, err := MultiEnvForPaths(context.Background(), hdp, config.NewEmptyMapConfig(), filesys.LocalFS, "test", envNamesAndPaths...)
+	mrEnv, err := MultiEnvForPaths(context.Background(), hdp, config.NewEmptyMapConfig(), filesys.LocalFS, "test", false, envNamesAndPaths...)
 	require.NoError(t, err)
 
 	for _, name := range names {

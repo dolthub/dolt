@@ -181,6 +181,11 @@ func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Databa
 
 // GetInitialDBState returns the InitialDbState for |db|.
 func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
+	switch db := db.(type) {
+	case *UserSpaceDatabase, *SingleTableInfoDatabase:
+		return getInitialDBStateForUserSpaceDb(ctx, db)
+	}
+
 	rsr := db.DbData().Rsr
 	ddb := db.DbData().Ddb
 
@@ -282,12 +287,16 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 		return nil, false, err
 	}
 
-	head, err := ds.GetHeadCommit(ctx, db.Name())
+	tbl, ok, err := db.getTableInsensitive(ctx, nil, ds, root, tblName)
 	if err != nil {
 		return nil, false, err
 	}
 
-	return db.getTableInsensitive(ctx, head, root, tblName)
+	if !ok {
+		return nil, false, nil
+	}
+
+	return tbl, true, nil
 }
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
@@ -299,7 +308,9 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 		return nil, false, nil
 	}
 
-	table, ok, err := db.getTableInsensitive(ctx, head, root, tableName)
+	sess := dsess.DSessFromSess(ctx.Session)
+
+	table, ok, err := db.getTableInsensitive(ctx, head, sess, root, tableName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -337,13 +348,21 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 	}
 }
 
-func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, root *doltdb.RootValue, tblName string) (sql.Table, bool, error) {
+func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root *doltdb.RootValue, tblName string) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 
 	// TODO: these tables that cache a root value at construction time should not, they need to get it from the session
 	//  at runtime
 	switch {
 	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.Name())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
 		suffix := tblName[len(doltdb.DoltDiffTablePrefix):]
 		dt, err := dtables.NewDiffTable(ctx, suffix, db.ddb, root, head)
 		if err != nil {
@@ -368,6 +387,15 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ro
 		if !ok {
 			return nil, false, nil
 		}
+
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.Name())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
 		return NewHistoryTable(baseTable.(*AlterableDoltTable).DoltTable, db.ddb, head), true, nil
 
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
@@ -391,8 +419,24 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ro
 	found := false
 	switch lwrName {
 	case doltdb.LogTableName:
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.Name())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
 		dt, found = dtables.NewLogTable(ctx, db.ddb, head), true
 	case doltdb.DiffTableName:
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.Name())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
 		dt, found = dtables.NewUnscopedDiffTable(ctx, db.ddb, head), true
 	case doltdb.TableOfTablesInConflictName:
 		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.name, db.ddb), true
@@ -409,7 +453,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ro
 	case doltdb.StatusTableName:
 		sess := dsess.DSessFromSess(ctx.Session)
 		adapter := dsess.NewSessionStateAdapter(
-			sess.Session, db.name,
+			sess, db.name,
 			map[string]env.Remote{},
 			map[string]env.BranchConfig{},
 			map[string]env.Remote{})
@@ -498,6 +542,7 @@ func resolveAsOfCommitRef(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef
 	}
 
 	cs, err := doltdb.NewCommitSpec(commitRef)
+
 	if err != nil {
 		return nil, nil, err
 	}
@@ -531,15 +576,33 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 	return filterDoltInternalTables(tblNames), nil
 }
 
-// getTable gets the table with the exact name given at the root value given. The database caches tables for all root
-// values to avoid doing schema lookups on every table lookup, which are expensive.
+// getTable returns the user table with the given name from the root given
 func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName string) (sql.Table, bool, error) {
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbState, ok, err := sess.LookupDbState(ctx, db.name)
+	if err != nil {
+		return nil, false, err
+	}
+	if !ok {
+		return nil, false, fmt.Errorf("no state for database %s", db.name)
+	}
+
+	key, err := doltdb.NewDataCacheKey(root)
+	if err != nil {
+		return nil, false, err
+	}
+
+	cachedTable, ok := dbState.SessionCache().GetCachedTable(key, tableName)
+	if ok {
+		return cachedTable, true, nil
+	}
+
 	tableNames, err := getAllTableNames(ctx, root)
 	if err != nil {
 		return nil, true, err
 	}
 
-	tableName, ok := sql.GetTableNameInsensitive(tableName, tableNames)
+	tableName, ok = sql.GetTableNameInsensitive(tableName, tableNames)
 	if !ok {
 		return nil, false, nil
 	}
@@ -570,6 +633,8 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 	} else {
 		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable, db: db}}
 	}
+
+	dbState.SessionCache().CacheTable(key, tableName, table)
 
 	return table, true, nil
 }
@@ -875,11 +940,28 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 		return view, true, nil
 	}
 
+	key, err := doltdb.NewDataCacheKey(root)
+	if err != nil {
+		return "", false, err
+	}
+
+	ds := dsess.DSessFromSess(ctx.Session)
+	dbState, _, err := ds.LookupDbState(ctx, db.name)
+	if err != nil {
+		return "", false, err
+	}
+
+	if dbState.SessionCache().ViewsCached(key) {
+		view, ok := dbState.SessionCache().GetCachedView(key, viewName)
+		return view, ok, nil
+	}
+
 	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return "", false, err
 	}
 	if !ok {
+		dbState.SessionCache().CacheViews(key, nil, nil)
 		return "", false, nil
 	}
 
@@ -888,13 +970,23 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 		return "", false, err
 	}
 
-	for _, fragment := range fragments {
+	found := false
+	viewDef := ""
+	viewNames := make([]string, len(fragments))
+	viewDefs := make([]string, len(fragments))
+	for i, fragment := range fragments {
 		if strings.ToLower(fragment.name) == strings.ToLower(viewName) {
-			return fragment.fragment, true, nil
+			found = true
+			viewDef = fragments[i].fragment
 		}
+
+		viewNames[i] = fragments[i].name
+		viewDefs[i] = fragments[i].fragment
 	}
 
-	return "", false, nil
+	dbState.SessionCache().CacheViews(key, viewNames, viewDefs)
+
+	return viewDef, found, nil
 }
 
 // AllViews implements sql.ViewDatabase
@@ -1090,4 +1182,55 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 	return sess.GetAllTemporaryTables(ctx, db.Name())
+}
+
+// TODO: this is a hack to make user space DBs appear to the analyzer as full DBs with state etc., but the state is
+//  really skeletal. We need to reexamine the DB / session initialization to make this simpler -- most of these things
+//  aren't needed at initialization time and for most code paths.
+func getInitialDBStateForUserSpaceDb(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
+	return dsess.InitialDbState{
+		Db: db,
+		DbData: env.DbData{
+			Rsw: noopRepoStateWriter{},
+		},
+	}, nil
+}
+
+// noopRepoStateWriter is a minimal implementation of RepoStateWriter that does nothing
+type noopRepoStateWriter struct{}
+
+func (n noopRepoStateWriter) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.MarshalableRef) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) RemoveRemote(ctx context.Context, name string) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) RemoveBackup(ctx context.Context, name string) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) TempTableFilesDir() string {
+	return ""
+}
+
+func (n noopRepoStateWriter) UpdateBranch(name string, new env.BranchConfig) error {
+	return nil
 }

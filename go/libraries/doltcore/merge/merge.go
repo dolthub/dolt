@@ -55,20 +55,8 @@ var ErrConflictsIncompatible = errors.New("the existing conflicts are of a diffe
 var ErrMultipleViolationsForRow = errors.New("multiple violations for row not supported")
 
 type MergeOpts struct {
-	ConflictStrategy ConflictStompStrategy
-	IsCherryPick     bool
+	IsCherryPick bool
 }
-
-type ConflictStompStrategy int
-
-const (
-	// ConflictStompStrategyNone does not stomp conflicts
-	ConflictStompStrategyNone ConflictStompStrategy = iota
-	// ConflictStompStrategyPickOurs picks the value of ours
-	ConflictStompStrategyPickOurs
-	// ConflictStompStrategyPickTheirs picks the value of theirs
-	ConflictStompStrategyPickTheirs
-)
 
 type Merger struct {
 	theirRootIsh hash.Hash
@@ -233,8 +221,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 			ancRows,
 			ancIndexSet,
 			merger.theirRootIsh,
-			merger.ancRootIsh,
-			mergeOpts.ConflictStrategy)
+			merger.ancRootIsh)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -286,7 +273,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 		return nil, nil, err
 	}
 
-	resultTbl, cons, stats, err := mergeNomsTableData(ctx, merger.vrw, tblName, postMergeSchema, rows, mergeRows, durable.NomsMapFromIndex(ancRows), updatedTblEditor, mergeOpts.ConflictStrategy)
+	resultTbl, cons, stats, err := mergeNomsTableData(ctx, merger.vrw, tblName, postMergeSchema, rows, mergeRows, durable.NomsMapFromIndex(ancRows), updatedTblEditor)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -425,7 +412,7 @@ func mergeNomsTableData(
 	sch schema.Schema,
 	rows, mergeRows, ancRows types.Map,
 	tblEdit editor.TableEditor,
-	strategy ConflictStompStrategy) (*doltdb.Table, types.Map, *MergeStats, error) {
+) (*doltdb.Table, types.Map, *MergeStats, error) {
 	var rowMerge rowMerger
 	var applyChange applicator
 	if schema.IsKeyless(sch) {
@@ -531,8 +518,6 @@ func mergeNomsTableData(
 				if err != nil {
 					return err
 				}
-				// we might need to stomp a conflict
-				rowMergeResult = transformMergeResultForStrategy(rowMergeResult, strategy, r, mergeRow)
 				if rowMergeResult.isConflict {
 					conflictTuple, err := conflict.NewConflict(ancRow, r, mergeRow).ToNomsList(vrw)
 					if err != nil {
@@ -583,23 +568,6 @@ func mergeNomsTableData(
 	}
 
 	return mergedTable, conflicts, stats, nil
-}
-
-func transformMergeResultForStrategy(res rowMergeResult, strategy ConflictStompStrategy, ourRow, theirRow types.Value) rowMergeResult {
-	if !res.isConflict {
-		return res
-	}
-
-	switch strategy {
-	case ConflictStompStrategyNone:
-		return res
-	case ConflictStompStrategyPickOurs:
-		return rowMergeResult{mergedRow: ourRow, didCellMerge: true, isConflict: false}
-	case ConflictStompStrategyPickTheirs:
-		return rowMergeResult{mergedRow: theirRow, didCellMerge: true, isConflict: false}
-	default:
-		panic("unhandled stomp strategy")
-	}
 }
 
 func addConflict(conflictChan chan types.Value, done <-chan struct{}, key types.Value, value types.Tuple) error {
@@ -988,7 +956,7 @@ func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit, opts 
 		return nil, nil, err
 	}
 
-	return MergeRoots(ctx, theirCmHash, ancCmHash, ourRoot, theirRoot, ancRoot, opts, MergeOpts{ConflictStompStrategyNone, false})
+	return MergeRoots(ctx, theirCmHash, ancCmHash, ourRoot, theirRoot, ancRoot, opts, MergeOpts{IsCherryPick: false})
 }
 
 // MergeRoots three-way merges |ourRoot|, |theirRoot|, and |ancRoot| and returns

@@ -241,19 +241,10 @@ func writeConflictResults(
 }
 
 func buildConflictQuery(base, sch, mergeSch schema.Schema, tblName string) string {
-	cols := castColumnWithPrefix(base.GetAllCols().GetColumnNames(), "base_")
-	cols = append(cols, castColumnWithPrefix(sch.GetAllCols().GetColumnNames(), "our_")...)
-	cols = append(cols, castColumnWithPrefix(mergeSch.GetAllCols().GetColumnNames(), "their_")...)
+	cols := withPrefix(base.GetAllCols().GetColumnNames(), "base_")
+	cols = append(cols, withPrefix(sch.GetAllCols().GetColumnNames(), "our_")...)
+	cols = append(cols, withPrefix(mergeSch.GetAllCols().GetColumnNames(), "their_")...)
 	colNames := strings.Join(cols, ", ")
 	query := fmt.Sprintf("SELECT %s, our_diff_type, their_diff_type from dolt_conflicts_%s", colNames, tblName)
 	return query
-}
-
-func castColumnWithPrefix(arr []string, prefix string) []string {
-	out := make([]string, len(arr))
-	for i := range arr {
-		n := prefix + arr[i]
-		out[i] = fmt.Sprintf("cast (%s as char) as `%s`", n, n)
-	}
-	return out
 }

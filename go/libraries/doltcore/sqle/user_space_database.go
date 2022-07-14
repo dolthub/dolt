@@ -97,5 +97,5 @@ func (db *UserSpaceDatabase) Flush(ctx *sql.Context) error {
 }
 
 func (db *UserSpaceDatabase) EditOptions() editor.Options {
-	panic("UserSpaceDatabase does not have edit options")
+	return editor.Options{}
 }

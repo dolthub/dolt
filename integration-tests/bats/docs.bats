@@ -650,6 +650,7 @@ SQL
 }
 
 @test "docs: dolt table commands do not allow write operations on dolt_docs" {
+    skip "temporarily allow operations on docs"
     echo "a readme" > README.md
     echo "a license" > LICENSE.md
     dolt add .
@@ -670,6 +671,7 @@ SQL
 }
 
 @test "docs: dolt schema command does not show dolt_docs" {
+   skip "temporarily allow operations on docs"
     echo "a readme" > README.md
     echo "a license" > LICENSE.md
     dolt add .
@@ -707,6 +709,8 @@ SQL
  }
 
 @test "docs: dolt sql operation on dolt_docs" {
+   skip "temporarily allow operations on docs"
+
     echo "a readme" > README.md
     echo "a license" > LICENSE.md
     run dolt sql -q "show tables"
@@ -768,7 +772,7 @@ SQL
     [[ ! $output =~ "test-a branch" ]] || false
     echo test-b branch > README.md
     dolt add .
-    dolt commit -m "Changed README.md on test-a branch"
+    dolt commit -m "Changed README.md on test-b branch"
     dolt checkout main
 
     # On successful FF merge, docs match the new working root

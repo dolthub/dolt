@@ -171,6 +171,14 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 	return startServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
 }
 
+func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
+	_, multiDbDir := apr.GetValue(commands.MultiDBDirFlag)
+	if multiDbDir {
+		cli.PrintErrln("WARNING: --multi-db-dir is deprecated, use --data-dir instead")
+	}
+	return nil
+}
+
 func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
 	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
@@ -179,9 +187,21 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
+	if err := validateSqlServerArgs(apr); err != nil {
+		return 1
+	}
 	serverConfig, err := GetServerConfig(dEnv, apr)
-
 	if err != nil {
+		if serverController != nil {
+			serverController.StopServer()
+			serverController.serverStopped(err)
+		}
+
+		cli.PrintErrln(color.RedString("Failed to start server. Bad Configuration"))
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+	if err = SetupDoltConfig(dEnv, apr, serverConfig); err != nil {
 		if serverController != nil {
 			serverController.StopServer()
 			serverController.serverStopped(err)
@@ -214,6 +234,79 @@ func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerC
 		return getYAMLServerConfig(dEnv.FS, cfgFile)
 	}
 	return getCommandLineServerConfig(dEnv, apr)
+}
+
+// SetupDoltConfig updates the given server config with where to create .doltcfg directory
+func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config ServerConfig) error {
+	if _, ok := apr.GetValue(configFileFlag); ok {
+		return nil
+	}
+	serverConfig := config.(*commandLineServerConfig)
+
+	_, dataDirFlag1 := apr.GetValue(commands.MultiDBDirFlag)
+	_, dataDirFlag2 := apr.GetValue(commands.DataDirFlag)
+	dataDirSpecified := dataDirFlag1 || dataDirFlag2
+
+	var cfgDirPath string
+	dataDir := serverConfig.DataDir()
+	cfgDir, cfgDirSpecified := apr.GetValue(commands.CfgDirFlag)
+	if cfgDirSpecified {
+		if exists, _ := dEnv.FS.Exists(cfgDir); !exists {
+			if err := dEnv.FS.MkDirs(cfgDir); err != nil {
+				return err
+			}
+		}
+		cfgDirPath = cfgDir
+	} else if dataDirSpecified {
+		path := filepath.Join(dataDir, commands.DefaultCfgDirName)
+		if exists, _ := dEnv.FS.Exists(path); !exists {
+			if err := dEnv.FS.MkDirs(path); err != nil {
+				return err
+			}
+		}
+		cfgDirPath = path
+	} else {
+		// Look in parent directory for doltcfg
+		path := filepath.Join("..", commands.DefaultCfgDirName)
+		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
+			cfgDirPath = path
+		}
+
+		// Look in data directory (which is necessarily current directory) for doltcfg, create one here if none found
+		path = filepath.Join(dataDir, commands.DefaultCfgDirName)
+		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
+			if len(cfgDirPath) != 0 {
+				p1, err := dEnv.FS.Abs(cfgDirPath)
+				if err != nil {
+					return err
+				}
+				p2, err := dEnv.FS.Abs(path)
+				if err != nil {
+					return err
+				}
+				return commands.ErrMultipleDoltCfgDirs.New(p1, p2)
+			}
+			cfgDirPath = path
+		} else if len(cfgDirPath) == 0 {
+			if err := dEnv.FS.MkDirs(path); err != nil {
+				return err
+			}
+			cfgDirPath = path
+		}
+	}
+	serverConfig.withCfgDir(cfgDirPath)
+
+	if privsFp, ok := apr.GetValue(commands.PrivsFilePathFlag); ok {
+		serverConfig.withPrivilegeFilePath(privsFp)
+	} else {
+		path, err := dEnv.FS.Abs(filepath.Join(cfgDirPath, commands.DefaultPrivsName))
+		if err != nil {
+			return err
+		}
+		serverConfig.withPrivilegeFilePath(path)
+	}
+
+	return nil
 }
 
 // getCommandLineServerConfig sets server config variables and persisted global variables with values defined on command line.
@@ -269,6 +362,16 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		serverConfig.withLogLevel(LogLevel(logLevel))
 	}
 
+	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
+		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, dataDir)
+
+		if err != nil {
+			return nil, errors.New("failed to read databases in path specified by --data-dir. error: " + err.Error())
+		}
+
+		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(dataDir)
+	}
+
 	if dataDir, ok := apr.GetValue(commands.DataDirFlag); ok {
 		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, dataDir)
 
@@ -278,60 +381,6 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 
 		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(dataDir)
 	}
-
-	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
-		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, dataDir)
-		cli.PrintErrln("WARNING: --multi-db-dir is deprecated, use --data-dir instead")
-
-		if err != nil {
-			return nil, errors.New("failed to read databases in path specified by --data-dir. error: " + err.Error())
-		}
-
-		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(dataDir)
-	}
-
-	var cfgDirPath string
-	dataDir := serverConfig.DataDir()
-	cfgDir, ok := apr.GetValue(commands.CfgDirFlag)
-	if ok {
-		// doltcfg directory specified; create at path if DNE, else add it to mrEnv
-		path := filepath.Join(dataDir, cfgDir)
-		if exists, _ := dEnv.FS.Exists(path); !exists {
-			if err := dEnv.FS.MkDirs(path); err != nil {
-				return nil, err
-			}
-		}
-		cfgDirPath = path
-	} else {
-		// Look in parent directory for doltcfg
-		path := filepath.Join("..", commands.DefaultCfgDirName)
-		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
-			cfgDirPath = path
-		}
-
-		// Look in current directory for doltcfg, create one here if none found so far
-		path = filepath.Join(dataDir, commands.DefaultCfgDirName)
-		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
-			if len(cfgDirPath) != 0 {
-				p1, err := dEnv.FS.Abs(cfgDirPath)
-				if err != nil {
-					return nil, err
-				}
-				p2, err := dEnv.FS.Abs(path)
-				if err != nil {
-					return nil, err
-				}
-				return nil, commands.ErrMultipleDoltCfgDirs.New(p1, p2)
-			}
-			cfgDirPath = path
-		} else if len(cfgDirPath) == 0 {
-			if err := dEnv.FS.MkDirs(path); err != nil {
-				return nil, err
-			}
-			cfgDirPath = path
-		}
-	}
-	serverConfig.withCfgDir(cfgDirPath)
 
 	if queryParallelism, ok := apr.GetInt(queryParallelismFlag); ok {
 		serverConfig.withQueryParallelism(queryParallelism)
@@ -346,9 +395,6 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	}
 
 	serverConfig.autoCommit = !apr.Contains(noAutoCommitFlag)
-	if privilegeFilePath, ok := apr.GetValue(commands.PrivsFilePathFlag); ok {
-		serverConfig.withPrivilegeFilePath(privilegeFilePath)
-	}
 
 	return serverConfig, nil
 }

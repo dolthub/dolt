@@ -112,6 +112,11 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			cli.PrintErrln(err.Error())
 			return 1
 		}
+		if err = SetupDoltConfig(dEnv, apr, serverConfig); err != nil {
+			cli.PrintErrln(color.RedString("Bad Configuration"))
+			cli.PrintErrln(err.Error())
+			return 1
+		}
 		cli.PrintErrf("Starting server with Config %v\n", ConfigInfo(serverConfig))
 
 		serverController = NewServerController()
