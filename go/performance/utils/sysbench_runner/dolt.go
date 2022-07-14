@@ -41,12 +41,12 @@ var stampFunc = func() string { return time.Now().UTC().Format(stampFormat) }
 func BenchmarkDolt(ctx context.Context, config *Config, serverConfig *ServerConfig) (Results, error) {
 	serverParams := serverConfig.GetServerArgs()
 
-	err := doltVersion(ctx, serverConfig)
+	err := DoltVersion(ctx, serverConfig.ServerExec)
 	if err != nil {
 		return nil, err
 	}
 
-	err = UpdateDoltConfig(ctx, serverConfig)
+	err = UpdateDoltConfig(ctx, serverConfig.ServerExec)
 	if err != nil {
 		return nil, err
 	}
@@ -127,9 +127,9 @@ func BenchmarkDolt(ctx context.Context, config *Config, serverConfig *ServerConf
 	return results, nil
 }
 
-// doltVersion ensures the dolt binary can run
-func doltVersion(ctx context.Context, config *ServerConfig) error {
-	doltVersion := ExecCommand(ctx, config.ServerExec, "version")
+// DoltVersion ensures the dolt binary can run
+func DoltVersion(ctx context.Context, serverExec string) error {
+	doltVersion := ExecCommand(ctx, serverExec, "version")
 	return doltVersion.Run()
 }
 
@@ -170,17 +170,17 @@ func initDoltRepo(ctx context.Context, config *ServerConfig, initBigRepo bool, n
 }
 
 // UpdateDoltConfig updates the dolt config if necessary
-func UpdateDoltConfig(ctx context.Context, config *ServerConfig) error {
-	err := checkSetDoltConfig(ctx, config, "user.name", "benchmark")
+func UpdateDoltConfig(ctx context.Context, serverExec string) error {
+	err := checkSetDoltConfig(ctx, serverExec, "user.name", "benchmark")
 	if err != nil {
 		return err
 	}
-	return checkSetDoltConfig(ctx, config, "user.email", "benchmark@dolthub.com")
+	return checkSetDoltConfig(ctx, serverExec, "user.email", "benchmark@dolthub.com")
 }
 
 // checkSetDoltConfig checks the output of `dolt config --global --get` and sets the key, val if necessary
-func checkSetDoltConfig(ctx context.Context, config *ServerConfig, key, val string) error {
-	check := ExecCommand(ctx, config.ServerExec, "config", "--global", "--get", key)
+func checkSetDoltConfig(ctx context.Context, serverExec, key, val string) error {
+	check := ExecCommand(ctx, serverExec, "config", "--global", "--get", key)
 	err := check.Run()
 	if err != nil {
 		// config get calls exit with 1 if not set
@@ -188,7 +188,7 @@ func checkSetDoltConfig(ctx context.Context, config *ServerConfig, key, val stri
 			return err
 		}
 
-		set := ExecCommand(ctx, config.ServerExec, "config", "--global", "--add", key, val)
+		set := ExecCommand(ctx, serverExec, "config", "--global", "--add", key, val)
 		err := set.Run()
 		if err != nil {
 			return err
