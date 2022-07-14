@@ -223,8 +223,8 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string, 
 	return nil
 }
 
-func getReplicationBranches(ctx *sql.Context, rrd ReadReplicaDatabase) ([]string, []ref.DoltRef, error) {
-	srcRefs, err := rrd.srcDB.GetBranches(ctx)
+func getReplicationBranches(ctx *sql.Context, rrd ReadReplicaDatabase) (allBranches []string, deletedBranches []ref.DoltRef, err error) {
+	remRefs, err := rrd.srcDB.GetBranches(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -234,33 +234,36 @@ func getReplicationBranches(ctx *sql.Context, rrd ReadReplicaDatabase) ([]string
 		return nil, nil, err
 	}
 
-	allBranches := make([]string, 0, len(srcRefs))
-	deletedBranches := make([]ref.DoltRef, 0, len(localRefs))
+	deletedBranches = branchesToDelete(remRefs, localRefs)
+	allBranches = make([]string, len(remRefs))
+	for i := range remRefs {
+		allBranches[i] = remRefs[i].GetPath()
+	}
+
+	return allBranches, deletedBranches, nil
+}
+
+func branchesToDelete(remRefs, localRefs []ref.DoltRef) []ref.DoltRef {
+	toDelete := make([]ref.DoltRef, 0, len(localRefs))
 	var i, j int
-	for i < len(srcRefs) && j < len(localRefs) {
-		rem := srcRefs[i].GetPath()
+	for i < len(remRefs) && j < len(localRefs) {
+		rem := remRefs[i].GetPath()
 		local := localRefs[j].GetPath()
 		if rem == local {
-			allBranches = append(allBranches, rem)
 			i++
 			j++
 		} else if rem < local {
-			allBranches = append(allBranches, rem)
 			i++
 		} else {
-			deletedBranches = append(deletedBranches, localRefs[j])
+			toDelete = append(toDelete, localRefs[j])
 			j++
 		}
 	}
-	for i < len(srcRefs) {
-		allBranches = append(allBranches, srcRefs[i].GetPath())
-		i++
-	}
 	for j < len(localRefs) {
-		deletedBranches = append(deletedBranches, localRefs[i])
+		toDelete = append(toDelete, localRefs[j])
 		j++
 	}
-	return allBranches, deletedBranches, nil
+	return toDelete
 }
 
 func deleteBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []ref.DoltRef, currentBranchRef ref.DoltRef) error {
