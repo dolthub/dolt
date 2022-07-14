@@ -193,15 +193,12 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	var cfgDirPath string
 	var dataDir string
-	dataDirSpecified := false
 	if multiDbDir, ok := apr.GetValue(MultiDBDirFlag); ok {
 		dataDir = multiDbDir
-		dataDirSpecified = true
-	}
-	if dataDirPath, ok := apr.GetValue(DataDirFlag); ok {
+	} else if dataDirPath, ok := apr.GetValue(DataDirFlag); ok {
 		dataDir = dataDirPath
-		dataDirSpecified = true
 	}
+
 	cfgDir, cfgDirSpecified := apr.GetValue(CfgDirFlag)
 	if cfgDirSpecified {
 		if exists, _ := dEnv.FS.Exists(cfgDir); !exists {
@@ -211,7 +208,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			}
 		}
 		cfgDirPath = cfgDir
-	} else if dataDirSpecified {
+	} else if len(dataDir) != 0 {
 		path := filepath.Join(dataDir, DefaultCfgDirName)
 		if exists, _ := dEnv.FS.Exists(path); !exists {
 			if err := dEnv.FS.MkDirs(path); err != nil {
@@ -438,11 +435,9 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 	fs := dEnv.FS
 
 	if dataDir, ok := apr.GetValue(MultiDBDirFlag); ok {
-		fs, err = dEnv.FS.WithWorkingDir(dataDir)
-	}
-
-	if dataDir, ok := apr.GetValue(DataDirFlag); ok {
-		fs, err = dEnv.FS.WithWorkingDir(dataDir)
+		fs, err = fs.WithWorkingDir(dataDir)
+	} else if dataDir, ok := apr.GetValue(DataDirFlag); ok {
+		fs, err = fs.WithWorkingDir(dataDir)
 	}
 
 	if err != nil {
@@ -720,6 +715,10 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 
 	if len(apr.Args) > 0 && !query {
 		return errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build()
+	}
+
+	if dataDir && multiDbDir {
+		return errhand.BuildDError("Invalid Argument: --data-dir is not compatible with --multi-db-dir").Build()
 	}
 
 	if execute {
