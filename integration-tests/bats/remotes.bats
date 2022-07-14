@@ -1949,7 +1949,7 @@ setup_ref_test() {
 
     cd repo1
     dolt init
-    dolt sql <<SQL
+    run dolt sql <<SQL
 CALL dolt_remote('add', 'origin', 'http://localhost:50051/test-org/test-repo');
 CALL dolt_push('origin', 'main');
 SQL
@@ -1957,7 +1957,7 @@ SQL
     [[ ! "$output" =~ "must provide a GRPCDialProvider param through GRPCDialProviderParam" ]] || false
 
     cd ..
-    dolt clone file://./remote repo2
+    dolt clone http://localhost:50051/test-org/test-repo repo2
 
     cd repo2
     run dolt branch -va
