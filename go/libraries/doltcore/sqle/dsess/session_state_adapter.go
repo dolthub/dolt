@@ -28,7 +28,7 @@ import (
 // SessionStateAdapter is an adapter for env.RepoStateReader in SQL contexts, getting information about the repo state
 // from the session.
 type SessionStateAdapter struct {
-	session  *Session
+	session  *DoltSession
 	dbName   string
 	remotes  map[string]env.Remote
 	backups  map[string]env.Remote
@@ -75,7 +75,7 @@ var _ env.RepoStateReader = SessionStateAdapter{}
 var _ env.RepoStateWriter = SessionStateAdapter{}
 var _ env.RootsProvider = SessionStateAdapter{}
 
-func NewSessionStateAdapter(session *Session, dbName string, remotes map[string]env.Remote, branches map[string]env.BranchConfig, backups map[string]env.Remote) SessionStateAdapter {
+func NewSessionStateAdapter(session *DoltSession, dbName string, remotes map[string]env.Remote, branches map[string]env.BranchConfig, backups map[string]env.Remote) SessionStateAdapter {
 	if branches == nil {
 		branches = make(map[string]env.BranchConfig)
 	}

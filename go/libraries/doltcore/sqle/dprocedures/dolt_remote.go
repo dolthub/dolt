@@ -87,7 +87,7 @@ func addRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResults,
 		return err
 	}
 
-	params, err := parseRemoteArgs(apr, scheme, absRemoteUrl)
+	params, err := remoteParams(apr, scheme, absRemoteUrl)
 	if err != nil {
 		return err
 	}

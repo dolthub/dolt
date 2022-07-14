@@ -230,7 +230,7 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 	var srcDB *doltdb.DoltDB
 	dialer := p.remoteDialer
 	if dialer == nil {
-
+		// TODO: fill this in or error out
 	}
 	r, srcDB, err := createRemote(ctx, remoteName, remoteUrl, remoteParams, dialer)
 	if err != nil {
@@ -275,6 +275,7 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 	return sess.AddDB(ctx, dbstate)
 }
 
+// TODO: extract a shared library for this functionality
 func createRemote(ctx *sql.Context, remoteName, remoteUrl string, params map[string]string, dialer dbfactory.GRPCDialProvider) (env.Remote, *doltdb.DoltDB, error) {
 	r := env.NewRemote(remoteName, remoteUrl, params)
 	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dialer)
@@ -492,8 +493,14 @@ func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDa
 		}
 	}
 
+	dSess := dsess.DSessFromSess(ctx.Session)
+	currentBranchRef, err := dSess.CWBHeadRef(ctx, db.name)
+	if err != nil {
+		return err
+	}
+
 	// create workingSets/heads/branch and update the working set
-	err = pullBranches(ctx, db, []string{branch})
+	err = pullBranches(ctx, db, []string{branch}, currentBranchRef)
 	if err != nil {
 		return err
 	}

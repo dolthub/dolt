@@ -22,14 +22,11 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // doltClone is a stored procedure to clone a database from a remote
@@ -42,7 +39,7 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 
 	remoteName := apr.GetValueOrDefault(cli.RemoteParam, "origin")
 	branch := apr.GetValueOrDefault(cli.BranchParam, "")
-	dir, urlStr, err := parseArgs(apr)
+	dir, urlStr, err := getDirectoryAndUrlString(apr)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +51,7 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		return nil, errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
 	}
 	var params map[string]string
-	params, err = parseRemoteArgs(apr, scheme, remoteUrl)
+	params, err = remoteParams(apr, scheme, remoteUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -71,8 +68,7 @@ func emptyConfig() config.ReadableConfig {
 	return &config.MapConfig{}
 }
 
-// TODO: lifted from clone cmd
-func parseArgs(apr *argparser.ArgParseResults) (string, string, error) {
+func getDirectoryAndUrlString(apr *argparser.ArgParseResults) (string, string, error) {
 	if apr.NArg() < 1 || apr.NArg() > 2 {
 		return "", "", errhand.BuildDError("").SetPrintUsage().Build()
 	}
@@ -92,19 +88,19 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, error) {
 		if dir == "." {
 			dir = path.Dir(urlStr)
 		} else if dir == "/" {
-			return "", "", errhand.BuildDError("Could not infer repo name.  Please explicitily define a directory for this url").Build()
+			return "", "", errhand.BuildDError("Could not infer repo name.  Please explicitly define a directory for this url").Build()
 		}
 	}
 
 	return dir, urlStr, nil
 }
 
-// TODO: lifted from clone cmd
-func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (map[string]string, errhand.VerboseError) {
+func remoteParams(apr *argparser.ArgParseResults, scheme, remoteUrl string) (map[string]string, errhand.VerboseError) {
 	params := map[string]string{}
 
 	var err error
 	if scheme == dbfactory.AWSScheme {
+		// TODO: get AWS params from session
 		err = cli.AddAWSParams(remoteUrl, apr, params)
 	} else {
 		err = cli.VerifyNoAwsParams(apr)
@@ -115,24 +111,4 @@ func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (
 	}
 
 	return params, nil
-}
-
-// TODO: lifted from clone cmd
-func createRemote(ctx *sql.Context, remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
-	r := env.NewRemote(remoteName, remoteUrl, params)
-
-	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dEnv)
-
-	if err != nil {
-		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
-
-		if err == remotestorage.ErrInvalidDoltSpecPath {
-			urlObj, _ := earl.Parse(remoteUrl)
-			bdr.AddDetails("'%s' should be in the format 'organization/repo'", urlObj.Path)
-		}
-
-		return env.NoRemote, nil, bdr.Build()
-	}
-
-	return r, ddb, nil
 }
