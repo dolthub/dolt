@@ -19,6 +19,7 @@ import (
 )
 
 var Commands = cli.NewSubCommandHandler("docs", "Commands for working with Dolt documents.", []cli.Command{
+	DiffCmd{},
 	ReadCmd{},
 	UpdateCmd{},
 })

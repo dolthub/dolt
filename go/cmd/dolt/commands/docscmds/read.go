@@ -104,15 +104,24 @@ func readDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName string) error {
 
 const (
 	readDocTemplate = "SELECT " + doltdb.DocTextColumnName + " " +
-		"FROM dolt_docs WHERE " + doltdb.DocPkColumnName + " = '%s'"
+		"FROM dolt_docs %s WHERE " + doltdb.DocPkColumnName + " = '%s'"
 )
 
-func readDocFromTable(ctx context.Context, eng *engine.SqlEngine, docName string) (doc string, err error) {
+func readDocFromTable(ctx context.Context, eng *engine.SqlEngine, docName string) (string, error) {
+	return readDocFromTableAsOf(ctx, eng, docName, "")
+}
+
+func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, docName, asOf string) (doc string, err error) {
 	var (
 		sctx *sql.Context
 		iter sql.RowIter
 		row  sql.Row
 	)
+
+	if asOf != "" {
+		asOf = fmt.Sprintf("AS OF '%s'", asOf)
+	}
+	query := fmt.Sprintf(readDocTemplate, asOf, docName)
 
 	sctx, err = eng.NewContext(ctx)
 	if err != nil {
@@ -120,7 +129,7 @@ func readDocFromTable(ctx context.Context, eng *engine.SqlEngine, docName string
 	}
 	sctx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
-	_, iter, err = eng.Query(sctx, fmt.Sprintf(readDocTemplate, docName))
+	_, iter, err = eng.Query(sctx, query)
 	if err != nil {
 		return "", err
 	}
