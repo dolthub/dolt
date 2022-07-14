@@ -239,28 +239,26 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 
 // getParentAndCherryRoots return root values of parent commit of cherry-picked commit and cherry-picked commit itself.
 func getParentAndCherryRoots(ctx context.Context, ddb *doltdb.DoltDB, cherryCommit *doltdb.Commit) (*doltdb.RootValue, *doltdb.RootValue, error) {
+	if len(cherryCommit.DatasParents()) > 1 {
+		return nil, nil, errhand.BuildDError("cherry-picking a merge commit is not supported.").Build()
+	}
+	if len(cherryCommit.DatasParents()) == 0 {
+		return nil, nil, errhand.BuildDError("cherry-picking a commit without parents is not supported.").Build()
+	}
+
 	cherryRoot, err := cherryCommit.GetRootValue(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var parentRoot *doltdb.RootValue
-	if len(cherryCommit.DatasParents()) > 1 {
-		return nil, nil, errhand.BuildDError("cherry-picking a merge commit is not supported.").Build()
-	} else if len(cherryCommit.DatasParents()) == 1 {
-		parentCM, err := ddb.ResolveParent(ctx, cherryCommit, 0)
-		if err != nil {
-			return nil, nil, err
-		}
-		parentRoot, err = parentCM.GetRootValue(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-	} else {
-		parentRoot, err = doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter(), ddb.NodeStore())
-		if err != nil {
-			return nil, nil, err
-		}
+	parentCM, err := ddb.ResolveParent(ctx, cherryCommit, 0)
+	if err != nil {
+		return nil, nil, err
 	}
+	parentRoot, err := parentCM.GetRootValue(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	return parentRoot, cherryRoot, nil
 }
