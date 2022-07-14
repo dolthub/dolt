@@ -17,8 +17,9 @@ package dsess
 import (
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
 // SessionCache caches various pieces of expensive to compute information to speed up future lookups in the session.
@@ -43,9 +44,9 @@ type SessionCache interface {
 }
 
 type sessionCache struct {
-	indexes   map[doltdb.DataCacheKey]map[string][]sql.Index
-	tables map[doltdb.DataCacheKey]map[string]sql.Table
-	views  map[doltdb.DataCacheKey]map[string]string
+	indexes map[doltdb.DataCacheKey]map[string][]sql.Index
+	tables  map[doltdb.DataCacheKey]map[string]sql.Table
+	views   map[doltdb.DataCacheKey]map[string]string
 }
 
 func newSessionCache() *sessionCache {
