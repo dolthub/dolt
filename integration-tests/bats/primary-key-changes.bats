@@ -353,7 +353,6 @@ teardown() {
 }
 
 @test "primary-key-changes: dolt diff on working set shows correct status diff" {
-    skip_nbf_dolt_1 "keyless diff"
 
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
     dolt sql -q "INSERT INTO t VALUES (1, 1)"
@@ -372,8 +371,6 @@ teardown() {
 }
 
 @test "primary-key-changes: dolt diff table returns top-down diff until schema change" {
-    skip_nbf_dolt_1 "keyless diff"
-
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
     dolt sql -q "INSERT INTO t VALUES (1, 1)"
 
@@ -439,8 +436,6 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ '| 0' ]] || false
     [[ "$output" =~ 'cannot render full diff between commits' ]] || false
-
-    skip_nbf_dolt_1 "keyless diff"
     
     run dolt sql -q "SELECT to_val,to_pk,from_val,from_pk from dolt_commit_diff_t where from_commit=HASHOF('HEAD~2') and to_commit=HASHOF('HEAD');" -r csv
     [[ "$output" =~ '3,3,,' ]] || false
