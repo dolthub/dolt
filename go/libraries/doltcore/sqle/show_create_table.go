@@ -27,12 +27,13 @@ import (
 
 // These functions cannot be in the sqlfmt package as the reliance on the sqle package creates a circular reference.
 
-func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Context, *sqle.Engine, *dsess.Session) {
-	sess := dsess.DefaultSession()
-	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
-
+func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Context, *sqle.Engine, *dsess.DoltSession) {
 	pro := NewDoltDatabaseProvider(env.DefaultInitBranch, nil, sqlDb)
 	engine := sqle.NewDefault(pro)
+
+	sess := dsess.DefaultSession(pro)
+	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
+
 	sqlCtx.SetCurrentDatabase(sqlDb.Name())
 	return sqlCtx, engine, sess
 }

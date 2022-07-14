@@ -69,17 +69,20 @@ type Session struct {
 
 var _ sql.Session = &Session{}
 
-// DefaultSession creates a Session object with default values
-func DefaultSession() *Session {
+// DefaultSession creates a DoltSession with default values
+func DefaultSession(pro RevisionDatabaseProvider) *DoltSession {
 	sess := &Session{
 		Session:    sql.NewBaseSession(),
 		username:   "",
 		email:      "",
 		dbStates:   make(map[string]*DatabaseSessionState),
-		provider:   emptyRevisionDatabaseProvider{},
+		provider:   pro,
 		tempTables: make(map[string][]sql.Table),
 	}
-	return sess
+	return &DoltSession{
+		Session:     sess,
+		globalsConf: config.NewMapConfig(make(map[string]string)),
+	}
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
@@ -124,7 +127,6 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 }
 
 // LookupDbState returns the session state for the database named
-// TODO(zachmu) get rid of bool return param, use a not found error or similar
 func (sess *Session) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
 	dbState, ok := sess.dbStates[dbName]
 	if ok {

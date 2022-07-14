@@ -1398,7 +1398,7 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 }
 
 func NewTestSQLCtx(ctx context.Context) *sql.Context {
-	session := dsess.DefaultSession()
+	session := dsess.DefaultSession(dsess.EmptyDatabaseProvider())
 	s := session.NewDoltSession(config.NewMapConfig(make(map[string]string)))
 	sqlCtx := sql.NewContext(
 		ctx,
