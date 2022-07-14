@@ -17,6 +17,8 @@ package testcommands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"os"
 	"path/filepath"
 
@@ -135,8 +137,7 @@ func (mr *MultiRepoTestSetup) NewRemote(remoteName string) {
 	os.Mkdir(remote, os.ModePerm)
 	remotePath := fmt.Sprintf("file:///%s", remote)
 
-	dEnv := mr.MrEnv.GetEnv(mr.DbNames[0])
-	rem := env.NewRemote(remoteName, remotePath, nil, dEnv)
+	rem := env.NewRemote(remoteName, remotePath, nil)
 
 	mr.MrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
 		dEnv.RepoState.AddRemote(rem)
@@ -168,7 +169,7 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 	cloneDir := filepath.Join(mr.Root, dbName)
 
 	r := mr.GetRemote(fromRemote)
-	srcDB, err := r.GetRemoteDB(ctx, types.Format_Default)
+	srcDB, err := r.GetRemoteDB(ctx, types.Format_Default, mr.MrEnv.GetEnv(dbName))
 	if err != nil {
 		mr.Errhand(err)
 	}
@@ -208,6 +209,7 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 }
 
 func (mr *MultiRepoTestSetup) GetRemote(remoteName string) env.Remote {
+	//dEnv := mr.MrEnv.GetEnv(mr.DbNames[0])
 	rem, ok := mr.Remotes[remoteName]
 	if !ok {
 		mr.Errhand("remote not found")
@@ -320,7 +322,23 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}
-	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, dEnv.TempTableFilesDir(), opts, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+
+	remoteDB, err := opts.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format(), mr.MrEnv.GetEnv(dbName))
+	if err != nil {
+		if err == remotestorage.ErrInvalidDoltSpecPath {
+			urlObj, _ := earl.Parse(opts.Remote.Url)
+			path := urlObj.Path
+			if path[0] == '/' {
+				path = path[1:]
+			}
+
+			var detail = fmt.Sprintf("the remote: %s %s '%s' should be in the format 'organization/repo'", opts.Remote.Name, opts.Remote.Url, path)
+			mr.Errhand(fmt.Sprintf("%w; %s; %s", actions.ErrFailedToGetRemoteDb, detail, err.Error()))
+		}
+		mr.Errhand(fmt.Sprintf("Failed to get remote database: %s", err.Error()))
+	}
+
+	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, remoteDB, dEnv.TempTableFilesDir(), opts, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}

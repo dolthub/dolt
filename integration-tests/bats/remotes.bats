@@ -1950,9 +1950,11 @@ setup_ref_test() {
     cd repo1
     dolt init
     dolt sql <<SQL
-CALL dolt_remote('add', 'origin', 'file://../remote');
+CALL dolt_remote('add', 'origin', 'http://localhost:50051/test-org/test-repo');
 CALL dolt_push('origin', 'main');
 SQL
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "must provide a GRPCDialProvider param through GRPCDialProviderParam" ]] || false
 
     cd ..
     dolt clone file://./remote repo2

@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"sync"
 	"time"
 
@@ -109,8 +110,23 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
+	remoteDB, err := opts.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
+	if err != nil {
+		if err == remotestorage.ErrInvalidDoltSpecPath {
+			urlObj, _ := earl.Parse(opts.Remote.Url)
+			path := urlObj.Path
+			if path[0] == '/' {
+				path = path[1:]
+			}
+
+			var detail = fmt.Sprintf("the remote: %s %s '%s' should be in the format 'organization/repo'", opts.Remote.Name, opts.Remote.Url, path)
+			err = fmt.Errorf("%w; %s; %s", actions.ErrFailedToGetRemoteDb, detail, err.Error())
+		}
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
 	var verr errhand.VerboseError
-	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, dEnv.TempTableFilesDir(), opts, buildProgStarter(defaultLanguage), stopProgFuncs)
+	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, remoteDB, dEnv.TempTableFilesDir(), opts, buildProgStarter(defaultLanguage), stopProgFuncs)
 	if err != nil {
 		verr = printInfoForPushError(err, opts.Remote, opts.DestRef, opts.RemoteRef)
 	}

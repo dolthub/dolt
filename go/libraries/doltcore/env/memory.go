@@ -198,7 +198,7 @@ func (m MemoryRepoState) GetRemotes() (map[string]Remote, error) {
 	return make(map[string]Remote), nil
 }
 
-func (m MemoryRepoState) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
+func (m MemoryRepoState) AddRemote(r Remote) error {
 	return fmt.Errorf("cannot insert a remote in a memory database")
 }
 
@@ -230,7 +230,7 @@ func (m MemoryRepoState) GetBackups() (map[string]Remote, error) {
 	panic("cannot get backups on in memory database")
 }
 
-func (m MemoryRepoState) AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error {
+func (m MemoryRepoState) AddBackup(remote Remote) error {
 	panic("cannot add backup to in memory database")
 }
 

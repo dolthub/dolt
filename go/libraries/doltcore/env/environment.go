@@ -125,14 +125,12 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 	if dEnv.RepoState != nil {
 		remotes := make(map[string]Remote, len(dEnv.RepoState.Remotes))
 		for n, r := range dEnv.RepoState.Remotes {
-			r.dialer = dEnv
 			remotes[n] = r
 		}
 		dEnv.RepoState.Remotes = remotes
 
 		backups := make(map[string]Remote, len(dEnv.RepoState.Backups))
 		for n, r := range dEnv.RepoState.Backups {
-			r.dialer = dEnv
 			backups[n] = r
 		}
 		dEnv.RepoState.Backups = backups
@@ -646,12 +644,12 @@ func (r *repoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.
 	return nil
 }
 
-func (r *repoStateWriter) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
-	return r.DoltEnv.AddRemote(name, url, fetchSpecs, params)
+func (r *repoStateWriter) AddRemote(remote Remote) error {
+	return r.DoltEnv.AddRemote(remote)
 }
 
-func (r *repoStateWriter) AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error {
-	return r.DoltEnv.AddBackup(name, url, fetchSpecs, params)
+func (r *repoStateWriter) AddBackup(remote Remote) error {
+	return r.DoltEnv.AddBackup(remote)
 }
 
 func (r *repoStateWriter) RemoveRemote(ctx context.Context, name string) error {
@@ -946,32 +944,28 @@ func checkRemoteAddressConflict(url string, remotes, backups map[string]Remote) 
 	return NoRemote, false
 }
 
-func (dEnv *DoltEnv) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
-	if _, ok := dEnv.RepoState.Remotes[name]; ok {
+func (dEnv *DoltEnv) AddRemote(r Remote) error {
+	if _, ok := dEnv.RepoState.Remotes[r.Name]; ok {
 		return ErrRemoteAlreadyExists
 	}
 
-	if strings.IndexAny(name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
+	if strings.IndexAny(r.Name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
 		return ErrInvalidRemoteName
 	}
 
-	_, absRemoteUrl, err := GetAbsRemoteUrl(dEnv.FS, dEnv.Config, url)
+	_, absRemoteUrl, err := GetAbsRemoteUrl(dEnv.FS, dEnv.Config, r.Url)
 	if err != nil {
 		return fmt.Errorf("%w; %s", ErrInvalidRemoteURL, err.Error())
 	}
 
 	// can have multiple remotes with the same address, but no conflicting backups
-	if r, found := checkRemoteAddressConflict(absRemoteUrl, nil, dEnv.RepoState.Backups); found {
-		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, r.Name, r.Url)
+	if rem, found := checkRemoteAddressConflict(absRemoteUrl, nil, dEnv.RepoState.Backups); found {
+		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, rem.Name, rem.Url)
 	}
 
-	r := Remote{name, absRemoteUrl, fetchSpecs, params, dEnv}
+	r.Url = absRemoteUrl
 	dEnv.RepoState.AddRemote(r)
-	err = dEnv.RepoState.Save(dEnv.FS)
-	if err != nil {
-		return err
-	}
-	return nil
+	return dEnv.RepoState.Save(dEnv.FS)
 }
 
 func (dEnv *DoltEnv) GetBackups() (map[string]Remote, error) {
@@ -982,16 +976,16 @@ func (dEnv *DoltEnv) GetBackups() (map[string]Remote, error) {
 	return dEnv.RepoState.Backups, nil
 }
 
-func (dEnv *DoltEnv) AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error {
-	if _, ok := dEnv.RepoState.Backups[name]; ok {
+func (dEnv *DoltEnv) AddBackup(r Remote) error {
+	if _, ok := dEnv.RepoState.Backups[r.Name]; ok {
 		return ErrBackupAlreadyExists
 	}
 
-	if strings.IndexAny(name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
+	if strings.IndexAny(r.Name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
 		return ErrInvalidBackupName
 	}
 
-	_, absRemoteUrl, err := GetAbsRemoteUrl(dEnv.FS, dEnv.Config, url)
+	_, absRemoteUrl, err := GetAbsRemoteUrl(dEnv.FS, dEnv.Config, r.Url)
 	if err != nil {
 		return fmt.Errorf("%w; %s", ErrInvalidBackupURL, err.Error())
 	}
@@ -1001,13 +995,9 @@ func (dEnv *DoltEnv) AddBackup(name string, url string, fetchSpecs []string, par
 		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, r.Name, r.Url)
 	}
 
-	r := Remote{name, absRemoteUrl, fetchSpecs, params, dEnv}
-	dEnv.RepoState.AddBackup(r)
-	err = dEnv.RepoState.Save(dEnv.FS)
-	if err != nil {
-		return err
-	}
-	return nil
+	r.Url = absRemoteUrl
+	dEnv.RepoState.AddRemote(r)
+	return dEnv.RepoState.Save(dEnv.FS)
 }
 
 func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {

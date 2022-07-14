@@ -91,7 +91,8 @@ func addRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResults,
 	if err != nil {
 		return err
 	}
-	return dbd.Rsw.AddRemote(remoteName, absRemoteUrl, nil, params)
+	r := env.NewRemote(remoteName, absRemoteUrl, params)
+	return dbd.Rsw.AddRemote(r)
 }
 
 func removeRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResults) error {

@@ -119,9 +119,9 @@ func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (
 
 // TODO: lifted from clone cmd
 func createRemote(ctx *sql.Context, remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
-	r := env.NewRemote(remoteName, remoteUrl, params, dEnv)
+	r := env.NewRemote(remoteName, remoteUrl, params)
 
-	ddb, err := r.GetRemoteDB(ctx, types.Format_Default)
+	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dEnv)
 
 	if err != nil {
 		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)

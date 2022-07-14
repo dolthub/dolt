@@ -104,7 +104,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 // pullHelper splits pull into fetch, prepare merge, and merge to interleave printing
 func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) error {
-	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
 	if err != nil {
 		return fmt.Errorf("failed to get remote db; %w", err)
 	}

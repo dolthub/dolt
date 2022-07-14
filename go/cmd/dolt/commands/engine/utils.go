@@ -143,7 +143,7 @@ func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.PushOnW
 		return nil, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
 
-	ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
+	ddb, err := rem.GetRemoteDB(ctx, types.Format_Default, dEnv)
 	if err != nil {
 		return nil, err
 	}

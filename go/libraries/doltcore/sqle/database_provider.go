@@ -208,6 +208,13 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	return dsess.AddDB(ctx, dbstate)
 }
 
+func (p DoltDatabaseProvider) GetRemoteDB(ctx *sql.Context, srcDB *doltdb.DoltDB, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
+	if withCaching {
+		return r.GetRemoteDBWithoutCaching(ctx, srcDB.ValueReadWriter().Format(), p.remoteDialer)
+	}
+	return r.GetRemoteDB(ctx, srcDB.ValueReadWriter().Format(), p.remoteDialer)
+}
+
 func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -269,9 +276,8 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 }
 
 func createRemote(ctx *sql.Context, remoteName, remoteUrl string, params map[string]string, dialer dbfactory.GRPCDialProvider) (env.Remote, *doltdb.DoltDB, error) {
-	r := env.NewRemote(remoteName, remoteUrl, params, dialer)
-
-	ddb, err := r.GetRemoteDB(ctx, types.Format_Default)
+	r := env.NewRemote(remoteName, remoteUrl, params)
+	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dialer)
 
 	if err != nil {
 		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
@@ -349,7 +355,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		return nil, dsess.InitialDbState{}, false, nil
 	}
 
-	isBranch, err := isBranch(ctx, srcDb, revSpec)
+	isBranch, err := isBranch(ctx, srcDb, revSpec, p.remoteDialer)
 	if err != nil {
 		return nil, dsess.InitialDbState{}, false, err
 	}
@@ -496,11 +502,11 @@ func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDa
 }
 
 // isBranch returns whether a branch with the given name is in scope for the database given
-func isBranch(ctx context.Context, db SqlDatabase, branchName string) (bool, error) {
+func isBranch(ctx context.Context, db SqlDatabase, branchName string, dialer dbfactory.GRPCDialProvider) (bool, error) {
 	var ddbs []*doltdb.DoltDB
 
 	if rdb, ok := db.(ReadReplicaDatabase); ok {
-		remoteDB, err := rdb.remote.GetRemoteDB(ctx, rdb.ddb.Format())
+		remoteDB, err := rdb.remote.GetRemoteDB(ctx, rdb.ddb.Format(), dialer)
 		if err != nil {
 			return false, err
 		}

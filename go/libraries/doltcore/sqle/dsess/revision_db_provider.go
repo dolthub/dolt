@@ -15,6 +15,8 @@
 package dsess
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/go-mysql-server/sql"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -42,6 +44,8 @@ type DoltDatabaseProvider interface {
 	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error
 	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases
 	FileSystem() filesys.Filesys
+	// GetRemoteDB
+	GetRemoteDB(ctx *sql.Context, srcDB *doltdb.DoltDB, r env.Remote, withCaching bool) (*doltdb.DoltDB, error)
 }
 
 func EmptyDatabaseProvider() DoltDatabaseProvider {
@@ -49,6 +53,10 @@ func EmptyDatabaseProvider() DoltDatabaseProvider {
 }
 
 type emptyRevisionDatabaseProvider struct{}
+
+func (e emptyRevisionDatabaseProvider) GetRemoteDB(ctx *sql.Context, srcDB *doltdb.DoltDB, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
+	return nil, nil
+}
 
 func (e emptyRevisionDatabaseProvider) FileSystem() filesys.Filesys {
 	return nil

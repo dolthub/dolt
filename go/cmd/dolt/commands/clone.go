@@ -194,9 +194,8 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
 	cli.Printf("cloning %s\n", remoteUrl)
 
-	r := env.NewRemote(remoteName, remoteUrl, params, dEnv)
-
-	ddb, err := r.GetRemoteDB(ctx, types.Format_Default)
+	r := env.NewRemote(remoteName, remoteUrl, params)
+	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dEnv)
 
 	if err != nil {
 		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)

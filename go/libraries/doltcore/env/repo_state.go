@@ -39,8 +39,8 @@ type RepoStateWriter interface {
 	// TODO: get rid of this
 	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
-	AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error
-	AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error
+	AddRemote(remote Remote) error
+	AddBackup(remote Remote) error
 	RemoveRemote(ctx context.Context, name string) error
 	RemoveBackup(ctx context.Context, name string) error
 	TempTableFilesDir() string

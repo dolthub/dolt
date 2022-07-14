@@ -122,7 +122,7 @@ func DoDoltBackup(ctx *sql.Context, args []string) (int, error) {
 			return statusErr, err
 		}
 
-		b = env.NewRemote("__temp__", backupUrl, params, nil)
+		b = env.NewRemote("__temp__", backupUrl, params)
 
 	case apr.Arg(0) == cli.SyncBackupId:
 		if apr.NArg() != 2 {
@@ -145,7 +145,7 @@ func DoDoltBackup(ctx *sql.Context, args []string) (int, error) {
 		return statusErr, fmt.Errorf("unrecognized dolt_backup parameter: %s", apr.Arg(0))
 	}
 
-	destDb, err := b.GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format())
+	destDb, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb, b, false)
 	if err != nil {
 		return statusErr, fmt.Errorf("error loading backup destination: %w", err)
 	}
