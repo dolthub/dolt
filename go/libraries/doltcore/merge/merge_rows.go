@@ -39,9 +39,9 @@ type MergeOpts struct {
 type TableMerger struct {
 	name string
 
-	left  *doltdb.Table
-	right *doltdb.Table
-	anc   *doltdb.Table
+	leftTbl  *doltdb.Table
+	rightTbl *doltdb.Table
+	ancTbl   *doltdb.Table
 
 	leftSch  schema.Schema
 	rightSch schema.Schema
@@ -55,18 +55,18 @@ type TableMerger struct {
 }
 
 func (tm TableMerger) tableHashes() (left, right, anc hash.Hash, err error) {
-	if tm.left != nil {
-		if left, err = tm.left.HashOf(); err != nil {
+	if tm.leftTbl != nil {
+		if left, err = tm.leftTbl.HashOf(); err != nil {
 			return
 		}
 	}
-	if tm.right != nil {
-		if right, err = tm.right.HashOf(); err != nil {
+	if tm.rightTbl != nil {
+		if right, err = tm.rightTbl.HashOf(); err != nil {
 			return
 		}
 	}
-	if tm.anc != nil {
-		if anc, err = tm.anc.HashOf(); err != nil {
+	if tm.ancTbl != nil {
+		if anc, err = tm.ancTbl.HashOf(); err != nil {
 			return
 		}
 	}
@@ -129,7 +129,7 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 		return nil, nil, schConflicts.AsError()
 	}
 
-	mergeTbl, err := tm.left.UpdateSchema(ctx, mergeSch)
+	mergeTbl, err := tm.leftTbl.UpdateSchema(ctx, mergeSch)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -152,7 +152,7 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 		}
 		stats.Conflicts = int(n)
 
-		mergeTbl, err = mergeAutoIncrementValues(ctx, tm.left, tm.right, mergeTbl)
+		mergeTbl, err = mergeAutoIncrementValues(ctx, tm.leftTbl, tm.rightTbl, mergeTbl)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -183,17 +183,17 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 		return nil, nil, err
 	}
 
-	rows, err := tm.left.GetNomsRowData(ctx)
+	rows, err := tm.leftTbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	mergeRows, err := tm.right.GetNomsRowData(ctx)
+	mergeRows, err := tm.rightTbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	ancRows, err := tm.anc.GetRowData(ctx)
+	ancRows, err := tm.ancTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -204,14 +204,14 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	}
 
 	if cons.Len() > 0 {
-		resultTbl, err = setConflicts(ctx, durable.ConflictIndexFromNomsMap(cons, rm.vrw), tm.left, tm.right, tm.anc, resultTbl)
+		resultTbl, err = setConflicts(ctx, durable.ConflictIndexFromNomsMap(cons, rm.vrw), tm.leftTbl, tm.rightTbl, tm.ancTbl, resultTbl)
 		if err != nil {
 			return nil, nil, err
 		}
 		stats.Conflicts = int(cons.Len())
 	}
 
-	resultTbl, err = mergeAutoIncrementValues(ctx, tm.left, tm.right, resultTbl)
+	resultTbl, err = mergeAutoIncrementValues(ctx, tm.leftTbl, tm.rightTbl, resultTbl)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -231,38 +231,38 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (Tabl
 	var ok bool
 	var err error
 
-	tm.left, ok, err = rm.left.GetTable(ctx, tblName)
+	tm.leftTbl, ok, err = rm.left.GetTable(ctx, tblName)
 	if err != nil {
 		return TableMerger{}, err
 	}
 	if ok {
-		if tm.leftSch, err = tm.left.GetSchema(ctx); err != nil {
+		if tm.leftSch, err = tm.leftTbl.GetSchema(ctx); err != nil {
 			return TableMerger{}, err
 		}
 	}
 
-	tm.right, ok, err = rm.right.GetTable(ctx, tblName)
+	tm.rightTbl, ok, err = rm.right.GetTable(ctx, tblName)
 	if err != nil {
 		return TableMerger{}, err
 	}
 	if ok {
-		if tm.rightSch, err = tm.right.GetSchema(ctx); err != nil {
+		if tm.rightSch, err = tm.rightTbl.GetSchema(ctx); err != nil {
 			return TableMerger{}, err
 		}
 	}
 
-	tm.anc, ok, err = rm.anc.GetTable(ctx, tblName)
+	tm.ancTbl, ok, err = rm.anc.GetTable(ctx, tblName)
 	if err != nil {
 		return TableMerger{}, err
 	}
 	if ok {
-		if tm.ancSch, err = tm.anc.GetSchema(ctx); err != nil {
+		if tm.ancSch, err = tm.ancTbl.GetSchema(ctx); err != nil {
 			return TableMerger{}, err
 		}
-	} else if schema.SchemasAreEqual(tm.leftSch, tm.rightSch) && tm.left != nil {
+	} else if schema.SchemasAreEqual(tm.leftSch, tm.rightSch) && tm.leftTbl != nil {
 		// If left & right added the same table, fill tm.anc with an empty table
 		tm.ancSch = tm.leftSch
-		tm.anc, err = doltdb.NewEmptyTable(ctx, rm.vrw, rm.ns, tm.ancSch)
+		tm.ancTbl, err = doltdb.NewEmptyTable(ctx, rm.vrw, rm.ns, tm.ancSch)
 		if err != nil {
 			return TableMerger{}, err
 		}
@@ -277,19 +277,19 @@ func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm TableMerger, opt
 		return nil, nil, err
 	}
 
-	leftExists := tm.left != nil
-	rightExists := tm.right != nil
-	ancExists := tm.anc != nil
+	leftExists := tm.leftTbl != nil
+	rightExists := tm.rightTbl != nil
+	ancExists := tm.ancTbl != nil
 
 	// Nothing changed
 	if leftExists && rightExists && ancExists && rootHash == mergeHash && rootHash == ancHash {
-		return tm.left, &MergeStats{Operation: TableUnmodified}, nil
+		return tm.leftTbl, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
 	// Both made identical changes
 	// For keyless tables, this counts as a conflict
 	if leftExists && rightExists && rootHash == mergeHash && !schema.IsKeyless(tm.leftSch) {
-		return tm.left, &MergeStats{Operation: TableUnmodified}, nil
+		return tm.leftTbl, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
 	// One or both added this table
@@ -300,10 +300,10 @@ func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm TableMerger, opt
 			}
 		} else if leftExists {
 			// fast-forward
-			return tm.left, &MergeStats{Operation: TableUnmodified}, nil
+			return tm.leftTbl, &MergeStats{Operation: TableUnmodified}, nil
 		} else {
 			// fast-forward
-			return tm.right, &MergeStats{Operation: TableAdded}, nil
+			return tm.rightTbl, &MergeStats{Operation: TableAdded}, nil
 		}
 	}
 
@@ -333,7 +333,7 @@ func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm TableMerger, opt
 
 	// Changes only in root, table unmodified
 	if mergeHash == ancHash {
-		return tm.left, &MergeStats{Operation: TableUnmodified}, nil
+		return tm.leftTbl, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
 	// Changes only in merge root, fast-forward
@@ -341,12 +341,12 @@ func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm TableMerger, opt
 	if !opts.IsCherryPick && rootHash == ancHash {
 		ms := MergeStats{Operation: TableModified}
 		if rootHash != mergeHash {
-			ms, err = calcTableMergeStats(ctx, tm.left, tm.right)
+			ms, err = calcTableMergeStats(ctx, tm.leftTbl, tm.rightTbl)
 			if err != nil {
 				return nil, nil, err
 			}
 		}
-		return tm.right, &ms, nil
+		return tm.rightTbl, &ms, nil
 	}
 
 	// no short-circuit

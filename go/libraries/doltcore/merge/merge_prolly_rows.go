@@ -51,9 +51,9 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 	var (
 		finalRows durable.Index
 
-		mergeLeftSet  durable.IndexSet
-		mergeRightSet durable.IndexSet
-		finalIndexSet durable.IndexSet
+		leftIdxs  durable.IndexSet
+		rightIdxs durable.IndexSet
+		finalIdxs durable.IndexSet
 
 		indexEdits = make(chan indexEdit, 128)
 		conflicts  = make(chan confVals, 128)
@@ -78,7 +78,7 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 	})
 
 	group.Go(func() (err error) {
-		mergeLeftSet, mergeRightSet, err = updateProllySecondaryIndexes(gCtx, tm, indexEdits)
+		leftIdxs, rightIdxs, err = updateProllySecondaryIndexes(gCtx, tm, indexEdits)
 		return err
 	})
 
@@ -94,20 +94,10 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 		return nil, nil, err
 	}
 
-	tm.left, err = tm.left.SetIndexSet(ctx, mergeLeftSet)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	tm.right, err = tm.right.SetIndexSet(ctx, mergeRightSet)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	// stage 2: merge the modified versions of the secondary
 	//   indexes generated in stage 1
 
-	finalIndexSet, err = mergeProllySecondaryIndexes(ctx, tm, finalSch, finalRows, artifacts)
+	finalIdxs, err = mergeProllySecondaryIndexes(ctx, tm, leftIdxs, rightIdxs, finalSch, finalRows, artifacts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -124,7 +114,7 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 		return nil, nil, err
 	}
 
-	finalTbl, err = finalTbl.SetIndexSet(ctx, finalIndexSet)
+	finalTbl, err = finalTbl.SetIndexSet(ctx, finalIdxs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -140,19 +130,19 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 }
 
 func mergeTableArtifacts(ctx context.Context, tm TableMerger, mergeTbl *doltdb.Table) (*doltdb.Table, error) {
-	la, err := tm.left.GetArtifacts(ctx)
+	la, err := tm.leftTbl.GetArtifacts(ctx)
 	if err != nil {
 		return nil, err
 	}
 	left := durable.ProllyMapFromArtifactIndex(la)
 
-	ra, err := tm.right.GetArtifacts(ctx)
+	ra, err := tm.rightTbl.GetArtifacts(ctx)
 	if err != nil {
 		return nil, err
 	}
 	right := durable.ProllyMapFromArtifactIndex(ra)
 
-	aa, err := tm.anc.GetArtifacts(ctx)
+	aa, err := tm.ancTbl.GetArtifacts(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -190,19 +180,19 @@ func mergeProllyRowData(
 	conflicts chan confVals,
 ) (durable.Index, error) {
 
-	lr, err := tm.left.GetRowData(ctx)
+	lr, err := tm.leftTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 	leftRows := durable.ProllyMapFromIndex(lr)
 
-	rr, err := tm.right.GetRowData(ctx)
+	rr, err := tm.rightTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 	rightRows := durable.ProllyMapFromIndex(rr)
 
-	ar, err := tm.anc.GetRowData(ctx)
+	ar, err := tm.ancTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +377,7 @@ type conflictProcessor interface {
 }
 
 func makeConflictProcessor(ctx context.Context, tm TableMerger) (conflictProcessor, error) {
-	has, err := tm.left.HasConflicts(ctx)
+	has, err := tm.leftTbl.HasConflicts(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -395,7 +385,7 @@ func makeConflictProcessor(ctx context.Context, tm TableMerger) (conflictProcess
 		return newInsertingProcessor(tm.rightSrc, tm.ancestorSrc)
 	}
 
-	a, l, r, err := tm.left.GetConflictSchemas(ctx, tm.name)
+	a, l, r, err := tm.leftTbl.GetConflictSchemas(ctx, tm.name)
 	if err != nil {
 		return nil, err
 	}

@@ -105,20 +105,13 @@ type confVals struct {
 func mergeProllySecondaryIndexes(
 	ctx context.Context,
 	tm TableMerger,
+	leftSet, rightSet durable.IndexSet,
 	finalSch schema.Schema,
 	finalRows durable.Index,
 	artifacts prolly.ArtifactsEditor,
 ) (durable.IndexSet, error) {
 
-	root, err := tm.left.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-	merge, err := tm.right.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-	anc, err := tm.anc.GetIndexSet(ctx)
+	ancSet, err := tm.ancTbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -146,15 +139,15 @@ func mergeProllySecondaryIndexes(
 	// and ancestor indexes.
 	for _, index := range finalSch.Indexes().AllIndexes() {
 
-		rootI, rootOK, err := tryGetIdx(tm.leftSch, root, index.Name())
+		left, rootOK, err := tryGetIdx(tm.leftSch, leftSet, index.Name())
 		if err != nil {
 			return nil, err
 		}
-		mergeI, mergeOK, err := tryGetIdx(tm.rightSch, merge, index.Name())
+		right, mergeOK, err := tryGetIdx(tm.rightSch, rightSet, index.Name())
 		if err != nil {
 			return nil, err
 		}
-		ancI, ancOK, err := tryGetIdx(tm.ancSch, anc, index.Name())
+		anc, ancOK, err := tryGetIdx(tm.ancSch, ancSet, index.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -165,14 +158,14 @@ func mergeProllySecondaryIndexes(
 			}
 
 			if index.IsUnique() {
-				err = addUniqIdxViols(ctx, finalSch, index, rootI, mergeI, ancI, mergedM, artifacts, tm.rightSrc, tm.name)
+				err = addUniqIdxViols(ctx, finalSch, index, left, right, anc, mergedM, artifacts, tm.rightSrc, tm.name)
 				if err != nil {
 					return nil, err
 				}
 			}
 
 			var collision = false
-			merged, err := prolly.MergeMaps(ctx, rootI, mergeI, ancI, func(left, right tree.Diff) (tree.Diff, bool) {
+			merged, err := prolly.MergeMaps(ctx, left, right, anc, func(left, right tree.Diff) (tree.Diff, bool) {
 				if left.Type == right.Type && bytes.Equal(left.To, right.To) {
 					// convergent edit
 					return left, true
@@ -254,7 +247,7 @@ func buildIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStor
 // they produce entries consistent with the cell-wise merges. The updated
 // |rootIndexSet| and |mergeIndexSet| are returned.
 func updateProllySecondaryIndexes(ctx context.Context, tm TableMerger, cellWiseEdits chan indexEdit) (durable.IndexSet, durable.IndexSet, error) {
-	ls, err := tm.left.GetIndexSet(ctx)
+	ls, err := tm.leftTbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -263,7 +256,7 @@ func updateProllySecondaryIndexes(ctx context.Context, tm TableMerger, cellWiseE
 		return nil, nil, err
 	}
 
-	rs, err := tm.right.GetIndexSet(ctx)
+	rs, err := tm.rightTbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
