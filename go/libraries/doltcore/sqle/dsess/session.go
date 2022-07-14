@@ -22,10 +22,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/go-mysql-server/sql"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -62,12 +62,12 @@ var ErrSessionNotPeristable = errors.New("session is not persistable")
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
 	sql.Session
-	batchMode  batchMode
-	username   string
-	email      string
-	dbStates   map[string]*DatabaseSessionState
-	provider   RevisionDatabaseProvider
-	tempTables map[string][]sql.Table
+	batchMode   batchMode
+	username    string
+	email       string
+	dbStates    map[string]*DatabaseSessionState
+	provider    RevisionDatabaseProvider
+	tempTables  map[string][]sql.Table
 	globalsConf config.ReadWriteConfig
 	mu          *sync.Mutex
 }
@@ -78,14 +78,14 @@ var _ sql.PersistableSession = (*DoltSession)(nil)
 // DefaultSession creates a DoltSession with default values
 func DefaultSession(pro RevisionDatabaseProvider) *DoltSession {
 	return &DoltSession{
-		Session:    sql.NewBaseSession(),
-		username:   "",
-		email:      "",
-		dbStates:   make(map[string]*DatabaseSessionState),
-		provider:   pro,
-		tempTables: make(map[string][]sql.Table),
+		Session:     sql.NewBaseSession(),
+		username:    "",
+		email:       "",
+		dbStates:    make(map[string]*DatabaseSessionState),
+		provider:    pro,
+		tempTables:  make(map[string][]sql.Table),
 		globalsConf: config.NewMapConfig(make(map[string]string)),
-		mu: &sync.Mutex{},
+		mu:          &sync.Mutex{},
 	}
 }
 
