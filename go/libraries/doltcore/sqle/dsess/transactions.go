@@ -37,7 +37,7 @@ const (
 	maxTxCommitRetries = 5
 )
 
-var ErrRetryTransaction = errors.New("this transaction conflicts with a committed transaction from another client, please retry")
+var ErrRetryTransaction = errors.New("this transaction conflicts with a committed transaction from another client")
 var ErrUnresolvedConflictsCommit = errors.New("Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1")
 var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transaction resulted in a working set with constraint violations, transaction rolled back. " +
 	"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
@@ -78,7 +78,6 @@ type DoltTransaction struct {
 	dbData          env.DbData
 	savepoints      []savepoint
 	mergeEditOpts   editor.Options
-	mergeStrategy   merge.ConflictStompStrategy
 	tCharacteristic sql.TransactionCharacteristic
 }
 
@@ -93,7 +92,6 @@ func NewDoltTransaction(
 	workingSet ref.WorkingSetRef,
 	dbData env.DbData,
 	mergeEditOpts editor.Options,
-	mergeStrategy merge.ConflictStompStrategy,
 	tCharacteristic sql.TransactionCharacteristic,
 ) *DoltTransaction {
 	return &DoltTransaction{
@@ -102,7 +100,6 @@ func NewDoltTransaction(
 		workingSetRef:   workingSet,
 		dbData:          dbData,
 		mergeEditOpts:   mergeEditOpts,
-		mergeStrategy:   mergeStrategy,
 		tCharacteristic: tCharacteristic,
 	}
 }
@@ -280,7 +277,7 @@ func (tx *DoltTransaction) mergeRoots(
 		return nil, err
 	}
 
-	mo := merge.MergeOpts{ConflictStrategy: tx.mergeStrategy, IsCherryPick: false}
+	mo := merge.MergeOpts{IsCherryPick: false}
 	mergedRoot, _, err := merge.MergeRoots(
 		ctx,
 		theirH,
@@ -380,7 +377,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 				return rollbackErr
 			}
 
-			return ErrRetryTransaction
+			return sql.ErrLockDeadlock.New(ErrRetryTransaction.Error())
 		}
 
 		// If there were conflicts before merge with the persisted working set, whether we allow it to be committed is a

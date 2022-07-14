@@ -126,6 +126,8 @@ type ServerConfig interface {
 	// PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
 	// JSON string.
 	PrivilegeFilePath() string
+	// UserVars is an array containing user specific session variables
+	UserVars() []UserSessionVars
 }
 
 type commandLineServerConfig struct {
@@ -240,6 +242,10 @@ func (cfg *commandLineServerConfig) MetricsPort() int {
 
 func (cfg *commandLineServerConfig) PrivilegeFilePath() string {
 	return cfg.privilegeFilePath
+}
+
+func (cfg *commandLineServerConfig) UserVars() []UserSessionVars {
+	return nil
 }
 
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in

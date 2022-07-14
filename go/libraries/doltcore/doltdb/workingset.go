@@ -65,6 +65,8 @@ type WorkingSet struct {
 	mergeState  *MergeState
 }
 
+var _ Rootish = &WorkingSet{}
+
 // TODO: remove this, require working and staged
 func EmptyWorkingSet(wsRef ref.WorkingSetRef) *WorkingSet {
 	return &WorkingSet{
@@ -209,6 +211,11 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		stagedRoot:  stagedRoot,
 		mergeState:  mergeState,
 	}, nil
+}
+
+// ResolveRootValue implements Rootish.
+func (ws *WorkingSet) ResolveRootValue(context.Context) (*RootValue, error) {
+	return ws.WorkingRoot(), nil
 }
 
 // HashOf returns the hash of the workingset struct, which is not the same as the hash of the root value stored in the

@@ -69,7 +69,7 @@ func (w FixedWidthDiffTableWriter) WriteRow(
 	newRow := append(sql.Row{diffMarker}, row...)
 	newColDiffTypes := append([]diff.ChangeType{rowDiffType}, colDiffTypes...)
 
-	return w.tableWriter.WriteRow(ctx, newRow, colorsForDiffTypes(newColDiffTypes))
+	return w.tableWriter.WriteColoredRow(ctx, newRow, colorsForDiffTypes(newColDiffTypes))
 }
 
 func colorsForDiffTypes(colDiffTypes []diff.ChangeType) []*color.Color {

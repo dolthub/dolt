@@ -392,8 +392,14 @@ func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDa
 		}
 	}
 
+	dSess := dsess.DSessFromSess(ctx.Session)
+	currentBranchRef, err := dSess.CWBHeadRef(ctx, db.name)
+	if err != nil {
+		return err
+	}
+
 	// create workingSets/heads/branch and update the working set
-	err = pullBranches(ctx, db, []string{branch})
+	err = pullBranches(ctx, db, []string{branch}, currentBranchRef)
 	if err != nil {
 		return err
 	}
@@ -481,9 +487,10 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 				gs:       v.gs,
 				editOpts: v.editOpts,
 			},
-			remote: v.remote,
-			srcDB:  v.srcDB,
-			tmpDir: v.tmpDir,
+			remote:  v.remote,
+			srcDB:   v.srcDB,
+			tmpDir:  v.tmpDir,
+			limiter: newLimiter(),
 		}
 	}
 

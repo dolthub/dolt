@@ -28,6 +28,15 @@ import (
 var errCommitHasNoMeta = errors.New("commit has no metadata")
 var errHasNoRootValue = errors.New("no root value")
 
+// Rootish is an object resolvable to a RootValue.
+type Rootish interface {
+	// ResolveRootValue resolves a Rootish to a RootValue.
+	ResolveRootValue(ctx context.Context) (*RootValue, error)
+
+	// HashOf returns the hash.Hash of the Rootish.
+	HashOf() (hash.Hash, error)
+}
+
 // Commit contains information on a commit that was written to noms
 type Commit struct {
 	vrw     types.ValueReadWriter
@@ -35,6 +44,8 @@ type Commit struct {
 	parents []*datas.Commit
 	dCommit *datas.Commit
 }
+
+var _ Rootish = &Commit{}
 
 func NewCommit(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, commit *datas.Commit) (*Commit, error) {
 	parents, err := datas.GetCommitParents(ctx, vrw, commit.NomsValue())
@@ -187,6 +198,11 @@ func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*Commit, er
 	}
 
 	return cur, nil
+}
+
+// ResolveRootValue implements Rootish.
+func (c *Commit) ResolveRootValue(ctx context.Context) (*RootValue, error) {
+	return c.GetRootValue(ctx)
 }
 
 // PendingCommit represents a commit that hasn't yet been written to storage. It contains a root value and options to

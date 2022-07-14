@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -43,6 +44,8 @@ type ParquetReader struct {
 	fileData       map[string][]interface{}
 	columnName     []string
 }
+
+var _ table.SqlTableReader = (*ParquetReader)(nil)
 
 // OpenParquetReader opens a reader at a given path within local filesystem.
 func OpenParquetReader(vrw types.ValueReadWriter, path string, sch schema.Schema) (*ParquetReader, error) {
