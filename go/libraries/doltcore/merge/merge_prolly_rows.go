@@ -391,8 +391,8 @@ func makeConflictProcessor(ctx context.Context, tm TableMerger) (conflictProcess
 	if err != nil {
 		return nil, err
 	}
-	if has {
-		return abortingProcessor{}, nil
+	if !has {
+		return newInsertingProcessor(tm.rightSrc, tm.ancestorSrc)
 	}
 
 	a, l, r, err := tm.left.GetConflictSchemas(ctx, tm.name)
@@ -455,7 +455,6 @@ func (p *insertingProcessor) process(ctx context.Context, conflictChan chan conf
 			return ctx.Err()
 		}
 	}
-	return nil
 }
 
 type abortingProcessor struct{}

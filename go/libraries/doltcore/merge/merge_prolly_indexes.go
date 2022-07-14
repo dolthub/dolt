@@ -337,15 +337,23 @@ func applyCellwiseEdits(ctx context.Context, rootIdxs, mergeIdxs []MutableSecond
 // a delete, if |len(edit.From)| == 0 then it is an insert, otherwise it is an
 // update.
 func applyEdit(ctx context.Context, idx MutableSecondaryIdx, edit tree.Diff) (err error) {
-	switch edit.Type {
-	case tree.AddedDiff:
-		err = idx.InsertEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.To))
-	case tree.RemovedDiff:
-		err = idx.DeleteEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.From))
-	case tree.ModifiedDiff:
-		err = idx.UpdateEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.From), val.Tuple(edit.To))
+	if len(edit.From) == 0 {
+		err := idx.InsertEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.To))
+		if err != nil {
+			return err
+		}
+	} else if len(edit.To) == 0 {
+		err := idx.DeleteEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.From))
+		if err != nil {
+			return err
+		}
+	} else {
+		err := idx.UpdateEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.From), val.Tuple(edit.To))
+		if err != nil {
+			return err
+		}
 	}
-	return
+	return nil
 }
 
 func emptyDiff(d tree.Diff) bool {
