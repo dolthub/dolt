@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 )
 
 // writeBufSize is the size of the buffer used when writing a csv file.  It is set at the package level and all
@@ -43,6 +44,8 @@ type CSVWriter struct {
 	sch     schema.Schema
 	useCRLF bool // True to use \r\n as the line terminator
 }
+
+var _ table.SqlTableWriter = (*CSVWriter)(nil)
 
 // NewCSVWriter writes rows to the given WriteCloser based on the Schema and CSVFileInfo provided
 func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {

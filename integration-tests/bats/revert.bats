@@ -97,10 +97,10 @@ SQL
     [[ "$output" =~ "ancestor" ]] || false
 }
 
-@test "revert: no changes" {
+@test "revert: init commit" {
     run dolt revert HEAD~4
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "No changes were made" ]] || false
+    [ "$status" -ne "0" ]
+    [[ "$output" =~ "cannot revert commit with no parents" ]] || false
 }
 
 @test "revert: invalid hash" {
@@ -294,26 +294,16 @@ SQL
     [[ "$output" =~ "ancestor" ]] || false
 }
 
-@test "revert: SQL no changes" {
-    dolt sql -q "SELECT DOLT_REVERT('HEAD~4')"
-    run dolt sql -q "SELECT * FROM test" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
-    [[ "$output" =~ "1,1" ]] || false
-    [[ "$output" =~ "2,2" ]] || false
-    [[ "$output" =~ "3,3" ]] || false
-    [[ "${#lines[@]}" = "4" ]] || false
+@test "revert: SQL revert init commit" {
+    run dolt sql -q "SELECT DOLT_REVERT('HEAD~4')"
+    [ "$status" -ne "0" ]
+    [[ "$output" =~ "cannot revert commit with no parents" ]] || false
 }
 
-@test "revert: Stored Procedure no changes" {
-    dolt sql -q "CALL DOLT_REVERT('HEAD~4')"
-    run dolt sql -q "SELECT * FROM test" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
-    [[ "$output" =~ "1,1" ]] || false
-    [[ "$output" =~ "2,2" ]] || false
-    [[ "$output" =~ "3,3" ]] || false
-    [[ "${#lines[@]}" = "4" ]] || false
+@test "revert: Stored Procedure revert init commit" {
+    run dolt sql -q "CALL DOLT_REVERT('HEAD~4')"
+    [ "$status" -ne "0" ]
+    [[ "$output" =~ "cannot revert commit with no parents" ]] || false
 }
 
 @test "revert: SQL invalid hash" {

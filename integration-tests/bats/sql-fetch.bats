@@ -369,8 +369,6 @@ teardown() {
     [[ "$output" =~ "fetch failed: can't fast forward merge" ]] || false
 
     dolt sql -q "select dolt_fetch('--force', 'origin', 'main')"
-
-    skip_nbf_dolt_1 "keyless diff not implemented"
     
     dolt diff main origin/main
     run dolt diff main origin/main
@@ -396,8 +394,6 @@ teardown() {
     [[ "$output" =~ "fetch failed: can't fast forward merge" ]] || false
 
     dolt sql -q "CALL dolt_fetch('--force', 'origin', 'main')"
-
-    skip_nbf_dolt_1 "keyless diff not implemented"
     
     run dolt diff main origin/main
     [ "$status" -eq 0 ]

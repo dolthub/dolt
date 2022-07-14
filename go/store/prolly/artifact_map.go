@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -573,4 +574,33 @@ func calcArtifactsDescriptors(srcKd val.TupleDesc) (kd, vd val.TupleDesc) {
 	valTypes := []val.Type{{Enc: val.JSONEnc, Nullable: false}}
 
 	return val.NewTupleDescriptor(keyTypes...), val.NewTupleDescriptor(valTypes...)
+}
+
+func ArtifactDebugFormat(ctx context.Context, m ArtifactMap) (string, error) {
+	kd, vd := m.Descriptors()
+	iter, err := m.tuples.iterAll(ctx)
+	if err != nil {
+		return "", err
+	}
+	c := m.Count()
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Artifact Map (count: %d) {\n", c))
+	for {
+		k, v, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+
+		sb.WriteString("\t")
+		sb.WriteString(kd.Format(k))
+		sb.WriteString(": ")
+		sb.WriteString(vd.Format(v))
+		sb.WriteString(",\n")
+	}
+	sb.WriteString("}")
+	return sb.String(), nil
 }
