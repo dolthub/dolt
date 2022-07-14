@@ -18,12 +18,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"io"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/pool"

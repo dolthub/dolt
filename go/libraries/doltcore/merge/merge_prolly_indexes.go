@@ -104,38 +104,23 @@ type confVals struct {
 // and returns its updated value.
 func mergeProllySecondaryIndexes(
 	ctx context.Context,
-	vrw types.ValueReadWriter,
-	ns tree.NodeStore,
-	postMergeSchema, rootSch, mergeSch, ancSch schema.Schema,
+	tm TableMerger,
+	postMergeSchema schema.Schema,
 	mergedData durable.Index,
-	tbl, mergeTbl, tableToUpdate *doltdb.Table,
-	ancSet durable.IndexSet,
+	finalTbl *doltdb.Table,
 	artEditor prolly.ArtifactsEditor,
-	theirRootish doltdb.Rootish,
-	tblName string) (*doltdb.Table, error) {
+) (*doltdb.Table, error) {
 
-	rootSet, err := tbl.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-	mergeSet, err := mergeTbl.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
 	mergedSet, err := mergeProllyIndexSets(
 		ctx,
-		vrw,
-		ns,
-		postMergeSchema, rootSch, mergeSch, ancSch,
+		tm,
+		postMergeSchema,
 		mergedData,
-		rootSet, mergeSet, ancSet,
-		artEditor,
-		theirRootish,
-		tblName)
+		artEditor)
 	if err != nil {
 		return nil, err
 	}
-	updatedTbl, err := tableToUpdate.SetIndexSet(ctx, mergedSet)
+	updatedTbl, err := finalTbl.SetIndexSet(ctx, mergedSet)
 	if err != nil {
 		return nil, err
 	}
@@ -146,15 +131,25 @@ func mergeProllySecondaryIndexes(
 // on the provided |postMergeSchema|. It returns the merged index set.
 func mergeProllyIndexSets(
 	ctx context.Context,
-	vrw types.ValueReadWriter,
-	ns tree.NodeStore,
-	postMergeSchema, rootSch, mergeSch, ancSch schema.Schema,
+	tm TableMerger,
+	postMergeSchema schema.Schema,
 	mergedData durable.Index,
-	root, merge, anc durable.IndexSet,
 	artEditor prolly.ArtifactsEditor,
-	theirRootish doltdb.Rootish,
-	tblName string) (durable.IndexSet, error) {
-	mergedIndexSet := durable.NewIndexSet(ctx, vrw, ns)
+) (durable.IndexSet, error) {
+
+	root, err := tm.left.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+	merge, err := tm.right.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+	anc, err := tm.anc.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mergedIndexSet := durable.NewIndexSet(ctx, tm.vrw, tm.ns)
 
 	mergedM := durable.ProllyMapFromIndex(mergedData)
 
@@ -178,26 +173,26 @@ func mergeProllyIndexSets(
 	// and ancestor indexes.
 	for _, index := range postMergeSchema.Indexes().AllIndexes() {
 
-		rootI, rootOK, err := tryGetIdx(rootSch, root, index.Name())
+		rootI, rootOK, err := tryGetIdx(tm.leftSch, root, index.Name())
 		if err != nil {
 			return nil, err
 		}
-		mergeI, mergeOK, err := tryGetIdx(mergeSch, merge, index.Name())
+		mergeI, mergeOK, err := tryGetIdx(tm.rightSch, merge, index.Name())
 		if err != nil {
 			return nil, err
 		}
-		ancI, ancOK, err := tryGetIdx(ancSch, anc, index.Name())
+		ancI, ancOK, err := tryGetIdx(tm.ancSch, anc, index.Name())
 		if err != nil {
 			return nil, err
 		}
 
 		mergedIndex, err := func() (durable.Index, error) {
 			if !rootOK || !mergeOK || !ancOK {
-				return buildIndex(ctx, vrw, ns, postMergeSchema, index, mergedM, artEditor, theirRootish, tblName)
+				return buildIndex(ctx, tm.vrw, tm.ns, postMergeSchema, index, mergedM, artEditor, tm.rightSrc, tm.name)
 			}
 
 			if index.IsUnique() {
-				err = addUniqIdxViols(ctx, postMergeSchema, index, rootI, mergeI, ancI, mergedM, artEditor, theirRootish, tblName)
+				err = addUniqIdxViols(ctx, postMergeSchema, index, rootI, mergeI, ancI, mergedM, artEditor, tm.rightSrc, tm.name)
 				if err != nil {
 					return nil, err
 				}
@@ -285,47 +280,55 @@ func buildIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStor
 // |rootIndexSet| and |mergeIndexSet| such that when the index sets are merged,
 // they produce entries consistent with the cell-wise merges. The updated
 // |rootIndexSet| and |mergeIndexSet| are returned.
-func updateProllySecondaryIndexes(ctx context.Context, leftSch, rightSch schema.Schema, leftIdxSet, rightIdxSet durable.IndexSet, cellWiseEdits chan indexEdit) (durable.IndexSet, durable.IndexSet, error) {
-
-	rootIdxs, err := getMutableSecondaryIdxs(ctx, leftSch, leftIdxSet)
+func updateProllySecondaryIndexes(ctx context.Context, tm TableMerger, cellWiseEdits chan indexEdit) (durable.IndexSet, durable.IndexSet, error) {
+	ls, err := tm.left.GetIndexSet(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	mergeIdxs, err := getMutableSecondaryIdxs(ctx, rightSch, rightIdxSet)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = applyCellwiseEdits(ctx, rootIdxs, mergeIdxs, cellWiseEdits)
+	lm, err := getMutableSecondaryIdxs(ctx, tm.leftSch, ls)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	persistIndexMuts := func(indexSet durable.IndexSet, idxs []MutableSecondaryIdx) (durable.IndexSet, error) {
-		for _, idx := range idxs {
-			m, err := idx.Map(ctx)
-			if err != nil {
-				return nil, err
-			}
-			indexSet, err = indexSet.PutIndex(ctx, idx.Name, durable.IndexFromProllyMap(m))
-			if err != nil {
-				return nil, err
-			}
+	rs, err := tm.right.GetIndexSet(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	rm, err := getMutableSecondaryIdxs(ctx, tm.rightSch, rs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = applyCellwiseEdits(ctx, lm, rm, cellWiseEdits)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ls, err = persistIndexMuts(ctx, ls, lm)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rs, err = persistIndexMuts(ctx, rs, rm)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return ls, rs, nil
+}
+
+func persistIndexMuts(ctx context.Context, indexSet durable.IndexSet, idxs []MutableSecondaryIdx) (durable.IndexSet, error) {
+	for _, idx := range idxs {
+		m, err := idx.Map(ctx)
+		if err != nil {
+			return nil, err
 		}
-		return indexSet, nil
+		indexSet, err = indexSet.PutIndex(ctx, idx.Name, durable.IndexFromProllyMap(m))
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	updatedRootIndexSet, err := persistIndexMuts(leftIdxSet, rootIdxs)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	updatedMergeIndexSet, err := persistIndexMuts(rightIdxSet, mergeIdxs)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return updatedRootIndexSet, updatedMergeIndexSet, nil
+	return indexSet, nil
 }
 
 func applyCellwiseEdits(ctx context.Context, rootIdxs, mergeIdxs []MutableSecondaryIdx, edits chan indexEdit) error {

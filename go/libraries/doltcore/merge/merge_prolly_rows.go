@@ -61,64 +61,37 @@ func mergeTableData(ctx context.Context, tm TableMerger, mergeSch schema.Schema,
 		conflicts  = make(chan confVals, 128)
 	)
 
-	ancRows, err := tm.anc.GetRowData(ctx)
+	ok, err := isNewConflictsCompatible(ctx, tm.left, tm.name, tm.ancSch, tm.leftSch, tm.rightSch)
 	if err != nil {
 		return nil, nil, err
 	}
-	ancIndexSet, err := tm.anc.GetIndexSet(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	group.Go(func() error {
-		var err error
-		finalTbl, finalRows, err = mergeProllyRowData(
-			gCtx,
-			mergeSch, tm.leftSch, tm.rightSch, tm.ancSch,
-			tm.left, tm.right, mergeTbl,
-			ancRows,
-			indexEdits,
-			conflicts)
-		if err != nil {
-			return err
-		}
-		defer close(indexEdits)
-		defer close(conflicts)
-		return nil
-	})
-
-	rootIndexSet, err := tm.left.GetIndexSet(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	mergeIndexSet, err := tm.right.GetIndexSet(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	group.Go(func() error {
-		var err error
-		updatedRootIndexSet, updatedMergeIndexSet, err = updateProllySecondaryIndexes(gCtx, tm.leftSch, tm.rightSch, rootIndexSet, mergeIndexSet, indexEdits)
-		return err
-	})
-
-	artIdx, err := mergeTbl.GetArtifacts(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	artM := durable.ProllyMapFromArtifactIndex(artIdx)
-	artifactEditor := artM.Editor()
-
-	if can, err := isNewConflictsCompatible(ctx, tm.left, tm.name, tm.ancSch, tm.leftSch, tm.rightSch); err != nil {
-		return nil, nil, err
-	} else if can {
-		p, err = newInsertingProcessor(tm.rightSrc, tm.ancestorSrc)
-		if err != nil {
+	if ok {
+		if p, err = newInsertingProcessor(tm.rightSrc, tm.ancestorSrc); err != nil {
 			return nil, nil, err
 		}
 	} else {
 		p = abortingProcessor{}
 	}
+
+	art, err := mergeTbl.GetArtifacts(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	artifactEditor := durable.ProllyMapFromArtifactIndex(art).Editor()
+
+	group.Go(func() (err error) {
+		defer close(indexEdits)
+		defer close(conflicts)
+		finalTbl, finalRows, err = mergeProllyRowData(
+			gCtx, tm, mergeTbl, mergeSch, indexEdits, conflicts)
+		return err
+	})
+
+	group.Go(func() error {
+		var err error
+		updatedRootIndexSet, updatedMergeIndexSet, err = updateProllySecondaryIndexes(gCtx, tm, indexEdits)
+		return err
+	})
 
 	group.Go(func() error {
 		return p.process(gCtx, conflicts, artifactEditor)
@@ -141,26 +114,21 @@ func mergeTableData(ctx context.Context, tm TableMerger, mergeSch schema.Schema,
 
 	finalTbl, err = mergeProllySecondaryIndexes(
 		ctx,
-		tm.vrw,
-		tm.ns,
-		mergeSch, tm.leftSch, tm.rightSch, tm.ancSch,
+		tm,
+		mergeSch,
 		finalRows,
-		tm.left, tm.right, finalTbl,
-		ancIndexSet,
-		artifactEditor,
-		tm.rightSrc,
-		tm.name)
+		finalTbl,
+		artifactEditor)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	artifactMap, err := artifactEditor.Flush(ctx)
+	am, err := artifactEditor.Flush(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	artIdx = durable.ArtifactIndexFromProllyMap(artifactMap)
 
-	finalTbl, err = finalTbl.SetArtifacts(ctx, artIdx)
+	finalTbl, err = finalTbl.SetArtifacts(ctx, durable.ArtifactIndexFromProllyMap(am))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -171,47 +139,45 @@ func mergeTableData(ctx context.Context, tm TableMerger, mergeSch schema.Schema,
 	return finalTbl, stats, nil
 }
 
-func mergeTableArtifacts(ctx context.Context, tblName string, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
-	artsIdx, err := tbl.GetArtifacts(ctx)
+func mergeTableArtifacts(ctx context.Context, tm TableMerger, mergeTbl *doltdb.Table) (*doltdb.Table, error) {
+	la, err := tm.left.GetArtifacts(ctx)
 	if err != nil {
 		return nil, err
 	}
-	mergeArtsIdx, err := mergeTbl.GetArtifacts(ctx)
+	left := durable.ProllyMapFromArtifactIndex(la)
+
+	ra, err := tm.right.GetArtifacts(ctx)
 	if err != nil {
 		return nil, err
 	}
-	ancArtsIdx, err := ancTbl.GetArtifacts(ctx)
+	right := durable.ProllyMapFromArtifactIndex(ra)
+
+	aa, err := tm.anc.GetArtifacts(ctx)
 	if err != nil {
 		return nil, err
 	}
-	arts := durable.ProllyMapFromArtifactIndex(artsIdx)
-	mergeArts := durable.ProllyMapFromArtifactIndex(mergeArtsIdx)
-	ancArts := durable.ProllyMapFromArtifactIndex(ancArtsIdx)
+	anc := durable.ProllyMapFromArtifactIndex(aa)
 
 	var keyCollision bool
-	mergedArts, err := prolly.MergeArtifactMaps(ctx, arts, mergeArts, ancArts, func(left, right tree.Diff) (tree.Diff, bool) {
-		if left.Type == right.Type && bytes.Equal(left.To, right.To) {
-			// convergent edit
-			return left, true
+	collide := func(l, r tree.Diff) (tree.Diff, bool) {
+		if l.Type == r.Type && bytes.Equal(l.To, r.To) {
+			return l, true // convergent edit
 		}
 		keyCollision = true
 		return tree.Diff{}, false
-	})
+	}
+
+	ma, err := prolly.MergeArtifactMaps(ctx, left, right, anc, collide)
 	if err != nil {
 		return nil, err
 	}
-	idx := durable.ArtifactIndexFromProllyMap(mergedArts)
+	idx := durable.ArtifactIndexFromProllyMap(ma)
 
 	if keyCollision {
-		return nil, fmt.Errorf("encountered a key collision when merging the artifacts for table %s", tblName)
+		return nil, fmt.Errorf("encountered a key collision when merging the artifacts for table %s", tm.name)
 	}
 
-	updatedTable, err := tableToUpdate.SetArtifacts(ctx, idx)
-	if err != nil {
-		return nil, err
-	}
-
-	return updatedTable, nil
+	return mergeTbl.SetArtifacts(ctx, idx)
 }
 
 // returns true if newly generated conflicts are compatible with existing conflicts in the artifact table.
@@ -243,30 +209,35 @@ func isNewConflictsCompatible(ctx context.Context, tbl *doltdb.Table, tblName st
 // and |ancTbl|. It stores the merged row data into |tableToUpdate| and returns the new value along with the row data.
 func mergeProllyRowData(
 	ctx context.Context,
-	postMergeSchema, rootSch, mergeSch, ancSch schema.Schema,
-	tbl, mergeTbl, tableToUpdate *doltdb.Table,
-	ancRows durable.Index,
+	tm TableMerger,
+	mergeTbl *doltdb.Table,
+	mergeSch schema.Schema,
 	indexEdits chan indexEdit,
 	conflicts chan confVals,
 ) (*doltdb.Table, durable.Index, error) {
 
-	rootR, err := tbl.GetRowData(ctx)
+	lr, err := tm.left.GetRowData(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	mergeR, err := mergeTbl.GetRowData(ctx)
+	leftRows := durable.ProllyMapFromIndex(lr)
+
+	rr, err := tm.right.GetRowData(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	rootRP := durable.ProllyMapFromIndex(rootR)
-	mergeRP := durable.ProllyMapFromIndex(mergeR)
-	ancRP := durable.ProllyMapFromIndex(ancRows)
+	rightRows := durable.ProllyMapFromIndex(rr)
 
-	m := durable.ProllyMapFromIndex(rootR)
-	vMerger := newValueMerger(postMergeSchema, rootSch, mergeSch, ancSch, m.Pool())
-	keyless := schema.IsKeyless(postMergeSchema)
+	ar, err := tm.anc.GetRowData(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	ancRows := durable.ProllyMapFromIndex(ar)
 
-	mergedRP, err := prolly.MergeMaps(ctx, rootRP, mergeRP, ancRP, func(left, right tree.Diff) (tree.Diff, bool) {
+	vMerger := newValueMerger(mergeSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool())
+	keyless := schema.IsKeyless(mergeSch)
+
+	mr, err := prolly.MergeMaps(ctx, leftRows, rightRows, ancRows, func(left, right tree.Diff) (tree.Diff, bool) {
 		if left.Type == right.Type && bytes.Equal(left.To, right.To) {
 			if keyless {
 				// convergent edits are conflicts for keyless tables
@@ -302,12 +273,13 @@ func mergeProllyRowData(
 		return nil, nil, err
 	}
 
-	updatedTbl, err := tableToUpdate.UpdateRows(ctx, durable.IndexFromProllyMap(mergedRP))
+	mergedRows := durable.IndexFromProllyMap(mr)
+	t, err := mergeTbl.UpdateRows(ctx, mergedRows)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return updatedTbl, durable.IndexFromProllyMap(mergedRP), nil
+	return t, mergedRows, nil
 }
 
 func processConflict(ctx context.Context, confs chan confVals, edits chan indexEdit, left, right tree.Diff) (tree.Diff, bool, error) {

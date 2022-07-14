@@ -135,7 +135,7 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	}
 
 	if types.IsFormat_DOLT_1(mergeTbl.Format()) {
-		mergeTbl, err = mergeTableArtifacts(ctx, tblName, tm.left, tm.right, tm.anc, mergeTbl)
+		mergeTbl, err = mergeTableArtifacts(ctx, tm, mergeTbl)
 		if err != nil {
 			return nil, nil, err
 		}
