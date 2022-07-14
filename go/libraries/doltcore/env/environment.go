@@ -993,12 +993,12 @@ func (dEnv *DoltEnv) AddBackup(r Remote) error {
 	}
 
 	// no conflicting remote or backup addresses
-	if r, found := checkRemoteAddressConflict(absRemoteUrl, dEnv.RepoState.Remotes, dEnv.RepoState.Backups); found {
-		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, r.Name, r.Url)
+	if rem, found := checkRemoteAddressConflict(absRemoteUrl, dEnv.RepoState.Remotes, dEnv.RepoState.Backups); found {
+		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, rem.Name, rem.Url)
 	}
 
 	r.Url = absRemoteUrl
-	dEnv.RepoState.AddRemote(r)
+	dEnv.RepoState.AddBackup(r)
 	return dEnv.RepoState.Save(dEnv.FS)
 }
 
@@ -1026,7 +1026,7 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 		}
 	}
 
-	dEnv.RepoState.RemoveRemote(remote)
+	dEnv.RepoState.RemoveBackup(remote)
 	err = dEnv.RepoState.Save(dEnv.FS)
 	if err != nil {
 		return ErrFailedToWriteRepoState
