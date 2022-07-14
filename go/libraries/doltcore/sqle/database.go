@@ -182,7 +182,7 @@ func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Databa
 // GetInitialDBState returns the InitialDbState for |db|.
 func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
 	switch db := db.(type) {
-	case *UserSpaceDatabase:
+	case *UserSpaceDatabase, *SingleTableInfoDatabase:
 		return getInitialDBStateForUserSpaceDb(ctx, db)
 	}
 
@@ -1187,7 +1187,7 @@ func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) 
 // TODO: this is a hack to make user space DBs appear to the analyzer as full DBs with state etc., but the state is
 //  really skeletal. We need to reexamine the DB / session initialization to make this simpler -- most of these things
 //  aren't needed at initialization time and for most code paths.
-func getInitialDBStateForUserSpaceDb(ctx context.Context, db *UserSpaceDatabase) (dsess.InitialDbState, error) {
+func getInitialDBStateForUserSpaceDb(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
 	return dsess.InitialDbState{
 		Db:          db,
 		DbData:      env.DbData{
