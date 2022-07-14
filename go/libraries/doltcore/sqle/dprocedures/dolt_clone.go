@@ -88,7 +88,7 @@ func getDirectoryAndUrlString(apr *argparser.ArgParseResults) (string, string, e
 		if dir == "." {
 			dir = path.Dir(urlStr)
 		} else if dir == "/" {
-			return "", "", errhand.BuildDError("Could not infer repo name.  Please explicitily define a directory for this url").Build()
+			return "", "", errhand.BuildDError("Could not infer repo name.  Please explicitly define a directory for this url").Build()
 		}
 	}
 
@@ -100,6 +100,7 @@ func remoteParams(apr *argparser.ArgParseResults, scheme, remoteUrl string) (map
 
 	var err error
 	if scheme == dbfactory.AWSScheme {
+		// TODO: get AWS params from session
 		err = cli.AddAWSParams(remoteUrl, apr, params)
 	} else {
 		err = cli.VerifyNoAwsParams(apr)

@@ -268,6 +268,7 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 	return sess.AddDB(ctx, dbstate)
 }
 
+// TODO: extract a shared library for this functionality
 func createRemote(ctx *sql.Context, remoteName, remoteUrl string, params map[string]string, dialer dbfactory.GRPCDialProvider) (env.Remote, *doltdb.DoltDB, error) {
 	r := env.NewRemote(remoteName, remoteUrl, params, dialer)
 
