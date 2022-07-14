@@ -24,36 +24,18 @@ import (
 
 // SessionCache caches various pieces of expensive to compute information to speed up future lookups in the session.
 // No methods are thread safe.
-type SessionCache interface {
-	// CacheTableIndexes caches all indexes for the table with the name given
-	CacheTableIndexes(key doltdb.DataCacheKey, table string, indexes []sql.Index)
-	// GetTableIndexesCache returns the cached index information for the table named, and whether the cache was present
-	GetTableIndexesCache(key doltdb.DataCacheKey, table string) ([]sql.Index, bool)
-	// CacheTable caches a sql.Table implementation for the table named
-	CacheTable(key doltdb.DataCacheKey, tableName string, table sql.Table)
-	// GetCachedTable returns the cached sql.Table for the table named, and whether the cache was present
-	GetCachedTable(key doltdb.DataCacheKey, tableName string) (sql.Table, bool)
-	// CacheViews caches all views in a database for the cache key given
-	CacheViews(key doltdb.DataCacheKey, viewNames []string, viewDefs []string)
-	// ViewsCached returns whether this cache has been initialized with the set of views yet
-	ViewsCached(key doltdb.DataCacheKey) bool
-	// GetCachedView returns the cached view named, and whether the cache was present
-	GetCachedView(key doltdb.DataCacheKey, viewName string) (string, bool)
-	// ClearTableCache removes all cache info for all tables at all cache keys
-	ClearTableCache()
-}
-
-type sessionCache struct {
+type SessionCache struct {
 	indexes map[doltdb.DataCacheKey]map[string][]sql.Index
 	tables  map[doltdb.DataCacheKey]map[string]sql.Table
 	views   map[doltdb.DataCacheKey]map[string]string
 }
 
-func newSessionCache() *sessionCache {
-	return &sessionCache{}
+func newSessionCache() *SessionCache {
+	return &SessionCache{}
 }
 
-func (c *sessionCache) CacheTableIndexes(key doltdb.DataCacheKey, table string, indexes []sql.Index) {
+// CacheTableIndexes caches all indexes for the table with the name given
+func (c *SessionCache) CacheTableIndexes(key doltdb.DataCacheKey, table string, indexes []sql.Index) {
 	table = strings.ToLower(table)
 
 	if c.indexes == nil {
@@ -69,7 +51,8 @@ func (c *sessionCache) CacheTableIndexes(key doltdb.DataCacheKey, table string, 
 	tableIndexes[table] = indexes
 }
 
-func (c *sessionCache) GetTableIndexesCache(key doltdb.DataCacheKey, table string) ([]sql.Index, bool) {
+// GetTableIndexesCache returns the cached index information for the table named, and whether the cache was present
+func (c *SessionCache) GetTableIndexesCache(key doltdb.DataCacheKey, table string) ([]sql.Index, bool) {
 	table = strings.ToLower(table)
 
 	if c.indexes == nil {
@@ -85,7 +68,8 @@ func (c *sessionCache) GetTableIndexesCache(key doltdb.DataCacheKey, table strin
 	return indexes, ok
 }
 
-func (c *sessionCache) CacheTable(key doltdb.DataCacheKey, tableName string, table sql.Table) {
+// CacheTable caches a sql.Table implementation for the table named
+func (c *SessionCache) CacheTable(key doltdb.DataCacheKey, tableName string, table sql.Table) {
 	tableName = strings.ToLower(tableName)
 
 	if c.tables == nil {
@@ -101,11 +85,13 @@ func (c *sessionCache) CacheTable(key doltdb.DataCacheKey, tableName string, tab
 	tablesForKey[tableName] = table
 }
 
-func (c *sessionCache) ClearTableCache() {
+// ClearTableCache removes all cache info for all tables at all cache keys
+func (c *SessionCache) ClearTableCache() {
 	c.tables = make(map[doltdb.DataCacheKey]map[string]sql.Table)
 }
 
-func (c *sessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName string) (sql.Table, bool) {
+// GetCachedTable returns the cached sql.Table for the table named, and whether the cache was present
+func (c *SessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName string) (sql.Table, bool) {
 	tableName = strings.ToLower(tableName)
 
 	if c.tables == nil {
@@ -121,7 +107,8 @@ func (c *sessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName string)
 	return table, ok
 }
 
-func (c *sessionCache) CacheViews(key doltdb.DataCacheKey, viewNames []string, viewDefs []string) {
+// CacheViews caches all views in a database for the cache key given
+func (c *SessionCache) CacheViews(key doltdb.DataCacheKey, viewNames []string, viewDefs []string) {
 	if c.views == nil {
 		c.views = make(map[doltdb.DataCacheKey]map[string]string)
 	}
@@ -138,7 +125,8 @@ func (c *sessionCache) CacheViews(key doltdb.DataCacheKey, viewNames []string, v
 	}
 }
 
-func (c *sessionCache) ViewsCached(key doltdb.DataCacheKey) bool {
+// ViewsCached returns whether this cache has been initialized with the set of views yet
+func (c *SessionCache) ViewsCached(key doltdb.DataCacheKey) bool {
 	if c.views == nil {
 		return false
 	}
@@ -147,7 +135,8 @@ func (c *sessionCache) ViewsCached(key doltdb.DataCacheKey) bool {
 	return ok
 }
 
-func (c *sessionCache) GetCachedView(key doltdb.DataCacheKey, viewName string) (string, bool) {
+// GetCachedView returns the cached view named, and whether the cache was present
+func (c *SessionCache) GetCachedView(key doltdb.DataCacheKey, viewName string) (string, bool) {
 	viewName = strings.ToLower(viewName)
 
 	if c.views == nil {

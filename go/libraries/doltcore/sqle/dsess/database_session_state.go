@@ -57,7 +57,7 @@ type DatabaseSessionState struct {
 
 	TblStats map[string]sql.TableStatistics
 
-	sessionCache *sessionCache
+	sessionCache *SessionCache
 
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a
@@ -86,7 +86,7 @@ func (d DatabaseSessionState) GetRoots() doltdb.Roots {
 	}
 }
 
-func (d *DatabaseSessionState) SessionCache() SessionCache {
+func (d *DatabaseSessionState) SessionCache() *SessionCache {
 	return d.sessionCache
 }
 
