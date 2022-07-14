@@ -237,7 +237,7 @@ func removeBranchRevisionDatabase(ctx *sql.Context, revisionDbName string) error
 		return fmt.Errorf("unexpected session type: %T", ctx.Session)
 	}
 
-	provider := doltsess.Session.Provider()
+	provider := doltsess.Provider()
 	if provider, ok := provider.(dsess.RevisionDatabaseProvider); ok {
 		err := provider.DropRevisionDb(ctx, revisionDbName)
 		// Try to remove any branch-qualified database, but don't error if it isn't found

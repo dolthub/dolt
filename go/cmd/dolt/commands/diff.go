@@ -452,6 +452,7 @@ func printShowCreateTableDiff(ctx context.Context, td diff.TableDelta) errhand.V
 
 	var fromCreateStmt = ""
 	if td.FromTable != nil {
+		// TODO: use UserSpaceDatabase for these, no reason for this separate database implementation
 		sqlDb := sqle.NewSingleTableDatabase(td.FromName, fromSch, td.FromFks, td.FromFksParentSch)
 		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
 		fromCreateStmt, err = sqle.GetCreateTableStmt(sqlCtx, engine, td.FromName)
