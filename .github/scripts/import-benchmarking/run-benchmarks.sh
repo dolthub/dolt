@@ -58,9 +58,8 @@ source \
   "$TO_VERSION"      \
   "$timeprefix"      \
   "$actorprefix"     \
-  "$issuenumber"      > job.json
-  "$issuenumber"     \
-  "$NOMS_BIN_FORMAT" > job.json
+  "$NOMS_BIN_FORMAT" \
+  "$issuenumber"     > job.json
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
 
