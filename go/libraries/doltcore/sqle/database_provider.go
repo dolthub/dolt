@@ -223,7 +223,7 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 	var srcDB *doltdb.DoltDB
 	dialer := p.remoteDialer
 	if dialer == nil {
-
+		// TODO: fill this in or error out
 	}
 	r, srcDB, err := createRemote(ctx, remoteName, remoteUrl, remoteParams, dialer)
 	if err != nil {
