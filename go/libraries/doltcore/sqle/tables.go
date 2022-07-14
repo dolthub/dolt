@@ -272,12 +272,12 @@ func (t *DoltTable) getRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 
 // GetIndexes implements sql.IndexedTable
 func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	key, ok, err := t.DataCacheKey(ctx)
+	key, tableIsCacheable, err := t.DataCacheKey(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if !ok {
+	if !tableIsCacheable {
 		tbl, err := t.DoltTable(ctx)
 		if err != nil {
 			return nil, err
