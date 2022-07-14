@@ -18,13 +18,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 // SingleTableInfoDatabase is intended to allow a sole schema to make use of any display functionality in `go-mysql-server`.
