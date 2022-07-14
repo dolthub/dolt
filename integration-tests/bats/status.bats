@@ -94,7 +94,6 @@ SQL
 }
 
 @test "status: tables in conflict" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE t (pk int PRIMARY KEY, c0 int);
 INSERT INTO t VALUES (1,1);

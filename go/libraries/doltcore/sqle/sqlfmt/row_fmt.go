@@ -351,7 +351,8 @@ func SqlRowAsTupleString(r sql.Row, tableSch schema.Schema) (string, error) {
 	return b.String(), nil
 }
 
-func SqlRowAsDeleteStmt(r sql.Row, tableName string, tableSch schema.Schema) (string, error) {
+// SqlRowAsDeleteStmt generates a sql statement. Non-zero |limit| adds a limit clause.
+func SqlRowAsDeleteStmt(r sql.Row, tableName string, tableSch schema.Schema, limit uint64) (string, error) {
 	var b strings.Builder
 	b.WriteString("DELETE FROM ")
 	b.WriteString(QuoteIdentifier(tableName))
@@ -381,6 +382,15 @@ func SqlRowAsDeleteStmt(r sql.Row, tableName string, tableSch schema.Schema) (st
 
 	if err != nil {
 		return "", err
+	}
+
+	if limit != 0 {
+		b.WriteString(" LIMIT ")
+		s, err := interfaceValueAsSqlString(typeinfo.FromKind(types.UintKind), limit)
+		if err != nil {
+			return "", err
+		}
+		b.WriteString(s)
 	}
 
 	b.WriteString(";")

@@ -248,7 +248,6 @@ func addParamsToCmd(cmd *exec.Cmd, scriptDir string) *exec.Cmd {
 	lp := filepath.Join(scriptDir, "?.lua")
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, fmt.Sprintf("LUA_PATH=%s", lp))
-	cmd.Env = append(cmd.Env, "DOLT_TRANSACTION_MERGE_STOMP=1")
 
 	return cmd
 }

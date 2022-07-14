@@ -20,7 +20,6 @@ import (
 	flatbuffers "github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -36,12 +35,12 @@ func storeroot_flatbuffer(am prolly.AddressMap) []byte {
 	return builder.FinishedBytes()
 }
 
-func parse_storeroot(bs []byte, cs chunks.ChunkStore) prolly.AddressMap {
+func parse_storeroot(bs []byte, ns tree.NodeStore) prolly.AddressMap {
 	if !bytes.Equal([]byte(serial.StoreRootFileID), bs[4:8]) {
 		panic("expected store root file id, got: " + string(bs[4:8]))
 	}
 	sr := serial.GetRootAsStoreRoot(bs, 0)
 	mapbytes := sr.AddressMapBytes()
 	node := tree.NodeFromBytes(mapbytes)
-	return prolly.NewAddressMap(node, tree.NewNodeStore(cs))
+	return prolly.NewAddressMap(node, ns)
 }

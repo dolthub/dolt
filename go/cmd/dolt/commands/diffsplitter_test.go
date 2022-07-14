@@ -41,33 +41,33 @@ func TestDiffSplitter(t *testing.T) {
 		{
 			name: "changed rows",
 			diffQuerySch: sql.Schema{
-				{Name: "from_a"},
-				{Name: "from_b"},
-				{Name: "to_a"},
-				{Name: "to_b"},
-				{Name: "diff_type"},
+				intCol("from_a"),
+				intCol("from_b"),
+				intCol("to_a"),
+				intCol("to_b"),
+				strCol("diff_type"),
 			},
 			tableSch: sql.Schema{
-				{Name: "a"},
-				{Name: "b"},
+				intCol("a"),
+				intCol("b"),
 			},
 			diffQueryRows: []sql.Row{
-				{nil, nil, "1", "2", "added"},
-				{"3", "4", nil, nil, "removed"},
-				{"5", "6", "5", "100", "modified"},
+				{nil, nil, 1, 2, "added"},
+				{3, 4, nil, nil, "removed"},
+				{5, 6, 5, 100, "modified"},
 			},
 			expectedRows: []splitRow{
 				{
 					old: emptyRowDiff(2),
 					new: rowDiff{
-						row:      sql.Row{"1", "2"},
+						row:      sql.Row{1, 2},
 						rowDiff:  diff.Added,
 						colDiffs: []diff.ChangeType{diff.Added, diff.Added},
 					},
 				},
 				{
 					old: rowDiff{
-						row:      sql.Row{"3", "4"},
+						row:      sql.Row{3, 4},
 						rowDiff:  diff.Removed,
 						colDiffs: []diff.ChangeType{diff.Removed, diff.Removed},
 					},
@@ -75,12 +75,12 @@ func TestDiffSplitter(t *testing.T) {
 				},
 				{
 					old: rowDiff{
-						row:      sql.Row{"5", "6"},
+						row:      sql.Row{5, 6},
 						rowDiff:  diff.ModifiedOld,
 						colDiffs: []diff.ChangeType{diff.None, diff.ModifiedOld},
 					},
 					new: rowDiff{
-						row:      sql.Row{"5", "100"},
+						row:      sql.Row{5, 100},
 						rowDiff:  diff.ModifiedNew,
 						colDiffs: []diff.ChangeType{diff.None, diff.ModifiedNew},
 					},
@@ -90,34 +90,34 @@ func TestDiffSplitter(t *testing.T) {
 		{
 			name: "added and removed column",
 			diffQuerySch: sql.Schema{
-				{Name: "from_a"},
-				{Name: "from_b"},
-				{Name: "to_b"},
-				{Name: "to_c"},
-				{Name: "diff_type"},
+				intCol("from_a"),
+				intCol("from_b"),
+				intCol("to_b"),
+				intCol("to_c"),
+				strCol("diff_type"),
 			},
 			tableSch: sql.Schema{
-				{Name: "a"},
-				{Name: "b"},
-				{Name: "c"},
+				intCol("a"),
+				intCol("b"),
+				intCol("c"),
 			},
 			diffQueryRows: []sql.Row{
-				{nil, nil, "1", "2", "added"},
-				{"3", "4", nil, nil, "removed"},
-				{"5", "6", "6", "100", "modified"},
+				{nil, nil, 1, 2, "added"},
+				{3, 4, nil, nil, "removed"},
+				{5, 6, 6, 100, "modified"},
 			},
 			expectedRows: []splitRow{
 				{
 					old: emptyRowDiff(3),
 					new: rowDiff{
-						row:      sql.Row{nil, "1", "2"},
+						row:      sql.Row{nil, 1, 2},
 						rowDiff:  diff.Added,
 						colDiffs: []diff.ChangeType{diff.None, diff.Added, diff.Added},
 					},
 				},
 				{
 					old: rowDiff{
-						row:      sql.Row{"3", "4", nil},
+						row:      sql.Row{3, 4, nil},
 						rowDiff:  diff.Removed,
 						colDiffs: []diff.ChangeType{diff.Removed, diff.Removed, diff.None},
 					},
@@ -125,12 +125,12 @@ func TestDiffSplitter(t *testing.T) {
 				},
 				{
 					old: rowDiff{
-						row:      sql.Row{"5", "6", nil},
+						row:      sql.Row{5, 6, nil},
 						rowDiff:  diff.ModifiedOld,
 						colDiffs: []diff.ChangeType{diff.None, diff.None, diff.None},
 					},
 					new: rowDiff{
-						row:      sql.Row{nil, "6", "100"},
+						row:      sql.Row{nil, 6, 100},
 						rowDiff:  diff.ModifiedNew,
 						colDiffs: []diff.ChangeType{diff.None, diff.None, diff.ModifiedNew},
 					},
@@ -140,23 +140,23 @@ func TestDiffSplitter(t *testing.T) {
 		{
 			name: "new table",
 			diffQuerySch: sql.Schema{
-				{Name: "to_a"},
-				{Name: "to_b"},
-				{Name: "diff_type"},
+				intCol("to_a"),
+				intCol("to_b"),
+				strCol("diff_type"),
 			},
 			tableSch: sql.Schema{
-				{Name: "a"},
-				{Name: "b"},
+				intCol("a"),
+				intCol("b"),
 			},
 			diffQueryRows: []sql.Row{
-				{"1", "2", "added"},
-				{"3", "4", "added"},
+				{1, 2, "added"},
+				{3, 4, "added"},
 			},
 			expectedRows: []splitRow{
 				{
 					old: emptyRowDiff(2),
 					new: rowDiff{
-						row:      sql.Row{"1", "2"},
+						row:      sql.Row{1, 2},
 						rowDiff:  diff.Added,
 						colDiffs: []diff.ChangeType{diff.Added, diff.Added},
 					},
@@ -164,7 +164,7 @@ func TestDiffSplitter(t *testing.T) {
 				{
 					old: emptyRowDiff(2),
 					new: rowDiff{
-						row:      sql.Row{"3", "4"},
+						row:      sql.Row{3, 4},
 						rowDiff:  diff.Added,
 						colDiffs: []diff.ChangeType{diff.Added, diff.Added},
 					},
@@ -174,23 +174,23 @@ func TestDiffSplitter(t *testing.T) {
 		{
 			name: "dropped table",
 			diffQuerySch: sql.Schema{
-				{Name: "from_a"},
-				{Name: "from_b"},
-				{Name: "diff_type"},
+				intCol("from_a"),
+				intCol("from_b"),
+				strCol("diff_type"),
 			},
 			tableSch: sql.Schema{
-				{Name: "a"},
-				{Name: "b"},
+				intCol("a"),
+				intCol("b"),
 			},
 			diffQueryRows: []sql.Row{
-				{"1", "2", "removed"},
-				{"3", "4", "removed"},
+				{1, 2, "removed"},
+				{3, 4, "removed"},
 			},
 			expectedRows: []splitRow{
 				{
 					new: emptyRowDiff(2),
 					old: rowDiff{
-						row:      sql.Row{"1", "2"},
+						row:      sql.Row{1, 2},
 						rowDiff:  diff.Removed,
 						colDiffs: []diff.ChangeType{diff.Removed, diff.Removed},
 					},
@@ -198,7 +198,7 @@ func TestDiffSplitter(t *testing.T) {
 				{
 					new: emptyRowDiff(2),
 					old: rowDiff{
-						row:      sql.Row{"3", "4"},
+						row:      sql.Row{3, 4},
 						rowDiff:  diff.Removed,
 						colDiffs: []diff.ChangeType{diff.Removed, diff.Removed},
 					},
@@ -226,7 +226,14 @@ func TestDiffSplitter(t *testing.T) {
 
 func emptyRowDiff(columns int) rowDiff {
 	return rowDiff{
-
 		colDiffs: make([]diff.ChangeType, columns),
 	}
+}
+
+func strCol(name string) *sql.Column {
+	return &sql.Column{Name: name, Type: sql.Text}
+}
+
+func intCol(name string) *sql.Column {
+	return &sql.Column{Name: name, Type: sql.Int64}
 }

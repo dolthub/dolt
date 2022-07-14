@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nomdl"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -127,12 +128,12 @@ func newCommit(ctx context.Context, value types.Value, parentsList types.List, p
 	}
 }
 
-func NewCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (*Commit, error) {
+func NewCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Parents == nil || len(opts.Parents) == 0 {
 		return nil, errors.New("cannot create commit without parents")
 	}
 
-	return newCommitForValue(ctx, cs, vrw, v, opts)
+	return newCommitForValue(ctx, cs, vrw, ns, v, opts)
 }
 
 func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, parentsClosureAddr hash.Hash) ([]byte, uint64) {
@@ -183,7 +184,7 @@ var commitKeyTupleDesc = val.NewTupleDescriptor(
 )
 var commitValueTupleDesc = val.NewTupleDescriptor()
 
-func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (*Commit, error) {
+func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Meta == nil {
 		opts.Meta = &CommitMeta{}
 	}
@@ -203,7 +204,7 @@ func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 			parents[i] = serial.GetRootAsCommit([]byte(parentValues[i].(types.SerialMessage)), 0)
 			heights[i] = parents[i].Height()
 		}
-		parentClosureAddr, err := writeFbCommitParentClosure(ctx, cs, vrw, parents, opts.Parents)
+		parentClosureAddr, err := writeFbCommitParentClosure(ctx, cs, vrw, ns, parents, opts.Parents)
 		if err != nil {
 			return nil, err
 		}
@@ -317,7 +318,7 @@ func LoadCommitAddr(ctx context.Context, vr types.ValueReader, addr hash.Hash) (
 	return commitFromValue(vr.Format(), v)
 }
 
-func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) (hash.Hash, bool, error) {
+func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader, ns1, ns2 tree.NodeStore) (hash.Hash, bool, error) {
 	c1Q, c2Q := CommitByHeightHeap{c1}, CommitByHeightHeap{c2}
 	for !c1Q.Empty() && !c2Q.Empty() {
 		c1Ht, c2Ht := c1Q.MaxHeight(), c2Q.MaxHeight()
@@ -358,21 +359,21 @@ func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 *Commit, vr1
 // This implementation makes use of the parents_closure field on the commit
 // struct.  If the commit does not have a materialized parents_closure, this
 // implementation delegates to findCommonAncestorUsingParentsList.
-func FindCommonAncestor(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) (hash.Hash, bool, error) {
-	pi1, err := newParentsClosureIterator(ctx, c1, vr1)
+func FindCommonAncestor(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader, ns1, ns2 tree.NodeStore) (hash.Hash, bool, error) {
+	pi1, err := newParentsClosureIterator(ctx, c1, vr1, ns1)
 	if err != nil {
 		return hash.Hash{}, false, err
 	}
 	if pi1 == nil {
-		return findCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
+		return findCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2, ns1, ns2)
 	}
 
-	pi2, err := newParentsClosureIterator(ctx, c2, vr2)
+	pi2, err := newParentsClosureIterator(ctx, c2, vr2, ns2)
 	if err != nil {
 		return hash.Hash{}, false, err
 	}
 	if pi2 == nil {
-		return findCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
+		return findCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2, ns1, ns2)
 	}
 
 	for {

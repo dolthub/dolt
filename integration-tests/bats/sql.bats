@@ -1121,7 +1121,6 @@ SQL
 }
 
 @test "sql: alter table modify column type no data change" {
-    skip_nbf_dolt_1
     
     # there was a bug on NULLs where it would register a change
     dolt sql <<SQL

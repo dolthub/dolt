@@ -76,6 +76,10 @@ func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
+
 	left, verr := ResolveCommitWithVErr(dEnv, apr.Arg(0))
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)

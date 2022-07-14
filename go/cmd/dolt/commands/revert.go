@@ -78,6 +78,11 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		usage()
 		return 1
 	}
+
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
+
 	headCommit, err := dEnv.HeadCommit(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)

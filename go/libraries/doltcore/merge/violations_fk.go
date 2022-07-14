@@ -99,7 +99,7 @@ func AddForeignKeyViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 				return nil, nil, err
 			}
 			// Parent does not exist in the ancestor so we use an empty map
-			emptyIdx, err := durable.NewEmptyIndex(ctx, postParent.Table.ValueReadWriter(), postParent.Schema)
+			emptyIdx, err := durable.NewEmptyIndex(ctx, postParent.Table.ValueReadWriter(), postParent.Table.NodeStore(), postParent.Schema)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -122,7 +122,7 @@ func AddForeignKeyViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 			}
 			innerFoundViolations := false
 			// Child does not exist in the ancestor so we use an empty map
-			emptyIdx, err := durable.NewEmptyIndex(ctx, postChild.Table.ValueReadWriter(), postChild.Schema)
+			emptyIdx, err := durable.NewEmptyIndex(ctx, postChild.Table.ValueReadWriter(), postChild.Table.NodeStore(), postChild.Schema)
 			if err != nil {
 				return nil, nil, err
 			}

@@ -73,7 +73,7 @@ func runDs(ctx context.Context, args []string) int {
 		if len(args) >= 1 {
 			dbSpec = args[0]
 		}
-		store, _, err := cfg.GetDatabase(ctx, dbSpec)
+		store, _, _, err := cfg.GetDatabase(ctx, dbSpec)
 		util.CheckError(err)
 		defer store.Close()
 

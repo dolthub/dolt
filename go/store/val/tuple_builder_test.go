@@ -16,6 +16,7 @@ package val
 
 import (
 	"math"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,6 +28,9 @@ func TestTupleBuilder(t *testing.T) {
 	})
 	t.Run("round trip ints", func(t *testing.T) {
 		testRoundTripInts(t)
+	})
+	t.Run("build large tuple", func(t *testing.T) {
+		testBuildLargeTuple(t)
 	})
 }
 
@@ -159,6 +163,42 @@ func testRoundTripInts(t *testing.T) {
 			}
 		}
 	}
+}
+
+func testBuildLargeTuple(t *testing.T) {
+	desc := NewTupleDescriptor(
+		Type{Enc: Int8Enc},
+		Type{Enc: Int16Enc},
+		Type{Enc: Int32Enc},
+		Type{Enc: Int64Enc},
+		Type{Enc: Uint8Enc},
+		Type{Enc: Uint16Enc},
+		Type{Enc: Uint32Enc},
+		Type{Enc: Uint64Enc},
+		Type{Enc: Float32Enc},
+		Type{Enc: Float64Enc},
+		Type{Enc: StringEnc},
+		Type{Enc: ByteStringEnc},
+	)
+
+	s1 := make([]byte, 1024)
+	s2 := make([]byte, 1024)
+	rand.Read(s1)
+	rand.Read(s2)
+
+	tb := NewTupleBuilder(desc)
+	tb.PutInt8(0, math.MaxInt8)
+	tb.PutInt16(1, math.MaxInt16)
+	tb.PutInt32(2, math.MaxInt32)
+	tb.PutInt64(3, math.MaxInt64)
+	tb.PutUint8(4, math.MaxUint8)
+	tb.PutUint16(5, math.MaxUint16)
+	tb.PutUint32(6, math.MaxUint32)
+	tb.PutUint64(7, math.MaxUint64)
+	tb.PutFloat32(8, math.MaxFloat32)
+	tb.PutFloat64(9, math.MaxFloat64)
+	tb.PutString(10, string(s1))
+	tb.PutByteString(11, []byte(s2))
 }
 
 type testCompare struct{}

@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -107,18 +108,19 @@ type AWSFactory struct {
 }
 
 // CreateDB creates an AWS backed database
-func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, error) {
+func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	var db datas.Database
 	cs, err := fact.newChunkStore(ctx, nbf, urlObj, params)
 
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	vrw := types.NewValueStore(cs)
-	db = datas.NewTypesDatabase(vrw)
+	ns := tree.NewNodeStore(cs)
+	db = datas.NewTypesDatabase(vrw, ns)
 
-	return db, vrw, nil
+	return db, vrw, ns, nil
 }
 
 func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (chunks.ChunkStore, error) {
@@ -140,6 +142,11 @@ func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinForm
 	}
 
 	sess := session.Must(session.NewSessionWithOptions(opts))
+	_, err = sess.Config.Credentials.Get()
+	if err != nil {
+		return nil, err
+	}
+
 	q := nbs.NewUnlimitedMemQuotaProvider()
 	return nbs.NewAWSStore(ctx, nbf.VersionString(), parts[0], dbName, parts[1], s3.New(sess), dynamodb.New(sess), defaultMemTableSize, q)
 }
@@ -184,6 +191,11 @@ func awsConfigFromParams(params map[string]interface{}) (session.Options, error)
 	if val, ok := params[AWSCredsProfile]; ok {
 		profile = val.(string)
 		opts.Profile = val.(string)
+	}
+
+	filePath, ok := params[AWSCredsFileParam]
+	if ok && len(filePath.(string)) != 0 && awsCredsSource == RoleCS {
+		awsCredsSource = FileCS
 	}
 
 	switch awsCredsSource {

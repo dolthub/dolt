@@ -71,7 +71,7 @@ func prollyParentFkConstraintViolations(
 				return nil
 			}
 
-			partialKeyRange := prolly.ClosedRange(partialKey, partialKey, partialDesc)
+			partialKeyRange := prolly.PrefixRange(partialKey, partialDesc)
 			itr, err := postParentIndexData.IterRange(ctx, partialKeyRange)
 			if err != nil {
 				return err
@@ -308,7 +308,11 @@ func makePartialKey(kb *val.TupleBuilder, idxSch schema.Index, tblSch schema.Sch
 		if v.FieldIsNull(j) {
 			return nil, true
 		}
-		kb.PutRaw(i, v.GetField(j))
+		if schema.IsKeyless(tblSch) {
+			kb.PutRaw(i, v.GetField(j+1))
+		} else {
+			kb.PutRaw(i, v.GetField(j))
+		}
 	}
 
 	return kb.Build(pool), false

@@ -39,7 +39,7 @@ type setType struct {
 var _ TypeInfo = (*setType)(nil)
 
 func CreateSetTypeFromParams(params map[string]string) (TypeInfo, error) {
-	var collation sql.Collation
+	var collation sql.CollationID
 	var err error
 	if collationStr, ok := params[setTypeParam_Collation]; ok {
 		collation, err = sql.ParseCollation(nil, &collationStr, false)

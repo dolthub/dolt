@@ -131,21 +131,20 @@ func RemoveDocsTable(tbls []string) []string {
 	return result
 }
 
-// GetRemoteBranchRef returns the ref of a branch and ensures it matched with name. It will also return boolean value
-// representing whether there is not match or not and an error if there is one.
-func GetRemoteBranchRef(ctx context.Context, ddb *doltdb.DoltDB, name string) (ref.DoltRef, bool, error) {
+// GetRemoteBranchRef returns a remote ref with matching name for a branch for each remotes.
+func GetRemoteBranchRef(ctx context.Context, ddb *doltdb.DoltDB, name string) ([]ref.RemoteRef, error) {
 	remoteRefFilter := map[ref.RefType]struct{}{ref.RemoteRefType: {}}
 	refs, err := ddb.GetRefsOfType(ctx, remoteRefFilter)
-
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
+	var remoteRef []ref.RemoteRef
 	for _, rf := range refs {
 		if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetBranch() == name {
-			return rf, true, nil
+			remoteRef = append(remoteRef, remRef)
 		}
 	}
 
-	return nil, false, nil
+	return remoteRef, nil
 }

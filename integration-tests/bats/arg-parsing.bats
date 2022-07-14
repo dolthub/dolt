@@ -11,40 +11,40 @@ teardown() {
 }
 
 @test "arg-parsing: dolt supports Nix style argument parsing" {
-    dolt checkout -b this-should-work
+    dolt checkout -b some-branch
     run dolt branch
     [ $status -eq 0 ]
-    [[ "$output" =~ "this-should-work" ]] || false
+    [[ "$output" =~ "some-branch" ]] || false
     dolt checkout main
-    dolt branch -d this-should-work
+    dolt branch -d some-branch
 
-    dolt checkout -b "this-should-work"
+    dolt checkout -b "some-branch"
     run dolt branch
     [ $status -eq 0 ]
-    [[ "$output" =~ "this-should-work" ]] || false
+    [[ "$output" =~ "some-branch" ]] || false
     dolt checkout main
-    dolt branch -d "this-should-work"
+    dolt branch -d "some-branch"
 
-    dolt checkout --b "this-should-work"
+    dolt checkout --b "some-branch"
     run dolt branch
     [ $status -eq 0 ]
-    [[ "$output" =~ "this-should-work" ]] || false
+    [[ "$output" =~ "some-branch" ]] || false
     dolt checkout main
-    dolt branch --d "this-should-work"
+    dolt branch --d "some-branch"
 
-    run dolt checkout -bthis-should-work
+    run dolt checkout -bsome-branch
     [ $status -eq 0 ]
     run dolt branch
     [ $status -eq 0 ]
-    [[ "$output" =~ "this-should-work" ]] || false
+    [[ "$output" =~ "some-branch" ]] || false
     dolt checkout main
-    dolt branch -dthis-should-work
+    dolt branch -dsome-branch
 
     cat <<DELIM > ints.csv
 pk,c1
 0,0
 DELIM
-    dolt table import -cpk=pk this-should-work ints.csv
+    dolt table import -cpk=pk some-branch ints.csv
 }
 
 @test "arg-parsing: dolt supports chaining of modal arguments" {

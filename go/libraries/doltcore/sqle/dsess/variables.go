@@ -127,6 +127,22 @@ func defineSystemVariables(name string) {
 				Type:              sql.NewSystemStringType(DefaultBranchKey(name)),
 				Default:           "",
 			},
+			{
+				Name:              AwsCredsFileKey,
+				Scope:             sql.SystemVariableScope_Session,
+				Dynamic:           false,
+				SetVarHintApplies: false,
+				Type:              sql.NewSystemStringType(AwsCredsFileKey),
+				Default:           nil,
+			},
+			{
+				Name:              AwsCredsProfileKey,
+				Scope:             sql.SystemVariableScope_Session,
+				Dynamic:           false,
+				SetVarHintApplies: false,
+				Type:              sql.NewSystemStringType(AwsCredsProfileKey),
+				Default:           nil,
+			},
 		})
 	}
 }

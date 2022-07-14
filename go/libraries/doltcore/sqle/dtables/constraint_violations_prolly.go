@@ -161,21 +161,31 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	o := 2
-	for i := 0; i < itr.kd.Count(); i++ {
-		r[o+i], err = index.GetField(ctx, itr.kd, i, art.Key, itr.ns)
-		if err != nil {
-			return nil, err
+	if !schema.IsKeyless(itr.sch) {
+		for i := 0; i < itr.kd.Count(); i++ {
+			r[o+i], err = index.GetField(ctx, itr.kd, i, art.Key, itr.ns)
+			if err != nil {
+				return nil, err
+			}
 		}
-	}
-	o += itr.kd.Count()
+		o += itr.kd.Count()
 
-	for i := 0; i < itr.vd.Count(); i++ {
-		r[o+i], err = index.GetField(ctx, itr.vd, i, meta.Value, itr.ns)
-		if err != nil {
-			return nil, err
+		for i := 0; i < itr.vd.Count(); i++ {
+			r[o+i], err = index.GetField(ctx, itr.vd, i, meta.Value, itr.ns)
+			if err != nil {
+				return nil, err
+			}
 		}
+		o += itr.vd.Count()
+	} else {
+		for i := 0; i < itr.vd.Count()-1; i++ {
+			r[o+i], err = index.GetField(ctx, itr.vd, i+1, meta.Value, itr.ns)
+			if err != nil {
+				return nil, err
+			}
+		}
+		o += itr.vd.Count() - 1
 	}
-	o += itr.vd.Count()
 
 	switch art.ArtType {
 	case prolly.ArtifactTypeForeignKeyViol:

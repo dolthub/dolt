@@ -66,8 +66,8 @@ func (ph *PushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
 func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir string, ds datas.Dataset) error {
 	addr, ok := ds.MaybeHeadAddr()
 	if !ok {
-		// No head, return
-		return nil
+		_, err := destDB.Delete(ctx, ds)
+		return err
 	}
 
 	rf, err := ref.Parse(ds.ID())
@@ -83,15 +83,14 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir
 	}
 
 	puller, err := pull.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcCS, destCS, waf, addr, nil)
-	if err == pull.ErrDBUpToDate {
-		return nil
-	} else if err != nil {
+	if err != nil && err != pull.ErrDBUpToDate {
 		return err
 	}
-
-	err = puller.Pull(ctx)
-	if err != nil {
-		return err
+	if err != pull.ErrDBUpToDate {
+		err = puller.Pull(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	ds, err = destDB.GetDataset(ctx, rf.String())
@@ -135,10 +134,7 @@ func NewAsyncPushOnWriteHook(bThreads *sql.BackgroundThreads, destDB *DoltDB, tm
 
 // Execute implements CommitHook, replicates head updates to the destDb field
 func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
-	addr, ok := ds.MaybeHeadAddr()
-	if !ok {
-		return ErrHashNotFound
-	}
+	addr, _ := ds.MaybeHeadAddr()
 
 	select {
 	case ah.ch <- PushArg{ds: ds, db: db, hash: addr}:
@@ -269,7 +265,11 @@ func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ch chan PushArg
 				if err != nil {
 					logger.Write([]byte("replication failed: " + err.Error()))
 				}
-				latestHeads[id] = newCm.hash
+				if newCm.hash.IsEmpty() {
+					delete(latestHeads, id)
+				} else {
+					latestHeads[id] = newCm.hash
+				}
 			}
 		}
 	}

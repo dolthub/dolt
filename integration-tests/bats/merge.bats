@@ -347,7 +347,6 @@ SQL
 }
 
 @test "merge: Add views on two branches, merge" {
-    skip_nbf_dolt_1
     dolt branch other
     dolt sql -q "CREATE VIEW pkpk AS SELECT pk*pk FROM test1;"
     dolt add . && dolt commit -m "added view on table test1"
@@ -786,7 +785,7 @@ SQL
     # commit it so we can merge again
     dolt commit -afm "committing merge conflicts"
 
-    skip_nbf_dolt_1
+    skip_nbf_dolt_1 "behavior in new format diverges"
 
     # Merge should fail due to conflict and previous conflict and violation state should be retained
     run dolt merge other2

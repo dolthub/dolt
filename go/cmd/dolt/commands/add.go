@@ -75,6 +75,10 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	allFlag := apr.Contains(cli.AllFlag)
 
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), helpPr)
+	}
+
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
 		return handleStageError(err)

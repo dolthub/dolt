@@ -104,6 +104,14 @@ func TestMutableMapReads(t *testing.T) {
 	}
 }
 
+func TestMutableMapFormat(t *testing.T) {
+	ctx := context.Background()
+	mutableMap, _ := makeMutableMap(t, 100)
+	s, err := debugFormat(ctx, mutableMap.(MutableMap))
+	assert.NoError(t, err)
+	assert.NotEmpty(t, s)
+}
+
 func makeMutableMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()

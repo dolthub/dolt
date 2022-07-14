@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -80,7 +81,7 @@ func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs Docs) (*dol
 }
 
 // createDocsTable creates a new in memory table that stores the given doc details.
-func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs) (*doltdb.Table, error) {
+func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, docs Docs) (*doltdb.Table, error) {
 
 	rows := make([]row.Row, 0, len(docs))
 
@@ -121,7 +122,7 @@ func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs) 
 		return nil, err
 	}
 
-	newDocsTbl, err := doltdb.NewNomsTable(ctx, vrw, DocsSchema, rowMap, nil, nil)
+	newDocsTbl, err := doltdb.NewNomsTable(ctx, vrw, ns, DocsSchema, rowMap, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +140,7 @@ func CreateOrUpdateDocsTable(ctx context.Context, root *doltdb.RootValue, docs D
 	if found {
 		return updateDocsTable(ctx, docsTbl, docs)
 	} else {
-		return createDocsTable(ctx, root.VRW(), docs)
+		return createDocsTable(ctx, root.VRW(), root.NodeStore(), docs)
 	}
 }
 

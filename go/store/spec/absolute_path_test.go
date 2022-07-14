@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -53,8 +54,9 @@ func TestAbsolutePathToAndFromString(t *testing.T) {
 func TestAbsolutePaths(t *testing.T) {
 	assert := assert.New(t)
 	storage := &chunks.MemoryStorage{}
-	vs := types.NewValueStore(storage.NewView())
-	db := datas.NewTypesDatabase(vs)
+	cs := storage.NewView()
+	vs := types.NewValueStore(cs)
+	db := datas.NewTypesDatabase(vs, tree.NewNodeStore(cs))
 
 	s0, s1 := types.String("foo"), types.String("bar")
 	list, err := types.NewList(context.Background(), vs, s0, s1)
@@ -113,8 +115,9 @@ func TestAbsolutePaths(t *testing.T) {
 func TestReadAbsolutePaths(t *testing.T) {
 	assert := assert.New(t)
 	storage := &chunks.MemoryStorage{}
-	vs := types.NewValueStore(storage.NewView())
-	db := datas.NewTypesDatabase(vs)
+	cs := storage.NewView()
+	vs := types.NewValueStore(cs)
+	db := datas.NewTypesDatabase(vs, tree.NewNodeStore(cs))
 
 	s0, s1 := types.String("foo"), types.String("bar")
 	list, err := types.NewList(context.Background(), vs, s0, s1)

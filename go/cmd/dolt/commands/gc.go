@@ -99,6 +99,10 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, gcDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
+
 	var err error
 	if apr.Contains(gcShallowFlag) {
 		err = dEnv.DoltDB.ShallowGC(ctx)

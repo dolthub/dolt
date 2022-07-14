@@ -13,7 +13,6 @@ setup() {
     setup_no_dolt_init
     make_repo repo1
     mkdir rem1
-    skip_nbf_dolt_1
 
     cd repo1
     dolt remote add remote1 file://../rem1
@@ -41,14 +40,15 @@ teardown() {
 
     cd repo1
     dolt remote add origin file://../rem1
+    dolt commit -am "add test"
+    dolt checkout -b other
     start_sql_server repo1
 
-    dolt push origin main
     run server_query repo1 1 "select dolt_push() as p" "p\n0"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "the current branch has no upstream branch" ]] || false
 
-    server_query repo1 1 "select dolt_push('--set-upstream', 'origin', 'main') as p" "p\n1"
+    server_query repo1 1 "select dolt_push('--set-upstream', 'origin', 'other') as p" "p\n1"
 
     skip "In-memory branch doesn't track upstream"
     server_query repo1 1 "select dolt_push() as p" "p\n1"

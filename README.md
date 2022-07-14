@@ -23,7 +23,7 @@ ask questions.
 
 Lots of things! Dolt is a generally useful tool with countless
 applications. But if you want some ideas, [here's how people are using
-it so far](https://www.dolthub.com/blog/2021-03-09-dolt-use-cases-in-the-wild/).
+it so far](https://www.dolthub.com/blog/2022-07-11-dolt-case-studies/).
 
 # Dolt CLI
 
@@ -102,12 +102,21 @@ privileges or aren't comfortable running a script with them, you can download th
 for your platform from [the latest release](https://github.com/dolthub/dolt/releases), unzip it,
 and put the binary somewhere on your `$PATH`.
 
-### Homebrew
+### Mac
+
+#### Homebrew
 
 Dolt is on Homebrew, updated every release.
 
 ```
 brew install dolt
+```
+#### MacPorts
+
+On macOS, Dolt can also be installed via a [community-managed port](https://ports.macports.org/port/dolt/) via [MacPorts](https://www.macports.org):
+
+```sh
+sudo port install dolt
 ```
 
 ### Windows
