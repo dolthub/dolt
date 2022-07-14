@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -159,7 +158,7 @@ func (cmd CatCmd) prettyPrintResults(ctx context.Context, doltSch schema.Schema,
 	}
 	defer wr.Close(ctx)
 
-	sess := dsess.DefaultSession().NewDoltSession(config.NewMapConfig(make(map[string]string)))
+	sess := dsess.DefaultSession(dsess.EmptyDatabaseProvider())
 	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
 
 	rowItr, err := getRowIter(ctx, doltSch, sqlSch, idx)
