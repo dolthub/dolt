@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -32,9 +33,10 @@ import (
 
 type ReadReplicaDatabase struct {
 	Database
-	remote env.Remote
-	srcDB  *doltdb.DoltDB
-	tmpDir string
+	remote  env.Remote
+	srcDB   *doltdb.DoltDB
+	tmpDir  string
+	limiter *limiter
 }
 
 var _ SqlDatabase = ReadReplicaDatabase{}
@@ -75,6 +77,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		remote:   remote,
 		tmpDir:   dEnv.TempTableFilesDir(),
 		srcDB:    srcDB,
+		limiter:  newLimiter(),
 	}, nil
 }
 
@@ -154,69 +157,91 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string) 
 		return err
 	}
 
-	for i, refSpec := range refSpecs {
-		branch := ref.NewBranchRef(branches[i])
-		rtRef := refSpec.DestRef(branch)
-		err := fetchRef(ctx, rrd, branch, rtRef)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = actions.FetchFollowTags(ctx, rrd.rsw.TempTableFilesDir(), rrd.srcDB, rrd.ddb, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func fetchRef(ctx *sql.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.DoltRef) error {
-	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, headRef, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
-	if err != nil {
-		return err
-	}
-
-	err = rrd.ddb.FastForward(ctx, rtRef, srcDBCommit)
-	if err != nil {
-		return err
-	}
-
-	err = rrd.ddb.FastForward(ctx, headRef, srcDBCommit)
-	if err != nil {
-		return err
-	}
-
 	dSess := dsess.DSessFromSess(ctx.Session)
-
 	currentBranchRef, err := dSess.CWBHeadRef(ctx, rrd.name)
 	if err != nil {
 		return err
 	}
 
-	if headRef == currentBranchRef {
-		wsRef, err := ref.WorkingSetRefForHead(headRef)
+	for i, refSpec := range refSpecs {
+		branch := ref.NewBranchRef(branches[i])
+		rtRef := refSpec.DestRef(branch)
+
+		fetchCtx := ctx.Context
+
+		srcDBCommitA, err := rrd.limiter.Run(ctx, branch.String(), func() (any, error) {
+			// fetch remote tracking ref only
+			var srcDBCommit *doltdb.Commit
+			{
+				srcDBCommit, err = actions.FetchRemoteBranch(fetchCtx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, branch, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+				if err != nil {
+					return nil, err
+				}
+
+				err = rrd.ddb.FastForward(fetchCtx, rtRef, srcDBCommit)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			// either ff or create local tracking branch
+			{
+				branchExists, err := rrd.ddb.HasBranch(fetchCtx, branch.GetPath())
+				switch {
+				case err != nil:
+				case branchExists:
+					err = rrd.ddb.FastForward(fetchCtx, branch, srcDBCommit)
+				default:
+					err = rrd.ddb.NewBranchAtCommit(fetchCtx, branch, srcDBCommit)
+				}
+				if err != nil {
+					return nil, err
+				}
+			}
+			return srcDBCommit, nil
+		})
 		if err != nil {
 			return err
 		}
 
-		ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
-		if err != nil {
-			return err
-		}
+		srcDBCommit := srcDBCommitA.(*doltdb.Commit)
 
-		commitRoot, err := srcDBCommit.GetRootValue(ctx)
-		if err != nil {
-			return err
-		}
+		// if ref is active head, update the current working set
+		{
+			if branch == currentBranchRef {
+				wsRef, err := ref.WorkingSetRefForHead(branch)
+				if err != nil {
+					return err
+				}
 
-		ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-		h, err := ws.HashOf()
-		if err != nil {
-			return err
-		}
+				ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
+				if err != nil {
+					return err
+				}
 
-		rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
+				commitRoot, err := srcDBCommit.GetRootValue(ctx)
+				if err != nil {
+					return err
+				}
+
+				ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
+				h, err := ws.HashOf()
+				if err != nil {
+					return err
+				}
+
+				rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
+			}
+		}
+	}
+
+	_, err = rrd.limiter.Run(ctx, "___tags", func() (any, error) {
+		// TODO: Not sure about this; see comment about the captured ctx below.
+
+		return nil, actions.FetchFollowTags(ctx, rrd.rsw.TempTableFilesDir(), rrd.srcDB, rrd.ddb, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -229,4 +254,106 @@ func parseBranches(arg string) []string {
 		branches = append(branches, head)
 	}
 	return branches
+}
+
+type res struct {
+	v   any
+	err error
+}
+
+type blocked struct {
+	f       func() (any, error)
+	waiters []chan res
+}
+
+func newLimiter() *limiter {
+	return &limiter{
+		running: make(map[string]*blocked),
+	}
+}
+
+// *limiter allows a caller to limit performing concurrent work for a given string key.
+type limiter struct {
+	mu      sync.Mutex
+	running map[string]*blocked
+}
+
+// |Run| invokes |f|, returning its result. It does not allow two |f|s
+// submitted with the same |s| to be running in concurrently.
+// Only one of the |f|s that arrives with the same |s| while another |f| with
+// that key is running will ultimately be run. The result of invoking that |f|
+// will be returned from the |Run| call to all blockers on that key.
+//
+// 1) A caller provides a string key, |s|, and an |f func() error| which will
+// perform the work when invoked.
+//
+// 2) If there is no outstanding call for the key, |f| is invoked and the
+// result is returned.
+//
+// 3) Otherwise, the caller blocks until the outstanding call is completed.
+// When the outstanding call completes, one of the blocked |f|s that was
+// provided for that key is run. The result of that invocation is returned to
+// all blocked callers.
+//
+// A caller's |Run| invocation can return early if the context is cancelled.
+// If the |f| captures a context, and that context is canceled, and the |f|
+// allows the error from that context cancelation to escape, then multiple
+// callers will see ContextCanceled / DeadlineExceeded, even if their contexts
+// are not canceled.
+//
+// This implementation is very naive and is not not optimized for high
+// contention on |l.running|/|l.mu|.
+func (l *limiter) Run(ctx context.Context, s string, f func() (any, error)) (any, error) {
+	l.mu.Lock()
+	if b, ok := l.running[s]; ok {
+		// Something is already running; add ourselves to waiters.
+		ch := make(chan res)
+		if b.f == nil {
+			// We are the first waiter; we set what |f| will be invoked.
+			b.f = f
+		}
+		b.waiters = append(b.waiters, ch)
+		l.mu.Unlock()
+		select {
+		case r := <-ch:
+			return r.v, r.err
+		case <-ctx.Done():
+			go func() { <-ch }()
+			return nil, ctx.Err()
+		}
+	} else {
+		// We can run immediately and return the result of |f|.
+		// Register ourselves as running.
+		l.running[s] = new(blocked)
+		l.mu.Unlock()
+	}
+
+	res, err := f()
+	l.finish(s)
+	return res, err
+}
+
+// Called anytime work is finished on a given key. Responsible for
+// starting any blocked work on |s| and delivering the results to waiters.
+func (l *limiter) finish(s string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	b := l.running[s]
+	if len(b.waiters) != 0 {
+		go func() {
+			r, err := b.f()
+			for _, ch := range b.waiters {
+				ch <- res{r, err}
+				close(ch)
+			}
+			l.finish(s)
+		}()
+		// Just started work for the existing |*blocked|, make a new
+		// |*blocked| for work that arrives from this point forward.
+		l.running[s] = new(blocked)
+	} else {
+		// No work is pending. Delete l.running[s] since nothing is
+		// running anymore.
+		delete(l.running, s)
+	}
 }

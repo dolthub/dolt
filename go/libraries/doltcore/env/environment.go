@@ -98,6 +98,8 @@ type DoltEnv struct {
 	FS     filesys.Filesys
 	urlStr string
 	hdp    HomeDirProvider
+
+	IgnoreLockFile bool
 }
 
 // Load loads the DoltEnv for the current directory of the cli
@@ -1278,12 +1280,20 @@ func (dEnv *DoltEnv) LockFile() string {
 
 // IsLocked returns true if this database's lockfile exists
 func (dEnv *DoltEnv) IsLocked() bool {
+	if dEnv.IgnoreLockFile {
+		return false
+	}
+
 	ok, _ := dEnv.FS.Exists(dEnv.LockFile())
 	return ok
 }
 
 // Lock writes this database's lockfile or errors if it already exists
 func (dEnv *DoltEnv) Lock() error {
+	if dEnv.IgnoreLockFile {
+		return nil
+	}
+
 	if dEnv.IsLocked() {
 		return ErrActiveServerLock.New(dEnv.LockFile())
 	}
@@ -1292,5 +1302,9 @@ func (dEnv *DoltEnv) Lock() error {
 
 // Unlock deletes this database's lockfile
 func (dEnv *DoltEnv) Unlock() error {
+	if dEnv.IgnoreLockFile {
+		return nil
+	}
+
 	return dEnv.FS.DeleteFile(dEnv.LockFile())
 }

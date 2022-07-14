@@ -5,7 +5,6 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/HdrHistogram/hdrhistogram-go v1.0.0
 	github.com/abiosoft/readline v0.0.0-20180607040430-155bce2042db
-	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d
 	github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883
 	github.com/attic-labs/kingpin v2.2.7-0.20180312050558-442efcfac769+incompatible
 	github.com/aws/aws-sdk-go v1.32.6
@@ -59,7 +58,7 @@ require (
 )
 
 require (
-	github.com/dolthub/go-mysql-server v0.12.1-0.20220712052627-2b78c4343a3d
+	github.com/dolthub/go-mysql-server v0.12.1-0.20220713232319-7ff7cdf2c557
 	github.com/google/flatbuffers v2.0.6+incompatible
 	github.com/gosuri/uilive v0.0.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6

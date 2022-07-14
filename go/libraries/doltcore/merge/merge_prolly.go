@@ -57,24 +57,31 @@ func mergeTableData(
 	ancIndexSet durable.IndexSet,
 	mergeRootIsh hash.Hash,
 	ancRootIsh hash.Hash,
-	strategy ConflictStompStrategy,
 ) (*doltdb.Table, *MergeStats, error) {
 	group, gCtx := errgroup.WithContext(ctx)
 
-	indexEdits := make(chan indexEdit, 128)
-	conflicts := make(chan confVals, 128)
-	var mergedData durable.Index
+	var (
+		finalTbl  *doltdb.Table
+		finalRows durable.Index
+
+		updatedRootIndexSet  durable.IndexSet
+		updatedMergeIndexSet durable.IndexSet
+
+		p conflictProcessor
+
+		indexEdits = make(chan indexEdit, 128)
+		conflicts  = make(chan confVals, 128)
+	)
 
 	group.Go(func() error {
 		var err error
-		updatedTbl, mergedData, err = mergeProllyRowData(
+		finalTbl, finalRows, err = mergeProllyRowData(
 			gCtx,
 			postMergeSchema, rootSchema, mergeSchema, ancSchema,
 			tbl, mergeTbl, updatedTbl,
 			ancRows,
 			indexEdits,
-			conflicts,
-			strategy)
+			conflicts)
 		if err != nil {
 			return err
 		}
@@ -92,8 +99,6 @@ func mergeTableData(
 		return nil, nil, err
 	}
 
-	var updatedRootIndexSet durable.IndexSet
-	var updatedMergeIndexSet durable.IndexSet
 	group.Go(func() error {
 		var err error
 		updatedRootIndexSet, updatedMergeIndexSet, err = updateProllySecondaryIndexes(gCtx, indexEdits, rootSchema, mergeSchema, tbl, mergeTbl, rootIndexSet, mergeIndexSet)
@@ -107,7 +112,6 @@ func mergeTableData(
 	artM := durable.ProllyMapFromArtifactIndex(artIdx)
 	artifactEditor := artM.Editor()
 
-	var p conflictProcessor
 	if can, err := isNewConflictsCompatible(ctx, tbl, tblName, ancSchema, rootSchema, mergeSchema); err != nil {
 		return nil, nil, err
 	} else if can {
@@ -137,13 +141,13 @@ func mergeTableData(
 		return nil, nil, err
 	}
 
-	updatedTbl, err = mergeProllySecondaryIndexes(
+	finalTbl, err = mergeProllySecondaryIndexes(
 		ctx,
 		vrw,
 		ns,
 		postMergeSchema, rootSchema, mergeSchema, ancSchema,
-		mergedData,
-		tbl, mergeTbl, updatedTbl,
+		finalRows,
+		tbl, mergeTbl, finalTbl,
 		ancIndexSet,
 		artifactEditor,
 		mergeRootIsh,
@@ -158,14 +162,15 @@ func mergeTableData(
 	}
 	artIdx = durable.ArtifactIndexFromProllyMap(artifactMap)
 
-	updatedTbl, err = updatedTbl.SetArtifacts(ctx, artIdx)
+	finalTbl, err = finalTbl.SetArtifacts(ctx, artIdx)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// TODO (dhruv): populate Adds, Deletes, Modifications
 	stats := &MergeStats{Operation: TableModified}
-	return updatedTbl, stats, nil
+
+	return finalTbl, stats, nil
 }
 
 func mergeTableArtifacts(ctx context.Context, tblName string, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
@@ -245,7 +250,7 @@ func mergeProllyRowData(
 	ancRows durable.Index,
 	indexEdits chan indexEdit,
 	conflicts chan confVals,
-	strategy ConflictStompStrategy) (*doltdb.Table, durable.Index, error) {
+) (*doltdb.Table, durable.Index, error) {
 
 	rootR, err := tbl.GetRowData(ctx)
 	if err != nil {
@@ -267,7 +272,7 @@ func mergeProllyRowData(
 		if left.Type == right.Type && bytes.Equal(left.To, right.To) {
 			if keyless {
 				// convergent edits are conflicts for keyless tables
-				d, b, _ := processConflict(ctx, conflicts, indexEdits, left, right, strategy)
+				d, b, _ := processConflict(ctx, conflicts, indexEdits, left, right)
 				return d, b
 			}
 			return left, true
@@ -275,7 +280,7 @@ func mergeProllyRowData(
 
 		merged, isConflict := vMerger.tryMerge(val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
 		if isConflict {
-			d, b, _ := processConflict(ctx, conflicts, indexEdits, left, right, strategy)
+			d, b, _ := processConflict(ctx, conflicts, indexEdits, left, right)
 			return d, b
 		}
 
@@ -307,47 +312,26 @@ func mergeProllyRowData(
 	return updatedTbl, durable.IndexFromProllyMap(mergedRP), nil
 }
 
-func processConflict(ctx context.Context, confs chan confVals, edits chan indexEdit, left, right tree.Diff, strategy ConflictStompStrategy) (tree.Diff, bool, error) {
-	switch strategy {
-	case ConflictStompStrategyNone:
-		c := confVals{
-			key:      val.Tuple(left.Key),
-			ourVal:   val.Tuple(left.To),
-			theirVal: val.Tuple(right.To),
-			baseVal:  val.Tuple(left.From),
-		}
-		select {
-		case confs <- c:
-		case <-ctx.Done():
-			return tree.Diff{}, false, ctx.Err()
-		}
-		// Reset the change on the right
-		e := conflictEdit{right: right}
-		select {
-		case edits <- e:
-		case <-ctx.Done():
-			return tree.Diff{}, false, ctx.Err()
-		}
-		return tree.Diff{}, false, nil
-	case ConflictStompStrategyPickOurs:
-		e := cellWiseMergeEdit{left: left, right: right, merged: left}
-		select {
-		case edits <- e:
-		case <-ctx.Done():
-			return tree.Diff{}, false, ctx.Err()
-		}
-		return left, true, nil
-	case ConflictStompStrategyPickTheirs:
-		e := cellWiseMergeEdit{left: left, right: right, merged: right}
-		select {
-		case edits <- e:
-		case <-ctx.Done():
-			return tree.Diff{}, false, ctx.Err()
-		}
-		return right, true, nil
-	default:
-		panic("unhandled conflict stomp strategy")
+func processConflict(ctx context.Context, confs chan confVals, edits chan indexEdit, left, right tree.Diff) (tree.Diff, bool, error) {
+	c := confVals{
+		key:      val.Tuple(left.Key),
+		ourVal:   val.Tuple(left.To),
+		theirVal: val.Tuple(right.To),
+		baseVal:  val.Tuple(left.From),
 	}
+	select {
+	case confs <- c:
+	case <-ctx.Done():
+		return tree.Diff{}, false, ctx.Err()
+	}
+	// Reset the change on the right
+	e := conflictEdit{right: right}
+	select {
+	case edits <- e:
+	case <-ctx.Done():
+		return tree.Diff{}, false, ctx.Err()
+	}
+	return tree.Diff{}, false, nil
 }
 
 type valueMerger struct {

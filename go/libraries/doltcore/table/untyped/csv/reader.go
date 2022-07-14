@@ -58,6 +58,8 @@ type CSVReader struct {
 	fieldsPerRecord int
 }
 
+var _ table.SqlTableReader = (*CSVReader)(nil)
+
 // OpenCSVReader opens a reader at a given path within a given filesys.  The CSVFileInfo should describe the csv file
 // being opened.
 func OpenCSVReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, info *CSVFileInfo) (*CSVReader, error) {

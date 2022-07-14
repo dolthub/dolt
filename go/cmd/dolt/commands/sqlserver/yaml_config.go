@@ -107,6 +107,11 @@ type MetricsYAMLConfig struct {
 	Port   *int              `yaml:"port"`
 }
 
+type UserSessionVars struct {
+	Name string            `yaml:"name"`
+	Vars map[string]string `yaml:"vars"`
+}
+
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
 	LogLevelStr       *string               `yaml:"log_level"`
@@ -118,6 +123,7 @@ type YAMLConfig struct {
 	DataDirStr        *string               `yaml:"data_dir"`
 	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
 	PrivilegeFile     *string               `yaml:"privilege_file"`
+	Vars              []UserSessionVars     `yaml:"user_session_vars"`
 }
 
 var _ ServerConfig = YAMLConfig{}
@@ -322,6 +328,14 @@ func (cfg YAMLConfig) PrivilegeFilePath() string {
 		return *cfg.PrivilegeFile
 	}
 	return ""
+}
+
+func (cfg YAMLConfig) UserVars() []UserSessionVars {
+	if cfg.Vars != nil {
+		return cfg.Vars
+	}
+
+	return nil
 }
 
 // QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer

@@ -581,9 +581,10 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 				gs:       v.gs,
 				editOpts: v.editOpts,
 			},
-			remote: v.remote,
-			srcDB:  v.srcDB,
-			tmpDir: v.tmpDir,
+			remote:  v.remote,
+			srcDB:   v.srcDB,
+			tmpDir:  v.tmpDir,
+			limiter: newLimiter(),
 		}
 	}
 

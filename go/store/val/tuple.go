@@ -15,7 +15,6 @@
 package val
 
 import (
-	"bytes"
 	"math"
 
 	"github.com/dolthub/dolt/go/store/pool"
@@ -110,15 +109,6 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 	}
 
 	return tup
-}
-
-func CellWiseTupleDiff(from, to Tuple) (c uint64) {
-	for i := 0; i < from.Count(); i++ {
-		if !bytes.Equal(from.GetField(i), to.GetField(i)) {
-			c++
-		}
-	}
-	return
 }
 
 func cloneTuple(pool pool.BuffPool, tup Tuple) Tuple {
