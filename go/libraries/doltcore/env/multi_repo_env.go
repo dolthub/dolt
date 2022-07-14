@@ -256,7 +256,9 @@ func MultiEnvForDirectory(
 		}
 		envName := getRepoRootDir(path, string(os.PathSeparator))
 		dbName = dirToDBName(envName)
-		dEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
+		dEnv = oldDEnv
+		// TODO: idk how or why, but this breaks docs.bats
+		//dEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
 	}
 
 	if dEnv.Valid() {

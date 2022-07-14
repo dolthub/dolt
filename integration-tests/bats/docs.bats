@@ -772,7 +772,7 @@ SQL
     [[ ! $output =~ "test-a branch" ]] || false
     echo test-b branch > README.md
     dolt add .
-    dolt commit -m "Changed README.md on test-a branch"
+    dolt commit -m "Changed README.md on test-b branch"
     dolt checkout main
 
     # On successful FF merge, docs match the new working root
