@@ -3847,6 +3847,33 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 	},
 }
 
+var LargeJsonObjectScriptTests = []queries.ScriptTest{
+	{
+		Name: "JSON under max length limit",
+		SetUpScript: []string{
+			"create table t (j JSON)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    `insert into t set j= concat('[', repeat('"word",', 10000000), '"word"]')`,
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+			},
+		},
+	},
+	{
+		Name: "JSON over max length limit",
+		SetUpScript: []string{
+			"create table t (j JSON)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       `insert into t set j= concat('[', repeat('"word",', 50000000), '"word"]')`,
+				ExpectedErr: sql.ErrLengthTooLarge,
+			},
+		},
+	},
+}
+
 var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "working set changes",
