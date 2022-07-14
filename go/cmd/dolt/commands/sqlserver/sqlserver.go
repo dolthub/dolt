@@ -304,7 +304,6 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		dataDirSpecified = true
 	}
 
-	// TODO: make sure absolute paths also work
 	var cfgDirPath string
 	dataDir := serverConfig.DataDir()
 	cfgDir, cfgDirSpecified := apr.GetValue(commands.CfgDirFlag)
@@ -354,6 +353,16 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	}
 	serverConfig.withCfgDir(cfgDirPath)
 
+	if privsFp, ok := apr.GetValue(commands.PrivsFilePathFlag); ok {
+		serverConfig.withPrivilegeFilePath(privsFp)
+	} else {
+		path, err := dEnv.FS.Abs(filepath.Join(cfgDirPath, commands.DefaultPrivsName))
+		if err != nil {
+			return nil, err
+		}
+		serverConfig.withPrivilegeFilePath(path)
+	}
+
 	if queryParallelism, ok := apr.GetInt(queryParallelismFlag); ok {
 		serverConfig.withQueryParallelism(queryParallelism)
 	}
@@ -367,9 +376,6 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	}
 
 	serverConfig.autoCommit = !apr.Contains(noAutoCommitFlag)
-	if privilegeFilePath, ok := apr.GetValue(commands.PrivsFilePathFlag); ok {
-		serverConfig.withPrivilegeFilePath(privilegeFilePath)
-	}
 
 	return serverConfig, nil
 }
