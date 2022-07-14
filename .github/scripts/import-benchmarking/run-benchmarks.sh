@@ -49,6 +49,8 @@ actorprefix="$MODE/$ACTOR/$actorShort"
 # or default to -1
 issuenumber=${ISSUE_NUMBER:-"-1"}
 
+echo "here1"
+
 source \
   "$TEMPLATE_SCRIPT" \
   "$jobname"         \
@@ -61,7 +63,10 @@ source \
   "$NOMS_BIN_FORMAT" \
   "$issuenumber"     > job.json
 
+echo "here2"
+
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
+echo $out
 
 if [ "$out" != "job.batch/$jobname created" ]; then
   echo "something went wrong creating job... this job likely already exists in the cluster"
