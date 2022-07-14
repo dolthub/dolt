@@ -59,15 +59,6 @@ type DatabaseSessionState struct {
 
 	sessionCache *sessionCache
 
-	// cache of indexes
-	indexCache map[doltdb.DataCacheKey]map[string][]sql.Index
-
-	// cache of tables
-	tableCache map[doltdb.DataCacheKey]map[string]sql.Table
-
-	// cache of views
-	viewCache map[doltdb.DataCacheKey]map[string]string
-
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a
 	// DatabaseSessionState with Err != nil will return that err.

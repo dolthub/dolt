@@ -2354,6 +2354,10 @@ func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*dol
 	return newTable, tblSch, nil
 }
 
+// updateFromRoot updates the table using data and schema in the root given. This is necessary for some schema change
+// statements that take place in multiple steps (e.g. adding a foreign key may create an index, then add a constraint).
+// We can't update the session's working set until the statement boundary, so we have to do it here.
+// TODO: eliminate this pattern, store all table data and schema in the session rather than in these objects.
 func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootValue) error {
 	updatedTableSql, ok, err := t.db.getTable(ctx, root, t.tableName)
 	if err != nil {
@@ -2369,6 +2373,17 @@ func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootV
 		updatedTable = updatedTableSql.(*AlterableDoltTable)
 	}
 	t.WritableDoltTable.DoltTable = updatedTable.WritableDoltTable.DoltTable
+
+	// When we update this table we need to also clear any cached versions of the object, since they may now have
+	// incorrect schema information
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.name)
+	if !ok {
+		return fmt.Errorf("no db state found for %s", t.db.name)
+	}
+
+	dbState.SessionCache().ClearTableCache()
+
 	return nil
 }
 

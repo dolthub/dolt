@@ -38,6 +38,8 @@ type SessionCache interface {
 	ViewsCached(key doltdb.DataCacheKey) bool
 	// GetCachedView returns the cached view named, and whether the cache was present
 	GetCachedView(key doltdb.DataCacheKey, viewName string) (string, bool)
+	// ClearTableCache removes all cache info for all tables at all cache keys
+	ClearTableCache()
 }
 
 type sessionCache struct {
@@ -96,6 +98,10 @@ func (c *sessionCache) CacheTable(key doltdb.DataCacheKey, tableName string, tab
 	}
 
 	tablesForKey[tableName] = table
+}
+
+func (c *sessionCache) ClearTableCache() {
+	c.tables = make(map[doltdb.DataCacheKey]map[string]sql.Table)
 }
 
 func (c *sessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName string) (sql.Table, bool) {
