@@ -741,7 +741,7 @@ func TestDoltMerge(t *testing.T) {
 }
 
 func TestDoltConflictsTableNameTable(t *testing.T) {
-	for _, script := range DoltConflictDiffTypeScripts {
+	for _, script := range DoltConflictTableNameTableTests {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
 }

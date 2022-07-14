@@ -116,7 +116,7 @@ EOF
     [[ "$output" =~ "$EXPECTED" ]] || false
 
     # No data diff
-    skip_nbf_dolt_1 "data diff shown inappropriately"
+    skip_nbf_dolt_1 "Adding a column necessarily rewrites row values in new format"
     [ "${#lines[@]}" -eq 9 ]
 
     run dolt sql -r csv -q "select * from test as of 'HEAD'"
@@ -283,7 +283,7 @@ EOF
     [[ "$output" =~ "$EXPECTED" ]] || false
 
     # no data diff
-    skip_nbf_dolt_1 "data diff shown inappropriately"
+    skip_nbf_dolt_1 "Adding a column necessarily rewrites row values in new format"
     [ "${#lines[@]}" -eq 11 ]
 }
 
