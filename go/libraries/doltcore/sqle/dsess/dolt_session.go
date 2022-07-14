@@ -29,29 +29,44 @@ import (
 
 var ErrSessionNotPeristable = errors.New("session is not persistable")
 
-type DoltSession struct {
-	*Session
-	globalsConf config.ReadWriteConfig
-	mu          *sync.Mutex
-}
-
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
 func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabaseProvider, conf config.ReadWriteConfig, dbs ...InitialDbState) (*DoltSession, error) {
-	sess, err := NewSession(ctx, sqlSess, pro, conf, dbs...)
-	if err != nil {
-		return nil, err
+	username := conf.GetStringOrDefault(env.UserNameKey, "")
+	email := conf.GetStringOrDefault(env.UserEmailKey, "")
+	globals := config.NewPrefixConfig(conf, env.SqlServerGlobalsPrefix)
+
+	sess := &DoltSession{
+		Session:    sqlSess,
+		username:   username,
+		email:      email,
+		dbStates:   make(map[string]*DatabaseSessionState),
+		provider:   pro,
+		tempTables: make(map[string][]sql.Table),
+		globalsConf: globals,
+		mu: &sync.Mutex{},
 	}
 
-	globals := config.NewPrefixConfig(conf, env.SqlServerGlobalsPrefix)
-	return sess.NewDoltSession(globals), nil
+	for _, db := range dbs {
+		err := sess.AddDB(ctx, db)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return sess, nil
+}
+
+func (d DoltSession) WithGlobals(conf config.ReadWriteConfig) *DoltSession {
+	d.globalsConf = conf
+	return &d
 }
 
 // PersistGlobal implements sql.PersistableSession
-func (s *DoltSession) PersistGlobal(sysVarName string, value interface{}) error {
-	if s.globalsConf == nil {
+func (d *DoltSession) PersistGlobal(sysVarName string, value interface{}) error {
+	if d.globalsConf == nil {
 		return ErrSessionNotPeristable
 	}
 
@@ -60,14 +75,14 @@ func (s *DoltSession) PersistGlobal(sysVarName string, value interface{}) error 
 		return err
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return setPersistedValue(s.globalsConf, sysVar.Name, value)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return setPersistedValue(d.globalsConf, sysVar.Name, value)
 }
 
 // RemovePersistedGlobal implements sql.PersistableSession
-func (s *DoltSession) RemovePersistedGlobal(sysVarName string) error {
-	if s.globalsConf == nil {
+func (d *DoltSession) RemovePersistedGlobal(sysVarName string) error {
+	if d.globalsConf == nil {
 		return ErrSessionNotPeristable
 	}
 
@@ -76,46 +91,46 @@ func (s *DoltSession) RemovePersistedGlobal(sysVarName string) error {
 		return err
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.globalsConf.Unset([]string{sysVar.Name})
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.globalsConf.Unset([]string{sysVar.Name})
 }
 
 // RemoveAllPersistedGlobals implements sql.PersistableSession
-func (s *DoltSession) RemoveAllPersistedGlobals() error {
-	if s.globalsConf == nil {
+func (d *DoltSession) RemoveAllPersistedGlobals() error {
+	if d.globalsConf == nil {
 		return ErrSessionNotPeristable
 	}
 
-	allVars := make([]string, s.globalsConf.Size())
+	allVars := make([]string, d.globalsConf.Size())
 	i := 0
-	s.globalsConf.Iter(func(k, v string) bool {
+	d.globalsConf.Iter(func(k, v string) bool {
 		allVars[i] = k
 		i++
 		return false
 	})
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.globalsConf.Unset(allVars)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.globalsConf.Unset(allVars)
 }
 
 // RemoveAllPersistedGlobals implements sql.PersistableSession
-func (s *DoltSession) GetPersistedValue(k string) (interface{}, error) {
-	if s.globalsConf == nil {
+func (d *DoltSession) GetPersistedValue(k string) (interface{}, error) {
+	if d.globalsConf == nil {
 		return nil, ErrSessionNotPeristable
 	}
 
-	return getPersistedValue(s.globalsConf, k)
+	return getPersistedValue(d.globalsConf, k)
 }
 
 // SystemVariablesInConfig returns a list of System Variables associated with the session
-func (s *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
-	if s.globalsConf == nil {
+func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
+	if d.globalsConf == nil {
 		return nil, ErrSessionNotPeristable
 	}
 
-	return SystemVariablesInConfig(s.globalsConf)
+	return SystemVariablesInConfig(d.globalsConf)
 }
 
 // validatePersistedSysVar checks whether a system variable exists and is dynamic
