@@ -116,7 +116,7 @@ func (tx DoltTransaction) IsReadOnly() bool {
 var txLock sync.Mutex
 
 // Commit attempts to merge the working set given into the current working set.
-// Uses the same algorithm as merge.Merger:
+// Uses the same algorithm as merge.RootMerger:
 // |current working set working root| is the root
 // |workingSet.workingRoot| is the mergeRoot
 // |tx.startRoot| is ancRoot
@@ -266,32 +266,18 @@ func (tx *DoltTransaction) mergeRoots(
 	existingWorkingRoot *doltdb.WorkingSet,
 	workingSet *doltdb.WorkingSet,
 ) (*doltdb.WorkingSet, error) {
-
-	theirH, err := workingSet.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	baseH, err := tx.startState.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
 	mo := merge.MergeOpts{IsCherryPick: false}
 	mergedRoot, _, err := merge.MergeRoots(
 		ctx,
-		theirH,
-		baseH,
 		existingWorkingRoot.WorkingRoot(),
 		workingSet.WorkingRoot(),
 		tx.startState.WorkingRoot(),
-		tx.mergeEditOpts,
-		mo,
-	)
+		workingSet,
+		tx.startState,
+		tx.mergeEditOpts, mo)
 	if err != nil {
 		return nil, err
 	}
-
 	return workingSet.WithWorkingRoot(mergedRoot), nil
 }
 

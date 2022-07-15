@@ -1,7 +1,7 @@
 {
   "Jobs": [
     {
-      "Name": "Medium Dolt import with Sorted Rows",
+      "Name": "Medium MySQL import with Sorted Rows",
       "NumRows": 1000000,
       "Sorted": true,
       "Format": "csv",
@@ -12,7 +12,7 @@
       "SchemaPath": "/Users/vinairachakonda/go/src/dolthub/dolt/go/performance/import_benchmarker/cmd/schema.sql"
     },
     {
-      "Name": "Medium MySQL import with Sorted Rows",
+      "Name": "Medium Dolt import with Sorted Rows",
       "NumRows": 1000000,
       "Sorted": true,
       "Format": "csv",
