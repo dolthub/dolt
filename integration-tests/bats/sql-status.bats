@@ -50,9 +50,9 @@ teardown() {
 
 @test "sql-status: status properly works with docs" {
     echo readme-text > README.md
-    dolt docs update README.md README.md
+    dolt docs read README.md README.md
     echo license-text > LICENSE.md
-    dolt docs update LICENSE.md LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
 
     dolt sql -r csv -q "select * from dolt_status ORDER BY table_name"
     run dolt sql -r csv -q "select * from dolt_status ORDER BY table_name"
@@ -85,7 +85,7 @@ teardown() {
 
 @test "sql-status: status works properly with working docs in conflict" {
      echo "a readme" > README.md
-     dolt docs update README.md README.md
+     dolt docs read README.md README.md
      dolt add .
      dolt commit -m "Committing initial docs"
 
@@ -94,17 +94,17 @@ teardown() {
 
      dolt checkout test-a
      echo test-a branch > README.md
-     dolt docs update README.md README.md
+     dolt docs read README.md README.md
      dolt add .
      dolt commit -m "Changed README.md on test-a branch"
 
      dolt checkout test-b
-     run dolt docs read README.md
+     run dolt docs write README.md
      [[ $output =~ "a readme" ]] || false
      [[ ! $output =~ "test-a branch" ]] || false
 
      echo test-b branch > README.md
-     dolt docs update README.md README.md
+     dolt docs read README.md README.md
      dolt add .
      dolt commit -m "Changed README.md on test-a branch"
      dolt checkout main
@@ -113,7 +113,7 @@ teardown() {
      run dolt merge test-a
      [ "$status" -eq 0 ]
      [[ $output =~ "Fast-forward" ]] || false
-     run dolt docs read README.md
+     run dolt docs write README.md
      [[ "$output" =~ "test-a branch" ]] || false
 
      # A merge with conflicts does not change the working root.
