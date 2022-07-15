@@ -47,6 +47,8 @@ const (
 	defaultQueryParallelism    = 2
 	defaultPersistenceBahavior = loadPerisistentGlobals
 	defaultDataDir             = "."
+	defaultCfgDir              = "./.doltcfg"
+	defaultPrivilegeFilePath   = "./.doltcfg/privileges.db"
 	defaultMetricsHost         = ""
 	defaultMetricsPort         = -1
 )
@@ -102,6 +104,8 @@ type ServerConfig interface {
 	DatabaseNamesAndPaths() []env.EnvNameAndPath
 	// DataDir is the path to a directory to use as the data dir, both to create new databases and locate existing ones.
 	DataDir() string
+	// CfgDir is the path to a directory to use to store the dolt configuration files.
+	CfgDir() string
 	// MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1
 	MaxConnections() uint64
 	// QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
@@ -139,6 +143,7 @@ type commandLineServerConfig struct {
 	logLevel               LogLevel
 	dbNamesAndPaths        []env.EnvNameAndPath
 	dataDir                string
+	cfgDir                 string
 	autoCommit             bool
 	maxConnections         uint64
 	queryParallelism       int
@@ -258,6 +263,10 @@ func (cfg *commandLineServerConfig) DataDir() string {
 	return cfg.dataDir
 }
 
+func (cfg *commandLineServerConfig) CfgDir() string {
+	return cfg.cfgDir
+}
+
 // withHost updates the host and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
 func (cfg *commandLineServerConfig) withHost(host string) *commandLineServerConfig {
 	cfg.host = host
@@ -323,6 +332,11 @@ func (cfg *commandLineServerConfig) withDataDir(dataDir string) *commandLineServ
 	return cfg
 }
 
+func (cfg *commandLineServerConfig) withCfgDir(cfgDir string) *commandLineServerConfig {
+	cfg.cfgDir = cfgDir
+	return cfg
+}
+
 func (cfg *commandLineServerConfig) withPersistenceBehavior(persistenceBehavior string) *commandLineServerConfig {
 	cfg.persistenceBehavior = persistenceBehavior
 	return cfg
@@ -348,6 +362,8 @@ func DefaultServerConfig() *commandLineServerConfig {
 		queryParallelism:    defaultQueryParallelism,
 		persistenceBehavior: defaultPersistenceBahavior,
 		dataDir:             defaultDataDir,
+		cfgDir:              defaultCfgDir,
+		privilegeFilePath:   defaultPrivilegeFilePath,
 	}
 }
 

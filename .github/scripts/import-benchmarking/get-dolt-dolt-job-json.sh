@@ -3,7 +3,7 @@
 set -e
 
 if [ "$#" -lt 9 ]; then
-    echo  "Usage: ./get-dolt-dolt-job-json.sh <jobName> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <nomsBinFormat> <issueNumber>"
+    echo  "Usage: ./get-dolt-dolt-job-json.sh <jobName> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <nomsBinFormat> <format> <issueNumber>"
     exit 1
 fi
 
@@ -15,7 +15,8 @@ toVersion="$5"
 timePrefix="$6"
 actorPrefix="$7"
 nomsBinFormat="$8"
-issueNumber="$9"
+format="$9"
+issueNumber="${10}"
 
 echo '
 {
@@ -57,8 +58,9 @@ echo '
               "--results-prefix='$actorPrefix'",
               "--mysql-schema-file=schema.sql",
               "--nbf='$nomsBinFormat'",
-              "--results-schema=results-schema.sql",
+              "--results-schema=/results-schema.sql",
               "--issue-number='$issueNumber'",
+              "--output='$format'",
               "--fileNames=100k-sorted.csv",
               "--fileNames=100k-random.csv",
               "--fileNames=1m-sorted.csv",

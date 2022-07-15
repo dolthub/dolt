@@ -32,61 +32,16 @@ type Persister struct {
 var _ mysql_db.MySQLDbPersistence = &Persister{}
 
 func NewPersister(fp string) *Persister {
-	// Create file if it does not exist, panic if something goes wrong
-	if len(fp) > 0 {
-		_, err := os.Stat(fp)
-		if err != nil && errors.Is(err, os.ErrNotExist) {
-			err = ioutil.WriteFile(fp, []byte{}, 0644)
-		}
-		if err != nil {
-			panic(err)
-		}
-	}
-
 	return &Persister{
 		privsFilePath: fp,
 		fileMutex:     &sync.Mutex{},
 	}
 }
 
-func (p *Persister) ValidateCanPersist() error {
-	if len(p.privsFilePath) == 0 {
-		return errors.New("no privilege file specified, to persist users/grants run with --privilege-file=<file_path>")
-	}
-	return nil
-}
-
 func (p *Persister) Persist(ctx *sql.Context, data []byte) error {
 	p.fileMutex.Lock()
 	defer p.fileMutex.Unlock()
-
-	if err := p.ValidateCanPersist(); err != nil {
-		return err
-	}
-
 	return ioutil.WriteFile(p.privsFilePath, data, 0777)
-}
-
-// SetPrivilegeFilePath sets the file path that will be used for loading privileges.
-// TODO: this is probably not needed
-func (p Persister) SetPrivilegeFilePath(fp string) {
-	// do nothing for empty file path
-	if len(fp) == 0 {
-		return
-	}
-
-	p.fileMutex.Lock()
-	defer p.fileMutex.Unlock()
-
-	// Create file if it does not exist, panic if something goes wrong
-	_, err := os.Stat(fp)
-	if err != nil && errors.Is(err, os.ErrNotExist) {
-		err = ioutil.WriteFile(fp, []byte{}, 0644)
-	}
-	if err != nil {
-		panic(err)
-	}
-	p.privsFilePath = fp
 }
 
 // LoadData reads the mysql.db file, returns nil if empty or not found

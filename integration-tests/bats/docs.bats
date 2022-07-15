@@ -132,4 +132,3 @@ TXT
     [[ "$output" =~ "-  0. You just DO WHAT THE FUCK YOU WANT TO"               ]] || false
     [[ "$output" =~ "+  0. You just DO WHAT THE F*CK YOU WANT TO"               ]] || false
 }
-
