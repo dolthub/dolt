@@ -20,9 +20,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
-
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -114,6 +115,17 @@ func GetAllTableNames(ctx context.Context, root *RootValue) ([]string, error) {
 	return append(n, s...), nil
 }
 
+func MaybeCreateDoltDocsTable(ctx context.Context, root *RootValue) (*RootValue, error) {
+	_, ok, err := root.GetTable(ctx, DocTableName)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		return root, nil
+	}
+	return root.CreateEmptyTable(ctx, DocTableName, DocsSchema)
+}
+
 // The set of reserved dolt_ tables that should be considered part of user space, like any other user-created table,
 // for the purposes of the dolt command line. These tables cannot be created or altered explicitly, but can be updated
 // like normal SQL tables.
@@ -153,6 +165,20 @@ var generatedSystemTablePrefixes = []string{
 	DoltConfTablePrefix,
 	DoltConstViolTablePrefix,
 }
+
+const (
+	// LicenseDoc is the key for accessing the license within the docs table
+	LicenseDoc = "LICENSE.md"
+	// ReadmeDoc is the key for accessing the readme within the docs table
+	ReadmeDoc = "README.md"
+)
+
+// todo(andy)
+var doltDocsColumns = schema.NewColCollection(
+	schema.NewColumn(DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn(DocTextColumnName, schema.DocTextTag, types.StringKind, false),
+)
+var DocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
 
 const (
 	// DocTableName is the name of the dolt table containing documents such as the license and readme

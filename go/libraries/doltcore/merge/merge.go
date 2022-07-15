@@ -19,9 +19,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -366,10 +364,6 @@ func GetTablesWithConstraintViolations(ctx context.Context, roots doltdb.Roots) 
 	}
 
 	return workingViolations, stagedViolations, headViolations, err
-}
-
-func GetDocsInConflict(ctx context.Context, workingRoot *doltdb.RootValue, docs doltdocs.Docs) (*diff.DocDiffs, error) {
-	return diff.NewDocDiffs(ctx, workingRoot, nil, docs)
 }
 
 func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit *doltdb.Commit) ([]string, map[string]hash.Hash, error) {

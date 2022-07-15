@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -94,11 +93,6 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return 1
 	}
 
-	if apr.ContainsArg(doltdb.DocTableName) {
-		verr := errhand.BuildDError("Use dolt checkout <filename> to check out individual docs.").Build()
-		return HandleVErrAndExitCode(verr, usagePrt)
-	}
-
 	if branchOrTrack {
 		verr := checkoutNewBranch(ctx, dEnv, apr)
 		return HandleVErrAndExitCode(verr, usagePrt)
@@ -130,14 +124,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return handleResetError(verr, usagePrt)
 	}
 
-	tbls, docs, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), args)
-	if err != nil {
-		verr := errhand.BuildDError("error: unable to parse arguments.").AddCause(err).Build()
-		return HandleVErrAndExitCode(verr, usagePrt)
-	}
-
-	verr := checkoutTablesAndDocs(ctx, dEnv, tbls, docs)
-
+	verr := checkoutTables(ctx, dEnv, args)
 	if verr != nil && apr.NArg() == 1 {
 		verr = checkoutRemoteBranchOrSuggestNew(ctx, dEnv, name)
 	}
@@ -255,13 +242,13 @@ func checkoutNewBranchFromStartPt(ctx context.Context, dEnv *env.DoltEnv, newBra
 	return checkoutBranch(ctx, dEnv, newBranch, false)
 }
 
-func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []string, docs doltdocs.Docs) errhand.VerboseError {
+func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, tables []string) errhand.VerboseError {
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = actions.CheckoutTablesAndDocs(ctx, roots, dEnv.DbData(), tables, docs)
+	err = actions.CheckoutTables(ctx, roots, dEnv.DbData(), tables)
 
 	if err != nil {
 		if doltdb.IsRootValUnreachable(err) {

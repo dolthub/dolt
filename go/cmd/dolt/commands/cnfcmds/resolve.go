@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -128,18 +127,8 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 	} else {
 		err = AutoResolveTables(ctx, dEnv, autoResolveStrategy, tbls)
 	}
-
 	if err != nil {
 		return errhand.BuildDError("error: failed to resolve").AddCause(err).Build()
-	}
-
-	return saveDocsOnResolve(ctx, dEnv)
-}
-
-func saveDocsOnResolve(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseError {
-	err := actions.SaveTrackedDocsFromWorking(ctx, dEnv)
-	if err != nil {
-		return errhand.BuildDError("error: failed to update docs on the filesystem").AddCause(err).Build()
 	}
 	return nil
 }
