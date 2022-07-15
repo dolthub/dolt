@@ -1624,6 +1624,39 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "merge with new triggers defined",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			// create table and trigger1 (main & other)
+			"CREATE TABLE x(a BIGINT PRIMARY KEY)",
+			"CREATE TRIGGER trigger1 BEFORE INSERT ON x FOR EACH ROW SET new.a = new.a + 1",
+			"CALL dolt_add('-A')",
+			"CALL dolt_commit('-m', 'added table with trigger')",
+			"INSERT INTO dolt_branches (name, hash) VALUES ('other',hashof('main'))",
+			// create trigger2 on main
+			"CREATE TRIGGER trigger2 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 10",
+			"CALL dolt_commit('-am', 'created trigger2 on main')",
+			// create trigger3 & trigger4 on other
+			"CALL dolt_checkout('other')",
+			"CREATE TRIGGER trigger3 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 100",
+			"CREATE TRIGGER trigger4 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 1000",
+			"UPDATE dolt_schemas SET id = id + 1 WHERE name = 'trigger4'",
+			"CALL dolt_commit('-am', 'created triggers 3 & 4 on other');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			// todo: merge triggers correctly
+			//{
+			//	Query:    "select count(*) from dolt_schemas where type = 'trigger';",
+			//	Expected: []sql.Row{{4}},
+			//},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
@@ -3842,6 +3875,33 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				// Maybe confusing? We match the old table name as well
 				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD~', 'HEAD')",
 				Expected: []sql.Row{{3, 4, "HEAD~", "HEAD", "added"}},
+			},
+		},
+	},
+}
+
+var LargeJsonObjectScriptTests = []queries.ScriptTest{
+	{
+		Name: "JSON under max length limit",
+		SetUpScript: []string{
+			"create table t (j JSON)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    `insert into t set j= concat('[', repeat('"word",', 10000000), '"word"]')`,
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+			},
+		},
+	},
+	{
+		Name: "JSON over max length limit",
+		SetUpScript: []string{
+			"create table t (j JSON)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       `insert into t set j= concat('[', repeat('"word",', 50000000), '"word"]')`,
+				ExpectedErr: sql.ErrLengthTooLarge,
 			},
 		},
 	},

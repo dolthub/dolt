@@ -18,6 +18,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -29,6 +30,13 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type MysqlConfig struct {
+	Socket             string
+	ConnectionProtocol string
+	Port               int
+	Host               string
+}
+
 // BenchmarkMysql benchmarks mysql based on the provided configurations
 func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerConfig) (Results, error) {
 	withKeyCtx, cancel := context.WithCancel(ctx)
@@ -38,7 +46,7 @@ func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerCon
 	var serverCtx context.Context
 	var server *exec.Cmd
 	if serverConfig.Host == defaultHost {
-		fmt.Println("Launching the default server")
+		log.Println("Launching the default server")
 		localServer = true
 		gServer, serverCtx = errgroup.WithContext(withKeyCtx)
 		serverParams := serverConfig.GetServerArgs()
@@ -53,11 +61,12 @@ func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerCon
 		time.Sleep(10 * time.Second)
 
 		// setup mysqldb
-		err := SetupDB(ctx, serverConfig, dbName)
+		err := SetupDB(ctx, GetMysqlConnectionConfigFromServerConfig(serverConfig), dbName)
 		if err != nil {
 			cancel()
 			return nil, err
 		}
+		log.Println("Successfully set up the MySQL database")
 	}
 
 	// handle user interrupt
@@ -120,8 +129,8 @@ func getMysqlServer(ctx context.Context, config *ServerConfig, params []string) 
 	return ExecCommand(ctx, config.ServerExec, params...)
 }
 
-func SetupDB(ctx context.Context, serverConfig *ServerConfig, databaseName string) (err error) {
-	dsn, err := formatDSN(serverConfig)
+func SetupDB(ctx context.Context, mConfig MysqlConfig, databaseName string) (err error) {
+	dsn, err := FormatDsn(mConfig)
 	if err != nil {
 		return err
 	}
@@ -161,7 +170,16 @@ func SetupDB(ctx context.Context, serverConfig *ServerConfig, databaseName strin
 	if err != nil {
 		return err
 	}
-
+	_, err = db.ExecContext(ctx, fmt.Sprintf("SET GLOBAL local_infile = 'ON'"))
+	if err != nil {
+		return err
+	}
+	// set MySQL durability level to match Dolt
+	// dev.mysql.com/doc/refman/8.0/en/innodb-parameters.html#sysvar_innodb_flush_log_at_trx_commit
+	_, err = db.ExecContext(ctx, "SET GLOBAL innodb_flush_log_at_trx_commit=2;")
+	if err != nil {
+		return err
+	}
 	// Required for running groupby_scan.lua without error
 	_, err = db.ExecContext(ctx, "SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));")
 	if err != nil {
@@ -171,18 +189,27 @@ func SetupDB(ctx context.Context, serverConfig *ServerConfig, databaseName strin
 	return
 }
 
-func formatDSN(serverConfig *ServerConfig) (string, error) {
+func FormatDsn(mConfig MysqlConfig) (string, error) {
 	var socketPath string
-	if serverConfig.Socket != "" {
-		socketPath = serverConfig.Socket
+	if mConfig.Socket != "" {
+		socketPath = mConfig.Socket
 	} else {
 		socketPath = defaultSocket
 	}
-	if serverConfig.ConnectionProtocol == tcpProtocol {
-		return fmt.Sprintf("root@tcp(%s:%d)/", defaultHost, serverConfig.Port), nil
-	} else if serverConfig.ConnectionProtocol == unixProtocol {
+	if mConfig.ConnectionProtocol == tcpProtocol {
+		return fmt.Sprintf("root@tcp(%s:%d)/", mConfig.Host, mConfig.Port), nil
+	} else if mConfig.ConnectionProtocol == unixProtocol {
 		return fmt.Sprintf("root@unix(%s)/", socketPath), nil
 	} else {
 		return "", ErrUnsupportedConnectionProtocol
+	}
+}
+
+func GetMysqlConnectionConfigFromServerConfig(config *ServerConfig) MysqlConfig {
+	return MysqlConfig{
+		Socket:             config.Socket,
+		ConnectionProtocol: config.ConnectionProtocol,
+		Port:               config.Port,
+		Host:               defaultHost,
 	}
 }

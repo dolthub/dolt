@@ -37,7 +37,7 @@ const (
 	maxTxCommitRetries = 5
 )
 
-var ErrRetryTransaction = errors.New("this transaction conflicts with a committed transaction from another client, please retry")
+var ErrRetryTransaction = errors.New("this transaction conflicts with a committed transaction from another client")
 var ErrUnresolvedConflictsCommit = errors.New("Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1")
 var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transaction resulted in a working set with constraint violations, transaction rolled back. " +
 	"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
@@ -116,7 +116,7 @@ func (tx DoltTransaction) IsReadOnly() bool {
 var txLock sync.Mutex
 
 // Commit attempts to merge the working set given into the current working set.
-// Uses the same algorithm as merge.Merger:
+// Uses the same algorithm as merge.RootMerger:
 // |current working set working root| is the root
 // |workingSet.workingRoot| is the mergeRoot
 // |tx.startRoot| is ancRoot
@@ -266,32 +266,18 @@ func (tx *DoltTransaction) mergeRoots(
 	existingWorkingRoot *doltdb.WorkingSet,
 	workingSet *doltdb.WorkingSet,
 ) (*doltdb.WorkingSet, error) {
-
-	theirH, err := workingSet.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	baseH, err := tx.startState.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
 	mo := merge.MergeOpts{IsCherryPick: false}
 	mergedRoot, _, err := merge.MergeRoots(
 		ctx,
-		theirH,
-		baseH,
 		existingWorkingRoot.WorkingRoot(),
 		workingSet.WorkingRoot(),
 		tx.startState.WorkingRoot(),
-		tx.mergeEditOpts,
-		mo,
-	)
+		workingSet,
+		tx.startState,
+		tx.mergeEditOpts, mo)
 	if err != nil {
 		return nil, err
 	}
-
 	return workingSet.WithWorkingRoot(mergedRoot), nil
 }
 
