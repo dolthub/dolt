@@ -30,7 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
-var readDocs = cli.CommandDocumentationContent{
+var writeDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Reads Dolt docs to stdout",
 	LongDesc:  "Reads Dolt docs to stdout",
 	Synopsis: []string{
@@ -38,40 +38,40 @@ var readDocs = cli.CommandDocumentationContent{
 	},
 }
 
-type ReadCmd struct{}
+type WriteCmd struct{}
 
 // Name implements cli.Command.
-func (cmd ReadCmd) Name() string {
-	return "read"
+func (cmd WriteCmd) Name() string {
+	return "write"
 }
 
 // Description implements cli.Command.
-func (cmd ReadCmd) Description() string {
-	return readDocs.ShortDesc
+func (cmd WriteCmd) Description() string {
+	return writeDocs.ShortDesc
 }
 
 // RequiresRepo implements cli.Command.
-func (cmd ReadCmd) RequiresRepo() bool {
+func (cmd WriteCmd) RequiresRepo() bool {
 	return true
 }
 
 // Docs implements cli.Command.
-func (cmd ReadCmd) Docs() *cli.CommandDocumentation {
+func (cmd WriteCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.NewCommandDocumentation(readDocs, ap)
+	return cli.NewCommandDocumentation(writeDocs, ap)
 }
 
 // ArgParser implements cli.Command.
-func (cmd ReadCmd) ArgParser() *argparser.ArgParser {
+func (cmd WriteCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"doc", "Dolt doc to be read."})
 	return ap
 }
 
 // Exec implements cli.Command.
-func (cmd ReadCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd WriteCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, readDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, writeDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() != 1 {
@@ -80,14 +80,14 @@ func (cmd ReadCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	var verr errhand.VerboseError
-	if err := readDoltDoc(ctx, dEnv, apr.Arg(0)); err != nil {
+	if err := writeDoltDoc(ctx, dEnv, apr.Arg(0)); err != nil {
 		verr = errhand.VerboseErrorFromError(err)
 	}
 
 	return commands.HandleVErrAndExitCode(verr, usage)
 }
 
-func readDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName string) error {
+func writeDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName string) error {
 	eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return err

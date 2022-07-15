@@ -50,8 +50,8 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ ! $output =~ "dolt_docs" ]] || false
 
-    dolt docs update README.md README.md
-    run dolt docs update README.md README.md
+    dolt docs read README.md README.md
+    run dolt docs read README.md README.md
     [ "$status" -eq 0 ]
 
     run dolt status
@@ -60,9 +60,9 @@ teardown() {
 }
 
 @test "docs: doc read outputs doc correctly" {
-    dolt docs update LICENSE.md LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
 
-    dolt docs read LICENSE.md > other.md
+    dolt docs write LICENSE.md > other.md
     diff LICENSE.md other.md
     run diff LICENSE.md other.md
     [ "$status" -eq 0 ]
@@ -70,7 +70,7 @@ teardown() {
 }
 
 @test "docs: docs can be staged" {
-    dolt docs update LICENSE.md LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     dolt add .
 
     dolt status
@@ -79,7 +79,7 @@ teardown() {
 }
 
 @test "docs: doc can be committed" {
-    dolt docs update LICENSE.md LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     dolt add .
 
     run dolt status
@@ -94,7 +94,7 @@ teardown() {
 }
 
 @test "docs: docs are available from SQL" {
-    dolt docs update LICENSE.md LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     dolt sql -q "SELECT doc_name FROM dolt_docs" -r csv
     run dolt sql -q "SELECT doc_name FROM dolt_docs" -r csv
     [ "$status" -eq 0 ]
@@ -103,7 +103,7 @@ teardown() {
 }
 
 @test "docs: docs diff" {
-    dolt docs update LICENSE.md LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     dolt add -A && dolt commit -m "added LICENSE"
 
     cat <<TXT > LICENSE.md
@@ -122,7 +122,7 @@ teardown() {
   0. You just DO WHAT THE F*CK YOU WANT TO
 TXT
 
-    dolt docs update LICENSE.md LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     run dolt docs diff LICENSE.md
     [ "$status" -eq 0 ]
     [[ "$output" =~ "-        DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE"      ]] || false

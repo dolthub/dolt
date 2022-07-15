@@ -31,37 +31,37 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
-var writeDocs = cli.CommandDocumentationContent{
+var readDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Updates Dolt docs from the file system",
 	LongDesc:  ``,
 	Synopsis:  []string{},
 }
 
-type UpdateCmd struct{}
+type ReadCmd struct{}
 
 // Name implements cli.Command.
-func (cmd UpdateCmd) Name() string {
-	return "update"
+func (cmd ReadCmd) Name() string {
+	return "read"
 }
 
 // Description implements cli.Command.
-func (cmd UpdateCmd) Description() string {
+func (cmd ReadCmd) Description() string {
 	return writeDocs.ShortDesc
 }
 
 // RequiresRepo implements cli.Command.
-func (cmd UpdateCmd) RequiresRepo() bool {
+func (cmd ReadCmd) RequiresRepo() bool {
 	return true
 }
 
 // Docs implements cli.Command.
-func (cmd UpdateCmd) Docs() *cli.CommandDocumentation {
+func (cmd ReadCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return cli.NewCommandDocumentation(writeDocs, ap)
 }
 
 // ArgParser implements cli.Command.
-func (cmd UpdateCmd) ArgParser() *argparser.ArgParser {
+func (cmd ReadCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"doc", "Dolt doc to be update."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "file to update Dolt doc from."})
@@ -69,9 +69,9 @@ func (cmd UpdateCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec implements cli.Command.
-func (cmd UpdateCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ReadCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, readDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, writeDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() != 2 {
@@ -83,7 +83,7 @@ func (cmd UpdateCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	var verr errhand.VerboseError
-	if err := editDoltDoc(ctx, dEnv, apr.Arg(0), apr.Arg(1)); err != nil {
+	if err := readDoltDoc(ctx, dEnv, apr.Arg(0), apr.Arg(1)); err != nil {
 		verr = errhand.VerboseErrorFromError(err)
 	}
 
@@ -106,7 +106,7 @@ func validateDocName(docName string) errhand.VerboseError {
 		docName, strings.Join(valid, ", ")).Build()
 }
 
-func editDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName, fileName string) error {
+func readDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName, fileName string) error {
 	update, err := dEnv.FS.ReadFile(fileName)
 	if err != nil {
 		return err
