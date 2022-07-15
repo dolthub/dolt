@@ -64,13 +64,9 @@ func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.R
 	}
 
 	idxToPkMap := make(map[int]int)
-	pkColToOrdinal := make(map[int]int)
-	for i, ord := range n.writer.sch.GetPkOrdinals() {
-		pkColToOrdinal[ord] = i
-	}
 	for idxPos, idxCol := range n.index.IndexSchema().GetAllCols().GetColumns() {
 		if tblIdx, ok := n.writer.sch.GetPKCols().TagToIdx[idxCol.Tag]; ok {
-			idxToPkMap[idxPos] = pkColToOrdinal[tblIdx]
+			idxToPkMap[idxPos] = tblIdx
 		}
 	}
 
@@ -98,7 +94,7 @@ func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.R
 	}
 }
 
-// prollyFkPkRowIter returns rows requested by a foreign key reference. For use on tables with primary keys.
+// prollyFkPkRowIter returns rows of the parent table requested by a foreign key reference. For use on tables with primary keys.
 type prollyFkPkRowIter struct {
 	rangeIter  prolly.MapIter
 	idxToPkMap map[int]int
@@ -110,6 +106,7 @@ var _ sql.RowIter = prollyFkPkRowIter{}
 
 // Next implements the interface sql.RowIter.
 func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
+	// |rangeIter| iterates on the foreign key index of the parent table
 	k, _, err := iter.rangeIter.Next(ctx)
 	if err != nil {
 		return nil, err
