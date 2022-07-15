@@ -29,6 +29,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
@@ -148,6 +149,9 @@ func Serve(
 	)
 	if err != nil {
 		return err, nil
+	}
+	if config.ServerUser != commands.DefaultUser && config.ServerPass != commands.DefaultPassword {
+		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.Persist(nil)
 	}
 	defer sqlEngine.Close()
 
