@@ -101,3 +101,35 @@ teardown() {
     [[ "$output" =~ "doc_name" ]] || false
     [[ "$output" =~ "LICENSE.md" ]] || false
 }
+
+@test "docs: docs diff" {
+    dolt docs update LICENSE.md LICENSE.md
+    dolt add -A && dolt commit -m "added LICENSE"
+
+    cat <<TXT > LICENSE.md
+        DO WHAT THE F*CK YOU WANT TO PUBLIC LICENSE
+                    Version 2, December 2004
+
+ Copyright (C) 2004 Sam Hocevar <sam@hocevar.net>
+
+ Everyone is permitted to copy and distribute verbatim or modified
+ copies of this license document, and changing it is allowed as long
+ as the name is changed.
+
+            DO WHAT THE F*CK YOU WANT TO PUBLIC LICENSE
+   TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+
+  0. You just DO WHAT THE F*CK YOU WANT TO
+TXT
+
+    dolt docs update LICENSE.md LICENSE.md
+    run dolt docs diff LICENSE.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "-        DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE"      ]] || false
+    [[ "$output" =~ "+        DO WHAT THE F*CK YOU WANT TO PUBLIC LICENSE"      ]] || false
+    [[ "$output" =~ "-            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE"  ]] || false
+    [[ "$output" =~ "+            DO WHAT THE F*CK YOU WANT TO PUBLIC LICENSE"  ]] || false
+    [[ "$output" =~ "-  0. You just DO WHAT THE FUCK YOU WANT TO"               ]] || false
+    [[ "$output" =~ "+  0. You just DO WHAT THE F*CK YOU WANT TO"               ]] || false
+}
+
