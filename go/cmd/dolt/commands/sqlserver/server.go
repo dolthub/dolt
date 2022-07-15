@@ -108,7 +108,7 @@ func Serve(
 				return err, nil
 			}
 		}
-		
+
 		mrEnv, err = env.MultiEnvForPaths(
 			ctx,
 			env.GetCurrentUserHomeDir,
