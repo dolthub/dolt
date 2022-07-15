@@ -10,7 +10,7 @@ fi
 jobName="$1"
 fromServer="$2"
 fromVersion="$3"
-toServer="$4"
+toServer="$4" # make this mysql
 toVersion="$5"
 timePrefix="$6"
 actorPrefix="$7"
