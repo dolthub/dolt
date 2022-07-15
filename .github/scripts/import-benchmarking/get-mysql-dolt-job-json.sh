@@ -14,8 +14,8 @@ toServer="$4"
 toVersion="$5"
 timePrefix="$6"
 actorPrefix="$7"
-nomsBinFormat="$8" # TODO: Add back when can rebuild
-issueNumber="$9" # TODO: Use this to paste the results onto the github issue
+nomsBinFormat="$8"
+issueNumber="$9"
 
 echo '
 {
@@ -57,6 +57,9 @@ echo '
               "--results-prefix='$actorPrefix'",
               "--mysql-exec=/usr/sbin/mysqld",
               "--mysql-schema-file=schema.sql",
+              "--nbf='$nomsBinFormat'",
+              "--results-schema=results-schema.sql",
+              "--issue-number='$issueNumber'",
               "--fileNames=100k-sorted.csv",
               "--fileNames=100k-random.csv",
               "--fileNames=1m-sorted.csv",
