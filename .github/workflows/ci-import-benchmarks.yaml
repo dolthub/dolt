@@ -5,6 +5,7 @@ on:
     types: [ opened ]
   issue_comment:
     types: [ created ]
+  workflow_dispatch:
 
 jobs:
   validate-commentor:
@@ -96,3 +97,4 @@ jobs:
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
           TEMPLATE_SCRIPT: "./.github/scripts/import-benchmarking/get-dolt-dolt-job-json.sh"
+          NOMS_BIN_FORMAT: "__LD_1__"
