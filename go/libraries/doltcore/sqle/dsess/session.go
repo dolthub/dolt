@@ -403,7 +403,7 @@ func (d *DoltSession) PendingCommitAllStaged(ctx *sql.Context, dbName string, pr
 	}
 
 	var err error
-	roots, err = actions.StageAllTablesNoDocs(ctx, roots)
+	roots, err = actions.StageAllTables(ctx, roots)
 	if err != nil {
 		return nil, err
 	}

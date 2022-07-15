@@ -27,6 +27,15 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+type TableDiffType int
+
+const (
+	AddedTable TableDiffType = iota
+	ModifiedTable
+	RenamedTable
+	RemovedTable
+)
+
 // TableDelta represents the change of a single table between two roots.
 // FromFKs and ToFKs contain Foreign Keys that constrain columns in this table,
 // they do not contain Foreign Keys that reference this table.

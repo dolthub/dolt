@@ -51,7 +51,7 @@ func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	roots, err := dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
-	roots, err = actions.StageAllTables(context.Background(), roots, dEnv.Docs)
+	roots, err = actions.StageAllTables(context.Background(), roots)
 	require.NoError(t, err)
 
 	return dEnv.UpdateRoots(context.Background(), roots)
@@ -115,7 +115,7 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	roots, err := dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
-	roots, err = actions.StageAllTables(context.Background(), roots, dEnv.Docs)
+	roots, err = actions.StageAllTables(context.Background(), roots)
 	require.NoError(t, err)
 
 	name, email, err := env.GetNameAndEmail(dEnv.Config)
@@ -167,13 +167,7 @@ func (r ResetHard) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	err = dEnv.UpdateStagedRoot(context.Background(), headRoot)
-	if err != nil {
-		return err
-	}
-
-	err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv)
-	return err
+	return dEnv.UpdateStagedRoot(context.Background(), headRoot)
 }
 
 type Query struct {
@@ -298,10 +292,6 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 
 		err = dEnv.UpdateWorkingSet(context.Background(), workingSet.WithWorkingRoot(rv))
 		require.NoError(t, err)
-
-		err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv)
-		assert.NoError(t, err)
-
 	} else {
 		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 		mergedRoot, tblToStats, err := merge.MergeCommits(context.Background(), cm1, cm2, opts)
@@ -316,11 +306,6 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		}
 
 		err = dEnv.UpdateWorkingRoot(context.Background(), mergedRoot)
-		if err != nil {
-			return err
-		}
-
-		err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv)
 		if err != nil {
 			return err
 		}
