@@ -35,6 +35,7 @@ type prollyKeylessWriter struct {
 }
 
 var _ indexWriter = prollyKeylessWriter{}
+var _ primaryIndexErrBuilder = prollyKeylessWriter{}
 
 func (k prollyKeylessWriter) Name() string {
 	return k.name
@@ -117,6 +118,10 @@ func (k prollyKeylessWriter) Discard(ctx context.Context) error {
 
 func (k prollyKeylessWriter) HasEdits(ctx context.Context) bool {
 	return k.mut.HasEdits()
+}
+
+func (k prollyKeylessWriter) IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error) {
+	return k.IterRange(ctx, rng)
 }
 
 func (k prollyKeylessWriter) tuplesFromRow(ctx context.Context, sqlRow sql.Row) (hashId, value val.Tuple, err error) {
@@ -312,10 +317,6 @@ func (writer prollyKeylessSecondaryWriter) HasEdits(ctx context.Context) bool {
 	return writer.mut.HasEdits()
 }
 
-func (writer prollyKeylessSecondaryWriter) getMut() prolly.MutableMap {
-	return writer.mut
-}
-
-func (writer prollyKeylessSecondaryWriter) errForSecondaryUniqueKeyError(ctx context.Context, err secondaryUniqueKeyError) error {
-	panic("secondary index writers should not handle their own errors")
+func (writer prollyKeylessSecondaryWriter) IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error) {
+	return writer.mut.IterRange(ctx, rng)
 }

@@ -77,7 +77,10 @@ type indexWriter interface {
 	Commit(ctx context.Context) error
 	Discard(ctx context.Context) error
 	HasEdits(ctx context.Context) bool
-	getMut() prolly.MutableMap
+	IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error)
+}
+
+type primaryIndexErrBuilder interface {
 	errForSecondaryUniqueKeyError(ctx context.Context, err secondaryUniqueKeyError) error
 }
 
@@ -92,6 +95,7 @@ type prollyIndexWriter struct {
 }
 
 var _ indexWriter = prollyIndexWriter{}
+var _ primaryIndexErrBuilder = prollyIndexWriter{}
 
 func (m prollyIndexWriter) Name() string {
 	// primary indexes don't have a name
@@ -197,8 +201,8 @@ func (m prollyIndexWriter) HasEdits(ctx context.Context) bool {
 	return m.mut.HasEdits()
 }
 
-func (m prollyIndexWriter) getMut() prolly.MutableMap {
-	return m.mut
+func (m prollyIndexWriter) IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error) {
+	return m.mut.IterRange(ctx, rng)
 }
 
 func (m prollyIndexWriter) errForSecondaryUniqueKeyError(ctx context.Context, err secondaryUniqueKeyError) error {
@@ -369,12 +373,8 @@ func (m prollySecondaryIndexWriter) HasEdits(ctx context.Context) bool {
 	return m.mut.HasEdits()
 }
 
-func (m prollySecondaryIndexWriter) getMut() prolly.MutableMap {
-	return m.mut
-}
-
-func (m prollySecondaryIndexWriter) errForSecondaryUniqueKeyError(ctx context.Context, err secondaryUniqueKeyError) error {
-	panic("secondary index writers shouldn't handle their own unique key errors")
+func (m prollySecondaryIndexWriter) IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error) {
+	return m.mut.IterRange(ctx, rng)
 }
 
 // FormatKeyForUniqKeyErr formats the given tuple |key| using |d|. The resulting

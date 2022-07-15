@@ -75,7 +75,7 @@ func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.R
 	}
 
 	if primary, ok := n.writer.primary.(prollyIndexWriter); ok {
-		rangeIter, err := idxWriter.getMut().IterRange(ctx, n.pRange)
+		rangeIter, err := idxWriter.IterRange(ctx, n.pRange)
 		if err != nil {
 			return nil, err
 		}
@@ -86,7 +86,7 @@ func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.R
 			sqlSch:     n.writer.sqlSch,
 		}, nil
 	} else {
-		rangeIter, err := idxWriter.getMut().IterRange(ctx, n.pRange)
+		rangeIter, err := idxWriter.IterRange(ctx, n.pRange)
 		if err != nil {
 			return nil, err
 		}
