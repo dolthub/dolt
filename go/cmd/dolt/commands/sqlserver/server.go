@@ -97,7 +97,6 @@ func Serve(
 			}
 		}
 
-		// TODO: this should be the global config, probably?
 		mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 		if err != nil {
 			return err, nil
@@ -109,8 +108,7 @@ func Serve(
 				return err, nil
 			}
 		}
-
-		// TODO: this should be the global config, probably?
+		
 		mrEnv, err = env.MultiEnvForPaths(
 			ctx,
 			env.GetCurrentUserHomeDir,
