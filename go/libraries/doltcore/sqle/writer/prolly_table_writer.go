@@ -133,7 +133,7 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 	for _, wr := range w.secondary {
 		if err := wr.Insert(ctx, sqlRow); err != nil {
 			if uke, ok := err.(secondaryUniqueKeyError); ok {
-				return w.primary.errForSecondaryUniqueKeyError(ctx, uke)
+				return w.primary.(primaryIndexErrBuilder).errForSecondaryUniqueKeyError(ctx, uke)
 			}
 			return err
 		}
@@ -159,7 +159,7 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 	for _, wr := range w.secondary {
 		if err := wr.Update(ctx, oldRow, newRow); err != nil {
 			if uke, ok := err.(secondaryUniqueKeyError); ok {
-				return w.primary.errForSecondaryUniqueKeyError(ctx, uke)
+				return w.primary.(primaryIndexErrBuilder).errForSecondaryUniqueKeyError(ctx, uke)
 			}
 			return err
 		}
