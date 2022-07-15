@@ -43,6 +43,11 @@ timeprefix=$(date +%Y/%m/%d)
 
 actorprefix="$MODE/$ACTOR/$actorShort"
 
+format="markdown"
+if [[ "$MODE" = "release" || "$MODE" = "nightly" ]]; then
+  format="html"
+fi
+
 # set value to ISSUE_NUMBER environment variable
 # or default to -1
 issuenumber=${ISSUE_NUMBER:-"-1"}
@@ -57,6 +62,7 @@ source \
   "$timeprefix"      \
   "$actorprefix"     \
   "$NOMS_BIN_FORMAT" \
+  "$format"          \
   "$issuenumber"     > job.json
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
