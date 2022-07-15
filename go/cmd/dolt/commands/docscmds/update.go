@@ -189,15 +189,7 @@ func maybeCreateDoltDocs(ctx context.Context, dEnv *env.DoltEnv) error {
 	}
 	root := ws.WorkingRoot()
 
-	_, ok, err := root.GetTable(ctx, doltdb.DocTableName)
-	if err != nil {
-		return err
-	}
-	if ok {
-		return nil
-	}
-
-	root, err = root.CreateEmptyTable(ctx, doltdb.DocTableName, doltdb.DocsSchema)
+	root, err = doltdb.MaybeCreateDoltDocsTable(ctx, root)
 	if err != nil {
 		return err
 	}

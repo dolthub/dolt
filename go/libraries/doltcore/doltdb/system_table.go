@@ -115,6 +115,17 @@ func GetAllTableNames(ctx context.Context, root *RootValue) ([]string, error) {
 	return append(n, s...), nil
 }
 
+func MaybeCreateDoltDocsTable(ctx context.Context, root *RootValue) (*RootValue, error) {
+	_, ok, err := root.GetTable(ctx, DocTableName)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		return root, nil
+	}
+	return root.CreateEmptyTable(ctx, DocTableName, DocsSchema)
+}
+
 // The set of reserved dolt_ tables that should be considered part of user space, like any other user-created table,
 // for the purposes of the dolt command line. These tables cannot be created or altered explicitly, but can be updated
 // like normal SQL tables.
