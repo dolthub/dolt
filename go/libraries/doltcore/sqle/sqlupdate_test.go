@@ -360,6 +360,18 @@ func TestExecuteUpdateSystemTables(t *testing.T) {
 
 var systemTableUpdateTests = []UpdateTest{
 	{
+		Name: "update dolt_docs",
+		AdditionalSetup: CreateTableFn("dolt_docs",
+			doltdb.DocsSchema,
+			NewRowWithSchema(doltdb.DocsSchema,
+				types.String("LICENSE.md"), types.String("A license"),
+			)),
+		UpdateQuery:    "update dolt_docs set doc_text = 'Some text';",
+		SelectQuery:    "select * from dolt_docs",
+		ExpectedRows:   []sql.Row{{"LICENSE.md", "Some text"}},
+		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
+	},
+	{
 		Name: "update dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
 			dtables.DoltQueryCatalogSchema,

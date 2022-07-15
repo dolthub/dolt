@@ -28,10 +28,10 @@ import (
 )
 
 var diffDocs = cli.CommandDocumentationContent{
-	ShortDesc: "",
-	LongDesc:  "",
+	ShortDesc: "Diffs Dolt Docs",
+	LongDesc:  "Diffs Dolt Docs",
 	Synopsis: []string{
-		"",
+		"{{.LessThan}}doc{{.GreaterThan}}",
 	},
 }
 
@@ -72,7 +72,7 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() != 1 {
-		verr := errhand.BuildDError("dolt docs read takes exactly one argument").Build()
+		verr := errhand.BuildDError("dolt docs diff takes exactly one argument").Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 

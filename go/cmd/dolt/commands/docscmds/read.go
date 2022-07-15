@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -30,108 +31,128 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
-var writeDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Reads Dolt docs to stdout",
-	LongDesc:  "Reads Dolt docs to stdout",
+var readDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Reads Dolt docs from the file system into the database",
+	LongDesc:  "Reads Dolt docs from the file system into the database",
 	Synopsis: []string{
-		"[{{.LessThan}}dolt doc{{.GreaterThan}}]",
+		"{{.LessThan}}doc{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
 }
 
-type WriteCmd struct{}
+type ReadCmd struct{}
 
 // Name implements cli.Command.
-func (cmd WriteCmd) Name() string {
-	return "write"
+func (cmd ReadCmd) Name() string {
+	return "read"
 }
 
 // Description implements cli.Command.
-func (cmd WriteCmd) Description() string {
+func (cmd ReadCmd) Description() string {
 	return writeDocs.ShortDesc
 }
 
 // RequiresRepo implements cli.Command.
-func (cmd WriteCmd) RequiresRepo() bool {
+func (cmd ReadCmd) RequiresRepo() bool {
 	return true
 }
 
 // Docs implements cli.Command.
-func (cmd WriteCmd) Docs() *cli.CommandDocumentation {
+func (cmd ReadCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.NewCommandDocumentation(writeDocs, ap)
+	return cli.NewCommandDocumentation(readDocs, ap)
 }
 
 // ArgParser implements cli.Command.
-func (cmd WriteCmd) ArgParser() *argparser.ArgParser {
+func (cmd ReadCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"doc", "Dolt doc to be read."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"doc", "Dolt doc name to be updated in the database."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "file to read Dolt doc from."})
 	return ap
 }
 
 // Exec implements cli.Command.
-func (cmd WriteCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ReadCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, writeDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.NArg() != 1 {
-		verr := errhand.BuildDError("dolt docs read takes exactly one argument").Build()
+	if apr.NArg() != 2 {
+		verr := errhand.BuildDError("dolt docs read takes exactly two arguments").Build()
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+	if verr := validateDocName(apr.Arg(0)); verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
 	var verr errhand.VerboseError
-	if err := writeDoltDoc(ctx, dEnv, apr.Arg(0)); err != nil {
+	if err := readDoltDoc(ctx, dEnv, apr.Arg(0), apr.Arg(1)); err != nil {
 		verr = errhand.VerboseErrorFromError(err)
 	}
 
 	return commands.HandleVErrAndExitCode(verr, usage)
 }
 
-func writeDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName string) error {
+func validateDocName(docName string) errhand.VerboseError {
+	valid := []string{
+		doltdb.ReadmeDoc,
+		doltdb.LicenseDoc,
+	}
+
+	for _, name := range valid {
+		if name == docName {
+			return nil
+		}
+	}
+
+	return errhand.BuildDError("invalid doc name '%s', valid names are (%s)",
+		docName, strings.Join(valid, ", ")).Build()
+}
+
+func readDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName, fileName string) error {
+	update, err := dEnv.FS.ReadFile(fileName)
+	if err != nil {
+		return err
+	}
+
+	if err := maybeCreateDoltDocs(ctx, dEnv); err != nil {
+		return err
+	}
+
 	eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return err
 	}
 
-	doc, err := readDocFromTable(ctx, eng, docName)
+	root, err := writeDocToTable(ctx, eng, docName, string(update))
 	if err != nil {
 		return err
 	}
 
-	cli.Print(doc)
-	return nil
+	return dEnv.UpdateWorkingRoot(ctx, root)
 }
 
 const (
-	readDocTemplate = "SELECT " + doltdb.DocTextColumnName + " " +
-		"FROM dolt_docs %s WHERE " + doltdb.DocPkColumnName + " = '%s'"
+	writeDocTemplate = `REPLACE INTO dolt_docs VALUES ("%s", "%s")`
 )
 
-func readDocFromTable(ctx context.Context, eng *engine.SqlEngine, docName string) (string, error) {
-	return readDocFromTableAsOf(ctx, eng, docName, "")
-}
-
-func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, docName, asOf string) (doc string, err error) {
+func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, content string) (*doltdb.RootValue, error) {
 	var (
-		sctx *sql.Context
-		iter sql.RowIter
-		row  sql.Row
+		sctx  *sql.Context
+		iter  sql.RowIter
+		err   error
+		roots map[string]*doltdb.RootValue
 	)
-
-	if asOf != "" {
-		asOf = fmt.Sprintf("AS OF '%s'", asOf)
-	}
-	query := fmt.Sprintf(readDocTemplate, asOf, docName)
 
 	sctx, err = eng.NewContext(ctx)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	sctx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
-	_, iter, err = eng.Query(sctx, query)
+	content = strings.ReplaceAll(content, `"`, `\"`)
+	_, iter, err = eng.Query(sctx, fmt.Sprintf(writeDocTemplate, docName, content))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer func() {
 		if cerr := iter.Close(sctx); err == nil {
@@ -139,24 +160,38 @@ func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, docName, a
 		}
 	}()
 
-	row, err = iter.Next(sctx)
-	if err == io.EOF {
-		// doc does not exist
-		return "", nil
-	}
-	if err != nil {
-		return "", err
+	for {
+		_, err = iter.Next(sctx)
+		if err == io.EOF {
+			err = nil
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	doc = row[0].(string)
+	if roots, err = eng.GetRoots(sctx); err != nil {
+		return nil, err
+	}
+	assertTrue(len(roots) == 1)
 
-	_, eof := iter.Next(sctx)
-	assertTrue(eof == io.EOF)
-	return
+	for _, rv := range roots {
+		return rv, nil
+	}
+	panic("unreachable")
 }
 
-func assertTrue(b bool) {
-	if !b {
-		panic("expected true")
+func maybeCreateDoltDocs(ctx context.Context, dEnv *env.DoltEnv) error {
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return err
 	}
+	root := ws.WorkingRoot()
+
+	root, err = doltdb.MaybeCreateDoltDocsTable(ctx, root)
+	if err != nil {
+		return err
+	}
+	return dEnv.UpdateWorkingRoot(ctx, root)
 }

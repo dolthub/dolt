@@ -1488,19 +1488,19 @@ func TestCaseSensitivity(t *testing.T) {
 }
 
 var systemTableSelectTests = []SelectTest{
-	//{
-	//	Name: "select from dolt_docs",
-	//	AdditionalSetup: CreateTableFn("dolt_docs",
-	//		doltdocs.DocsSchema,
-	//		NewRowWithSchema(doltdocs.DocsSchema,
-	//			types.String("LICENSE.md"),
-	//			types.String("A license")),
-	//	),
-	//	Query: "select * from dolt_docs",
-	//	ExpectedRows: ToSqlRows(CompressSchema(doltdocs.DocsSchema),
-	//		NewRow(types.String("LICENSE.md"), types.String("A license"))),
-	//	ExpectedSchema: CompressSchema(doltdocs.DocsSchema),
-	//},
+	{
+		Name: "select from dolt_docs",
+		AdditionalSetup: CreateTableFn("dolt_docs",
+			doltdb.DocsSchema,
+			NewRowWithSchema(doltdb.DocsSchema,
+				types.String("LICENSE.md"),
+				types.String("A license")),
+		),
+		Query: "select * from dolt_docs",
+		ExpectedRows: ToSqlRows(CompressSchema(doltdb.DocsSchema),
+			NewRow(types.String("LICENSE.md"), types.String("A license"))),
+		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
+	},
 	{
 		Name: "select from dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,

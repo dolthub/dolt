@@ -252,6 +252,16 @@ func TestExecuteReplace(t *testing.T) {
 
 var systemTableReplaceTests = []ReplaceTest{
 	{
+		Name: "replace into dolt_docs",
+		AdditionalSetup: CreateTableFn("dolt_docs",
+			doltdb.DocsSchema,
+			NewRow(types.String("LICENSE.md"), types.String("A license"))),
+		ReplaceQuery:   "replace into dolt_docs (doc_name, doc_text) values ('LICENSE.md', 'Some text')",
+		SelectQuery:    "select * from dolt_docs",
+		ExpectedRows:   []sql.Row{{"LICENSE.md", "Some text"}},
+		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
+	},
+	{
 		Name: "replace into dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
 			dtables.DoltQueryCatalogSchema,
