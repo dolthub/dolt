@@ -23,9 +23,9 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
@@ -40,7 +40,7 @@ func addUniqIdxViols(
 	left, right, base prolly.Map,
 	m prolly.Map,
 	artEditor prolly.ArtifactsEditor,
-	theirRootIsh hash.Hash,
+	theirRootIsh doltdb.Rootish,
 	tblName string) error {
 
 	meta, err := makeUniqViolMeta(postMergeSchema, index)
@@ -143,7 +143,7 @@ func (m UniqCVMeta) PrettyPrint() string {
 	return jsonStr
 }
 
-func replaceUniqueKeyViolation(ctx context.Context, edt prolly.ArtifactsEditor, m prolly.Map, k val.Tuple, kd val.TupleDesc, theirRootIsh hash.Hash, vInfo []byte, tblName string) error {
+func replaceUniqueKeyViolation(ctx context.Context, edt prolly.ArtifactsEditor, m prolly.Map, k val.Tuple, kd val.TupleDesc, theirRootIsh doltdb.Rootish, vInfo []byte, tblName string) error {
 	var value val.Tuple
 	err := m.Get(ctx, k, func(_, v val.Tuple) error {
 		value = v
@@ -158,7 +158,12 @@ func replaceUniqueKeyViolation(ctx context.Context, edt prolly.ArtifactsEditor, 
 		Value: value,
 	}
 
-	err = edt.ReplaceConstraintViolation(ctx, k, theirRootIsh, prolly.ArtifactTypeUniqueKeyViol, meta)
+	theirsHash, err := theirRootIsh.HashOf()
+	if err != nil {
+		return err
+	}
+
+	err = edt.ReplaceConstraintViolation(ctx, k, theirsHash, prolly.ArtifactTypeUniqueKeyViol, meta)
 	if err != nil {
 		if mv, ok := err.(*prolly.ErrMergeArtifactCollision); ok {
 			var e, n UniqCVMeta
