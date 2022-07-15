@@ -60,6 +60,13 @@ func BenchmarkOltpPointSelect(b *testing.B) {
 	})
 }
 
+func BenchmarkProjectionAggregation(b *testing.B) {
+	benchmarkSysbenchQuery(b, func(int) string {
+		q := "SELECT c, count(id) FROM sbtest1 WHERE k > %d GROUP BY c ORDER BY c"
+		return fmt.Sprintf(q, rand.Intn(tableSize))
+	})
+}
+
 func BenchmarkSelectRandomPoints(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
 		var sb strings.Builder
@@ -78,7 +85,7 @@ func BenchmarkSelectRandomPoints(b *testing.B) {
 func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 	ctx, eng := setupBenchmark(b, dEnv)
 	for i := 0; i < b.N; i++ {
-		_, iter, err := commands.ProcessQuery(ctx, getQuery(i), eng)
+		_, iter, err := eng.Query(ctx, getQuery(i))
 		require.NoError(b, err)
 		for {
 			if _, err = iter.Next(ctx); err != nil {
@@ -90,6 +97,7 @@ func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 		require.NoError(b, err)
 	}
 	_ = eng.Close()
+	b.ReportAllocs()
 }
 
 func setupBenchmark(t *testing.B, dEnv *env.DoltEnv) (*sql.Context, *engine.SqlEngine) {

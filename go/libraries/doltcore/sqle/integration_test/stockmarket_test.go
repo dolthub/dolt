@@ -20125,7 +20125,7 @@ INSERT INTO join_result VALUES ('stock','ZYNE','us','2017-11-01',9.7,9.93,9.41,9
 `
 
 func TestCreateTables(t *testing.T) {
-	SkipByDefaultInCI(t)
+	sqle.SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 
@@ -20144,7 +20144,7 @@ func TestCreateTables(t *testing.T) {
 }
 
 func TestInserts(t *testing.T) {
-	SkipByDefaultInCI(t)
+	sqle.SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 
@@ -20170,7 +20170,7 @@ func TestInserts(t *testing.T) {
 }
 
 func TestInsertsWithIndexes(t *testing.T) {
-	SkipByDefaultInCI(t)
+	sqle.SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 
@@ -20205,7 +20205,7 @@ func TestInsertsWithIndexes(t *testing.T) {
 }
 
 func TestJoin(t *testing.T) {
-	SkipByDefaultInCI(t)
+	sqle.SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 
@@ -20253,7 +20253,7 @@ func assertResultRowsEqual(t *testing.T, expected, actual []sql.Row) {
 }
 
 func TestExplain(t *testing.T) {
-	SkipByDefaultInCI(t)
+	sqle.SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 

@@ -71,11 +71,7 @@ func SchemasTableSchema() schema.Schema {
 
 // GetOrCreateDoltSchemasTable returns the `dolt_schemas` table in `db`, creating it if it does not already exist.
 func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *WritableDoltTable, retErr error) {
-	root, err := db.GetRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-	tbl, found, err := db.GetTableInsensitiveWithRoot(ctx, root, doltdb.SchemasTableName)
+	tbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +80,10 @@ func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 		schemasTable := tbl.(*WritableDoltTable)
 		// Old schemas table does not contain the `id` or `extra` column.
 		if !tbl.Schema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) || !tbl.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) {
+			root, err := db.GetRoot(ctx)
+			if err != nil {
+				return nil, err
+			}
 			root, rowsToAdd, err = migrateOldSchemasTableToNew(ctx, db, root, schemasTable)
 			if err != nil {
 				return nil, err
@@ -92,16 +92,16 @@ func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 			return schemasTable, nil
 		}
 	}
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
 	// Create the schemas table as an empty table
 	err = db.createDoltTable(ctx, doltdb.SchemasTableName, root, SchemasTableSchema())
 	if err != nil {
 		return nil, err
 	}
-	root, err = db.GetRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-	tbl, found, err = db.GetTableInsensitiveWithRoot(ctx, root, doltdb.SchemasTableName)
+	tbl, found, err = db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
 	}
@@ -123,11 +123,7 @@ func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 		return nil, err
 	}
 	// If there was an old schemas table that contained rows, then add that data here
-	root, err = db.GetRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-	tbl, found, err = db.GetTableInsensitiveWithRoot(ctx, root, doltdb.SchemasTableName)
+	tbl, found, err = db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
 	}

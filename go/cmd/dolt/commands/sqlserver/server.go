@@ -95,7 +95,7 @@ func Serve(
 			}
 
 			// TODO: this should be the global config, probably?
-			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version)
+			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile)
 			if err != nil {
 				return err, nil
 			}
@@ -117,7 +117,7 @@ func Serve(
 		}
 
 		// TODO: this should be the global config, probably?
-		mrEnv, err = env.LoadMultiEnv(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), fs, version, dbNamesAndPaths...)
+		mrEnv, err = env.LoadMultiEnv(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), fs, version, dEnv.IgnoreLockFile, dbNamesAndPaths...)
 
 		if err != nil {
 			return err, nil
@@ -158,7 +158,7 @@ func Serve(
 	mySQLServer, startError = server.NewServer(
 		serverConf,
 		sqlEngine.GetUnderlyingEngine(),
-		newSessionBuilder(sqlEngine),
+		newSessionBuilder(sqlEngine, serverConfig),
 		listener,
 	)
 
@@ -184,6 +184,15 @@ func Serve(
 		}()
 	}
 
+	if ok, f := mrEnv.IsLocked(); ok {
+		startError = env.ErrActiveServerLock.New(f)
+		return
+	}
+	if err = mrEnv.Lock(); err != nil {
+		startError = err
+		return
+	}
+
 	serverController.registerCloseFunction(startError, func() error {
 		if metSrv != nil {
 			metSrv.Close()
@@ -195,8 +204,11 @@ func Serve(
 	closeError = mySQLServer.Start()
 	if closeError != nil {
 		cli.PrintErr(closeError)
-		return
 	}
+	if err := mrEnv.Unlock(); err != nil {
+		cli.PrintErr(err)
+	}
+
 	return
 }
 
@@ -210,7 +222,13 @@ func portInUse(hostPort string) bool {
 	return false
 }
 
-func newSessionBuilder(se *engine.SqlEngine) server.SessionBuilder {
+func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.SessionBuilder {
+	userToSessionVars := make(map[string]map[string]string)
+	userVars := config.UserVars()
+	for _, curr := range userVars {
+		userToSessionVars[curr.Name] = curr.Vars
+	}
+
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, error) {
 		mysqlSess, err := server.DefaultSessionBuilder(ctx, conn, host)
 		if err != nil {
@@ -221,7 +239,27 @@ func newSessionBuilder(se *engine.SqlEngine) server.SessionBuilder {
 			return nil, fmt.Errorf("unknown GMS base session type")
 		}
 
-		return se.NewDoltSession(ctx, mysqlBaseSess)
+		dsess, err := se.NewDoltSession(ctx, mysqlBaseSess)
+		if err != nil {
+			return nil, err
+		}
+
+		varsForUser := userToSessionVars[conn.User]
+		if len(varsForUser) > 0 {
+			sqlCtx, err := se.NewContext(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			for key, val := range varsForUser {
+				err = dsess.InitSessionVariable(sqlCtx, key, val)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		return dsess, nil
 	}
 }
 

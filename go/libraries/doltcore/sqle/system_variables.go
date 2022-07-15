@@ -16,15 +16,8 @@ package sqle
 
 import (
 	"github.com/dolthub/go-mysql-server/sql"
-)
 
-const (
-	ReplicateToRemoteKey     = "dolt_replicate_to_remote"
-	ReadReplicaRemoteKey     = "dolt_read_replica_remote"
-	SkipReplicationErrorsKey = "dolt_skip_replication_errors"
-	ReplicateHeadsKey        = "dolt_replicate_heads"
-	ReplicateAllHeadsKey     = "dolt_replicate_all_heads"
-	AsyncReplicationKey      = "dolt_async_replication"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 const (
@@ -39,58 +32,58 @@ func init() {
 func AddDoltSystemVariables() {
 	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 		{
-			Name:              ReplicateToRemoteKey,
+			Name:              dsess.ReplicateToRemoteKey,
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(ReplicateToRemoteKey),
+			Type:              sql.NewSystemStringType(dsess.ReplicateToRemoteKey),
 			Default:           "",
 		},
 		{
-			Name:              ReadReplicaRemoteKey,
+			Name:              dsess.ReadReplicaRemoteKey,
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(ReadReplicaRemoteKey),
+			Type:              sql.NewSystemStringType(dsess.ReadReplicaRemoteKey),
 			Default:           "",
 		},
 		{
-			Name:              SkipReplicationErrorsKey,
+			Name:              dsess.SkipReplicationErrorsKey,
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(SkipReplicationErrorsKey),
+			Type:              sql.NewSystemBoolType(dsess.SkipReplicationErrorsKey),
 			Default:           int8(0),
 		},
 		{
-			Name:              ReplicateHeadsKey,
+			Name:              dsess.ReplicateHeadsKey,
 			Scope:             sql.SystemVariableScope_Both,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(ReplicateHeadsKey),
+			Type:              sql.NewSystemStringType(dsess.ReplicateHeadsKey),
 			Default:           "",
 		},
 		{
-			Name:              ReplicateAllHeadsKey,
+			Name:              dsess.ReplicateAllHeadsKey,
 			Scope:             sql.SystemVariableScope_Both,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(ReplicateAllHeadsKey),
+			Type:              sql.NewSystemBoolType(dsess.ReplicateAllHeadsKey),
 			Default:           int8(0),
 		},
 		{
-			Name:              AsyncReplicationKey,
+			Name:              dsess.AsyncReplicationKey,
 			Scope:             sql.SystemVariableScope_Both,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(AsyncReplicationKey),
+			Type:              sql.NewSystemBoolType(dsess.AsyncReplicationKey),
 			Default:           int8(0),
 		},
 	})
 }
 
 func SkipReplicationWarnings() bool {
-	_, skip, ok := sql.SystemVariables.GetGlobal(SkipReplicationErrorsKey)
+	_, skip, ok := sql.SystemVariables.GetGlobal(dsess.SkipReplicationErrorsKey)
 	if !ok {
 		panic("dolt system variables not loaded")
 	}

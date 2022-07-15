@@ -21,6 +21,55 @@ teardown() {
     teardown_common
 }
 
+
+
+@test "sql-server: user session variables from config" {
+  cd repo1
+  echo "
+privilege_file: privs.json
+user_session_vars:
+- name: user0
+  vars:
+    aws_credentials_file: /Users/user0/.aws/config
+    aws_credentials_profile: default
+- name: user1
+  vars:
+    aws_credentials_file: /Users/user1/.aws/config
+    aws_credentials_profile: lddev" > server.yaml
+
+    dolt sql --privilege-file=privs.json -q "CREATE USER dolt@'127.0.0.1'"
+    dolt sql --privilege-file=privs.json -q "CREATE USER user0@'127.0.0.1' IDENTIFIED BY 'pass0'"
+    dolt sql --privilege-file=privs.json -q "CREATE USER user1@'127.0.0.1' IDENTIFIED BY 'pass1'"
+    dolt sql --privilege-file=privs.json -q "CREATE USER user2@'127.0.0.1' IDENTIFIED BY 'pass2'"
+
+    start_sql_server_with_config "" server.yaml
+
+    run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user0  --password=pass0<<SQL
+SELECT @@aws_credentials_file, @@aws_credentials_profile;
+SQL
+    echo $output
+    [[ "$output" =~ /Users/user0/.aws/config.*default ]] || false
+
+    run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user1 --password=pass1<<SQL
+SELECT @@aws_credentials_file, @@aws_credentials_profile;
+SQL
+    echo $output
+    [[ "$output" =~ /Users/user1/.aws/config.*lddev ]] || false
+
+    run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user2 --password=pass2<<SQL
+SELECT @@aws_credentials_file, @@aws_credentials_profile;
+SQL
+    echo $output
+    [[ "$output" =~ NULL.*NULL ]] || false
+
+    run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user2 --password=pass2<<SQL
+SET @@aws_credentials_file="/Users/should_fail";
+SQL
+    echo $output
+    [[ "$output" =~ "Variable 'aws_credentials_file' is a read only variable" ]] || false
+}
+
+
 @test "sql-server: port in use" {
     cd repo1
 
@@ -151,15 +200,17 @@ teardown() {
     [[ "$output" =~ "one_pk" ]] || false
 
     # Add rows on the command line
-    dolt sql -q "insert into one_pk values (1,1,1)"
+    run dolt sql -q "insert into one_pk values (1,1,1)"
+    [ "$status" -eq 1 ]
 
-    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n1,1,1"
+    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" ""
 
     # Test import as well (used by doltpy)
     echo 'pk,c1,c2' > import.csv
     echo '2,2,2' >> import.csv
-    dolt table import -u one_pk import.csv
-    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n1,1,1\n2,2,2"
+    run dolt table import -u one_pk import.csv
+    [ "$status" -eq 1 ]
+    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" ""
 }
 
 @test "sql-server: test dolt sql interface works properly with autocommit" {
@@ -641,13 +692,16 @@ SQL
     SELECT commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');
     INSERT INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
 
-    dolt add .
+    server_query repo1 1 "call dolt_add('.')" "status\n0"
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
 
-    dolt sql -q "drop table one_pk"
-    dolt commit -am "Dropped table one_pk"
+    run dolt sql -q "drop table one_pk"
+    [ "$status" -eq 1 ]
+
+    server_query repo1 1 "drop table one_pk" ""
+    multi_query repo1 1 "call dolt_commit('-am', 'Dropped table one_pk')"
 
     run dolt ls
     [ "$status" -eq 0 ]
@@ -656,7 +710,6 @@ SQL
 
 # TODO: Need to update testing logic allow queries for a multiple session.
 @test "sql-server: Create a temporary table and validate that it doesn't persist after a session closes" {
-    skip_nbf_dolt_1
     skiponwindows "Missing dependencies"
 
     cd repo1
@@ -978,7 +1031,6 @@ END""")
 
 @test "sql-server: sql-push --set-remote within session" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1
 
     mkdir rem1
     cd repo1
@@ -998,7 +1050,6 @@ END""")
 
 @test "sql-server: replicate to backup after sql-session commit" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1
 
     mkdir bac1
     cd repo1
@@ -1083,7 +1134,7 @@ END""")
 @test "sql-server: drop database with active connections" {
     skiponwindows "Missing dependencies"
     skip_nbf_dolt_1
-    
+
     mkdir no_dolt && cd no_dolt
     start_sql_server
 
@@ -1132,7 +1183,6 @@ END""")
 
 @test "sql-server: connect to databases case insensitive" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1
 
     mkdir no_dolt && cd no_dolt
     start_sql_server
@@ -1255,7 +1305,6 @@ END""")
 
 @test "sql-server: fetch uses database tempdir from different working directory" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1
 
     mkdir remote1
     cd repo2
@@ -1312,4 +1361,37 @@ databases:
 
     run expect $BATS_TEST_DIRNAME/sql-server-mysql.expect $PORT repo1
     [ "$status" -eq 0 ]
+}
+
+@test "sql-server: sql-server lock cleanup" {
+    cd repo1
+    start_sql_server
+    stop_sql_server
+    start_sql_server
+    stop_sql_server
+}
+
+@test "sql-server: sql-server locks database" {
+    cd repo1
+    start_sql_server
+    let PORT="$$ % (65536-1024) + 1024"
+    run dolt sql-server -P $PORT
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: multi dir sql-server locks out childen" {
+    start_sql_server
+    cd repo2
+    let PORT="$$ % (65536-1024) + 1024"
+    run dolt sql-server -P $PORT
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: sql-server child locks out parent multi dir" {
+    cd repo2
+    start_sql_server
+    cd ..
+    let PORT="$$ % (65536-1024) + 1024"
+    run dolt sql-server -P $PORT
+    [ "$status" -eq 1 ]
 }

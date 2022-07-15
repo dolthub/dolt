@@ -81,5 +81,5 @@ func (k keylessCompare) Compare(left, right Tuple, _ TupleDesc) int {
 
 // CompareValues implements TupleComparator
 func (k keylessCompare) CompareValues(left, right []byte, typ Type) int {
-	panic("unimplemented")
+	return compare(typ, left, right)
 }

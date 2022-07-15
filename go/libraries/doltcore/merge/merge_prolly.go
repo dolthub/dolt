@@ -15,6 +15,7 @@
 package merge
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -48,22 +49,39 @@ import (
 func mergeTableData(
 	ctx context.Context,
 	vrw types.ValueReadWriter,
+	ns tree.NodeStore,
 	tblName string,
 	postMergeSchema, rootSchema, mergeSchema, ancSchema schema.Schema,
 	tbl, mergeTbl, updatedTbl *doltdb.Table,
 	ancRows durable.Index,
 	ancIndexSet durable.IndexSet,
 	mergeRootIsh hash.Hash,
-	ancRootIsh hash.Hash) (*doltdb.Table, *MergeStats, error) {
+	ancRootIsh hash.Hash,
+) (*doltdb.Table, *MergeStats, error) {
 	group, gCtx := errgroup.WithContext(ctx)
 
-	indexEdits := make(chan indexEdit, 128)
-	conflicts := make(chan confVals, 128)
-	var mergedData durable.Index
+	var (
+		finalTbl  *doltdb.Table
+		finalRows durable.Index
+
+		updatedRootIndexSet  durable.IndexSet
+		updatedMergeIndexSet durable.IndexSet
+
+		p conflictProcessor
+
+		indexEdits = make(chan indexEdit, 128)
+		conflicts  = make(chan confVals, 128)
+	)
 
 	group.Go(func() error {
 		var err error
-		updatedTbl, mergedData, err = mergeProllyRowData(gCtx, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, updatedTbl, ancRows, indexEdits, conflicts)
+		finalTbl, finalRows, err = mergeProllyRowData(
+			gCtx,
+			postMergeSchema, rootSchema, mergeSchema, ancSchema,
+			tbl, mergeTbl, updatedTbl,
+			ancRows,
+			indexEdits,
+			conflicts)
 		if err != nil {
 			return err
 		}
@@ -81,8 +99,6 @@ func mergeTableData(
 		return nil, nil, err
 	}
 
-	var updatedRootIndexSet durable.IndexSet
-	var updatedMergeIndexSet durable.IndexSet
 	group.Go(func() error {
 		var err error
 		updatedRootIndexSet, updatedMergeIndexSet, err = updateProllySecondaryIndexes(gCtx, indexEdits, rootSchema, mergeSchema, tbl, mergeTbl, rootIndexSet, mergeIndexSet)
@@ -96,7 +112,6 @@ func mergeTableData(
 	artM := durable.ProllyMapFromArtifactIndex(artIdx)
 	artifactEditor := artM.Editor()
 
-	var p conflictProcessor
 	if can, err := isNewConflictsCompatible(ctx, tbl, tblName, ancSchema, rootSchema, mergeSchema); err != nil {
 		return nil, nil, err
 	} else if can {
@@ -126,12 +141,13 @@ func mergeTableData(
 		return nil, nil, err
 	}
 
-	updatedTbl, err = mergeProllySecondaryIndexes(
+	finalTbl, err = mergeProllySecondaryIndexes(
 		ctx,
 		vrw,
+		ns,
 		postMergeSchema, rootSchema, mergeSchema, ancSchema,
-		mergedData,
-		tbl, mergeTbl, updatedTbl,
+		finalRows,
+		tbl, mergeTbl, finalTbl,
 		ancIndexSet,
 		artifactEditor,
 		mergeRootIsh,
@@ -146,14 +162,15 @@ func mergeTableData(
 	}
 	artIdx = durable.ArtifactIndexFromProllyMap(artifactMap)
 
-	updatedTbl, err = updatedTbl.SetArtifacts(ctx, artIdx)
+	finalTbl, err = finalTbl.SetArtifacts(ctx, artIdx)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// TODO (dhruv): populate Adds, Deletes, Modifications
 	stats := &MergeStats{Operation: TableModified}
-	return updatedTbl, stats, nil
+
+	return finalTbl, stats, nil
 }
 
 func mergeTableArtifacts(ctx context.Context, tblName string, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
@@ -175,6 +192,10 @@ func mergeTableArtifacts(ctx context.Context, tblName string, tbl, mergeTbl, anc
 
 	var keyCollision bool
 	mergedArts, err := prolly.MergeArtifactMaps(ctx, arts, mergeArts, ancArts, func(left, right tree.Diff) (tree.Diff, bool) {
+		if left.Type == right.Type && bytes.Equal(left.To, right.To) {
+			// convergent edit
+			return left, true
+		}
 		keyCollision = true
 		return tree.Diff{}, false
 	})
@@ -222,7 +243,15 @@ func isNewConflictsCompatible(ctx context.Context, tbl *doltdb.Table, tblName st
 
 // mergeProllyRowData merges the primary row table indexes of |tbl|, |mergeTbl|,
 // and |ancTbl|. It stores the merged row data into |tableToUpdate| and returns the new value along with the row data.
-func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch, ancSch schema.Schema, tbl, mergeTbl, tableToUpdate *doltdb.Table, ancRows durable.Index, indexEdits chan indexEdit, conflicts chan confVals) (*doltdb.Table, durable.Index, error) {
+func mergeProllyRowData(
+	ctx context.Context,
+	postMergeSchema, rootSch, mergeSch, ancSch schema.Schema,
+	tbl, mergeTbl, tableToUpdate *doltdb.Table,
+	ancRows durable.Index,
+	indexEdits chan indexEdit,
+	conflicts chan confVals,
+) (*doltdb.Table, durable.Index, error) {
+
 	rootR, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -237,31 +266,22 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 
 	m := durable.ProllyMapFromIndex(rootR)
 	vMerger := newValueMerger(postMergeSchema, rootSch, mergeSch, ancSch, m.Pool())
+	keyless := schema.IsKeyless(postMergeSchema)
 
 	mergedRP, err := prolly.MergeMaps(ctx, rootRP, mergeRP, ancRP, func(left, right tree.Diff) (tree.Diff, bool) {
+		if left.Type == right.Type && bytes.Equal(left.To, right.To) {
+			if keyless {
+				// convergent edits are conflicts for keyless tables
+				d, b, _ := processConflict(ctx, conflicts, indexEdits, left, right)
+				return d, b
+			}
+			return left, true
+		}
+
 		merged, isConflict := vMerger.tryMerge(val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
 		if isConflict {
-			c := confVals{
-				key:      val.Tuple(left.Key),
-				ourVal:   val.Tuple(left.To),
-				theirVal: val.Tuple(right.To),
-				baseVal:  val.Tuple(left.From),
-			}
-			select {
-			case conflicts <- c:
-			case <-ctx.Done():
-				return tree.Diff{}, false
-			}
-			// Reset the change on the right
-			e := conflictEdit{
-				right: right,
-			}
-			select {
-			case indexEdits <- e:
-			case <-ctx.Done():
-				return tree.Diff{}, false
-			}
-			return tree.Diff{}, false
+			d, b, _ := processConflict(ctx, conflicts, indexEdits, left, right)
+			return d, b
 		}
 
 		d := tree.Diff{
@@ -290,6 +310,28 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 	}
 
 	return updatedTbl, durable.IndexFromProllyMap(mergedRP), nil
+}
+
+func processConflict(ctx context.Context, confs chan confVals, edits chan indexEdit, left, right tree.Diff) (tree.Diff, bool, error) {
+	c := confVals{
+		key:      val.Tuple(left.Key),
+		ourVal:   val.Tuple(left.To),
+		theirVal: val.Tuple(right.To),
+		baseVal:  val.Tuple(left.From),
+	}
+	select {
+	case confs <- c:
+	case <-ctx.Done():
+		return tree.Diff{}, false, ctx.Err()
+	}
+	// Reset the change on the right
+	e := conflictEdit{right: right}
+	select {
+	case edits <- e:
+	case <-ctx.Done():
+		return tree.Diff{}, false, ctx.Err()
+	}
+	return tree.Diff{}, false, nil
 }
 
 type valueMerger struct {

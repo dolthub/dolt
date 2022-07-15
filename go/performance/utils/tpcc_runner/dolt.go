@@ -38,7 +38,7 @@ const (
 func BenchmarkDolt(ctx context.Context, tppcConfig *TpccBenchmarkConfig, serverConfig *sysbench_runner.ServerConfig) (sysbench_runner.Results, error) {
 	serverParams := serverConfig.GetServerArgs()
 
-	err := sysbench_runner.UpdateDoltConfig(ctx, serverConfig)
+	err := sysbench_runner.UpdateDoltConfig(ctx, serverConfig.ServerExec)
 	if err != nil {
 		return nil, err
 	}

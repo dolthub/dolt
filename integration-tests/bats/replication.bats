@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 
     TMPDIRS=$(pwd)/tmpdirs
     mkdir -p $TMPDIRS/{bac1,rem1,repo1}
@@ -59,6 +58,75 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
+@test "replication: push branch delete" {
+    cd repo1
+    dolt push remote1 feature
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
+    dolt sql -q "call dolt_branch('-df', 'feature');"
+
+    cd ..
+    dolt clone file://./rem1 repo2
+    cd repo2
+    run dolt sql -q "select name from dolt_branches" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "feature" ]] || false
+}
+
+@test "replication: pull branch delete on read" {
+    cd repo1
+    dolt push remote1 feature
+
+    cd ..
+    dolt clone file://./rem1 repo2
+
+    cd repo2
+    dolt push origin :feature
+
+    cd ../repo1
+    run dolt sql -q "select name from dolt_branches" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "feature" ]] || false
+
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+    run dolt sql -q "select name from dolt_branches" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "feature" ]] || false
+}
+
+@test "replication: pull branch delete current branch" {
+    cd repo1
+    dolt push remote1 feature
+
+    cd ..
+    dolt clone file://./rem1 repo2
+
+    cd repo2
+    dolt push origin :feature
+
+    cd ../repo1
+    run dolt sql -q "select name from dolt_branches" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "feature" ]] || false
+
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+    dolt checkout feature
+    run dolt sql -q "select name from dolt_branches" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "feature" ]] || false
+}
+
 @test "replication: tag does not trigger replication" {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
@@ -104,6 +172,64 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
+@test "replication: push on call dolt_branch(..." {
+    cd repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_branch
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "call dolt_commit('-am', 'commit')"
+    dolt sql -q "call dolt_branch('new_branch')"
+
+    cd ..
+    dolt clone file://./bac1 repo2
+    cd repo2
+    run dolt branch -av
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "remotes/origin/main" ]] || false
+    [[ "$output" =~ "remotes/origin/new_branch" ]] || false
+}
+
+@test "replication: push on call dolt_checkout(-b..." {
+    cd repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_branch
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "call dolt_commit('-am', 'commit')"
+    dolt sql -q "call dolt_checkout('-b', 'new_branch')"
+
+    cd ..
+    dolt clone file://./bac1 repo2
+    cd repo2
+    run dolt branch -av
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "remotes/origin/main" ]] || false
+    [[ "$output" =~ "remotes/origin/new_branch" ]] || false
+}
+
+@test "replication: push on call dolt_merge, fast-forward merge" {
+    cd repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_branch
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "call dolt_commit('-am', 'commit')"
+    dolt sql -q "call dolt_checkout('-b', 'new_branch')"
+    dolt sql -q "create table t2 (b int primary key)"
+    dolt sql -q "call dolt_commit('-am', 'commit')"
+    dolt sql -q "call dolt_checkout('main')"
+    dolt sql -q "call dolt_merge('new_branch')"
+
+    cd ..
+    dolt clone file://./bac1 repo2
+    cd repo2
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "t1" ]] || false
+    [[ "$output" =~ "t2" ]] || false
+}
+
 @test "replication: pull non-main head" {
     dolt clone file://./rem1 repo2
     cd repo2
@@ -120,6 +246,24 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
     [[ "${lines[0]}" =~ "Table" ]] || false
     [[ "${lines[1]}" =~ "t1" ]] || false
+}
+
+@test "replication: pull on sql checkout" {
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt checkout -b new_feature
+    dolt sql -q "create table t1 (a int)"
+    dolt commit -am "cm"
+    dolt push origin new_feature
+
+    cd ../repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads new_feature
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    run dolt sql -q "call dolt_checkout('new_feature'); show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "${lines[2]}" =~ "Table" ]] || false
+    [[ "${lines[3]}" =~ "t1" ]] || false
 }
 
 @test "replication: pull multiple heads" {
@@ -276,11 +420,11 @@ SQL
     cd ../repo1
     dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
-    run dolt sql -q "show tables as of hashof('new_feature')" -r csv
+    run dolt sql -q "call dolt_checkout('new_feature'); show tables" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "${lines[0]}" =~ "Table" ]] || false
-    [[ "${lines[1]}" =~ "t1" ]] || false
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "${lines[2]}" =~ "Tables_in_repo1" ]] || false
+    [[ "${lines[3]}" =~ "t1" ]] || false
 }
 
 @test "replication: pull all heads pulls tags" {

@@ -23,10 +23,24 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	nameColName  = "name"
+	ageColName   = "age"
+	titleColName = "title"
+)
+
+type StringBuilderCloser struct {
+	strings.Builder
+}
+
+func (*StringBuilderCloser) Close() error {
+	return nil
+}
+
 func TestFixedWidthWriter(t *testing.T) {
 	sch := sql.Schema{
 		{Name: nameColName, Type: sql.Text},
-		{Name: ageColName, Type: sql.Text},
+		{Name: ageColName, Type: sql.Int64},
 		{Name: titleColName, Type: sql.Text},
 	}
 
@@ -37,9 +51,9 @@ func TestFixedWidthWriter(t *testing.T) {
 		"Jim Halpêrt",
 	}
 	ages := []interface{}{
-		"43",
-		"25",
-		"29",
+		43,
+		25,
+		29,
 		nil,
 	}
 	titles := []interface{}{
@@ -76,7 +90,7 @@ func TestFixedWidthWriter(t *testing.T) {
 		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
 
 		for _, r := range rows {
-			err := tableWr.WriteRow(context.Background(), r, nil)
+			err := tableWr.WriteSqlRow(context.Background(), r)
 			assert.NoError(t, err)
 		}
 
@@ -104,7 +118,7 @@ func TestFixedWidthWriter(t *testing.T) {
 		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
 
 		for _, r := range rows {
-			err := tableWr.WriteRow(context.Background(), r, nil)
+			err := tableWr.WriteSqlRow(context.Background(), r)
 			assert.NoError(t, err)
 		}
 
@@ -132,7 +146,7 @@ func TestFixedWidthWriter(t *testing.T) {
 		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
 
 		for _, r := range rows {
-			err := tableWr.WriteRow(context.Background(), r, nil)
+			err := tableWr.WriteSqlRow(context.Background(), r)
 			assert.NoError(t, err)
 		}
 

@@ -1,46 +1,27 @@
 {
   "Jobs": [
     {
-      "Name": "Small Dolt import with randomly order columns",
-      "NumRows": 100000,
-      "Sorted": false,
-      "Format": "csv",
-      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/100k-random.csv"
-    },
-    {
-      "Name": "Small Dolt import with sorted columns",
-      "NumRows": 100000,
-      "Sorted": true,
-      "Format": "csv",
-      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/100k-sorted.csv"
-    },
-    {
-      "Name": "Medium Dolt import with randomly ordered columns",
-      "NumRows": 1000000,
-      "Sorted": false,
-      "Format": "csv",
-      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/1m-random.csv"
-    },
-    {
-      "Name": "Medium Dolt import with sorted columns",
+      "Name": "Medium MySQL import with Sorted Rows",
       "NumRows": 1000000,
       "Sorted": true,
       "Format": "csv",
-      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/1m-sorted.csv"
+      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/100k-sorted.csv",
+      "Program": "mysql",
+      "Version": "8.0.22",
+      "ExecPath": "/usr/local/bin/mysqld",
+      "SchemaPath": "/Users/vinairachakonda/go/src/dolthub/dolt/go/performance/import_benchmarker/cmd/schema.sql"
     },
     {
-      "Name": "Large Dolt import with randomly ordered columns",
-      "NumRows": 10000000,
-      "Sorted": false,
-      "Format": "csv",
-      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/10m-random.csv"
-    },
-    {
-      "Name": "Large Dolt import with sorted columns",
-      "NumRows": 10000000,
+      "Name": "Medium Dolt import with Sorted Rows",
+      "NumRows": 1000000,
       "Sorted": true,
       "Format": "csv",
-      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/10m-sorted.csv"
+      "FilePath": "/Users/vinairachakonda/misc/import-benchmark-files/100k-sorted.csv",
+      "Program": "dolt",
+      "Version": "HEAD",
+      "ExecPath": "/Users/vinairachakonda/go/bin/dolt",
+      "SchemaPath": "/Users/vinairachakonda/go/src/dolthub/dolt/go/performance/import_benchmarker/cmd/schema.sql"
     }
-  ]
+  ],
+  "MysqlConnectionProtocol": "tcp"
 }

@@ -51,7 +51,7 @@ func BenchmarkMysql(ctx context.Context, config *TpccBenchmarkConfig, serverConf
 		time.Sleep(10 * time.Second)
 
 		// setup mysqldb
-		err := sysbench_runner.SetupDB(ctx, serverConfig, dbName)
+		err := sysbench_runner.SetupDB(ctx, sysbench_runner.GetMysqlConnectionConfigFromServerConfig(serverConfig), dbName)
 		if err != nil {
 			cancel()
 			return nil, err

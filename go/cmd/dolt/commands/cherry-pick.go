@@ -77,7 +77,9 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 	ap := cli.CreateCherryPickArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cherryPickDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
 	// This command creates a commit, so we need user identity
 	if !cli.CheckUserNameAndEmail(dEnv) {
 		return 1
@@ -214,7 +216,8 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 	}
 
 	// use parent of cherry-pick as ancestor to merge
-	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, toHash, fromHash, workingRoot, toRoot, fromRoot, opts, true)
+	mo := merge.MergeOpts{IsCherryPick: true}
+	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, toHash, fromHash, workingRoot, toRoot, fromRoot, opts, mo)
 	if err != nil {
 		return nil, "", err
 	}
@@ -236,28 +239,26 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 
 // getParentAndCherryRoots return root values of parent commit of cherry-picked commit and cherry-picked commit itself.
 func getParentAndCherryRoots(ctx context.Context, ddb *doltdb.DoltDB, cherryCommit *doltdb.Commit) (*doltdb.RootValue, *doltdb.RootValue, error) {
+	if len(cherryCommit.DatasParents()) > 1 {
+		return nil, nil, errhand.BuildDError("cherry-picking a merge commit is not supported.").Build()
+	}
+	if len(cherryCommit.DatasParents()) == 0 {
+		return nil, nil, errhand.BuildDError("cherry-picking a commit without parents is not supported.").Build()
+	}
+
 	cherryRoot, err := cherryCommit.GetRootValue(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var parentRoot *doltdb.RootValue
-	if len(cherryCommit.DatasParents()) > 1 {
-		return nil, nil, errhand.BuildDError("cherry-picking a merge commit is not supported.").Build()
-	} else if len(cherryCommit.DatasParents()) == 1 {
-		parentCM, err := ddb.ResolveParent(ctx, cherryCommit, 0)
-		if err != nil {
-			return nil, nil, err
-		}
-		parentRoot, err = parentCM.GetRootValue(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-	} else {
-		parentRoot, err = doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
-		if err != nil {
-			return nil, nil, err
-		}
+	parentCM, err := ddb.ResolveParent(ctx, cherryCommit, 0)
+	if err != nil {
+		return nil, nil, err
 	}
+	parentRoot, err := parentCM.GetRootValue(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	return parentRoot, cherryRoot, nil
 }

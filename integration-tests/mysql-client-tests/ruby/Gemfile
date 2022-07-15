@@ -1,2 +1,2 @@
 source 'https://rubygems.org'
-gem 'ruby-mysql', '~> 2.9', '>= 2.9.14'
+gem 'ruby-mysql', '~> 2.10'
