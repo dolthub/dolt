@@ -114,12 +114,6 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	// TODO: delete
-	// Immediately persist upon first starting
-	//defer func() {
-	//	engine.Analyzer.Catalog.MySQLDb.Persist(sql.NewEmptyContext())
-	//}()
-
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
 		if verbose, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG_VERBOSE"); ok && strings.ToLower(verbose) == "true" {
