@@ -63,7 +63,7 @@ func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.R
 		return nil, fmt.Errorf("unable to find writer for index `%s`", n.index.ID())
 	}
 
-	idxToPkMap := make(map[int]int)
+	idxToPkMap := make(val.OrdinalMapping, n.writer.sch.GetPKCols().Size())
 	for idxPos, idxCol := range n.index.IndexSchema().GetAllCols().GetColumns() {
 		if tblIdx, ok := n.writer.sch.GetPKCols().TagToIdx[idxCol.Tag]; ok {
 			idxToPkMap[idxPos] = tblIdx
@@ -97,7 +97,7 @@ func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.R
 // prollyFkPkRowIter returns rows of the parent table requested by a foreign key reference. For use on tables with primary keys.
 type prollyFkPkRowIter struct {
 	rangeIter  prolly.MapIter
-	idxToPkMap map[int]int
+	idxToPkMap val.OrdinalMapping
 	primary    prollyIndexWriter
 	sqlSch     sql.Schema
 }
