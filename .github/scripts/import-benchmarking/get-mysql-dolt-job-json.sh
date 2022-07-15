@@ -65,7 +65,9 @@ echo '
               "--fileNames=100k-sorted.csv",
               "--fileNames=100k-random.csv",
               "--fileNames=1m-sorted.csv",
-              "--fileNames=1m-random.csv"
+              "--fileNames=1m-random.csv",
+              "--fileNames=10m-sorted.csv",
+              "--fileNames=10m-random.csv"
             ]
           }
         ],
