@@ -97,7 +97,6 @@ SQL
 }
 
 @test "regression-tests: UNIQUE index violations do not break future INSERTs" {
-    skip_nbf_dolt_1
     skiponwindows "Need to install expect and make this script work on windows."
     mkdir doltsql
     cd doltsql

@@ -2599,7 +2599,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('right');",
-				ExpectedErrStr: "Duplicate entry for key 'col1_uniq': duplicate unique key given: [1,1]",
+				ExpectedErrStr: "duplicate unique key given: [1]",
 			},
 			{
 				Query:    "SELECT * from t",
@@ -2637,7 +2637,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('right');",
-				ExpectedErrStr: "Duplicate entry for key 'col1_uniq': duplicate unique key given: [1,1]",
+				ExpectedErrStr: "duplicate unique key given: [1]",
 			},
 		},
 	},

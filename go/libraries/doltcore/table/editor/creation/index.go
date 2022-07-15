@@ -21,6 +21,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -167,7 +168,8 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 	if idx.IsUnique() {
 		kd := shim.KeyDescriptorFromSchema(idx.Schema())
 		return BuildUniqueProllyIndex(ctx, vrw, ns, sch, idx, primary, func(ctx context.Context, existingKey, newKey val.Tuple) error {
-			return sql.ErrDuplicateEntry.Wrap(&prollyUniqueKeyErr{k: newKey, kd: kd, IndexName: idx.Name()}, idx.Name())
+			msg := writer.FormatKeyForUniqKeyErr(newKey, kd)
+			return sql.NewUniqueKeyErr(msg, false, nil)
 		})
 	}
 
