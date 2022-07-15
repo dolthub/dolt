@@ -74,15 +74,13 @@ user_session_vars:
 
 jwks:
   - name: jwks_name
-    source: https://website.com
+    location_url: https://website.com
     claims: 
       field1: a
       field2: b
-    fields_to_log:
-    - field1
-    - field2
+    fields_to_log: [field1, field2]
   - name: jwks_name2
-    source: https://website.com
+    location_url: https://website.com
     claims: 
       field1: a
     fields_to_log:
@@ -129,8 +127,8 @@ jwks:
 	}
 	expected.Jwks = []JwksYAMLConfig{
 		{
-			Name:   "jwks_name",
-			Source: "https://website.com",
+			Name:        "jwks_name",
+			LocationUrl: "https://website.com",
 			Claims: map[string]string{
 				"field1": "a",
 				"field2": "b",
@@ -138,8 +136,8 @@ jwks:
 			FieldsToLog: []string{"field1", "field2"},
 		},
 		{
-			Name:   "jwks_name2",
-			Source: "https://website.com",
+			Name:        "jwks_name2",
+			LocationUrl: "https://website.com",
 			Claims: map[string]string{
 				"field1": "a",
 			},

@@ -114,7 +114,7 @@ type UserSessionVars struct {
 
 type JwksYAMLConfig struct {
 	Name        string            `yaml:"name"`
-	Source      string            `yaml:"source"`
+	LocationUrl string            `yaml:"location_url"`
 	Claims      map[string]string `yaml:"claims"`
 	FieldsToLog []string          `yaml:"fields_to_log"`
 }
