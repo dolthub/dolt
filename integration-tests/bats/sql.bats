@@ -39,7 +39,7 @@ teardown() {
     teardown_common
 }
 
-@test "sql: dolt sql -q" {
+@test "sql: check configurations with all default options" {
     # remove any previous config directories
     rm -rf .doltcfg
 
@@ -79,7 +79,7 @@ teardown() {
     rm -rf .doltcfg
 }
 
-@test "sql: dolt sql -q --data-dir" {
+@test "sql: check configurations specify data directory" {
     # remove config files
     rm -rf .doltcfg
     rm -rf db_dir
@@ -173,7 +173,7 @@ teardown() {
     rm -rf db_dir
 }
 
-@test "sql: dolt sql -q --doltcfg-dir" {
+@test "sql: check configurations specify doltcfg directory" {
     # remove any previous config directories
     rm -rf .doltcfg
     rm -rf doltcfgdir
@@ -208,7 +208,7 @@ teardown() {
     rm -rf doltcfgdir
 }
 
-@test "sql: dolt sql -q --privilege-file" {
+@test "sql: check configurations specify privilege file" {
     # remove config files
     rm -rf .doltcfg
     rm -f privs.db
@@ -245,7 +245,7 @@ teardown() {
     rm -f privs.db
 }
 
-@test "sql: dolt sql -q --data-dir --doltcfg-dir" {
+@test "sql: check configurations specify data directory and doltcfg directory" {
     # remove config files
     rm -rf .doltcfg
     rm -rf db_dir
@@ -347,7 +347,7 @@ teardown() {
     rm -rf doltcfgdir
 }
 
-@test "sql: dolt sql -q --data-dir --privilege-file" {
+@test "sql: check configurations specify data directory and privilege file" {
     # remove config files
     rm -rf .doltcfg
     rm -rf db_dir
@@ -448,7 +448,7 @@ teardown() {
     rm -rf privs.db
 }
 
-@test "sql: dolt sql -q --doltcfg-dir --privilege-file" {
+@test "sql: dcheck configurations specify doltcfg directory and privilege file" {
     # remove any previous config directories
     rm -rf .doltcfg
     rm -rf doltcfgdir
@@ -490,7 +490,7 @@ teardown() {
     rm -rf privs.db
 }
 
-@test "sql: dolt sql -q --data-dir --doltcfg-dir --privileges-file" {
+@test "sql: check configurations specify data directory, doltcfg directory, and privilege file" {
     # remove config files
     rm -rf .doltcfg
     rm -rf db_dir
