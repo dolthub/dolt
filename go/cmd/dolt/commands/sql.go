@@ -104,6 +104,7 @@ const (
 	PasswordFlag      = "password"
 	DefaultUser       = "root"
 	DefaultPassword   = ""
+	DefaultHost       = "localhost"
 
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
@@ -295,13 +296,13 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	// TODO: just create config here
 	config := &engine.SqlEngineConfig{
 		InitialDb:    currentDb,
 		IsReadOnly:   false,
 		PrivFilePath: privsFp,
 		ServerUser:   username,
 		ServerPass:   password,
+		ServerHost:   DefaultHost, // TODO: it literally can't be anything else right?
 		Autocommit:   true,
 	}
 

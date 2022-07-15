@@ -52,6 +52,7 @@ type SqlEngineConfig struct {
 	PrivFilePath string
 	ServerUser   string
 	ServerPass   string
+	ServerHost   string
 	Autocommit   bool
 	Bulk         bool
 }
@@ -140,7 +141,7 @@ func NewSqlEngine(
 	}
 
 	// TODO: check password
-	sess.SetClient(sql.Client{User: config.ServerUser, Address: "%", Capabilities: 0})
+	sess.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
 	// this is overwritten only for server sessions
 	for _, db := range dbs {
@@ -399,6 +400,8 @@ func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, err
 			InitialDb:  dbName,
 			IsReadOnly: false,
 			ServerUser: "root",
+			ServerPass: "",
+			ServerHost: "localhost",
 			Autocommit: false,
 		},
 	)

@@ -139,6 +139,7 @@ func Serve(
 		PrivFilePath: serverConfig.PrivilegeFilePath(),
 		ServerUser:   serverConfig.User(),
 		ServerPass:   serverConfig.Password(),
+		ServerHost:   serverConfig.Host(),
 		Autocommit:   serverConfig.AutoCommit(),
 	}
 	sqlEngine, err := engine.NewSqlEngine(
