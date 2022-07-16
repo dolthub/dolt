@@ -300,6 +300,17 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 			}
 		}
 
+		addr = hash.New(msg.ArtifactsBytes())
+		if !addr.IsEmpty() {
+			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
+			if err = cb(r); err != nil {
+				return err
+			}
+		}
+
 		err = TupleRowStorage(msg.SecondaryIndexesBytes()).walkRefs(nbf, cb)
 		if err != nil {
 			return err
