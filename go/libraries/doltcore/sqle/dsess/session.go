@@ -51,6 +51,7 @@ const (
 	AsyncReplicationKey      = "dolt_async_replication"
 	AwsCredsFileKey          = "aws_credentials_file"
 	AwsCredsProfileKey       = "aws_credentials_profile"
+	AwsCredsRegionKey        = "aws_credentials_region"
 )
 
 var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
@@ -899,7 +900,7 @@ func (sess *Session) HasDB(ctx *sql.Context, dbName string) bool {
 // other state tracking metadata.
 func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	db := dbState.Db
-	defineSystemVariables(db.Name())
+	defineSystemVariablesForDB(db.Name())
 
 	sessionState := &DatabaseSessionState{}
 	sess.dbStates[db.Name()] = sessionState
