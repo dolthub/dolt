@@ -272,23 +272,15 @@ func (p prollyCoveringIndexIter) Next2(ctx *sql.Context, f *sql.RowFrame) error 
 }
 
 func (p prollyCoveringIndexIter) writeRowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
-	for to := range p.keyMap {
-		from := p.keyMap.MapOrdinal(to)
-		if from == -1 {
-			continue
-		}
-		r[to], err = GetField(ctx, p.keyDesc, from, key, p.ns)
+	for i := range p.keyMap {
+		r[i], err = GetField(ctx, p.keyDesc, p.keyMap[i], key, p.ns)
 		if err != nil {
 			return err
 		}
 	}
 
-	for to := range p.valMap {
-		from := p.valMap.MapOrdinal(to)
-		if from == -1 {
-			continue
-		}
-		r[to], err = GetField(ctx, p.valDesc, from, value, p.ns)
+	for i := range p.valMap {
+		r[len(p.keyMap)+i], err = GetField(ctx, p.valDesc, p.valMap[i], value, p.ns)
 		if err != nil {
 			return err
 		}
@@ -331,47 +323,48 @@ func (p prollyCoveringIndexIter) Close(*sql.Context) error {
 }
 
 func coveringIndexMapping(d DoltIndex, projections []uint64) (keyMap val.OrdinalMapping) {
-	all := d.Schema().GetAllCols()
 	idx := d.IndexSchema().GetAllCols()
-
-	keyMap = make(val.OrdinalMapping, all.Size())
-	for i := range keyMap {
-		keyMap[i] = -1
-	}
+	keyMap = make(val.OrdinalMapping, len(projections))
+	var i int
 	for _, p := range projections {
-		i := all.TagToIdx[p]
 		if idx, ok := idx.TagToIdx[p]; ok {
 			keyMap[i] = idx
+			i++
 		}
 	}
 	return
 }
 
 func primaryIndexMapping(idx DoltIndex, sqlSch sql.PrimaryKeySchema, projections []uint64) (keyMap, valMap val.OrdinalMapping) {
-	all := idx.Schema().GetAllCols()
+	//all := idx.Schema().GetAllCols()
 	pks := idx.Schema().GetPKCols()
 	nonPks := idx.Schema().GetNonPKCols()
 
-	keyMap = make(val.OrdinalMapping, all.Size())
-	for i := range keyMap {
-		keyMap[i] = -1
-	}
-	valMap = make(val.OrdinalMapping, all.Size())
-	for i := range valMap {
-		valMap[i] = -1
-	}
+	//keyMap = make(val.OrdinalMapping, all.Size())
+	//for i := range keyMap {
+	//	keyMap[i] = -1
+	//}
+	//valMap = make(val.OrdinalMapping, all.Size())
+	//for i := range valMap {
+	//	valMap[i] = -1
+	//}
 
+	allMap := make([]int, len(projections))
+	i := 0
+	j := len(projections) - 1
 	for _, p := range projections {
-		i := all.TagToIdx[p]
-		if iidx, ok := pks.TagToIdx[p]; ok {
-			keyMap[i] = iidx
+		if idx, ok := pks.TagToIdx[p]; ok {
+			allMap[i] = idx
+			i++
 		}
 
-		j := all.TagToIdx[p]
-		if jidx, ok := nonPks.TagToIdx[p]; ok {
-			valMap[j] = jidx
+		if idx, ok := nonPks.TagToIdx[p]; ok {
+			allMap[j] = idx
+			j--
 		}
 	}
+	keyMap = allMap[:i]
+	valMap = allMap[i:]
 	return
 }
 

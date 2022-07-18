@@ -116,7 +116,8 @@ type DoltTable struct {
 	sch          schema.Schema
 	autoIncCol   schema.Column
 
-	projectedCols []uint64
+	projectedCols   []uint64
+	projectedSchema sql.Schema
 
 	opts editor.Options
 
@@ -365,6 +366,9 @@ func (t *DoltTable) Format() *types.NomsBinFormat {
 
 // Schema returns the schema for this table.
 func (t *DoltTable) Schema() sql.Schema {
+	if t.projectedSchema != nil {
+		return t.projectedSchema
+	}
 	return t.sqlSchema().Schema
 }
 
@@ -936,13 +940,17 @@ func (t *DoltTable) Projections() []string {
 func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 	nt := *t
 	nt.projectedCols = make([]uint64, len(colNames))
+	nt.projectedSchema = make(sql.Schema, len(colNames))
 	cols := t.sch.GetAllCols()
+	sch := t.Schema()
 	for i := range colNames {
-		col, ok := cols.LowerNameToCol[strings.ToLower(colNames[i])]
+		lowerName := strings.ToLower(colNames[i])
+		col, ok := cols.LowerNameToCol[lowerName]
 		if !ok {
 			panic("column does not exist")
 		}
 		nt.projectedCols[i] = col.Tag
+		nt.projectedSchema[i] = sch[sch.IndexOfColName(lowerName)]
 	}
 	return &nt
 }

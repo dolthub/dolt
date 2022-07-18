@@ -87,33 +87,43 @@ func NewProllyRowIter(sch schema.Schema, sqlSch sql.Schema, rows prolly.Map, ite
 		valDesc: vd,
 		keyProj: keyProj,
 		valProj: valProj,
-		rowLen:  sch.GetAllCols().Size(),
+		rowLen:  len(projections),
 		ns:      rows.NodeStore(),
 	}, nil
 }
 
+//todo: only make keyMap and valMap as big as they need to be
 func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap val.OrdinalMapping) {
-	keyMap = make(val.OrdinalMapping, sch.GetPKCols().Size())
-	for i := range keyMap {
-		keyMap[i] = -1
-	}
-	valMap = make(val.OrdinalMapping, sch.GetNonPKCols().Size())
-	for i := range valMap {
-		valMap[i] = -1
-	}
+	//keyMap = make(val.OrdinalMapping, sch.GetPKCols().Size())
+	//for i := range keyMap {
+	//	keyMap[i] = -1
+	//}
+	//valMap = make(val.OrdinalMapping, sch.GetNonPKCols().Size())
+	//for i := range valMap {
+	//	valMap[i] = -1
+	//}
 
 	all := sch.GetAllCols()
 	pks := sch.GetPKCols()
 	nonPks := sch.GetNonPKCols()
 
+	allMap := make([]int, len(projections))
+	i := 0
+	j := len(projections) - 1
 	for _, t := range projections {
-		if i, ok := pks.TagToIdx[t]; ok {
-			keyMap[i] = all.TagToIdx[t]
-		}
-		if j, ok := nonPks.TagToIdx[t]; ok {
-			valMap[j] = all.TagToIdx[t]
+		if _, ok := pks.TagToIdx[t]; ok {
+			//keyMap[i] = all.TagToIdx[t]
+			allMap[i] = all.TagToIdx[t]
+			i++
+		} else if _, ok := nonPks.TagToIdx[t]; ok {
+			//valMap[j] = all.TagToIdx[t]
+			allMap[j] = all.TagToIdx[t]
+			j--
 		}
 	}
+	keyMap = allMap[:i]
+	valMap = allMap[i:]
+
 	if schema.IsKeyless(sch) {
 		skip := val.OrdinalMapping{-1}
 		keyMap = append(skip, keyMap...) // hashId
@@ -129,21 +139,21 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	row := make(sql.Row, it.rowLen)
-
-	for keyIdx, rowIdx := range it.keyProj {
-		if rowIdx == -1 {
-			continue
-		}
-		row[rowIdx], err = GetField(ctx, it.keyDesc, keyIdx, key, it.ns)
+	for i := range it.keyProj {
+		//if rowIdx == -1 {
+		//	continue
+		//}
+		//row[rowIdx], err = GetField(ctx, it.keyDesc, keyIdx, key, it.ns)
+		row[i], err = GetField(ctx, it.keyDesc, it.keyProj[i], key, it.ns)
 		if err != nil {
 			return nil, err
 		}
 	}
-	for valIdx, rowIdx := range it.valProj {
-		if rowIdx == -1 {
-			continue
-		}
-		row[rowIdx], err = GetField(ctx, it.valDesc, valIdx, value, it.ns)
+	for i := range it.valProj {
+		//if rowIdx == -1 {
+		//	continue
+		//}
+		row[len(it.keyProj)+i], err = GetField(ctx, it.valDesc, it.valProj[i], value, it.ns)
 		if err != nil {
 			return nil, err
 		}
