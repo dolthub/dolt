@@ -313,6 +313,15 @@ func TestInsertIgnoreInto(t *testing.T) {
 	enginetest.TestInsertIgnoreInto(t, newDoltHarness(t))
 }
 
+// todo: merge this into the above test when https://github.com/dolthub/dolt/issues/3836 is fixed
+func TestInsertIgnoreIntoWithDuplicateUniqueKeyKeyless(t *testing.T) {
+	if !types.IsFormat_DOLT_1(types.Format_Default) {
+		// todo: fix https://github.com/dolthub/dolt/issues/3836
+		t.Skip()
+	}
+	enginetest.TestInsertIgnoreIntoWithDuplicateUniqueKeyKeyless(t, newDoltHarness(t))
+}
+
 func TestInsertIntoErrors(t *testing.T) {
 	enginetest.TestInsertIntoErrors(t, newDoltHarness(t))
 }
@@ -985,11 +994,6 @@ func TestPersist(t *testing.T) {
 	}
 
 	enginetest.TestPersist(t, harness, newPersistableSession)
-}
-
-func TestKeylessUniqueIndex(t *testing.T) {
-	harness := newDoltHarness(t)
-	enginetest.TestKeylessUniqueIndex(t, harness)
 }
 
 func TestTypesOverWire(t *testing.T) {

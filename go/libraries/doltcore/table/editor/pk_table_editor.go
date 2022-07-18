@@ -51,7 +51,7 @@ func init() {
 	}
 }
 
-type PKDuplicateCb func(keyString, indexName string, k, v types.Tuple, isPk bool) error
+type PKDuplicateCb func(newKeyString, indexName string, existingKey, existingVal types.Tuple, isPk bool) error
 
 type TableEditor interface {
 	InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, cb PKDuplicateCb) error
@@ -299,7 +299,7 @@ func (te *pkTableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, in
 	return nil, fmt.Errorf("an index editor for `%s` could not be found on table `%s`", indexName, te.name)
 }
 
-func (te *pkTableEditor) maybeReturnErrForKVP(ctx context.Context, indexName string, kvp *doltKVP, isPk bool, cb PKDuplicateCb) error {
+func (te *pkTableEditor) maybeReturnErrForKVP(ctx context.Context, newKeyString, indexName string, kvp *doltKVP, isPk bool, cb PKDuplicateCb) error {
 	kVal, err := kvp.k.Value(ctx)
 	if err != nil {
 		return err
@@ -310,15 +310,10 @@ func (te *pkTableEditor) maybeReturnErrForKVP(ctx context.Context, indexName str
 		return err
 	}
 
-	keyStr, err := formatKey(ctx, kVal)
-	if err != nil {
-		return err
-	}
-
 	if cb != nil {
-		return cb(keyStr, indexName, kVal.(types.Tuple), vVal.(types.Tuple), isPk)
+		return cb(newKeyString, indexName, kVal.(types.Tuple), vVal.(types.Tuple), isPk)
 	} else {
-		return fmt.Errorf("duplicate key '%s': %w", keyStr, ErrDuplicateKey)
+		return fmt.Errorf("duplicate key '%s': %w", newKeyString, ErrDuplicateKey)
 	}
 }
 
@@ -382,7 +377,11 @@ func (te *pkTableEditor) insertKeyVal(ctx context.Context, keyHash hash.Hash, ke
 				return fmt.Errorf("UNIQUE constraint violation on index '%s', but could not find row with primary key: %s",
 					indexEd.Index().Name(), keyStr)
 			}
-			err = te.maybeReturnErrForKVP(ctx, indexEd.Index().Name(), kvp, false, cb)
+			newKeyString, err := formatKey(ctx, uke.IndexTuple)
+			if err != nil {
+				return err
+			}
+			err = te.maybeReturnErrForKVP(ctx, newKeyString, indexEd.Index().Name(), kvp, false, cb)
 			if err != nil {
 				return err
 			}
@@ -397,7 +396,11 @@ func (te *pkTableEditor) insertKeyVal(ctx context.Context, keyHash hash.Hash, ke
 	if kvp, pkExists, err := te.tea.Get(ctx, keyHash, key); err != nil {
 		return err
 	} else if pkExists {
-		return te.maybeReturnErrForKVP(ctx, "PRIMARY KEY", kvp, true, cb)
+		newKeyString, err := formatKey(ctx, key)
+		if err != nil {
+			return err
+		}
+		return te.maybeReturnErrForKVP(ctx, newKeyString, "PRIMARY KEY", kvp, true, cb)
 	}
 
 	err := te.tea.Insert(keyHash, key, val)
@@ -565,7 +568,11 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 				return fmt.Errorf("UNIQUE constraint violation on index '%s', but could not find row with primary key: %s",
 					indexEd.Index().Name(), keyStr)
 			}
-			return te.maybeReturnErrForKVP(ctx, indexEd.Index().Name(), kvp, false, errFunc)
+			newKeyString, err := formatKey(ctx, uke.IndexTuple)
+			if err != nil {
+				return err
+			}
+			return te.maybeReturnErrForKVP(ctx, newKeyString, indexEd.Index().Name(), kvp, false, errFunc)
 		})
 		if err != nil {
 			return err
@@ -583,7 +590,11 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	if kvp, pkExists, err := te.tea.Get(ctx, newHash, dNewKeyVal); err != nil {
 		return err
 	} else if pkExists {
-		return te.maybeReturnErrForKVP(ctx, "PRIMARY KEY", kvp, true, errFunc)
+		str, err := formatKey(ctx, dNewKeyVal)
+		if err != nil {
+			return err
+		}
+		return te.maybeReturnErrForKVP(ctx, str, "PRIMARY KEY", kvp, true, errFunc)
 	}
 
 	return te.tea.Insert(newHash, dNewKeyVal, dNewRowVal)
