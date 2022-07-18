@@ -52,7 +52,7 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		refArr, cardArr  fb.UOffsetT
 	)
 
-	keySz, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees, len(s.ValDesc.Addrs))
+	keySz, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees, s.ValDesc.AddressTypeCount())
 	b := getFlatbufferBuilder(s.Pool, bufSz)
 
 	// serialize keys and offsets
@@ -65,9 +65,9 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		valTups = writeItemBytes(b, values, valSz)
 		serial.ProllyTreeNodeStartValueOffsetsVector(b, len(values)-1)
 		valOffs = writeItemOffsets(b, values, valSz)
-		if len(s.ValDesc.Addrs) > 0 {
-			serial.ProllyTreeNodeStartValueAddressOffsetsVector(b, len(values)*len(s.ValDesc.Addrs))
-			valAddrOffs = writeValAddrOffsets(b, values, valSz, s.ValDesc)
+		if s.ValDesc.AddressTypeCount() > 0 {
+			serial.ProllyTreeNodeStartValueAddressOffsetsVector(b, countAddresses(values, s.ValDesc))
+			valAddrOffs = writeAddressOffsets(b, values, valSz, s.ValDesc)
 		}
 	} else {
 		// serialize child refs and subtree counts for internal nodes

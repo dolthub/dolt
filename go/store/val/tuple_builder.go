@@ -340,9 +340,9 @@ func (tb *TupleBuilder) PutJSONAddr(i int, v hash.Hash) {
 }
 
 func (tb *TupleBuilder) putAddr(i int, v hash.Hash) {
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+addrSize]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+hash.ByteLen]
 	writeAddr(tb.fields[i], v[:])
-	tb.pos += addrSize
+	tb.pos += hash.ByteLen
 }
 
 func (tb *TupleBuilder) ensureCapacity(sz ByteSize) {
