@@ -145,16 +145,16 @@ func (rcv *MergeArtifacts) MutateKeyType(n ArtifactType) bool {
 	return rcv._tab.MutateByteSlot(8, byte(n))
 }
 
-func (rcv *MergeArtifacts) KeyAddresses(j int) byte {
+func (rcv *MergeArtifacts) KeyAddressOffsets(j int) uint16 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
-		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
+		return rcv._tab.GetUint16(a + flatbuffers.UOffsetT(j*2))
 	}
 	return 0
 }
 
-func (rcv *MergeArtifacts) KeyAddressesLength() int {
+func (rcv *MergeArtifacts) KeyAddressOffsetsLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -162,19 +162,11 @@ func (rcv *MergeArtifacts) KeyAddressesLength() int {
 	return 0
 }
 
-func (rcv *MergeArtifacts) KeyAddressesBytes() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
-	}
-	return nil
-}
-
-func (rcv *MergeArtifacts) MutateKeyAddresses(j int, n byte) bool {
+func (rcv *MergeArtifacts) MutateKeyAddressOffsets(j int, n uint16) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
-		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
+		return rcv._tab.MutateUint16(a+flatbuffers.UOffsetT(j*2), n)
 	}
 	return false
 }
@@ -361,11 +353,11 @@ func MergeArtifactsStartKeyOffsetsVector(builder *flatbuffers.Builder, numElems 
 func MergeArtifactsAddKeyType(builder *flatbuffers.Builder, keyType ArtifactType) {
 	builder.PrependByteSlot(2, byte(keyType), 0)
 }
-func MergeArtifactsAddKeyAddresses(builder *flatbuffers.Builder, keyAddresses flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(keyAddresses), 0)
+func MergeArtifactsAddKeyAddressOffsets(builder *flatbuffers.Builder, keyAddressOffsets flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(keyAddressOffsets), 0)
 }
-func MergeArtifactsStartKeyAddressesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(1, numElems, 1)
+func MergeArtifactsStartKeyAddressOffsetsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(2, numElems, 2)
 }
 func MergeArtifactsAddValueItems(builder *flatbuffers.Builder, valueItems flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(valueItems), 0)

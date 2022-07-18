@@ -508,7 +508,7 @@ func (cd *prollyConflictDeleter) putPrimaryKeys(ctx *sql.Context, r sql.Row) err
 	}()
 
 	for i := 0; i < cd.kd.Count()-2; i++ {
-		err := index.PutField(ctx, cd.ed.Mut.NodeStore(), cd.kB, i, r[o+i])
+		err := index.PutField(ctx, cd.ed.NodeStore(), cd.kB, i, r[o+i])
 
 		if err != nil {
 			return err
@@ -531,7 +531,7 @@ func (cd *prollyConflictDeleter) putKeylessHash(ctx *sql.Context, r sql.Row) err
 	// init cardinality to 0
 	cd.vB.PutUint64(0, 0)
 	for i, v := range rowVals {
-		err := index.PutField(ctx, cd.ed.Mut.NodeStore(), cd.vB, i+1, v)
+		err := index.PutField(ctx, cd.ed.NodeStore(), cd.vB, i+1, v)
 		if err != nil {
 			return err
 		}

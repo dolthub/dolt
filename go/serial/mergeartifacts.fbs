@@ -28,7 +28,7 @@ table MergeArtifacts {
   key_type:ArtifactType;
 
   // offsets for each chunk address in |key_items|
-  key_addresses:[ubyte];
+  key_address_offsets:[uint16];
 
   // array of values items, ordered by paired key
   value_items:[ubyte];

@@ -65,6 +65,7 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		valTups = writeItemBytes(b, values, valSz)
 		serial.ProllyTreeNodeStartValueOffsetsVector(b, len(values)-1)
 		valOffs = writeItemOffsets(b, values, valSz)
+		// serialize offsets of chunk addresses within |valTups|
 		if s.ValDesc.AddressTypeCount() > 0 {
 			serial.ProllyTreeNodeStartValueAddressOffsetsVector(b, countAddresses(values, s.ValDesc))
 			valAddrOffs = writeAddressOffsets(b, values, valSz, s.ValDesc)
@@ -212,7 +213,7 @@ func estimateProllyMapSize(keys, values [][]byte, subtrees []uint64, valAddrsCnt
 	bufSz += 8 + 1 + 1 + 1               // metadata
 	bufSz += 72                          // vtable (approx)
 	bufSz += 100                         // padding?
-	bufSz += valAddrsCnt * len(values)
+	bufSz += valAddrsCnt * len(values) * 2
 	bufSz += messagePrefixSz
 
 	return keySz, valSz, bufSz
