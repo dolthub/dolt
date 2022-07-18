@@ -27,6 +27,11 @@ if [ -z "$MODE" ]; then
     exit 1
 fi
 
+if [ "$NOMS_BIN_FORMAT" = "__DOLT_1__" ]; then;
+  INIT_BIG_REPO="false"
+fi
+
+
 echo "Setting from $FROM_SERVER: $FROM_VERSION"
 echo "Setting to $TO_SERVER: $TO_VERSION"
 
