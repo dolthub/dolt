@@ -21,8 +21,6 @@ import (
 	"math"
 	"path/filepath"
 
-	"github.com/dolthub/dolt/go/store/types"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -56,10 +54,6 @@ func (cmd InspectCmd) RequiresRepo() bool {
 // Description returns a description of the command
 func (cmd InspectCmd) Description() string {
 	return "Inspects a Dolt Database and collects stats."
-}
-
-func (cmd InspectCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT_1(nbf)
 }
 
 func (cmd InspectCmd) Docs() *cli.CommandDocumentation {

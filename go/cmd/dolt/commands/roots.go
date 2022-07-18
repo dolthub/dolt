@@ -65,10 +65,6 @@ func (cmd RootsCmd) Description() string {
 	return "Displays store root values (or potential store root values) that we find in the current database."
 }
 
-func (cmd RootsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return false
-}
-
 func (cmd RootsCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }

@@ -56,10 +56,6 @@ func (cmd ReadTablesCmd) Description() string {
 	return readTablesDocs.ShortDesc
 }
 
-func (cmd ReadTablesCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT_1(nbf)
-}
-
 func (cmd ReadTablesCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return cli.NewCommandDocumentation(readTablesDocs, ap)
