@@ -264,7 +264,7 @@ func (s *nomsWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.Working
 	s.workingSet = ws
 
 	root := ws.WorkingRoot()
-	if err := s.updateAutoIncrementSequences(ctx, root); err != nil {
+	if err := updateAutoIncrementSequences(ctx, root, s.tracker); err != nil {
 		return err
 	}
 
@@ -295,18 +295,4 @@ func (s *nomsWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.Working
 		localTableEditor.tableEditor = newTableEditor
 	}
 	return nil
-}
-
-func (s *nomsWriteSession) updateAutoIncrementSequences(ctx context.Context, root *doltdb.RootValue) error {
-	return root.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
-		if !schema.HasAutoIncrement(sch) {
-			return
-		}
-		v, err := table.GetAutoIncrementValue(ctx)
-		if err != nil {
-			return true, err
-		}
-		s.tracker.Set(name, v)
-		return
-	})
 }

@@ -1692,6 +1692,42 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_merge() (3way) works with no auto increment overlap",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+			"INSERT INTO t (c0) VALUES (1);",
+			"CALL dolt_commit('-a', '-m', 'cm1');",
+			"CALL dolt_checkout('-b', 'test');",
+			"INSERT INTO t (pk,c0) VALUES (3,3), (4,4);",
+			"CALL dolt_commit('-a', '-m', 'cm2');",
+			"CALL dolt_checkout('main');",
+			"INSERT INTO t (c0) VALUES (2);",
+			"CALL dolt_commit('-a', '-m', 'cm3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('test');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 5}}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+					{7, 7},
+				},
+			},
+		},
+	},
+	{
 		Name: "dolt_merge() with a gap in an auto increment key",
 		SetUpScript: []string{
 			"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
@@ -1707,6 +1743,42 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "CALL dolt_merge('test');",
 				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (3,3),(NULL,6);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_merge() (3way) with a gap in an auto increment key",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+			"INSERT INTO t (c0) VALUES (1);",
+			"CALL dolt_add('-A');",
+			"CALL dolt_commit('-am', 'cm1');",
+			"CALL dolt_checkout('-b', 'test');",
+			"INSERT INTO t VALUES (4,4), (5,5);",
+			"CALL dolt_commit('-am', 'cm2');",
+			"CALL dolt_checkout('main');",
+			"INSERT INTO t (c0) VALUES (2);",
+			"CALL dolt_commit('-am', 'cm3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('test');",
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query:    "INSERT INTO t VALUES (3,3),(NULL,6);",
