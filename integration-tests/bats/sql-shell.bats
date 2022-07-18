@@ -28,6 +28,14 @@ teardown() {
     [[ "$output" =~ "pk" ]] || false
 }
 
+@test "sql-shell: can't start shell with invalid user" {
+    run dolt sql --user=notroot <<< "show tables"
+    [ "$status" -eq 0 ]
+    run dolt sql --user=toor <<< "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "user toor@localhost does not exist" ]] || false
+}
+
 @test "sql-shell: sql shell writes to disk after every iteration (autocommit)" {
     skiponwindows "Need to install expect and make this script work on windows."
     run $BATS_TEST_DIRNAME/sql-shell.expect

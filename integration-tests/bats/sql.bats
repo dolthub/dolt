@@ -39,6 +39,14 @@ teardown() {
     teardown_common
 }
 
+@test "sql: can't query with nonexistent user" {
+    run dolt sql --user=notroot -q "show tables"
+    [ "$status" -eq 0 ]
+    run dolt sql --user=toor -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "user toor@localhost does not exist" ]] || false
+}
+
 @test "sql: check configurations with all default options" {
     # remove any previous config directories
     rm -rf .doltcfg
