@@ -110,9 +110,9 @@ func (tea *BulkImportTEA) Commit(ctx context.Context, nbf *types.NomsBinFormat) 
 	return nil
 }
 
-// Rollback operation not supported on BulkImportTEA
+// Rollback operation is a no-op on BulkImportTEA
 func (tea *BulkImportTEA) Rollback(ctx context.Context) error {
-	return errors.New("not supported")
+	return nil
 }
 
 // MaterializeEdits applies the in memory edits to the row data and returns types.Map
@@ -271,9 +271,9 @@ func (iea *BulkImportIEA) Commit(ctx context.Context, nbf *types.NomsBinFormat) 
 	return nil
 }
 
-// Rollback operation not supported on BulkImportIEA
+// Rollback operation no-op on BulkImportIEA
 func (iea *BulkImportIEA) Rollback(ctx context.Context) error {
-	return errors.New("not supported")
+	return nil
 }
 
 // MaterializeEdits commits and applies the in memory edits to the row data
