@@ -1283,7 +1283,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table a" ]] || false
 
-    run dolt sql -q "show tables"
+    run dolt sql --user=dolt -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "a" ]] || false
 
@@ -1292,7 +1292,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table b" ]] || false
 
-    run dolt sql -q "show tables"
+    run dolt sql --user=dolt -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "b" ]] || false
 
