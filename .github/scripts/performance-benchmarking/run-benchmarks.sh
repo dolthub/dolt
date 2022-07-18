@@ -27,7 +27,7 @@ if [ -z "$MODE" ]; then
     exit 1
 fi
 
-if [ "$NOMS_BIN_FORMAT" = "__DOLT_1__" ]; then;
+if [ "$NOMS_BIN_FORMAT" = "__DOLT_1__" ]; then
   INIT_BIG_REPO="false"
 fi
 
