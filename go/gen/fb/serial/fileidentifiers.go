@@ -31,6 +31,7 @@ const AddressMapFileID = "ADRM"
 const CommitClosureFileID = "CMCL"
 const TableSchemaFileID = "DSCH"
 const ForeignKeyCollectionFileID = "DFKC"
+const MergeArtifactsFileID = "ARTM"
 
 func GetFileID(bs []byte) string {
 	if len(bs) < 8 {
