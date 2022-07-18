@@ -36,10 +36,6 @@ type WriteSession interface {
 	// GetTableWriter creates a TableWriter and adds it to the WriteSession.
 	GetTableWriter(ctx context.Context, table, db string, setter SessionRootSetter, batched bool) (TableWriter, error)
 
-	// UpdateWorkingSet takes a callback to update this WriteSession's WorkingSet. The update method cannot change the
-	// WorkingSetRef of the WriteSession. WriteSession flushes the pending writes in the session before calling the update.
-	UpdateWorkingSet(ctx context.Context, cb func(ctx context.Context, current *doltdb.WorkingSet) (*doltdb.WorkingSet, error)) error
-
 	// SetWorkingSet modifies the state of the WriteSession. The WorkingSetRef of |ws| must match the existing Ref.
 	SetWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error
 
@@ -148,25 +144,6 @@ func (s *nomsWriteSession) SetWorkingSet(ctx context.Context, ws *doltdb.Working
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	return s.setWorkingSet(ctx, ws)
-}
-
-// UpdateWorkingSet implements WriteSession.
-func (s *nomsWriteSession) UpdateWorkingSet(ctx context.Context, cb func(ctx context.Context, current *doltdb.WorkingSet) (*doltdb.WorkingSet, error)) error {
-	s.mut.Lock()
-	defer s.mut.Unlock()
-
-	current, err := s.flush(ctx)
-	if err != nil {
-		return err
-	}
-
-	mutated, err := cb(ctx, current)
-	if err != nil {
-		return err
-	}
-	s.workingSet = mutated
-
-	return s.setWorkingSet(ctx, s.workingSet)
 }
 
 func (s *nomsWriteSession) GetOptions() editor.Options {

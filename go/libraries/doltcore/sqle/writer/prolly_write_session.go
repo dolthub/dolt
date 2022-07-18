@@ -120,24 +120,6 @@ func (s *prollyWriteSession) SetWorkingSet(ctx context.Context, ws *doltdb.Worki
 	return s.setWorkingSet(ctx, ws)
 }
 
-// UpdateWorkingSet implements WriteSession.
-func (s *prollyWriteSession) UpdateWorkingSet(ctx context.Context, cb func(ctx context.Context, current *doltdb.WorkingSet) (*doltdb.WorkingSet, error)) error {
-	s.mut.Lock()
-	defer s.mut.Unlock()
-
-	current, err := s.flush(ctx)
-	if err != nil {
-		return err
-	}
-
-	mutated, err := cb(ctx, current)
-	if err != nil {
-		return err
-	}
-
-	return s.SetWorkingSet(ctx, mutated)
-}
-
 // GetOptions implemented WriteSession.
 func (s *prollyWriteSession) GetOptions() editor.Options {
 	return editor.Options{}
