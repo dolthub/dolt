@@ -38,9 +38,9 @@ type RevisionDatabaseProvider interface {
 
 type DoltDatabaseProvider interface {
 	RevisionDatabaseProvider
-	// CloneDatabaseFromRemote clones the database from the remote given as a new database in this provider
+	// CloneDatabaseFromRemote clones the database from the specified URL as a new database in this provider. dbName is the name for the new database, branch is an optional parameter indicating which branch to clone (otherwise all branches are cloned), remoteName is the name for the remote created in the new database, and remoteUrl is a URL (e.g. "file:///dbs/db1") or an <org>/<database> path indicating a database hosted on DoltHub.
 	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error
-	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases
+	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases.
 	FileSystem() filesys.Filesys
 }
 
