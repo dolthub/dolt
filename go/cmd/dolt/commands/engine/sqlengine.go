@@ -95,9 +95,9 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	// Create temporary users if no privileges in config
+	// Add superuser
 	var tempUsers []gms.TemporaryUser
-	if len(data) == 0 && len(config.ServerUser) > 0 {
+	if len(config.ServerUser) > 0 {
 		tempUsers = append(tempUsers, gms.TemporaryUser{
 			Username: config.ServerUser,
 			Password: config.ServerPass,
@@ -142,9 +142,9 @@ func NewSqlEngine(
 
 	sess.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
-	if user := engine.Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
-		return nil, fmt.Errorf("user %s@%s does not exist", config.ServerUser, config.ServerHost)
-	}
+	//if user := engine.Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
+	//	return nil, fmt.Errorf("user %s@%s does not exist", config.ServerUser, config.ServerHost)
+	//}
 
 	// this is overwritten only for server sessions
 	for _, db := range dbs {

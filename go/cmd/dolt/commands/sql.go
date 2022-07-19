@@ -159,8 +159,7 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
 	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given")
 	ap.SupportsString(PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to $doltcfg-dir/privileges.db")
-	ap.SupportsString(UserFlag, "u", "user", fmt.Sprintf("Defines the server user (default `%v`)", DefaultUser))
-	ap.SupportsString(PasswordFlag, "p", "password", fmt.Sprintf("Defines the server password (default `%v`)", DefaultPassword))
+	ap.SupportsString(UserFlag, "u", "user", fmt.Sprintf("Defines the local super user (default `%v`)", DefaultUser))
 	return ap
 }
 
@@ -194,14 +193,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 
 	// Retrieve username and password from command line, if provided
-	// TODO: persist if user and pass provided
 	username := DefaultUser
-	password := DefaultPassword
 	if user, ok := apr.GetValue(UserFlag); ok {
 		username = user
-	}
-	if pass, ok := apr.GetValue(PasswordFlag); ok {
-		password = pass
 	}
 
 	mrEnv, verr := getMultiRepoEnv(ctx, apr, dEnv, cmd)
@@ -301,7 +295,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		IsReadOnly:   false,
 		PrivFilePath: privsFp,
 		ServerUser:   username,
-		ServerPass:   password,
 		ServerHost:   DefaultHost, // TODO: it literally can't be anything else right?
 		Autocommit:   true,
 	}
