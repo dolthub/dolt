@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -91,22 +90,8 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 	return err
 }
 
-func DoPush(ctx context.Context, rsr env.RepoStateReader, rsw env.RepoStateWriter, srcDB *doltdb.DoltDB, tempTableDir string, opts *env.PushOpts, progStarter ProgStarter, progStopper ProgStopper) error {
-	destDB, err := opts.Remote.GetRemoteDB(ctx, srcDB.ValueReadWriter().Format())
-
-	if err != nil {
-		if err == remotestorage.ErrInvalidDoltSpecPath {
-			urlObj, _ := earl.Parse(opts.Remote.Url)
-			path := urlObj.Path
-			if path[0] == '/' {
-				path = path[1:]
-			}
-
-			var detail = fmt.Sprintf("the remote: %s %s '%s' should be in the format 'organization/repo'", opts.Remote.Name, opts.Remote.Url, path)
-			return fmt.Errorf("%w; %s; %s", ErrFailedToGetRemoteDb, detail, err.Error())
-		}
-		return err
-	}
+func DoPush(ctx context.Context, rsr env.RepoStateReader, rsw env.RepoStateWriter, srcDB, destDB *doltdb.DoltDB, tempTableDir string, opts *env.PushOpts, progStarter ProgStarter, progStopper ProgStopper) error {
+	var err error
 
 	switch opts.SrcRef.GetType() {
 	case ref.BranchRefType:
@@ -375,12 +360,7 @@ func FetchRemoteBranch(
 }
 
 // FetchRefSpecs is the common SQL and CLI entrypoint for fetching branches, tags, and heads from a remote.
-func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.RemoteRefSpec, remote env.Remote, mode ref.UpdateMode, progStarter ProgStarter, progStopper ProgStopper) error {
-	srcDB, err := remote.GetRemoteDBWithoutCaching(ctx, dbData.Ddb.ValueReadWriter().Format())
-	if err != nil {
-		return err
-	}
-
+func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB, refSpecs []ref.RemoteRefSpec, remote env.Remote, mode ref.UpdateMode, progStarter ProgStarter, progStopper ProgStopper) error {
 	branchRefs, err := srcDB.GetHeadRefs(ctx)
 	if err != nil {
 		return env.ErrFailedToReadDb

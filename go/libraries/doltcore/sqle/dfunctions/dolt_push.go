@@ -16,6 +16,8 @@ package dfunctions
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -91,7 +93,22 @@ func DoDoltPush(ctx *sql.Context, args []string) (int, error) {
 	if err != nil {
 		return cmdFailure, err
 	}
-	err = actions.DoPush(ctx, dbData.Rsr, dbData.Rsw, dbData.Ddb, dbData.Rsw.TempTableFilesDir(), opts, runProgFuncs, stopProgFuncs)
+	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb, opts.Remote, false)
+	if err != nil {
+		if err == remotestorage.ErrInvalidDoltSpecPath {
+			urlObj, _ := earl.Parse(opts.Remote.Url)
+			path := urlObj.Path
+			if path[0] == '/' {
+				path = path[1:]
+			}
+
+			var detail = fmt.Sprintf("the remote: %s %s '%s' should be in the format 'organization/repo'", opts.Remote.Name, opts.Remote.Url, path)
+			return 1, fmt.Errorf("%w; %s; %s", actions.ErrFailedToGetRemoteDb, detail, err.Error())
+		}
+		return 1, err
+	}
+
+	err = actions.DoPush(ctx, dbData.Rsr, dbData.Rsw, dbData.Ddb, remoteDB, dbData.Rsw.TempTableFilesDir(), opts, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:

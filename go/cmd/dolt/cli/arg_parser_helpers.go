@@ -154,6 +154,18 @@ func CreateResetArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateRemoteArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"region", "cloud provider region associated with this remote."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds-type", "credential type.  Valid options are role, env, and file.  See the help section for additional details."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"profile", "AWS profile to use."})
+	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
+	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
+	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
+	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
+	return ap
+}
+
 func CreateCleanArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(DryRunFlag, "", "Tests removing untracked tables without modifying the working set.")

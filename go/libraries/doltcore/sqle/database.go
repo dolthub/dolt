@@ -1204,11 +1204,11 @@ func (n noopRepoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef r
 	return nil
 }
 
-func (n noopRepoStateWriter) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
+func (n noopRepoStateWriter) AddRemote(r env.Remote) error {
 	return nil
 }
 
-func (n noopRepoStateWriter) AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error {
+func (n noopRepoStateWriter) AddBackup(r env.Remote) error {
 	return nil
 }
 
