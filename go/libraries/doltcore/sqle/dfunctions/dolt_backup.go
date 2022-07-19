@@ -141,6 +141,12 @@ func DoDoltBackup(ctx *sql.Context, args []string) (int, error) {
 			params[dbfactory.AWSCredsProfile] = profStr
 		}
 
+		credsRegion, err := sess.GetSessionVariable(ctx, dsess.AwsCredsRegionKey)
+		regionStr, isStr := credsRegion.(string)
+		if isStr && len(regionStr) > 0 {
+			params[dbfactory.AWSRegionParam] = regionStr
+		}
+
 		b = env.NewRemote("__temp__", backupUrl, params)
 
 	case apr.Arg(0) == cli.SyncBackupId:

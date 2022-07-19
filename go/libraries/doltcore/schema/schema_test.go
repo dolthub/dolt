@@ -103,6 +103,47 @@ func TestGetSharedCols(t *testing.T) {
 	assert.Equal(t, expected, res)
 }
 
+func TestSetPkOrder(t *testing.T) {
+
+	// GetPkCols() should always return columns in ordinal order
+	// GetAllCols() should always return columns in the defined schema's order
+	t.Run("returns the correct GetPkCols() order", func(t *testing.T) {
+		allColColl := NewColCollection(allCols...)
+		pkColColl := NewColCollection(pkCols...)
+		sch, err := SchemaFromCols(allColColl)
+		require.NoError(t, err)
+
+		require.Equal(t, allColColl, sch.GetAllCols())
+		require.Equal(t, pkColColl, sch.GetPKCols())
+
+		err = sch.SetPkOrdinals([]int{1, 0})
+		require.NoError(t, err)
+
+		expectedPkColColl := NewColCollection(pkCols[1], pkCols[0])
+		require.Equal(t, expectedPkColColl, sch.GetPKCols())
+		require.Equal(t, allColColl, sch.GetAllCols())
+	})
+
+	t.Run("Can round-trip", func(t *testing.T) {
+		allColColl := NewColCollection(allCols...)
+		pkColColl := NewColCollection(pkCols...)
+		sch, err := SchemaFromCols(allColColl)
+		require.NoError(t, err)
+
+		require.Equal(t, allColColl, sch.GetAllCols())
+		require.Equal(t, pkColColl, sch.GetPKCols())
+
+		err = sch.SetPkOrdinals([]int{1, 0})
+		require.NoError(t, err)
+
+		err = sch.SetPkOrdinals([]int{0, 1})
+		require.NoError(t, err)
+
+		require.Equal(t, allColColl, sch.GetAllCols())
+		require.Equal(t, pkColColl, sch.GetPKCols())
+	})
+}
+
 func mustGetCol(collection *ColCollection, name string) Column {
 	col, ok := collection.GetByName(name)
 	if !ok {

@@ -31,7 +31,6 @@ import (
 type StatusTable struct {
 	ddb           *doltdb.DoltDB
 	rootsProvider env.RootsProvider
-	drw           env.DocsReadWriter
 	dbName        string
 }
 
@@ -60,12 +59,11 @@ func (s StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.R
 }
 
 // NewStatusTable creates a StatusTable
-func NewStatusTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, rp env.RootsProvider, drw env.DocsReadWriter) sql.Table {
+func NewStatusTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, rp env.RootsProvider) sql.Table {
 	return &StatusTable{
 		ddb:           ddb,
 		dbName:        dbName,
 		rootsProvider: rp,
-		drw:           drw,
 	}
 }
 
@@ -79,7 +77,6 @@ type StatusItr struct {
 
 func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	rp := st.rootsProvider
-	drw := st.drw
 
 	roots, err := rp.GetRoots(ctx)
 	if err != nil {
@@ -91,30 +88,12 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		return nil, err
 	}
 
-	docsOnDisk, err := drw.GetDocsOnDisk()
-	if err != nil {
-		return nil, err
-	}
-	stagedDocDiffs, unStagedDocDiffs, err := diff.GetDocDiffs(ctx, roots, docsOnDisk)
-	if err != nil {
-		return nil, err
-	}
-
 	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, roots)
 	if err != nil {
 		return nil, err
 	}
 
-	docs, err := drw.GetDocsOnDisk()
-	if err != nil {
-		return nil, err
-	}
-	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, roots.Working, docs)
-	if err != nil {
-		return nil, err
-	}
-
-	tLength := len(stagedTables) + len(unstagedTables) + len(stagedDocDiffs.Docs) + len(unStagedDocDiffs.Docs) + len(workingTblsInConflict) + len(workingDocsInConflict.Docs)
+	tLength := len(stagedTables) + len(unstagedTables) + len(workingTblsInConflict)
 
 	tables := make([]string, tLength)
 	isStaged := make([]bool, tLength)
@@ -123,10 +102,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	itr := &StatusItr{tables: tables, isStaged: isStaged, statuses: statuses, idx: 0}
 
 	idx := handleStagedUnstagedTables(stagedTables, unstagedTables, itr, 0)
-	idx = handleStagedUnstagedDocDiffs(stagedDocDiffs, unStagedDocDiffs, itr, idx)
 	idx = handleWorkingTablesInConflict(workingTblsInConflict, itr, idx)
-	idx = handleWorkingDocConflicts(workingDocsInConflict, itr, idx)
-
 	return itr, nil
 }
 
@@ -161,44 +137,11 @@ func handleStagedUnstagedTables(staged, unstaged []diff.TableDelta, itr *StatusI
 	return idx
 }
 
-var docDiffTypeToLabel = map[diff.DocDiffType]string{
-	diff.ModifiedDoc: "modified",
-	diff.RemovedDoc:  "deleted",
-	diff.AddedDoc:    "new doc",
-}
-
-func handleStagedUnstagedDocDiffs(staged *diff.DocDiffs, unstaged *diff.DocDiffs, itr *StatusItr, idx int) int {
-	combined := append(staged.Docs, unstaged.Docs...)
-	for i, docName := range combined {
-		dType := staged.DocToType[docName]
-
-		itr.tables[idx] = docName
-		itr.isStaged[idx] = i < len(staged.Docs)
-		itr.statuses[idx] = docDiffTypeToLabel[dType]
-
-		idx += 1
-	}
-
-	return idx
-}
-
 const mergeConflictStatus = "conflict"
 
 func handleWorkingTablesInConflict(workingTables []string, itr *StatusItr, idx int) int {
 	for _, tableName := range workingTables {
 		itr.tables[idx] = tableName
-		itr.isStaged[idx] = false
-		itr.statuses[idx] = mergeConflictStatus
-
-		idx += 1
-	}
-
-	return idx
-}
-
-func handleWorkingDocConflicts(workingDocs *diff.DocDiffs, itr *StatusItr, idx int) int {
-	for _, docName := range workingDocs.Docs {
-		itr.tables[idx] = docName
 		itr.isStaged[idx] = false
 		itr.statuses[idx] = mergeConflictStatus
 

@@ -996,7 +996,6 @@ SQL
 }
 
 @test "keyless: insert into keyless table with unique index" {
-    skip_nbf_dolt_1 "keyless table with unique index does not throw errors"
 
     dolt sql -q "CREATE TABLE mytable (pk int UNIQUE)";
 
@@ -1038,7 +1037,6 @@ SQL
 }
 
 @test "keyless: insert into keyless table with unique index and auto increment" {
-    skip_nbf_dolt_1 "keyless table with unique index does not throw errors"
 
     dolt sql -q "CREATE TABLE gis (pk INT UNIQUE NOT NULL AUTO_INCREMENT, shape GEOMETRY NOT NULL)"
     dolt sql -q "INSERT INTO gis VALUES (1, POINT(1,1))"
@@ -1060,14 +1058,16 @@ SQL
 }
 
 @test "keyless: string type unique key index" {
-    skip_nbf_dolt_1 "keyless table with unique index does not throw errors"
 
     dolt sql -q "CREATE TABLE mytable (pk int, val varchar(6) UNIQUE)"
     dolt sql -q "INSERT INTO mytable VALUES (1, 'nekter')"
 
     run dolt sql -q "INSERT INTO mytable VALUES (1, 'nekter')"
     [ $status -eq 1 ]
-    [[ "$output" =~ 'duplicate unique key given: ["nekter"]' ]] || false
+    [[ "$output" =~ 'duplicate unique key given' ]] || false
+    # old format wraps strings with quotes in duplicate unique key error
+    # printing, new format does not. So we test just for the content `nekter`
+     [[ "$output" =~ 'nekter' ]] || false
 
     run dolt sql -r csv -q "SELECT count(*) from mytable where pk = 1"
     [ $status -eq 0 ]
@@ -1080,7 +1080,6 @@ SQL
 }
 
 @test "keyless: compound unique key index" {
-    skip_nbf_dolt_1 "keyless table with unique index does not throw errors"
 
     dolt sql -q "CREATE TABLE mytable (pk int, v1 int, v2 int)"
     dolt sql -q "ALTER TABLE mytable ADD CONSTRAINT ux UNIQUE (v1, v2)"
@@ -1102,7 +1101,6 @@ SQL
 }
 
 @test "keyless: replace into and unique key index" {
-    skip_nbf_dolt_1 "keyless table with unique index does not throw errors"
 
     skip "Keyless tables with unique indexes do not properly support replace into semantics"
     dolt sql -q "CREATE TABLE mytable (pk int, v1 int, v2 int)"
@@ -1114,7 +1112,6 @@ SQL
 }
 
 @test "keyless: batch import with keyless unique index" {
-    skip_nbf_dolt_1 "keyless table with unique index does not throw errors"
 
     dolt sql -q "CREATE TABLE mytable (pk int, v1 int, v2 int)"
     dolt sql -q "ALTER TABLE mytable ADD CONSTRAINT ux UNIQUE (v1)"
@@ -1145,7 +1142,6 @@ SQL
 }
 
 @test "keyless: batch import with keyless unique index and secondary index" {
-    skip_nbf_dolt_1 "keyless table with unique index does not throw errors"
 
     dolt sql -q "CREATE TABLE mytable (pk int, v1 int, v2 int)"
     dolt sql -q "ALTER TABLE mytable ADD CONSTRAINT ux UNIQUE (v1)"
@@ -1185,7 +1181,6 @@ SQL
 }
 
 @test "keyless: batch import into the unique key correctly works" {
-    skip_nbf_dolt_1 "keyless table with unique index does not throw errors"
 
     skip "index error handling does not work with bulk import"
     dolt sql -q "CREATE TABLE mytable (pk int, v1 int, v2 int)"

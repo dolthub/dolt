@@ -189,14 +189,16 @@ func TestExecuteDeleteSystemTables(t *testing.T) {
 }
 
 var systemTableDeleteTests = []DeleteTest{
-	//{
-	//	Name: "delete dolt_docs",
-	//	AdditionalSetup: CreateTableFn("dolt_docs",
-	//		doltdocs.DocsSchema,
-	//		NewRow(types.String("LICENSE.md"), types.String("A license"))),
-	//	DeleteQuery: "delete from dolt_docs",
-	//	ExpectedErr: "cannot delete from table",
-	//},
+	{
+		Name: "delete dolt_docs",
+		AdditionalSetup: CreateTableFn("dolt_docs",
+			doltdb.DocsSchema,
+			NewRow(types.String("LICENSE.md"), types.String("A license"))),
+		DeleteQuery:    "delete from dolt_docs where doc_name = 'LICENSE.md'",
+		SelectQuery:    "select * from dolt_docs",
+		ExpectedRows:   []sql.Row{},
+		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
+	},
 	{
 		Name: "delete dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,

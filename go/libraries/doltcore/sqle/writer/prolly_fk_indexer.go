@@ -63,30 +63,26 @@ func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.R
 		return nil, fmt.Errorf("unable to find writer for index `%s`", n.index.ID())
 	}
 
-	idxToPkMap := make(map[int]int)
-	pkColToOrdinal := make(map[int]int)
-	for i, ord := range n.writer.sch.GetPkOrdinals() {
-		pkColToOrdinal[ord] = i
-	}
-	for idxPos, idxCol := range n.index.IndexSchema().GetAllCols().GetColumns() {
-		if tblIdx, ok := n.writer.sch.GetPKCols().TagToIdx[idxCol.Tag]; ok {
-			idxToPkMap[idxPos] = pkColToOrdinal[tblIdx]
+	pkToIdxMap := make(val.OrdinalMapping, n.writer.sch.GetPKCols().Size())
+	for j, idxCol := range n.index.IndexSchema().GetAllCols().GetColumns() {
+		if i, ok := n.writer.sch.GetPKCols().TagToIdx[idxCol.Tag]; ok {
+			pkToIdxMap[i] = j
 		}
 	}
 
 	if primary, ok := n.writer.primary.(prollyIndexWriter); ok {
-		rangeIter, err := idxWriter.(prollyIndexWriter).mut.IterRange(ctx, n.pRange)
+		rangeIter, err := idxWriter.IterRange(ctx, n.pRange)
 		if err != nil {
 			return nil, err
 		}
 		return &prollyFkPkRowIter{
 			rangeIter:  rangeIter,
-			idxToPkMap: idxToPkMap,
+			pkToIdxMap: pkToIdxMap,
 			primary:    primary,
 			sqlSch:     n.writer.sqlSch,
 		}, nil
 	} else {
-		rangeIter, err := idxWriter.(prollyKeylessSecondaryWriter).mut.IterRange(ctx, n.pRange)
+		rangeIter, err := idxWriter.IterRange(ctx, n.pRange)
 		if err != nil {
 			return nil, err
 		}
@@ -98,10 +94,10 @@ func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.R
 	}
 }
 
-// prollyFkPkRowIter returns rows requested by a foreign key reference. For use on tables with primary keys.
+// prollyFkPkRowIter returns rows of the parent table requested by a foreign key reference. For use on tables with primary keys.
 type prollyFkPkRowIter struct {
 	rangeIter  prolly.MapIter
-	idxToPkMap map[int]int
+	pkToIdxMap val.OrdinalMapping
 	primary    prollyIndexWriter
 	sqlSch     sql.Schema
 }
@@ -110,6 +106,7 @@ var _ sql.RowIter = prollyFkPkRowIter{}
 
 // Next implements the interface sql.RowIter.
 func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
+	// |rangeIter| iterates on the foreign key index of the parent table
 	k, _, err := iter.rangeIter.Next(ctx)
 	if err != nil {
 		return nil, err
@@ -119,7 +116,7 @@ func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	pkBld := iter.primary.keyBld
-	for idxPos, pkPos := range iter.idxToPkMap {
+	for pkPos, idxPos := range iter.pkToIdxMap {
 		pkBld.PutRaw(pkPos, k.GetField(idxPos))
 	}
 	pkTup := pkBld.BuildPermissive(sharePool)

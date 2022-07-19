@@ -27,8 +27,6 @@ if [ -z "$MODE" ]; then
     exit 1
 fi
 
-echo "Setting from $FROM_SERVER: $FROM_VERSION"
-
 # use first 8 characters of TO_VERSION to differentiate
 # jobs
 short=${TO_VERSION:0:8}
@@ -38,12 +36,17 @@ actorShort="$lowered-$short"
 # random sleep
 sleep 0.$[ ( $RANDOM % 10 )  + 1 ]s
 
-timesuffix=`date +%s%N`
+timesuffix=`date +%s`
 jobname="$actorShort-$timesuffix"
 
 timeprefix=$(date +%Y/%m/%d)
 
 actorprefix="$MODE/$ACTOR/$actorShort"
+
+format="markdown"
+if [[ "$MODE" = "release" || "$MODE" = "nightly" ]]; then
+  format="html"
+fi
 
 # set value to ISSUE_NUMBER environment variable
 # or default to -1
@@ -52,11 +55,15 @@ issuenumber=${ISSUE_NUMBER:-"-1"}
 source \
   "$TEMPLATE_SCRIPT" \
   "$jobname"         \
+  "$FROM_SERVER"     \
   "$FROM_VERSION"    \
+  "$TO_SERVER"       \
   "$TO_VERSION"      \
   "$timeprefix"      \
   "$actorprefix"     \
-  "$issuenumber"      > job.json
+  "$NOMS_BIN_FORMAT" \
+  "$format"          \
+  "$issuenumber"     > job.json
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
 

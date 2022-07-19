@@ -100,7 +100,12 @@ func NewIndexEditor(ctx context.Context, index schema.Index, indexData types.Map
 // Otherwise, it is a no-op.
 func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tuple, value types.Tuple) error {
 	return ie.InsertRowWithDupCb(ctx, key, partialKey, value, func(ctx context.Context, uke *uniqueKeyErr) error {
-		return sql.ErrDuplicateEntry.Wrap(uke, ie.idx.Name())
+		msg, err := formatKey(context.Background(), uke.IndexTuple)
+		if err != nil {
+			return err
+		}
+		// The only secondary index that can throw unique key errors is a unique index
+		return sql.NewUniqueKeyErr(msg, !ie.idx.IsUnique(), nil)
 	})
 }
 
@@ -132,7 +137,7 @@ func (ie *IndexEditor) InsertRowWithDupCb(ctx context.Context, key, partialKey t
 			if err != nil {
 				return err
 			}
-			cause := &uniqueKeyErr{tableTuple, matches[0].key, ie.idx.Name()}
+			cause := &uniqueKeyErr{tableTuple, partialKey, ie.idx.Name()}
 			err = cb(ctx, cause)
 			if err != nil {
 				return err

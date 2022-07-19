@@ -112,6 +112,13 @@ type UserSessionVars struct {
 	Vars map[string]string `yaml:"vars"`
 }
 
+type JwksYAMLConfig struct {
+	Name        string            `yaml:"name"`
+	LocationUrl string            `yaml:"location_url"`
+	Claims      map[string]string `yaml:"claims"`
+	FieldsToLog []string          `yaml:"fields_to_log"`
+}
+
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
 	LogLevelStr       *string               `yaml:"log_level"`
@@ -121,9 +128,11 @@ type YAMLConfig struct {
 	DatabaseConfig    []DatabaseYAMLConfig  `yaml:"databases"`
 	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
 	DataDirStr        *string               `yaml:"data_dir"`
+	CfgDirStr         *string               `yaml:"cfg_dir"`
 	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
 	PrivilegeFile     *string               `yaml:"privilege_file"`
 	Vars              []UserSessionVars     `yaml:"user_session_vars"`
+	Jwks              []JwksYAMLConfig      `yaml:"jwks"`
 }
 
 var _ ServerConfig = YAMLConfig{}
@@ -338,6 +347,13 @@ func (cfg YAMLConfig) UserVars() []UserSessionVars {
 	return nil
 }
 
+func (cfg YAMLConfig) JwksConfig() []JwksYAMLConfig {
+	if cfg.Jwks != nil {
+		return cfg.Jwks
+	}
+	return nil
+}
+
 // QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
 func (cfg YAMLConfig) QueryParallelism() int {
 	if cfg.PerformanceConfig.QueryParallelism == nil {
@@ -377,6 +393,13 @@ func (cfg YAMLConfig) PersistenceBehavior() string {
 
 func (cfg YAMLConfig) DataDir() string {
 	if cfg.DataDirStr != nil {
+		return *cfg.DataDirStr
+	}
+	return ""
+}
+
+func (cfg YAMLConfig) CfgDir() string {
+	if cfg.CfgDirStr != nil {
 		return *cfg.DataDirStr
 	}
 	return ""

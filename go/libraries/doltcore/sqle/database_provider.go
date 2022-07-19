@@ -561,7 +561,6 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 		branch:          branch,
 		RepoStateWriter: srcDb.DbData().Rsw,
 		RepoStateReader: srcDb.DbData().Rsr,
-		DocsReadWriter:  srcDb.DbData().Drw,
 	}
 
 	var db SqlDatabase
@@ -573,7 +572,6 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			ddb:      v.ddb,
 			rsw:      static,
 			rsr:      static,
-			drw:      static,
 			gs:       v.gs,
 			editOpts: v.editOpts,
 		}
@@ -584,7 +582,6 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 				ddb:      v.ddb,
 				rsw:      static,
 				rsr:      static,
-				drw:      static,
 				gs:       v.gs,
 				editOpts: v.editOpts,
 			},
@@ -603,7 +600,6 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			Ddb: srcDb.DbData().Ddb,
 			Rsw: static,
 			Rsr: static,
-			Drw: static,
 		},
 	}
 
@@ -627,7 +623,6 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		ddb:      srcDb.DbData().Ddb,
 		rsw:      srcDb.DbData().Rsw,
 		rsr:      srcDb.DbData().Rsr,
-		drw:      srcDb.DbData().Drw,
 		editOpts: srcDb.editOpts,
 	}}
 	init := dsess.InitialDbState{
@@ -638,7 +633,6 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 			Ddb: srcDb.DbData().Ddb,
 			Rsw: srcDb.DbData().Rsw,
 			Rsr: srcDb.DbData().Rsr,
-			Drw: srcDb.DbData().Drw,
 		},
 	}
 
@@ -649,7 +643,6 @@ type staticRepoState struct {
 	branch ref.DoltRef
 	env.RepoStateWriter
 	env.RepoStateReader
-	env.DocsReadWriter
 }
 
 func (s staticRepoState) CWBHeadRef() ref.DoltRef {

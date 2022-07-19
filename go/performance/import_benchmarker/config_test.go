@@ -42,6 +42,27 @@ func TestGeneratedConfigCanBeImported(t *testing.T) {
 	os.RemoveAll(filepath.Join(wd, "testData.csv"))
 }
 
+func TestNewStorageFormat(t *testing.T) {
+	t.Skip() // Skipping since dolt isn't installed on the github actions vm
+
+	job := createSampleDoltJob()
+	config := &ImportBenchmarkConfig{Jobs: []*ImportBenchmarkJob{job}, NbfVersion: "__DOLT_1__"}
+	err := config.ValidateAndUpdateDefaults()
+
+	assert.NoError(t, err)
+
+	wd := GetWorkingDir()
+	results := RunBenchmarkTests(config, wd)
+
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, "dolt_import_small", results[0].name)
+
+	// Sanity check: An import of 100,000 should never take more than 15 seconds
+	assert.LessOrEqual(t, results[0].br.T, time.Second*15)
+
+	os.RemoveAll(filepath.Join(wd, "testData.csv"))
+}
+
 func TestCanGenerateFilesForAllFormats(t *testing.T) {
 	config := &ImportBenchmarkConfig{Jobs: make([]*ImportBenchmarkJob, 0)}
 

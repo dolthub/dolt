@@ -34,7 +34,6 @@ import (
 	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/valutil"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
@@ -308,7 +307,10 @@ func TestMergeCommits(t *testing.T) {
 	}
 
 	vrw, ns, rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedArtifacts := setupMergeTest(t)
-	merger := NewMerger(context.Background(), rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, vrw, ns)
+	merger, err := NewMerger(root, mergeRoot, ancRoot, rightCommitHash, ancCommitHash, vrw, ns)
+	if err != nil {
+		t.Fatal(err)
+	}
 	opts := editor.TestEditorOptions(vrw)
 	// TODO: stats
 	merged, _, err := merger.MergeTable(context.Background(), tableName, opts, MergeOpts{IsCherryPick: false})
@@ -357,9 +359,12 @@ func TestNomsMergeCommits(t *testing.T) {
 		t.Skip()
 	}
 
-	vrw, ns, rightCmHash, ancCmHash, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, expectedStats := setupNomsMergeTest(t)
+	vrw, ns, rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, expectedStats := setupNomsMergeTest(t)
 
-	merger := NewMerger(context.Background(), rightCmHash, ancCmHash, root, mergeRoot, ancRoot, vrw, ns)
+	merger, err := NewMerger(root, mergeRoot, ancRoot, rightCommitHash, ancCommitHash, vrw, ns)
+	if err != nil {
+		t.Fatal(err)
+	}
 	opts := editor.TestEditorOptions(vrw)
 	merged, stats, err := merger.MergeTable(context.Background(), tableName, opts, MergeOpts{IsCherryPick: false})
 	if err != nil {
@@ -418,7 +423,7 @@ func sortTests(t []testRow) {
 	})
 }
 
-func setupMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, hash.Hash, hash.Hash, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index, prolly.ArtifactMap) {
+func setupMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index, prolly.ArtifactMap) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
 	ns := ddb.NodeStore()
@@ -488,11 +493,16 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, hash.H
 	ancTbl, err = rebuildAllProllyIndexes(context.Background(), ancTbl)
 	require.NoError(t, err)
 
-	rightCmHash, baseCmHash, root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, rootTbl, mergeTbl, ancTbl)
+	rightCm, baseCm, root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, rootTbl, mergeTbl, ancTbl)
 
 	artifactMap, err := prolly.NewArtifactMapFromTuples(context.Background(), ns, kD)
 	require.NoError(t, err)
 	artEditor := artifactMap.Editor()
+
+	baseCmHash, err := baseCm.HashOf()
+	require.NoError(t, err)
+	rightCmHash, err := rightCm.HashOf()
+	require.NoError(t, err)
 
 	m := prolly.ConflictMetadata{
 		BaseRootIsh: baseCmHash,
@@ -502,6 +512,7 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, hash.H
 
 	for _, testCase := range testRows {
 		if testCase.conflict {
+
 			err = artEditor.Add(context.Background(), key(testCase.key), rightCmHash, prolly.ArtifactTypeConflict, d)
 			require.NoError(t, err)
 		}
@@ -510,10 +521,10 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, hash.H
 	expectedArtifacts, err := artEditor.Flush(context.Background())
 	require.NoError(t, err)
 
-	return vrw, ns, rightCmHash, baseCmHash, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedArtifacts
+	return vrw, ns, rightCm, baseCm, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedArtifacts
 }
 
-func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, hash.Hash, hash.Hash, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, types.Map, types.Map, *MergeStats) {
+func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, types.Map, types.Map, *MergeStats) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
 	ns := ddb.NodeStore()
@@ -595,9 +606,9 @@ func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, ha
 	ancTable, err = editor.RebuildAllIndexes(context.Background(), ancTable, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
-	rightCmHash, ancCommitHash, root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, updatedTbl, mergeTbl, ancTable)
+	rightCm, ancCommit, root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, updatedTbl, mergeTbl, ancTable)
 
-	return vrw, ns, rightCmHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, calcExpectedStats(t)
+	return vrw, ns, rightCm, ancCommit, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, calcExpectedStats(t)
 }
 
 // rebuildAllProllyIndexes builds the data for the secondary indexes in |tbl|'s
@@ -707,7 +718,7 @@ func mustMakeEmptyRepo(t *testing.T) *doltdb.DoltDB {
 	return ddb
 }
 
-func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootTbl, mergeTbl, ancTbl *doltdb.Table) (hash.Hash, hash.Hash, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue) {
+func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootTbl, mergeTbl, ancTbl *doltdb.Table) (doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue) {
 	mainHeadSpec, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
 	mainHead, err := ddb.Resolve(context.Background(), mainHeadSpec, nil)
 	require.NoError(t, err)
@@ -759,13 +770,7 @@ func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootT
 	require.NoError(t, err)
 	require.False(t, ff)
 
-	rightCommitHash, err := mergeCommit.HashOf()
-	require.NoError(t, err)
-
-	ancCommitHash, err := ancCm.HashOf()
-	require.NoError(t, err)
-
-	return rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot
+	return mergeCommit, ancCm, root, mergeRoot, ancRoot
 }
 
 var kD = shim.KeyDescriptorFromSchema(sch)

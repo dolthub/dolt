@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -68,32 +69,39 @@ Multiple SQL statements must be separated by semicolons. Use {{.EmphasisLeft}}-b
 
 Queries can be saved to the query catalog with {{.EmphasisLeft}}-s{{.EmphasisRight}}. Alternatively {{.EmphasisLeft}}-x{{.EmphasisRight}} can be used to execute a saved query by name.
 
-By default this command uses the dolt database in the current working directory, as well as any dolt databases that are found in the current directory. Any databases created with CREATE DATABASE are placed in the current directory as well. Running with {{.EmphasisLeft}}--multi-db-dir <directory>{{.EmphasisRight}} uses each of the subdirectories of the supplied directory (each subdirectory must be a valid dolt data repository) as databases. Subdirectories starting with '.' are ignored.`,
+By default this command uses the dolt database in the current working directory, as well as any dolt databases that are found in the current directory. Any databases created with CREATE DATABASE are placed in the current directory as well. Running with {{.EmphasisLeft}}--data-dir <directory>{{.EmphasisRight}} uses each of the subdirectories of the supplied directory (each subdirectory must be a valid dolt data repository) as databases. Subdirectories starting with '.' are ignored.`,
 
 	Synopsis: []string{
 		"",
 		"< script.sql",
-		"[--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}] [-r {{.LessThan}}result format{{.GreaterThan}}]",
+		"[--data-dir {{.LessThan}}directory{{.GreaterThan}}] [-r {{.LessThan}}result format{{.GreaterThan}}]",
 		"-q {{.LessThan}}query{{.GreaterThan}} [-r {{.LessThan}}result format{{.GreaterThan}}] [-s {{.LessThan}}name{{.GreaterThan}} -m {{.LessThan}}message{{.GreaterThan}}] [-b]",
-		"-q {{.LessThan}}query{{.GreaterThan}} --multi-db-dir {{.LessThan}}directory{{.GreaterThan}} [-r {{.LessThan}}result format{{.GreaterThan}}] [-b]",
+		"-q {{.LessThan}}query{{.GreaterThan}} --data-dir {{.LessThan}}directory{{.GreaterThan}} [-r {{.LessThan}}result format{{.GreaterThan}}] [-b]",
 		"-x {{.LessThan}}name{{.GreaterThan}}",
 		"--list-saved",
 	},
 }
 
+var ErrMultipleDoltCfgDirs = errors.NewKind("multiple .doltcfg directories detected: '%s' and '%s'; pass one of the directories using option --doltcfg-dir")
+
 const (
-	QueryFlag             = "query"
-	FormatFlag            = "result-format"
-	saveFlag              = "save"
-	executeFlag           = "execute"
-	listSavedFlag         = "list-saved"
-	messageFlag           = "message"
-	BatchFlag             = "batch"
-	multiDBDirFlag        = "multi-db-dir"
-	continueFlag          = "continue"
-	fileInputFlag         = "file"
-	privilegeFilePathFlag = "privilege-file"
-	welcomeMsg            = `# Welcome to the DoltSQL shell.
+	QueryFlag         = "query"
+	FormatFlag        = "result-format"
+	saveFlag          = "save"
+	executeFlag       = "execute"
+	listSavedFlag     = "list-saved"
+	messageFlag       = "message"
+	BatchFlag         = "batch"
+	DataDirFlag       = "data-dir"
+	MultiDBDirFlag    = "multi-db-dir"
+	CfgDirFlag        = "doltcfg-dir"
+	DefaultCfgDirName = ".doltcfg"
+	PrivsFilePathFlag = "privilege-file"
+	DefaultPrivsName  = "privileges.db"
+	continueFlag      = "continue"
+	fileInputFlag     = "file"
+
+	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
 )
@@ -140,10 +148,12 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(listSavedFlag, "l", "List all saved queries")
 	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
 	ap.SupportsFlag(BatchFlag, "b", "Use to enable more efficient batch processing for large SQL import scripts consisting of only INSERT statements. Other statements types are not guaranteed to work in this mode.")
-	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
+	ap.SupportsString(DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults the the current directory.")
+	ap.SupportsString(MultiDBDirFlag, "", "directory", "DEPRECATED: Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults the the current directory.")
+	ap.SupportsString(CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to $data-dir/.doltcfg.")
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
 	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given")
-	ap.SupportsString(privilegeFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Without this flag, the database has a single user with all permissions, and more cannot be added.")
+	ap.SupportsString(PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to $doltcfg-dir/privileges.db")
 	return ap
 }
 
@@ -153,7 +163,7 @@ func (cmd SqlCmd) EventType() eventsapi.ClientEventType {
 }
 
 // RequiresRepo indicates that this command does not have to be run from within a dolt data repository directory.
-// In this case it is because this command supports the multiDBDirFlag which can pass in a directory.  In the event that
+// In this case it is because this command supports the DataDirFlag which can pass in a directory.  In the event that
 // that parameter is not provided there is additional error handling within this command to make sure that this was in
 // fact run from within a dolt data repository directory.
 func (cmd SqlCmd) RequiresRepo() bool {
@@ -173,14 +183,77 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	privsFp, _ := apr.GetValue(privilegeFilePathFlag)
-
 	// We need a username and password for many SQL commands, so set defaults if they don't exist
 	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 
 	mrEnv, verr := getMultiRepoEnv(ctx, apr, dEnv, cmd)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	var cfgDirPath string
+	var dataDir string
+	if multiDbDir, ok := apr.GetValue(MultiDBDirFlag); ok {
+		dataDir = multiDbDir
+	} else if dataDirPath, ok := apr.GetValue(DataDirFlag); ok {
+		dataDir = dataDirPath
+	}
+
+	cfgDir, cfgDirSpecified := apr.GetValue(CfgDirFlag)
+	if cfgDirSpecified {
+		if exists, _ := dEnv.FS.Exists(cfgDir); !exists {
+			if err := dEnv.FS.MkDirs(cfgDir); err != nil {
+				absPath, _ := dEnv.FS.Abs(cfgDir)
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("couldn't create directory at %s", absPath)), usage)
+			}
+		}
+		cfgDirPath = cfgDir
+	} else if len(dataDir) != 0 {
+		path := filepath.Join(dataDir, DefaultCfgDirName)
+		if exists, _ := dEnv.FS.Exists(path); !exists {
+			if err := dEnv.FS.MkDirs(path); err != nil {
+				absPath, _ := dEnv.FS.Abs(path)
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("couldn't create directory at %s", absPath)), usage)
+			}
+		}
+		cfgDirPath = path
+	} else {
+		// Look in parent directory for doltcfg
+		path := filepath.Join("..", DefaultCfgDirName)
+		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
+			cfgDirPath = path
+		}
+
+		// Look in data directory (which is necessarily current directory) for doltcfg, create one here if none found
+		path = filepath.Join(dataDir, DefaultCfgDirName)
+		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
+			if len(cfgDirPath) != 0 {
+				p1, err := dEnv.FS.Abs(cfgDirPath)
+				if err != nil {
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+				}
+				p2, err := dEnv.FS.Abs(path)
+				if err != nil {
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+				}
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(ErrMultipleDoltCfgDirs.New(p1, p2)), usage)
+			}
+			cfgDirPath = path
+		} else if len(cfgDirPath) == 0 {
+			if err := dEnv.FS.MkDirs(path); err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			}
+			cfgDirPath = path
+		}
+	}
+
+	// If no privilege filepath specified, default to doltcfg directory
+	privsFp, hasPrivsFp := apr.GetValue(PrivsFilePathFlag)
+	if !hasPrivsFp {
+		privsFp, err = dEnv.FS.Abs(filepath.Join(cfgDirPath, DefaultPrivsName))
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
 	}
 
 	initialRoots, err := mrEnv.GetWorkingRoots(ctx)
@@ -205,7 +278,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
-		return queryMode(ctx, mrEnv, initialRoots, apr, query, currentDb, format, usage)
+		return queryMode(ctx, mrEnv, initialRoots, apr, query, currentDb, format, usage, privsFp)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
 		return savedQueryMode(ctx, mrEnv, initialRoots, savedQueryName, currentDb, format, usage, privsFp)
 	} else if apr.Contains(listSavedFlag) {
@@ -309,6 +382,7 @@ func queryMode(
 	currentDb string,
 	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
+	privsFp string,
 ) int {
 
 	// query mode has 3 sub modes:
@@ -320,7 +394,6 @@ func queryMode(
 
 	_, continueOnError := apr.GetValue(continueFlag)
 
-	privsFp, _ := apr.GetValue(privilegeFilePathFlag)
 	if saveName != "" {
 		verr := execQuery(ctx, mrEnv, query, format, currentDb, privsFp)
 		if verr != nil {
@@ -358,20 +431,22 @@ func queryMode(
 
 // getMultiRepoEnv returns an appropriate MultiRepoEnv for this invocation of the command
 func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, cmd SqlCmd) (*env.MultiRepoEnv, errhand.VerboseError) {
-	var mrEnv *env.MultiRepoEnv
-	multiDir, multiDbMode := apr.GetValue(multiDBDirFlag)
-	if multiDbMode {
-		var err error
-		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), dEnv.FS, multiDir, cmd.VersionStr, dEnv.IgnoreLockFile)
-		if err != nil {
-			return nil, errhand.VerboseErrorFromError(err)
-		}
-	} else {
-		var err error
-		mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
-		if err != nil {
-			return nil, errhand.VerboseErrorFromError(err)
-		}
+	var err error
+	fs := dEnv.FS
+
+	if dataDir, ok := apr.GetValue(MultiDBDirFlag); ok {
+		fs, err = fs.WithWorkingDir(dataDir)
+	} else if dataDir, ok := apr.GetValue(DataDirFlag); ok {
+		fs, err = fs.WithWorkingDir(dataDir)
+	}
+
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
 	}
 
 	return mrEnv, nil
@@ -635,10 +710,15 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 	_, batch := apr.GetValue(BatchFlag)
 	_, list := apr.GetValue(listSavedFlag)
 	_, execute := apr.GetValue(executeFlag)
-	_, multiDB := apr.GetValue(multiDBDirFlag)
+	_, dataDir := apr.GetValue(DataDirFlag)
+	_, multiDbDir := apr.GetValue(MultiDBDirFlag)
 
 	if len(apr.Args) > 0 && !query {
 		return errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build()
+	}
+
+	if dataDir && multiDbDir {
+		return errhand.BuildDError("Invalid Argument: --data-dir is not compatible with --multi-db-dir").Build()
 	}
 
 	if execute {
@@ -650,8 +730,8 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --message|-m").Build()
 		} else if save {
 			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --save|-s").Build()
-		} else if multiDB {
-			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --multi-db-dir").Build()
+		} else if dataDir || multiDbDir {
+			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --data-dir").Build()
 		}
 	}
 
@@ -664,13 +744,13 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 			return errhand.BuildDError("Invalid Argument: --list-saved is not compatible with --message|-m").Build()
 		} else if save {
 			return errhand.BuildDError("Invalid Argument: --list-saved is not compatible with --save|-s").Build()
-		} else if multiDB {
-			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --multi-db-dir").Build()
+		} else if dataDir || multiDbDir {
+			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --data-dir").Build()
 		}
 	}
 
-	if save && multiDB {
-		return errhand.BuildDError("Invalid Argument: --multi-db-dir queries cannot be saved").Build()
+	if save && (dataDir || multiDbDir) {
+		return errhand.BuildDError("Invalid Argument: --data-dir queries cannot be saved").Build()
 	}
 
 	if batch {
@@ -690,6 +770,10 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 		if msg {
 			return errhand.BuildDError("Invalid Argument: --message|-m is only used with --query|-q and --save|-s").Build()
 		}
+	}
+
+	if multiDbDir {
+		cli.PrintErrln("WARNING: --multi-db-dir is deprecated, use --data-dir instead")
 	}
 
 	return nil

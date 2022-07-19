@@ -53,6 +53,7 @@ const (
 	AsyncReplicationKey      = "dolt_async_replication"
 	AwsCredsFileKey          = "aws_credentials_file"
 	AwsCredsProfileKey       = "aws_credentials_profile"
+	AwsCredsRegionKey        = "aws_credentials_region"
 )
 
 var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
@@ -403,7 +404,7 @@ func (d *DoltSession) PendingCommitAllStaged(ctx *sql.Context, dbName string, pr
 	}
 
 	var err error
-	roots, err = actions.StageAllTablesNoDocs(ctx, roots)
+	roots, err = actions.StageAllTables(ctx, roots)
 	if err != nil {
 		return nil, err
 	}
@@ -908,7 +909,7 @@ func (d *DoltSession) HasDB(ctx *sql.Context, dbName string) bool {
 // other state tracking metadata.
 func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	db := dbState.Db
-	defineSystemVariables(db.Name())
+	defineSystemVariablesForDB(db.Name())
 
 	sessionState := NewEmptyDatabaseSessionState()
 	d.dbStates[db.Name()] = sessionState
