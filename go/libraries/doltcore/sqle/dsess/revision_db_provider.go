@@ -15,11 +15,12 @@
 package dsess
 
 import (
+	"github.com/dolthub/go-mysql-server/sql"
+	"gopkg.in/src-d/go-errors.v1"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/go-mysql-server/sql"
-	"gopkg.in/src-d/go-errors.v1"
 )
 
 // ErrRevisionDbNotFound is thrown when a RevisionDatabaseProvider cannot find a specified revision database.
