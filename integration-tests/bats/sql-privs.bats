@@ -65,14 +65,18 @@ teardown() {
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.json
 
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nprivs_user"
-
     server_query test_db 1 "create user new_user" ""
-
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user\nprivs_user"
 
     # Test that privs.json file is not in json format
     run cat privs.json
     ! [[ "$output" =~ "\"User\":\"privs_user\"" ]] || false
+
+    # Restart server
+    rm -f ./.dolt/sql-server.lock
+    stop_sql_server
+    start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.json
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user\nprivs_user"
 }
 
 @test "sql-privs: errors instead of panic when reading badly formatted privilege file" {
