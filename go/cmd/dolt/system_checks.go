@@ -72,7 +72,7 @@ func reconfigIfTempFileMoveFails(dEnv *env.DoltEnv) error {
 			return fmt.Errorf("attempting to use '%s' as a temp directory, but there exists a file with that name", tmpDir)
 		}
 
-		tempfiles.MovableTempFileProvider = tempfiles.NewTempFileProviderAt(tmpDir)
+		tempfiles.MovableTempFileProvider = tempfiles.NewTempFileProviderAt(tmpDir, "")
 	}
 
 	return nil

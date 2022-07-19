@@ -15,10 +15,8 @@
 package tempfiles
 
 import (
+	"context"
 	"os"
-	"sync"
-
-	"github.com/dolthub/dolt/go/libraries/utils/file"
 )
 
 // TempFileProvider is an interface which provides methods for creating temporary files.
@@ -34,17 +32,23 @@ type TempFileProvider interface {
 	Clean()
 }
 
+const tempFileBufferSize = 1024
+
 // TempFileProviderAt is a TempFileProvider interface which creates temp files at a given path.
 type TempFileProviderAt struct {
-	tempDir      string
-	filesCreated []string
-	mu           sync.Mutex
+	tempDir string
+	prefix  string
+	files   chan *os.File
+	errs    chan error
 }
 
 // NewTempFileProviderAt creates a new TempFileProviderAt instance with the provided directory to create files in. The
 // directory is assumed to have been created already.
-func NewTempFileProviderAt(tempDir string) *TempFileProviderAt {
-	return &TempFileProviderAt{tempDir, nil, sync.Mutex{}}
+func NewTempFileProviderAt(tempDir string, prefix string) *TempFileProviderAt {
+	f := make(chan *os.File, tempFileBufferSize)
+	e := make(chan error, tempFileBufferSize)
+	fp := &TempFileProviderAt{files: f, errs: e, tempDir: tempDir, prefix: prefix}
+	return fp
 }
 
 // GetTempDir returns the directory where temp files will be created by default
@@ -52,36 +56,65 @@ func (tfp *TempFileProviderAt) GetTempDir() string {
 	return tfp.tempDir
 }
 
+func (tfp *TempFileProviderAt) Run(ctx context.Context) {
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				go func() {
+					for {
+						select {
+						case <-tfp.files:
+						case <-tfp.errs:
+						default:
+							return
+						}
+					}
+				}()
+				return
+			default:
+			}
+			f, err := os.CreateTemp(tfp.tempDir, tfp.prefix)
+			tfp.files <- f
+			tfp.errs <- err
+		}
+	}(ctx)
+}
+
 // NewFile creates a new temporary file in the directory dir, opens the file for reading and writing, and returns
 // the resulting *os.File. If dir is "" then the default temp dir is used.
 func (tfp *TempFileProviderAt) NewFile(dir, pattern string) (*os.File, error) {
-	tfp.mu.Lock()
-	defer tfp.mu.Unlock()
-	if dir == "" {
-		dir = tfp.tempDir
-	}
-
-	f, err := os.CreateTemp(dir, pattern)
-
-	if err == nil {
-		tfp.filesCreated = append(tfp.filesCreated, f.Name())
-	}
+	//tfp.mu.Lock()
+	//defer tfp.mu.Unlock()
+	//if dir == "" {
+	//	dir = tfp.tempDir
+	//}
+	//
+	//f, err := os.CreateTemp(dir, pattern)
+	//
+	//if err == nil {
+	//	tfp.filesCreated = append(tfp.filesCreated, f.Name())
+	//}
+	f := <-tfp.files
+	err := <-tfp.errs
 
 	return f, err
 }
 
 // Clean makes a best effort attempt to delete all temp files created by calls to NewFile
 func (tfp *TempFileProviderAt) Clean() {
-	tfp.mu.Lock()
-	defer tfp.mu.Unlock()
-	for _, filename := range tfp.filesCreated {
-		// best effort. ignore errors
-		_ = file.Remove(filename)
-	}
+	//close(tfp.files)
+	//close(tfp.errs)
+	//tfp.mu.Lock()
+	//defer tfp.mu.Unlock()
+	//for _, filename := range tfp.filesCreated {
+	//	// best effort. ignore errors
+	//	_ = file.Remove(filename)
+	//}
 }
 
 // MovableTemFile is an object that implements TempFileProvider that is used by the nbs to create temp files that
 // ultimately will be renamed.  It is important to use this instance rather than using os.TempDir, or os.CreateTemp
 // directly as those may have errors executing a rename against if the volume the default temporary directory lives on
 // is different than the volume of the destination of the rename.
-var MovableTempFileProvider TempFileProvider = NewTempFileProviderAt(os.TempDir())
+var MovableTempFileProvider TempFileProvider = NewTempFileProviderAt(os.TempDir(), "")

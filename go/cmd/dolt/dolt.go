@@ -363,6 +363,7 @@ func runMain() int {
 	start := time.Now()
 	var wg sync.WaitGroup
 	ctx, stop := context.WithCancel(ctx)
+	tempfiles.MovableTempFileProvider.(*tempfiles.TempFileProviderAt).Run(ctx)
 	res := doltCommand.Exec(ctx, "dolt", args, dEnv)
 	stop()
 	wg.Wait()
