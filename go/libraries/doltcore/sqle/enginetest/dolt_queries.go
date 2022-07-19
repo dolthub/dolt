@@ -1799,6 +1799,31 @@ var MergeScripts = []queries.ScriptTest{
 	},
 }
 
+var Dolt1MergeScripts = []queries.ScriptTest{
+	{
+		Name: "Merge errors if the primary key types have changed (even if the new type has the same NomsKind)",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk1 bigint, pk2 bigint, PRIMARY KEY (pk1, pk2));",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"ALTER TABLE t MODIFY COLUMN pk2 tinyint",
+			"INSERT INTO t VALUES (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'right commit');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'left commit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('right');",
+				ExpectedErrStr: "error: cannot merge two tables with different primary key sets",
+			},
+		},
+	},
+}
+
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 	{
 		Name: "Keyless merge with unique indexes documents violations",

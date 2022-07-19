@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/types"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -120,7 +121,7 @@ func (c ChkConflict) String() string {
 var ErrMergeWithDifferentPkSets = errors.New("error: cannot merge two tables with different primary key sets")
 
 // SchemaMerge performs a three-way merge of ourSch, theirSch, and ancSch.
-func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, err error) {
+func SchemaMerge(format *types.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, err error) {
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
 	sc = SchemaConflict{
 		TableName: tblName,
@@ -128,7 +129,7 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 
 	// TODO: We'll remove this once it's possible to get diff and merge on different primary key sets
 	// TODO: decide how to merge different orders of PKS
-	if !schema.ArePrimaryKeySetsDiffable(ourSch, theirSch) {
+	if !schema.ArePrimaryKeySetsDiffable(format, ourSch, theirSch) {
 		return nil, SchemaConflict{}, ErrMergeWithDifferentPkSets
 	}
 
