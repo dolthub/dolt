@@ -52,7 +52,7 @@ require (
 	google.golang.org/api v0.32.0
 	google.golang.org/grpc v1.37.0
 	google.golang.org/protobuf v1.27.1
-	gopkg.in/square/go-jose.v2 v2.5.1
+	gopkg.in/square/go-jose.v2 v2.6.0
 	gopkg.in/src-d/go-errors.v1 v1.0.0
 	gopkg.in/yaml.v2 v2.3.0
 )
@@ -112,6 +112,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.6 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
+	github.com/pquerna/cachecontrol v0.1.0
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.26.0 // indirect
 	github.com/prometheus/procfs v0.6.0 // indirect
@@ -138,5 +139,9 @@ replace (
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 	github.com/oliveagle/jsonpath => github.com/dolthub/jsonpath v0.0.0-20210609232853-d49537a30474
 )
+
+// replace github.com/dolthub/vitess => /Users/taylor/go/src/github.com/dolthub/vitess
+
+// replace github.com/dolthub/go-mysql-server => /Users/taylor/go/src/github.com/dolthub/go-mysql-server
 
 go 1.18

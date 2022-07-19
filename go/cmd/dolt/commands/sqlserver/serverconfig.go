@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
@@ -131,6 +132,8 @@ type ServerConfig interface {
 	PrivilegeFilePath() string
 	// UserVars is an array containing user specific session variables
 	UserVars() []UserSessionVars
+	// JwksConfig is an array containing jwks config
+	JwksConfig() []engine.JwksConfig
 }
 
 type commandLineServerConfig struct {
@@ -249,6 +252,10 @@ func (cfg *commandLineServerConfig) PrivilegeFilePath() string {
 }
 
 func (cfg *commandLineServerConfig) UserVars() []UserSessionVars {
+	return nil
+}
+
+func (cfg *commandLineServerConfig) JwksConfig() []engine.JwksConfig {
 	return nil
 }
 

@@ -1,0 +1,115 @@
+// Copyright 2022 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package engine
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/dolthub/dolt/go/libraries/utils/jwtauth"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/sirupsen/logrus"
+)
+
+type JwksConfig struct {
+	Name        string            `yaml:"name"`
+	LocationUrl string            `yaml:"location_url"`
+	Claims      map[string]string `yaml:"claims"`
+	FieldsToLog []string          `yaml:"fields_to_log"`
+}
+
+// authenticateDoltJWTPlugin is used to authenticate plaintext user plugins
+type authenticateDoltJWTPlugin struct {
+	jwksConfig []JwksConfig
+}
+
+func NewAuthenticateDoltJWTPlugin(jwksConfig []JwksConfig) mysql_db.PlaintextAuthPlugin {
+	return &authenticateDoltJWTPlugin{jwksConfig: jwksConfig}
+}
+
+func (p *authenticateDoltJWTPlugin) Authenticate(db *mysql_db.MySQLDb, user string, userEntry *mysql_db.User, pass string) (bool, error) {
+	return validateJWT(p.jwksConfig, user, userEntry.Identity, pass)
+}
+
+func validateJWT(config []JwksConfig, username, identity, token string) (bool, error) {
+	if len(config) == 0 {
+		return false, nil
+	}
+
+	expectedClaimsMap := parseUserIdentity(identity)
+	sub, ok := expectedClaimsMap["sub"]
+	if ok && sub != username {
+		return false, fmt.Errorf("ValidateJWT: Subjects do not match")
+	}
+
+	jwksConfig, err := getMatchingJwksConfig(config, expectedClaimsMap["jwks"])
+	if err != nil {
+		return false, err
+	}
+
+	pr := jwtauth.JWTProvider{URL: jwksConfig.LocationUrl}
+	if iss, ok := expectedClaimsMap["iss"]; ok {
+		pr.Issuer = iss
+	}
+	if aud, ok := expectedClaimsMap["aud"]; ok {
+		pr.Audience = aud
+	}
+	vd := jwtauth.NewJWTValidator(pr)
+	claims, err := vd.ValidateJWT(token, time.Now())
+	if err != nil {
+		return false, err
+	}
+
+	logString := "Authenticating with JWT: "
+	for _, field := range jwksConfig.FieldsToLog {
+		logString += fmt.Sprintf("%s: %s,", field, getClaimFromKey(claims, field))
+	}
+	logrus.Info(logString)
+	return true, nil
+}
+
+func getClaimFromKey(claims *jwtauth.Claims, field string) string {
+	switch field {
+	case "id":
+		return claims.ID
+	case "iss":
+		return claims.Issuer
+	case "sub":
+		return claims.Subject
+	case "on_behalf_of":
+		return claims.OnBehalfOf
+	}
+	return ""
+}
+
+func getMatchingJwksConfig(config []JwksConfig, name string) (*JwksConfig, error) {
+	for _, item := range config {
+		if item.Name == name {
+			return &item, nil
+		}
+	}
+	return nil, fmt.Errorf("ValidateJWT: Matching JWKS config not found")
+}
+
+func parseUserIdentity(identity string) map[string]string {
+	idMap := make(map[string]string)
+	items := strings.Split(identity, ",")
+	for _, item := range items {
+		tup := strings.Split(item, "=")
+		idMap[tup[0]] = tup[1]
+	}
+	return idMap
+}

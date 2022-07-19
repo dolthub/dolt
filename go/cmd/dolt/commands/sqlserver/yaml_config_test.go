@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"testing"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
@@ -125,7 +126,7 @@ jwks:
 			},
 		},
 	}
-	expected.Jwks = []JwksYAMLConfig{
+	expected.Jwks = []engine.JwksConfig{
 		{
 			Name:        "jwks_name",
 			LocationUrl: "https://website.com",

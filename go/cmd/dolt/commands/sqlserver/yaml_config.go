@@ -21,6 +21,7 @@ import (
 
 	"gopkg.in/yaml.v2"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
@@ -112,13 +113,6 @@ type UserSessionVars struct {
 	Vars map[string]string `yaml:"vars"`
 }
 
-type JwksYAMLConfig struct {
-	Name        string            `yaml:"name"`
-	LocationUrl string            `yaml:"location_url"`
-	Claims      map[string]string `yaml:"claims"`
-	FieldsToLog []string          `yaml:"fields_to_log"`
-}
-
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
 	LogLevelStr       *string               `yaml:"log_level"`
@@ -132,7 +126,7 @@ type YAMLConfig struct {
 	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
 	PrivilegeFile     *string               `yaml:"privilege_file"`
 	Vars              []UserSessionVars     `yaml:"user_session_vars"`
-	Jwks              []JwksYAMLConfig      `yaml:"jwks"`
+	Jwks              []engine.JwksConfig   `yaml:"jwks"`
 }
 
 var _ ServerConfig = YAMLConfig{}
@@ -347,7 +341,7 @@ func (cfg YAMLConfig) UserVars() []UserSessionVars {
 	return nil
 }
 
-func (cfg YAMLConfig) JwksConfig() []JwksYAMLConfig {
+func (cfg YAMLConfig) JwksConfig() []engine.JwksConfig {
 	if cfg.Jwks != nil {
 		return cfg.Jwks
 	}
