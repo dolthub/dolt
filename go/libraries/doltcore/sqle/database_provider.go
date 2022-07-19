@@ -208,6 +208,7 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	return dsess.AddDB(ctx, dbstate)
 }
 
+// CloneDatabaseFromRemote implements DoltDatabaseProvider interface
 func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -223,7 +224,7 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 	var srcDB *doltdb.DoltDB
 	dialer := p.remoteDialer
 	if dialer == nil {
-		// TODO: fill this in or error out
+		return fmt.Errorf("unable to clone remote database; no remote dialer configured")
 	}
 	r, srcDB, err := createRemote(ctx, remoteName, remoteUrl, remoteParams, dialer)
 	if err != nil {
