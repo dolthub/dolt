@@ -25,7 +25,8 @@ import (
 
 // Schema is an interface for retrieving the columns that make up a schema
 type Schema interface {
-	// GetPKCols gets the collection of columns which make the primary key.
+	// GetPKCols gets the collection of columns which make the primary key. They
+	// are always returned in ordinal order.
 	GetPKCols() *ColCollection
 
 	// GetNonPKCols gets the collection of columns which are not part of the primary key.
