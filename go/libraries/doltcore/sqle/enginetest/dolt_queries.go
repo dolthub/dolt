@@ -3554,6 +3554,29 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 	},
 }
 
+var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
+	{
+		Name: "Diff table stops creating diff partitions when any primary key type has changed",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk1 VARCHAR(100), pk2 VARCHAR(100), PRIMARY KEY (pk1, pk2));",
+			"INSERT INTO t VALUES ('1', '1');",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"ALTER TABLE t MODIFY COLUMN pk2 VARCHAR(101)",
+			"CALL DOLT_COMMIT('-am', 'modify column type');",
+
+			"INSERT INTO t VALUES ('2', '2');",
+			"CALL DOLT_COMMIT('-am', 'insert new row');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT to_pk1, to_pk2, from_pk1, from_pk2, diff_type from dolt_diff_t;",
+				Expected: []sql.Row{{"2", "2", nil, nil, "added"}},
+			},
+		},
+	},
+}
+
 var DiffTableFunctionScriptTests = []queries.ScriptTest{
 	{
 		Name: "invalid arguments",

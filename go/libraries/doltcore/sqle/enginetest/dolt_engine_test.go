@@ -955,6 +955,12 @@ func TestDiffSystemTable(t *testing.T) {
 			enginetest.TestScript(t, harness, test)
 		})
 	}
+
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		for _, test := range Dolt1DiffSystemTableScripts {
+			enginetest.TestScript(t, newDoltHarness(t), test)
+		}
+	}
 }
 
 func TestTestReadOnlyDatabases(t *testing.T) {
