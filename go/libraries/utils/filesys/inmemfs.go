@@ -144,8 +144,9 @@ func (fs InMemFS) WithWorkingDir(path string) (Filesys, error) {
 		return nil, err
 	}
 
-	fs.cwd = abs
-	return &fs, nil
+	newFs := fs
+	newFs.cwd = abs
+	return &newFs, nil
 }
 
 func (fs *InMemFS) getAbsPath(path string) string {
