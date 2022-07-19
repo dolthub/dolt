@@ -493,9 +493,6 @@ func execShell(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	if config.ServerUser != DefaultUser || config.ServerPass != DefaultPassword {
-		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.Persist(nil)
-	}
 	defer se.Close()
 
 	err = runShell(ctx, se, mrEnv)
@@ -521,9 +518,6 @@ func execBatch(
 	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
-	}
-	if config.ServerUser != DefaultUser || config.ServerPass != DefaultPassword {
-		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.Persist(nil)
 	}
 	defer se.Close()
 
@@ -565,9 +559,6 @@ func execMultiStatements(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	if config.ServerUser != DefaultUser || config.ServerPass != DefaultPassword {
-		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.Persist(nil)
-	}
 	defer se.Close()
 
 	sqlCtx, err := se.NewContext(ctx)
@@ -594,9 +585,6 @@ func execQuery(
 	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
-	}
-	if config.ServerUser != DefaultUser || config.ServerPass != DefaultPassword {
-		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.Persist(nil)
 	}
 	defer se.Close()
 
