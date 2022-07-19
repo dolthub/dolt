@@ -376,14 +376,14 @@ func TestExecuteInsert(t *testing.T) {
 }
 
 var systemTableInsertTests = []InsertTest{
-	//{
-	//	Name: "insert into dolt_docs",
-	//	AdditionalSetup: CreateTableFn("dolt_docs",
-	//		doltdocs.DocsSchema,
-	//		NewRow(types.String("LICENSE.md"), types.String("A license"))),
-	//	InsertQuery: "insert into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
-	//	ExpectedErr: "cannot insert into table",
-	//},
+	{
+		Name:            "insert into dolt_docs",
+		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema),
+		InsertQuery:     "insert into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
+		SelectQuery:     "select * from dolt_docs",
+		ExpectedRows:    []sql.Row{{"README.md", "Some text"}},
+		ExpectedSchema:  CompressSchema(doltdb.DocsSchema),
+	},
 	{
 		Name: "insert into dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,

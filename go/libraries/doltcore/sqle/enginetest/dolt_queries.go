@@ -1624,6 +1624,179 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "merge with new triggers defined",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			// create table and trigger1 (main & other)
+			"CREATE TABLE x(a BIGINT PRIMARY KEY)",
+			"CREATE TRIGGER trigger1 BEFORE INSERT ON x FOR EACH ROW SET new.a = new.a + 1",
+			"CALL dolt_add('-A')",
+			"CALL dolt_commit('-m', 'added table with trigger')",
+			"INSERT INTO dolt_branches (name, hash) VALUES ('other',hashof('main'))",
+			// create trigger2 on main
+			"CREATE TRIGGER trigger2 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 10",
+			"CALL dolt_commit('-am', 'created trigger2 on main')",
+			// create trigger3 & trigger4 on other
+			"CALL dolt_checkout('other')",
+			"CREATE TRIGGER trigger3 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 100",
+			"CREATE TRIGGER trigger4 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 1000",
+			"UPDATE dolt_schemas SET id = id + 1 WHERE name = 'trigger4'",
+			"CALL dolt_commit('-am', 'created triggers 3 & 4 on other');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			// todo: merge triggers correctly
+			//{
+			//	Query:    "select count(*) from dolt_schemas where type = 'trigger';",
+			//	Expected: []sql.Row{{4}},
+			//},
+		},
+	},
+	{
+		Name: "dolt_merge() works with no auto increment overlap",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+			"INSERT INTO t (c0) VALUES (1), (2);",
+			"CALL dolt_commit('-a', '-m', 'cm1');",
+			"CALL dolt_checkout('-b', 'test');",
+			"INSERT INTO t (c0) VALUES (3), (4);",
+			"CALL dolt_commit('-a', '-m', 'cm2');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('test');",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 5}}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+					{7, 7},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_merge() (3way) works with no auto increment overlap",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+			"INSERT INTO t (c0) VALUES (1);",
+			"CALL dolt_commit('-a', '-m', 'cm1');",
+			"CALL dolt_checkout('-b', 'test');",
+			"INSERT INTO t (pk,c0) VALUES (3,3), (4,4);",
+			"CALL dolt_commit('-a', '-m', 'cm2');",
+			"CALL dolt_checkout('main');",
+			"INSERT INTO t (c0) VALUES (2);",
+			"CALL dolt_commit('-a', '-m', 'cm3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('test');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 5}}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+					{7, 7},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_merge() with a gap in an auto increment key",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+			"INSERT INTO t (c0) VALUES (1), (2);",
+			"CALL dolt_add('-A');",
+			"CALL dolt_commit('-am', 'cm1');",
+			"CALL dolt_checkout('-b', 'test');",
+			"INSERT INTO t VALUES (4,4), (5,5);",
+			"CALL dolt_commit('-am', 'cm2');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('test');",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (3,3),(NULL,6);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_merge() (3way) with a gap in an auto increment key",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+			"INSERT INTO t (c0) VALUES (1);",
+			"CALL dolt_add('-A');",
+			"CALL dolt_commit('-am', 'cm1');",
+			"CALL dolt_checkout('-b', 'test');",
+			"INSERT INTO t VALUES (4,4), (5,5);",
+			"CALL dolt_commit('-am', 'cm2');",
+			"CALL dolt_checkout('main');",
+			"INSERT INTO t (c0) VALUES (2);",
+			"CALL dolt_commit('-am', 'cm3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('test');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (3,3),(NULL,6);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+				},
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
@@ -2566,7 +2739,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('right');",
-				ExpectedErrStr: "Duplicate entry for key 'col1_uniq': duplicate unique key given: [1,1]",
+				ExpectedErrStr: "duplicate unique key given: [1]",
 			},
 			{
 				Query:    "SELECT * from t",
@@ -2604,7 +2777,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('right');",
-				ExpectedErrStr: "Duplicate entry for key 'col1_uniq': duplicate unique key given: [1,1]",
+				ExpectedErrStr: "duplicate unique key given: [1]",
 			},
 		},
 	},

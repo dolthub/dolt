@@ -84,93 +84,76 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Group Concat Queries",
+			Name: "dolt_merge() works with no auto increment overlap",
 			SetUpScript: []string{
-				"CREATE TABLE x (pk int)",
-				"INSERT INTO x VALUES (1),(2),(3),(4),(NULL)",
-
-				"create table t (o_id int, attribute longtext, value longtext)",
-				"INSERT INTO t VALUES (2, 'color', 'red'), (2, 'fabric', 'silk')",
-				"INSERT INTO t VALUES (3, 'color', 'green'), (3, 'shape', 'square')",
-
-				"create table nulls(pk int)",
-				"INSERT INTO nulls VALUES (NULL)",
+				"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+				"INSERT INTO t (c0) VALUES (1), (2);",
+				"CALL dolt_commit('-a', '-m', 'cm1');",
+				"CALL dolt_checkout('-b', 'test');",
+				"INSERT INTO t (c0) VALUES (3), (4);",
+				"CALL dolt_commit('-a', '-m', 'cm2');",
+				"CALL dolt_checkout('main');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    `SELECT group_concat(pk ORDER BY pk) FROM x;`,
-					Expected: []sql.Row{{"1,2,3,4"}},
+					Query:    "CALL dolt_merge('test');",
+					Expected: []sql.Row{{1, 0}},
 				},
 				{
-					Query:    `SELECT group_concat(DISTINCT pk ORDER BY pk) FROM x;`,
-					Expected: []sql.Row{{"1,2,3,4"}},
+					Query:    "INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 5}}},
 				},
 				{
-					Query:    `SELECT group_concat(DISTINCT pk ORDER BY pk SEPARATOR '-') FROM x;`,
-					Expected: []sql.Row{{"1-2-3-4"}},
-				},
-				{
-					Query:    "SELECT group_concat(`attribute` ORDER BY `attribute`) FROM t group by o_id order by o_id asc",
-					Expected: []sql.Row{{"color,fabric"}, {"color,shape"}},
-				},
-				{
-					Query:    "SELECT group_concat(DISTINCT `attribute` ORDER BY value DESC SEPARATOR ';') FROM t group by o_id order by o_id asc",
-					Expected: []sql.Row{{"fabric;color"}, {"shape;color"}},
-				},
-				{
-					Query:    "SELECT group_concat(DISTINCT `attribute` ORDER BY `attribute`) FROM t",
-					Expected: []sql.Row{{"color,fabric,shape"}},
-				},
-				{
-					Query:    "SELECT group_concat(`attribute` ORDER BY `attribute`) FROM t",
-					Expected: []sql.Row{{"color,color,fabric,shape"}},
-				},
-				{
-					Query:    `SELECT group_concat((SELECT 2)) FROM x;`,
-					Expected: []sql.Row{{"2,2,2,2,2"}},
-				},
-				{
-					Query:    `SELECT group_concat(DISTINCT (SELECT 2)) FROM x;`,
-					Expected: []sql.Row{{"2"}},
-				},
-				{
-					Query:    "SELECT group_concat(DISTINCT `attribute` ORDER BY `attribute` ASC) FROM t",
-					Expected: []sql.Row{{"color,fabric,shape"}},
-				},
-				{
-					Query:    "SELECT group_concat(DISTINCT `attribute` ORDER BY `attribute` DESC) FROM t",
-					Expected: []sql.Row{{"shape,fabric,color"}},
-				},
-				{
-					Query:    `SELECT group_concat(pk) FROM nulls`,
-					Expected: []sql.Row{{nil}},
-				},
-				{
-					Query:       `SELECT group_concat((SELECT * FROM t LIMIT 1)) from t`,
-					ExpectedErr: sql.ErrInvalidOperandColumns,
-				},
-				{
-					Query:       `SELECT group_concat((SELECT * FROM x)) from t`,
-					ExpectedErr: sql.ErrExpectedSingleRow,
-				},
-				{
-					Query:    "SELECT group_concat(`attribute`) FROM t where o_id=2 order by attribute",
-					Expected: []sql.Row{{"color,fabric"}},
-				},
-				{
-					Query:    "SELECT group_concat(DISTINCT `attribute` ORDER BY value DESC SEPARATOR ';') FROM t group by o_id order by o_id asc",
-					Expected: []sql.Row{{"fabric;color"}, {"shape;color"}},
-				},
-				{
-					Query:    "SELECT group_concat(o_id) FROM t WHERE `attribute`='color' order by o_id",
-					Expected: []sql.Row{{"2,3"}},
+					Query: "SELECT * FROM t ORDER BY pk;",
+					Expected: []sql.Row{
+						{1, 1},
+						{2, 2},
+						{3, 3},
+						{4, 4},
+						{5, 5},
+						{6, 6},
+						{7, 7},
+					},
 				},
 			},
 		},
+		//{
+		//	Name: "dolt_merge() with a gap in an auto increment key",
+		//	SetUpScript: []string{
+		//		"CREATE TABLE t2 (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+		//		"INSERT INTO t2 (c0) VALUES (1), (2);",
+		//		"CALL dolt_add('-A');",
+		//		"CALL dolt_commit('-am', 'cm1');",
+		//		"CALL dolt_checkout('-b', 'test2');",
+		//		"INSERT INTO t2 VALUES (4,4), (5,5);",
+		//		"CALL dolt_commit('-am', 'cm2');",
+		//		"CALL dolt_checkout('main');",
+		//	},
+		//	Assertions: []queries.ScriptTestAssertion{
+		//		{
+		//			Query:    "CALL dolt_merge('test2');",
+		//			Expected: []sql.Row{{1, 0}},
+		//		},
+		//		{
+		//			Query:    "INSERT INTO t2 VALUES (3,3),(NULL,6);",
+		//			Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
+		//		},
+		//		{
+		//			Query: "SELECT * FROM t2 ORDER BY pk;",
+		//			Expected: []sql.Row{
+		//				{1, 1},
+		//				{2, 2},
+		//				{3, 3},
+		//				{4, 4},
+		//				{5, 5},
+		//				{6, 6},
+		//			},
+		//		},
+		//	},
+		//},
 	}
 
-	harness := newDoltHarness(t).WithParallelism(1)
-	harness.Setup(setup.MydbData)
+	harness := newDoltHarness(t)
 	for _, test := range scripts {
 		enginetest.TestScript(t, harness, test)
 	}
@@ -311,6 +294,15 @@ func TestInsertInto(t *testing.T) {
 
 func TestInsertIgnoreInto(t *testing.T) {
 	enginetest.TestInsertIgnoreInto(t, newDoltHarness(t))
+}
+
+// todo: merge this into the above test when https://github.com/dolthub/dolt/issues/3836 is fixed
+func TestInsertIgnoreIntoWithDuplicateUniqueKeyKeyless(t *testing.T) {
+	if !types.IsFormat_DOLT_1(types.Format_Default) {
+		// todo: fix https://github.com/dolthub/dolt/issues/3836
+		t.Skip()
+	}
+	enginetest.TestInsertIgnoreIntoWithDuplicateUniqueKeyKeyless(t, newDoltHarness(t))
 }
 
 func TestInsertIntoErrors(t *testing.T) {
@@ -978,18 +970,13 @@ func TestPersist(t *testing.T) {
 	require.True(t, ok)
 	globals := config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
 	newPersistableSession := func(ctx *sql.Context) sql.PersistableSession {
-		session := ctx.Session.(*dsess.DoltSession).Session.NewDoltSession(globals)
+		session := ctx.Session.(*dsess.DoltSession).WithGlobals(globals)
 		err := session.RemoveAllPersistedGlobals()
 		require.NoError(t, err)
 		return session
 	}
 
 	enginetest.TestPersist(t, harness, newPersistableSession)
-}
-
-func TestKeylessUniqueIndex(t *testing.T) {
-	harness := newDoltHarness(t)
-	enginetest.TestKeylessUniqueIndex(t, harness)
 }
 
 func TestTypesOverWire(t *testing.T) {

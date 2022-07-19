@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -46,7 +45,6 @@ func NewMemoryDbData(ctx context.Context, cfg config.ReadableConfig) (DbData, er
 		Ddb: ddb,
 		Rsw: rs,
 		Rsr: rs,
-		Drw: rs,
 	}, nil
 }
 
@@ -102,7 +100,6 @@ type MemoryRepoState struct {
 
 var _ RepoStateReader = MemoryRepoState{}
 var _ RepoStateWriter = MemoryRepoState{}
-var _ DocsReadWriter = MemoryRepoState{}
 
 func (m MemoryRepoState) CWBHeadRef() ref.DoltRef {
 	return m.Head
@@ -216,14 +213,6 @@ func (m MemoryRepoState) RemoveRemote(ctx context.Context, name string) error {
 
 func (m MemoryRepoState) TempTableFilesDir() string {
 	return os.TempDir()
-}
-
-func (m MemoryRepoState) GetDocsOnDisk(docNames ...string) (doltdocs.Docs, error) {
-	return nil, fmt.Errorf("cannot get docs from a memory database")
-}
-
-func (m MemoryRepoState) WriteDocsToDisk(docs doltdocs.Docs) error {
-	return fmt.Errorf("cannot write docs to a memory database")
 }
 
 func (m MemoryRepoState) GetBackups() (map[string]Remote, error) {

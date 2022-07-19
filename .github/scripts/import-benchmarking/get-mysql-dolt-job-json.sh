@@ -2,19 +2,21 @@
 
 set -e
 
-if [ "$#" -lt 8 ]; then
-    echo  "Usage: ./get-mysql-dolt-job-json.sh <jobName> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <issueNumber>"
+if [ "$#" -lt 9 ]; then
+    echo  "Usage: ./get-mysql-dolt-job-json.sh <jobName> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <nomsBinFormat> <format> <issueNumber>"
     exit 1
 fi
 
 jobName="$1"
 fromServer="$2"
 fromVersion="$3"
-toServer="$4"
+toServer="$4" # make this mysql
 toVersion="$5"
 timePrefix="$6"
 actorPrefix="$7"
-issueNumber="$8" # TODO: Use this to paste the results onto the github issue
+nomsBinFormat="$8"
+format="$9"
+issueNumber="${10}"
 
 echo '
 {
@@ -56,6 +58,10 @@ echo '
               "--results-prefix='$actorPrefix'",
               "--mysql-exec=/usr/sbin/mysqld",
               "--mysql-schema-file=schema.sql",
+              "--nbf='$nomsBinFormat'",
+              "--results-schema=/results-schema.sql",
+              "--issue-number='$issueNumber'",
+              "--output='$format'",
               "--fileNames=100k-sorted.csv",
               "--fileNames=100k-random.csv",
               "--fileNames=1m-sorted.csv",

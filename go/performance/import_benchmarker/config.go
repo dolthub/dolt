@@ -84,6 +84,9 @@ type ImportBenchmarkConfig struct {
 
 	// MysqlHost is used to connect with a MySQL host
 	MysqlHost string
+
+	// NbfVersion is used to turn what format to run Dolt against
+	NbfVersion string
 }
 
 // NewDefaultImportBenchmarkConfig returns a default import configuration where data is generated with accordance to
@@ -261,7 +264,7 @@ func RunBenchmarkTests(config *ImportBenchmarkConfig, workingDir string) []resul
 
 	results := make([]result, 0)
 	for _, doltJob := range doltJobs {
-		results = append(results, BenchmarkDoltImportJob(doltJob, workingDir))
+		results = append(results, BenchmarkDoltImportJob(doltJob, workingDir, config.NbfVersion))
 	}
 
 	results = append(results, BenchmarkMySQLImportJobs(mySQLJobs, getMysqlConfigFromConfig(config))...)

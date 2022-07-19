@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 type indexComp int
@@ -1398,8 +1397,7 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 }
 
 func NewTestSQLCtx(ctx context.Context) *sql.Context {
-	session := dsess.DefaultSession()
-	s := session.NewDoltSession(config.NewMapConfig(make(map[string]string)))
+	s := dsess.DefaultSession(dsess.EmptyDatabaseProvider())
 	sqlCtx := sql.NewContext(
 		ctx,
 		sql.WithSession(s),
