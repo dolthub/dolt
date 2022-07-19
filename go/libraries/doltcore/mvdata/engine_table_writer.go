@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"sync/atomic"
 
 	sqle "github.com/dolthub/go-mysql-server"
@@ -26,6 +27,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/transform"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -215,69 +217,84 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 
 			if ok, err := oldRow.Equals(newRow, s.tableSchema.Schema); err == nil {
 				if ok {
-					s.stats.SameVal++
+					atomic.AddInt64(&s.stats.SameVal, 1)
 				} else {
-					s.stats.Modifications++
+					atomic.AddInt64(&s.stats.Modifications, 1)
 				}
 			}
 		} else {
-			s.stats.Additions++
+			atomic.AddInt64(&s.stats.Additions, 1)
 		}
 	}
 
-	insertOrUpdateOperation, err := s.getInsertNode(inputChannel)
-	if err != nil {
-		return err
-	}
+	var e errgroup.Group
+	var mu sync.Mutex
 
-	iter, err := insertOrUpdateOperation.RowIter(s.sqlCtx, nil)
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		rerr := iter.Close(s.sqlCtx)
-		if err == nil {
-			err = rerr
-		}
-	}()
-
-	for {
-		if s.statsCB != nil && atomic.LoadInt32(&s.statOps) >= tableWriterStatUpdateRate {
-			atomic.StoreInt32(&s.statOps, 0)
-			s.statsCB(s.stats)
-		}
-
-		row, err := iter.Next(s.sqlCtx)
-
-		// All other errors are handled by the errorHandler
-		if err == nil {
-			_ = atomic.AddInt32(&s.statOps, 1)
-			updateStats(row)
-		} else if err == io.EOF {
-			atomic.LoadInt32(&s.statOps)
-			atomic.StoreInt32(&s.statOps, 0)
-			if s.statsCB != nil {
-				s.statsCB(s.stats)
+	// TODO: Think through all the non thread safe operations here?
+	// TODO: Maybe the go error message could be a proble here>
+	for i := 0; i < 3; i++ {
+		e.Go(func() error {
+			insertOrUpdateOperation, err := s.getInsertNode(inputChannel)
+			if err != nil {
+				return err
 			}
 
-			return err
-		} else {
-			var offendingRow sql.Row
-			switch n := err.(type) {
-			case sql.WrappedInsertError:
-				offendingRow = n.OffendingRow
-			case sql.ErrInsertIgnore:
-				offendingRow = n.OffendingRow
+			iter, err := insertOrUpdateOperation.RowIter(s.sqlCtx, nil)
+			if err != nil {
+				return err
 			}
 
-			trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "write", Details: err.Error()}
-			quit := badRowCb(trf)
-			if quit {
-				return trf
+			defer func() {
+				rerr := iter.Close(s.sqlCtx)
+				if err == nil {
+					err = rerr
+				}
+			}()
+
+			for {
+				if s.statsCB != nil && atomic.LoadInt32(&s.statOps) >= tableWriterStatUpdateRate {
+					atomic.StoreInt32(&s.statOps, 0)
+					mu.Lock()          // TODO: Does this lead to a deadlock?
+					s.statsCB(s.stats) // TODO: needs to be atomic
+					mu.Unlock()
+				}
+
+				row, err := iter.Next(s.sqlCtx)
+
+				// All other errors are handled by the errorHandler
+				if err == nil {
+					_ = atomic.AddInt32(&s.statOps, 1)
+					updateStats(row)
+				} else if err == io.EOF {
+					atomic.LoadInt32(&s.statOps)
+					atomic.StoreInt32(&s.statOps, 0)
+					if s.statsCB != nil {
+						mu.Lock()
+						s.statsCB(s.stats) // TODO: needs to be atomic
+						mu.Unlock()
+					}
+
+					return err
+				} else {
+					var offendingRow sql.Row
+					switch n := err.(type) {
+					case sql.WrappedInsertError:
+						offendingRow = n.OffendingRow
+					case sql.ErrInsertIgnore:
+						offendingRow = n.OffendingRow
+					}
+
+					trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "write", Details: err.Error()}
+					quit := badRowCb(trf) // TODO: Needs to be atomic
+					if quit {
+						return trf
+					}
+				}
 			}
-		}
+		})
 	}
+
+	return e.Wait()
 }
 
 func (s *SqlEngineTableWriter) Commit(ctx context.Context) error {
