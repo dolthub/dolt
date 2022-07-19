@@ -29,9 +29,9 @@ teardown() {
 }
 
 @test "sql-shell: can't start shell with invalid user" {
-    run dolt sql --user=notroot <<< "show tables"
+    run dolt sql --user=notroot <<< "show databases"
     [ "$status" -eq 0 ]
-    run dolt sql --user=toor <<< "show tables"
+    run dolt sql --user=toor <<< "show databases"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "user toor@localhost does not exist" ]] || false
 }
