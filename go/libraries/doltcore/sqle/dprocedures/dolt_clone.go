@@ -69,12 +69,11 @@ func emptyConfig() config.ReadableConfig {
 
 func getDirectoryAndUrlString(apr *argparser.ArgParseResults) (string, string, error) {
 	if apr.NArg() < 1 || apr.NArg() > 2 {
-		return "", "", errhand.BuildDError("").SetPrintUsage().Build()
+		return "", "", errhand.BuildDError("error: invalid number of arguments: database URL must be specified and database name is optional").Build()
 	}
 
 	urlStr := apr.Arg(0)
 	_, err := earl.Parse(urlStr)
-
 	if err != nil {
 		return "", "", errhand.BuildDError("error: invalid remote url: " + urlStr).Build()
 	}
@@ -87,7 +86,7 @@ func getDirectoryAndUrlString(apr *argparser.ArgParseResults) (string, string, e
 		if dir == "." {
 			dir = path.Dir(urlStr)
 		} else if dir == "/" {
-			return "", "", errhand.BuildDError("Could not infer repo name.  Please explicitly define a directory for this url").Build()
+			return "", "", errhand.BuildDError("Could not infer repo name. Please explicitly define a directory for this url").Build()
 		}
 	}
 
