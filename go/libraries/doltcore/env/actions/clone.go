@@ -64,20 +64,17 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 	}
 
 	err := fs.MkDirs(dir)
-
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateDirectory, dir, err.Error())
 	}
 
 	err = os.Chdir(dir)
-
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToAccessDir, dir, err.Error())
 	}
 
 	dEnv := env.Load(ctx, homeProvider, fs, doltdb.LocalDirDoltDB, version)
 	err = dEnv.InitRepoWithNoData(ctx, nbf)
-
 	if err != nil {
 		return nil, fmt.Errorf("%w; %s", ErrFailedToInitRepo, err.Error())
 	}
@@ -85,7 +82,6 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 	dEnv.RSLoadErr = nil
 	if !env.IsEmptyRemote(r) {
 		dEnv.RepoState, err = env.CloneRepoState(dEnv.FS, r)
-
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateRepoStateWithRemote, r.Name, err.Error())
 		}
