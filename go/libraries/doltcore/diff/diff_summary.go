@@ -66,7 +66,7 @@ func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td T
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
 
-	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
+	if !schema.ArePrimaryKeySetsDiffable(td.Format(), fromSch, toSch) {
 		return errhand.BuildDError("diff summary will not compute due to primary key set change with table %s", td.CurName()).Build()
 	}
 

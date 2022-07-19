@@ -1799,6 +1799,31 @@ var MergeScripts = []queries.ScriptTest{
 	},
 }
 
+var Dolt1MergeScripts = []queries.ScriptTest{
+	{
+		Name: "Merge errors if the primary key types have changed (even if the new type has the same NomsKind)",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk1 bigint, pk2 bigint, PRIMARY KEY (pk1, pk2));",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"ALTER TABLE t MODIFY COLUMN pk2 tinyint",
+			"INSERT INTO t VALUES (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'right commit');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'left commit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('right');",
+				ExpectedErrStr: "error: cannot merge two tables with different primary key sets",
+			},
+		},
+	},
+}
+
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 	{
 		Name: "Keyless merge with unique indexes documents violations",
@@ -3524,6 +3549,29 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 					{7, 8, 0, 7, 8, 9, "modified"},
 					{7, 8, 9, nil, nil, nil, "added"},
 				},
+			},
+		},
+	},
+}
+
+var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
+	{
+		Name: "Diff table stops creating diff partitions when any primary key type has changed",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk1 VARCHAR(100), pk2 VARCHAR(100), PRIMARY KEY (pk1, pk2));",
+			"INSERT INTO t VALUES ('1', '1');",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"ALTER TABLE t MODIFY COLUMN pk2 VARCHAR(101)",
+			"CALL DOLT_COMMIT('-am', 'modify column type');",
+
+			"INSERT INTO t VALUES ('2', '2');",
+			"CALL DOLT_COMMIT('-am', 'insert new row');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT to_pk1, to_pk2, from_pk1, from_pk2, diff_type from dolt_diff_t;",
+				Expected: []sql.Row{{"2", "2", nil, nil, "added"}},
 			},
 		},
 	},
