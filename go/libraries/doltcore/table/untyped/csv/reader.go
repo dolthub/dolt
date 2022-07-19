@@ -187,7 +187,7 @@ func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
 		return nil, io.EOF
 	}
 
-	colVals, err := csvr.csvReadRecords(nil)
+	rowVals, err := csvr.csvReadRecords(nil)
 
 	if err == io.EOF {
 		csvr.isDone = true
@@ -195,17 +195,28 @@ func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
 	}
 
 	schSize := csvr.sch.GetAllCols().Size()
-	if len(colVals) != schSize {
+	if len(rowVals) != schSize {
 		var out strings.Builder
-		for _, cv := range colVals {
+		for _, cv := range rowVals {
 			if cv != nil {
 				out.WriteString(*cv)
 			}
 			out.WriteRune(',')
 		}
+
+		badMpStr, unusedRowValues := interpretRowSizeError(csvr.sch, rowVals)
+
+		args := []string{
+			fmt.Sprintf("csv reader's schema expects %d fields, but line has %d values.", schSize, len(rowVals)),
+			fmt.Sprintf("The bad line was interpreted as follows: '%s'", badMpStr),
+		}
+
+		if len(unusedRowValues) > 0 {
+			args = append(args, fmt.Sprintf("The following line values were unused: '%v'", unusedRowValues))
+		}
+
 		return nil, table.NewBadRow(nil,
-			fmt.Sprintf("csv reader's schema expects %d fields, but line only has %d values.", schSize, len(colVals)),
-			fmt.Sprintf("line: '%s'", out.String()),
+			args...,
 		)
 	}
 
@@ -214,11 +225,11 @@ func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
 	}
 
 	var sqlRow sql.Row
-	for _, colVal := range colVals {
-		if colVal == nil {
+	for _, rowVal := range rowVals {
+		if rowVal == nil {
 			sqlRow = append(sqlRow, nil)
 		} else {
-			sqlRow = append(sqlRow, *colVal)
+			sqlRow = append(sqlRow, *rowVal)
 		}
 	}
 
@@ -454,4 +465,44 @@ func (csvr *CSVReader) parseQuotedField(rs *recordState) (kontinue bool, err err
 			return false, err
 		}
 	}
+}
+
+// interpretRowSizeError returns a formatted maps of colums to to their read string along with an array of an unused
+// column vals
+func interpretRowSizeError(schema schema.Schema, rowVals []*string) (string, []string) {
+	cols := schema.GetAllCols().GetColumns()
+
+	keyValPairs := make([][]string, len(cols))
+	unusedRowValues := make([]string, 0)
+
+	// 1. Start by adding all cols to the map and their relevant pair
+	for i, col := range cols {
+		if i >= len(rowVals) {
+			keyValPairs[i] = []string{col.Name, ""}
+		} else {
+			keyValPairs[i] = []string{col.Name, *rowVals[i]}
+		}
+	}
+
+	// 2. Append any used row values to print to the user
+	for i := len(cols); i < len(rowVals); i++ {
+		if rowVals[i] == nil {
+			unusedRowValues = append(unusedRowValues, fmt.Sprintf("%q", ""))
+		} else {
+			unusedRowValues = append(unusedRowValues, fmt.Sprintf("%q", *rowVals[i]))
+		}
+	}
+
+	// 3. Pretty print the column names to values pairings
+	var b bytes.Buffer
+
+	b.Write([]byte("{\n"))
+
+	for _, pair := range keyValPairs {
+		b.Write([]byte(fmt.Sprintf("\t%q: %q\n", pair[0], pair[1])))
+	}
+
+	b.Write([]byte("}\n"))
+
+	return b.String(), unusedRowValues
 }

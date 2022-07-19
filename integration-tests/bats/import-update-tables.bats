@@ -381,7 +381,8 @@ DELIM
     run dolt table import -u test bad-updates.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
-    [[ "$output" =~ "csv reader's schema expects 2 fields, but line only has 3 values" ]] || false
+    [[ "$output" =~ "csv reader's schema expects 2 fields, but line has 3 values" ]] || false
+    [[ "$output" =~ "The following line values were unused: '[\"\"]'" ]] || false
 
     run dolt table import -u --continue test bad-updates.csv
     [ "$status" -eq 0 ]
@@ -1168,4 +1169,39 @@ DELIM
     [[ "$output" =~ "2,medium" ]] || false
     [[ "$output" =~ "3,large" ]] || false
     [[ "$output" =~ "4,x-small" ]] || false # should be empty
+}
+
+@test "import-update-tables: test better error message for mismatching column count with schema" {
+    # Case where there are fewer values in a row than the number of columns in the schema
+    cat <<DELIM > bad-updates.csv
+pk,v1, v2
+5,5
+6,5
+DELIM
+
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT DEFAULT 2 NOT NULL, v2 int)"
+    dolt sql -q "INSERT INTO test (pk, v1, v2) VALUES (1, 2, 3), (2, 3, 4)"
+
+    run dolt table import -u test bad-updates.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "csv reader's schema expects 3 fields, but line has 2 values" ]] || false
+    [[ "$output" =~ "The bad line was interpreted as follows:" ]]
+    ! [[ "$output" =~ "The following line values were unused: '[\"\"]'" ]] || false
+
+    # Case there are more columns in the rows than the number of columns in the schema
+ cat <<DELIM > bad-updates.csv
+pk,v1
+5,7,5
+6,5,5
+DELIM
+
+    run dolt table import -u test bad-updates.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "csv reader's schema expects 2 fields, but line has 3 values" ]] || false
+    [[ "$output" =~ "The bad line was interpreted as follows:" ]]
+    [[ "$output" =~ "\"pk\": 5" ]]
+    [[ "$output" =~ "\"v1\": 7" ]]
+    [[ "$output" =~ "The following line values were unused: '[\"5\"]'" ]] || false
 }
