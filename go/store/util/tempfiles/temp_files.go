@@ -36,6 +36,8 @@ const tempFileBufferSize = 1024
 
 // TempFileProviderAt is a TempFileProvider interface which creates temp files at a given path.
 type TempFileProviderAt struct {
+	ctx     context.Context
+	stop    context.CancelFunc
 	tempDir string
 	prefix  string
 	files   chan *os.File
@@ -57,20 +59,12 @@ func (tfp *TempFileProviderAt) GetTempDir() string {
 }
 
 func (tfp *TempFileProviderAt) Run(ctx context.Context) {
+	var childCtx context.Context
+	childCtx, tfp.stop = context.WithCancel(ctx)
 	go func(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				go func() {
-					for {
-						select {
-						case <-tfp.files:
-						case <-tfp.errs:
-						default:
-							return
-						}
-					}
-				}()
 				return
 			default:
 			}
@@ -78,23 +72,12 @@ func (tfp *TempFileProviderAt) Run(ctx context.Context) {
 			tfp.files <- f
 			tfp.errs <- err
 		}
-	}(ctx)
+	}(childCtx)
 }
 
 // NewFile creates a new temporary file in the directory dir, opens the file for reading and writing, and returns
 // the resulting *os.File. If dir is "" then the default temp dir is used.
 func (tfp *TempFileProviderAt) NewFile(dir, pattern string) (*os.File, error) {
-	//tfp.mu.Lock()
-	//defer tfp.mu.Unlock()
-	//if dir == "" {
-	//	dir = tfp.tempDir
-	//}
-	//
-	//f, err := os.CreateTemp(dir, pattern)
-	//
-	//if err == nil {
-	//	tfp.filesCreated = append(tfp.filesCreated, f.Name())
-	//}
 	f := <-tfp.files
 	err := <-tfp.errs
 
@@ -103,14 +86,21 @@ func (tfp *TempFileProviderAt) NewFile(dir, pattern string) (*os.File, error) {
 
 // Clean makes a best effort attempt to delete all temp files created by calls to NewFile
 func (tfp *TempFileProviderAt) Clean() {
-	//close(tfp.files)
-	//close(tfp.errs)
-	//tfp.mu.Lock()
-	//defer tfp.mu.Unlock()
-	//for _, filename := range tfp.filesCreated {
-	//	// best effort. ignore errors
-	//	_ = file.Remove(filename)
-	//}
+	if tfp.stop != nil {
+		tfp.stop()
+		go func() {
+			for {
+				select {
+				case <-tfp.files:
+				case <-tfp.errs:
+				default:
+					return
+				}
+			}
+			close(tfp.files)
+			close(tfp.errs)
+		}()
+	}
 }
 
 // MovableTemFile is an object that implements TempFileProvider that is used by the nbs to create temp files that
