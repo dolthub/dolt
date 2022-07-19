@@ -75,6 +75,15 @@ teardown() {
     ! [[ "$output" =~ "\"User\":\"privs_user\"" ]] || false
 }
 
+@test "sql-privs: errors instead of panic when reading badly formatted privilege file" {
+    make_test_repo
+    touch privs.db
+    echo "garbage" > privs.db
+
+    run start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.db
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "ill formatted privileges file" ]] || false
+}
 
 @test "sql-privs: default options" {
     make_test_repo
