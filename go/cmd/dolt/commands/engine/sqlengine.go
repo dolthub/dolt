@@ -108,7 +108,9 @@ func NewSqlEngine(
 	// Set up engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: config.IsReadOnly, TemporaryUsers: tempUsers}).WithBackgroundThreads(bThreads)
 	engine.Analyzer.Catalog.MySQLDb.SetPersister(persister)
-	engine.Analyzer.Catalog.MySQLDb.SetPlugins(map[string]mysql_db.PlaintextAuthPlugin{"authenticate_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig)})
+	engine.Analyzer.Catalog.MySQLDb.SetPlugins(map[string]mysql_db.PlaintextAuthPlugin{
+		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
+	})
 
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {

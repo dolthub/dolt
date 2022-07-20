@@ -47,7 +47,7 @@ func (p *authenticateDoltJWTPlugin) Authenticate(db *mysql_db.MySQLDb, user stri
 
 func validateJWT(config []JwksConfig, username, identity, token string, reqTime time.Time) (bool, error) {
 	if len(config) == 0 {
-		return false, nil
+		return false, fmt.Errorf("ValidateJWT: JWKS server config not found")
 	}
 
 	expectedClaimsMap := parseUserIdentity(identity)
