@@ -1201,7 +1201,7 @@ DELIM
     [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
     [[ "$output" =~ "CSV reader expected 2 values, but saw 3" ]] || false
     [[ "$output" =~ "The row was interpreted to be:" ]]
-    [[ "$output" =~ '"pk": 5' ]]
-    [[ "$output" =~ '"v1": 7' ]]
+    [[ "$output" =~ '"pk": "5"' ]]
+    [[ "$output" =~ '"v1": "7"' ]]
     [[ "$output" =~ "with the following values left over: '[\"5\"]'" ]] || false
 }
