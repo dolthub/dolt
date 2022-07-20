@@ -26,8 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -39,10 +37,12 @@ import (
 const (
 	ddbRootStructName = "dolt_db_root"
 
-	tablesKey       = "tables"
+	tablesKey      = "tables"
+	foreignKeyKey  = "foreign_key"
+	featureVersKey = "feature_ver"
+
+	// deprecated
 	superSchemasKey = "super_schemas"
-	foreignKeyKey   = "foreign_key"
-	featureVersKey  = "feature_ver"
 )
 
 type FeatureVersion int64
@@ -390,43 +390,6 @@ func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error)
 	return !a.IsEmpty(), nil
 }
 
-// GetSuperSchema returns the SuperSchema for the table name specified if that table exists.
-func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schema.SuperSchema, bool, error) {
-	// SuperSchema is only persisted on Commit()
-	ss, found, err := root.getSuperSchemaAtLastCommit(ctx, tName)
-
-	if err != nil {
-		return nil, false, err
-	}
-	if !found {
-		ss, _ = schema.NewSuperSchema()
-	}
-
-	t, tblFound, err := root.GetTable(ctx, tName)
-	if err != nil {
-		return nil, false, err
-	}
-
-	if !found && !tblFound {
-		// table doesn't exist in current commit or in history
-		return nil, false, nil
-	}
-
-	if tblFound {
-		sch, err := t.GetSchema(ctx)
-		if err != nil {
-			return nil, false, err
-		}
-
-		err = ss.AddSchemas(sch)
-		if err != nil {
-			return nil, false, err
-		}
-	}
-
-	return ss, true, err
-}
-
 func (root *RootValue) GenerateTagsForNewColColl(ctx context.Context, tableName string, cc *schema.ColCollection) (*schema.ColCollection, error) {
 	newColNames := make([]string, 0, cc.Size())
 	newColKinds := make([]types.NomsKind, 0, cc.Size())
@@ -519,12 +482,11 @@ func (root *RootValue) GenerateTagsForNewColumns(
 		existingColKinds = append(existingColKinds, col.Kind)
 	}
 
-	rootSuperSchema, err := GetRootValueSuperSchema(ctx, root)
+	existingTags, err := GetAllTagsForRoot(ctx, root)
 	if err != nil {
 		return nil, err
 	}
 
-	existingTags := set.NewUint64Set(rootSuperSchema.AllTags())
 	for i := range newTags {
 		if newTags[i] > 0 {
 			continue
@@ -532,7 +494,7 @@ func (root *RootValue) GenerateTagsForNewColumns(
 
 		newTags[i] = schema.AutoGenerateTag(existingTags, tableName, existingColKinds, newColNames[i], newColKinds[i])
 		existingColKinds = append(existingColKinds, newColKinds[i])
-		existingTags.Add(newTags[i])
+		existingTags.Add(newTags[i], tableName)
 	}
 
 	return newTags, nil
@@ -541,36 +503,6 @@ func (root *RootValue) GenerateTagsForNewColumns(
 // GerSuperSchemaMap returns the Noms map that tracks SuperSchemas, used to create new RootValues on checkout branch.
 func (root *RootValue) GetSuperSchemaMap(ctx context.Context) (types.Map, error) {
 	return root.getOrCreateSuperSchemaMap(ctx)
-}
-
-// SuperSchemas are only persisted on commit.
-func (root *RootValue) getSuperSchemaAtLastCommit(ctx context.Context, tName string) (*schema.SuperSchema, bool, error) {
-	ssm, err := root.getOrCreateSuperSchemaMap(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-
-	v, found, err := ssm.MaybeGet(ctx, types.String(tName))
-	if err != nil {
-		return nil, false, err
-	}
-	if !found {
-		// Super Schema doesn't exist for new or nonexistent table
-		return nil, false, nil
-	}
-
-	ssValRef := v.(types.Ref)
-	ssVal, err := ssValRef.TargetValue(ctx, root.vrw)
-	if err != nil {
-		return nil, false, err
-	}
-
-	ss, err := encoding.UnmarshalSuperSchemaNomsValue(ctx, root.vrw.Format(), ssVal)
-	if err != nil {
-		return nil, false, err
-	}
-
-	return ss, true, nil
 }
 
 func (root *RootValue) getOrCreateSuperSchemaMap(ctx context.Context) (types.Map, error) {
@@ -699,8 +631,7 @@ func (root *RootValue) GetTableInsensitive(ctx context.Context, tName string) (*
 	return tbl, resolvedName, ok, nil
 }
 
-// GetTableByColTag looks for the table containing the given column tag. It returns false if no table exists in the history.
-// If the table containing the given tag previously existed and was deleted, it will return its name and a nil pointer.
+// GetTableByColTag looks for the table containing the given column tag.
 func (root *RootValue) GetTableByColTag(ctx context.Context, tag uint64) (tbl *Table, name string, found bool, err error) {
 	err = root.IterTables(ctx, func(tn string, t *Table, s schema.Schema) (bool, error) {
 		_, found = s.GetAllCols().GetByTag(tag)
@@ -711,18 +642,6 @@ func (root *RootValue) GetTableByColTag(ctx context.Context, tag uint64) (tbl *T
 		return found, nil
 	})
 
-	if err != nil {
-		return nil, "", false, err
-	}
-
-	err = root.iterSuperSchemas(ctx, func(tn string, ss *schema.SuperSchema) (bool, error) {
-		_, found = ss.GetByTag(tag)
-		if found {
-			name = tn
-		}
-
-		return found, nil
-	})
 	if err != nil {
 		return nil, "", false, err
 	}
@@ -846,59 +765,6 @@ func (root *RootValue) IterTables(ctx context.Context, cb func(name string, tabl
 	})
 }
 
-func (root *RootValue) iterSuperSchemas(ctx context.Context, cb func(name string, ss *schema.SuperSchema) (stop bool, err error)) error {
-	m, err := root.getOrCreateSuperSchemaMap(ctx)
-	if err != nil {
-		return err
-	}
-
-	return m.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-		name := string(key.(types.String))
-
-		// use GetSuperSchema() to pickup uncommitted SuperSchemas
-		ss, _, err := root.GetSuperSchema(ctx, name)
-		if err != nil {
-			return false, err
-		}
-
-		return cb(name, ss)
-	})
-}
-
-// PutSuperSchema writes a new map entry for the table name and super schema supplied, it will overwrite an existing entry.
-func (root *RootValue) PutSuperSchema(ctx context.Context, tName string, ss *schema.SuperSchema) (*RootValue, error) {
-	ssm, err := root.getOrCreateSuperSchemaMap(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	ssVal, err := encoding.MarshalSuperSchemaAsNomsValue(ctx, root.VRW(), ss)
-
-	if err != nil {
-		return nil, err
-	}
-
-	ssRef, err := WriteValAndGetRef(ctx, root.VRW(), ssVal)
-
-	if err != nil {
-		return nil, err
-	}
-
-	m, err := ssm.Edit().Set(types.String(tName), ssRef).Map(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	newStorage, err := root.st.SetSuperSchemaMap(ctx, root.vrw, m)
-	if err != nil {
-		return nil, err
-	}
-
-	return root.withStorage(newStorage), nil
-}
-
 func (root *RootValue) withStorage(st rvStorage) *RootValue {
 	return &RootValue{root.vrw, root.ns, st, nil}
 }
@@ -968,76 +834,6 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 // HashOf gets the hash of the root value
 func (root *RootValue) HashOf() (hash.Hash, error) {
 	return root.st.nomsValue().Hash(root.vrw.Format())
-}
-
-// UpdateSuperSchemasFromOther updates SuperSchemas of tblNames using SuperSchemas from other.
-func (root *RootValue) UpdateSuperSchemasFromOther(ctx context.Context, tblNames []string, other *RootValue) (*RootValue, error) {
-	ssm, err := root.getOrCreateSuperSchemaMap(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	sse := ssm.Edit()
-
-	for _, tn := range tblNames {
-
-		ss, found, err := root.GetSuperSchema(ctx, tn)
-
-		if err != nil {
-			return nil, err
-		}
-
-		oss, foundOther, err := other.GetSuperSchema(ctx, tn)
-
-		if err != nil {
-			return nil, err
-		}
-
-		var newSS *schema.SuperSchema
-		if found && foundOther {
-			newSS, err = schema.SuperSchemaUnion(ss, oss)
-		} else if found {
-			newSS = ss
-		} else if foundOther {
-			newSS = oss
-		} else {
-			h, _ := root.HashOf()
-			oh, _ := other.HashOf()
-			return nil, errors.New(fmt.Sprintf("table %s does not exist in root %s or root %s", tn, h.String(), oh.String()))
-		}
-
-		if err != nil {
-			return nil, err
-		}
-
-		ssVal, err := encoding.MarshalSuperSchemaAsNomsValue(ctx, root.VRW(), newSS)
-
-		if err != nil {
-			return nil, err
-		}
-
-		ssRef, err := WriteValAndGetRef(ctx, root.VRW(), ssVal)
-
-		if err != nil {
-			return nil, err
-		}
-
-		sse = sse.Set(types.String(tn), ssRef)
-	}
-
-	m, err := sse.Map(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	newStorage, err := root.st.SetSuperSchemaMap(ctx, root.vrw, m)
-	if err != nil {
-		return nil, err
-	}
-
-	return root.withStorage(newStorage), nil
 }
 
 // RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
@@ -1210,55 +1006,16 @@ func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootV
 	return root.PutForeignKeyCollection(ctx, fkCollection)
 }
 
-// GetRootValueSuperSchema creates a SuperSchema with every column in history of root.
-func GetRootValueSuperSchema(ctx context.Context, root *RootValue) (*schema.SuperSchema, error) {
-	ssMap, err := root.getOrCreateSuperSchemaMap(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	var sss []*schema.SuperSchema
-	err = ssMap.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-		ssValRef := value.(types.Ref)
-		ssVal, err := ssValRef.TargetValue(ctx, root.vrw)
-
-		if err != nil {
-			return true, err
+// GetAllTagsForRoot gets all tags for root
+func GetAllTagsForRoot(ctx context.Context, root *RootValue) (tags schema.TagMapping, err error) {
+	tags = make(schema.TagMapping)
+	err = root.IterTables(ctx, func(tblName string, _ *Table, sch schema.Schema) (stop bool, err error) {
+		for _, t := range sch.GetAllCols().Tags {
+			tags.Add(t, tblName)
 		}
-
-		ss, err := encoding.UnmarshalSuperSchemaNomsValue(ctx, root.vrw.Format(), ssVal)
-
-		if err != nil {
-			return true, err
-		}
-
-		sss = append(sss, ss) // go get -f parseltongue
-		return false, nil
+		return
 	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	rootSuperSchema, err := schema.SuperSchemaUnion(sss...)
-	if err != nil {
-		return nil, err
-	}
-
-	// super schemas are only persisted on commit, so add in working schemas
-	err = root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
-		err = rootSuperSchema.AddSchemas(sch)
-		if err != nil {
-			return true, err
-		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return rootSuperSchema, nil
+	return
 }
 
 // UnionTableNames returns an array of all table names in all roots passed as params.
@@ -1310,29 +1067,22 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 		return err
 	}
 
-	var ee []string
-	err = root.iterSuperSchemas(ctx, func(tn string, ss *schema.SuperSchema) (stop bool, err error) {
-		if tn == tableName {
-			return false, nil
-		}
-
-		err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			_, ok := ss.GetByTag(tag)
-			if ok {
-				ee = append(ee, schema.ErrTagPrevUsed(tag, col.Name, tn).Error())
-			}
-			return false, nil
-		})
-		return false, err
-	})
+	existing, err := GetAllTagsForRoot(ctx, root)
 	if err != nil {
 		return err
 	}
 
+	var ee []string
+	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		name, ok := existing.Get(tag)
+		if ok && name != tableName {
+			ee = append(ee, schema.ErrTagPrevUsed(tag, col.Name, name).Error())
+		}
+		return false, nil
+	})
 	if len(ee) > 0 {
 		return fmt.Errorf(strings.Join(ee, "\n"))
 	}
-
 	return nil
 }
 
