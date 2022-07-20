@@ -44,6 +44,8 @@ import (
 const (
 	// tableWriterStatUpdateRate is the number of writes that will process before the updated stats are displayed.
 	tableWriterStatUpdateRate = 64 * 1024
+	// concurrentWriters is the numbers of concurrent inserts nodes writing directly to the engine
+	concurrentWriters = 3
 )
 
 // SqlEngineTableWriter is a utility for importing a set of rows through the sql engine.
@@ -205,34 +207,10 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		return err
 	}
 
-	updateStats := func(row sql.Row) {
-		if row == nil {
-			return
-		}
-
-		// If the length of the row does not match the schema then we have an update operation.
-		if len(row) != len(s.tableSchema.Schema) {
-			oldRow := row[:len(row)/2]
-			newRow := row[len(row)/2:]
-
-			if ok, err := oldRow.Equals(newRow, s.tableSchema.Schema); err == nil {
-				if ok {
-					atomic.AddInt64(&s.stats.SameVal, 1)
-				} else {
-					atomic.AddInt64(&s.stats.Modifications, 1)
-				}
-			}
-		} else {
-			atomic.AddInt64(&s.stats.Additions, 1)
-		}
-	}
+	var statsCallbackMutex, badRowCallbackMutex sync.Mutex
 
 	var e errgroup.Group
-	var mu sync.Mutex
-
-	// TODO: Think through all the non thread safe operations here?
-	// TODO: Maybe the go error message could be a proble here>
-	for i := 0; i < 3; i++ {
+	for i := 0; i < concurrentWriters; i++ {
 		e.Go(func() error {
 			insertOrUpdateOperation, err := s.getInsertNode(inputChannel)
 			if err != nil {
@@ -254,9 +232,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 			for {
 				if s.statsCB != nil && atomic.LoadInt32(&s.statOps) >= tableWriterStatUpdateRate {
 					atomic.StoreInt32(&s.statOps, 0)
-					mu.Lock()          // TODO: Does this lead to a deadlock?
-					s.statsCB(s.stats) // TODO: needs to be atomic
-					mu.Unlock()
+					s.atomicStatsCallback(&statsCallbackMutex)
 				}
 
 				row, err := iter.Next(s.sqlCtx)
@@ -264,14 +240,12 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 				// All other errors are handled by the errorHandler
 				if err == nil {
 					_ = atomic.AddInt32(&s.statOps, 1)
-					updateStats(row)
+					s.atomicallyUpdateStats(row)
 				} else if err == io.EOF {
 					atomic.LoadInt32(&s.statOps)
 					atomic.StoreInt32(&s.statOps, 0)
 					if s.statsCB != nil {
-						mu.Lock()
-						s.statsCB(s.stats) // TODO: needs to be atomic
-						mu.Unlock()
+						s.atomicStatsCallback(&statsCallbackMutex)
 					}
 
 					return err
@@ -285,7 +259,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 					}
 
 					trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "write", Details: err.Error()}
-					quit := badRowCb(trf) // TODO: Needs to be atomic
+					quit := s.atomicBadRowCallback(&badRowCallbackMutex, badRowCb, trf) // TODO: Needs to be atomic
 					if quit {
 						return trf
 					}
@@ -411,4 +385,40 @@ func generateOnDuplicateKeyExpressions(sch sql.Schema) []sql.Expression {
 	}
 
 	return ret
+}
+
+func (s *SqlEngineTableWriter) atomicallyUpdateStats(row sql.Row) {
+	if row == nil {
+		return
+	}
+
+	// If the length of the row does not match the schema then we have an update operation.
+	if len(row) != len(s.tableSchema.Schema) {
+		oldRow := row[:len(row)/2]
+		newRow := row[len(row)/2:]
+
+		if ok, err := oldRow.Equals(newRow, s.tableSchema.Schema); err == nil {
+			if ok {
+				atomic.AddInt64(&s.stats.SameVal, 1)
+			} else {
+				atomic.AddInt64(&s.stats.Modifications, 1)
+			}
+		}
+	} else {
+		atomic.AddInt64(&s.stats.Additions, 1)
+	}
+}
+
+func (s *SqlEngineTableWriter) atomicStatsCallback(mu *sync.Mutex) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	s.statsCB(s.stats)
+}
+
+func (s *SqlEngineTableWriter) atomicBadRowCallback(mu *sync.Mutex, badRowCb func(*pipeline.TransformRowFailure) bool, trf *pipeline.TransformRowFailure) bool {
+	mu.Lock()
+	defer mu.Unlock()
+
+	return badRowCb(trf)
 }
