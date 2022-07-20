@@ -2025,10 +2025,18 @@ SQL
     # run dolt checkout main
     # [ "$status" -eq 1 ]
 
-    # Test cloning from a DoltHub remote
-    run dolt sql -q "call dolt_clone('dolthub/VEID');"
+    # Set up a test repo in the remote server
+    cd repo2
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt sql -q "CREATE TABLE test_table (pk INT)"
+    dolt commit -am "main commit"
+    dolt push test-remote main
+    cd ..
+
+    # Test cloning from a server remote
+    run dolt sql -q "call dolt_clone('http://localhost:50051/test-org/test-repo');"
     [ "$status" -eq 0 ]
-    run dolt sql -q "use VEID; show tables;"
+    run dolt sql -q "use test_repo; show tables;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Stg_product2" ]] || false
+    [[ "$output" =~ "test_table" ]] || false
 }
