@@ -21,18 +21,6 @@ teardown() {
     teardown_common
 }
 
-@test "sql-server: can't start server with nonexistent user" {
-    cd repo1
-
-    run start_sql_server_with_args --host 0.0.0.0 --user dolt1
-    stop_sql_server
-    sleep 5 # not using python wait so this works on windows
-    run start_sql_server_with_args --host 0.0.0.0 --user dolt1
-    [ "$status" -eq 1 ]
-
-    cd ..
-}
-
 @test "sql-server: user session variables from config" {
   cd repo1
   echo "
