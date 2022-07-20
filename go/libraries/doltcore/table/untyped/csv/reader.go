@@ -467,8 +467,8 @@ func (csvr *CSVReader) parseQuotedField(rs *recordState) (kontinue bool, err err
 	}
 }
 
-// interpretRowSizeError returns a formatted maps of colums to to their read string along with an array of an unused
-// column vals
+// interpretRowSizeError returns a format map (written as a string) of a set of columns to their row values. It also
+// returns a slice of an unused strings.
 func interpretRowSizeError(schema schema.Schema, rowVals []*string) (string, []string) {
 	cols := schema.GetAllCols().GetColumns()
 
@@ -484,7 +484,7 @@ func interpretRowSizeError(schema schema.Schema, rowVals []*string) (string, []s
 		}
 	}
 
-	// 2. Append any used row values to print to the user
+	// 2. Append any unused row values to print to the user
 	for i := len(cols); i < len(rowVals); i++ {
 		if rowVals[i] == nil {
 			unusedRowValues = append(unusedRowValues, fmt.Sprintf("%q", ""))
@@ -493,7 +493,7 @@ func interpretRowSizeError(schema schema.Schema, rowVals []*string) (string, []s
 		}
 	}
 
-	// 3. Pretty print the column names to values pairings
+	// 3. Pretty print the column names to value pairings
 	var b bytes.Buffer
 
 	b.Write([]byte("{\n"))
