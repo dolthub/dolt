@@ -241,8 +241,14 @@ func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerC
 // SetupDoltConfig updates the given server config with where to create .doltcfg directory
 func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config ServerConfig) error {
 	if _, ok := apr.GetValue(configFileFlag); ok {
+		if exists, _ := dEnv.FS.Exists(config.CfgDir()); !exists {
+			if err := dEnv.FS.MkDirs(config.CfgDir()); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
+
 	serverConfig := config.(*commandLineServerConfig)
 
 	_, dataDirFlag1 := apr.GetValue(commands.MultiDBDirFlag)
