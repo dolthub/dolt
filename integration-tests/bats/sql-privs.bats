@@ -53,6 +53,22 @@ teardown() {
     teardown_common
 }
 
+@test "sql-privs: starting server with empty config works" {
+    make_test_repo
+    touch server.yaml
+
+    start_sql_server_with_config test_db server.yaml
+
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
+
+    server_query test_db 1 "create user new_user" ""
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
+
+    run ls .doltcfg
+    [[ "$output" =~ "privileges.db" ]] || false
+}
 
 @test "sql-privs: can read json privilege files and convert them" {
     make_test_repo
