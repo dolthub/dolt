@@ -57,11 +57,10 @@ type Remote struct {
 	Url        string            `json:"url"`
 	FetchSpecs []string          `json:"fetch_specs"`
 	Params     map[string]string `json:"params"`
-	dialer     dbfactory.GRPCDialProvider
 }
 
-func NewRemote(name, url string, params map[string]string, dialer dbfactory.GRPCDialProvider) Remote {
-	return Remote{name, url, []string{"refs/heads/*:refs/remotes/" + name + "/*"}, params, dialer}
+func NewRemote(name, url string, params map[string]string) Remote {
+	return Remote{name, url, []string{"refs/heads/*:refs/remotes/" + name + "/*"}, params}
 }
 
 func (r *Remote) GetParam(pName string) (string, bool) {
@@ -79,26 +78,25 @@ func (r *Remote) GetParamOrDefault(pName, defVal string) string {
 	return val
 }
 
-func (r *Remote) GetRemoteDB(ctx context.Context, nbf *types.NomsBinFormat) (*doltdb.DoltDB, error) {
+func (r *Remote) GetRemoteDB(ctx context.Context, nbf *types.NomsBinFormat, dialer dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {
 	params := make(map[string]interface{})
 	for k, v := range r.Params {
 		params[k] = v
 	}
-	if r.dialer != nil {
-		params[dbfactory.GRPCDialProviderParam] = r.dialer
-	}
+
+	params[dbfactory.GRPCDialProviderParam] = dialer
+
 	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }
 
-func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsBinFormat) (*doltdb.DoltDB, error) {
+func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsBinFormat, dialer dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {
 	params := make(map[string]interface{})
 	for k, v := range r.Params {
 		params[k] = v
 	}
 	params[dbfactory.NoCachingParameter] = "true"
-	if r.dialer != nil {
-		params[dbfactory.GRPCDialProviderParam] = r.dialer
-	}
+	params[dbfactory.GRPCDialProviderParam] = dialer
+
 	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }
 

@@ -58,6 +58,7 @@ const (
 )
 
 // AddForeignKeyViolations adds foreign key constraint violations to each table.
+// todo(andy): pass doltdb.Rootish
 func AddForeignKeyViolations(ctx context.Context, newRoot, baseRoot *doltdb.RootValue, tables *set.StrSet, theirRootIsh hash.Hash) (*doltdb.RootValue, *set.StrSet, error) {
 	fkColl, err := newRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
@@ -211,7 +212,7 @@ func nomsParentFkConstraintViolations(
 		return nil, false, err
 	}
 
-	differ := diff.NewRowDiffer(ctx, preParentSch, postParent.Schema, 1024)
+	differ := diff.NewRowDiffer(ctx, preParentRowData.Format(), preParentSch, postParent.Schema, 1024)
 	defer differ.Close()
 	differ.Start(ctx, preParentRowData, durable.NomsMapFromIndex(postParent.RowData))
 	for {
@@ -378,7 +379,7 @@ func nomsChildFkConstraintViolations(
 		return nil, false, err
 	}
 
-	differ := diff.NewRowDiffer(ctx, preChildSch, postChild.Schema, 1024)
+	differ := diff.NewRowDiffer(ctx, preChildRowData.Format(), preChildSch, postChild.Schema, 1024)
 	defer differ.Close()
 	differ.Start(ctx, preChildRowData, durable.NomsMapFromIndex(postChild.RowData))
 	for {

@@ -15,6 +15,7 @@
 package sqlserver
 
 import (
+	"path/filepath"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -112,6 +113,13 @@ type UserSessionVars struct {
 	Vars map[string]string `yaml:"vars"`
 }
 
+type JwksYAMLConfig struct {
+	Name        string            `yaml:"name"`
+	LocationUrl string            `yaml:"location_url"`
+	Claims      map[string]string `yaml:"claims"`
+	FieldsToLog []string          `yaml:"fields_to_log"`
+}
+
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
 	LogLevelStr       *string               `yaml:"log_level"`
@@ -121,9 +129,11 @@ type YAMLConfig struct {
 	DatabaseConfig    []DatabaseYAMLConfig  `yaml:"databases"`
 	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
 	DataDirStr        *string               `yaml:"data_dir"`
+	CfgDirStr         *string               `yaml:"cfg_dir"`
 	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
 	PrivilegeFile     *string               `yaml:"privilege_file"`
 	Vars              []UserSessionVars     `yaml:"user_session_vars"`
+	Jwks              []JwksYAMLConfig      `yaml:"jwks"`
 }
 
 var _ ServerConfig = YAMLConfig{}
@@ -327,7 +337,7 @@ func (cfg YAMLConfig) PrivilegeFilePath() string {
 	if cfg.PrivilegeFile != nil {
 		return *cfg.PrivilegeFile
 	}
-	return ""
+	return filepath.Join(cfg.CfgDir(), defaultPrivilegeFilePath)
 }
 
 func (cfg YAMLConfig) UserVars() []UserSessionVars {
@@ -335,6 +345,13 @@ func (cfg YAMLConfig) UserVars() []UserSessionVars {
 		return cfg.Vars
 	}
 
+	return nil
+}
+
+func (cfg YAMLConfig) JwksConfig() []JwksYAMLConfig {
+	if cfg.Jwks != nil {
+		return cfg.Jwks
+	}
 	return nil
 }
 
@@ -379,5 +396,12 @@ func (cfg YAMLConfig) DataDir() string {
 	if cfg.DataDirStr != nil {
 		return *cfg.DataDirStr
 	}
-	return ""
+	return defaultDataDir
+}
+
+func (cfg YAMLConfig) CfgDir() string {
+	if cfg.CfgDirStr != nil {
+		return *cfg.CfgDirStr
+	}
+	return filepath.Join(cfg.DataDir(), defaultCfgDir)
 }

@@ -183,8 +183,6 @@ SQL
 }
 
 @test "schema-changes: changing column types in place works" {
-    skip_nbf_dolt_1 "hangs"
-    
     dolt sql <<SQL
 CREATE TABLE test2(
   pk1 BIGINT,
@@ -248,6 +246,7 @@ SQL
     dolt add .
     dolt commit -m "Created table with one row"
 
+    skip_nbf_dolt_1 "In __DOLT_1__ the following throws an error since the primary key types changed"
     dolt merge main
 
     run dolt sql -q 'show create table test2'

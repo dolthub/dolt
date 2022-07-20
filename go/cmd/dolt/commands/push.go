@@ -109,8 +109,16 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
+	remoteDB, err := opts.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
+	if err != nil {
+		if err == remotestorage.ErrInvalidDoltSpecPath {
+			err = actions.HandleInvalidDoltSpecPathErr(opts.Remote.Name, opts.Remote.Url, err)
+		}
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
 	var verr errhand.VerboseError
-	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, dEnv.TempTableFilesDir(), opts, buildProgStarter(defaultLanguage), stopProgFuncs)
+	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, remoteDB, dEnv.TempTableFilesDir(), opts, buildProgStarter(defaultLanguage), stopProgFuncs)
 	if err != nil {
 		verr = printInfoForPushError(err, opts.Remote, opts.DestRef, opts.RemoteRef)
 	}

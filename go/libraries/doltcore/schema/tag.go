@@ -22,7 +22,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -35,13 +34,33 @@ func ErrTagPrevUsed(tag uint64, newColName, tableName string) error {
 	return fmt.Errorf("Cannot create column %s, the tag %d was already used in table %s", newColName, tag, tableName)
 }
 
+type TagMapping map[uint64]string
+
+func (tm TagMapping) Contains(tag uint64) (ok bool) {
+	_, ok = tm[tag]
+	return
+}
+
+func (tm TagMapping) Get(tag uint64) (table string, ok bool) {
+	table, ok = tm[tag]
+	return
+}
+
+func (tm TagMapping) Add(tag uint64, table string) {
+	tm[tag] = table
+}
+
+func (tm TagMapping) Size() int {
+	return len(tm)
+}
+
 // AutoGenerateTag generates a random tag that doesn't exist in the provided SuperSchema.
 // It uses a deterministic random number generator that is seeded with the NomsKinds of any existing columns in the
 // schema and the NomsKind of the column being added to the schema. Deterministic tag generation means that branches
 // and repositories that perform the same sequence of mutations to a database will get equivalent databases as a result.
 // DETERMINISTIC MUTATION IS A CRITICAL INVARIANT TO MAINTAINING COMPATIBILITY BETWEEN REPOSITORIES.
 // DO NOT ALTER THIS METHOD.
-func AutoGenerateTag(existingTags *set.Uint64Set, tableName string, existingColKinds []types.NomsKind, newColName string, newColKind types.NomsKind) uint64 {
+func AutoGenerateTag(existingTags TagMapping, tableName string, existingColKinds []types.NomsKind, newColName string, newColKind types.NomsKind) uint64 {
 	// DO NOT ALTER THIS METHOD (see above)
 	var maxTagVal uint64 = 128 * 128
 

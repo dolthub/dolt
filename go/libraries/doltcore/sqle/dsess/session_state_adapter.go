@@ -135,16 +135,32 @@ func (s SessionStateAdapter) UpdateBranch(name string, new env.BranchConfig) err
 	return nil
 }
 
-func (s SessionStateAdapter) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
-	return fmt.Errorf("cannot insert remote in an SQL session")
+func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
+	s.remotes[remote.Name] = remote
+
+	fs := s.session.Provider().FileSystem()
+	repoState, err := env.LoadRepoState(fs)
+	if err != nil {
+		return err
+	}
+	repoState.AddRemote(remote)
+	return repoState.Save(fs)
 }
 
-func (s SessionStateAdapter) AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error {
+func (s SessionStateAdapter) AddBackup(remote env.Remote) error {
 	return fmt.Errorf("cannot insert remote in an SQL session")
 }
 
 func (s SessionStateAdapter) RemoveRemote(ctx context.Context, name string) error {
-	return fmt.Errorf("cannot delete remote in an SQL session")
+	delete(s.remotes, name)
+
+	fs := s.session.Provider().FileSystem()
+	repoState, err := env.LoadRepoState(fs)
+	if err != nil {
+		return err
+	}
+	delete(repoState.Remotes, name)
+	return repoState.Save(fs)
 }
 
 func (s SessionStateAdapter) RemoveBackup(ctx context.Context, name string) error {

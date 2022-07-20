@@ -85,30 +85,23 @@ func Serve(
 	}
 
 	var mrEnv *env.MultiRepoEnv
-	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
+	var err error
+	fs := dEnv.FS
 
+	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
 	if len(dbNamesAndPaths) == 0 {
 		if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
-			fs, err := dEnv.FS.WithWorkingDir(serverConfig.DataDir())
-			if err != nil {
-				return err, nil
-			}
-
-			// TODO: this should be the global config, probably?
-			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile)
-			if err != nil {
-				return err, nil
-			}
-		} else {
-			var err error
-			mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
+			fs, err = dEnv.FS.WithWorkingDir(serverConfig.DataDir())
 			if err != nil {
 				return err, nil
 			}
 		}
+
+		mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+		if err != nil {
+			return err, nil
+		}
 	} else {
-		var err error
-		fs := dEnv.FS
 		if len(serverConfig.DataDir()) > 0 {
 			fs, err = fs.WithWorkingDir(serverConfig.DataDir())
 			if err != nil {
@@ -116,8 +109,15 @@ func Serve(
 			}
 		}
 
-		// TODO: this should be the global config, probably?
-		mrEnv, err = env.LoadMultiEnv(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), fs, version, dEnv.IgnoreLockFile, dbNamesAndPaths...)
+		mrEnv, err = env.MultiEnvForPaths(
+			ctx,
+			env.GetCurrentUserHomeDir,
+			dEnv.Config.WriteableConfig(),
+			fs,
+			version,
+			dEnv.IgnoreLockFile,
+			dbNamesAndPaths...,
+		)
 
 		if err != nil {
 			return err, nil

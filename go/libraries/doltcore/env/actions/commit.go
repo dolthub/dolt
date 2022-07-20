@@ -38,7 +38,6 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mer
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
 	rsw := dbData.Rsw
-	drw := dbData.Drw
 
 	if props.Message == "" {
 		return nil, datas.ErrEmptyCommitMessage
@@ -59,16 +58,7 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mer
 	}
 
 	if len(staged) == 0 && !mergeActive && !props.AllowEmpty {
-		docsOnDisk, err := drw.GetDocsOnDisk()
-		if err != nil {
-			return nil, err
-		}
-
-		_, notStagedDocs, err := diff.GetDocDiffs(ctx, roots, docsOnDisk)
-		if err != nil {
-			return nil, err
-		}
-		return nil, NothingStaged{notStaged, notStagedDocs}
+		return nil, NothingStaged{notStaged}
 	}
 
 	if !props.Force {
@@ -88,7 +78,7 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mer
 		}
 	}
 
-	stagedRoot, err := roots.Staged.UpdateSuperSchemasFromOther(ctx, stagedTblNames, roots.Staged)
+	stagedRoot := roots.Staged
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +96,7 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mer
 		return nil, err
 	}
 
-	workingRoot, err := roots.Working.UpdateSuperSchemasFromOther(ctx, stagedTblNames, stagedRoot)
+	workingRoot := roots.Working
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +142,6 @@ func GetCommitStaged(
 ) (*doltdb.PendingCommit, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
-	drw := dbData.Drw
 
 	if props.Message == "" {
 		return nil, datas.ErrEmptyCommitMessage
@@ -172,18 +161,8 @@ func GetCommitStaged(
 		stagedTblNames = append(stagedTblNames, n)
 	}
 
-	// TODO: kill off drw here, return an appropriate error type and make clients build this error as appropriate
 	if len(staged) == 0 && !mergeActive && !props.AllowEmpty {
-		docsOnDisk, err := drw.GetDocsOnDisk()
-		if err != nil {
-			return nil, err
-		}
-
-		_, notStagedDocs, err := diff.GetDocDiffs(ctx, roots, docsOnDisk)
-		if err != nil {
-			return nil, err
-		}
-		return nil, NothingStaged{notStaged, notStagedDocs}
+		return nil, NothingStaged{notStaged}
 	}
 
 	if !props.Force {
@@ -203,21 +182,11 @@ func GetCommitStaged(
 		}
 	}
 
-	roots.Staged, err = roots.Staged.UpdateSuperSchemasFromOther(ctx, stagedTblNames, roots.Staged)
-	if err != nil {
-		return nil, err
-	}
-
 	if !props.Force {
 		roots.Staged, err = roots.Staged.ValidateForeignKeysOnSchemas(ctx)
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	roots.Working, err = roots.Working.UpdateSuperSchemasFromOther(ctx, stagedTblNames, roots.Staged)
-	if err != nil {
-		return nil, err
 	}
 
 	meta, err := datas.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)

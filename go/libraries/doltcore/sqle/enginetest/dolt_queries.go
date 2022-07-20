@@ -1624,6 +1624,204 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "merge with new triggers defined",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			// create table and trigger1 (main & other)
+			"CREATE TABLE x(a BIGINT PRIMARY KEY)",
+			"CREATE TRIGGER trigger1 BEFORE INSERT ON x FOR EACH ROW SET new.a = new.a + 1",
+			"CALL dolt_add('-A')",
+			"CALL dolt_commit('-m', 'added table with trigger')",
+			"INSERT INTO dolt_branches (name, hash) VALUES ('other',hashof('main'))",
+			// create trigger2 on main
+			"CREATE TRIGGER trigger2 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 10",
+			"CALL dolt_commit('-am', 'created trigger2 on main')",
+			// create trigger3 & trigger4 on other
+			"CALL dolt_checkout('other')",
+			"CREATE TRIGGER trigger3 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 100",
+			"CREATE TRIGGER trigger4 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 1000",
+			"UPDATE dolt_schemas SET id = id + 1 WHERE name = 'trigger4'",
+			"CALL dolt_commit('-am', 'created triggers 3 & 4 on other');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			// todo: merge triggers correctly
+			//{
+			//	Query:    "select count(*) from dolt_schemas where type = 'trigger';",
+			//	Expected: []sql.Row{{4}},
+			//},
+		},
+	},
+	{
+		Name: "dolt_merge() works with no auto increment overlap",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+			"INSERT INTO t (c0) VALUES (1), (2);",
+			"CALL dolt_commit('-a', '-m', 'cm1');",
+			"CALL dolt_checkout('-b', 'test');",
+			"INSERT INTO t (c0) VALUES (3), (4);",
+			"CALL dolt_commit('-a', '-m', 'cm2');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('test');",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 5}}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+					{7, 7},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_merge() (3way) works with no auto increment overlap",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+			"INSERT INTO t (c0) VALUES (1);",
+			"CALL dolt_commit('-a', '-m', 'cm1');",
+			"CALL dolt_checkout('-b', 'test');",
+			"INSERT INTO t (pk,c0) VALUES (3,3), (4,4);",
+			"CALL dolt_commit('-a', '-m', 'cm2');",
+			"CALL dolt_checkout('main');",
+			"INSERT INTO t (c0) VALUES (2);",
+			"CALL dolt_commit('-a', '-m', 'cm3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('test');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 5}}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+					{7, 7},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_merge() with a gap in an auto increment key",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+			"INSERT INTO t (c0) VALUES (1), (2);",
+			"CALL dolt_add('-A');",
+			"CALL dolt_commit('-am', 'cm1');",
+			"CALL dolt_checkout('-b', 'test');",
+			"INSERT INTO t VALUES (4,4), (5,5);",
+			"CALL dolt_commit('-am', 'cm2');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('test');",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (3,3),(NULL,6);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_merge() (3way) with a gap in an auto increment key",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+			"INSERT INTO t (c0) VALUES (1);",
+			"CALL dolt_add('-A');",
+			"CALL dolt_commit('-am', 'cm1');",
+			"CALL dolt_checkout('-b', 'test');",
+			"INSERT INTO t VALUES (4,4), (5,5);",
+			"CALL dolt_commit('-am', 'cm2');",
+			"CALL dolt_checkout('main');",
+			"INSERT INTO t (c0) VALUES (2);",
+			"CALL dolt_commit('-am', 'cm3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('test');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (3,3),(NULL,6);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+				},
+			},
+		},
+	},
+}
+
+var Dolt1MergeScripts = []queries.ScriptTest{
+	{
+		Name: "Merge errors if the primary key types have changed (even if the new type has the same NomsKind)",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk1 bigint, pk2 bigint, PRIMARY KEY (pk1, pk2));",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"ALTER TABLE t MODIFY COLUMN pk2 tinyint",
+			"INSERT INTO t VALUES (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'right commit');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'left commit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('right');",
+				ExpectedErrStr: "error: cannot merge two tables with different primary key sets",
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
@@ -2566,7 +2764,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('right');",
-				ExpectedErrStr: "Duplicate entry for key 'col1_uniq': duplicate unique key given: [1,1]",
+				ExpectedErrStr: "duplicate unique key given: [1]",
 			},
 			{
 				Query:    "SELECT * from t",
@@ -2604,7 +2802,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('right');",
-				ExpectedErrStr: "Duplicate entry for key 'col1_uniq': duplicate unique key given: [1,1]",
+				ExpectedErrStr: "duplicate unique key given: [1]",
 			},
 		},
 	},
@@ -3351,6 +3549,29 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 					{7, 8, 0, 7, 8, 9, "modified"},
 					{7, 8, 9, nil, nil, nil, "added"},
 				},
+			},
+		},
+	},
+}
+
+var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
+	{
+		Name: "Diff table stops creating diff partitions when any primary key type has changed",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk1 VARCHAR(100), pk2 VARCHAR(100), PRIMARY KEY (pk1, pk2));",
+			"INSERT INTO t VALUES ('1', '1');",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"ALTER TABLE t MODIFY COLUMN pk2 VARCHAR(101)",
+			"CALL DOLT_COMMIT('-am', 'modify column type');",
+
+			"INSERT INTO t VALUES ('2', '2');",
+			"CALL DOLT_COMMIT('-am', 'insert new row');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT to_pk1, to_pk2, from_pk1, from_pk2, diff_type from dolt_diff_t;",
+				Expected: []sql.Row{{"2", "2", nil, nil, "added"}},
 			},
 		},
 	},
@@ -4899,6 +5120,62 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * FROM test",
 				Expected: []sql.Row{{1}, {2}, {3}, {8}, {9}},
+			},
+		},
+	},
+}
+
+var DoltRemoteTestScripts = []queries.ScriptTest{
+	{
+		Name: "dolt-remote: SQL add remotes",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_REMOTE('add','origin','file://../test')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
+				Expected: []sql.Row{{"origin", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin/*"]`), sql.MustJSON(`{}`)}},
+			},
+			{
+				Query:          "CALL DOLT_REMOTE()",
+				ExpectedErrStr: "error: invalid argument, use 'dolt_remotes' system table to list remotes",
+			},
+			{
+				Query:          "CALL DOLT_REMOTE('origin')",
+				ExpectedErrStr: "error: invalid argument",
+			},
+			{
+				Query:          "INSERT INTO dolt_remotes (name, url) VALUES ('origin', 'file://../test')",
+				ExpectedErrStr: "the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes",
+			},
+		},
+	},
+	{
+		Name: "dolt-remote: SQL remove remotes",
+		SetUpScript: []string{
+			"CALL DOLT_REMOTE('add','origin1','file://.')",
+			"CALL DOLT_REMOTE('add','origin2','aws://[dynamo_db_table:s3_bucket]/repo_name')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
+				Expected: []sql.Row{
+					{"origin1", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), sql.MustJSON(`{}`)},
+					{"origin2", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin2/*"]`), sql.MustJSON(`{}`)}},
+			},
+			{
+				Query:    "CALL DOLT_REMOTE('remove','origin2')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
+				Expected: []sql.Row{{"origin1", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), sql.MustJSON(`{}`)}},
+			},
+			// 'origin1' remote must exist in order this error to be returned; otherwise, no error from EOF
+			{
+				Query:          "DELETE FROM dolt_remotes WHERE name = 'origin1'",
+				ExpectedErrStr: "the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes",
 			},
 		},
 	},
