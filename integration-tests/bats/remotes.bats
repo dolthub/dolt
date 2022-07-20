@@ -2020,8 +2020,8 @@ SQL
     run dolt sql -q "use single_branch; select active_branch();"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "other" ]] || false
-    # TODO: to match Git's semantics, clone for a single branch should NOT create any other remote tracking branches
-    # TODO: Issue link
+    # TODO: To match Git's semantics, clone for a single branch should NOT create any other
+    #       remote tracking branches (https://github.com/dolthub/dolt/issues/3873)
     # run dolt checkout main
     # [ "$status" -eq 1 ]
 
