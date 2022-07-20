@@ -32,7 +32,7 @@ const (
 	// and serial.MergeArtifacts.ValueOffsets() respectively.
 	// They are only as stable as the flatbuffers schema that define them.
 	mergeArtifactKeyOffsetsVOffset   = 6
-	mergeArtifactValueOffsetsVOffset = 14
+	mergeArtifactValueOffsetsVOffset = 12
 )
 
 var mergeArtifactFileID = []byte(serial.MergeArtifactsFileID)
