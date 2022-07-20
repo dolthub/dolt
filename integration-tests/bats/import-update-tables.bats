@@ -381,8 +381,8 @@ DELIM
     run dolt table import -u test bad-updates.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
-    [[ "$output" =~ "csv reader's schema expects 2 fields, but line has 3 values" ]] || false
-    [[ "$output" =~ "The following line values were unused: '[\"\"]'" ]] || false
+    [[ "$output" =~ "CSV reader expected 2 values, but saw 3" ]] || false
+    [[ "$output" =~ "with the following values left over: '[\"\"]'" ]] || false
 
     run dolt table import -u --continue test bad-updates.csv
     [ "$status" -eq 0 ]
@@ -1185,9 +1185,9 @@ DELIM
     run dolt table import -u test bad-updates.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
-    [[ "$output" =~ "csv reader's schema expects 3 fields, but line has 2 values" ]] || false
-    [[ "$output" =~ "The bad line was interpreted as follows:" ]]
-    ! [[ "$output" =~ "The following line values were unused: '[\"\"]'" ]] || false
+    [[ "$output" =~ "CSV reader expected 3 values, but saw 2" ]] || false
+    [[ "$output" =~ "The row was interpreted to be:" ]]
+    ! [[ "$output" =~ "with the following values left over: '[\"\"]'" ]] || false
 
     # Case there are more columns in the rows than the number of columns in the schema
  cat <<DELIM > bad-updates.csv
@@ -1199,9 +1199,9 @@ DELIM
     run dolt table import -u test bad-updates.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
-    [[ "$output" =~ "csv reader's schema expects 2 fields, but line has 3 values" ]] || false
-    [[ "$output" =~ "The bad line was interpreted as follows:" ]]
-    [[ "$output" =~ "\"pk\": 5" ]]
-    [[ "$output" =~ "\"v1\": 7" ]]
-    [[ "$output" =~ "The following line values were unused: '[\"5\"]'" ]] || false
+    [[ "$output" =~ "CSV reader expected 2 values, but saw 3" ]] || false
+    [[ "$output" =~ "The row was interpreted to be:" ]]
+    [[ "$output" =~ '"pk": 5' ]]
+    [[ "$output" =~ '"v1": 7' ]]
+    [[ "$output" =~ "with the following values left over: '[\"5\"]'" ]] || false
 }

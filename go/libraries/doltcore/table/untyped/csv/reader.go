@@ -207,12 +207,12 @@ func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
 		badMpStr, unusedRowValues := interpretRowSizeError(csvr.sch, rowVals)
 
 		args := []string{
-			fmt.Sprintf("csv reader's schema expects %d fields, but line has %d values.", schSize, len(rowVals)),
-			fmt.Sprintf("The bad line was interpreted as follows: '%s'", badMpStr),
+			fmt.Sprintf("CSV reader expected %d values, but saw %d.", schSize, len(rowVals)),
+			fmt.Sprintf("The row was interpreted to be: '%s'", badMpStr),
 		}
 
 		if len(unusedRowValues) > 0 {
-			args = append(args, fmt.Sprintf("The following line values were unused: '%v'", unusedRowValues))
+			args = append(args, fmt.Sprintf("with the following values left over: '%v'", unusedRowValues))
 		}
 
 		return nil, table.NewBadRow(nil,

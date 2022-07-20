@@ -515,8 +515,8 @@ DELIM
     [ "$status" -eq 1 ]
     [[ "${lines[0]}" =~ "Additions" ]] || false
     [[ "${lines[1]}" =~ "A bad row was encountered" ]] || false
-    [[ "${lines[2]}" =~ "expects 6 fields" ]] || false
-    [[ "${lines[2]}" =~ "line only has 1 value" ]] || false
+    [[ "${lines[2]}" =~ "expected 6 values" ]] || false
+    [[ "${lines[2]}" =~ "but saw 1" ]] || false
 }
 
 @test "1pk5col-ints: import data from a csv file with a bad header" {
