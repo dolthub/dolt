@@ -53,7 +53,6 @@ type DoltDatabaseProvider interface {
 	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error
 }
 
-
 func EmptyDatabaseProvider() DoltDatabaseProvider {
 	return emptyRevisionDatabaseProvider{}
 }
