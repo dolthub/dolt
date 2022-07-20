@@ -142,10 +142,6 @@ func NewSqlEngine(
 
 	sess.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
-	//if user := engine.Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
-	//	return nil, fmt.Errorf("user %s@%s does not exist", config.ServerUser, config.ServerHost)
-	//}
-
 	// this is overwritten only for server sessions
 	for _, db := range dbs {
 		db.DbData().Ddb.SetCommitHookLogger(ctx, cli.CliOut)

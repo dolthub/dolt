@@ -101,7 +101,6 @@ const (
 	continueFlag      = "continue"
 	fileInputFlag     = "file"
 	UserFlag          = "user"
-	PasswordFlag      = "password"
 	DefaultUser       = "root"
 	DefaultPassword   = ""
 	DefaultHost       = "localhost"
