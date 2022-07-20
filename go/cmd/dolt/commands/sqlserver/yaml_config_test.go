@@ -71,6 +71,19 @@ user_session_vars:
           var1: val1_1
           var2: val1_2
           var4: val1_4
+
+jwks:
+  - name: jwks_name
+    location_url: https://website.com
+    claims: 
+      field1: a
+      field2: b
+    fields_to_log: [field1, field2]
+  - name: jwks_name2
+    location_url: https://website.com
+    claims: 
+      field1: a
+    fields_to_log:
 `
 
 	expected := serverConfigAsYAMLConfig(DefaultServerConfig())
@@ -110,6 +123,25 @@ user_session_vars:
 				"var2": "val1_2",
 				"var4": "val1_4",
 			},
+		},
+	}
+	expected.Jwks = []JwksYAMLConfig{
+		{
+			Name:        "jwks_name",
+			LocationUrl: "https://website.com",
+			Claims: map[string]string{
+				"field1": "a",
+				"field2": "b",
+			},
+			FieldsToLog: []string{"field1", "field2"},
+		},
+		{
+			Name:        "jwks_name2",
+			LocationUrl: "https://website.com",
+			Claims: map[string]string{
+				"field1": "a",
+			},
+			FieldsToLog: nil,
 		},
 	}
 

@@ -497,11 +497,11 @@ func fmtPrimaryKeyError(sch schema.Schema, keylessRow row.Row) error {
 		vals[i] = val.HumanReadableString()
 	}
 
-	return sql.NewUniqueKeyErr(fmt.Sprintf("[%s]", strings.Join(vals, ",")), true, sql.Row{vals})
+	return sql.NewUniqueKeyErr(fmt.Sprintf("[%s]", strings.Join(vals, ",")), true, nil)
 }
 
 func duplicatePkFunction(keyString, indexName string, k, v types.Tuple, isPk bool) error {
-	return sql.NewUniqueKeyErr(fmt.Sprintf("%s", keyString), true, sql.Row{})
+	return sql.NewUniqueKeyErr(fmt.Sprintf("%s", keyString), true, nil)
 }
 
 var ErrKeylessAltTbl = errors.New("schema alterations not supported for keyless tables")

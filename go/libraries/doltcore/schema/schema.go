@@ -25,7 +25,8 @@ import (
 
 // Schema is an interface for retrieving the columns that make up a schema
 type Schema interface {
-	// GetPKCols gets the collection of columns which make the primary key.
+	// GetPKCols gets the collection of columns which make the primary key. They
+	// are always returned in ordinal order.
 	GetPKCols() *ColCollection
 
 	// GetNonPKCols gets the collection of columns which are not part of the primary key.
@@ -165,9 +166,10 @@ func GetSharedCols(schema Schema, cmpNames []string, cmpKinds []types.NomsKind) 
 	return shared
 }
 
-// ArePrimaryKeySetsDiffable checks if two schemas are diffable. Assumes the passed in schema are from the same table
-// between commits.
-func ArePrimaryKeySetsDiffable(fromSch, toSch Schema) bool {
+// ArePrimaryKeySetsDiffable checks if two schemas are diffable. Assumes the
+// passed in schema are from the same table between commits. If __DOLT_1__, then
+// it also checks if the underlying SQL types of the columns are equal.
+func ArePrimaryKeySetsDiffable(format *types.NomsBinFormat, fromSch, toSch Schema) bool {
 	if fromSch == nil && toSch == nil {
 		return false
 		// Empty case
@@ -192,6 +194,9 @@ func ArePrimaryKeySetsDiffable(fromSch, toSch Schema) bool {
 		c1 := cc1.GetAtIndex(i)
 		c2 := cc2.GetAtIndex(i)
 		if (c1.Tag != c2.Tag) || (c1.IsPartOfPK != c2.IsPartOfPK) {
+			return false
+		}
+		if types.IsFormat_DOLT_1(format) && !c1.TypeInfo.ToSqlType().Equals(c2.TypeInfo.ToSqlType()) {
 			return false
 		}
 	}

@@ -87,7 +87,7 @@ func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joine
 	fromCmInfo := commitInfo{types.String(dp.fromName), dp.fromDate, fromCol.Tag, fromDateCol.Tag}
 	toCmInfo := commitInfo{types.String(dp.toName), dp.toDate, toCol.Tag, toDateCol.Tag}
 
-	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
+	rd := diff.NewRowDiffer(ctx, ddb.Format(), fromSch, toSch, 1024)
 	// TODO (dhruv) don't cast to noms map
 	// Use index lookup if it exists
 	if lookup == nil {

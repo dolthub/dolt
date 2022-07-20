@@ -284,7 +284,7 @@ func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
 }
 
 func (td TableDelta) HasPrimaryKeySetChanged() bool {
-	return !schema.ArePrimaryKeySetsDiffable(td.FromSch, td.ToSch)
+	return !schema.ArePrimaryKeySetsDiffable(td.Format(), td.FromSch, td.ToSch)
 }
 
 func (td TableDelta) HasChanges() (bool, error) {

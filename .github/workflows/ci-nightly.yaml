@@ -9,6 +9,9 @@ jobs:
   perf:
     runs-on: ubuntu-18.04
     name: Benchmark Performance
+    strategy:
+      matrix:
+        dolt_fmt: [ "__LD_1__", "__DOLT_1__" ]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -47,6 +50,7 @@ jobs:
           ACTOR: ${{ github.actor }}
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
+          NOMS_BIN_FORMAT: ${{ matrix.dolt_fmt }}
           TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"
       - name: Run correctness
         id: run-correctness
@@ -58,4 +62,5 @@ jobs:
           ACTOR_EMAIL: 'max@dolthub.com'
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
+          NOMS_BIN_FORMAT: ${{ matrix.dolt_fmt }}
           TEMPLATE_SCRIPT: "./.github/scripts/sql-correctness/get-dolt-correctness-job-json.sh"
