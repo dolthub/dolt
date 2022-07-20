@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -93,17 +92,10 @@ func DoDoltPush(ctx *sql.Context, args []string) (int, error) {
 	if err != nil {
 		return cmdFailure, err
 	}
-	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb, opts.Remote, false)
+	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb, opts.Remote, true)
 	if err != nil {
 		if err == remotestorage.ErrInvalidDoltSpecPath {
-			urlObj, _ := earl.Parse(opts.Remote.Url)
-			path := urlObj.Path
-			if path[0] == '/' {
-				path = path[1:]
-			}
-
-			var detail = fmt.Sprintf("the remote: %s %s '%s' should be in the format 'organization/repo'", opts.Remote.Name, opts.Remote.Url, path)
-			return 1, fmt.Errorf("%w; %s; %s", actions.ErrFailedToGetRemoteDb, detail, err.Error())
+			return 1, actions.HandleInvalidDoltSpecPathErr(opts.Remote.Name, opts.Remote.Url, err)
 		}
 		return 1, err
 	}

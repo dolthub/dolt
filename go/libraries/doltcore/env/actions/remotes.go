@@ -360,6 +360,8 @@ func FetchRemoteBranch(
 }
 
 // FetchRefSpecs is the common SQL and CLI entrypoint for fetching branches, tags, and heads from a remote.
+// This function takes dbData which is a env.DbData object for handling repoState read and write, and srcDB is
+// a remote *doltdb.DoltDB object that is used to fetch remote branches from.
 func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB, refSpecs []ref.RemoteRefSpec, remote env.Remote, mode ref.UpdateMode, progStarter ProgStarter, progStopper ProgStopper) error {
 	branchRefs, err := srcDB.GetHeadRefs(ctx)
 	if err != nil {
@@ -459,4 +461,15 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 	destDb.CommitRoot(ctx, srcRoot, destRoot)
 
 	return nil
+}
+
+func HandleInvalidDoltSpecPathErr(name, url string, err error) error {
+	urlObj, _ := earl.Parse(url)
+	path := urlObj.Path
+	if path[0] == '/' {
+		path = path[1:]
+	}
+
+	var detail = fmt.Sprintf("the remote: %s %s '%s' should be in the format 'organization/repo'", name, url, path)
+	return fmt.Errorf("%w; %s; %s", ErrFailedToGetRemoteDb, detail, err.Error())
 }

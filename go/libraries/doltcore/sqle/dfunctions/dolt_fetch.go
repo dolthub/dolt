@@ -97,7 +97,7 @@ func DoDoltFetch(ctx *sql.Context, args []string) (int, error) {
 
 	updateMode := ref.UpdateMode{Force: apr.Contains(cli.ForceFlag)}
 
-	srcDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb, remote, true)
+	srcDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb, remote, false)
 	if err != nil {
 		return 1, err
 	}

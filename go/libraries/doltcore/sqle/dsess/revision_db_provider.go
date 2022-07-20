@@ -41,7 +41,10 @@ type DoltDatabaseProvider interface {
 	RevisionDatabaseProvider
 	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases
 	FileSystem() filesys.Filesys
-	// GetRemoteDB returns the remote DB from Remote object.
+	// GetRemoteDB returns the remote database for given env.Remote object using the local database's vrw, and
+	// withCaching defines whether the remoteDB gets cached or not.
+	// This function replaces env.Remote's GetRemoteDB method during SQL session to access dialer in order
+	// to get remote database associated to the env.Remote object.
 	GetRemoteDB(ctx *sql.Context, srcDB *doltdb.DoltDB, r env.Remote, withCaching bool) (*doltdb.DoltDB, error)
 }
 
