@@ -14,28 +14,21 @@
 
 namespace serial;
 
-enum ArtifactType : uint8 {
-  Unknown,
-  ArifactFormatAlpha = 1,
-}
-
 table MergeArtifacts {
   // sorted array of key items
+  // key items are encoded as TupleFormatAlpha
   key_items:[ubyte] (required);
   // items offets for |key_items|, zeroth offset omitted
   key_offsets:[uint16] (required);
-  // item type for |key_items|
-  key_type:ArtifactType;
 
   // offsets for each chunk address in |key_items|
   key_address_offsets:[uint16];
 
   // array of values items, ordered by paired key
+  // value items are encoded as TupleFormatAlpha
   value_items:[ubyte];
   // item offsets for |value_items|, zeroth offset omitted
   value_offsets:[uint16];
-  // item type for |value_items|
-  value_type:ArtifactType;
 
   // array of subtree addresses for internal tree nodes
   address_array:[ubyte];

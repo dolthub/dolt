@@ -17,34 +17,8 @@
 package serial
 
 import (
-	"strconv"
-
 	flatbuffers "github.com/google/flatbuffers/go"
 )
-
-type ArtifactType byte
-
-const (
-	ArtifactTypeUnknown            ArtifactType = 0
-	ArtifactTypeArifactFormatAlpha ArtifactType = 1
-)
-
-var EnumNamesArtifactType = map[ArtifactType]string{
-	ArtifactTypeUnknown:            "Unknown",
-	ArtifactTypeArifactFormatAlpha: "ArifactFormatAlpha",
-}
-
-var EnumValuesArtifactType = map[string]ArtifactType{
-	"Unknown":            ArtifactTypeUnknown,
-	"ArifactFormatAlpha": ArtifactTypeArifactFormatAlpha,
-}
-
-func (v ArtifactType) String() string {
-	if s, ok := EnumNamesArtifactType[v]; ok {
-		return s
-	}
-	return "ArtifactType(" + strconv.FormatInt(int64(v), 10) + ")"
-}
 
 type MergeArtifacts struct {
 	_tab flatbuffers.Table
@@ -133,20 +107,8 @@ func (rcv *MergeArtifacts) MutateKeyOffsets(j int, n uint16) bool {
 	return false
 }
 
-func (rcv *MergeArtifacts) KeyType() ArtifactType {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		return ArtifactType(rcv._tab.GetByte(o + rcv._tab.Pos))
-	}
-	return 0
-}
-
-func (rcv *MergeArtifacts) MutateKeyType(n ArtifactType) bool {
-	return rcv._tab.MutateByteSlot(8, byte(n))
-}
-
 func (rcv *MergeArtifacts) KeyAddressOffsets(j int) uint16 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.GetUint16(a + flatbuffers.UOffsetT(j*2))
@@ -155,7 +117,7 @@ func (rcv *MergeArtifacts) KeyAddressOffsets(j int) uint16 {
 }
 
 func (rcv *MergeArtifacts) KeyAddressOffsetsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -163,7 +125,7 @@ func (rcv *MergeArtifacts) KeyAddressOffsetsLength() int {
 }
 
 func (rcv *MergeArtifacts) MutateKeyAddressOffsets(j int, n uint16) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.MutateUint16(a+flatbuffers.UOffsetT(j*2), n)
@@ -172,7 +134,7 @@ func (rcv *MergeArtifacts) MutateKeyAddressOffsets(j int, n uint16) bool {
 }
 
 func (rcv *MergeArtifacts) ValueItems(j int) byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
@@ -181,7 +143,7 @@ func (rcv *MergeArtifacts) ValueItems(j int) byte {
 }
 
 func (rcv *MergeArtifacts) ValueItemsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -189,7 +151,7 @@ func (rcv *MergeArtifacts) ValueItemsLength() int {
 }
 
 func (rcv *MergeArtifacts) ValueItemsBytes() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
 	}
@@ -197,7 +159,7 @@ func (rcv *MergeArtifacts) ValueItemsBytes() []byte {
 }
 
 func (rcv *MergeArtifacts) MutateValueItems(j int, n byte) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
@@ -206,7 +168,7 @@ func (rcv *MergeArtifacts) MutateValueItems(j int, n byte) bool {
 }
 
 func (rcv *MergeArtifacts) ValueOffsets(j int) uint16 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.GetUint16(a + flatbuffers.UOffsetT(j*2))
@@ -215,7 +177,7 @@ func (rcv *MergeArtifacts) ValueOffsets(j int) uint16 {
 }
 
 func (rcv *MergeArtifacts) ValueOffsetsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -223,7 +185,7 @@ func (rcv *MergeArtifacts) ValueOffsetsLength() int {
 }
 
 func (rcv *MergeArtifacts) MutateValueOffsets(j int, n uint16) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.MutateUint16(a+flatbuffers.UOffsetT(j*2), n)
@@ -231,20 +193,8 @@ func (rcv *MergeArtifacts) MutateValueOffsets(j int, n uint16) bool {
 	return false
 }
 
-func (rcv *MergeArtifacts) ValueType() ArtifactType {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
-	if o != 0 {
-		return ArtifactType(rcv._tab.GetByte(o + rcv._tab.Pos))
-	}
-	return 0
-}
-
-func (rcv *MergeArtifacts) MutateValueType(n ArtifactType) bool {
-	return rcv._tab.MutateByteSlot(16, byte(n))
-}
-
 func (rcv *MergeArtifacts) AddressArray(j int) byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
@@ -253,7 +203,7 @@ func (rcv *MergeArtifacts) AddressArray(j int) byte {
 }
 
 func (rcv *MergeArtifacts) AddressArrayLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -261,7 +211,7 @@ func (rcv *MergeArtifacts) AddressArrayLength() int {
 }
 
 func (rcv *MergeArtifacts) AddressArrayBytes() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
 	}
@@ -269,7 +219,7 @@ func (rcv *MergeArtifacts) AddressArrayBytes() []byte {
 }
 
 func (rcv *MergeArtifacts) MutateAddressArray(j int, n byte) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
@@ -278,7 +228,7 @@ func (rcv *MergeArtifacts) MutateAddressArray(j int, n byte) bool {
 }
 
 func (rcv *MergeArtifacts) SubtreeCounts(j int) byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
@@ -287,7 +237,7 @@ func (rcv *MergeArtifacts) SubtreeCounts(j int) byte {
 }
 
 func (rcv *MergeArtifacts) SubtreeCountsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -295,7 +245,7 @@ func (rcv *MergeArtifacts) SubtreeCountsLength() int {
 }
 
 func (rcv *MergeArtifacts) SubtreeCountsBytes() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
 	}
@@ -303,7 +253,7 @@ func (rcv *MergeArtifacts) SubtreeCountsBytes() []byte {
 }
 
 func (rcv *MergeArtifacts) MutateSubtreeCounts(j int, n byte) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
@@ -312,7 +262,7 @@ func (rcv *MergeArtifacts) MutateSubtreeCounts(j int, n byte) bool {
 }
 
 func (rcv *MergeArtifacts) TreeCount() uint64 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(22))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
 	if o != 0 {
 		return rcv._tab.GetUint64(o + rcv._tab.Pos)
 	}
@@ -320,11 +270,11 @@ func (rcv *MergeArtifacts) TreeCount() uint64 {
 }
 
 func (rcv *MergeArtifacts) MutateTreeCount(n uint64) bool {
-	return rcv._tab.MutateUint64Slot(22, n)
+	return rcv._tab.MutateUint64Slot(18, n)
 }
 
 func (rcv *MergeArtifacts) TreeLevel() byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(24))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
 	if o != 0 {
 		return rcv._tab.GetByte(o + rcv._tab.Pos)
 	}
@@ -332,11 +282,11 @@ func (rcv *MergeArtifacts) TreeLevel() byte {
 }
 
 func (rcv *MergeArtifacts) MutateTreeLevel(n byte) bool {
-	return rcv._tab.MutateByteSlot(24, n)
+	return rcv._tab.MutateByteSlot(20, n)
 }
 
 func MergeArtifactsStart(builder *flatbuffers.Builder) {
-	builder.StartObject(11)
+	builder.StartObject(9)
 }
 func MergeArtifactsAddKeyItems(builder *flatbuffers.Builder, keyItems flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(keyItems), 0)
@@ -350,47 +300,41 @@ func MergeArtifactsAddKeyOffsets(builder *flatbuffers.Builder, keyOffsets flatbu
 func MergeArtifactsStartKeyOffsetsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(2, numElems, 2)
 }
-func MergeArtifactsAddKeyType(builder *flatbuffers.Builder, keyType ArtifactType) {
-	builder.PrependByteSlot(2, byte(keyType), 0)
-}
 func MergeArtifactsAddKeyAddressOffsets(builder *flatbuffers.Builder, keyAddressOffsets flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(keyAddressOffsets), 0)
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(keyAddressOffsets), 0)
 }
 func MergeArtifactsStartKeyAddressOffsetsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(2, numElems, 2)
 }
 func MergeArtifactsAddValueItems(builder *flatbuffers.Builder, valueItems flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(valueItems), 0)
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(valueItems), 0)
 }
 func MergeArtifactsStartValueItemsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
 }
 func MergeArtifactsAddValueOffsets(builder *flatbuffers.Builder, valueOffsets flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(valueOffsets), 0)
+	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(valueOffsets), 0)
 }
 func MergeArtifactsStartValueOffsetsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(2, numElems, 2)
 }
-func MergeArtifactsAddValueType(builder *flatbuffers.Builder, valueType ArtifactType) {
-	builder.PrependByteSlot(6, byte(valueType), 0)
-}
 func MergeArtifactsAddAddressArray(builder *flatbuffers.Builder, addressArray flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(addressArray), 0)
+	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(addressArray), 0)
 }
 func MergeArtifactsStartAddressArrayVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
 }
 func MergeArtifactsAddSubtreeCounts(builder *flatbuffers.Builder, subtreeCounts flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(8, flatbuffers.UOffsetT(subtreeCounts), 0)
+	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(subtreeCounts), 0)
 }
 func MergeArtifactsStartSubtreeCountsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
 }
 func MergeArtifactsAddTreeCount(builder *flatbuffers.Builder, treeCount uint64) {
-	builder.PrependUint64Slot(9, treeCount, 0)
+	builder.PrependUint64Slot(7, treeCount, 0)
 }
 func MergeArtifactsAddTreeLevel(builder *flatbuffers.Builder, treeLevel byte) {
-	builder.PrependByteSlot(10, treeLevel, 0)
+	builder.PrependByteSlot(8, treeLevel, 0)
 }
 func MergeArtifactsEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
