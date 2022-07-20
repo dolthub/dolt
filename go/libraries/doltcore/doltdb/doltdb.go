@@ -633,10 +633,7 @@ func (ddb *DoltDB) ResolveParent(ctx context.Context, commit *Commit, parentIdx 
 }
 
 func (ddb *DoltDB) ResolveAllParents(ctx context.Context, commit *Commit) ([]*Commit, error) {
-	num, err := commit.NumParents()
-	if err != nil {
-		return nil, err
-	}
+	num := commit.NumParents()
 	resolved := make([]*Commit, num)
 	for i := 0; i < num; i++ {
 		parent, err := ddb.ResolveParent(ctx, commit, i)
