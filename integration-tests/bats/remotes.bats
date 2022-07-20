@@ -1787,6 +1787,49 @@ setup_ref_test() {
     [[ "$output" =~ "adding table from other" ]]
 }
 
+@test "remotes: dolt_remote add and remove works with other commands" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    run dolt sql <<SQL
+CALL dolt_remote('add', 'origin', 'http://localhost:50051/test-org/test-repo');
+CALL dolt_push('origin', 'main');
+SQL
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "must provide a GRPCDialProvider param through GRPCDialProviderParam" ]] || false
+
+    cd ..
+    dolt clone http://localhost:50051/test-org/test-repo repo2
+
+    cd repo2
+    run dolt branch -va
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "other" ]] || false
+
+    cd ../repo1
+    dolt checkout -b other
+    dolt push origin other
+
+    cd ../repo2
+    dolt pull
+    run dolt branch -va
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "other" ]] || false
+
+    dolt checkout main
+    dolt sql -q "CREATE TABLE a(pk int primary key)"
+    dolt commit -am "add table a"
+    dolt push
+
+    cd ../repo1
+    dolt sql -q "CALL dolt_remote('remove', 'origin')"
+    run dolt pull
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no remote" ]] || false
+}
+
 @test "remotes: dolt status on local repo compares with remote tracking" {
     mkdir remote
     mkdir repo1
