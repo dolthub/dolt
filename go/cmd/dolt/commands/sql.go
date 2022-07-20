@@ -257,7 +257,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	// TODO: some logic involving user and password
 	// If no privilege filepath specified, default to doltcfg directory
 	privsFp, hasPrivsFp := apr.GetValue(PrivsFilePathFlag)
 	if !hasPrivsFp {
@@ -293,7 +292,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		IsReadOnly:   false,
 		PrivFilePath: privsFp,
 		ServerUser:   username,
-		ServerHost:   DefaultHost, // TODO: it literally can't be anything else right?
+		ServerHost:   DefaultHost,
 		Autocommit:   true,
 	}
 
