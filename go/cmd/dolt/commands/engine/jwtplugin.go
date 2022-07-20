@@ -41,10 +41,10 @@ func NewAuthenticateDoltJWTPlugin(jwksConfig []JwksConfig) mysql_db.PlaintextAut
 }
 
 func (p *authenticateDoltJWTPlugin) Authenticate(db *mysql_db.MySQLDb, user string, userEntry *mysql_db.User, pass string) (bool, error) {
-	return validateJWT(p.jwksConfig, user, userEntry.Identity, pass)
+	return validateJWT(p.jwksConfig, user, userEntry.Identity, pass, time.Now())
 }
 
-func validateJWT(config []JwksConfig, username, identity, token string) (bool, error) {
+func validateJWT(config []JwksConfig, username, identity, token string, reqTime time.Time) (bool, error) {
 	if len(config) == 0 {
 		return false, nil
 	}
@@ -68,7 +68,7 @@ func validateJWT(config []JwksConfig, username, identity, token string) (bool, e
 		pr.Audience = aud
 	}
 	vd := jwtauth.NewJWTValidator(pr)
-	claims, err := vd.ValidateJWT(token, time.Now())
+	claims, err := vd.ValidateJWT(token, reqTime)
 	if err != nil {
 		return false, err
 	}

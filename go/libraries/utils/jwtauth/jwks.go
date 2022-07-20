@@ -55,7 +55,10 @@ func (f *fetchedJWKS) GetJWKS() (*jose.JSONWebKeySet, error) {
 	f.cache.mutex.Lock()
 	defer f.cache.mutex.Unlock()
 	if f.needsRefresh() {
-		client := &http.Client{}
+		tr := &http.Transport{}
+		// Allows use of file:// for jwks location  url for tests
+		tr.RegisterProtocol("file", http.NewFileTransport(http.Dir("/")))
+		client := &http.Client{Transport: tr}
 
 		request, err := http.NewRequest("GET", f.URL, nil)
 		if err != nil {
