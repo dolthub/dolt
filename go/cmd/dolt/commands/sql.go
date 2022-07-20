@@ -102,7 +102,6 @@ const (
 	fileInputFlag     = "file"
 	UserFlag          = "user"
 	DefaultUser       = "root"
-	DefaultPassword   = ""
 	DefaultHost       = "localhost"
 
 	welcomeMsg = `# Welcome to the DoltSQL shell.
@@ -487,7 +486,7 @@ func execShell(
 	}
 	defer se.Close()
 
-	err = runShell(ctx, se, mrEnv)
+	err = runShell(ctx, se, mrEnv, config)
 	if err != nil {
 		return errhand.BuildDError(err.Error()).Build()
 	}
@@ -517,6 +516,9 @@ func execBatch(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
+	// Set client to specified user
+	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
 	// In batch mode, we need to set a couple flags on the session to prevent constant flushes to disk
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
@@ -558,6 +560,9 @@ func execMultiStatements(
 		return errhand.VerboseErrorFromError(err)
 	}
 
+	// Set client to specified user
+	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
+
 	err = runMultiStatementMode(sqlCtx, se, batchInput, continueOnErr)
 	return errhand.VerboseErrorFromError(err)
 }
@@ -584,6 +589,9 @@ func execQuery(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
+	// Set client to specified user
+	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
 	sqlSch, rowIter, err := ProcessQuery(sqlCtx, query, se)
 	if err != nil {
@@ -850,13 +858,16 @@ func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, conti
 
 // runShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
 // be updated by any queries which were processed.
-func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv) error {
+func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv, config *engine.SqlEngineConfig) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
 		return err
 	}
+
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
 	currentDB := sqlCtx.Session.GetCurrentDatabase()
 	currEnv := mrEnv.GetEnv(currentDB)

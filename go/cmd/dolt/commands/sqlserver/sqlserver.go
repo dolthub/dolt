@@ -36,6 +36,7 @@ import (
 const (
 	hostFlag                = "host"
 	portFlag                = "port"
+	passwordFlag            = "password"
 	timeoutFlag             = "timeout"
 	readonlyFlag            = "readonly"
 	logLevelFlag            = "loglevel"
@@ -44,7 +45,6 @@ const (
 	queryParallelismFlag    = "query-parallelism"
 	maxConnectionsFlag      = "max-connections"
 	persistenceBehaviorFlag = "persistence-behavior"
-	passwordFlag            = "password"
 )
 
 func indentLines(s string) string {
@@ -329,7 +329,6 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		serverConfig.WithPort(port)
 	}
 
-	// TODO: need to immediately persist if user and password provided
 	if user, ok := apr.GetValue(commands.UserFlag); ok {
 		serverConfig.withUser(user)
 	}

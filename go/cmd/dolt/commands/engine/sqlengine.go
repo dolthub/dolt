@@ -95,7 +95,6 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	// Add superuser
 	var tempUsers []gms.TemporaryUser
 	if len(config.ServerUser) > 0 {
 		tempUsers = append(tempUsers, gms.TemporaryUser{
@@ -139,8 +138,6 @@ func NewSqlEngine(
 	if err != nil {
 		return nil, err
 	}
-
-	sess.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
 	// this is overwritten only for server sessions
 	for _, db := range dbs {

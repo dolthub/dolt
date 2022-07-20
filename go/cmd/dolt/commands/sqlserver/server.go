@@ -151,7 +151,7 @@ func Serve(
 	if err != nil {
 		return err, nil
 	}
-	if config.ServerUser != commands.DefaultUser || config.ServerPass != commands.DefaultPassword {
+	if config.ServerUser != commands.DefaultUser {
 		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.Persist(nil)
 	}
 	defer sqlEngine.Close()
