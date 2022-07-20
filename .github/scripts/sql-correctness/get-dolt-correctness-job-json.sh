@@ -40,7 +40,7 @@ echo '
             "env": [
               { "name": "REPO_ACCESS_TOKEN", "value": "'$REPO_ACCESS_TOKEN'"},
               { "name": "ACTOR", "value": "'$ACTOR'"},
-              { "name": "ACTOR_EMAIL", "value": "'$ACTOR_EMAIL'"}
+              { "name": "ACTOR_EMAIL", "value": "'$ACTOR_EMAIL'"},
               { "name": "DOLT_DEFAULT_BIN_FORMAT", "value": "'NOMS_BIN_FORMAT'"}
             ],
             "args": [
