@@ -1943,6 +1943,10 @@ setup_ref_test() {
 }
 
 @test "remotes: dolt_clone procedure" {
+    repoDir="$BATS_TMPDIR/dolt-repo-$$"
+    tempDir=$(mktemp -d)
+
+    cd $tempDir
     mkdir remote
     mkdir repo1
 
@@ -1953,31 +1957,40 @@ setup_ref_test() {
     dolt checkout -b other
     dolt push --set-upstream origin other
 
-    cd ..
+    cd $repoDir
 
     run dolt sql -q "call dolt_clone()"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "error: invalid number of arguments" ]] || false
 
-    run dolt sql -q "call dolt_clone('file://./remote', 'foo', 'bar')"
+    run dolt sql -q "call dolt_clone('file://$tempDir/remote', 'foo', 'bar')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "error: invalid number of arguments" ]] || false
 
-    # Clone a local database
-    run dolt sql -q "call dolt_clone('file://./remote', 'repo2');"
+    # Clone a local database and check for all the branches
+    run dolt sql -q "call dolt_clone('file://$tempDir/remote');"
     [ "$status" -eq 0 ]
+    cd remote
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "other" ]] || false
+    [[ "$output" =~ "main" ]] || false
+    run dolt branch --remote
+    [[ "$output" =~ "origin/other" ]] || false
+    [[ "$output" =~ "origin/main" ]] || false
+    cd ..
 
     # Ensure we can't clone it again
-    run dolt sql -q "call dolt_clone('file://./remote', 'repo2');"
+    run dolt sql -q "call dolt_clone('file://$tempDir/remote');"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "can't create database repo2; database exists" ]] || false
+    [[ "$output" =~ "can't create database remote; database exists" ]] || false
 
-    # Drop the new database and re-clone it
-    dolt sql -q "drop database repo2"
+    # Drop the new database and re-clone it with a different name
+    dolt sql -q "drop database remote"
     run dolt sql -q "show databases"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "repo2" ]] || false
-    dolt sql -q "call dolt_clone('file://./remote', 'repo2');"
+    dolt sql -q "call dolt_clone('file://$tempDir/remote', 'repo2');"
 
     # Sanity check that we can use the new database
     dolt sql << SQL
@@ -1988,14 +2001,34 @@ SQL
     cd repo2
     dolt commit -am "a commit for main from repo2"
     dolt push origin main
+    cd ..
 
-    run dolt branch
-    [[ ! "$output" =~ "other" ]] || false
-
-    run dolt checkout other
+    # Test -remote option to customize the origin remote name for the cloned DB
+    run dolt sql -q "call dolt_clone('-remote', 'custom', 'file://$tempDir/remote', 'custom_remote');"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "branch 'other' set up to track 'origin/other'." ]] || false
+    run dolt sql -q "use custom_remote; select name from dolt_remotes;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "custom" ]] || false
 
-    run dolt status
-    [[ "$output" =~ "Your branch is up to date with 'origin/other'." ]] || false
+    # Test -branch option to only clone a single branch
+    run dolt sql -q "call dolt_clone('-branch', 'other', 'file://$tempDir/remote', 'single_branch');"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "use single_branch; select name from dolt_branches;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "other" ]] || false
+    [[ ! "$output" =~ "main" ]] || false
+    run dolt sql -q "use single_branch; select active_branch();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "other" ]] || false
+    # TODO: to match Git's semantics, clone for a single branch should NOT create any other remote tracking branches
+    # TODO: Issue link
+    # run dolt checkout main
+    # [ "$status" -eq 1 ]
+
+    # Test cloning from a DoltHub remote
+    run dolt sql -q "call dolt_clone('dolthub/VEID');"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "use VEID; show tables;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Stg_product2" ]] || false
 }
