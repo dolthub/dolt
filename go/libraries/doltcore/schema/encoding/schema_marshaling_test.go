@@ -83,20 +83,6 @@ func TestNomsMarshalling(t *testing.T) {
 			t.Error("Value different after marshalling and unmarshalling.")
 		}
 	}
-
-	tSuperSchema, err := schema.NewSuperSchema(tSchema)
-	require.NoError(t, err)
-
-	ssVal, err := MarshalSuperSchemaAsNomsValue(context.Background(), vrw, tSuperSchema)
-	require.NoError(t, err)
-
-	unMarshalledSS, err := UnmarshalSuperSchemaNomsValue(context.Background(), types.Format_Default, ssVal)
-	require.NoError(t, err)
-
-	if !reflect.DeepEqual(tSuperSchema, unMarshalledSS) {
-		t.Error("Value different after marshalling and unmarshalling.")
-	}
-
 }
 
 func getSqlTypes() []sql.Type {
