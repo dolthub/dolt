@@ -738,6 +738,12 @@ func TestDoltMerge(t *testing.T) {
 		// dolt versioning conflicts with reset harness -- use new harness every time
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
+
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		for _, script := range Dolt1MergeScripts {
+			enginetest.TestScript(t, newDoltHarness(t), script)
+		}
+	}
 }
 
 func TestDoltConflictsTableNameTable(t *testing.T) {
@@ -948,6 +954,12 @@ func TestDiffSystemTable(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, test)
 		})
+	}
+
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		for _, test := range Dolt1DiffSystemTableScripts {
+			enginetest.TestScript(t, newDoltHarness(t), test)
+		}
 	}
 }
 

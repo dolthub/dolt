@@ -385,7 +385,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) (ve
 				fromSch = toSch
 			}
 
-			if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
+			if !schema.ArePrimaryKeySetsDiffable(td.Format(), fromSch, toSch) {
 				cli.PrintErrf("Primary key sets differ between revisions for table %s, skipping data diff\n", tblName)
 				continue
 			}

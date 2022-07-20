@@ -18,6 +18,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"path/filepath"
 	"runtime"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -48,8 +49,8 @@ const (
 	defaultQueryParallelism    = 2
 	defaultPersistenceBahavior = loadPerisistentGlobals
 	defaultDataDir             = "."
-	defaultCfgDir              = "./.doltcfg"
-	defaultPrivilegeFilePath   = "./.doltcfg/privileges.db"
+	defaultCfgDir              = ".doltcfg"
+	defaultPrivilegeFilePath   = "privileges.db"
 	defaultMetricsHost         = ""
 	defaultMetricsPort         = -1
 )
@@ -363,8 +364,8 @@ func DefaultServerConfig() *commandLineServerConfig {
 		queryParallelism:    defaultQueryParallelism,
 		persistenceBehavior: defaultPersistenceBahavior,
 		dataDir:             defaultDataDir,
-		cfgDir:              defaultCfgDir,
-		privilegeFilePath:   defaultPrivilegeFilePath,
+		cfgDir:              filepath.Join(defaultDataDir, defaultCfgDir),
+		privilegeFilePath:   filepath.Join(defaultDataDir, defaultCfgDir, defaultPrivilegeFilePath),
 	}
 }
 

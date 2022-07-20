@@ -78,7 +78,7 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mer
 		}
 	}
 
-	stagedRoot, err := roots.Staged.UpdateSuperSchemasFromOther(ctx, stagedTblNames, roots.Staged)
+	stagedRoot := roots.Staged
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mer
 		return nil, err
 	}
 
-	workingRoot, err := roots.Working.UpdateSuperSchemasFromOther(ctx, stagedTblNames, stagedRoot)
+	workingRoot := roots.Working
 	if err != nil {
 		return nil, err
 	}
@@ -182,21 +182,11 @@ func GetCommitStaged(
 		}
 	}
 
-	roots.Staged, err = roots.Staged.UpdateSuperSchemasFromOther(ctx, stagedTblNames, roots.Staged)
-	if err != nil {
-		return nil, err
-	}
-
 	if !props.Force {
 		roots.Staged, err = roots.Staged.ValidateForeignKeysOnSchemas(ctx)
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	roots.Working, err = roots.Working.UpdateSuperSchemasFromOther(ctx, stagedTblNames, roots.Staged)
-	if err != nil {
-		return nil, err
 	}
 
 	meta, err := datas.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)

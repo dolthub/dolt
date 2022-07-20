@@ -178,11 +178,6 @@ func MergeRoots(
 		return nil, nil, err
 	}
 
-	mergedRoot, err = mergedRoot.UpdateSuperSchemasFromOther(ctx, tblNames, theirRoot)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	h, err := merger.rightSrc.HashOf()
 	if err != nil {
 		return nil, nil, err
