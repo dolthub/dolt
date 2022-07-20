@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -91,22 +90,4 @@ func getDirectoryAndUrlString(apr *argparser.ArgParseResults) (string, string, e
 	}
 
 	return dir, urlStr, nil
-}
-
-func remoteParams(apr *argparser.ArgParseResults, scheme, remoteUrl string) (map[string]string, errhand.VerboseError) {
-	params := map[string]string{}
-
-	var err error
-	if scheme == dbfactory.AWSScheme {
-		// TODO: get AWS params from session
-		err = cli.AddAWSParams(remoteUrl, apr, params)
-	} else {
-		err = cli.VerifyNoAwsParams(apr)
-	}
-
-	if err != nil {
-		return nil, errhand.VerboseErrorFromError(err)
-	}
-
-	return params, nil
 }
