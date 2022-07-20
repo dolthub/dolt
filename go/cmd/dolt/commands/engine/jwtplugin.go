@@ -19,9 +19,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/utils/jwtauth"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/sirupsen/logrus"
+
+	"github.com/dolthub/dolt/go/libraries/utils/jwtauth"
 )
 
 type JwksConfig struct {

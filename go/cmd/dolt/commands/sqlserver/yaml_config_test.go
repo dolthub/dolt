@@ -17,11 +17,11 @@ package sqlserver
 import (
 	"testing"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 )
 
 func TestUnmarshall(t *testing.T) {
