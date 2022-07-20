@@ -15,6 +15,7 @@
 package sqlserver
 
 import (
+	"path/filepath"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -336,7 +337,7 @@ func (cfg YAMLConfig) PrivilegeFilePath() string {
 	if cfg.PrivilegeFile != nil {
 		return *cfg.PrivilegeFile
 	}
-	return ""
+	return filepath.Join(cfg.CfgDir(), defaultPrivilegeFilePath)
 }
 
 func (cfg YAMLConfig) UserVars() []UserSessionVars {
@@ -395,12 +396,12 @@ func (cfg YAMLConfig) DataDir() string {
 	if cfg.DataDirStr != nil {
 		return *cfg.DataDirStr
 	}
-	return ""
+	return defaultDataDir
 }
 
 func (cfg YAMLConfig) CfgDir() string {
 	if cfg.CfgDirStr != nil {
 		return *cfg.DataDirStr
 	}
-	return ""
+	return filepath.Join(cfg.DataDir(), defaultCfgDir)
 }
