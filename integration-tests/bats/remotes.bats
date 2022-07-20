@@ -1954,19 +1954,41 @@ setup_ref_test() {
     dolt push --set-upstream origin other
 
     cd ..
-    
-    run dolt sql <<SQL
-call dolt_clone('file://./remote', 'repo2');
+
+    run dolt sql -q "call dolt_clone()"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: invalid number of arguments" ]] || false
+
+    run dolt sql -q "call dolt_clone('file://./remote', 'foo', 'bar')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: invalid number of arguments" ]] || false
+
+    # Clone a local database
+    run dolt sql -q "call dolt_clone('file://./remote', 'repo2');"
+    [ "$status" -eq 0 ]
+
+    # Ensure we can't clone it again
+    run dolt sql -q "call dolt_clone('file://./remote', 'repo2');"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "can't create database repo2; database exists" ]] || false
+
+    # Drop the new database and re-clone it
+    dolt sql -q "drop database repo2"
+    run dolt sql -q "show databases"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "repo2" ]] || false
+    dolt sql -q "call dolt_clone('file://./remote', 'repo2');"
+
+    # Sanity check that we can use the new database
+    dolt sql << SQL
 use repo2;
 create table new_table(a int primary key);
 insert into new_table values (1), (2);
 SQL
-    [ "$status" -eq 0 ]
-
     cd repo2
     dolt commit -am "a commit for main from repo2"
     dolt push origin main
-    
+
     run dolt branch
     [[ ! "$output" =~ "other" ]] || false
 
