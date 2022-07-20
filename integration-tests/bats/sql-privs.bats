@@ -70,6 +70,43 @@ teardown() {
     [[ "$output" =~ "privileges.db" ]] || false
 }
 
+@test "sql-privs: yaml specifies doltcfg dir" {
+    make_test_repo
+    touch server.yaml
+    echo "cfg_dir: \"doltcfgdir\"" > server.yaml
+
+    start_sql_server_with_config test_db server.yaml
+
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
+
+    server_query test_db 1 "create user new_user" ""
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
+
+    run ls doltcfgdir
+    [[ "$output" =~ "privileges.db" ]] || false
+}
+
+@test "sql-privs: yaml specifies privilege file" {
+    make_test_repo
+    touch server.yaml
+    echo "privilege_file: \"privs.db\"" > server.yaml
+
+    start_sql_server_with_config test_db server.yaml
+
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
+
+    server_query test_db 1 "create user new_user" ""
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
+
+    run ls -a
+    [[ "$output" =~ "privs.db" ]] || false
+}
+
 @test "sql-privs: can read json privilege files and convert them" {
     make_test_repo
     cp $BATS_TEST_DIRNAME/privs.json .

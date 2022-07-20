@@ -401,7 +401,7 @@ func (cfg YAMLConfig) DataDir() string {
 
 func (cfg YAMLConfig) CfgDir() string {
 	if cfg.CfgDirStr != nil {
-		return *cfg.DataDirStr
+		return *cfg.CfgDirStr
 	}
 	return filepath.Join(cfg.DataDir(), defaultCfgDir)
 }
