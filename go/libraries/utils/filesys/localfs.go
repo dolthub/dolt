@@ -79,9 +79,8 @@ func (fs localFS) WithWorkingDir(path string) (Filesys, error) {
 		return nil, err
 	}
 
-	newFs := fs
-	newFs.cwd = abs
-	return &newFs, nil
+	fs.cwd = abs
+	return &fs, nil
 }
 
 var errStopMarker = errors.New("stop")
