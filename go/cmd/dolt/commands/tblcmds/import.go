@@ -782,12 +782,10 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 
 		// We can optimize timestamp conversions with the following converter
 		if _, ok := col.Type.(sql.DatetimeType); ok {
-			colAsString, ok := row[i].(string)
-			if !ok {
-				return nil, fmt.Errorf("error: column value should be of type string")
+			colAsString, sok := row[i].(string)
+			if sok {
+				row[i] = tConverter.ConvertTimestampObject(colAsString)
 			}
-
-			row[i] = tConverter.ConvertTimestampObject(colAsString)
 		}
 
 		// For non string types we want empty strings to be converted to nils. String types should be allowed to take on
