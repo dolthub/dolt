@@ -9,6 +9,10 @@ inputs:
     description: 'dolt version being benchmarked or ref of bats windows job'
     required: true
     default: ''
+  format:
+    description: 'dolt noms bin format'
+    required: true
+    default: '__LD_1__'
   template:
     description: 'email template'
     required: false
