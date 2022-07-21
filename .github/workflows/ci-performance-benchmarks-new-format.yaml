@@ -82,8 +82,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: core.setOutput("pull_number", JSON.stringify(context.issue.number));
-      - name: Run benchmarks
-        id: run-benchmarks
+      - name: Run Sysbench benchmarks
         run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
         env:
           FROM_SERVER: 'dolt'
@@ -97,4 +96,20 @@ jobs:
           KUBECONFIG: "./kubeconfig"
           INIT_BIG_REPO: "false"
           NOMS_BIN_FORMAT: "__DOLT_1__"
+          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"
+      - name: Run Tpcc benchmarks
+        run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
+        env:
+          FROM_SERVER: 'dolt'
+          FROM_VERSION: ${{ github.sha }}
+          TO_SERVER: 'dolt'
+          TO_VERSION: ${{ steps.comment-branch.outputs.head_sha }}
+          MODE: 'pullRequest'
+          ISSUE_NUMBER: ${{ steps.get_pull_number.outputs.pull_number }}
+          ACTOR: ${{ github.actor }}
+          REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+          KUBECONFIG: "./kubeconfig"
+          INIT_BIG_REPO: "false"
+          NOMS_BIN_FORMAT: "__DOLT_1__"
+          WITH_TPCC: 'true'
           TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"
