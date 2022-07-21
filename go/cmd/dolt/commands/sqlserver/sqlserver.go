@@ -240,11 +240,6 @@ func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerC
 // SetupDoltConfig updates the given server config with where to create .doltcfg directory
 func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config ServerConfig) error {
 	if _, ok := apr.GetValue(configFileFlag); ok {
-		if exists, _ := dEnv.FS.Exists(config.CfgDir()); !exists {
-			if err := dEnv.FS.MkDirs(config.CfgDir()); err != nil {
-				return err
-			}
-		}
 		return nil
 	}
 
@@ -258,20 +253,9 @@ func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config S
 	dataDir := serverConfig.DataDir()
 	cfgDir, cfgDirSpecified := apr.GetValue(commands.CfgDirFlag)
 	if cfgDirSpecified {
-		if exists, _ := dEnv.FS.Exists(cfgDir); !exists {
-			if err := dEnv.FS.MkDirs(cfgDir); err != nil {
-				return err
-			}
-		}
 		cfgDirPath = cfgDir
 	} else if dataDirSpecified {
-		path := filepath.Join(dataDir, commands.DefaultCfgDirName)
-		if exists, _ := dEnv.FS.Exists(path); !exists {
-			if err := dEnv.FS.MkDirs(path); err != nil {
-				return err
-			}
-		}
-		cfgDirPath = path
+		cfgDirPath = filepath.Join(dataDir, commands.DefaultCfgDirName)
 	} else {
 		// Look in parent directory for doltcfg
 		path := filepath.Join("..", commands.DefaultCfgDirName)
@@ -279,27 +263,20 @@ func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config S
 			cfgDirPath = path
 		}
 
-		// Look in data directory (which is necessarily current directory) for doltcfg, create one here if none found
+		// Look in data directory (which is necessarily current directory) for doltcfg
 		path = filepath.Join(dataDir, commands.DefaultCfgDirName)
-		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
-			if len(cfgDirPath) != 0 {
-				p1, err := dEnv.FS.Abs(cfgDirPath)
-				if err != nil {
-					return err
-				}
-				p2, err := dEnv.FS.Abs(path)
-				if err != nil {
-					return err
-				}
-				return commands.ErrMultipleDoltCfgDirs.New(p1, p2)
-			}
-			cfgDirPath = path
-		} else if len(cfgDirPath) == 0 {
-			if err := dEnv.FS.MkDirs(path); err != nil {
+		if exists, isDir := dEnv.FS.Exists(path); exists && isDir && len(cfgDirPath) != 0 {
+			p1, err := dEnv.FS.Abs(cfgDirPath)
+			if err != nil {
 				return err
 			}
-			cfgDirPath = path
+			p2, err := dEnv.FS.Abs(path)
+			if err != nil {
+				return err
+			}
+			return commands.ErrMultipleDoltCfgDirs.New(p1, p2)
 		}
+		cfgDirPath = path
 	}
 	serverConfig.withCfgDir(cfgDirPath)
 

@@ -47,14 +47,15 @@ type SqlEngine struct {
 }
 
 type SqlEngineConfig struct {
-	InitialDb    string
-	IsReadOnly   bool
-	PrivFilePath string
-	ServerUser   string
-	ServerPass   string
-	ServerHost   string
-	Autocommit   bool
-	Bulk         bool
+	InitialDb      string
+	IsReadOnly     bool
+	DoltCfgDirPath string
+	PrivFilePath   string
+	ServerUser     string
+	ServerPass     string
+	ServerHost     string
+	Autocommit     bool
+	Bulk           bool
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -89,7 +90,7 @@ func NewSqlEngine(
 	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), all...).WithRemoteDialer(mrEnv.RemoteDialProvider())
 
 	// Load in privileges from file, if it exists
-	persister := mysql_file_handler.NewPersister(config.PrivFilePath)
+	persister := mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
 	data, err := persister.LoadData()
 	if err != nil {
 		return nil, err

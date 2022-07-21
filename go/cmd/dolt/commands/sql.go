@@ -201,6 +201,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
+	// need to return cfgdirpath and error
 	var cfgDirPath string
 	var dataDir string
 	if multiDbDir, ok := apr.GetValue(MultiDBDirFlag); ok {
@@ -211,22 +212,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	cfgDir, cfgDirSpecified := apr.GetValue(CfgDirFlag)
 	if cfgDirSpecified {
-		if exists, _ := dEnv.FS.Exists(cfgDir); !exists {
-			if err := dEnv.FS.MkDirs(cfgDir); err != nil {
-				absPath, _ := dEnv.FS.Abs(cfgDir)
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("couldn't create directory at %s", absPath)), usage)
-			}
-		}
 		cfgDirPath = cfgDir
 	} else if len(dataDir) != 0 {
-		path := filepath.Join(dataDir, DefaultCfgDirName)
-		if exists, _ := dEnv.FS.Exists(path); !exists {
-			if err := dEnv.FS.MkDirs(path); err != nil {
-				absPath, _ := dEnv.FS.Abs(path)
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("couldn't create directory at %s", absPath)), usage)
-			}
-		}
-		cfgDirPath = path
+		cfgDirPath = filepath.Join(dataDir, DefaultCfgDirName)
 	} else {
 		// Look in parent directory for doltcfg
 		path := filepath.Join("..", DefaultCfgDirName)
@@ -234,27 +222,20 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			cfgDirPath = path
 		}
 
-		// Look in data directory (which is necessarily current directory) for doltcfg, create one here if none found
+		// Look in data directory (which is necessarily current directory) for doltcfg
 		path = filepath.Join(dataDir, DefaultCfgDirName)
-		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
-			if len(cfgDirPath) != 0 {
-				p1, err := dEnv.FS.Abs(cfgDirPath)
-				if err != nil {
-					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-				}
-				p2, err := dEnv.FS.Abs(path)
-				if err != nil {
-					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-				}
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(ErrMultipleDoltCfgDirs.New(p1, p2)), usage)
-			}
-			cfgDirPath = path
-		} else if len(cfgDirPath) == 0 {
-			if err := dEnv.FS.MkDirs(path); err != nil {
+		if exists, isDir := dEnv.FS.Exists(path); exists && isDir && len(cfgDirPath) != 0 {
+			p1, err := dEnv.FS.Abs(cfgDirPath)
+			if err != nil {
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 			}
-			cfgDirPath = path
+			p2, err := dEnv.FS.Abs(path)
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			}
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(ErrMultipleDoltCfgDirs.New(p1, p2)), usage)
 		}
+		cfgDirPath = path
 	}
 
 	// If no privilege filepath specified, default to doltcfg directory
@@ -288,12 +269,13 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	config := &engine.SqlEngineConfig{
-		InitialDb:    currentDb,
-		IsReadOnly:   false,
-		PrivFilePath: privsFp,
-		ServerUser:   username,
-		ServerHost:   DefaultHost,
-		Autocommit:   true,
+		InitialDb:      currentDb,
+		IsReadOnly:     false,
+		DoltCfgDirPath: cfgDirPath,
+		PrivFilePath:   privsFp,
+		ServerUser:     username,
+		ServerHost:     DefaultHost,
+		Autocommit:     true,
 	}
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {

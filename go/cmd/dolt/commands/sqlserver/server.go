@@ -133,13 +133,14 @@ func Serve(
 
 	// Create SQL Engine with users
 	config := &engine.SqlEngineConfig{
-		InitialDb:    "",
-		IsReadOnly:   isReadOnly,
-		PrivFilePath: serverConfig.PrivilegeFilePath(),
-		ServerUser:   serverConfig.User(),
-		ServerPass:   serverConfig.Password(),
-		ServerHost:   serverConfig.Host(),
-		Autocommit:   serverConfig.AutoCommit(),
+		InitialDb:      "",
+		IsReadOnly:     isReadOnly,
+		PrivFilePath:   serverConfig.PrivilegeFilePath(),
+		DoltCfgDirPath: serverConfig.CfgDir(),
+		ServerUser:     serverConfig.User(),
+		ServerPass:     serverConfig.Password(),
+		ServerHost:     serverConfig.Host(),
+		Autocommit:     serverConfig.AutoCommit(),
 	}
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,
@@ -150,9 +151,16 @@ func Serve(
 	if err != nil {
 		return err, nil
 	}
-	if len(config.ServerUser) == 0 {
-		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.Persist(nil)
+
+	// check if user exists, else add them as superuser; might need to do something else for sql-server
+	if user := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
+		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerPass)
 	}
+
+	// TODO: maybe delete
+	//if len(config.ServerUser) == 0 {
+	//	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.Persist(nil)
+	//}
 	defer sqlEngine.Close()
 
 	labels := serverConfig.MetricsLabels()
