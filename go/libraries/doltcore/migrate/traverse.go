@@ -23,34 +23,34 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 )
 
-func TraverseDAG(ctx context.Context, ddb *doltdb.DoltDB) (Progress, error) {
-	heads, err := ddb.GetHeadRefs(ctx)
+func TraverseDAG(ctx context.Context, old, new *doltdb.DoltDB) error {
+	heads, err := old.GetHeadRefs(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	prog := newProgress()
 	for i := range heads {
-		if err = TraverseHistory(ctx, heads[i], prog); err != nil {
-			return nil, err
+		if err = TraverseRefHistory(ctx, heads[i], new, prog); err != nil {
+			return err
 		}
 	}
-	return prog, nil
-}
-
-func TraverseHistory(ctx context.Context, r ref.DoltRef, prog Progress) error {
 	return nil
 }
 
-func TraverseTagHistory(ctx context.Context, tag *doltdb.Tag, prog Progress) error {
+func TraverseRefHistory(ctx context.Context, r ref.DoltRef, new *doltdb.DoltDB, prog Progress) error {
 	return nil
 }
 
-func TraverseWorkingSetHistory(ctx context.Context, ws doltdb.WorkingSet, prog Progress) error {
+func TraverseTagHistory(ctx context.Context, tag *doltdb.Tag, new *doltdb.DoltDB, prog Progress) error {
 	return nil
 }
 
-func TraverseCommitHistory(ctx context.Context, cm *doltdb.Commit, prog Progress) error {
+func TraverseWorkingSetHistory(ctx context.Context, ws doltdb.WorkingSet, new *doltdb.DoltDB, prog Progress) error {
+	return nil
+}
+
+func TraverseCommitHistory(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
 	for {
 		ph, err := cm.ParentHashes(ctx)
 		if err != nil {
@@ -63,7 +63,7 @@ func TraverseCommitHistory(ctx context.Context, cm *doltdb.Commit, prog Progress
 		}
 		if idx < 0 {
 			// parents for |cm| are done, migrate |cm|
-			if err = MigrateCommit(ctx, cm, prog); err != nil {
+			if err = MigrateCommit(ctx, cm, new, prog); err != nil {
 				return err
 			}
 			// pop the stack, traverse upwards

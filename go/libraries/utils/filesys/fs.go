@@ -114,3 +114,18 @@ func UnmarshalJSONFile(fs ReadableFS, path string, dest interface{}) error {
 
 	return json.Unmarshal(data, dest)
 }
+
+func CopyFile(srcPath, destPath string, srcFS, destFS Filesys) (err error) {
+	rd, err := srcFS.OpenForRead(srcPath)
+	if err != nil {
+		return err
+	}
+
+	wr, err := destFS.OpenForWrite(destPath, os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(wr, rd)
+	return
+}

@@ -20,10 +20,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
-func MigrateCommit(ctx context.Context, old *doltdb.Commit, prog Progress) error {
+func MigrateCommit(ctx context.Context, old *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
 	return nil
 }
 
-func MigrateRoot(ctx context.Context, old *doltdb.RootValue) (*doltdb.RootValue, error) {
+func MigrateRoot(ctx context.Context, old *doltdb.RootValue, new *doltdb.DoltDB) (*doltdb.RootValue, error) {
 	return old, nil
 }
