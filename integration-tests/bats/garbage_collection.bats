@@ -151,6 +151,7 @@ setup_merge() {
 }
 
 @test "garbage_collection: leave merge commit" {
+    skip_nbf_dolt_1
     setup_merge
     dolt merge other
 
