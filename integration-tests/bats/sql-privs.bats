@@ -145,6 +145,9 @@ teardown() {
 
     start_sql_server test_db
 
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
     server_query test_db 1 "create user new_user" ""
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
@@ -180,6 +183,14 @@ teardown() {
 
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --data-dir=db_dir
 
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "privileges.db" ]] || false
+
+    run ls -a db_dir
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "privileges.db" ]] || false
+
     server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema"
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt"
     server_query db1 1 "create user new_user" ""
@@ -202,6 +213,10 @@ teardown() {
 
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --doltcfg-dir=doltcfgdir
 
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "doltcfgdir" ]] || false
+
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
     server_query test_db 1 "create user new_user" ""
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
@@ -219,6 +234,10 @@ teardown() {
 
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.db
 
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "privs.db" ]] || false
+
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
     server_query test_db 1 "create user new_user" ""
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
@@ -232,6 +251,15 @@ teardown() {
     make_multi_test_repo
 
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --data-dir=db_dir --doltcfg-dir=doltcfgdir
+
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "doltcfgdir" ]] || false
+    ! [[ "$output" =~ "privileges.db" ]] || false
+
+    run ls -a db_dir
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "privileges.db" ]] || false
 
     server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema"
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt"
@@ -256,6 +284,14 @@ teardown() {
 
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --data-dir=db_dir --privilege-file=privs.db
 
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "privs.db" ]] || false
+
+    run ls -a db_dir
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "privs.db" ]] || false
+
     server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema"
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt"
     server_query db1 1 "create user new_user" ""
@@ -278,6 +314,11 @@ teardown() {
 
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --doltcfg-dir=doltcfgdir --privilege-file=privs.db
 
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "doltcfgdir" ]] || false
+    ! [[ "$output" =~ "privs.db" ]] || false
+
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
     server_query test_db 1 "create user new_user" ""
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
@@ -296,6 +337,12 @@ teardown() {
     make_multi_test_repo
 
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --data-dir=db_dir --doltcfg-dir=doltcfgdir --privilege-file=privs.db
+
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "doltcfgdir" ]] || false
+    ! [[ "$output" =~ "privileges.db" ]] || false
+    ! [[ "$output" =~ "privs.db" ]] || false
 
     server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema"
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt"
