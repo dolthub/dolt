@@ -15,6 +15,7 @@
 package tblcmds
 
 import (
+	"container/list"
 	"context"
 	"fmt"
 	"io"
@@ -23,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -596,6 +598,8 @@ func moveRows(
 		return err
 	}
 
+	tConverter := newTimestampConverter()
+
 	for {
 		sqlRow, err := rd.ReadSqlRow(ctx)
 		if err == io.EOF {
@@ -613,7 +617,7 @@ func moveRows(
 				return err
 			}
 		} else {
-			sqlRow, err = NameAndTypeTransform(sqlRow, wr.RowOperationSchema(), rdSqlSch, options.nameMapper)
+			sqlRow, err = NameAndTypeTransform(sqlRow, wr.RowOperationSchema(), rdSqlSch, options.nameMapper, tConverter)
 			if err != nil {
 				return err
 			}
@@ -729,7 +733,7 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 
 // NameAndTypeTransform does 1) match the read and write schema with subsetting and name matching. 2) Address any
 // type inconsistencies.
-func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, rdSchema sql.PrimaryKeySchema, nameMapper rowconv.NameMapper) (sql.Row, error) {
+func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, rdSchema sql.PrimaryKeySchema, nameMapper rowconv.NameMapper, tConverter *timestampConverter) (sql.Row, error) {
 	row = applyMapperToRow(row, rowOperationSchema, rdSchema, nameMapper)
 
 	for i, col := range rowOperationSchema.Schema {
@@ -774,6 +778,16 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 			} else {
 				return nil, fmt.Errorf("error: Unparsable bit value %s", colAsString)
 			}
+		}
+
+		// We can optimize timestamp conversions with the following converter
+		if _, ok := col.Type.(sql.DatetimeType); ok {
+			colAsString, ok := row[i].(string)
+			if !ok {
+				return nil, fmt.Errorf("error: column value should be of type string")
+			}
+
+			row[i] = tConverter.ConvertTimestampObject(colAsString)
 		}
 
 		// For non string types we want empty strings to be converted to nils. String types should be allowed to take on
@@ -844,4 +858,45 @@ func applyMapperToRow(row sql.Row, rowOperationSchema, rdSchema sql.PrimaryKeySc
 	}
 
 	return returnRow
+}
+
+// timestampConverter uses a list that keeps the most recently used datetime conversion at the front. Ideally this saves
+// time iterating through all the datetime layouts when parsing datetime strings
+type timestampConverter struct {
+	datetimeLayouts *list.List
+}
+
+func newTimestampConverter() *timestampConverter {
+	ll := list.New()
+	for _, tFmt := range sql.TimestampDatetimeLayouts {
+		ll.PushBack(tFmt)
+	}
+
+	return &timestampConverter{
+		datetimeLayouts: ll,
+	}
+}
+
+func (tc *timestampConverter) ConvertTimestampObject(value string) interface{} {
+	var res time.Time
+	parsed := false
+
+	for e := tc.datetimeLayouts.Front(); e != nil; e = e.Next() {
+		// do something with e.Value
+		tFmt := e.Value.(string)
+		if t, err := time.Parse(tFmt, value); err == nil {
+			res = t.UTC()
+			parsed = true
+
+			tc.datetimeLayouts.MoveToFront(e)
+			break
+		}
+	}
+
+	// if we couldn't parse this at all just return the original string
+	if !parsed {
+		return value
+	}
+
+	return res
 }
