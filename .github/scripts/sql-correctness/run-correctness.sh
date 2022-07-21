@@ -12,6 +12,11 @@ if [ -z "$TEMPLATE_SCRIPT" ]; then
     exit 1
 fi
 
+if [ -z "$NOMS_BIN_FORMAT" ]; then
+    echo  "Must set NOMS_BIN_FORMAT"
+    exit 1
+fi
+
 if [ -z "$FROM_VERSION" ] && [ -z "$TO_VERSION" ]; then
     echo  "Must set FROM_VERSION or TO_VERSION for correctness run"
     echo  "Must set both for regressions run"
@@ -39,11 +44,16 @@ short=${TO_VERSION:0:8}
 lowered=$(echo "$ACTOR" | tr '[:upper:]' '[:lower:]')
 actorShort="$lowered-$short"
 
-jobname="$actorShort"
+# random sleep
+sleep 0.$[ ( $RANDOM % 10 )  + 1 ]s
+
+timesuffix=`date +%s%N`
+
+jobname="$actorShort-$timesuffix"
 
 timeprefix=$(date +%Y/%m/%d)
 
-actorprefix="$MODE/$ACTOR/$actorShort"
+actorprefix="$MODE/$ACTOR/$jobname/$NOMS_BIN_FORMAT"
 
 format="markdown"
 if [[ "$MODE" = "release" || "$MODE" = "nightly" ]]; then
