@@ -95,18 +95,10 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	var tempUsers []gms.TemporaryUser
-	if len(config.ServerUser) > 0 {
-		tempUsers = append(tempUsers, gms.TemporaryUser{
-			Username: config.ServerUser,
-			Password: config.ServerPass,
-		})
-	}
-
 	// Set up engine
 	engine := gms.New(
 		analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(),
-		&gms.Config{IsReadOnly: config.IsReadOnly, TemporaryUsers: tempUsers},
+		&gms.Config{IsReadOnly: config.IsReadOnly},
 	).WithBackgroundThreads(bThreads)
 	engine.Analyzer.Catalog.MySQLDb.SetPersister(persister)
 	// Load MySQL Db information
