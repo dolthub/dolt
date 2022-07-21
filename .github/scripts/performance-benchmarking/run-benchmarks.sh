@@ -72,7 +72,8 @@ source \
   "$format"          \
   "$issuenumber"     \
   "$INIT_BIG_REPO"   \
-  "$NOMS_BIN_FORMAT" > job.json
+  "$NOMS_BIN_FORMAT" \
+  "$WITH_TPCC" > job.json
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
 
