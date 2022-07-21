@@ -80,5 +80,6 @@ jobs:
         with:
           region: us-west-2
           version: ${{ github.event.client_payload.dolt_version }}
+          format: ${{ github.event.client_payload.noms_bin_format }}
           toAddresses: '["${{ github.event.client_payload.actor_email }}"]'
           dataFile: ${{ format('{0}/results.log', github.workspace) }}
