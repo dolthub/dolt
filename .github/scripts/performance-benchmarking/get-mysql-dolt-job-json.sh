@@ -2,8 +2,8 @@
 
 set -e
 
-if [ "$#" -lt 8 ]; then
-    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timeprefix> <actorprefix> <format> <initBigRepo> <nomsBinFormat>"
+if [ "$#" -lt 9 ]; then
+    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timeprefix> <actorprefix> <format> <issueNumber> <initBigRepo> <nomsBinFormat>"
     exit 1
 fi
 
@@ -15,8 +15,9 @@ toVersion="$5"
 timeprefix="$6"
 actorprefix="$7"
 format="$8"
-initBigRepo="$9"
-nomsBinFormat="${10}"
+issueNumber="$9"
+initBigRepo="${10}"
+nomsBinFormat="${11}"
 precision="1"
 tpccRegex="tpcc%"
 
