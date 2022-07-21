@@ -73,7 +73,7 @@ var _ enginetest.ValidatingHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
 	dEnv := dtestutils.CreateTestEnv()
-	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	require.NoError(t, err)
 	b := env.GetDefaultInitBranch(dEnv.Config)
 	pro := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem())
@@ -256,7 +256,7 @@ func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession
 	dSession, err := dsess.NewDoltSession(
 		enginetest.NewContext(d),
 		sql.NewBaseSessionWithClientServer("address", client, 1),
-		pro.(dsess.RevisionDatabaseProvider),
+		pro.(dsess.DoltDatabaseProvider),
 		localConfig,
 		states...,
 	)
@@ -322,7 +322,7 @@ func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDataba
 	// NewDatabases must be called before NewDatabaseProvider, we grab the DoltEnvs
 	// previously created by NewDatabases and re-add them to the new MultiRepoEnv.
 	dEnv := dtestutils.CreateTestEnv()
-	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	require.NoError(d.t, err)
 	d.multiRepoEnv = mrEnv
 	for _, db := range dbs {

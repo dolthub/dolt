@@ -28,11 +28,11 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) RowDiffer {
+func NewRowDiffer(ctx context.Context, format *types.NomsBinFormat, fromSch, toSch schema.Schema, buf int) RowDiffer {
 	ad := NewAsyncDiffer(buf)
 
 	// Returns an EmptyRowDiffer if the two schemas are not diffable.
-	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
+	if !schema.ArePrimaryKeySetsDiffable(format, fromSch, toSch) {
 		return &EmptyRowDiffer{}
 	}
 

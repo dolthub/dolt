@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/dolthub/dolt/go/libraries/utils/set"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
@@ -136,7 +134,7 @@ func NewSchemaForTable(tableName string, colNamesAndTypes ...interface{}) schema
 
 	// existingTags *set.Uint64Set, tableName string, existingColKinds []types.NomsKind, newColName string, newColKind types.NomsKind
 	nomsKinds := make([]types.NomsKind, 0)
-	tags := set.NewUint64Set(nil)
+	tags := make(schema.TagMapping)
 
 	cols := make([]schema.Column, len(colNamesAndTypes)/2)
 	for i := 0; i < len(colNamesAndTypes); i += 2 {
@@ -144,7 +142,7 @@ func NewSchemaForTable(tableName string, colNamesAndTypes ...interface{}) schema
 		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
 
 		tag := schema.AutoGenerateTag(tags, tableName, nomsKinds, name, nomsKind)
-		tags.Add(tag)
+		tags.Add(tag, tableName)
 		nomsKinds = append(nomsKinds, nomsKind)
 
 		isPk := i/2 == 0

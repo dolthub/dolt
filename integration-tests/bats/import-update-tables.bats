@@ -815,7 +815,6 @@ DELIM
 }
 
 @test "import-update-tables: successfully update child table in multi-key fk relationship" {
-    skip_nbf_dolt_1
     dolt sql -q "drop table objects"
     dolt sql -q "drop table colors"
 

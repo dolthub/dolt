@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -45,6 +46,7 @@ type DoltDatabaseProvider struct {
 	defaultBranch string
 	dataRootDir   string
 	fs            filesys.Filesys
+	remoteDialer  dbfactory.GRPCDialProvider
 
 	dbFactoryUrl string
 }
@@ -52,7 +54,7 @@ type DoltDatabaseProvider struct {
 var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
-var _ dsess.RevisionDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
 
 // NewDoltDatabaseProvider returns a provider for the databases given
 func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys, databases ...sql.Database) DoltDatabaseProvider {
@@ -93,6 +95,16 @@ func (p DoltDatabaseProvider) WithFunctions(fns []sql.Function) DoltDatabaseProv
 func (p DoltDatabaseProvider) WithDbFactoryUrl(url string) DoltDatabaseProvider {
 	p.dbFactoryUrl = url
 	return p
+}
+
+// WithRemoteDialer returns a copy of this provider with the dialer provided
+func (p DoltDatabaseProvider) WithRemoteDialer(provider dbfactory.GRPCDialProvider) DoltDatabaseProvider {
+	p.remoteDialer = provider
+	return p
+}
+
+func (p DoltDatabaseProvider) FileSystem() filesys.Filesys {
+	return p.fs
 }
 
 func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Database, err error) {
@@ -140,6 +152,13 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 		i++
 	}
 	return
+}
+
+func (p DoltDatabaseProvider) GetRemoteDB(ctx *sql.Context, srcDB *doltdb.DoltDB, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
+	if withCaching {
+		return r.GetRemoteDB(ctx, srcDB.ValueReadWriter().Format(), p.remoteDialer)
+	}
+	return r.GetRemoteDBWithoutCaching(ctx, srcDB.ValueReadWriter().Format(), p.remoteDialer)
 }
 
 func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) error {
@@ -255,7 +274,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		return nil, dsess.InitialDbState{}, false, nil
 	}
 
-	isBranch, err := isBranch(ctx, srcDb, revSpec)
+	isBranch, err := isBranch(ctx, srcDb, revSpec, p.remoteDialer)
 	if err != nil {
 		return nil, dsess.InitialDbState{}, false, err
 	}
@@ -408,11 +427,11 @@ func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDa
 }
 
 // isBranch returns whether a branch with the given name is in scope for the database given
-func isBranch(ctx context.Context, db SqlDatabase, branchName string) (bool, error) {
+func isBranch(ctx context.Context, db SqlDatabase, branchName string, dialer dbfactory.GRPCDialProvider) (bool, error) {
 	var ddbs []*doltdb.DoltDB
 
 	if rdb, ok := db.(ReadReplicaDatabase); ok {
-		remoteDB, err := rdb.remote.GetRemoteDB(ctx, rdb.ddb.Format())
+		remoteDB, err := rdb.remote.GetRemoteDB(ctx, rdb.ddb.Format(), dialer)
 		if err != nil {
 			return false, err
 		}
@@ -460,7 +479,6 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 		branch:          branch,
 		RepoStateWriter: srcDb.DbData().Rsw,
 		RepoStateReader: srcDb.DbData().Rsr,
-		DocsReadWriter:  srcDb.DbData().Drw,
 	}
 
 	var db SqlDatabase
@@ -472,7 +490,6 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			ddb:      v.ddb,
 			rsw:      static,
 			rsr:      static,
-			drw:      static,
 			gs:       v.gs,
 			editOpts: v.editOpts,
 		}
@@ -483,7 +500,6 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 				ddb:      v.ddb,
 				rsw:      static,
 				rsr:      static,
-				drw:      static,
 				gs:       v.gs,
 				editOpts: v.editOpts,
 			},
@@ -502,7 +518,6 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			Ddb: srcDb.DbData().Ddb,
 			Rsw: static,
 			Rsr: static,
-			Drw: static,
 		},
 	}
 
@@ -526,7 +541,6 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		ddb:      srcDb.DbData().Ddb,
 		rsw:      srcDb.DbData().Rsw,
 		rsr:      srcDb.DbData().Rsr,
-		drw:      srcDb.DbData().Drw,
 		editOpts: srcDb.editOpts,
 	}}
 	init := dsess.InitialDbState{
@@ -537,7 +551,6 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 			Ddb: srcDb.DbData().Ddb,
 			Rsw: srcDb.DbData().Rsw,
 			Rsr: srcDb.DbData().Rsr,
-			Drw: srcDb.DbData().Drw,
 		},
 	}
 
@@ -548,7 +561,6 @@ type staticRepoState struct {
 	branch ref.DoltRef
 	env.RepoStateWriter
 	env.RepoStateReader
-	env.DocsReadWriter
 }
 
 func (s staticRepoState) CWBHeadRef() ref.DoltRef {
