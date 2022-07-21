@@ -199,10 +199,12 @@ func TestYAMLConfigDefaults(t *testing.T) {
 	assert.Equal(t, "", cfg.TLSKey())
 	assert.Equal(t, "", cfg.TLSCert())
 	assert.Equal(t, false, cfg.RequireSecureTransport())
+	assert.Equal(t, false, cfg.AllowCleartextPasswords())
 	assert.Equal(t, false, cfg.DisableClientMultiStatements())
 	assert.Equal(t, defaultMetricsHost, cfg.MetricsHost())
 	assert.Equal(t, defaultMetricsPort, cfg.MetricsPort())
 	assert.Nil(t, cfg.MetricsConfig.Labels)
+	assert.Equal(t, defaultAllowCleartextPasswords, cfg.AllowCleartextPasswords())
 
 	c, err := LoadTLSConfig(cfg)
 	assert.NoError(t, err)
