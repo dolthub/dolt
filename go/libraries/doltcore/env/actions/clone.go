@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -68,12 +67,12 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateDirectory, dir, err.Error())
 	}
 
-	err = os.Chdir(dir)
+	newFs, err := fs.WithWorkingDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToAccessDir, dir, err.Error())
 	}
 
-	dEnv := env.Load(ctx, homeProvider, fs, doltdb.LocalDirDoltDB, version)
+	dEnv := env.Load(ctx, homeProvider, newFs, doltdb.LocalDirDoltDB, version)
 	err = dEnv.InitRepoWithNoData(ctx, nbf)
 	if err != nil {
 		return nil, fmt.Errorf("%w; %s", ErrFailedToInitRepo, err.Error())

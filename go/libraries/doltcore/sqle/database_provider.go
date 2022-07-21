@@ -17,7 +17,6 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 
@@ -238,16 +237,6 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 	if err != nil {
 		return err
 	}
-
-	// TODO: EnvForClone changes the working directory for the current process – this hack
-	//       undoes that. We should audit the code and find a cleaner way to fix this, such
-	//       as: 1) see if we really need to change the working directory, or 2) if that
-	//       function should reset it afterwards, or 3) if it should be hidden behind a flag.
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	defer os.Chdir(cwd)
 
 	dEnv, err := actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dbName, p.fs, "VERSION", env.GetCurrentUserHomeDir)
 	if err != nil {
