@@ -60,11 +60,11 @@ teardown() {
     start_sql_server_with_config test_db server.yaml
 
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
-    run ls -a
-    [[ "$output" =~ ".doltcfg" ]] || false
-
     server_query test_db 1 "create user new_user" ""
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
+
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
 
     run ls .doltcfg
     [[ "$output" =~ "privileges.db" ]] || false
@@ -78,12 +78,12 @@ teardown() {
     start_sql_server_with_config test_db server.yaml
 
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
+    server_query test_db 1 "create user new_user" ""
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
+
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
     [[ "$output" =~ "doltcfgdir" ]] || false
-
-    server_query test_db 1 "create user new_user" ""
-    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
     run ls doltcfgdir
     [[ "$output" =~ "privileges.db" ]] || false
@@ -97,13 +97,11 @@ teardown() {
     start_sql_server_with_config test_db server.yaml
 
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
-    run ls -a
-    [[ "$output" =~ ".doltcfg" ]] || false
-
     server_query test_db 1 "create user new_user" ""
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
     run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
     [[ "$output" =~ "privs.db" ]] || false
 }
 
@@ -147,18 +145,15 @@ teardown() {
 
     start_sql_server test_db
 
-    # expect only dolt user
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
+    server_query test_db 1 "create user new_user" ""
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
-    # check for config directory
     run ls -a
     [[ "$output" =~ ".doltcfg" ]] || false
 
-    # create user
-    server_query test_db 1 "create user new_user" ""
-
-    # expect dolt user and new_user
-    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
+    run ls .doltcfg
+    [[ "$output" =~ "privileges.db" ]] || false
 }
 
 @test "sql-privs: multiple doltcfg directories causes error" {
@@ -173,7 +168,6 @@ teardown() {
     cd inner_db
     mkdir .doltcfg
 
-    # expect start server to fail
     run start_sql_server inner_db
     [ "$status" -eq 1 ]
     [[ "$output" =~ "multiple .doltcfg directories detected" ]] || false
@@ -186,35 +180,19 @@ teardown() {
 
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --data-dir=db_dir
 
-    # show databases, expect all
     server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema"
-
-    # show users, expect just root user
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt"
-
-    # expect no .doltcfg in current directory
-    run ls -a
-    ! [[ "$output" =~ ".doltcfg" ]] || false
-
-    # expect .doltcfg in $datadir
-    run ls -a db_dir
-    [[ "$output" =~ ".doltcfg" ]] || false
-
-    # create new user
     server_query db1 1 "create user new_user" ""
-
-    # show users, expect root user and new_user
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
-    # expect no privileges.db in current directory
-    run ls
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
-    # expect no privileges.db in $datadir directory
-    run ls db_dir
+    run ls -a db_dir
+    [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
-    # expect privileges.db in $datadir/.doltcfg
     run ls db_dir/.doltcfg
     [[ "$output" =~ "privileges.db" ]] || false
 }
@@ -224,21 +202,14 @@ teardown() {
 
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --doltcfg-dir=doltcfgdir
 
-    # show users, expect just root user
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
+    server_query test_db 1 "create user new_user" ""
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
-    # expect only custom doltcfgdir
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
     [[ "$output" =~ "doltcfgdir" ]] || false
 
-    # create new_user
-    server_query test_db 1 "create user new_user" ""
-
-    # show users, expect root user and new_user
-    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
-
-    # expect privileges file in doltcfgdir
     run ls doltcfgdir
     [[ "$output" =~ "privileges.db" ]] || false
 }
@@ -248,21 +219,12 @@ teardown() {
 
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.db
 
-    # show users, expect just root user
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
-
-    # expect default doltcfg directory
-    run ls -a
-    [[ "$output" =~ ".doltcfg" ]] || false
-
-    # create new_user
     server_query test_db 1 "create user new_user" ""
-
-    # show users, expect root user and new_user
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
-    # expect custom privilege file current directory
-    run ls
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
     [[ "$output" =~ "privs.db" ]] || false
 }
 
@@ -271,36 +233,20 @@ teardown() {
 
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --data-dir=db_dir --doltcfg-dir=doltcfgdir
 
-    # show databases, expect all
     server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema"
-
-    # show users, expect just root user
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt"
+    server_query db1 1 "create user new_user" ""
+    server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
-    # expect custom doltcfg in current directory
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
     [[ "$output" =~ "doltcfgdir" ]] || false
+    ! [[ "$output" =~ "privileges.db" ]] || false
 
-    # expect no .doltcfg in $datadir
     run ls -a db_dir
     ! [[ "$output" =~ ".doltcfg" ]] || false
-
-    # create new user
-    server_query db1 1 "create user new_user" ""
-
-    # show users, expect root user and new_user
-    server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
-
-    # expect no privileges.db in current directory
-    run ls
     ! [[ "$output" =~ "privileges.db" ]] || false
 
-    # expect no privileges.db in $datadir directory
-    run ls db_dir
-    ! [[ "$output" =~ "privileges.db" ]] || false
-
-    # expect privileges.db in $doltcfg directory
     run ls doltcfgdir
     [[ "$output" =~ "privileges.db" ]] || false
 }
@@ -310,35 +256,19 @@ teardown() {
 
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --data-dir=db_dir --privilege-file=privs.db
 
-    # show databases, expect all
     server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema"
-
-    # show users, expect just root user
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt"
-
-    # expect no .doltcfg in current directory
-    run ls -a
-    ! [[ "$output" =~ ".doltcfg" ]] || false
-
-    # expect .doltcfg in $datadir
-    run ls -a db_dir
-    [[ "$output" =~ ".doltcfg" ]] || false
-
-    # create new user
     server_query db1 1 "create user new_user" ""
-
-    # show users, expect root user and new_user
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
-    # expect privs.db in current directory
-    run ls
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
     [[ "$output" =~ "privs.db" ]] || false
 
-    # expect no privileges.db in $datadir directory
-    run ls db_dir
+    run ls -a db_dir
+    [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
 
-    # expect no privs.db in $doltcfg directory
     run ls db_dir/.doltcfg
     ! [[ "$output" =~ "privs.db" ]] || false
 }
@@ -348,25 +278,15 @@ teardown() {
 
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --doltcfg-dir=doltcfgdir --privilege-file=privs.db
 
-    # expect only dolt user
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
+    server_query test_db 1 "create user new_user" ""
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
-    # expect custom doltcfgdir
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
     [[ "$output" =~ "doltcfgdir" ]] || false
-
-    # create user
-    server_query test_db 1 "create user new_user" ""
-
-    # expect dolt user and new_user
-    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
-
-    # expect privileges file
-    run ls
     [[ "$output" =~ "privs.db" ]] || false
 
-    # expect no privileges file in doltcfgdir
     run ls doltcfgdir
     ! [[ "$output" =~ "privileges.db" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
@@ -377,38 +297,22 @@ teardown() {
 
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --data-dir=db_dir --doltcfg-dir=doltcfgdir --privilege-file=privs.db
 
-    # show databases, expect all
     server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema"
-
-    # show users, expect just root user
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt"
+    server_query db1 1 "create user new_user" ""
+    server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
-    # expect custom doltcfg in current directory
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
     [[ "$output" =~ "doltcfgdir" ]] || false
-
-    # expect no .doltcfg in $datadir
-    run ls -a db_dir
-    ! [[ "$output" =~ ".doltcfg" ]] || false
-
-    # create new user
-    server_query db1 1 "create user new_user" ""
-
-    # show users, expect root user and new_user
-    server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
-
-    # expect privs.db in current directory
-    run ls
     ! [[ "$output" =~ "privileges.db" ]] || false
     [[ "$output" =~ "privs.db" ]] || false
 
-    # expect no privileges.db in $datadir directory
-    run ls db_dir
+    run ls -a db_dir
+    ! [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
 
-    # expect no privileges.db in $doltcfg directory
     run ls doltcfgdir
     ! [[ "$output" =~ "privileges.db" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
