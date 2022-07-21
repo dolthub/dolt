@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -314,7 +313,7 @@ func restoreBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	// make .dolt dir whith env.NoRemote to avoid origin upstream
+	// Create a new Dolt env for the clone and assign it to dEnv; use env.NoRemote to avoid origin upstream
 	dEnv, err = actions.EnvForClone(ctx, srcDb.ValueReadWriter().Format(), env.NoRemote, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -331,12 +330,9 @@ func restoreBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		// If we're cloning into a directory that already exists do not erase it. Otherwise
 		// make best effort to delete the directory we created.
 		if userDirExists {
-			// Set the working dir to the parent of the .dolt folder so we can delete .dolt
-			_ = os.Chdir(dir)
 			_ = dEnv.FS.Delete(dbfactory.DoltDir, true)
 		} else {
-			_ = os.Chdir("../")
-			_ = dEnv.FS.Delete(dir, true)
+			_ = dEnv.FS.Delete(".", true)
 		}
 		return errhand.VerboseErrorFromError(err)
 	}

@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"os"
 	"path"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -120,6 +119,7 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		return verr
 	}
 
+	// Create a new Dolt env for the clone and assign it to dEnv
 	dEnv, err = actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -130,12 +130,9 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		// If we're cloning into a directory that already exists do not erase it. Otherwise
 		// make best effort to delete the directory we created.
 		if userDirExists {
-			// Set the working dir to the parent of the .dolt folder so we can delete .dolt
-			_ = os.Chdir(dir)
-			_ = dEnv.FS.Delete(dbfactory.DoltDir, true)
+			dEnv.FS.Delete(dbfactory.DoltDir, true)
 		} else {
-			_ = os.Chdir("../")
-			_ = dEnv.FS.Delete(dir, true)
+			dEnv.FS.Delete(".", true)
 		}
 		return errhand.VerboseErrorFromError(err)
 	}
