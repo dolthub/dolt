@@ -215,15 +215,19 @@ func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
 			args = append(args, fmt.Sprintf("with the following values left over: '%v'", unusedRowValues))
 		}
 
-		return nil, table.NewBadRow(nil,
+		return rowValsToSQLRows(rowVals), table.NewBadRow(nil,
 			args...,
 		)
 	}
 
 	if err != nil {
-		return nil, table.NewBadRow(nil, err.Error())
+		return rowValsToSQLRows(rowVals), table.NewBadRow(nil, err.Error())
 	}
 
+	return rowValsToSQLRows(rowVals), nil
+}
+
+func rowValsToSQLRows(rowVals []*string) sql.Row {
 	var sqlRow sql.Row
 	for _, rowVal := range rowVals {
 		if rowVal == nil {
@@ -233,7 +237,7 @@ func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
 		}
 	}
 
-	return sqlRow, nil
+	return sqlRow
 }
 
 // GetSchema gets the schema of the rows that this reader will return

@@ -320,15 +320,15 @@ DELIM
 
     run dolt table import -u --continue persons persons.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "The following rows were skipped:" ]] || false
-    [[ "$output" =~ "[2,little,doe,10]" ]] || false
-    [[ "$output" =~ "[3,little,doe,4]" ]] || false
-    [[ "$output" =~ "[4,little,doe,1]" ]] || false
-    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
-    [[ "$output" =~ "Import completed successfully." ]] || false
+    [[ "${lines[0]}" =~ "The following rows were skipped:" ]] || false
+    [[ "${lines[1]}" =~ '[2,little,doe,10]' ]] || false
+    [[ "${lines[2]}" =~ '[3,little,doe,4]' ]] || false
+    [[ "${lines[3]}" =~ '[4,little,doe,1]' ]] || false
+    [[ "${lines[4]}" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "${lines[5]}" =~ "Lines skipped: 3" ]] || false
+    [[ "${lines[6]}" =~ "Import completed successfully." ]] || false
 
     run dolt sql -r csv -q "select * from persons"
-    skip "this only worked b/c no rollback on keyless tables; this also fails on primary key tables"
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "ID,LastName,FirstName,Age" ]] || false
     [[ "$output" =~ "1,jon,doe,20" ]] || false
@@ -1204,4 +1204,14 @@ DELIM
     [[ "$output" =~ '"pk": "5"' ]]
     [[ "$output" =~ '"v1": "7"' ]]
     [[ "$output" =~ "with the following values left over: '[\"5\"]'" ]] || false
+
+    # Add a continue statement
+    run dolt table import -u --continue test bad-updates.csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[2]}" =~ "The following rows were skipped:" ]] || false
+    [[ "${lines[3]}" =~ '[5,7,5]' ]] || false
+    [[ "${lines[4]}" =~ '[6,5,5]' ]] || false
+    [[ "${lines[5]}" =~ "Rows Processed: 0, Additions: 0, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "${lines[6]}" =~ "Lines skipped: 2" ]] || false
+    [[ "${lines[7]}" =~ "Import completed successfully." ]] || false
 }
