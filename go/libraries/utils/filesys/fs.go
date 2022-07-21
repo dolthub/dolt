@@ -71,6 +71,9 @@ type WritableFS interface {
 
 	// MoveFile will move a file from the srcPath in the filesystem to the destPath
 	MoveFile(srcPath, destPath string) error
+
+	// TempDir returns the path of a new temporary directory.
+	TempDir() string
 }
 
 // FSIterCB specifies the signature of the function that will be called for every item found while iterating.

@@ -16,8 +16,10 @@ package filesys
 
 import (
 	"bytes"
+	"encoding/base32"
 	"errors"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -557,6 +559,13 @@ func (fs *InMemFS) LastModified(path string) (t time.Time, exists bool) {
 	}
 
 	return time.Time{}, false
+}
+
+func (fs *InMemFS) TempDir() string {
+	buf := make([]byte, 16)
+	rand.Read(buf)
+	s := base32.HexEncoding.EncodeToString(buf)
+	return "/var/folders/gc/" + s + "/T/"
 }
 
 func (fs *InMemFS) pathToNative(path string) string {
