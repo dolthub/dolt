@@ -16,7 +16,6 @@ package editor
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -40,7 +39,6 @@ var tupleFactories = &sync.Pool{New: func() interface{} {
 
 var (
 	tableEditorMaxOps uint64 = 256 * 1024
-	ErrDuplicateKey          = errors.New("duplicate key error")
 )
 
 func init() {
@@ -310,11 +308,7 @@ func (te *pkTableEditor) maybeReturnErrForKVP(ctx context.Context, newKeyString,
 		return err
 	}
 
-	if cb != nil {
-		return cb(newKeyString, indexName, kVal.(types.Tuple), vVal.(types.Tuple), isPk)
-	} else {
-		return fmt.Errorf("duplicate key '%s': %w", newKeyString, ErrDuplicateKey)
-	}
+	return cb(newKeyString, indexName, kVal.(types.Tuple), vVal.(types.Tuple), isPk)
 }
 
 // InsertKeyVal adds the given tuples to the table.
