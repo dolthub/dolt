@@ -41,11 +41,20 @@ jwks:
 
   start_sql_server_with_config "" server.yaml
   
-  run dolt sql-client --host=127.0.0.1 --port=$PORT --allow-cleartext-passwords=true --user=test_jwt_user --password=eyJhbGciOiJSUzI1NiIsImtpZCI6ImUwNjA2Y2QwLTkwNWQtNGFiYS05MjBjLTZlNTE0YTFjYmIyNiIsInR5cCI6IkpXVCJ9.eyJhdWQiOlsibXlfcmVzb3VyY2UiXSwiZXhwIjoxNjU4Mjc1OTAzLCJpYXQiOjE2NTgyNzU4NzMsImlzcyI6ImRvbHRodWIuY29tIiwianRpIjoiN2ViZTg3YmMtOTkzMi00ZTljLTk5N2EtNjQzMDk0NTBkMWVjIiwib25fYmVoYWxmX29mIjoibXlfdXNlciIsInN1YiI6InRlc3RfdXNlciJ9.u2cUGUkQ2hk4AaxtNQB-6Jcdf5LtehFA7XX2FG8LGgTf6KfwE3cuuGaBIU8Jz9ktD9g8TjAbfAfbrNaFNYnKG6SnDUHp0t7VbfLdgfNDQqSyH0nOK2UF8ffxqa46PRxeMwTSJv8prE07rcmiZNL9Ie4vSGYLncJfMzo_RdE-A-PH7z-ZyZ_TxOMhkgMFq2Af5Px3zFuAKq-Y-PrQNopSuzjPJc0DQ93Q7EcIHfU6Fx6gOVTkzHxnOFcg3Nj-4HhqBSvBa_BdMYEzHJKx3F_9rrCCPqEGUFnxXAqFFmnZUQuQKpN2yW_zhviCVqrvbP7vOCIXmxi8YXLiGiV-4KlxHA<<SQL
-USE repo1;
-SHOW TABLES;
+  run dolt sql-client --host=127.0.0.1 --port=$PORT --allow-cleartext-passwords=true --user=test_jwt_user --password=eyJhbGciOiJSUzI1NiIsImtpZCI6ImViYmMxY2ZlLTZhZjMtNDZmOC1iMmQxLWZiNjkyZDNhZGJjYiIsInR5cCI6IkpXVCJ9.eyJhdWQiOlsibXlfcmVzb3VyY2UiXSwiZXhwIjoxNjU4NDI4MzcxLCJpYXQiOjE2NTg0MjY1NzEsImlzcyI6ImRvbHRodWIuY29tIiwianRpIjoiYmU3YTg2MzctNmM5MC00OWFhLTgyY2MtODE2ZDIwMDdkZTNiIiwib25fYmVoYWxmX29mIjoibXlfdXNlciIsInN1YiI6InRlc3RfdXNlciJ9.L0HBebCbjQhHKVssJrqX6uRwZfx48j4tP121pYTW83xawAIhadgtxSTDZf4wDXySemTfmaRlIxpw9gYL1p2YLLz_xDM6ho4LOhZhm1yRl8F4LHxw30G-8oUNmp-F9Jcs7NJkDOkZBa4sPhNs8zJABHomztNzQ1ZQ2xiiKeYnRrvG3AQu7qCMikx9nYIh4TWbJPwbZvtaxaCgct6vVOvoZLyaSA-IE_EEOzUoOPUnmgU_Xlxv6CWeR7oRbBPTIFR-573qU79ydcSUKBJsRMMTE-PxwKXddd2GvX3O7vmXjQICwzrfyN7shJfqusmtAs5GVTUONHDD3gI9i4eWLK9PEg<<SQL
+SHOW DATABASES;
 SQL
 
-   echo $output
-   [ "$status" -eq 0 ]
+  echo $output
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
+  [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
+  [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
+  [ "${lines[3]}" = '+--------------------+' ]
+  [ "${lines[4]}" = '| Database           |' ]
+  [ "${lines[5]}" = '+--------------------+' ]
+  [ "${lines[6]}" = '| information_schema |' ]
+  [ "${lines[7]}" = '| repo1              |' ]
+  [ "${lines[8]}" = '+--------------------+' ]
+
 }
