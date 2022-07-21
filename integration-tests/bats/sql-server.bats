@@ -1133,7 +1133,7 @@ END""")
 
 @test "sql-server: drop database with active connections" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1
+    skip_nbf_dolt_1 "json ordering of keys differs"
 
     mkdir no_dolt && cd no_dolt
     start_sql_server
