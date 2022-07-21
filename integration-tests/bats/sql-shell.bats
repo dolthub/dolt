@@ -46,39 +46,31 @@ teardown() {
     # remove config files
     rm -rf .doltcfg
 
-     # show users, expect just root user
     run dolt sql <<< "select user from mysql.user;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "root" ]] || false
     ! [[ "$output" =~ "new_user" ]] || false
 
-    # check for config directory
     run ls -a
-    [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ ".doltcfg" ]] || false
 
-    # check for no privileges.db file
     run ls .doltcfg
     ! [[ "$output" =~ "privileges.db" ]] || false
 
-    # create new_user
     run dolt sql <<< "create user new_user"
     [ "$status" -eq 0 ]
 
-    # show users, expect root user and new_user
     run dolt sql <<< "select user from mysql.user;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "root" ]] || false
     [[ "$output" =~ "new_user" ]] || false
 
-    # check for config directory
     run ls -a
     [[ "$output" =~ ".doltcfg" ]] || false
 
-    # check for no privileges.db file
     run ls .doltcfg
     [[ "$output" =~ "privileges.db" ]] || false
 
-    # remove existing .doltcfg
     rm -rf .doltcfg
 }
 
@@ -122,13 +114,11 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     ! [[ "$output" =~ "new_user" ]] || false
 
-    # expect no .doltcfg in current directory
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
 
-    # expect .doltcfg in $datadir
     run ls -a db_dir
-    [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ ".doltcfg" ]] || false
 
     # create new user
     run dolt sql --data-dir=db_dir <<< "create user new_user"
@@ -140,18 +130,16 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     [[ "$output" =~ "new_user" ]] || false
 
-    # expect no privileges.db in current directory
-    run ls
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
-    # expect no privileges.db in $datadir directory
-    run ls db_dir
+    run ls -a db_dir
+    [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
-    # expect privileges.db in $datadir/.doltcfg
     run ls db_dir/.doltcfg
     [[ "$output" =~ "privileges.db" ]] || false
-
 
     # test relative to $datadir
     cd db_dir
@@ -187,10 +175,9 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     ! [[ "$output" =~ "new_user" ]] || false
 
-    # expect only custom doltcfgdir
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
-    [[ "$output" =~ "doltcfgdir" ]] || false
+    ! [[ "$output" =~ "doltcfgdir" ]] || false
 
     # create new_user
     run dolt sql --doltcfg-dir=doltcfgdir <<< "create user new_user"
@@ -202,11 +189,14 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     [[ "$output" =~ "new_user" ]] || false
 
-    # expect privileges files in doltcfgdir
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
+
     run ls doltcfgdir
     [[ "$output" =~ "privileges.db" ]] || false
 
-    # remove config directory just in case
+    # remove files
     rm -rf .doltcfg
     rm -rf doltcfgdir
 }
@@ -221,9 +211,9 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     ! [[ "$output" =~ "new_user" ]] || false
 
-    # expect default doltcfg directory
     run ls -a
-    [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "privs.db" ]] || false
 
     # create new_user
     run dolt sql --privilege-file=privs.db <<< "create user new_user"
@@ -234,8 +224,8 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     [[ "$output" =~ "new_user" ]] || false
 
-    # expect custom privilege file current directory
-    run ls
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
     [[ "$output" =~ "privs.db" ]] || false
 
     # expect to not see new_user when privs.db not specified
@@ -289,12 +279,10 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     ! [[ "$output" =~ "new_user" ]] || false
 
-    # expect custom doltcfg in current directory
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
-    [[ "$output" =~ "doltcfgdir" ]] || false
+    ! [[ "$output" =~ "doltcfgdir" ]] || false
 
-    # expect no .doltcfg in $datadir
     run ls -a db_dir
     ! [[ "$output" =~ ".doltcfg" ]] || false
 
@@ -308,15 +296,14 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     [[ "$output" =~ "new_user" ]] || false
 
-    # expect no privileges.db in current directory
-    run ls
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
-    # expect no privileges.db in $datadir directory
     run ls db_dir
     ! [[ "$output" =~ "privileges.db" ]] || false
 
-    # expect privileges.db in $doltcfg directory
     run ls doltcfgdir
     [[ "$output" =~ "privileges.db" ]] || false
 
@@ -391,13 +378,11 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     ! [[ "$output" =~ "new_user" ]] || false
 
-    # expect no .doltcfg in current directory
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
 
-    # expect .doltcfg in $datadir
     run ls -a db_dir
-    [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ ".doltcfg" ]] || false
 
     # create new user
     run dolt sql --data-dir=db_dir --privilege-file=privs.db <<< "create user new_user"
@@ -409,15 +394,14 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     [[ "$output" =~ "new_user" ]] || false
 
-    # expect privs.db in current directory
-    run ls
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
     [[ "$output" =~ "privs.db" ]] || false
 
-    # expect no privileges.db in $datadir directory
-    run ls db_dir
+    run ls -a db_dir
+    [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
 
-    # expect no privs.db in $doltcfg directory
     run ls db_dir/.doltcfg
     ! [[ "$output" =~ "privs.db" ]] || false
 
@@ -463,10 +447,9 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     ! [[ "$output" =~ "new_user" ]] || false
 
-    # expect custom doltcfgdir
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
-    [[ "$output" =~ "doltcfgdir" ]] || false
+    ! [[ "$output" =~ "doltcfgdir" ]] || false
 
     # create new_user
     run dolt sql --doltcfg-dir=doltcfgdir --privilege-file=privs.db <<< "create user new_user"
@@ -478,11 +461,11 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     [[ "$output" =~ "new_user" ]] || false
 
-    # expect privileges file
-    run ls
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
     [[ "$output" =~ "privs.db" ]] || false
 
-    # expect no privileges file in doltcfgdir
     run ls doltcfgdir
     ! [[ "$output" =~ "privileges.db" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
@@ -535,12 +518,10 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     ! [[ "$output" =~ "new_user" ]] || false
 
-    # expect custom doltcfg in current directory
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
-    [[ "$output" =~ "doltcfgdir" ]] || false
+    ! [[ "$output" =~ "doltcfgdir" ]] || false
 
-    # expect no .doltcfg in $datadir
     run ls -a db_dir
     ! [[ "$output" =~ ".doltcfg" ]] || false
 
@@ -554,17 +535,16 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     [[ "$output" =~ "new_user" ]] || false
 
-    # expect privs.db in current directory
-    run ls
+    run ls -a
     ! [[ "$output" =~ "privileges.db" ]] || false
     [[ "$output" =~ "privs.db" ]] || false
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
 
-    # expect no privileges.db in $datadir directory
     run ls db_dir
     ! [[ "$output" =~ "privileges.db" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
 
-    # expect no privileges.db in $doltcfg directory
     run ls doltcfgdir
     ! [[ "$output" =~ "privileges.db" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
