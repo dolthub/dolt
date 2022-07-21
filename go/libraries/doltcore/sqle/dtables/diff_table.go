@@ -333,7 +333,7 @@ func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
 		return false, err
 	}
 
-	return schema.ArePrimaryKeySetsDiffable(fromSch, toSch), nil
+	return schema.ArePrimaryKeySetsDiffable(dp.from.Format(), fromSch, toSch), nil
 }
 
 type partitionSelectFunc func(*sql.Context, DiffPartition) (bool, error)

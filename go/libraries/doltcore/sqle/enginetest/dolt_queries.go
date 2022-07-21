@@ -1799,6 +1799,31 @@ var MergeScripts = []queries.ScriptTest{
 	},
 }
 
+var Dolt1MergeScripts = []queries.ScriptTest{
+	{
+		Name: "Merge errors if the primary key types have changed (even if the new type has the same NomsKind)",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk1 bigint, pk2 bigint, PRIMARY KEY (pk1, pk2));",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"ALTER TABLE t MODIFY COLUMN pk2 tinyint",
+			"INSERT INTO t VALUES (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'right commit');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'left commit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('right');",
+				ExpectedErrStr: "error: cannot merge two tables with different primary key sets",
+			},
+		},
+	},
+}
+
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 	{
 		Name: "Keyless merge with unique indexes documents violations",
@@ -3529,6 +3554,29 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 	},
 }
 
+var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
+	{
+		Name: "Diff table stops creating diff partitions when any primary key type has changed",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk1 VARCHAR(100), pk2 VARCHAR(100), PRIMARY KEY (pk1, pk2));",
+			"INSERT INTO t VALUES ('1', '1');",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"ALTER TABLE t MODIFY COLUMN pk2 VARCHAR(101)",
+			"CALL DOLT_COMMIT('-am', 'modify column type');",
+
+			"INSERT INTO t VALUES ('2', '2');",
+			"CALL DOLT_COMMIT('-am', 'insert new row');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT to_pk1, to_pk2, from_pk1, from_pk2, diff_type from dolt_diff_t;",
+				Expected: []sql.Row{{"2", "2", nil, nil, "added"}},
+			},
+		},
+	},
+}
+
 var DiffTableFunctionScriptTests = []queries.ScriptTest{
 	{
 		Name: "invalid arguments",
@@ -5072,6 +5120,62 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * FROM test",
 				Expected: []sql.Row{{1}, {2}, {3}, {8}, {9}},
+			},
+		},
+	},
+}
+
+var DoltRemoteTestScripts = []queries.ScriptTest{
+	{
+		Name: "dolt-remote: SQL add remotes",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_REMOTE('add','origin','file://../test')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
+				Expected: []sql.Row{{"origin", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin/*"]`), sql.MustJSON(`{}`)}},
+			},
+			{
+				Query:          "CALL DOLT_REMOTE()",
+				ExpectedErrStr: "error: invalid argument, use 'dolt_remotes' system table to list remotes",
+			},
+			{
+				Query:          "CALL DOLT_REMOTE('origin')",
+				ExpectedErrStr: "error: invalid argument",
+			},
+			{
+				Query:          "INSERT INTO dolt_remotes (name, url) VALUES ('origin', 'file://../test')",
+				ExpectedErrStr: "the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes",
+			},
+		},
+	},
+	{
+		Name: "dolt-remote: SQL remove remotes",
+		SetUpScript: []string{
+			"CALL DOLT_REMOTE('add','origin1','file://.')",
+			"CALL DOLT_REMOTE('add','origin2','aws://[dynamo_db_table:s3_bucket]/repo_name')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
+				Expected: []sql.Row{
+					{"origin1", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), sql.MustJSON(`{}`)},
+					{"origin2", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin2/*"]`), sql.MustJSON(`{}`)}},
+			},
+			{
+				Query:    "CALL DOLT_REMOTE('remove','origin2')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
+				Expected: []sql.Row{{"origin1", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), sql.MustJSON(`{}`)}},
+			},
+			// 'origin1' remote must exist in order this error to be returned; otherwise, no error from EOF
+			{
+				Query:          "DELETE FROM dolt_remotes WHERE name = 'origin1'",
+				ExpectedErrStr: "the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes",
 			},
 		},
 	},
