@@ -313,26 +313,29 @@ func restoreBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	// Create a new Dolt env for the clone and assign it to dEnv; use env.NoRemote to avoid origin upstream
-	dEnv, err = actions.EnvForClone(ctx, srcDb.ValueReadWriter().Format(), env.NoRemote, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
+	// Create a new Dolt env for the clone; use env.NoRemote to avoid origin upstream
+	clonedEnv, err := actions.EnvForClone(ctx, srcDb.ValueReadWriter().Format(), env.NoRemote, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
+	// Nil out the old Dolt env so we don't accidentally use the wrong database
+	dEnv = nil
 
 	// still make empty repo state
-	_, err = env.CreateRepoState(dEnv.FS, env.DefaultInitBranch)
+	_, err = env.CreateRepoState(clonedEnv.FS, env.DefaultInitBranch)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = actions.SyncRoots(ctx, srcDb, dEnv.DoltDB, dEnv.TempTableFilesDir(), buildProgStarter(downloadLanguage), stopProgFuncs)
+	err = actions.SyncRoots(ctx, srcDb, clonedEnv.DoltDB, clonedEnv.TempTableFilesDir(), buildProgStarter(downloadLanguage), stopProgFuncs)
 	if err != nil {
 		// If we're cloning into a directory that already exists do not erase it. Otherwise
 		// make best effort to delete the directory we created.
 		if userDirExists {
-			_ = dEnv.FS.Delete(dbfactory.DoltDir, true)
+			_ = clonedEnv.FS.Delete(dbfactory.DoltDir, true)
 		} else {
-			_ = dEnv.FS.Delete(".", true)
+			_ = clonedEnv.FS.Delete(".", true)
 		}
 		return errhand.VerboseErrorFromError(err)
 	}

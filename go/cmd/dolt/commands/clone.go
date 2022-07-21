@@ -119,20 +119,23 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		return verr
 	}
 
-	// Create a new Dolt env for the clone and assign it to dEnv
-	dEnv, err = actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
+	// Create a new Dolt env for the clone
+	clonedEnv, err := actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, dEnv)
+	// Nil out the old Dolt env so we don't accidentally operate on the wrong database
+	dEnv = nil
+
+	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, clonedEnv)
 	if err != nil {
 		// If we're cloning into a directory that already exists do not erase it. Otherwise
 		// make best effort to delete the directory we created.
 		if userDirExists {
-			dEnv.FS.Delete(dbfactory.DoltDir, true)
+			clonedEnv.FS.Delete(dbfactory.DoltDir, true)
 		} else {
-			dEnv.FS.Delete(".", true)
+			clonedEnv.FS.Delete(".", true)
 		}
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -145,15 +148,15 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		}
 	}
 
-	err = dEnv.RepoStateWriter().UpdateBranch(dEnv.RepoState.CWBHeadRef().GetPath(), env.BranchConfig{
-		Merge:  dEnv.RepoState.Head,
+	err = clonedEnv.RepoStateWriter().UpdateBranch(clonedEnv.RepoState.CWBHeadRef().GetPath(), env.BranchConfig{
+		Merge:  clonedEnv.RepoState.Head,
 		Remote: remoteName,
 	})
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = dEnv.RepoState.Save(dEnv.FS)
+	err = clonedEnv.RepoState.Save(clonedEnv.FS)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
