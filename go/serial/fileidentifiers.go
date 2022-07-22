@@ -42,10 +42,10 @@ const MessagePrefixSz = 4
 type Message []byte
 
 func GetFileID(bs []byte) string {
-	if len(bs) < 8 + MessagePrefixSz {
+	if len(bs) < 8+MessagePrefixSz {
 		return ""
 	}
-	return byteSliceToString(bs[MessagePrefixSz+4:MessagePrefixSz+8])
+	return byteSliceToString(bs[MessagePrefixSz+4 : MessagePrefixSz+8])
 }
 
 func FinishMessage(b *fb.Builder, off fb.UOffsetT, fileID []byte) Message {
