@@ -7,7 +7,6 @@ on:
 jobs:
   correctness:
     runs-on: ubuntu-18.04
-    needs: set-version-actor
     name: Dolt SQL Correctness
     strategy:
       matrix:
