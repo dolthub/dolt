@@ -16,7 +16,6 @@ package table
 
 import (
 	"context"
-	"math"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -65,7 +64,7 @@ func NewTableIterator(ctx context.Context, sch schema.Schema, idx durable.Index,
 	var rowItr sql.RowIter
 	if types.IsFormat_DOLT_1(idx.Format()) {
 		m := durable.ProllyMapFromIndex(idx)
-		itr, err := m.IterOrdinalRange(ctx, offset, math.MaxUint64)
+		itr, err := m.IterOrdinalRange(ctx, offset, uint64(m.Count()))
 		if err != nil {
 			return nil, err
 		}
