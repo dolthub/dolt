@@ -151,8 +151,12 @@ func Serve(
 	if err != nil {
 		return err, nil
 	}
-
 	defer sqlEngine.Close()
+
+	// Add specified user as new superuser, if it doesn't already exist and there is no privilege file
+	if user := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil && len(serverConfig.User()) == 0 {
+		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerPass)
+	}
 
 	labels := serverConfig.MetricsLabels()
 	listener := newMetricsListener(labels)
