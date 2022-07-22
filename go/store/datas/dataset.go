@@ -29,7 +29,6 @@ import (
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -149,7 +148,7 @@ type serialTagHead struct {
 }
 
 func newSerialTagHead(bs []byte, addr hash.Hash) serialTagHead {
-	return serialTagHead{serial.GetRootAsTag(bs, message.MessagePrefixSz), addr}
+	return serialTagHead{serial.GetRootAsTag(bs, serial.MessagePrefixSz), addr}
 }
 
 func (h serialTagHead) TypeName() string {
@@ -186,7 +185,7 @@ type serialWorkingSetHead struct {
 }
 
 func newSerialWorkingSetHead(bs []byte, addr hash.Hash) serialWorkingSetHead {
-	return serialWorkingSetHead{serial.GetRootAsWorkingSet(bs, message.MessagePrefixSz), addr}
+	return serialWorkingSetHead{serial.GetRootAsWorkingSet(bs, serial.MessagePrefixSz), addr}
 }
 
 func (h serialWorkingSetHead) TypeName() string {
@@ -305,7 +304,7 @@ func newHead(head types.Value, addr hash.Hash) (dsHead, error) {
 
 	if sm, ok := head.(types.SerialMessage); ok {
 		data := []byte(sm)
-		fid := serial.GetFileID(data[message.MessagePrefixSz:])
+		fid := serial.GetFileID(data)
 		if fid == serial.TagFileID {
 			return newSerialTagHead(data, addr), nil
 		}

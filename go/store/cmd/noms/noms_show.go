@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -128,7 +127,7 @@ func outputType(value types.Value) {
 	var typeString string
 	switch value := value.(type) {
 	case types.SerialMessage:
-		switch serial.GetFileID(value[message.MessagePrefixSz:]) {
+		switch serial.GetFileID(value) {
 		case serial.StoreRootFileID:
 			typeString = "StoreRoot"
 		case serial.TagFileID:
@@ -162,9 +161,9 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 	switch value := value.(type) {
 	// Some types of serial message need to be output here because of dependency cycles between types / tree package
 	case types.SerialMessage:
-		switch serial.GetFileID(value[message.MessagePrefixSz:]) {
+		switch serial.GetFileID(value) {
 		case serial.TableFileID:
-			msg := serial.GetRootAsTable(value, message.MessagePrefixSz)
+			msg := serial.GetRootAsTable(value, serial.MessagePrefixSz)
 
 			fmt.Fprintf(w, "{\n")
 			fmt.Fprintf(w, "\tSchema: #%s\n", hash.New(msg.SchemaBytes()).String())
@@ -191,7 +190,7 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 
 			return nil
 		case serial.StoreRootFileID:
-			msg := serial.GetRootAsStoreRoot(value, message.MessagePrefixSz)
+			msg := serial.GetRootAsStoreRoot(value, serial.MessagePrefixSz)
 			ambytes := msg.AddressMapBytes()
 			node := tree.NodeFromBytes(ambytes)
 			return tree.OutputAddressMapNode(w, node)

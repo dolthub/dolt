@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -33,7 +32,7 @@ func newParentsClosureIterator(ctx context.Context, c *Commit, vr types.ValueRea
 	sv := c.NomsValue()
 
 	if _, ok := sv.(types.SerialMessage); ok {
-		msg := serial.GetRootAsCommit(sv.(types.SerialMessage), message.MessagePrefixSz)
+		msg := serial.GetRootAsCommit(sv.(types.SerialMessage), serial.MessagePrefixSz)
 		addr := hash.New(msg.ParentClosureBytes())
 		if addr.IsEmpty() {
 			return nil, nil

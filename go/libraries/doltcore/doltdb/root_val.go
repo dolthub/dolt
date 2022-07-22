@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -256,7 +255,7 @@ func newRootValue(vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value) (
 	var storage rvStorage
 
 	if vrw.Format().UsesFlatbuffers() {
-		srv := serial.GetRootAsRootValue([]byte(v.(types.SerialMessage)), message.MessagePrefixSz)
+		srv := serial.GetRootAsRootValue([]byte(v.(types.SerialMessage)), serial.MessagePrefixSz)
 		storage = fbRvStorage{srv}
 	} else {
 		st, ok := v.(types.Struct)
@@ -307,7 +306,7 @@ func decodeRootNomsValue(vrw types.ValueReadWriter, ns tree.NodeStore, val types
 func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {
 	if nbf.UsesFlatbuffers() {
 		if sm, ok := val.(types.SerialMessage); ok {
-			return string(serial.GetFileID(sm[message.MessagePrefixSz:])) == serial.RootValueFileID
+			return string(serial.GetFileID(sm)) == serial.RootValueFileID
 		}
 	} else {
 		if st, ok := val.(types.Struct); ok {
@@ -333,7 +332,7 @@ func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter, ns tree.Node
 		serial.RootValueAddTables(builder, tablesoff)
 		serial.RootValueAddForeignKeyAddr(builder, fkoff)
 		serial.RootValueAddSuperSchemasAddr(builder, ssoff)
-		bs := message.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
+		bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
 		return newRootValue(vrw, ns, types.SerialMessage(bs))
 	}
 
@@ -1269,8 +1268,8 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 	serial.RootValueAddForeignKeyAddr(builder, fkoff)
 	serial.RootValueAddSuperSchemasAddr(builder, ssoff)
 
-	bs := message.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
-	return fbRvStorage{serial.GetRootAsRootValue(bs, message.MessagePrefixSz)}, nil
+	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
+	return fbRvStorage{serial.GetRootAsRootValue(bs, serial.MessagePrefixSz)}, nil
 }
 
 func (r fbRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (rvStorage, error) {

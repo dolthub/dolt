@@ -16,55 +16,19 @@ package message
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
-
-	fb "github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-const MessageTypesKind int = 27
-
-const MessagePrefixSz = 4
-
-type Message []byte
-
-func FinishMessage(b *fb.Builder, off fb.UOffsetT, fileID []byte) Message {
-	// We finish the buffer by prefixing it with:
-	// 1) 1 byte NomsKind == SerialMessage.
-	// 2) big endian 3 byte uint representing the size of the message, not
-	// including the kind or size prefix bytes.
-	//
-	// This allows chunks we serialize here to be read by types binary
-	// codec.
-	//
-	// All accessors in this package expect this prefix to be on the front
-	// of the message bytes as well. See |MessagePrefixSz|.
-
-	b.Prep(1, fb.SizeInt32+4+MessagePrefixSz)
-	b.FinishWithFileIdentifier(off, fileID)
-
-	var size [4]byte
-	binary.BigEndian.PutUint32(size[:], uint32(len(b.Bytes)-int(b.Head())))
-	if size[0] != 0 {
-		panic("message is too large to be encoded")
-	}
-
-	bytes := b.Bytes[b.Head()-MessagePrefixSz:]
-	bytes[0] = byte(MessageTypesKind)
-	copy(bytes[1:], size[1:])
-	return bytes
-}
-
 type Serializer interface {
-	Serialize(keys, values [][]byte, subtrees []uint64, level int) Message
+	Serialize(keys, values [][]byte, subtrees []uint64, level int) serial.Message
 }
 
-func GetKeysAndValues(msg Message) (keys, values val.SlicedBuffer, cnt uint16) {
-	id := serial.GetFileID(msg[MessagePrefixSz:])
+func GetKeysAndValues(msg serial.Message) (keys, values val.SlicedBuffer, cnt uint16) {
+	id := serial.GetFileID(msg)
 
 	if id == serial.ProllyTreeNodeFileID {
 		return getProllyMapKeysAndValues(msg)
@@ -85,8 +49,8 @@ func GetKeysAndValues(msg Message) (keys, values val.SlicedBuffer, cnt uint16) {
 	panic(fmt.Sprintf("unknown message id %s", id))
 }
 
-func WalkAddresses(ctx context.Context, msg Message, cb func(ctx context.Context, addr hash.Hash) error) error {
-	id := serial.GetFileID(msg[MessagePrefixSz:])
+func WalkAddresses(ctx context.Context, msg serial.Message, cb func(ctx context.Context, addr hash.Hash) error) error {
+	id := serial.GetFileID(msg)
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return walkProllyMapAddresses(ctx, msg, cb)
@@ -99,8 +63,8 @@ func WalkAddresses(ctx context.Context, msg Message, cb func(ctx context.Context
 	}
 }
 
-func GetTreeLevel(msg Message) int {
-	id := serial.GetFileID(msg[MessagePrefixSz:])
+func GetTreeLevel(msg serial.Message) int {
+	id := serial.GetFileID(msg)
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapTreeLevel(msg)
@@ -113,8 +77,8 @@ func GetTreeLevel(msg Message) int {
 	}
 }
 
-func GetTreeCount(msg Message) int {
-	id := serial.GetFileID(msg[MessagePrefixSz:])
+func GetTreeCount(msg serial.Message) int {
+	id := serial.GetFileID(msg)
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapTreeCount(msg)
@@ -127,8 +91,8 @@ func GetTreeCount(msg Message) int {
 	}
 }
 
-func GetSubtrees(msg Message) []uint64 {
-	id := serial.GetFileID(msg[MessagePrefixSz:])
+func GetSubtrees(msg serial.Message) []uint64 {
+	id := serial.GetFileID(msg)
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapSubtrees(msg)

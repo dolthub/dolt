@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nomdl"
-	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -112,7 +111,7 @@ func newTag(ctx context.Context, db *database, commitAddr hash.Hash, meta *TagMe
 	}
 }
 
-func tag_flatbuffer(commitAddr hash.Hash, meta *TagMeta) message.Message {
+func tag_flatbuffer(commitAddr hash.Hash, meta *TagMeta) serial.Message {
 	builder := flatbuffers.NewBuilder(1024)
 	addroff := builder.CreateByteVector(commitAddr[:])
 	var nameOff, emailOff, descOff flatbuffers.UOffsetT
@@ -130,7 +129,7 @@ func tag_flatbuffer(commitAddr hash.Hash, meta *TagMeta) message.Message {
 		serial.TagAddTimestampMillis(builder, meta.Timestamp)
 		serial.TagAddUserTimestampMillis(builder, meta.UserTimestamp)
 	}
-	return message.FinishMessage(builder, serial.TagEnd(builder), []byte(serial.TagFileID))
+	return serial.FinishMessage(builder, serial.TagEnd(builder), []byte(serial.TagFileID))
 }
 
 func IsTag(v types.Value) (bool, error) {
@@ -138,7 +137,7 @@ func IsTag(v types.Value) (bool, error) {
 		return types.IsValueSubtypeOf(s.Format(), v, valueTagType)
 	} else if sm, ok := v.(types.SerialMessage); ok {
 		data := []byte(sm)
-		return serial.GetFileID(data[message.MessagePrefixSz:]) == serial.TagFileID, nil
+		return serial.GetFileID(data) == serial.TagFileID, nil
 	}
 	return false, nil
 }

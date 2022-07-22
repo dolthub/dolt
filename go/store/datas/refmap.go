@@ -19,25 +19,24 @@ import (
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func storeroot_flatbuffer(am prolly.AddressMap) message.Message {
+func storeroot_flatbuffer(am prolly.AddressMap) serial.Message {
 	builder := flatbuffers.NewBuilder(1024)
 	ambytes := []byte(tree.ValueFromNode(am.Node()).(types.SerialMessage))
 	voff := builder.CreateByteVector(ambytes)
 	serial.StoreRootStart(builder)
 	serial.StoreRootAddAddressMap(builder, voff)
-	return message.FinishMessage(builder, serial.StoreRootEnd(builder), []byte(serial.StoreRootFileID))
+	return serial.FinishMessage(builder, serial.StoreRootEnd(builder), []byte(serial.StoreRootFileID))
 }
 
 func parse_storeroot(bs []byte, ns tree.NodeStore) prolly.AddressMap {
-	if serial.GetFileID(bs[message.MessagePrefixSz:]) != serial.StoreRootFileID {
-		panic("expected store root file id, got: " + serial.GetFileID(bs[message.MessagePrefixSz:]))
+	if serial.GetFileID(bs) != serial.StoreRootFileID {
+		panic("expected store root file id, got: " + serial.GetFileID(bs))
 	}
-	sr := serial.GetRootAsStoreRoot(bs, message.MessagePrefixSz)
+	sr := serial.GetRootAsStoreRoot(bs, serial.MessagePrefixSz)
 	mapbytes := sr.AddressMapBytes()
 	node := tree.NodeFromBytes(mapbytes)
 	return prolly.NewAddressMap(node, ns)

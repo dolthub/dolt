@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nomdl"
-	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -137,7 +136,7 @@ func NewCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 	return newCommitForValue(ctx, cs, vrw, ns, v, opts)
 }
 
-func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, parentsClosureAddr hash.Hash) (message.Message, uint64) {
+func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, parentsClosureAddr hash.Hash) (serial.Message, uint64) {
 	builder := flatbuffers.NewBuilder(1024)
 	vaddroff := builder.CreateByteVector(vaddr[:])
 
@@ -176,7 +175,7 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	serial.CommitAddTimestampMillis(builder, opts.Meta.Timestamp)
 	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestamp)
 
-	bytes := message.FinishMessage(builder, serial.CommitEnd(builder), []byte(serial.CommitFileID))
+	bytes := serial.FinishMessage(builder, serial.CommitEnd(builder), []byte(serial.CommitFileID))
 	return bytes, maxheight + 1
 }
 
@@ -203,7 +202,7 @@ func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 			return nil, err
 		}
 		for i := range heights {
-			parents[i] = serial.GetRootAsCommit([]byte(parentValues[i].(types.SerialMessage)), message.MessagePrefixSz)
+			parents[i] = serial.GetRootAsCommit([]byte(parentValues[i].(types.SerialMessage)), serial.MessagePrefixSz)
 			heights[i] = parents[i].Height()
 		}
 		parentClosureAddr, err := writeFbCommitParentClosure(ctx, cs, vrw, ns, parents, opts.Parents)
@@ -263,7 +262,7 @@ func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 func commitPtr(nbf *types.NomsBinFormat, v types.Value, r *types.Ref) (*Commit, error) {
 	if nbf.UsesFlatbuffers() {
 		bs := []byte(v.(types.SerialMessage))
-		height := serial.GetRootAsCommit(bs, message.MessagePrefixSz).Height()
+		height := serial.GetRootAsCommit(bs, serial.MessagePrefixSz).Height()
 		var addr hash.Hash
 		if r != nil {
 			addr = r.TargetHash()
@@ -432,7 +431,7 @@ func FindClosureCommonAncestor(ctx context.Context, cl CommitClosure, cm *Commit
 func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value) ([]*Commit, error) {
 	if sm, ok := cv.(types.SerialMessage); ok {
 		data := []byte(sm)
-		if serial.GetFileID(data[message.MessagePrefixSz:]) != serial.CommitFileID {
+		if serial.GetFileID(data) != serial.CommitFileID {
 			return nil, errors.New("GetCommitParents: provided value is not a commit.")
 		}
 		addrs, err := types.SerialCommitParentAddrs(vr.Format(), sm)
@@ -445,7 +444,7 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 			if v == nil {
 				return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", addrs[i].String())
 			}
-			csm := serial.GetRootAsCommit([]byte(v.(types.SerialMessage)), message.MessagePrefixSz)
+			csm := serial.GetRootAsCommit([]byte(v.(types.SerialMessage)), serial.MessagePrefixSz)
 			res[i] = &Commit{
 				val:    v,
 				height: csm.Height(),
@@ -512,10 +511,10 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 	if sm, ok := cv.(types.SerialMessage); ok {
 		data := []byte(sm)
-		if serial.GetFileID(data[message.MessagePrefixSz:]) != serial.CommitFileID {
+		if serial.GetFileID(data) != serial.CommitFileID {
 			return nil, errors.New("GetCommitMeta: provided value is not a commit.")
 		}
-		cmsg := serial.GetRootAsCommit(data, message.MessagePrefixSz)
+		cmsg := serial.GetRootAsCommit(data, serial.MessagePrefixSz)
 		ret := &CommitMeta{}
 		ret.Name = string(cmsg.Name())
 		ret.Email = string(cmsg.Email())
@@ -548,10 +547,10 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 func GetCommittedValue(ctx context.Context, vr types.ValueReader, cv types.Value) (types.Value, error) {
 	if sm, ok := cv.(types.SerialMessage); ok {
 		data := []byte(sm)
-		if serial.GetFileID(data[message.MessagePrefixSz:]) != serial.CommitFileID {
+		if serial.GetFileID(data) != serial.CommitFileID {
 			return nil, errors.New("GetCommittedValue: provided value is not a commit.")
 		}
-		cmsg := serial.GetRootAsCommit(data, message.MessagePrefixSz)
+		cmsg := serial.GetRootAsCommit(data, serial.MessagePrefixSz)
 		var roothash hash.Hash
 		copy(roothash[:], cmsg.RootBytes())
 		return vr.ReadValue(ctx, roothash)
@@ -674,7 +673,7 @@ func IsCommit(v types.Value) (bool, error) {
 		return types.IsValueSubtypeOf(s.Format(), v, valueCommitType)
 	} else if sm, ok := v.(types.SerialMessage); ok {
 		data := []byte(sm)
-		return serial.GetFileID(data[message.MessagePrefixSz:]) == serial.CommitFileID, nil
+		return serial.GetFileID(data) == serial.CommitFileID, nil
 	} else {
 		return false, nil
 	}

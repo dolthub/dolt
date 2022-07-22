@@ -49,17 +49,17 @@ func offsetsForCommitClosureKeys(buf []byte) []byte {
 	return commitClosureKeyOffsets[:cnt*uint16Size]
 }
 
-func getCommitClosureKeys(msg Message) val.SlicedBuffer {
+func getCommitClosureKeys(msg serial.Message) val.SlicedBuffer {
 	var ret val.SlicedBuffer
-	m := serial.GetRootAsCommitClosure(msg, MessagePrefixSz)
+	m := serial.GetRootAsCommitClosure(msg, serial.MessagePrefixSz)
 	ret.Buf = m.KeyItemsBytes()
 	ret.Offs = offsetsForCommitClosureKeys(ret.Buf)
 	return ret
 }
 
-func getCommitClosureValues(msg Message) val.SlicedBuffer {
+func getCommitClosureValues(msg serial.Message) val.SlicedBuffer {
 	var ret val.SlicedBuffer
-	m := serial.GetRootAsCommitClosure(msg, MessagePrefixSz)
+	m := serial.GetRootAsCommitClosure(msg, serial.MessagePrefixSz)
 	if m.AddressArrayLength() == 0 {
 		ret.Buf = commitClosureEmptyValueBytes
 		ret.Offs = commitClosureValueOffsets[:getCommitClosureCount(msg)*uint16Size]
@@ -73,29 +73,29 @@ func getCommitClosureValues(msg Message) val.SlicedBuffer {
 // uint64 + hash.
 const commitClosureKeyLength = 8 + 20
 
-func getCommitClosureCount(msg Message) uint16 {
-	m := serial.GetRootAsCommitClosure(msg, MessagePrefixSz)
+func getCommitClosureCount(msg serial.Message) uint16 {
+	m := serial.GetRootAsCommitClosure(msg, serial.MessagePrefixSz)
 	return uint16(m.KeyItemsLength() / commitClosureKeyLength)
 }
 
-func getCommitClosureTreeLevel(msg Message) int {
-	m := serial.GetRootAsCommitClosure(msg, MessagePrefixSz)
+func getCommitClosureTreeLevel(msg serial.Message) int {
+	m := serial.GetRootAsCommitClosure(msg, serial.MessagePrefixSz)
 	return int(m.TreeLevel())
 }
 
-func getCommitClosureTreeCount(msg Message) int {
-	m := serial.GetRootAsCommitClosure(msg, MessagePrefixSz)
+func getCommitClosureTreeCount(msg serial.Message) int {
+	m := serial.GetRootAsCommitClosure(msg, serial.MessagePrefixSz)
 	return int(m.TreeCount())
 }
 
-func getCommitClosureSubtrees(msg Message) []uint64 {
+func getCommitClosureSubtrees(msg serial.Message) []uint64 {
 	counts := make([]uint64, getCommitClosureCount(msg))
-	m := serial.GetRootAsCommitClosure(msg, MessagePrefixSz)
+	m := serial.GetRootAsCommitClosure(msg, serial.MessagePrefixSz)
 	return decodeVarints(m.SubtreeCountsBytes(), counts)
 }
 
-func walkCommitClosureAddresses(ctx context.Context, msg Message, cb func(ctx context.Context, addr hash.Hash) error) error {
-	m := serial.GetRootAsCommitClosure(msg, MessagePrefixSz)
+func walkCommitClosureAddresses(ctx context.Context, msg serial.Message, cb func(ctx context.Context, addr hash.Hash) error) error {
+	m := serial.GetRootAsCommitClosure(msg, serial.MessagePrefixSz)
 	arr := m.AddressArrayBytes()
 	for i := 0; i < len(arr)/hash.ByteLen; i++ {
 		addr := hash.New(arr[i*addrSize : (i+1)*addrSize])
@@ -124,7 +124,7 @@ type CommitClosureSerializer struct {
 
 var _ Serializer = CommitClosureSerializer{}
 
-func (s CommitClosureSerializer) Serialize(keys, addrs [][]byte, subtrees []uint64, level int) Message {
+func (s CommitClosureSerializer) Serialize(keys, addrs [][]byte, subtrees []uint64, level int) serial.Message {
 	var keyArr, addrArr, cardArr fb.UOffsetT
 
 	keySz, addrSz, totalSz := estimateCommitClosureSize(keys, addrs, subtrees)
@@ -153,7 +153,7 @@ func (s CommitClosureSerializer) Serialize(keys, addrs [][]byte, subtrees []uint
 	}
 	serial.CommitClosureAddTreeLevel(b, uint8(level))
 
-	return FinishMessage(b, serial.CommitClosureEnd(b), commitClosureFileID)
+	return serial.FinishMessage(b, serial.CommitClosureEnd(b), commitClosureFileID)
 }
 
 func estimateCommitClosureSize(keys, addresses [][]byte, subtrees []uint64) (keySz, addrSz, totalSz int) {
@@ -163,6 +163,6 @@ func estimateCommitClosureSize(keys, addresses [][]byte, subtrees []uint64) (key
 	totalSz += len(subtrees) * binary.MaxVarintLen64
 	totalSz += 8 + 1 + 1 + 1
 	totalSz += 72
-	totalSz += MessagePrefixSz
+	totalSz += serial.MessagePrefixSz
 	return
 }

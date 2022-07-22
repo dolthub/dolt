@@ -22,7 +22,7 @@
 package types
 
 import (
-	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 )
 
 // NomsKind allows a TypeDesc to indicate what kind of type is described.
@@ -127,8 +127,8 @@ func init() {
 	SupportedKinds[PolygonKind] = true
 	SupportedKinds[SerialMessageKind] = true
 
-	if message.MessageTypesKind != int(SerialMessageKind) {
-		panic("internal error: message.MessageTypesKind != SerialMessageKind")
+	if serial.MessageTypesKind != int(SerialMessageKind) {
+		panic("internal error: serial.MessageTypesKind != SerialMessageKind")
 	}
 }
 

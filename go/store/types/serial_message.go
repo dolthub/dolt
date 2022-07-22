@@ -53,10 +53,10 @@ func (sm SerialMessage) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 }
 
 func (sm SerialMessage) HumanReadableString() string {
-	id := serial.GetFileID(sm[message.MessagePrefixSz:])
+	id := serial.GetFileID(sm)
 	switch id {
 	case serial.StoreRootFileID:
-		msg := serial.GetRootAsStoreRoot([]byte(sm), message.MessagePrefixSz)
+		msg := serial.GetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		mapbytes := msg.AddressMapBytes()
 		fmt.Fprintf(ret, "StoreRoot{%s}", SerialMessage(mapbytes).HumanReadableString())
@@ -64,7 +64,7 @@ func (sm SerialMessage) HumanReadableString() string {
 	case serial.TagFileID:
 		return "Tag"
 	case serial.WorkingSetFileID:
-		msg := serial.GetRootAsWorkingSet(sm, message.MessagePrefixSz)
+		msg := serial.GetRootAsWorkingSet(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		fmt.Fprintf(ret, "{\n")
 		fmt.Fprintf(ret, "\tName: %s\n", msg.Name())
@@ -76,7 +76,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		fmt.Fprintf(ret, "}")
 		return ret.String()
 	case serial.CommitFileID:
-		msg := serial.GetRootAsCommit(sm, message.MessagePrefixSz)
+		msg := serial.GetRootAsCommit(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		fmt.Fprintf(ret, "{\n")
 		fmt.Fprintf(ret, "\tName: %s\n", msg.Name())
@@ -104,7 +104,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		fmt.Fprintf(ret, "}")
 		return ret.String()
 	case serial.RootValueFileID:
-		msg := serial.GetRootAsRootValue(sm, message.MessagePrefixSz)
+		msg := serial.GetRootAsRootValue(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		fmt.Fprintf(ret, "{\n")
 		fmt.Fprintf(ret, "\tFeatureVersion: %d\n", msg.FeatureVersion())
@@ -115,7 +115,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		fmt.Fprintf(ret, "}")
 		return ret.String()
 	case serial.TableFileID:
-		msg := serial.GetRootAsTable(sm, message.MessagePrefixSz)
+		msg := serial.GetRootAsTable(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 
 		fmt.Fprintf(ret, "{\n")
@@ -133,7 +133,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		fmt.Fprintf(ret, "}")
 		return ret.String()
 	case serial.AddressMapFileID:
-		keys, values, cnt := message.GetKeysAndValues(message.Message(sm))
+		keys, values, cnt := message.GetKeysAndValues(serial.Message(sm))
 		var b strings.Builder
 		b.Write([]byte("AddressMap{\n"))
 		for i := uint16(0); i < cnt; i++ {
@@ -164,15 +164,15 @@ func (sm SerialMessage) Less(nbf *NomsBinFormat, other LesserValuable) (bool, er
 const SerialMessageRefHeight = 1024
 
 func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
-	switch serial.GetFileID(sm[message.MessagePrefixSz:]) {
+	switch serial.GetFileID(sm) {
 	case serial.StoreRootFileID:
-		msg := serial.GetRootAsStoreRoot([]byte(sm), message.MessagePrefixSz)
+		msg := serial.GetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
 		if msg.AddressMapLength() > 0 {
 			mapbytes := msg.AddressMapBytes()
 			return SerialMessage(mapbytes).walkRefs(nbf, cb)
 		}
 	case serial.TagFileID:
-		msg := serial.GetRootAsTag([]byte(sm), message.MessagePrefixSz)
+		msg := serial.GetRootAsTag([]byte(sm), serial.MessagePrefixSz)
 		addr := hash.New(msg.CommitAddrBytes())
 		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 		if err != nil {
@@ -180,7 +180,7 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 		}
 		return cb(r)
 	case serial.WorkingSetFileID:
-		msg := serial.GetRootAsWorkingSet([]byte(sm), message.MessagePrefixSz)
+		msg := serial.GetRootAsWorkingSet([]byte(sm), serial.MessagePrefixSz)
 		addr := hash.New(msg.WorkingRootAddrBytes())
 		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 		if err != nil {
@@ -220,7 +220,7 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 			}
 		}
 	case serial.RootValueFileID:
-		msg := serial.GetRootAsRootValue([]byte(sm), message.MessagePrefixSz)
+		msg := serial.GetRootAsRootValue([]byte(sm), serial.MessagePrefixSz)
 		err := SerialMessage(msg.TablesBytes()).walkRefs(nbf, cb)
 		if err != nil {
 			return err
@@ -246,7 +246,7 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 			}
 		}
 	case serial.TableFileID:
-		msg := serial.GetRootAsTable([]byte(sm), message.MessagePrefixSz)
+		msg := serial.GetRootAsTable([]byte(sm), serial.MessagePrefixSz)
 		addr := hash.New(msg.SchemaBytes())
 		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 		if err != nil {
@@ -344,7 +344,7 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 				return err
 			}
 		}
-		msg := serial.GetRootAsCommit([]byte(sm), message.MessagePrefixSz)
+		msg := serial.GetRootAsCommit([]byte(sm), serial.MessagePrefixSz)
 		addr := hash.New(msg.RootBytes())
 		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 		if err != nil {
@@ -373,7 +373,7 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	case serial.AddressMapFileID:
 		fallthrough
 	case serial.CommitClosureFileID:
-		return message.WalkAddresses(context.TODO(), message.Message(sm), func(ctx context.Context, addr hash.Hash) error {
+		return message.WalkAddresses(context.TODO(), serial.Message(sm), func(ctx context.Context, addr hash.Hash) error {
 			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 			if err != nil {
 				return err
@@ -381,13 +381,13 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 			return cb(r)
 		})
 	default:
-		return fmt.Errorf("unsupported SerialMessage message with FileID: %s", serial.GetFileID(sm[message.MessagePrefixSz:]))
+		return fmt.Errorf("unsupported SerialMessage message with FileID: %s", serial.GetFileID(sm))
 	}
 	return nil
 }
 
 func SerialCommitParentAddrs(nbf *NomsBinFormat, sm SerialMessage) ([]hash.Hash, error) {
-	msg := serial.GetRootAsCommit([]byte(sm), message.MessagePrefixSz)
+	msg := serial.GetRootAsCommit([]byte(sm), serial.MessagePrefixSz)
 	addrs := msg.ParentAddrsBytes()
 	n := len(addrs) / 20
 	ret := make([]hash.Hash, n)

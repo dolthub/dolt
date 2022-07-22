@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -195,12 +194,12 @@ func TableFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 			err = errors.New("table ref is unexpected noms value; not SerialMessage")
 			return nil, err
 		}
-		id := serial.GetFileID(sm[message.MessagePrefixSz:])
+		id := serial.GetFileID(sm)
 		if id != serial.TableFileID {
 			err = errors.New("table ref is unexpected noms value; GetFileID == " + id)
 			return nil, err
 		}
-		return doltDevTable{vrw, ns, serial.GetRootAsTable([]byte(sm), message.MessagePrefixSz)}, nil
+		return doltDevTable{vrw, ns, serial.GetRootAsTable([]byte(sm), serial.MessagePrefixSz)}, nil
 	}
 }
 
@@ -774,8 +773,8 @@ func (fields serialTableFields) write() *serial.Table {
 	serial.TableAddConflicts(builder, conflictsoff)
 	serial.TableAddViolations(builder, violationsoff)
 	serial.TableAddArtifacts(builder, artifactsoff)
-	bs := message.FinishMessage(builder, serial.TableEnd(builder), []byte(serial.TableFileID))
-	return serial.GetRootAsTable(bs, message.MessagePrefixSz)
+	bs := serial.FinishMessage(builder, serial.TableEnd(builder), []byte(serial.TableFileID))
+	return serial.GetRootAsTable(bs, serial.MessagePrefixSz)
 }
 
 func newDoltDevTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, rows Index, indexes IndexSet, autoIncVal types.Value) (Table, error) {
