@@ -54,7 +54,11 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Printf("JWT: %s\n", jwt)
+
+	err = ioutil.WriteFile("token.jwt", []byte(jwt), 0644)
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
 func writeJWKSToFile(pubKey crypto.PublicKey, kid string) error {

@@ -1,7 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
 load $BATS_TEST_DIRNAME/helper/query-server-common.bash
-load $BATS_TEST_DIRNAME/helper/gen_keys.bash
 
 make_repo() {
   mkdir "$1"
@@ -14,13 +13,14 @@ setup() {
     skiponwindows "Missing dependencies"
     setup_no_dolt_init
     make_repo repo1
+    (cd "$BATS_TEST_DIRNAME"/../../go/libraries/utils/jwtauth/gen_keys && go run .)
 }
 
 teardown() {
     stop_sql_server
     teardown_common
-    rm -rf "$BATS_TEST_DIRNAME/token.jwt"
-    rm -rf "$BATS_TEST_DIRNAME/test-jwks.json"
+    rm -rf "$BATS_TEST_DIRNAME/../../go/libraries/utils/jwtauth/gen_keys/token.jwt"
+    rm -rf "$BATS_TEST_DIRNAME/../../go/libraries/utils/jwtauth/gen_keys/test_jwks.json"
 }
 
 
@@ -29,7 +29,7 @@ teardown() {
     cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_key.pem .
     cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_cert.pem .
     let PORT="$$ % (65536-1024) + 1024"
-    TOKEN="`cat $BATS_TEST_DIRNAME/token.jwt`"
+    TOKEN="`cat $BATS_TEST_DIRNAME/../../go/libraries/utils/jwtauth/gen_keys/token.jwt`"
 
     cat >config.yml <<EOF
 log_level: debug
@@ -44,7 +44,7 @@ listener:
 privilege_file: privs.json
 jwks:
 - name: jwksname
-  location_url: file://$BATS_TEST_DIRNAME/test-jwks.json
+  location_url: file://$BATS_TEST_DIRNAME/../../go/libraries/utils/jwtauth/gen_keys/test_jwks.json
   claims: 
     alg: RS256
     aud: my_resource
