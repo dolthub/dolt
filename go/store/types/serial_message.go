@@ -49,7 +49,7 @@ func (sm SerialMessage) Equals(other Value) bool {
 }
 
 func (sm SerialMessage) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
-	return getHash(sm, nbf)
+	return hash.Of(sm), nil
 }
 
 func (sm SerialMessage) HumanReadableString() string {
