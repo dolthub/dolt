@@ -24,7 +24,7 @@ teardown() {
 }
 
 
-@test "sql-server: jwt auth from config" {
+@test "sql-jwt-auth: jwt auth from config" {
     cd repo1
     cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_key.pem .
     cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_cert.pem .
