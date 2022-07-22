@@ -26,7 +26,6 @@ import (
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -126,7 +125,7 @@ func makeProllyMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	ns := tree.NewTestNodeStore()
 
 	tuples := tree.RandomTuplePairs(count, kd, vd, ns)
-	om := prollyMapFromTuples(t, kd, vd, tuples)
+	om := MustProllyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
 }
@@ -139,27 +138,9 @@ func makeProllySecondaryIndex(t *testing.T, count int) (testMap, [][2]val.Tuple)
 	vd := val.NewTupleDescriptor()
 	ns := tree.NewTestNodeStore()
 	tuples := tree.RandomCompositeTuplePairs(count, kd, vd, ns)
-	om := prollyMapFromTuples(t, kd, vd, tuples)
+	om := MustProllyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
-}
-
-func prollyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tuple) testMap {
-	ctx := context.Background()
-	ns := tree.NewTestNodeStore()
-
-	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
-	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
-	require.NoError(t, err)
-
-	for _, pair := range tuples {
-		err := chunker.AddPair(ctx, tree.Item(pair[0]), tree.Item(pair[1]))
-		require.NoError(t, err)
-	}
-	root, err := chunker.Done(ctx)
-	require.NoError(t, err)
-
-	return NewMap(root, ns, kd, vd)
 }
 
 func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
