@@ -280,8 +280,8 @@ func (cfg *commandLineServerConfig) WithPort(port int) *commandLineServerConfig 
 	return cfg
 }
 
-// withUser updates the user and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
-func (cfg *commandLineServerConfig) withUser(user string) *commandLineServerConfig {
+// WithUser updates the user and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
+func (cfg *commandLineServerConfig) WithUser(user string) *commandLineServerConfig {
 	cfg.user = user
 	return cfg
 }
