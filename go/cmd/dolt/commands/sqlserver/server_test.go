@@ -16,13 +16,13 @@ package sqlserver
 
 import (
 	"fmt"
+	"github.com/gocraft/dbr/v2"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/gocraft/dbr/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -187,7 +187,7 @@ func TestServerGoodParams(t *testing.T) {
 
 func TestServerSelect(t *testing.T) {
 	env := dtestutils.CreateEnvWithSeedData(t)
-	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15300).WithHost("127.0.0.1")
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15300)
 
 	sc := NewServerController()
 	defer sc.StopServer()
@@ -262,7 +262,7 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 
 func TestServerSetDefaultBranch(t *testing.T) {
 	dEnv := dtestutils.CreateEnvWithSeedData(t)
-	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15302).WithHost("127.0.0.1")
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15302)
 
 	sc := NewServerController()
 	defer sc.StopServer()
@@ -412,7 +412,7 @@ func TestReadReplica(t *testing.T) {
 
 	// start server as read replica
 	sc := NewServerController()
-	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15303).WithHost("127.0.0.1")
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15303)
 
 	func() {
 		os.Chdir(multiSetup.DbPaths[readReplicaDbName])

@@ -36,8 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
 
-const SockAddr = "/tmp/mysql.sock"
-
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(
 	ctx context.Context,
@@ -91,6 +89,8 @@ func Serve(
 	var err error
 	fs := dEnv.FS
 
+	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
+	// to the value of mysql that we support.
 	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
 	if len(dbNamesAndPaths) == 0 {
 		if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
@@ -232,8 +232,8 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 		userToSessionVars[curr.Name] = curr.Vars
 	}
 
-	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, error) {
-		mysqlSess, err := server.DefaultSessionBuilder(ctx, conn, host)
+	return func(ctx context.Context, conn *mysql.Conn, addr string) (sql.Session, error) {
+		mysqlSess, err := server.DefaultSessionBuilder(ctx, conn, addr)
 		if err != nil {
 			return nil, err
 		}
@@ -268,14 +268,11 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 
 // getConfigFromServerConfig processes ServerConfig and returns server.Config for sql-server.
 func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error, error) {
-	serverConf := server.Config{Protocol: "tcp"}
-	portAsString := strconv.Itoa(serverConfig.Port())
-	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
-	serverConf.Address = hostPort
-	if runtime.GOOS != "windows" && serverConfig.Host() == "localhost" {
-		serverConf = server.Config{Protocol: "unix"}
-		serverConf.Address = SockAddr
+	serverConf, err := handleProtocolAndAddress(serverConfig)
+	if err != nil {
+		return server.Config{}, err, nil
 	}
+
 	serverConf.DisableClientMultiStatements = serverConfig.DisableClientMultiStatements()
 
 	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
@@ -284,11 +281,6 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 	tlsConfig, err := LoadTLSConfig(serverConfig)
 	if err != nil {
 		return server.Config{}, nil, err
-	}
-
-	if portInUse(hostPort) {
-		portInUseError := fmt.Errorf("Port %s already in use.", portAsString)
-		return server.Config{}, portInUseError, nil
 	}
 
 	// if persist is 'load' we use currently set persisted global variable,
@@ -305,8 +297,6 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 		}
 	}
 
-	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
-	// to the value of mysql that we support.
 	serverConf.ConnReadTimeout = readTimeout
 	serverConf.ConnWriteTimeout = writeTimeout
 	serverConf.MaxConnections = serverConfig.MaxConnections()
@@ -314,4 +304,33 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
 	return serverConf, nil, nil
+}
+
+// handleProtocolAndAddress returns new server.Config object with only Protocol and Address defined.
+func handleProtocolAndAddress(serverConfig ServerConfig) (server.Config, error) {
+	host := serverConfig.Host()
+	port := serverConfig.Port()
+	serverConf := server.Config{}
+	serverConf.Protocol = "tcp"
+	portAsString := strconv.Itoa(port)
+	hostPort := net.JoinHostPort(host, portAsString)
+	serverConf.Address = hostPort
+	if portInUse(hostPort) {
+		portInUseError := fmt.Errorf("Port %s already in use.", portAsString)
+		return server.Config{}, portInUseError
+	}
+	// if socket is defined with or without value -> unix
+	if serverConfig.Socket() != "" {
+		// unix
+		if runtime.GOOS == "windows" {
+			return server.Config{}, fmt.Errorf("cannot define socket file on Windows")
+		}
+		serverConf.Socket = serverConfig.Socket()
+	} else {
+		if runtime.GOOS != "windows" && host == "localhost" {
+			serverConf.Socket = defaultSocketFileLocation
+		}
+	}
+
+	return serverConf, nil
 }

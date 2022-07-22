@@ -362,6 +362,10 @@ teardown() {
     # expect dolt user and new_user
     server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
+    # expect privileges file
+    run ls
+    [[ "$output" =~ "privs.db" ]] || false
+
     # expect no privileges file in doltcfgdir
     run ls doltcfgdir
     ! [[ "$output" =~ "privileges.db" ]] || false

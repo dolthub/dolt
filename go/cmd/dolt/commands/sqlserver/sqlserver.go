@@ -46,6 +46,7 @@ const (
 	queryParallelismFlag    = "query-parallelism"
 	maxConnectionsFlag      = "max-connections"
 	persistenceBehaviorFlag = "persistence-behavior"
+	socketFlag              = "socket"
 )
 
 func indentLines(s string) string {
@@ -145,6 +146,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server (default `%d`)", serverConfig.MaxConnections()))
 	ap.SupportsString(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables (default `%s`)", serverConfig.PersistenceBehavior()))
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to $doltcfg-dir/privileges.db")
+	ap.SupportsString(socketFlag, "", "socket file", "Path to a unix socket file. Defaults to '/tmp/mysql.sock'")
 	return ap
 }
 
@@ -321,6 +323,14 @@ func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config S
 // If not defined, it sets variables to default values.
 func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	serverConfig := DefaultServerConfig()
+
+	if sock, ok := apr.GetValue(socketFlag); ok {
+		// defined without value gets default
+		if sock == "" {
+			sock = defaultSocketFileLocation
+		}
+		serverConfig.withSocket(sock)
+	}
 
 	if host, ok := apr.GetValue(hostFlag); ok {
 		serverConfig.WithHost(host)

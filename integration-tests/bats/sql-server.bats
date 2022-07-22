@@ -1357,7 +1357,7 @@ databases:
     dolt commit -am "create three tables"
 
     cd ..
-    start_sql_server_with_args --host 0.0.0.0 --user dolt -ltrace --no-auto-commit
+    start_sql_server_with_args --user dolt -ltrace --no-auto-commit
 
     run expect $BATS_TEST_DIRNAME/sql-server-mysql.expect $PORT repo1
     [ "$status" -eq 0 ]
