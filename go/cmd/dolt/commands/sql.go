@@ -498,11 +498,6 @@ func execBatch(
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	// check if user exists, else add them as superuser; might need to do something else for sql-server
-	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
-		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerPass)
-	}
-
 	// Set client to specified user
 	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
@@ -546,11 +541,6 @@ func execMultiStatements(
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	// check if user exists, else add them as superuser; might need to do something else for sql-server
-	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
-		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerPass)
-	}
-
 	// Set client to specified user
 	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
@@ -579,11 +569,6 @@ func execQuery(
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
-	}
-
-	// check if user exists, else add them as superuser; might need to do something else for sql-server
-	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
-		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerPass)
 	}
 
 	// Set client to specified user
@@ -860,11 +845,6 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
 		return err
-	}
-
-	// check if user exists, else add them as superuser; might need to do something else for sql-server
-	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
-		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerPass)
 	}
 
 	// Add root client

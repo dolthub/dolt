@@ -106,6 +106,10 @@ func NewSqlEngine(
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {
 		return nil, err
 	}
+	// Add specified user as new superuser, if it doesn't already exist
+	if user := engine.Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
+		engine.Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerPass)
+	}
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true

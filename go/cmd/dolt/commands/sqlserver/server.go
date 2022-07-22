@@ -152,15 +152,6 @@ func Serve(
 		return err, nil
 	}
 
-	// check if user exists, else add them as superuser; might need to do something else for sql-server
-	if user := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
-		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerPass)
-	}
-
-	// TODO: maybe delete
-	//if len(config.ServerUser) == 0 {
-	//	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.Persist(nil)
-	//}
 	defer sqlEngine.Close()
 
 	labels := serverConfig.MetricsLabels()
