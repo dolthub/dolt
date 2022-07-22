@@ -153,6 +153,19 @@ func Serve(
 	}
 	defer sqlEngine.Close()
 
+	// Add superuser
+	if sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.UserTable().Data().Count() != 0 {
+		// privileges specified, only add if superuser specified is not an existing user
+		userSpecified := config.ServerUser != defaultUser || config.ServerHost != defaultHost || config.ServerPass != defaultPass
+		superuser := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false)
+		if userSpecified && superuser != nil {
+			sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
+		}
+	} else {
+		// no privileges, must add superuser; will already be defaulted to root
+		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
+	}
+
 	labels := serverConfig.MetricsLabels()
 	listener := newMetricsListener(labels)
 	defer listener.Close()
