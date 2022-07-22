@@ -127,7 +127,6 @@ func TestServerBadArgs(t *testing.T) {
 		{"-H", "loclahost"},
 		{"-P", "300"},
 		{"-P", "90000"},
-		{"-u", ""},
 		{"-l", "everything"},
 	}
 
