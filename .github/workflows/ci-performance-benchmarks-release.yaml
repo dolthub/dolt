@@ -95,3 +95,17 @@ jobs:
           NOMS_BIN_FORMAT: ${{ matrix.dolt_fmt }}
           WITH_TPCC: 'true'
           TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"
+      - name: Run Import Benchmarks
+        run: ./.github/scripts/import-benchmarking/run-benchmarks.sh
+        env:
+          FROM_SERVER: "dolt"
+          FROM_VERSION: ${{ needs.set-version-actor.outputs.version }}
+          TO_SERVER: "mysql"
+          TO_VERSION: '8.0.28'
+          MODE: 'release'
+          ACTOR: ${{ needs.set-version-actor.outputs.actor }}
+          ACTOR_EMAIL: ${{ needs.set-version-actor.outputs.actor_email }}
+          REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+          KUBECONFIG: "./kubeconfig"
+          NOMS_BIN_FORMAT: ${{ matrix.dolt_fmt }}
+          TEMPLATE_SCRIPT: "./.github/scripts/import-benchmarking/get-mysql-dolt-job-json.sh"
