@@ -16,7 +16,6 @@ package engine
 
 import (
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -31,12 +30,10 @@ var onBehalfOf = "my_user"
 var jwt = "eyJhbGciOiJSUzI1NiIsImtpZCI6ImUwNjA2Y2QwLTkwNWQtNGFiYS05MjBjLTZlNTE0YTFjYmIyNiIsInR5cCI6IkpXVCJ9.eyJhdWQiOlsibXlfcmVzb3VyY2UiXSwiZXhwIjoxNjU4Mjc1OTAzLCJpYXQiOjE2NTgyNzU4NzMsImlzcyI6ImRvbHRodWIuY29tIiwianRpIjoiN2ViZTg3YmMtOTkzMi00ZTljLTk5N2EtNjQzMDk0NTBkMWVjIiwib25fYmVoYWxmX29mIjoibXlfdXNlciIsInN1YiI6InRlc3RfdXNlciJ9.u2cUGUkQ2hk4AaxtNQB-6Jcdf5LtehFA7XX2FG8LGgTf6KfwE3cuuGaBIU8Jz9ktD9g8TjAbfAfbrNaFNYnKG6SnDUHp0t7VbfLdgfNDQqSyH0nOK2UF8ffxqa46PRxeMwTSJv8prE07rcmiZNL9Ie4vSGYLncJfMzo_RdE-A-PH7z-ZyZ_TxOMhkgMFq2Af5Px3zFuAKq-Y-PrQNopSuzjPJc0DQ93Q7EcIHfU6Fx6gOVTkzHxnOFcg3Nj-4HhqBSvBa_BdMYEzHJKx3F_9rrCCPqEGUFnxXAqFFmnZUQuQKpN2yW_zhviCVqrvbP7vOCIXmxi8YXLiGiV-4KlxHA"
 
 func TestJWTAuth(t *testing.T) {
-	pwd, err := os.Getwd()
-	require.NoError(t, err)
 	jwksConfig := []JwksConfig{
 		{
 			Name:        jwksName,
-			LocationUrl: fmt.Sprintf("file://%s/testdata/test_jwks.json", pwd),
+			LocationUrl: fmt.Sprintf("file:///testdata/test_jwks.json"),
 			Claims: map[string]string{
 				"alg": "RS256",
 				"aud": aud,
