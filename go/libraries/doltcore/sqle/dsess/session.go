@@ -909,6 +909,7 @@ func (d *DoltSession) HasDB(ctx *sql.Context, dbName string) bool {
 // other state tracking metadata.
 func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	db := dbState.Db
+	DefineSystemVariablesForDB(db.Name())
 
 	sessionState := NewEmptyDatabaseSessionState()
 	d.dbStates[db.Name()] = sessionState
