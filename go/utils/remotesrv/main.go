@@ -42,9 +42,7 @@ func main() {
 		err := os.Chdir(*dirParam)
 
 		if err != nil {
-			log.Fatalln("failed to chdir to:", *dirParam)
-			log.Fatalln("error:", err.Error())
-			os.Exit(1)
+			log.Fatalln("failed to chdir to:", *dirParam, "error:", err.Error())
 		} else {
 			log.Println("cwd set to " + *dirParam)
 		}
