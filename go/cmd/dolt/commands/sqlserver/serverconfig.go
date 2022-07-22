@@ -38,7 +38,7 @@ const (
 const (
 	defaultHost                = "localhost"
 	defaultPort                = 3306
-	defaultUser                = ""
+	defaultUser                = "root"
 	defaultPass                = ""
 	defaultTimeout             = 8 * 60 * 60 * 1000 // 8 hours, same as MySQL
 	defaultReadOnly            = false
