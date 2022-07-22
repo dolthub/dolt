@@ -16,13 +16,13 @@ package sqlserver
 
 import (
 	"fmt"
-	"github.com/gocraft/dbr/v2"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/gocraft/dbr/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
