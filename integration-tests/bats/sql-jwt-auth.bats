@@ -19,6 +19,8 @@ setup() {
 teardown() {
     stop_sql_server
     teardown_common
+    rm -rf "$BATS_TEST_DIRNAME/token.jwt"
+    rm -rf "$BATS_TEST_DIRNAME/test-jwks.json"
 }
 
 
@@ -66,7 +68,7 @@ import time
 i=0
 
 args = sys.argv[sys.argv.index("--") + 1:]
-password = args
+password = args[0]
 
 while True:
   try:
