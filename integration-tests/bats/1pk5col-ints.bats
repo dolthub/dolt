@@ -513,10 +513,11 @@ pk,c1,c2,c3,c4,c5
 DELIM
     run dolt table import test -u badline.csv
     [ "$status" -eq 1 ]
-    [[ "${lines[0]}" =~ "Additions" ]] || false
+    echo $output
+    [[ "${lines[0]}" =~ "Additions: 2" ]] || false
     [[ "${lines[1]}" =~ "A bad row was encountered" ]] || false
-    [[ "${lines[2]}" =~ "expects 6 fields" ]] || false
-    [[ "${lines[2]}" =~ "line only has 1 value" ]] || false
+    [[ "${lines[2]}" =~ "Bad Row: [2]" ]] || false
+    [[ "${lines[3]}" =~ "CSV reader expected 6 values, but saw 1" ]] || false
 }
 
 @test "1pk5col-ints: import data from a csv file with a bad header" {
