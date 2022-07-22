@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -62,8 +63,8 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 	serial.TableSchemaAddSecondaryIndexes(b, indexes)
 	serial.TableSchemaAddChecks(b, checks)
 	root := serial.TableSchemaEnd(b)
-	b.FinishWithFileIdentifier(root, []byte(serial.TableSchemaFileID))
-	return b.FinishedBytes(), nil
+	bs := message.FinishMessage(b, root, []byte(serial.TableSchemaFileID))
+	return bs, nil
 }
 
 // DeserializeSchema deserializes a schema.Schema from a serial.Message.
@@ -75,8 +76,8 @@ func DeserializeSchema(ctx context.Context, nbf *types.NomsBinFormat, v types.Va
 }
 
 func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Schema, error) {
-	assertTrue(serial.GetFileID(buf) == serial.TableSchemaFileID)
-	s := serial.GetRootAsTableSchema(buf, 0)
+	assertTrue(serial.GetFileID(buf[message.MessagePrefixSz:]) == serial.TableSchemaFileID)
+	s := serial.GetRootAsTableSchema(buf, message.MessagePrefixSz)
 
 	cols, err := deserializeColumns(ctx, s)
 	if err != nil {

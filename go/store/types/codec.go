@@ -325,7 +325,7 @@ func (b *binaryNomsReader) ReadInlineBlob() []byte {
 	return bytes
 }
 
-func (b *binaryNomsReader) readTupleRowStorage() []byte {
+func (b *binaryNomsReader) readSerialMessage() []byte {
 	size := uint32(b.readUint16())
 	// start at offset-3, to include the kind byte + Uint16 for size...
 	bytes := b.buff[b.offset-3 : b.offset+size]

@@ -148,7 +148,7 @@ func TestCommitClosure(t *testing.T) {
 		assert.Equal(t, 4096, cc.Count())
 
 		// Walk the addresses in the root.
-		msg := message.Message(tree.ValueFromNode(cc.closure.root).(types.TupleRowStorage))
+		msg := message.Message(tree.ValueFromNode(cc.closure.root).(types.SerialMessage))
 		numaddresses := 0
 		err = message.WalkAddresses(ctx, msg, func(ctx context.Context, addr hash.Hash) error {
 			numaddresses++

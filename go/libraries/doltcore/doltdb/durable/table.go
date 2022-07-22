@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -194,11 +195,12 @@ func TableFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 			err = errors.New("table ref is unexpected noms value; not SerialMessage")
 			return nil, err
 		}
-		if serial.GetFileID([]byte(sm)) != serial.TableFileID {
-			err = errors.New("table ref is unexpected noms value; GetFileID == " + serial.GetFileID([]byte(sm)))
+		id := serial.GetFileID(sm[message.MessagePrefixSz:])
+		if id != serial.TableFileID {
+			err = errors.New("table ref is unexpected noms value; GetFileID == " + id)
 			return nil, err
 		}
-		return doltDevTable{vrw, ns, serial.GetRootAsTable([]byte(sm), 0)}, nil
+		return doltDevTable{vrw, ns, serial.GetRootAsTable([]byte(sm), message.MessagePrefixSz)}, nil
 	}
 }
 
@@ -745,7 +747,7 @@ func (fields serialTableFields) write() *serial.Table {
 	builder := flatbuffers.NewBuilder(1024)
 
 	indexesam := fields.indexes
-	indexesbytes := []byte(tree.ValueFromNode(indexesam.Node()).(types.TupleRowStorage))
+	indexesbytes := []byte(tree.ValueFromNode(indexesam.Node()).(types.SerialMessage))
 
 	schemaoff := builder.CreateByteVector(fields.schema)
 	rowsoff := builder.CreateByteVector(fields.rows)
@@ -772,8 +774,8 @@ func (fields serialTableFields) write() *serial.Table {
 	serial.TableAddConflicts(builder, conflictsoff)
 	serial.TableAddViolations(builder, violationsoff)
 	serial.TableAddArtifacts(builder, artifactsoff)
-	builder.FinishWithFileIdentifier(serial.TableEnd(builder), []byte(serial.TableFileID))
-	return serial.GetRootAsTable(builder.FinishedBytes(), 0)
+	bs := message.FinishMessage(builder, serial.TableEnd(builder), []byte(serial.TableFileID))
+	return serial.GetRootAsTable(bs, message.MessagePrefixSz)
 }
 
 func newDoltDevTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, rows Index, indexes IndexSet, autoIncVal types.Value) (Table, error) {
@@ -871,7 +873,7 @@ func (t doltDevTable) GetTableRows(ctx context.Context) (Index, error) {
 		if err != nil {
 			return nil, err
 		}
-		m := shim.MapFromValue(types.TupleRowStorage(rowbytes), sch, t.ns)
+		m := shim.MapFromValue(types.SerialMessage(rowbytes), sch, t.ns)
 		return IndexFromProllyMap(m), nil
 	}
 }

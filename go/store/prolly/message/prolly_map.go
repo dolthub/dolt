@@ -93,11 +93,11 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 	serial.ProllyTreeNodeAddValueType(b, serial.ItemTypeTupleFormatAlpha)
 	serial.ProllyTreeNodeAddTreeLevel(b, uint8(level))
 
-	return finishMessage(b, serial.ProllyTreeNodeEnd(b), prollyMapFileID)
+	return FinishMessage(b, serial.ProllyTreeNodeEnd(b), prollyMapFileID)
 }
 
 func getProllyMapKeysAndValues(msg Message) (keys, values val.SlicedBuffer, cnt uint16) {
-	pm := serial.GetRootAsProllyTreeNode(msg, messagePrefixSz)
+	pm := serial.GetRootAsProllyTreeNode(msg, MessagePrefixSz)
 
 	keys.Buf = pm.KeyItemsBytes()
 	keys.Offs = getProllyMapKeyOffsets(pm)
@@ -120,7 +120,7 @@ func getProllyMapKeysAndValues(msg Message) (keys, values val.SlicedBuffer, cnt 
 }
 
 func walkProllyMapAddresses(ctx context.Context, msg Message, cb func(ctx context.Context, addr hash.Hash) error) error {
-	pm := serial.GetRootAsProllyTreeNode(msg, messagePrefixSz)
+	pm := serial.GetRootAsProllyTreeNode(msg, MessagePrefixSz)
 	arr := pm.AddressArrayBytes()
 	for i := 0; i < len(arr)/hash.ByteLen; i++ {
 		addr := hash.New(arr[i*addrSize : (i+1)*addrSize])
@@ -143,7 +143,7 @@ func walkProllyMapAddresses(ctx context.Context, msg Message, cb func(ctx contex
 }
 
 func getProllyMapCount(msg Message) uint16 {
-	pm := serial.GetRootAsProllyTreeNode(msg, messagePrefixSz)
+	pm := serial.GetRootAsProllyTreeNode(msg, MessagePrefixSz)
 	if pm.KeyItemsLength() == 0 {
 		return 0
 	}
@@ -152,18 +152,18 @@ func getProllyMapCount(msg Message) uint16 {
 }
 
 func getProllyMapTreeLevel(msg Message) int {
-	pm := serial.GetRootAsProllyTreeNode(msg, messagePrefixSz)
+	pm := serial.GetRootAsProllyTreeNode(msg, MessagePrefixSz)
 	return int(pm.TreeLevel())
 }
 
 func getProllyMapTreeCount(msg Message) int {
-	pm := serial.GetRootAsProllyTreeNode(msg, messagePrefixSz)
+	pm := serial.GetRootAsProllyTreeNode(msg, MessagePrefixSz)
 	return int(pm.TreeCount())
 }
 
 func getProllyMapSubtrees(msg Message) []uint64 {
 	counts := make([]uint64, getProllyMapCount(msg))
-	pm := serial.GetRootAsProllyTreeNode(msg, messagePrefixSz)
+	pm := serial.GetRootAsProllyTreeNode(msg, MessagePrefixSz)
 	return decodeVarints(pm.SubtreeCountsBytes(), counts)
 }
 
@@ -213,7 +213,7 @@ func estimateProllyMapSize(keys, values [][]byte, subtrees []uint64, valAddrsCnt
 	bufSz += 72                          // vtable (approx)
 	bufSz += 100                         // padding?
 	bufSz += valAddrsCnt * len(values)
-	bufSz += messagePrefixSz
+	bufSz += MessagePrefixSz
 
 	return keySz, valSz, bufSz
 }

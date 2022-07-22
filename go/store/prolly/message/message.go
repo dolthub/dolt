@@ -24,9 +24,9 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-const MessageTypesKind int = 28
+const MessageTypesKind int = 27
 
-const messagePrefixSz = 3
+const MessagePrefixSz = 3
 
 type Message []byte
 
@@ -35,7 +35,7 @@ type Serializer interface {
 }
 
 func GetKeysAndValues(msg Message) (keys, values val.SlicedBuffer, cnt uint16) {
-	id := serial.GetFileID(msg[messagePrefixSz:])
+	id := serial.GetFileID(msg[MessagePrefixSz:])
 
 	if id == serial.ProllyTreeNodeFileID {
 		return getProllyMapKeysAndValues(msg)
@@ -57,7 +57,7 @@ func GetKeysAndValues(msg Message) (keys, values val.SlicedBuffer, cnt uint16) {
 }
 
 func WalkAddresses(ctx context.Context, msg Message, cb func(ctx context.Context, addr hash.Hash) error) error {
-	id := serial.GetFileID(msg[messagePrefixSz:])
+	id := serial.GetFileID(msg[MessagePrefixSz:])
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return walkProllyMapAddresses(ctx, msg, cb)
@@ -71,7 +71,7 @@ func WalkAddresses(ctx context.Context, msg Message, cb func(ctx context.Context
 }
 
 func GetTreeLevel(msg Message) int {
-	id := serial.GetFileID(msg[messagePrefixSz:])
+	id := serial.GetFileID(msg[MessagePrefixSz:])
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapTreeLevel(msg)
@@ -85,7 +85,7 @@ func GetTreeLevel(msg Message) int {
 }
 
 func GetTreeCount(msg Message) int {
-	id := serial.GetFileID(msg[messagePrefixSz:])
+	id := serial.GetFileID(msg[MessagePrefixSz:])
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapTreeCount(msg)
@@ -99,7 +99,7 @@ func GetTreeCount(msg Message) int {
 }
 
 func GetSubtrees(msg Message) []uint64 {
-	id := serial.GetFileID(msg[messagePrefixSz:])
+	id := serial.GetFileID(msg[MessagePrefixSz:])
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapSubtrees(msg)

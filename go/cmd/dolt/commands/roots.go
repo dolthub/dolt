@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
@@ -151,8 +152,8 @@ func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified 
 				cli.Println()
 			}
 		} else if sm, ok := value.(types.SerialMessage); ok {
-			if serial.GetFileID([]byte(sm)) == serial.StoreRootFileID {
-				msg := serial.GetRootAsStoreRoot([]byte(sm), 0)
+			if serial.GetFileID(sm[message.MessagePrefixSz:]) == serial.StoreRootFileID {
+				msg := serial.GetRootAsStoreRoot([]byte(sm), message.MessagePrefixSz)
 				ambytes := msg.AddressMapBytes()
 				node := tree.NodeFromBytes(ambytes)
 				err := tree.OutputAddressMapNode(cli.OutStream, node)

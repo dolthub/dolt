@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 // For an annotation like @type, 1st capture group is the annotation.
@@ -235,9 +236,8 @@ func (fp FieldPath) Resolve(ctx context.Context, v Value, vr ValueReader) (Value
 			return sv, nil
 		}
 	case SerialMessage:
-		data := []byte(v)
-		if serial.GetFileID(data) == serial.CommitFileID && fp.Name == "value" {
-			msg := serial.GetRootAsCommit(data, 0)
+		if serial.GetFileID(v[message.MessagePrefixSz:]) == serial.CommitFileID && fp.Name == "value" {
+			msg := serial.GetRootAsCommit(v, message.MessagePrefixSz)
 			addr := hash.New(msg.RootBytes())
 			return vr.ReadValue(ctx, addr)
 		}

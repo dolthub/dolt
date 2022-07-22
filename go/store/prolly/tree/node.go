@@ -235,5 +235,5 @@ func OutputAddressMapNode(w io.Writer, node Node) error {
 }
 
 func ValueFromNode(root Node) types.Value {
-	return types.TupleRowStorage(root.bytes())
+	return types.SerialMessage(root.bytes())
 }

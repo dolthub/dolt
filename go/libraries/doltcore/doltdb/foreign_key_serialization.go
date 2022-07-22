@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/marshal"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -84,11 +85,11 @@ func serializeNomsForeignKeys(ctx context.Context, vrw types.ValueReadWriter, fk
 
 // deserializeNomsForeignKeys returns a new ForeignKeyCollection using the provided map returned previously by GetMap.
 func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyCollection, error) {
-	if serial.GetFileID(msg) != serial.ForeignKeyCollectionFileID {
+	if serial.GetFileID(msg[message.MessagePrefixSz:]) != serial.ForeignKeyCollectionFileID {
 		return nil, fmt.Errorf("expect Serial Message with ForeignKeyCollectionFileID")
 	}
 
-	c := serial.GetRootAsForeignKeyCollection(msg, 0)
+	c := serial.GetRootAsForeignKeyCollection(msg, message.MessagePrefixSz)
 	collection := &ForeignKeyCollection{
 		foreignKeys: make(map[string]ForeignKey, c.ForeignKeysLength()),
 	}
@@ -203,8 +204,7 @@ func serializeFlatbufferForeignKeys(fkc *ForeignKeyCollection) types.SerialMessa
 	serial.ForeignKeyCollectionStart(b)
 	serial.ForeignKeyCollectionAddForeignKeys(b, vec)
 	o := serial.ForeignKeyCollectionEnd(b)
-	b.FinishWithFileIdentifier(o, []byte(serial.ForeignKeyCollectionFileID))
-	return types.SerialMessage(b.FinishedBytes())
+	return []byte(message.FinishMessage(b, o, []byte(serial.ForeignKeyCollectionFileID)))
 }
 
 func serializeStringVector(b *fb.Builder, s []string) fb.UOffsetT {
@@ -228,9 +228,9 @@ func serializeUint64Vector(b *fb.Builder, u []uint64) fb.UOffsetT {
 }
 
 func emptyForeignKeyCollection(msg types.SerialMessage) bool {
-	if serial.GetFileID(msg) != serial.ForeignKeyCollectionFileID {
+	if serial.GetFileID(msg[message.MessagePrefixSz:]) != serial.ForeignKeyCollectionFileID {
 		return false
 	}
-	c := serial.GetRootAsForeignKeyCollection(msg, 0)
+	c := serial.GetRootAsForeignKeyCollection(msg, message.MessagePrefixSz)
 	return c.ForeignKeysLength() == 0
 }
