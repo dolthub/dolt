@@ -108,17 +108,6 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	if len(config.ServerUser) == 0 { // ran sql-server without --user argument
-		if len(data) == 0 { // no existing privileges
-			engine.Analyzer.Catalog.MySQLDb.AddSuperUser("root", "localhost", "")
-		}
-	} else { // provided --user argument or config.ServerUser is set to "root" for sql and sql -q
-		// add user as superuser if they don't already exist
-		if user := engine.Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
-			engine.Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
-		}
-	}
-
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
 		if verbose, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG_VERBOSE"); ok && strings.ToLower(verbose) == "true" {
