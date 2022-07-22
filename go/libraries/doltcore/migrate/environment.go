@@ -23,16 +23,18 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
 const (
-	doltDir = dbfactory.DoltDir
-	nomsDir = dbfactory.DataDir
+	doltDir       = dbfactory.DoltDir
+	nomsDir       = dbfactory.DataDir
+	migrateBranch = "migrate"
 )
 
 var targetFormat = types.Format_DOLT_DEV
@@ -48,7 +50,7 @@ func NewEnvironment(ctx context.Context, existing *env.DoltEnv) (Environment, er
 		return Environment{}, err
 	}
 
-	if err = InitMigrationDB(ctx, existing.FS, mfs); err != nil {
+	if err = InitMigrationDB(ctx, existing.DoltDB, existing.FS, mfs); err != nil {
 		return Environment{}, err
 	}
 
@@ -82,7 +84,7 @@ func SwapChunkstores(ctx context.Context, migration *env.DoltEnv, dest string) e
 	return nil
 }
 
-func InitMigrationDB(ctx context.Context, src, dest filesys.Filesys) (err error) {
+func InitMigrationDB(ctx context.Context, existing *doltdb.DoltDB, src, dest filesys.Filesys) (err error) {
 	base, err := src.Abs(".")
 	if err != nil {
 		return err
@@ -130,8 +132,35 @@ func InitMigrationDB(ctx context.Context, src, dest filesys.Filesys) (err error)
 		return err
 	}
 
-	_, _, _, err = dbfactory.FileFactory{}.CreateDB(ctx, targetFormat, u, nil)
-	return
+	db, vrw, ns, err := dbfactory.FileFactory{}.CreateDB(ctx, targetFormat, u, nil)
+	if err != nil {
+		return err
+	}
+
+	// migrate init commit
+	creation := ref.NewInternalRef(doltdb.CreationBranch)
+	init, err := existing.ResolveCommitRef(ctx, creation)
+	if err != nil {
+		return err
+	}
+
+	meta, err := init.GetCommitMeta(ctx)
+	if err != nil {
+		return err
+	}
+	rv, err := doltdb.EmptyRootValue(ctx, vrw, ns)
+	if err != nil {
+		return err
+	}
+	nv := doltdb.HackNomsValuesFromRootValues(rv)
+
+	ds, err := db.GetDataset(ctx, creation.String())
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Commit(ctx, ds, nv, datas.CommitOptions{Meta: meta})
+	return nil
 }
 
 func getMigrateFS(existing filesys.Filesys) (filesys.Filesys, error) {

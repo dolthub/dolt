@@ -47,7 +47,7 @@ const (
 )
 
 const (
-	creationBranch = "create"
+	CreationBranch = "create"
 
 	defaultChunksPerTF = 256 * 1024
 )
@@ -155,7 +155,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		panic("Passed bad name or email.  Both should be valid")
 	}
 
-	ds, err := ddb.db.GetDataset(ctx, creationBranch)
+	ds, err := ddb.db.GetDataset(ctx, CreationBranch)
 
 	if err != nil {
 		return err
@@ -181,7 +181,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 
 	commitOpts := datas.CommitOptions{Meta: cm}
 
-	cb := ref.NewInternalRef(creationBranch)
+	cb := ref.NewInternalRef(CreationBranch)
 	ds, err = ddb.db.GetDataset(ctx, cb.String())
 
 	if err != nil {
@@ -525,10 +525,13 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 			parents = append(parents, addr)
 		}
 	}
-
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
-	ds, err = ddb.db.GetDataset(ctx, dref.String())
 
+	return ddb.CommitValue(ctx, dref, val, commitOpts)
+}
+
+func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.Value, commitOpts datas.CommitOptions) (*Commit, error) {
+	ds, err := ddb.db.GetDataset(ctx, dref.String())
 	if err != nil {
 		return nil, err
 	}
@@ -573,9 +576,15 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 		}
 		parents = append(parents, addr)
 	}
-
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
-	dcommit, err := datas.NewCommitForValue(ctx, datas.ChunkStoreFromDatabase(ddb.db), ddb.vrw, ddb.ns, val, commitOpts)
+
+	return ddb.CommitDangling(ctx, val, commitOpts)
+}
+
+func (ddb *DoltDB) CommitDangling(ctx context.Context, val types.Value, opts datas.CommitOptions) (*Commit, error) {
+	cs := datas.ChunkStoreFromDatabase(ddb.db)
+
+	dcommit, err := datas.NewCommitForValue(ctx, cs, ddb.vrw, ddb.ns, val, opts)
 	if err != nil {
 		return nil, err
 	}

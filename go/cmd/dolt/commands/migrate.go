@@ -98,8 +98,13 @@ func MigrateDatabase(ctx context.Context, dEnv *env.DoltEnv) error {
 	if err != nil {
 		return err
 	}
+	p, err := menv.Migration.FS.Abs(".")
+	if err != nil {
+		return err
+	}
+	cli.Println("migrating database at tmp dir: ", p)
 
-	err = migrate.TraverseDAG(ctx, menv.Migration.DoltDB, menv.Existing.DoltDB)
+	err = migrate.TraverseDAG(ctx, menv.Existing.DoltDB, menv.Migration.DoltDB)
 	if err != nil {
 		return err
 	}

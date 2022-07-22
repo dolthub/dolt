@@ -768,6 +768,10 @@ func (root *RootValue) withStorage(st rvStorage) *RootValue {
 	return &RootValue{root.vrw, root.ns, st, nil}
 }
 
+func HackNomsValuesFromRootValues(root *RootValue) types.Value {
+	return root.nomsValue()
+}
+
 func (root *RootValue) nomsValue() types.Value {
 	return root.st.nomsValue()
 }
