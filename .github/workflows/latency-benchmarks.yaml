@@ -1,4 +1,4 @@
-#name: Benchmark Latency
+name: Benchmark Latency
 
 on:
   repository_dispatch:
