@@ -909,7 +909,6 @@ func (d *DoltSession) HasDB(ctx *sql.Context, dbName string) bool {
 // other state tracking metadata.
 func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	db := dbState.Db
-	defineSystemVariablesForDB(db.Name())
 
 	sessionState := NewEmptyDatabaseSessionState()
 	d.dbStates[db.Name()] = sessionState
@@ -1144,7 +1143,7 @@ func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
 		return nil, ErrSessionNotPeristable
 	}
 
-	return SystemVariablesInConfig(d.globalsConf)
+	return SystemVariablesInConfig(d.globalsConf, func(string) {})
 }
 
 // validatePersistedSysVar checks whether a system variable exists and is dynamic
@@ -1234,8 +1233,10 @@ func setPersistedValue(conf config.WritableConfig, key string, value interface{}
 	}
 }
 
-// SystemVariablesInConfig returns system variables from the persisted config
-func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, error) {
+// SystemVariablesInConfig returns system variables from the persisted config.
+// It ignores persisted keys that do not exist in |sql.SystemVariables|. The
+// ignored keys are sent to |cb|.
+func SystemVariablesInConfig(conf config.ReadableConfig, cb func(key string)) ([]sql.SystemVariable, error) {
 	allVars := make([]sql.SystemVariable, conf.Size())
 	i := 0
 	var err error
@@ -1244,10 +1245,15 @@ func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, 
 	conf.Iter(func(k, v string) bool {
 		def, err = getPersistedValue(conf, k)
 		if err != nil {
+			if sql.ErrUnknownSystemVariable.Is(err) {
+				err = nil
+				cb(k)
+				return false
+			}
 			err = fmt.Errorf("key: '%s'; %w", k, err)
 			return true
 		}
-		// getPeristedVal already checked for errors
+		// getPersistedVal already checked for errors
 		sysVar, _, _ = sql.SystemVariables.GetGlobal(k)
 		sysVar.Default = def
 		allVars[i] = sysVar
@@ -1276,7 +1282,9 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 		globals = config.NewMapConfig(make(map[string]string))
 	}
 
-	persistedGlobalVars, err := SystemVariablesInConfig(globals)
+	persistedGlobalVars, err := SystemVariablesInConfig(globals, func(key string) {
+		cli.Printf("warning: persisted system variable %s was not loaded since its definition does not exist.\n", key)
+	})
 	if err != nil {
 		return err
 	}

@@ -21,7 +21,25 @@ teardown() {
     teardown_common
 }
 
+@test "sql-server: Database specific system variables should be loaded" {
+    cd repo1
+    dolt branch dev
 
+    start_sql_server
+    server_query repo1 1 "SET PERSIST repo1_default_branch = 'dev';" ""
+    stop_sql_server
+    start_sql_server
+    server_query repo1 1 "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\ndev"
+    stop_sql_server
+
+    # system variable is lost when starting sql-server outside of the folder
+    cd ..
+    start_sql_server
+    server_query repo1 1 "SELECT LENGTH(@@repo1_default_branch);" "LENGTH(@@repo1_default_branch)\n0"
+
+    # Ideally we would test the global config, but altering the DOLT_ROOT_PATH environment var here is a
+    # code smell.
+}
 
 @test "sql-server: user session variables from config" {
   cd repo1
