@@ -114,7 +114,7 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 
 	userDirExists, _ := dEnv.FS.Exists(dir)
 
-	scheme, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
+	scheme, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr) // TODO: Probably should support here
 
 	if err != nil {
 		return errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
@@ -205,6 +205,8 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 
 func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
 	cli.Printf("cloning %s\n", remoteUrl)
+
+	// TODO: Can do check for dolthub url here
 
 	r := env.NewRemote(remoteName, remoteUrl, params)
 	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dEnv)
