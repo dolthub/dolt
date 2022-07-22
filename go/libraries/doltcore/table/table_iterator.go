@@ -26,7 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// RowIter wraps a sql.RowIter and abstracts way a sql.Context for a
+// RowIter wraps a sql.RowIter and abstracts away sql.Context for a
 // context.Context.
 type RowIter interface {
 	Next(ctx context.Context) (sql.Row, error)
