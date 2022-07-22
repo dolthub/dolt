@@ -28,6 +28,7 @@ teardown() {
     cd repo1
     cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_key.pem .
     cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_cert.pem .
+    cp "$BATS_TEST_DIRNAME"/../../go/libraries/utils/jwtauth/gen_keys/test_jwks.json .
     let PORT="$$ % (65536-1024) + 1024"
     TOKEN="`cat $BATS_TEST_DIRNAME/../../go/libraries/utils/jwtauth/gen_keys/token.jwt`"
 
@@ -44,7 +45,7 @@ listener:
 privilege_file: privs.json
 jwks:
 - name: jwksname
-  location_url: file://$BATS_TEST_DIRNAME/../../go/libraries/utils/jwtauth/gen_keys/test_jwks.json
+  location_url: file:///test_jwks.json
   claims: 
     alg: RS256
     aud: my_resource
