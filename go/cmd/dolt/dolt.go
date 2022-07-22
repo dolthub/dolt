@@ -18,6 +18,7 @@ import (
 	"context"
 	crand "crypto/rand"
 	"encoding/binary"
+	"fmt"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -135,6 +136,7 @@ const traceProf = "trace"
 const featureVersionFlag = "--feature-version"
 
 func main() {
+	fmt.Println("testing testing")
 	os.Exit(runMain())
 }
 
