@@ -237,7 +237,7 @@ listener:
 	assert.NoError(t, err)
 	assert.NotNil(t, c)
 	assert.Len(t, c.Certificates, 1)
-	assert.Len(t, c.Certificates[0].Certificate, 2)
+	assert.Len(t, c.Certificates[0].Certificate, 1)
 
 	cfg = YAMLConfig{}
 	err = yaml.Unmarshal([]byte(`
