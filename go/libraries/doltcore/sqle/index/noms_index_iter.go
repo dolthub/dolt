@@ -54,7 +54,7 @@ type indexLookupRowIterAdapter struct {
 }
 
 // NewIndexLookupRowIterAdapter returns a new indexLookupRowIterAdapter.
-func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, durableState *durableIndexState, keyIter nomsKeyIter) (*indexLookupRowIterAdapter, error) {
+func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, durableState *durableIndexState, keyIter nomsKeyIter, columns []uint64) (*indexLookupRowIterAdapter, error) {
 	rows := durable.NomsMapFromIndex(durableState.Primary)
 
 	resBuf := resultBufferPool.Get().(*async.RingBuffer)
@@ -66,7 +66,7 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, durableState 
 		idx:        idx,
 		keyIter:    keyIter,
 		tableRows:  rows,
-		conv:       idx.sqlRowConverter(durableState),
+		conv:       idx.sqlRowConverter(durableState, columns),
 		lookupTags: idx.lookupTags(durableState),
 		cancelF:    cancelF,
 		resultBuf:  resBuf,

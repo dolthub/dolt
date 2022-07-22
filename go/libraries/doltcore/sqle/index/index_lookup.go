@@ -89,7 +89,7 @@ func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRa
 	if covers || idx.ID() == "PRIMARY" {
 		return NewCoveringIndexRowIterAdapter(ctx, idx, nrr, columns), nil
 	} else {
-		return NewIndexLookupRowIterAdapter(ctx, idx, durableState, nrr)
+		return NewIndexLookupRowIterAdapter(ctx, idx, durableState, nrr, columns)
 	}
 }
 
