@@ -22,8 +22,11 @@ teardown() {
 }
 
 @test "sql-server: Database specific system variables should be loaded" {
+    dir=$(pwd)
+    nativevar DOLT_ROOT_PATH $dir
     cd repo1
     dolt branch dev
+    dolt branch other
 
     start_sql_server
     server_query repo1 1 "SET PERSIST repo1_default_branch = 'dev';" ""
@@ -33,12 +36,20 @@ teardown() {
     stop_sql_server
 
     # system variable is lost when starting sql-server outside of the folder
+    # because global config is used.
     cd ..
     start_sql_server
     server_query repo1 1 "SELECT LENGTH(@@repo1_default_branch);" "LENGTH(@@repo1_default_branch)\n0"
+    server_query repo1 1 "SET PERSIST repo1_default_branch = 'other';" ""
+    stop_sql_server
+    start_sql_server
+    server_query repo1 1 "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\nother"
+    stop_sql_server
 
-    # Ideally we would test the global config, but altering the DOLT_ROOT_PATH environment var here is a
-    # code smell.
+    # ensure we didn't blow away local setting
+    cd repo1
+    start_sql_server
+    server_query repo1 1 "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\ndev"
 }
 
 @test "sql-server: user session variables from config" {
