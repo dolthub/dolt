@@ -12,6 +12,10 @@ make_repo() {
 setup() {
     skiponwindows "tests are flaky on Windows"
     setup_no_dolt_init
+    mkdir $BATS_TMPDIR/sql-server-test$$
+    nativevar DOLT_ROOT_PATH $BATS_TMPDIR/sql-server-test$$ /p
+    dolt config --global --add user.email "test@test.com"
+    dolt config --global --add user.name "test"
     make_repo repo1
     make_repo repo2
 }
@@ -22,8 +26,6 @@ teardown() {
 }
 
 @test "sql-server: Database specific system variables should be loaded" {
-    dir=$(pwd)
-    nativevar DOLT_ROOT_PATH $dir
     cd repo1
     dolt branch dev
     dolt branch other
@@ -48,7 +50,7 @@ teardown() {
 
     # ensure we didn't blow away local setting
     cd repo1
-    start_sql_server
+    start_sql_server_with_args --user dolt --doltcfg-dir './'
     server_query repo1 1 "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\ndev"
 }
 
