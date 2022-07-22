@@ -17,8 +17,6 @@ teardown() {
 }
 
 @test "conflict-detection: cannot merge into dirty working table" {
-    skip_nbf_dolt_1 "needs merge stats"
-
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -55,12 +53,12 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
+    skip_nbf_dolt_1 "needs merge stats"
     [[ "$output" =~ "1 rows modified" ]] || false
 
 }
 
 @test "conflict-detection: two branches modify different cell different row. merge. no conflict" {
-    skip_nbf_dolt_1 "needs merge stats"
 
     dolt sql <<SQL
 CREATE TABLE test (
@@ -90,16 +88,15 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
-    [[ "$output" =~ "1 rows modified" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
+    skip_nbf_dolt_1 "needs merge stats"
+    [[ "$output" =~ "1 rows modified" ]] || false
     run dolt status
     [[ "$output" =~ "All conflicts and constraint violations fixed" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
 }
 
 @test "conflict-detection: two branches modify different cell same row. merge. no conflict" {
-    skip_nbf_dolt_1 "needs merge stats"
-
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -127,8 +124,9 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
-    [[ "$output" =~ "1 rows modified" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
+    skip_nbf_dolt_1 "needs merge stats"
+    [[ "$output" =~ "1 rows modified" ]] || false
     run dolt status
     [[ "$output" =~ "All conflicts and constraint violations fixed" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
@@ -167,8 +165,6 @@ SQL
 }
 
 @test "conflict-detection: two branches add a different row. merge. no conflict" {
-    skip_nbf_dolt_1 "needs merge stats"
-
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -195,6 +191,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
+    skip_nbf_dolt_1 "needs merge stats"
     [[ "$output" =~ "1 rows added" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
