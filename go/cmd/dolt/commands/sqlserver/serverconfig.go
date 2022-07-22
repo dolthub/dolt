@@ -38,7 +38,7 @@ const (
 const (
 	defaultHost                = "localhost"
 	defaultPort                = 3306
-	defaultUser                = "root"
+	defaultUser                = ""
 	defaultPass                = ""
 	defaultTimeout             = 8 * 60 * 60 * 1000 // 8 hours, same as MySQL
 	defaultReadOnly            = false
@@ -378,9 +378,6 @@ func ValidateConfig(config ServerConfig) error {
 	}
 	if config.Port() < 1024 || config.Port() > 65535 {
 		return fmt.Errorf("port is not in the range between 1024-65535: %v\n", config.Port())
-	}
-	if len(config.User()) == 0 {
-		return fmt.Errorf("user cannot be empty")
 	}
 	if config.LogLevel().String() == "unknown" {
 		return fmt.Errorf("loglevel is invalid: %v\n", string(config.LogLevel()))
