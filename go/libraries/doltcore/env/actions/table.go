@@ -76,16 +76,6 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest *doltd
 			if err != nil {
 				return nil, err
 			}
-
-			ss, _, err := src.GetSuperSchema(ctx, td.ToName)
-			if err != nil {
-				return nil, err
-			}
-
-			dest, err = dest.PutSuperSchema(ctx, td.ToName, ss)
-			if err != nil {
-				return nil, err
-			}
 		}
 	}
 

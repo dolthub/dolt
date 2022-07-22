@@ -177,8 +177,8 @@ func addBackup(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	r := env.NewRemote(backupName, backupUrl, params, dEnv)
-	err = dEnv.AddBackup(r.Name, r.Url, r.FetchSpecs, r.Params)
+	r := env.NewRemote(backupName, backupUrl, params)
+	err = dEnv.AddBackup(r)
 
 	switch err {
 	case nil:
@@ -234,7 +234,7 @@ func syncBackupUrl(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	b := env.NewRemote("__temp__", backupUrl, params, dEnv)
+	b := env.NewRemote("__temp__", backupUrl, params)
 	return backup(ctx, dEnv, b)
 }
 
@@ -259,7 +259,7 @@ func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 }
 
 func backup(ctx context.Context, dEnv *env.DoltEnv, b env.Remote) errhand.VerboseError {
-	destDb, err := b.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+	destDb, err := b.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
 	if err != nil {
 		return errhand.BuildDError("error: unable to open destination.").AddCause(err).Build()
 	}
@@ -308,8 +308,8 @@ func restoreBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		return verr
 	}
 
-	r := env.NewRemote("", remoteUrl, params, dEnv)
-	srcDb, err := r.GetRemoteDB(ctx, types.Format_Default)
+	r := env.NewRemote("", remoteUrl, params)
+	srcDb, err := r.GetRemoteDB(ctx, types.Format_Default, dEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}

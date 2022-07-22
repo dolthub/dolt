@@ -53,6 +53,7 @@ const (
 	AsyncReplicationKey      = "dolt_async_replication"
 	AwsCredsFileKey          = "aws_credentials_file"
 	AwsCredsProfileKey       = "aws_credentials_profile"
+	AwsCredsRegionKey        = "aws_credentials_region"
 )
 
 var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
@@ -66,7 +67,7 @@ type DoltSession struct {
 	username    string
 	email       string
 	dbStates    map[string]*DatabaseSessionState
-	provider    RevisionDatabaseProvider
+	provider    DoltDatabaseProvider
 	tempTables  map[string][]sql.Table
 	globalsConf config.ReadWriteConfig
 	mu          *sync.Mutex
@@ -76,7 +77,7 @@ var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 
 // DefaultSession creates a DoltSession with default values
-func DefaultSession(pro RevisionDatabaseProvider) *DoltSession {
+func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
 	return &DoltSession{
 		Session:     sql.NewBaseSession(),
 		username:    "",
@@ -90,7 +91,7 @@ func DefaultSession(pro RevisionDatabaseProvider) *DoltSession {
 }
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
-func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabaseProvider, conf config.ReadWriteConfig, dbs ...InitialDbState) (*DoltSession, error) {
+func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro DoltDatabaseProvider, conf config.ReadWriteConfig, dbs ...InitialDbState) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")
 	globals := config.NewPrefixConfig(conf, env.SqlServerGlobalsPrefix)
@@ -117,7 +118,7 @@ func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionData
 }
 
 // Provider returns the RevisionDatabaseProvider for this session.
-func (d *DoltSession) Provider() RevisionDatabaseProvider {
+func (d *DoltSession) Provider() DoltDatabaseProvider {
 	return d.provider
 }
 
@@ -908,7 +909,7 @@ func (d *DoltSession) HasDB(ctx *sql.Context, dbName string) bool {
 // other state tracking metadata.
 func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	db := dbState.Db
-	defineSystemVariables(db.Name())
+	defineSystemVariablesForDB(db.Name())
 
 	sessionState := NewEmptyDatabaseSessionState()
 	d.dbStates[db.Name()] = sessionState
