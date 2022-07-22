@@ -31,7 +31,7 @@ jobs:
           VERSION: ${{ github.event.inputs.version || github.event.client_payload.version }}
           ACTOR: ${{ github.event.client_payload.actor || github.actor }}
 
-  correctness-release:
+  correctness:
     runs-on: ubuntu-18.04
     needs: set-version-actor
     name: Dolt SQL Correctness
