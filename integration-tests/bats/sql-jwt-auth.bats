@@ -64,9 +64,13 @@ import mysql.connector
 import sys
 import time
 i=0
+
+args = sys.argv[sys.argv.index("--") + 1:]
+password = args
+
 while True:
   try:
-    with mysql.connector.connect(host="127.0.0.1", user="test_jwt_user", password='"$TOKEN"', port='"$PORT"', database="repo1", connection_timeout=1) as c:
+    with mysql.connector.connect(host="127.0.0.1", user="test_jwt_user", password=password, port='"$PORT"', database="repo1", connection_timeout=1) as c:
       cursor = c.cursor()
       cursor.execute("show tables")
       for (t) in cursor:
@@ -80,5 +84,5 @@ while True:
       time.sleep(1)
       if i == 10:
         raise err
-'
+' -- "$TOKEN"
 }
