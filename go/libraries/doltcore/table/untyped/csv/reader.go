@@ -208,7 +208,7 @@ func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
 
 		args := []string{
 			fmt.Sprintf("CSV reader expected %d values, but saw %d.", schSize, len(rowVals)),
-			fmt.Sprintf("The row was interpreted to be: '%s'", badMpStr),
+			fmt.Sprintf("row values: '%s'", badMpStr),
 		}
 
 		if len(unusedRowValues) > 0 {
