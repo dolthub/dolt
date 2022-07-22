@@ -32,9 +32,9 @@ import (
 )
 
 const (
-	doltDir       = dbfactory.DoltDir
-	nomsDir       = dbfactory.DataDir
-	migrateBranch = "migrate"
+	doltDir      = dbfactory.DoltDir
+	nomsDir      = dbfactory.DataDir
+	manifestFile = "manifest"
 )
 
 var targetFormat = types.Format_DOLT_DEV
@@ -80,8 +80,47 @@ func NewEnvironment(ctx context.Context, existing *env.DoltEnv) (Environment, er
 	}, nil
 }
 
-func SwapChunkstores(ctx context.Context, migration *env.DoltEnv, dest string) error {
-	return nil
+func SwapChunkStores(ctx context.Context, menv Environment) error {
+	src, dest := menv.Migration.FS, menv.Existing.FS
+	p := filepath.Join(doltDir, nomsDir)
+
+	var cerr error
+	err := src.Iter(p, true, func(path string, size int64, isDir bool) (stop bool) {
+		if strings.Contains(path, manifestFile) || isDir {
+			return
+		}
+		if cerr = filesys.CopyFile(path, path, src, dest); cerr != nil {
+			stop = true
+		}
+		return
+	})
+	if err != nil {
+		return err
+	}
+	if cerr != nil {
+		return cerr
+	}
+
+	return SwapManifests(ctx, src, dest)
+}
+
+func SwapManifests(ctx context.Context, src, dest filesys.Filesys) (err error) {
+	// backup the current manifest
+	manifest := filepath.Join(doltDir, nomsDir, manifestFile)
+	bak := filepath.Join(doltDir, nomsDir, manifestFile+".bak")
+	if err = filesys.CopyFile(manifest, bak, dest, dest); err != nil {
+		return err
+	}
+
+	// copy manifest to |dest| under temporary name
+	tmp := filepath.Join(doltDir, nomsDir, "temp-manifest")
+	if err = filesys.CopyFile(manifest, tmp, src, dest); err != nil {
+		return err
+	}
+
+	// atomically swap the manifests
+	return dest.MoveFile(tmp, manifest)
+	// exit immediately!
 }
 
 func InitMigrationDB(ctx context.Context, existing *doltdb.DoltDB, src, dest filesys.Filesys) (err error) {

@@ -109,5 +109,5 @@ func MigrateDatabase(ctx context.Context, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	return migrate.SwapChunkstores(ctx, menv.Migration, "")
+	return migrate.SwapChunkStores(ctx, menv)
 }
