@@ -36,7 +36,7 @@ func TestJWTAuth(t *testing.T) {
 	jwksConfig := []JwksConfig{
 		{
 			Name:        jwksName,
-			LocationUrl: fmt.Sprintf("file://%s/testfiles/test_jwks.json", pwd),
+			LocationUrl: fmt.Sprintf("file://%s/testdata/test_jwks.json", pwd),
 			Claims: map[string]string{
 				"alg": "RS256",
 				"aud": aud,
@@ -71,6 +71,11 @@ func TestJWTAuth(t *testing.T) {
 
 	// No token
 	authed, err = validateJWT(jwksConfig, sub, fmt.Sprintf("jwks=%s,sub=%s,iss=%s,aud=%s", jwksName, sub, iss, aud), "", tokenCreated)
+	require.Error(t, err)
+	require.False(t, authed)
+
+	// Unknown claim in identity string
+	authed, err = validateJWT(jwksConfig, sub, fmt.Sprintf("jwks=%s,sub=%s,iss=%s,unknown=%s", jwksName, sub, iss, aud), "", tokenCreated)
 	require.Error(t, err)
 	require.False(t, authed)
 }
