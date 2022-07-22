@@ -38,9 +38,8 @@ func newCachedJWKS() *cachedJWKS {
 }
 
 type fetchedJWKS struct {
-	URL          string
-	BrokenBase64 bool
-	cache        *cachedJWKS
+	URL   string
+	cache *cachedJWKS
 }
 
 func newJWKS(provider JWTProvider) *fetchedJWKS {
@@ -84,8 +83,6 @@ func (f *fetchedJWKS) GetJWKS() (*jose.JSONWebKeySet, error) {
 			}
 			f.cache.value = &jwks
 			_, _, err = cachecontrol.CachableResponse(request, response, cachecontrol.Options{})
-			//TODO: expire the cache based on cachecontrol response.
-			f.cache.expires = time.Now().Add(20 * time.Minute)
 		}
 	}
 	return f.cache.value, nil

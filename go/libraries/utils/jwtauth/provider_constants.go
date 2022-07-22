@@ -18,4 +18,5 @@ type JWTProvider struct {
 	URL      string
 	Issuer   string
 	Audience string
+	Subject  string
 }

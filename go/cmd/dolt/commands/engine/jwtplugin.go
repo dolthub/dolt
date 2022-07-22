@@ -61,12 +61,9 @@ func validateJWT(config []JwksConfig, username, identity, token string, reqTime 
 		return false, err
 	}
 
-	pr := jwtauth.JWTProvider{URL: jwksConfig.LocationUrl}
-	if iss, ok := expectedClaimsMap["iss"]; ok {
-		pr.Issuer = iss
-	}
-	if aud, ok := expectedClaimsMap["aud"]; ok {
-		pr.Audience = aud
+	pr, err := getJWTProvider(expectedClaimsMap, jwksConfig.LocationUrl)
+	if err != nil {
+		return false, err
 	}
 	vd := jwtauth.NewJWTValidator(pr)
 	claims, err := vd.ValidateJWT(token, reqTime)
@@ -80,6 +77,25 @@ func validateJWT(config []JwksConfig, username, identity, token string, reqTime 
 	}
 	logrus.Info(logString)
 	return true, nil
+}
+
+func getJWTProvider(expectedClaimsMap map[string]string, url string) (jwtauth.JWTProvider, error) {
+	pr := jwtauth.JWTProvider{URL: url}
+	for name, claim := range expectedClaimsMap {
+		switch name {
+		case "iss":
+			pr.Issuer = claim
+		case "aud":
+			pr.Audience = claim
+		case "sub":
+			pr.Subject = claim
+		case "jwks":
+			continue
+		default:
+			return pr, fmt.Errorf("ValidateJWT: Unexpected expected claim found in user identity")
+		}
+	}
+	return pr, nil
 }
 
 func getClaimFromKey(claims *jwtauth.Claims, field string) string {
