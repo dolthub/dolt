@@ -14,7 +14,6 @@ setup() {
     skiponwindows "Missing dependencies"
     setup_no_dolt_init
     make_repo repo1
-    make_repo repo2
 }
 
 teardown() {
@@ -28,7 +27,7 @@ teardown() {
     cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_key.pem .
     cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_cert.pem .
     let PORT="$$ % (65536-1024) + 1024"
-    TOKEN=`cat $BATS_TEST_DIRNAME/token.jwt`
+    TOKEN="`cat $BATS_TEST_DIRNAME/token.jwt`"
 
     cat >config.yml <<EOF
 log_level: debug
@@ -53,13 +52,12 @@ jwks:
 EOF
 
     dolt sql --privilege-file=privs.json -q "CREATE USER dolt@'127.0.0.1'"
+    dolt sql --privilege-file=privs.json -q "GRANT ALL ON *.* TO dolt@'127.0.0.1' WITH GRANT OPTION"
     dolt sql --privilege-file=privs.json -q "CREATE USER test_jwt_user@'127.0.0.1' IDENTIFIED WITH authentication_dolt_jwt AS 'jwks=jwksname,sub=test_jwt_user,iss=dolthub.com,aud=my_resource'"
     dolt sql --privilege-file=privs.json -q "GRANT ALL ON *.* TO test_jwt_user@'127.0.0.1' WITH GRANT OPTION"
 
     dolt sql-server --config ./config.yml &
     SERVER_PID=$!
-
-    
     # We do things manually here because we need TLS support.
     python3 -c '
 import mysql.connector
@@ -68,9 +66,9 @@ import time
 i=0
 while True:
   try:
-    with mysql.connector.connect(host="127.0.0.1", user="test_jwt_user", port='"$PORT"', database="repo1", connection_timeout=1) as c:
+    with mysql.connector.connect(host="127.0.0.1", user="test_jwt_user", password='"$TOKEN"', port='"$PORT"', database="repo1", connection_timeout=1) as c:
       cursor = c.cursor()
-      cursor.execute("show databases")
+      cursor.execute("show tables")
       for (t) in cursor:
         print(t)
       sys.exit(0)
@@ -83,21 +81,4 @@ while True:
       if i == 10:
         raise err
 '
-  
-#   run dolt sql-client --host=127.0.0.1 --port=$PORT --allow-cleartext-passwords=true --user=test_jwt_user --password=$TOKEN<<SQL
-# SHOW DATABASES;
-# SQL
-
-#   echo $output
-#   [ "$status" -eq 0 ]
-#   [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
-#   [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
-#   [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
-#   [ "${lines[3]}" = '+--------------------+' ]
-#   [ "${lines[4]}" = '| Database           |' ]
-#   [ "${lines[5]}" = '+--------------------+' ]
-#   [ "${lines[6]}" = '| information_schema |' ]
-#   [ "${lines[7]}" = '| repo1              |' ]
-#   [ "${lines[8]}" = '+--------------------+' ]
-
 }
