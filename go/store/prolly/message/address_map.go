@@ -78,27 +78,6 @@ func (s AddressMapSerializer) Serialize(keys, addrs [][]byte, subtrees []uint64,
 	return FinishMessage(b, serial.AddressMapEnd(b), addressMapFileID)
 }
 
-func FinishMessage(b *fb.Builder, off fb.UOffsetT, fileID []byte) Message {
-	// We finish the buffer by prefixing it with:
-	// 1) 1 byte NomsKind == TupleRowStorage.
-	// 2) big endian uint16 representing the size of the message, not
-	// including the kind or size prefix bytes.
-	//
-	// This allows chunks we serialize here to be read by types binary
-	// codec.
-	//
-	// All accessors in this package expect this prefix to be on the front
-	// of the message bytes as well. See |MessagePrefixSz|.
-
-	b.Prep(1, fb.SizeInt32+4+MessagePrefixSz)
-	b.FinishWithFileIdentifier(off, fileID)
-
-	bytes := b.Bytes[b.Head()-MessagePrefixSz:]
-	bytes[0] = byte(MessageTypesKind)
-	binary.BigEndian.PutUint16(bytes[1:], uint16(len(b.Bytes)-int(b.Head())))
-	return bytes
-}
-
 func getAddressMapKeys(msg Message) (keys val.SlicedBuffer) {
 	am := serial.GetRootAsAddressMap(msg, MessagePrefixSz)
 	keys.Buf = am.KeyItemsBytes()
