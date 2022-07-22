@@ -377,11 +377,11 @@ SQL
 }
 
 @test "remotes: push and pull with docs from remote" {
-    skip_nbf_dolt_1 "uses docs"
-
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     echo "license-text" > LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     echo "readme-text" > README.md
+    dolt docs read README.md README.md
     dolt add .
     dolt commit -m "test doc commit"
     dolt push test-remote main
@@ -396,23 +396,21 @@ SQL
 
     cd ../../
     echo "updated-license" > LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     dolt add .
     dolt commit -m "updated license"
     dolt push test-remote main
 
     cd dolt-repo-clones/test-repo
-    echo "this text should remain after pull :p" > README.md
     run dolt pull
     [[ "$output" =~ "Updating" ]] || false
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "updated license" ]] || false
+    dolt docs write LICENSE.md > LICENSE.md
     run cat LICENSE.md
     [ "$status" -eq 0 ]
     [[ "$output" =~ "updated-license" ]] || false
-    run cat README.md
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "this text should remain after pull :p" ]] || false
 }
 
 @test "remotes: push and pull tags to/from remote" {
@@ -574,11 +572,11 @@ SQL
 }
 
 @test "remotes: clone a remote with docs" {
-    skip_nbf_dolt_1 "uses docs"
-
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     echo "license-text" > LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     echo "readme-text" > README.md
+    dolt docs read README.md README.md
     dolt add .
     dolt commit -m "test doc commit"
     dolt push test-remote main
@@ -594,6 +592,8 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "LICENSE.md" ]] || false
     [[ ! "$output" =~ "README.md" ]] || false
+    dolt docs write LICENSE.md > LICENSE.md
+    dolt docs write README.md > README.md
     run ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "LICENSE.md" ]] || false
@@ -789,11 +789,11 @@ SQL
 }
 
 @test "remotes: dolt fetch with docs" {
-    skip_nbf_dolt_1 "uses docs"
-
     # Initial commit of docs on remote
     echo "initial-license" > LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     echo "initial-readme" > README.md
+    dolt docs read README.md README.md
     dolt add .
     dolt commit -m "initial doc commit"
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
@@ -812,6 +812,8 @@ SQL
     cd "dolt-repo-clones"
     run dolt clone http://localhost:50051/test-org/test-repo
     cd test-repo
+    dolt docs write LICENSE.md > LICENSE.md
+    dolt docs write README.md > README.md
     run cat LICENSE.md
     [ "$status" -eq 0 ]
     [[ "$output" =~ "initial-license" ]] || false
@@ -820,14 +822,18 @@ SQL
     [[ "$output" =~ "initial-readme" ]] || false
     # Change the docs
     echo "dolt-repo-clones-license" > LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     echo "dolt-repo-clones-readme" > README.md
+    dolt docs read README.md README.md
     dolt add .
     dolt commit -m "dolt-repo-clones updated docs"
 
     # Go back to original repo, and change the docs again
     cd ../../
     echo "initial-license-updated" > LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     echo "initial-readme-updated" > README.md
+    dolt docs read README.md README.md
     dolt add .
     dolt commit -m "update initial doc values in test-org/test-repo"
 
@@ -1779,6 +1785,49 @@ setup_ref_test() {
     dolt checkout other
     run dolt log
     [[ "$output" =~ "adding table from other" ]]
+}
+
+@test "remotes: dolt_remote add and remove works with other commands" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    run dolt sql <<SQL
+CALL dolt_remote('add', 'origin', 'http://localhost:50051/test-org/test-repo');
+CALL dolt_push('origin', 'main');
+SQL
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "must provide a GRPCDialProvider param through GRPCDialProviderParam" ]] || false
+
+    cd ..
+    dolt clone http://localhost:50051/test-org/test-repo repo2
+
+    cd repo2
+    run dolt branch -va
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "other" ]] || false
+
+    cd ../repo1
+    dolt checkout -b other
+    dolt push origin other
+
+    cd ../repo2
+    dolt pull
+    run dolt branch -va
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "other" ]] || false
+
+    dolt checkout main
+    dolt sql -q "CREATE TABLE a(pk int primary key)"
+    dolt commit -am "add table a"
+    dolt push
+
+    cd ../repo1
+    dolt sql -q "CALL dolt_remote('remove', 'origin')"
+    run dolt pull
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no remote" ]] || false
 }
 
 @test "remotes: dolt status on local repo compares with remote tracking" {

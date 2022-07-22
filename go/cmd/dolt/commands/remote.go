@@ -170,8 +170,8 @@ func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 		return verr
 	}
 
-	r := env.NewRemote(remoteName, remoteUrl, params, dEnv)
-	err = dEnv.AddRemote(r.Name, r.Url, r.FetchSpecs, r.Params)
+	r := env.NewRemote(remoteName, remoteUrl, params)
+	err = dEnv.AddRemote(r)
 
 	switch err {
 	case nil:

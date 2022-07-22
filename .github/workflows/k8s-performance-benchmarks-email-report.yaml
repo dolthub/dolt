@@ -1,4 +1,4 @@
-name: SQL Correctness
+name: Benchmark Dolt vs MySQL
 
 on:
   repository_dispatch:
@@ -21,20 +21,26 @@ jobs:
     outputs:
       version: ${{ steps.set-vars.outputs.version }}
       actor: ${{ steps.set-vars.outputs.actor }}
+      actor_email: ${{ steps.set-vars.outputs.actor_email }}
     steps:
       - name: Set variables
         id: set-vars
         run: |
           echo "::set-output name=version::$VERSION"
           echo "::set-output name=actor::$ACTOR"
+          echo "::set-output name=actor_email::$ACTOR_EMAIL"
         env:
           VERSION: ${{ github.event.inputs.version || github.event.client_payload.version }}
           ACTOR: ${{ github.event.client_payload.actor || github.actor }}
+          ACTOR_EMAIL: ${{ github.event.inputs.email }}
 
-  correctness-release:
+  benchmark-release-mysql:
     runs-on: ubuntu-18.04
     needs: set-version-actor
-    name: Dolt SQL Correctness
+    name: Benchmark Dolt Release vs MySQL 8
+    strategy:
+      matrix:
+        dolt_fmt: [ "__LD_1__", "__DOLT_1__" ]
     steps:
       - uses: actions/checkout@v2
       - uses: azure/setup-kubectl@v2.0
@@ -60,14 +66,32 @@ jobs:
           KUBECONFIG=kubeconfig kubectl config use-context github-actions-dolt-context
         env:
           CONFIG: ${{ secrets.CORP_KUBECONFIG }}
-      - name: Run correctness
-        id: run-correctness
-        run: ./.github/scripts/sql-correctness/run-correctness.sh
+      - name: Run Sysbench benchmarks
+        run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
         env:
+          FROM_SERVER: 'mysql'
+          FROM_VERSION: '8.0.28'
+          TO_SERVER: 'dolt'
           TO_VERSION: ${{ needs.set-version-actor.outputs.version }}
           MODE: 'release'
           ACTOR: ${{ needs.set-version-actor.outputs.actor }}
-          ACTOR_EMAIL: ${{ github.event.inputs.email }}
+          ACTOR_EMAIL: ${{ needs.set-version-actor.outputs.actor_email }}
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
-          TEMPLATE_SCRIPT: "./.github/scripts/sql-correctness/get-dolt-correctness-job-json.sh"
+          NOMS_BIN_FORMAT: ${{ matrix.dolt_fmt }}
+          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"
+      - name: Run Tpcc benchmarks
+        run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
+        env:
+          FROM_SERVER: 'mysql'
+          FROM_VERSION: '8.0.28'
+          TO_SERVER: 'dolt'
+          TO_VERSION: ${{ needs.set-version-actor.outputs.version }}
+          MODE: 'release'
+          ACTOR: ${{ needs.set-version-actor.outputs.actor }}
+          ACTOR_EMAIL: ${{ needs.set-version-actor.outputs.actor_email }}
+          REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+          KUBECONFIG: "./kubeconfig"
+          NOMS_BIN_FORMAT: ${{ matrix.dolt_fmt }}
+          WITH_TPCC: 'true'
+          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"

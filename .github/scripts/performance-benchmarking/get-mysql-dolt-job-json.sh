@@ -2,8 +2,8 @@
 
 set -e
 
-if [ "$#" -lt 8 ]; then
-    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timeprefix> <actorprefix> <format> <initBigRepo> <nomsBinFormat>"
+if [ "$#" -lt 9 ]; then
+    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timeprefix> <actorprefix> <format> <issueNumber> <initBigRepo> <nomsBinFormat> <withTpcc>"
     exit 1
 fi
 
@@ -15,8 +15,10 @@ toVersion="$5"
 timeprefix="$6"
 actorprefix="$7"
 format="$8"
-initBigRepo="$9"
-nomsBinFormat="${10}"
+issueNumber="$9"
+initBigRepo="${10}"
+nomsBinFormat="${11}"
+withTpcc="${12}"
 precision="1"
 tpccRegex="tpcc%"
 
@@ -26,6 +28,10 @@ fi
 
 if [ -n "$nomsBinFormat" ]; then
   nomsBinFormat="\"--noms-bin-format=$nomsBinFormat\","
+fi
+
+if [ -n "$withTpcc" ]; then
+  withTpcc="\"--withTpcc=$withTpcc\","
 fi
 
 readTests="('oltp_read_only', 'oltp_point_select', 'select_random_points', 'select_random_ranges', 'covering_index_scan', 'index_scan', 'table_scan', 'groupby_scan', 'index_join_scan')"
@@ -84,7 +90,7 @@ echo '
               "--region=us-west-2",
               "--results-dir='$timeprefix'",
               "--results-prefix='$actorprefix'",
-              "--withTpcc=true",
+              '"$withTpcc"'
               '"$initBigRepo"'
               '"$nomsBinFormat"'
               "--sysbenchQueries='"$medianLatencyMultiplierReadsQuery"'",

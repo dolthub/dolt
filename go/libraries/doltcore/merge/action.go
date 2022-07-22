@@ -204,11 +204,6 @@ func ExecuteFFMerge(
 		}
 	}
 
-	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv)
-	if err != nil {
-		return err
-	}
-
 	if !spec.Squash {
 		err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoStateReader().CWBHeadRef(), spec.MergeC)
 
@@ -222,17 +217,7 @@ func ExecuteFFMerge(
 		return err
 	}
 
-	err = dEnv.UpdateWorkingSet(ctx, workingSet.WithWorkingRoot(workingRoot).WithStagedRoot(stagedRoot))
-	if err != nil {
-		return ErrMergeFailedToUpdateRepoState
-	}
-
-	err = actions.SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
-	if err != nil {
-		return ErrMergeFailedToUpdateDocs
-	}
-
-	return nil
+	return dEnv.UpdateWorkingSet(ctx, workingSet.WithWorkingRoot(workingRoot).WithStagedRoot(stagedRoot))
 }
 
 func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
@@ -280,11 +265,6 @@ func mergedRootToWorking(
 		}
 	}
 
-	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv)
-	if err != nil {
-		return ErrFailedToDetermineUnstagedDocs
-	}
-
 	err = dEnv.UpdateWorkingRoot(context.Background(), workingRoot)
 	if err != nil {
 		return err
@@ -295,15 +275,7 @@ func mergedRootToWorking(
 		return err
 	}
 
-	if err = actions.SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs); err != nil {
-		return err
-	}
-
-	if err = dEnv.UpdateStagedRoot(context.Background(), mergedRoot); err != nil {
-		return err
-	}
-
-	return nil
+	return dEnv.UpdateStagedRoot(context.Background(), mergedRoot)
 }
 
 func conflictsAndViolations(tblToStats map[string]*MergeStats) (conflicts []string, constraintViolations []string) {

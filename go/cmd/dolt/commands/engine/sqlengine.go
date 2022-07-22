@@ -85,7 +85,7 @@ func NewSqlEngine(
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
-	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), all...)
+	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), all...).WithRemoteDialer(mrEnv.RemoteDialProvider())
 
 	// Load in privileges from file, if it exists
 	persister := mysql_file_handler.NewPersister(config.PrivFilePath)
@@ -370,17 +370,20 @@ func getInitialDBStateWithDefaultBranch(ctx context.Context, db dsqle.SqlDatabas
 
 // NewSqlEngineForEnv returns a SqlEngine configured for the environment provided, with a single root user
 func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, error) {
-	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	if err != nil {
 		return nil, err
 	}
 
 	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
 	var dbName string
-	mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
+	err = mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
 		dbName = name
 		return true, nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	return NewSqlEngine(
 		ctx,

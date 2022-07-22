@@ -27,6 +27,15 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+type TableDiffType int
+
+const (
+	AddedTable TableDiffType = iota
+	ModifiedTable
+	RenamedTable
+	RemovedTable
+)
+
 // TableDelta represents the change of a single table between two roots.
 // FromFKs and ToFKs contain Foreign Keys that constrain columns in this table,
 // they do not contain Foreign Keys that reference this table.
@@ -275,7 +284,7 @@ func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
 }
 
 func (td TableDelta) HasPrimaryKeySetChanged() bool {
-	return !schema.ArePrimaryKeySetsDiffable(td.FromSch, td.ToSch)
+	return !schema.ArePrimaryKeySetsDiffable(td.Format(), td.FromSch, td.ToSch)
 }
 
 func (td TableDelta) HasChanges() (bool, error) {

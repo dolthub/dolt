@@ -63,7 +63,7 @@ SQL
     [[ "$output" =~ "  (use \"dolt checkout <table>\" to discard changes in working directory)" ]] || false
     [[ "$output" =~ "	modified:       u" ]] || false
     [[ "$output" =~ "Untracked files:" ]] || false
-    [[ "$output" =~ "  (use \"dolt add <table|doc>\" to include in what will be committed)" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
     [[ "$output" =~ "	new table:      v" ]] || false
 }
 
@@ -290,7 +290,7 @@ SQL
 
     run dolt status
     [[ "$output" =~ "Untracked files:" ]] || false
-    [[ "$output" =~ "  (use \"dolt add <table|doc>\" to include in what will be committed)" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
     [[ "$output" =~ "	new table:      test" ]] || false
 
     # Now verify that commit log has changes
@@ -344,7 +344,7 @@ SQL
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Untracked files:" ]] || false
-    [[ "$output" =~ "  (use \"dolt add <table|doc>\" to include in what will be committed)" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
     [[ "$output" =~ "	new table:      tb3" ]] || false
     ! [[ "$output" =~ "	new table:      tb2" ]] || false
 
@@ -361,7 +361,7 @@ SQL
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Untracked files:" ]] || false
-    [[ "$output" =~ "  (use \"dolt add <table|doc>\" to include in what will be committed)" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
     [[ "$output" =~ "	new table:      tb3" ]] || false
     [[ "$output" =~ "	new table:      tb2" ]] || false
     ! [[ "$output" =~ "	new table:      tb1" ]] || false

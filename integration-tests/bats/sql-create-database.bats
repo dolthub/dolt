@@ -97,12 +97,12 @@ SQL
     [ ! -d mydb ]
 }
 
-@test "sql-create-database: with multi-db-dir" {
+@test "sql-create-database: with data-dir" {
     skiponwindows "failing with file in use error"
 
     mkdir db_dir
     
-    dolt sql --multi-db-dir db_dir <<SQL
+    dolt sql --data-dir db_dir <<SQL
 create database mydb1;
 create database mydb2;
 use mydb1;
@@ -129,22 +129,22 @@ SQL
 
     cd ../../
     
-    dolt sql --multi-db-dir db_dir -q "drop database mydb1"
+    dolt sql --data-dir db_dir -q "drop database mydb1"
     
     [ ! -d db_dir/mydb1 ]
     [ -d db_dir/mydb2 ]
 
-    run dolt sql --multi-db-dir db_dir -q "show databases"
+    run dolt sql --data-dir db_dir -q "show databases"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "mydb2" ]] || false
     [[ ! "$output" =~ "mydb1" ]] || false
     [[ ! "$output" =~ "dolt_repo_$$" ]] || false
 
-    # multi-db-dir with abs path
+    # data-dir with abs path
     absdir="/tmp/$$/db_dir"
     mkdir -p "$absdir"
 
-    dolt sql --multi-db-dir "$absdir" <<SQL
+    dolt sql --data-dir "$absdir" <<SQL
 create database mydb1;
 create database mydb2;
 use mydb1;
@@ -159,7 +159,7 @@ SQL
     [ -d "$absdir/mydb1" ]
     [ -d "$absdir/mydb2" ]
 
-    dolt sql --multi-db-dir "$absdir" -q "drop database mydb1"
+    dolt sql --data-dir "$absdir" -q "drop database mydb1"
 
     [ ! -d "$absdir/mydb1" ]
     [ -d "$absdir/mydb2" ]

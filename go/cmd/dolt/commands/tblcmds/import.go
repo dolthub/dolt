@@ -544,7 +544,7 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 		r := pipeline.GetTransFailureSqlRow(trf)
 
 		if r != nil {
-			cli.PrintErr(sql.FormatRow(r))
+			cli.PrintErr(sql.FormatRow(r), "\n")
 		}
 
 		return false

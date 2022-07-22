@@ -105,7 +105,7 @@ func NewTestSQLCtx(ctx context.Context) *sql.Context {
 	return NewTestSQLCtxWithProvider(ctx, dsess.EmptyDatabaseProvider())
 }
 
-func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.RevisionDatabaseProvider) *sql.Context {
+func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider) *sql.Context {
 	s, err := dsess.NewDoltSession(
 		sql.NewEmptyContext(),
 		sql.NewBaseSession(),
@@ -178,7 +178,6 @@ func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *do
 		Ddb: ddb,
 		Rsw: dEnv.RepoStateWriter(),
 		Rsr: dEnv.RepoStateReader(),
-		Drw: dEnv.DocsReadWriter(),
 	}
 
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}

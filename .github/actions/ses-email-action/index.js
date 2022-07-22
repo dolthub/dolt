@@ -4,6 +4,7 @@ const fs = require('fs');
 
 const region = core.getInput('region');
 const version = core.getInput('version');
+const format = core.getInput('format');
 const Template = core.getInput('template');
 const dataFilePath = core.getInput('dataFile');
 const CcAddresses = JSON.parse(core.getInput('ccAddresses'));
@@ -15,6 +16,7 @@ const data = dataFilePath ? fs.readFileSync(dataFilePath, { encoding: 'utf-8' })
 
 const templated = {
     version,
+    format,
     results: data,
     workflowURL,
 };
