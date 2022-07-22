@@ -37,7 +37,6 @@ jobs:
         env:
           CONFIG: ${{ secrets.CORP_KUBECONFIG }}
       - name: Run correctness
-        id: run-correctness
         run: ./.github/scripts/sql-correctness/run-correctness.sh
         env:
           TO_VERSION: ${{ github.event.client_payload.to_version }}

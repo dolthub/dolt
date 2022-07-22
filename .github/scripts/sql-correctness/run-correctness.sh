@@ -61,14 +61,14 @@ if [[ "$MODE" = "release" || "$MODE" = "nightly" ]]; then
 fi
 
 source \
-"$TEMPLATE_SCRIPT" \
-"$jobname" \
-"$FROM_VERSION" \
-"$TO_VERSION" \
-"$timeprefix" \
-"$actorprefix" \
-"$format" \
-"$NOMS_BIN_FORMAT" > job.json
+  "$TEMPLATE_SCRIPT" \
+  "$jobname" \
+  "$FROM_VERSION" \
+  "$TO_VERSION" \
+  "$timeprefix" \
+  "$actorprefix" \
+  "$format" \
+  "$NOMS_BIN_FORMAT" > job.json
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
 
