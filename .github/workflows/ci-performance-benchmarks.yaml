@@ -46,6 +46,9 @@ jobs:
     needs: [validate-commentor, check-comments]
     if: ${{ needs.check-comments.outputs.benchmark == 'true' }}
     name: Benchmark Performance
+    strategy:
+      matrix:
+        dolt_fmt: [ "__LD_1__", "__DOLT_1__" ]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -82,8 +85,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: core.setOutput("pull_number", JSON.stringify(context.issue.number));
-      - name: Run benchmarks
-        id: run-benchmarks
+      - name: Run Sysbench benchmarks
         run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
         env:
           FROM_SERVER: 'dolt'
@@ -96,5 +98,21 @@ jobs:
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
           INIT_BIG_REPO: "true"
-          NOMS_BIN_FORMAT: "__LD_1__"
+          NOMS_BIN_FORMAT: ${{ matrix.dolt_fmt }}
+          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"
+      - name: Run Tpcc benchmarks
+        run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
+        env:
+          FROM_SERVER: 'dolt'
+          FROM_VERSION: ${{ github.sha }}
+          TO_SERVER: 'dolt'
+          TO_VERSION: ${{ steps.comment-branch.outputs.head_sha }}
+          MODE: 'pullRequest'
+          ISSUE_NUMBER: ${{ steps.get_pull_number.outputs.pull_number }}
+          ACTOR: ${{ github.actor }}
+          REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+          KUBECONFIG: "./kubeconfig"
+          INIT_BIG_REPO: "true"
+          NOMS_BIN_FORMAT: ${{ matrix.dolt_fmt }}
+          WITH_TPCC: 'true'
           TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"

@@ -119,7 +119,7 @@ func getResultsRow(res result, cols []*SeedColumn) []string {
 	// set iterations
 	row[6] = fmt.Sprintf("%d", res.br.N)
 	// set time
-	row[7] = res.br.T.String()
+	row[7] = res.br.T.Round(time.Second).String()
 	// set size_on_disk
 	row[8] = fmt.Sprintf("%v", res.sizeOnDisk)
 	// set rows_per_second
