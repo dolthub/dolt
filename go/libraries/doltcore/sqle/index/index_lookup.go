@@ -79,6 +79,9 @@ func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSc
 }
 
 func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, columns []uint64, durableState *durableIndexState) (sql.RowIter, error) {
+	if len(columns) == 0 {
+		columns = idx.Schema().GetAllCols().Tags
+	}
 	m := durable.NomsMapFromIndex(durableState.Secondary)
 	nrr := noms.NewNomsRangeReader(idx.IndexSchema(), m, ranges)
 

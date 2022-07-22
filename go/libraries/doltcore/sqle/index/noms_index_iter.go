@@ -232,7 +232,16 @@ func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter *no
 	idxCols := idx.IndexSchema().GetPKCols()
 	tblPKCols := idx.Schema().GetPKCols()
 	sch := idx.Schema()
-	cols := sch.GetAllCols().GetColumns()
+	allCols := sch.GetAllCols().GetColumns()
+	cols := make([]schema.Column, 0)
+	for _, col := range allCols {
+		for _, tag := range resultCols {
+			if col.Tag == tag {
+				cols = append(cols, col)
+			}
+		}
+
+	}
 	tagToSqlColIdx := make(map[uint64]int)
 	isPrimaryKeyIdx := idx.ID() == "PRIMARY"
 
