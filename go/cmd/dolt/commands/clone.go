@@ -18,6 +18,8 @@ import (
 	"context"
 	"os"
 	"path"
+	"path/filepath"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -114,7 +116,13 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 
 	userDirExists, _ := dEnv.FS.Exists(dir)
 
-	scheme, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr) // TODO: Probably should support here
+	// Check for a valid dolthub url and replace the urlStr with the parsed repoName.
+	repoName, ok := validateAndParseDolthubUrl(urlStr)
+	if ok {
+		urlStr = repoName
+	}
+
+	scheme, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
 
 	if err != nil {
 		return errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
@@ -206,8 +214,6 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
 	cli.Printf("cloning %s\n", remoteUrl)
 
-	// TODO: Can do check for dolthub url here
-
 	r := env.NewRemote(remoteName, remoteUrl, params)
 	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dEnv)
 
@@ -223,4 +229,27 @@ func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[
 	}
 
 	return r, ddb, nil
+}
+
+// validateAndParseDolthubUrl validates and returns a Dolthub repo link's repository name. For example, given this url: https://www.dolthub.com/repositories/user/test
+// the function would return 'user/test'. Note this function correctly does handle additional path extensions. The url: https://www.dolthub.com/repositories/user/test/pulls
+// would return 'user/test/pulls' and eventually error later in the code base.
+func validateAndParseDolthubUrl(urlStr string) (string, bool) {
+	u, err := earl.Parse(urlStr)
+
+	if err != nil {
+		return "", false
+	}
+
+	if u.Scheme == dbfactory.HTTPSScheme && u.Host == "www.dolthub.com" {
+		// Get the actual repo name and covert the remote
+		split := strings.Split(u.Path, "/")
+
+		if len(split) > 2 {
+			// the path is of the form /repositories/user/repoName
+			return filepath.Join(split[2:]...), true
+		}
+	}
+
+	return "", false
 }

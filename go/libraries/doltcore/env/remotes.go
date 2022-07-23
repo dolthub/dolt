@@ -421,23 +421,6 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 			return u.Scheme, absUrl, err
 		}
 
-		// This is a dolthub link
-		if u.Scheme == dbfactory.HTTPSScheme && u.Host == "www.dolthub.com" {
-			split := strings.Split(u.Path, "/")
-
-			repoName := filepath.Join(split[2:]...)
-			hostName, err := cfg.GetString(RemotesApiHostKey)
-			if err != nil {
-				if err != config.ErrConfigParamNotFound {
-					return "", "", err
-				}
-
-				hostName = DefaultRemotesApiHost
-			}
-
-			return dbfactory.HTTPSScheme, "https://" + path.Join(hostName, repoName), nil
-		}
-
 		return u.Scheme, urlArg, nil
 	} else if u.Host != "" {
 		return dbfactory.HTTPSScheme, "https://" + urlArg, nil
