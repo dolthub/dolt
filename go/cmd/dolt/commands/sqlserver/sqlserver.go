@@ -146,7 +146,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server (default `%d`)", serverConfig.MaxConnections()))
 	ap.SupportsString(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables (default `%s`)", serverConfig.PersistenceBehavior()))
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to $doltcfg-dir/privileges.db")
-	ap.SupportsString(socketFlag, "", "socket file", "Path to a unix socket file. Defaults to '/tmp/mysql.sock'")
+	ap.SupportsString(socketFlag, "", "socket file", "Path for the unix socket file. Defaults to '/tmp/mysql.sock'")
 	return ap
 }
 
@@ -327,7 +327,7 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	if sock, ok := apr.GetValue(socketFlag); ok {
 		// defined without value gets default
 		if sock == "" {
-			sock = defaultSocketFileLocation
+			sock = defaultUnixSocketFilePath
 		}
 		serverConfig.withSocket(sock)
 	}

@@ -308,27 +308,26 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 
 // handleProtocolAndAddress returns new server.Config object with only Protocol and Address defined.
 func handleProtocolAndAddress(serverConfig ServerConfig) (server.Config, error) {
-	host := serverConfig.Host()
-	port := serverConfig.Port()
-	serverConf := server.Config{}
-	serverConf.Protocol = "tcp"
-	portAsString := strconv.Itoa(port)
-	hostPort := net.JoinHostPort(host, portAsString)
-	serverConf.Address = hostPort
+	serverConf := server.Config{Protocol: "tcp"}
+
+	portAsString := strconv.Itoa(serverConfig.Port())
+	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
 	if portInUse(hostPort) {
 		portInUseError := fmt.Errorf("Port %s already in use.", portAsString)
 		return server.Config{}, portInUseError
 	}
+	serverConf.Address = hostPort
+
 	// if socket is defined with or without value -> unix
 	if serverConfig.Socket() != "" {
-		// unix
 		if runtime.GOOS == "windows" {
-			return server.Config{}, fmt.Errorf("cannot define socket file on Windows")
+			return server.Config{}, fmt.Errorf("cannot define unix socket file on Windows")
 		}
 		serverConf.Socket = serverConfig.Socket()
 	} else {
-		if runtime.GOOS != "windows" && host == "localhost" {
-			serverConf.Socket = defaultSocketFileLocation
+		// if host is undefined or defined as "localhost" -> unix
+		if shouldUseUnixSocket(serverConfig) {
+			serverConf.Socket = defaultUnixSocketFilePath
 		}
 	}
 

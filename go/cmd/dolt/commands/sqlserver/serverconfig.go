@@ -53,7 +53,7 @@ const (
 	defaultPrivilegeFilePath   = "privileges.db"
 	defaultMetricsHost         = ""
 	defaultMetricsPort         = -1
-	defaultSocketFileLocation  = "/tmp/mysql.sock"
+	defaultUnixSocketFilePath  = "/tmp/mysql.sock"
 )
 
 const (
@@ -426,7 +426,7 @@ func ValidateConfig(config ServerConfig) error {
 
 // ConnectionString returns a Data Source Name (DSN) to be used by go clients for connecting to a running server.
 func ConnectionString(config ServerConfig) string {
-	if runtime.GOOS != "windows" && config.Host() == "localhost" {
+	if shouldUseUnixSocket(config) {
 		return fmt.Sprintf("%v:%v@unix(%v)/", config.User(), config.Password(), config.Socket())
 	}
 	return fmt.Sprintf("%v:%v@tcp(%v:%v)/", config.User(), config.Password(), config.Host(), config.Port())
@@ -434,7 +434,15 @@ func ConnectionString(config ServerConfig) string {
 
 // ConfigInfo returns a summary of some of the config which contains some of the more important information
 func ConfigInfo(config ServerConfig) string {
-	return fmt.Sprintf(`HP="%v:%v"|T="%v"|R="%v"|L="%v"`, config.Host(), config.Port(),
+	socket := ""
+	if shouldUseUnixSocket(config) {
+		s := config.Socket()
+		if s == "" {
+			s = defaultUnixSocketFilePath
+		}
+		socket = fmt.Sprintf(`|S="%v"`, s)
+	}
+	return fmt.Sprintf(`HP="%v:%v"%s|T="%v"|R="%v"|L="%v"`, config.Host(), config.Port(), socket,
 		config.ReadTimeout(), config.ReadOnly(), config.LogLevel())
 }
 
@@ -453,4 +461,8 @@ func LoadTLSConfig(cfg ServerConfig) (*tls.Config, error) {
 			c,
 		},
 	}, nil
+}
+
+func shouldUseUnixSocket(config ServerConfig) bool {
+	return runtime.GOOS != "windows" && config.Host() == "localhost"
 }

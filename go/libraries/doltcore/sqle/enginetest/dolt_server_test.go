@@ -17,6 +17,7 @@ package enginetest
 import (
 	"context"
 	gosql "database/sql"
+	"github.com/gocraft/dbr/v2"
 	"math/rand"
 	"strings"
 	"testing"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/gocraft/dbr/v2"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
@@ -209,7 +209,7 @@ func TestDoltMultiSessionBehavior(t *testing.T) {
 
 func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 	for _, test := range tests {
-		sc, serverConfig := startServer(t)
+		sc, serverConfig := startServer(t, "")
 		sc.WaitForStart()
 
 		conn1, sess1 := newConnection(t, serverConfig)
@@ -313,11 +313,14 @@ func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
 	}
 }
 
-func startServer(t *testing.T) (*sqlserver.ServerController, sqlserver.ServerConfig) {
+func startServer(t *testing.T, host string) (*sqlserver.ServerController, sqlserver.ServerConfig) {
 	dEnv := dtestutils.CreateTestEnv()
 	rand.Seed(time.Now().UnixNano())
 	port := 15403 + rand.Intn(25)
 	serverConfig := sqlserver.DefaultServerConfig().WithPort(port)
+	if host != "" {
+		serverConfig = serverConfig.WithHost(host)
+	}
 
 	sc := sqlserver.NewServerController()
 	go func() {
@@ -352,21 +355,27 @@ func newConnection(t *testing.T, serverConfig sqlserver.ServerConfig) (*dbr.Conn
 }
 
 func TestDoltServerRunningUnixSocket(t *testing.T) {
-	// with default host = 'localhost', the server will use unix socket located in /tmp/mysql.sock
-	sc, serverConfig := startServerWithDefaultConfigOnly(t)
-	sc.WaitForStart()
-
 	t.Run("connecting mysql works", func(t *testing.T) {
+		sc, serverConfig := startServerWithDefaultConfigOnly(t)
+		require.True(t, strings.Contains(sqlserver.ConnectionString(serverConfig), "unix"))
+		sc.WaitForStart()
+
 		conn, sess := newConnection(t, serverConfig)
 		// Assertions
 		rows, err := sess.Query("select 1")
 		require.NoError(t, err)
 		assertResultsEqual(t, []sql.Row{{1}}, rows)
 		require.NoError(t, conn.Close())
+
+		sc.StopServer()
+		sc.WaitForClose()
 	})
 
 	t.Run("connecting to local server with both tcp and socket connections", func(t *testing.T) {
-		// default connection
+		sc, serverConfig := startServerWithDefaultConfigOnly(t)
+		sc.WaitForStart()
+
+		// default unix socket connection
 		localConn, localSess := newConnection(t, serverConfig)
 		rows, err := localSess.Query("select 1")
 		require.NoError(t, err)
@@ -398,9 +407,32 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 		require.NoError(t, conn2.Close())
 		require.NoError(t, conn1.Close())
 		require.NoError(t, localConn.Close())
+
+		sc.StopServer()
+		sc.WaitForClose()
 	})
 
-	sc.StopServer()
-	sc.WaitForClose()
+	t.Run("host and port specified, there should not be unix socket created", func(t *testing.T) {
+		sc, serverConfig := startServer(t, "0.0.0.0")
+		require.False(t, strings.Contains(sqlserver.ConnectionString(serverConfig), "unix"))
+		sc.WaitForStart()
+
+		// unix socket connection should fail
+		localServerConfig := sqlserver.DefaultServerConfig()
+		conn, sess := newConnection(t, localServerConfig)
+		_, err := sess.Query("select 1")
+		require.Error(t, err)
+		require.NoError(t, conn.Close())
+
+		// connection with the host and port define should work
+		conn1, sess1 := newConnection(t, serverConfig)
+		rows1, err := sess1.Query("select 1")
+		require.NoError(t, err)
+		assertResultsEqual(t, []sql.Row{{1}}, rows1)
+		require.NoError(t, conn1.Close())
+
+		sc.StopServer()
+		sc.WaitForClose()
+	})
 
 }

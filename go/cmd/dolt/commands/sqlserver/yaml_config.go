@@ -426,7 +426,7 @@ func (cfg YAMLConfig) Socket() string {
 	}
 	// if defined but empty -> default
 	if *cfg.ListenerConfig.Socket == "" {
-		return defaultSocketFileLocation
+		return defaultUnixSocketFilePath
 	}
 	return *cfg.ListenerConfig.Socket
 }
