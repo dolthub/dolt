@@ -104,7 +104,7 @@ func TestNodeDecodeValueCompatibility(t *testing.T) {
 
 	v, err := vs.ReadValue(context.Background(), h)
 	require.NoError(t, err)
-	assert.Equal(t, nd.bytes(), []byte(v.(types.TupleRowStorage)))
+	assert.Equal(t, nd.bytes(), []byte(v.(types.SerialMessage)))
 }
 
 func randomNodeItemPairs(t *testing.T, count int) (keys, values []Item) {

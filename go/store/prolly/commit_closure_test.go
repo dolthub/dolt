@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -148,7 +149,7 @@ func TestCommitClosure(t *testing.T) {
 		assert.Equal(t, 4096, cc.Count())
 
 		// Walk the addresses in the root.
-		msg := message.Message(tree.ValueFromNode(cc.closure.root).(types.TupleRowStorage))
+		msg := serial.Message(tree.ValueFromNode(cc.closure.root).(types.SerialMessage))
 		numaddresses := 0
 		err = message.WalkAddresses(ctx, msg, func(ctx context.Context, addr hash.Hash) error {
 			numaddresses++

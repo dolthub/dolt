@@ -235,9 +235,8 @@ func (fp FieldPath) Resolve(ctx context.Context, v Value, vr ValueReader) (Value
 			return sv, nil
 		}
 	case SerialMessage:
-		data := []byte(v)
-		if serial.GetFileID(data) == serial.CommitFileID && fp.Name == "value" {
-			msg := serial.GetRootAsCommit(data, 0)
+		if serial.GetFileID(v) == serial.CommitFileID && fp.Name == "value" {
+			msg := serial.GetRootAsCommit(v, serial.MessagePrefixSz)
 			addr := hash.New(msg.RootBytes())
 			return vr.ReadValue(ctx, addr)
 		}

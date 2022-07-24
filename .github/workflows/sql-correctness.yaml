@@ -2,38 +2,11 @@ name: SQL Correctness
 
 on:
   repository_dispatch:
-    types: [ release-dolt ]
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'SemVer format release tag, i.e. 0.24.5'
-        required: true
-        default: ''
-      email:
-        description: 'Email address to receive results'
-        required: true
-        default: ''
+    types: [ sql-correctness ]
 
 jobs:
-  set-version-actor:
-    name: Set Version and Actor
+  correctness:
     runs-on: ubuntu-18.04
-    outputs:
-      version: ${{ steps.set-vars.outputs.version }}
-      actor: ${{ steps.set-vars.outputs.actor }}
-    steps:
-      - name: Set variables
-        id: set-vars
-        run: |
-          echo "::set-output name=version::$VERSION"
-          echo "::set-output name=actor::$ACTOR"
-        env:
-          VERSION: ${{ github.event.inputs.version || github.event.client_payload.version }}
-          ACTOR: ${{ github.event.client_payload.actor || github.actor }}
-
-  correctness-release:
-    runs-on: ubuntu-18.04
-    needs: set-version-actor
     name: Dolt SQL Correctness
     strategy:
       matrix:
@@ -64,14 +37,13 @@ jobs:
         env:
           CONFIG: ${{ secrets.CORP_KUBECONFIG }}
       - name: Run correctness
-        id: run-correctness
         run: ./.github/scripts/sql-correctness/run-correctness.sh
         env:
-          TO_VERSION: ${{ needs.set-version-actor.outputs.version }}
-          MODE: 'release'
-          ACTOR: ${{ needs.set-version-actor.outputs.actor }}
-          ACTOR_EMAIL: ${{ github.event.inputs.email }}
+          TO_VERSION: ${{ github.event.client_payload.to_version }}
+          MODE: ${{ github.event.client_payload.mode }}
+          ACTOR: ${{ github.event.client_payload.actor }}
+          ACTOR_EMAIL: ${{ github.event.client_payload.actor_email }}
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
           NOMS_BIN_FORMAT: ${{ matrix.dolt_fmt }}
-          TEMPLATE_SCRIPT: "./.github/scripts/sql-correctness/get-dolt-correctness-job-json.sh"
+          TEMPLATE_SCRIPT: ${{ github.event.client_payload.template_script }}

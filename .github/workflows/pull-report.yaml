@@ -1,4 +1,4 @@
-# name: Performance Benchmark Reporter
+name: Post to Pull Request
 
 on:
   repository_dispatch:
@@ -47,40 +47,3 @@ jobs:
         env:
           ACTOR: ${{ github.event.client_payload.actor }}
           ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
-  report-email:
-    name: Report Performance Benchmarks via Email
-    runs-on: ubuntu-18.04
-    if: ${{ github.event.client_payload.issue_number == -1 }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - name: Get benchmark results
-        id: get-results
-        run: aws s3api get-object --bucket="$BUCKET" --key="$KEY" results.log
-        env:
-          KEY: ${{ github.event.client_payload.key }}
-          BUCKET: ${{ github.event.client_payload.bucket }}
-      - name: Send Email
-        if: ${{ github.event.client_payload.actor_email == '' }}
-        uses: ./.github/actions/ses-email-action
-        with:
-          region: us-west-2
-          version: ${{ github.event.client_payload.dolt_version }}
-          format: ${{ github.event.client_payload.noms_bin_format }}
-          toAddresses: '["${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}"]'
-          dataFile: ${{ format('{0}/results.log', github.workspace) }}
-      - name: Send Email
-        if: ${{ github.event.client_payload.actor_email != '' }}
-        uses: ./.github/actions/ses-email-action
-        with:
-          region: us-west-2
-          version: ${{ github.event.client_payload.dolt_version }}
-          format: ${{ github.event.client_payload.noms_bin_format }}
-          toAddresses: '["${{ github.event.client_payload.actor_email }}"]'
-          dataFile: ${{ format('{0}/results.log', github.workspace) }}

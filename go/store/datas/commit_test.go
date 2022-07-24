@@ -22,8 +22,10 @@
 package datas
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -421,6 +423,12 @@ func TestCommitParentsClosure(t *testing.T) {
 	}
 
 	assertCommitParentsClosure := func(v types.Value, es []expected) {
+		sort.Slice(es, func(i, j int) bool {
+			if es[i].height == es[j].height {
+				return bytes.Compare(es[i].hash[:], es[j].hash[:]) > 0
+			}
+			return es[i].height > es[j].height
+		})
 		c, err := commitPtr(db.Format(), v, nil)
 		if !assert.NoError(err) {
 			return
@@ -448,19 +456,14 @@ func TestCommitParentsClosure(t *testing.T) {
 		assert.NoError(iter.Err())
 	}
 
-	// TODO: These tests rely on the hash values of the commits
-	// to assert the order of commits that are at the same height in the
-	// parent closure map. The values have been tweaked to currently pass
-	// with LD_1 and DOLT_DEV.
-
 	a, b, c, d := "ds-a", "ds-b", "ds-c", "ds-d"
 	a1, a1a := addCommit(t, db, a, "a1")
 	a2, a2a := addCommit(t, db, a, "a2", a1)
-	a3, a3a := addCommit(t, db, a, "a3 ", a2)
+	a3, a3a := addCommit(t, db, a, "a3", a2)
 
 	b1, b1a := addCommit(t, db, b, "b1", a1)
-	b2, b2a := addCommit(t, db, b, "b2 ", b1)
-	b3, b3a := addCommit(t, db, b, "b3 ", b2)
+	b2, b2a := addCommit(t, db, b, "b2", b1)
+	b3, b3a := addCommit(t, db, b, "b3", b2)
 
 	c1, c1a := addCommit(t, db, c, "c1", a3, b3)
 
