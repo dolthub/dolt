@@ -21,6 +21,28 @@ teardown() {
     teardown_common
 }
 
+@test "sql: --user option changes superuser" {
+    # remove config
+    rm -rf .doltcfg
+
+    # default is root@localhost
+    run dolt sql <<< "select user, host from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "dolt" ]] || false
+    [[ "$output" =~ "localhost" ]] || false
+
+    # make it dolt@localhost
+    run dolt sql --user=dolt <<< "select user, host from mysql.user"
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "dolt" ]] || false
+    [[ "$output" =~ "localhost" ]] || false
+
+    # remove config
+    rm -rf .doltcfg
+}
+
 @test "sql-shell: run a query in sql shell" {
     skiponwindows "Works on Windows command prompt but not the WSL terminal used during bats"
     run bash -c "echo 'select * from test;' | dolt sql"
