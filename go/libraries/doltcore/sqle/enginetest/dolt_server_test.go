@@ -358,7 +358,7 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 	// Running unix socket server
 	sc, serverConfig := startServer(t, false, "", unixSocketPath)
 	sc.WaitForStart()
-	require.True(t, strings.Contains(sqlserver.ConnectionString(serverConfig), "unix"))
+	require.True(t, strings.Contains(sqlserver.ConnectionString(serverConfig, "dolt"), "unix"))
 
 	t.Run("connecting mysql works", func(t *testing.T) {
 		conn, sess := newConnection(t, serverConfig)
@@ -413,7 +413,7 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 	// Running TCP socket server
 	tcpSc, tcpServerConfig := startServer(t, true, "0.0.0.0", "")
 	tcpSc.WaitForStart()
-	require.False(t, strings.Contains(sqlserver.ConnectionString(tcpServerConfig), "unix"))
+	require.False(t, strings.Contains(sqlserver.ConnectionString(tcpServerConfig, "dolt"), "unix"))
 
 	t.Run("host and port specified, there should not be unix socket created", func(t *testing.T) {
 		// unix socket connection should fail
