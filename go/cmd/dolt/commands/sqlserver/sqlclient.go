@@ -96,7 +96,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 	var err error
 
 	if _, ok := apr.GetValue(commands.UserFlag); !ok {
-		cli.PrintErrln(color.RedString("--user is required"))
+		cli.PrintErrln(color.RedString("--user or -u argument is required"))
 		return 1
 	}
 
