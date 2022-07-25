@@ -27,6 +27,12 @@ import (
 )
 
 func MigrateCommit(ctx context.Context, r ref.DoltRef, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
+	oldHash, err := cm.HashOf()
+	if err != nil {
+		return err
+	}
+	prog.Log(ctx, "migrating commit %s", oldHash.String())
+
 	root, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return err
@@ -56,10 +62,6 @@ func MigrateCommit(ctx context.Context, r ref.DoltRef, cm *doltdb.Commit, new *d
 	}
 
 	// update progress
-	oldHash, err := cm.HashOf()
-	if err != nil {
-		return err
-	}
 	newHash, err := migratedCm.HashOf()
 	if err != nil {
 		return err

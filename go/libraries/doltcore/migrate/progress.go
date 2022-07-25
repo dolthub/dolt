@@ -16,6 +16,7 @@ package migrate
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -35,6 +36,8 @@ type CommitStack interface {
 type Progress interface {
 	ChunkMapping
 	CommitStack
+
+	Log(ctx context.Context, format string, args ...any)
 }
 
 type memoryProgress struct {
@@ -43,33 +46,33 @@ type memoryProgress struct {
 }
 
 func newProgress() Progress {
-	return memoryProgress{
+	return &memoryProgress{
 		stack:   make([]*doltdb.Commit, 0, 128),
 		mapping: make(map[hash.Hash]hash.Hash, 128),
 	}
 }
 
-func (mem memoryProgress) Has(ctx context.Context, addr hash.Hash) (ok bool, err error) {
+func (mem *memoryProgress) Has(ctx context.Context, addr hash.Hash) (ok bool, err error) {
 	_, ok = mem.mapping[addr]
 	return
 }
 
-func (mem memoryProgress) Get(ctx context.Context, old hash.Hash) (new hash.Hash, err error) {
+func (mem *memoryProgress) Get(ctx context.Context, old hash.Hash) (new hash.Hash, err error) {
 	new = mem.mapping[old]
 	return
 }
 
-func (mem memoryProgress) Put(ctx context.Context, old, new hash.Hash) (err error) {
+func (mem *memoryProgress) Put(ctx context.Context, old, new hash.Hash) (err error) {
 	mem.mapping[old] = new
 	return
 }
 
-func (mem memoryProgress) Push(ctx context.Context, cm *doltdb.Commit) (err error) {
+func (mem *memoryProgress) Push(ctx context.Context, cm *doltdb.Commit) (err error) {
 	mem.stack = append(mem.stack, cm)
 	return
 }
 
-func (mem memoryProgress) Pop(ctx context.Context) (cm *doltdb.Commit, err error) {
+func (mem *memoryProgress) Pop(ctx context.Context) (cm *doltdb.Commit, err error) {
 	if len(mem.stack) == 0 {
 		return nil, nil
 	}
@@ -77,4 +80,8 @@ func (mem memoryProgress) Pop(ctx context.Context) (cm *doltdb.Commit, err error
 	cm = mem.stack[top]
 	mem.stack = mem.stack[:top]
 	return
+}
+
+func (mem *memoryProgress) Log(ctx context.Context, format string, args ...any) {
+	fmt.Println(fmt.Sprintf(format, args...))
 }
