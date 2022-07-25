@@ -21,8 +21,6 @@ teardown() {
     teardown_common
 }
 
-
-
 @test "sql-server: user session variables from config" {
   cd repo1
   echo "
@@ -1394,4 +1392,16 @@ databases:
     let PORT="$$ % (65536-1024) + 1024"
     run dolt sql-server -P $PORT
     [ "$status" -eq 1 ]
+}
+
+@test "sql-server: sql-server locks database to writes" {
+    cd repo2
+    dolt sql -q "create table a (x int primary key)" 
+    start_sql_server
+    run dolt sql -q "create table b (x int primary key)" 
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database is locked to writes" ]] || false
+    run dolt sql -q "insert into b values (0)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database is locked to writes" ]] || false
 }
