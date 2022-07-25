@@ -53,23 +53,16 @@ func TraverseRefHistory(ctx context.Context, r ref.DoltRef, old, new *doltdb.Dol
 		if err != nil {
 			return err
 		}
-		return TraverseWorkingSetHistory(ctx, wsRef, old, new, prog)
+		return MigrateWorkingSet(ctx, wsRef, old, new, prog)
 
 	case ref.TagRefType:
-		t, err := old.ResolveTag(ctx, r.(ref.TagRef))
-		if err != nil {
-			return err
-		}
-		return TraverseTagHistory(ctx, t, old, new, prog)
+		return TraverseTagHistory(ctx, r.(ref.TagRef), old, new, prog)
 
 	case ref.RemoteRefType:
 		return TraverseBranchHistory(ctx, r, old, new, prog)
 
-	case ref.WorkspaceRefType:
-		return nil // todo(andy)
-
-	case ref.InternalRefType:
-		return nil // todo(andy)?
+	case ref.WorkspaceRefType, ref.InternalRefType:
+		return nil
 
 	default:
 		panic(fmt.Sprintf("unknown ref type %s", r.String()))
@@ -97,12 +90,17 @@ func TraverseBranchHistory(ctx context.Context, r ref.DoltRef, old, new *doltdb.
 	return new.SetHead(ctx, r, newHash)
 }
 
-func TraverseTagHistory(ctx context.Context, tag *doltdb.Tag, old, new *doltdb.DoltDB, prog Progress) error {
-	return nil
-}
+func TraverseTagHistory(ctx context.Context, r ref.TagRef, old, new *doltdb.DoltDB, prog Progress) error {
+	t, err := old.ResolveTag(ctx, r)
+	if err != nil {
+		return err
+	}
 
-func TraverseWorkingSetHistory(ctx context.Context, wsRef ref.WorkingSetRef, old, new *doltdb.DoltDB, prog Progress) error {
-	return nil
+	if err = TraverseCommitHistory(ctx, t.Commit, new, prog); err != nil {
+		return err
+	}
+
+	return new.NewTagAtCommit(ctx, r, t.Commit, t.Meta)
 }
 
 func TraverseCommitHistory(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {

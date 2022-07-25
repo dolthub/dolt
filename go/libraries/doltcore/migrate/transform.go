@@ -27,6 +27,27 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+func MigrateWorkingSet(ctx context.Context, wsRef ref.WorkingSetRef, old, new *doltdb.DoltDB, prog Progress) error {
+	oldWs, err := old.ResolveWorkingSet(ctx, wsRef)
+	if err != nil {
+		return err
+	}
+
+	wr, err := MigrateRoot(ctx, oldWs.WorkingRoot(), new)
+	if err != nil {
+		return err
+	}
+
+	sr, err := MigrateRoot(ctx, oldWs.StagedRoot(), new)
+	if err != nil {
+		return err
+	}
+
+	newWs := doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(wr).WithStagedRoot(sr)
+
+	return new.UpdateWorkingSet(ctx, wsRef, newWs, hash.Hash{}, oldWs.Meta())
+}
+
 func MigrateCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
 	oldHash, err := cm.HashOf()
 	if err != nil {
