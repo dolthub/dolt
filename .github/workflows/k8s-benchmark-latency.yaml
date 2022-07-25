@@ -37,7 +37,7 @@ jobs:
           KUBECONFIG=kubeconfig kubectl config use-context github-actions-dolt-context
         env:
           CONFIG: ${{ secrets.CORP_KUBECONFIG }}
-      - name: Run Sysbench benchmarks
+      - name: Create Sysbench Performance Benchmarking K8s Job
         run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
         env:
           FROM_SERVER: ${{ github.event.client_payload.from_server }}
@@ -53,7 +53,7 @@ jobs:
           INIT_BIG_REPO: ${{ github.event.client_payload.init_big_repo }}
           NOMS_BIN_FORMAT: ${{ matrix.dolt_fmt }}
           TEMPLATE_SCRIPT: ${{ github.event.client_payload.template_script }}
-      - name: Run Tpcc benchmarks
+      - name: Create TPCC Performance Benchmarking K8s Job
         run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
         env:
           FROM_SERVER: ${{ github.event.client_payload.from_server }}

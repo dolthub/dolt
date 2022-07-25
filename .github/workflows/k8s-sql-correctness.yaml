@@ -36,7 +36,7 @@ jobs:
           KUBECONFIG=kubeconfig kubectl config use-context github-actions-dolt-context
         env:
           CONFIG: ${{ secrets.CORP_KUBECONFIG }}
-      - name: Run correctness
+      - name: Create SQL Correctness K8s Job
         run: ./.github/scripts/sql-correctness/run-correctness.sh
         env:
           TO_VERSION: ${{ github.event.client_payload.to_version }}
