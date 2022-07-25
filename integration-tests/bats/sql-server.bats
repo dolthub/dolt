@@ -1403,7 +1403,7 @@ databases:
     REPO_NAME=$output
 
     let PORT="$$ % (65536-1024) + 1024"
-    run dolt sql-server --port=$PORT --socket="$REPO_NAME/mysql.sock" --user dolt > log.txt 2>&1 &
+    dolt sql-server --port=$PORT --socket="$REPO_NAME/mysql.sock" --user dolt > log.txt 2>&1 &
     SERVER_PID=$!
     run wait_for_connection $PORT 5000
     [ "$status" -eq 1 ]
