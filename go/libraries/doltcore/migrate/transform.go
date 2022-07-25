@@ -186,13 +186,34 @@ func MigrateIndexSet(ctx context.Context, sch schema.Schema, oldSet durable.Inde
 
 func MigrateNomsMap(ctx context.Context, idx durable.Index, old, new types.ValueReadWriter) error {
 	m := durable.NomsMapFromIndex(idx)
-	_, _, err := types.VisitMapLevelOrder(m, func(h hash.Hash) (int64, error) {
-		v, err := old.ReadValue(ctx, h)
-		if err != nil {
-			return 0, err
+	return copyTreeFromValue(ctx, m, old, new)
+}
+
+// copyTreeFromValue recursively copies |v| and all its children from |old| to |new|.
+func copyTreeFromValue(ctx context.Context, v types.Value, old, new types.ValueReadWriter) error {
+	if _, err := new.WriteValue(ctx, v); err != nil {
+		return err
+	}
+	return types.WalkAddrs(v, old.Format(), func(h hash.Hash, isleaf bool) error {
+		if err := copyValue(ctx, h, old, new); err != nil {
+			return err
 		}
-		_, err = new.WriteValue(ctx, v)
-		return 0, err
+		if isleaf {
+			return nil
+		}
+		val, err := old.ReadValue(ctx, h)
+		if err != nil {
+			return err
+		}
+		return copyTreeFromValue(ctx, val, old, new)
 	})
-	return err
+}
+
+func copyValue(ctx context.Context, addr hash.Hash, old, new types.ValueReadWriter) (err error) {
+	var v types.Value
+	if v, err = old.ReadValue(ctx, addr); err != nil {
+		return err
+	}
+	_, err = new.WriteValue(ctx, v)
+	return
 }
