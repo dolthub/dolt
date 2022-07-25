@@ -57,7 +57,7 @@ type SqlEngineConfig struct {
 	ServerHost     string
 	Autocommit     bool
 	Bulk           bool
-	JwksConfig   []JwksConfig
+	JwksConfig     []JwksConfig
 }
 
 // NewSqlEngine returns a SqlEngine

@@ -372,8 +372,8 @@ func (cfg *commandLineServerConfig) withAllowCleartextPasswords(allow bool) *com
 func DefaultServerConfig() *commandLineServerConfig {
 	return &commandLineServerConfig{
 		host:                    defaultHost,
-		user:                defaultUser,
-		port:                defaultPort,
+		user:                    defaultUser,
+		port:                    defaultPort,
 		password:                defaultPass,
 		timeout:                 defaultTimeout,
 		readOnly:                defaultReadOnly,
