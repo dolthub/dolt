@@ -353,14 +353,14 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 		t.Skip("we define socket flag and unix socket cannot be created on Windows, so it will return error")
 	}
 
+	// TODO : socket flag is defined in this startServer method for now
 	unixSocketPath := "/tmp/mysql.sock"
+	// Running unix socket server
+	sc, serverConfig := startServer(t, false, "", unixSocketPath)
+	sc.WaitForStart()
+	require.True(t, strings.Contains(sqlserver.ConnectionString(serverConfig), "unix"))
 
 	t.Run("connecting mysql works", func(t *testing.T) {
-		// TODO : socket flag is defined in this startServer method for now
-		sc, serverConfig := startServer(t, false, "", unixSocketPath)
-		sc.WaitForStart()
-		require.True(t, strings.Contains(sqlserver.ConnectionString(serverConfig), "unix"))
-
 		conn, sess := newConnection(t, serverConfig)
 		// Assertions
 		rows, err := sess.Query("select 1")
@@ -368,15 +368,9 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 		assertResultsEqual(t, []sql.Row{{1}}, rows)
 		require.NoError(t, conn.Close())
 
-		sc.StopServer()
-		sc.WaitForClose()
 	})
 
 	t.Run("connecting to local server with both tcp and socket connections", func(t *testing.T) {
-		// TODO : socket flag is defined in this startServer method for now
-		sc, serverConfig := startServer(t, false, "", "/tmp/mysql.sock")
-		sc.WaitForStart()
-
 		// default unix socket connection
 		localConn, localSess := newConnection(t, serverConfig)
 		rows, err := localSess.Query("select 1")
@@ -409,16 +403,19 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 		require.NoError(t, conn2.Close())
 		require.NoError(t, conn1.Close())
 		require.NoError(t, localConn.Close())
-
-		sc.StopServer()
-		sc.WaitForClose()
 	})
 
-	t.Run("host and port specified, there should not be unix socket created", func(t *testing.T) {
-		sc, serverConfig := startServer(t, true, "0.0.0.0", "")
-		sc.WaitForStart()
-		require.False(t, strings.Contains(sqlserver.ConnectionString(serverConfig), "unix"))
+	// Stopping unix socket server
+	sc.StopServer()
+	err := sc.WaitForClose()
+	require.NoError(t, err)
 
+	// Running TCP socket server
+	tcpSc, tcpServerConfig := startServer(t, true, "0.0.0.0", "")
+	tcpSc.WaitForStart()
+	require.False(t, strings.Contains(sqlserver.ConnectionString(tcpServerConfig), "unix"))
+
+	t.Run("host and port specified, there should not be unix socket created", func(t *testing.T) {
 		// unix socket connection should fail
 		localServerConfig := sqlserver.DefaultServerConfig()
 		conn, sess := newConnection(t, localServerConfig)
@@ -427,13 +424,15 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 		require.NoError(t, conn.Close())
 
 		// connection with the host and port define should work
-		conn1, sess1 := newConnection(t, serverConfig)
+		conn1, sess1 := newConnection(t, tcpServerConfig)
 		rows1, err := sess1.Query("select 1")
 		require.NoError(t, err)
 		assertResultsEqual(t, []sql.Row{{1}}, rows1)
 		require.NoError(t, conn1.Close())
-
-		sc.StopServer()
-		sc.WaitForClose()
 	})
+
+	// Stopping TCP socket server
+	tcpSc.StopServer()
+	err = tcpSc.WaitForClose()
+	require.NoError(t, err)
 }
