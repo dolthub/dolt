@@ -32,7 +32,7 @@ func newParentsClosureIterator(ctx context.Context, c *Commit, vr types.ValueRea
 	sv := c.NomsValue()
 
 	if _, ok := sv.(types.SerialMessage); ok {
-		msg := serial.GetRootAsCommit(sv.(types.SerialMessage), 0)
+		msg := serial.GetRootAsCommit(sv.(types.SerialMessage), serial.MessagePrefixSz)
 		addr := hash.New(msg.ParentClosureBytes())
 		if addr.IsEmpty() {
 			return nil, nil
@@ -44,7 +44,7 @@ func newParentsClosureIterator(ctx context.Context, c *Commit, vr types.ValueRea
 		if types.IsNull(v) {
 			return nil, fmt.Errorf("internal error or data loss: dangling commit parent closure for addr %s or commit %s", addr.String(), c.Addr().String())
 		}
-		node := tree.NodeFromBytes(v.(types.TupleRowStorage))
+		node := tree.NodeFromBytes(v.(types.SerialMessage))
 		cc := prolly.NewCommitClosure(node, ns)
 		ci, err := cc.IterAllReverse(ctx)
 		if err != nil {
@@ -391,7 +391,7 @@ func writeFbCommitParentClosure(ctx context.Context, cs chunks.ChunkStore, vrw t
 	closures := make([]prolly.CommitClosure, len(parents))
 	for i := range addrs {
 		if !types.IsNull(vs[i]) {
-			node := tree.NodeFromBytes(vs[i].(types.TupleRowStorage))
+			node := tree.NodeFromBytes(vs[i].(types.SerialMessage))
 			closures[i] = prolly.NewCommitClosure(node, ns)
 		} else {
 			closures[i] = prolly.NewEmptyCommitClosure(ns)

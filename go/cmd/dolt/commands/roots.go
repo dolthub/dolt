@@ -151,8 +151,8 @@ func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified 
 				cli.Println()
 			}
 		} else if sm, ok := value.(types.SerialMessage); ok {
-			if serial.GetFileID([]byte(sm)) == serial.StoreRootFileID {
-				msg := serial.GetRootAsStoreRoot([]byte(sm), 0)
+			if serial.GetFileID(sm) == serial.StoreRootFileID {
+				msg := serial.GetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
 				ambytes := msg.AddressMapBytes()
 				node := tree.NodeFromBytes(ambytes)
 				err := tree.OutputAddressMapNode(cli.OutStream, node)

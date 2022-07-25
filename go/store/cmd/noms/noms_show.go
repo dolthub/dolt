@@ -159,14 +159,11 @@ func outputType(value types.Value) {
 
 func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) error {
 	switch value := value.(type) {
-	case types.TupleRowStorage:
-		node := shim.NodeFromValue(value)
-		return tree.OutputProllyNode(w, node)
 	// Some types of serial message need to be output here because of dependency cycles between types / tree package
 	case types.SerialMessage:
 		switch serial.GetFileID(value) {
 		case serial.TableFileID:
-			msg := serial.GetRootAsTable(value, 0)
+			msg := serial.GetRootAsTable(value, serial.MessagePrefixSz)
 
 			fmt.Fprintf(w, "{\n")
 			fmt.Fprintf(w, "\tSchema: #%s\n", hash.New(msg.SchemaBytes()).String())
@@ -193,10 +190,17 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 
 			return nil
 		case serial.StoreRootFileID:
-			msg := serial.GetRootAsStoreRoot(value, 0)
+			msg := serial.GetRootAsStoreRoot(value, serial.MessagePrefixSz)
 			ambytes := msg.AddressMapBytes()
 			node := tree.NodeFromBytes(ambytes)
 			return tree.OutputAddressMapNode(w, node)
+		case serial.ProllyTreeNodeFileID:
+			fallthrough
+		case serial.AddressMapFileID:
+			fallthrough
+		case serial.CommitClosureFileID:
+			node := shim.NodeFromValue(value)
+			return tree.OutputProllyNode(w, node)
 		default:
 			return types.WriteEncodedValue(ctx, w, value)
 		}

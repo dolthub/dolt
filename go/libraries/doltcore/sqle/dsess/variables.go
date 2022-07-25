@@ -105,8 +105,8 @@ func init() {
 	})
 }
 
-// defineSystemVariablesForDB defines per database dolt-session variables in the engine as necessary
-func defineSystemVariablesForDB(name string) {
+// DefineSystemVariablesForDB defines per database dolt-session variables in the engine as necessary
+func DefineSystemVariablesForDB(name string) {
 	if _, _, ok := sql.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
 		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 			{

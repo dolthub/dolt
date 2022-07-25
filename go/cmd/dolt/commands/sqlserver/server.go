@@ -141,6 +141,7 @@ func Serve(
 		ServerPass:     serverConfig.Password(),
 		ServerHost:     serverConfig.Host(),
 		Autocommit:     serverConfig.AutoCommit(),
+		JwksConfig:   serverConfig.JwksConfig(),
 	}
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,

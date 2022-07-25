@@ -34,8 +34,8 @@ import (
 )
 
 const (
-	hostFlag                = "host"
-	portFlag                = "port"
+	hostFlag                    = "host"
+	portFlag                    = "port"
 	passwordFlag            = "password"
 	timeoutFlag             = "timeout"
 	readonlyFlag            = "readonly"
@@ -45,6 +45,7 @@ const (
 	queryParallelismFlag    = "query-parallelism"
 	maxConnectionsFlag      = "max-connections"
 	persistenceBehaviorFlag = "persistence-behavior"
+	allowCleartextPasswordsFlag = "allow-cleartext-passwords"
 )
 
 func indentLines(s string) string {
@@ -144,6 +145,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server (default `%d`)", serverConfig.MaxConnections()))
 	ap.SupportsString(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables (default `%s`)", serverConfig.PersistenceBehavior()))
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to $doltcfg-dir/privileges.db")
+	ap.SupportsString(allowCleartextPasswordsFlag, "", "allow-cleartext-passwords", "Allows use of cleartext passwords. Defaults to false.")
 	return ap
 }
 
@@ -378,6 +380,7 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	}
 
 	serverConfig.autoCommit = !apr.Contains(noAutoCommitFlag)
+	serverConfig.allowCleartextPasswords = apr.Contains(allowCleartextPasswordsFlag)
 
 	return serverConfig, nil
 }

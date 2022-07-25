@@ -2,7 +2,7 @@ name: Post to Pull Request
 
 on:
   repository_dispatch:
-    types: [ benchmark-report ]
+    types: [ pull-report ]
 
 jobs:
   report-pull-request:
@@ -29,7 +29,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { ACTOR, ISSUE_NUMBER, GITHUB_WORKSPACE } = process.env;
+            const { ACTOR, FORMAT, ISSUE_NUMBER, GITHUB_WORKSPACE } = process.env;
             const issue_number = parseInt(ISSUE_NUMBER, 10);
             const { owner, repo } = context.repo;
             fs = require('fs');
@@ -41,9 +41,10 @@ jobs:
                 issue_number,
                 owner,
                 repo,
-                body: `@${ACTOR}\n ${data}`
+                body: `@${ACTOR} ${FORMAT}\n ${data}`
               });
             });
         env:
           ACTOR: ${{ github.event.client_payload.actor }}
           ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
+          FORMAT: ${{ github.event.client_payload.noms_bin_format }}

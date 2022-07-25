@@ -25,7 +25,7 @@ import (
 )
 
 func NodeFromValue(v types.Value) tree.Node {
-	return tree.NodeFromBytes(v.(types.TupleRowStorage))
+	return tree.NodeFromBytes(v.(types.SerialMessage))
 }
 
 func ValueFromMap(m prolly.Map) types.Value {

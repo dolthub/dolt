@@ -142,7 +142,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 		}
 	}
 
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig), nil)
+	conn, err := dbr.Open("mysql", ConnectionString(serverConfig, ""), nil)
 	if err != nil {
 		cli.PrintErrln(err.Error())
 		serverController.StopServer()
