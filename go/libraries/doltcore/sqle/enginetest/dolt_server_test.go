@@ -18,7 +18,6 @@ import (
 	"context"
 	gosql "database/sql"
 	"math/rand"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -336,113 +335,10 @@ func startServer(t *testing.T, host string, unixSocketPath string) (*sqlserver.S
 	return sc, serverConfig
 }
 
-func startServerWithDefaultConfigOnly(t *testing.T) (*sqlserver.ServerController, sqlserver.ServerConfig) {
-	dEnv := dtestutils.CreateTestEnv()
-	serverConfig := sqlserver.DefaultServerConfig().WithSocket("/tmp/mysql.sock")
-
-	sc := sqlserver.NewServerController()
-	go func() {
-		_, _ = sqlserver.Serve(context.Background(), "", serverConfig, sc, dEnv)
-	}()
-	err := sc.WaitForStart()
-	require.NoError(t, err)
-
-	return sc, serverConfig
-}
-
 func newConnection(t *testing.T, serverConfig sqlserver.ServerConfig) (*dbr.Connection, *dbr.Session) {
 	const dbName = "dolt"
 	conn, err := dbr.Open("mysql", sqlserver.ConnectionString(serverConfig)+dbName, nil)
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 	return conn, sess
-}
-
-func TestDoltServerRunningUnixSocket(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("we define socket flag and unix socket cannot be created on Windows, so it will return error")
-	}
-
-	t.Run("connecting mysql works", func(t *testing.T) {
-		// TODO : socket flag is defined in this startServer method for now
-		sc, serverConfig := startServerWithDefaultConfigOnly(t)
-		require.True(t, strings.Contains(sqlserver.ConnectionString(serverConfig), "unix"))
-		sc.WaitForStart()
-
-		conn, sess := newConnection(t, serverConfig)
-		// Assertions
-		rows, err := sess.Query("select 1")
-		require.NoError(t, err)
-		assertResultsEqual(t, []sql.Row{{1}}, rows)
-		require.NoError(t, conn.Close())
-
-		sc.StopServer()
-		sc.WaitForClose()
-	})
-
-	t.Run("connecting to local server with both tcp and socket connections", func(t *testing.T) {
-		// TODO : socket flag is defined in this startServer method for now
-		sc, serverConfig := startServerWithDefaultConfigOnly(t)
-		sc.WaitForStart()
-
-		// default unix socket connection
-		localConn, localSess := newConnection(t, serverConfig)
-		rows, err := localSess.Query("select 1")
-		require.NoError(t, err)
-		assertResultsEqual(t, []sql.Row{{1}}, rows)
-
-		// connect with port defined
-		serverConfigWithPortOnly := sqlserver.DefaultServerConfig().WithPort(3306)
-		conn1, sess1 := newConnection(t, serverConfigWithPortOnly)
-		rows1, err := sess1.Query("select 1")
-		require.NoError(t, err)
-		assertResultsEqual(t, []sql.Row{{1}}, rows1)
-
-		// connect with host defined
-		serverConfigWithPortandHost := sqlserver.DefaultServerConfig().WithHost("127.0.0.1")
-		conn2, sess2 := newConnection(t, serverConfigWithPortandHost)
-		rows2, err := sess2.Query("select 1")
-		require.NoError(t, err)
-		assertResultsEqual(t, []sql.Row{{1}}, rows2)
-
-		// connect with port and host defined
-		serverConfigWithPortandHost1 := sqlserver.DefaultServerConfig().WithPort(3306).WithHost("0.0.0.0")
-		conn3, sess3 := newConnection(t, serverConfigWithPortandHost1)
-		rows3, err := sess3.Query("select 1")
-		require.NoError(t, err)
-		assertResultsEqual(t, []sql.Row{{1}}, rows3)
-
-		// close connections
-		require.NoError(t, conn3.Close())
-		require.NoError(t, conn2.Close())
-		require.NoError(t, conn1.Close())
-		require.NoError(t, localConn.Close())
-
-		sc.StopServer()
-		sc.WaitForClose()
-	})
-
-	t.Run("host and port specified, there should not be unix socket created", func(t *testing.T) {
-		sc, serverConfig := startServer(t, "0.0.0.0", "")
-		require.False(t, strings.Contains(sqlserver.ConnectionString(serverConfig), "unix"))
-		sc.WaitForStart()
-
-		// unix socket connection should fail
-		localServerConfig := sqlserver.DefaultServerConfig()
-		conn, sess := newConnection(t, localServerConfig)
-		_, err := sess.Query("select 1")
-		require.Error(t, err)
-		require.NoError(t, conn.Close())
-
-		// connection with the host and port define should work
-		conn1, sess1 := newConnection(t, serverConfig)
-		rows1, err := sess1.Query("select 1")
-		require.NoError(t, err)
-		assertResultsEqual(t, []sql.Row{{1}}, rows1)
-		require.NoError(t, conn1.Close())
-
-		sc.StopServer()
-		sc.WaitForClose()
-	})
-
 }
