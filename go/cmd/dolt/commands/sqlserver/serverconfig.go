@@ -442,8 +442,8 @@ func ConfigInfo(config ServerConfig) string {
 		}
 		socket = fmt.Sprintf(`|S="%v"`, s)
 	}
-	return fmt.Sprintf(`HP="%v:%v"%s|T="%v"|R="%v"|L="%v"`, config.Host(), config.Port(), socket,
-		config.ReadTimeout(), config.ReadOnly(), config.LogLevel())
+	return fmt.Sprintf(`HP="%v:%v"|T="%v"|R="%v"|L="%v"%s`, config.Host(), config.Port(),
+		config.ReadTimeout(), config.ReadOnly(), config.LogLevel(), socket)
 }
 
 // LoadTLSConfig loads the certificate chain from config.TLSKey() and config.TLSCert() and returns
