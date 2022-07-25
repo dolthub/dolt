@@ -317,7 +317,7 @@ func startServer(t *testing.T) (*sqlserver.ServerController, sqlserver.ServerCon
 	dEnv := dtestutils.CreateTestEnv()
 	rand.Seed(time.Now().UnixNano())
 	port := 15403 + rand.Intn(25)
-	serverConfig := sqlserver.DefaultServerConfig().WithPort(port).WithUser("root")
+	serverConfig := sqlserver.DefaultServerConfig().WithPort(port).withUser("root")
 
 	sc := sqlserver.NewServerController()
 	go func() {

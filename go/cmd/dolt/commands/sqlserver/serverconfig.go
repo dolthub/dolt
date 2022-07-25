@@ -280,8 +280,8 @@ func (cfg *commandLineServerConfig) WithPort(port int) *commandLineServerConfig 
 	return cfg
 }
 
-// WithUser updates the user and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
-func (cfg *commandLineServerConfig) WithUser(user string) *commandLineServerConfig {
+// withUser updates the user and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
+func (cfg *commandLineServerConfig) withUser(user string) *commandLineServerConfig {
 	cfg.user = user
 	return cfg
 }
@@ -352,6 +352,7 @@ func (cfg *commandLineServerConfig) withPrivilegeFilePath(privFilePath string) *
 func DefaultServerConfig() *commandLineServerConfig {
 	return &commandLineServerConfig{
 		host:                defaultHost,
+		user:                defaultUser,
 		port:                defaultPort,
 		password:            defaultPass,
 		timeout:             defaultTimeout,

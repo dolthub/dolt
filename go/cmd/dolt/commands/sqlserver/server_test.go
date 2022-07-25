@@ -155,14 +155,14 @@ func TestServerGoodParams(t *testing.T) {
 		DefaultServerConfig().withHost("127.0.0.1").WithPort(15400),
 		DefaultServerConfig().withHost("localhost").WithPort(15401),
 		//DefaultServerConfig().withHost("::1").WithPort(15402), // Fails on Jenkins, assuming no IPv6 support
-		DefaultServerConfig().WithUser("testusername").WithPort(15403),
+		DefaultServerConfig().withUser("testusername").WithPort(15403),
 		DefaultServerConfig().withPassword("hunter2").WithPort(15404),
 		DefaultServerConfig().withTimeout(0).WithPort(15405),
 		DefaultServerConfig().withTimeout(5).WithPort(15406),
 		DefaultServerConfig().withLogLevel(LogLevel_Debug).WithPort(15407),
 		DefaultServerConfig().withLogLevel(LogLevel_Info).WithPort(15408),
 		DefaultServerConfig().withReadOnly(true).WithPort(15409),
-		DefaultServerConfig().WithUser("testusernamE").withPassword("hunter2").withTimeout(4).WithPort(15410),
+		DefaultServerConfig().withUser("testusernamE").withPassword("hunter2").withTimeout(4).WithPort(15410),
 	}
 
 	for _, test := range tests {
@@ -187,7 +187,6 @@ func TestServerGoodParams(t *testing.T) {
 func TestServerSelect(t *testing.T) {
 	env := dtestutils.CreateEnvWithSeedData(t)
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15300)
-	serverConfig.WithUser("root")
 
 	sc := NewServerController()
 	defer sc.StopServer()
@@ -263,7 +262,6 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 func TestServerSetDefaultBranch(t *testing.T) {
 	dEnv := dtestutils.CreateEnvWithSeedData(t)
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15302)
-	serverConfig.WithUser("root")
 
 	sc := NewServerController()
 	defer sc.StopServer()
@@ -414,7 +412,6 @@ func TestReadReplica(t *testing.T) {
 	// start server as read replica
 	sc := NewServerController()
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15303)
-	serverConfig.WithUser("root")
 
 	func() {
 		os.Chdir(multiSetup.DbPaths[readReplicaDbName])

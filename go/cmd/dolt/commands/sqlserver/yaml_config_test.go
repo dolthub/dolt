@@ -85,7 +85,7 @@ jwks:
       field1: a
     fields_to_log:
 `
-	expected := serverConfigAsYAMLConfig(DefaultServerConfig().WithUser("root"))
+	expected := serverConfigAsYAMLConfig(DefaultServerConfig())
 	expected.DatabaseConfig = []DatabaseYAMLConfig{
 		{
 			Name: "irs_soi",

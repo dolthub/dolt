@@ -307,7 +307,7 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	}
 
 	if user, ok := apr.GetValue(commands.UserFlag); ok {
-		serverConfig.WithUser(user)
+		serverConfig.withUser(user)
 	}
 
 	if password, ok := apr.GetValue(passwordFlag); ok {
