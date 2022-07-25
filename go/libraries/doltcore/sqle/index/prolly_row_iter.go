@@ -54,8 +54,13 @@ type prollyRowIter struct {
 	sqlSch  sql.Schema
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
+
+	// keyProj is a list of indexes into the key tuple
 	keyProj []int
+	// keyProj is a list of indexes into the value tuple
 	valProj []int
+	// orjProj is a conatenated list of ordinal mappings for |keyProk| and |valProj|
+	ordProj []int
 	rowLen  int
 }
 
@@ -67,7 +72,7 @@ func NewProllyRowIter(sch schema.Schema, sqlSch sql.Schema, rows prolly.Map, ite
 		projections = sch.GetAllCols().Tags
 	}
 
-	keyProj, valProj := projectionMappings(sch, projections)
+	keyProj, valProj, ordProj := projectionMappings(sch, projections)
 	kd, vd := rows.Descriptors()
 
 	if schema.IsKeyless(sch) {
@@ -87,49 +92,41 @@ func NewProllyRowIter(sch schema.Schema, sqlSch sql.Schema, rows prolly.Map, ite
 		valDesc: vd,
 		keyProj: keyProj,
 		valProj: valProj,
+		ordProj: ordProj,
 		rowLen:  len(projections),
 		ns:      rows.NodeStore(),
 	}, nil
 }
 
 //todo: only make keyMap and valMap as big as they need to be
-func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap val.OrdinalMapping) {
-	//keyMap = make(val.OrdinalMapping, sch.GetPKCols().Size())
-	//for i := range keyMap {
-	//	keyMap[i] = -1
-	//}
-	//valMap = make(val.OrdinalMapping, sch.GetNonPKCols().Size())
-	//for i := range valMap {
-	//	valMap[i] = -1
-	//}
-
-	//all := sch.GetAllCols()
+func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping) {
 	pks := sch.GetPKCols()
 	nonPks := sch.GetNonPKCols()
 
-	allMap := make([]int, len(projections))
+	allMap := make([]int, 2*len(projections))
 	i := 0
 	j := len(projections) - 1
-	for _, t := range projections {
+	for k, t := range projections {
 		if idx, ok := pks.TagToIdx[t]; ok {
-			//keyMap[i] = all.TagToIdx[t]
+			allMap[len(projections)+i] = k
 			allMap[i] = idx
 			i++
 		} else if idx, ok := nonPks.TagToIdx[t]; ok {
-			//valMap[j] = all.TagToIdx[t]
 			allMap[j] = idx
+			allMap[len(projections)+j] = k
 			j--
 		}
 	}
 	keyMap = allMap[:i]
-	valMap = allMap[i:]
-	i = 0
-	j = len(valMap) - 1
-	for i < j {
-		valMap[i], valMap[j] = valMap[j], valMap[i]
-		i++
-		j--
-	}
+	valMap = allMap[i:len(projections)]
+	ordMap = allMap[len(projections):]
+	//i = 0
+	//j = len(valMap) - 1
+	//for i < j {
+	//	valMap[i], valMap[j] = valMap[j], valMap[i]
+	//	i++
+	//	j--
+	//}
 
 	if schema.IsKeyless(sch) {
 		skip := val.OrdinalMapping{-1}
@@ -147,20 +144,15 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 	row := make(sql.Row, it.rowLen)
 	for i := range it.keyProj {
-		//if rowIdx == -1 {
-		//	continue
-		//}
-		//row[rowIdx], err = GetField(ctx, it.keyDesc, keyIdx, key, it.ns)
-		row[i], err = GetField(ctx, it.keyDesc, it.keyProj[i], key, it.ns)
+		outputIdx := it.ordProj[i]
+		row[outputIdx], err = GetField(ctx, it.keyDesc, it.keyProj[i], key, it.ns)
 		if err != nil {
 			return nil, err
 		}
 	}
 	for i := range it.valProj {
-		//if rowIdx == -1 {
-		//	continue
-		//}
-		row[len(it.keyProj)+i], err = GetField(ctx, it.valDesc, it.valProj[i], value, it.ns)
+		outputIdx := it.ordProj[len(it.keyProj)+i]
+		row[outputIdx], err = GetField(ctx, it.valDesc, it.valProj[i], value, it.ns)
 		if err != nil {
 			return nil, err
 		}

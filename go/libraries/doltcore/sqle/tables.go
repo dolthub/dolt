@@ -181,17 +181,17 @@ func (t DoltTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (*Dolt
 		return nil, err
 	}
 
-	return &DoltTable{
-		tableName:     t.tableName,
-		db:            t.db,
-		nbf:           tbl.Format(),
-		sch:           sch,
-		sqlSch:        sqlSch,
-		autoIncCol:    autoCol,
-		projectedCols: t.projectedCols,
-		opts:          t.opts,
-		lockedToRoot:  root,
-	}, nil
+	dt := &DoltTable{
+		tableName:    t.tableName,
+		db:           t.db,
+		nbf:          tbl.Format(),
+		sch:          sch,
+		sqlSch:       sqlSch,
+		autoIncCol:   autoCol,
+		opts:         t.opts,
+		lockedToRoot: root,
+	}
+	return dt.WithProjections(t.Projections()).(*DoltTable), nil
 }
 
 // Internal interface for declaring the interfaces that read-only dolt tables are expected to implement
@@ -939,18 +939,20 @@ func (t *DoltTable) Projections() []string {
 // WithProjections implements sql.ProjectedTable
 func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 	nt := *t
-	nt.projectedCols = make([]uint64, len(colNames))
-	nt.projectedSchema = make(sql.Schema, len(colNames))
+	nt.projectedCols = make([]uint64, 0, len(colNames))
+	nt.projectedSchema = make(sql.Schema, 0, len(colNames))
 	cols := t.sch.GetAllCols()
 	sch := t.Schema()
 	for i := range colNames {
 		lowerName := strings.ToLower(colNames[i])
 		col, ok := cols.LowerNameToCol[lowerName]
 		if !ok {
-			panic("column does not exist")
+			//panic("column does not exist")
+			// leave col tag empty, schema nil
+			continue
 		}
-		nt.projectedCols[i] = col.Tag
-		nt.projectedSchema[i] = sch[sch.IndexOfColName(lowerName)]
+		nt.projectedCols = append(nt.projectedCols, col.Tag)
+		nt.projectedSchema = append(nt.projectedSchema, sch[sch.IndexOfColName(lowerName)])
 	}
 	return &nt
 }
