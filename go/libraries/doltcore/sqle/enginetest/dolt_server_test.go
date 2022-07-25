@@ -18,6 +18,7 @@ import (
 	"context"
 	gosql "database/sql"
 	"math/rand"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -358,7 +359,12 @@ func newConnection(t *testing.T, serverConfig sqlserver.ServerConfig) (*dbr.Conn
 }
 
 func TestDoltServerRunningUnixSocket(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("we define socket flag and unix socket cannot be created on Windows, so it will return error")
+	}
+
 	t.Run("connecting mysql works", func(t *testing.T) {
+		// TODO : socket flag is defined in this startServer method for now
 		sc, serverConfig := startServerWithDefaultConfigOnly(t)
 		require.True(t, strings.Contains(sqlserver.ConnectionString(serverConfig), "unix"))
 		sc.WaitForStart()
@@ -375,6 +381,7 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 	})
 
 	t.Run("connecting to local server with both tcp and socket connections", func(t *testing.T) {
+		// TODO : socket flag is defined in this startServer method for now
 		sc, serverConfig := startServerWithDefaultConfigOnly(t)
 		sc.WaitForStart()
 
