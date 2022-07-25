@@ -75,7 +75,7 @@ func newRowIterator(ctx context.Context, tbl *doltdb.Table, sqlSch sql.Schema, p
 	}
 
 	if types.IsFormat_DOLT_1(tbl.Format()) {
-		return ProllyRowIterFromPartition(ctx, tbl, sqlSch, projCols, partition)
+		return ProllyRowIterFromPartition(ctx, sch, sqlSch, projCols, partition)
 	}
 
 	if schema.IsKeyless(sch) {
@@ -177,16 +177,12 @@ func (itr *doltTableRowIter) Close(*sql.Context) error {
 
 func ProllyRowIterFromPartition(
 	ctx context.Context,
-	tbl *doltdb.Table,
+	sch schema.Schema,
 	sqlSch sql.Schema,
 	projections []uint64,
 	partition doltTablePartition,
 ) (sql.RowIter, error) {
 	rows := durable.ProllyMapFromIndex(partition.rowData)
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
 	if partition.end > uint64(rows.Count()) {
 		partition.end = uint64(rows.Count())
 	}

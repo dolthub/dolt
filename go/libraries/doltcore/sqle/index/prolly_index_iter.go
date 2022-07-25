@@ -392,6 +392,7 @@ type prollyKeylessIndexIter struct {
 	// valueMap transforms tuples from the
 	// clustered index into sql.Rows
 	valueMap  val.OrdinalMapping
+	ordMap    val.OrdinalMapping
 	valueDesc val.TupleDesc
 	sqlSch    sql.Schema
 }
@@ -418,7 +419,7 @@ func newProllyKeylessIndexIter(
 	indexMap := ordinalMappingFromIndex(idx)
 	keyBld := val.NewTupleBuilder(keyDesc)
 	sch := idx.Schema()
-	_, vm, _ := projectionMappings(sch, projections)
+	_, vm, om := projectionMappings(sch, projections)
 
 	eg, c := errgroup.WithContext(ctx)
 
@@ -431,6 +432,7 @@ func newProllyKeylessIndexIter(
 		eg:           eg,
 		rowChan:      make(chan sql.Row, indexLookupBufSize),
 		valueMap:     vm,
+		ordMap:       om,
 		valueDesc:    valDesc,
 		sqlSch:       pkSch.Schema,
 	}
@@ -503,13 +505,11 @@ func (p prollyKeylessIndexIter) queueRows(ctx context.Context) error {
 func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, ns tree.NodeStore, value val.Tuple) (rows []sql.Row, err error) {
 	card := val.ReadKeylessCardinality(value)
 	rows = make([]sql.Row, card)
-	rows[0] = make(sql.Row, len(p.valueMap)-1) // omit cardinality field
+	rows[0] = make(sql.Row, len(p.valueMap)) // omit cardinality field
 
-	for valIdx, rowIdx := range p.valueMap {
-		if rowIdx == -1 {
-			continue
-		}
-		rows[0][rowIdx], err = GetField(ctx, p.valueDesc, valIdx, value, ns)
+	for i, idx := range p.valueMap {
+		outputIdx := p.ordMap[i]
+		rows[0][outputIdx], err = GetField(ctx, p.valueDesc, idx, value, ns)
 		if err != nil {
 			return nil, err
 		}

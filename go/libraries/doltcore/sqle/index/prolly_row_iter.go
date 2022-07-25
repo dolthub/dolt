@@ -80,6 +80,7 @@ func NewProllyRowIter(sch schema.Schema, sqlSch sql.Schema, rows prolly.Map, ite
 			iter:    iter,
 			valDesc: vd,
 			valProj: valProj,
+			ordProj: ordProj,
 			rowLen:  len(sqlSch),
 			ns:      rows.NodeStore(),
 		}, nil
@@ -129,9 +130,15 @@ func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap
 	//}
 
 	if schema.IsKeyless(sch) {
-		skip := val.OrdinalMapping{-1}
-		keyMap = append(skip, keyMap...) // hashId
-		valMap = append(skip, valMap...) // cardinality
+		for i := range keyMap {
+			keyMap[i]++
+		}
+		for i := range valMap {
+			valMap[i]++
+		}
+		//skip := val.OrdinalMapping{-1}
+		//keyMap = append(skip, keyMap...) // hashId
+		//valMap = append(skip, valMap...) // cardinality
 	}
 	return
 }
@@ -206,6 +213,7 @@ type prollyKeylessIter struct {
 
 	valDesc val.TupleDesc
 	valProj []int
+	ordProj []int
 	rowLen  int
 
 	curr sql.Row
@@ -237,11 +245,9 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 	it.card = val.ReadKeylessCardinality(value)
 	it.curr = make(sql.Row, it.rowLen)
 
-	for valIdx, rowIdx := range it.valProj {
-		if rowIdx == -1 {
-			continue
-		}
-		it.curr[rowIdx], err = GetField(ctx, it.valDesc, valIdx, value, it.ns)
+	for i := range it.valProj {
+		outputIdx := it.ordProj[i]
+		it.curr[outputIdx], err = GetField(ctx, it.valDesc, it.valProj[i], value, it.ns)
 		if err != nil {
 			return err
 		}

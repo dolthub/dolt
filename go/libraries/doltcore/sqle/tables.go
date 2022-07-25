@@ -366,7 +366,7 @@ func (t *DoltTable) Format() *types.NomsBinFormat {
 
 // Schema returns the schema for this table.
 func (t *DoltTable) Schema() sql.Schema {
-	if t.projectedSchema != nil {
+	if len(t.projectedSchema) > 0 {
 		return t.projectedSchema
 	}
 	return t.sqlSchema().Schema
