@@ -379,6 +379,9 @@ func ValidateConfig(config ServerConfig) error {
 	if config.Port() < 1024 || config.Port() > 65535 {
 		return fmt.Errorf("port is not in the range between 1024-65535: %v\n", config.Port())
 	}
+	if len(config.User()) == 0 {
+		return fmt.Errorf("user cannot be empty")
+	}
 	if config.LogLevel().String() == "unknown" {
 		return fmt.Errorf("loglevel is invalid: %v\n", string(config.LogLevel()))
 	}
