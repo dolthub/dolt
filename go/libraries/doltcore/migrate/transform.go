@@ -17,20 +17,33 @@ package migrate
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func MigrateCommit(ctx context.Context, r ref.DoltRef, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
+func MigrateCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
 	oldHash, err := cm.HashOf()
 	if err != nil {
 		return err
 	}
+
+	ok, err := prog.Has(ctx, oldHash)
+	if err != nil {
+		return err
+	} else if ok {
+		return nil
+	}
+
+	if cm.NumParents() == 0 {
+		return MigrateInitCommit(ctx, cm, new, prog)
+	}
+
 	prog.Log(ctx, "migrating commit %s", oldHash.String())
 
 	root, err := cm.GetRootValue(ctx)
@@ -56,7 +69,7 @@ func MigrateCommit(ctx context.Context, r ref.DoltRef, cm *doltdb.Commit, new *d
 		return err
 	}
 
-	migratedCm, err := new.CommitValue(ctx, r, value, opts)
+	migratedCm, err := new.CommitDangling(ctx, value, opts)
 	if err != nil {
 		return err
 	}
@@ -70,10 +83,53 @@ func MigrateCommit(ctx context.Context, r ref.DoltRef, cm *doltdb.Commit, new *d
 	return prog.Put(ctx, oldHash, newHash)
 }
 
+func MigrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
+	oldHash, err := cm.HashOf()
+	if err != nil {
+		return err
+	}
+
+	rv, err := doltdb.EmptyRootValue(ctx, new.ValueReadWriter(), new.NodeStore())
+	if err != nil {
+		return err
+	}
+	nv := doltdb.HackNomsValuesFromRootValues(rv)
+
+	meta, err := cm.GetCommitMeta(ctx)
+	if err != nil {
+		return err
+	}
+	datasDB := doltdb.HackDatasDatabaseFromDoltDB(new)
+
+	creation := ref.NewInternalRef(doltdb.CreationBranch)
+	ds, err := datasDB.GetDataset(ctx, creation.String())
+	if err != nil {
+		return err
+	}
+	ds, err = datasDB.Commit(ctx, ds, nv, datas.CommitOptions{Meta: meta})
+	if err != nil {
+		return err
+	}
+
+	newCm, err := new.ResolveCommitRef(ctx, creation)
+	if err != nil {
+		return err
+	}
+	newHash, err := newCm.HashOf()
+	if err != nil {
+		return err
+	}
+
+	return prog.Put(ctx, oldHash, newHash)
+}
+
 func MigrateCommitOptions(ctx context.Context, oldCm *doltdb.Commit, prog Progress) (datas.CommitOptions, error) {
 	parents, err := oldCm.ParentHashes(ctx)
 	if err != nil {
 		return datas.CommitOptions{}, err
+	}
+	if len(parents) == 0 {
+		panic("expected non-zero parents list")
 	}
 
 	for i := range parents {

@@ -16,7 +16,6 @@ package migrate
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -36,9 +35,13 @@ const (
 	doltDir      = dbfactory.DoltDir
 	nomsDir      = dbfactory.DataDir
 	manifestFile = "manifest"
+	migrationRef = "migration"
 )
 
-var targetFormat = types.Format_DOLT_DEV
+var (
+	targetFormat = types.Format_DOLT_DEV
+	migrationMsg = fmt.Sprintf("migrating database to Noms Binary Format %s", targetFormat.VersionString())
+)
 
 type Environment struct {
 	Migration *env.DoltEnv
@@ -51,7 +54,7 @@ func NewEnvironment(ctx context.Context, existing *env.DoltEnv) (Environment, er
 		return Environment{}, err
 	}
 
-	if err = InitMigrationDB(ctx, existing.DoltDB, existing.FS, mfs); err != nil {
+	if err = InitMigrationDB(ctx, existing, existing.FS, mfs); err != nil {
 		return Environment{}, err
 	}
 
@@ -81,7 +84,7 @@ func NewEnvironment(ctx context.Context, existing *env.DoltEnv) (Environment, er
 	}, nil
 }
 
-func InitMigrationDB(ctx context.Context, existing *doltdb.DoltDB, src, dest filesys.Filesys) (err error) {
+func InitMigrationDB(ctx context.Context, existing *env.DoltEnv, src, dest filesys.Filesys) (err error) {
 	base, err := src.Abs(".")
 	if err != nil {
 		return err
@@ -134,74 +137,30 @@ func InitMigrationDB(ctx context.Context, existing *doltdb.DoltDB, src, dest fil
 		return err
 	}
 
-	// migrate init commit
-	init, err := getOrCreateInternalRef(ctx, existing)
+	// write init commit for migration
+	name, email, err := env.GetNameAndEmail(existing.Config)
 	if err != nil {
 		return err
 	}
 
-	meta, err := init.GetCommitMeta(ctx)
+	meta, err := datas.NewCommitMeta(name, email, migrationMsg)
 	if err != nil {
 		return err
 	}
+
 	rv, err := doltdb.EmptyRootValue(ctx, vrw, ns)
 	if err != nil {
 		return err
 	}
 	nv := doltdb.HackNomsValuesFromRootValues(rv)
 
-	creation := ref.NewInternalRef(doltdb.CreationBranch)
-	ds, err := db.GetDataset(ctx, creation.String())
+	ds, err := db.GetDataset(ctx, ref.NewInternalRef(migrationRef).String())
 	if err != nil {
 		return err
 	}
 
 	_, err = db.Commit(ctx, ds, nv, datas.CommitOptions{Meta: meta})
 	return nil
-}
-
-func getOrCreateInternalRef(ctx context.Context, existing *doltdb.DoltDB) (*doltdb.Commit, error) {
-	creation := ref.NewInternalRef(doltdb.CreationBranch)
-
-	init, err := existing.ResolveCommitRef(ctx, creation)
-	if err == nil && init != nil {
-		return init, nil
-	}
-	if err != nil && !errors.Is(err, doltdb.ErrBranchNotFound) {
-		return nil, err
-	}
-
-	heads, err := existing.GetBranches(ctx)
-	if err != nil {
-		return nil, err
-	}
-	cm, err := existing.ResolveCommitRef(ctx, heads[0])
-	if err != nil {
-		return nil, err
-	}
-
-	for {
-		if cm.NumParents() < 1 {
-			break
-		}
-
-		cm, err = cm.GetParent(ctx, 0)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	h, err := cm.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	err = existing.SetHead(ctx, creation, h)
-	if err != nil {
-		return nil, err
-	}
-
-	return cm, nil
 }
 
 func SwapChunkStores(ctx context.Context, menv Environment) error {

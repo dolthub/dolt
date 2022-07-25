@@ -25,16 +25,12 @@ import (
 )
 
 func TraverseDAG(ctx context.Context, old, new *doltdb.DoltDB) error {
-	prog := newProgress()
-	if err := MapInitCommits(ctx, old, new, prog); err != nil {
-		return err
-	}
-
 	heads, err := old.GetHeadRefs(ctx)
 	if err != nil {
 		return err
 	}
 
+	prog := newProgress()
 	for i := range heads {
 		if err = TraverseRefHistory(ctx, heads[i], old, new, prog); err != nil {
 			return err
@@ -44,36 +40,10 @@ func TraverseDAG(ctx context.Context, old, new *doltdb.DoltDB) error {
 	if err = ValidateMigration(ctx, old, new); err != nil {
 		return err
 	}
-
 	return nil
 }
 
-func MapInitCommits(ctx context.Context, old, new *doltdb.DoltDB, prog Progress) error {
-	// map init commits
-	creation := ref.NewInternalRef(doltdb.CreationBranch)
-	o, err := old.ResolveCommitRef(ctx, creation)
-	if err != nil {
-		return err
-	}
-	oh, err := o.HashOf()
-	if err != nil {
-		return err
-	}
-
-	n, err := new.ResolveCommitRef(ctx, creation)
-	if err != nil {
-		return err
-	}
-	nh, err := n.HashOf()
-	if err != nil {
-		return err
-	}
-
-	return prog.Put(ctx, oh, nh)
-}
-
 func TraverseRefHistory(ctx context.Context, r ref.DoltRef, old, new *doltdb.DoltDB, prog Progress) error {
-
 	switch r.GetType() {
 	case ref.BranchRefType:
 		if err := TraverseBranchHistory(ctx, r, old, new, prog); err != nil {
@@ -111,7 +81,7 @@ func TraverseBranchHistory(ctx context.Context, r ref.DoltRef, old, new *doltdb.
 	if err != nil {
 		return err
 	}
-	if err = TraverseCommitHistory(ctx, r, cm, new, prog); err != nil {
+	if err = TraverseCommitHistory(ctx, cm, new, prog); err != nil {
 		return err
 	}
 
@@ -135,7 +105,7 @@ func TraverseWorkingSetHistory(ctx context.Context, wsRef ref.WorkingSetRef, old
 	return nil
 }
 
-func TraverseCommitHistory(ctx context.Context, r ref.DoltRef, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
+func TraverseCommitHistory(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
 	ch, err := cm.HashOf()
 	if err != nil {
 		return err
@@ -157,7 +127,7 @@ func TraverseCommitHistory(ctx context.Context, r ref.DoltRef, cm *doltdb.Commit
 		}
 		if idx < 0 {
 			// parents for |cm| are done, migrate |cm|
-			if err = MigrateCommit(ctx, r, cm, new, prog); err != nil {
+			if err = MigrateCommit(ctx, cm, new, prog); err != nil {
 				return err
 			}
 			// pop the stack, traverse upwards

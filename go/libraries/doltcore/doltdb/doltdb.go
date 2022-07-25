@@ -79,6 +79,10 @@ func DoltDBFromCS(cs chunks.ChunkStore) *DoltDB {
 	return &DoltDB{hooksDatabase{Database: db}, vrw, ns}
 }
 
+func HackDatasDatabaseFromDoltDB(ddb *DoltDB) datas.Database {
+	return ddb.db
+}
+
 // LoadDoltDB will acquire a reference to the underlying noms db.  If the Location is InMemDoltDB then a reference
 // to a newly created in memory database will be used. If the location is LocalDirDoltDB, the directory must exist or
 // this returns nil.
