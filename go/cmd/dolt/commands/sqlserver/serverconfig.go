@@ -375,8 +375,8 @@ func (cfg *commandLineServerConfig) withPrivilegeFilePath(privFilePath string) *
 	return cfg
 }
 
-// withSocket updates the path to the unix socket file
-func (cfg *commandLineServerConfig) withSocket(sockFilePath string) *commandLineServerConfig {
+// WithSocket updates the path to the unix socket file
+func (cfg *commandLineServerConfig) WithSocket(sockFilePath string) *commandLineServerConfig {
 	cfg.socket = sockFilePath
 	return cfg
 }
@@ -426,7 +426,7 @@ func ValidateConfig(config ServerConfig) error {
 
 // ConnectionString returns a Data Source Name (DSN) to be used by go clients for connecting to a running server.
 func ConnectionString(config ServerConfig) string {
-	if shouldUseUnixSocket(config) {
+	if config.Socket() != "" { // shouldUseUnixSocket(config) {
 		return fmt.Sprintf("%v:%v@unix(%v)/", config.User(), config.Password(), config.Socket())
 	}
 	return fmt.Sprintf("%v:%v@tcp(%v:%v)/", config.User(), config.Password(), config.Host(), config.Port())

@@ -17,6 +17,7 @@ package enginetest
 import (
 	"context"
 	gosql "database/sql"
+	"github.com/gocraft/dbr/v2"
 	"math/rand"
 	"strings"
 	"testing"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/gocraft/dbr/v2"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
@@ -209,7 +209,7 @@ func TestDoltMultiSessionBehavior(t *testing.T) {
 
 func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 	for _, test := range tests {
-		sc, serverConfig := startServer(t, "")
+		sc, serverConfig := startServer(t, "", "")
 		sc.WaitForStart()
 
 		conn1, sess1 := newConnection(t, serverConfig)
@@ -313,13 +313,16 @@ func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
 	}
 }
 
-func startServer(t *testing.T, host string) (*sqlserver.ServerController, sqlserver.ServerConfig) {
+func startServer(t *testing.T, host string, unixSocketPath string) (*sqlserver.ServerController, sqlserver.ServerConfig) {
 	dEnv := dtestutils.CreateTestEnv()
 	rand.Seed(time.Now().UnixNano())
 	port := 15403 + rand.Intn(25)
 	serverConfig := sqlserver.DefaultServerConfig().WithPort(port)
 	if host != "" {
 		serverConfig = serverConfig.WithHost(host)
+	}
+	if unixSocketPath != "" {
+		serverConfig = serverConfig.WithHost(host).WithSocket(unixSocketPath)
 	}
 
 	sc := sqlserver.NewServerController()
@@ -334,7 +337,7 @@ func startServer(t *testing.T, host string) (*sqlserver.ServerController, sqlser
 
 func startServerWithDefaultConfigOnly(t *testing.T) (*sqlserver.ServerController, sqlserver.ServerConfig) {
 	dEnv := dtestutils.CreateTestEnv()
-	serverConfig := sqlserver.DefaultServerConfig()
+	serverConfig := sqlserver.DefaultServerConfig().WithSocket("/tmp/mysql.sock")
 
 	sc := sqlserver.NewServerController()
 	go func() {
@@ -413,7 +416,7 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 	})
 
 	t.Run("host and port specified, there should not be unix socket created", func(t *testing.T) {
-		sc, serverConfig := startServer(t, "0.0.0.0")
+		sc, serverConfig := startServer(t, "0.0.0.0", "")
 		require.False(t, strings.Contains(sqlserver.ConnectionString(serverConfig), "unix"))
 		sc.WaitForStart()
 

@@ -324,12 +324,15 @@ func handleProtocolAndAddress(serverConfig ServerConfig) (server.Config, error) 
 			return server.Config{}, fmt.Errorf("cannot define unix socket file on Windows")
 		}
 		serverConf.Socket = serverConfig.Socket()
-	} else {
-		// if host is undefined or defined as "localhost" -> unix
-		if shouldUseUnixSocket(serverConfig) {
-			serverConf.Socket = defaultUnixSocketFilePath
-		}
 	}
+	// TODO : making it an "opt in" feature (just to start) and requiring users to pass in the `--socket` flag
+	//  to turn them on instead of defaulting them on when host and port aren't set or host is set to `localhost`.
+	//} else {
+	//	// if host is undefined or defined as "localhost" -> unix
+	//	if shouldUseUnixSocket(serverConfig) {
+	//		serverConf.Socket = defaultUnixSocketFilePath
+	//	}
+	//}
 
 	return serverConf, nil
 }

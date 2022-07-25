@@ -329,7 +329,7 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		if sock == "" {
 			sock = defaultUnixSocketFilePath
 		}
-		serverConfig.withSocket(sock)
+		serverConfig.WithSocket(sock)
 	}
 
 	if host, ok := apr.GetValue(hostFlag); ok {
