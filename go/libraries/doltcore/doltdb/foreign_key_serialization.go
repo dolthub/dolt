@@ -88,7 +88,7 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 		return nil, fmt.Errorf("expect Serial Message with ForeignKeyCollectionFileID")
 	}
 
-	c := serial.GetRootAsForeignKeyCollection(msg, 0)
+	c := serial.GetRootAsForeignKeyCollection(msg, serial.MessagePrefixSz)
 	collection := &ForeignKeyCollection{
 		foreignKeys: make(map[string]ForeignKey, c.ForeignKeysLength()),
 	}
@@ -203,8 +203,7 @@ func serializeFlatbufferForeignKeys(fkc *ForeignKeyCollection) types.SerialMessa
 	serial.ForeignKeyCollectionStart(b)
 	serial.ForeignKeyCollectionAddForeignKeys(b, vec)
 	o := serial.ForeignKeyCollectionEnd(b)
-	b.FinishWithFileIdentifier(o, []byte(serial.ForeignKeyCollectionFileID))
-	return types.SerialMessage(b.FinishedBytes())
+	return []byte(serial.FinishMessage(b, o, []byte(serial.ForeignKeyCollectionFileID)))
 }
 
 func serializeStringVector(b *fb.Builder, s []string) fb.UOffsetT {
@@ -231,6 +230,6 @@ func emptyForeignKeyCollection(msg types.SerialMessage) bool {
 	if serial.GetFileID(msg) != serial.ForeignKeyCollectionFileID {
 		return false
 	}
-	c := serial.GetRootAsForeignKeyCollection(msg, 0)
+	c := serial.GetRootAsForeignKeyCollection(msg, serial.MessagePrefixSz)
 	return c.ForeignKeysLength() == 0
 }

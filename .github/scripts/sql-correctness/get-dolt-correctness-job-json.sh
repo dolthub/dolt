@@ -2,7 +2,7 @@
 
 set -e
 
-if [ "$#" -ne 6 ]; then
+if [ "$#" -lt 6 ]; then
     echo  "Usage: ./get-dolt-correctness-job-json.sh <jobname> <fromVersion> <toVersion> <timeprefix> <actorprefix> <format> <nomsBinFormat>"
     exit 1
 fi

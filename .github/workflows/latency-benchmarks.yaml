@@ -1,4 +1,4 @@
-#name: Benchmark Latency
+name: Benchmark Latency
 
 on:
   repository_dispatch:
@@ -47,7 +47,7 @@ jobs:
           MODE: ${{ github.event.client_payload.mode }}
           ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
           ACTOR: ${{ github.event.client_payload.actor }}
-          ACTOR_EMAIL: ${{ github.event.client_payload.actor }}
+          ACTOR_EMAIL: ${{ github.event.client_payload.actor_email }}
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
           INIT_BIG_REPO: ${{ github.event.client_payload.init_big_repo }}
@@ -63,7 +63,7 @@ jobs:
           MODE: ${{ github.event.client_payload.mode }}
           ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
           ACTOR: ${{ github.event.client_payload.actor }}
-          ACTOR_EMAIL: ${{ github.event.client_payload.actor }}
+          ACTOR_EMAIL: ${{ github.event.client_payload.actor_email }}
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
           INIT_BIG_REPO: ${{ github.event.client_payload.init_big_repo }}
