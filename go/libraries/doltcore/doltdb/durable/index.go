@@ -250,7 +250,7 @@ func (i prollyIndex) Format() *types.NomsBinFormat {
 
 // bytes implements Index.
 func (i prollyIndex) bytes() ([]byte, error) {
-	return []byte(shim.ValueFromMap(i.index).(types.TupleRowStorage)), nil
+	return []byte(shim.ValueFromMap(i.index).(types.SerialMessage)), nil
 }
 
 var _ Index = prollyIndex{}

@@ -253,7 +253,7 @@ func newRootValue(vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value) (
 	var storage rvStorage
 
 	if vrw.Format().UsesFlatbuffers() {
-		srv := serial.GetRootAsRootValue([]byte(v.(types.SerialMessage)), 0)
+		srv := serial.GetRootAsRootValue([]byte(v.(types.SerialMessage)), serial.MessagePrefixSz)
 		storage = fbRvStorage{srv}
 	} else {
 		st, ok := v.(types.Struct)
@@ -304,7 +304,7 @@ func decodeRootNomsValue(vrw types.ValueReadWriter, ns tree.NodeStore, val types
 func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {
 	if nbf.UsesFlatbuffers() {
 		if sm, ok := val.(types.SerialMessage); ok {
-			return string(serial.GetFileID([]byte(sm))) == serial.RootValueFileID
+			return string(serial.GetFileID(sm)) == serial.RootValueFileID
 		}
 	} else {
 		if st, ok := val.(types.Struct); ok {
@@ -319,7 +319,7 @@ func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter, ns tree.Node
 		builder := flatbuffers.NewBuilder(80)
 
 		emptyam := prolly.NewEmptyAddressMap(ns)
-		ambytes := []byte(tree.ValueFromNode(emptyam.Node()).(types.TupleRowStorage))
+		ambytes := []byte(tree.ValueFromNode(emptyam.Node()).(types.SerialMessage))
 		tablesoff := builder.CreateByteVector(ambytes)
 
 		var empty hash.Hash
@@ -328,8 +328,7 @@ func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter, ns tree.Node
 		serial.RootValueAddFeatureVersion(builder, int64(DoltFeatureVersion))
 		serial.RootValueAddTables(builder, tablesoff)
 		serial.RootValueAddForeignKeyAddr(builder, fkoff)
-		builder.FinishWithFileIdentifier(serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
-		bs := builder.FinishedBytes()
+		bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
 		return newRootValue(vrw, ns, types.SerialMessage(bs))
 	}
 
@@ -1097,7 +1096,7 @@ func (r fbRvStorage) GetFeatureVersion() (FeatureVersion, bool, error) {
 
 func (r fbRvStorage) getAddressMap(vrw types.ValueReadWriter, ns tree.NodeStore) prolly.AddressMap {
 	tbytes := r.srv.TablesBytes()
-	node := shim.NodeFromValue(types.TupleRowStorage(tbytes))
+	node := shim.NodeFromValue(types.SerialMessage(tbytes))
 	return prolly.NewAddressMap(node, ns)
 }
 
@@ -1186,7 +1185,7 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 		return nil, err
 	}
 
-	ambytes := []byte(tree.ValueFromNode(am.Node()).(types.TupleRowStorage))
+	ambytes := []byte(tree.ValueFromNode(am.Node()).(types.SerialMessage))
 	tablesoff := builder.CreateByteVector(ambytes)
 
 	fkoff := builder.CreateByteVector(r.srv.ForeignKeyAddrBytes())
@@ -1194,9 +1193,9 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 	serial.RootValueAddFeatureVersion(builder, r.srv.FeatureVersion())
 	serial.RootValueAddTables(builder, tablesoff)
 	serial.RootValueAddForeignKeyAddr(builder, fkoff)
-	builder.FinishWithFileIdentifier(serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
-	bs := builder.FinishedBytes()
-	return fbRvStorage{serial.GetRootAsRootValue(bs, 0)}, nil
+
+	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
+	return fbRvStorage{serial.GetRootAsRootValue(bs, serial.MessagePrefixSz)}, nil
 }
 
 func (r fbRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (rvStorage, error) {
