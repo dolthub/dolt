@@ -1,0 +1,44 @@
+name: Email Team Members
+
+on:
+  repository_dispatch:
+    types: [ email-report ]
+
+jobs:
+  email-team:
+    runs-on: ubuntu-18.04
+    name: Email Team Members
+    steps:
+      - uses: actions/checkout@v2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Get Results
+        id: get-results
+        run: aws s3api get-object --bucket="$BUCKET" --key="$KEY" results.log
+        env:
+          KEY: ${{ github.event.client_payload.key }}
+          BUCKET: ${{ github.event.client_payload.bucket }}
+      - name: Get Addresses
+        id: get-addresses
+        run: |
+          addresses="$TEAM"
+          if [ ! -z "$RECIPIENT" ]; then
+            addresses="[\"$RECIPIENT\"]"
+          fi
+          echo "::set-output name=addresses::$addresses"
+        env:
+          RECIPIENT: ${{ github.event.client_payload.email_recipient }}
+          TEAM: '["${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}"]'
+      - name: Send Email
+        uses: ./.github/actions/ses-email-action
+        with:
+          template: ${{ github.event.client_payload.template }}
+          region: us-west-2
+          version: ${{ github.event.client_payload.version }}
+          format: ${{ github.event.client_payload.noms_bin_format }}
+          toAddresses: ${{ steps.get-addresses.outputs.addresses }}
+          dataFile: ${{ format('{0}/results.log', github.workspace) }}

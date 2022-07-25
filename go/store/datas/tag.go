@@ -111,7 +111,7 @@ func newTag(ctx context.Context, db *database, commitAddr hash.Hash, meta *TagMe
 	}
 }
 
-func tag_flatbuffer(commitAddr hash.Hash, meta *TagMeta) []byte {
+func tag_flatbuffer(commitAddr hash.Hash, meta *TagMeta) serial.Message {
 	builder := flatbuffers.NewBuilder(1024)
 	addroff := builder.CreateByteVector(commitAddr[:])
 	var nameOff, emailOff, descOff flatbuffers.UOffsetT
@@ -129,8 +129,7 @@ func tag_flatbuffer(commitAddr hash.Hash, meta *TagMeta) []byte {
 		serial.TagAddTimestampMillis(builder, meta.Timestamp)
 		serial.TagAddUserTimestampMillis(builder, meta.UserTimestamp)
 	}
-	builder.FinishWithFileIdentifier(serial.TagEnd(builder), []byte(serial.TagFileID))
-	return builder.FinishedBytes()
+	return serial.FinishMessage(builder, serial.TagEnd(builder), []byte(serial.TagFileID))
 }
 
 func IsTag(v types.Value) (bool, error) {
