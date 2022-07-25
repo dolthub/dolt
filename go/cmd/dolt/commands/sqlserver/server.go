@@ -158,7 +158,7 @@ func Serve(
 		// privileges specified, only add if superuser specified is not an existing user
 		userSpecified := config.ServerUser != defaultUser || config.ServerHost != defaultHost || config.ServerPass != defaultPass
 		superuser := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, "%", false)
-		if userSpecified && superuser != nil {
+		if userSpecified && superuser == nil {
 			sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, "%", config.ServerPass)
 		}
 	} else {
