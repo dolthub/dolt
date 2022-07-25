@@ -21,7 +21,7 @@ teardown() {
     teardown_common
 }
 
-@test "sql: --user option changes superuser" {
+@test "sql-shell: --user option changes superuser" {
     # remove config
     rm -rf .doltcfg
 
