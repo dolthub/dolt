@@ -187,6 +187,7 @@ func TestServerGoodParams(t *testing.T) {
 func TestServerSelect(t *testing.T) {
 	env := dtestutils.CreateEnvWithSeedData(t)
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15300)
+	serverConfig.WithUser("root")
 
 	sc := NewServerController()
 	defer sc.StopServer()
@@ -262,6 +263,7 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 func TestServerSetDefaultBranch(t *testing.T) {
 	dEnv := dtestutils.CreateEnvWithSeedData(t)
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15302)
+	serverConfig.WithUser("root")
 
 	sc := NewServerController()
 	defer sc.StopServer()
