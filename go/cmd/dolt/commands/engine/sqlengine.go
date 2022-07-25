@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -55,6 +56,7 @@ type SqlEngineConfig struct {
 	ServerPass     string
 	Autocommit     bool
 	Bulk           bool
+	JwksConfig     []JwksConfig
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -107,6 +109,10 @@ func NewSqlEngine(
 	// Set up engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: config.IsReadOnly, TemporaryUsers: tempUsers, IsServerLocked: config.IsServerLocked}).WithBackgroundThreads(bThreads)
 	engine.Analyzer.Catalog.MySQLDb.SetPersister(persister)
+	engine.Analyzer.Catalog.MySQLDb.SetPlugins(map[string]mysql_db.PlaintextAuthPlugin{
+		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
+	})
+
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {
 		return nil, err
