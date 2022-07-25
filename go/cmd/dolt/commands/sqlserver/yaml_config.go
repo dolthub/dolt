@@ -22,6 +22,7 @@ import (
 
 	"gopkg.in/yaml.v2"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
@@ -95,6 +96,8 @@ type ListenerYAMLConfig struct {
 	TLSCert *string `yaml:"tls_cert"`
 	// RequireSecureTransport can enable a mode where non-TLS connections are turned away.
 	RequireSecureTransport *bool `yaml:"require_secure_transport"`
+	// AllowCleartextPasswords enables use of cleartext passwords.
+	AllowCleartextPasswords *bool `yaml:"allow_cleartext_passwords"`
 }
 
 // PerformanceYAMLConfig contains configuration parameters for performance tweaking
@@ -113,13 +116,6 @@ type UserSessionVars struct {
 	Vars map[string]string `yaml:"vars"`
 }
 
-type JwksYAMLConfig struct {
-	Name        string            `yaml:"name"`
-	LocationUrl string            `yaml:"location_url"`
-	Claims      map[string]string `yaml:"claims"`
-	FieldsToLog []string          `yaml:"fields_to_log"`
-}
-
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
 	LogLevelStr       *string               `yaml:"log_level"`
@@ -133,7 +129,7 @@ type YAMLConfig struct {
 	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
 	PrivilegeFile     *string               `yaml:"privilege_file"`
 	Vars              []UserSessionVars     `yaml:"user_session_vars"`
-	Jwks              []JwksYAMLConfig      `yaml:"jwks"`
+	Jwks              []engine.JwksConfig   `yaml:"jwks"`
 }
 
 var _ ServerConfig = YAMLConfig{}
@@ -163,6 +159,7 @@ func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 			nillableStrPtr(cfg.TLSKey()),
 			nillableStrPtr(cfg.TLSCert()),
 			nillableBoolPtr(cfg.RequireSecureTransport()),
+			nillableBoolPtr(cfg.AllowCleartextPasswords()),
 		},
 		DatabaseConfig: nil,
 	}
@@ -348,11 +345,18 @@ func (cfg YAMLConfig) UserVars() []UserSessionVars {
 	return nil
 }
 
-func (cfg YAMLConfig) JwksConfig() []JwksYAMLConfig {
+func (cfg YAMLConfig) JwksConfig() []engine.JwksConfig {
 	if cfg.Jwks != nil {
 		return cfg.Jwks
 	}
 	return nil
+}
+
+func (cfg YAMLConfig) AllowCleartextPasswords() bool {
+	if cfg.ListenerConfig.AllowCleartextPasswords == nil {
+		return defaultAllowCleartextPasswords
+	}
+	return *cfg.ListenerConfig.AllowCleartextPasswords
 }
 
 // QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer

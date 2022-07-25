@@ -18,9 +18,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 )
 
 func TestUnmarshall(t *testing.T) {
@@ -125,7 +126,7 @@ jwks:
 			},
 		},
 	}
-	expected.Jwks = []JwksYAMLConfig{
+	expected.Jwks = []engine.JwksConfig{
 		{
 			Name:        "jwks_name",
 			LocationUrl: "https://website.com",
@@ -198,10 +199,12 @@ func TestYAMLConfigDefaults(t *testing.T) {
 	assert.Equal(t, "", cfg.TLSKey())
 	assert.Equal(t, "", cfg.TLSCert())
 	assert.Equal(t, false, cfg.RequireSecureTransport())
+	assert.Equal(t, false, cfg.AllowCleartextPasswords())
 	assert.Equal(t, false, cfg.DisableClientMultiStatements())
 	assert.Equal(t, defaultMetricsHost, cfg.MetricsHost())
 	assert.Equal(t, defaultMetricsPort, cfg.MetricsPort())
 	assert.Nil(t, cfg.MetricsConfig.Labels)
+	assert.Equal(t, defaultAllowCleartextPasswords, cfg.AllowCleartextPasswords())
 
 	c, err := LoadTLSConfig(cfg)
 	assert.NoError(t, err)
@@ -234,7 +237,7 @@ listener:
 	assert.NoError(t, err)
 	assert.NotNil(t, c)
 	assert.Len(t, c.Certificates, 1)
-	assert.Len(t, c.Certificates[0].Certificate, 2)
+	assert.Len(t, c.Certificates[0].Certificate, 1)
 
 	cfg = YAMLConfig{}
 	err = yaml.Unmarshal([]byte(`
