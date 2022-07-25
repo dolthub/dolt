@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"io"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
@@ -35,7 +36,7 @@ type Node struct {
 	keys, values val.SlicedBuffer
 	subtrees     subtreeCounts
 	count        uint16
-	msg          message.Message
+	msg          serial.Message
 }
 
 type AddressCb func(ctx context.Context, addr hash.Hash) error
@@ -235,5 +236,5 @@ func OutputAddressMapNode(w io.Writer, node Node) error {
 }
 
 func ValueFromNode(root Node) types.Value {
-	return types.TupleRowStorage(root.bytes())
+	return types.SerialMessage(root.bytes())
 }

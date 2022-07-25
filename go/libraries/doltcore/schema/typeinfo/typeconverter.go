@@ -131,7 +131,7 @@ func wrapConvertValueToNomsValue(
 			vInt = float64(val)
 		case types.InlineBlob:
 			vInt = *(*string)(unsafe.Pointer(&val))
-		case types.TupleRowStorage:
+		case types.SerialMessage:
 			vInt = *(*string)(unsafe.Pointer(&val))
 		case types.Int:
 			vInt = int64(val)
