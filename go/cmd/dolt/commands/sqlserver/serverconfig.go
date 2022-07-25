@@ -462,7 +462,7 @@ func ConnectionString(config ServerConfig, database string) string {
 // ConfigInfo returns a summary of some of the config which contains some of the more important information
 func ConfigInfo(config ServerConfig) string {
 	socket := ""
-	if shouldUseUnixSocket(config) {
+	if config.Socket() != "" { // shouldUseUnixSocket(config) {
 		s := config.Socket()
 		if s == "" {
 			s = defaultUnixSocketFilePath
