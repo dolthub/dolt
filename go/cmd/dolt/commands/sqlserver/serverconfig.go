@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
@@ -37,23 +38,24 @@ const (
 )
 
 const (
-	defaultHost                = "localhost"
-	defaultPort                = 3306
-	defaultUser                = "root"
-	defaultPass                = ""
-	defaultTimeout             = 8 * 60 * 60 * 1000 // 8 hours, same as MySQL
-	defaultReadOnly            = false
-	defaultLogLevel            = LogLevel_Info
-	defaultAutoCommit          = true
-	defaultMaxConnections      = 100
-	defaultQueryParallelism    = 2
-	defaultPersistenceBahavior = loadPerisistentGlobals
-	defaultDataDir             = "."
-	defaultCfgDir              = ".doltcfg"
-	defaultPrivilegeFilePath   = "privileges.db"
-	defaultMetricsHost         = ""
-	defaultMetricsPort         = -1
-	defaultUnixSocketFilePath  = "/tmp/mysql.sock"
+	defaultHost                    = "localhost"
+	defaultPort                    = 3306
+	defaultUser                    = "root"
+	defaultPass                    = ""
+	defaultTimeout                 = 8 * 60 * 60 * 1000 // 8 hours, same as MySQL
+	defaultReadOnly                = false
+	defaultLogLevel                = LogLevel_Info
+	defaultAutoCommit              = true
+	defaultMaxConnections          = 100
+	defaultQueryParallelism        = 2
+	defaultPersistenceBahavior     = loadPerisistentGlobals
+	defaultDataDir                 = "."
+	defaultCfgDir                  = ".doltcfg"
+	defaultPrivilegeFilePath       = "privileges.db"
+	defaultMetricsHost             = ""
+	defaultMetricsPort             = -1
+	defaultAllowCleartextPasswords = false
+	defaultUnixSocketFilePath      = "/tmp/mysql.sock"
 )
 
 const (
@@ -134,30 +136,35 @@ type ServerConfig interface {
 	PrivilegeFilePath() string
 	// UserVars is an array containing user specific session variables
 	UserVars() []UserSessionVars
+	// JwksConfig is an array containing jwks config
+	JwksConfig() []engine.JwksConfig
+	// AllowCleartextPasswords is true if the server should accept cleartext passwords.
+	AllowCleartextPasswords() bool
 	// Socket is a path to the unix socket file
 	Socket() string
 }
 
 type commandLineServerConfig struct {
-	host                   string
-	port                   int
-	user                   string
-	password               string
-	timeout                uint64
-	readOnly               bool
-	logLevel               LogLevel
-	dbNamesAndPaths        []env.EnvNameAndPath
-	dataDir                string
-	cfgDir                 string
-	autoCommit             bool
-	maxConnections         uint64
-	queryParallelism       int
-	tlsKey                 string
-	tlsCert                string
-	requireSecureTransport bool
-	persistenceBehavior    string
-	privilegeFilePath      string
-	socket                 string
+	host                    string
+	port                    int
+	user                    string
+	password                string
+	timeout                 uint64
+	readOnly                bool
+	logLevel                LogLevel
+	dbNamesAndPaths         []env.EnvNameAndPath
+	dataDir                 string
+	cfgDir                  string
+	autoCommit              bool
+	maxConnections          uint64
+	queryParallelism        int
+	tlsKey                  string
+	tlsCert                 string
+	requireSecureTransport  bool
+	persistenceBehavior     string
+	privilegeFilePath       string
+	allowCleartextPasswords bool
+	socket                  string
 }
 
 var _ ServerConfig = (*commandLineServerConfig)(nil)
@@ -268,6 +275,14 @@ func (cfg *commandLineServerConfig) UserVars() []UserSessionVars {
 	return nil
 }
 
+func (cfg *commandLineServerConfig) JwksConfig() []engine.JwksConfig {
+	return nil
+}
+
+func (cfg *commandLineServerConfig) AllowCleartextPasswords() bool {
+	return cfg.allowCleartextPasswords
+}
+
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in
 // a multiple db configuration. If nil is returned the server will look for a database in the current directory and
 // give it a name automatically.
@@ -375,6 +390,11 @@ func (cfg *commandLineServerConfig) withPrivilegeFilePath(privFilePath string) *
 	return cfg
 }
 
+func (cfg *commandLineServerConfig) withAllowCleartextPasswords(allow bool) *commandLineServerConfig {
+	cfg.allowCleartextPasswords = allow
+	return cfg
+}
+
 // WithSocket updates the path to the unix socket file
 func (cfg *commandLineServerConfig) WithSocket(sockFilePath string) *commandLineServerConfig {
 	cfg.socket = sockFilePath
@@ -384,20 +404,21 @@ func (cfg *commandLineServerConfig) WithSocket(sockFilePath string) *commandLine
 // DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
 func DefaultServerConfig() *commandLineServerConfig {
 	return &commandLineServerConfig{
-		host:                defaultHost,
-		port:                defaultPort,
-		user:                defaultUser,
-		password:            defaultPass,
-		timeout:             defaultTimeout,
-		readOnly:            defaultReadOnly,
-		logLevel:            defaultLogLevel,
-		autoCommit:          defaultAutoCommit,
-		maxConnections:      defaultMaxConnections,
-		queryParallelism:    defaultQueryParallelism,
-		persistenceBehavior: defaultPersistenceBahavior,
-		dataDir:             defaultDataDir,
-		cfgDir:              filepath.Join(defaultDataDir, defaultCfgDir),
-		privilegeFilePath:   filepath.Join(defaultDataDir, defaultCfgDir, defaultPrivilegeFilePath),
+		host:                    defaultHost,
+		port:                    defaultPort,
+		user:                    defaultUser,
+		password:                defaultPass,
+		timeout:                 defaultTimeout,
+		readOnly:                defaultReadOnly,
+		logLevel:                defaultLogLevel,
+		autoCommit:              defaultAutoCommit,
+		maxConnections:          defaultMaxConnections,
+		queryParallelism:        defaultQueryParallelism,
+		persistenceBehavior:     defaultPersistenceBahavior,
+		dataDir:                 defaultDataDir,
+		cfgDir:                  filepath.Join(defaultDataDir, defaultCfgDir),
+		privilegeFilePath:       filepath.Join(defaultDataDir, defaultCfgDir, defaultPrivilegeFilePath),
+		allowCleartextPasswords: defaultAllowCleartextPasswords,
 	}
 }
 
@@ -425,11 +446,17 @@ func ValidateConfig(config ServerConfig) error {
 }
 
 // ConnectionString returns a Data Source Name (DSN) to be used by go clients for connecting to a running server.
-func ConnectionString(config ServerConfig) string {
+func ConnectionString(config ServerConfig, database string) string {
+	var dsn string
 	if config.Socket() != "" { // shouldUseUnixSocket(config) {
-		return fmt.Sprintf("%v:%v@unix(%v)/", config.User(), config.Password(), config.Socket())
+		dsn = fmt.Sprintf("%v:%v@unix(%v)/%v", config.User(), config.Password(), config.Socket(), database)
+	} else {
+		dsn = fmt.Sprintf("%v:%v@tcp(%v:%v)/%v", config.User(), config.Password(), config.Host(), config.Port(), database)
 	}
-	return fmt.Sprintf("%v:%v@tcp(%v:%v)/", config.User(), config.Password(), config.Host(), config.Port())
+	if config.AllowCleartextPasswords() {
+		dsn += "?allowCleartextPasswords=1"
+	}
+	return dsn
 }
 
 // ConfigInfo returns a summary of some of the config which contains some of the more important information

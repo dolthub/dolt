@@ -342,7 +342,7 @@ func startServer(t *testing.T, withPort bool, host string, unixSocketPath string
 
 func newConnection(t *testing.T, serverConfig sqlserver.ServerConfig) (*dbr.Connection, *dbr.Session) {
 	const dbName = "dolt"
-	conn, err := dbr.Open("mysql", sqlserver.ConnectionString(serverConfig)+dbName, nil)
+	conn, err := dbr.Open("mysql", sqlserver.ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 	return conn, sess
