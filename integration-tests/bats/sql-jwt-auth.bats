@@ -61,19 +61,30 @@ EOF
 
     dolt sql-server --config ./config.yml &
     SERVER_PID=$!
+
+
     # We do things manually here because we need TLS support.
     python3 -c '
 import mysql.connector
 import sys
 import time
+import os
 i=0
 
+os.environ["LIBMYSQL_ENABLE_CLEARTEXT_PLUGIN"] = "1"
 args = sys.argv[sys.argv.index("--") + 1:]
 password = args[0]
 
 while True:
   try:
-    with mysql.connector.connect(host="127.0.0.1", user="test_jwt_user", password=password, port='"$PORT"', database="repo1", connection_timeout=1) as c:
+    with mysql.connector.connect(
+      host="127.0.0.1",
+      user="test_jwt_user",
+      password=password,
+      port='"$PORT"',
+      database="repo1",
+      connection_timeout=1
+    ) as c:
       cursor = c.cursor()
       cursor.execute("show tables")
       for (t) in cursor:
