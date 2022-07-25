@@ -17,7 +17,6 @@ package enginetest
 import (
 	"context"
 	gosql "database/sql"
-	"github.com/gocraft/dbr/v2"
 	"math/rand"
 	"strings"
 	"testing"
@@ -25,6 +24,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/gocraft/dbr/v2"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
