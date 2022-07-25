@@ -167,7 +167,7 @@ SQL
     # attempt to create table (autocommit on), expect either some exception
     server_query repo1 1 "CREATE TABLE i_should_not_exist (
             c0 INT
-        )" "" "not authorized"
+        )" "" "database server is set to read only mode"
 
     # Expect that there are still no tables
     run dolt ls
@@ -205,7 +205,7 @@ SQL
 
     # make a dolt_commit query
     skip "read-only flag does not prevent dolt_commit"
-    server_query repo1 1 "select dolt_commit('--allow-empty', '-m', 'msg')" "" "not authorized: user does not have permission: write"
+    server_query repo1 1 "select dolt_commit('--allow-empty', '-m', 'msg')" "" "database server is set to read only mode: user does not have permission: write"
 }
 
 @test "sql-server: test command line modification" {
