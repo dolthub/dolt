@@ -131,7 +131,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(configFileFlag, "", "file", "When provided configuration is taken from the yaml config file and all command line parameters are ignored.")
 	ap.SupportsString(hostFlag, "H", "host address", fmt.Sprintf("Defines the host address that the server will run on (default `%v`)", serverConfig.Host()))
 	ap.SupportsUint(portFlag, "P", "port", fmt.Sprintf("Defines the port that the server will run on (default `%v`)", serverConfig.Port()))
-	ap.SupportsString(commands.UserFlag, "u", "user", fmt.Sprintf("Defines the server user (default `%v`)", serverConfig.User()))
+	ap.SupportsString(commands.UserFlag, "u", "user", fmt.Sprintf("Defines the server user (default `%v`). This should be explicit if desired.", serverConfig.User()))
 	ap.SupportsString(passwordFlag, "p", "password", fmt.Sprintf("Defines the server password (default `%v`)", serverConfig.Password()))
 	ap.SupportsInt(timeoutFlag, "t", "connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout (default `%v`)", serverConfig.ReadTimeout()))
 	ap.SupportsFlag(readonlyFlag, "r", "Disable modification of the database")
