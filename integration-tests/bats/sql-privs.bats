@@ -45,7 +45,7 @@ delete_test_repo() {
 }
 
 setup() {
-    skiponwindows "no clue why this fails on CI"
+    skiponwindows "Missing dependencies"
     setup_no_dolt_init
 }
 
