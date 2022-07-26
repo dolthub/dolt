@@ -63,7 +63,7 @@ func writeItemOffsets(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
 // countAddresses returns the number of chunk addresses stored within |items|.
 func countAddresses(items [][]byte, td val.TupleDesc) (cnt int) {
 	for i := len(items) - 1; i >= 0; i-- {
-		val.IterAddressTypes(td, func(j int, t val.Type) {
+		val.IterAddressFields(td, func(j int, t val.Type) {
 			// get offset of address withing |tup|
 			addr := val.Tuple(items[i]).GetField(j)
 			if len(addr) > 0 && !hash.New(addr).IsEmpty() {
@@ -82,7 +82,7 @@ func writeAddressOffsets(b *fb.Builder, items [][]byte, sumSz int, td val.TupleD
 	for i := len(items) - 1; i >= 0; i-- {
 		tup := val.Tuple(items[i])
 		off -= len(tup) // start of tuple
-		val.IterAddressTypes(td, func(j int, t val.Type) {
+		val.IterAddressFields(td, func(j int, t val.Type) {
 			addr := val.Tuple(items[i]).GetField(j)
 			if len(addr) == 0 || hash.New(addr).IsEmpty() {
 				return

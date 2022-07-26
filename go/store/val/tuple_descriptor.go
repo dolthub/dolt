@@ -58,7 +58,7 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 	return
 }
 
-func IterAddressTypes(td TupleDesc, cb func(int, Type)) {
+func IterAddressFields(td TupleDesc, cb func(int, Type)) {
 	for i, typ := range td.Types {
 		switch typ.Enc {
 		case BytesAddrEnc, StringAddrEnc,
@@ -88,8 +88,8 @@ func makeFixedAccess(types []Type) (acc fixedAccess) {
 	return
 }
 
-func (td TupleDesc) AddressTypeCount() (n int) {
-	IterAddressTypes(td, func(int, Type) {
+func (td TupleDesc) AddressFieldCount() (n int) {
+	IterAddressFields(td, func(int, Type) {
 		n++
 	})
 	return

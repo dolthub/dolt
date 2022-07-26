@@ -35,8 +35,8 @@ func TestTupleDescriptorAddressTypes(t *testing.T) {
 	}
 	td := NewTupleDescriptor(types...)
 
-	assert.Equal(t, 4, td.AddressTypeCount())
-	IterAddressTypes(td, func(i int, typ Type) {
+	assert.Equal(t, 4, td.AddressFieldCount())
+	IterAddressFields(td, func(i int, typ Type) {
 		assert.Equal(t, types[i], typ)
 	})
 }
