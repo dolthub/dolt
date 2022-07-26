@@ -372,7 +372,6 @@ func (cfg *commandLineServerConfig) withAllowCleartextPasswords(allow bool) *com
 func DefaultServerConfig() *commandLineServerConfig {
 	return &commandLineServerConfig{
 		host:                    defaultHost,
-		user:                    defaultUser,
 		port:                    defaultPort,
 		password:                defaultPass,
 		timeout:                 defaultTimeout,
@@ -400,9 +399,9 @@ func ValidateConfig(config ServerConfig) error {
 	if config.Port() < 1024 || config.Port() > 65535 {
 		return fmt.Errorf("port is not in the range between 1024-65535: %v\n", config.Port())
 	}
-	if len(config.User()) == 0 {
-		return fmt.Errorf("user cannot be empty")
-	}
+	//if len(config.User()) == 0 {
+	//	return fmt.Errorf("user cannot be empty")
+	//}
 	if config.LogLevel().String() == "unknown" {
 		return fmt.Errorf("loglevel is invalid: %v\n", string(config.LogLevel()))
 	}
@@ -414,7 +413,11 @@ func ValidateConfig(config ServerConfig) error {
 
 // ConnectionString returns a Data Source Name (DSN) to be used by go clients for connecting to a running server.
 func ConnectionString(config ServerConfig, database string) string {
-	str := fmt.Sprintf("%v:%v@tcp(%v:%v)/%v", config.User(), config.Password(), config.Host(), config.Port(), database)
+	user := config.User()
+	if user == "" {
+		user = "root"
+	}
+	str := fmt.Sprintf("%v:%v@tcp(%v:%v)/%v", user, config.Password(), config.Host(), config.Port(), database)
 	if config.AllowCleartextPasswords() {
 		str += "?allowCleartextPasswords=1"
 	}

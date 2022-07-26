@@ -155,18 +155,28 @@ func Serve(
 		serverHost = "%"
 	}
 
-	// Add superuser
-	if sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.UserTable().Data().Count() != 0 {
-		// privileges specified, only add if superuser specified is not an existing user
-		userSpecified := config.ServerUser != defaultUser || config.ServerHost != defaultHost || config.ServerPass != defaultPass
+	userSpecified := config.ServerUser != ""
+	if userSpecified {
 		superuser := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, serverHost, false)
 		if userSpecified && superuser == nil {
 			sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, serverHost, config.ServerPass)
 		}
 	} else {
-		// no privileges, must add superuser; will already be defaulted to root
-		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, serverHost, config.ServerPass)
+		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(defaultUser, defaultHost, defaultPass)
 	}
+
+	// Add superuser
+	//if sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.UserTable().Data().Count() != 0 {
+	//	// privileges specified, only add if superuser specified is not an existing user
+	//	userSpecified := config.ServerUser != defaultUser || config.ServerHost != defaultHost || config.ServerPass != defaultPass
+	//	superuser := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, serverHost, false)
+	//	if userSpecified && superuser == nil {
+	//		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, serverHost, config.ServerPass)
+	//	}
+	//} else {
+	//	// no privileges, must add superuser; will already be defaulted to root
+	//	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, serverHost, config.ServerPass)
+	//}
 
 	labels := serverConfig.MetricsLabels()
 	listener := newMetricsListener(labels)

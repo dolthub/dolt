@@ -35,7 +35,7 @@ behavior:
     disable_client_multi_statements: false
 
 user:
-    name: root
+    name: ""
     password: ""
 
 listener:
