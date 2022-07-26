@@ -17,6 +17,7 @@ flatc -o $GEN_DIR --gen-onefile --filename-suffix "" --gen-mutable --go-namespac
   commitclosure.fbs \
   encoding.fbs \
   foreign_key.fbs \
+  mergeartifacts.fbs \
   prolly.fbs \
   rootvalue.fbs \
   schema.fbs \
