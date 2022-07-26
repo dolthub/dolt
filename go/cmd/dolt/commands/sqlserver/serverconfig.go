@@ -17,10 +17,11 @@ package sqlserver
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"net"
 	"path/filepath"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
 // LogLevel defines the available levels of logging for the server.
