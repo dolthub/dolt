@@ -61,6 +61,27 @@ teardown() {
     rm -rf .doltcfg
 }
 
+@test "sql: --user don't create superuser if using an existing user" {
+    rm -rf .doltcfg
+
+    # default user is root
+    run dolt sql -q "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]]
+
+    # create user
+    run dolt sql -q "create user new_user@'localhost'"
+    [ "$status" -eq 0 ]
+
+    #
+    run dolt sql --user=new_user -q "select user from mysql.user"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Access denied for user" ]]
+
+    rm -rf .doltcfg
+}
+
+
 @test "sql: check configurations with all default options" {
     # remove any previous config directories
     rm -rf .doltcfg

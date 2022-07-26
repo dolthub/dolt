@@ -45,6 +45,7 @@ delete_test_repo() {
 }
 
 setup() {
+    skiponwindows "no clue why this fails on CI"
     setup_no_dolt_init
 }
 
@@ -53,8 +54,31 @@ teardown() {
     teardown_common
 }
 
+@test "sql-privs: default user is root" {
+    make_test_repo
+    let PORT="$$ % (65536-1024) + 1024"
+    dolt sql-server --host 0.0.0.0 --port=$PORT &
+    SERVER_PID=$! # will get killed by teardown_common
+    sleep 5 # not using python wait so this works on windows
+
+    server_query_with_user test_db 1 root "select user from mysql.user order by user" "User\nroot"
+    server_query_with_user test_db 1 root "create user new_user" ""
+    server_query_with_user test_db 1 root "select user from mysql.user order by user" "User\nnew_user\nroot"
+
+    stop_sql_server
+    rm -f .dolt/sql-server.lock
+
+    # restarting server
+    let PORT="$$ % (65536-1024) + 1024"
+    dolt sql-server --host 0.0.0.0 --port=$PORT &
+    SERVER_PID=$! # will get killed by teardown_common
+    sleep 5 # not using python wait so this works on windows
+
+    run server_query_with_user test_db 1 root "select user from mysql.user order by user" ""
+    [ "$status" -eq 1 ]
+}
+
 @test "sql-privs: starting server with empty config works" {
-    skiponwindows "no clue why this fails on CI"
     make_test_repo
     touch server.yaml
 

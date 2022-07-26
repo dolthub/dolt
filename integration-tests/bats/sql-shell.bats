@@ -43,6 +43,25 @@ teardown() {
     rm -rf .doltcfg
 }
 
+@test "sql-shell: use user without privileges, and no superuser created" {
+    rm -rf .doltcfg
+
+    # default user is root
+    run dolt sql <<< "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]]
+
+    # create user
+    run dolt sql <<< "create user new_user@'localhost'"
+    [ "$status" -eq 0 ]
+
+    run dolt sql --user=new_user <<< "select user from mysql.user"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Access denied for user" ]]
+
+    rm -rf .doltcfg
+}
+
 @test "sql-shell: run a query in sql shell" {
     skiponwindows "Works on Windows command prompt but not the WSL terminal used during bats"
     run bash -c "echo 'select * from test;' | dolt sql"
