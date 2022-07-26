@@ -1325,6 +1325,8 @@ func NewDataCacheKey(rv *RootValue) (DataCacheKey, error) {
 	return DataCacheKey{hash}, nil
 }
 
+// HackNomsValuesFromRootValues unwraps a RootVal to a noms Value.
+// Deprecated: only for use in dolt migrate.
 func HackNomsValuesFromRootValues(root *RootValue) types.Value {
 	return root.nomsValue()
 }

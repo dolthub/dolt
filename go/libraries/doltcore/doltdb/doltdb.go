@@ -79,6 +79,8 @@ func DoltDBFromCS(cs chunks.ChunkStore) *DoltDB {
 	return &DoltDB{hooksDatabase{Database: db}, vrw, ns}
 }
 
+// HackDatasDatabaseFromDoltDB unwraps a DoltDB to a datas.Database.
+// Deprecated: only for use in dolt migrate.
 func HackDatasDatabaseFromDoltDB(ddb *DoltDB) datas.Database {
 	return ddb.db
 }
