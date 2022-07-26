@@ -1445,3 +1445,35 @@ databases:
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
 }
+
+@test "sql-server: start server with yaml config with socket file path defined" {
+    skiponwindows "unix socket is not available on Windows"
+    cd repo2
+    DEFAULT_DB="repo2"
+    let PORT="$$ % (65536-1024) + 1024"
+
+    echo "
+log_level: debug
+
+user:
+  name: dolt
+
+listener:
+  host: localhost
+  port: $PORT
+  max_connections: 10
+  socket: /tmp/mysql.sock
+
+behavior:
+  autocommit: true" > server.yaml
+
+    dolt sql-server --config server.yaml > log.txt 2>&1 &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+
+    server_query repo2 1 "select 1 as col1" "col1\n1"
+
+    run grep '\"/tmp/mysql.sock\"' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+}

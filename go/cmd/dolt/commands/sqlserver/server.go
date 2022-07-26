@@ -89,8 +89,6 @@ func Serve(
 	var err error
 	fs := dEnv.FS
 
-	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
-	// to the value of mysql that we support.
 	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
 	if len(dbNamesAndPaths) == 0 {
 		if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
@@ -298,6 +296,8 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 		}
 	}
 
+	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
+	// to the value of mysql that we support.
 	serverConf.ConnReadTimeout = readTimeout
 	serverConf.ConnWriteTimeout = writeTimeout
 	serverConf.MaxConnections = serverConfig.MaxConnections()

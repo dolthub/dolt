@@ -17,12 +17,10 @@ package sqlserver
 import (
 	"crypto/tls"
 	"fmt"
-	"net"
-	"path/filepath"
-	"runtime"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"net"
+	"path/filepath"
 )
 
 // LogLevel defines the available levels of logging for the server.
@@ -446,9 +444,10 @@ func ValidateConfig(config ServerConfig) error {
 }
 
 // ConnectionString returns a Data Source Name (DSN) to be used by go clients for connecting to a running server.
+// If unix socket file path is defined in ServerConfig, then `unix` DSN will be returned.
 func ConnectionString(config ServerConfig, database string) string {
 	var dsn string
-	if config.Socket() != "" { // shouldUseUnixSocket(config) {
+	if config.Socket() != "" {
 		dsn = fmt.Sprintf("%v:%v@unix(%v)/%v", config.User(), config.Password(), config.Socket(), database)
 	} else {
 		dsn = fmt.Sprintf("%v:%v@tcp(%v:%v)/%v", config.User(), config.Password(), config.Host(), config.Port(), database)
@@ -462,7 +461,7 @@ func ConnectionString(config ServerConfig, database string) string {
 // ConfigInfo returns a summary of some of the config which contains some of the more important information
 func ConfigInfo(config ServerConfig) string {
 	socket := ""
-	if config.Socket() != "" { // shouldUseUnixSocket(config) {
+	if config.Socket() != "" {
 		s := config.Socket()
 		if s == "" {
 			s = defaultUnixSocketFilePath
@@ -488,8 +487,4 @@ func LoadTLSConfig(cfg ServerConfig) (*tls.Config, error) {
 			c,
 		},
 	}, nil
-}
-
-func shouldUseUnixSocket(config ServerConfig) bool {
-	return runtime.GOOS != "windows" && config.Host() == "localhost"
 }
