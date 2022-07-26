@@ -46,6 +46,7 @@ const (
 	maxConnectionsFlag          = "max-connections"
 	persistenceBehaviorFlag     = "persistence-behavior"
 	allowCleartextPasswordsFlag = "allow-cleartext-passwords"
+	socketFlag                  = "socket"
 )
 
 func indentLines(s string) string {
@@ -146,6 +147,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables (default `%s`)", serverConfig.PersistenceBehavior()))
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to $doltcfg-dir/privileges.db")
 	ap.SupportsString(allowCleartextPasswordsFlag, "", "allow-cleartext-passwords", "Allows use of cleartext passwords. Defaults to false.")
+	ap.SupportsString(socketFlag, "", "socket file", "Path for the unix socket file. Defaults to '/tmp/mysql.sock'")
 	return ap
 }
 
@@ -300,8 +302,16 @@ func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config S
 func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	serverConfig := DefaultServerConfig()
 
+	if sock, ok := apr.GetValue(socketFlag); ok {
+		// defined without value gets default
+		if sock == "" {
+			sock = defaultUnixSocketFilePath
+		}
+		serverConfig.WithSocket(sock)
+	}
+
 	if host, ok := apr.GetValue(hostFlag); ok {
-		serverConfig.withHost(host)
+		serverConfig.WithHost(host)
 	}
 
 	if port, ok := apr.GetInt(portFlag); ok {

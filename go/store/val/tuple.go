@@ -147,7 +147,7 @@ func (tup Tuple) GetOffset(i int) (int, bool) {
 		start = readUint16(offs[pos : pos+2])
 	}
 
-	return int(start), start == stop
+	return int(start), start != stop
 }
 
 // GetField returns the value for field |i|.

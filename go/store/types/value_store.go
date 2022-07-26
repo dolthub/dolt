@@ -95,7 +95,8 @@ func PanicIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.Chu
 	d.PanicIfError(err)
 
 	if len(absent) != 0 {
-		d.Panic("Found dangling references to %v", absent)
+		s := absent.String()
+		d.Panic("Found dangling references to %s", s)
 	}
 }
 

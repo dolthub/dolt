@@ -224,13 +224,7 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 	}
 
 	matchFunc := func(commit *doltdb.Commit) (bool, error) {
-		numParents, err := commit.NumParents()
-
-		if err != nil {
-			return false, err
-		}
-
-		return numParents >= opts.minParents, nil
+		return commit.NumParents() >= opts.minParents, nil
 	}
 	commits, err := commitwalk.GetTopNTopoOrderedCommitsMatching(ctx, dEnv.DoltDB, h, opts.numLines, matchFunc)
 
