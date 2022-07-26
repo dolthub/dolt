@@ -193,10 +193,11 @@ func TestJSONStructuralSharing(t *testing.T) {
 		tup, err := types.NewTuple(types.Format_Default, types.Int(12), types.JSON(val))
 		require.NoError(t, err)
 		tuple_refs := make(hash.HashSet)
-		types.WalkAddrs(tup, vrw.Format(), func(h hash.Hash, _ bool) error {
+		err = types.WalkAddrs(tup, vrw.Format(), func(h hash.Hash, _ bool) error {
 			tuple_refs.Insert(h)
 			return nil
 		})
+		assert.NoError(t, err)
 
 		assert.Greater(t, len(json_refs), 0)
 		assert.Equal(t, len(json_refs), len(tuple_refs))

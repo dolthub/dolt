@@ -93,6 +93,7 @@ func (cmd MigrateCmd) Exec(ctx context.Context, commandStr string, args []string
 	return 0
 }
 
+// MigrateDatabase migrates the NomsBinFormat of |dEnv.DoltDB|.
 func MigrateDatabase(ctx context.Context, dEnv *env.DoltEnv) error {
 	menv, err := migrate.NewEnvironment(ctx, dEnv)
 	if err != nil {

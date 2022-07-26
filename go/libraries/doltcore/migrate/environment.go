@@ -43,18 +43,20 @@ var (
 	migrationMsg = fmt.Sprintf("migrating database to Noms Binary Format %s", targetFormat.VersionString())
 )
 
+// Environment is a migration environment.
 type Environment struct {
 	Migration *env.DoltEnv
 	Existing  *env.DoltEnv
 }
 
+// NewEnvironment creates a migration Environment for |existing|.
 func NewEnvironment(ctx context.Context, existing *env.DoltEnv) (Environment, error) {
 	mfs, err := getMigrateFS(existing.FS)
 	if err != nil {
 		return Environment{}, err
 	}
 
-	if err = InitMigrationDB(ctx, existing, existing.FS, mfs); err != nil {
+	if err = initMigrationDB(ctx, existing, existing.FS, mfs); err != nil {
 		return Environment{}, err
 	}
 
@@ -84,7 +86,7 @@ func NewEnvironment(ctx context.Context, existing *env.DoltEnv) (Environment, er
 	}, nil
 }
 
-func InitMigrationDB(ctx context.Context, existing *env.DoltEnv, src, dest filesys.Filesys) (err error) {
+func initMigrationDB(ctx context.Context, existing *env.DoltEnv, src, dest filesys.Filesys) (err error) {
 	base, err := src.Abs(".")
 	if err != nil {
 		return err
@@ -163,6 +165,7 @@ func InitMigrationDB(ctx context.Context, existing *env.DoltEnv, src, dest files
 	return nil
 }
 
+// SwapChunkStores atomically swaps the ChunkStores of |menv.Migration| and |menv.Existing|.
 func SwapChunkStores(ctx context.Context, menv Environment) error {
 	src, dest := menv.Migration.FS, menv.Existing.FS
 
@@ -203,10 +206,10 @@ func SwapChunkStores(ctx context.Context, menv Environment) error {
 		return cpErr
 	}
 
-	return SwapManifests(ctx, src, dest)
+	return swapManifests(ctx, src, dest)
 }
 
-func SwapManifests(ctx context.Context, src, dest filesys.Filesys) (err error) {
+func swapManifests(ctx context.Context, src, dest filesys.Filesys) (err error) {
 	// backup the current manifest
 	manifest := filepath.Join(doltDir, nomsDir, manifestFile)
 	bak := filepath.Join(doltDir, nomsDir, manifestFile+".bak")

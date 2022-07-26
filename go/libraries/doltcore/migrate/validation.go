@@ -21,7 +21,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
-func ValidateMigration(ctx context.Context, old, new *doltdb.DoltDB) error {
+func validateMigration(ctx context.Context, old, new *doltdb.DoltDB) error {
 	if err := validateBranchMapping(ctx, old, new); err != nil {
 		return err
 	}

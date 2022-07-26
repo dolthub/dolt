@@ -27,18 +27,18 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func MigrateWorkingSet(ctx context.Context, wsRef ref.WorkingSetRef, old, new *doltdb.DoltDB, prog Progress) error {
+func migrateWorkingSet(ctx context.Context, wsRef ref.WorkingSetRef, old, new *doltdb.DoltDB, prog Progress) error {
 	oldWs, err := old.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
 		return err
 	}
 
-	wr, err := MigrateRoot(ctx, oldWs.WorkingRoot(), new)
+	wr, err := migrateRoot(ctx, oldWs.WorkingRoot(), new)
 	if err != nil {
 		return err
 	}
 
-	sr, err := MigrateRoot(ctx, oldWs.StagedRoot(), new)
+	sr, err := migrateRoot(ctx, oldWs.StagedRoot(), new)
 	if err != nil {
 		return err
 	}
@@ -48,7 +48,7 @@ func MigrateWorkingSet(ctx context.Context, wsRef ref.WorkingSetRef, old, new *d
 	return new.UpdateWorkingSet(ctx, wsRef, newWs, hash.Hash{}, oldWs.Meta())
 }
 
-func MigrateCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
+func migrateCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
 	oldHash, err := cm.HashOf()
 	if err != nil {
 		return err
@@ -62,7 +62,7 @@ func MigrateCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, p
 	}
 
 	if cm.NumParents() == 0 {
-		return MigrateInitCommit(ctx, cm, new, prog)
+		return migrateInitCommit(ctx, cm, new, prog)
 	}
 
 	prog.Log(ctx, "migrating commit %s", oldHash.String())
@@ -72,7 +72,7 @@ func MigrateCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, p
 		return err
 	}
 
-	mRoot, err := MigrateRoot(ctx, root, new)
+	mRoot, err := migrateRoot(ctx, root, new)
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ func MigrateCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, p
 		return err
 	}
 
-	opts, err := MigrateCommitOptions(ctx, cm, prog)
+	opts, err := migrateCommitOptions(ctx, cm, prog)
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func MigrateCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, p
 	return prog.Put(ctx, oldHash, newHash)
 }
 
-func MigrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
+func migrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
 	oldHash, err := cm.HashOf()
 	if err != nil {
 		return err
@@ -144,7 +144,7 @@ func MigrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltD
 	return prog.Put(ctx, oldHash, newHash)
 }
 
-func MigrateCommitOptions(ctx context.Context, oldCm *doltdb.Commit, prog Progress) (datas.CommitOptions, error) {
+func migrateCommitOptions(ctx context.Context, oldCm *doltdb.Commit, prog Progress) (datas.CommitOptions, error) {
 	parents, err := oldCm.ParentHashes(ctx)
 	if err != nil {
 		return datas.CommitOptions{}, err
@@ -172,7 +172,7 @@ func MigrateCommitOptions(ctx context.Context, oldCm *doltdb.Commit, prog Progre
 	}, nil
 }
 
-func MigrateRoot(ctx context.Context, root *doltdb.RootValue, new *doltdb.DoltDB) (*doltdb.RootValue, error) {
+func migrateRoot(ctx context.Context, root *doltdb.RootValue, new *doltdb.DoltDB) (*doltdb.RootValue, error) {
 	migrated, err := doltdb.EmptyRootValue(ctx, new.ValueReadWriter(), new.NodeStore())
 	if err != nil {
 		return nil, err
@@ -189,7 +189,7 @@ func MigrateRoot(ctx context.Context, root *doltdb.RootValue, new *doltdb.DoltDB
 	}
 
 	err = root.IterTables(ctx, func(name string, tbl *doltdb.Table, _ schema.Schema) (bool, error) {
-		mtbl, err := MigrateTable(ctx, tbl, new)
+		mtbl, err := migrateTable(ctx, tbl, new)
 		if err != nil {
 			return true, err
 		}
@@ -207,13 +207,13 @@ func MigrateRoot(ctx context.Context, root *doltdb.RootValue, new *doltdb.DoltDB
 	return migrated, nil
 }
 
-func MigrateTable(ctx context.Context, table *doltdb.Table, new *doltdb.DoltDB) (*doltdb.Table, error) {
+func migrateTable(ctx context.Context, table *doltdb.Table, new *doltdb.DoltDB) (*doltdb.Table, error) {
 	rows, err := table.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	err = MigrateNomsMap(ctx, rows, table.ValueReadWriter(), new.ValueReadWriter())
+	err = migrateNomsMap(ctx, rows, table.ValueReadWriter(), new.ValueReadWriter())
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +234,7 @@ func MigrateTable(ctx context.Context, table *doltdb.Table, new *doltdb.DoltDB) 
 		return nil, err
 	}
 
-	newSet, err := MigrateIndexSet(ctx, sch, oldSet, table.ValueReadWriter(), new)
+	newSet, err := migrateIndexSet(ctx, sch, oldSet, table.ValueReadWriter(), new)
 	if err != nil {
 		return nil, err
 	}
@@ -242,14 +242,14 @@ func MigrateTable(ctx context.Context, table *doltdb.Table, new *doltdb.DoltDB) 
 	return doltdb.NewTable(ctx, new.ValueReadWriter(), new.NodeStore(), sch, rows, newSet, autoInc)
 }
 
-func MigrateIndexSet(ctx context.Context, sch schema.Schema, oldSet durable.IndexSet, old types.ValueReadWriter, new *doltdb.DoltDB) (durable.IndexSet, error) {
+func migrateIndexSet(ctx context.Context, sch schema.Schema, oldSet durable.IndexSet, old types.ValueReadWriter, new *doltdb.DoltDB) (durable.IndexSet, error) {
 	newSet := durable.NewIndexSet(ctx, new.ValueReadWriter(), new.NodeStore())
 	for _, def := range sch.Indexes().AllIndexes() {
 		idx, err := oldSet.GetIndex(ctx, sch, def.Name())
 		if err != nil {
 			return nil, err
 		}
-		if err = MigrateNomsMap(ctx, idx, old, new.ValueReadWriter()); err != nil {
+		if err = migrateNomsMap(ctx, idx, old, new.ValueReadWriter()); err != nil {
 			return nil, err
 		}
 
@@ -261,7 +261,7 @@ func MigrateIndexSet(ctx context.Context, sch schema.Schema, oldSet durable.Inde
 	return newSet, nil
 }
 
-func MigrateNomsMap(ctx context.Context, idx durable.Index, old, new types.ValueReadWriter) error {
+func migrateNomsMap(ctx context.Context, idx durable.Index, old, new types.ValueReadWriter) error {
 	m := durable.NomsMapFromIndex(idx)
 	return copyTreeFromValue(ctx, m, old, new)
 }
