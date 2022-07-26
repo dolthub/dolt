@@ -1319,6 +1319,12 @@ func (t *AlterableDoltTable) RewriteInserter(
 		}
 	} else {
 		newSch = schema.CopyIndexes(oldSch, newSch)
+
+		// We are doing a primary key delete
+		if len(newSch.GetPkOrdinals()) == 0 && len(oldSch.GetPkOrdinals()) > 0 {
+			// Remove the primary key index
+			newSch.Indexes().RemoveIndex("PRIMARY")
+		}
 	}
 
 	// If we have an auto increment column, we need to set it here before we begin the rewrite process (it may have changed)
@@ -1604,6 +1610,19 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		// TODO: this isn't transactional, and it should be
 		ait.AddNewTable(t.tableName)
 		ait.Set(t.tableName, seq)
+	} else if existingCol.AutoIncrement && !col.AutoIncrement {
+		updatedTable, err = updatedTable.SetAutoIncrementValue(ctx, 0)
+		if err != nil {
+			return err
+		}
+
+		ait, err := t.db.gs.GetAutoIncrementTracker(ctx, ws)
+		if err != nil {
+			return err
+		}
+
+		// TODO: This isn't transactional, and it should be
+		ait.DropTable(t.tableName)
 	}
 
 	newRoot, err := root.PutTable(ctx, t.tableName, updatedTable)
