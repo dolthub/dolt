@@ -37,7 +37,7 @@ jobs:
           KUBECONFIG=kubeconfig kubectl config use-context github-actions-dolt-context
         env:
           CONFIG: ${{ secrets.CORP_KUBECONFIG }}
-      - name: Fuzzer gatekeeper
+      - name: Create Fuzzer (GateKeeper) K8s Job
         run: ./.github/scripts/fuzzer/run-fuzzer.sh
         env:
           VERSION: ${{ github.sha }}

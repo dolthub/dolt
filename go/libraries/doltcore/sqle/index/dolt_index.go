@@ -260,6 +260,7 @@ type durableIndexState struct {
 	coversAllCols         uint32
 	cachedLookupTags      atomic.Value
 	cachedSqlRowConverter atomic.Value
+	cachedProjections     atomic.Value
 }
 
 func (s *durableIndexState) coversAllColumns(i *doltIndex) bool {
@@ -317,15 +318,29 @@ func (s *durableIndexState) lookupTags(i *doltIndex) map[uint64]int {
 	return cached.(map[uint64]int)
 }
 
-func (s *durableIndexState) sqlRowConverter(i *doltIndex, columns []uint64) *KVToSqlRowConverter {
-	cached := s.cachedSqlRowConverter.Load()
-	if cached == nil {
-		//cached = NewKVToSqlRowConverter(i.Format(), tagToSqlColIdx, cols, len(cols)),
-
-		cached = NewKVToSqlRowConverterForCols(i.Format(), i.Schema(), columns)
-		s.cachedSqlRowConverter.Store(cached)
+func projectionsEqual(x, y []uint64) bool {
+	if len(x) != len(y) {
+		return false
 	}
-	return cached.(*KVToSqlRowConverter)
+	var i, j int
+	for i < len(x) && j < len(y) {
+		if x[i] != y[j] {
+			return false
+		}
+		i++
+		j++
+	}
+	return true
+}
+func (s *durableIndexState) sqlRowConverter(i *doltIndex, proj []uint64) *KVToSqlRowConverter {
+	cachedProjections := s.cachedProjections.Load()
+	cachedConverter := s.cachedSqlRowConverter.Load()
+	if cachedConverter == nil || !projectionsEqual(proj, cachedProjections.([]uint64)) {
+		cachedConverter = NewKVToSqlRowConverterForCols(i.Format(), i.Schema(), proj)
+		s.cachedSqlRowConverter.Store(cachedConverter)
+		s.cachedProjections.Store(proj)
+	}
+	return cachedConverter.(*KVToSqlRowConverter)
 }
 
 type cachedDurableIndexes struct {

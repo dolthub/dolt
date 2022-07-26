@@ -46,6 +46,11 @@ type DoltDatabaseProvider interface {
 	// This function replaces env.Remote's GetRemoteDB method during SQL session to access dialer in order
 	// to get remote database associated to the env.Remote object.
 	GetRemoteDB(ctx *sql.Context, srcDB *doltdb.DoltDB, r env.Remote, withCaching bool) (*doltdb.DoltDB, error)
+	// CloneDatabaseFromRemote clones the database from the specified remoteURL as a new database in this provider.
+	// dbName is the name for the new database, branch is an optional parameter indicating which branch to clone
+	// (otherwise all branches are cloned), remoteName is the name for the remote created in the new database, and
+	// remoteUrl is a URL (e.g. "file:///dbs/db1") or an <org>/<database> path indicating a database hosted on DoltHub.
+	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error
 }
 
 func EmptyDatabaseProvider() DoltDatabaseProvider {
@@ -59,6 +64,10 @@ func (e emptyRevisionDatabaseProvider) GetRemoteDB(ctx *sql.Context, srcDB *dolt
 }
 
 func (e emptyRevisionDatabaseProvider) FileSystem() filesys.Filesys {
+	return nil
+}
+
+func (e emptyRevisionDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error {
 	return nil
 }
 

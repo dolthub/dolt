@@ -1,4 +1,4 @@
-// Copyright 2021 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,20 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-include "prolly.fbs";
+package jwtauth
 
-namespace serial;
+import (
+	"gopkg.in/square/go-jose.v2/jwt"
+)
 
-table RootValue {
-  feature_version:int64;
-
-  tables:[ubyte]; // Serialized AddressMap.
-
-  foreign_key_addr:[ubyte];
+type Claims struct {
+	jwt.Claims
+	OnBehalfOf string `json:"on_behalf_of"`
 }
-
-// KEEP THIS IN SYNC WITH fileidentifiers.go
-file_identifier "RTVL";
-
-root_type RootValue;
-

@@ -2,7 +2,7 @@ name: Email Team Members
 
 on:
   repository_dispatch:
-    types: [ release-email ]
+    types: [ email-report ]
 
 jobs:
   email-team:

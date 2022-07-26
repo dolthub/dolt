@@ -12,6 +12,10 @@ make_repo() {
 setup() {
     skiponwindows "tests are flaky on Windows"
     setup_no_dolt_init
+    mkdir $BATS_TMPDIR/sql-server-test$$
+    nativevar DOLT_ROOT_PATH $BATS_TMPDIR/sql-server-test$$ /p
+    dolt config --global --add user.email "test@test.com"
+    dolt config --global --add user.name "test"
     make_repo repo1
     make_repo repo2
 }
@@ -21,7 +25,34 @@ teardown() {
     teardown_common
 }
 
+@test "sql-server: Database specific system variables should be loaded" {
+    cd repo1
+    dolt branch dev
+    dolt branch other
 
+    start_sql_server
+    server_query repo1 1 "SET PERSIST repo1_default_branch = 'dev';" ""
+    stop_sql_server
+    start_sql_server
+    server_query repo1 1 "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\ndev"
+    stop_sql_server
+
+    # system variable is lost when starting sql-server outside of the folder
+    # because global config is used.
+    cd ..
+    start_sql_server
+    server_query repo1 1 "SELECT LENGTH(@@repo1_default_branch);" "LENGTH(@@repo1_default_branch)\n0"
+    server_query repo1 1 "SET PERSIST repo1_default_branch = 'other';" ""
+    stop_sql_server
+    start_sql_server
+    server_query repo1 1 "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\nother"
+    stop_sql_server
+
+    # ensure we didn't blow away local setting
+    cd repo1
+    start_sql_server_with_args --user dolt --doltcfg-dir './'
+    server_query repo1 1 "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\ndev"
+}
 
 @test "sql-server: user session variables from config" {
   cd repo1
@@ -136,7 +167,7 @@ SQL
     # attempt to create table (autocommit on), expect either some exception
     server_query repo1 1 "CREATE TABLE i_should_not_exist (
             c0 INT
-        )" "" "not authorized"
+        )" "" "database server is set to read only mode"
 
     # Expect that there are still no tables
     run dolt ls
@@ -174,7 +205,7 @@ SQL
 
     # make a dolt_commit query
     skip "read-only flag does not prevent dolt_commit"
-    server_query repo1 1 "select dolt_commit('--allow-empty', '-m', 'msg')" "" "not authorized: user does not have permission: write"
+    server_query repo1 1 "select dolt_commit('--allow-empty', '-m', 'msg')" "" "database server is set to read only mode: user does not have permission: write"
 }
 
 @test "sql-server: test command line modification" {
@@ -1394,4 +1425,16 @@ databases:
     let PORT="$$ % (65536-1024) + 1024"
     run dolt sql-server -P $PORT
     [ "$status" -eq 1 ]
+}
+
+@test "sql-server: sql-server locks database to writes" {
+    cd repo2
+    dolt sql -q "create table a (x int primary key)" 
+    start_sql_server
+    run dolt sql -q "create table b (x int primary key)" 
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database is locked to writes" ]] || false
+    run dolt sql -q "insert into b values (0)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database is locked to writes" ]] || false
 }

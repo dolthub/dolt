@@ -79,11 +79,6 @@ func Serve(
 	}
 	logrus.SetFormatter(LogFormat{})
 
-	isReadOnly := false
-	if serverConfig.ReadOnly() {
-		isReadOnly = true
-	}
-
 	var mrEnv *env.MultiRepoEnv
 	var err error
 	fs := dEnv.FS
@@ -134,11 +129,12 @@ func Serve(
 	// Create SQL Engine with users
 	config := &engine.SqlEngineConfig{
 		InitialDb:    "",
-		IsReadOnly:   isReadOnly,
+		IsReadOnly:   serverConfig.ReadOnly(),
 		PrivFilePath: serverConfig.PrivilegeFilePath(),
 		ServerUser:   serverConfig.User(),
 		ServerPass:   serverConfig.Password(),
 		Autocommit:   serverConfig.AutoCommit(),
+		JwksConfig:   serverConfig.JwksConfig(),
 	}
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,

@@ -37,7 +37,7 @@ jobs:
   benchmark-dolt-mysql:
     runs-on: ubuntu-18.04
     needs: set-version-actor
-    name: Benchmark Dolt vs MySQL Latency, Benchmark Import
+    name: Trigger Benchmark Latency and Benchmark Import K8s Workflows
     steps:
       - uses: peter-evans/repository-dispatch@v1
         with:
