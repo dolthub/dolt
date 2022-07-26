@@ -546,12 +546,12 @@ SQL
      "
 
      server_query repo1 1 "SELECT * FROM test" "pk\n0\n1\n2"
-     
+
      multi_query repo1 1 "
      SELECT DOLT_CHECKOUT('feature-branch');
      SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
      "
-     
+
      multi_query repo1 1 "
      INSERT INTO test VALUES (500000);
      INSERT INTO test VALUES (500001);
@@ -562,7 +562,7 @@ SQL
      SELECT DOLT_MERGE('feature-branch');
      SELECT DOLT_COMMIT('-a', '-m', 'Finish up Merge');
      "
-     
+
      server_query repo1 1 "SELECT * FROM test order by pk" "pk\n0\n1\n2\n3\n21\n60"
 
      run dolt status
@@ -814,7 +814,7 @@ SQL
 
     multi_query repo1 1 '
     USE `repo1/feature-branch`;
-    CREATE TABLE test ( 
+    CREATE TABLE test (
         pk int,
         c1 int,
         PRIMARY KEY (pk)
@@ -1155,7 +1155,7 @@ END""")
 
     [ -d test3 ]
     [ ! -d test2 ]
-    
+
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server
@@ -1172,7 +1172,7 @@ END""")
     server_query "" 1 "create database test1"
     server_query "" 1 "create database test2"
     server_query "" 1 "create database test3"
-    
+
     server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest2\ntest3"
     server_query "test1" 1 "create table a(x int)"
     server_query "test1" 1 "insert into a values (1), (2)"
@@ -1185,7 +1185,7 @@ END""")
     server_query "test3" 1 "create table a(x int)"
     server_query "test3" 1 "insert into a values (5), (6)"
     run server_query "test3" 1 "select dolt_commit('-a', '-m', 'new table a')"
-    
+
     run server_query "test1" 1 "select dolt_checkout('-b', 'newbranch')"
     server_query "test1/newbranch" 1 "select * from a" "x\n1\n2"
 
@@ -1208,7 +1208,7 @@ END""")
     run server_query "test2/newbranch" 1 "select * from a"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "database not found: test2/newbranch" ]] || false
-    
+
     server_query "test3" 1 "select * from a" "x\n5\n6"
 }
 
@@ -1248,7 +1248,7 @@ END""")
     run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
 
     [ -d db_dir/test1 ]
-    
+
     cd db_dir/test1
     run dolt log
     [ "$status" -eq 0 ]
@@ -1265,7 +1265,7 @@ END""")
 
     [ -d db_dir/test3 ]
     [ ! -d db_dir/test1 ]
-    
+
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
@@ -1279,7 +1279,7 @@ END""")
     mkdir dir_exists
     touch file_exists
     start_sql_server
-    
+
     server_query "" 1 "create database test1"
 
     # Error on creation, already exists
@@ -1287,7 +1287,7 @@ END""")
 
     # Files / dirs in the way
     server_query "" 1 "create database dir_exists" "" "exists"
-    server_query "" 1 "create database file_exists" "" "exists"        
+    server_query "" 1 "create database file_exists" "" "exists"
 }
 
 @test "sql-server: create database with existing repo" {
@@ -1295,7 +1295,7 @@ END""")
 
     cd repo1
     start_sql_server
-    
+
     server_query "" 1 "create database test1"
     server_query "repo1" 1 "show databases" "Database\ninformation_schema\nrepo1\ntest1"
     server_query "test1" 1 "create table a(x int)"
@@ -1437,4 +1437,55 @@ databases:
     run dolt sql -q "insert into b values (0)"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database is locked to writes" ]] || false
+}
+
+@test "sql-server: server fails to start up if there is already a file in the socket file path" {
+    skiponwindows "unix socket is not available on Windows"
+    cd repo2
+    touch mysql.sock
+
+    run pwd
+    REPO_NAME=$output
+
+    let PORT="$$ % (65536-1024) + 1024"
+    dolt sql-server --port=$PORT --socket="$REPO_NAME/mysql.sock" --user dolt > log.txt 2>&1 &
+    SERVER_PID=$!
+    run wait_for_connection $PORT 5000
+    [ "$status" -eq 1 ]
+
+    run grep 'address already in use' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+}
+
+@test "sql-server: start server with yaml config with socket file path defined" {
+    skiponwindows "unix socket is not available on Windows"
+    cd repo2
+    DEFAULT_DB="repo2"
+    let PORT="$$ % (65536-1024) + 1024"
+
+    echo "
+log_level: debug
+
+user:
+  name: dolt
+
+listener:
+  host: localhost
+  port: $PORT
+  max_connections: 10
+  socket: /tmp/mysql.sock
+
+behavior:
+  autocommit: true" > server.yaml
+
+    dolt sql-server --config server.yaml > log.txt 2>&1 &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+
+    server_query repo2 1 "select 1 as col1" "col1\n1"
+
+    run grep '\"/tmp/mysql.sock\"' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
 }

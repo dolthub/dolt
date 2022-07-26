@@ -98,6 +98,8 @@ type ListenerYAMLConfig struct {
 	RequireSecureTransport *bool `yaml:"require_secure_transport"`
 	// AllowCleartextPasswords enables use of cleartext passwords.
 	AllowCleartextPasswords *bool `yaml:"allow_cleartext_passwords"`
+	// Socket is unix socket file path
+	Socket *string `yaml:"socket"`
 }
 
 // PerformanceYAMLConfig contains configuration parameters for performance tweaking
@@ -160,6 +162,7 @@ func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 			nillableStrPtr(cfg.TLSCert()),
 			nillableBoolPtr(cfg.RequireSecureTransport()),
 			nillableBoolPtr(cfg.AllowCleartextPasswords()),
+			nillableStrPtr(cfg.Socket()),
 		},
 		DatabaseConfig: nil,
 	}
@@ -260,7 +263,7 @@ func (cfg YAMLConfig) ReadOnly() bool {
 	return *cfg.BehaviorConfig.ReadOnly
 }
 
-// Autocommit defines the value of the @@autocommit session variable used on every connection
+// AutoCommit defines the value of the @@autocommit session variable used on every connection
 func (cfg YAMLConfig) AutoCommit() bool {
 	if cfg.BehaviorConfig.AutoCommit == nil {
 		return defaultAutoCommit
@@ -310,6 +313,7 @@ func (cfg YAMLConfig) DisableClientMultiStatements() bool {
 	return *cfg.BehaviorConfig.DisableClientMultiStatements
 }
 
+// MetricsLabels returns labels that are applied to all prometheus metrics
 func (cfg YAMLConfig) MetricsLabels() map[string]string {
 	return cfg.MetricsConfig.Labels
 }
@@ -330,6 +334,8 @@ func (cfg YAMLConfig) MetricsPort() int {
 	return *cfg.MetricsConfig.Port
 }
 
+// PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
+// JSON string.
 func (cfg YAMLConfig) PrivilegeFilePath() string {
 	if cfg.PrivilegeFile != nil {
 		return *cfg.PrivilegeFile
@@ -337,6 +343,7 @@ func (cfg YAMLConfig) PrivilegeFilePath() string {
 	return filepath.Join(cfg.CfgDir(), defaultPrivilegeFilePath)
 }
 
+// UserVars is an array containing user specific session variables
 func (cfg YAMLConfig) UserVars() []UserSessionVars {
 	if cfg.Vars != nil {
 		return cfg.Vars
@@ -345,6 +352,7 @@ func (cfg YAMLConfig) UserVars() []UserSessionVars {
 	return nil
 }
 
+// JwksConfig is JSON Web Key Set config, and used to validate a user authed with a jwt (JSON Web Token).
 func (cfg YAMLConfig) JwksConfig() []engine.JwksConfig {
 	if cfg.Jwks != nil {
 		return cfg.Jwks
@@ -368,6 +376,7 @@ func (cfg YAMLConfig) QueryParallelism() int {
 	return *cfg.PerformanceConfig.QueryParallelism
 }
 
+// TLSKey returns a path to the servers PEM-encoded private TLS key. "" if there is none.
 func (cfg YAMLConfig) TLSKey() string {
 	if cfg.ListenerConfig.TLSKey == nil {
 		return ""
@@ -375,6 +384,7 @@ func (cfg YAMLConfig) TLSKey() string {
 	return *cfg.ListenerConfig.TLSKey
 }
 
+// TLSCert returns a path to the servers PEM-encoded TLS certificate chain. "" if there is none.
 func (cfg YAMLConfig) TLSCert() string {
 	if cfg.ListenerConfig.TLSCert == nil {
 		return ""
@@ -382,6 +392,7 @@ func (cfg YAMLConfig) TLSCert() string {
 	return *cfg.ListenerConfig.TLSCert
 }
 
+// RequireSecureTransport is true if the server should reject non-TLS connections.
 func (cfg YAMLConfig) RequireSecureTransport() bool {
 	if cfg.ListenerConfig.RequireSecureTransport == nil {
 		return false
@@ -389,6 +400,7 @@ func (cfg YAMLConfig) RequireSecureTransport() bool {
 	return *cfg.ListenerConfig.RequireSecureTransport
 }
 
+// PersistenceBehavior is "load" if we include persisted system globals on server init
 func (cfg YAMLConfig) PersistenceBehavior() string {
 	if cfg.BehaviorConfig.PersistenceBehavior == nil {
 		return loadPerisistentGlobals
@@ -396,6 +408,7 @@ func (cfg YAMLConfig) PersistenceBehavior() string {
 	return *cfg.BehaviorConfig.PersistenceBehavior
 }
 
+// DataDir is the path to a directory to use as the data dir, both to create new databases and locate existing ones.
 func (cfg YAMLConfig) DataDir() string {
 	if cfg.DataDirStr != nil {
 		return *cfg.DataDirStr
@@ -403,9 +416,22 @@ func (cfg YAMLConfig) DataDir() string {
 	return defaultDataDir
 }
 
+// CfgDir is the path to a directory to use to store the dolt configuration files.
 func (cfg YAMLConfig) CfgDir() string {
 	if cfg.CfgDirStr != nil {
 		return *cfg.CfgDirStr
 	}
 	return filepath.Join(cfg.DataDir(), defaultCfgDir)
+}
+
+// Socket is a path to the unix socket file
+func (cfg YAMLConfig) Socket() string {
+	if cfg.ListenerConfig.Socket == nil {
+		return ""
+	}
+	// if defined but empty -> default
+	if *cfg.ListenerConfig.Socket == "" {
+		return defaultUnixSocketFilePath
+	}
+	return *cfg.ListenerConfig.Socket
 }
