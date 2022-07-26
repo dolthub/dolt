@@ -51,6 +51,12 @@ func GetKeysAndValues(msg serial.Message) (keys, values val.SlicedBuffer, cnt ui
 		cnt = getCommitClosureCount(msg)
 		return
 	}
+	if id == serial.BlobFileID {
+		keys = getBlobKeys(msg)
+		values = getBlobValues(msg)
+		cnt = getBlobCount(msg)
+		return
+	}
 
 	panic(fmt.Sprintf("unknown message id %s", id))
 }
@@ -66,6 +72,8 @@ func WalkAddresses(ctx context.Context, msg serial.Message, cb func(ctx context.
 		return walkMergeArtifactAddresses(ctx, msg, cb)
 	case serial.CommitClosureFileID:
 		return walkCommitClosureAddresses(ctx, msg, cb)
+	case serial.BlobFileID:
+		return walkBlobAddresses(ctx, msg, cb)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}
@@ -82,6 +90,8 @@ func GetTreeLevel(msg serial.Message) int {
 		return getMergeArtifactTreeLevel(msg)
 	case serial.CommitClosureFileID:
 		return getCommitClosureTreeLevel(msg)
+	case serial.BlobFileID:
+		return getBlobTreeLevel(msg)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}
@@ -98,6 +108,8 @@ func GetTreeCount(msg serial.Message) int {
 		return getMergeArtifactTreeCount(msg)
 	case serial.CommitClosureFileID:
 		return getCommitClosureTreeCount(msg)
+	case serial.BlobFileID:
+		return getBlobTreeCount(msg)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}
@@ -114,6 +126,8 @@ func GetSubtrees(msg serial.Message) []uint64 {
 		return getMergeArtifactSubtrees(msg)
 	case serial.CommitClosureFileID:
 		return getCommitClosureSubtrees(msg)
+	case serial.BlobFileID:
+		return getBlobSubtrees(msg)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}
