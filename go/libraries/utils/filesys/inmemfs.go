@@ -16,8 +16,10 @@ package filesys
 
 import (
 	"bytes"
+	"encoding/base32"
 	"errors"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -535,6 +537,44 @@ func (fs *InMemFS) MoveFile(srcPath, destPath string) error {
 	return os.ErrNotExist
 }
 
+func (fs *InMemFS) CopyFile(srcPath, destPath string) error {
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
+	srcPath = fs.getAbsPath(srcPath)
+	destPath = fs.getAbsPath(destPath)
+
+	if exists, destIsDir := fs.exists(destPath); exists && destIsDir {
+		return ErrIsDir
+	}
+
+	if obj, ok := fs.objs[srcPath]; ok {
+		if obj.isDir() {
+			return ErrIsDir
+		}
+
+		destDir := filepath.Dir(destPath)
+		destParentDir, err := fs.mkDirs(destDir)
+		if err != nil {
+			return err
+		}
+
+		destData := make([]byte, len(obj.(*memFile).data))
+		copy(destData, obj.(*memFile).data)
+
+		now := InMemNowFunc()
+		destObj := &memFile{destPath, destData, destParentDir, now}
+
+		fs.objs[destPath] = destObj
+		destParentDir.objs[destPath] = destObj
+		destParentDir.time = now
+
+		return nil
+	}
+
+	return os.ErrNotExist
+}
+
 // converts a path to an absolute path.  If it's already an absolute path the input path will be returned unaltered
 func (fs *InMemFS) Abs(path string) (string, error) {
 	path = fs.pathToNative(path)
@@ -557,6 +597,13 @@ func (fs *InMemFS) LastModified(path string) (t time.Time, exists bool) {
 	}
 
 	return time.Time{}, false
+}
+
+func (fs *InMemFS) TempDir() string {
+	buf := make([]byte, 16)
+	rand.Read(buf)
+	s := base32.HexEncoding.EncodeToString(buf)
+	return "/var/folders/gc/" + s + "/T/"
 }
 
 func (fs *InMemFS) pathToNative(path string) string {

@@ -109,7 +109,6 @@ func (sm SerialMessage) HumanReadableString() string {
 		fmt.Fprintf(ret, "{\n")
 		fmt.Fprintf(ret, "\tFeatureVersion: %d\n", msg.FeatureVersion())
 		fmt.Fprintf(ret, "\tForeignKeys: #%s\n", hash.New(msg.ForeignKeyAddrBytes()).String())
-		fmt.Fprintf(ret, "\tSuperSchema: #%s\n", hash.New(msg.SuperSchemasAddrBytes()).String())
 		fmt.Fprintf(ret, "\tTables: {\n\t%s", SerialMessage(msg.TablesBytes()).HumanReadableString())
 		fmt.Fprintf(ret, "\t}\n")
 		fmt.Fprintf(ret, "}")
@@ -226,16 +225,6 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 			return err
 		}
 		addr := hash.New(msg.ForeignKeyAddrBytes())
-		if !addr.IsEmpty() {
-			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
-			if err != nil {
-				return err
-			}
-			if err = cb(r); err != nil {
-				return err
-			}
-		}
-		addr = hash.New(msg.SuperSchemasAddrBytes())
 		if !addr.IsEmpty() {
 			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 			if err != nil {
@@ -371,6 +360,8 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	case serial.ProllyTreeNodeFileID:
 		fallthrough
 	case serial.AddressMapFileID:
+		fallthrough
+	case serial.MergeArtifactsFileID:
 		fallthrough
 	case serial.CommitClosureFileID:
 		return message.WalkAddresses(context.TODO(), serial.Message(sm), func(ctx context.Context, addr hash.Hash) error {

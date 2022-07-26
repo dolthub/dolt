@@ -83,10 +83,8 @@ type rvStorage interface {
 	GetFeatureVersion() (FeatureVersion, bool, error)
 
 	GetTablesMap(ctx context.Context, vr types.ValueReadWriter, ns tree.NodeStore) (tableMap, error)
-	GetSuperSchemaMap(ctx context.Context, vr types.ValueReader) (types.Map, bool, error)
 	GetForeignKeys(ctx context.Context, vr types.ValueReader) (types.Value, bool, error)
 
-	SetSuperSchemaMap(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (rvStorage, error)
 	SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, m types.Value) (rvStorage, error)
 	SetFeatureVersion(v FeatureVersion) (rvStorage, error)
 
@@ -326,12 +324,10 @@ func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter, ns tree.Node
 
 		var empty hash.Hash
 		fkoff := builder.CreateByteVector(empty[:])
-		ssoff := builder.CreateByteVector(empty[:])
 		serial.RootValueStart(builder)
 		serial.RootValueAddFeatureVersion(builder, int64(DoltFeatureVersion))
 		serial.RootValueAddTables(builder, tablesoff)
 		serial.RootValueAddForeignKeyAddr(builder, fkoff)
-		serial.RootValueAddSuperSchemasAddr(builder, ssoff)
 		bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
 		return newRootValue(vrw, ns, types.SerialMessage(bs))
 	}
@@ -497,23 +493,6 @@ func (root *RootValue) GenerateTagsForNewColumns(
 	}
 
 	return newTags, nil
-}
-
-// GerSuperSchemaMap returns the Noms map that tracks SuperSchemas, used to create new RootValues on checkout branch.
-func (root *RootValue) GetSuperSchemaMap(ctx context.Context) (types.Map, error) {
-	return root.getOrCreateSuperSchemaMap(ctx)
-}
-
-func (root *RootValue) getOrCreateSuperSchemaMap(ctx context.Context) (types.Map, error) {
-	m, found, err := root.st.GetSuperSchemaMap(ctx, root.vrw)
-	if err != nil {
-		return types.Map{}, err
-	}
-	if found {
-		return m, nil
-	}
-
-	return types.NewMap(ctx, root.vrw)
 }
 
 func (root *RootValue) GetAllSchemas(ctx context.Context) (map[string]schema.Schema, error) {
@@ -838,35 +817,10 @@ func (root *RootValue) HashOf() (hash.Hash, error) {
 // RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
 // column tag information, use this method instead of a table drop + add.
 func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string) (*RootValue, error) {
-
 	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{old_name: oldName, name: newName}})
 	if err != nil {
 		return nil, err
 	}
-
-	ssMap, err := root.getOrCreateSuperSchemaMap(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	ssv, found, err := ssMap.MaybeGet(ctx, types.String(oldName))
-	if err != nil {
-		return nil, err
-	}
-	if found {
-		ssme := ssMap.Edit().Remove(types.String(oldName))
-		ssme = ssme.Set(types.String(newName), ssv)
-		ssMap, err = ssme.Map(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		newStorage, err = newStorage.SetSuperSchemaMap(ctx, root.vrw, ssMap)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return root.withStorage(newStorage), nil
 }
 
@@ -1171,18 +1125,6 @@ func (m fbTableMap) Iter(ctx context.Context, cb func(string, hash.Hash) (bool, 
 	})
 }
 
-func (r fbRvStorage) GetSuperSchemaMap(ctx context.Context, vr types.ValueReader) (types.Map, bool, error) {
-	addr := hash.New(r.srv.SuperSchemasAddrBytes())
-	if addr.IsEmpty() {
-		return types.Map{}, false, nil
-	}
-	v, err := vr.ReadValue(ctx, addr)
-	if err != nil {
-		return types.Map{}, false, err
-	}
-	return v.(types.Map), true, nil
-}
-
 func (r fbRvStorage) GetForeignKeys(ctx context.Context, vr types.ValueReader) (types.Value, bool, error) {
 	addr := hash.New(r.srv.ForeignKeyAddrBytes())
 	if addr.IsEmpty() {
@@ -1193,20 +1135,6 @@ func (r fbRvStorage) GetForeignKeys(ctx context.Context, vr types.ValueReader) (
 		return types.SerialMessage{}, false, err
 	}
 	return v.(types.SerialMessage), true, nil
-}
-
-func (r fbRvStorage) SetSuperSchemaMap(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (rvStorage, error) {
-	var h hash.Hash
-	if !m.Empty() {
-		ref, err := vrw.WriteValue(ctx, m)
-		if err != nil {
-			return nil, err
-		}
-		h = ref.TargetHash()
-	}
-	ret := r.clone()
-	copy(ret.srv.SuperSchemasAddrBytes(), h[:])
-	return ret, nil
 }
 
 func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error) {
@@ -1261,12 +1189,10 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 	tablesoff := builder.CreateByteVector(ambytes)
 
 	fkoff := builder.CreateByteVector(r.srv.ForeignKeyAddrBytes())
-	ssoff := builder.CreateByteVector(r.srv.SuperSchemasAddrBytes())
 	serial.RootValueStart(builder)
 	serial.RootValueAddFeatureVersion(builder, r.srv.FeatureVersion())
 	serial.RootValueAddTables(builder, tablesoff)
 	serial.RootValueAddForeignKeyAddr(builder, fkoff)
-	serial.RootValueAddSuperSchemasAddr(builder, ssoff)
 
 	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
 	return fbRvStorage{serial.GetRootAsRootValue(bs, serial.MessagePrefixSz)}, nil
@@ -1301,11 +1227,10 @@ func (r fbRvStorage) clone() fbRvStorage {
 }
 
 func (r fbRvStorage) DebugString(ctx context.Context) string {
-	return fmt.Sprintf("fbRvStorage[%d, %s, %s, %s]",
+	return fmt.Sprintf("fbRvStorage[%d, %s, %s]",
 		r.srv.FeatureVersion(),
 		"...", // TODO: Print out tables map
-		hash.New(r.srv.ForeignKeyAddrBytes()).String(),
-		hash.New(r.srv.SuperSchemasAddrBytes()).String())
+		hash.New(r.srv.ForeignKeyAddrBytes()).String())
 }
 
 func (r fbRvStorage) nomsValue() types.Value {
@@ -1323,4 +1248,10 @@ func NewDataCacheKey(rv *RootValue) (DataCacheKey, error) {
 	}
 
 	return DataCacheKey{hash}, nil
+}
+
+// HackNomsValuesFromRootValues unwraps a RootVal to a noms Value.
+// Deprecated: only for use in dolt migrate.
+func HackNomsValuesFromRootValues(root *RootValue) types.Value {
+	return root.nomsValue()
 }

@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 remotesrv_pid=
 setup() {
-    skip_nbf_dolt_1
     skiponwindows "tests are flaky on Windows"
     setup_common
     cd $BATS_TMPDIR
@@ -152,6 +151,7 @@ setup_merge() {
 }
 
 @test "garbage_collection: leave merge commit" {
+    skip_nbf_dolt_1
     setup_merge
     dolt merge other
 

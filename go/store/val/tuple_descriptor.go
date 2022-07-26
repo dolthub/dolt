@@ -32,7 +32,6 @@ type TupleDesc struct {
 	Types []Type
 	cmp   TupleComparator
 	fast  fixedAccess
-	Addrs []int
 }
 
 // NewTupleDescriptor makes a TupleDescriptor from |types|.
@@ -45,18 +44,9 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 	if len(types) > MaxTupleFields {
 		panic("tuple field maxIdx exceeds maximum")
 	}
-
 	for _, typ := range types {
 		if typ.Enc == NullEnc {
 			panic("invalid encoding")
-		}
-	}
-
-	var addrIdxs []int
-	for i, t := range types {
-		switch t.Enc {
-		case BytesAddrEnc, StringAddrEnc, JSONAddrEnc:
-			addrIdxs = append(addrIdxs, i)
 		}
 	}
 
@@ -64,10 +54,18 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 		Types: types,
 		cmp:   cmp,
 		fast:  makeFixedAccess(types),
-		Addrs: addrIdxs,
 	}
-
 	return
+}
+
+func IterAddressFields(td TupleDesc, cb func(int, Type)) {
+	for i, typ := range td.Types {
+		switch typ.Enc {
+		case BytesAddrEnc, StringAddrEnc,
+			JSONAddrEnc, CommitAddrEnc:
+			cb(i, typ)
+		}
+	}
 }
 
 type fixedAccess [][2]ByteSize
@@ -87,6 +85,13 @@ func makeFixedAccess(types []Type) (acc fixedAccess) {
 		acc = append(acc, [2]ByteSize{off, off + sz})
 		off += sz
 	}
+	return
+}
+
+func (td TupleDesc) AddressFieldCount() (n int) {
+	IterAddressFields(td, func(int, Type) {
+		n++
+	})
 	return
 }
 

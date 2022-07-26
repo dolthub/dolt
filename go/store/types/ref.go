@@ -242,9 +242,8 @@ func WalkAddrsForNBF(nbf *NomsBinFormat) func(chunks.Chunk, func(h hash.Hash, is
 	}
 }
 
-func WalkAddrs(v Value, nbf *NomsBinFormat, cb func(h hash.Hash, isleaf bool)) error {
+func WalkAddrs(v Value, nbf *NomsBinFormat, cb func(h hash.Hash, isleaf bool) error) error {
 	return v.walkRefs(nbf, func(r Ref) error {
-		cb(r.TargetHash(), r.Height() == 1)
-		return nil
+		return cb(r.TargetHash(), r.Height() == 1)
 	})
 }

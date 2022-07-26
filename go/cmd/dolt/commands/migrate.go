@@ -20,8 +20,10 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/migrate"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -36,7 +38,7 @@ const (
 var migrateDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Executes a database migration to use the latest Dolt data format.",
 	LongDesc: `Migrate is a multi-purpose command to update the data format of a Dolt database. Over time, development 
-on Dolt requires changes to the on-disk data format. These changes are necessary to improve Database performance amd 
+on Dolt requires changes to the on-disk data format. These changes are necessary to improve Database performance and 
 correctness. Migrating to the latest format is therefore necessary for compatibility with the latest Dolt clients, and
 to take advantage of the newly released Dolt features.`,
 
@@ -76,7 +78,7 @@ func (cmd MigrateCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd MigrateCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, migrateDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, migrateDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.Contains(migratePushFlag) && apr.Contains(migratePullFlag) {
@@ -84,5 +86,29 @@ func (cmd MigrateCmd) Exec(ctx context.Context, commandStr string, args []string
 		return 1
 	}
 
+	if err := MigrateDatabase(ctx, dEnv); err != nil {
+		verr := errhand.BuildDError("migration failed").AddCause(err).Build()
+		return HandleVErrAndExitCode(verr, usage)
+	}
 	return 0
+}
+
+// MigrateDatabase migrates the NomsBinFormat of |dEnv.DoltDB|.
+func MigrateDatabase(ctx context.Context, dEnv *env.DoltEnv) error {
+	menv, err := migrate.NewEnvironment(ctx, dEnv)
+	if err != nil {
+		return err
+	}
+	p, err := menv.Migration.FS.Abs(".")
+	if err != nil {
+		return err
+	}
+	cli.Println("migrating database at tmp dir: ", p)
+
+	err = migrate.TraverseDAG(ctx, menv.Existing.DoltDB, menv.Migration.DoltDB)
+	if err != nil {
+		return err
+	}
+
+	return migrate.SwapChunkStores(ctx, menv)
 }

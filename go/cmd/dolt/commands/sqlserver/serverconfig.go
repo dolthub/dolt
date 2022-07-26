@@ -20,6 +20,7 @@ import (
 	"net"
 	"path/filepath"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
@@ -36,22 +37,24 @@ const (
 )
 
 const (
-	defaultHost                = "localhost"
-	defaultPort                = 3306
-	defaultUser                = "root"
-	defaultPass                = ""
-	defaultTimeout             = 8 * 60 * 60 * 1000 // 8 hours, same as MySQL
-	defaultReadOnly            = false
-	defaultLogLevel            = LogLevel_Info
-	defaultAutoCommit          = true
-	defaultMaxConnections      = 100
-	defaultQueryParallelism    = 2
-	defaultPersistenceBahavior = loadPerisistentGlobals
-	defaultDataDir             = "."
-	defaultCfgDir              = ".doltcfg"
-	defaultPrivilegeFilePath   = "privileges.db"
-	defaultMetricsHost         = ""
-	defaultMetricsPort         = -1
+	defaultHost                    = "localhost"
+	defaultPort                    = 3306
+	defaultUser                    = "root"
+	defaultPass                    = ""
+	defaultTimeout                 = 8 * 60 * 60 * 1000 // 8 hours, same as MySQL
+	defaultReadOnly                = false
+	defaultLogLevel                = LogLevel_Info
+	defaultAutoCommit              = true
+	defaultMaxConnections          = 100
+	defaultQueryParallelism        = 2
+	defaultPersistenceBahavior     = loadPerisistentGlobals
+	defaultDataDir                 = "."
+	defaultCfgDir                  = ".doltcfg"
+	defaultPrivilegeFilePath       = "privileges.db"
+	defaultMetricsHost             = ""
+	defaultMetricsPort             = -1
+	defaultAllowCleartextPasswords = false
+	defaultUnixSocketFilePath      = "/tmp/mysql.sock"
 )
 
 const (
@@ -132,27 +135,35 @@ type ServerConfig interface {
 	PrivilegeFilePath() string
 	// UserVars is an array containing user specific session variables
 	UserVars() []UserSessionVars
+	// JwksConfig is an array containing jwks config
+	JwksConfig() []engine.JwksConfig
+	// AllowCleartextPasswords is true if the server should accept cleartext passwords.
+	AllowCleartextPasswords() bool
+	// Socket is a path to the unix socket file
+	Socket() string
 }
 
 type commandLineServerConfig struct {
-	host                   string
-	port                   int
-	user                   string
-	password               string
-	timeout                uint64
-	readOnly               bool
-	logLevel               LogLevel
-	dbNamesAndPaths        []env.EnvNameAndPath
-	dataDir                string
-	cfgDir                 string
-	autoCommit             bool
-	maxConnections         uint64
-	queryParallelism       int
-	tlsKey                 string
-	tlsCert                string
-	requireSecureTransport bool
-	persistenceBehavior    string
-	privilegeFilePath      string
+	host                    string
+	port                    int
+	user                    string
+	password                string
+	timeout                 uint64
+	readOnly                bool
+	logLevel                LogLevel
+	dbNamesAndPaths         []env.EnvNameAndPath
+	dataDir                 string
+	cfgDir                  string
+	autoCommit              bool
+	maxConnections          uint64
+	queryParallelism        int
+	tlsKey                  string
+	tlsCert                 string
+	requireSecureTransport  bool
+	persistenceBehavior     string
+	privilegeFilePath       string
+	allowCleartextPasswords bool
+	socket                  string
 }
 
 var _ ServerConfig = (*commandLineServerConfig)(nil)
@@ -197,7 +208,7 @@ func (cfg *commandLineServerConfig) LogLevel() LogLevel {
 	return cfg.logLevel
 }
 
-// Autocommit defines the value of the @@autocommit session variable used on every connection
+// AutoCommit defines the value of the @@autocommit session variable used on every connection
 func (cfg *commandLineServerConfig) AutoCommit() bool {
 	return cfg.autoCommit
 }
@@ -217,22 +228,29 @@ func (cfg *commandLineServerConfig) PersistenceBehavior() string {
 	return cfg.persistenceBehavior
 }
 
+// TLSKey returns a path to the servers PEM-encoded private TLS key. "" if there is none.
 func (cfg *commandLineServerConfig) TLSKey() string {
 	return cfg.tlsKey
 }
 
+// TLSCert returns a path to the servers PEM-encoded TLS certificate chain. "" if there is none.
 func (cfg *commandLineServerConfig) TLSCert() string {
 	return cfg.tlsCert
 }
 
+// RequireSecureTransport is true if the server should reject non-TLS connections.
 func (cfg *commandLineServerConfig) RequireSecureTransport() bool {
 	return cfg.requireSecureTransport
 }
 
+// DisableClientMultiStatements is true if we want the server to not
+// process incoming ComQuery packets as if they had multiple queries in
+// them, even if the client advertises support for MULTI_STATEMENTS.
 func (cfg *commandLineServerConfig) DisableClientMultiStatements() bool {
 	return false
 }
 
+// MetricsLabels returns labels that are applied to all prometheus metrics
 func (cfg *commandLineServerConfig) MetricsLabels() map[string]string {
 	return nil
 }
@@ -245,12 +263,23 @@ func (cfg *commandLineServerConfig) MetricsPort() int {
 	return defaultMetricsPort
 }
 
+// PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
+// JSON string.
 func (cfg *commandLineServerConfig) PrivilegeFilePath() string {
 	return cfg.privilegeFilePath
 }
 
+// UserVars is an array containing user specific session variables.
 func (cfg *commandLineServerConfig) UserVars() []UserSessionVars {
 	return nil
+}
+
+func (cfg *commandLineServerConfig) JwksConfig() []engine.JwksConfig {
+	return nil
+}
+
+func (cfg *commandLineServerConfig) AllowCleartextPasswords() bool {
+	return cfg.allowCleartextPasswords
 }
 
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in
@@ -260,16 +289,23 @@ func (cfg *commandLineServerConfig) DatabaseNamesAndPaths() []env.EnvNameAndPath
 	return cfg.dbNamesAndPaths
 }
 
+// DataDir is the path to a directory to use as the data dir, both to create new databases and locate existing ones.
 func (cfg *commandLineServerConfig) DataDir() string {
 	return cfg.dataDir
 }
 
+// CfgDir is the path to a directory to use to store the dolt configuration files.
 func (cfg *commandLineServerConfig) CfgDir() string {
 	return cfg.cfgDir
 }
 
-// withHost updates the host and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
-func (cfg *commandLineServerConfig) withHost(host string) *commandLineServerConfig {
+// Socket is a path to the unix socket file
+func (cfg *commandLineServerConfig) Socket() string {
+	return cfg.socket
+}
+
+// WithHost updates the host and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
+func (cfg *commandLineServerConfig) WithHost(host string) *commandLineServerConfig {
 	cfg.host = host
 	return cfg
 }
@@ -323,52 +359,69 @@ func (cfg *commandLineServerConfig) withQueryParallelism(queryParallelism int) *
 	return cfg
 }
 
+// withDBNamesAndPaths updates the dbNamesAndPaths, which is an array of env.EnvNameAndPathObjects corresponding to the databases
 func (cfg *commandLineServerConfig) withDBNamesAndPaths(dbNamesAndPaths []env.EnvNameAndPath) *commandLineServerConfig {
 	cfg.dbNamesAndPaths = dbNamesAndPaths
 	return cfg
 }
 
+// withDataDir updates the path to a directory to use as the data dir.
 func (cfg *commandLineServerConfig) withDataDir(dataDir string) *commandLineServerConfig {
 	cfg.dataDir = dataDir
 	return cfg
 }
 
+// withCfgDir updates the path to a directory to use to store the dolt configuration files.
 func (cfg *commandLineServerConfig) withCfgDir(cfgDir string) *commandLineServerConfig {
 	cfg.cfgDir = cfgDir
 	return cfg
 }
 
+// withPersistenceBehavior updates persistence behavior of system globals on server init
 func (cfg *commandLineServerConfig) withPersistenceBehavior(persistenceBehavior string) *commandLineServerConfig {
 	cfg.persistenceBehavior = persistenceBehavior
 	return cfg
 }
 
+// withPrivilegeFilePath updates the path to the file which contains all needed privilege information in the form of a JSON string
 func (cfg *commandLineServerConfig) withPrivilegeFilePath(privFilePath string) *commandLineServerConfig {
 	cfg.privilegeFilePath = privFilePath
+	return cfg
+}
+
+func (cfg *commandLineServerConfig) withAllowCleartextPasswords(allow bool) *commandLineServerConfig {
+	cfg.allowCleartextPasswords = allow
+	return cfg
+}
+
+// WithSocket updates the path to the unix socket file
+func (cfg *commandLineServerConfig) WithSocket(sockFilePath string) *commandLineServerConfig {
+	cfg.socket = sockFilePath
 	return cfg
 }
 
 // DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
 func DefaultServerConfig() *commandLineServerConfig {
 	return &commandLineServerConfig{
-		host:                defaultHost,
-		port:                defaultPort,
-		user:                defaultUser,
-		password:            defaultPass,
-		timeout:             defaultTimeout,
-		readOnly:            defaultReadOnly,
-		logLevel:            defaultLogLevel,
-		autoCommit:          defaultAutoCommit,
-		maxConnections:      defaultMaxConnections,
-		queryParallelism:    defaultQueryParallelism,
-		persistenceBehavior: defaultPersistenceBahavior,
-		dataDir:             defaultDataDir,
-		cfgDir:              filepath.Join(defaultDataDir, defaultCfgDir),
-		privilegeFilePath:   filepath.Join(defaultDataDir, defaultCfgDir, defaultPrivilegeFilePath),
+		host:                    defaultHost,
+		port:                    defaultPort,
+		user:                    defaultUser,
+		password:                defaultPass,
+		timeout:                 defaultTimeout,
+		readOnly:                defaultReadOnly,
+		logLevel:                defaultLogLevel,
+		autoCommit:              defaultAutoCommit,
+		maxConnections:          defaultMaxConnections,
+		queryParallelism:        defaultQueryParallelism,
+		persistenceBehavior:     defaultPersistenceBahavior,
+		dataDir:                 defaultDataDir,
+		cfgDir:                  filepath.Join(defaultDataDir, defaultCfgDir),
+		privilegeFilePath:       filepath.Join(defaultDataDir, defaultCfgDir, defaultPrivilegeFilePath),
+		allowCleartextPasswords: defaultAllowCleartextPasswords,
 	}
 }
 
-// Validate returns an `error` if any field is not valid.
+// ValidateConfig returns an `error` if any field is not valid.
 func ValidateConfig(config ServerConfig) error {
 	if config.Host() != "localhost" {
 		ip := net.ParseIP(config.Host())
@@ -392,14 +445,32 @@ func ValidateConfig(config ServerConfig) error {
 }
 
 // ConnectionString returns a Data Source Name (DSN) to be used by go clients for connecting to a running server.
-func ConnectionString(config ServerConfig) string {
-	return fmt.Sprintf("%v:%v@tcp(%v:%v)/", config.User(), config.Password(), config.Host(), config.Port())
+// If unix socket file path is defined in ServerConfig, then `unix` DSN will be returned.
+func ConnectionString(config ServerConfig, database string) string {
+	var dsn string
+	if config.Socket() != "" {
+		dsn = fmt.Sprintf("%v:%v@unix(%v)/%v", config.User(), config.Password(), config.Socket(), database)
+	} else {
+		dsn = fmt.Sprintf("%v:%v@tcp(%v:%v)/%v", config.User(), config.Password(), config.Host(), config.Port(), database)
+	}
+	if config.AllowCleartextPasswords() {
+		dsn += "?allowCleartextPasswords=1"
+	}
+	return dsn
 }
 
 // ConfigInfo returns a summary of some of the config which contains some of the more important information
 func ConfigInfo(config ServerConfig) string {
-	return fmt.Sprintf(`HP="%v:%v"|T="%v"|R="%v"|L="%v"`, config.Host(), config.Port(),
-		config.ReadTimeout(), config.ReadOnly(), config.LogLevel())
+	socket := ""
+	if config.Socket() != "" {
+		s := config.Socket()
+		if s == "" {
+			s = defaultUnixSocketFilePath
+		}
+		socket = fmt.Sprintf(`|S="%v"`, s)
+	}
+	return fmt.Sprintf(`HP="%v:%v"|T="%v"|R="%v"|L="%v"%s`, config.Host(), config.Port(),
+		config.ReadTimeout(), config.ReadOnly(), config.LogLevel(), socket)
 }
 
 // LoadTLSConfig loads the certificate chain from config.TLSKey() and config.TLSCert() and returns

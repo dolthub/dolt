@@ -103,6 +103,20 @@ func TestFilesystems(t *testing.T) {
 			dataRead, err = fs.ReadFile(movedFilePath)
 			require.NoError(t, err)
 			require.Equal(t, dataRead, data)
+
+			tmp := fs.TempDir()
+			require.NotEmpty(t, tmp)
+			fp2 := filepath.Join(tmp, "data.txt")
+			wrc, err := fs.OpenForWrite(fp2, os.ModePerm)
+			require.NoError(t, err)
+			require.NoError(t, wrc.Close())
+
+			// Test writing/reading random data to tmp file
+			err = fs.WriteFile(fp2, data)
+			require.NoError(t, err)
+			dataRead, err = fs.ReadFile(fp2)
+			require.NoError(t, err)
+			require.Equal(t, dataRead, data)
 		})
 	}
 }

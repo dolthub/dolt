@@ -153,9 +153,9 @@ func TestServerGoodParams(t *testing.T) {
 
 	tests := []ServerConfig{
 		DefaultServerConfig(),
-		DefaultServerConfig().withHost("127.0.0.1").WithPort(15400),
-		DefaultServerConfig().withHost("localhost").WithPort(15401),
-		//DefaultServerConfig().withHost("::1").WithPort(15402), // Fails on Jenkins, assuming no IPv6 support
+		DefaultServerConfig().WithHost("127.0.0.1").WithPort(15400),
+		DefaultServerConfig().WithHost("localhost").WithPort(15401),
+		//DefaultServerConfig().WithHost("::1").WithPort(15402), // Fails on Jenkins, assuming no IPv6 support
 		DefaultServerConfig().withUser("testusername").WithPort(15403),
 		DefaultServerConfig().withPassword("hunter2").WithPort(15404),
 		DefaultServerConfig().withTimeout(0).WithPort(15405),
@@ -164,6 +164,7 @@ func TestServerGoodParams(t *testing.T) {
 		DefaultServerConfig().withLogLevel(LogLevel_Info).WithPort(15408),
 		DefaultServerConfig().withReadOnly(true).WithPort(15409),
 		DefaultServerConfig().withUser("testusernamE").withPassword("hunter2").withTimeout(4).WithPort(15410),
+		DefaultServerConfig().withAllowCleartextPasswords(true),
 	}
 
 	for _, test := range tests {
@@ -174,7 +175,7 @@ func TestServerGoodParams(t *testing.T) {
 			}(test, sc)
 			err := sc.WaitForStart()
 			require.NoError(t, err)
-			conn, err := dbr.Open("mysql", ConnectionString(test), nil)
+			conn, err := dbr.Open("mysql", ConnectionString(test, "dbname"), nil)
 			require.NoError(t, err)
 			err = conn.Close()
 			require.NoError(t, err)
@@ -198,7 +199,7 @@ func TestServerSelect(t *testing.T) {
 	require.NoError(t, err)
 
 	const dbName = "dolt"
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+dbName, nil)
+	conn, err := dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	defer conn.Close()
 	sess := conn.NewSession(nil)
@@ -274,7 +275,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 
 	const dbName = "dolt"
 
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+dbName, nil)
+	conn, err := dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 
@@ -316,7 +317,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	}
 	conn.Close()
 
-	conn, err = dbr.Open("mysql", ConnectionString(serverConfig)+dbName, nil)
+	conn, err = dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -353,7 +354,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	}
 	conn.Close()
 
-	conn, err = dbr.Open("mysql", ConnectionString(serverConfig)+dbName, nil)
+	conn, err = dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -431,7 +432,7 @@ func TestReadReplica(t *testing.T) {
 	multiSetup.PushToRemote(sourceDbName, "remote1", "main")
 
 	t.Run("read replica pulls multiple branches", func(t *testing.T) {
-		conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
+		conn, err := dbr.Open("mysql", ConnectionString(serverConfig, readReplicaDbName), nil)
 		defer conn.Close()
 		require.NoError(t, err)
 		sess := conn.NewSession(nil)
