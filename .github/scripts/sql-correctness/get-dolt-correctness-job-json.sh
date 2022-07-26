@@ -36,6 +36,14 @@ echo '
   "spec": {
     "backoffLimit": 3,
     "template": {
+      "metadata": {
+        "annotations": {
+          "alert_recipients": "'$ACTOR_EMAIL'"
+        },
+        "labels": {
+          "k8s-liquidata-inc-monitored-job": "created-by-static-config"
+        }
+      },
       "spec": {
         "serviceAccountName": "sql-correctness",
         "containers": [
