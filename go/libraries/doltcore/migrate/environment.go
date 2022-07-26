@@ -226,7 +226,7 @@ func SwapManifests(ctx context.Context, src, dest filesys.Filesys) (err error) {
 }
 
 func getMigrateFS(existing filesys.Filesys) (filesys.Filesys, error) {
-	uniq := fmt.Sprintf("dolt_migration_%d", time.Now().Unix())
+	uniq := fmt.Sprintf("dolt_migration_%d", time.Now().UnixNano())
 	tmpPath := filepath.Join(existing.TempDir(), uniq)
 	if err := existing.MkDirs(tmpPath); err != nil {
 		return nil, err

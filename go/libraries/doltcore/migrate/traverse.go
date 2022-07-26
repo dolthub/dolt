@@ -100,7 +100,19 @@ func TraverseTagHistory(ctx context.Context, r ref.TagRef, old, new *doltdb.Dolt
 		return err
 	}
 
-	return new.NewTagAtCommit(ctx, r, t.Commit, t.Meta)
+	oldHash, err := t.Commit.HashOf()
+	if err != nil {
+		return err
+	}
+	newHash, err := prog.Get(ctx, oldHash)
+	if err != nil {
+		return err
+	}
+	cm, err := new.ReadCommit(ctx, newHash)
+	if err != nil {
+		return err
+	}
+	return new.NewTagAtCommit(ctx, r, cm, t.Meta)
 }
 
 func TraverseCommitHistory(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {

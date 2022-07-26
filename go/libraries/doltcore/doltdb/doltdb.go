@@ -417,6 +417,15 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, 
 	return decodeRootNomsValue(ddb.vrw, ddb.ns, val)
 }
 
+// ReadCommit reads the Commit whose hash is |h|, if one exists.
+func (ddb *DoltDB) ReadCommit(ctx context.Context, h hash.Hash) (*Commit, error) {
+	c, err := datas.LoadCommitAddr(ctx, ddb.vrw, h)
+	if err != nil {
+		return nil, err
+	}
+	return NewCommit(ctx, ddb.vrw, ddb.ns, c)
+}
+
 // Commit will update a branch's head value to be that of a previously committed root value hash
 func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, cm *datas.CommitMeta) (*Commit, error) {
 	if dref.GetType() != ref.BranchRefType {
