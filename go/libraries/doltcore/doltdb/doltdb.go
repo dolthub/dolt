@@ -47,7 +47,7 @@ const (
 )
 
 const (
-	creationBranch = "create"
+	CreationBranch = "create"
 
 	defaultChunksPerTF = 256 * 1024
 )
@@ -77,6 +77,12 @@ func DoltDBFromCS(cs chunks.ChunkStore) *DoltDB {
 	db := datas.NewTypesDatabase(vrw, ns)
 
 	return &DoltDB{hooksDatabase{Database: db}, vrw, ns}
+}
+
+// HackDatasDatabaseFromDoltDB unwraps a DoltDB to a datas.Database.
+// Deprecated: only for use in dolt migrate.
+func HackDatasDatabaseFromDoltDB(ddb *DoltDB) datas.Database {
+	return ddb.db
 }
 
 // LoadDoltDB will acquire a reference to the underlying noms db.  If the Location is InMemDoltDB then a reference
@@ -155,7 +161,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		panic("Passed bad name or email.  Both should be valid")
 	}
 
-	ds, err := ddb.db.GetDataset(ctx, creationBranch)
+	ds, err := ddb.db.GetDataset(ctx, CreationBranch)
 
 	if err != nil {
 		return err
@@ -181,7 +187,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 
 	commitOpts := datas.CommitOptions{Meta: cm}
 
-	cb := ref.NewInternalRef(creationBranch)
+	cb := ref.NewInternalRef(CreationBranch)
 	ds, err = ddb.db.GetDataset(ctx, cb.String())
 
 	if err != nil {
@@ -413,6 +419,15 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, 
 	return decodeRootNomsValue(ddb.vrw, ddb.ns, val)
 }
 
+// ReadCommit reads the Commit whose hash is |h|, if one exists.
+func (ddb *DoltDB) ReadCommit(ctx context.Context, h hash.Hash) (*Commit, error) {
+	c, err := datas.LoadCommitAddr(ctx, ddb.vrw, h)
+	if err != nil {
+		return nil, err
+	}
+	return NewCommit(ctx, ddb.vrw, ddb.ns, c)
+}
+
 // Commit will update a branch's head value to be that of a previously committed root value hash
 func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, cm *datas.CommitMeta) (*Commit, error) {
 	if dref.GetType() != ref.BranchRefType {
@@ -525,10 +540,13 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 			parents = append(parents, addr)
 		}
 	}
-
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
-	ds, err = ddb.db.GetDataset(ctx, dref.String())
 
+	return ddb.CommitValue(ctx, dref, val, commitOpts)
+}
+
+func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.Value, commitOpts datas.CommitOptions) (*Commit, error) {
+	ds, err := ddb.db.GetDataset(ctx, dref.String())
 	if err != nil {
 		return nil, err
 	}
@@ -573,9 +591,16 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 		}
 		parents = append(parents, addr)
 	}
-
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
-	dcommit, err := datas.NewCommitForValue(ctx, datas.ChunkStoreFromDatabase(ddb.db), ddb.vrw, ddb.ns, val, commitOpts)
+
+	return ddb.CommitDangling(ctx, val, commitOpts)
+}
+
+// CommitDangling creates a new Commit for |val| that is not referenced by any DoltRef.
+func (ddb *DoltDB) CommitDangling(ctx context.Context, val types.Value, opts datas.CommitOptions) (*Commit, error) {
+	cs := datas.ChunkStoreFromDatabase(ddb.db)
+
+	dcommit, err := datas.NewCommitForValue(ctx, cs, ddb.vrw, ddb.ns, val, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -633,10 +658,7 @@ func (ddb *DoltDB) ResolveParent(ctx context.Context, commit *Commit, parentIdx 
 }
 
 func (ddb *DoltDB) ResolveAllParents(ctx context.Context, commit *Commit) ([]*Commit, error) {
-	num, err := commit.NumParents()
-	if err != nil {
-		return nil, err
-	}
+	num := commit.NumParents()
 	resolved := make([]*Commit, num)
 	for i := 0; i < num; i++ {
 		parent, err := ddb.ResolveParent(ctx, commit, i)

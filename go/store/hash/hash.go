@@ -51,6 +51,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/d"
 )
@@ -190,4 +191,18 @@ func (hs HashSet) Empty() {
 	for h := range hs {
 		delete(hs, h)
 	}
+}
+
+func (hs HashSet) String() string {
+	var sb strings.Builder
+	sb.Grow(len(hs)*34 + 100)
+
+	sb.WriteString("HashSet {\n")
+	for h := range hs {
+		sb.WriteString("\t")
+		sb.WriteString(h.String())
+		sb.WriteString("\n")
+	}
+	sb.WriteString("}\n")
+	return sb.String()
 }

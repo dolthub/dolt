@@ -318,3 +318,7 @@ func (fs *localFS) LastModified(path string) (t time.Time, exists bool) {
 
 	return stat.ModTime(), true
 }
+
+func (fs *localFS) TempDir() string {
+	return os.TempDir()
+}

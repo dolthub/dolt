@@ -130,11 +130,12 @@ func main() {
 		orderedChildren := hash.HashSlice{}
 		nextLevel := hash.HashSlice{}
 		for _, h := range current {
-			_ = types.WalkAddrs(currentValues[h], types.Format_Default, func(h hash.Hash, isleaf bool) {
+			_ = types.WalkAddrs(currentValues[h], types.Format_Default, func(h hash.Hash, isleaf bool) error {
 				orderedChildren = append(orderedChildren, h)
 				if !visited[h] && !isleaf {
 					nextLevel = append(nextLevel, h)
 				}
+				return nil
 			})
 		}
 
