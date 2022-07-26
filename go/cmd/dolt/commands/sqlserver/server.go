@@ -156,13 +156,15 @@ func Serve(
 		serverHost = "%"
 	}
 
+	// Add superuser if specified user exists; add root superuser if no user specified and no existing privileges
 	userSpecified := config.ServerUser != ""
+	privsExist := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.UserTable().Data().Count() != 0
 	if userSpecified {
 		superuser := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, serverHost, false)
 		if userSpecified && superuser == nil {
 			sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, serverHost, config.ServerPass)
 		}
-	} else {
+	} else if !privsExist {
 		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(defaultUser, defaultHost, defaultPass)
 	}
 
