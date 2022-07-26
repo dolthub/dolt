@@ -45,7 +45,6 @@ delete_test_repo() {
 }
 
 setup() {
-    skiponwindows "Missing dependencies"
     setup_no_dolt_init
 }
 
