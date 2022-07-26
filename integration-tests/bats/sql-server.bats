@@ -12,6 +12,10 @@ make_repo() {
 setup() {
     skiponwindows "tests are flaky on Windows"
     setup_no_dolt_init
+    mkdir $BATS_TMPDIR/sql-server-test$$
+    nativevar DOLT_ROOT_PATH $BATS_TMPDIR/sql-server-test$$ /p
+    dolt config --global --add user.email "test@test.com"
+    dolt config --global --add user.name "test"
     make_repo repo1
     make_repo repo2
 }
@@ -21,7 +25,34 @@ teardown() {
     teardown_common
 }
 
+@test "sql-server: Database specific system variables should be loaded" {
+    cd repo1
+    dolt branch dev
+    dolt branch other
 
+    start_sql_server
+    server_query repo1 1 "SET PERSIST repo1_default_branch = 'dev';" ""
+    stop_sql_server
+    start_sql_server
+    server_query repo1 1 "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\ndev"
+    stop_sql_server
+
+    # system variable is lost when starting sql-server outside of the folder
+    # because global config is used.
+    cd ..
+    start_sql_server
+    server_query repo1 1 "SELECT LENGTH(@@repo1_default_branch);" "LENGTH(@@repo1_default_branch)\n0"
+    server_query repo1 1 "SET PERSIST repo1_default_branch = 'other';" ""
+    stop_sql_server
+    start_sql_server
+    server_query repo1 1 "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\nother"
+    stop_sql_server
+
+    # ensure we didn't blow away local setting
+    cd repo1
+    start_sql_server_with_args --user dolt --doltcfg-dir './'
+    server_query repo1 1 "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\ndev"
+}
 
 @test "sql-server: user session variables from config" {
   cd repo1
@@ -136,7 +167,7 @@ SQL
     # attempt to create table (autocommit on), expect either some exception
     server_query repo1 1 "CREATE TABLE i_should_not_exist (
             c0 INT
-        )" "" "not authorized"
+        )" "" "database server is set to read only mode"
 
     # Expect that there are still no tables
     run dolt ls
@@ -174,7 +205,7 @@ SQL
 
     # make a dolt_commit query
     skip "read-only flag does not prevent dolt_commit"
-    server_query repo1 1 "select dolt_commit('--allow-empty', '-m', 'msg')" "" "not authorized: user does not have permission: write"
+    server_query repo1 1 "select dolt_commit('--allow-empty', '-m', 'msg')" "" "database server is set to read only mode: user does not have permission: write"
 }
 
 @test "sql-server: test command line modification" {
@@ -515,12 +546,12 @@ SQL
      "
 
      server_query repo1 1 "SELECT * FROM test" "pk\n0\n1\n2"
-     
+
      multi_query repo1 1 "
      SELECT DOLT_CHECKOUT('feature-branch');
      SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
      "
-     
+
      multi_query repo1 1 "
      INSERT INTO test VALUES (500000);
      INSERT INTO test VALUES (500001);
@@ -531,7 +562,7 @@ SQL
      SELECT DOLT_MERGE('feature-branch');
      SELECT DOLT_COMMIT('-a', '-m', 'Finish up Merge');
      "
-     
+
      server_query repo1 1 "SELECT * FROM test order by pk" "pk\n0\n1\n2\n3\n21\n60"
 
      run dolt status
@@ -783,7 +814,7 @@ SQL
 
     multi_query repo1 1 '
     USE `repo1/feature-branch`;
-    CREATE TABLE test ( 
+    CREATE TABLE test (
         pk int,
         c1 int,
         PRIMARY KEY (pk)
@@ -1124,7 +1155,7 @@ END""")
 
     [ -d test3 ]
     [ ! -d test2 ]
-    
+
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server
@@ -1133,7 +1164,7 @@ END""")
 
 @test "sql-server: drop database with active connections" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1
+    skip_nbf_dolt_1 "json ordering of keys differs"
 
     mkdir no_dolt && cd no_dolt
     start_sql_server
@@ -1141,7 +1172,7 @@ END""")
     server_query "" 1 "create database test1"
     server_query "" 1 "create database test2"
     server_query "" 1 "create database test3"
-    
+
     server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest2\ntest3"
     server_query "test1" 1 "create table a(x int)"
     server_query "test1" 1 "insert into a values (1), (2)"
@@ -1154,7 +1185,7 @@ END""")
     server_query "test3" 1 "create table a(x int)"
     server_query "test3" 1 "insert into a values (5), (6)"
     run server_query "test3" 1 "select dolt_commit('-a', '-m', 'new table a')"
-    
+
     run server_query "test1" 1 "select dolt_checkout('-b', 'newbranch')"
     server_query "test1/newbranch" 1 "select * from a" "x\n1\n2"
 
@@ -1177,7 +1208,7 @@ END""")
     run server_query "test2/newbranch" 1 "select * from a"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "database not found: test2/newbranch" ]] || false
-    
+
     server_query "test3" 1 "select * from a" "x\n5\n6"
 }
 
@@ -1217,7 +1248,7 @@ END""")
     run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
 
     [ -d db_dir/test1 ]
-    
+
     cd db_dir/test1
     run dolt log
     [ "$status" -eq 0 ]
@@ -1234,7 +1265,7 @@ END""")
 
     [ -d db_dir/test3 ]
     [ ! -d db_dir/test1 ]
-    
+
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
@@ -1248,7 +1279,7 @@ END""")
     mkdir dir_exists
     touch file_exists
     start_sql_server
-    
+
     server_query "" 1 "create database test1"
 
     # Error on creation, already exists
@@ -1256,7 +1287,7 @@ END""")
 
     # Files / dirs in the way
     server_query "" 1 "create database dir_exists" "" "exists"
-    server_query "" 1 "create database file_exists" "" "exists"        
+    server_query "" 1 "create database file_exists" "" "exists"
 }
 
 @test "sql-server: create database with existing repo" {
@@ -1264,7 +1295,7 @@ END""")
 
     cd repo1
     start_sql_server
-    
+
     server_query "" 1 "create database test1"
     server_query "repo1" 1 "show databases" "Database\ninformation_schema\nrepo1\ntest1"
     server_query "test1" 1 "create table a(x int)"
@@ -1394,4 +1425,67 @@ databases:
     let PORT="$$ % (65536-1024) + 1024"
     run dolt sql-server -P $PORT
     [ "$status" -eq 1 ]
+}
+
+@test "sql-server: sql-server locks database to writes" {
+    cd repo2
+    dolt sql -q "create table a (x int primary key)" 
+    start_sql_server
+    run dolt sql -q "create table b (x int primary key)" 
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database is locked to writes" ]] || false
+    run dolt sql -q "insert into b values (0)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database is locked to writes" ]] || false
+}
+
+@test "sql-server: server fails to start up if there is already a file in the socket file path" {
+    skiponwindows "unix socket is not available on Windows"
+    cd repo2
+    touch mysql.sock
+
+    run pwd
+    REPO_NAME=$output
+
+    let PORT="$$ % (65536-1024) + 1024"
+    dolt sql-server --port=$PORT --socket="$REPO_NAME/mysql.sock" --user dolt > log.txt 2>&1 &
+    SERVER_PID=$!
+    run wait_for_connection $PORT 5000
+    [ "$status" -eq 1 ]
+
+    run grep 'address already in use' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+}
+
+@test "sql-server: start server with yaml config with socket file path defined" {
+    skiponwindows "unix socket is not available on Windows"
+    cd repo2
+    DEFAULT_DB="repo2"
+    let PORT="$$ % (65536-1024) + 1024"
+
+    echo "
+log_level: debug
+
+user:
+  name: dolt
+
+listener:
+  host: localhost
+  port: $PORT
+  max_connections: 10
+  socket: /tmp/mysql.sock
+
+behavior:
+  autocommit: true" > server.yaml
+
+    dolt sql-server --config server.yaml > log.txt 2>&1 &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+
+    server_query repo2 1 "select 1 as col1" "col1\n1"
+
+    run grep '\"/tmp/mysql.sock\"' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
 }

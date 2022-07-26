@@ -434,8 +434,6 @@ SQL
 }
 
 @test "auto_increment: dolt_merge() works with no auto increment overlap" {
-    skip_nbf_dolt_1
-    
     dolt sql <<SQL
 CREATE TABLE t (
     pk int PRIMARY KEY AUTO_INCREMENT,
@@ -500,8 +498,6 @@ SQL
 }
 
 @test "auto_increment: dolt_merge() with a gap in an auto increment key" {
-    skip_nbf_dolt_1
-    
     dolt sql <<SQL
 CREATE TABLE t (
     pk int PRIMARY KEY AUTO_INCREMENT,

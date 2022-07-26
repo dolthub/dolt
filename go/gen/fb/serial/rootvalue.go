@@ -127,42 +127,8 @@ func (rcv *RootValue) MutateForeignKeyAddr(j int, n byte) bool {
 	return false
 }
 
-func (rcv *RootValue) SuperSchemasAddr(j int) byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
-	}
-	return 0
-}
-
-func (rcv *RootValue) SuperSchemasAddrLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func (rcv *RootValue) SuperSchemasAddrBytes() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
-	}
-	return nil
-}
-
-func (rcv *RootValue) MutateSuperSchemasAddr(j int, n byte) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
-	}
-	return false
-}
-
 func RootValueStart(builder *flatbuffers.Builder) {
-	builder.StartObject(4)
+	builder.StartObject(3)
 }
 func RootValueAddFeatureVersion(builder *flatbuffers.Builder, featureVersion int64) {
 	builder.PrependInt64Slot(0, featureVersion, 0)
@@ -177,12 +143,6 @@ func RootValueAddForeignKeyAddr(builder *flatbuffers.Builder, foreignKeyAddr fla
 	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(foreignKeyAddr), 0)
 }
 func RootValueStartForeignKeyAddrVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(1, numElems, 1)
-}
-func RootValueAddSuperSchemasAddr(builder *flatbuffers.Builder, superSchemasAddr flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(superSchemasAddr), 0)
-}
-func RootValueStartSuperSchemasAddrVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
 }
 func RootValueEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {

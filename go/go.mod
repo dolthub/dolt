@@ -17,7 +17,7 @@ require (
 	github.com/dolthub/ishell v0.0.0-20220112232610-14e753f0f371
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20220628181817-dae896d89d02
+	github.com/dolthub/vitess v0.0.0-20220720203453-81dc23415170
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -52,13 +52,13 @@ require (
 	google.golang.org/api v0.32.0
 	google.golang.org/grpc v1.37.0
 	google.golang.org/protobuf v1.27.1
-	gopkg.in/square/go-jose.v2 v2.5.1
+	gopkg.in/square/go-jose.v2 v2.6.0
 	gopkg.in/src-d/go-errors.v1 v1.0.0
 	gopkg.in/yaml.v2 v2.3.0
 )
 
 require (
-	github.com/dolthub/go-mysql-server v0.12.1-0.20220715220455-74cc955d9dfc
+	github.com/dolthub/go-mysql-server v0.12.1-0.20220726021412-60dcca3a24be
 	github.com/google/flatbuffers v2.0.6+incompatible
 	github.com/gosuri/uilive v0.0.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
@@ -112,6 +112,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.6 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
+	github.com/pquerna/cachecontrol v0.1.0
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.26.0 // indirect
 	github.com/prometheus/procfs v0.6.0 // indirect
@@ -138,5 +139,9 @@ replace (
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 	github.com/oliveagle/jsonpath => github.com/dolthub/jsonpath v0.0.0-20210609232853-d49537a30474
 )
+
+// replace github.com/dolthub/vitess => /Users/taylor/go/src/github.com/dolthub/vitess
+
+// replace github.com/dolthub/go-mysql-server => /Users/taylor/go/src/github.com/dolthub/go-mysql-server
 
 go 1.18

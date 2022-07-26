@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -177,8 +176,8 @@ func addBackup(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	r := env.NewRemote(backupName, backupUrl, params, dEnv)
-	err = dEnv.AddBackup(r.Name, r.Url, r.FetchSpecs, r.Params)
+	r := env.NewRemote(backupName, backupUrl, params)
+	err = dEnv.AddBackup(r)
 
 	switch err {
 	case nil:
@@ -234,7 +233,7 @@ func syncBackupUrl(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	b := env.NewRemote("__temp__", backupUrl, params, dEnv)
+	b := env.NewRemote("__temp__", backupUrl, params)
 	return backup(ctx, dEnv, b)
 }
 
@@ -259,7 +258,7 @@ func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 }
 
 func backup(ctx context.Context, dEnv *env.DoltEnv, b env.Remote) errhand.VerboseError {
-	destDb, err := b.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+	destDb, err := b.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
 	if err != nil {
 		return errhand.BuildDError("error: unable to open destination.").AddCause(err).Build()
 	}
@@ -308,35 +307,35 @@ func restoreBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		return verr
 	}
 
-	r := env.NewRemote("", remoteUrl, params, dEnv)
-	srcDb, err := r.GetRemoteDB(ctx, types.Format_Default)
+	r := env.NewRemote("", remoteUrl, params)
+	srcDb, err := r.GetRemoteDB(ctx, types.Format_Default, dEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	// make .dolt dir whith env.NoRemote to avoid origin upstream
-	dEnv, err = actions.EnvForClone(ctx, srcDb.ValueReadWriter().Format(), env.NoRemote, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
+	// Create a new Dolt env for the clone; use env.NoRemote to avoid origin upstream
+	clonedEnv, err := actions.EnvForClone(ctx, srcDb.ValueReadWriter().Format(), env.NoRemote, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
+	// Nil out the old Dolt env so we don't accidentally use the wrong database
+	dEnv = nil
 
 	// still make empty repo state
-	_, err = env.CreateRepoState(dEnv.FS, env.DefaultInitBranch)
+	_, err = env.CreateRepoState(clonedEnv.FS, env.DefaultInitBranch)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = actions.SyncRoots(ctx, srcDb, dEnv.DoltDB, dEnv.TempTableFilesDir(), buildProgStarter(downloadLanguage), stopProgFuncs)
+	err = actions.SyncRoots(ctx, srcDb, clonedEnv.DoltDB, clonedEnv.TempTableFilesDir(), buildProgStarter(downloadLanguage), stopProgFuncs)
 	if err != nil {
 		// If we're cloning into a directory that already exists do not erase it. Otherwise
 		// make best effort to delete the directory we created.
 		if userDirExists {
-			// Set the working dir to the parent of the .dolt folder so we can delete .dolt
-			_ = os.Chdir(dir)
-			_ = dEnv.FS.Delete(dbfactory.DoltDir, true)
+			_ = clonedEnv.FS.Delete(dbfactory.DoltDir, true)
 		} else {
-			_ = os.Chdir("../")
-			_ = dEnv.FS.Delete(dir, true)
+			_ = clonedEnv.FS.Delete(".", true)
 		}
 		return errhand.VerboseErrorFromError(err)
 	}

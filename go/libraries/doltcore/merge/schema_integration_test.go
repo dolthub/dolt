@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type testCommand struct {
@@ -611,7 +612,7 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 
 	otherSch := getSchema(t, dEnv)
 
-	_, actConflicts, err := merge.SchemaMerge(mainSch, otherSch, ancSch, "test")
+	_, actConflicts, err := merge.SchemaMerge(types.Format_Default, mainSch, otherSch, ancSch, "test")
 	if test.expectedErr != nil {
 		assert.True(t, errors.Is(err, test.expectedErr))
 		return

@@ -53,6 +53,95 @@ teardown() {
     teardown_common
 }
 
+@test "sql-privs: starting server with empty config works" {
+    make_test_repo
+    touch server.yaml
+
+    start_sql_server_with_config test_db server.yaml
+
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
+
+    server_query test_db 1 "create user new_user" ""
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
+
+    run ls .doltcfg
+    [[ "$output" =~ "privileges.db" ]] || false
+}
+
+@test "sql-privs: yaml specifies doltcfg dir" {
+    make_test_repo
+    touch server.yaml
+    echo "cfg_dir: \"doltcfgdir\"" > server.yaml
+
+    start_sql_server_with_config test_db server.yaml
+
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
+
+    server_query test_db 1 "create user new_user" ""
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
+
+    run ls doltcfgdir
+    [[ "$output" =~ "privileges.db" ]] || false
+}
+
+@test "sql-privs: yaml specifies privilege file" {
+    make_test_repo
+    touch server.yaml
+    echo "privilege_file: \"privs.db\"" > server.yaml
+
+    start_sql_server_with_config test_db server.yaml
+
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt"
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
+
+    server_query test_db 1 "create user new_user" ""
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
+
+    run ls -a
+    [[ "$output" =~ "privs.db" ]] || false
+}
+
+@test "sql-privs: can read json privilege files and convert them" {
+    make_test_repo
+    cp $BATS_TEST_DIRNAME/privs.json .
+
+    # Test that privs.json file is in json format
+    run cat privs.json
+    [[ "$output" =~ "\"User\":\"privs_user\"" ]] || false
+
+    start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.json
+
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nprivs_user"
+    server_query test_db 1 "create user new_user" ""
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user\nprivs_user"
+
+    # Test that privs.json file is not in json format
+    run cat privs.json
+    ! [[ "$output" =~ "\"User\":\"privs_user\"" ]] || false
+
+    # Restart server
+    rm -f ./.dolt/sql-server.lock
+    stop_sql_server
+    start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.json
+    server_query test_db 1 "select user from mysql.user order by user" "User\ndolt\nnew_user\nprivs_user"
+}
+
+@test "sql-privs: errors instead of panic when reading badly formatted privilege file" {
+    make_test_repo
+    touch privs.db
+    echo "garbage" > privs.db
+
+    run start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.db
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "ill formatted privileges file" ]] || false
+}
+
 @test "sql-privs: default options" {
     make_test_repo
 

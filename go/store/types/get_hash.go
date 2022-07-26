@@ -23,16 +23,7 @@ package types
 
 import "github.com/dolthub/dolt/go/store/hash"
 
-var getHashOverride func(v Value) (hash.Hash, error)
-
 func getHash(v Value, nbf *NomsBinFormat) (hash.Hash, error) {
-	if getHashOverride != nil {
-		return getHashOverride(v)
-	}
-	return getHashNoOverride(v, nbf)
-}
-
-func getHashNoOverride(v Value, nbf *NomsBinFormat) (hash.Hash, error) {
 	val, err := EncodeValue(v, nbf)
 
 	if err != nil {
