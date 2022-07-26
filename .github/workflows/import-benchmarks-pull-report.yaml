@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-18.04
     needs: [validate-commentor, check-comments]
     if: ${{ needs.check-comments.outputs.benchmark == 'true' }}
-    name: Benchmark Import Performance
+    name: Trigger Benchmark Import K8s Workflow
     steps:
       - uses: xt0rted/pull-request-comment-branch@v1
         id: comment-branch
