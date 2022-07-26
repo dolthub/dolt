@@ -460,12 +460,6 @@ func (i *historyIter) Close(ctx *sql.Context) error {
 }
 
 func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.CommitMeta, projections []uint64) func(row sql.Row) sql.Row {
-	// inputs:
-	//  - desired projections
-	//  - way to get the names of the desired projections
-	//  - source schema, to check whether it has those projections
-	// outputs:
-	//  - func to map projected source r
 	srcToTarget := make(map[int]int)
 	for i, col := range targetSchema {
 		srcIdx := srcSchema.IndexOfColName(col.Name)
@@ -495,16 +489,6 @@ func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.C
 			}
 			i++
 		}
-		//for i := range row {
-		//	if idx, ok := srcToTarget[i]; ok {
-		//		r[idx] = row[i]
-		//	}
-		//}
-		//
-		//r[len(targetSchema)-3] = h.String()
-		//r[len(targetSchema)-2] = meta.Name
-		//r[len(targetSchema)-1] = meta.Time()
-
 		return r
 	}
 }

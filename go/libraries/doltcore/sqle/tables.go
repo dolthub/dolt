@@ -947,8 +947,11 @@ func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 		lowerName := strings.ToLower(colNames[i])
 		col, ok := cols.LowerNameToCol[lowerName]
 		if !ok {
-			//panic("column does not exist")
-			// leave col tag empty, schema nil
+			// The history iter projects a new schema onto an
+			// older table. When a requested projection does not
+			// exist in the older schema, the table will ignore
+			// the field. The history table is responsible for
+			// filling the gaps with nil values.
 			continue
 		}
 		nt.projectedCols = append(nt.projectedCols, col.Tag)

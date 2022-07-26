@@ -150,17 +150,17 @@ func (p prollyIndexIter) queueRows(ctx context.Context) error {
 func (p prollyIndexIter) rowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
 	keyDesc, valDesc := p.primary.Descriptors()
 
-	for i := range p.keyMap {
+	for i, idx := range p.keyMap {
 		outputIdx := p.ordMap[i]
-		r[outputIdx], err = GetField(ctx, keyDesc, p.keyMap[i], key, p.primary.NodeStore())
+		r[outputIdx], err = GetField(ctx, keyDesc, idx, key, p.primary.NodeStore())
 		if err != nil {
 			return err
 		}
 	}
 
-	for i := range p.valMap {
+	for i, idx := range p.valMap {
 		outputIdx := p.ordMap[len(p.keyMap)+i]
-		r[outputIdx], err = GetField(ctx, valDesc, p.valMap[i], value, p.primary.NodeStore())
+		r[outputIdx], err = GetField(ctx, valDesc, idx, value, p.primary.NodeStore())
 		if err != nil {
 			return err
 		}
@@ -273,17 +273,17 @@ func (p prollyCoveringIndexIter) Next2(ctx *sql.Context, f *sql.RowFrame) error 
 }
 
 func (p prollyCoveringIndexIter) writeRowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
-	for i := range p.keyMap {
+	for i, idx := range p.keyMap {
 		outputIdx := p.ordMap[i]
-		r[outputIdx], err = GetField(ctx, p.keyDesc, p.keyMap[i], key, p.ns)
+		r[outputIdx], err = GetField(ctx, p.keyDesc, idx, key, p.ns)
 		if err != nil {
 			return err
 		}
 	}
 
-	for i := range p.valMap {
+	for i, idx := range p.valMap {
 		outputIdx := p.ordMap[len(p.keyMap)+i]
-		r[outputIdx], err = GetField(ctx, p.valDesc, p.valMap[i], value, p.ns)
+		r[outputIdx], err = GetField(ctx, p.valDesc, idx, value, p.ns)
 		if err != nil {
 			return err
 		}
@@ -501,11 +501,10 @@ func (p prollyKeylessIndexIter) queueRows(ctx context.Context) error {
 	}
 }
 
-//todo(max): new proj
 func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, ns tree.NodeStore, value val.Tuple) (rows []sql.Row, err error) {
 	card := val.ReadKeylessCardinality(value)
 	rows = make([]sql.Row, card)
-	rows[0] = make(sql.Row, len(p.valueMap)) // omit cardinality field
+	rows[0] = make(sql.Row, len(p.valueMap))
 
 	for i, idx := range p.valueMap {
 		outputIdx := p.ordMap[i]

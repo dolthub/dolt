@@ -55,11 +55,9 @@ type prollyRowIter struct {
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
 
-	// keyProj is a list of indexes into the key tuple
 	keyProj []int
-	// keyProj is a list of indexes into the value tuple
 	valProj []int
-	// orjProj is a conatenated list of ordinal mappings for |keyProk| and |valProj|
+	// orjProj is a concatenated list of output ordinals for |keyProj| and |valProj|
 	ordProj []int
 	rowLen  int
 }
@@ -99,7 +97,8 @@ func NewProllyRowIter(sch schema.Schema, sqlSch sql.Schema, rows prolly.Map, ite
 	}, nil
 }
 
-//todo: only make keyMap and valMap as big as they need to be
+// projectionMappings returns data structures that specify 1) which fields we read
+// from key and value tuples, and 2) the position of those fields in the output row.
 func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping) {
 	pks := sch.GetPKCols()
 	nonPks := sch.GetNonPKCols()
@@ -121,24 +120,14 @@ func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap
 	keyMap = allMap[:i]
 	valMap = allMap[i:len(projections)]
 	ordMap = allMap[len(projections):]
-	//i = 0
-	//j = len(valMap) - 1
-	//for i < j {
-	//	valMap[i], valMap[j] = valMap[j], valMap[i]
-	//	i++
-	//	j--
-	//}
-
 	if schema.IsKeyless(sch) {
+		// skip the cardinality value, increment every index
 		for i := range keyMap {
 			keyMap[i]++
 		}
 		for i := range valMap {
 			valMap[i]++
 		}
-		//skip := val.OrdinalMapping{-1}
-		//keyMap = append(skip, keyMap...) // hashId
-		//valMap = append(skip, valMap...) // cardinality
 	}
 	return
 }
@@ -150,16 +139,16 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	row := make(sql.Row, it.rowLen)
-	for i := range it.keyProj {
+	for i, idx := range it.keyProj {
 		outputIdx := it.ordProj[i]
-		row[outputIdx], err = GetField(ctx, it.keyDesc, it.keyProj[i], key, it.ns)
+		row[outputIdx], err = GetField(ctx, it.keyDesc, idx, key, it.ns)
 		if err != nil {
 			return nil, err
 		}
 	}
-	for i := range it.valProj {
+	for i, idx := range it.valProj {
 		outputIdx := it.ordProj[len(it.keyProj)+i]
-		row[outputIdx], err = GetField(ctx, it.valDesc, it.valProj[i], value, it.ns)
+		row[outputIdx], err = GetField(ctx, it.valDesc, idx, value, it.ns)
 		if err != nil {
 			return nil, err
 		}
@@ -245,9 +234,9 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 	it.card = val.ReadKeylessCardinality(value)
 	it.curr = make(sql.Row, it.rowLen)
 
-	for i := range it.valProj {
+	for i, idx := range it.valProj {
 		outputIdx := it.ordProj[i]
-		it.curr[outputIdx], err = GetField(ctx, it.valDesc, it.valProj[i], value, it.ns)
+		it.curr[outputIdx], err = GetField(ctx, it.valDesc, idx, value, it.ns)
 		if err != nil {
 			return err
 		}
