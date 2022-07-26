@@ -241,11 +241,10 @@ type prollySecondaryIndexWriter struct {
 	mut    prolly.MutableMap
 	unique bool
 
-	keyBld      *val.TupleBuilder
-	prefixBld   *val.TupleBuilder
-	suffixBld   *val.TupleBuilder
-	numUniqCols int
-	keyMap      val.OrdinalMapping
+	keyBld    *val.TupleBuilder
+	prefixBld *val.TupleBuilder
+	suffixBld *val.TupleBuilder
+	keyMap    val.OrdinalMapping
 }
 
 var _ indexWriter = prollySecondaryIndexWriter{}
@@ -264,7 +263,7 @@ func (m prollySecondaryIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) 
 		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
 			return err
 		}
-		if to < m.numUniqCols {
+		if to < m.prefixBld.Desc.Count() {
 			if err := index.PutField(ctx, m.mut.NodeStore(), m.prefixBld, to, sqlRow[from]); err != nil {
 				return err
 			}
@@ -299,8 +298,8 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, pr
 		return err
 	}
 	if err == nil {
-		for i := m.numUniqCols; i < existingK.Count(); i++ {
-			j := i - m.numUniqCols
+		for i := m.prefixBld.Desc.Count(); i < existingK.Count(); i++ {
+			j := i - m.prefixBld.Desc.Count()
 			m.suffixBld.PutRaw(j, existingK.GetField(i))
 		}
 		suffixK := m.suffixBld.Build(sharePool)
@@ -341,7 +340,7 @@ func (m prollySecondaryIndexWriter) Update(ctx context.Context, oldRow sql.Row, 
 		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, newRow[from]); err != nil {
 			return err
 		}
-		if to < m.numUniqCols {
+		if to < m.prefixBld.Desc.Count() {
 			if err := index.PutField(ctx, m.mut.NodeStore(), m.prefixBld, to, newRow[from]); err != nil {
 				return err
 			}

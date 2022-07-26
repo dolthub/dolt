@@ -75,14 +75,13 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 		keyDesc, _ := m.Descriptors()
 
 		writers[defName] = prollySecondaryIndexWriter{
-			name:        defName,
-			mut:         m.Mutate(),
-			unique:      def.IsUnique(),
-			keyBld:      val.NewTupleBuilder(keyDesc),
-			prefixBld:   val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count())),
-			suffixBld:   val.NewTupleBuilder(keyDesc.SuffixDesc(keyDesc.Count() - def.Count())),
-			numUniqCols: def.Count(),
-			keyMap:      keyMap,
+			name:      defName,
+			mut:       m.Mutate(),
+			unique:    def.IsUnique(),
+			keyBld:    val.NewTupleBuilder(keyDesc),
+			prefixBld: val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count())),
+			suffixBld: val.NewTupleBuilder(keyDesc.SuffixDesc(keyDesc.Count() - def.Count())),
+			keyMap:    keyMap,
 		}
 	}
 
