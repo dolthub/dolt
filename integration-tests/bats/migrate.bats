@@ -28,15 +28,13 @@ CALL dcommit('-am', 'added table test');
 SQL
     CHECKSUM=$(checksum_table test head)
 
-    run cat ./.dolt/noms/manifest
-    [[ "$output" =~ "__LD_1__" ]] || false
-    [[ ! "$output" =~ "$TARGET_NBF" ]] || false
+    [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "__LD_1__" ]] || false
+    [[ ! $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
 
     dolt migrate
 
-    run cat ./.dolt/noms/manifest
-    [[ "$output" =~ "$TARGET_NBF" ]] || false
-    [[ ! "$output" =~ "__LD_1__" ]] || false
+    [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
+    [[ ! $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "__LD_1__" ]] || false
 
     run checksum_table test head
     [[ "$output" =~ "$CHECKSUM" ]] || false
@@ -44,6 +42,33 @@ SQL
     run dolt sql -q "SELECT count(*) FROM dolt_commits" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "2" ]] || false
+}
+
+@test "migrate: functional transform" {
+    dolt sql <<SQL
+CREATE TABLE test (pk int primary key, c0 int, c1 int);
+INSERT INTO test VALUES (0,0,0);
+CALL dadd('-A');
+CALL dcommit('-am', 'added table test');
+SQL
+
+    mkdir db_one db_two
+    mv .dolt db_one
+    cp -r db_one/ db_two/
+
+    pushd db_one
+    dolt migrate
+    [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
+    ONE=$(dolt branch -av)
+    popd
+
+    pushd db_two
+    dolt migrate
+    [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
+    TWO=$(dolt branch -av)
+    popd
+
+    [[ "$ONE" = "$TWO" ]] || false
 }
 
 @test "migrate: manifest backup" {
@@ -55,10 +80,8 @@ CALL dcommit('-am', 'added table test');
 SQL
 
     dolt migrate
-
-    run cat ./.dolt/noms/manifest.bak
-    [[ "$output" =~ "__LD_1__" ]] || false
-    [[ ! "$output" =~ "$TARGET_NBF" ]] || false
+    [[ $(cat ./.dolt/noms/manifest.bak | cut -f 2 -d :) = "__LD_1__" ]] || false
+    [[ ! $(cat ./.dolt/noms/manifest.bak | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
 }
 
 @test "migrate: multiple branches" {
@@ -87,8 +110,7 @@ SQL
 
     dolt migrate
 
-    run cat ./.dolt/noms/manifest
-    [[ "$output" =~ "$TARGET_NBF" ]] || false
+    [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
 
     run checksum_table test main
     [[ "$output" =~ "$MAIN" ]] || false
@@ -121,8 +143,7 @@ SQL
 
     dolt migrate
 
-    run cat ./.dolt/noms/manifest
-    [[ "$output" =~ "$TARGET_NBF" ]] || false
+    [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
 
     run checksum_table test head
     [[ "$output" =~ "$HEAD" ]] || false
