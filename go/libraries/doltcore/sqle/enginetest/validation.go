@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -181,7 +182,7 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 			return err
 		}
 		if !ok {
-			return fmt.Errorf("index key %v not found in index %s", k, def.Name())
+			return fmt.Errorf("index key %s not found in index %s", builder.Desc.Format(k), def.Name())
 		}
 	}
 }
@@ -273,18 +274,18 @@ func iterDatabaseTables(
 		return err
 	}
 
-	for i := range branches {
-		var c *doltdb.Commit
-		var r *doltdb.RootValue
+	for _, branchRef := range branches {
+		wsRef, err := ref.WorkingSetRefForHead(branchRef)
+		if err != nil {
+			return err
+		}
+		ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
+		if err != nil {
+			return err
+		}
 
-		c, err = ddb.ResolveCommitRef(ctx, branches[i])
-		if err != nil {
-			return err
-		}
-		r, err = c.GetRootValue(ctx)
-		if err != nil {
-			return err
-		}
+		r := ws.WorkingRoot()
+
 		if err = r.IterTables(ctx, cb); err != nil {
 			return err
 		}

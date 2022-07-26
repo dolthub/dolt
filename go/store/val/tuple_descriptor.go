@@ -15,6 +15,7 @@
 package val
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -538,13 +539,13 @@ func formatValue(enc Encoding, value []byte) string {
 	case StringEnc:
 		return readString(value)
 	case ByteStringEnc:
-		return string(value)
+		return hex.EncodeToString(value)
 	case Hash128Enc:
-		return string(value)
+		return hex.EncodeToString(value)
 	case BytesAddrEnc:
-		return string(value)
+		return hex.EncodeToString(value)
 	case CommitAddrEnc:
-		return string(value)
+		return hex.EncodeToString(value)
 	default:
 		return string(value)
 	}

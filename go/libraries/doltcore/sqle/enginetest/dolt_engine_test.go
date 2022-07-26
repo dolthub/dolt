@@ -229,7 +229,7 @@ func TestSingleScriptPrepared(t *testing.T) {
 	//sch3, rows3 := enginetest.MustQuery(ctx, e, rawQuery)
 	//fmt.Println(sch3, rows3)
 
-	enginetest.TestQueryWithContext(t, ctx, e, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings)
+	enginetest.TestQueryWithContext(t, ctx, e, harness, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings)
 }
 
 func TestVersionedQueries(t *testing.T) {
@@ -413,7 +413,7 @@ func TestDoltUserPrivileges(t *testing.T) {
 					})
 				} else {
 					t.Run(assertion.Query, func(t *testing.T) {
-						enginetest.TestQueryWithContext(t, ctx, engine, assertion.Query, assertion.Expected, nil, nil)
+						enginetest.TestQueryWithContext(t, ctx, engine, harness, assertion.Query, assertion.Expected, nil, nil)
 					})
 				}
 			}
