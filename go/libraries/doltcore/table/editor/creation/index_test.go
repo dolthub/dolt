@@ -104,7 +104,8 @@ func TestGetIndexKeyMapping(t *testing.T) {
 			},
 			IdxCols: []string{"col1"},
 			KeyLen:  1,
-			Mapping: []int{1, 0},
+			// Mapping should skip over cardinality
+			Mapping: []int{2, 0},
 		},
 		{
 			Name: "keyless other",
@@ -114,7 +115,8 @@ func TestGetIndexKeyMapping(t *testing.T) {
 			},
 			IdxCols: []string{"col2"},
 			KeyLen:  1,
-			Mapping: []int{2, 0},
+			// Mapping should skip over cardinality
+			Mapping: []int{3, 0},
 		},
 		{
 			Name: "compound keyless",
@@ -125,7 +127,8 @@ func TestGetIndexKeyMapping(t *testing.T) {
 			},
 			IdxCols: []string{"col2", "col3"},
 			KeyLen:  1,
-			Mapping: []int{2, 3, 0},
+			// Mapping should skip over cardinality
+			Mapping: []int{3, 4, 0},
 		},
 		{
 			Name: "compound keyless reverse",
@@ -136,7 +139,8 @@ func TestGetIndexKeyMapping(t *testing.T) {
 			},
 			IdxCols: []string{"col3", "col2"},
 			KeyLen:  1,
-			Mapping: []int{3, 2, 0},
+			// Mapping should skip over cardinality
+			Mapping: []int{4, 3, 0},
 		},
 	}
 
