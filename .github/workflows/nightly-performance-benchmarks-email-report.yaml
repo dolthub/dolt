@@ -8,7 +8,7 @@ on:
 jobs:
   perf:
     runs-on: ubuntu-18.04
-    name: Benchmark Latency, Correctness, and Imports
+    name: Trigger Benchmark Latency, Benchmark Import, and SQL Correctness K8s Workflows
     steps:
       - uses: peter-evans/repository-dispatch@v1
         with:

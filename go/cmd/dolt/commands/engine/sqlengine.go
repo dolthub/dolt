@@ -48,14 +48,15 @@ type SqlEngine struct {
 }
 
 type SqlEngineConfig struct {
-	InitialDb    string
-	IsReadOnly   bool
-	PrivFilePath string
-	ServerUser   string
-	ServerPass   string
-	Autocommit   bool
-	Bulk         bool
-	JwksConfig   []JwksConfig
+	InitialDb      string
+	IsReadOnly     bool
+	IsServerLocked bool
+	PrivFilePath   string
+	ServerUser     string
+	ServerPass     string
+	Autocommit     bool
+	Bulk           bool
+	JwksConfig     []JwksConfig
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -67,7 +68,7 @@ func NewSqlEngine(
 ) (*SqlEngine, error) {
 
 	if ok, _ := mrEnv.IsLocked(); ok {
-		config.IsReadOnly = true
+		config.IsServerLocked = true
 	}
 
 	parallelism := runtime.GOMAXPROCS(0)
@@ -106,7 +107,7 @@ func NewSqlEngine(
 	}
 
 	// Set up engine
-	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: config.IsReadOnly, TemporaryUsers: tempUsers}).WithBackgroundThreads(bThreads)
+	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: config.IsReadOnly, TemporaryUsers: tempUsers, IsServerLocked: config.IsServerLocked}).WithBackgroundThreads(bThreads)
 	engine.Analyzer.Catalog.MySQLDb.SetPersister(persister)
 	engine.Analyzer.Catalog.MySQLDb.SetPlugins(map[string]mysql_db.PlaintextAuthPlugin{
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),

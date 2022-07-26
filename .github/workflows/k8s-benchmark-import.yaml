@@ -37,7 +37,7 @@ jobs:
           KUBECONFIG=kubeconfig kubectl config use-context github-actions-dolt-context
         env:
           CONFIG: ${{ secrets.CORP_KUBECONFIG }}
-      - name: Run Import benchmarks
+      - name: Create Import Benchmarking K8s Job
         run: ./.github/scripts/import-benchmarking/run-benchmarks.sh
         env:
           FROM_SERVER: ${{ github.event.client_payload.from_server }}
