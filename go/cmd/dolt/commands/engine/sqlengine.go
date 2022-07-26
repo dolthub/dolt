@@ -50,6 +50,7 @@ type SqlEngine struct {
 type SqlEngineConfig struct {
 	InitialDb      string
 	IsReadOnly     bool
+	IsServerLocked bool
 	DoltCfgDirPath string
 	PrivFilePath   string
 	ServerUser     string
@@ -69,7 +70,7 @@ func NewSqlEngine(
 ) (*SqlEngine, error) {
 
 	if ok, _ := mrEnv.IsLocked(); ok {
-		config.IsReadOnly = true
+		config.IsServerLocked = true
 	}
 
 	parallelism := runtime.GOMAXPROCS(0)
@@ -99,10 +100,7 @@ func NewSqlEngine(
 	}
 
 	// Set up engine
-	engine := gms.New(
-		analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(),
-		&gms.Config{IsReadOnly: config.IsReadOnly},
-	).WithBackgroundThreads(bThreads)
+	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: config.IsReadOnly, IsServerLocked: config.IsServerLocked}).WithBackgroundThreads(bThreads)
 	engine.Analyzer.Catalog.MySQLDb.SetPersister(persister)
 
 	engine.Analyzer.Catalog.MySQLDb.SetPlugins(map[string]mysql_db.PlaintextAuthPlugin{

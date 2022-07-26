@@ -1,43 +1,49 @@
-name: Benchmark SQL Correctness
+name: SQL Correctness
 
 on:
   repository_dispatch:
-    types: [ release-dolt ]
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'SemVer format release tag, i.e. 0.24.5'
-        required: true
-        default: ''
-      email:
-        description: 'Email address to receive results'
-        required: true
-        default: ''
+    types: [ sql-correctness ]
 
 jobs:
-  set-version-actor:
-    name: Set Version and Actor
-    runs-on: ubuntu-18.04
-    outputs:
-      version: ${{ steps.set-vars.outputs.version }}
-      actor: ${{ steps.set-vars.outputs.actor }}
-    steps:
-      - name: Set variables
-        id: set-vars
-        run: |
-          echo "::set-output name=version::$VERSION"
-          echo "::set-output name=actor::$ACTOR"
-        env:
-          VERSION: ${{ github.event.inputs.version || github.event.client_payload.version }}
-          ACTOR: ${{ github.event.client_payload.actor || github.actor }}
-
   correctness:
     runs-on: ubuntu-18.04
-    needs: set-version-actor
-    name: Benchmark SQL Correctness
+    name: Dolt SQL Correctness
+    strategy:
+      matrix:
+        dolt_fmt: [ "__LD_1__", "__DOLT_1__" ]
     steps:
-      - uses: peter-evans/repository-dispatch@v1
+      - uses: actions/checkout@v2
+      - uses: azure/setup-kubectl@v2.0
         with:
-          token: ${{ secrets.REPO_ACCESS_TOKEN }}
-          event-type: sql-correctness
-          client-payload: '{"to_version": "${{ needs.set-version-actor.outputs.version }}", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/sql-correctness/get-dolt-correctness-job-json.sh"}'
+          version: 'v1.23.6'
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Install aws-iam-authenticator
+        run: |
+          curl -o aws-iam-authenticator https://amazon-eks.s3.us-west-2.amazonaws.com/1.18.8/2020-09-18/bin/linux/amd64/aws-iam-authenticator && \
+          chmod +x ./aws-iam-authenticator && \
+          sudo cp ./aws-iam-authenticator /usr/local/bin/aws-iam-authenticator
+          aws-iam-authenticator version
+      - name: Create and Auth kubeconfig
+        run: |
+          echo "$CONFIG" > kubeconfig
+          KUBECONFIG=kubeconfig kubectl config set-credentials github-actions-dolt --exec-api-version=client.authentication.k8s.io/v1alpha1 --exec-command=aws-iam-authenticator --exec-arg=token --exec-arg=-i --exec-arg=eks-cluster-1
+          KUBECONFIG=kubeconfig kubectl config set-context github-actions-dolt-context --cluster=eks-cluster-1 --user=github-actions-dolt --namespace=performance-benchmarking
+          KUBECONFIG=kubeconfig kubectl config use-context github-actions-dolt-context
+        env:
+          CONFIG: ${{ secrets.CORP_KUBECONFIG }}
+      - name: Create SQL Correctness K8s Job
+        run: ./.github/scripts/sql-correctness/run-correctness.sh
+        env:
+          TO_VERSION: ${{ github.event.client_payload.to_version }}
+          MODE: ${{ github.event.client_payload.mode }}
+          ACTOR: ${{ github.event.client_payload.actor }}
+          ACTOR_EMAIL: ${{ github.event.client_payload.actor_email }}
+          REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+          KUBECONFIG: "./kubeconfig"
+          NOMS_BIN_FORMAT: ${{ matrix.dolt_fmt }}
+          TEMPLATE_SCRIPT: ${{ github.event.client_payload.template_script }}
