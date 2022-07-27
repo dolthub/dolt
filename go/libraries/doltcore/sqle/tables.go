@@ -1610,19 +1610,6 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		// TODO: this isn't transactional, and it should be
 		ait.AddNewTable(t.tableName)
 		ait.Set(t.tableName, seq)
-	} else if existingCol.AutoIncrement && !col.AutoIncrement {
-		updatedTable, err = updatedTable.SetAutoIncrementValue(ctx, 0)
-		if err != nil {
-			return err
-		}
-
-		ait, err := t.db.gs.GetAutoIncrementTracker(ctx, ws)
-		if err != nil {
-			return err
-		}
-
-		// TODO: This isn't transactional, and it should be
-		ait.DropTable(t.tableName)
 	}
 
 	newRoot, err := root.PutTable(ctx, t.tableName, updatedTable)

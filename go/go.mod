@@ -139,8 +139,6 @@ replace (
 	github.com/oliveagle/jsonpath => github.com/dolthub/jsonpath v0.0.0-20210609232853-d49537a30474
 )
 
-// replace github.com/dolthub/vitess => /Users/taylor/go/src/github.com/dolthub/vitess
-
-// replace github.com/dolthub/go-mysql-server => /Users/taylor/go/src/github.com/dolthub/go-mysql-server
+replace github.com/dolthub/go-mysql-server => /Users/vinairachakonda/go/src/dolthub/go-mysql-server
 
 go 1.18
