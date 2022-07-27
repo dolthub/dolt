@@ -128,7 +128,7 @@ func getEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv, cfg 
 		b.Fatal(err)
 	}
 
-	dEnv = env.Load(ctx, os.UserHomeDir, fs, doltdb.LocalDirDoltDB, "bench", "")
+	dEnv = env.Load(ctx, os.UserHomeDir, fs, doltdb.LocalDirDoltDB, "bench")
 	err = dEnv.InitRepo(ctx, types.Format_Default, name, email, env.DefaultInitBranch)
 	if err != nil {
 		b.Fatal(err)

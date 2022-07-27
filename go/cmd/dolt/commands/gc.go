@@ -151,7 +151,7 @@ func MaybeMigrateEnv(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, erro
 	}
 
 	// reload env with new manifest
-	tmp := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, dEnv.Version, "")
+	tmp := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, dEnv.Version)
 
 	if tmp.CfgLoadErr != nil {
 		return nil, tmp.CfgLoadErr

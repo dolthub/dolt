@@ -49,7 +49,7 @@ func CreateTestEnvWithName(envName string) *env.DoltEnv {
 	initialDirs := []string{TestHomeDirPrefix + envName, WorkingDirPrefix + envName}
 	homeDirFunc := func() (string, error) { return TestHomeDirPrefix + envName, nil }
 	fs := filesys.NewInMemFS(initialDirs, nil, WorkingDirPrefix+envName)
-	dEnv := env.Load(context.Background(), homeDirFunc, fs, doltdb.InMemDoltDB+envName, "test", "")
+	dEnv := env.Load(context.Background(), homeDirFunc, fs, doltdb.InMemDoltDB+envName, "test")
 	cfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 	cfg.SetStrings(map[string]string{
 		env.UserNameKey:  name,

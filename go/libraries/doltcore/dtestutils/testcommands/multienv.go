@@ -103,7 +103,7 @@ func (mr *MultiRepoTestSetup) NewDB(dbName string) {
 	}
 
 	// TODO sometimes tempfiles scrubber is racy with tempfolder deleter
-	dEnv := env.Load(context.Background(), mr.homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test", "")
+	dEnv := env.Load(context.Background(), mr.homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
 	if err != nil {
 		mr.Errhand("Failed to initialize environment:" + err.Error())
 	}
@@ -122,7 +122,7 @@ func (mr *MultiRepoTestSetup) NewDB(dbName string) {
 		mr.Errhand("Failed to initialize environment:" + err.Error())
 	}
 
-	dEnv = env.Load(context.Background(), mr.homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test", "")
+	dEnv = env.Load(context.Background(), mr.homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
 
 	mr.MrEnv.AddEnv(dbName, dEnv)
 	mr.DoltDBs[dbName] = ddb
@@ -172,7 +172,7 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 		mr.Errhand(err)
 	}
 
-	dEnv := env.Load(context.Background(), mr.homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test", "")
+	dEnv := env.Load(context.Background(), mr.homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
 	dEnv, err = actions.EnvForClone(ctx, srcDB.Format(), r, cloneDir, dEnv.FS, dEnv.Version, mr.homeProv)
 	if err != nil {
 		mr.Errhand(err)
@@ -198,7 +198,7 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 		mr.Errhand("Failed to initialize environment:" + err.Error())
 	}
 
-	dEnv = env.Load(context.Background(), mr.homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test", "")
+	dEnv = env.Load(context.Background(), mr.homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
 
 	mr.MrEnv.AddEnv(dbName, dEnv)
 	mr.DoltDBs[dbName] = ddb

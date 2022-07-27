@@ -32,7 +32,7 @@ func createTestEnvWithFS(fs filesys.Filesys, workingDir string) *env.DoltEnv {
 	testHomeDirFunc := func() (string, error) { return workingDir, nil }
 	const name = "test mcgibbins"
 	const email = "bigfakeytester@fake.horse"
-	dEnv := env.Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB, "test", "")
+	dEnv := env.Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB, "test")
 	err := dEnv.InitRepo(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch)
 	if err != nil {
 		panic("Failed to initialize environment")

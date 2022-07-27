@@ -83,7 +83,7 @@ func initRepoWithRelativePath(t *testing.T, envPath string, hdp HomeDirProvider)
 	require.NoError(t, err)
 
 	urlStr := earl.FileUrlFromPath(filepath.Join(envPath, ".dolt", "noms"), os.PathSeparator)
-	dEnv := Load(context.Background(), hdp, fs, urlStr, "test", "")
+	dEnv := Load(context.Background(), hdp, fs, urlStr, "test")
 	cfg, _ := dEnv.Config.GetConfig(GlobalConfig)
 	cfg.SetStrings(map[string]string{
 		UserNameKey:  name,
@@ -93,7 +93,7 @@ func initRepoWithRelativePath(t *testing.T, envPath string, hdp HomeDirProvider)
 	err = dEnv.InitRepo(context.Background(), types.Format_Default, name, email, DefaultInitBranch)
 	require.NoError(t, err)
 
-	return Load(context.Background(), hdp, fs, urlStr, "test", "")
+	return Load(context.Background(), hdp, fs, urlStr, "test")
 }
 
 func TestMultiEnvForDirectory(t *testing.T) {

@@ -100,7 +100,11 @@ type DoltEnv struct {
 }
 
 // Load loads the DoltEnv for the .dolt directory determined by resolving the specified urlStr with the specified Filesys.
-func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, version, binFormat string) *DoltEnv {
+func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
+	return loadWithFormat(ctx, hdp, fs, urlStr, version, nil)
+}
+
+func loadWithFormat(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, version string, binFormat *types.NomsBinFormat) *DoltEnv {
 	config, cfgErr := LoadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
 
@@ -162,7 +166,7 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 
 	var dbFormatErr error
 	if rsErr == nil && dbLoadErr == nil {
-		if binFormat != "" && dEnv.DoltDB.Format().VersionString() != binFormat {
+		if binFormat != nil && dEnv.DoltDB.Format() != binFormat {
 			dbFormatErr = fmt.Errorf("database with incompatible DOLT_DEFAULT_BIN_FORMAT")
 			dEnv.DbFormatError = dbFormatErr
 		}

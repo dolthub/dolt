@@ -305,7 +305,7 @@ func runMain() int {
 	warnIfMaxFilesTooLow()
 
 	ctx := context.Background()
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version, "")
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 	dEnv.IgnoreLockFile = ignoreLockFile
 
 	root, err := env.GetCurrentUserHomeDir()

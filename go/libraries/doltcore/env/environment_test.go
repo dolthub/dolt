@@ -69,7 +69,7 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) (*DoltEnv, *filesys.
 	}
 
 	fs := filesys.NewInMemFS(initialDirs, initialFiles, workingDir)
-	dEnv := Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB, "test", "")
+	dEnv := Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB, "test")
 
 	return dEnv, fs
 }
@@ -80,7 +80,7 @@ func createFileTestEnv(t *testing.T, workingDir, homeDir string) *DoltEnv {
 
 	return Load(context.Background(), func() (string, error) {
 		return homeDir, nil
-	}, fs, doltdb.LocalDirDoltDB, "test", "")
+	}, fs, doltdb.LocalDirDoltDB, "test")
 }
 
 func TestNonRepoDir(t *testing.T) {
@@ -210,7 +210,7 @@ func TestMigrateWorkingSet(t *testing.T) {
 	// Now write the repo state file to disk and re-load the repo
 	require.NoError(t, rs.save(dEnv.FS))
 
-	dEnv = Load(context.Background(), testHomeDirFunc, dEnv.FS, doltdb.LocalDirDoltDB, "test", "")
+	dEnv = Load(context.Background(), testHomeDirFunc, dEnv.FS, doltdb.LocalDirDoltDB, "test")
 	assert.NoError(t, dEnv.RSLoadErr)
 	assert.NoError(t, dEnv.CfgLoadErr)
 

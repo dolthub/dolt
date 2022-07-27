@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
@@ -269,9 +270,9 @@ func MultiEnvForDirectory(
 		//dEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
 	}
 
-	var binFormat string
+	var binFormat *types.NomsBinFormat
 	if dEnv.Valid() {
-		binFormat = dEnv.DoltDB.Format().VersionString()
+		binFormat = dEnv.DoltDB.Format()
 		mrEnv.AddEnv(dbName, dEnv)
 	}
 
@@ -288,15 +289,15 @@ func MultiEnvForDirectory(
 			return false
 		}
 
-		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, dEnv.Version, binFormat)
+		newEnv := loadWithFormat(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, dEnv.Version, binFormat)
 		if newEnv.Valid() {
 			mrEnv.AddEnv(dirToDBName(dir), newEnv)
-			if binFormat == "" {
-				binFormat = newEnv.DoltDB.Format().VersionString()
+			if binFormat == nil {
+				binFormat = newEnv.DoltDB.Format()
 			}
 		}
 		if newEnv.DbFormatError != nil {
-			logrus.Infof("incompatible format for database '%s'; expected '%s', found '%s'", dir, binFormat, newEnv.DoltDB.Format().VersionString())
+			logrus.Infof("incompatible format for database '%s'; expected '%s', found '%s'", dir, binFormat.VersionString(), newEnv.DoltDB.Format().VersionString())
 		}
 
 		return false
@@ -352,7 +353,7 @@ func MultiEnvForPaths(
 		}
 
 		urlStr := earl.FileUrlFromPath(filepath.Join(absPath, dbfactory.DoltDataDir), os.PathSeparator)
-		dEnv := Load(ctx, hdp, fsForEnv, urlStr, version, "")
+		dEnv := Load(ctx, hdp, fsForEnv, urlStr, version)
 
 		if dEnv.RSLoadErr != nil {
 			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.RSLoadErr.Error())

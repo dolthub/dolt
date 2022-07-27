@@ -187,7 +187,7 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 
 	// TODO: fill in version appropriately
 	dsess := dsess.DSessFromSess(ctx.Session)
-	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO", "")
+	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
 	err = newEnv.InitRepo(ctx, types.Format_Default, dsess.Username(), dsess.Email(), p.defaultBranch)
 	if err != nil {
 		return err

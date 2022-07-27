@@ -253,7 +253,7 @@ func loadConfig(ctx *sql.Context) *env.DoltCliConfig {
 	// When executing branch actions from SQL, we don't have access to a DoltEnv like we do from
 	// within the CLI. We can fake it here enough to get a DoltCliConfig, but we can't rely on the
 	// DoltEnv because tests and production will run with different settings (e.g. in-mem versus file).
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "", "")
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "")
 	return dEnv.Config
 }
 
