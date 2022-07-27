@@ -38,7 +38,7 @@ func TraverseDAG(ctx context.Context, old, new *doltdb.DoltDB) error {
 		}
 	}
 
-	if err = validateMigration(ctx, old, new); err != nil {
+	if err = validateBranchMapping(ctx, old, new); err != nil {
 		return err
 	}
 	return nil
