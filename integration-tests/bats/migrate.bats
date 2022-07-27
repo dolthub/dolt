@@ -54,7 +54,10 @@ SQL
 
     mkdir db_one db_two
     mv .dolt db_one
-    cp -r db_one/ db_two/
+    pushd db_two/
+    mkdir .dolt
+    cp -r ../db_one/.dolt/* .dolt
+    popd
 
     pushd db_one
     dolt migrate
