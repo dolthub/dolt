@@ -173,9 +173,10 @@ SQL
     dolt add .
     dolt commit -m "add more rows"
 
+    dolt blame t
     run dolt blame t
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "| pk   | val | commit                           | commit_date             | committer  | email           | message       |" ]] || false
+    [[ "${lines[1]}" =~ "| pk   | val |" ]] || false
     [[ "${lines[3]}" =~ "| add  | 5   |" ]] || false
     [[ "${lines[4]}" =~ "| alt  | 12  |" ]] || false
     [[ "${lines[5]}" =~ "| ctl  | 3   |" ]] || false
