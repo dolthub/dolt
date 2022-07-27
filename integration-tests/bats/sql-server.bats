@@ -25,6 +25,20 @@ teardown() {
     teardown_common
 }
 
+@test "sql-server: server assumes existing user" {
+    cd repo1
+    dolt sql -q "create user dolt@'%' identified by '123'"
+
+    let PORT="$$ % (65536-1024) + 1024"
+    dolt sql-server --port=$PORT --user dolt &> log.txt &
+    SERVER_PID=$!
+
+    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt --password=wrongpassword <<< "exit;"
+    run grep 'Error authenticating user using MySQL native password' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+}
+
 @test "sql-server: Database specific system variables should be loaded" {
     cd repo1
     dolt branch dev
