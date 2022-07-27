@@ -30,7 +30,7 @@ teardown() {
     dolt sql -q "create user dolt@'%' identified by '123'"
 
     let PORT="$$ % (65536-1024) + 1024"
-    dolt sql-server --port=$PORT --user dolt &> log.txt &
+    dolt sql-server --port=$PORT --user dolt > log.txt 2>&1 &
     SERVER_PID=$!
 
     dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt --password=wrongpassword <<< "exit;"
