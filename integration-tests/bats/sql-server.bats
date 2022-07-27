@@ -32,6 +32,7 @@ teardown() {
     let PORT="$$ % (65536-1024) + 1024"
     dolt sql-server --port=$PORT --user dolt > log.txt 2>&1 &
     SERVER_PID=$!
+    sleep 5
 
     dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt --password=wrongpassword <<< "exit;"
     run grep 'Error authenticating user using MySQL native password' log.txt
