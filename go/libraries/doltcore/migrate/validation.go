@@ -217,3 +217,9 @@ func hashRow(sctx *sql.Context, r sql.Row) (uint64, error) {
 	}
 	return sql.HashOf(r)
 }
+
+func assertTrue(b bool) {
+	if !b {
+		panic("expected true")
+	}
+}

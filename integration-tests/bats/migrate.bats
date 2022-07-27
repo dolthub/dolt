@@ -5,7 +5,7 @@ setup() {
     skip_nbf_dolt_1
     skip_nbf_dolt_dev
 
-    TARGET_NBF="__DOLT_DEV__"
+    TARGET_NBF="__DOLT_1__"
     setup_common
 }
 
