@@ -17,12 +17,12 @@ package env
 import (
 	"context"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
 
+	"github.com/sirupsen/logrus"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
