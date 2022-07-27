@@ -109,7 +109,6 @@ SQL
     TWO=$(checksum_table test two)
 
     dolt migrate
-
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
 
     run checksum_table test main
@@ -142,7 +141,6 @@ SQL
     [ $TAG -eq $PREV ]
 
     dolt migrate
-
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
 
     run checksum_table test head
@@ -151,4 +149,31 @@ SQL
     [[ "$output" =~ "$PREV" ]] || false
     run checksum_table test tag1
     [[ "$output" =~ "$TAG" ]] || false
+}
+
+@test "migrate: views and docs" {
+    cat <<TXT > README.md
+# Dolt is Git for Data!
+Dolt is a SQL database that you can fork, clone, branch, merge, push
+TXT
+
+    dolt sql <<SQL
+CREATE TABLE test (pk int primary key, c0 int, c1 int);
+CREATE VIEW test2 AS SELECT c0, c1 FROM test;
+INSERT INTO test VALUES (0,0,0);
+CALL dadd('-A');
+CALL dcommit('-am', 'added table test');
+SQL
+    dolt docs read README.md README.md
+    dolt commit -am "added a README"
+
+    dolt migrate
+    [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
+
+    run dolt sql -q "SELECT * FROM test2" -r csv
+    [[ "$output" =~ "c0,c1" ]] || false
+    [[ "$output" =~ "0,0" ]] || false
+
+    run dolt docs write README.md
+    [[ "$output" = $(cat README.md) ]] || false
 }
