@@ -377,7 +377,9 @@ type rangeIterator interface {
 func GetIndexKeyMapping(sch schema.Schema, idx schema.Index) (keyLen int, m val.OrdinalMapping) {
 	m = make(val.OrdinalMapping, len(idx.AllTags()))
 
-	if schema.IsKeyless(sch) {
+	keyless := schema.IsKeyless(sch)
+
+	if keyless {
 		// the only key is the hash of the values
 		keyLen = 1
 	} else {
@@ -387,8 +389,12 @@ func GetIndexKeyMapping(sch schema.Schema, idx schema.Index) (keyLen int, m val.
 	for i, tag := range idx.AllTags() {
 		j, ok := sch.GetPKCols().TagToIdx[tag]
 		if !ok {
-			j = sch.GetNonPKCols().TagToIdx[tag]
-			j += keyLen
+			if keyless {
+				// Skip cardinality column
+				j = keyLen + 1 + sch.GetNonPKCols().TagToIdx[tag]
+			} else {
+				j = keyLen + sch.GetNonPKCols().TagToIdx[tag]
+			}
 		}
 		m[i] = j
 	}
