@@ -2,6 +2,7 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
+    skip "temporary skip"
     skip_nbf_dolt_1
     skip_nbf_dolt_dev
 
