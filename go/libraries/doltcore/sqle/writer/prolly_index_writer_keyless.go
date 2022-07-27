@@ -229,6 +229,8 @@ func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sq
 		if err != nil {
 			return err
 		}
+	} else {
+		writer.prefixBld.Recycle()
 	}
 
 	return writer.mut.Put(ctx, indexKey, val.EmptyTuple)
