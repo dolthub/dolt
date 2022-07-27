@@ -57,7 +57,7 @@ func (h *DoltHarness) EngineStr() string {
 }
 
 func (h *DoltHarness) Init() error {
-	dEnv := env.Load(context.Background(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
+	dEnv := env.Load(context.Background(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "test", "")
 	return innerInit(h, dEnv)
 }
 

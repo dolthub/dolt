@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
 	"strings"
@@ -268,7 +269,9 @@ func MultiEnvForDirectory(
 		//dEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
 	}
 
+	var binFormat string
 	if dEnv.Valid() {
+		binFormat = dEnv.DoltDB.Format().VersionString()
 		mrEnv.AddEnv(dbName, dEnv)
 	}
 
@@ -285,9 +288,15 @@ func MultiEnvForDirectory(
 			return false
 		}
 
-		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, dEnv.Version)
+		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, dEnv.Version, binFormat)
 		if newEnv.Valid() {
 			mrEnv.AddEnv(dirToDBName(dir), newEnv)
+			if binFormat == "" {
+				binFormat = newEnv.DoltDB.Format().VersionString()
+			}
+		}
+		if newEnv.DbFormatError != nil {
+			logrus.Infof("incompatible format for database '%s'; expected '%s', found '%s'", dir, binFormat, newEnv.DoltDB.Format().VersionString())
 		}
 
 		return false
@@ -343,7 +352,7 @@ func MultiEnvForPaths(
 		}
 
 		urlStr := earl.FileUrlFromPath(filepath.Join(absPath, dbfactory.DoltDataDir), os.PathSeparator)
-		dEnv := Load(ctx, hdp, fsForEnv, urlStr, version)
+		dEnv := Load(ctx, hdp, fsForEnv, urlStr, version, "")
 
 		if dEnv.RSLoadErr != nil {
 			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.RSLoadErr.Error())
