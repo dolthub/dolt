@@ -34,7 +34,7 @@ teardown() {
     server_query repo1 1 "use repo1"
 }
 
-@test "sql: incompatible BIN FORMATs" {
+@test "multidb: incompatible BIN FORMATs" {
     mkdir dbs1/repo4
     cd dbs1/repo4
     DOLT_DEFAULT_BIN_FORMAT=__DOLT_1__ dolt init
