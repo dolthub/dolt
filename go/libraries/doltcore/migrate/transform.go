@@ -204,6 +204,10 @@ func migrateRoot(ctx context.Context, root *doltdb.RootValue, new *doltdb.DoltDB
 		return nil, err
 	}
 
+	if err = validateRootValueChecksums(ctx, root, migrated); err != nil {
+		return nil, err
+	}
+
 	return migrated, nil
 }
 
@@ -228,6 +232,12 @@ func migrateTable(ctx context.Context, table *doltdb.Table, new *doltdb.DoltDB) 
 	if err != nil {
 		return nil, err
 	}
+	if sch, err = patchMigrateSchema(ctx, sch); err != nil {
+		return nil, err
+	}
+	if err = validateSchema(sch); err != nil {
+		return nil, err
+	}
 
 	oldSet, err := table.GetIndexSet(ctx)
 	if err != nil {
@@ -240,6 +250,27 @@ func migrateTable(ctx context.Context, table *doltdb.Table, new *doltdb.DoltDB) 
 	}
 
 	return doltdb.NewTable(ctx, new.ValueReadWriter(), new.NodeStore(), sch, rows, newSet, autoInc)
+}
+
+// patchMigrateSchema attempts to correct irregularities in existing schemas
+func patchMigrateSchema(ctx context.Context, existing schema.Schema) (schema.Schema, error) {
+	cols := existing.GetAllCols().GetColumns()
+
+	var patched bool
+	for i, c := range cols {
+		// check if query.Type matches types.NomsKind
+		qt := c.TypeInfo.ToSqlType().Type()
+		if c.Kind != mapQueryTypeToNomsKind(qt) {
+			// replace column with correct SQL type for NomsKind
+			cols[i] = schema.NewColumn(c.Name, c.Tag, c.Kind, c.IsPartOfPK, c.Constraints...)
+			patched = true
+		}
+	}
+	if !patched {
+		return existing, nil
+	}
+
+	return schema.SchemaFromCols(schema.NewColCollection(cols...))
 }
 
 func migrateIndexSet(ctx context.Context, sch schema.Schema, oldSet durable.IndexSet, old types.ValueReadWriter, new *doltdb.DoltDB) (durable.IndexSet, error) {
