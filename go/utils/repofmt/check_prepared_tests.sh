@@ -13,5 +13,6 @@ expected="$((all_cnt-skip_cnt))"
 if [[ "$expected" != "$prep_cnt" ]]; then
     echo "Expected '$expected' TestPrepared enginetests in dolt_engine_test.go, found: '$prep_cnt'"
     echo "Either increment SkipPreparedsCount or add a prepared test for the new test suite"
+    exit 1
 fi
 
