@@ -352,6 +352,16 @@ SQL
     [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
+@test "remotes: pull with explicit remote and branch" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt checkout -b test-branch
+    run dolt push test-remote test-branch
+    [ "$status" -eq 0 ]
+    run dolt pull test-remote test-branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
+}
+
 @test "remotes: push and pull from non-main branch and use --set-upstream" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
