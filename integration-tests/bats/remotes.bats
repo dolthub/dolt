@@ -357,6 +357,14 @@ SQL
     dolt checkout -b test-branch
     run dolt push test-remote test-branch
     [ "$status" -eq 0 ]
+    dolt checkout main
+
+    # Specifying a non-existent branch returns an error
+    run dolt pull test-remote doesnotexist
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'branch "doesnotexist" not found on remote' ]] || false
+
+    # Specifying a valid branch merges it in
     run dolt pull test-remote test-branch
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Everything up-to-date" ]] || false
