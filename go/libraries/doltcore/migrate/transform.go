@@ -17,10 +17,11 @@ package migrate
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -204,7 +205,7 @@ func migrateRoot(ctx context.Context, root *doltdb.RootValue, new *doltdb.DoltDB
 		return nil, err
 	}
 
-	if err = validateRootValueChecksums(ctx, root, migrated); err != nil {
+	if err = validateRootValue(ctx, root, migrated); err != nil {
 		return nil, err
 	}
 
@@ -263,10 +264,9 @@ func patchMigrateSchema(ctx context.Context, existing schema.Schema) (schema.Sch
 
 	var patched bool
 	for i, c := range cols {
-		// check if query.Type matches types.NomsKind
 		qt := c.TypeInfo.ToSqlType().Type()
-		if c.Kind != mapQueryTypeToNomsKind(qt) {
-			// replace column with correct SQL type for NomsKind
+		// dolt_schemas and dolt_docs previously written with TEXT columns
+		if qt == query.Type_TEXT && c.Kind == types.StringKind {
 			cols[i] = schema.NewColumn(c.Name, c.Tag, c.Kind, c.IsPartOfPK, c.Constraints...)
 			patched = true
 		}
