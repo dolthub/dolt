@@ -459,6 +459,21 @@ teardown() {
     [[ ! "$output" =~ "v3" ]] || false
 }
 
+@test "sql-pull: dolt_pull with remote and remote ref" {
+    cd repo1
+    dolt checkout feature
+    dolt checkout -b newbranch
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "t1" ]] || false
+
+    run dolt sql -q "call dolt_pull('origin', 'main');"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+}
+
 @test "sql-pull: dolt_pull also fetches, but does not merge other branches" {
     cd repo1
     dolt checkout -b other
