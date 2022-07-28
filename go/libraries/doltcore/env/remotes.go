@@ -361,6 +361,20 @@ type PullSpec struct {
 }
 
 func NewPullSpec(_ context.Context, rsr RepoStateReader, remoteName, remoteRefName string, squash, noff, force, remoteOnly bool) (*PullSpec, error) {
+	refSpecs, err := GetRefSpecs(rsr, remoteName)
+	if err != nil {
+		return nil, err
+	}
+	if len(refSpecs) == 0 {
+		return nil, ErrNoRefSpecForRemote
+	}
+
+	remotes, err := rsr.GetRemotes()
+	if err != nil {
+		return nil, err
+	}
+	remote := remotes[refSpecs[0].GetRemote()]
+
 	var remoteRef ref.DoltRef
 	if remoteRefName == "" {
 		branch := rsr.CWBHeadRef()
@@ -382,20 +396,6 @@ func NewPullSpec(_ context.Context, rsr RepoStateReader, remoteName, remoteRefNa
 	} else {
 		remoteRef = ref.NewBranchRef(remoteRefName)
 	}
-
-	refSpecs, err := GetRefSpecs(rsr, remoteName)
-	if err != nil {
-		return nil, err
-	}
-	if len(refSpecs) == 0 {
-		return nil, ErrNoRefSpecForRemote
-	}
-
-	remotes, err := rsr.GetRemotes()
-	if err != nil {
-		return nil, err
-	}
-	remote := remotes[refSpecs[0].GetRemote()]
 
 	return &PullSpec{
 		Squash:     squash,
