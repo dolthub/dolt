@@ -224,19 +224,19 @@ func SqlTableToRowIter(ctx *sql.Context, table *DoltTable, columns []uint64) (sq
 }
 
 // DoltTableToRowIter returns a sql.RowIter for the clustered index of |table|.
-func DoltTableToRowIter(ctx *sql.Context, name string, table *doltdb.Table) (sql.RowIter, error) {
+func DoltTableToRowIter(ctx *sql.Context, name string, table *doltdb.Table) (sql.Schema, sql.RowIter, error) {
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	pkSch, err := sqlutil.FromDoltSchema(name, sch)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	data, err := table.GetRowData(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	p := doltTablePartition{
@@ -244,5 +244,9 @@ func DoltTableToRowIter(ctx *sql.Context, name string, table *doltdb.Table) (sql
 		rowData: data,
 	}
 
-	return newRowIterator(ctx, table, pkSch.Schema, nil, p)
+	iter, err := newRowIterator(ctx, table, pkSch.Schema, nil, p)
+	if err != nil {
+		return nil, nil, err
+	}
+	return pkSch.Schema, iter, nil
 }
