@@ -79,7 +79,7 @@ func NewProllyRowIter(sch schema.Schema, sqlSch sql.Schema, rows prolly.Map, ite
 			valDesc: vd,
 			valProj: valProj,
 			ordProj: ordProj,
-			rowLen:  len(sqlSch),
+			rowLen:  len(projections),
 			ns:      rows.NodeStore(),
 		}, nil
 	}
