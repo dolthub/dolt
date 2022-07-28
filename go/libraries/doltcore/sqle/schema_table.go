@@ -309,7 +309,7 @@ type schemaFragment struct {
 }
 
 func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType string) ([]schemaFragment, error) {
-	iter, err := TableToRowIter(ctx, tbl, nil)
+	iter, err := SqlTableToRowIter(ctx, tbl.DoltTable, nil)
 	if err != nil {
 		return nil, err
 	}

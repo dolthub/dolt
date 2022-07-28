@@ -277,6 +277,8 @@ func (m prollySecondaryIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) 
 		if err != nil {
 			return err
 		}
+	} else {
+		m.prefixBld.Recycle()
 	}
 
 	return m.mut.Put(ctx, k, val.EmptyTuple)
@@ -354,6 +356,8 @@ func (m prollySecondaryIndexWriter) Update(ctx context.Context, oldRow sql.Row, 
 		if err != nil {
 			return err
 		}
+	} else {
+		m.prefixBld.Recycle()
 	}
 
 	return m.mut.Put(ctx, newKey, val.EmptyTuple)

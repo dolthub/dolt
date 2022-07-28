@@ -25,7 +25,6 @@ import (
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 const DefaultFixedChunkLength = 4000
@@ -243,7 +242,7 @@ type ImmutableTree struct {
 }
 
 func NewImmutableTreeFromReader(ctx context.Context, r io.Reader, ns NodeStore, chunkSize int) (*ImmutableTree, error) {
-	s := message.ProllyMapSerializer{Pool: ns.Pool(), ValDesc: val.TupleDesc{}}
+	s := message.BlobSerializer{Pool: ns.Pool()}
 	root, err := buildImmutableTree(ctx, r, ns, s, chunkSize)
 	if errors.Is(err, io.EOF) {
 		return &ImmutableTree{Addr: hash.Hash{}}, nil

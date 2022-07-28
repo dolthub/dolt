@@ -196,7 +196,7 @@ func estimateProllyMapSize(keys, values [][]byte, subtrees []uint64, valAddrsCnt
 		keySz += len(keys[i])
 		valSz += len(values[i])
 	}
-	refCntSz := len(subtrees) * binary.MaxVarintLen64
+	subtreesSz := len(subtrees) * binary.MaxVarintLen64
 
 	// constraints enforced upstream
 	if keySz > int(MaxVectorOffset) {
@@ -208,7 +208,7 @@ func estimateProllyMapSize(keys, values [][]byte, subtrees []uint64, valAddrsCnt
 
 	// todo(andy): better estimates
 	bufSz += keySz + valSz               // tuples
-	bufSz += refCntSz                    // subtree counts
+	bufSz += subtreesSz                  // subtree counts
 	bufSz += len(keys)*2 + len(values)*2 // offsets
 	bufSz += 8 + 1 + 1 + 1               // metadata
 	bufSz += 72                          // vtable (approx)

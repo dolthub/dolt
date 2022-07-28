@@ -17,10 +17,11 @@ package migrate
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -189,7 +190,7 @@ func migrateRoot(ctx context.Context, root *doltdb.RootValue, new *doltdb.DoltDB
 	}
 
 	err = root.IterTables(ctx, func(name string, tbl *doltdb.Table, _ schema.Schema) (bool, error) {
-		mtbl, err := migrateTable(ctx, tbl, new)
+		mtbl, err := migrateTable(ctx, name, tbl, new)
 		if err != nil {
 			return true, err
 		}
@@ -204,10 +205,14 @@ func migrateRoot(ctx context.Context, root *doltdb.RootValue, new *doltdb.DoltDB
 		return nil, err
 	}
 
+	if err = validateRootValue(ctx, root, migrated); err != nil {
+		return nil, err
+	}
+
 	return migrated, nil
 }
 
-func migrateTable(ctx context.Context, table *doltdb.Table, new *doltdb.DoltDB) (*doltdb.Table, error) {
+func migrateTable(ctx context.Context, name string, table *doltdb.Table, new *doltdb.DoltDB) (*doltdb.Table, error) {
 	rows, err := table.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -229,6 +234,17 @@ func migrateTable(ctx context.Context, table *doltdb.Table, new *doltdb.DoltDB) 
 		return nil, err
 	}
 
+	// maybe patch dolt_schemas, dolt docs
+	if doltdb.HasDoltPrefix(name) {
+		if sch, err = patchMigrateSchema(ctx, sch); err != nil {
+			return nil, err
+		}
+	}
+
+	if err = validateSchema(sch); err != nil {
+		return nil, err
+	}
+
 	oldSet, err := table.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
@@ -240,6 +256,26 @@ func migrateTable(ctx context.Context, table *doltdb.Table, new *doltdb.DoltDB) 
 	}
 
 	return doltdb.NewTable(ctx, new.ValueReadWriter(), new.NodeStore(), sch, rows, newSet, autoInc)
+}
+
+// patchMigrateSchema attempts to correct irregularities in existing schemas
+func patchMigrateSchema(ctx context.Context, existing schema.Schema) (schema.Schema, error) {
+	cols := existing.GetAllCols().GetColumns()
+
+	var patched bool
+	for i, c := range cols {
+		qt := c.TypeInfo.ToSqlType().Type()
+		// dolt_schemas and dolt_docs previously written with TEXT columns
+		if qt == query.Type_TEXT && c.Kind == types.StringKind {
+			cols[i] = schema.NewColumn(c.Name, c.Tag, c.Kind, c.IsPartOfPK, c.Constraints...)
+			patched = true
+		}
+	}
+	if !patched {
+		return existing, nil
+	}
+
+	return schema.SchemaFromCols(schema.NewColCollection(cols...))
 }
 
 func migrateIndexSet(ctx context.Context, sch schema.Schema, oldSet durable.IndexSet, old types.ValueReadWriter, new *doltdb.DoltDB) (durable.IndexSet, error) {

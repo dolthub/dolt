@@ -33,3 +33,14 @@ teardown() {
     multi_query repo1 1 "create database new; use new; call dcheckout('-b', 'feat'); create table t (x int); call dcommit('-am', 'cm'); set @@global.new_default_branch='feat'"
     server_query repo1 1 "use repo1"
 }
+
+@test "multidb: incompatible BIN FORMATs" {
+    mkdir dbs1/repo4
+    cd dbs1/repo4
+    DOLT_DEFAULT_BIN_FORMAT=__DOLT_1__ dolt init
+    cd ..
+
+    dolt --help
+    dolt sql -q "show tables"
+}
+
