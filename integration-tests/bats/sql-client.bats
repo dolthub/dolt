@@ -67,3 +67,9 @@ teardown() {
     [ "${lines[6]}" = '| test            |' ]
     [ "${lines[7]}" = '+-----------------+' ]
 }
+
+@test "sql-client: --user argument is required" {
+    run dolt sql-client
+    [ "$status" -eq 1 ]
+    [[ "$output" =~  "--user or -u argument is required" ]] || false
+}
