@@ -156,10 +156,13 @@ func mapQueryTypeToNomsKind(qt query.Type) types.NomsKind {
 		query.Type_INT32, query.Type_INT64:
 		return types.IntKind
 
+	case query.Type_YEAR, query.Type_TIME:
+		return types.IntKind
+
 	case query.Type_FLOAT32, query.Type_FLOAT64:
 		return types.FloatKind
 
-	case query.Type_TIMESTAMP, query.Type_DATE, query.Type_TIME, query.Type_DATETIME, query.Type_YEAR:
+	case query.Type_TIMESTAMP, query.Type_DATE, query.Type_DATETIME:
 		return types.TimestampKind
 
 	case query.Type_DECIMAL:
@@ -174,11 +177,8 @@ func mapQueryTypeToNomsKind(qt query.Type) types.NomsKind {
 	case query.Type_VARBINARY, query.Type_BINARY:
 		return types.InlineBlobKind
 
-	case query.Type_BIT, query.Type_ENUM:
+	case query.Type_BIT, query.Type_ENUM, query.Type_SET:
 		return types.UintKind
-
-	case query.Type_SET:
-		return types.StringKind
 
 	case query.Type_GEOMETRY:
 		return types.GeometryKind
