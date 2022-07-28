@@ -67,8 +67,8 @@ func getBlobKeys(msg serial.Message) ItemArray {
 		binary.LittleEndian.PutUint16(b, uint16(i))
 	}
 	return ItemArray{
-		Buf:  buf,
-		Offs: offs,
+		Items: buf,
+		Offs:  offs,
 	}
 }
 
@@ -78,8 +78,8 @@ func getBlobValues(msg serial.Message) ItemArray {
 		arr := b.AddressArrayBytes()
 		off := offsetsForAddressArray(arr)
 		return ItemArray{
-			Buf:  arr,
-			Offs: off,
+			Items: arr,
+			Offs:  off,
 		}
 	}
 
@@ -87,7 +87,7 @@ func getBlobValues(msg serial.Message) ItemArray {
 	offs := make([]byte, 4)
 	binary.LittleEndian.PutUint16(offs[2:], uint16(len(buf)))
 
-	return ItemArray{Buf: buf, Offs: offs}
+	return ItemArray{Items: buf, Offs: offs}
 }
 
 func getBlobCount(msg serial.Message) uint16 {

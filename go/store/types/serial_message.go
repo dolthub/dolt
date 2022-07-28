@@ -136,8 +136,8 @@ func (sm SerialMessage) HumanReadableString() string {
 		var b strings.Builder
 		b.Write([]byte("AddressMap{\n"))
 		for i := uint16(0); i < cnt; i++ {
-			name := keys.GetSlice(int(i))
-			addr := values.GetSlice(int(i))
+			name := keys.GetItem(int(i))
+			addr := values.GetItem(int(i))
 			b.Write([]byte("\t"))
 			b.Write(name)
 			b.Write([]byte(": "))

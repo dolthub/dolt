@@ -190,8 +190,8 @@ func NewLeafCursorAtItem(ctx context.Context, ns NodeStore, nd Node, item Item, 
 }
 
 func CurrentCursorItems(cur *Cursor) (key, value Item) {
-	key = cur.nd.keys.GetSlice(cur.idx)
-	value = cur.nd.values.GetSlice(cur.idx)
+	key = cur.nd.keys.GetItem(cur.idx)
+	value = cur.nd.values.GetItem(cur.idx)
 	return
 }
 

@@ -79,15 +79,15 @@ func (s AddressMapSerializer) Serialize(keys, addrs [][]byte, subtrees []uint64,
 
 func getAddressMapKeys(msg serial.Message) (keys ItemArray) {
 	am := serial.GetRootAsAddressMap(msg, serial.MessagePrefixSz)
-	keys.Buf = am.KeyItemsBytes()
+	keys.Items = am.KeyItemsBytes()
 	keys.Offs = getAddressMapKeyOffsets(am)
 	return
 }
 
 func getAddressMapValues(msg serial.Message) (values ItemArray) {
 	am := serial.GetRootAsAddressMap(msg, serial.MessagePrefixSz)
-	values.Buf = am.AddressArrayBytes()
-	values.Offs = offsetsForAddressArray(values.Buf)
+	values.Items = am.AddressArrayBytes()
+	values.Offs = offsetsForAddressArray(values.Items)
 	return
 }
 

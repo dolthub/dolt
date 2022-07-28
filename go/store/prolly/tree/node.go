@@ -136,12 +136,12 @@ func (nd Node) IsLeaf() bool {
 
 // GetKey returns the |ith| key of this node
 func (nd Node) GetKey(i int) Item {
-	return nd.keys.GetSlice(i)
+	return nd.keys.GetItem(i)
 }
 
 // getValue returns the |ith| value of this node.
 func (nd Node) getValue(i int) Item {
-	return nd.values.GetSlice(i)
+	return nd.values.GetItem(i)
 }
 
 func (nd Node) loadSubtrees() Node {

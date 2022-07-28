@@ -53,8 +53,8 @@ func offsetsForCommitClosureKeys(buf []byte) []byte {
 func getCommitClosureKeys(msg serial.Message) ItemArray {
 	var ret ItemArray
 	m := serial.GetRootAsCommitClosure(msg, serial.MessagePrefixSz)
-	ret.Buf = m.KeyItemsBytes()
-	ret.Offs = offsetsForCommitClosureKeys(ret.Buf)
+	ret.Items = m.KeyItemsBytes()
+	ret.Offs = offsetsForCommitClosureKeys(ret.Items)
 	return ret
 }
 
@@ -62,12 +62,12 @@ func getCommitClosureValues(msg serial.Message) ItemArray {
 	var ret ItemArray
 	m := serial.GetRootAsCommitClosure(msg, serial.MessagePrefixSz)
 	if m.AddressArrayLength() == 0 {
-		ret.Buf = commitClosureEmptyValueBytes
+		ret.Items = commitClosureEmptyValueBytes
 		ret.Offs = commitClosureValueOffsets[:getCommitClosureCount(msg)*uint16Size]
 		return ret
 	}
-	ret.Buf = m.AddressArrayBytes()
-	ret.Offs = offsetsForAddressArray(ret.Buf)
+	ret.Items = m.AddressArrayBytes()
+	ret.Offs = offsetsForAddressArray(ret.Items)
 	return ret
 }
 
