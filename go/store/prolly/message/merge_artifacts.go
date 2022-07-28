@@ -57,13 +57,13 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 
 	// serialize keys and offsets
 	keyTups = writeItemBytes(b, keys, keySz)
-	serial.MergeArtifactsStartKeyOffsetsVector(b, len(keys)-1)
+	serial.MergeArtifactsStartKeyOffsetsVector(b, len(keys)+1)
 	keyOffs = writeItemOffsets(b, keys, keySz)
 
 	if level == 0 {
 		// serialize value tuples for leaf nodes
 		valTups = writeItemBytes(b, values, valSz)
-		serial.MergeArtifactsStartValueOffsetsVector(b, len(values)-1)
+		serial.MergeArtifactsStartValueOffsetsVector(b, len(values)+1)
 		valOffs = writeItemOffsets(b, values, valSz)
 		// serialize offsets of chunk addresses within |keyTups|
 		if s.KeyDesc.AddressFieldCount() > 0 {
@@ -100,11 +100,7 @@ func getArtifactMapKeysAndValues(msg serial.Message) (keys, values ItemArray, cn
 
 	keys.Buf = am.KeyItemsBytes()
 	keys.Offs = getMergeArtifactKeyOffsets(am)
-	if len(keys.Buf) == 0 {
-		cnt = 0
-	} else {
-		cnt = 1 + uint16(len(keys.Offs)/2)
-	}
+	cnt = uint16(keys.Len())
 
 	vv := am.ValueItemsBytes()
 	if vv != nil {

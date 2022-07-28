@@ -23,22 +23,12 @@ type ItemArray struct {
 
 // GetSlice returns the ith slice of |sb.Items|.
 func (sb ItemArray) GetSlice(i int) []byte {
-	start := uint16(0)
-	if i > 0 {
-		pos := (i - 1) * 2
-		start = val.ReadUint16(sb.Offs[pos : pos+2])
-	}
-
-	stop := uint16(len(sb.Buf))
-	if i*2 < len(sb.Offs) {
-		pos := i * 2
-		stop = val.ReadUint16(sb.Offs[pos : pos+2])
-	}
-
+	pos := i * 2
+	start := val.ReadUint16(sb.Offs[pos : pos+2])
+	stop := val.ReadUint16(sb.Offs[pos+2 : pos+4])
 	return sb.Buf[start:stop]
 }
 
 func (sb ItemArray) Len() int {
-	// offsets stored as uint16s with first offset omitted
-	return len(sb.Offs)/2 + 1
+	return len(sb.Offs)/2 - 1
 }

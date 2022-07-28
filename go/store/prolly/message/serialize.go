@@ -50,14 +50,14 @@ func writeItemBytes(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
 }
 
 func writeItemOffsets(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
-	var cnt int
 	var off = sumSz
-	for i := len(items) - 1; i > 0; i-- { // omit first offset
-		off -= len(items[i])
+	for i := len(items) - 1; i >= 0; i-- {
 		b.PrependUint16(uint16(off))
-		cnt++
+		off -= len(items[i])
 	}
-	return b.EndVector(cnt)
+	assertTrue(off == 0)
+	b.PrependUint16(uint16(off))
+	return b.EndVector(len(items) + 1)
 }
 
 // countAddresses returns the number of chunk addresses stored within |items|.

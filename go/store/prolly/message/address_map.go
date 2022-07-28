@@ -50,7 +50,7 @@ func (s AddressMapSerializer) Serialize(keys, addrs [][]byte, subtrees []uint64,
 
 	// keys
 	keyArr = writeItemBytes(b, keys, keySz)
-	serial.AddressMapStartKeyOffsetsVector(b, len(keys)-1)
+	serial.AddressMapStartKeyOffsetsVector(b, len(keys)+1)
 	keyOffs = writeItemOffsets(b, keys, keySz)
 
 	// addresses
@@ -105,11 +105,7 @@ func walkAddressMapAddresses(ctx context.Context, msg serial.Message, cb func(ct
 
 func getAddressMapCount(msg serial.Message) uint16 {
 	am := serial.GetRootAsAddressMap(msg, serial.MessagePrefixSz)
-	if am.KeyItemsLength() == 0 {
-		return 0
-	}
-	// zeroth offset ommitted from array
-	return uint16(am.KeyOffsetsLength() + 1)
+	return uint16(am.KeyOffsetsLength() - 1)
 }
 
 func getAddressMapTreeLevel(msg serial.Message) int {
