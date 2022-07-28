@@ -39,7 +39,7 @@ const (
 )
 
 var (
-	targetFormat = types.Format_DOLT_DEV
+	targetFormat = types.Format_DOLT_1
 	migrationMsg = fmt.Sprintf("migrating database to Noms Binary Format %s", targetFormat.VersionString())
 )
 

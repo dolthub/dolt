@@ -208,3 +208,17 @@ func (f filteredIter) Next(ctx context.Context) (k, v val.Tuple, err error) {
 		return
 	}
 }
+
+type sliceIter struct {
+	tuples []val.Tuple
+}
+
+func (s *sliceIter) Next(context.Context) (k, v val.Tuple, err error) {
+	if len(s.tuples) < 2 {
+		err = io.EOF
+	} else {
+		k, v = s.tuples[0], s.tuples[1]
+		s.tuples = s.tuples[2:]
+	}
+	return
+}
