@@ -1283,11 +1283,10 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return nil, err
 	}
 
-	newSch, err := sqlutil.ToDoltSchema(ctx, ws.WorkingRoot(), t.Name(), newSchema, headRoot)
+	newSch, err := t.getNewSch(ctx, oldColumn, newColumn, oldSch, newSchema, ws.WorkingRoot(), headRoot)
 	if err != nil {
 		return nil, err
 	}
-
 	newSch = schema.CopyChecksConstraints(oldSch, newSch)
 
 	if isColumnDrop(oldSchema, newSchema) {
@@ -1370,6 +1369,92 @@ func (t *AlterableDoltTable) RewriteInserter(
 	}
 
 	return ed, nil
+}
+
+func (t *AlterableDoltTable) getNewSch(ctx context.Context, oldColumn, newColumn *sql.Column, oldSch schema.Schema, newSchema sql.PrimaryKeySchema, root, headRoot *doltdb.RootValue) (schema.Schema, error) {
+	if oldColumn == nil || newColumn == nil {
+		// Adding or dropping a column
+		newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot)
+		if err != nil {
+			return nil, err
+		}
+		return newSch, err
+	}
+
+	oldTi, err := typeinfo.FromSqlType(oldColumn.Type)
+	if err != nil {
+		return nil, err
+	}
+	newTi, err := typeinfo.FromSqlType(newColumn.Type)
+	if err != nil {
+		return nil, err
+	}
+
+	if oldTi.NomsKind() != newTi.NomsKind() {
+		oldCol, ok := oldSch.GetAllCols().GetByName(oldColumn.Name)
+		if !ok {
+			return nil, fmt.Errorf("expected column %s to exist in the old schema but did not find it", oldColumn.Name)
+		}
+		// Remove the old column from |root| so that its kind will not seed the
+		// new tag.
+		root, err = filterColumnFromRoot(ctx, root, oldCol.Tag)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	return newSch, nil
+}
+
+// filterColumnFromRoot removes any columns matching |colTag| from a |root|. Returns the updated root.
+func filterColumnFromRoot(ctx context.Context, root *doltdb.RootValue, colTag uint64) (*doltdb.RootValue, error) {
+	newRoot := root
+	err := root.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+		_, ok := sch.GetAllCols().GetByTag(colTag)
+		if !ok {
+			return false, nil
+		}
+
+		newSch, err := filterColumnFromSch(sch, colTag)
+		if err != nil {
+			return true, err
+		}
+		t, err := table.UpdateSchema(ctx, newSch)
+		if err != nil {
+			return true, err
+		}
+		newRoot, err = newRoot.PutTable(ctx, name, t)
+		if err != nil {
+			return true, err
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return newRoot, nil
+}
+
+func filterColumnFromSch(sch schema.Schema, colTag uint64) (schema.Schema, error) {
+	var cols []schema.Column
+	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if tag == colTag {
+			return false, nil
+		}
+		cols = append(cols, col)
+		return false, nil
+	})
+	colCol := schema.NewColCollection(cols...)
+	newSch, err := schema.SchemaFromCols(colCol)
+	if err != nil {
+		return nil, err
+	}
+	return newSch, nil
 }
 
 // validateSchemaChange returns an error if the schema change given is not legal
@@ -1567,15 +1652,8 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 
 	// TODO: move this logic into ShouldRewrite
 	if !existingCol.TypeInfo.Equals(col.TypeInfo) {
-		if existingCol.Kind != col.Kind { // We only change the tag when the underlying Noms kind changes
-			tags, err := root.GenerateTagsForNewColumns(ctx, t.tableName, []string{col.Name}, []types.NomsKind{col.Kind}, nil)
-			if err != nil {
-				return err
-			}
-			if len(tags) != 1 {
-				return fmt.Errorf("expected a generated tag length of 1")
-			}
-			col.Tag = tags[0]
+		if existingCol.Kind != col.Kind {
+			panic("table cannot be modified in place")
 		}
 	}
 

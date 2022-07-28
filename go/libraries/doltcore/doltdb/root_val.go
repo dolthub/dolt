@@ -420,12 +420,60 @@ func (root *RootValue) GenerateTagsForNewColumns(
 		return nil, fmt.Errorf("error generating tags, newColNames and newColKinds must be of equal length")
 	}
 
-	var existingCols []schema.Column
 	newTags := make([]uint64, len(newColNames))
 
 	// Get existing columns from the current root, or the head root if the table doesn't exist in the current root. The
 	// latter case is to support reusing table tags in the case of drop / create in the same session, which is common
 	// during import.
+	existingCols, err := getExistingColumns(ctx, root, headRoot, tableName, newColNames, newColKinds)
+	if err != nil {
+		return nil, err
+	}
+
+	// If we found any existing columns set them in the newTags list.
+	for _, col := range existingCols {
+		for i := range newColNames {
+			// Only re-use tags if the noms kind didn't change
+			// TODO: revisit this when new storage format is further along
+			if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) &&
+				newColKinds[i] == col.TypeInfo.NomsKind() {
+				newTags[i] = col.Tag
+				break
+			}
+		}
+	}
+
+	var existingColKinds []types.NomsKind
+	for _, col := range existingCols {
+		existingColKinds = append(existingColKinds, col.Kind)
+	}
+
+	existingTags, err := GetAllTagsForRoot(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range newTags {
+		if newTags[i] > 0 {
+			continue
+		}
+
+		newTags[i] = schema.AutoGenerateTag(existingTags, tableName, existingColKinds, newColNames[i], newColKinds[i])
+		existingColKinds = append(existingColKinds, newColKinds[i])
+		existingTags.Add(newTags[i], tableName)
+	}
+
+	return newTags, nil
+}
+
+func getExistingColumns(
+	ctx context.Context,
+	root, headRoot *RootValue,
+	tableName string,
+	newColNames []string,
+	newColKinds []types.NomsKind) ([]schema.Column, error) {
+
+	var existingCols []schema.Column
 	tbl, found, err := root.GetTable(ctx, tableName)
 	if err != nil {
 		return nil, err
@@ -456,43 +504,7 @@ func (root *RootValue) GenerateTagsForNewColumns(
 		}
 	}
 
-	// If we found any existing columns set them in the newTags list.
-	// We only do this if we want to reuse columns from a previous existing table with the same name
-	if headRoot != nil {
-		for _, col := range existingCols {
-			for i := range newColNames {
-				// Only re-use tags if the noms kind didn't change
-				// TODO: revisit this when new storage format is further along
-				if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) &&
-					newColKinds[i] == col.TypeInfo.NomsKind() {
-					newTags[i] = col.Tag
-					break
-				}
-			}
-		}
-	}
-
-	var existingColKinds []types.NomsKind
-	for _, col := range existingCols {
-		existingColKinds = append(existingColKinds, col.Kind)
-	}
-
-	existingTags, err := GetAllTagsForRoot(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-
-	for i := range newTags {
-		if newTags[i] > 0 {
-			continue
-		}
-
-		newTags[i] = schema.AutoGenerateTag(existingTags, tableName, existingColKinds, newColNames[i], newColKinds[i])
-		existingColKinds = append(existingColKinds, newColKinds[i])
-		existingTags.Add(newTags[i], tableName)
-	}
-
-	return newTags, nil
+	return existingCols, nil
 }
 
 func (root *RootValue) GetAllSchemas(ctx context.Context) (map[string]schema.Schema, error) {

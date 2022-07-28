@@ -74,7 +74,7 @@ type ColConflict struct {
 func (c ColConflict) String() string {
 	switch c.Kind {
 	case NameCollision:
-		return fmt.Sprintf("two columns with the name '%s'", c.Ours.Name)
+		return fmt.Sprintf("two columns with the same name '%s' have different tags", c.Ours.Name)
 	case TagCollision:
 		return fmt.Sprintf("different column definitions for our column %s and their column %s", c.Ours.Name, c.Theirs.Name)
 	}
