@@ -68,6 +68,18 @@ SQL
     [ "$status" -eq "0" ]
 }
 
+@test "garbage_collection: works after gc" {
+    dolt sql -q "create table t(pk int primary key, val int)"
+    dolt sql -q "insert into t values (1,1),(2,2)"
+    dolt sql -q "create view view1 as select * from t"
+    dolt add -A && dolt commit -am "added a table and a view"
+
+    dolt gc
+
+    dolt sql -q "select * from view1"
+    dolt sql -q "select * from information_schema.tables"
+}
+
 @test "garbage_collection: clone a remote" {
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
