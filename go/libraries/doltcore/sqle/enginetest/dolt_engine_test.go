@@ -43,7 +43,7 @@ import (
 
 var skipPrepared bool
 
-const SkipPreparedsCount = 105
+const SkipPreparedsCount = 104
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
 func init() {
