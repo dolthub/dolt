@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
@@ -47,7 +48,7 @@ func validateBranchMapping(ctx context.Context, old, new *doltdb.DoltDB) error {
 	return nil
 }
 
-func validateRootValueChecksums(ctx context.Context, old, new *doltdb.RootValue) error {
+func validateRootValue(ctx context.Context, old, new *doltdb.RootValue) error {
 	names, err := old.GetTableNames(ctx)
 	if err != nil {
 		return err
@@ -61,10 +62,6 @@ func validateRootValueChecksums(ctx context.Context, old, new *doltdb.RootValue)
 			h, _ := old.HashOf()
 			return fmt.Errorf("expected to find table %s in root value (%s)", name, h.String())
 		}
-		oldSch, err := o.GetSchema(ctx)
-		if err != nil {
-			return err
-		}
 
 		n, ok, err := new.GetTable(ctx, name)
 		if err != nil {
@@ -74,120 +71,136 @@ func validateRootValueChecksums(ctx context.Context, old, new *doltdb.RootValue)
 			h, _ := new.HashOf()
 			return fmt.Errorf("expected to find table %s in root value (%s)", name, h.String())
 		}
-		newSch, err := n.GetSchema(ctx)
-		if err != nil {
+
+		if err = validateTableData(ctx, name, o, n); err != nil {
 			return err
-		}
-
-		// update |o| if schema was patched
-		if !schema.SchemasAreEqual(oldSch, newSch) {
-			o, err = o.UpdateSchema(ctx, newSch)
-			if err != nil {
-				return err
-			}
-		}
-
-		oldSum, err := checksumTable(ctx, name, o)
-		if err != nil {
-			return err
-		}
-
-		newSum, err := checksumTable(ctx, name, n)
-		if err != nil {
-			return err
-		}
-
-		if oldSum != newSum {
-			return fmt.Errorf("migrated table has different checksum (%d != %d)", oldSum, newSum)
 		}
 	}
 	return nil
 }
 
-func checksumTable(ctx context.Context, name string, tbl *doltdb.Table) (uint64, error) {
-	sctx := sql.NewEmptyContext()
-	iter, err := sqle.DoltTableToRowIter(sctx, name, tbl)
+func validateTableData(ctx context.Context, name string, old, new *doltdb.Table) error {
+	sctx := sql.NewContext(ctx)
+	oldSch, oldIter, err := sqle.DoltTableToRowIter(sctx, name, old)
 	if err != nil {
-		return 0, err
+		return err
+	}
+	newSch, newIter, err := sqle.DoltTableToRowIter(sctx, name, old)
+	if err != nil {
+		return err
+	}
+	if !oldSch.Equals(newSch) {
+		return fmt.Errorf("differing schemas for table %s", name)
 	}
 
-	var checksum uint64
+	var o, n sql.Row
 	for {
-		r, err := iter.Next(sctx)
+		o, err = oldIter.Next(sctx)
 		if err == io.EOF {
 			break
-		}
-		if err != nil {
-			return 0, err
-		}
-
-		h, err := hashRow(sctx, r)
-		if err != nil {
-			return 0, err
+		} else if err != nil {
+			return err
 		}
 
-		checksum ^= h
+		n, err = newIter.Next(sctx)
+		if err != nil {
+			return err
+		}
+
+		ok, err := o.Equals(n, newSch)
+		if err != nil {
+			return err
+		} else if !ok {
+			return fmt.Errorf("differing rows for table %s (%s != %s)",
+				name, sql.FormatRow(o), sql.FormatRow(n))
+		}
 	}
-	return checksum, nil
+
+	// validated that newIter is also exhausted
+	_, err = newIter.Next(sctx)
+	if err != io.EOF {
+		return fmt.Errorf("differing number of rows for table %s", name)
+	}
+	return nil
 }
 
 func validateSchema(existing schema.Schema) error {
 	for _, c := range existing.GetAllCols().GetColumns() {
 		qt := c.TypeInfo.ToSqlType().Type()
-		nk := mapQueryTypeToNomsKind(qt)
-		if qt == query.Type_GEOMETRY {
-			continue // indefinite NomsKind
-		}
-		if c.Kind != nk {
-			return fmt.Errorf("expected NomsKind %s for query.Type %s, got NomsKind %s",
-				types.KindToString[nk], qt.String(), types.KindToString[c.Kind])
+		err := assertNomsKind(c.Kind, nomsKindsFromQueryTypes(qt)...)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-func mapQueryTypeToNomsKind(qt query.Type) types.NomsKind {
+func nomsKindsFromQueryTypes(qt query.Type) []types.NomsKind {
 	switch qt {
 	case query.Type_UINT8, query.Type_UINT16, query.Type_UINT24,
 		query.Type_UINT32, query.Type_UINT64:
-		return types.UintKind
+		return []types.NomsKind{types.UintKind}
 
 	case query.Type_INT8, query.Type_INT16, query.Type_INT24,
 		query.Type_INT32, query.Type_INT64:
-		return types.IntKind
+		return []types.NomsKind{types.IntKind}
+
+	case query.Type_YEAR, query.Type_TIME:
+		return []types.NomsKind{types.IntKind}
 
 	case query.Type_FLOAT32, query.Type_FLOAT64:
-		return types.FloatKind
+		return []types.NomsKind{types.FloatKind}
 
-	case query.Type_TIMESTAMP, query.Type_DATE, query.Type_TIME, query.Type_DATETIME, query.Type_YEAR:
-		return types.TimestampKind
+	case query.Type_TIMESTAMP, query.Type_DATE, query.Type_DATETIME:
+		return []types.NomsKind{types.TimestampKind}
 
 	case query.Type_DECIMAL:
-		return types.DecimalKind
+		return []types.NomsKind{types.DecimalKind}
 
 	case query.Type_TEXT, query.Type_BLOB:
-		return types.BlobKind
+		return []types.NomsKind{
+			types.BlobKind,
+			types.StringKind,
+		}
 
 	case query.Type_VARCHAR, query.Type_CHAR:
-		return types.StringKind
+		return []types.NomsKind{types.StringKind}
 
 	case query.Type_VARBINARY, query.Type_BINARY:
-		return types.InlineBlobKind
+		return []types.NomsKind{types.InlineBlobKind}
 
-	case query.Type_BIT, query.Type_ENUM:
-		return types.UintKind
-
-	case query.Type_SET:
-		return types.StringKind
+	case query.Type_BIT, query.Type_ENUM, query.Type_SET:
+		return []types.NomsKind{types.UintKind}
 
 	case query.Type_GEOMETRY:
-		return types.GeometryKind
+		return []types.NomsKind{
+			types.GeometryKind,
+			types.PointKind,
+			types.LineStringKind,
+			types.PolygonKind,
+		}
 
 	case query.Type_JSON:
-		return types.JSONKind
+		return []types.NomsKind{types.JSONKind}
+
 	default:
 		panic(fmt.Sprintf("unexpect query.Type %s", qt.String()))
 	}
+}
+
+func assertNomsKind(kind types.NomsKind, candidates ...types.NomsKind) error {
+	for _, c := range candidates {
+		if kind == c {
+			return nil
+		}
+	}
+
+	cs := make([]string, len(candidates))
+	for i, c := range candidates {
+		cs[i] = types.KindToString[c]
+	}
+	return fmt.Errorf("expected NomsKind to be one of (%s), got NomsKind (%s)",
+		strings.Join(cs, ", "), types.KindToString[kind])
 }
 
 func hashRow(sctx *sql.Context, r sql.Row) (uint64, error) {

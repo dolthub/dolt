@@ -95,17 +95,26 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 	return serial.FinishMessage(b, serial.MergeArtifactsEnd(b), mergeArtifactFileID)
 }
 
-func getMergeArtifactKeys(msg serial.Message) (keys val.SlicedBuffer) {
-	ma := serial.GetRootAsMergeArtifacts(msg, serial.MessagePrefixSz)
-	keys.Buf = ma.KeyItemsBytes()
-	keys.Offs = getMergeArtifactKeyOffsets(ma)
-	return
-}
+func getArtifactMapKeysAndValues(msg serial.Message) (keys, values val.SlicedBuffer, cnt uint16) {
+	am := serial.GetRootAsMergeArtifacts(msg, serial.MessagePrefixSz)
 
-func getMergeArtifactValues(msg serial.Message) (values val.SlicedBuffer) {
-	ma := serial.GetRootAsMergeArtifacts(msg, serial.MessagePrefixSz)
-	values.Buf = ma.ValueItemsBytes()
-	values.Offs = getMergeArtifactValueOffsets(ma)
+	keys.Buf = am.KeyItemsBytes()
+	keys.Offs = getMergeArtifactKeyOffsets(am)
+	if len(keys.Buf) == 0 {
+		cnt = 0
+	} else {
+		cnt = 1 + uint16(len(keys.Offs)/2)
+	}
+
+	vv := am.ValueItemsBytes()
+	if vv != nil {
+		values.Buf = vv
+		values.Offs = getMergeArtifactValueOffsets(am)
+	} else {
+		values.Buf = am.AddressArrayBytes()
+		values.Offs = offsetsForAddressArray(values.Buf)
+	}
+
 	return
 }
 
@@ -128,7 +137,7 @@ func walkMergeArtifactAddresses(ctx context.Context, msg serial.Message, cb func
 			return err
 		}
 	}
-	assertFalse((arr != nil) && (arr2 != nil))
+
 	return nil
 }
 
