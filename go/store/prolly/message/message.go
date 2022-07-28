@@ -39,10 +39,22 @@ func GetKeysAndValues(msg serial.Message) (keys, values val.SlicedBuffer, cnt ui
 		cnt = getAddressMapCount(msg)
 		return
 	}
+	if id == serial.MergeArtifactsFileID {
+		keys = getMergeArtifactKeys(msg)
+		values = getMergeArtifactValues(msg)
+		cnt = getMergeArtifactCount(msg)
+		return
+	}
 	if id == serial.CommitClosureFileID {
 		keys = getCommitClosureKeys(msg)
 		values = getCommitClosureValues(msg)
 		cnt = getCommitClosureCount(msg)
+		return
+	}
+	if id == serial.BlobFileID {
+		keys = getBlobKeys(msg)
+		values = getBlobValues(msg)
+		cnt = getBlobCount(msg)
 		return
 	}
 
@@ -56,8 +68,12 @@ func WalkAddresses(ctx context.Context, msg serial.Message, cb func(ctx context.
 		return walkProllyMapAddresses(ctx, msg, cb)
 	case serial.AddressMapFileID:
 		return walkAddressMapAddresses(ctx, msg, cb)
+	case serial.MergeArtifactsFileID:
+		return walkMergeArtifactAddresses(ctx, msg, cb)
 	case serial.CommitClosureFileID:
 		return walkCommitClosureAddresses(ctx, msg, cb)
+	case serial.BlobFileID:
+		return walkBlobAddresses(ctx, msg, cb)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}
@@ -70,8 +86,12 @@ func GetTreeLevel(msg serial.Message) int {
 		return getProllyMapTreeLevel(msg)
 	case serial.AddressMapFileID:
 		return getAddressMapTreeLevel(msg)
+	case serial.MergeArtifactsFileID:
+		return getMergeArtifactTreeLevel(msg)
 	case serial.CommitClosureFileID:
 		return getCommitClosureTreeLevel(msg)
+	case serial.BlobFileID:
+		return getBlobTreeLevel(msg)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}
@@ -84,8 +104,12 @@ func GetTreeCount(msg serial.Message) int {
 		return getProllyMapTreeCount(msg)
 	case serial.AddressMapFileID:
 		return getAddressMapTreeCount(msg)
+	case serial.MergeArtifactsFileID:
+		return getMergeArtifactTreeCount(msg)
 	case serial.CommitClosureFileID:
 		return getCommitClosureTreeCount(msg)
+	case serial.BlobFileID:
+		return getBlobTreeCount(msg)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}
@@ -98,8 +122,12 @@ func GetSubtrees(msg serial.Message) []uint64 {
 		return getProllyMapSubtrees(msg)
 	case serial.AddressMapFileID:
 		return getAddressMapSubtrees(msg)
+	case serial.MergeArtifactsFileID:
+		return getMergeArtifactSubtrees(msg)
 	case serial.CommitClosureFileID:
 		return getCommitClosureSubtrees(msg)
+	case serial.BlobFileID:
+		return getBlobSubtrees(msg)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}

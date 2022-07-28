@@ -80,8 +80,8 @@ func (c *Commit) ParentHashes(ctx context.Context) ([]hash.Hash, error) {
 }
 
 // NumParents gets the number of parents a commit has.
-func (c *Commit) NumParents() (int, error) {
-	return len(c.parents), nil
+func (c *Commit) NumParents() int {
+	return len(c.parents)
 }
 
 func (c *Commit) Height() (uint64, error) {
@@ -180,14 +180,11 @@ func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*Commit, er
 
 	instructions := as.Instructions
 	for _, inst := range instructions {
-		n, err := cur.NumParents()
-		if err != nil {
-			return nil, err
-		}
-		if inst >= n {
+		if inst >= cur.NumParents() {
 			return nil, ErrInvalidAncestorSpec
 		}
 
+		var err error
 		cur, err = cur.GetParent(ctx, inst)
 		if err != nil {
 			return nil, err

@@ -25,6 +25,21 @@ teardown() {
     teardown_common
 }
 
+@test "sql-server: server assumes existing user" {
+    cd repo1
+    dolt sql -q "create user dolt@'%' identified by '123'"
+
+    let PORT="$$ % (65536-1024) + 1024"
+    dolt sql-server --port=$PORT --user dolt > log.txt 2>&1 &
+    SERVER_PID=$!
+    sleep 5
+
+    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt --password=wrongpassword <<< "exit;"
+    run grep 'Error authenticating user using MySQL native password' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+}
+
 @test "sql-server: Database specific system variables should be loaded" {
     cd repo1
     dolt branch dev
@@ -231,7 +246,7 @@ SQL
     [[ "$output" =~ "one_pk" ]] || false
 
     # Add rows on the command line
-    run dolt sql -q "insert into one_pk values (1,1,1)"
+    run dolt sql --user=dolt -q "insert into one_pk values (1,1,1)"
     [ "$status" -eq 1 ]
 
     server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" ""
@@ -286,18 +301,18 @@ SQL
     [[ "$output" =~ "one_pk" ]] || false
 
     # check that dolt_commit works properly when autocommit is on
-    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+    run dolt sql --user=dolt -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
     [ "$status" -eq 0 ]
 
     # check that dolt_commit throws error now that there are no working set changes.
-    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+    run dolt sql --user=dolt -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
     [ "$status" -eq 1 ]
 
     # Make a change to the working set but not the staged set.
-    run dolt sql -q "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
+    run dolt sql --user=dolt -q "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
 
     # check that dolt_commit throws error now that there are no staged changes.
-    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+    run dolt sql --user=dolt -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
     [ "$status" -eq 1 ]
 
     run dolt log
@@ -374,7 +389,7 @@ SQL
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "working tree clean" ]] || false
-    run dolt sql -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
+    run dolt sql --user=dolt -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "6,6" ]] || false
 
@@ -386,7 +401,7 @@ SQL
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "working tree clean" ]] || false
-    run dolt sql -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
+    run dolt sql --user=dolt -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "6,6" ]] || false
 }
@@ -656,11 +671,11 @@ SQL
 
      # verify changes outside the session
      cd repo2
-     run dolt sql -q "show tables"
+     run dolt sql --user=dolt -q "show tables"
      [ "$status" -eq 0 ]
      [[ "$output" =~ "one_pk" ]] || false
 
-     run dolt sql -q "select * from one_pk"
+     run dolt sql --user=dolt -q "select * from one_pk"
      [ "$status" -eq 0 ]
      [[ "$output" =~ "0" ]] || false
      [[ "$output" =~ "1" ]] || false
@@ -677,7 +692,7 @@ SQL
 
      # verify changes outside the session
      cd newdb
-     run dolt sql -q "show tables"
+     run dolt sql --user=dolt -q "show tables"
      [ "$status" -eq 0 ]
      [[ "$output" =~ "test" ]] || false
 }
@@ -728,7 +743,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
 
-    run dolt sql -q "drop table one_pk"
+    run dolt sql --user=dolt -q "drop table one_pk"
     [ "$status" -eq 1 ]
 
     server_query repo1 1 "drop table one_pk" ""
@@ -1131,7 +1146,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table a" ]] || false
 
-    run dolt sql -q "show tables"
+    run dolt sql --user=dolt -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "a" ]] || false
 
@@ -1140,7 +1155,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table b" ]] || false
 
-    run dolt sql -q "show tables"
+    run dolt sql --user=dolt -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "b" ]] || false
 
@@ -1314,7 +1329,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table a" ]] || false
 
-    run dolt sql -q "show tables"
+    run dolt sql --user=dolt -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "a" ]] || false
 
@@ -1323,7 +1338,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table b" ]] || false
 
-    run dolt sql -q "show tables"
+    run dolt sql --user=dolt -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "b" ]] || false
 

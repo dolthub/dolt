@@ -299,6 +299,33 @@ var DoltScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "blame: composite pk ordered output with correct header (bats repro)",
+		SetUpScript: []string{
+			"CREATE TABLE t(pk varchar(20), val int)",
+			"ALTER TABLE t ADD PRIMARY KEY (pk, val)",
+			"INSERT INTO t VALUES ('zzz',4),('mult',1),('sub',2),('add',5)",
+			"CALL dadd('.');",
+			"CALL dcommit('-am', 'add rows');",
+			"INSERT INTO t VALUES ('dolt',0),('alt',12),('del',8),('ctl',3)",
+			"CALL dcommit('-am', 'add more rows');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT pk, val, message FROM dolt_blame_t",
+				Expected: []sql.Row{
+					{"add", 5, "add rows"},
+					{"alt", 12, "add more rows"},
+					{"ctl", 3, "add more rows"},
+					{"del", 8, "add more rows"},
+					{"dolt", 0, "add more rows"},
+					{"mult", 1, "add rows"},
+					{"sub", 2, "add rows"},
+					{"zzz", 4, "add rows"},
+				},
+			},
+		},
+	},
 }
 
 func makeLargeInsert(sz int) string {

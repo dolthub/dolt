@@ -209,10 +209,13 @@ func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sq
 		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, sqlRow[from]); err != nil {
 			return err
 		}
-		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.prefixBld, to, sqlRow[from]); err != nil {
-			return err
+		if to < writer.prefixBld.Desc.Count() {
+			if err := index.PutField(ctx, writer.mut.NodeStore(), writer.prefixBld, to, sqlRow[from]); err != nil {
+				return err
+			}
 		}
 	}
+
 	hashId, _, err := writer.primary.tuplesFromRow(ctx, sqlRow)
 	if err != nil {
 		return err
@@ -226,6 +229,8 @@ func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sq
 		if err != nil {
 			return err
 		}
+	} else {
+		writer.prefixBld.Recycle()
 	}
 
 	return writer.mut.Put(ctx, indexKey, val.EmptyTuple)
