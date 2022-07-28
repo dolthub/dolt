@@ -86,14 +86,14 @@ func (v Geometry) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 		// Write header and data to buffer
 		WriteEWKBHeader(inner, buf)
 		WriteEWKBPointData(inner, buf[geometry.EWKBHeaderSize:])
-		w.writeString(string(buf))
+		w.writeRaw(buf)
 	case LineString:
 		// Allocate buffer for linestring
 		buf := make([]byte, geometry.EWKBHeaderSize+LengthSize+geometry.PointSize*len(inner.Points))
 		// Write header and data to buffer
 		WriteEWKBHeader(inner, buf)
 		WriteEWKBLineData(inner, buf[geometry.EWKBHeaderSize:])
-		w.writeString(string(buf))
+		w.writeRaw(buf)
 	case Polygon:
 		// Calculate space for polygon buffer
 		size := 0
@@ -105,7 +105,7 @@ func (v Geometry) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 		// Write header and data to buffer
 		WriteEWKBHeader(inner, buf)
 		WriteEWKBPolyData(inner, buf[geometry.EWKBHeaderSize:])
-		w.writeString(string(buf))
+		w.writeRaw(buf)
 	default:
 		return errors.New("wrong Inner type")
 	}
