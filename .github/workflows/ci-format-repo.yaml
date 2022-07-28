@@ -44,6 +44,7 @@ jobs:
           fi
       - name: Count prepared statement tests
         id: prep-test-count
+        working-directory: ./go
         run: |
           ./utils/repofmt/check_prepared_tests.sh
       - uses: EndBug/add-and-commit@v7
