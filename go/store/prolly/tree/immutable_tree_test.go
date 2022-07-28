@@ -183,6 +183,7 @@ func TestWriteImmutableTree(t *testing.T) {
 			assert.Equal(t, tt.inputSize, byteCnt)
 			assert.Equal(t, expUnfilled, unfilledCnt)
 			if expLevel > 0 {
+				root = root.loadSubtrees()
 				for i := range expSubtrees {
 					assert.Equal(t, expSubtrees[i], root.getSubtreeCount(i))
 				}

@@ -144,15 +144,20 @@ func (nd Node) getValue(i int) Item {
 	return nd.values.GetSlice(i)
 }
 
-func (nd *Node) getSubtreeCount(i int) uint64 {
+func (nd Node) loadSubtrees() Node {
+	if nd.subtrees == nil {
+		// deserializing subtree counts requires a malloc,
+		// we don't load them unless explicitly requested
+		nd.subtrees = message.GetSubtrees(nd.msg)
+	}
+	return nd
+}
+
+func (nd Node) getSubtreeCount(i int) uint64 {
 	if nd.IsLeaf() {
 		return 1
 	}
-	if nd.subtrees == nil {
-		// deserializing subtree counts requires a
-		// malloc, so we lazily load them here
-		nd.subtrees = message.GetSubtrees(nd.msg)
-	}
+	// this will panic unless subtrees were loaded.
 	return nd.subtrees[i]
 }
 

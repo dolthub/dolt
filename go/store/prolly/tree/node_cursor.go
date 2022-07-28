@@ -101,6 +101,7 @@ func NewCursorAtOrdinal(ctx context.Context, ns NodeStore, nd Node, ord uint64) 
 		if nd.IsLeaf() {
 			return int(distance)
 		}
+		nd = nd.loadSubtrees()
 
 		for idx = 0; idx < nd.Count(); idx++ {
 			card := int64(nd.getSubtreeCount(idx))
@@ -217,6 +218,7 @@ func (cur *Cursor) currentSubtreeSize() uint64 {
 	if cur.isLeaf() {
 		return 1
 	}
+	cur.nd = cur.nd.loadSubtrees()
 	return cur.nd.getSubtreeCount(cur.idx)
 }
 
