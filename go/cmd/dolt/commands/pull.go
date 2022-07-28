@@ -36,7 +36,7 @@ var pullDocs = cli.CommandDocumentationContent{
 More precisely, dolt pull runs {{.EmphasisLeft}}dolt fetch{{.EmphasisRight}} with the given parameters and calls {{.EmphasisLeft}}dolt merge{{.EmphasisRight}} to merge the retrieved branch {{.EmphasisLeft}}HEAD{{.EmphasisRight}} into the current branch.
 `,
 	Synopsis: []string{
-		"{{.LessThan}}remote{{.GreaterThan}}",
+		`[{{.LessThan}}remote{{.GreaterThan}}, [{{.LessThan}}remoteBranch{{.GreaterThan}}]]`,
 	},
 }
 
@@ -59,6 +59,8 @@ func (cmd PullCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd PullCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"remote", "The name of the remote to pull from."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"remoteBranch", "The name of a branch on the specified remote to be merged into the current working set."})
 	ap.SupportsFlag(cli.SquashParam, "", "Merges changes to the working set without updating the commit history")
 	return ap
 }
