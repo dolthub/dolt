@@ -426,8 +426,8 @@ func roundTripUints(t *testing.T) {
 	uintegers = append(uintegers, math.MaxUint16)
 	for _, value := range uintegers {
 		exp := uint16(value)
-		writeUint16(buf, exp)
-		assert.Equal(t, exp, readUint16(buf))
+		WriteUint16(buf, exp)
+		assert.Equal(t, exp, ReadUint16(buf))
 		zero(buf)
 	}
 

@@ -159,11 +159,11 @@ func TestWriteImmutableTree(t *testing.T) {
 			WalkNodes(ctx, root, ns, func(ctx context.Context, n Node) error {
 				var keyCnt int
 				if n.IsLeaf() {
-					byteCnt += len(n.values.Buf)
+					byteCnt += len(n.values.Items)
 					for _, i := range n.getValue(0) {
 						sum += int(i)
 					}
-					keyCnt = len(n.values.Buf)
+					keyCnt = len(n.values.Items)
 					if keyCnt != tt.chunkSize {
 						unfilledCnt += 1
 					}
@@ -183,6 +183,7 @@ func TestWriteImmutableTree(t *testing.T) {
 			assert.Equal(t, tt.inputSize, byteCnt)
 			assert.Equal(t, expUnfilled, unfilledCnt)
 			if expLevel > 0 {
+				root = root.loadSubtrees()
 				for i := range expSubtrees {
 					assert.Equal(t, expSubtrees[i], root.getSubtreeCount(i))
 				}
