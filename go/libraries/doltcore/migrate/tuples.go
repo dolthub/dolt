@@ -15,6 +15,7 @@
 package migrate
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -22,8 +23,12 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
+	geo "github.com/dolthub/dolt/go/store/geometry"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -32,21 +37,23 @@ type translator struct {
 	builder *val.TupleBuilder
 	mapping map[uint64]int
 
+	ns   tree.NodeStore
 	pool pool.BuffPool
 }
 
-func tupleTranslatorsFromSchema(sch schema.Schema, old types.ValueReadWriter) (kt, vt translator) {
+func tupleTranslatorsFromSchema(sch schema.Schema, ns tree.NodeStore) (kt, vt translator) {
 	kd := shim.KeyDescriptorFromSchema(sch)
-	kt = newTupleTranslator(sch.GetPKCols(), kd)
+	kt = newTupleTranslator(ns, sch.GetPKCols(), kd)
 	vd := shim.ValueDescriptorFromSchema(sch)
-	vt = newTupleTranslator(sch.GetNonPKCols(), vd)
+	vt = newTupleTranslator(ns, sch.GetNonPKCols(), vd)
 	return
 }
 
-func newTupleTranslator(cols *schema.ColCollection, desc val.TupleDesc) translator {
+func newTupleTranslator(ns tree.NodeStore, cols *schema.ColCollection, desc val.TupleDesc) translator {
 	return translator{
 		builder: val.NewTupleBuilder(desc),
 		mapping: cols.TagToIdx,
+		ns:      ns,
 		pool:    pool.NewBuffPool(),
 	}
 }
@@ -65,7 +72,7 @@ func (t translator) TranslateTuple(ctx context.Context, tup types.Tuple) (val.Tu
 		} else {
 			// |tag| set in previous iteration
 			pos := t.mapping[tag]
-			err = translateNomsField(value, pos, t.builder)
+			err = translateNomsField(ctx, t.ns, value, pos, t.builder)
 			stop = err != nil
 		}
 		return
@@ -76,9 +83,12 @@ func (t translator) TranslateTuple(ctx context.Context, tup types.Tuple) (val.Tu
 	return t.builder.Build(t.pool), nil
 }
 
-func translateNomsField(value types.Value, idx int, b *val.TupleBuilder) error {
+func translateNomsField(ctx context.Context, ns tree.NodeStore, value types.Value, idx int, b *val.TupleBuilder) error {
 	nk := value.Kind()
 	switch nk {
+	case types.NullKind:
+		return nil // todo(andy): log warning?
+
 	case types.UintKind:
 		translateUintField(value.(types.Uint), idx, b)
 
@@ -107,15 +117,18 @@ func translateNomsField(value types.Value, idx int, b *val.TupleBuilder) error {
 	case types.DecimalKind:
 		b.PutDecimal(idx, decimal.Decimal(value.(types.Decimal)))
 
-	case types.PointKind, types.LineStringKind,
-		types.PolygonKind, types.GeometryKind:
+	case types.GeometryKind:
+		v := value.(types.Geometry).Inner
+		translateGeometryField(v, idx, b)
+
+	case types.PointKind, types.LineStringKind, types.PolygonKind:
 		translateGeometryField(value, idx, b)
 
 	case types.JSONKind:
-		translateJSONField(value.(types.JSON), idx, b)
+		return translateJSONField(ctx, ns, value.(types.JSON), idx, b)
 
 	case types.BlobKind:
-		translateBlobField(value.(types.Blob), idx, b)
+		return translateBlobField(ctx, ns, value.(types.Blob), idx, b)
 
 	default:
 		return fmt.Errorf("encountered unexpected NomsKind %s",
@@ -188,16 +201,57 @@ func translateTimestampField(value types.Timestamp, idx int, b *val.TupleBuilder
 	}
 }
 
-func translateGeometryField(value types.Value, ids int, b *val.TupleBuilder) {
-	panic("unimplemeted")
+func translateGeometryField(value types.Value, idx int, b *val.TupleBuilder) {
+	nk := value.Kind()
+	switch nk {
+	case types.PointKind:
+		p := typeinfo.ConvertTypesPointToSQLPoint(value.(types.Point))
+		b.PutGeometry(idx, geo.SerializePoint(p))
+
+	case types.LineStringKind:
+		l := typeinfo.ConvertTypesLineStringToSQLLineString(value.(types.LineString))
+		b.PutGeometry(idx, geo.SerializeLineString(l))
+
+	case types.PolygonKind:
+		p := typeinfo.ConvertTypesPolygonToSQLPolygon(value.(types.Polygon))
+		b.PutGeometry(idx, geo.SerializePolygon(p))
+
+	default:
+		panic(fmt.Sprintf("unexpected NomsKind for geometry (%d)", nk))
+	}
 }
 
-func translateJSONField(value types.JSON, idx int, b *val.TupleBuilder) {
-	panic("unimplemeted")
+func translateJSONField(ctx context.Context, ns tree.NodeStore, value types.JSON, idx int, b *val.TupleBuilder) error {
+	s, err := json.NomsJSONToString(ctx, json.NomsJSON(value))
+	if err != nil {
+		return err
+	}
+	buf := bytes.NewBuffer([]byte(s))
+
+	t, err := tree.NewImmutableTreeFromReader(ctx, buf, ns, tree.DefaultFixedChunkLength)
+	if err != nil {
+		return err
+	}
+	b.PutJSONAddr(idx, t.Addr)
+	return nil
 }
 
-func translateBlobField(value types.Blob, idx int, b *val.TupleBuilder) {
-	panic("unimplemeted")
+func translateBlobField(ctx context.Context, ns tree.NodeStore, value types.Blob, idx int, b *val.TupleBuilder) error {
+	t, err := tree.NewImmutableTreeFromReader(ctx, value.Reader(ctx), ns, tree.DefaultFixedChunkLength)
+	if err != nil {
+		return err
+	}
+
+	typ := b.Desc.Types[idx]
+	switch typ.Enc {
+	case val.BytesAddrEnc:
+		b.PutBytesAddr(idx, t.Addr)
+	case val.StringAddrEnc:
+		b.PutStringAddr(idx, t.Addr)
+	default:
+		panic(fmt.Sprintf("unexpected encoding for blob (%d)", typ.Enc))
+	}
+	return nil
 }
 
 func isEven(n uint64) bool {

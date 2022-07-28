@@ -317,7 +317,7 @@ func migrateIndex(ctx context.Context, sch schema.Schema, idx durable.Index, old
 	reader := make(chan types.Tuple, 256)
 	writer := make(chan val.Tuple, 256)
 
-	kt, vt := tupleTranslatorsFromSchema(sch, old)
+	kt, vt := tupleTranslatorsFromSchema(sch, ns)
 	kd := kt.builder.Desc
 	vd := vt.builder.Desc
 
@@ -398,7 +398,6 @@ func translateTuples(ctx context.Context, kt, vt translator, reader <-chan types
 		select {
 		case oldVal, ok = <-reader:
 			assertTrue(ok)
-
 		case _ = <-ctx.Done():
 			return nil
 		}
@@ -417,8 +416,7 @@ func translateTuples(ctx context.Context, kt, vt translator, reader <-chan types
 }
 
 func writeProllyMap(ctx context.Context, ns tree.NodeStore, kd, vd val.TupleDesc, writer <-chan val.Tuple) (prolly.Map, error) {
-	pro := channelProvider{tuples: writer}
-	return prolly.NewMapFromProvider(ctx, ns, kd, vd, pro)
+	return prolly.NewMapFromProvider(ctx, ns, kd, vd, channelProvider{tuples: writer})
 }
 
 type channelProvider struct {
