@@ -100,6 +100,9 @@ const (
 	DefaultPrivsName  = "privileges.db"
 	continueFlag      = "continue"
 	fileInputFlag     = "file"
+	UserFlag          = "user"
+	DefaultUser       = "root"
+	DefaultHost       = "localhost"
 
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
@@ -148,12 +151,13 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(listSavedFlag, "l", "List all saved queries")
 	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
 	ap.SupportsFlag(BatchFlag, "b", "Use to enable more efficient batch processing for large SQL import scripts consisting of only INSERT statements. Other statements types are not guaranteed to work in this mode.")
-	ap.SupportsString(DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults the the current directory.")
-	ap.SupportsString(MultiDBDirFlag, "", "directory", "DEPRECATED: Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults the the current directory.")
+	ap.SupportsString(DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
+	ap.SupportsString(MultiDBDirFlag, "", "directory", "DEPRECATED: Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
 	ap.SupportsString(CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to $data-dir/.doltcfg.")
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
 	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given")
 	ap.SupportsString(PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to $doltcfg-dir/privileges.db")
+	ap.SupportsString(UserFlag, "u", "user", fmt.Sprintf("Defines the local super user (default `%v`)", DefaultUser))
 	return ap
 }
 
@@ -186,11 +190,18 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	// We need a username and password for many SQL commands, so set defaults if they don't exist
 	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 
+	// Retrieve username and password from command line, if provided
+	username := DefaultUser
+	if user, ok := apr.GetValue(UserFlag); ok {
+		username = user
+	}
+
 	mrEnv, verr := getMultiRepoEnv(ctx, apr, dEnv, cmd)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
+	// need to return cfgdirpath and error
 	var cfgDirPath string
 	var dataDir string
 	if multiDbDir, ok := apr.GetValue(MultiDBDirFlag); ok {
@@ -201,22 +212,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	cfgDir, cfgDirSpecified := apr.GetValue(CfgDirFlag)
 	if cfgDirSpecified {
-		if exists, _ := dEnv.FS.Exists(cfgDir); !exists {
-			if err := dEnv.FS.MkDirs(cfgDir); err != nil {
-				absPath, _ := dEnv.FS.Abs(cfgDir)
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("couldn't create directory at %s", absPath)), usage)
-			}
-		}
 		cfgDirPath = cfgDir
 	} else if len(dataDir) != 0 {
-		path := filepath.Join(dataDir, DefaultCfgDirName)
-		if exists, _ := dEnv.FS.Exists(path); !exists {
-			if err := dEnv.FS.MkDirs(path); err != nil {
-				absPath, _ := dEnv.FS.Abs(path)
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("couldn't create directory at %s", absPath)), usage)
-			}
-		}
-		cfgDirPath = path
+		cfgDirPath = filepath.Join(dataDir, DefaultCfgDirName)
 	} else {
 		// Look in parent directory for doltcfg
 		path := filepath.Join("..", DefaultCfgDirName)
@@ -224,27 +222,20 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			cfgDirPath = path
 		}
 
-		// Look in data directory (which is necessarily current directory) for doltcfg, create one here if none found
+		// Look in data directory (which is necessarily current directory) for doltcfg
 		path = filepath.Join(dataDir, DefaultCfgDirName)
-		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
-			if len(cfgDirPath) != 0 {
-				p1, err := dEnv.FS.Abs(cfgDirPath)
-				if err != nil {
-					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-				}
-				p2, err := dEnv.FS.Abs(path)
-				if err != nil {
-					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-				}
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(ErrMultipleDoltCfgDirs.New(p1, p2)), usage)
-			}
-			cfgDirPath = path
-		} else if len(cfgDirPath) == 0 {
-			if err := dEnv.FS.MkDirs(path); err != nil {
+		if exists, isDir := dEnv.FS.Exists(path); exists && isDir && len(cfgDirPath) != 0 {
+			p1, err := dEnv.FS.Abs(cfgDirPath)
+			if err != nil {
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 			}
-			cfgDirPath = path
+			p2, err := dEnv.FS.Abs(path)
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			}
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(ErrMultipleDoltCfgDirs.New(p1, p2)), usage)
 		}
+		cfgDirPath = path
 	}
 
 	// If no privilege filepath specified, default to doltcfg directory
@@ -277,12 +268,22 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
+	config := &engine.SqlEngineConfig{
+		InitialDb:      currentDb,
+		IsReadOnly:     false,
+		DoltCfgDirPath: cfgDirPath,
+		PrivFilePath:   privsFp,
+		ServerUser:     username,
+		ServerHost:     DefaultHost,
+		Autocommit:     true,
+	}
+
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
-		return queryMode(ctx, mrEnv, initialRoots, apr, query, currentDb, format, usage, privsFp)
+		return queryMode(ctx, mrEnv, initialRoots, apr, query, format, usage, config)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		return savedQueryMode(ctx, mrEnv, initialRoots, savedQueryName, currentDb, format, usage, privsFp)
+		return savedQueryMode(ctx, mrEnv, initialRoots, savedQueryName, format, usage, config)
 	} else if apr.Contains(listSavedFlag) {
-		return listSavedQueriesMode(ctx, mrEnv, initialRoots, currentDb, format, usage, privsFp)
+		return listSavedQueriesMode(ctx, mrEnv, initialRoots, format, usage, config)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		isTty := false
@@ -309,17 +310,17 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if isTty {
-			verr := execShell(ctx, mrEnv, format, currentDb, privsFp)
+			verr := execShell(ctx, mrEnv, format, config)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else if runInBatchMode {
-			verr := execBatch(ctx, continueOnError, mrEnv, input, format, currentDb, privsFp)
+			verr := execBatch(ctx, continueOnError, mrEnv, input, format, config)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else {
-			verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, currentDb, privsFp)
+			verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, config)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
@@ -333,12 +334,11 @@ func listSavedQueriesMode(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
 	initialRoots map[string]*doltdb.RootValue,
-	currentDb string,
 	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) int {
-	hasQC, err := initialRoots[currentDb].HasTable(ctx, doltdb.DoltQueryCatalogTableName)
+	hasQC, err := initialRoots[config.InitialDb].HasTable(ctx, doltdb.DoltQueryCatalogTableName)
 
 	if err != nil {
 		verr := errhand.BuildDError("error: Failed to read from repository.").AddCause(err).Build()
@@ -350,7 +350,7 @@ func listSavedQueriesMode(
 	}
 
 	query := "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
-	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, query, format, currentDb, privsFp), usage)
+	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, query, format, config), usage)
 }
 
 func savedQueryMode(
@@ -358,19 +358,18 @@ func savedQueryMode(
 	mrEnv *env.MultiRepoEnv,
 	initialRoots map[string]*doltdb.RootValue,
 	savedQueryName string,
-	currentDb string,
 	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) int {
-	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoots[currentDb], savedQueryName)
+	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoots[config.InitialDb], savedQueryName)
 
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, sq.Query, format, currentDb, privsFp), usage)
+	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, sq.Query, format, config), usage)
 }
 
 func queryMode(
@@ -379,10 +378,9 @@ func queryMode(
 	initialRoots map[string]*doltdb.RootValue,
 	apr *argparser.ArgParseResults,
 	query string,
-	currentDb string,
 	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) int {
 
 	// query mode has 3 sub modes:
@@ -395,32 +393,32 @@ func queryMode(
 	_, continueOnError := apr.GetValue(continueFlag)
 
 	if saveName != "" {
-		verr := execQuery(ctx, mrEnv, query, format, currentDb, privsFp)
+		verr := execQuery(ctx, mrEnv, query, format, config)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
 
 		if saveName != "" {
 			saveMessage := apr.GetValueOrDefault(messageFlag, "")
-			newRoot, verr := saveQuery(ctx, initialRoots[currentDb], query, saveName, saveMessage)
+			newRoot, verr := saveQuery(ctx, initialRoots[config.InitialDb], query, saveName, saveMessage)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 
-			verr = UpdateWorkingWithVErr(mrEnv.GetEnv(currentDb), newRoot)
+			verr = UpdateWorkingWithVErr(mrEnv.GetEnv(config.InitialDb), newRoot)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		}
 	} else if batchMode {
 		batchInput := strings.NewReader(query)
-		verr := execBatch(ctx, continueOnError, mrEnv, batchInput, format, currentDb, privsFp)
+		verr := execBatch(ctx, continueOnError, mrEnv, batchInput, format, config)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
 	} else {
 		input := strings.NewReader(query)
-		verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, currentDb, privsFp)
+		verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, config)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
@@ -456,17 +454,8 @@ func execShell(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
 	format engine.PrintResultFormat,
-	initialDb string,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) errhand.VerboseError {
-	config := &engine.SqlEngineConfig{
-		InitialDb:    initialDb,
-		IsReadOnly:   false,
-		PrivFilePath: privsFp,
-		ServerUser:   "root",
-		ServerPass:   "",
-		Autocommit:   true,
-	}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
@@ -478,7 +467,7 @@ func execShell(
 	}
 	defer se.Close()
 
-	err = runShell(ctx, se, mrEnv)
+	err = runShell(ctx, se, mrEnv, config)
 	if err != nil {
 		return errhand.BuildDError(err.Error()).Build()
 	}
@@ -491,17 +480,8 @@ func execBatch(
 	mrEnv *env.MultiRepoEnv,
 	batchInput io.Reader,
 	format engine.PrintResultFormat,
-	initialDb string,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) errhand.VerboseError {
-	config := &engine.SqlEngineConfig{
-		InitialDb:    initialDb,
-		IsReadOnly:   false,
-		PrivFilePath: privsFp,
-		ServerUser:   "root",
-		ServerPass:   "",
-		Autocommit:   true,
-	}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
@@ -518,8 +498,13 @@ func execBatch(
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	// Add root client
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	// Add specified user as new superuser, if it doesn't already exist
+	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
+		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
+	}
+
+	// Set client to specified user
+	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
 	// In batch mode, we need to set a couple flags on the session to prevent constant flushes to disk
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
@@ -543,17 +528,8 @@ func execMultiStatements(
 	mrEnv *env.MultiRepoEnv,
 	batchInput io.Reader,
 	format engine.PrintResultFormat,
-	initialDb string,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) errhand.VerboseError {
-	config := &engine.SqlEngineConfig{
-		InitialDb:    initialDb,
-		IsReadOnly:   false,
-		PrivFilePath: privsFp,
-		ServerUser:   "root",
-		ServerPass:   "",
-		Autocommit:   true,
-	}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
@@ -570,8 +546,13 @@ func execMultiStatements(
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	// Add root client
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	// Add specified user as new superuser, if it doesn't already exist
+	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
+		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
+	}
+
+	// Set client to specified user
+	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
 	err = runMultiStatementMode(sqlCtx, se, batchInput, continueOnErr)
 	return errhand.VerboseErrorFromError(err)
@@ -582,17 +563,8 @@ func execQuery(
 	mrEnv *env.MultiRepoEnv,
 	query string,
 	format engine.PrintResultFormat,
-	initialDb string,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) errhand.VerboseError {
-	config := &engine.SqlEngineConfig{
-		InitialDb:    initialDb,
-		IsReadOnly:   false,
-		PrivFilePath: privsFp,
-		ServerUser:   "root",
-		ServerPass:   "",
-		Autocommit:   true,
-	}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
@@ -609,8 +581,13 @@ func execQuery(
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	// Add root client
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	// Add specified user as new superuser, if it doesn't already exist
+	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
+		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
+	}
+
+	// Set client to specified user
+	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
 	sqlSch, rowIter, err := ProcessQuery(sqlCtx, query, se)
 	if err != nil {
@@ -877,7 +854,7 @@ func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, conti
 
 // runShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
 // be updated by any queries which were processed.
-func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv) error {
+func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv, config *engine.SqlEngineConfig) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 
 	sqlCtx, err := se.NewContext(ctx)
@@ -885,11 +862,16 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 		return err
 	}
 
-	currentDB := sqlCtx.Session.GetCurrentDatabase()
-	currEnv := mrEnv.GetEnv(currentDB)
+	// Add specified user as new superuser, if it doesn't already exist
+	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
+		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
+	}
 
 	// Add root client
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
+
+	currentDB := sqlCtx.Session.GetCurrentDatabase()
+	currEnv := mrEnv.GetEnv(currentDB)
 
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
 	initialPrompt := fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
