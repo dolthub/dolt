@@ -12,51 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package val
+package message
 
-type SlicedBuffer struct {
+import "github.com/dolthub/dolt/go/store/val"
+
+type ItemArray struct {
 	Buf  []byte
-	Offs offsets
+	Offs []byte
 }
 
-// GetSlice returns the ith slice of |sb.Buf|.
-func (sb SlicedBuffer) GetSlice(i int) []byte {
+// GetSlice returns the ith slice of |sb.Items|.
+func (sb ItemArray) GetSlice(i int) []byte {
 	start := uint16(0)
 	if i > 0 {
 		pos := (i - 1) * 2
-		start = readUint16(sb.Offs[pos : pos+2])
+		start = val.ReadUint16(sb.Offs[pos : pos+2])
 	}
 
 	stop := uint16(len(sb.Buf))
 	if i*2 < len(sb.Offs) {
 		pos := i * 2
-		stop = readUint16(sb.Offs[pos : pos+2])
+		stop = val.ReadUint16(sb.Offs[pos : pos+2])
 	}
 
 	return sb.Buf[start:stop]
 }
 
-func (sb SlicedBuffer) Len() int {
+func (sb ItemArray) Len() int {
 	// offsets stored as uint16s with first offset omitted
 	return len(sb.Offs)/2 + 1
-}
-
-type offsets []byte
-
-// offsetsSize returns the number of bytes needed to
-// store |fieldCount| offsets.
-func offsetsSize(count int) ByteSize {
-	if count == 0 {
-		return 0
-	}
-	return ByteSize((count - 1) * 2)
-}
-
-// writeOffset writes offset |pos| at index |i|.
-func writeOffset(i int, off ByteSize, arr offsets) {
-	if i == 0 {
-		return
-	}
-	start := (i - 1) * 2
-	writeUint16(arr[start:start+2], uint16(off))
 }

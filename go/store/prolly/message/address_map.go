@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -78,14 +77,14 @@ func (s AddressMapSerializer) Serialize(keys, addrs [][]byte, subtrees []uint64,
 	return serial.FinishMessage(b, serial.AddressMapEnd(b), addressMapFileID)
 }
 
-func getAddressMapKeys(msg serial.Message) (keys val.SlicedBuffer) {
+func getAddressMapKeys(msg serial.Message) (keys ItemArray) {
 	am := serial.GetRootAsAddressMap(msg, serial.MessagePrefixSz)
 	keys.Buf = am.KeyItemsBytes()
 	keys.Offs = getAddressMapKeyOffsets(am)
 	return
 }
 
-func getAddressMapValues(msg serial.Message) (values val.SlicedBuffer) {
+func getAddressMapValues(msg serial.Message) (values ItemArray) {
 	am := serial.GetRootAsAddressMap(msg, serial.MessagePrefixSz)
 	values.Buf = am.AddressArrayBytes()
 	values.Offs = offsetsForAddressArray(values.Buf)

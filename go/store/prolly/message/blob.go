@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 var blobFileID = []byte(serial.BlobFileID)
@@ -56,7 +55,7 @@ func (s BlobSerializer) Serialize(keys, values [][]byte, subtrees []uint64, leve
 	return serial.FinishMessage(b, serial.BlobEnd(b), blobFileID)
 }
 
-func getBlobKeys(msg serial.Message) val.SlicedBuffer {
+func getBlobKeys(msg serial.Message) ItemArray {
 	cnt := getBlobCount(msg)
 	buf := make([]byte, cnt)
 	for i := range buf {
@@ -67,24 +66,24 @@ func getBlobKeys(msg serial.Message) val.SlicedBuffer {
 		b := offs[i*2 : (i+1)*2]
 		binary.LittleEndian.PutUint16(b, uint16(i))
 	}
-	return val.SlicedBuffer{
+	return ItemArray{
 		Buf:  buf,
 		Offs: offs,
 	}
 }
 
-func getBlobValues(msg serial.Message) val.SlicedBuffer {
+func getBlobValues(msg serial.Message) ItemArray {
 	b := serial.GetRootAsBlob(msg, serial.MessagePrefixSz)
 	if b.TreeLevel() > 0 {
 		arr := b.AddressArrayBytes()
 		off := offsetsForAddressArray(arr)
-		return val.SlicedBuffer{
+		return ItemArray{
 			Buf:  arr,
 			Offs: off,
 		}
 	}
 
-	return val.SlicedBuffer{
+	return ItemArray{
 		Buf:  b.PayloadBytes(),
 		Offs: []byte{},
 	}

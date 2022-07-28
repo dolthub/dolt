@@ -33,7 +33,7 @@ type subtreeCounts []uint64
 type Node struct {
 	// keys and values contain sub-slices of |msg|,
 	// allowing faster lookups by avoiding the vtable
-	keys, values val.SlicedBuffer
+	keys, values message.ItemArray
 	subtrees     subtreeCounts
 	count        uint16
 	msg          serial.Message

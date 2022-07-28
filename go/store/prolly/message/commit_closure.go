@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 var commitClosureKeyOffsets []byte
@@ -49,16 +48,16 @@ func offsetsForCommitClosureKeys(buf []byte) []byte {
 	return commitClosureKeyOffsets[:cnt*uint16Size]
 }
 
-func getCommitClosureKeys(msg serial.Message) val.SlicedBuffer {
-	var ret val.SlicedBuffer
+func getCommitClosureKeys(msg serial.Message) ItemArray {
+	var ret ItemArray
 	m := serial.GetRootAsCommitClosure(msg, serial.MessagePrefixSz)
 	ret.Buf = m.KeyItemsBytes()
 	ret.Offs = offsetsForCommitClosureKeys(ret.Buf)
 	return ret
 }
 
-func getCommitClosureValues(msg serial.Message) val.SlicedBuffer {
-	var ret val.SlicedBuffer
+func getCommitClosureValues(msg serial.Message) ItemArray {
+	var ret ItemArray
 	m := serial.GetRootAsCommitClosure(msg, serial.MessagePrefixSz)
 	if m.AddressArrayLength() == 0 {
 		ret.Buf = commitClosureEmptyValueBytes

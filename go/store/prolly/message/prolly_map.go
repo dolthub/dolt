@@ -97,7 +97,7 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 	return serial.FinishMessage(b, serial.ProllyTreeNodeEnd(b), prollyMapFileID)
 }
 
-func getProllyMapKeysAndValues(msg serial.Message) (keys, values val.SlicedBuffer, cnt uint16) {
+func getProllyMapKeysAndValues(msg serial.Message) (keys, values ItemArray, cnt uint16) {
 	pm := serial.GetRootAsProllyTreeNode(msg, serial.MessagePrefixSz)
 
 	keys.Buf = pm.KeyItemsBytes()

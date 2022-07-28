@@ -95,7 +95,7 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 	return serial.FinishMessage(b, serial.MergeArtifactsEnd(b), mergeArtifactFileID)
 }
 
-func getArtifactMapKeysAndValues(msg serial.Message) (keys, values val.SlicedBuffer, cnt uint16) {
+func getArtifactMapKeysAndValues(msg serial.Message) (keys, values ItemArray, cnt uint16) {
 	am := serial.GetRootAsMergeArtifacts(msg, serial.MessagePrefixSz)
 
 	keys.Buf = am.KeyItemsBytes()

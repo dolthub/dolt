@@ -20,14 +20,13 @@ import (
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 type Serializer interface {
 	Serialize(keys, values [][]byte, subtrees []uint64, level int) serial.Message
 }
 
-func GetKeysAndValues(msg serial.Message) (keys, values val.SlicedBuffer, cnt uint16) {
+func GetKeysAndValues(msg serial.Message) (keys, values ItemArray, cnt uint16) {
 	id := serial.GetFileID(msg)
 
 	if id == serial.ProllyTreeNodeFileID {
