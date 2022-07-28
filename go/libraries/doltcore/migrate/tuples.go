@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -105,7 +106,7 @@ func translateNomsField(ctx context.Context, ns tree.NodeStore, value types.Valu
 		b.PutBool(idx, bool(value.(types.Bool)))
 
 	case types.StringKind:
-		b.PutString(idx, string(value.(types.String)))
+		return translateStringField(ctx, ns, value.(types.String), idx, b)
 
 	case types.UUIDKind:
 		uuid := value.(types.UUID)
@@ -169,9 +170,9 @@ func translateIntField(value types.Int, idx int, b *val.TupleBuilder) {
 	case val.Int64Enc:
 		b.PutInt64(idx, int64(value))
 	case val.YearEnc:
-		b.PutInt16(idx, int16(value))
+		b.PutYear(idx, int16(value))
 	case val.TimeEnc:
-		b.PutInt64(idx, int64(value))
+		b.PutSqlTime(idx, int64(value))
 	default:
 		panic(fmt.Sprintf("unexpected encoding for int (%d)", typ.Enc))
 	}
@@ -187,6 +188,27 @@ func translateFloatField(value types.Float, idx int, b *val.TupleBuilder) {
 	default:
 		panic(fmt.Sprintf("unexpected encoding for float (%d)", typ.Enc))
 	}
+}
+
+func translateStringField(ctx context.Context, ns tree.NodeStore, value types.String, idx int, b *val.TupleBuilder) error {
+	typ := b.Desc.Types[idx]
+	switch typ.Enc {
+	case val.StringEnc:
+		b.PutString(idx, string(value))
+
+	case val.StringAddrEnc:
+		// note: previously, TEXT fields were serialized as types.String
+		rd := strings.NewReader(string(value))
+		t, err := tree.NewImmutableTreeFromReader(ctx, rd, ns, tree.DefaultFixedChunkLength)
+		if err != nil {
+			return err
+		}
+		b.PutStringAddr(idx, t.Addr)
+
+	default:
+		panic(fmt.Sprintf("unexpected encoding for string (%d)", typ.Enc))
+	}
+	return nil
 }
 
 func translateTimestampField(value types.Timestamp, idx int, b *val.TupleBuilder) {
