@@ -467,11 +467,17 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "t1" ]] || false
 
+    # Explicitly specifying the remote and remote ref will merge in that branch
     run dolt sql -q "call dolt_pull('origin', 'main');"
     [ "$status" -eq 0 ]
     run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "t1" ]] || false
+
+    # Specifying a non-existent remote ref gives an error
+    run dolt sql -q "call dolt_pull('origin', 'doesnotexist');"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'branch "doesnotexist" not found on remote' ]] || false
 }
 
 @test "sql-pull: dolt_pull also fetches, but does not merge other branches" {

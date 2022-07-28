@@ -75,22 +75,24 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.NArg() > 1 {
+	if apr.NArg() > 2 {
 		verr := errhand.VerboseErrorFromError(actions.ErrInvalidPullArgs)
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	var remoteName string
+	var remoteName, remoteRefName string
 	if apr.NArg() == 1 {
 		remoteName = apr.Arg(0)
+	} else if apr.NArg() == 2 {
+		remoteName = apr.Arg(0)
+		remoteRefName = apr.Arg(1)
 	}
 
 	if dEnv.IsLocked() {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 
-	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
-
+	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -113,6 +115,14 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 	branchRefs, err := srcDB.GetHeadRefs(ctx)
 	if err != nil {
 		return env.ErrFailedToReadDb
+	}
+
+	hasBranch, err := srcDB.HasBranch(ctx, pullSpec.Branch.GetPath())
+	if err != nil {
+		return err
+	}
+	if !hasBranch {
+		return fmt.Errorf("branch %q not found on remote", pullSpec.Branch.GetPath())
 	}
 
 	// Go through every reference and every branch in each reference

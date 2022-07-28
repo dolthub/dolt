@@ -45,7 +45,7 @@ var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrNoRefSpecForRemote = errors.New("no refspec for remote")
 var ErrInvalidSetUpstreamArgs = errors.New("invalid set-upstream arguments")
 var ErrInvalidFetchSpec = errors.New("invalid fetch spec")
-var ErrPullWithRemoteNoUpstream = errors.New("You asked to pull from the remote '%s', but did not specify a branch. Because this is not the default configured remote for your current branch, you must specify a branch on the command line.")
+var ErrPullWithRemoteNoUpstream = errors.New("You asked to pull from the remote '%s', but did not specify a branch. Because this is not the default configured remote for your current branch, you must specify a branch.")
 var ErrPullWithNoRemoteAndNoUpstream = errors.New("There is no tracking information for the current branch.\nPlease specify which branch you want to merge with.\n\n\tdolt pull <remote> <branch>\n\nIf you wish to set tracking information for this branch you can do so with:\n\n\t dolt push --set-upstream <remote> <branch>\n")
 
 func IsEmptyRemote(r Remote) bool {
@@ -360,30 +360,35 @@ type PullSpec struct {
 	Branch     ref.DoltRef
 }
 
-func NewPullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, squash, noff, force, remoteOnly bool) (*PullSpec, error) {
-	branch := rsr.CWBHeadRef()
+func NewPullSpec(_ context.Context, rsr RepoStateReader, remoteName, remoteRefName string, squash, noff, force, remoteOnly bool) (*PullSpec, error) {
+	var remoteRef ref.DoltRef
+	if remoteRefName == "" {
+		branch := rsr.CWBHeadRef()
+		trackedBranches, err := rsr.GetBranches()
+		if err != nil {
+			return nil, err
+		}
+
+		trackedBranch, hasUpstream := trackedBranches[branch.GetPath()]
+		if !hasUpstream {
+			if remoteOnly {
+				return nil, fmt.Errorf(ErrPullWithRemoteNoUpstream.Error(), remoteName)
+			} else {
+				return nil, ErrPullWithNoRemoteAndNoUpstream
+			}
+		}
+
+		remoteRef = trackedBranch.Merge.Ref
+	} else {
+		remoteRef = ref.NewBranchRef(remoteRefName)
+	}
 
 	refSpecs, err := GetRefSpecs(rsr, remoteName)
 	if err != nil {
 		return nil, err
 	}
-
 	if len(refSpecs) == 0 {
 		return nil, ErrNoRefSpecForRemote
-	}
-
-	trackedBranches, err := rsr.GetBranches()
-	if err != nil {
-		return nil, err
-	}
-
-	trackedBranch, hasUpstream := trackedBranches[branch.GetPath()]
-	if !hasUpstream {
-		if remoteOnly {
-			return nil, fmt.Errorf(ErrPullWithRemoteNoUpstream.Error(), remoteName)
-		} else {
-			return nil, ErrPullWithNoRemoteAndNoUpstream
-		}
 	}
 
 	remotes, err := rsr.GetRemotes()
@@ -398,7 +403,7 @@ func NewPullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, sq
 		RemoteName: remoteName,
 		Remote:     remote,
 		RefSpecs:   refSpecs,
-		Branch:     trackedBranch.Merge.Ref,
+		Branch:     remoteRef,
 		Force:      force,
 	}, nil
 }
