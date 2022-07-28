@@ -49,7 +49,7 @@ type DoltIndex interface {
 
 	getDurableState(*sql.Context, DoltTableable) (*durableIndexState, error)
 	coversColumns(s *durableIndexState, columns []uint64) bool
-	sqlRowConverter(s *durableIndexState) *KVToSqlRowConverter
+	sqlRowConverter(*durableIndexState, []uint64) *KVToSqlRowConverter
 	lookupTags(s *durableIndexState) map[uint64]int
 }
 
@@ -260,6 +260,7 @@ type durableIndexState struct {
 	coversAllCols         uint32
 	cachedLookupTags      atomic.Value
 	cachedSqlRowConverter atomic.Value
+	cachedProjections     atomic.Value
 }
 
 func (s *durableIndexState) coversAllColumns(i *doltIndex) bool {
@@ -317,13 +318,29 @@ func (s *durableIndexState) lookupTags(i *doltIndex) map[uint64]int {
 	return cached.(map[uint64]int)
 }
 
-func (s *durableIndexState) sqlRowConverter(i *doltIndex) *KVToSqlRowConverter {
-	cached := s.cachedSqlRowConverter.Load()
-	if cached == nil {
-		cached = NewKVToSqlRowConverterForCols(i.Format(), i.Schema())
-		s.cachedSqlRowConverter.Store(cached)
+func projectionsEqual(x, y []uint64) bool {
+	if len(x) != len(y) {
+		return false
 	}
-	return cached.(*KVToSqlRowConverter)
+	var i, j int
+	for i < len(x) && j < len(y) {
+		if x[i] != y[j] {
+			return false
+		}
+		i++
+		j++
+	}
+	return true
+}
+func (s *durableIndexState) sqlRowConverter(i *doltIndex, proj []uint64) *KVToSqlRowConverter {
+	cachedProjections := s.cachedProjections.Load()
+	cachedConverter := s.cachedSqlRowConverter.Load()
+	if cachedConverter == nil || !projectionsEqual(proj, cachedProjections.([]uint64)) {
+		cachedConverter = NewKVToSqlRowConverterForCols(i.Format(), i.Schema(), proj)
+		s.cachedSqlRowConverter.Store(cachedConverter)
+		s.cachedProjections.Store(proj)
+	}
+	return cachedConverter.(*KVToSqlRowConverter)
 }
 
 type cachedDurableIndexes struct {
@@ -575,8 +592,8 @@ RangeLoop:
 	}, nil
 }
 
-func (di *doltIndex) sqlRowConverter(s *durableIndexState) *KVToSqlRowConverter {
-	return s.sqlRowConverter(di)
+func (di *doltIndex) sqlRowConverter(s *durableIndexState, columns []uint64) *KVToSqlRowConverter {
+	return s.sqlRowConverter(di, columns)
 }
 
 func (di *doltIndex) lookupTags(s *durableIndexState) map[uint64]int {

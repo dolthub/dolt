@@ -272,7 +272,40 @@ func (ht *HistoryTable) String() string {
 
 // Schema returns the schema for the history table
 func (ht *HistoryTable) Schema() sql.Schema {
-	return historyTableSchema(ht.Name(), ht.doltTable)
+	sch := historyTableSchema(ht.Name(), ht.doltTable)
+	if len(ht.projectedCols) == 0 {
+		return sch
+	}
+
+	projectedSch := make(sql.Schema, len(ht.projectedCols))
+	allCols := ht.doltTable.sch.GetAllCols()
+	for i, t := range ht.projectedCols {
+		if col, ok := allCols.TagToCol[t]; ok {
+			idx := sch.IndexOfColName(col.Name)
+			projectedSch[i] = sch[idx]
+		} else if t == schema.HistoryCommitterTag {
+			projectedSch[i] = &sql.Column{
+				Name:   CommitterCol,
+				Source: ht.Name(),
+				Type:   CommitterColType,
+			}
+		} else if t == schema.HistoryCommitHashTag {
+			projectedSch[i] = &sql.Column{
+				Name:   CommitHashCol,
+				Source: ht.Name(),
+				Type:   CommitHashColType,
+			}
+		} else if t == schema.HistoryCommitDateTag {
+			projectedSch[i] = &sql.Column{
+				Name:   CommitDateCol,
+				Source: ht.Name(),
+				Type:   sql.Datetime,
+			}
+		} else {
+			panic("column not found")
+		}
+	}
+	return projectedSch
 }
 
 // Partitions returns a PartitionIter which will be used in getting partitions each of which is used to create RowIter.
@@ -284,7 +317,7 @@ func (ht *HistoryTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) 
 func (ht *HistoryTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	cp := part.(*commitPartition)
 
-	return newRowItrForTableAtCommit(ctx, ht.Name(), ht.doltTable, cp.h, cp.cm, ht.indexLookup)
+	return newRowItrForTableAtCommit(ctx, ht.Name(), ht.doltTable, cp.h, cp.cm, ht.indexLookup, ht.projectedCols)
 }
 
 // commitPartition is a single commit
@@ -327,8 +360,8 @@ type historyIter struct {
 	nonExistentTable bool
 }
 
-func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTable, h hash.Hash, cm *doltdb.Commit, lookup sql.IndexLookup) (*historyIter, error) {
-	targetSchema := historyTableSchema(tableName, table)
+func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTable, h hash.Hash, cm *doltdb.Commit, lookup sql.IndexLookup, projections []uint64) (*historyIter, error) {
+	targetSchema := table.Schema().Copy()
 
 	root, err := cm.GetRootValue(ctx)
 	if err != nil {
@@ -380,7 +413,7 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 		return nil, err
 	}
 
-	converter := rowConverter(sqlTable.Schema(), targetSchema, h, meta)
+	converter := rowConverter(sqlTable.Schema(), targetSchema, h, meta, projections)
 
 	return &historyIter{
 		table:           sqlTable,
@@ -426,9 +459,9 @@ func (i *historyIter) Close(ctx *sql.Context) error {
 	return nil
 }
 
-func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.CommitMeta) func(row sql.Row) sql.Row {
+func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.CommitMeta, projections []uint64) func(row sql.Row) sql.Row {
 	srcToTarget := make(map[int]int)
-	for i, col := range targetSchema[:len(targetSchema)-3] {
+	for i, col := range targetSchema {
 		srcIdx := srcSchema.IndexOfColName(col.Name)
 		if srcIdx >= 0 {
 			// only add a conversion if the type is the same
@@ -440,17 +473,22 @@ func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.C
 	}
 
 	return func(row sql.Row) sql.Row {
-		r := make(sql.Row, len(targetSchema))
-		for i := range row {
-			if idx, ok := srcToTarget[i]; ok {
-				r[idx] = row[i]
+		r := make(sql.Row, len(projections))
+		for i, t := range projections {
+			switch t {
+			case schema.HistoryCommitterTag:
+				r[i] = meta.Name
+			case schema.HistoryCommitDateTag:
+				r[i] = meta.Time()
+			case schema.HistoryCommitHashTag:
+				r[i] = h.String()
+			default:
+				if j, ok := srcToTarget[i]; ok {
+					r[j] = row[i]
+				}
 			}
+			i++
 		}
-
-		r[len(targetSchema)-3] = h.String()
-		r[len(targetSchema)-2] = meta.Name
-		r[len(targetSchema)-1] = meta.Time()
-
 		return r
 	}
 }

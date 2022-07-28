@@ -115,7 +115,7 @@ func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table, db string,
 		return nil, err
 	}
 
-	conv := index.NewKVToSqlRowConverterForCols(t.Format(), sch)
+	conv := index.NewKVToSqlRowConverterForCols(t.Format(), sch, nil)
 
 	return &nomsTableWriter{
 		tableName:   table,
