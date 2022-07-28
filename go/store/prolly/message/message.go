@@ -40,10 +40,7 @@ func GetKeysAndValues(msg serial.Message) (keys, values val.SlicedBuffer, cnt ui
 		return
 	}
 	if id == serial.MergeArtifactsFileID {
-		keys = getMergeArtifactKeys(msg)
-		values = getMergeArtifactValues(msg)
-		cnt = getMergeArtifactCount(msg)
-		return
+		return getArtifactMapKeysAndValues(msg)
 	}
 	if id == serial.CommitClosureFileID {
 		keys = getCommitClosureKeys(msg)
