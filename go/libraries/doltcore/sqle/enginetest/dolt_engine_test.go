@@ -325,6 +325,10 @@ func TestUpdate(t *testing.T) {
 	enginetest.TestUpdate(t, newDoltHarness(t))
 }
 
+func TestUpdateIgnore(t *testing.T) {
+	enginetest.TestUpdateIgnore(t, newDoltHarness(t))
+}
+
 func TestUpdateErrors(t *testing.T) {
 	enginetest.TestUpdateErrors(t, newDoltHarness(t))
 }
