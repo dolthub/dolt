@@ -17,7 +17,6 @@ package migrate
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"golang.org/x/sync/errgroup"
@@ -424,16 +423,16 @@ func translateTuples(ctx context.Context, kt, vt translator, reader <-chan types
 }
 
 func writeProllyMap(ctx context.Context, ns tree.NodeStore, kd, vd val.TupleDesc, writer <-chan val.Tuple) (prolly.Map, error) {
-	return prolly.NewMapFromProvider(ctx, ns, kd, vd, channelProvider{tuples: writer})
+	return prolly.NewMapFromTupleIter(ctx, ns, kd, vd, channelProvider{tuples: writer})
 }
 
 type channelProvider struct {
 	tuples <-chan val.Tuple
 }
 
-var _ prolly.TupleProvider = channelProvider{}
+var _ prolly.TupleIter = channelProvider{}
 
-func (p channelProvider) Next(ctx context.Context) (val.Tuple, val.Tuple, error) {
+func (p channelProvider) Next(ctx context.Context) (val.Tuple, val.Tuple) {
 	var (
 		k, v val.Tuple
 		ok   bool
@@ -442,17 +441,17 @@ func (p channelProvider) Next(ctx context.Context) (val.Tuple, val.Tuple, error)
 	select {
 	case k, ok = <-p.tuples:
 		if !ok {
-			return nil, nil, io.EOF // done
+			return nil, nil // done
 		}
 	case _ = <-ctx.Done():
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	select {
 	case v, ok = <-p.tuples:
 		assertTrue(ok)
 	case _ = <-ctx.Done():
-		return nil, nil, nil
+		return nil, nil
 	}
-	return k, v, nil
+	return k, v
 }

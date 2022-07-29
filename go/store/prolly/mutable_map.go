@@ -192,3 +192,34 @@ func debugFormat(ctx context.Context, m MutableMap) (string, error) {
 	sb.WriteString("\t}\n}\n")
 	return sb.String(), nil
 }
+
+type tupleIter struct {
+	tuples []val.Tuple
+}
+
+var _ TupleIter = &tupleIter{}
+
+func (s *tupleIter) Next(context.Context) (k, v val.Tuple) {
+	if len(s.tuples) > 0 {
+		k, v = s.tuples[0], s.tuples[1]
+		s.tuples = s.tuples[2:]
+	}
+	return
+}
+
+// mutationIter wraps a TupleIter as a MutationIter.
+type mutationIter struct {
+	iter TupleIter
+}
+
+var _ tree.MutationIter = mutationIter{}
+
+func (m mutationIter) NextMutation(ctx context.Context) (key, value tree.Item) {
+	k, v := m.iter.Next(ctx)
+	key, value = tree.Item(k), tree.Item(v)
+	return
+}
+
+func (m mutationIter) Close() error {
+	return nil
+}
