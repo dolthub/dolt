@@ -34,6 +34,10 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+var (
+	flushRef = ref.NewInternalRef("migration-flush")
+)
+
 func migrateWorkingSet(ctx context.Context, wsRef ref.WorkingSetRef, old, new *doltdb.DoltDB, prog Progress) error {
 	oldWs, err := old.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
@@ -107,8 +111,12 @@ func migrateCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, p
 	if err != nil {
 		return err
 	}
+	if err = prog.Put(ctx, oldHash, newHash); err != nil {
+		return err
+	}
 
-	return prog.Put(ctx, oldHash, newHash)
+	// flush ChunkStore
+	return new.SetHead(ctx, flushRef, newHash)
 }
 
 func migrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
