@@ -299,6 +299,33 @@ var DoltScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "blame: composite pk ordered output with correct header (bats repro)",
+		SetUpScript: []string{
+			"CREATE TABLE t(pk varchar(20), val int)",
+			"ALTER TABLE t ADD PRIMARY KEY (pk, val)",
+			"INSERT INTO t VALUES ('zzz',4),('mult',1),('sub',2),('add',5)",
+			"CALL dadd('.');",
+			"CALL dcommit('-am', 'add rows');",
+			"INSERT INTO t VALUES ('dolt',0),('alt',12),('del',8),('ctl',3)",
+			"CALL dcommit('-am', 'add more rows');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT pk, val, message FROM dolt_blame_t",
+				Expected: []sql.Row{
+					{"add", 5, "add rows"},
+					{"alt", 12, "add more rows"},
+					{"ctl", 3, "add more rows"},
+					{"del", 8, "add more rows"},
+					{"dolt", 0, "add more rows"},
+					{"mult", 1, "add rows"},
+					{"sub", 2, "add rows"},
+					{"zzz", 4, "add rows"},
+				},
+			},
+		},
+	},
 }
 
 func makeLargeInsert(sz int) string {
@@ -598,20 +625,19 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "explain select pk, c from dolt_history_t1 where pk = 3",
 				Expected: []sql.Row{
-					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{" └─ Filter(dolt_history_t1.pk = 3)"},
-					{"     └─ Projected table access on [pk c]"},
-					{"         └─ Exchange"},
-					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])"},
+					{"Projected table access on [pk c]"},
+					{" └─ Exchange"},
+					{"     └─ Filter(dolt_history_t1.pk = 3)"},
+					{"         └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])"},
 				},
 			},
 			{
 				Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
 				Expected: []sql.Row{
 					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{" └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
-					{"     └─ Projected table access on [pk c committer]"},
-					{"         └─ Exchange"},
+					{" └─ Projected table access on [pk c committer]"},
+					{"     └─ Exchange"},
+					{"         └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
 					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])"},
 				},
 			},
@@ -664,20 +690,19 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "explain select pk, c from dolt_history_t1 where c = 4",
 				Expected: []sql.Row{
-					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{" └─ Filter(dolt_history_t1.c = 4)"},
-					{"     └─ Projected table access on [pk c]"},
-					{"         └─ Exchange"},
-					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.c] with ranges: [{[4, 4]}])"},
+					{"Projected table access on [pk c]"},
+					{" └─ Exchange"},
+					{"     └─ Filter(dolt_history_t1.c = 4)"},
+					{"         └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.c] with ranges: [{[4, 4]}])"},
 				},
 			},
 			{
 				Query: "explain select pk, c from dolt_history_t1 where c = 10 and committer = 'someguy'",
 				Expected: []sql.Row{
 					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{" └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = 'someguy'))"},
-					{"     └─ Projected table access on [pk c committer]"},
-					{"         └─ Exchange"},
+					{" └─ Projected table access on [pk c committer]"},
+					{"     └─ Exchange"},
+					{"         └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = 'someguy'))"},
 					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.c] with ranges: [{[10, 10]}])"}},
 			},
 		},

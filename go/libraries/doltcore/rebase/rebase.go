@@ -31,8 +31,7 @@ type NeedsRebaseFn func(ctx context.Context, cm *doltdb.Commit) (bool, error)
 // EntireHistory returns a |NeedsRebaseFn| that rebases the entire commit history.
 func EntireHistory() NeedsRebaseFn {
 	return func(_ context.Context, cm *doltdb.Commit) (bool, error) {
-		n, err := cm.NumParents()
-		return n != 0, err
+		return cm.NumParents() != 0, nil
 	}
 }
 
@@ -54,11 +53,7 @@ func StopAtCommit(stopCommit *doltdb.Commit) NeedsRebaseFn {
 			return false, nil
 		}
 
-		n, err := cm.NumParents()
-		if err != nil {
-			return false, err
-		}
-		if n == 0 {
+		if cm.NumParents() == 0 {
 			return false, fmt.Errorf("commit %s is missing from the commit history of at least one rebase head", sh)
 		}
 

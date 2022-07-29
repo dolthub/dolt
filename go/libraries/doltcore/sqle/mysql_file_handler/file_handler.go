@@ -25,22 +25,34 @@ import (
 )
 
 type Persister struct {
-	privsFilePath string
-	fileMutex     *sync.Mutex
+	privsFilePath  string
+	doltCfgDirPath string
+	fileMutex      *sync.Mutex
 }
 
 var _ mysql_db.MySQLDbPersistence = &Persister{}
 
-func NewPersister(fp string) *Persister {
+func NewPersister(fp string, dp string) *Persister {
 	return &Persister{
-		privsFilePath: fp,
-		fileMutex:     &sync.Mutex{},
+		privsFilePath:  fp,
+		doltCfgDirPath: dp,
+		fileMutex:      &sync.Mutex{},
 	}
 }
 
 func (p *Persister) Persist(ctx *sql.Context, data []byte) error {
 	p.fileMutex.Lock()
 	defer p.fileMutex.Unlock()
+
+	// Create doltcfg directory if it doesn't already exist
+	if len(p.doltCfgDirPath) != 0 {
+		if _, err := os.Stat(p.doltCfgDirPath); os.IsNotExist(err) {
+			if err := os.Mkdir(p.doltCfgDirPath, 0777); err != nil {
+				return err
+			}
+		}
+	}
+
 	return ioutil.WriteFile(p.privsFilePath, data, 0777)
 }
 

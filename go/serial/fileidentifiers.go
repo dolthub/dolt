@@ -34,6 +34,8 @@ const AddressMapFileID = "ADRM"
 const CommitClosureFileID = "CMCL"
 const TableSchemaFileID = "DSCH"
 const ForeignKeyCollectionFileID = "DFKC"
+const MergeArtifactsFileID = "ARTM"
+const BlobFileID = "BLOB"
 
 const MessageTypesKind int = 27
 

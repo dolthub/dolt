@@ -152,8 +152,9 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	s.NoError(err)
 
 	numChildChunks := 0
-	err = types.WalkAddrs(l, vrw.Format(), func(_ hash.Hash, _ bool) {
+	err = types.WalkAddrs(l, vrw.Format(), func(_ hash.Hash, _ bool) error {
 		numChildChunks++
+		return nil
 	})
 	s.NoError(err)
 	s.True(numChildChunks > 0)

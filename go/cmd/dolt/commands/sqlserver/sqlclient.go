@@ -95,6 +95,11 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 	var serverController *ServerController
 	var err error
 
+	if _, ok := apr.GetValue(commands.UserFlag); !ok {
+		cli.PrintErrln(color.RedString("--user or -u argument is required"))
+		return 1
+	}
+
 	if apr.Contains(sqlClientDualFlag) {
 		if !dEnv.Valid() {
 			if !cli.CheckEnvIsValid(dEnv) {
@@ -137,7 +142,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 		}
 	}
 
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig), nil)
+	conn, err := dbr.Open("mysql", ConnectionString(serverConfig, ""), nil)
 	if err != nil {
 		cli.PrintErrln(err.Error())
 		serverController.StopServer()

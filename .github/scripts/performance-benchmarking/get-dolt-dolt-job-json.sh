@@ -53,6 +53,14 @@ echo '
   "spec": {
     "backoffLimit": 1,
     "template": {
+      "metadata": {
+        "annotations": {
+          "alert_recipients": "'$ACTOR_EMAIL'"
+        },
+        "labels": {
+          "k8s-liquidata-inc-monitored-job": "created-by-static-config"
+        }
+      },
       "spec": {
         "serviceAccountName": "performance-benchmarking",
         "containers": [

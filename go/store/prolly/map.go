@@ -59,18 +59,32 @@ func NewMap(node tree.Node, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc) M
 
 // NewMapFromTuples creates a prolly tree Map from slice of sorted Tuples.
 func NewMapFromTuples(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
+	if len(tups)%2 != 0 {
+		return Map{}, fmt.Errorf("tuples must be key-value pairs")
+	}
+
+	return NewMapFromProvider(ctx, ns, keyDesc, valDesc, &sliceIter{tuples: tups})
+}
+
+type TupleProvider MapIter
+
+func NewMapFromProvider(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc, iter TupleProvider) (Map, error) {
 	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
 	ch, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	if err != nil {
 		return Map{}, err
 	}
 
-	if len(tups)%2 != 0 {
-		return Map{}, fmt.Errorf("tuples must be key-value pairs")
-	}
-
-	for i := 0; i < len(tups); i += 2 {
-		if err = ch.AddPair(ctx, tree.Item(tups[i]), tree.Item(tups[i+1])); err != nil {
+	var k, v val.Tuple
+	for {
+		k, v, err = iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return Map{}, err
+		}
+		if err = ch.AddPair(ctx, tree.Item(k), tree.Item(v)); err != nil {
 			return Map{}, err
 		}
 	}

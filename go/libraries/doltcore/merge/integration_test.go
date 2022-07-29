@@ -355,6 +355,7 @@ func engineFromEnvironment(ctx context.Context, dEnv *env.DoltEnv) (eng *engine.
 		PrivFilePath: "",
 		ServerUser:   "root",
 		ServerPass:   "",
+		ServerHost:   "localhost",
 		Autocommit:   true,
 	})
 	if err != nil {

@@ -325,7 +325,7 @@ func TestLDNoms(t *testing.T) {
 		assert.Equal(t, len(branches), 1)
 		assert.Equal(t, branches[0].Ref.GetPath(), "master")
 
-		numParents, err := commit.NumParents()
+		numParents := commit.NumParents()
 		assert.NoError(t, err)
 
 		if numParents != 1 {

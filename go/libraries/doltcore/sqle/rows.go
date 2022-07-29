@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -75,7 +76,7 @@ func newRowIterator(ctx context.Context, tbl *doltdb.Table, sqlSch sql.Schema, p
 	}
 
 	if types.IsFormat_DOLT_1(tbl.Format()) {
-		return ProllyRowIterFromPartition(ctx, tbl, sqlSch, projCols, partition)
+		return ProllyRowIterFromPartition(ctx, sch, sqlSch, projCols, partition)
 	}
 
 	if schema.IsKeyless(sch) {
@@ -145,20 +146,24 @@ func getTagToResColIdx(ctx context.Context, tbl *doltdb.Table, projectedCols []u
 		return nil, nil, err
 	}
 
-	cols := sch.GetAllCols().GetColumns()
+	allCols := sch.GetAllCols().GetColumns()
 	tagToSqlColIdx := make(map[uint64]int)
 
-	resultColSet := make(map[uint64]bool)
-	for i := range projectedCols {
-		resultColSet[projectedCols[i]] = true
+	if len(projectedCols) > 0 {
+		outCols := make([]schema.Column, len(projectedCols))
+		for i := range projectedCols {
+			t := projectedCols[i]
+			idx := sch.GetAllCols().TagToIdx[t]
+			tagToSqlColIdx[t] = i
+			outCols[i] = allCols[idx]
+		}
+		return outCols, tagToSqlColIdx, nil
 	}
 
-	for i, col := range cols {
-		if len(projectedCols) == 0 || resultColSet[col.Tag] {
-			tagToSqlColIdx[col.Tag] = i
-		}
+	for i, col := range allCols {
+		tagToSqlColIdx[col.Tag] = i
 	}
-	return cols, tagToSqlColIdx, nil
+	return allCols, tagToSqlColIdx, nil
 }
 
 // Next returns the next row in this row iterator, or an io.EOF error if there aren't any more.
@@ -173,16 +178,12 @@ func (itr *doltTableRowIter) Close(*sql.Context) error {
 
 func ProllyRowIterFromPartition(
 	ctx context.Context,
-	tbl *doltdb.Table,
+	sch schema.Schema,
 	sqlSch sql.Schema,
 	projections []uint64,
 	partition doltTablePartition,
 ) (sql.RowIter, error) {
 	rows := durable.ProllyMapFromIndex(partition.rowData)
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
 	if partition.end > uint64(rows.Count()) {
 		partition.end = uint64(rows.Count())
 	}
@@ -195,15 +196,15 @@ func ProllyRowIterFromPartition(
 	return index.NewProllyRowIter(sch, sqlSch, rows, iter, projections)
 }
 
-// TableToRowIter returns a |sql.RowIter| for a full table scan for the given |table|. If
+// SqlTableToRowIter returns a |sql.RowIter| for a full table scan for the given |table|. If
 // |columns| is not empty, only columns with names appearing in |columns| will
 // have non-|nil| values in the resulting |sql.Row|s. If |columns| is empty,
 // values for all columns in the table are populated in each returned Row. The
 // returned rows always have the schema of the table, regardless of the value
 // of |columns|.  Providing a column name which does not appear in the schema
 // is not an error, but no corresponding column will appear in the results.
-func TableToRowIter(ctx *sql.Context, table *WritableDoltTable, columns []uint64) (sql.RowIter, error) {
-	t, err := table.DoltTable.DoltTable(ctx)
+func SqlTableToRowIter(ctx *sql.Context, table *DoltTable, columns []uint64) (sql.RowIter, error) {
+	t, err := table.DoltTable(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -220,4 +221,32 @@ func TableToRowIter(ctx *sql.Context, table *WritableDoltTable, columns []uint64
 	sqlSch := table.sqlSch.Schema
 
 	return newRowIterator(ctx, t, sqlSch, columns, p)
+}
+
+// DoltTableToRowIter returns a sql.RowIter for the clustered index of |table|.
+func DoltTableToRowIter(ctx *sql.Context, name string, table *doltdb.Table) (sql.Schema, sql.RowIter, error) {
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	pkSch, err := sqlutil.FromDoltSchema(name, sch)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	data, err := table.GetRowData(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	p := doltTablePartition{
+		end:     NoUpperBound,
+		rowData: data,
+	}
+
+	iter, err := newRowIterator(ctx, table, pkSch.Schema, nil, p)
+	if err != nil {
+		return nil, nil, err
+	}
+	return pkSch.Schema, iter, nil
 }

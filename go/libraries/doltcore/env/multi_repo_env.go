@@ -22,6 +22,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/sirupsen/logrus"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -29,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 var ErrActiveServerLock = errors.NewKind("database locked by another sql-server; either clone the database to run a second server, or delete the '%s' if no other sql-servers are active")
@@ -268,7 +270,9 @@ func MultiEnvForDirectory(
 		//dEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
 	}
 
+	var binFormat *types.NomsBinFormat
 	if dEnv.Valid() {
+		binFormat = dEnv.DoltDB.Format()
 		mrEnv.AddEnv(dbName, dEnv)
 	}
 
@@ -285,9 +289,15 @@ func MultiEnvForDirectory(
 			return false
 		}
 
-		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, dEnv.Version)
+		newEnv := loadWithFormat(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, dEnv.Version, binFormat)
 		if newEnv.Valid() {
 			mrEnv.AddEnv(dirToDBName(dir), newEnv)
+			if binFormat == nil {
+				binFormat = newEnv.DoltDB.Format()
+			}
+		}
+		if newEnv.DbFormatError != nil {
+			logrus.Infof("incompatible format for database '%s'; expected '%s', found '%s'", dir, binFormat.VersionString(), newEnv.DoltDB.Format().VersionString())
 		}
 
 		return false

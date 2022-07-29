@@ -15,6 +15,7 @@
 package val
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -32,7 +33,6 @@ type TupleDesc struct {
 	Types []Type
 	cmp   TupleComparator
 	fast  fixedAccess
-	Addrs []int
 }
 
 // NewTupleDescriptor makes a TupleDescriptor from |types|.
@@ -45,18 +45,9 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 	if len(types) > MaxTupleFields {
 		panic("tuple field maxIdx exceeds maximum")
 	}
-
 	for _, typ := range types {
 		if typ.Enc == NullEnc {
 			panic("invalid encoding")
-		}
-	}
-
-	var addrIdxs []int
-	for i, t := range types {
-		switch t.Enc {
-		case BytesAddrEnc, StringAddrEnc, JSONAddrEnc:
-			addrIdxs = append(addrIdxs, i)
 		}
 	}
 
@@ -64,10 +55,18 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 		Types: types,
 		cmp:   cmp,
 		fast:  makeFixedAccess(types),
-		Addrs: addrIdxs,
 	}
-
 	return
+}
+
+func IterAddressFields(td TupleDesc, cb func(int, Type)) {
+	for i, typ := range td.Types {
+		switch typ.Enc {
+		case BytesAddrEnc, StringAddrEnc,
+			JSONAddrEnc, CommitAddrEnc:
+			cb(i, typ)
+		}
+	}
 }
 
 type fixedAccess [][2]ByteSize
@@ -87,6 +86,13 @@ func makeFixedAccess(types []Type) (acc fixedAccess) {
 		acc = append(acc, [2]ByteSize{off, off + sz})
 		off += sz
 	}
+	return
+}
+
+func (td TupleDesc) AddressFieldCount() (n int) {
+	IterAddressFields(td, func(int, Type) {
+		n++
+	})
 	return
 }
 
@@ -192,7 +198,7 @@ func (td TupleDesc) GetUint16(i int, tup Tuple) (v uint16, ok bool) {
 	td.expectEncoding(i, Uint16Enc)
 	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = readUint16(b), true
+		v, ok = ReadUint16(b), true
 	}
 	return
 }
@@ -486,7 +492,7 @@ func formatValue(enc Encoding, value []byte) string {
 		v := readInt16(value)
 		return strconv.Itoa(int(v))
 	case Uint16Enc:
-		v := readUint16(value)
+		v := ReadUint16(value)
 		return strconv.Itoa(int(v))
 	case Int32Enc:
 		v := readInt32(value)
@@ -533,13 +539,13 @@ func formatValue(enc Encoding, value []byte) string {
 	case StringEnc:
 		return readString(value)
 	case ByteStringEnc:
-		return string(value)
+		return hex.EncodeToString(value)
 	case Hash128Enc:
-		return string(value)
+		return hex.EncodeToString(value)
 	case BytesAddrEnc:
-		return string(value)
+		return hex.EncodeToString(value)
 	case CommitAddrEnc:
-		return string(value)
+		return hex.EncodeToString(value)
 	default:
 		return string(value)
 	}

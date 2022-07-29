@@ -119,7 +119,7 @@ func (tb *TupleBuilder) PutUint16(i int, v uint16) {
 	tb.Desc.expectEncoding(i, Uint16Enc)
 	tb.ensureCapacity(uint16Size)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+uint16Size]
-	writeUint16(tb.fields[i], v)
+	WriteUint16(tb.fields[i], v)
 	tb.pos += uint16Size
 }
 
@@ -340,9 +340,9 @@ func (tb *TupleBuilder) PutJSONAddr(i int, v hash.Hash) {
 }
 
 func (tb *TupleBuilder) putAddr(i int, v hash.Hash) {
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+addrSize]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+hash.ByteLen]
 	writeAddr(tb.fields[i], v[:])
-	tb.pos += addrSize
+	tb.pos += hash.ByteLen
 }
 
 func (tb *TupleBuilder) ensureCapacity(sz ByteSize) {
