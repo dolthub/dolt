@@ -68,16 +68,17 @@ SQL
     [ "$status" -eq "0" ]
 }
 
-@test "garbage_collection: works after gc" {
-    dolt sql -q "create table t(pk int primary key, val int)"
-    dolt sql -q "insert into t values (1,1),(2,2)"
-    dolt sql -q "create view view1 as select * from t"
-    dolt add -A && dolt commit -am "added a table and a view"
+@test "garbage_collection: blob types work after GC" {
+    dolt sql -q "create table t(pk int primary key, val text)"
+    dolt sql -q "insert into t values (1, 'one'), (2, 'two');"
+    dolt add -A && dolt commit -am "added a table with blob encoding"
 
     dolt gc
 
-    dolt sql -q "select * from view1"
-    dolt sql -q "select * from information_schema.tables"
+    run dolt sql -q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "one" ]] || false
+    [[ $output =~ "two" ]] || false
 }
 
 @test "garbage_collection: clone a remote" {
