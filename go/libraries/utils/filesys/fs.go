@@ -120,11 +120,23 @@ func CopyFile(srcPath, destPath string, srcFS, destFS Filesys) (err error) {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		cerr := rd.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
 
 	wr, err := destFS.OpenForWrite(destPath, os.ModePerm)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		cerr := wr.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
 
 	_, err = io.Copy(wr, rd)
 	return

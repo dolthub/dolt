@@ -22,14 +22,16 @@ enum ItemType : uint8 {
 table ProllyTreeNode {
   // sorted array of key items
   key_items:[ubyte] (required);
-  // items offets for |key_items|, zeroth offset omitted
+  // items offets for |key_items|
+  // first offset is 0, last offset is len(key_items)
   key_offsets:[uint16] (required);
   // item type for |key_items|
   key_type:ItemType;
 
   // array of values items, ordered by paired key
   value_items:[ubyte];
-  // item offsets for |value_items|, zeroth offset omitted
+  // item offsets for |value_items|
+  // first offset is 0, last offset is len(value_items)
   value_offsets:[uint16];
   // item type for |value_items|
   value_type:ItemType;

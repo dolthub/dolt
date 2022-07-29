@@ -22,19 +22,19 @@ import (
 )
 
 const (
-	maxChunkSz  = math.MaxUint16
-	addrSize    = hash.ByteLen
-	offsetCount = maxChunkSz / addrSize
-	uint16Size  = 2
+	maxChunkSz     = math.MaxUint16
+	addrSize       = hash.ByteLen
+	maxOffsetCount = (maxChunkSz / addrSize) + 1
+	uint16Size     = 2
 )
 
 var addressOffsets []byte
 
 func init() {
-	addressOffsets = make([]byte, offsetCount*uint16Size)
+	addressOffsets = make([]byte, maxOffsetCount*uint16Size)
 
 	buf := addressOffsets
-	off := uint16(addrSize)
+	off := uint16(0)
 	for len(buf) > 0 {
 		binary.LittleEndian.PutUint16(buf, off)
 		buf = buf[uint16Size:]
@@ -45,10 +45,10 @@ func init() {
 // offsetsForAddressArray provides an uint16 offsets array |offs| for an array
 // of addresses |arr|. Together, |arr| and |offs| can construct a val.SlicedBuffer.
 // Offsets aren't necessary to slice into an array of fixed-width addresses, but
-// we still wrap address arrays in val.SlicedBuffer to provide a uniform API when
+// we still wrap address arrays in ItemArray to provide a uniform API when
 // accessing keys and values of Messages.
 func offsetsForAddressArray(arr []byte) (offs []byte) {
-	cnt := len(arr) / addrSize
+	cnt := (len(arr) / addrSize) + 1
 	offs = addressOffsets[:cnt*uint16Size]
 	return
 }

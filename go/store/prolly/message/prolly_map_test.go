@@ -36,10 +36,10 @@ func TestGetKeyValueOffsetsVectors(t *testing.T) {
 		keyBuf, valBuf, _ := getProllyMapKeysAndValues(msg)
 
 		for i := range keys {
-			assert.Equal(t, keys[i], keyBuf.GetSlice(i))
+			assert.Equal(t, keys[i], keyBuf.GetItem(i))
 		}
 		for i := range values {
-			assert.Equal(t, values[i], valBuf.GetSlice(i))
+			assert.Equal(t, values[i], valBuf.GetItem(i))
 		}
 	}
 }

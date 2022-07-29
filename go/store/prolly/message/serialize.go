@@ -49,15 +49,17 @@ func writeItemBytes(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
 	return b.CreateByteVector(b.Bytes[start:stop])
 }
 
+// writeItemOffsets writes (n+1) uint16 offsets for n |items|.
+// the first offset is 0, the last offset is |sumSz|.
 func writeItemOffsets(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
-	var cnt int
 	var off = sumSz
-	for i := len(items) - 1; i > 0; i-- { // omit first offset
-		off -= len(items[i])
+	for i := len(items) - 1; i >= 0; i-- {
 		b.PrependUint16(uint16(off))
-		cnt++
+		off -= len(items[i])
 	}
-	return b.EndVector(cnt)
+	assertTrue(off == 0)
+	b.PrependUint16(uint16(off))
+	return b.EndVector(len(items) + 1)
 }
 
 // countAddresses returns the number of chunk addresses stored within |items|.
@@ -98,7 +100,7 @@ func writeAddressOffsets(b *fb.Builder, items [][]byte, sumSz int, td val.TupleD
 }
 
 func writeCountArray(b *fb.Builder, counts []uint64) fb.UOffsetT {
-	// todo(andy): encode without alloc
+	// todo(andy): write without alloc
 	buf := make([]byte, maxEncodedSize(len(counts)))
 	return b.CreateByteVector(encodeVarints(counts, buf))
 }
