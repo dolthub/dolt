@@ -77,7 +77,7 @@ func testEqualMapMerge(t *testing.T, sz int) {
 
 func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeStore) {
 	baseTuples, leftEdits, rightEdits := makeTuplesAndMutations(kd, vd, sz, ns)
-	base := MustProllyMapFromTuples(t, kd, vd, baseTuples)
+	base := mustProllyMapFromTuples(t, kd, vd, baseTuples)
 
 	left := applyMutationSet(t, base, leftEdits)
 	right := applyMutationSet(t, base, rightEdits)
@@ -143,7 +143,7 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.No
 func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeStore) {
 	ctx := context.Background()
 	tuples := tree.RandomTuplePairs(sz, kd, vd, ns)
-	base := MustProllyMapFromTuples(t, kd, vd, tuples)
+	base := mustProllyMapFromTuples(t, kd, vd, tuples)
 
 	mutSz := sz / 10
 	testRand.Shuffle(len(tuples), func(i, j int) {

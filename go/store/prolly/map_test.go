@@ -125,7 +125,7 @@ func makeProllyMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	ns := tree.NewTestNodeStore()
 
 	tuples := tree.RandomTuplePairs(count, kd, vd, ns)
-	om := MustProllyMapFromTuples(t, kd, vd, tuples)
+	om := mustProllyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
 }
@@ -138,7 +138,7 @@ func makeProllySecondaryIndex(t *testing.T, count int) (testMap, [][2]val.Tuple)
 	vd := val.NewTupleDescriptor()
 	ns := tree.NewTestNodeStore()
 	tuples := tree.RandomCompositeTuplePairs(count, kd, vd, ns)
-	om := MustProllyMapFromTuples(t, kd, vd, tuples)
+	om := mustProllyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
 }

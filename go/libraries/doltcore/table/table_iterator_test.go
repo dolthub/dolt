@@ -20,6 +20,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -76,9 +77,27 @@ func mustMakeProllyMap(t *testing.T, count int) (prolly.Map, [][2]val.Tuple) {
 	ns := tree.NewTestNodeStore()
 
 	tuples := tree.RandomTuplePairs(count, kd, vd, ns)
-	om := prolly.MustProllyMapFromTuples(t, kd, vd, tuples)
+	om := mustProllyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
+}
+
+func mustProllyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tuple) prolly.Map {
+	ctx := context.Background()
+	ns := tree.NewTestNodeStore()
+
+	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
+	require.NoError(t, err)
+
+	for _, pair := range tuples {
+		err := chunker.AddPair(ctx, tree.Item(pair[0]), tree.Item(pair[1]))
+		require.NoError(t, err)
+	}
+	root, err := chunker.Done(ctx)
+	require.NoError(t, err)
+
+	return prolly.NewMap(root, ns, kd, vd)
 }
 
 func tuplesToRows(t *testing.T, kvs [][2]val.Tuple) (rows []sql.Row) {
