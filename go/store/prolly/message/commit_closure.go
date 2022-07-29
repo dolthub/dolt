@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 var commitClosureKeyOffsets []byte
@@ -31,12 +30,13 @@ var commitClosureValueOffsets []byte
 var commitClosureEmptyValueBytes []byte
 
 func init() {
-	commitClosureKeyOffsets = make([]byte, (maxChunkSz/commitClosureKeyLength)*uint16Size)
-	commitClosureValueOffsets = make([]byte, (maxChunkSz/commitClosureKeyLength)*uint16Size)
+	maxOffsets := (maxChunkSz / commitClosureKeyLength) + 1
+	commitClosureKeyOffsets = make([]byte, maxOffsets*uint16Size)
+	commitClosureValueOffsets = make([]byte, maxOffsets*uint16Size)
 	commitClosureEmptyValueBytes = make([]byte, 0)
 
 	buf := commitClosureKeyOffsets
-	off := uint16(commitClosureKeyLength)
+	off := uint16(0)
 	for len(buf) > 0 {
 		binary.LittleEndian.PutUint16(buf, off)
 		buf = buf[uint16Size:]
@@ -44,29 +44,30 @@ func init() {
 	}
 }
 
+// see offsetsForAddressArray()
 func offsetsForCommitClosureKeys(buf []byte) []byte {
-	cnt := len(buf) / commitClosureKeyLength
+	cnt := (len(buf) / commitClosureKeyLength) + 1
 	return commitClosureKeyOffsets[:cnt*uint16Size]
 }
 
-func getCommitClosureKeys(msg serial.Message) val.SlicedBuffer {
-	var ret val.SlicedBuffer
+func getCommitClosureKeys(msg serial.Message) ItemArray {
+	var ret ItemArray
 	m := serial.GetRootAsCommitClosure(msg, serial.MessagePrefixSz)
-	ret.Buf = m.KeyItemsBytes()
-	ret.Offs = offsetsForCommitClosureKeys(ret.Buf)
+	ret.Items = m.KeyItemsBytes()
+	ret.Offs = offsetsForCommitClosureKeys(ret.Items)
 	return ret
 }
 
-func getCommitClosureValues(msg serial.Message) val.SlicedBuffer {
-	var ret val.SlicedBuffer
+func getCommitClosureValues(msg serial.Message) ItemArray {
+	var ret ItemArray
 	m := serial.GetRootAsCommitClosure(msg, serial.MessagePrefixSz)
 	if m.AddressArrayLength() == 0 {
-		ret.Buf = commitClosureEmptyValueBytes
+		ret.Items = commitClosureEmptyValueBytes
 		ret.Offs = commitClosureValueOffsets[:getCommitClosureCount(msg)*uint16Size]
 		return ret
 	}
-	ret.Buf = m.AddressArrayBytes()
-	ret.Offs = offsetsForAddressArray(ret.Buf)
+	ret.Items = m.AddressArrayBytes()
+	ret.Offs = offsetsForAddressArray(ret.Items)
 	return ret
 }
 

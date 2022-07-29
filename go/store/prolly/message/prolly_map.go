@@ -57,13 +57,13 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 
 	// serialize keys and offsets
 	keyTups = writeItemBytes(b, keys, keySz)
-	serial.ProllyTreeNodeStartKeyOffsetsVector(b, len(keys)-1)
+	serial.ProllyTreeNodeStartKeyOffsetsVector(b, len(keys)+1)
 	keyOffs = writeItemOffsets(b, keys, keySz)
 
 	if level == 0 {
 		// serialize value tuples for leaf nodes
 		valTups = writeItemBytes(b, values, valSz)
-		serial.ProllyTreeNodeStartValueOffsetsVector(b, len(values)-1)
+		serial.ProllyTreeNodeStartValueOffsetsVector(b, len(values)+1)
 		valOffs = writeItemOffsets(b, values, valSz)
 		// serialize offsets of chunk addresses within |valTups|
 		if s.ValDesc.AddressFieldCount() > 0 {
@@ -97,24 +97,20 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 	return serial.FinishMessage(b, serial.ProllyTreeNodeEnd(b), prollyMapFileID)
 }
 
-func getProllyMapKeysAndValues(msg serial.Message) (keys, values val.SlicedBuffer, cnt uint16) {
+func getProllyMapKeysAndValues(msg serial.Message) (keys, values ItemArray, cnt uint16) {
 	pm := serial.GetRootAsProllyTreeNode(msg, serial.MessagePrefixSz)
 
-	keys.Buf = pm.KeyItemsBytes()
+	keys.Items = pm.KeyItemsBytes()
 	keys.Offs = getProllyMapKeyOffsets(pm)
-	if len(keys.Buf) == 0 {
-		cnt = 0
-	} else {
-		cnt = 1 + uint16(len(keys.Offs)/2)
-	}
+	cnt = uint16(keys.Len())
 
 	vv := pm.ValueItemsBytes()
 	if vv != nil {
-		values.Buf = vv
+		values.Items = vv
 		values.Offs = getProllyMapValueOffsets(pm)
 	} else {
-		values.Buf = pm.AddressArrayBytes()
-		values.Offs = offsetsForAddressArray(values.Buf)
+		values.Items = pm.AddressArrayBytes()
+		values.Offs = offsetsForAddressArray(values.Items)
 	}
 
 	return
@@ -145,11 +141,7 @@ func walkProllyMapAddresses(ctx context.Context, msg serial.Message, cb func(ctx
 
 func getProllyMapCount(msg serial.Message) uint16 {
 	pm := serial.GetRootAsProllyTreeNode(msg, serial.MessagePrefixSz)
-	if pm.KeyItemsLength() == 0 {
-		return 0
-	}
-	// zeroth offset ommitted from array
-	return uint16(pm.KeyOffsetsLength() + 1)
+	return uint16(pm.KeyOffsetsLength() - 1)
 }
 
 func getProllyMapTreeLevel(msg serial.Message) int {

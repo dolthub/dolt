@@ -32,8 +32,8 @@ func NewTriple[V ~[]byte](pool pool.BuffPool, one, two, three V) (tri Triple[V])
 	copy(tri[o2:], three)
 
 	// populate offsets
-	writeUint16(tri[end:end+2], uint16(o1))
-	writeUint16(tri[end+2:], uint16(o2))
+	WriteUint16(tri[end:end+2], uint16(o1))
+	WriteUint16(tri[end+2:], uint16(o2))
 	return
 }
 
@@ -41,19 +41,19 @@ type Triple[V ~[]byte] []byte
 
 func (t Triple[V]) First() V {
 	l := len(t)
-	o1 := readUint16(t[l-4 : l-2])
+	o1 := ReadUint16(t[l-4 : l-2])
 	return V(t[:o1])
 }
 
 func (t Triple[V]) Second() V {
 	l := len(t)
-	o1 := readUint16(t[l-4 : l-2])
-	o2 := readUint16(t[l-2 : l])
+	o1 := ReadUint16(t[l-4 : l-2])
+	o2 := ReadUint16(t[l-2 : l])
 	return V(t[o1:o2])
 }
 
 func (t Triple[V]) Third() V {
 	l := len(t)
-	o2 := readUint16(t[l-2 : l])
+	o2 := ReadUint16(t[l-2 : l])
 	return V(t[o2 : l-4])
 }

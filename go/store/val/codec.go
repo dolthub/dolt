@@ -250,12 +250,12 @@ func compareInt16(l, r int16) int {
 	}
 }
 
-func readUint16(val []byte) uint16 {
+func ReadUint16(val []byte) uint16 {
 	expectSize(val, uint16Size)
 	return binary.LittleEndian.Uint16(val)
 }
 
-func writeUint16(buf []byte, val uint16) {
+func WriteUint16(buf []byte, val uint16) {
 	expectSize(buf, uint16Size)
 	binary.LittleEndian.PutUint16(buf, val)
 }
@@ -511,11 +511,11 @@ func compareDatetime(l, r time.Time) int {
 }
 
 func readEnum(val []byte) uint16 {
-	return readUint16(val)
+	return ReadUint16(val)
 }
 
 func writeEnum(buf []byte, val uint16) {
-	writeUint16(buf, val)
+	WriteUint16(buf, val)
 }
 
 func compareEnum(l, r uint16) int {

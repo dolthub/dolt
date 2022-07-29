@@ -5,7 +5,7 @@ setup() {
     skip_nbf_dolt_1
     skip_nbf_dolt_dev
 
-    TARGET_NBF="__DOLT_DEV__"
+    TARGET_NBF="__DOLT_1__"
     setup_common
 }
 
@@ -179,4 +179,26 @@ SQL
 
     run dolt docs write README.md
     [[ "$output" = $(cat README.md) ]] || false
+}
+
+@test "migrate: keyless tables" {
+    dolt sql <<SQL
+CREATE TABLE keyless (c0 int, c1 int);
+INSERT INTO keyless VALUES (0,0),(1,1);
+CALL dadd('-A');
+CALL dcommit('-am', 'added keyless table');
+INSERT INTO keyless VALUES (2,2),(3,3);
+CALL dcommit('-am', 'added more rows');
+SQL
+
+    HEAD=$(checksum_table keyless head)
+    PREV=$(checksum_table keyless head~1)
+
+    dolt migrate
+    [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
+
+    run checksum_table keyless head
+    [[ "$output" =~ "$HEAD" ]] || false
+    run checksum_table keyless head~1
+    [[ "$output" =~ "$PREV" ]] || false
 }

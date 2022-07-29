@@ -116,7 +116,8 @@ type DoltTable struct {
 	sch          schema.Schema
 	autoIncCol   schema.Column
 
-	projectedCols []uint64
+	projectedCols   []uint64
+	projectedSchema sql.Schema
 
 	opts editor.Options
 
@@ -180,17 +181,17 @@ func (t DoltTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (*Dolt
 		return nil, err
 	}
 
-	return &DoltTable{
-		tableName:     t.tableName,
-		db:            t.db,
-		nbf:           tbl.Format(),
-		sch:           sch,
-		sqlSch:        sqlSch,
-		autoIncCol:    autoCol,
-		projectedCols: t.projectedCols,
-		opts:          t.opts,
-		lockedToRoot:  root,
-	}, nil
+	dt := &DoltTable{
+		tableName:    t.tableName,
+		db:           t.db,
+		nbf:          tbl.Format(),
+		sch:          sch,
+		sqlSch:       sqlSch,
+		autoIncCol:   autoCol,
+		opts:         t.opts,
+		lockedToRoot: root,
+	}
+	return dt.WithProjections(t.Projections()).(*DoltTable), nil
 }
 
 // Internal interface for declaring the interfaces that read-only dolt tables are expected to implement
@@ -365,6 +366,9 @@ func (t *DoltTable) Format() *types.NomsBinFormat {
 
 // Schema returns the schema for this table.
 func (t *DoltTable) Schema() sql.Schema {
+	if len(t.projectedSchema) > 0 {
+		return t.projectedSchema
+	}
 	return t.sqlSchema().Schema
 }
 
@@ -935,14 +939,23 @@ func (t *DoltTable) Projections() []string {
 // WithProjections implements sql.ProjectedTable
 func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 	nt := *t
-	nt.projectedCols = make([]uint64, len(colNames))
+	nt.projectedCols = make([]uint64, 0, len(colNames))
+	nt.projectedSchema = make(sql.Schema, 0, len(colNames))
 	cols := t.sch.GetAllCols()
+	sch := t.Schema()
 	for i := range colNames {
-		col, ok := cols.LowerNameToCol[strings.ToLower(colNames[i])]
+		lowerName := strings.ToLower(colNames[i])
+		col, ok := cols.LowerNameToCol[lowerName]
 		if !ok {
-			panic("column does not exist")
+			// The history iter projects a new schema onto an
+			// older table. When a requested projection does not
+			// exist in the older schema, the table will ignore
+			// the field. The history table is responsible for
+			// filling the gaps with nil values.
+			continue
 		}
-		nt.projectedCols[i] = col.Tag
+		nt.projectedCols = append(nt.projectedCols, col.Tag)
+		nt.projectedSchema = append(nt.projectedSchema, sch[sch.IndexOfColName(lowerName)])
 	}
 	return &nt
 }

@@ -82,15 +82,25 @@ func getValLocations(tagToSqlColIdx map[uint64]int, cols []schema.Column) (int, 
 }
 
 // NewKVToSqlRowConverterForCols returns a KVToSqlConverter instance based on the list of columns passed in
-func NewKVToSqlRowConverterForCols(nbf *types.NomsBinFormat, sch schema.Schema) *KVToSqlRowConverter {
-	cols := sch.GetAllCols().GetColumns()
-
+func NewKVToSqlRowConverterForCols(nbf *types.NomsBinFormat, sch schema.Schema, columns []uint64) *KVToSqlRowConverter {
+	allCols := sch.GetAllCols().GetColumns()
 	tagToSqlColIdx := make(map[uint64]int)
-	for i, col := range cols {
-		tagToSqlColIdx[col.Tag] = i
+	var outCols []schema.Column
+	if len(columns) > 0 {
+		outCols = make([]schema.Column, len(columns))
+		for i, tag := range columns {
+			schIdx := sch.GetAllCols().TagToIdx[tag]
+			outCols[i] = allCols[schIdx]
+			tagToSqlColIdx[tag] = i
+		}
+	} else {
+		outCols = allCols
+		for i, col := range allCols {
+			tagToSqlColIdx[col.Tag] = i
+		}
 	}
 
-	return NewKVToSqlRowConverter(nbf, tagToSqlColIdx, cols, len(cols))
+	return NewKVToSqlRowConverter(nbf, tagToSqlColIdx, outCols, len(outCols))
 }
 
 // ConvertKVToSqlRow returns a sql.Row generated from the key and value provided.

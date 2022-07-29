@@ -203,17 +203,8 @@ func assertNomsKind(kind types.NomsKind, candidates ...types.NomsKind) error {
 		strings.Join(cs, ", "), types.KindToString[kind])
 }
 
-func hashRow(sctx *sql.Context, r sql.Row) (uint64, error) {
-	for i := range r {
-		// normalize fields
-		switch x := r[i].(type) {
-		case sql.JSONValue:
-			s, err := x.ToString(sctx)
-			if err != nil {
-				return 0, err
-			}
-			r[i] = s
-		}
+func assertTrue(b bool) {
+	if !b {
+		panic("expected true")
 	}
-	return sql.HashOf(r)
 }

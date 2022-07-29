@@ -16,8 +16,11 @@ package migrate
 
 import (
 	"context"
+	"fmt"
+	"io"
 
 	"github.com/dolthub/vitess/go/vt/proto/query"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -25,7 +28,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
+)
+
+var (
+	flushRef = ref.NewInternalRef("migration-flush")
 )
 
 func migrateWorkingSet(ctx context.Context, wsRef ref.WorkingSetRef, old, new *doltdb.DoltDB, prog Progress) error {
@@ -101,8 +111,12 @@ func migrateCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, p
 	if err != nil {
 		return err
 	}
+	if err = prog.Put(ctx, oldHash, newHash); err != nil {
+		return err
+	}
 
-	return prog.Put(ctx, oldHash, newHash)
+	// flush ChunkStore
+	return new.SetHead(ctx, flushRef, newHash)
 }
 
 func migrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
@@ -195,6 +209,13 @@ func migrateRoot(ctx context.Context, root *doltdb.RootValue, new *doltdb.DoltDB
 			return true, err
 		}
 
+		ok, err := tbl.HasConflicts(ctx)
+		if err != nil {
+			return true, err
+		} else if ok {
+			return true, fmt.Errorf("cannot migrate table with conflicts (%s)", name)
+		}
+
 		migrated, err = migrated.PutTable(ctx, name, mtbl)
 		if err != nil {
 			return true, err
@@ -213,22 +234,6 @@ func migrateRoot(ctx context.Context, root *doltdb.RootValue, new *doltdb.DoltDB
 }
 
 func migrateTable(ctx context.Context, name string, table *doltdb.Table, new *doltdb.DoltDB) (*doltdb.Table, error) {
-	rows, err := table.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	err = migrateNomsMap(ctx, rows, table.ValueReadWriter(), new.ValueReadWriter())
-	if err != nil {
-		return nil, err
-	}
-
-	ai, err := table.GetAutoIncrementValue(ctx)
-	if err != nil {
-		return nil, err
-	}
-	autoInc := types.Uint(ai)
-
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -245,6 +250,16 @@ func migrateTable(ctx context.Context, name string, table *doltdb.Table, new *do
 		return nil, err
 	}
 
+	rows, err := table.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	newRows, err := migrateIndex(ctx, sch, rows, table.ValueReadWriter(), new.NodeStore())
+	if err != nil {
+		return nil, err
+	}
+
 	oldSet, err := table.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
@@ -255,7 +270,13 @@ func migrateTable(ctx context.Context, name string, table *doltdb.Table, new *do
 		return nil, err
 	}
 
-	return doltdb.NewTable(ctx, new.ValueReadWriter(), new.NodeStore(), sch, rows, newSet, autoInc)
+	ai, err := table.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return nil, err
+	}
+	autoInc := types.Uint(ai)
+
+	return doltdb.NewTable(ctx, new.ValueReadWriter(), new.NodeStore(), sch, newRows, newSet, autoInc)
 }
 
 // patchMigrateSchema attempts to correct irregularities in existing schemas
@@ -285,11 +306,13 @@ func migrateIndexSet(ctx context.Context, sch schema.Schema, oldSet durable.Inde
 		if err != nil {
 			return nil, err
 		}
-		if err = migrateNomsMap(ctx, idx, old, new.ValueReadWriter()); err != nil {
+
+		newIdx, err := migrateIndex(ctx, def.Schema(), idx, old, new.NodeStore())
+		if err != nil {
 			return nil, err
 		}
 
-		newSet, err = newSet.PutIndex(ctx, def.Name(), idx)
+		newSet, err = newSet.PutIndex(ctx, def.Name(), newIdx)
 		if err != nil {
 			return nil, err
 		}
@@ -297,36 +320,139 @@ func migrateIndexSet(ctx context.Context, sch schema.Schema, oldSet durable.Inde
 	return newSet, nil
 }
 
-func migrateNomsMap(ctx context.Context, idx durable.Index, old, new types.ValueReadWriter) error {
-	m := durable.NomsMapFromIndex(idx)
-	return copyTreeFromValue(ctx, m, old, new)
+func migrateIndex(ctx context.Context, sch schema.Schema, idx durable.Index, old types.ValueReadWriter, ns tree.NodeStore) (durable.Index, error) {
+	eg, ctx := errgroup.WithContext(ctx)
+	reader := make(chan types.Tuple, 256)
+	writer := make(chan val.Tuple, 256)
+
+	kt, vt := tupleTranslatorsFromSchema(sch, ns)
+	kd := kt.builder.Desc
+	vd := vt.builder.Desc
+
+	var oldMap = durable.NomsMapFromIndex(idx)
+	var newMap prolly.Map
+
+	// read old noms map
+	eg.Go(func() error {
+		defer close(reader)
+		return readNomsMap(ctx, oldMap, reader)
+	})
+
+	// translate noms tuples to prolly tuples
+	eg.Go(func() error {
+		defer close(writer)
+		return translateTuples(ctx, kt, vt, reader, writer)
+	})
+
+	// write tuples in new prolly map
+	eg.Go(func() (err error) {
+		newMap, err = writeProllyMap(ctx, ns, kd, vd, writer)
+		return
+	})
+
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	return durable.IndexFromProllyMap(newMap), nil
 }
 
-// copyTreeFromValue recursively copies |v| and all its children from |old| to |new|.
-func copyTreeFromValue(ctx context.Context, v types.Value, old, new types.ValueReadWriter) error {
-	if _, err := new.WriteValue(ctx, v); err != nil {
-		return err
-	}
-	return types.WalkAddrs(v, old.Format(), func(h hash.Hash, isleaf bool) error {
-		if err := copyValue(ctx, h, old, new); err != nil {
-			return err
+func readNomsMap(ctx context.Context, m types.Map, reader chan<- types.Tuple) error {
+	return m.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+		select {
+		case reader <- key.(types.Tuple):
+		case _ = <-ctx.Done():
+			stop = true
+			return
 		}
-		if isleaf {
-			return nil
+		select {
+		case reader <- value.(types.Tuple):
+		case _ = <-ctx.Done():
+			stop = true
+			return
 		}
-		val, err := old.ReadValue(ctx, h)
-		if err != nil {
-			return err
-		}
-		return copyTreeFromValue(ctx, val, old, new)
+		return
 	})
 }
 
-func copyValue(ctx context.Context, addr hash.Hash, old, new types.ValueReadWriter) (err error) {
-	var v types.Value
-	if v, err = old.ReadValue(ctx, addr); err != nil {
-		return err
+func translateTuples(ctx context.Context, kt, vt translator, reader <-chan types.Tuple, writer chan<- val.Tuple) error {
+	for {
+		var (
+			oldKey types.Tuple
+			oldVal types.Tuple
+			ok     bool
+		)
+
+		select {
+		case oldKey, ok = <-reader:
+			if !ok {
+				return nil // done
+			}
+		case _ = <-ctx.Done():
+			return nil
+		}
+
+		newKey, err := kt.TranslateTuple(ctx, oldKey)
+		if err != nil {
+			return err
+		}
+
+		select {
+		case writer <- newKey:
+		case _ = <-ctx.Done():
+			return nil
+		}
+
+		select {
+		case oldVal, ok = <-reader:
+			assertTrue(ok)
+		case _ = <-ctx.Done():
+			return nil
+		}
+
+		newVal, err := vt.TranslateTuple(ctx, oldVal)
+		if err != nil {
+			return err
+		}
+
+		select {
+		case writer <- newVal:
+		case _ = <-ctx.Done():
+			return nil
+		}
 	}
-	_, err = new.WriteValue(ctx, v)
-	return
+}
+
+func writeProllyMap(ctx context.Context, ns tree.NodeStore, kd, vd val.TupleDesc, writer <-chan val.Tuple) (prolly.Map, error) {
+	return prolly.NewMapFromProvider(ctx, ns, kd, vd, channelProvider{tuples: writer})
+}
+
+type channelProvider struct {
+	tuples <-chan val.Tuple
+}
+
+var _ prolly.TupleProvider = channelProvider{}
+
+func (p channelProvider) Next(ctx context.Context) (val.Tuple, val.Tuple, error) {
+	var (
+		k, v val.Tuple
+		ok   bool
+	)
+
+	select {
+	case k, ok = <-p.tuples:
+		if !ok {
+			return nil, nil, io.EOF // done
+		}
+	case _ = <-ctx.Done():
+		return nil, nil, nil
+	}
+
+	select {
+	case v, ok = <-p.tuples:
+		assertTrue(ok)
+	case _ = <-ctx.Done():
+		return nil, nil, nil
+	}
+	return k, v, nil
 }
