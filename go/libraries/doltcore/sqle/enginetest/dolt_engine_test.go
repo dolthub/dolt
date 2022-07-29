@@ -297,12 +297,12 @@ func TestInsertIgnoreInto(t *testing.T) {
 }
 
 // todo: merge this into the above test when https://github.com/dolthub/dolt/issues/3836 is fixed
-func TestInsertIgnoreIntoWithDuplicateUniqueKeyKeyless(t *testing.T) {
+func TestIgnoreIntoWithDuplicateUniqueKeyKeyless(t *testing.T) {
 	if !types.IsFormat_DOLT_1(types.Format_Default) {
 		// todo: fix https://github.com/dolthub/dolt/issues/3836
 		t.Skip()
 	}
-	enginetest.TestInsertIgnoreIntoWithDuplicateUniqueKeyKeyless(t, newDoltHarness(t))
+	enginetest.TestIgnoreIntoWithDuplicateUniqueKeyKeyless(t, newDoltHarness(t))
 }
 
 func TestInsertIntoErrors(t *testing.T) {
