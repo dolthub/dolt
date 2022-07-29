@@ -19,6 +19,8 @@ import (
 	"io"
 	"testing"
 
+	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/val"
@@ -65,4 +67,22 @@ func keyDescFromMap(om testMap) val.TupleDesc {
 	default:
 		panic("unknown ordered map")
 	}
+}
+
+func mustProllyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tuple) Map {
+	ctx := context.Background()
+	ns := tree.NewTestNodeStore()
+
+	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
+	require.NoError(t, err)
+
+	for _, pair := range tuples {
+		err := chunker.AddPair(ctx, tree.Item(pair[0]), tree.Item(pair[1]))
+		require.NoError(t, err)
+	}
+	root, err := chunker.Done(ctx)
+	require.NoError(t, err)
+
+	return NewMap(root, ns, kd, vd)
 }

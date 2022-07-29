@@ -83,14 +83,14 @@ func NewTableIterator(ctx context.Context, sch schema.Schema, idx durable.Index,
 		if err != nil {
 			return nil, err
 		}
-		conv := MakeNomsConverter(idx.Format(), sch)
+		conv := makeNomsConverter(idx.Format(), sch)
 		rowItr = index.NewDoltMapIter(itr.NextTuple, nil, conv)
 	}
 	return NewRowIter(rowItr), nil
 }
 
-// MakeNomsConverter creates a *index.KVToSqlRowConverter.
-func MakeNomsConverter(nbf *types.NomsBinFormat, sch schema.Schema) *index.KVToSqlRowConverter {
+// makeNomsConverter creates a *index.KVToSqlRowConverter.
+func makeNomsConverter(nbf *types.NomsBinFormat, sch schema.Schema) *index.KVToSqlRowConverter {
 	cols := sch.GetAllCols().GetColumns()
 	tagToSqlColIdx := make(map[uint64]int)
 	for i, col := range cols {
