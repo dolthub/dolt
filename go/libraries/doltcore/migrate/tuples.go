@@ -36,6 +36,8 @@ import (
 
 type translator struct {
 	builder *val.TupleBuilder
+
+	// maps columns tags to ordinal position
 	mapping map[uint64]int
 
 	ns   tree.NodeStore
@@ -44,16 +46,37 @@ type translator struct {
 
 func tupleTranslatorsFromSchema(sch schema.Schema, ns tree.NodeStore) (kt, vt translator) {
 	kd := shim.KeyDescriptorFromSchema(sch)
-	kt = newTupleTranslator(ns, sch.GetPKCols(), kd)
 	vd := shim.ValueDescriptorFromSchema(sch)
-	vt = newTupleTranslator(ns, sch.GetNonPKCols(), vd)
+
+	keyMap := sch.GetPKCols().TagToIdx
+	valMap := sch.GetNonPKCols().TagToIdx
+
+	if !schema.IsKeyless(sch) {
+		kt = newTupleTranslator(ns, keyMap, kd)
+		vt = newTupleTranslator(ns, valMap, vd)
+		return
+	}
+
+	// for keyless tables, we must account for the id and cardinality columns
+	keyMap2 := map[uint64]int{schema.KeylessRowIdTag: 0}
+	valMap2 := map[uint64]int{schema.KeylessRowCardinalityTag: 0}
+
+	// shift positions for other columns
+	for tag, pos := range valMap {
+		valMap2[tag] = pos + 1
+	}
+	// assert previous keyMap was empty
+	assertTrue(len(keyMap) == 0)
+
+	kt = newTupleTranslator(ns, keyMap2, kd)
+	vt = newTupleTranslator(ns, valMap2, vd)
 	return
 }
 
-func newTupleTranslator(ns tree.NodeStore, cols *schema.ColCollection, desc val.TupleDesc) translator {
+func newTupleTranslator(ns tree.NodeStore, mapping map[uint64]int, desc val.TupleDesc) translator {
 	return translator{
 		builder: val.NewTupleBuilder(desc),
-		mapping: cols.TagToIdx,
+		mapping: mapping,
 		ns:      ns,
 		pool:    pool.NewBuffPool(),
 	}
@@ -72,15 +95,24 @@ func (t translator) TranslateTuple(ctx context.Context, tup types.Tuple) (val.Tu
 			tag = uint64(value.(types.Uint))
 		} else {
 			// |tag| set in previous iteration
-			pos := t.mapping[tag]
-			err = translateNomsField(ctx, t.ns, value, pos, t.builder)
-			stop = err != nil
+			pos, ok := t.mapping[tag]
+			if ok {
+				err = translateNomsField(ctx, t.ns, value, pos, t.builder)
+				stop = err != nil
+			} // else tombstone column
 		}
 		return
 	})
 	if err != nil {
 		return nil, err
 	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			panic(tup.String())
+		}
+	}()
+
 	return t.builder.Build(t.pool), nil
 }
 

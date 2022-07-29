@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -83,5 +85,5 @@ func (mem *memoryProgress) Pop(ctx context.Context) (cm *doltdb.Commit, err erro
 }
 
 func (mem *memoryProgress) Log(ctx context.Context, format string, args ...any) {
-	fmt.Println(fmt.Sprintf(format, args...))
+	cli.Println(fmt.Sprintf(format, args...))
 }
