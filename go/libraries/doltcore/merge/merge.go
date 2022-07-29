@@ -28,6 +28,7 @@ import (
 var ErrFastForward = errors.New("fast forward")
 var ErrSameTblAddedTwice = errors.New("table with same name added in 2 commits can't be merged")
 var ErrTableDeletedAndModified = errors.New("conflict: table with same name deleted and modified ")
+var ErrSchemaConflict = errors.New("schema conflict found, merge aborted. Please alter schema to prevent schema conflicts before merging")
 
 // ErrCantOverwriteConflicts is returned when there are unresolved conflicts
 // and the merge produces new conflicts. Because we currently don't have a model

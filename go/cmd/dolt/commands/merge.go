@@ -202,15 +202,11 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			}
 
 			if mergeErr != nil {
-				var verr errhand.VerboseError
-				switch mergeErr {
-				case doltdb.ErrIsAhead:
-					verr = nil
-				default:
-					verr = errhand.VerboseErrorFromError(mergeErr)
-					cli.Println("Unable to stage changes: add and commit to finish merge")
+				if mergeErr == doltdb.ErrIsAhead {
+					return 0
 				}
-				return handleCommitErr(ctx, dEnv, verr, usage)
+				verr := errhand.BuildDError("Merge aborted due to error").AddCause(mergeErr).Build()
+				return HandleVErrAndExitCode(verr, usage)
 			}
 		}
 	}
