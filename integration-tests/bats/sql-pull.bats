@@ -467,17 +467,34 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "t1" ]] || false
 
-    # Explicitly specifying the remote and remote ref will merge in that branch
+    # Specifying a non-existent remote branch returns an error
+    run dolt sql -q "call dolt_pull('origin', 'doesnotexist');"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'branch "doesnotexist" not found on remote' ]] || false
+
+    # Explicitly specifying the remote and branch will merge in that branch
     run dolt sql -q "call dolt_pull('origin', 'main');"
     [ "$status" -eq 0 ]
     run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "t1" ]] || false
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "working tree clean" ]] || false
 
-    # Specifying a non-existent remote ref gives an error
-    run dolt sql -q "call dolt_pull('origin', 'doesnotexist');"
+    # Make a conflicting working set change and test that pull complains
+    dolt reset --hard HEAD^1
+    dolt sql -q "insert into t1 values (0, 100);"
+    run dolt sql -q "call dolt_pull('origin', 'main');"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'branch "doesnotexist" not found on remote' ]] || false
+    [[ "$output" =~ 'cannot merge with uncommitted changes' ]] || false
+
+    # Commit changes and test that a merge conflict fails the pull
+    dolt commit -am "adding new t1 table"
+    run dolt sql -q "call dolt_pull('origin', 'main');"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "| fast_forward | conflicts |" ]] || false
+    [[ "$output" =~ "| 0            | 1         |" ]] || false
 }
 
 @test "sql-pull: dolt_pull also fetches, but does not merge other branches" {

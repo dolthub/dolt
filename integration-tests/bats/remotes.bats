@@ -355,19 +355,39 @@ SQL
 @test "remotes: pull with explicit remote and branch" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
+    dolt sql -q "create table t1(c0 varchar(100));"
+    dolt commit -am "adding table t1"
     run dolt push test-remote test-branch
     [ "$status" -eq 0 ]
     dolt checkout main
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "t1" ]] || false
 
-    # Specifying a non-existent branch returns an error
+    # Specifying a non-existent remote branch returns an error
     run dolt pull test-remote doesnotexist
     [ "$status" -eq 1 ]
     [[ "$output" =~ 'branch "doesnotexist" not found on remote' ]] || false
 
-    # Specifying a valid branch merges it in
+    # Explicitly specifying the remote and branch will merge in that branch
     run dolt pull test-remote test-branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date" ]] || false
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+
+    # Make a conflicting working set change and test that pull complains
+    dolt reset --hard HEAD^1
+    dolt sql -q "create table t1 (pk int primary key);"
+    run dolt pull test-remote test-branch
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'local changes to the following tables would be overwritten by merge' ]] || false
+
+    # Commit changes and test that a merge conflict fails the pull
+    dolt commit -am "adding new t1 table"
+    run dolt pull test-remote test-branch
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table with same name added in 2 commits can't be merged" ]] || false
 }
 
 @test "remotes: push and pull from non-main branch and use --set-upstream" {
