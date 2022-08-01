@@ -40,12 +40,10 @@ type prollyIndexIter struct {
 	pkMap val.OrdinalMapping
 	pkBld *val.TupleBuilder
 
-	eg        *errgroup.Group
-	tupleChan chan val.Tuple
-
 	// keyMap and valMap transform tuples from
 	// primary row storage into sql.Row's
 	keyMap, valMap val.OrdinalMapping
+
 	//ordMap are output ordinals for |keyMap| and |valMap|
 	ordMap val.OrdinalMapping
 	sqlSch sql.Schema
@@ -75,60 +73,47 @@ func newProllyIndexIter(
 	pkMap := ordinalMappingFromIndex(idx)
 	keyProj, valProj, ordProj := projectionMappings(idx.Schema(), projections)
 
-	eg, c := errgroup.WithContext(ctx)
-
 	iter := prollyIndexIter{
 		idx:       idx,
 		indexIter: indexIter,
 		primary:   primary,
 		pkBld:     pkBld,
 		pkMap:     pkMap,
-		eg:        eg,
-		tupleChan: make(chan val.Tuple, indexLookupBufSize),
 		keyMap:    keyProj,
 		valMap:    valProj,
 		ordMap:    ordProj,
 		sqlSch:    pkSch.Schema,
 	}
 
-	eg.Go(func() error {
-		return iter.queueRows(c)
-	})
-
 	return iter, nil
 }
 
 // Next returns the next row from the iterator.
 func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
-	var k, v val.Tuple
-	var ok bool
-
-	select {
-	case k, ok = <-p.tupleChan:
-		if !ok { // done
-			if err := p.eg.Wait(); err != nil {
-				return nil, err
-			}
-			return nil, io.EOF
-		}
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	idxKey, _, err := p.indexIter.Next(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	select {
-	case v, ok = <-p.tupleChan:
-		if !ok {
-			panic("expected key-value pairs")
-		}
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	for to := range p.pkMap {
+		from := p.pkMap.MapOrdinal(to)
+		p.pkBld.PutRaw(to, idxKey.GetField(from))
+	}
+	pk := p.pkBld.Build(sharePool)
+
+	var k, v val.Tuple
+	err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
+		k, v = key, value
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	kd, vd := p.primary.Descriptors()
 	ns := p.primary.NodeStore()
 	sqlRow := make(sql.Row, len(p.keyMap)+len(p.valMap))
 
-	var err error
 	for i, idx := range p.keyMap {
 		outputIdx := p.ordMap[i]
 		sqlRow[outputIdx], err = GetField(ctx, kd, idx, k, ns)
@@ -149,40 +134,6 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 func (p prollyIndexIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
 	panic("unimplemented")
-}
-
-func (p prollyIndexIter) queueRows(ctx context.Context) error {
-	defer close(p.tupleChan)
-
-	for {
-		idxKey, _, err := p.indexIter.Next(ctx)
-		if err != nil {
-			return err
-		}
-
-		for to := range p.pkMap {
-			from := p.pkMap.MapOrdinal(to)
-			p.pkBld.PutRaw(to, idxKey.GetField(from))
-		}
-		pk := p.pkBld.Build(sharePool)
-
-		err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
-			select {
-			case p.tupleChan <- key:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-			select {
-			case p.tupleChan <- value:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-	}
 }
 
 func (p prollyIndexIter) Close(*sql.Context) error {
