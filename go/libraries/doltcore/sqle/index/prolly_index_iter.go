@@ -124,10 +124,26 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, ctx.Err()
 	}
 
+	kd, vd := p.primary.Descriptors()
+	ns := p.primary.NodeStore()
 	sqlRow := make(sql.Row, len(p.keyMap)+len(p.valMap))
-	if err := p.rowFromTuples(ctx, k, v, sqlRow); err != nil {
-		return nil, err
+
+	var err error
+	for i, idx := range p.keyMap {
+		outputIdx := p.ordMap[i]
+		sqlRow[outputIdx], err = GetField(ctx, kd, idx, k, ns)
+		if err != nil {
+			return nil, err
+		}
 	}
+	for i, idx := range p.valMap {
+		outputIdx := p.ordMap[len(p.keyMap)+i]
+		sqlRow[outputIdx], err = GetField(ctx, vd, idx, v, ns)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return sqlRow, nil
 }
 
@@ -167,28 +183,6 @@ func (p prollyIndexIter) queueRows(ctx context.Context) error {
 			return err
 		}
 	}
-}
-
-func (p prollyIndexIter) rowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
-	keyDesc, valDesc := p.primary.Descriptors()
-
-	for i, idx := range p.keyMap {
-		outputIdx := p.ordMap[i]
-		r[outputIdx], err = GetField(ctx, keyDesc, idx, key, p.primary.NodeStore())
-		if err != nil {
-			return err
-		}
-	}
-
-	for i, idx := range p.valMap {
-		outputIdx := p.ordMap[len(p.keyMap)+i]
-		r[outputIdx], err = GetField(ctx, valDesc, idx, value, p.primary.NodeStore())
-		if err != nil {
-			return err
-		}
-	}
-
-	return
 }
 
 func (p prollyIndexIter) Close(*sql.Context) error {
