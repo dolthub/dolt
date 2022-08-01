@@ -136,8 +136,8 @@ func (sm SerialMessage) HumanReadableString() string {
 		var b strings.Builder
 		b.Write([]byte("AddressMap{\n"))
 		for i := uint16(0); i < cnt; i++ {
-			name := keys.GetSlice(int(i))
-			addr := values.GetSlice(int(i))
+			name := keys.GetItem(int(i))
+			addr := values.GetItem(int(i))
 			b.Write([]byte("\t"))
 			b.Write(name)
 			b.Write([]byte(": "))
@@ -362,6 +362,8 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	case serial.AddressMapFileID:
 		fallthrough
 	case serial.MergeArtifactsFileID:
+		fallthrough
+	case serial.BlobFileID:
 		fallthrough
 	case serial.CommitClosureFileID:
 		return message.WalkAddresses(context.TODO(), serial.Message(sm), func(ctx context.Context, addr hash.Hash) error {

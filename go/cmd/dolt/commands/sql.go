@@ -144,20 +144,20 @@ func (cmd SqlCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsString(QueryFlag, "q", "SQL query to run", "Runs a single query and exits")
-	ap.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, vertical. Defaults to tabular. ")
+	ap.SupportsString(QueryFlag, "q", "SQL query to run", "Runs a single query and exits.")
+	ap.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, vertical. Defaults to tabular.")
 	ap.SupportsString(saveFlag, "s", "saved query name", "Used with --query, save the query to the query catalog with the name provided. Saved queries can be examined in the dolt_query_catalog system table.")
-	ap.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name")
-	ap.SupportsFlag(listSavedFlag, "l", "List all saved queries")
-	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
+	ap.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name.")
+	ap.SupportsFlag(listSavedFlag, "l", "List all saved queries.")
+	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also `--name`.")
 	ap.SupportsFlag(BatchFlag, "b", "Use to enable more efficient batch processing for large SQL import scripts consisting of only INSERT statements. Other statements types are not guaranteed to work in this mode.")
 	ap.SupportsString(DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
-	ap.SupportsString(MultiDBDirFlag, "", "directory", "DEPRECATED: Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
-	ap.SupportsString(CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to $data-dir/.doltcfg.")
+	ap.SupportsString(MultiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory. This is deprecated, you should use `--data-dir` instead")
+	ap.SupportsString(CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change that affect configuration settings.")
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
-	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given")
-	ap.SupportsString(PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to $doltcfg-dir/privileges.db")
-	ap.SupportsString(UserFlag, "u", "user", fmt.Sprintf("Defines the local super user (default `%v`)", DefaultUser))
+	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given.")
+	ap.SupportsString(PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
+	ap.SupportsString(UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", DefaultUser))
 	return ap
 }
 

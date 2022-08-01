@@ -75,7 +75,7 @@ func compare(typ Type, left, right []byte) int {
 	case Int16Enc:
 		return compareInt16(readInt16(left), readInt16(right))
 	case Uint16Enc:
-		return compareUint16(readUint16(left), readUint16(right))
+		return compareUint16(ReadUint16(left), ReadUint16(right))
 	case Int32Enc:
 		return compareInt32(readInt32(left), readInt32(right))
 	case Uint32Enc:

@@ -39,7 +39,7 @@ const (
 )
 
 var (
-	targetFormat = types.Format_DOLT_DEV
+	targetFormat = types.Format_DOLT_1
 	migrationMsg = fmt.Sprintf("migrating database to Noms Binary Format %s", targetFormat.VersionString())
 )
 
@@ -121,15 +121,15 @@ func initMigrationDB(ctx context.Context, existing *env.DoltEnv, src, dest files
 		return err
 	}
 
-	dd, err := dest.Abs(filepath.Join(doltDir, nomsDir))
+	absPath, err := dest.Abs(filepath.Join(doltDir, nomsDir))
 	if err != nil {
 		return err
 	}
-	if err = dest.MkDirs(dd); err != nil {
+	if err = dest.MkDirs(absPath); err != nil {
 		return err
 	}
 
-	u, err := earl.Parse(dd)
+	u, err := earl.Parse("file://" + filepath.ToSlash(absPath))
 	if err != nil {
 		return err
 	}

@@ -54,8 +54,11 @@ type prollyRowIter struct {
 	sqlSch  sql.Schema
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
+
 	keyProj []int
 	valProj []int
+	// orjProj is a concatenated list of output ordinals for |keyProj| and |valProj|
+	ordProj []int
 	rowLen  int
 }
 
@@ -67,7 +70,7 @@ func NewProllyRowIter(sch schema.Schema, sqlSch sql.Schema, rows prolly.Map, ite
 		projections = sch.GetAllCols().Tags
 	}
 
-	keyProj, valProj := projectionMappings(sch, projections)
+	keyProj, valProj, ordProj := projectionMappings(sch, projections)
 	kd, vd := rows.Descriptors()
 
 	if schema.IsKeyless(sch) {
@@ -75,7 +78,8 @@ func NewProllyRowIter(sch schema.Schema, sqlSch sql.Schema, rows prolly.Map, ite
 			iter:    iter,
 			valDesc: vd,
 			valProj: valProj,
-			rowLen:  len(sqlSch),
+			ordProj: ordProj,
+			rowLen:  len(projections),
 			ns:      rows.NodeStore(),
 		}, nil
 	}
@@ -87,37 +91,43 @@ func NewProllyRowIter(sch schema.Schema, sqlSch sql.Schema, rows prolly.Map, ite
 		valDesc: vd,
 		keyProj: keyProj,
 		valProj: valProj,
-		rowLen:  sch.GetAllCols().Size(),
+		ordProj: ordProj,
+		rowLen:  len(projections),
 		ns:      rows.NodeStore(),
 	}, nil
 }
 
-func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap val.OrdinalMapping) {
-	keyMap = make(val.OrdinalMapping, sch.GetPKCols().Size())
-	for i := range keyMap {
-		keyMap[i] = -1
-	}
-	valMap = make(val.OrdinalMapping, sch.GetNonPKCols().Size())
-	for i := range valMap {
-		valMap[i] = -1
-	}
-
-	all := sch.GetAllCols()
+// projectionMappings returns data structures that specify 1) which fields we read
+// from key and value tuples, and 2) the position of those fields in the output row.
+func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping) {
 	pks := sch.GetPKCols()
 	nonPks := sch.GetNonPKCols()
 
-	for _, t := range projections {
-		if i, ok := pks.TagToIdx[t]; ok {
-			keyMap[i] = all.TagToIdx[t]
-		}
-		if j, ok := nonPks.TagToIdx[t]; ok {
-			valMap[j] = all.TagToIdx[t]
+	allMap := make([]int, 2*len(projections))
+	i := 0
+	j := len(projections) - 1
+	for k, t := range projections {
+		if idx, ok := pks.TagToIdx[t]; ok {
+			allMap[len(projections)+i] = k
+			allMap[i] = idx
+			i++
+		} else if idx, ok := nonPks.TagToIdx[t]; ok {
+			allMap[j] = idx
+			allMap[len(projections)+j] = k
+			j--
 		}
 	}
+	keyMap = allMap[:i]
+	valMap = allMap[i:len(projections)]
+	ordMap = allMap[len(projections):]
 	if schema.IsKeyless(sch) {
-		skip := val.OrdinalMapping{-1}
-		keyMap = append(skip, keyMap...) // hashId
-		valMap = append(skip, valMap...) // cardinality
+		// skip the cardinality value, increment every index
+		for i := range keyMap {
+			keyMap[i]++
+		}
+		for i := range valMap {
+			valMap[i]++
+		}
 	}
 	return
 }
@@ -129,21 +139,16 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	row := make(sql.Row, it.rowLen)
-
-	for keyIdx, rowIdx := range it.keyProj {
-		if rowIdx == -1 {
-			continue
-		}
-		row[rowIdx], err = GetField(ctx, it.keyDesc, keyIdx, key, it.ns)
+	for i, idx := range it.keyProj {
+		outputIdx := it.ordProj[i]
+		row[outputIdx], err = GetField(ctx, it.keyDesc, idx, key, it.ns)
 		if err != nil {
 			return nil, err
 		}
 	}
-	for valIdx, rowIdx := range it.valProj {
-		if rowIdx == -1 {
-			continue
-		}
-		row[rowIdx], err = GetField(ctx, it.valDesc, valIdx, value, it.ns)
+	for i, idx := range it.valProj {
+		outputIdx := it.ordProj[len(it.keyProj)+i]
+		row[outputIdx], err = GetField(ctx, it.valDesc, idx, value, it.ns)
 		if err != nil {
 			return nil, err
 		}
@@ -197,6 +202,7 @@ type prollyKeylessIter struct {
 
 	valDesc val.TupleDesc
 	valProj []int
+	ordProj []int
 	rowLen  int
 
 	curr sql.Row
@@ -228,11 +234,9 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 	it.card = val.ReadKeylessCardinality(value)
 	it.curr = make(sql.Row, it.rowLen)
 
-	for valIdx, rowIdx := range it.valProj {
-		if rowIdx == -1 {
-			continue
-		}
-		it.curr[rowIdx], err = GetField(ctx, it.valDesc, valIdx, value, it.ns)
+	for i, idx := range it.valProj {
+		outputIdx := it.ordProj[i]
+		it.curr[outputIdx], err = GetField(ctx, it.valDesc, idx, value, it.ns)
 		if err != nil {
 			return err
 		}

@@ -76,7 +76,7 @@ func newRowIterator(ctx context.Context, tbl *doltdb.Table, sqlSch sql.Schema, p
 	}
 
 	if types.IsFormat_DOLT_1(tbl.Format()) {
-		return ProllyRowIterFromPartition(ctx, tbl, sqlSch, projCols, partition)
+		return ProllyRowIterFromPartition(ctx, sch, sqlSch, projCols, partition)
 	}
 
 	if schema.IsKeyless(sch) {
@@ -146,20 +146,24 @@ func getTagToResColIdx(ctx context.Context, tbl *doltdb.Table, projectedCols []u
 		return nil, nil, err
 	}
 
-	cols := sch.GetAllCols().GetColumns()
+	allCols := sch.GetAllCols().GetColumns()
 	tagToSqlColIdx := make(map[uint64]int)
 
-	resultColSet := make(map[uint64]bool)
-	for i := range projectedCols {
-		resultColSet[projectedCols[i]] = true
+	if len(projectedCols) > 0 {
+		outCols := make([]schema.Column, len(projectedCols))
+		for i := range projectedCols {
+			t := projectedCols[i]
+			idx := sch.GetAllCols().TagToIdx[t]
+			tagToSqlColIdx[t] = i
+			outCols[i] = allCols[idx]
+		}
+		return outCols, tagToSqlColIdx, nil
 	}
 
-	for i, col := range cols {
-		if len(projectedCols) == 0 || resultColSet[col.Tag] {
-			tagToSqlColIdx[col.Tag] = i
-		}
+	for i, col := range allCols {
+		tagToSqlColIdx[col.Tag] = i
 	}
-	return cols, tagToSqlColIdx, nil
+	return allCols, tagToSqlColIdx, nil
 }
 
 // Next returns the next row in this row iterator, or an io.EOF error if there aren't any more.
@@ -174,16 +178,12 @@ func (itr *doltTableRowIter) Close(*sql.Context) error {
 
 func ProllyRowIterFromPartition(
 	ctx context.Context,
-	tbl *doltdb.Table,
+	sch schema.Schema,
 	sqlSch sql.Schema,
 	projections []uint64,
 	partition doltTablePartition,
 ) (sql.RowIter, error) {
 	rows := durable.ProllyMapFromIndex(partition.rowData)
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
 	if partition.end > uint64(rows.Count()) {
 		partition.end = uint64(rows.Count())
 	}
