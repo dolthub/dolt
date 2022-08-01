@@ -47,7 +47,6 @@ type DoltDatabaseProvider struct {
 	mu        *sync.RWMutex
 
 	defaultBranch string
-	dataRootDir   string
 	fs            filesys.Filesys
 	remoteDialer  dbfactory.GRPCDialProvider
 
