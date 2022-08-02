@@ -30,7 +30,9 @@ type AddressMap struct {
 }
 
 func NewEmptyAddressMap(ns tree.NodeStore) AddressMap {
-	return NewAddressMap(newEmptyMapNode(ns.Pool()), ns)
+	serializer := message.AddressMapSerializer{Pool: ns.Pool()}
+	msg := serializer.Serialize(nil, nil, nil, 0)
+	return NewAddressMap(tree.NodeFromBytes(msg), ns)
 }
 
 func NewAddressMap(node tree.Node, ns tree.NodeStore) AddressMap {

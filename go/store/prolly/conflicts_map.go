@@ -20,10 +20,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/prolly/message"
-
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -69,7 +67,7 @@ func NewConflictMap(root tree.Node, ns tree.NodeStore, key, ours, theirs, base v
 }
 
 func NewEmptyConflictMap(ns tree.NodeStore, key, ours, theirs, base val.TupleDesc) ConflictMap {
-	return NewConflictMap(newEmptyMapNode(ns.Pool()), ns, key, ours, theirs, base)
+	panic("delete me")
 }
 
 func (c ConflictMap) Count() int {
@@ -154,25 +152,26 @@ func (wr ConflictEditor) Delete(ctx context.Context, key val.Tuple) error {
 }
 
 func (wr ConflictEditor) Flush(ctx context.Context) (ConflictMap, error) {
-	tr := wr.conflicts.tree
-	serializer := message.ProllyMapSerializer{Pool: tr.ns.Pool()}
-
-	root, err := tree.ApplyMutations(ctx, tr.ns, tr.root, serializer, wr.conflicts.mutations(), tr.compareItems)
-	if err != nil {
-		return ConflictMap{}, err
-	}
-
-	return ConflictMap{
-		conflicts: orderedTree[val.Tuple, Conflict, val.TupleDesc]{
-			root:  root,
-			ns:    tr.ns,
-			order: tr.order,
-		},
-		keyDesc:   wr.keyDesc,
-		ourDesc:   wr.ourDesc,
-		theirDesc: wr.theirDesc,
-		baseDesc:  wr.baseDesc,
-	}, nil
+	panic("delete me")
+	//tr := wr.conflicts.tree
+	//serializer := message.NewProllyMapSerializer()
+	//
+	//root, err := tree.ApplyMutations(ctx, tr.ns, tr.root, serializer, wr.conflicts.mutations(), tr.compareItems)
+	//if err != nil {
+	//	return ConflictMap{}, err
+	//}
+	//
+	//return ConflictMap{
+	//	conflicts: orderedTree[val.Tuple, Conflict, val.TupleDesc]{
+	//		root:  root,
+	//		ns:    tr.ns,
+	//		order: tr.order,
+	//	},
+	//	keyDesc:   wr.keyDesc,
+	//	ourDesc:   wr.ourDesc,
+	//	theirDesc: wr.theirDesc,
+	//	baseDesc:  wr.baseDesc,
+	//}, nil
 }
 
 // ConflictDebugFormat formats a ConflictMap.

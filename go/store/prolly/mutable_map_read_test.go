@@ -137,7 +137,7 @@ func makeMutableMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	tree.SortTuplePairs(mapTuples, kd)
 	tree.SortTuplePairs(memTuples, kd)
 
-	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	serializer := message.NewProllyMapSerializer(vd, ns.Pool())
 	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 	for _, pair := range mapTuples {

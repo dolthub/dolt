@@ -56,14 +56,14 @@ func NewEmptyConflictIndex(ctx context.Context, vrw types.ValueReadWriter, ns tr
 		}
 		return ConflictIndexFromNomsMap(m, vrw), nil
 
-	case types.Format_DOLT_1:
-		kd, oursVD := shim.MapDescriptorsFromSchema(oursSch)
-		theirsVD := shim.ValueDescriptorFromSchema(theirsSch)
-		baseVD := shim.ValueDescriptorFromSchema(baseSch)
-
-		m := prolly.NewEmptyConflictMap(ns, kd, oursVD, theirsVD, baseVD)
-
-		return ConflictIndexFromProllyMap(m), nil
+	//case types.Format_DOLT_1:
+	//	kd, oursVD := shim.MapDescriptorsFromSchema(oursSch)
+	//	theirsVD := shim.ValueDescriptorFromSchema(theirsSch)
+	//	baseVD := shim.ValueDescriptorFromSchema(baseSch)
+	//
+	//	m := prolly.NewEmptyConflictMap(ns, kd, oursVD, theirsVD, baseVD)
+	//
+	//	return ConflictIndexFromProllyMap(m), nil
 
 	default:
 		return nil, errNbfUnkown

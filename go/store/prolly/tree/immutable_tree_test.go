@@ -361,8 +361,8 @@ func newTree(t *testing.T, ns NodeStore, keyCnt, blobLen, chunkSize int) Node {
 		tuples[i][1] = valBld.Build(sharedPool)
 	}
 
-	serializer := message.ProllyMapSerializer{Pool: ns.Pool(), ValDesc: valDesc}
-	chunker, err := newEmptyChunker(ctx, ns, serializer)
+	s := message.NewProllyMapSerializer(valDesc, ns.Pool())
+	chunker, err := newEmptyChunker(ctx, ns, s)
 	require.NoError(t, err)
 	for _, pair := range tuples {
 		err := chunker.AddPair(ctx, Item(pair[0]), Item(pair[1]))
