@@ -25,15 +25,19 @@ import (
 
 var blobFileID = []byte(serial.BlobFileID)
 
+func NewBlobSerializer(pool pool.BuffPool) BlobSerializer {
+	return BlobSerializer{pool: pool}
+}
+
 type BlobSerializer struct {
-	Pool pool.BuffPool
+	pool pool.BuffPool
 }
 
 var _ Serializer = BlobSerializer{}
 
 func (s BlobSerializer) Serialize(keys, values [][]byte, subtrees []uint64, level int) serial.Message {
 	bufSz := estimateBlobSize(values, subtrees)
-	b := getFlatbufferBuilder(s.Pool, bufSz)
+	b := getFlatbufferBuilder(s.pool, bufSz)
 
 	if level == 0 {
 		assertTrue(len(values) == 1)

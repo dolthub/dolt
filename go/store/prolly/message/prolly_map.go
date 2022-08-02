@@ -37,9 +37,13 @@ const (
 
 var prollyMapFileID = []byte(serial.ProllyTreeNodeFileID)
 
+func NewProllyMapSerializer(valueDesc val.TupleDesc, pool pool.BuffPool) ProllyMapSerializer {
+	return ProllyMapSerializer{valDesc: valueDesc, pool: pool}
+}
+
 type ProllyMapSerializer struct {
-	Pool    pool.BuffPool
-	ValDesc val.TupleDesc
+	valDesc val.TupleDesc
+	pool    pool.BuffPool
 }
 
 var _ Serializer = ProllyMapSerializer{}
@@ -52,8 +56,8 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		refArr, cardArr  fb.UOffsetT
 	)
 
-	keySz, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees, s.ValDesc.AddressFieldCount())
-	b := getFlatbufferBuilder(s.Pool, bufSz)
+	keySz, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees, s.valDesc.AddressFieldCount())
+	b := getFlatbufferBuilder(s.pool, bufSz)
 
 	// serialize keys and offsets
 	keyTups = writeItemBytes(b, keys, keySz)
@@ -66,9 +70,9 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		serial.ProllyTreeNodeStartValueOffsetsVector(b, len(values)+1)
 		valOffs = writeItemOffsets(b, values, valSz)
 		// serialize offsets of chunk addresses within |valTups|
-		if s.ValDesc.AddressFieldCount() > 0 {
-			serial.ProllyTreeNodeStartValueAddressOffsetsVector(b, countAddresses(values, s.ValDesc))
-			valAddrOffs = writeAddressOffsets(b, values, valSz, s.ValDesc)
+		if s.valDesc.AddressFieldCount() > 0 {
+			serial.ProllyTreeNodeStartValueAddressOffsetsVector(b, countAddresses(values, s.valDesc))
+			valAddrOffs = writeAddressOffsets(b, values, valSz, s.valDesc)
 		}
 	} else {
 		// serialize child refs and subtree counts for internal nodes

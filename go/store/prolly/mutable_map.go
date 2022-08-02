@@ -50,11 +50,8 @@ func newMutableMap(m Map) MutableMap {
 
 // Map materializes all pending and applied mutations in the MutableMap.
 func (mut MutableMap) Map(ctx context.Context) (Map, error) {
-	serializer := message.ProllyMapSerializer{
-		Pool:    mut.NodeStore().Pool(),
-		ValDesc: mut.valDesc,
-	}
-	return mut.flushWithSerializer(ctx, serializer)
+	s := message.NewProllyMapSerializer(mut.valDesc, mut.NodeStore().Pool())
+	return mut.flushWithSerializer(ctx, s)
 }
 
 func (mut MutableMap) flushWithSerializer(ctx context.Context, s message.Serializer) (Map, error) {
@@ -191,4 +188,35 @@ func debugFormat(ctx context.Context, m MutableMap) (string, error) {
 	}
 	sb.WriteString("\t}\n}\n")
 	return sb.String(), nil
+}
+
+type tupleIter struct {
+	tuples []val.Tuple
+}
+
+var _ TupleIter = &tupleIter{}
+
+func (s *tupleIter) Next(context.Context) (k, v val.Tuple) {
+	if len(s.tuples) > 0 {
+		k, v = s.tuples[0], s.tuples[1]
+		s.tuples = s.tuples[2:]
+	}
+	return
+}
+
+// mutationIter wraps a TupleIter as a MutationIter.
+type mutationIter struct {
+	iter TupleIter
+}
+
+var _ tree.MutationIter = mutationIter{}
+
+func (m mutationIter) NextMutation(ctx context.Context) (key, value tree.Item) {
+	k, v := m.iter.Next(ctx)
+	key, value = tree.Item(k), tree.Item(v)
+	return
+}
+
+func (m mutationIter) Close() error {
+	return nil
 }

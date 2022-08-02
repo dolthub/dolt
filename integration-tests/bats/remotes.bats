@@ -1825,6 +1825,28 @@ setup_ref_test() {
     [[ "$output" =~ "adding table from other" ]]
 }
 
+@test "remotes: dolt_remote uses the right db directory in a multidb env" {
+    tempDir=$(mktemp -d)
+
+    cd $tempDir
+    mkdir db1
+    cd db1
+    dolt init
+    cd ..
+
+    run dolt sql -q "use db1; call dolt_remote('add', 'test1', 'foo/bar');"
+    [ "$status" -eq 0 ]
+
+    run grep "test1" db1/.dolt/repo_state.json
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '"name": "test1"' ]] || false
+    [ ! -d ".dolt" ]
+
+    run dolt sql -q "use db1; call dolt_remote('remove', 'test1');"
+    [ "$status" -eq 0 ]
+    [ ! -d ".dolt" ]
+}
+
 @test "remotes: dolt_remote add and remove works with other commands" {
     mkdir remote
     mkdir repo1

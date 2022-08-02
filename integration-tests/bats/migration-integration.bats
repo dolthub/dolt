@@ -17,17 +17,19 @@ teardown() {
     dolt clone dolthub/first-hour-db
     cd first-hour-db
 
+    dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
-    [[ ! "$output" =~ "ovpnp265d9cubjeo9qf0ts10piq7c70d" ]] || false
+    [[ ! "$output" =~ "popqo96mjvhsaumd3rbba9m56f1oij7h" ]] || false
 
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
 
+    dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "ovpnp265d9cubjeo9qf0ts10piq7c70d" ]] || false
+    [[ "$output" =~ "popqo96mjvhsaumd3rbba9m56f1oij7h" ]] || false
     [[ ! "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
 }
 
@@ -35,16 +37,18 @@ teardown() {
     dolt clone dolthub/us-jails
     cd us-jails
 
+    dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "u8s83gapv7ghnbmrtpm8q5es0dbl7lpd" ]] || false
-    [[ ! "$output" =~ "t25l8d0u3tp1tul8o9ttf8k3t5a24n4q" ]] || false
+    [[ ! "$output" =~ "k0hgumfrd2i891h1nh172cfutih5n6ea" ]] || false
 
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
 
+    dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "t25l8d0u3tp1tul8o9ttf8k3t5a24n4q" ]] || false
+    [[ "$output" =~ "k0hgumfrd2i891h1nh172cfutih5n6ea" ]] || false
     [[ ! "$output" =~ "u8s83gapv7ghnbmrtpm8q5es0dbl7lpd" ]] || false
 }
