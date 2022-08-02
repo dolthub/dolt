@@ -299,6 +299,33 @@ var DoltScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "blame: composite pk ordered output with correct header (bats repro)",
+		SetUpScript: []string{
+			"CREATE TABLE t(pk varchar(20), val int)",
+			"ALTER TABLE t ADD PRIMARY KEY (pk, val)",
+			"INSERT INTO t VALUES ('zzz',4),('mult',1),('sub',2),('add',5)",
+			"CALL dadd('.');",
+			"CALL dcommit('-am', 'add rows');",
+			"INSERT INTO t VALUES ('dolt',0),('alt',12),('del',8),('ctl',3)",
+			"CALL dcommit('-am', 'add more rows');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT pk, val, message FROM dolt_blame_t",
+				Expected: []sql.Row{
+					{"add", 5, "add rows"},
+					{"alt", 12, "add more rows"},
+					{"ctl", 3, "add more rows"},
+					{"del", 8, "add more rows"},
+					{"dolt", 0, "add more rows"},
+					{"mult", 1, "add rows"},
+					{"sub", 2, "add rows"},
+					{"zzz", 4, "add rows"},
+				},
+			},
+		},
+	},
 }
 
 func makeLargeInsert(sz int) string {
@@ -598,20 +625,19 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "explain select pk, c from dolt_history_t1 where pk = 3",
 				Expected: []sql.Row{
-					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{" └─ Filter(dolt_history_t1.pk = 3)"},
-					{"     └─ Projected table access on [pk c]"},
-					{"         └─ Exchange"},
-					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])"},
+					{"Projected table access on [pk c]"},
+					{" └─ Exchange"},
+					{"     └─ Filter(dolt_history_t1.pk = 3)"},
+					{"         └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])"},
 				},
 			},
 			{
 				Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
 				Expected: []sql.Row{
 					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{" └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
-					{"     └─ Projected table access on [pk c committer]"},
-					{"         └─ Exchange"},
+					{" └─ Projected table access on [pk c committer]"},
+					{"     └─ Exchange"},
+					{"         └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
 					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])"},
 				},
 			},
@@ -664,20 +690,19 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "explain select pk, c from dolt_history_t1 where c = 4",
 				Expected: []sql.Row{
-					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{" └─ Filter(dolt_history_t1.c = 4)"},
-					{"     └─ Projected table access on [pk c]"},
-					{"         └─ Exchange"},
-					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.c] with ranges: [{[4, 4]}])"},
+					{"Projected table access on [pk c]"},
+					{" └─ Exchange"},
+					{"     └─ Filter(dolt_history_t1.c = 4)"},
+					{"         └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.c] with ranges: [{[4, 4]}])"},
 				},
 			},
 			{
 				Query: "explain select pk, c from dolt_history_t1 where c = 10 and committer = 'someguy'",
 				Expected: []sql.Row{
 					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{" └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = 'someguy'))"},
-					{"     └─ Projected table access on [pk c committer]"},
-					{"         └─ Exchange"},
+					{" └─ Projected table access on [pk c committer]"},
+					{"     └─ Exchange"},
+					{"         └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = 'someguy'))"},
 					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.c] with ranges: [{[10, 10]}])"}},
 			},
 		},
@@ -5120,6 +5145,62 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * FROM test",
 				Expected: []sql.Row{{1}, {2}, {3}, {8}, {9}},
+			},
+		},
+	},
+}
+
+var DoltRemoteTestScripts = []queries.ScriptTest{
+	{
+		Name: "dolt-remote: SQL add remotes",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_REMOTE('add','origin','file://../test')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
+				Expected: []sql.Row{{"origin", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin/*"]`), sql.MustJSON(`{}`)}},
+			},
+			{
+				Query:          "CALL DOLT_REMOTE()",
+				ExpectedErrStr: "error: invalid argument, use 'dolt_remotes' system table to list remotes",
+			},
+			{
+				Query:          "CALL DOLT_REMOTE('origin')",
+				ExpectedErrStr: "error: invalid argument",
+			},
+			{
+				Query:          "INSERT INTO dolt_remotes (name, url) VALUES ('origin', 'file://../test')",
+				ExpectedErrStr: "the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes",
+			},
+		},
+	},
+	{
+		Name: "dolt-remote: SQL remove remotes",
+		SetUpScript: []string{
+			"CALL DOLT_REMOTE('add','origin1','file://.')",
+			"CALL DOLT_REMOTE('add','origin2','aws://[dynamo_db_table:s3_bucket]/repo_name')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
+				Expected: []sql.Row{
+					{"origin1", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), sql.MustJSON(`{}`)},
+					{"origin2", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin2/*"]`), sql.MustJSON(`{}`)}},
+			},
+			{
+				Query:    "CALL DOLT_REMOTE('remove','origin2')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
+				Expected: []sql.Row{{"origin1", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), sql.MustJSON(`{}`)}},
+			},
+			// 'origin1' remote must exist in order this error to be returned; otherwise, no error from EOF
+			{
+				Query:          "DELETE FROM dolt_remotes WHERE name = 'origin1'",
+				ExpectedErrStr: "the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes",
 			},
 		},
 	},

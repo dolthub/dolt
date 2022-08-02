@@ -87,7 +87,7 @@ func LoadedLocalLocation() *time.Location {
 func BasicSelectTests() []SelectTest {
 	headCommitHash := "73hc2robs4v0kt9taoe3m5hd49dmrgun"
 	if types.Format_Default == types.Format_DOLT_DEV {
-		headCommitHash = "r5hevva9fc9ul414fm5lo11r8vcqifc1"
+		headCommitHash = "8rpomvicsi7h22diru7r8mmsk757hg8n"
 	}
 	return []SelectTest{
 		{

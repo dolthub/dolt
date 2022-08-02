@@ -2,7 +2,7 @@ name: Email Team Members
 
 on:
   repository_dispatch:
-    types: [ release-email ]
+    types: [ email-report ]
 
 jobs:
   email-team:
@@ -39,5 +39,6 @@ jobs:
           template: ${{ github.event.client_payload.template }}
           region: us-west-2
           version: ${{ github.event.client_payload.version }}
+          format: ${{ github.event.client_payload.noms_bin_format }}
           toAddresses: ${{ steps.get-addresses.outputs.addresses }}
           dataFile: ${{ format('{0}/results.log', github.workspace) }}

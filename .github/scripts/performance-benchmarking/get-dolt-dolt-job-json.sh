@@ -3,7 +3,7 @@
 set -e
 
 if [ "$#" -lt 9 ]; then
-    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <format> <issueNumber> <initBigRepo> <nomsBinFormat>"
+    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <format> <issueNumber> <initBigRepo> <nomsBinFormat> <withTpcc>"
     exit 1
 fi
 
@@ -18,6 +18,7 @@ format="$8"
 issueNumber="$9"
 initBigRepo="${10}"
 nomsBinFormat="${11}"
+withTpcc="${12}"
 tpccRegex="tpcc%"
 
 if [ -n "$initBigRepo" ]; then
@@ -26,6 +27,10 @@ fi
 
 if [ -n "$nomsBinFormat" ]; then
   nomsBinFormat="\"--noms-bin-format=$nomsBinFormat\","
+fi
+
+if [ -n "$withTpcc" ]; then
+  withTpcc="\"--withTpcc=$withTpcc\","
 fi
 
 readTests="('oltp_read_only', 'oltp_point_select', 'select_random_points', 'select_random_ranges', 'covering_index_scan', 'index_scan', 'table_scan', 'groupby_scan', 'index_join_scan')"
@@ -48,6 +53,14 @@ echo '
   "spec": {
     "backoffLimit": 1,
     "template": {
+      "metadata": {
+        "annotations": {
+          "alert_recipients": "'$ACTOR_EMAIL'"
+        },
+        "labels": {
+          "k8s-liquidata-inc-monitored-job": "created-by-static-config"
+        }
+      },
       "spec": {
         "serviceAccountName": "performance-benchmarking",
         "containers": [
@@ -79,7 +92,7 @@ echo '
               "--issue-number='$issueNumber'",
               "--results-dir='$timePrefix'",
               "--results-prefix='$actorPrefix'",
-              "--withTpcc=true",
+              '"$withTpcc"'
               '"$initBigRepo"'
               '"$nomsBinFormat"'
               "--sysbenchQueries='"$medianLatencyChangeReadsQuery"'",

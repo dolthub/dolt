@@ -49,42 +49,58 @@ func writeItemBytes(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
 	return b.CreateByteVector(b.Bytes[start:stop])
 }
 
+// writeItemOffsets writes (n+1) uint16 offsets for n |items|.
+// the first offset is 0, the last offset is |sumSz|.
 func writeItemOffsets(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
-	var cnt int
 	var off = sumSz
-	for i := len(items) - 1; i > 0; i-- { // omit first offset
-		off -= len(items[i])
+	for i := len(items) - 1; i >= 0; i-- {
 		b.PrependUint16(uint16(off))
-		cnt++
+		off -= len(items[i])
 	}
-	return b.EndVector(cnt)
+	assertTrue(off == 0)
+	b.PrependUint16(uint16(off))
+	return b.EndVector(len(items) + 1)
 }
 
-// writeAddrOffests returns offsets into the values array that correspond to addr root
-// hashes that themselves have subtrees
-func writeValAddrOffsets(b *fb.Builder, items [][]byte, sumSz int, valDesc val.TupleDesc) fb.UOffsetT {
+// countAddresses returns the number of chunk addresses stored within |items|.
+func countAddresses(items [][]byte, td val.TupleDesc) (cnt int) {
+	for i := len(items) - 1; i >= 0; i-- {
+		val.IterAddressFields(td, func(j int, t val.Type) {
+			// get offset of address withing |tup|
+			addr := val.Tuple(items[i]).GetField(j)
+			if len(addr) > 0 && !hash.New(addr).IsEmpty() {
+				cnt++
+			}
+			return
+		})
+	}
+	return
+}
+
+// writeAddressOffsets serializes an array of uint16 offsets representing address offsets within an array of items.
+func writeAddressOffsets(b *fb.Builder, items [][]byte, sumSz int, td val.TupleDesc) fb.UOffsetT {
 	var cnt int
 	var off = sumSz
 	for i := len(items) - 1; i >= 0; i-- {
 		tup := val.Tuple(items[i])
 		off -= len(tup) // start of tuple
-		for _, j := range valDesc.Addrs {
-			// get index into value tuple pointing at address
-			o, _ := tup.GetOffset(j)
-			a := tup.GetField(j)
-			if len(a) == 0 || hash.New(a).IsEmpty() {
-				continue
+		val.IterAddressFields(td, func(j int, t val.Type) {
+			addr := val.Tuple(items[i]).GetField(j)
+			if len(addr) == 0 || hash.New(addr).IsEmpty() {
+				return
 			}
+			// get offset of address withing |tup|
+			o, _ := tup.GetOffset(j)
 			o += off // offset is tuple start plus field start
 			b.PrependUint16(uint16(o))
 			cnt++
-		}
+		})
 	}
 	return b.EndVector(cnt)
 }
 
 func writeCountArray(b *fb.Builder, counts []uint64) fb.UOffsetT {
-	// todo(andy): encode without alloc
+	// todo(andy): write without alloc
 	buf := make([]byte, maxEncodedSize(len(counts)))
 	return b.CreateByteVector(encodeVarints(counts, buf))
 }

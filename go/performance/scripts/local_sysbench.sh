@@ -32,6 +32,9 @@ do
         --single) export GOMAXPROCS=1
             ;;
 
+        --row2) export ENABLE_ROW_ITER_2=true
+            ;;
+
         # specify sysbench benchmark
         *) SYSBENCH_TEST="$1"
             ;;

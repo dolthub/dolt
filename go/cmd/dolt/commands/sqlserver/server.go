@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -79,11 +80,6 @@ func Serve(
 	}
 	logrus.SetFormatter(LogFormat{})
 
-	isReadOnly := false
-	if serverConfig.ReadOnly() {
-		isReadOnly = true
-	}
-
 	var mrEnv *env.MultiRepoEnv
 	var err error
 	fs := dEnv.FS
@@ -133,12 +129,15 @@ func Serve(
 
 	// Create SQL Engine with users
 	config := &engine.SqlEngineConfig{
-		InitialDb:    "",
-		IsReadOnly:   isReadOnly,
-		PrivFilePath: serverConfig.PrivilegeFilePath(),
-		ServerUser:   serverConfig.User(),
-		ServerPass:   serverConfig.Password(),
-		Autocommit:   serverConfig.AutoCommit(),
+		InitialDb:      "",
+		IsReadOnly:     serverConfig.ReadOnly(),
+		PrivFilePath:   serverConfig.PrivilegeFilePath(),
+		DoltCfgDirPath: serverConfig.CfgDir(),
+		ServerUser:     serverConfig.User(),
+		ServerPass:     serverConfig.Password(),
+		ServerHost:     serverConfig.Host(),
+		Autocommit:     serverConfig.AutoCommit(),
+		JwksConfig:     serverConfig.JwksConfig(),
 	}
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,
@@ -150,6 +149,25 @@ func Serve(
 		return err, nil
 	}
 	defer sqlEngine.Close()
+
+	// TODO: move this to GMS
+	// set host to "%" if empty string or 0.0.0.0
+	serverHost := config.ServerHost
+	if serverHost == "" || serverHost == "0.0.0.0" {
+		serverHost = "%"
+	}
+
+	// Add superuser if specified user exists; add root superuser if no user specified and no existing privileges
+	userSpecified := config.ServerUser != ""
+	privsExist := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.UserTable().Data().Count() != 0
+	if userSpecified {
+		superuser := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, serverHost, false)
+		if userSpecified && superuser == nil {
+			sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, serverHost, config.ServerPass)
+		}
+	} else if !privsExist {
+		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(defaultUser, defaultHost, defaultPass)
+	}
 
 	labels := serverConfig.MetricsLabels()
 	listener := newMetricsListener(labels)
@@ -229,8 +247,8 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 		userToSessionVars[curr.Name] = curr.Vars
 	}
 
-	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, error) {
-		mysqlSess, err := server.DefaultSessionBuilder(ctx, conn, host)
+	return func(ctx context.Context, conn *mysql.Conn, addr string) (sql.Session, error) {
+		mysqlSess, err := server.DefaultSessionBuilder(ctx, conn, addr)
 		if err != nil {
 			return nil, err
 		}
@@ -265,7 +283,11 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 
 // getConfigFromServerConfig processes ServerConfig and returns server.Config for sql-server.
 func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error, error) {
-	serverConf := server.Config{Protocol: "tcp"}
+	serverConf, err := handleProtocolAndAddress(serverConfig)
+	if err != nil {
+		return server.Config{}, err, nil
+	}
+
 	serverConf.DisableClientMultiStatements = serverConfig.DisableClientMultiStatements()
 
 	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
@@ -274,14 +296,6 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 	tlsConfig, err := LoadTLSConfig(serverConfig)
 	if err != nil {
 		return server.Config{}, nil, err
-	}
-
-	portAsString := strconv.Itoa(serverConfig.Port())
-	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
-
-	if portInUse(hostPort) {
-		portInUseError := fmt.Errorf("Port %s already in use.", portAsString)
-		return server.Config{}, portInUseError, nil
 	}
 
 	// if persist is 'load' we use currently set persisted global variable,
@@ -300,7 +314,6 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 
 	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
 	// to the value of mysql that we support.
-	serverConf.Address = hostPort
 	serverConf.ConnReadTimeout = readTimeout
 	serverConf.ConnWriteTimeout = writeTimeout
 	serverConf.MaxConnections = serverConfig.MaxConnections()
@@ -308,4 +321,35 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
 	return serverConf, nil, nil
+}
+
+// handleProtocolAndAddress returns new server.Config object with only Protocol and Address defined.
+func handleProtocolAndAddress(serverConfig ServerConfig) (server.Config, error) {
+	serverConf := server.Config{Protocol: "tcp"}
+
+	portAsString := strconv.Itoa(serverConfig.Port())
+	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
+	if portInUse(hostPort) {
+		portInUseError := fmt.Errorf("Port %s already in use.", portAsString)
+		return server.Config{}, portInUseError
+	}
+	serverConf.Address = hostPort
+
+	// if socket is defined with or without value -> unix
+	if serverConfig.Socket() != "" {
+		if runtime.GOOS == "windows" {
+			return server.Config{}, fmt.Errorf("cannot define unix socket file on Windows")
+		}
+		serverConf.Socket = serverConfig.Socket()
+	}
+	// TODO : making it an "opt in" feature (just to start) and requiring users to pass in the `--socket` flag
+	//  to turn them on instead of defaulting them on when host and port aren't set or host is set to `localhost`.
+	//} else {
+	//	// if host is undefined or defined as "localhost" -> unix
+	//	if shouldUseUnixSocket(serverConfig) {
+	//		serverConf.Socket = defaultUnixSocketFilePath
+	//	}
+	//}
+
+	return serverConf, nil
 }

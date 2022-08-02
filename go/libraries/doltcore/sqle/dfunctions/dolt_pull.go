@@ -92,21 +92,24 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 		return noConflictsOrViolations, threeWayMerge, err
 	}
 
-	if apr.NArg() > 1 {
+	if apr.NArg() > 2 {
 		return noConflictsOrViolations, threeWayMerge, actions.ErrInvalidPullArgs
 	}
 
-	var remoteName string
+	var remoteName, remoteRefName string
 	if apr.NArg() == 1 {
 		remoteName = apr.Arg(0)
+	} else if apr.NArg() == 2 {
+		remoteName = apr.Arg(0)
+		remoteRefName = apr.Arg(1)
 	}
 
-	pullSpec, err := env.NewPullSpec(ctx, dbData.Rsr, remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
+	pullSpec, err := env.NewPullSpec(ctx, dbData.Rsr, remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, err
 	}
 
-	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dbData.Ddb.ValueReadWriter().Format())
+	srcDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb, pullSpec.Remote, false)
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, fmt.Errorf("failed to get remote db; %w", err)
 	}
@@ -120,6 +123,15 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 	branchRefs, err := srcDB.GetHeadRefs(ctx)
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, env.ErrFailedToReadDb
+	}
+
+	hasBranch, err := srcDB.HasBranch(ctx, pullSpec.Branch.GetPath())
+	if err != nil {
+		return noConflictsOrViolations, threeWayMerge, err
+	}
+	if !hasBranch {
+		return noConflictsOrViolations, threeWayMerge,
+			fmt.Errorf("branch %q not found on remote", pullSpec.Branch.GetPath())
 	}
 
 	var conflicts int

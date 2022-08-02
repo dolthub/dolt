@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/nbs"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -57,10 +56,6 @@ func (cmd GarbageCollectionCmd) Name() string {
 // Description returns a description of the command
 func (cmd GarbageCollectionCmd) Description() string {
 	return gcDocs.ShortDesc
-}
-
-func (cmd GarbageCollectionCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT_1(nbf)
 }
 
 // Hidden should return true if this command should be hidden from the help text

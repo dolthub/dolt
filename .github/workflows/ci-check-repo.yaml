@@ -28,6 +28,7 @@ jobs:
           ./utils/repofmt/check_fmt.sh
           ./Godeps/verify.sh
           ./utils/repofmt/check_bats_fmt.sh
+          ./utils/repofmt/check_prepared_tests.sh
         env:
           BRANCH_NAME: ${{ github.head_ref }}
           CHANGE_TARGET: ${{ github.base_ref }}

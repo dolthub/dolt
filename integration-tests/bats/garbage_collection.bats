@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 remotesrv_pid=
 setup() {
-    skip_nbf_dolt_1
     skiponwindows "tests are flaky on Windows"
     setup_common
     cd $BATS_TMPDIR
@@ -67,6 +66,19 @@ SQL
     [ "$status" -eq "0" ]
     run dolt status
     [ "$status" -eq "0" ]
+}
+
+@test "garbage_collection: blob types work after GC" {
+    dolt sql -q "create table t(pk int primary key, val text)"
+    dolt sql -q "insert into t values (1, 'one'), (2, 'two');"
+    dolt add -A && dolt commit -am "added a table with blob encoding"
+
+    dolt gc
+
+    run dolt sql -q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "one" ]] || false
+    [[ $output =~ "two" ]] || false
 }
 
 @test "garbage_collection: clone a remote" {
@@ -152,6 +164,7 @@ setup_merge() {
 }
 
 @test "garbage_collection: leave merge commit" {
+    skip_nbf_dolt_1
     setup_merge
     dolt merge other
 

@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"os"
 	"path"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -31,11 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/types"
-)
-
-const (
-	remoteParam = "remote"
-	branchParam = "branch"
 )
 
 var cloneDocs = cli.CommandDocumentationContent{
@@ -75,14 +69,7 @@ func (cmd CloneCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd CloneCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsString(remoteParam, "", "name", "Name of the remote to be added. Default will be 'origin'.")
-	ap.SupportsString(branchParam, "b", "branch", "The branch to be cloned.  If not specified all branches will be cloned.")
-	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
-	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, credTypes))
-	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file.")
-	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use.")
-	return ap
+	return cli.CreateCloneArgParser()
 }
 
 // EventType returns the type of the event to log
@@ -105,8 +92,8 @@ func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, 
 }
 
 func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
-	remoteName := apr.GetValueOrDefault(remoteParam, "origin")
-	branch := apr.GetValueOrDefault(branchParam, "")
+	remoteName := apr.GetValueOrDefault(cli.RemoteParam, "origin")
+	branch := apr.GetValueOrDefault(cli.BranchParam, "")
 	dir, urlStr, verr := parseArgs(apr)
 	if verr != nil {
 		return verr
@@ -132,22 +119,23 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		return verr
 	}
 
-	dEnv, err = actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
+	// Create a new Dolt env for the clone
+	clonedEnv, err := actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, dEnv)
+	// Nil out the old Dolt env so we don't accidentally operate on the wrong database
+	dEnv = nil
+
+	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, clonedEnv)
 	if err != nil {
 		// If we're cloning into a directory that already exists do not erase it. Otherwise
 		// make best effort to delete the directory we created.
 		if userDirExists {
-			// Set the working dir to the parent of the .dolt folder so we can delete .dolt
-			_ = os.Chdir(dir)
-			_ = dEnv.FS.Delete(dbfactory.DoltDir, true)
+			clonedEnv.FS.Delete(dbfactory.DoltDir, true)
 		} else {
-			_ = os.Chdir("../")
-			_ = dEnv.FS.Delete(dir, true)
+			clonedEnv.FS.Delete(".", true)
 		}
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -160,15 +148,15 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		}
 	}
 
-	err = dEnv.RepoStateWriter().UpdateBranch(dEnv.RepoState.CWBHeadRef().GetPath(), env.BranchConfig{
-		Merge:  dEnv.RepoState.Head,
+	err = clonedEnv.RepoStateWriter().UpdateBranch(clonedEnv.RepoState.CWBHeadRef().GetPath(), env.BranchConfig{
+		Merge:  clonedEnv.RepoState.Head,
 		Remote: remoteName,
 	})
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = dEnv.RepoState.Save(dEnv.FS)
+	err = clonedEnv.RepoState.Save(clonedEnv.FS)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -206,9 +194,8 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
 	cli.Printf("cloning %s\n", remoteUrl)
 
-	r := env.NewRemote(remoteName, remoteUrl, params, dEnv)
-
-	ddb, err := r.GetRemoteDB(ctx, types.Format_Default)
+	r := env.NewRemote(remoteName, remoteUrl, params)
+	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dEnv)
 
 	if err != nil {
 		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)

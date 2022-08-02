@@ -17,13 +17,14 @@ package types
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 type SerialMessage []byte
@@ -48,21 +49,22 @@ func (sm SerialMessage) Equals(other Value) bool {
 }
 
 func (sm SerialMessage) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
-	return getHash(sm, nbf)
+	return hash.Of(sm), nil
 }
 
 func (sm SerialMessage) HumanReadableString() string {
-	switch serial.GetFileID(sm) {
+	id := serial.GetFileID(sm)
+	switch id {
 	case serial.StoreRootFileID:
-		msg := serial.GetRootAsStoreRoot([]byte(sm), 0)
+		msg := serial.GetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		mapbytes := msg.AddressMapBytes()
-		fmt.Fprintf(ret, "StoreRoot{%s}", TupleRowStorage(mapbytes).HumanReadableString())
+		fmt.Fprintf(ret, "StoreRoot{%s}", SerialMessage(mapbytes).HumanReadableString())
 		return ret.String()
 	case serial.TagFileID:
 		return "Tag"
 	case serial.WorkingSetFileID:
-		msg := serial.GetRootAsWorkingSet(sm, 0)
+		msg := serial.GetRootAsWorkingSet(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		fmt.Fprintf(ret, "{\n")
 		fmt.Fprintf(ret, "\tName: %s\n", msg.Name())
@@ -74,7 +76,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		fmt.Fprintf(ret, "}")
 		return ret.String()
 	case serial.CommitFileID:
-		msg := serial.GetRootAsCommit(sm, 0)
+		msg := serial.GetRootAsCommit(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		fmt.Fprintf(ret, "{\n")
 		fmt.Fprintf(ret, "\tName: %s\n", msg.Name())
@@ -102,18 +104,17 @@ func (sm SerialMessage) HumanReadableString() string {
 		fmt.Fprintf(ret, "}")
 		return ret.String()
 	case serial.RootValueFileID:
-		msg := serial.GetRootAsRootValue(sm, 0)
+		msg := serial.GetRootAsRootValue(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		fmt.Fprintf(ret, "{\n")
 		fmt.Fprintf(ret, "\tFeatureVersion: %d\n", msg.FeatureVersion())
 		fmt.Fprintf(ret, "\tForeignKeys: #%s\n", hash.New(msg.ForeignKeyAddrBytes()).String())
-		fmt.Fprintf(ret, "\tSuperSchema: #%s\n", hash.New(msg.SuperSchemasAddrBytes()).String())
-		fmt.Fprintf(ret, "\tTables: {\n\t%s", TupleRowStorage(msg.TablesBytes()).HumanReadableString())
+		fmt.Fprintf(ret, "\tTables: {\n\t%s", SerialMessage(msg.TablesBytes()).HumanReadableString())
 		fmt.Fprintf(ret, "\t}\n")
 		fmt.Fprintf(ret, "}")
 		return ret.String()
 	case serial.TableFileID:
-		msg := serial.GetRootAsTable(sm, 0)
+		msg := serial.GetRootAsTable(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 
 		fmt.Fprintf(ret, "{\n")
@@ -126,16 +127,27 @@ func (sm SerialMessage) HumanReadableString() string {
 		// TODO: can't use tree package to print here, creates a cycle
 		fmt.Fprintf(ret, "\tPrimary index: prolly tree\n")
 
-		fmt.Fprintf(ret, "\tSecondary indexes: {\n\t%s\n", TupleRowStorage(msg.SecondaryIndexesBytes()).HumanReadableString())
+		fmt.Fprintf(ret, "\tSecondary indexes: {\n\t%s\n", SerialMessage(msg.SecondaryIndexesBytes()).HumanReadableString())
 		fmt.Fprintf(ret, "\t}\n")
 		fmt.Fprintf(ret, "}")
 		return ret.String()
-	case serial.ProllyTreeNodeFileID:
-		return "ProllyTreeNode"
 	case serial.AddressMapFileID:
-		return "AddressMap"
+		keys, values, cnt := message.GetKeysAndValues(serial.Message(sm))
+		var b strings.Builder
+		b.Write([]byte("AddressMap{\n"))
+		for i := uint16(0); i < cnt; i++ {
+			name := keys.GetItem(int(i))
+			addr := values.GetItem(int(i))
+			b.Write([]byte("\t"))
+			b.Write(name)
+			b.Write([]byte(": "))
+			b.Write([]byte(hash.New(addr).String()))
+			b.Write([]byte("\n"))
+		}
+		b.Write([]byte("}"))
+		return b.String()
 	default:
-		return "SerialMessage (HumanReadableString not implemented)"
+		return fmt.Sprintf("SerialMessage (HumanReadableString not implemented), [%v]: %s", id, strings.ToUpper(hex.EncodeToString(sm)))
 	}
 }
 
@@ -151,15 +163,15 @@ func (sm SerialMessage) Less(nbf *NomsBinFormat, other LesserValuable) (bool, er
 const SerialMessageRefHeight = 1024
 
 func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
-	switch serial.GetFileID([]byte(sm)) {
+	switch serial.GetFileID(sm) {
 	case serial.StoreRootFileID:
-		msg := serial.GetRootAsStoreRoot([]byte(sm), 0)
+		msg := serial.GetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
 		if msg.AddressMapLength() > 0 {
 			mapbytes := msg.AddressMapBytes()
-			return TupleRowStorage(mapbytes).walkRefs(nbf, cb)
+			return SerialMessage(mapbytes).walkRefs(nbf, cb)
 		}
 	case serial.TagFileID:
-		msg := serial.GetRootAsTag([]byte(sm), 0)
+		msg := serial.GetRootAsTag([]byte(sm), serial.MessagePrefixSz)
 		addr := hash.New(msg.CommitAddrBytes())
 		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 		if err != nil {
@@ -167,7 +179,7 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 		}
 		return cb(r)
 	case serial.WorkingSetFileID:
-		msg := serial.GetRootAsWorkingSet([]byte(sm), 0)
+		msg := serial.GetRootAsWorkingSet([]byte(sm), serial.MessagePrefixSz)
 		addr := hash.New(msg.WorkingRootAddrBytes())
 		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 		if err != nil {
@@ -207,8 +219,8 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 			}
 		}
 	case serial.RootValueFileID:
-		msg := serial.GetRootAsRootValue([]byte(sm), 0)
-		err := TupleRowStorage(msg.TablesBytes()).walkRefs(nbf, cb)
+		msg := serial.GetRootAsRootValue([]byte(sm), serial.MessagePrefixSz)
+		err := SerialMessage(msg.TablesBytes()).walkRefs(nbf, cb)
 		if err != nil {
 			return err
 		}
@@ -222,18 +234,8 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 				return err
 			}
 		}
-		addr = hash.New(msg.SuperSchemasAddrBytes())
-		if !addr.IsEmpty() {
-			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
-			if err != nil {
-				return err
-			}
-			if err = cb(r); err != nil {
-				return err
-			}
-		}
 	case serial.TableFileID:
-		msg := serial.GetRootAsTable([]byte(sm), 0)
+		msg := serial.GetRootAsTable([]byte(sm), serial.MessagePrefixSz)
 		addr := hash.New(msg.SchemaBytes())
 		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 		if err != nil {
@@ -300,7 +302,7 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 			}
 		}
 
-		err = TupleRowStorage(msg.SecondaryIndexesBytes()).walkRefs(nbf, cb)
+		err = SerialMessage(msg.SecondaryIndexesBytes()).walkRefs(nbf, cb)
 		if err != nil {
 			return err
 		}
@@ -315,7 +317,7 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 			}
 			return v.walkRefs(nbf, cb)
 		} else {
-			return TupleRowStorage(mapbytes).walkRefs(nbf, cb)
+			return SerialMessage(mapbytes).walkRefs(nbf, cb)
 		}
 	case serial.CommitFileID:
 		parents, err := SerialCommitParentAddrs(nbf, sm)
@@ -331,7 +333,7 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 				return err
 			}
 		}
-		msg := serial.GetRootAsCommit([]byte(sm), 0)
+		msg := serial.GetRootAsCommit([]byte(sm), serial.MessagePrefixSz)
 		addr := hash.New(msg.RootBytes())
 		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 		if err != nil {
@@ -355,14 +357,30 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 		return nil
 	case serial.ForeignKeyCollectionFileID:
 		return nil
+	case serial.ProllyTreeNodeFileID:
+		fallthrough
+	case serial.AddressMapFileID:
+		fallthrough
+	case serial.MergeArtifactsFileID:
+		fallthrough
+	case serial.BlobFileID:
+		fallthrough
+	case serial.CommitClosureFileID:
+		return message.WalkAddresses(context.TODO(), serial.Message(sm), func(ctx context.Context, addr hash.Hash) error {
+			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
+			return cb(r)
+		})
 	default:
-		return fmt.Errorf("unsupported SerialMessage message with FileID: %s", serial.GetFileID([]byte(sm)))
+		return fmt.Errorf("unsupported SerialMessage message with FileID: %s", serial.GetFileID(sm))
 	}
 	return nil
 }
 
 func SerialCommitParentAddrs(nbf *NomsBinFormat, sm SerialMessage) ([]hash.Hash, error) {
-	msg := serial.GetRootAsCommit([]byte(sm), 0)
+	msg := serial.GetRootAsCommit([]byte(sm), serial.MessagePrefixSz)
 	addrs := msg.ParentAddrsBytes()
 	n := len(addrs) / 20
 	ret := make([]hash.Hash, n)
@@ -375,7 +393,7 @@ func SerialCommitParentAddrs(nbf *NomsBinFormat, sm SerialMessage) ([]hash.Hash,
 }
 
 func (sm SerialMessage) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
-	bytes := b.ReadInlineBlob()
+	bytes := b.readSerialMessage()
 	return SerialMessage(bytes), nil
 }
 
@@ -389,16 +407,6 @@ func (sm SerialMessage) typeOf() (*Type, error) {
 }
 
 func (sm SerialMessage) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
-	byteLen := len(sm)
-	if byteLen > math.MaxUint16 {
-		return fmt.Errorf("SerialMessage has length %v when max is %v", byteLen, math.MaxUint16)
-	}
-
-	err := SerialMessageKind.writeTo(w, nbf)
-	if err != nil {
-		return err
-	}
-	w.writeUint16(uint16(byteLen))
 	w.writeRaw(sm)
 	return nil
 }

@@ -88,8 +88,9 @@ type DoltEnv struct {
 	RepoState *RepoState
 	RSLoadErr error
 
-	DoltDB      *doltdb.DoltDB
-	DBLoadError error
+	DoltDB        *doltdb.DoltDB
+	DBLoadError   error
+	DbFormatError error
 
 	FS     filesys.Filesys
 	urlStr string
@@ -98,8 +99,12 @@ type DoltEnv struct {
 	IgnoreLockFile bool
 }
 
-// Load loads the DoltEnv for the current directory of the cli
-func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, version string) *DoltEnv {
+// Load loads the DoltEnv for the .dolt directory determined by resolving the specified urlStr with the specified Filesys.
+func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
+	return loadWithFormat(ctx, hdp, fs, urlStr, version, nil)
+}
+
+func loadWithFormat(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, version string, binFormat *types.NomsBinFormat) *DoltEnv {
 	config, cfgErr := LoadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
 
@@ -120,14 +125,12 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 	if dEnv.RepoState != nil {
 		remotes := make(map[string]Remote, len(dEnv.RepoState.Remotes))
 		for n, r := range dEnv.RepoState.Remotes {
-			r.dialer = dEnv
 			remotes[n] = r
 		}
 		dEnv.RepoState.Remotes = remotes
 
 		backups := make(map[string]Remote, len(dEnv.RepoState.Backups))
 		for n, r := range dEnv.RepoState.Backups {
-			r.dialer = dEnv
 			backups[n] = r
 		}
 		dEnv.RepoState.Backups = backups
@@ -161,7 +164,15 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 		}
 	}
 
+	var dbFormatErr error
 	if rsErr == nil && dbLoadErr == nil {
+		if binFormat != nil && dEnv.DoltDB.Format() != binFormat {
+			dbFormatErr = fmt.Errorf("database with incompatible DOLT_DEFAULT_BIN_FORMAT")
+			dEnv.DbFormatError = dbFormatErr
+		}
+	}
+
+	if rsErr == nil && dbLoadErr == nil && dbFormatErr == nil {
 		// If the working set isn't present in the DB, create it from the repo state. This step can be removed post 1.0.
 		_, err := dEnv.WorkingSet(ctx)
 		if err == doltdb.ErrWorkingSetNotFound {
@@ -184,7 +195,7 @@ func GetDefaultInitBranch(cfg config.ReadableConfig) string {
 // Valid returns whether this environment has been properly initialized. This is useful because although every command
 // gets a DoltEnv, not all of them require it, and we allow invalid dolt envs to be passed around for this reason.
 func (dEnv *DoltEnv) Valid() bool {
-	return dEnv.CfgLoadErr == nil && dEnv.DBLoadError == nil && dEnv.HasDoltDir() && dEnv.HasDoltDataDir()
+	return dEnv.CfgLoadErr == nil && dEnv.DBLoadError == nil && dEnv.DbFormatError == nil && dEnv.HasDoltDir() && dEnv.HasDoltDataDir()
 }
 
 // initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.
@@ -363,7 +374,7 @@ func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context, nbf *types.NomsBinF
 		return err
 	}
 
-	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, filesys.LocalFS)
+	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, dEnv.FS)
 
 	return err
 }
@@ -641,12 +652,12 @@ func (r *repoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.
 	return nil
 }
 
-func (r *repoStateWriter) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
-	return r.DoltEnv.AddRemote(name, url, fetchSpecs, params)
+func (r *repoStateWriter) AddRemote(remote Remote) error {
+	return r.DoltEnv.AddRemote(remote)
 }
 
-func (r *repoStateWriter) AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error {
-	return r.DoltEnv.AddBackup(name, url, fetchSpecs, params)
+func (r *repoStateWriter) AddBackup(remote Remote) error {
+	return r.DoltEnv.AddBackup(remote)
 }
 
 func (r *repoStateWriter) RemoveRemote(ctx context.Context, name string) error {
@@ -908,32 +919,28 @@ func checkRemoteAddressConflict(url string, remotes, backups map[string]Remote) 
 	return NoRemote, false
 }
 
-func (dEnv *DoltEnv) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
-	if _, ok := dEnv.RepoState.Remotes[name]; ok {
+func (dEnv *DoltEnv) AddRemote(r Remote) error {
+	if _, ok := dEnv.RepoState.Remotes[r.Name]; ok {
 		return ErrRemoteAlreadyExists
 	}
 
-	if strings.IndexAny(name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
+	if strings.IndexAny(r.Name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
 		return ErrInvalidRemoteName
 	}
 
-	_, absRemoteUrl, err := GetAbsRemoteUrl(dEnv.FS, dEnv.Config, url)
+	_, absRemoteUrl, err := GetAbsRemoteUrl(dEnv.FS, dEnv.Config, r.Url)
 	if err != nil {
 		return fmt.Errorf("%w; %s", ErrInvalidRemoteURL, err.Error())
 	}
 
 	// can have multiple remotes with the same address, but no conflicting backups
-	if r, found := checkRemoteAddressConflict(absRemoteUrl, nil, dEnv.RepoState.Backups); found {
-		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, r.Name, r.Url)
+	if rem, found := checkRemoteAddressConflict(absRemoteUrl, nil, dEnv.RepoState.Backups); found {
+		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, rem.Name, rem.Url)
 	}
 
-	r := Remote{name, absRemoteUrl, fetchSpecs, params, dEnv}
+	r.Url = absRemoteUrl
 	dEnv.RepoState.AddRemote(r)
-	err = dEnv.RepoState.Save(dEnv.FS)
-	if err != nil {
-		return err
-	}
-	return nil
+	return dEnv.RepoState.Save(dEnv.FS)
 }
 
 func (dEnv *DoltEnv) GetBackups() (map[string]Remote, error) {
@@ -944,32 +951,28 @@ func (dEnv *DoltEnv) GetBackups() (map[string]Remote, error) {
 	return dEnv.RepoState.Backups, nil
 }
 
-func (dEnv *DoltEnv) AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error {
-	if _, ok := dEnv.RepoState.Backups[name]; ok {
+func (dEnv *DoltEnv) AddBackup(r Remote) error {
+	if _, ok := dEnv.RepoState.Backups[r.Name]; ok {
 		return ErrBackupAlreadyExists
 	}
 
-	if strings.IndexAny(name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
+	if strings.IndexAny(r.Name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
 		return ErrInvalidBackupName
 	}
 
-	_, absRemoteUrl, err := GetAbsRemoteUrl(dEnv.FS, dEnv.Config, url)
+	_, absRemoteUrl, err := GetAbsRemoteUrl(dEnv.FS, dEnv.Config, r.Url)
 	if err != nil {
 		return fmt.Errorf("%w; %s", ErrInvalidBackupURL, err.Error())
 	}
 
 	// no conflicting remote or backup addresses
-	if r, found := checkRemoteAddressConflict(absRemoteUrl, dEnv.RepoState.Remotes, dEnv.RepoState.Backups); found {
-		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, r.Name, r.Url)
+	if rem, found := checkRemoteAddressConflict(absRemoteUrl, dEnv.RepoState.Remotes, dEnv.RepoState.Backups); found {
+		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, rem.Name, rem.Url)
 	}
 
-	r := Remote{name, absRemoteUrl, fetchSpecs, params, dEnv}
+	r.Url = absRemoteUrl
 	dEnv.RepoState.AddBackup(r)
-	err = dEnv.RepoState.Save(dEnv.FS)
-	if err != nil {
-		return err
-	}
-	return nil
+	return dEnv.RepoState.Save(dEnv.FS)
 }
 
 func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {

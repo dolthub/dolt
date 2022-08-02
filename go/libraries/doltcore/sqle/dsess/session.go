@@ -67,7 +67,7 @@ type DoltSession struct {
 	username    string
 	email       string
 	dbStates    map[string]*DatabaseSessionState
-	provider    RevisionDatabaseProvider
+	provider    DoltDatabaseProvider
 	tempTables  map[string][]sql.Table
 	globalsConf config.ReadWriteConfig
 	mu          *sync.Mutex
@@ -77,7 +77,7 @@ var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 
 // DefaultSession creates a DoltSession with default values
-func DefaultSession(pro RevisionDatabaseProvider) *DoltSession {
+func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
 	return &DoltSession{
 		Session:     sql.NewBaseSession(),
 		username:    "",
@@ -91,7 +91,7 @@ func DefaultSession(pro RevisionDatabaseProvider) *DoltSession {
 }
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
-func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabaseProvider, conf config.ReadWriteConfig, dbs ...InitialDbState) (*DoltSession, error) {
+func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro DoltDatabaseProvider, conf config.ReadWriteConfig, dbs ...InitialDbState) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")
 	globals := config.NewPrefixConfig(conf, env.SqlServerGlobalsPrefix)
@@ -118,7 +118,7 @@ func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionData
 }
 
 // Provider returns the RevisionDatabaseProvider for this session.
-func (d *DoltSession) Provider() RevisionDatabaseProvider {
+func (d *DoltSession) Provider() DoltDatabaseProvider {
 	return d.provider
 }
 
@@ -909,7 +909,7 @@ func (d *DoltSession) HasDB(ctx *sql.Context, dbName string) bool {
 // other state tracking metadata.
 func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	db := dbState.Db
-	defineSystemVariablesForDB(db.Name())
+	DefineSystemVariablesForDB(db.Name())
 
 	sessionState := NewEmptyDatabaseSessionState()
 	d.dbStates[db.Name()] = sessionState
@@ -1143,8 +1143,11 @@ func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
 	if d.globalsConf == nil {
 		return nil, ErrSessionNotPeristable
 	}
-
-	return SystemVariablesInConfig(d.globalsConf)
+	sysVars, _, err := SystemVariablesInConfig(d.globalsConf)
+	if err != nil {
+		return nil, err
+	}
+	return sysVars, nil
 }
 
 // validatePersistedSysVar checks whether a system variable exists and is dynamic
@@ -1235,8 +1238,11 @@ func setPersistedValue(conf config.WritableConfig, key string, value interface{}
 }
 
 // SystemVariablesInConfig returns system variables from the persisted config
-func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, error) {
+// and a list of persisted keys that have no corresponding definition in
+// |sql.SystemVariables|.
+func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, []string, error) {
 	allVars := make([]sql.SystemVariable, conf.Size())
+	var missingKeys []string
 	i := 0
 	var err error
 	var sysVar sql.SystemVariable
@@ -1244,10 +1250,15 @@ func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, 
 	conf.Iter(func(k, v string) bool {
 		def, err = getPersistedValue(conf, k)
 		if err != nil {
+			if sql.ErrUnknownSystemVariable.Is(err) {
+				err = nil
+				missingKeys = append(missingKeys, k)
+				return false
+			}
 			err = fmt.Errorf("key: '%s'; %w", k, err)
 			return true
 		}
-		// getPeristedVal already checked for errors
+		// getPersistedVal already checked for errors
 		sysVar, _, _ = sql.SystemVariables.GetGlobal(k)
 		sysVar.Default = def
 		allVars[i] = sysVar
@@ -1255,9 +1266,9 @@ func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, 
 		return false
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return allVars, nil
+	return allVars, missingKeys, nil
 }
 
 var initMu = sync.Mutex{}
@@ -1276,9 +1287,12 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 		globals = config.NewMapConfig(make(map[string]string))
 	}
 
-	persistedGlobalVars, err := SystemVariablesInConfig(globals)
+	persistedGlobalVars, missingKeys, err := SystemVariablesInConfig(globals)
 	if err != nil {
 		return err
+	}
+	for _, k := range missingKeys {
+		cli.Printf("warning: persisted system variable %s was not loaded since its definition does not exist.\n", k)
 	}
 	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
 	return nil

@@ -79,7 +79,12 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 	updateMode := ref.UpdateMode{Force: apr.Contains(cli.ForceFlag)}
 
-	err = actions.FetchRefSpecs(ctx, dEnv.DbData(), refSpecs, r, updateMode, buildProgStarter(downloadLanguage), stopProgFuncs)
+	srcDB, err := r.GetRemoteDBWithoutCaching(ctx, dEnv.DbData().Ddb.ValueReadWriter().Format(), dEnv)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	err = actions.FetchRefSpecs(ctx, dEnv.DbData(), srcDB, refSpecs, r, updateMode, buildProgStarter(downloadLanguage), stopProgFuncs)
 	switch err {
 	case doltdb.ErrUpToDate:
 		return HandleVErrAndExitCode(nil, usage)
