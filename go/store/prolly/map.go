@@ -63,12 +63,14 @@ func NewMapFromTuples(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc v
 		return Map{}, fmt.Errorf("tuples must be key-value pairs")
 	}
 
-	return NewMapFromProvider(ctx, ns, keyDesc, valDesc, &sliceIter{tuples: tups})
+	return NewMapFromTupleIter(ctx, ns, keyDesc, valDesc, &tupleIter{tuples: tups})
 }
 
-type TupleProvider MapIter
+type TupleIter interface {
+	Next(ctx context.Context) (k, v val.Tuple)
+}
 
-func NewMapFromProvider(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc, iter TupleProvider) (Map, error) {
+func NewMapFromTupleIter(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc, iter TupleIter) (Map, error) {
 	serializer := message.NewProllyMapSerializer(valDesc, ns.Pool())
 	ch, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	if err != nil {
@@ -77,8 +79,8 @@ func NewMapFromProvider(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc
 
 	var k, v val.Tuple
 	for {
-		k, v, err = iter.Next(ctx)
-		if err == io.EOF {
+		k, v = iter.Next(ctx)
+		if k == nil {
 			break
 		}
 		if err != nil {
@@ -95,6 +97,27 @@ func NewMapFromProvider(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc
 	}
 
 	return NewMap(root, ns, keyDesc, valDesc), nil
+}
+
+func MutateMapWithTupleIter(ctx context.Context, m Map, iter TupleIter) (Map, error) {
+	t := m.tuples
+	i := mutationIter{iter: iter}
+	s := message.NewProllyMapSerializer(m.valDesc, t.ns.Pool())
+
+	root, err := tree.ApplyMutations(ctx, t.ns, t.root, s, i, t.compareItems)
+	if err != nil {
+		return Map{}, err
+	}
+
+	return Map{
+		tuples: orderedTree[val.Tuple, val.Tuple, val.TupleDesc]{
+			root:  root,
+			ns:    t.ns,
+			order: t.order,
+		},
+		keyDesc: m.keyDesc,
+		valDesc: m.valDesc,
+	}, nil
 }
 
 func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
