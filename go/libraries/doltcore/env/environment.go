@@ -1271,13 +1271,15 @@ func (dEnv *DoltEnv) IsLocked() bool {
 	}
 
 	// Check whether the pid that spawned the lock file is still running. Ignore it if not.
+	// For unix systems FindProcess will always return a nil err and a process object which is why we must use the checkPid
+	// function. For Windows systems FindProcess will correctly determine if a process exists or not.
 	p, err := os.FindProcess(lockFilePid)
-	if err != nil { // if there's any error assume that env is locked since the file exists
-		return true
+	if runtime.GOOS == "windows" {
+		return p != nil
 	}
 
-	if p == nil {
-		return false
+	if err != nil {
+		return false // if there's any error assume that env is locked since the file exists
 	}
 
 	return checkPid(p.Pid)
@@ -1303,7 +1305,9 @@ func getProcessFromLockFile(fs filesys.Filesys, lockFile string) (int, error) {
 		return -1, err
 	}
 
-	b := make([]byte, 1000)
+	// Technically, the max pid is bounded by int types (~32 bits). That gets
+	// encoded to about 11 bytes. We'll round about just in case.
+	b := make([]byte, 50)
 	n, err := rd.Read(b)
 	if err != nil {
 		return -1, err
