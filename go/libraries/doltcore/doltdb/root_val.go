@@ -1254,11 +1254,6 @@ type DataCacheKey struct {
 }
 
 func NewDataCacheKey(rv *RootValue) (DataCacheKey, error) {
-	//hash, err := rv.HashOf()
-	//if err != nil {
-	//	return DataCacheKey{}, err
-	//}
-
 	return DataCacheKey{rv}, nil
 }
 
