@@ -18,7 +18,6 @@ import (
 	"context"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -232,7 +231,7 @@ func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[
 }
 
 // validateAndParseDolthubUrl validates and returns a Dolthub repo link's repository name. For example, given this url: https://www.dolthub.com/repositories/user/test
-// the function would return 'user/test'. Note this function correctly does not handle remocing additional path extensions. The url: https://www.dolthub.com/repositories/user/test/pulls
+// the function would return 'user/test'. Note this function correctly does not handle removing additional path extensions. The url: https://www.dolthub.com/repositories/user/test/pulls
 // would return 'user/test/pulls' and eventually error later in the code base.
 func validateAndParseDolthubUrl(urlStr string) (string, bool) {
 	u, err := earl.Parse(urlStr)
@@ -247,7 +246,7 @@ func validateAndParseDolthubUrl(urlStr string) (string, bool) {
 
 		if len(split) > 2 {
 			// the path is of the form /repositories/user/repoName
-			return filepath.Join(split[2:]...), true
+			return strings.Join(split[2:], "/"), true
 		}
 	}
 
