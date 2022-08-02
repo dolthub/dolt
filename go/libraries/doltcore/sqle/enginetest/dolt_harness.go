@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -76,11 +77,11 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	require.NoError(t, err)
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem())
+	pro, err := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem())
+	require.NoError(t, err)
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
 	localConfig := dEnv.Config.WriteableConfig()
-
 	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, localConfig)
 	require.NoError(t, err)
 	dh := &DoltHarness{
@@ -146,6 +147,13 @@ func commitScripts(dbs []string) []setup.SetupScript {
 func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 	if d.engine == nil {
 		pro := d.NewDatabaseProvider(information_schema.NewInformationSchemaDatabase())
+		doltProvider, ok := pro.(sqle.DoltDatabaseProvider)
+		require.True(t, ok)
+
+		var err error
+		d.session, err = dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), doltProvider, d.multiRepoEnv.Config())
+		require.NoError(t, err)
+
 		e, err := enginetest.NewEngineWithProviderSetup(t, d, pro, d.setupData)
 		if err != nil {
 			return nil, err
@@ -325,14 +333,18 @@ func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDataba
 	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	require.NoError(d.t, err)
 	d.multiRepoEnv = mrEnv
-	for _, db := range dbs {
+	locations := make([]filesys.Filesys, len(dbs))
+	for i, db := range dbs {
 		if db.Name() != information_schema.InformationSchemaDatabaseName {
 			d.multiRepoEnv.AddEnv(db.Name(), d.createdEnvs[db.Name()])
+			locations[i] = d.createdEnvs[db.Name()].FS
 		}
 	}
 
 	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())
-	pro := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem(), dbs...)
+	pro, err := sqle.NewDoltDatabaseProviderWithDatabases(b, d.multiRepoEnv.FileSystem(), dbs, locations)
+	require.NoError(d.t, err)
+
 	return pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 }
 

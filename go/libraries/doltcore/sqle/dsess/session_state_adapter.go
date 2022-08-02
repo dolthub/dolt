@@ -55,19 +55,19 @@ func (s SessionStateAdapter) UpdateWorkingRoot(ctx context.Context, newRoot *dol
 	return s.session.SetRoots(ctx.(*sql.Context), s.dbName, roots)
 }
 
-func (s SessionStateAdapter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.MarshalableRef) error {
+func (s SessionStateAdapter) SetCWBHeadRef(_ context.Context, _ ref.MarshalableRef) error {
 	return fmt.Errorf("Cannot set cwb head ref with a SessionStateAdapter")
 }
 
-func (s SessionStateAdapter) AbortMerge(ctx context.Context) error {
+func (s SessionStateAdapter) AbortMerge(_ context.Context) error {
 	return fmt.Errorf("Cannot abort merge with a SessionStateAdapter")
 }
 
-func (s SessionStateAdapter) ClearMerge(ctx context.Context) error {
+func (s SessionStateAdapter) ClearMerge(_ context.Context) error {
 	return nil
 }
 
-func (s SessionStateAdapter) StartMerge(ctx context.Context, commit *doltdb.Commit) error {
+func (s SessionStateAdapter) StartMerge(_ context.Context, _ *doltdb.Commit) error {
 	return fmt.Errorf("Cannot start merge with a SessionStateAdapter")
 }
 
@@ -82,7 +82,7 @@ func NewSessionStateAdapter(session *DoltSession, dbName string, remotes map[str
 	return SessionStateAdapter{session: session, dbName: dbName, remotes: remotes, branches: branches, backups: backups}
 }
 
-func (s SessionStateAdapter) GetRoots(ctx context.Context) (doltdb.Roots, error) {
+func (s SessionStateAdapter) GetRoots(_ context.Context) (doltdb.Roots, error) {
 	return s.session.GetDbStates()[s.dbName].GetRoots(), nil
 }
 
@@ -106,15 +106,15 @@ func (s SessionStateAdapter) CWBHeadSpec() *doltdb.CommitSpec {
 	return spec
 }
 
-func (s SessionStateAdapter) IsMergeActive(ctx context.Context) (bool, error) {
+func (s SessionStateAdapter) IsMergeActive(_ context.Context) (bool, error) {
 	return s.session.GetDbStates()[s.dbName].WorkingSet.MergeActive(), nil
 }
 
-func (s SessionStateAdapter) GetMergeCommit(ctx context.Context) (*doltdb.Commit, error) {
+func (s SessionStateAdapter) GetMergeCommit(_ context.Context) (*doltdb.Commit, error) {
 	return s.session.GetDbStates()[s.dbName].WorkingSet.MergeState().Commit(), nil
 }
 
-func (s SessionStateAdapter) GetPreMergeWorking(ctx context.Context) (*doltdb.RootValue, error) {
+func (s SessionStateAdapter) GetPreMergeWorking(_ context.Context) (*doltdb.RootValue, error) {
 	return s.session.GetDbStates()[s.dbName].WorkingSet.MergeState().PreMergeWorkingRoot(), nil
 }
 
@@ -138,7 +138,11 @@ func (s SessionStateAdapter) UpdateBranch(name string, new env.BranchConfig) err
 func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
 	s.remotes[remote.Name] = remote
 
-	fs := s.session.Provider().FileSystem()
+	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
+	if err != nil {
+		return err
+	}
+
 	repoState, err := env.LoadRepoState(fs)
 	if err != nil {
 		return err
@@ -147,14 +151,18 @@ func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
 	return repoState.Save(fs)
 }
 
-func (s SessionStateAdapter) AddBackup(remote env.Remote) error {
+func (s SessionStateAdapter) AddBackup(_ env.Remote) error {
 	return fmt.Errorf("cannot insert remote in an SQL session")
 }
 
-func (s SessionStateAdapter) RemoveRemote(ctx context.Context, name string) error {
+func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error {
 	delete(s.remotes, name)
 
-	fs := s.session.Provider().FileSystem()
+	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
+	if err != nil {
+		return err
+	}
+
 	repoState, err := env.LoadRepoState(fs)
 	if err != nil {
 		return err
@@ -163,7 +171,7 @@ func (s SessionStateAdapter) RemoveRemote(ctx context.Context, name string) erro
 	return repoState.Save(fs)
 }
 
-func (s SessionStateAdapter) RemoveBackup(ctx context.Context, name string) error {
+func (s SessionStateAdapter) RemoveBackup(_ context.Context, _ string) error {
 	return fmt.Errorf("cannot delete remote in an SQL session")
 }
 

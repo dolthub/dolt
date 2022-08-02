@@ -39,8 +39,13 @@ type RevisionDatabaseProvider interface {
 }
 type DoltDatabaseProvider interface {
 	RevisionDatabaseProvider
-	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases
+
+	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases.
 	FileSystem() filesys.Filesys
+	// FileSystemForDatabase returns a filesystem, with the working directory set to the root directory
+	// of the requested database. If the requested database isn't found, a database not found error
+	// is returned.
+	FileSystemForDatabase(dbname string) (filesys.Filesys, error)
 	// GetRemoteDB returns the remote database for given env.Remote object using the local database's vrw, and
 	// withCaching defines whether the remoteDB gets cached or not.
 	// This function replaces env.Remote's GetRemoteDB method during SQL session to access dialer in order
@@ -65,6 +70,10 @@ func (e emptyRevisionDatabaseProvider) GetRemoteDB(ctx *sql.Context, srcDB *dolt
 
 func (e emptyRevisionDatabaseProvider) FileSystem() filesys.Filesys {
 	return nil
+}
+
+func (e emptyRevisionDatabaseProvider) FileSystemForDatabase(dbname string) (filesys.Filesys, error) {
+	return nil, nil
 }
 
 func (e emptyRevisionDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error {

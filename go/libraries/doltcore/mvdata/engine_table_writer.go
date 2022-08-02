@@ -271,7 +271,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 			switch n := err.(type) {
 			case sql.WrappedInsertError:
 				offendingRow = n.OffendingRow
-			case sql.ErrInsertIgnore:
+			case sql.IgnorableError:
 				offendingRow = n.OffendingRow
 			}
 
