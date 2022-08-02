@@ -19,8 +19,11 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -1251,17 +1254,71 @@ func (dEnv *DoltEnv) LockFile() string {
 	return f
 }
 
-// IsLocked returns true if this database's lockfile exists
+// IsLocked returns true if this database's lockfile exists and that process written in lockfile is still active.
 func (dEnv *DoltEnv) IsLocked() bool {
 	if dEnv.IgnoreLockFile {
 		return false
 	}
 
 	ok, _ := dEnv.FS.Exists(dEnv.LockFile())
-	return ok
+	if !ok {
+		return false
+	}
+
+	lockFilePid, err := dEnv.getProcessFromLockFile()
+	if err != nil { // if there's any error assume that env is locked since the file exists
+		return true
+	}
+
+	// Check whether the pid that spawned the lock file is still running. Ignore it if not TODO: Should we prune instead?
+	p, err := os.FindProcess(lockFilePid)
+	if err != nil { // if there's any error assume that env is locked since the file exists
+		return true
+	}
+
+	if p == nil {
+		return false
+	}
+
+	return checkPid(p.Pid)
 }
 
-// Lock writes this database's lockfile or errors if it already exists
+// cc. https://stackoverflow.com/questions/15204162/check-if-a-process-exists-in-go-way
+func checkPid(pid int) bool {
+	out, err := exec.Command("kill", "-s", "0", strconv.Itoa(pid)).CombinedOutput()
+	if err != nil {
+		return false
+	}
+
+	if string(out) == "" {
+		return true // pid exist
+	}
+	return false
+}
+
+func (dEnv *DoltEnv) getProcessFromLockFile() (int, error) {
+	// validate that the pid on the lock file is still active
+	lockFile, err := dEnv.FS.OpenForRead(dEnv.LockFile())
+	if err != nil {
+		return -1, err
+	}
+
+	b := make([]byte, 100000)
+	n, err := lockFile.Read(b)
+	if err != nil {
+		return -1, err
+	}
+
+	data := string(b[:n])
+	pid, err := strconv.Atoi(data)
+	if err != nil {
+		return -1, err
+	}
+
+	return pid, nil
+}
+
+// Lock writes this database's lockfile with the pid of the calling process or errors if it already exists
 func (dEnv *DoltEnv) Lock() error {
 	if dEnv.IgnoreLockFile {
 		return nil
@@ -1270,7 +1327,8 @@ func (dEnv *DoltEnv) Lock() error {
 	if dEnv.IsLocked() {
 		return ErrActiveServerLock.New(dEnv.LockFile())
 	}
-	return dEnv.FS.WriteFile(dEnv.LockFile(), []byte{})
+
+	return dEnv.FS.WriteFile(dEnv.LockFile(), []byte(fmt.Sprintf("%d", os.Getpid())))
 }
 
 // Unlock deletes this database's lockfile
