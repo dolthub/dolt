@@ -1553,5 +1553,6 @@ behavior:
     echo "iamamaliciousactor" > repo1/.dolt/sql-server.lock
 
     run start_sql_server
+    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
     [ "$status" -eq 1 ]
 }

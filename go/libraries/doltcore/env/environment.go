@@ -1254,7 +1254,7 @@ func (dEnv *DoltEnv) LockFile() string {
 	return f
 }
 
-// IsLocked returns true if this database's lockfile exists and that process written in lockfile is still active.
+// IsLocked returns true if this database's lockfile exists and the pid contained in lockfile is alive.
 func (dEnv *DoltEnv) IsLocked() bool {
 	if dEnv.IgnoreLockFile {
 		return false
@@ -1265,12 +1265,12 @@ func (dEnv *DoltEnv) IsLocked() bool {
 		return false
 	}
 
-	lockFilePid, err := dEnv.getProcessFromLockFile()
+	lockFilePid, err := getProcessFromLockFile(dEnv.FS, dEnv.LockFile())
 	if err != nil { // if there's any error assume that env is locked since the file exists
 		return true
 	}
 
-	// Check whether the pid that spawned the lock file is still running. Ignore it if not TODO: Should we prune instead?
+	// Check whether the pid that spawned the lock file is still running. Ignore it if not.
 	p, err := os.FindProcess(lockFilePid)
 	if err != nil { // if there's any error assume that env is locked since the file exists
 		return true
@@ -1296,15 +1296,15 @@ func checkPid(pid int) bool {
 	return false
 }
 
-func (dEnv *DoltEnv) getProcessFromLockFile() (int, error) {
+func getProcessFromLockFile(fs filesys.Filesys, lockFile string) (int, error) {
 	// validate that the pid on the lock file is still active
-	lockFile, err := dEnv.FS.OpenForRead(dEnv.LockFile())
+	rd, err := fs.OpenForRead(lockFile)
 	if err != nil {
 		return -1, err
 	}
 
-	b := make([]byte, 100000)
-	n, err := lockFile.Read(b)
+	b := make([]byte, 1000)
+	n, err := rd.Read(b)
 	if err != nil {
 		return -1, err
 	}
