@@ -5213,4 +5213,32 @@ var DoltRemoteTestScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt-remote: multi-repo test",
+		SetUpScript: []string{
+			"create database one",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "use one;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "CALL DOLT_REMOTE('add','test01','file:///foo');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_remotes where name='test01';",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "use mydb;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select count(*) from dolt_remotes where name='test01';",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
 }
