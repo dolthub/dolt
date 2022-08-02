@@ -143,7 +143,7 @@ func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 	return err == nil
 }
 
-func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database) {
+func (p DoltDatabaseProvider) AllDatabases(_ *sql.Context) (all []sql.Database) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
