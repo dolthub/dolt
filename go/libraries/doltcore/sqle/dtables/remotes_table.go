@@ -15,7 +15,6 @@
 package dtables
 
 import (
-	"errors"
 	"fmt"
 	"io"
 
@@ -25,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 var _ sql.Table = (*RemotesTable)(nil)

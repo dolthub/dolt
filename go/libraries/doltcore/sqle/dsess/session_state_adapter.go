@@ -138,7 +138,11 @@ func (s SessionStateAdapter) UpdateBranch(name string, new env.BranchConfig) err
 func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
 	s.remotes[remote.Name] = remote
 
-	fs := s.session.Provider().FileSystem()
+	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
+	if err != nil {
+		return err
+	}
+
 	repoState, err := env.LoadRepoState(fs)
 	if err != nil {
 		return err
@@ -154,7 +158,11 @@ func (s SessionStateAdapter) AddBackup(_ env.Remote) error {
 func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error {
 	delete(s.remotes, name)
 
-	fs := s.session.Provider().FileSystem()
+	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
+	if err != nil {
+		return err
+	}
+
 	repoState, err := env.LoadRepoState(fs)
 	if err != nil {
 		return err
