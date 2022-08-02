@@ -33,8 +33,12 @@ const (
 
 var addressMapFileID = []byte(serial.AddressMapFileID)
 
+func NewAddressMapSerializer(pool pool.BuffPool) AddressMapSerializer {
+	return AddressMapSerializer{pool: pool}
+}
+
 type AddressMapSerializer struct {
-	Pool pool.BuffPool
+	pool pool.BuffPool
 }
 
 var _ Serializer = AddressMapSerializer{}
@@ -46,7 +50,7 @@ func (s AddressMapSerializer) Serialize(keys, addrs [][]byte, subtrees []uint64,
 	)
 
 	keySz, addrSz, totalSz := estimateAddressMapSize(keys, addrs, subtrees)
-	b := getFlatbufferBuilder(s.Pool, totalSz)
+	b := getFlatbufferBuilder(s.pool, totalSz)
 
 	// keys
 	keyArr = writeItemBytes(b, keys, keySz)

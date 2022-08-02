@@ -47,8 +47,8 @@ func makeTree(t *testing.T, tuples [][2]val.Tuple) Node {
 	ns := NewTestNodeStore()
 
 	// todo(andy): move this test
-	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
-	chunker, err := newEmptyChunker(ctx, ns, serializer)
+	s := message.NewProllyMapSerializer(val.TupleDesc{}, ns.Pool())
+	chunker, err := newEmptyChunker(ctx, ns, s)
 	require.NoError(t, err)
 	for _, pair := range tuples {
 		err := chunker.AddPair(ctx, Item(pair[0]), Item(pair[1]))

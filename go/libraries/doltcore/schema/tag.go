@@ -50,6 +50,10 @@ func (tm TagMapping) Add(tag uint64, table string) {
 	tm[tag] = table
 }
 
+func (tm TagMapping) Remove(tag uint64) {
+	delete(tm, tag)
+}
+
 func (tm TagMapping) Size() int {
 	return len(tm)
 }
