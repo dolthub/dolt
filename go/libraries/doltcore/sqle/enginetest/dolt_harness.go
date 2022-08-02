@@ -81,7 +81,6 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
 	localConfig := dEnv.Config.WriteableConfig()
-
 	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, localConfig)
 	require.NoError(t, err)
 	dh := &DoltHarness{
@@ -147,6 +146,13 @@ func commitScripts(dbs []string) []setup.SetupScript {
 func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 	if d.engine == nil {
 		pro := d.NewDatabaseProvider(information_schema.NewInformationSchemaDatabase())
+		doltProvider, ok := pro.(sqle.DoltDatabaseProvider)
+		require.True(t, ok)
+
+		var err error
+		d.session, err = dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), doltProvider, d.multiRepoEnv.Config())
+		require.NoError(t, err)
+
 		e, err := enginetest.NewEngineWithProviderSetup(t, d, pro, d.setupData)
 		if err != nil {
 			return nil, err
