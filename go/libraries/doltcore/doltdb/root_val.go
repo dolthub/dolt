@@ -1250,16 +1250,16 @@ func (r fbRvStorage) nomsValue() types.Value {
 }
 
 type DataCacheKey struct {
-	hash.Hash
+	*RootValue
 }
 
 func NewDataCacheKey(rv *RootValue) (DataCacheKey, error) {
-	hash, err := rv.HashOf()
-	if err != nil {
-		return DataCacheKey{}, err
-	}
+	//hash, err := rv.HashOf()
+	//if err != nil {
+	//	return DataCacheKey{}, err
+	//}
 
-	return DataCacheKey{hash}, nil
+	return DataCacheKey{rv}, nil
 }
 
 // HackNomsValuesFromRootValues unwraps a RootVal to a noms Value.
