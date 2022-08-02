@@ -18,9 +18,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
@@ -225,8 +225,10 @@ func (fs *localFS) MkDirs(path string) error {
 		return err
 	}
 
-	log.Println(path)
-	_, err = os.Stat(path)
+	p, err := os.Stat(path)
+	if runtime.GOOS == "windows" && err == nil {
+		panic(p)
+	}
 
 	if err != nil {
 		return os.MkdirAll(path, os.ModePerm)
