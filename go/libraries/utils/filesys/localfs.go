@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -224,6 +225,7 @@ func (fs *localFS) MkDirs(path string) error {
 		return err
 	}
 
+	log.Println(path)
 	_, err = os.Stat(path)
 
 	if err != nil {
