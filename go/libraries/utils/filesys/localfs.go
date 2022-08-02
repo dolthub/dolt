@@ -20,7 +20,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
@@ -223,11 +222,6 @@ func (fs *localFS) MkDirs(path string) error {
 
 	if err != nil {
 		return err
-	}
-
-	p, err := os.Stat(path)
-	if runtime.GOOS == "windows" && err == nil {
-		panic(p)
 	}
 
 	if err != nil {
