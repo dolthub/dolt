@@ -1504,3 +1504,54 @@ behavior:
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
 }
+
+@test "sql-server: start server multidir creates sql-server.lock file in every rep" {
+    start_sql_server
+    run ls repo1/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    run ls repo2/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    stop_sql_server
+    run ls repo1/.dolt
+    ! [[ "$output" =~ "sql-server.lock" ]] || false
+
+    run ls repo2/.dolt
+    ! [[ "$output" =~ "sql-server.lock" ]] || false
+}
+
+@test "sql-server: sigterm running server and restarting works correctly" {
+    start_sql_server
+    run ls repo1/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    run ls repo2/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    kill -9 $SERVER_PID
+
+    run ls repo1/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    run ls repo2/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    start_sql_server
+    server_query repo1 1 "SELECT 1" "1\n1"
+    stop_sql_server
+
+    # Try adding fake pid numbers. Could happen via debugger or something
+    echo "423423" > repo1/.dolt/sql-server.lock
+    echo "4123423" > repo2/.dolt/sql-server.lock
+
+    start_sql_server
+    server_query repo1 1 "SELECT 1" "1\n1"
+    stop_sql_server
+
+    # Add malicious text to lockfile and expect to fail
+    echo "iamamaliciousactor" > repo1/.dolt/sql-server.lock
+
+    run start_sql_server
+    [ "$status" -eq 1 ]
+}

@@ -1309,7 +1309,7 @@ func (dEnv *DoltEnv) getProcessFromLockFile() (int, error) {
 		return -1, err
 	}
 
-	data := string(b[:n])
+	data := strings.TrimSpace(string(b[:n]))
 	pid, err := strconv.Atoi(data)
 	if err != nil {
 		return -1, err
