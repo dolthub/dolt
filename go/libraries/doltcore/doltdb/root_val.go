@@ -1253,8 +1253,8 @@ type DataCacheKey struct {
 	*RootValue
 }
 
-func NewDataCacheKey(rv *RootValue) (DataCacheKey, error) {
-	return DataCacheKey{rv}, nil
+func NewDataCacheKey(rv *RootValue) DataCacheKey {
+	return DataCacheKey{rv}
 }
 
 // HackNomsValuesFromRootValues unwraps a RootVal to a noms Value.

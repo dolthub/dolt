@@ -580,7 +580,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 		return nil, false, fmt.Errorf("no state for database %s", db.name)
 	}
 
-	key, err := doltdb.NewDataCacheKey(root)
+	key := doltdb.NewDataCacheKey(root)
 	if err != nil {
 		return nil, false, err
 	}
@@ -933,7 +933,7 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 		return view, true, nil
 	}
 
-	key, err := doltdb.NewDataCacheKey(root)
+	key := doltdb.NewDataCacheKey(root)
 	if err != nil {
 		return "", false, err
 	}
