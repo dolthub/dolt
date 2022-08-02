@@ -47,7 +47,7 @@ func (o commitClosureKeyOrdering) Compare(left, right CommitClosureKey) int {
 }
 
 func NewEmptyCommitClosure(ns tree.NodeStore) CommitClosure {
-	serializer := message.CommitClosureSerializer{Pool: ns.Pool()}
+	serializer := message.NewCommitClosureSerializer(ns.Pool())
 	msg := serializer.Serialize(nil, nil, nil, 0)
 	node := tree.NodeFromBytes(msg)
 	return NewCommitClosure(node, ns)
@@ -138,7 +138,7 @@ func (wr CommitClosureEditor) Delete(ctx context.Context, key CommitClosureKey) 
 
 func (wr CommitClosureEditor) Flush(ctx context.Context) (CommitClosure, error) {
 	tr := wr.closure.tree
-	serializer := message.CommitClosureSerializer{Pool: tr.ns.Pool()}
+	serializer := message.NewCommitClosureSerializer(tr.ns.Pool())
 
 	root, err := tree.ApplyMutations(ctx, tr.ns, tr.root, serializer, wr.closure.mutations(), tr.compareItems)
 	if err != nil {

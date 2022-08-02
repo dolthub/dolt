@@ -91,7 +91,9 @@ func TestMap(t *testing.T) {
 }
 
 func TestNewEmptyNode(t *testing.T) {
-	empty := newEmptyMapNode(sharedPool)
+	s := message.NewProllyMapSerializer(val.TupleDesc{}, sharedPool)
+	msg := s.Serialize(nil, nil, nil, 0)
+	empty := tree.NodeFromBytes(msg)
 	assert.Equal(t, 0, empty.Level())
 	assert.Equal(t, 0, empty.Count())
 	assert.Equal(t, 0, empty.TreeCount())
@@ -148,7 +150,7 @@ func prollyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tup
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
 
-	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	serializer := message.NewProllyMapSerializer(vd, ns.Pool())
 	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 
