@@ -184,7 +184,6 @@ func walkAddresses(ctx context.Context, nd Node, cb AddressCb) (err error) {
 // manner. Interior nodes have their child hash references spelled out, leaf nodes have value tuples delineated like
 // the keys
 func OutputProllyNode(w io.Writer, node Node) error {
-	w.Write([]byte("["))
 	for i := 0; i < int(node.count); i++ {
 		k := node.GetKey(i)
 		kt := val.Tuple(k)
@@ -219,12 +218,11 @@ func OutputProllyNode(w io.Writer, node Node) error {
 		}
 	}
 
-	w.Write([]byte("\n]\n"))
+	w.Write([]byte("\n"))
 	return nil
 }
 
 func OutputAddressMapNode(w io.Writer, node Node) error {
-	w.Write([]byte("["))
 	for i := 0; i < int(node.count); i++ {
 		k := node.GetKey(i)
 		w.Write([]byte("\n    { key: "))
@@ -236,7 +234,7 @@ func OutputAddressMapNode(w io.Writer, node Node) error {
 		w.Write([]byte(ref.String()))
 		w.Write([]byte(" }"))
 	}
-	w.Write([]byte("\n]\n"))
+	w.Write([]byte("\n"))
 	return nil
 }
 
