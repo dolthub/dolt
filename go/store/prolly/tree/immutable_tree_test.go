@@ -138,7 +138,7 @@ func TestWriteImmutableTree(t *testing.T) {
 			ctx := context.Background()
 			r := bytes.NewReader(buf)
 			ns := NewTestNodeStore()
-			serializer := message.BlobSerializer{Pool: ns.Pool()}
+			serializer := message.NewBlobSerializer(ns.Pool())
 			root, err := buildImmutableTree(ctx, r, ns, serializer, tt.chunkSize)
 			if tt.err != nil {
 				require.True(t, errors.Is(err, tt.err))

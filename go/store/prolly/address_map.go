@@ -30,7 +30,7 @@ type AddressMap struct {
 }
 
 func NewEmptyAddressMap(ns tree.NodeStore) AddressMap {
-	serializer := message.AddressMapSerializer{Pool: ns.Pool()}
+	serializer := message.NewAddressMapSerializer(ns.Pool())
 	msg := serializer.Serialize(nil, nil, nil, 0)
 	return NewAddressMap(tree.NodeFromBytes(msg), ns)
 }
@@ -147,7 +147,7 @@ func (wr AddressMapEditor) Delete(ctx context.Context, name string) error {
 
 func (wr AddressMapEditor) Flush(ctx context.Context) (AddressMap, error) {
 	tr := wr.addresses.tree
-	serializer := message.AddressMapSerializer{Pool: tr.ns.Pool()}
+	serializer := message.NewAddressMapSerializer(tr.ns.Pool())
 
 	root, err := tree.ApplyMutations(ctx, tr.ns, tr.root, serializer, wr.addresses.mutations(), tr.compareItems)
 	if err != nil {
