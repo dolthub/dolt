@@ -60,21 +60,27 @@ var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
 
-// NewDoltDatabaseProvider returns a new provider, initialized without any databases.
-func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys) DoltDatabaseProvider {
+// NewDoltDatabaseProvider returns a new provider, initialized without any databases, along with any
+// errors that occurred while trying to create the database provider.
+func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys) (DoltDatabaseProvider, error) {
 	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, nil, nil)
 }
 
 // NewDoltDatabaseProviderWithDatabase returns a new provider, initialized with one database at the
-// specified location.
-func NewDoltDatabaseProviderWithDatabase(defaultBranch string, fs filesys.Filesys, database sql.Database, dbLocation filesys.Filesys) DoltDatabaseProvider {
+// specified location, and any error that occurred along the way.
+func NewDoltDatabaseProviderWithDatabase(defaultBranch string, fs filesys.Filesys, database sql.Database, dbLocation filesys.Filesys) (DoltDatabaseProvider, error) {
 	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, []sql.Database{database}, []filesys.Filesys{dbLocation})
 }
 
 // NewDoltDatabaseProviderWithDatabases returns a new provider, initialized with the specified databases,
 // at the specified locations. For every database specified, there must be a corresponding filesystem
-// specified that represents where the database is located.
-func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Filesys, databases []sql.Database, locations []filesys.Filesys) DoltDatabaseProvider {
+// specified that represents where the database is located. If the number of specified databases is not the
+// same as the number of specified locations, an error is returned.
+func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Filesys, databases []sql.Database, locations []filesys.Filesys) (DoltDatabaseProvider, error) {
+	if len(databases) != len(locations) {
+		return DoltDatabaseProvider{}, fmt.Errorf("unable to create DoltDatabaseProvider: "+
+			"incorrect number of databases (%d) and database locations (%d) specified", len(databases), len(locations))
+	}
 
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
@@ -99,7 +105,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		fs:            fs,
 		defaultBranch: defaultBranch,
 		dbFactoryUrl:  doltdb.LocalDirDoltDB,
-	}
+	}, nil
 }
 
 // WithFunctions returns a copy of this provider with the functions given. Any previous functions are removed.

@@ -77,7 +77,8 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	require.NoError(t, err)
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem())
+	pro, err := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem())
+	require.NoError(t, err)
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
 	localConfig := dEnv.Config.WriteableConfig()
@@ -341,7 +342,9 @@ func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDataba
 	}
 
 	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())
-	pro := sqle.NewDoltDatabaseProviderWithDatabases(b, d.multiRepoEnv.FileSystem(), dbs, locations)
+	pro, err := sqle.NewDoltDatabaseProviderWithDatabases(b, d.multiRepoEnv.FileSystem(), dbs, locations)
+	require.NoError(d.t, err)
+
 	return pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 }
 
