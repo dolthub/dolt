@@ -381,6 +381,40 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		return db, init, true, nil
 	}
 
+	isTag, err := isTag(ctx, srcDb, revSpec, p.remoteDialer)
+	if err != nil {
+		return nil, dsess.InitialDbState{}, false, err
+	}
+
+	if isTag {
+		// TODO: this should be an interface, not a struct
+		replicaDb, ok := srcDb.(ReadReplicaDatabase)
+		if ok {
+			srcDb = replicaDb.Database
+		}
+
+		srcDb, ok = srcDb.(Database)
+		if !ok {
+			return nil, dsess.InitialDbState{}, false, nil
+		}
+
+		tag, err := srcDb.(Database).DbData().Ddb.ResolveTag(ctx, ref.NewTagRef(revSpec))
+		if err != nil {
+			return nil, dsess.InitialDbState{}, false, err
+		}
+
+		commitHash, err := tag.Commit.HashOf()
+		if err != nil {
+			return nil, dsess.InitialDbState{}, false, err
+		}
+
+		db, init, err := dbRevisionForCommit(ctx, srcDb.(Database), commitHash.String())
+		if err != nil {
+			return nil, dsess.InitialDbState{}, false, err
+		}
+		return db, init, true, nil
+	}
+
 	if doltdb.IsValidCommitHash(revSpec) {
 		// TODO: this should be an interface, not a struct
 		replicaDb, ok := srcDb.(ReadReplicaDatabase)
@@ -533,6 +567,36 @@ func isBranch(ctx context.Context, db SqlDatabase, branchName string, dialer dbf
 		}
 
 		if branchExists {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// isTag returns whether a tag with the given name is in scope for the database given
+func isTag(ctx context.Context, db SqlDatabase, tagName string, dialer dbfactory.GRPCDialProvider) (bool, error) {
+	var ddbs []*doltdb.DoltDB
+
+	if rdb, ok := db.(ReadReplicaDatabase); ok {
+		remoteDB, err := rdb.remote.GetRemoteDB(ctx, rdb.ddb.Format(), dialer)
+		if err != nil {
+			return false, err
+		}
+		ddbs = append(ddbs, rdb.ddb, remoteDB)
+	} else if ddb, ok := db.(Database); ok {
+		ddbs = append(ddbs, ddb.ddb)
+	} else {
+		return false, fmt.Errorf("unrecognized type of database %T", db)
+	}
+
+	for _, ddb := range ddbs {
+		tagExists, err := ddb.HasTag(ctx, tagName)
+		if err != nil {
+			return false, err
+		}
+
+		if tagExists {
 			return true, nil
 		}
 	}
