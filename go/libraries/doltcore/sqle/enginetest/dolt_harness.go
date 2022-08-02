@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -325,14 +326,16 @@ func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDataba
 	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	require.NoError(d.t, err)
 	d.multiRepoEnv = mrEnv
-	for _, db := range dbs {
+	locations := make([]filesys.Filesys, len(dbs))
+	for i, db := range dbs {
 		if db.Name() != information_schema.InformationSchemaDatabaseName {
 			d.multiRepoEnv.AddEnv(db.Name(), d.createdEnvs[db.Name()])
+			locations[i] = d.createdEnvs[db.Name()].FS
 		}
 	}
 
 	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())
-	pro := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem(), dbs...)
+	pro := sqle.NewDoltDatabaseProviderWithDatabases(b, d.multiRepoEnv.FileSystem(), dbs, locations)
 	return pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 }
 

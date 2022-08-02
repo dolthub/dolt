@@ -42,9 +42,11 @@ const (
 )
 
 type DoltDatabaseProvider struct {
-	databases map[string]sql.Database
-	functions map[string]sql.Function
-	mu        *sync.RWMutex
+	// dbLocations maps a database name to its file system root
+	dbLocations map[string]filesys.Filesys
+	databases   map[string]sql.Database
+	functions   map[string]sql.Function
+	mu          *sync.RWMutex
 
 	defaultBranch string
 	fs            filesys.Filesys
@@ -58,11 +60,30 @@ var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
 
-// NewDoltDatabaseProvider returns a provider for the databases given
-func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys, databases ...sql.Database) DoltDatabaseProvider {
+// NewDoltDatabaseProvider returns a new provider, initialized without any databases.
+func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys) DoltDatabaseProvider {
+	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, nil, nil)
+}
+
+// NewDoltDatabaseProviderWithDatabase returns a new provider, initialized with one database at the
+// specified location.
+func NewDoltDatabaseProviderWithDatabase(defaultBranch string, fs filesys.Filesys, database sql.Database, dbLocation filesys.Filesys) DoltDatabaseProvider {
+	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, []sql.Database{database}, []filesys.Filesys{dbLocation})
+}
+
+// NewDoltDatabaseProviderWithDatabases returns a new provider, initialized with the specified databases,
+// at the specified locations. For every database specified, there must be a corresponding filesystem
+// specified that represents where the database is located.
+func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Filesys, databases []sql.Database, locations []filesys.Filesys) DoltDatabaseProvider {
+
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
 		dbs[strings.ToLower(db.Name())] = db
+	}
+
+	dbLocations := make(map[string]filesys.Filesys, len(locations))
+	for i, dbLocation := range locations {
+		dbLocations[databases[i].Name()] = dbLocation
 	}
 
 	funcs := make(map[string]sql.Function, len(dfunctions.DoltFunctions))
@@ -71,6 +92,7 @@ func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys, databases
 	}
 
 	return DoltDatabaseProvider{
+		dbLocations:   dbLocations,
 		databases:     dbs,
 		functions:     funcs,
 		mu:            &sync.RWMutex{},
@@ -107,6 +129,21 @@ func (p DoltDatabaseProvider) WithRemoteDialer(provider dbfactory.GRPCDialProvid
 
 func (p DoltDatabaseProvider) FileSystem() filesys.Filesys {
 	return p.fs
+}
+
+// FileSystemForDatabase returns a filesystem, with the working directory set to the root directory
+// of the requested database. If the requested database isn't found, a database not found error
+// is returned.
+func (p DoltDatabaseProvider) FileSystemForDatabase(dbname string) (filesys.Filesys, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	dbLocation, ok := p.dbLocations[dbname]
+	if !ok {
+		return nil, sql.ErrDatabaseNotFound.New(dbname)
+	}
+
+	return dbLocation, nil
 }
 
 func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Database, err error) {
@@ -204,7 +241,9 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	}
 
 	db := NewDatabase(name, newEnv.DbData(), opts)
-	p.databases[formatDbMapKeyName(db.Name())] = db
+	formattedName := formatDbMapKeyName(db.Name())
+	p.databases[formattedName] = db
+	p.dbLocations[formattedName] = newEnv.FS
 
 	dbstate, err := GetInitialDBState(ctx, db)
 	if err != nil {

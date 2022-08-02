@@ -314,7 +314,7 @@ func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, error) {
 	}
 
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro := dsql.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), db)
+	pro := dsql.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS)
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
 	engine := sqle.NewDefault(pro)

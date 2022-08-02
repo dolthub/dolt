@@ -234,7 +234,7 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 	}
 
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), db)
+	pro := dsqle.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS)
 
 	sess := dsess.DefaultSession(pro)
 

@@ -75,7 +75,7 @@ func NewSqlEngine(
 
 	parallelism := runtime.GOMAXPROCS(0)
 
-	dbs, err := CollectDBs(ctx, mrEnv, config.Bulk)
+	dbs, locations, err := CollectDBs(ctx, mrEnv, config.Bulk)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func NewSqlEngine(
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
-	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), all...).WithRemoteDialer(mrEnv.RemoteDialProvider())
+	pro := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations).WithRemoteDialer(mrEnv.RemoteDialProvider())
 
 	// Load in privileges from file, if it exists
 	persister := mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
