@@ -71,7 +71,7 @@ type TupleIter interface {
 }
 
 func NewMapFromTupleIter(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc, iter TupleIter) (Map, error) {
-	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	serializer := message.NewProllyMapSerializer(valDesc, ns.Pool())
 	ch, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	if err != nil {
 		return Map{}, err
@@ -102,10 +102,7 @@ func NewMapFromTupleIter(ctx context.Context, ns tree.NodeStore, keyDesc, valDes
 func MutateMapWithTupleIter(ctx context.Context, m Map, iter TupleIter) (Map, error) {
 	t := m.tuples
 	i := mutationIter{iter: iter}
-	s := message.ProllyMapSerializer{
-		Pool:    t.ns.Pool(),
-		ValDesc: m.valDesc,
-	}
+	s := message.NewProllyMapSerializer(m.valDesc, t.ns.Pool())
 
 	root, err := tree.ApplyMutations(ctx, t.ns, t.root, s, i, t.compareItems)
 	if err != nil {
@@ -128,7 +125,7 @@ func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
 }
 
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
-	serializer := message.ProllyMapSerializer{Pool: left.tuples.ns.Pool()}
+	serializer := message.NewProllyMapSerializer(left.valDesc, base.NodeStore().Pool())
 	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer, base.valDesc)
 	if err != nil {
 		return Map{}, err
@@ -302,12 +299,6 @@ func (p *pointLookup) Next(context.Context) (key, value val.Tuple, err error) {
 		p.k, p.v = nil, nil
 	}
 	return
-}
-
-func newEmptyMapNode(pool pool.BuffPool) tree.Node {
-	serializer := message.ProllyMapSerializer{Pool: pool}
-	msg := serializer.Serialize(nil, nil, nil, 0)
-	return tree.NodeFromBytes(msg)
 }
 
 // DebugFormat formats a Map.

@@ -470,18 +470,18 @@ SQL
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "table created"
-    dolt sql -q "insert into test values (2, 22, 0, 0, 0, 0)"
-    dolt sql -q "insert into test values (3, 33, 0, 0, 0, 0)"
+    dolt sql -q "insert into test values (2, 222, 0, 0, 0, 0)"
+    dolt sql -q "insert into test values (3, 333, 0, 0, 0, 0)"
 
     run dolt diff --where "to_pk=2"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "22" ]] || false
-    ! [[ "$output" =~ "33" ]] || false
+    [[ "$output" =~ "222" ]] || false
+    [[ ! "$output" =~ "333" ]] || false
 
     run dolt diff --where "to_pk < 3"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "22" ]] || false
-    ! [[ "$output" =~ "33" ]] || false
+    [[ "$output" =~ "222" ]] || false
+    ! [[ "$output" =~ "333" ]] || false
     
     dolt add test
     dolt commit -m "added two rows"

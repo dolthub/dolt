@@ -81,7 +81,7 @@ func testNewCursorAtItem(t *testing.T, count int) {
 func randomTree(t *testing.T, count int) (Node, [][2]Item, NodeStore) {
 	ctx := context.Background()
 	ns := NewTestNodeStore()
-	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	serializer := message.NewProllyMapSerializer(valDesc, ns.Pool())
 	chkr, err := newEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 

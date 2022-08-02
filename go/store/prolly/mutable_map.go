@@ -50,11 +50,8 @@ func newMutableMap(m Map) MutableMap {
 
 // Map materializes all pending and applied mutations in the MutableMap.
 func (mut MutableMap) Map(ctx context.Context) (Map, error) {
-	serializer := message.ProllyMapSerializer{
-		Pool:    mut.NodeStore().Pool(),
-		ValDesc: mut.valDesc,
-	}
-	return mut.flushWithSerializer(ctx, serializer)
+	s := message.NewProllyMapSerializer(mut.valDesc, mut.NodeStore().Pool())
+	return mut.flushWithSerializer(ctx, s)
 }
 
 func (mut MutableMap) flushWithSerializer(ctx context.Context, s message.Serializer) (Map, error) {

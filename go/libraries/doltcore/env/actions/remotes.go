@@ -32,7 +32,7 @@ import (
 )
 
 var ErrCantFF = errors.New("can't fast forward merge")
-var ErrInvalidPullArgs = errors.New("dolt pull takes at most one arg")
+var ErrInvalidPullArgs = errors.New("dolt pull takes at most two args")
 var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrFailedToSaveRepoState = errors.New("failed to save repo state")
 var ErrFailedToDeleteRemote = errors.New("failed to delete remote")

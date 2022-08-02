@@ -68,6 +68,19 @@ SQL
     [ "$status" -eq "0" ]
 }
 
+@test "garbage_collection: blob types work after GC" {
+    dolt sql -q "create table t(pk int primary key, val text)"
+    dolt sql -q "insert into t values (1, 'one'), (2, 'two');"
+    dolt add -A && dolt commit -am "added a table with blob encoding"
+
+    dolt gc
+
+    run dolt sql -q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "one" ]] || false
+    [[ $output =~ "two" ]] || false
+}
+
 @test "garbage_collection: clone a remote" {
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);

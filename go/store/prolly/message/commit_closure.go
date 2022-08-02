@@ -119,8 +119,12 @@ func walkCommitClosureAddresses(ctx context.Context, msg serial.Message, cb func
 
 var commitClosureFileID = []byte(serial.CommitClosureFileID)
 
+func NewCommitClosureSerializer(pool pool.BuffPool) CommitClosureSerializer {
+	return CommitClosureSerializer{pool: pool}
+}
+
 type CommitClosureSerializer struct {
-	Pool pool.BuffPool
+	pool pool.BuffPool
 }
 
 var _ Serializer = CommitClosureSerializer{}
@@ -129,7 +133,7 @@ func (s CommitClosureSerializer) Serialize(keys, addrs [][]byte, subtrees []uint
 	var keyArr, addrArr, cardArr fb.UOffsetT
 
 	keySz, addrSz, totalSz := estimateCommitClosureSize(keys, addrs, subtrees)
-	b := getFlatbufferBuilder(s.Pool, totalSz)
+	b := getFlatbufferBuilder(s.pool, totalSz)
 
 	// keys
 	keyArr = writeItemBytes(b, keys, keySz)
