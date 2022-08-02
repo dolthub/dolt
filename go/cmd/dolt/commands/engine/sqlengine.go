@@ -95,7 +95,7 @@ func NewSqlEngine(
 	if err != nil {
 		return nil, err
 	}
-	pro.WithRemoteDialer(mrEnv.RemoteDialProvider())
+	pro = pro.WithRemoteDialer(mrEnv.RemoteDialProvider())
 
 	// Load in privileges from file, if it exists
 	persister := mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
