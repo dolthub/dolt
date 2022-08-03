@@ -224,6 +224,8 @@ func (fs *localFS) MkDirs(path string) error {
 		return err
 	}
 
+	_, err = os.Stat(path)
+
 	if err != nil {
 		return os.MkdirAll(path, os.ModePerm)
 	}
