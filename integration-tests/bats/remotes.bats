@@ -2051,10 +2051,23 @@ SQL
     [[ "$output" =~ "Fast-forward" ]] || false
 }
 
+@test "remotes: dolt_clone failure cleanup" {
+    repoDir="$BATS_TMPDIR/dolt-repo-$$"
+
+    # try to clone a remote that doesn't exist
+    cd $repoDir
+    run dolt sql -q 'call dolt_clone("file:///tmp/sanity/remote");'
+    [ "$status" -eq 1 ]
+
+    # Make sure there's nothing remaining from the failed clone
+    [ ! -d "$repoDir/remote" ]
+}
+
 @test "remotes: dolt_clone procedure" {
     repoDir="$BATS_TMPDIR/dolt-repo-$$"
-    tempDir=$(mktemp -d)
 
+    # make directories outside of the dolt repo
+    tempDir=$(mktemp -d)
     cd $tempDir
     mkdir remote
     mkdir repo1
@@ -2093,6 +2106,9 @@ SQL
     run dolt sql -q "call dolt_clone('file://$tempDir/remote');"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "can't create database remote; database exists" ]] || false
+    run dolt sql -q "show databases"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remote" ]] || false
 
     # Drop the new database and re-clone it with a different name
     dolt sql -q "drop database remote"
