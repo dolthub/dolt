@@ -231,7 +231,13 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 	if err != nil {
 		// Make a best effort to clean up any artifacts on disk from a failed clone
 		// before we return the error
-		p.fs.Delete(dbName, true)
+		exists, _ := p.fs.Exists(dbName)
+		if exists {
+			deleteErr := p.fs.Delete(dbName, true)
+			if deleteErr != nil {
+				err = fmt.Errorf("%s: unable to clean up failed clone in directory '%s'", err.Error(), dbName)
+			}
+		}
 		return err
 	}
 
