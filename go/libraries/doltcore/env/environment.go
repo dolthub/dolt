@@ -19,12 +19,15 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
+	ps "github.com/mitchellh/go-ps"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -1251,17 +1254,56 @@ func (dEnv *DoltEnv) LockFile() string {
 	return f
 }
 
-// IsLocked returns true if this database's lockfile exists
+// IsLocked returns true if this database's lockfile exists and the pid contained in lockfile is alive.
 func (dEnv *DoltEnv) IsLocked() bool {
 	if dEnv.IgnoreLockFile {
 		return false
 	}
 
 	ok, _ := dEnv.FS.Exists(dEnv.LockFile())
-	return ok
+	if !ok {
+		return false
+	}
+
+	lockFilePid, err := getProcessFromLockFile(dEnv.FS, dEnv.LockFile())
+	if err != nil { // if there's any error assume that env is locked since the file exists
+		return true
+	}
+
+	// Check whether the pid that spawned the lock file is still running. Ignore it if not.
+	p, err := ps.FindProcess(lockFilePid)
+	if err != nil {
+		return false
+	}
+
+	return p != nil
 }
 
-// Lock writes this database's lockfile or errors if it already exists
+func getProcessFromLockFile(fs filesys.Filesys, lockFile string) (int, error) {
+	// validate that the pid on the lock file is still active
+	rd, err := fs.OpenForRead(lockFile)
+	if err != nil {
+		return -1, err
+	}
+
+	// Technically, the max pid is bounded by int types (~32 bits). That gets
+	// encoded to about 11 bytes. We'll round about just in case.
+	b := make([]byte, 50)
+	n, err := rd.Read(b)
+	if err != nil {
+		return -1, err
+	}
+
+	data := strings.TrimSpace(string(b[:n]))
+	pid, err := strconv.Atoi(data)
+	if err != nil {
+		return -1, err
+	}
+
+	return pid, nil
+}
+
+// Lock writes this database's lockfile with the pid of the calling process or errors if it already exists
 func (dEnv *DoltEnv) Lock() error {
 	if dEnv.IgnoreLockFile {
 		return nil
@@ -1270,7 +1312,8 @@ func (dEnv *DoltEnv) Lock() error {
 	if dEnv.IsLocked() {
 		return ErrActiveServerLock.New(dEnv.LockFile())
 	}
-	return dEnv.FS.WriteFile(dEnv.LockFile(), []byte{})
+
+	return dEnv.FS.WriteFile(dEnv.LockFile(), []byte(fmt.Sprintf("%d", os.Getpid())))
 }
 
 // Unlock deletes this database's lockfile
