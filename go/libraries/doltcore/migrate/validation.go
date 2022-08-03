@@ -85,7 +85,7 @@ func validateTableData(ctx context.Context, name string, old, new *doltdb.Table)
 	if err != nil {
 		return err
 	}
-	newSch, newIter, err := sqle.DoltTableToRowIter(sctx, name, old)
+	newSch, newIter, err := sqle.DoltTableToRowIter(sctx, name, new)
 	if err != nil {
 		return err
 	}
