@@ -32,8 +32,8 @@ import (
 )
 
 var readDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Reads Dolt docs from the file system into the database",
-	LongDesc:  "Reads Dolt docs from the file system into the database",
+	ShortDesc: "Reads Dolt Docs from the file system into the database",
+	LongDesc:  "Reads Dolt Docs from the file system into the database",
 	Synopsis: []string{
 		"{{.LessThan}}doc{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
@@ -48,7 +48,7 @@ func (cmd ReadCmd) Name() string {
 
 // Description implements cli.Command.
 func (cmd ReadCmd) Description() string {
-	return writeDocs.ShortDesc
+	return readDocs.ShortDesc
 }
 
 // RequiresRepo implements cli.Command.
@@ -174,7 +174,9 @@ func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, conten
 	if roots, err = eng.GetRoots(sctx); err != nil {
 		return nil, err
 	}
-	assertTrue(len(roots) == 1)
+	if len(roots) != 1 {
+		return nil, fmt.Errorf("cannot access docs in multi-database mode")
+	}
 
 	for _, rv := range roots {
 		return rv, nil

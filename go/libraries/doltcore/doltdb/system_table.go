@@ -173,7 +173,6 @@ const (
 	ReadmeDoc = "README.md"
 )
 
-// todo(andy)
 var doltDocsColumns = schema.NewColCollection(
 	schema.NewColumn(DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
 	schema.NewColumn(DocTextColumnName, schema.DocTextTag, types.StringKind, false),

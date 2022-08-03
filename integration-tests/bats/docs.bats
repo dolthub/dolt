@@ -45,7 +45,7 @@ teardown() {
     teardown_common
 }
 
-@test "docs: doc update creates dolt_docs table" {
+@test "docs: doc read creates dolt_docs table" {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ ! $output =~ "dolt_docs" ]] || false
