@@ -49,6 +49,10 @@ func TestParseDolthubRepos(t *testing.T) {
 			urlStr:   "http://www.dolthub.com/repositories",
 			expected: "",
 		},
+		{
+			urlStr:   "https://www.dolthub.com/repositories/dolthub/museum-collections",
+			expected: "dolthub/museum-collections",
+		},
 	}
 
 	for _, test := range tests {
