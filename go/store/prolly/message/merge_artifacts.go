@@ -37,9 +37,16 @@ const (
 
 var mergeArtifactFileID = []byte(serial.MergeArtifactsFileID)
 
+func NewMergeArtifactSerializer(keyDesc val.TupleDesc, pool pool.BuffPool) MergeArtifactSerializer {
+	return MergeArtifactSerializer{
+		keyDesc: keyDesc,
+		pool:    pool,
+	}
+}
+
 type MergeArtifactSerializer struct {
-	KeyDesc val.TupleDesc
-	Pool    pool.BuffPool
+	keyDesc val.TupleDesc
+	pool    pool.BuffPool
 }
 
 var _ Serializer = MergeArtifactSerializer{}
@@ -52,8 +59,8 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 		refArr, cardArr  fb.UOffsetT
 	)
 
-	keySz, valSz, bufSz := estimateMergeArtifactSize(keys, values, subtrees, s.KeyDesc.AddressFieldCount())
-	b := getFlatbufferBuilder(s.Pool, bufSz)
+	keySz, valSz, bufSz := estimateMergeArtifactSize(keys, values, subtrees, s.keyDesc.AddressFieldCount())
+	b := getFlatbufferBuilder(s.pool, bufSz)
 
 	// serialize keys and offsets
 	keyTups = writeItemBytes(b, keys, keySz)
@@ -66,9 +73,9 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 		serial.MergeArtifactsStartValueOffsetsVector(b, len(values)+1)
 		valOffs = writeItemOffsets(b, values, valSz)
 		// serialize offsets of chunk addresses within |keyTups|
-		if s.KeyDesc.AddressFieldCount() > 0 {
-			serial.MergeArtifactsStartKeyAddressOffsetsVector(b, countAddresses(keys, s.KeyDesc))
-			keyAddrOffs = writeAddressOffsets(b, keys, keySz, s.KeyDesc)
+		if s.keyDesc.AddressFieldCount() > 0 {
+			serial.MergeArtifactsStartKeyAddressOffsetsVector(b, countAddresses(keys, s.keyDesc))
+			keyAddrOffs = writeAddressOffsets(b, keys, keySz, s.keyDesc)
 		}
 	} else {
 		// serialize child refs and subtree counts for internal nodes

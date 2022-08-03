@@ -28,7 +28,10 @@ import (
 // These functions cannot be in the sqlfmt package as the reliance on the sqle package creates a circular reference.
 
 func PrepareCreateTableStmt(ctx context.Context, sqlDb SqlDatabase) (*sql.Context, *sqle.Engine, *dsess.DoltSession) {
-	pro := NewDoltDatabaseProvider(env.DefaultInitBranch, nil, sqlDb)
+	pro, err := NewDoltDatabaseProviderWithDatabase(env.DefaultInitBranch, nil, sqlDb, nil)
+	if err != nil {
+		return nil, nil, nil
+	}
 	engine := sqle.NewDefault(pro)
 
 	sess := dsess.DefaultSession(pro)

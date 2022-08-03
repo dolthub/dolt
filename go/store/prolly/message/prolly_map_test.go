@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var sharedPool = pool.NewBuffPool()
@@ -29,7 +30,7 @@ func TestGetKeyValueOffsetsVectors(t *testing.T) {
 	for trial := 0; trial < 100; trial++ {
 		keys, values := randomByteSlices(t, (testRand.Int()%101)+50)
 		require.True(t, sumSize(keys)+sumSize(values) < MaxVectorOffset)
-		s := ProllyMapSerializer{Pool: sharedPool}
+		s := ProllyMapSerializer{valDesc: val.TupleDesc{}, pool: sharedPool}
 		msg := s.Serialize(keys, values, nil, 0)
 
 		// uses hard-coded vtable slot

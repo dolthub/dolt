@@ -46,7 +46,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 105
+const SkipPreparedsCount = 106
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -302,12 +302,12 @@ func TestInsertIgnoreInto(t *testing.T) {
 }
 
 // todo: merge this into the above test when https://github.com/dolthub/dolt/issues/3836 is fixed
-func TestInsertIgnoreIntoWithDuplicateUniqueKeyKeyless(t *testing.T) {
+func TestIgnoreIntoWithDuplicateUniqueKeyKeyless(t *testing.T) {
 	if !types.IsFormat_DOLT_1(types.Format_Default) {
 		// todo: fix https://github.com/dolthub/dolt/issues/3836
 		t.Skip()
 	}
-	enginetest.TestInsertIgnoreIntoWithDuplicateUniqueKeyKeyless(t, newDoltHarness(t))
+	enginetest.TestIgnoreIntoWithDuplicateUniqueKeyKeyless(t, newDoltHarness(t))
 }
 
 func TestInsertIntoErrors(t *testing.T) {
@@ -328,6 +328,10 @@ func TestReplaceIntoErrors(t *testing.T) {
 
 func TestUpdate(t *testing.T) {
 	enginetest.TestUpdate(t, newDoltHarness(t))
+}
+
+func TestUpdateIgnore(t *testing.T) {
+	enginetest.TestUpdateIgnore(t, newDoltHarness(t))
 }
 
 func TestUpdateErrors(t *testing.T) {

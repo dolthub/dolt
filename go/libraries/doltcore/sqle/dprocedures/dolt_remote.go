@@ -63,7 +63,7 @@ func doDoltRemote(ctx *sql.Context, args []string) (int, error) {
 
 	switch apr.Arg(0) {
 	case "add":
-		err = addRemote(ctx, dbData, apr, dSess)
+		err = addRemote(ctx, dbName, dbData, apr, dSess)
 	case "remove", "rm":
 		err = removeRemote(ctx, dbData, apr)
 	default:
@@ -76,7 +76,7 @@ func doDoltRemote(ctx *sql.Context, args []string) (int, error) {
 	return 0, nil
 }
 
-func addRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResults, sess *dsess.DoltSession) error {
+func addRemote(_ *sql.Context, dbName string, dbd env.DbData, apr *argparser.ArgParseResults, sess *dsess.DoltSession) error {
 	if apr.NArg() != 3 {
 		return fmt.Errorf("error: invalid argument")
 	}
@@ -84,7 +84,12 @@ func addRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResults,
 	remoteName := strings.TrimSpace(apr.Arg(1))
 	remoteUrl := apr.Arg(2)
 
-	scheme, absRemoteUrl, err := env.GetAbsRemoteUrl(sess.Provider().FileSystem(), &config.MapConfig{}, remoteUrl)
+	dbFs, err := sess.Provider().FileSystemForDatabase(dbName)
+	if err != nil {
+		return err
+	}
+
+	scheme, absRemoteUrl, err := env.GetAbsRemoteUrl(dbFs, &config.MapConfig{}, remoteUrl)
 	if err != nil {
 		return err
 	}

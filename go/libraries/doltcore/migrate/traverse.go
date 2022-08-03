@@ -54,7 +54,7 @@ func traverseRefHistory(ctx context.Context, r ref.DoltRef, old, new *doltdb.Dol
 		if err != nil {
 			return err
 		}
-		return migrateWorkingSet(ctx, wsRef, old, new, prog)
+		return migrateWorkingSet(ctx, r.(ref.BranchRef), wsRef, old, new)
 
 	case ref.TagRefType:
 		return traverseTagHistory(ctx, r.(ref.TagRef), old, new, prog)

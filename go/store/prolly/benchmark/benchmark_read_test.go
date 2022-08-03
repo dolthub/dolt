@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 
 	"github.com/dolthub/dolt/go/store/val"
@@ -152,4 +153,111 @@ func benchmarkTypesMapGetParallel(b *testing.B, size uint64) {
 		})
 		b.ReportAllocs()
 	})
+}
+
+const mapScale = 4096
+
+func BenchmarkGoMapGet(b *testing.B) {
+	b.Skip()
+	kv1 := makeGoMap(mapScale)
+	kv2 := makeSyncMap(mapScale)
+	b.ResetTimer()
+
+	b.Run("test golang map", func(b *testing.B) {
+		for j := 0; j < b.N; j++ {
+			_, ok := kv1[uint64(j%mapScale)]
+			if !ok {
+				b.Fail()
+			}
+		}
+		b.ReportAllocs()
+	})
+	b.Run("test golang sync map", func(b *testing.B) {
+		for j := 0; j < b.N; j++ {
+			_, ok := kv2.Load(uint64(j % mapScale))
+			if !ok {
+				b.Fail()
+			}
+		}
+		b.ReportAllocs()
+	})
+}
+
+func BenchmarkParallelGoMapGet(b *testing.B) {
+	b.Skip()
+	kv1 := makeGoMap(mapScale)
+	kv2 := makeSyncMap(mapScale)
+	b.ResetTimer()
+
+	b.Run("test golang map", func(b *testing.B) {
+		b.RunParallel(func(pb *testing.PB) {
+			j := 0
+			for pb.Next() {
+				_, _ = kv1[uint64(j%mapScale)]
+				j++
+			}
+		})
+		b.ReportAllocs()
+	})
+	b.Run("test golang sync map", func(b *testing.B) {
+		b.RunParallel(func(pb *testing.PB) {
+			v, _ := kv2.Load(uint64(1234))
+			tup := v.(val.Tuple)
+			j := 0
+			for pb.Next() {
+				k := uint64(j % mapScale)
+				if j%10 == 0 {
+					kv2.Store(k, tup)
+				} else {
+					_, _ = kv2.Load(k)
+				}
+				j++
+			}
+		})
+		b.ReportAllocs()
+	})
+}
+
+func makeGoMap(scale uint64) map[uint64]val.Tuple {
+	src := rand.NewSource(0)
+	vb := val.NewTupleBuilder(val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+	))
+
+	kv := make(map[uint64]val.Tuple, scale)
+	for i := uint64(0); i < scale; i++ {
+		vb.PutInt64(0, src.Int63())
+		vb.PutInt64(1, src.Int63())
+		vb.PutInt64(2, src.Int63())
+		vb.PutInt64(3, src.Int63())
+		vb.PutInt64(4, src.Int63())
+		kv[i] = vb.Build(shared)
+	}
+	return kv
+}
+
+func makeSyncMap(scale uint64) *sync.Map {
+	src := rand.NewSource(0)
+	vb := val.NewTupleBuilder(val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+	))
+	kv := &sync.Map{}
+
+	for i := uint64(0); i < scale; i++ {
+		vb.PutInt64(0, src.Int63())
+		vb.PutInt64(1, src.Int63())
+		vb.PutInt64(2, src.Int63())
+		vb.PutInt64(3, src.Int63())
+		vb.PutInt64(4, src.Int63())
+		kv.Store(i, vb.Build(shared))
+	}
+	return kv
 }

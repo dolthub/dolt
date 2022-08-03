@@ -726,6 +726,22 @@ func (ddb *DoltDB) GetTags(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, tagsRefFilter)
 }
 
+// HasTag returns whether the DB has a tag with the name given
+func (ddb *DoltDB) HasTag(ctx context.Context, tagName string) (bool, error) {
+	tags, err := ddb.GetRefsOfType(ctx, tagsRefFilter)
+	if err != nil {
+		return false, err
+	}
+
+	for _, t := range tags {
+		if t.GetPath() == tagName {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 type TagWithHash struct {
 	Tag  *Tag
 	Hash hash.Hash
