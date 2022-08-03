@@ -1521,6 +1521,29 @@ behavior:
     ! [[ "$output" =~ "sql-server.lock" ]] || false
 }
 
+@test "sql-server: running a dolt function in the same directory as a running server correctly errors" {
+    start_sql_server
+
+    cd repo1
+    run dolt commit --allow-empty --am "adasdasd"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
+
+    run dolt gc
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
+
+    PORT="$$ % (65536-1024) + 1024 + 1"
+    run dolt sql-server --port=$PORT
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
+
+    stop_sql_server
+
+    run dolt gc
+    [ "$status" -eq 0 ]
+}
+
 @test "sql-server: sigterm running server and restarting works correctly" {
     start_sql_server
     run ls repo1/.dolt

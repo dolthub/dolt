@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -28,6 +27,7 @@ import (
 	"time"
 	"unicode"
 
+	ps "github.com/mitchellh/go-ps"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -1271,31 +1271,12 @@ func (dEnv *DoltEnv) IsLocked() bool {
 	}
 
 	// Check whether the pid that spawned the lock file is still running. Ignore it if not.
-	// For unix systems FindProcess will always return a nil err and a process object which is why we must use the checkPid
-	// function. For Windows systems FindProcess will correctly determine if a process exists or not.
-	p, err := os.FindProcess(lockFilePid)
-	if runtime.GOOS == "windows" {
-		return p != nil
-	}
-
-	if err != nil {
-		return false // if there's any error assume that env is locked since the file exists
-	}
-
-	return checkPid(p.Pid)
-}
-
-// cc. https://stackoverflow.com/questions/15204162/check-if-a-process-exists-in-go-way
-func checkPid(pid int) bool {
-	out, err := exec.Command("kill", "-s", "0", strconv.Itoa(pid)).CombinedOutput()
+	p, err := ps.FindProcess(lockFilePid)
 	if err != nil {
 		return false
 	}
 
-	if string(out) == "" {
-		return true // pid exist
-	}
-	return false
+	return p != nil
 }
 
 func getProcessFromLockFile(fs filesys.Filesys, lockFile string) (int, error) {
