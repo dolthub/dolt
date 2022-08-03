@@ -45,7 +45,7 @@ var ErrWorkingSetUnsupported = errors.New("unsupported type of ref for a working
 // represent a head.
 func WorkingSetRefForHead(ref DoltRef) (WorkingSetRef, error) {
 	switch ref.GetType() {
-	case BranchRefType, WorkspaceRefType:
+	case BranchRefType, WorkspaceRefType, TagRefType:
 		return NewWorkingSetRef(path.Join(string(ref.GetType()), ref.GetPath())), nil
 	default:
 		return WorkingSetRef{}, fmt.Errorf("%w: %s", ErrWorkingSetUnsupported, ref.GetType())
