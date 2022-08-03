@@ -316,6 +316,24 @@ teardown() {
     server_query repo2 1 "use \`repo2/$head_hash\`" ""
 }
 
+@test "remotes-sql-server: connect to tag works" {
+    skiponwindows "Missing dependencies"
+    
+    cd repo1
+    dolt commit -am "cm"
+    dolt push remote1 main
+    head_hash=$(get_head_commit)
+
+    cd ../repo2
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+    dolt tag v1
+    start_sql_server repo2
+
+    server_query repo2 1 "show tables" "Tables_in_repo2\ntest"
+    server_query repo2 1 "use \`repo2/v1\`" ""
+}
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 13-44
 }
