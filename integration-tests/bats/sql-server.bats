@@ -25,6 +25,30 @@ teardown() {
     teardown_common
 }
 
+@test "sql-server: server with no dbs yet should be able to clone" {
+    # make directories outside of the existing init'ed dolt repos to ensure that
+    # we are starting a sql-server with no existing dolt databases inside it
+    tempDir=$(mktemp -d)
+    cd $tempDir
+    mkdir empty_server
+    mkdir remote
+
+    # create a file remote to clone later
+    cd $BATS_TMPDIR/dolt-repo-$$/repo1
+    dolt remote add remote01 file:///$tempDir/remote
+    dolt push remote01 main
+
+    # start the server and ensure there are no databases yet
+    cd $tempDir/empty_server
+    start_sql_server
+    unselected_server_query 1 "show databases" "Database\ninformation_schema"
+
+    # verify that dolt_clone works
+    # TODO: Once dolt_clone can be called without a selected database, this can be removed
+    unselected_server_query 1 "create database test01;" ""
+    server_query "test01" 1 "call dolt_clone('file:///$tempDir/remote');" "status\n0"
+}
+
 @test "sql-server: server assumes existing user" {
     cd repo1
     dolt sql -q "create user dolt@'%' identified by '123'"
