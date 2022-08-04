@@ -27,30 +27,30 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 )
 
-// SimpleGRPCDialProvider implements GRPCDialProvider. By default, it is not able to use custom user credentials, but
-// if a DoltEnv is configured, it will load custom user credentials from it.
-type SimpleGRPCDialProvider struct {
+// GRPCDialProvider implements dbfactory.GRPCDialProvider. By default, it is not able to use custom user credentials, but
+// if it is initialized with a DoltEnv, it will load custom user credentials from it.
+type GRPCDialProvider struct {
 	dEnv *DoltEnv
 }
 
-var _ dbfactory.GRPCDialProvider = SimpleGRPCDialProvider{}
+var _ dbfactory.GRPCDialProvider = GRPCDialProvider{}
 
-// NewSimpleGRCDialProvider returns a new SimpleGRPCDialProvider, with no DoltEnv configured and without supporting
+// NewGRPCDialProvider returns a new GRPCDialProvider, with no DoltEnv configured and without supporting
 // custom user credentials.
-func NewSimpleGRPCDialProvider() *SimpleGRPCDialProvider {
-	return &SimpleGRPCDialProvider{}
+func NewGRPCDialProvider() *GRPCDialProvider {
+	return &GRPCDialProvider{}
 }
 
-// NewSimpleGRPCDialProviderWithDoltEnvreturns a new SimpleGRPCDialProvider, configured with the specified DoltEnv
+// NewGRPCDialProviderFromDoltEnv returns a new GRPCDialProvider, configured with the specified DoltEnv
 // and uses that DoltEnv to load custom user credentials.
-func NewSimpleGRPCDialProviderWithDoltEnv(dEnv *DoltEnv) *SimpleGRPCDialProvider {
-	return &SimpleGRPCDialProvider{
+func NewGRPCDialProviderFromDoltEnv(dEnv *DoltEnv) *GRPCDialProvider {
+	return &GRPCDialProvider{
 		dEnv: dEnv,
 	}
 }
 
 // GetGRPCDialParms implements dbfactory.GRPCDialProvider
-func (p SimpleGRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (string, []grpc.DialOption, error) {
+func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (string, []grpc.DialOption, error) {
 	endpoint := config.Endpoint
 	if strings.IndexRune(endpoint, ':') == -1 {
 		if config.Insecure {
@@ -88,7 +88,7 @@ func (p SimpleGRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (s
 
 // getRPCCreds returns any RPC credentials available to this dial provider. If a DoltEnv has been configured
 // in this dial provider, it will be used to load custom user credentials, otherwise nil will be returned.
-func (p SimpleGRPCDialProvider) getRPCCreds() (credentials.PerRPCCredentials, error) {
+func (p GRPCDialProvider) getRPCCreds() (credentials.PerRPCCredentials, error) {
 	if p.dEnv == nil {
 		return nil, nil
 	}
@@ -104,7 +104,7 @@ func (p SimpleGRPCDialProvider) getRPCCreds() (credentials.PerRPCCredentials, er
 }
 
 // getUserAgentString returns a user agent string to use in GRPC requests.
-func (p SimpleGRPCDialProvider) getUserAgentString() string {
+func (p GRPCDialProvider) getUserAgentString() string {
 	version := ""
 	if p.dEnv != nil {
 		version = p.dEnv.Version

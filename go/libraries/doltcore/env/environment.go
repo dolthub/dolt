@@ -829,7 +829,7 @@ func (dEnv *DoltEnv) UserRPCCreds() (creds.DoltCreds, bool, error) {
 
 // GetGRPCDialParams implements dbfactory.GRPCDialProvider
 func (dEnv *DoltEnv) GetGRPCDialParams(config grpcendpoint.Config) (string, []grpc.DialOption, error) {
-	return NewSimpleGRPCDialProviderWithDoltEnv(dEnv).GetGRPCDialParams(config)
+	return NewGRPCDialProviderFromDoltEnv(dEnv).GetGRPCDialParams(config)
 }
 
 func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {
