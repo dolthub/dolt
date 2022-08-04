@@ -16,21 +16,8 @@ package env
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strconv"
-	"strings"
-	"time"
-	"unicode"
-
-	ps "github.com/mitchellh/go-ps"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -43,6 +30,13 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+	ps "github.com/mitchellh/go-ps"
+	"google.golang.org/grpc"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 )
 
 const (
@@ -100,6 +94,8 @@ type DoltEnv struct {
 	hdp    HomeDirProvider
 
 	IgnoreLockFile bool
+
+	dialer *SimpleGRPCDialProvider
 }
 
 // Load loads the DoltEnv for the .dolt directory determined by resolving the specified urlStr with the specified Filesys.
@@ -125,6 +121,9 @@ func loadWithFormat(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys
 		urlStr:      urlStr,
 		hdp:         hdp,
 	}
+
+	dEnv.dialer = NewSimpleGRPCDialProviderWithDoltEnv(dEnv)
+
 	if dEnv.RepoState != nil {
 		remotes := make(map[string]Remote, len(dEnv.RepoState.Remotes))
 		for n, r := range dEnv.RepoState.Remotes {
@@ -830,72 +829,8 @@ func (dEnv *DoltEnv) UserRPCCreds() (creds.DoltCreds, bool, error) {
 	return creds.EmptyCreds, false, nil
 }
 
-func (dEnv *DoltEnv) getRPCCreds() (credentials.PerRPCCredentials, error) {
-	dCreds, valid, err := dEnv.UserRPCCreds()
-	if err != nil {
-		return nil, ErrInvalidCredsFile
-	}
-	if !valid {
-		return nil, nil
-	}
-	return dCreds, nil
-}
-
-func (dEnv *DoltEnv) getUserAgentString() string {
-	tokens := []string{
-		"dolt_cli",
-		dEnv.Version,
-		runtime.GOOS,
-		runtime.GOARCH,
-	}
-
-	for i, t := range tokens {
-		tokens[i] = strings.Map(func(r rune) rune {
-			if unicode.IsSpace(r) {
-				return '_'
-			}
-
-			return r
-		}, strings.TrimSpace(t))
-	}
-
-	return strings.Join(tokens, " ")
-}
-
 func (dEnv *DoltEnv) GetGRPCDialParams(config grpcendpoint.Config) (string, []grpc.DialOption, error) {
-	endpoint := config.Endpoint
-	if strings.IndexRune(endpoint, ':') == -1 {
-		if config.Insecure {
-			endpoint += ":80"
-		} else {
-			endpoint += ":443"
-		}
-	}
-
-	var opts []grpc.DialOption
-	if config.Insecure {
-		opts = append(opts, grpc.WithInsecure())
-	} else {
-		tc := credentials.NewTLS(&tls.Config{})
-		opts = append(opts, grpc.WithTransportCredentials(tc))
-	}
-
-	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(128*1024*1024)))
-	opts = append(opts, grpc.WithUserAgent(dEnv.getUserAgentString()))
-
-	if config.Creds != nil {
-		opts = append(opts, grpc.WithPerRPCCredentials(config.Creds))
-	} else if config.WithEnvCreds {
-		rpcCreds, err := dEnv.getRPCCreds()
-		if err != nil {
-			return "", nil, err
-		}
-		if rpcCreds != nil {
-			opts = append(opts, grpc.WithPerRPCCredentials(rpcCreds))
-		}
-	}
-
-	return endpoint, opts, nil
+	return dEnv.dialer.GetGRPCDialParams(config)
 }
 
 func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {

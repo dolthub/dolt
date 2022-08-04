@@ -64,7 +64,7 @@ func (mrEnv *MultiRepoEnv) RemoteDialProvider() dbfactory.GRPCDialProvider {
 	for _, env := range mrEnv.envs {
 		return env.env
 	}
-	return nil
+	return NewSimpleGRPCDialProvider()
 }
 
 func (mrEnv *MultiRepoEnv) Config() config.ReadWriteConfig {
