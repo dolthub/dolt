@@ -16,13 +16,15 @@ package env
 
 import (
 	"crypto/tls"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"runtime"
 	"strings"
 	"unicode"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 )
 
 // SimpleGRPCDialProvider implements GRPCDialProvider. By default, it is not able to use custom user credentials, but
