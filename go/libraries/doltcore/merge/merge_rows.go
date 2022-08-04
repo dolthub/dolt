@@ -126,7 +126,7 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	}
 	if schConflicts.Count() != 0 {
 		// error on schema conflicts for now
-		return nil, nil, schConflicts.AsError()
+		return nil, nil, fmt.Errorf("%w.\n%s", ErrSchemaConflict, schConflicts.AsError().Error())
 	}
 
 	mergeTbl, err := tm.leftTbl.UpdateSchema(ctx, mergeSch)

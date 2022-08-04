@@ -26,13 +26,15 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool) ([]sqle.SqlDatabase, error) {
+func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool) ([]sqle.SqlDatabase, []filesys.Filesys, error) {
 	var dbs []sqle.SqlDatabase
+	var locations []filesys.Filesys
 	var db sqle.SqlDatabase
 
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
@@ -56,14 +58,16 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool
 		}
 
 		dbs = append(dbs, db)
+		locations = append(locations, dEnv.FS)
+
 		return false, nil
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return dbs, nil
+	return dbs, locations, nil
 }
 
 // GetCommitHooks creates a list of hooks to execute on database commit. If doltdb.SkipReplicationErrorsKey is set,

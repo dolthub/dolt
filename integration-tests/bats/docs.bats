@@ -45,7 +45,7 @@ teardown() {
     teardown_common
 }
 
-@test "docs: doc update creates dolt_docs table" {
+@test "docs: doc read creates dolt_docs table" {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ ! $output =~ "dolt_docs" ]] || false
@@ -100,6 +100,26 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "doc_name" ]] || false
     [[ "$output" =~ "LICENSE.md" ]] || false
+}
+
+@test "docs: docs can be created from SQL" {
+    # must use correct schema
+    run dolt sql -q "CREATE TABLE dolt_docs (x int);"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "incorrect schema for dolt_docs table" ]] || false
+
+    dolt sql <<SQL
+CREATE TABLE dolt_docs (
+  doc_name varchar(16383) NOT NULL,
+  doc_text varchar(16383),
+  PRIMARY KEY (doc_name)
+);
+SQL
+    dolt sql -q "INSERT INTO dolt_docs VALUES ('README.md', 'this is a README')"
+
+    run dolt sql -q "SELECT * FROM dolt_docs"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "this is a README" ]] || false
 }
 
 @test "docs: docs diff" {

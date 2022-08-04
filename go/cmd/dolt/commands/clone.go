@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"path"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -100,6 +101,12 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 	}
 
 	userDirExists, _ := dEnv.FS.Exists(dir)
+
+	// Check for a valid dolthub url and replace the urlStr with the parsed repoName.
+	repoName, ok := validateAndParseDolthubUrl(urlStr)
+	if ok {
+		urlStr = repoName
+	}
 
 	scheme, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
 
@@ -209,4 +216,27 @@ func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[
 	}
 
 	return r, ddb, nil
+}
+
+// validateAndParseDolthubUrl validates and returns a Dolthub repo link's repository name. For example, given this url: https://www.dolthub.com/repositories/user/test
+// the function would return 'user/test'. Note this function correctly does not handle removing additional path extensions. The url: https://www.dolthub.com/repositories/user/test/pulls
+// would return 'user/test/pulls' and eventually error later in the code base.
+func validateAndParseDolthubUrl(urlStr string) (string, bool) {
+	u, err := earl.Parse(urlStr)
+
+	if err != nil {
+		return "", false
+	}
+
+	if u.Scheme == dbfactory.HTTPSScheme && u.Host == "www.dolthub.com" {
+		// Get the actual repo name and covert the remote
+		split := strings.Split(u.Path, "/")
+
+		if len(split) > 2 {
+			// the path is of the form /repositories/user/repoName
+			return strings.Join(split[2:], "/"), true
+		}
+	}
+
+	return "", false
 }

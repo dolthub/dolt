@@ -625,20 +625,24 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "explain select pk, c from dolt_history_t1 where pk = 3",
 				Expected: []sql.Row{
-					{"Projected table access on [pk c]"},
-					{" └─ Exchange"},
-					{"     └─ Filter(dolt_history_t1.pk = 3)"},
-					{"         └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])"},
+					{"Exchange"},
+					{" └─ Filter(dolt_history_t1.pk = 3)"},
+					{"     └─ IndexedTableAccess(dolt_history_t1)"},
+					{"         ├─ index: [dolt_history_t1.pk]"},
+					{"         ├─ filters: [{[3, 3]}]"},
+					{"         └─ columns: [pk c]"},
 				},
 			},
 			{
 				Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
 				Expected: []sql.Row{
-					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{" └─ Projected table access on [pk c committer]"},
-					{"     └─ Exchange"},
-					{"         └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
-					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])"},
+					{"Exchange"},
+					{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+					{"     └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
+					{"         └─ IndexedTableAccess(dolt_history_t1)"},
+					{"             ├─ index: [dolt_history_t1.pk]"},
+					{"             ├─ filters: [{[3, 3]}]"},
+					{"             └─ columns: [pk c committer]"},
 				},
 			},
 		},
@@ -690,20 +694,25 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "explain select pk, c from dolt_history_t1 where c = 4",
 				Expected: []sql.Row{
-					{"Projected table access on [pk c]"},
-					{" └─ Exchange"},
-					{"     └─ Filter(dolt_history_t1.c = 4)"},
-					{"         └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.c] with ranges: [{[4, 4]}])"},
+					{"Exchange"},
+					{" └─ Filter(dolt_history_t1.c = 4)"},
+					{"     └─ IndexedTableAccess(dolt_history_t1)"},
+					{"         ├─ index: [dolt_history_t1.c]"},
+					{"         ├─ filters: [{[4, 4]}]"},
+					{"         └─ columns: [pk c]"},
 				},
 			},
 			{
 				Query: "explain select pk, c from dolt_history_t1 where c = 10 and committer = 'someguy'",
 				Expected: []sql.Row{
-					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{" └─ Projected table access on [pk c committer]"},
-					{"     └─ Exchange"},
-					{"         └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = 'someguy'))"},
-					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.c] with ranges: [{[10, 10]}])"}},
+					{"Exchange"},
+					{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+					{"     └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = 'someguy'))"},
+					{"         └─ IndexedTableAccess(dolt_history_t1)"},
+					{"             ├─ index: [dolt_history_t1.c]"},
+					{"             ├─ filters: [{[10, 10]}]"},
+					{"             └─ columns: [pk c committer]"},
+				},
 			},
 		},
 	},
@@ -5201,6 +5210,34 @@ var DoltRemoteTestScripts = []queries.ScriptTest{
 			{
 				Query:          "DELETE FROM dolt_remotes WHERE name = 'origin1'",
 				ExpectedErrStr: "the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes",
+			},
+		},
+	},
+	{
+		Name: "dolt-remote: multi-repo test",
+		SetUpScript: []string{
+			"create database one",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "use one;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "CALL DOLT_REMOTE('add','test01','file:///foo');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_remotes where name='test01';",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "use mydb;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select count(*) from dolt_remotes where name='test01';",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},

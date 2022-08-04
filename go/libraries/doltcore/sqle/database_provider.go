@@ -42,12 +42,13 @@ const (
 )
 
 type DoltDatabaseProvider struct {
-	databases map[string]sql.Database
-	functions map[string]sql.Function
-	mu        *sync.RWMutex
+	// dbLocations maps a database name to its file system root
+	dbLocations map[string]filesys.Filesys
+	databases   map[string]sql.Database
+	functions   map[string]sql.Function
+	mu          *sync.RWMutex
 
 	defaultBranch string
-	dataRootDir   string
 	fs            filesys.Filesys
 	remoteDialer  dbfactory.GRPCDialProvider
 
@@ -59,11 +60,36 @@ var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
 
-// NewDoltDatabaseProvider returns a provider for the databases given
-func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys, databases ...sql.Database) DoltDatabaseProvider {
+// NewDoltDatabaseProvider returns a new provider, initialized without any databases, along with any
+// errors that occurred while trying to create the database provider.
+func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys) (DoltDatabaseProvider, error) {
+	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, nil, nil)
+}
+
+// NewDoltDatabaseProviderWithDatabase returns a new provider, initialized with one database at the
+// specified location, and any error that occurred along the way.
+func NewDoltDatabaseProviderWithDatabase(defaultBranch string, fs filesys.Filesys, database sql.Database, dbLocation filesys.Filesys) (DoltDatabaseProvider, error) {
+	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, []sql.Database{database}, []filesys.Filesys{dbLocation})
+}
+
+// NewDoltDatabaseProviderWithDatabases returns a new provider, initialized with the specified databases,
+// at the specified locations. For every database specified, there must be a corresponding filesystem
+// specified that represents where the database is located. If the number of specified databases is not the
+// same as the number of specified locations, an error is returned.
+func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Filesys, databases []sql.Database, locations []filesys.Filesys) (DoltDatabaseProvider, error) {
+	if len(databases) != len(locations) {
+		return DoltDatabaseProvider{}, fmt.Errorf("unable to create DoltDatabaseProvider: "+
+			"incorrect number of databases (%d) and database locations (%d) specified", len(databases), len(locations))
+	}
+
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
 		dbs[strings.ToLower(db.Name())] = db
+	}
+
+	dbLocations := make(map[string]filesys.Filesys, len(locations))
+	for i, dbLocation := range locations {
+		dbLocations[databases[i].Name()] = dbLocation
 	}
 
 	funcs := make(map[string]sql.Function, len(dfunctions.DoltFunctions))
@@ -72,13 +98,14 @@ func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys, databases
 	}
 
 	return DoltDatabaseProvider{
+		dbLocations:   dbLocations,
 		databases:     dbs,
 		functions:     funcs,
 		mu:            &sync.RWMutex{},
 		fs:            fs,
 		defaultBranch: defaultBranch,
 		dbFactoryUrl:  doltdb.LocalDirDoltDB,
-	}
+	}, nil
 }
 
 // WithFunctions returns a copy of this provider with the functions given. Any previous functions are removed.
@@ -108,6 +135,21 @@ func (p DoltDatabaseProvider) WithRemoteDialer(provider dbfactory.GRPCDialProvid
 
 func (p DoltDatabaseProvider) FileSystem() filesys.Filesys {
 	return p.fs
+}
+
+// FileSystemForDatabase returns a filesystem, with the working directory set to the root directory
+// of the requested database. If the requested database isn't found, a database not found error
+// is returned.
+func (p DoltDatabaseProvider) FileSystemForDatabase(dbname string) (filesys.Filesys, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	dbLocation, ok := p.dbLocations[dbname]
+	if !ok {
+		return nil, sql.ErrDatabaseNotFound.New(dbname)
+	}
+
+	return dbLocation, nil
 }
 
 func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Database, err error) {
@@ -144,7 +186,7 @@ func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 	return err == nil
 }
 
-func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database) {
+func (p DoltDatabaseProvider) AllDatabases(_ *sql.Context) (all []sql.Database) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -205,7 +247,9 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	}
 
 	db := NewDatabase(name, newEnv.DbData(), opts)
-	p.databases[formatDbMapKeyName(db.Name())] = db
+	formattedName := formatDbMapKeyName(db.Name())
+	p.databases[formattedName] = db
+	p.dbLocations[formattedName] = newEnv.FS
 
 	dbstate, err := GetInitialDBState(ctx, db)
 	if err != nil {
@@ -227,13 +271,33 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 		return fmt.Errorf("cannot create DB, file exists at %s", dbName)
 	}
 
-	var r env.Remote
-	var srcDB *doltdb.DoltDB
-	dialer := p.remoteDialer
-	if dialer == nil {
+	err := p.cloneDatabaseFromRemote(ctx, dbName, remoteName, branch, remoteUrl, remoteParams)
+	if err != nil {
+		// Make a best effort to clean up any artifacts on disk from a failed clone
+		// before we return the error
+		exists, _ := p.fs.Exists(dbName)
+		if exists {
+			deleteErr := p.fs.Delete(dbName, true)
+			if deleteErr != nil {
+				err = fmt.Errorf("%s: unable to clean up failed clone in directory '%s'", err.Error(), dbName)
+			}
+		}
+		return err
+	}
+
+	return nil
+}
+
+// cloneDatabaseFromRemote encapsulates the inner logic for cloning a database so that if any error
+// is returned by this function, the caller can capture the error and safely clean up the failed
+// clone directory before returning the error to the user. This function should not be used directly;
+// use CloneDatabaseFromRemote instead.
+func (p DoltDatabaseProvider) cloneDatabaseFromRemote(ctx *sql.Context, dbName, remoteName, branch, remoteUrl string, remoteParams map[string]string) error {
+	if p.remoteDialer == nil {
 		return fmt.Errorf("unable to clone remote database; no remote dialer configured")
 	}
-	r, srcDB, err := createRemote(ctx, remoteName, remoteUrl, remoteParams, dialer)
+
+	r, srcDB, err := createRemote(ctx, remoteName, remoteUrl, remoteParams, p.remoteDialer)
 	if err != nil {
 		return err
 	}
@@ -378,6 +442,40 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 			return nil, dsess.InitialDbState{}, false, err
 		}
 
+		return db, init, true, nil
+	}
+
+	isTag, err := isTag(ctx, srcDb, revSpec, p.remoteDialer)
+	if err != nil {
+		return nil, dsess.InitialDbState{}, false, err
+	}
+
+	if isTag {
+		// TODO: this should be an interface, not a struct
+		replicaDb, ok := srcDb.(ReadReplicaDatabase)
+		if ok {
+			srcDb = replicaDb.Database
+		}
+
+		srcDb, ok = srcDb.(Database)
+		if !ok {
+			return nil, dsess.InitialDbState{}, false, nil
+		}
+
+		tag, err := srcDb.(Database).DbData().Ddb.ResolveTag(ctx, ref.NewTagRef(revSpec))
+		if err != nil {
+			return nil, dsess.InitialDbState{}, false, err
+		}
+
+		commitHash, err := tag.Commit.HashOf()
+		if err != nil {
+			return nil, dsess.InitialDbState{}, false, err
+		}
+
+		db, init, err := dbRevisionForCommit(ctx, srcDb.(Database), commitHash.String())
+		if err != nil {
+			return nil, dsess.InitialDbState{}, false, err
+		}
 		return db, init, true, nil
 	}
 
@@ -533,6 +631,36 @@ func isBranch(ctx context.Context, db SqlDatabase, branchName string, dialer dbf
 		}
 
 		if branchExists {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// isTag returns whether a tag with the given name is in scope for the database given
+func isTag(ctx context.Context, db SqlDatabase, tagName string, dialer dbfactory.GRPCDialProvider) (bool, error) {
+	var ddbs []*doltdb.DoltDB
+
+	if rdb, ok := db.(ReadReplicaDatabase); ok {
+		remoteDB, err := rdb.remote.GetRemoteDB(ctx, rdb.ddb.Format(), dialer)
+		if err != nil {
+			return false, err
+		}
+		ddbs = append(ddbs, rdb.ddb, remoteDB)
+	} else if ddb, ok := db.(Database); ok {
+		ddbs = append(ddbs, ddb.ddb)
+	} else {
+		return false, fmt.Errorf("unrecognized type of database %T", db)
+	}
+
+	for _, ddb := range ddbs {
+		tagExists, err := ddb.HasTag(ctx, tagName)
+		if err != nil {
+			return false, err
+		}
+
+		if tagExists {
 			return true, nil
 		}
 	}

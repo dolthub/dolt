@@ -352,6 +352,44 @@ SQL
     [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
+@test "remotes: pull with explicit remote and branch" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt checkout -b test-branch
+    dolt sql -q "create table t1(c0 varchar(100));"
+    dolt commit -am "adding table t1"
+    run dolt push test-remote test-branch
+    [ "$status" -eq 0 ]
+    dolt checkout main
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "t1" ]] || false
+
+    # Specifying a non-existent remote branch returns an error
+    run dolt pull test-remote doesnotexist
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'branch "doesnotexist" not found on remote' ]] || false
+
+    # Explicitly specifying the remote and branch will merge in that branch
+    run dolt pull test-remote test-branch
+    [ "$status" -eq 0 ]
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+
+    # Make a conflicting working set change and test that pull complains
+    dolt reset --hard HEAD^1
+    dolt sql -q "create table t1 (pk int primary key);"
+    run dolt pull test-remote test-branch
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'local changes to the following tables would be overwritten by merge' ]] || false
+
+    # Commit changes and test that a merge conflict fails the pull
+    dolt commit -am "adding new t1 table"
+    run dolt pull test-remote test-branch
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table with same name added in 2 commits can't be merged" ]] || false
+}
+
 @test "remotes: push and pull from non-main branch and use --set-upstream" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
@@ -1787,6 +1825,28 @@ setup_ref_test() {
     [[ "$output" =~ "adding table from other" ]]
 }
 
+@test "remotes: dolt_remote uses the right db directory in a multidb env" {
+    tempDir=$(mktemp -d)
+
+    cd $tempDir
+    mkdir db1
+    cd db1
+    dolt init
+    cd ..
+
+    run dolt sql -q "use db1; call dolt_remote('add', 'test1', 'foo/bar');"
+    [ "$status" -eq 0 ]
+
+    run grep "test1" db1/.dolt/repo_state.json
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '"name": "test1"' ]] || false
+    [ ! -d ".dolt" ]
+
+    run dolt sql -q "use db1; call dolt_remote('remove', 'test1');"
+    [ "$status" -eq 0 ]
+    [ ! -d ".dolt" ]
+}
+
 @test "remotes: dolt_remote add and remove works with other commands" {
     mkdir remote
     mkdir repo1
@@ -1991,10 +2051,23 @@ SQL
     [[ "$output" =~ "Fast-forward" ]] || false
 }
 
+@test "remotes: dolt_clone failure cleanup" {
+    repoDir="$BATS_TMPDIR/dolt-repo-$$"
+
+    # try to clone a remote that doesn't exist
+    cd $repoDir
+    run dolt sql -q 'call dolt_clone("file:///tmp/sanity/remote");'
+    [ "$status" -eq 1 ]
+
+    # Make sure there's nothing remaining from the failed clone
+    [ ! -d "$repoDir/remote" ]
+}
+
 @test "remotes: dolt_clone procedure" {
     repoDir="$BATS_TMPDIR/dolt-repo-$$"
-    tempDir=$(mktemp -d)
 
+    # make directories outside of the dolt repo
+    tempDir=$(mktemp -d)
     cd $tempDir
     mkdir remote
     mkdir repo1
@@ -2033,6 +2106,9 @@ SQL
     run dolt sql -q "call dolt_clone('file://$tempDir/remote');"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "can't create database remote; database exists" ]] || false
+    run dolt sql -q "show databases"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remote" ]] || false
 
     # Drop the new database and re-clone it with a different name
     dolt sql -q "drop database remote"

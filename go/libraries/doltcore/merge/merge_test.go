@@ -821,42 +821,12 @@ func MustDebugFormatProlly(t *testing.T, m prolly.Map) string {
 	return s
 }
 
-func MustDebugFormatConflictMap(t *testing.T, m prolly.ConflictMap) string {
-	s, err := prolly.ConflictDebugFormat(context.Background(), m)
-	require.NoError(t, err)
-	return s
-}
-
 func MustEqualProlly(t *testing.T, expected prolly.Map, actual prolly.Map) {
 	require.Equal(t, expected.HashOf(), actual.HashOf(),
 		"hashes differed. expected: %s\nactual: %s", MustDebugFormatProlly(t, expected), MustDebugFormatProlly(t, actual))
-}
-
-func MustEqualConflictMap(t *testing.T, expected prolly.ConflictMap, actual prolly.ConflictMap) {
-	require.Equal(t, expected.HashOf(), actual.HashOf(),
-		"conflict map hashes differed. expected: %s\nactual: %s", MustDebugFormatConflictMap(t, expected), MustDebugFormatConflictMap(t, actual))
 }
 
 func MustEqualArtifactMap(t *testing.T, expected prolly.ArtifactMap, actual prolly.ArtifactMap) {
 	require.Equal(t, expected.HashOf(), actual.HashOf(),
 		"artifact map hashes differed.")
 }
-
-//func diffStr(t tree.Diff, kD val.TupleDesc) string {
-//	var str string
-//	switch t.Type {
-//	case tree.AddedDiff:
-//		str = "added"
-//	case tree.ModifiedDiff:
-//		str = "modified"
-//	case tree.RemovedDiff:
-//		str = "removed"
-//	default:
-//		panic("unknown type")
-//	}
-//
-//	key := kD.Format(val.Tuple(t.Key))
-//	str += " key " + key
-//
-//	return str
-//}

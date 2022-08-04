@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func init() {
@@ -101,7 +102,7 @@ func makeProllyTreeWithSizes(t *testing.T, fact splitterFactory, scale, keySz, v
 
 	ctx := context.Background()
 	ns = NewTestNodeStore()
-	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	serializer := message.NewProllyMapSerializer(val.TupleDesc{}, ns.Pool())
 	chunker, err := newEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 

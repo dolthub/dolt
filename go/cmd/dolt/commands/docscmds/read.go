@@ -32,8 +32,8 @@ import (
 )
 
 var readDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Reads Dolt docs from the file system into the database",
-	LongDesc:  "Reads Dolt docs from the file system into the database",
+	ShortDesc: "Reads Dolt Docs from the file system into the database",
+	LongDesc:  "Reads Dolt Docs from the file system into the database",
 	Synopsis: []string{
 		"{{.LessThan}}doc{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
@@ -48,7 +48,7 @@ func (cmd ReadCmd) Name() string {
 
 // Description implements cli.Command.
 func (cmd ReadCmd) Description() string {
-	return writeDocs.ShortDesc
+	return readDocs.ShortDesc
 }
 
 // RequiresRepo implements cli.Command.
@@ -114,10 +114,6 @@ func readDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName, fileName strin
 		return err
 	}
 
-	if err := maybeCreateDoltDocs(ctx, dEnv); err != nil {
-		return err
-	}
-
 	eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return err
@@ -138,7 +134,6 @@ const (
 func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, content string) (*doltdb.RootValue, error) {
 	var (
 		sctx  *sql.Context
-		iter  sql.RowIter
 		err   error
 		roots map[string]*doltdb.RootValue
 	)
@@ -149,10 +144,35 @@ func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, conten
 	}
 	sctx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
-	content = strings.ReplaceAll(content, `"`, `\"`)
-	_, iter, err = eng.Query(sctx, fmt.Sprintf(writeDocTemplate, docName, content))
-	if err != nil {
+	if err = execQuery(sctx, eng, doltdb.DocsMaybeCreateTableStmt); err != nil {
 		return nil, err
+	}
+
+	content = strings.ReplaceAll(content, `"`, `\"`)
+	update := fmt.Sprintf(writeDocTemplate, docName, content)
+
+	if err = execQuery(sctx, eng, update); err != nil {
+		return nil, err
+	}
+
+	if roots, err = eng.GetRoots(sctx); err != nil {
+		return nil, err
+	}
+	if len(roots) != 1 {
+		return nil, fmt.Errorf("cannot access docs in multi-database mode")
+	}
+
+	for _, rv := range roots {
+		return rv, nil
+	}
+	panic("unreachable")
+}
+
+func execQuery(sctx *sql.Context, eng *engine.SqlEngine, q string) (err error) {
+	var iter sql.RowIter
+	_, iter, err = eng.Query(sctx, q)
+	if err != nil {
+		return err
 	}
 	defer func() {
 		if cerr := iter.Close(sctx); err == nil {
@@ -167,31 +187,8 @@ func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, conten
 			break
 		}
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-
-	if roots, err = eng.GetRoots(sctx); err != nil {
-		return nil, err
-	}
-	assertTrue(len(roots) == 1)
-
-	for _, rv := range roots {
-		return rv, nil
-	}
-	panic("unreachable")
-}
-
-func maybeCreateDoltDocs(ctx context.Context, dEnv *env.DoltEnv) error {
-	ws, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		return err
-	}
-	root := ws.WorkingRoot()
-
-	root, err = doltdb.MaybeCreateDoltDocsTable(ctx, root)
-	if err != nil {
-		return err
-	}
-	return dEnv.UpdateWorkingRoot(ctx, root)
+	return
 }

@@ -55,6 +55,7 @@ func (sm SerialMessage) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 func (sm SerialMessage) HumanReadableString() string {
 	id := serial.GetFileID(sm)
 	switch id {
+	// NOTE: splunk uses a separate path for some printing
 	case serial.StoreRootFileID:
 		msg := serial.GetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
 		ret := &strings.Builder{}
@@ -85,8 +86,16 @@ func (sm SerialMessage) HumanReadableString() string {
 		fmt.Fprintf(ret, "\tTime: %s\n", time.UnixMilli((int64)(msg.TimestampMillis())).String())
 		fmt.Fprintf(ret, "\tHeight: %d\n", msg.Height())
 
+		fmt.Fprintf(ret, "\tRootValue: {\n")
+		hashes := msg.RootBytes()
+		for i := 0; i < len(hashes)/hash.ByteLen; i++ {
+			addr := hash.New(hashes[i*20 : (i+1)*20])
+			fmt.Fprintf(ret, "\t\t#%s\n", addr.String())
+		}
+		fmt.Fprintf(ret, "\t}\n")
+
 		fmt.Fprintf(ret, "\tParents: {\n")
-		hashes := msg.ParentAddrsBytes()
+		hashes = msg.ParentAddrsBytes()
 		for i := 0; i < msg.ParentAddrsLength()/hash.ByteLen; i++ {
 			addr := hash.New(hashes[i*20 : (i+1)*20])
 			fmt.Fprintf(ret, "\t\t#%s\n", addr.String())
@@ -117,7 +126,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		msg := serial.GetRootAsTable(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 
-		fmt.Fprintf(ret, "{\n")
+		fmt.Fprintf(ret, "asdasdf {\n")
 		fmt.Fprintf(ret, "\tSchema: #%s\n", hash.New(msg.SchemaBytes()).String())
 		fmt.Fprintf(ret, "\tViolations: #%s\n", hash.New(msg.ViolationsBytes()).String())
 		// TODO: merge conflicts, not stable yet
@@ -140,7 +149,7 @@ func (sm SerialMessage) HumanReadableString() string {
 			addr := values.GetItem(int(i))
 			b.Write([]byte("\t"))
 			b.Write(name)
-			b.Write([]byte(": "))
+			b.Write([]byte(": #"))
 			b.Write([]byte(hash.New(addr).String()))
 			b.Write([]byte("\n"))
 		}
@@ -362,6 +371,8 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	case serial.AddressMapFileID:
 		fallthrough
 	case serial.MergeArtifactsFileID:
+		fallthrough
+	case serial.BlobFileID:
 		fallthrough
 	case serial.CommitClosureFileID:
 		return message.WalkAddresses(context.TODO(), serial.Message(sm), func(ctx context.Context, addr hash.Hash) error {
