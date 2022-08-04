@@ -1327,3 +1327,12 @@ SQL
     run dolt sql -q "INSERT INTO test VALUES (2, '2156');"
     [ "$status" -eq "1" ]
 }
+
+@test "types: CHAR BINARY" {
+    skip "unsupported type"
+    dolt sql <<SQL
+CREATE TABLE budgets(`id` CHAR (36) BINARY);
+SQL
+
+    dolt sql -q "INSERT INTO budgets VALUES (UUID())"
+}
