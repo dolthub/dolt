@@ -1193,3 +1193,12 @@ SQL
     run dolt table import -u mytable x.csv
     [ $status -eq 0 ]
 }
+
+@test "keyless: unique key should be represented as a primary key" {
+    #skip "unique key is created, but it should be described as a primary key."
+    dolt sql -q "create table t(pk int not null auto_increment, UNIQUE KEY pk (pk));"
+
+    run dolt sql -r csv -q "describe t"
+    [[ "$output" =~ "Field,Type,Null,Key,Default,Extra" ]] || false
+    [[ "$output" =~ "ai,int,NO,UNI,NULL,auto_increment" ]] || false
+}
