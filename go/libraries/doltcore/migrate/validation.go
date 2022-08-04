@@ -89,7 +89,7 @@ func validateTableData(ctx context.Context, name string, old, new *doltdb.Table)
 	if err != nil {
 		return err
 	}
-	if !oldSch.Equals(newSch) {
+	if !doltdb.HasDoltPrefix(name) && !oldSch.Equals(newSch) {
 		return fmt.Errorf("differing schemas for table %s", name)
 	}
 
