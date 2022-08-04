@@ -156,7 +156,7 @@ func TestMutateMapWithTupleIter(t *testing.T) {
 			// original tuples, before modification
 			base := all[:q3]
 			tree.SortTuplePairs(base, kd)
-			before := prollyMapFromTuples(t, kd, vd, base).(Map)
+			before := mustProllyMapFromTuples(t, kd, vd, base)
 
 			ctx := context.Background()
 			ds, err := DebugFormat(ctx, before)
@@ -273,7 +273,7 @@ func makeProllyMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	ns := tree.NewTestNodeStore()
 
 	tuples := tree.RandomTuplePairs(count, kd, vd, ns)
-	om := prollyMapFromTuples(t, kd, vd, tuples)
+	om := mustProllyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
 }
@@ -286,27 +286,9 @@ func makeProllySecondaryIndex(t *testing.T, count int) (testMap, [][2]val.Tuple)
 	vd := val.NewTupleDescriptor()
 	ns := tree.NewTestNodeStore()
 	tuples := tree.RandomCompositeTuplePairs(count, kd, vd, ns)
-	om := prollyMapFromTuples(t, kd, vd, tuples)
+	om := mustProllyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
-}
-
-func prollyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tuple) testMap {
-	ctx := context.Background()
-	ns := tree.NewTestNodeStore()
-
-	serializer := message.NewProllyMapSerializer(vd, ns.Pool())
-	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
-	require.NoError(t, err)
-
-	for _, pair := range tuples {
-		err := chunker.AddPair(ctx, tree.Item(pair[0]), tree.Item(pair[1]))
-		require.NoError(t, err)
-	}
-	root, err := chunker.Done(ctx)
-	require.NoError(t, err)
-
-	return NewMap(root, ns, kd, vd)
 }
 
 func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
