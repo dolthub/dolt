@@ -761,7 +761,12 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 
 // CreateTable creates a table with the name and schema given.
 func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema) error {
-	if doltdb.HasDoltPrefix(tableName) {
+	if strings.ToLower(tableName) == doltdb.DocTableName {
+		// validate correct schema
+		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) {
+			return fmt.Errorf("incorrect schema for dolt_docs table")
+		}
+	} else if doltdb.HasDoltPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
 
