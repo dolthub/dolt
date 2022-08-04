@@ -96,8 +96,6 @@ type DoltEnv struct {
 	hdp    HomeDirProvider
 
 	IgnoreLockFile bool
-
-	dialer *SimpleGRPCDialProvider
 }
 
 // Load loads the DoltEnv for the .dolt directory determined by resolving the specified urlStr with the specified Filesys.
@@ -123,8 +121,6 @@ func loadWithFormat(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys
 		urlStr:      urlStr,
 		hdp:         hdp,
 	}
-
-	dEnv.dialer = NewSimpleGRPCDialProviderWithDoltEnv(dEnv)
 
 	if dEnv.RepoState != nil {
 		remotes := make(map[string]Remote, len(dEnv.RepoState.Remotes))
@@ -831,8 +827,9 @@ func (dEnv *DoltEnv) UserRPCCreds() (creds.DoltCreds, bool, error) {
 	return creds.EmptyCreds, false, nil
 }
 
+// GetGRPCDialParams implements dbfactory.GRPCDialProvider
 func (dEnv *DoltEnv) GetGRPCDialParams(config grpcendpoint.Config) (string, []grpc.DialOption, error) {
-	return dEnv.dialer.GetGRPCDialParams(config)
+	return NewSimpleGRPCDialProviderWithDoltEnv(dEnv).GetGRPCDialParams(config)
 }
 
 func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {
