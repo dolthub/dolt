@@ -271,13 +271,33 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 		return fmt.Errorf("cannot create DB, file exists at %s", dbName)
 	}
 
-	var r env.Remote
-	var srcDB *doltdb.DoltDB
-	dialer := p.remoteDialer
-	if dialer == nil {
+	err := p.cloneDatabaseFromRemote(ctx, dbName, remoteName, branch, remoteUrl, remoteParams)
+	if err != nil {
+		// Make a best effort to clean up any artifacts on disk from a failed clone
+		// before we return the error
+		exists, _ := p.fs.Exists(dbName)
+		if exists {
+			deleteErr := p.fs.Delete(dbName, true)
+			if deleteErr != nil {
+				err = fmt.Errorf("%s: unable to clean up failed clone in directory '%s'", err.Error(), dbName)
+			}
+		}
+		return err
+	}
+
+	return nil
+}
+
+// cloneDatabaseFromRemote encapsulates the inner logic for cloning a database so that if any error
+// is returned by this function, the caller can capture the error and safely clean up the failed
+// clone directory before returning the error to the user. This function should not be used directly;
+// use CloneDatabaseFromRemote instead.
+func (p DoltDatabaseProvider) cloneDatabaseFromRemote(ctx *sql.Context, dbName, remoteName, branch, remoteUrl string, remoteParams map[string]string) error {
+	if p.remoteDialer == nil {
 		return fmt.Errorf("unable to clone remote database; no remote dialer configured")
 	}
-	r, srcDB, err := createRemote(ctx, remoteName, remoteUrl, remoteParams, dialer)
+
+	r, srcDB, err := createRemote(ctx, remoteName, remoteUrl, remoteParams, p.remoteDialer)
 	if err != nil {
 		return err
 	}
