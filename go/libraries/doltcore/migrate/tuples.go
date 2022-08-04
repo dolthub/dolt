@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -291,7 +292,15 @@ func translateJSONField(ctx context.Context, ns tree.NodeStore, value types.JSON
 }
 
 func translateBlobField(ctx context.Context, ns tree.NodeStore, value types.Blob, idx int, b *val.TupleBuilder) error {
-	t, err := tree.NewImmutableTreeFromReader(ctx, value.Reader(ctx), ns, tree.DefaultFixedChunkLength)
+	buf := make([]byte, value.Len())
+	_, err := value.ReadAt(ctx, buf, 0)
+	if err == io.EOF {
+		err = nil
+	} else if err != nil {
+		return err
+	}
+
+	t, err := tree.NewImmutableTreeFromReader(ctx, bytes.NewReader(buf), ns, tree.DefaultFixedChunkLength)
 	if err != nil {
 		return err
 	}
