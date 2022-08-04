@@ -115,17 +115,6 @@ func GetAllTableNames(ctx context.Context, root *RootValue) ([]string, error) {
 	return append(n, s...), nil
 }
 
-func MaybeCreateDoltDocsTable(ctx context.Context, root *RootValue) (*RootValue, error) {
-	_, ok, err := root.GetTable(ctx, DocTableName)
-	if err != nil {
-		return nil, err
-	}
-	if ok {
-		return root, nil
-	}
-	return root.CreateEmptyTable(ctx, DocTableName, DocsSchema)
-}
-
 // The set of reserved dolt_ tables that should be considered part of user space, like any other user-created table,
 // for the purposes of the dolt command line. These tables cannot be created or altered explicitly, but can be updated
 // like normal SQL tables.
@@ -173,12 +162,18 @@ const (
 	ReadmeDoc = "README.md"
 )
 
-// todo(andy)
 var doltDocsColumns = schema.NewColCollection(
 	schema.NewColumn(DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
 	schema.NewColumn(DocTextColumnName, schema.DocTextTag, types.StringKind, false),
 )
 var DocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
+
+var DocsMaybeCreateTableStmt = `
+CREATE TABLE IF NOT EXISTS dolt_docs (
+  doc_name varchar(16383) NOT NULL,
+  doc_text varchar(16383),
+  PRIMARY KEY (doc_name)
+);`
 
 const (
 	// DocTableName is the name of the dolt table containing documents such as the license and readme

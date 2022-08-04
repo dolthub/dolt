@@ -82,8 +82,7 @@ teardown() {
     [[ "$output" =~ "Invalid table name" ]] || false
     run dolt table cp test1 dolt_docs
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Invalid table name" ]] || false
-    [[ "$output" =~ "reserved" ]] || false
+    [[ "$output" =~ "incorrect schema for dolt_docs table" ]] || false
     run dolt table cp test1 dolt_query_catalog
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Invalid table name" ]] || false

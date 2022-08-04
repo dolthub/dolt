@@ -31,8 +31,8 @@ import (
 )
 
 var writeDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Writes Dolt docs to stdout",
-	LongDesc:  "Writes Dolt docs to stdout",
+	ShortDesc: "Writes Dolt Docs to stdout",
+	LongDesc:  "Writes Dolt Docs to stdout",
 	Synopsis: []string{
 		"{{.LessThan}}doc{{.GreaterThan}}",
 	},
