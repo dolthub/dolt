@@ -303,3 +303,11 @@ SQL
     [[ "${lines[1]}" =~ 'v1,int,YES,"",NULL,""' ]] || false
     [[ "${lines[2]}" =~ 'v2,int,YES,"",NULL,""' ]] || false
 }
+
+@test "create-views:can correctly alter a view" {
+    skip "ALTER VIEW is unsupported"
+    dolt sql -q "create table t(pk int primary key, val int)"
+    dolt sql -q "create view view1 as select * from t"
+
+    dolt sql -q "alter view view1 as select val from t"
+}
