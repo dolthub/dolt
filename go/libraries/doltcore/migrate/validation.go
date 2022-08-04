@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -80,12 +81,31 @@ func validateRootValue(ctx context.Context, old, new *doltdb.RootValue) error {
 }
 
 func validateTableData(ctx context.Context, name string, old, new *doltdb.Table) error {
+	parts, err := partitionTable(ctx, old)
+	if err != nil {
+		return err
+	} else if len(parts) == 0 {
+		return nil
+	}
+
+	eg, ctx := errgroup.WithContext(ctx)
+	for i := range parts {
+		eg.Go(func() error {
+			start, end := parts[i][0], parts[i][1]
+			return validateTableDataPartition(ctx, name, old, new, start, end)
+		})
+	}
+
+	return eg.Wait()
+}
+
+func validateTableDataPartition(ctx context.Context, name string, old, new *doltdb.Table, start, end uint64) error {
 	sctx := sql.NewContext(ctx)
-	oldSch, oldIter, err := sqle.DoltTableToRowIter(sctx, name, old)
+	oldSch, oldIter, err := sqle.DoltTablePartitionToRowIter(sctx, name, old, start, end)
 	if err != nil {
 		return err
 	}
-	newSch, newIter, err := sqle.DoltTableToRowIter(sctx, name, new)
+	newSch, newIter, err := sqle.DoltTablePartitionToRowIter(sctx, name, new, start, end)
 	if err != nil {
 		return err
 	}
@@ -201,6 +221,29 @@ func assertNomsKind(kind types.NomsKind, candidates ...types.NomsKind) error {
 	}
 	return fmt.Errorf("expected NomsKind to be one of (%s), got NomsKind (%s)",
 		strings.Join(cs, ", "), types.KindToString[kind])
+}
+
+func partitionTable(ctx context.Context, tbl *doltdb.Table) ([][2]uint64, error) {
+	const fixedSize uint64 = 16384
+
+	idx, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	} else if idx.Count() == 0 {
+		return nil, nil
+	}
+
+	n := (idx.Count() + fixedSize - 1) / fixedSize
+	parts := make([][2]uint64, n)
+
+	parts[0][0] = 0
+	parts[n-1][1] = idx.Count()
+	for i := 1; i < len(parts); i++ {
+		parts[i-1][1] = uint64(i) * fixedSize
+		parts[i][0] = uint64(i) * fixedSize
+	}
+
+	return parts, nil
 }
 
 func assertTrue(b bool) {
