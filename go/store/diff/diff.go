@@ -79,9 +79,9 @@ type differ struct {
 // Diff function to stop processing.
 // Diff returns the Differences in depth-first first order. A 'diff' is defined
 // as one of the following conditions:
-//  * a Value is Added or Removed from a node in the graph
-//  * the type of a Value has changed in the graph
-//  * a primitive (i.e. Bool, Float, String, Ref or Blob) Value has changed.
+//   - a Value is Added or Removed from a node in the graph
+//   - the type of a Value has changed in the graph
+//   - a primitive (i.e. Bool, Float, String, Ref or Blob) Value has changed.
 //
 // A Difference is not returned when a non-primitive value has been modified. For
 // example, a struct field has been changed from one Value of type Employee to
@@ -95,15 +95,16 @@ type differ struct {
 // been closed to know if it needs to terminate diffing early. To function
 // properly it needs to be executed concurrently with code that reads values from
 // diffChan. The following is a typical invocation of Diff():
-//    dChan := make(chan Difference)
-//    sChan := make(chan struct{})
-//    go func() {
-//        d.Diff(s3, s4, dChan, sChan, leftRight)
-//        close(dChan)
-//    }()
-//    for dif := range dChan {
-//        <some code>
-//    }
+//
+//	dChan := make(chan Difference)
+//	sChan := make(chan struct{})
+//	go func() {
+//	    d.Diff(s3, s4, dChan, sChan, leftRight)
+//	    close(dChan)
+//	}()
+//	for dif := range dChan {
+//	    <some code>
+//	}
 func Diff(ctx context.Context, v1, v2 types.Value, dChan chan<- Difference, leftRight bool, descFunc ShouldDescFunc) error {
 	f := func(ctx context.Context, d differ, v1, v2 types.Value) error {
 		return d.diff(ctx, nil, v1, v2)

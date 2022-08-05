@@ -28,10 +28,13 @@ import (
 // a. be a super type of the input type
 // b. have all unions flattened (no union inside a union)
 // c. have all unions folded, which means the union
-//    1. have at most one element each of kind Ref, Set, List, and Map
-//    2. have at most one struct element with a given name
+//  1. have at most one element each of kind Ref, Set, List, and Map
+//  2. have at most one struct element with a given name
+//
 // e. all named unions are pointing at the same simplified struct, which means
-//    that all named unions with the same name form cycles.
+//
+//	that all named unions with the same name form cycles.
+//
 // f. all cycle type that can be resolved have been resolved.
 // g. all types reachable from it also fulfill b-f
 //
@@ -40,18 +43,18 @@ import (
 // - The input types are deduplicated
 // - Any unions in the input set are "flattened" into the input set
 // - The inputs are grouped into categories:
-//    - ref
-//    - list
-//    - set
-//    - map
-//    - struct, by name (each unique struct name will have its own group)
-// - The ref, set, and list groups are collapsed like so:
+//   - ref
+//   - list
+//   - set
+//   - map
+//   - struct, by name (each unique struct name will have its own group)
+//   - The ref, set, and list groups are collapsed like so:
 //     {Ref<A>,Ref<B>,...} -> Ref<A|B|...>
-// - The map group is collapsed like so:
+//   - The map group is collapsed like so:
 //     {Map<K1,V1>|Map<K2,V2>...} -> Map<K1|K2,V1|V2>
-// - Each struct group is collapsed like so:
+//   - Each struct group is collapsed like so:
 //     {struct{foo:number,bar:string}, struct{bar:blob, baz:bool}} ->
-//       struct{foo?:number,bar:string|blob,baz?:bool}
+//     struct{foo?:number,bar:string|blob,baz?:bool}
 //
 // All the above rules are applied recursively.
 func simplifyType(t *Type, intersectStructs bool) (*Type, error) {

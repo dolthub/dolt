@@ -20,14 +20,14 @@ tree type for encoding data, and supportive metadata types like ForeignKey,
 TableSchema, Column, ...etc are stored inline. In order of decreasing hierarchy:
   - StoreRoot is the tip of a database. Contains a map from dataset name to HEAD
     rootish in the form of an AddressMap
-    - ex:   main -> abcdefghij0123456789
-            feature -> abcdefghij0123456789
+  - ex:   main -> abcdefghij0123456789
+    feature -> abcdefghij0123456789
   - An AddressMap is itself a prolly tree (see NodeStore above) that can contains
     a name->rootish mapping of arbitrary size
   - A Rootish is informally a RootValue hash (like a working or staging hash), a
     Commit hash (that points to a root value hash), or a Tag (which points to a
     commit, and subsequently a root value hash).
-    - refer to tag.fbs, workingset.fbs, commit.fbs for details
+  - refer to tag.fbs, workingset.fbs, commit.fbs for details
   - A RootValue is a static database version: tables, foreign keys, and a schema.
     Refer to rootvalue.fbs for details.
   - Schema encodes columns, the primary index, a secondary index, and check

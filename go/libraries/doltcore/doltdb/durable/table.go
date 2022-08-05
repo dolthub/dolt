@@ -216,7 +216,8 @@ func RefFromNomsTable(ctx context.Context, table Table) (types.Ref, error) {
 
 // VrwFromTable returns the types.ValueReadWriter used by |t|.
 // todo(andy): this is a temporary method that will be removed when there is a
-//  general-purpose abstraction to replace types.ValueReadWriter.
+//
+//	general-purpose abstraction to replace types.ValueReadWriter.
 func VrwFromTable(t Table) types.ValueReadWriter {
 	if nt, ok := t.(nomsTable); ok {
 		return nt.vrw
