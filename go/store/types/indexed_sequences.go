@@ -40,11 +40,14 @@ func newBlobMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) 
 // advanceCursorToOffset advances the cursor as close as possible to idx
 //
 // If the cursor references a leaf sequence,
-// 	advance to idx,
-// 	and return the number of values preceding the idx
+//
+//	advance to idx,
+//	and return the number of values preceding the idx
+//
 // If it references a meta-sequence,
-// 	advance to the tuple containing idx,
-// 	and return the number of leaf values preceding this tuple
+//
+//	advance to the tuple containing idx,
+//	and return the number of leaf values preceding this tuple
 func advanceCursorToOffset(cur *sequenceCursor, idx uint64) (uint64, error) {
 	seq := cur.seq
 

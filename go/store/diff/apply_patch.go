@@ -31,8 +31,10 @@ import (
 
 // Apply applies a Patch (list of diffs) to a graph. It fulfills the
 // following contract:
-//  Given 2 Noms graphs: a1 and a2:
-//    ApplyPatch(a1, Diff(a1, a2)) == a2
+//
+//	Given 2 Noms graphs: a1 and a2:
+//	  ApplyPatch(a1, Diff(a1, a2)) == a2
+//
 // This is useful for IncrementalUpdate() and possibly other problems. See
 // updater.go for more information.
 //
@@ -378,7 +380,8 @@ func (stack *patchStack) Len() int {
 // offset is calculated by keeping a count of each add & remove. Due to the way
 // way diffs are calculated, no offset is ever needed for 'add' operations. The
 // offset for 'remove' operations are calculated as:
-//   stack.addCnt - stack.rmCnt
+//
+//	stack.addCnt - stack.rmCnt
 func (stack *patchStack) adjustIndexOffset(p types.Path, changeType types.DiffChangeType) (res int) {
 	parentPath := p[:len(p)-1]
 

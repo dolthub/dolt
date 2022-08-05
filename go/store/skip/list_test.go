@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-//var src = rand.New(rand.NewSource(time.Now().Unix()))
+// var src = rand.New(rand.NewSource(time.Now().Unix()))
 var src = rand.New(rand.NewSource(0))
 
 func TestSkipList(t *testing.T) {

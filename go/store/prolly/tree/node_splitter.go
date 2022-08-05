@@ -53,7 +53,7 @@ var levelSalt = [...]uint64{
 	saltFromLevel(15),
 }
 
-//  splitterFactory makes a nodeSplitter.
+// splitterFactory makes a nodeSplitter.
 type splitterFactory func(level uint8) nodeSplitter
 
 var defaultSplitterFactory splitterFactory = newKeySplitter
