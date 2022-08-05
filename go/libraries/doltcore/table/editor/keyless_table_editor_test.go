@@ -16,7 +16,6 @@ package editor
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"testing"
 
@@ -366,7 +365,7 @@ func TestKeylessTableEditorDuplicateKeyHandling(t *testing.T) {
 		})
 		require.NoError(t, err)
 		err = tableEditor.InsertRow(context.Background(), dRow, nil)
-		require.False(t, errors.Is(err, ErrDuplicateKey))
+		require.NoError(t, err)
 	}
 
 	_, err = tableEditor.Table(context.Background())
@@ -465,7 +464,7 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		})
 		require.NoError(t, err)
 		err = tableEditor.InsertRow(ctx, dRow, nil)
-		require.False(t, errors.Is(err, ErrDuplicateKey))
+		require.NoError(t, err)
 		dRow, err = row.New(format, tableSch, row.TaggedValues{
 			0: types.Int(i + 10),
 			1: types.Int(i + 10),
@@ -473,7 +472,7 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		})
 		require.NoError(t, err)
 		err = tableEditor.InsertRow(ctx, dRow, nil)
-		require.False(t, errors.Is(err, ErrDuplicateKey))
+		require.NoError(t, err)
 	}
 
 	table, err = tableEditor.Table(ctx)

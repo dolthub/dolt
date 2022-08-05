@@ -106,9 +106,8 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 }
 
 // TODO forcing a commit with a constrain violation should warn users that subsequest
-//
-//	FF merges will not surface constraint violations on their own; constraint verify --all
-//	is required to reify violations.
+// FF merges will not surface constraint violations on their own; constraint verify --all
+// is required to reify violations.
 func MergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
 	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
 		return nil, err

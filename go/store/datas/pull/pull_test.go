@@ -176,10 +176,11 @@ func (pt *progressTracker) Validate(suite *PullSuite) {
 	}
 }
 
-// Source: -3-> C(L2) -1-> N
+// Source:
 //
-//	\  -2-> L1 -1-> N
-//	         \ -1-> L0
+//	-3-> C(L2) -1-> N
+//	        \  -2-> L1 -1-> N
+//	                 \ -1-> L0
 //
 // Sink: Nada
 func (suite *PullSuite) TestPullEverything() {
@@ -201,27 +202,29 @@ func (suite *PullSuite) TestPullEverything() {
 	suite.True(l.Equals(mustGetCommittedValue(suite.sinkVRW, v)))
 }
 
-// Source: -6-> C3(L5) -1-> N
+// Source:
 //
-//	.  \  -5-> L4 -1-> N
-//	 .          \ -4-> L3 -1-> N
-//	  .                 \  -3-> L2 -1-> N
-//	   5                         \ -2-> L1 -1-> N
-//	    .                                \ -1-> L0
-//	   C2(L4) -1-> N
-//	    .  \  -4-> L3 -1-> N
-//	     .          \ -3-> L2 -1-> N
-//	      .                 \ -2-> L1 -1-> N
-//	       3                        \ -1-> L0
-//	        .
-//	      C1(L2) -1-> N
-//	          \  -2-> L1 -1-> N
-//	                   \ -1-> L0
+//	-6-> C3(L5) -1-> N
+//	      .  \  -5-> L4 -1-> N
+//	       .          \ -4-> L3 -1-> N
+//	        .                 \  -3-> L2 -1-> N
+//	         5                         \ -2-> L1 -1-> N
+//	          .                                \ -1-> L0
+//	         C2(L4) -1-> N
+//	          .  \  -4-> L3 -1-> N
+//	           .          \ -3-> L2 -1-> N
+//	            .                 \ -2-> L1 -1-> N
+//	             3                        \ -1-> L0
+//	              .
+//	            C1(L2) -1-> N
+//	                \  -2-> L1 -1-> N
+//	                         \ -1-> L0
 //
-// Sink: -3-> C1(L2) -1-> N
+// Sink:
 //
-//	\  -2-> L1 -1-> N
-//	         \ -1-> L0
+//	-3-> C1(L2) -1-> N
+//	         \  -2-> L1 -1-> N
+//	                  \ -1-> L0
 func (suite *PullSuite) TestPullMultiGeneration() {
 	sinkL := buildListOfHeight(2, suite.sinkVRW)
 	suite.commitToSink(sinkL, nil)
@@ -250,30 +253,32 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 	suite.True(srcL.Equals(mustGetCommittedValue(suite.sinkVRW, v)))
 }
 
-// Source: -6-> C2(L5) -1-> N
+// Source:
 //
-//	.  \  -5-> L4 -1-> N
-//	 .          \ -4-> L3 -1-> N
-//	  .                 \  -3-> L2 -1-> N
-//	   4                         \ -2-> L1 -1-> N
-//	    .                                \ -1-> L0
-//	   C1(L3) -1-> N
-//	       \  -3-> L2 -1-> N
-//	                \ -2-> L1 -1-> N
-//	                        \ -1-> L0
+//	-6-> C2(L5) -1-> N
+//	      .  \  -5-> L4 -1-> N
+//	       .          \ -4-> L3 -1-> N
+//	        .                 \  -3-> L2 -1-> N
+//	         4                         \ -2-> L1 -1-> N
+//	          .                                \ -1-> L0
+//	         C1(L3) -1-> N
+//	             \  -3-> L2 -1-> N
+//	                      \ -2-> L1 -1-> N
+//	                              \ -1-> L0
 //
-// Sink: -5-> C3(L3') -1-> N
+// Sink:
 //
-//	.   \ -3-> L2 -1-> N
-//	 .   \      \ -2-> L1 -1-> N
-//	  .   \             \ -1-> L0
-//	   .   \  - "oy!"
-//	    4
-//	     .
-//	   C1(L3) -1-> N
-//	       \  -3-> L2 -1-> N
-//	                \ -2-> L1 -1-> N
-//	                        \ -1-> L0
+//	-5-> C3(L3') -1-> N
+//	      .   \ -3-> L2 -1-> N
+//	       .   \      \ -2-> L1 -1-> N
+//	        .   \             \ -1-> L0
+//	         .   \  - "oy!"
+//	          4
+//	           .
+//	         C1(L3) -1-> N
+//	             \  -3-> L2 -1-> N
+//	                      \ -2-> L1 -1-> N
+//	                              \ -1-> L0
 func (suite *PullSuite) TestPullDivergentHistory() {
 	sinkL := buildListOfHeight(3, suite.sinkVRW)
 	sinkAddr := suite.commitToSink(sinkL, nil)
@@ -305,25 +310,27 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 	suite.True(srcL.Equals(mustGetCommittedValue(suite.sinkVRW, v)))
 }
 
-// Source: -6-> C2(L4) -1-> N
+// Source:
 //
-//	.  \  -4-> L3 -1-> N
-//	  .         \ -3-> L2 -1-> N
-//	   .                \ - "oy!"
-//	    5                \ -2-> L1 -1-> N
-//	     .                       \ -1-> L0
-//	    C1(L4) -1-> N
-//	        \  -4-> L3 -1-> N
-//	                 \ -3-> L2 -1-> N
-//	                         \ -2-> L1 -1-> N
-//	                                 \ -1-> L0
+//	-6-> C2(L4) -1-> N
+//	      .  \  -4-> L3 -1-> N
+//	        .         \ -3-> L2 -1-> N
+//	         .                \ - "oy!"
+//	          5                \ -2-> L1 -1-> N
+//	           .                       \ -1-> L0
+//	          C1(L4) -1-> N
+//	              \  -4-> L3 -1-> N
+//	                       \ -3-> L2 -1-> N
+//	                               \ -2-> L1 -1-> N
+//	                                       \ -1-> L0
 //
-// Sink: -5-> C1(L4) -1-> N
+// Sink:
 //
-//	\  -4-> L3 -1-> N
-//	         \ -3-> L2 -1-> N
-//	                 \ -2-> L1 -1-> N
-//	                         \ -1-> L0
+//	-5-> C1(L4) -1-> N
+//	         \  -4-> L3 -1-> N
+//	                  \ -3-> L2 -1-> N
+//	                          \ -2-> L1 -1-> N
+//	                                  \ -1-> L0
 func (suite *PullSuite) TestPullUpdates() {
 	sinkL := buildListOfHeight(4, suite.sinkVRW)
 	suite.commitToSink(sinkL, nil)

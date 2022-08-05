@@ -29,8 +29,7 @@ import (
 )
 
 // TODO: we need tests for manual DOLT_COMMIT as well, but that's difficult with the way that functions are resolved
-//
-//	in the engine.
+// in the engine.
 func TestDoltTransactionCommitOneClient(t *testing.T) {
 	// In this test, we're setting only one client to match transaction commits to dolt commits.
 	// Autocommit is disabled for the enabled client, as it's the recommended way to use this feature.
