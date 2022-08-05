@@ -22,7 +22,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_branch", Schema: int64Schema("status"), Function: doltBranch},
 	{Name: "dolt_checkout", Schema: int64Schema("status"), Function: doltCheckout},
 	{Name: "dolt_clean", Schema: int64Schema("status"), Function: doltClean},
-	{Name: "dolt_clone", Schema: int64Schema("status"), Function: doltClone},
+	{Name: "dolt_clone", Schema: int64Schema("status"), Function: doltClone, WorksWithoutDatabase: true},
 	{Name: "dolt_commit", Schema: stringSchema("hash"), Function: doltCommit},
 	{Name: "dolt_fetch", Schema: int64Schema("success"), Function: doltFetch},
 	{Name: "dolt_merge", Schema: int64Schema("fast_forward", "conflicts"), Function: doltMerge},
@@ -33,10 +33,13 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_revert", Schema: int64Schema("status"), Function: doltRevert},
 	{Name: "dolt_tag", Schema: int64Schema("status"), Function: doltTag},
 	{Name: "dolt_verify_constraints", Schema: int64Schema("violations"), Function: doltVerifyConstraints},
+
+	// Dolt stored procedure aliases
 	{Name: "dadd", Schema: int64Schema("status"), Function: doltAdd},
 	{Name: "dbranch", Schema: int64Schema("status"), Function: doltBranch},
 	{Name: "dcheckout", Schema: int64Schema("status"), Function: doltCheckout},
 	{Name: "dclean", Schema: int64Schema("status"), Function: doltClean},
+	{Name: "dclone", Schema: int64Schema("status"), Function: doltClone, WorksWithoutDatabase: true},
 	{Name: "dcommit", Schema: stringSchema("hash"), Function: doltCommit},
 	{Name: "dfetch", Schema: int64Schema("success"), Function: doltFetch},
 	{Name: "dmerge", Schema: int64Schema("fast_forward", "conflicts"), Function: doltMerge},
