@@ -33,7 +33,7 @@ teardown() {
     [[ ! "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
 
     # validate TEXT migration
-    run dolt sql -q "select film_id, title from film limit 1" -r csv
+    run dolt sql -q "select film_id, title from film order by film_id limit 1" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1,ACADEMY DINOSAUR" ]] || false
 }
