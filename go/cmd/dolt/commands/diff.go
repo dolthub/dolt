@@ -670,13 +670,13 @@ func getColumnNamesString(fromSch, toSch schema.Schema) string {
 	var cols []string
 	if fromSch != nil {
 		fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			cols = append(cols, fmt.Sprintf("from_%s", col.Name))
+			cols = append(cols, fmt.Sprintf("`from_%s`", col.Name))
 			return false, nil
 		})
 	}
 	if toSch != nil {
 		toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			cols = append(cols, fmt.Sprintf("to_%s", col.Name))
+			cols = append(cols, fmt.Sprintf("`to_%s`", col.Name))
 			return false, nil
 		})
 	}

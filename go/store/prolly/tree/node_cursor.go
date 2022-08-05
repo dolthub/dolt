@@ -444,11 +444,13 @@ func (cur *Cursor) fetchNode(ctx context.Context) (err error) {
 //
 // cur:   L3 -> 4, L2 -> 2, L1 -> 5, L0 -> 2
 // other: L3 -> 4, L2 -> 2, L1 -> 5, L0 -> 4
-//    res => -2 (from level 0)
+//
+//	res => -2 (from level 0)
 //
 // cur:   L3 -> 4, L2 -> 2, L1 -> 5, L0 -> 2
 // other: L3 -> 4, L2 -> 3, L1 -> 5, L0 -> 4
-//    res => +1 (from level 2)
+//
+//	res => +1 (from level 2)
 func (cur *Cursor) Compare(other *Cursor) int {
 	return compareCursors(cur, other)
 }

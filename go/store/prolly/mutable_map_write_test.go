@@ -445,7 +445,7 @@ func testInternalNodeSplits(t *testing.T) {
 		tuples[i][0] = bld.Build(sharedPool)
 		tuples[i][1] = val.EmptyTuple
 	}
-	pm := prollyMapFromTuples(t, kd, vd, tuples).(Map)
+	pm := mustProllyMapFromTuples(t, kd, vd, tuples)
 
 	// reproduces chunker panic (k = 10_600)
 	repro := 20_000
@@ -478,8 +478,8 @@ func ascendingIntMapWithStep(t *testing.T, count, step int) Map {
 		v := int64(i * step)
 		tuples[i][0], tuples[i][1] = makePut(v, v)
 	}
-	pm := prollyMapFromTuples(t, mutKeyDesc, mutValDesc, tuples)
-	return pm.(Map)
+	pm := mustProllyMapFromTuples(t, mutKeyDesc, mutValDesc, tuples)
+	return pm
 }
 
 var mutKeyDesc = val.NewTupleDescriptor(

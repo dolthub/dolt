@@ -122,7 +122,6 @@ func TestMarshalTypeType(tt *testing.T) {
 	})), ts)
 }
 
-//
 func assertMarshalTypeErrorMessage(t *testing.T, v interface{}, expectedMessage string) {
 	_, err := MarshalType(types.Format_Default, v)
 	assert.Error(t, err)

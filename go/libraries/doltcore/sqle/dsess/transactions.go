@@ -122,7 +122,7 @@ var txLock sync.Mutex
 // |tx.startRoot| is ancRoot
 // if workingSet.workingRoot == ancRoot, attempt a fast-forward merge
 // TODO: Non-working roots aren't merged into the working set and just stomp any changes made there. We need merge
-//  strategies for staged as well as merge state.
+// strategies for staged as well as merge state.
 func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
 	ws, _, err := tx.doCommit(ctx, workingSet, nil, txCommit)
 	return ws, err
