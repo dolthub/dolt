@@ -27,11 +27,11 @@ import "github.com/dolthub/dolt/go/store/d"
 //    - if either type is Union, return true iff at least one variant of |a| intersects with one variant of |b|
 //    - if |a| & |b| are not the same kind, return false
 //    - else
-//      - if both are structs, return true iff their names are equal or one name is "", they share a field name
-//        and the type of that field intersects
-//      - if both are refs, sets or lists, return true iff the element type intersects
-//      - if both are maps, return true iff they have a key with the same type and value types that intersect
-//      - else return true
+//        - if both are structs, return true iff their names are equal or one name is "", they share a field name
+//          and the type of that field intersects
+//        - if both are refs, sets or lists, return true iff the element type intersects
+//        - if both are maps, return true iff they have a key with the same type and value types that intersect
+//        - else return true
 func ContainCommonSupertype(nbf *NomsBinFormat, a, b *Type) bool {
 	// Avoid cycles internally.
 	return containCommonSupertypeImpl(nbf, a, b, nil, nil)

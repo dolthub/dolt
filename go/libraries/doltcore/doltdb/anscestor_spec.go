@@ -65,11 +65,11 @@ func parseInstructions(aSpec string) ([]int, error) {
 var emptyASpec = &AncestorSpec{"", []int{}}
 
 // AncestorSpec supports using ^, ^N, and ~N together to specify an ancestor of a commit.
-//   ^ after a commit spec means the first parent of that commit. ^<n> means the <n>th parent (i.e. <rev>^ is equivalent
-//     to <rev>^1). As a special rule.
-//   ~<n> after a commit spec means the commit object that is the <n>th generation grand-parent of the named commit
-//     object, following only the first parents. I.e. <rev>~3 is equivalent to <rev>^^^ which is equivalent to
-//     <rev>^1^1^1. See below for an illustration of the usage of this form.
+// ^ after a commit spec means the first parent of that commit. ^<n> means the <n>th parent (i.e. <rev>^ is equivalent
+// to <rev>^1). As a special rule.
+// ~<n> after a commit spec means the commit object that is the <n>th generation grand-parent of the named commit
+// object, following only the first parents. I.e. <rev>~3 is equivalent to <rev>^^^ which is equivalent to
+// <rev>^1^1^1. See below for an illustration of the usage of this form.
 type AncestorSpec struct {
 
 	// SpecStr is string representation of the AncestorSpec

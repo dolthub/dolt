@@ -99,11 +99,11 @@ func NewThreeWay(resolve ResolveFunc) Policy {
 //     - if the two merged values are still different: conflict
 //   - if a key was inserted in one candidate and removed in the other: conflict
 // - If the values are structs:
-//   - Same as map, except using field names instead of map keys
+//     - Same as map, except using field names instead of map keys
 // - If the values are sets:
-//   - Apply the changes from both candidates to the parent to get the result. No conflicts are possible.
+//     - Apply the changes from both candidates to the parent to get the result. No conflicts are possible.
 // - If the values are list:
-//   - Apply list-merge (see below)
+//     - Apply list-merge (see below)
 //
 // Merge rules for List are a bit more complex than Map, Struct, and Set due
 // to a wider away of potential use patterns. A List might be a de-facto Map

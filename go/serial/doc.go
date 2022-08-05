@@ -20,8 +20,10 @@ tree type for encoding data, and supportive metadata types like ForeignKey,
 TableSchema, Column, ...etc are stored inline. In order of decreasing hierarchy:
   - StoreRoot is the tip of a database. Contains a map from dataset name to HEAD
     rootish in the form of an AddressMap
-    - ex:   main -> abcdefghij0123456789
-            feature -> abcdefghij0123456789
+    - ex:
+        main -> abcdefghij0123456789
+        feature -> abcdefghij0123456789
+
   - An AddressMap is itself a prolly tree (see NodeStore above) that can contains
     a name->rootish mapping of arbitrary size
   - A Rootish is informally a RootValue hash (like a working or staging hash), a

@@ -114,7 +114,7 @@ func UnmarshalOpt(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, 
 // calling UnmarshalNoms will effectively do nothing. For example, to unmarshal
 // a MyType you would define:
 //
-//  func (t *MyType) UnmarshalNoms(v types.Value) error {}
+// func (t *MyType) UnmarshalNoms(v types.Value) error {}
 type Unmarshaler interface {
 	// UnmarshalNoms decodes v, or returns an error.
 	UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error

@@ -176,7 +176,8 @@ func (pt *progressTracker) Validate(suite *PullSuite) {
 	}
 }
 
-// Source: -3-> C(L2) -1-> N
+// Source:
+//         -3-> C(L2) -1-> N
 //                 \  -2-> L1 -1-> N
 //                          \ -1-> L0
 //
@@ -200,7 +201,8 @@ func (suite *PullSuite) TestPullEverything() {
 	suite.True(l.Equals(mustGetCommittedValue(suite.sinkVRW, v)))
 }
 
-// Source: -6-> C3(L5) -1-> N
+// Source:
+//         -6-> C3(L5) -1-> N
 //               .  \  -5-> L4 -1-> N
 //                .          \ -4-> L3 -1-> N
 //                 .                 \  -3-> L2 -1-> N
@@ -216,7 +218,8 @@ func (suite *PullSuite) TestPullEverything() {
 //                         \  -2-> L1 -1-> N
 //                                  \ -1-> L0
 //
-// Sink: -3-> C1(L2) -1-> N
+// Sink:
+//       -3-> C1(L2) -1-> N
 //                \  -2-> L1 -1-> N
 //                         \ -1-> L0
 func (suite *PullSuite) TestPullMultiGeneration() {
@@ -247,7 +250,8 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 	suite.True(srcL.Equals(mustGetCommittedValue(suite.sinkVRW, v)))
 }
 
-// Source: -6-> C2(L5) -1-> N
+// Source:
+//         -6-> C2(L5) -1-> N
 //               .  \  -5-> L4 -1-> N
 //                .          \ -4-> L3 -1-> N
 //                 .                 \  -3-> L2 -1-> N
@@ -258,7 +262,8 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 //                               \ -2-> L1 -1-> N
 //                                       \ -1-> L0
 //
-// Sink: -5-> C3(L3') -1-> N
+// Sink:
+//       -5-> C3(L3') -1-> N
 //             .   \ -3-> L2 -1-> N
 //              .   \      \ -2-> L1 -1-> N
 //               .   \             \ -1-> L0
@@ -300,7 +305,8 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 	suite.True(srcL.Equals(mustGetCommittedValue(suite.sinkVRW, v)))
 }
 
-// Source: -6-> C2(L4) -1-> N
+// Source:
+//         -6-> C2(L4) -1-> N
 //               .  \  -4-> L3 -1-> N
 //                 .         \ -3-> L2 -1-> N
 //                  .                \ - "oy!"
@@ -311,7 +317,8 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 //                                \ -3-> L2 -1-> N
 //                                        \ -2-> L1 -1-> N
 //                                                \ -1-> L0
-// Sink: -5-> C1(L4) -1-> N
+// Sink:
+//       -5-> C1(L4) -1-> N
 //                \  -4-> L3 -1-> N
 //                         \ -3-> L2 -1-> N
 //                                 \ -2-> L1 -1-> N
