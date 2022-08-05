@@ -850,3 +850,11 @@ SQL
     run dolt diff HEAD~1
     [ "${#lines[@]}" -eq 2007 ] # 2000 diffs + 6 for top rows before data + 1 for bottom row of table
 }
+
+@test "diff: works with spaces in column names" {
+   dolt sql -q 'CREATE table t (pk int, `type of food` varchar(100));'
+   dolt sql -q "INSERT INTO t VALUES (1, 'ramen');"
+   run dolt diff
+   [ $status -eq 0 ]
+   [[ $output =~ '| + | 1  | ramen        |' ]] || false
+}

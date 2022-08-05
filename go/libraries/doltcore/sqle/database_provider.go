@@ -400,7 +400,7 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	return nil
 }
 
-//TODO: databaseForRevision should call checkout on the given branch/commit, returning a non-mutable session
+// TODO: databaseForRevision should call checkout on the given branch/commit, returning a non-mutable session
 // only if a non-branch revspec was indicated.
 func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string) (sql.Database, dsess.InitialDbState, bool, error) {
 	if !strings.Contains(revDB, dbRevisionDelimiter) {

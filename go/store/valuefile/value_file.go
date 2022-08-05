@@ -112,11 +112,13 @@ func WriteToWriter(ctx context.Context, wr io.Writer, store *FileValueStore, val
 // uint32 num chunks
 //
 // for each chunk:
-//   hash of chunk
-//   len of chunk
+//
+//	hash of chunk
+//	len of chunk
 //
 // for each chunk
-//   chunk bytes
+//
+//	chunk bytes
 func write(wr io.Writer, h hash.Hash, store *FileValueStore) error {
 	// The Write*IfNoErr functions makes the error handling code less annoying
 	err := iohelp.WritePrimIfNoErr(wr, uint32(len(store.nbf.VersionString())), nil)
