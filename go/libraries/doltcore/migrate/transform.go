@@ -17,6 +17,7 @@ package migrate
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"golang.org/x/sync/errgroup"
@@ -238,7 +239,98 @@ func migrateCommitOptions(ctx context.Context, oldCm *doltdb.Commit, prog Progre
 }
 
 func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.RootValue) (*doltdb.RootValue, error) {
+	eg, ctx := errgroup.WithContext(ctx)
+	completed := &sync.Map{}
+
+	err := oldRoot.IterTables(ctx, func(name string, oldTbl *doltdb.Table, sch schema.Schema) (bool, error) {
+		eg.Go(func() error {
+			ok, err := oldTbl.HasConflicts(ctx)
+			if err != nil {
+				return err
+			} else if ok {
+				return fmt.Errorf("cannot migrate table with conflicts (%s)", name)
+			}
+
+			// maybe patch dolt_schemas, dolt docs
+			var newSch schema.Schema
+			if doltdb.HasDoltPrefix(name) {
+				if newSch, err = patchMigrateSchema(ctx, sch); err != nil {
+					return err
+				}
+			} else {
+				newSch = sch
+			}
+			if err = validateSchema(newSch); err != nil {
+				return err
+			}
+
+			// if there was a schema change in this commit,
+			// diff against an empty table and rewrite everything
+			var parentSch schema.Schema
+
+			oldParentTbl, ok, err := oldParent.GetTable(ctx, name)
+			if err != nil {
+				return err
+			}
+			if ok {
+				parentSch, err = oldParentTbl.GetSchema(ctx)
+				if err != nil {
+					return err
+				}
+			}
+			if !ok || !schema.SchemasAreEqual(sch, parentSch) {
+				// provide empty table to diff against
+				oldParentTbl, err = doltdb.NewEmptyTable(ctx, oldParent.VRW(), oldParent.NodeStore(), sch)
+				if err != nil {
+					return err
+				}
+			}
+
+			newParentTbl, ok, err := newParent.GetTable(ctx, name)
+			if err != nil {
+				return err
+			}
+			if !ok || !schema.SchemasAreEqual(sch, parentSch) {
+				// provide empty table to diff against
+				newParentTbl, err = doltdb.NewEmptyTable(ctx, newParent.VRW(), newParent.NodeStore(), newSch)
+				if err != nil {
+					return err
+				}
+			}
+
+			mtbl, err := migrateTable(ctx, newSch, oldParentTbl, oldTbl, newParentTbl)
+			if err != nil {
+				return err
+			}
+			completed.Store(name, mtbl)
+			return nil
+		})
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if err = eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	names, err := oldRoot.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	migrated := newParent
+	for i := range names {
+		m, ok := completed.Load(names[i])
+		if !ok {
+			return nil, fmt.Errorf("could not find migrated table %s", names[i])
+		}
+		migrated, err = migrated.PutTable(ctx, names[i], m.(*doltdb.Table))
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	fkc, err := oldRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
@@ -246,76 +338,6 @@ func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.Root
 	}
 
 	migrated, err = migrated.PutForeignKeyCollection(ctx, fkc)
-	if err != nil {
-		return nil, err
-	}
-
-	err = oldRoot.IterTables(ctx, func(name string, oldTbl *doltdb.Table, sch schema.Schema) (bool, error) {
-		ok, err := oldTbl.HasConflicts(ctx)
-		if err != nil {
-			return true, err
-		} else if ok {
-			return true, fmt.Errorf("cannot migrate table with conflicts (%s)", name)
-		}
-
-		// maybe patch dolt_schemas, dolt docs
-		var newSch schema.Schema
-		if doltdb.HasDoltPrefix(name) {
-			if newSch, err = patchMigrateSchema(ctx, sch); err != nil {
-				return true, err
-			}
-		} else {
-			newSch = sch
-		}
-		if err = validateSchema(newSch); err != nil {
-			return true, err
-		}
-
-		// if there was a schema change in this commit,
-		// diff against an empty table and rewrite everything
-		var parentSch schema.Schema
-
-		oldParentTbl, ok, err := oldParent.GetTable(ctx, name)
-		if err != nil {
-			return true, err
-		}
-		if ok {
-			parentSch, err = oldParentTbl.GetSchema(ctx)
-			if err != nil {
-				return true, err
-			}
-		}
-		if !ok || !schema.SchemasAreEqual(sch, parentSch) {
-			// provide empty table to diff against
-			oldParentTbl, err = doltdb.NewEmptyTable(ctx, oldParent.VRW(), oldParent.NodeStore(), sch)
-			if err != nil {
-				return true, err
-			}
-		}
-
-		newParentTbl, ok, err := newParent.GetTable(ctx, name)
-		if err != nil {
-			return true, err
-		}
-		if !ok || !schema.SchemasAreEqual(sch, parentSch) {
-			// provide empty table to diff against
-			newParentTbl, err = doltdb.NewEmptyTable(ctx, newParent.VRW(), newParent.NodeStore(), newSch)
-			if err != nil {
-				return true, err
-			}
-		}
-
-		mtbl, err := migrateTable(ctx, newSch, oldParentTbl, oldTbl, newParentTbl)
-		if err != nil {
-			return true, err
-		}
-
-		migrated, err = migrated.PutTable(ctx, name, mtbl)
-		if err != nil {
-			return true, err
-		}
-		return false, nil
-	})
 	if err != nil {
 		return nil, err
 	}
