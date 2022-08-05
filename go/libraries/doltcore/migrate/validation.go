@@ -91,8 +91,8 @@ func validateTableData(ctx context.Context, name string, old, new *doltdb.Table)
 
 	eg, ctx := errgroup.WithContext(ctx)
 	for i := range parts {
+		start, end := parts[i][0], parts[i][1]
 		eg.Go(func() error {
-			start, end := parts[i][0], parts[i][1]
 			return validateTableDataPartition(ctx, name, old, new, start, end)
 		})
 	}
