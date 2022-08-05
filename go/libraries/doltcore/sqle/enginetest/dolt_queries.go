@@ -29,6 +29,57 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
+var ViewsWithAsOfScriptTest = queries.ScriptTest{
+	Name: "Querying a view with a union using an as of expression",
+	SetUpScript: []string{
+		"CALL dolt_commit('--allow-empty', '-m', 'cm0');",
+
+		"CREATE TABLE t1 (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+		"CALL dolt_commit('-am', 'cm1');",
+		"INSERT INTO t1 (c0) VALUES (1), (2);",
+		"CALL dolt_commit('-am', 'cm2');",
+
+		"CREATE TABLE t2 (pk int PRIMARY KEY AUTO_INCREMENT, vc varchar(100));",
+		"CALL dolt_commit('-am', 'cm3');",
+		"INSERT INTO t2 (vc) VALUES ('one'), ('two');",
+		"CALL dolt_commit('-am', 'cm4');",
+
+		"CREATE VIEW v1 as select * from t1 union select * from t2",
+		"CALL dolt_commit('-am', 'cm5');",
+	},
+	Assertions: []queries.ScriptTestAssertion{
+		{
+			Query:    "select * from v1",
+			Expected: []sql.Row{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
+		},
+		{
+			Query:    "select * from v1 as of 'HEAD'",
+			Expected: []sql.Row{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
+		},
+		{
+			Query:    "select * from v1 as of 'HEAD~1'",
+			Expected: []sql.Row{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
+		},
+		{
+			Query:    "select * from v1 as of 'HEAD~2'",
+			Expected: []sql.Row{{1, "1"}, {2, "2"}},
+		},
+		{
+			// At this point table t1 doesn't exist yet, so the view should return an error
+			Query:          "select * from v1 as of 'HEAD~3'",
+			ExpectedErrStr: "table not found: t2, maybe you mean t1?",
+		},
+		{
+			Query:          "select * from v1 as of 'HEAD~4'",
+			ExpectedErrStr: "table not found: t2, maybe you mean t1?",
+		},
+		{
+			Query:          "select * from v1 as of 'HEAD~5'",
+			ExpectedErrStr: "table not found: t1",
+		},
+	},
+}
+
 var ShowCreateTableAsOfScriptTest = queries.ScriptTest{
 	Name: "Show create table as of",
 	SetUpScript: []string{
