@@ -16,7 +16,7 @@ package editor
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -70,7 +70,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 					2: types.Int(val),
 				})
 				require.NoError(t, err)
-				require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, nil))
+				require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, handleDuplicateKeyError))
 				wg.Done()
 			}(j)
 		}
@@ -160,7 +160,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, nil))
+		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, handleDuplicateKeyError))
 	}
 	table, err = tableEditor.Table(context.Background())
 	require.NoError(t, err)
@@ -254,7 +254,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, nil))
+		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, handleDuplicateKeyError))
 	}
 
 	_, err = tableEditor.Table(context.Background())
@@ -298,6 +298,10 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 	assert.True(t, sameTableData.Equals(newTableData))
 }
 
+func handleDuplicateKeyError(newKeyString, indexName string, existingKey, existingVal types.Tuple, isPk bool) error {
+	return fmt.Errorf("is primary key: %v", isPk)
+}
+
 func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 	format := types.Format_Default
 	_, vrw, ns, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
@@ -324,7 +328,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, nil))
+		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, handleDuplicateKeyError))
 	}
 
 	_, err = tableEditor.Table(context.Background())
@@ -337,8 +341,8 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		err = tableEditor.InsertRow(context.Background(), dRow, nil)
-		require.True(t, errors.Is(err, ErrDuplicateKey))
+		err = tableEditor.InsertRow(context.Background(), dRow, handleDuplicateKeyError)
+		require.Error(t, err)
 	}
 
 	_, err = tableEditor.Table(context.Background())
@@ -351,7 +355,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, nil))
+		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, handleDuplicateKeyError))
 	}
 
 	newTable, err := tableEditor.Table(context.Background())
@@ -412,7 +416,7 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, tableEditor.InsertRow(ctx, dRow, nil))
+		require.NoError(t, tableEditor.InsertRow(ctx, dRow, handleDuplicateKeyError))
 	}
 
 	_, err = tableEditor.Table(ctx)
@@ -425,16 +429,16 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 			2: types.Int(i + 10),
 		})
 		require.NoError(t, err)
-		err = tableEditor.InsertRow(ctx, dRow, nil)
-		require.True(t, errors.Is(err, ErrDuplicateKey))
+		err = tableEditor.InsertRow(ctx, dRow, handleDuplicateKeyError)
+		require.Error(t, err)
 		dRow, err = row.New(format, tableSch, row.TaggedValues{
 			0: types.Int(i + 10),
 			1: types.Int(i + 10),
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		err = tableEditor.InsertRow(ctx, dRow, nil)
-		require.True(t, errors.Is(err, ErrDuplicateKey))
+		err = tableEditor.InsertRow(ctx, dRow, handleDuplicateKeyError)
+		require.Error(t, err)
 	}
 
 	table, err = tableEditor.Table(ctx)

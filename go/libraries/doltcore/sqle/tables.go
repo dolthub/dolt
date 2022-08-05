@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"runtime"
 	"sort"
@@ -996,7 +997,7 @@ func (itr *doltTablePartitionIter) Next(*sql.Context) (sql.Partition, error) {
 
 var _ sql.Partition = doltTablePartition{}
 
-const NoUpperBound = 0xffffffffffffffff
+const NoUpperBound = math.MaxUint64
 
 type doltTablePartition struct {
 	// half-open index range of partition: [start, end)

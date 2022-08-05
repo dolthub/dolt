@@ -251,6 +251,8 @@ func benchmark(
 	run := sysbenchRun(ctx, test, config.ScriptDir)
 	cleanup := sysbenchCleanup(ctx, test, config.ScriptDir)
 
+	fmt.Println("Running test ", test.Name)
+
 	out, err := prepare.Output()
 	if err != nil {
 		fmt.Println(string(out))
