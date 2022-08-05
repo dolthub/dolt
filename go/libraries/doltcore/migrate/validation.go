@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
@@ -127,7 +128,7 @@ func validateTableDataPartition(ctx context.Context, name string, old, new *dolt
 			return err
 		}
 
-		ok, err := o.Equals(n, newSch)
+		ok, err := equalRows(o, n, newSch)
 		if err != nil {
 			return err
 		} else if !ok {
@@ -142,6 +143,37 @@ func validateTableDataPartition(ctx context.Context, name string, old, new *dolt
 		return fmt.Errorf("differing number of rows for table %s", name)
 	}
 	return nil
+}
+
+func equalRows(old, new sql.Row, sch sql.Schema) (bool, error) {
+	if len(new) != len(new) || len(new) != len(sch) {
+		return false, nil
+	}
+
+	var err error
+	var cmp int
+	for i := range new {
+		// special case time comparison to account
+		// for precision changes between formats
+		if _, ok := old[i].(time.Time); ok {
+			if old[i], err = sql.Int64.Convert(old[i]); err != nil {
+				return false, err
+			}
+			if new[i], err = sql.Int64.Convert(new[i]); err != nil {
+				return false, err
+			}
+			cmp, err = sql.Int64.Compare(old[i], new[i])
+		} else {
+			cmp, err = sch[i].Type.Compare(old[i], new[i])
+		}
+		if err != nil {
+			return false, err
+		} else if cmp != 0 {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
 
 func validateSchema(existing schema.Schema) error {
