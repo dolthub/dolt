@@ -350,55 +350,68 @@ func (p *Parser) parseMapType() (*types.Type, error) {
 }
 
 // Value :
-//   Type
-//   Bool
-//   Float
-//   String
-//   List
-//   Set
-//   Map
-//   Struct
-//   Tuple
+//
+//	Type
+//	Bool
+//	Float
+//	String
+//	List
+//	Set
+//	Map
+//	Struct
+//	Tuple
 //
 // Bool :
-//   `true`
-//   `false`
+//
+//	`true`
+//	`false`
 //
 // Float :
-//   ...
+//
+//	...
 //
 // String :
-//   ...
+//
+//	...
 //
 // List :
-//   `[` Values? `]`
+//
+//	`[` Values? `]`
 //
 // Values :
-//   Value
-//   Value `,` Values?
+//
+//	Value
+//	Value `,` Values?
 //
 // Set :
-//   `set` `{` Values? `}`
+//
+//	`set` `{` Values? `}`
 //
 // Map :
-//   `map` `{` MapEntries? `}`
+//
+//	`map` `{` MapEntries? `}`
 //
 // MapEntries :
-//   MapEntry
-//   MapEntry `,` MapEntries?
+//
+//	MapEntry
+//	MapEntry `,` MapEntries?
 //
 // MapEntry :
-//   Value `:` Value
+//
+//	Value `:` Value
 //
 // Struct :
-//   `struct` StructName? `{` StructFields? `}`
+//
+//	`struct` StructName? `{` StructFields? `}`
 //
 // StructFields :
-//   StructField
-//   StructField `,` StructFields?
+//
+//	StructField
+//	StructField `,` StructFields?
 //
 // StructField :
-//   StructFieldName `:` Value
+//
+//	StructFieldName `:` Value
 func (p *Parser) parseValue(ctx context.Context) (types.Value, error) {
 	tok := p.lex.next()
 	switch tok {
