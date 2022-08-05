@@ -101,7 +101,7 @@ func PanicIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.Chu
 }
 
 const (
-	defaultDecodedChunksSize = 1 << 30 // 32MB
+	defaultDecodedChunksSize = 1 << 25 // 32MB
 	defaultPendingPutMax     = 1 << 28 // 256MB
 
 	gcBuffSize = 16
