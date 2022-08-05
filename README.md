@@ -3,7 +3,7 @@
 # Dolt is Git for Data!
 
 Dolt is a SQL database that you can fork, clone, branch, merge, push
-and pull just like a git repository. Connect to Dolt just like any
+and pull just like a Git repository. Connect to Dolt just like any
 MySQL database to run queries or update the data using SQL
 commands. Use the command line interface to import CSV files, commit
 your changes, push them to a remote, or merge your teammate's changes.
@@ -17,7 +17,8 @@ Dolt databases. We host public data for free. If you want to host
 your own version of DoltHub, we have [DoltLab](https://www.doltlab.com). If you want us to run a Dolt server for you, we have [Hosted Dolt](https://hosted.doltdb.com).
 
 [Join us on Discord](https://discord.com/invite/RFwfYpu) to say hi and
-ask questions.
+ask questions, or [check out our roadmap](https://docs.dolthub.com/other/roadmap) 
+to see what we're building next.
 
 ## What's it for?
 
@@ -787,7 +788,7 @@ Dolt provides powerful data audit capabilities down to individual cells. When, h
 
 # Additional Reading
 
-Head over to [our documentation](https://docs.dolthub.com/introduction/what-is-dolt) now that you have a feel for Dolt.
+Head over to [our documentation](https://docs.dolthub.com/introduction/what-is-dolt) now that you have a feel for Dolt. You can also read about what we've been working on in [our blog](https://www.dolthub.com/blog/).
 
 # Credits and License
 
