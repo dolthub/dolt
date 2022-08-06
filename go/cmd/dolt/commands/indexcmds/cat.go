@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
@@ -36,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var catDocs = cli.CommandDocumentationContent{
@@ -146,12 +144,6 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 func (cmd CatCmd) prettyPrintResults(ctx context.Context, doltSch schema.Schema, idx durable.Index) error {
 
-	s, err := sqlutil.FromDoltSchema("", doltSch)
-	if err != nil {
-		return err
-	}
-	sqlSch := s.Schema
-
 	wr, err := getTableWriter(cmd.resultFormat, doltSch)
 	if err != nil {
 		return err
@@ -161,7 +153,7 @@ func (cmd CatCmd) prettyPrintResults(ctx context.Context, doltSch schema.Schema,
 	sess := dsess.DefaultSession(dsess.EmptyDatabaseProvider())
 	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
 
-	rowItr, err := getRowIter(ctx, doltSch, sqlSch, idx)
+	rowItr, err := table.NewTableIterator(ctx, doltSch, idx, 0)
 	if err != nil {
 		return err
 	}
@@ -207,32 +199,4 @@ func getTableWriter(format resultFormat, sch schema.Schema) (wr table.SqlTableWr
 	}
 
 	return wr, nil
-}
-
-func getRowIter(ctx context.Context, sch schema.Schema, sqlSch sql.Schema, idx durable.Index) (rowItr sql.RowIter, err error) {
-	if types.IsFormat_DOLT_1(idx.Format()) {
-		m := durable.ProllyMapFromIndex(idx)
-		itr, err := m.IterAll(ctx)
-		if err != nil {
-			return nil, err
-		}
-		rowItr, err = index.NewProllyRowIter(sch, sqlSch, m, itr, nil)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		cols := sch.GetAllCols().GetColumns()
-		tagToSqlColIdx := make(map[uint64]int)
-		for i, col := range cols {
-			tagToSqlColIdx[col.Tag] = i
-		}
-		noms := durable.NomsMapFromIndex(idx)
-		itr, err := noms.Iterator(ctx)
-		if err != nil {
-			return nil, err
-		}
-		conv := index.NewKVToSqlRowConverter(idx.Format(), tagToSqlColIdx, cols, len(cols))
-		rowItr = index.NewDoltMapIter(itr.NextTuple, nil, conv)
-	}
-	return rowItr, nil
 }

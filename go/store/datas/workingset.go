@@ -90,12 +90,14 @@ type WorkingSetSpec struct {
 // A working set struct has the following type:
 //
 // ```
-// struct WorkingSet {
-//   meta: M,
-//   workingRootRef: R,
-//   stagedRootRef: R,
-//   mergeState: R,
-// }
+//
+//	struct WorkingSet {
+//	  meta: M,
+//	  workingRootRef: R,
+//	  stagedRootRef: R,
+//	  mergeState: R,
+//	}
+//
 // ```
 // where M is a struct type and R is a ref type.
 func newWorkingSet(ctx context.Context, db *database, meta *WorkingSetMeta, workingRef, stagedRef types.Ref, mergeState *MergeState) (hash.Hash, types.Ref, error) {

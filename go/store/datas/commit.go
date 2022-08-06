@@ -107,13 +107,15 @@ var valueCommitType = nomdl.MustParseType(`Struct Commit {
 // A commit has the following type:
 //
 // ```
-// struct Commit {
-//   meta: M,
-//   parents: Set<Ref<Cycle<Commit>>>,
-//   parentsList: List<Ref<Cycle<Commit>>>,
-//   parentsClosure: Ref<Value>, // Map<Tuple,List<Ref<Value>>>,
-//   value: T,
-// }
+//
+//	struct Commit {
+//	  meta: M,
+//	  parents: Set<Ref<Cycle<Commit>>>,
+//	  parentsList: List<Ref<Cycle<Commit>>>,
+//	  parentsClosure: Ref<Value>, // Map<Tuple,List<Ref<Value>>>,
+//	  value: T,
+//	}
+//
 // ```
 // where M is a struct type and T is any type.
 func newCommit(ctx context.Context, value types.Value, parentsList types.List, parentsClosure types.Ref, includeParentsClosure bool, meta types.Struct) (types.Struct, error) {

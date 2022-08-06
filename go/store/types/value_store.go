@@ -376,11 +376,11 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 // ChunkStore in a way which attempts to locate children and grandchildren
 // sequentially together. The following invariants are retained:
 //
-// 1. For any given chunk currently in the buffer, only direct children of the
-//    chunk may also be presently buffered (any grandchildren will have been
-//    flushed).
-// 2. The total data occupied by buffered chunks does not exceed
-//    lvs.bufferedChunksMax
+//  1. For any given chunk currently in the buffer, only direct children of the
+//     chunk may also be presently buffered (any grandchildren will have been
+//     flushed).
+//  2. The total data occupied by buffered chunks does not exceed
+//     lvs.bufferedChunksMax
 func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk, height uint64) error {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
