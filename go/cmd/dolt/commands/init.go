@@ -32,6 +32,7 @@ const (
 	emailParamName      = "email"
 	usernameParamName   = "name"
 	initBranchParamName = "initial-branch"
+	fun                 = "fun"
 )
 
 var initDocs = cli.CommandDocumentationContent{
@@ -75,6 +76,7 @@ func (cmd InitCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(emailParamName, "", "email", fmt.Sprintf("The email address used. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", env.UserEmailKey))
 	ap.SupportsString(cli.DateParam, "", "date", "Specify the date used in the initial commit. If not specified the current system time is used.")
 	ap.SupportsString(initBranchParamName, "b", "branch", fmt.Sprintf("The branch name used to initialize this database. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config. If unset, the default initialized branch will be named '%s'.", env.InitBranchName, env.DefaultInitBranch))
+	ap.SupportsFlag(fun, "", "Fun!")
 	return ap
 }
 
