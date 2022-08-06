@@ -340,10 +340,10 @@ func (dEnv *DoltEnv) bestEffortDeleteAll(dir string) {
 // InitRepo takes an empty directory and initializes it with a .dolt directory containing repo state, uncommitted license and readme, and creates a noms
 // database with dolt structure.
 func (dEnv *DoltEnv) InitRepo(ctx context.Context, nbf *types.NomsBinFormat, name, email, branchName string) error { // should remove name and email args
-	return dEnv.InitRepoWithTime(ctx, nbf, name, email, branchName, datas.CommitNowFunc())
+	return dEnv.InitRepoWithTime(ctx, nbf, name, email, branchName, datas.CommitNowFunc(), false)
 }
 
-func (dEnv *DoltEnv) InitRepoWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email, branchName string, t time.Time) error { // should remove name and email args
+func (dEnv *DoltEnv) InitRepoWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email, branchName string, t time.Time, dolt_hash bool) error { // should remove name and email args
 	doltDir, err := dEnv.createDirectories(".")
 
 	if err != nil {
@@ -353,7 +353,7 @@ func (dEnv *DoltEnv) InitRepoWithTime(ctx context.Context, nbf *types.NomsBinFor
 	err = dEnv.configureRepo(doltDir)
 
 	if err == nil {
-		err = dEnv.InitDBAndRepoState(ctx, nbf, name, email, branchName, t)
+		err = dEnv.InitDBAndRepoState(ctx, nbf, name, email, branchName, t, dolt_hash)
 	}
 
 	if err != nil {
@@ -429,8 +429,8 @@ func (dEnv *DoltEnv) configureRepo(doltDir string) error {
 
 // Inits the dolt DB of this environment with an empty commit at the time given and writes default docs to disk.
 // Writes new repo state with a main branch and current root hash.
-func (dEnv *DoltEnv) InitDBAndRepoState(ctx context.Context, nbf *types.NomsBinFormat, name, email, branchName string, t time.Time) error {
-	err := dEnv.InitDBWithTime(ctx, nbf, name, email, branchName, t)
+func (dEnv *DoltEnv) InitDBAndRepoState(ctx context.Context, nbf *types.NomsBinFormat, name, email, branchName string, t time.Time, dolt_hash bool) error {
+	err := dEnv.InitDBWithTime(ctx, nbf, name, email, branchName, t, dolt_hash)
 	if err != nil {
 		return err
 	}
@@ -440,14 +440,14 @@ func (dEnv *DoltEnv) InitDBAndRepoState(ctx context.Context, nbf *types.NomsBinF
 
 // Inits the dolt DB of this environment with an empty commit at the time given and writes default docs to disk.
 // Does not update repo state.
-func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email, branchName string, t time.Time) error {
+func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email, branchName string, t time.Time, dolt_hash bool) error {
 	var err error
 	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, dEnv.FS)
 	if err != nil {
 		return err
 	}
 
-	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, branchName, name, email, t)
+	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, branchName, name, email, t, dolt_hash)
 	if err != nil {
 		return fmt.Errorf("%w: %v", doltdb.ErrNomsIO, err)
 	}

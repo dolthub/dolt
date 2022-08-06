@@ -32,5 +32,8 @@ type CommitOptions struct {
 	// parent.
 	Parents []hash.Hash
 
+	// See https://github.com/dolthub/dolt/issues/4015
+	DoltCommitHash bool
+
 	Meta *CommitMeta
 }

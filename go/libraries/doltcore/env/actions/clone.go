@@ -278,7 +278,7 @@ func InitEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 		return ErrEmailNotFound
 	}
 
-	err := dEnv.InitDBWithTime(ctx, types.Format_Default, name, email, initBranch, datas.CommitNowFunc())
+	err := dEnv.InitDBWithTime(ctx, types.Format_Default, name, email, initBranch, datas.CommitNowFunc(), false)
 	if err != nil {
 		return ErrFailedToInitRepo
 	}

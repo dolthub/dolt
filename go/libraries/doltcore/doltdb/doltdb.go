@@ -139,12 +139,12 @@ func (ddb *DoltDB) CSMetricsSummary() string {
 
 // WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid
 // metadata for the creation commit, and an empty RootValue.
-func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, initBranch, name, email string) error {
-	return ddb.WriteEmptyRepoWithCommitTime(ctx, initBranch, name, email, datas.CommitNowFunc())
+func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, initBranch, name, email string, dolt_hash bool) error {
+	return ddb.WriteEmptyRepoWithCommitTime(ctx, initBranch, name, email, datas.CommitNowFunc(), dolt_hash)
 }
 
-func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, initBranch, name, email string, t time.Time) error {
-	return ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, name, email, t, ref.NewBranchRef(initBranch))
+func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, initBranch, name, email string, t time.Time, dolt_hash bool) error {
+	return ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, name, email, t, ref.NewBranchRef(initBranch), dolt_hash)
 }
 
 func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
@@ -152,6 +152,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 	name, email string,
 	t time.Time,
 	init ref.BranchRef,
+	dolt_hash bool,
 ) error {
 	// precondition checks
 	name = strings.TrimSpace(name)
@@ -185,7 +186,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 
 	cm, _ := datas.NewCommitMetaWithUserTS(name, email, "Initialize data repository", t)
 
-	commitOpts := datas.CommitOptions{Meta: cm}
+	commitOpts := datas.CommitOptions{Meta: cm, DoltCommitHash: dolt_hash}
 
 	cb := ref.NewInternalRef(CreationBranch)
 	ds, err = ddb.db.GetDataset(ctx, cb.String())

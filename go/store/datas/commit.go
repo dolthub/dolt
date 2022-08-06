@@ -26,8 +26,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
-	"time"
 
 	flatbuffers "github.com/google/flatbuffers/go"
 
@@ -255,23 +253,6 @@ func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 		return nil, err
 	}
 	r, err := types.NewRef(cv, vrw.Format())
-	rx, _ := regexp.Compile("(?i)^d[o0][1l]t")
-	println("nCFV2")
-	println(r.TargetHash().String())
-	for !rx.MatchString(r.TargetHash().String()) {
-		println(time.Now().UnixMilli())
-		opts.Meta.Timestamp = uint64(time.Now().UnixMilli())
-		opts.Meta.UserTimestamp = time.Now().UnixMilli()
-		metaSt, err = opts.Meta.toNomsStruct(vrw.Format())
-		cv, err = newCommit(ctx, v, parentsList, parentsClosure, includeParentsClosure, metaSt)
-		if err != nil {
-			return nil, err
-		}
-		r, err = types.NewRef(cv, vrw.Format())
-		println("nCFV22")
-		println(r.TargetHash().String())
-	}
-
 	if err != nil {
 		return nil, err
 	}
@@ -300,8 +281,6 @@ func commitPtr(nbf *types.NomsBinFormat, v types.Value, r *types.Ref) (*Commit, 
 	}
 	if r == nil {
 		rv, err := types.NewRef(v, nbf)
-		println("cP")
-		println(rv.TargetHash().String())
 		if err != nil {
 			return nil, err
 		}

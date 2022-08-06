@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -408,8 +409,21 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 }
 
 func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
+	reg := regexp.MustCompile("(?i)^d[o0][1l]t")
+
 	currentAddr, _ := ds.MaybeHeadAddr()
 	commit, err := buildNewCommit(ctx, ds, v, opts)
+
+	if opts.DoltCommitHash {
+		// Run buildNewCommit with updated timestamps until we get the desired commit hash
+		for !reg.MatchString(commit.Addr().String()) {
+			opts.Meta.Timestamp = uint64(CommitNowFunc().UnixMilli())
+			opts.Meta.UserTimestamp = CommitNowFunc().UnixMilli()
+
+			commit, err = buildNewCommit(ctx, ds, v, opts)
+		}
+	}
+
 	if err != nil {
 		return Dataset{}, err
 	}
