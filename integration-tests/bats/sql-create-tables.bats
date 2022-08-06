@@ -767,3 +767,10 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "table not found: myTempTable" ]] || false
 }
+
+@test "sql-create-tables: Deprecated BINARY attribute after character set" {
+    dolt sql <<SQL
+CREATE TABLE budgets(id CHAR(36) CHARACTER SET utf8mb4 BINARY);
+SQL
+    dolt sql -q "INSERT INTO budgets VALUES (UUID());"
+}
