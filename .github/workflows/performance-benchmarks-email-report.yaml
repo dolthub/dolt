@@ -17,7 +17,7 @@ on:
 jobs:
   set-version-actor:
     name: Set Version and Actor
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     outputs:
       version: ${{ steps.set-vars.outputs.version }}
       actor: ${{ steps.set-vars.outputs.actor }}
@@ -35,7 +35,7 @@ jobs:
           ACTOR_EMAIL: ${{ github.event.inputs.email }}
 
   benchmark-dolt-mysql:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     needs: set-version-actor
     name: Trigger Benchmark Latency and Benchmark Import K8s Workflows
     steps:

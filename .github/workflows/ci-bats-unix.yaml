@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ ubuntu-18.04, macos-latest ]
+        os: [ ubuntu-22.04, macos-latest ]
         dolt_fmt: [ "", "__DOLT_DEV__", "__DOLT_1__" ]
         exclude:
           - os: "macos-latest"
@@ -87,7 +87,7 @@ jobs:
           dolt config --global --add user.name 'Dolthub Actions'
           dolt config --global --add user.email 'actions@dolthub.com'
       - name: Install expect
-        if: matrix.os == 'ubuntu-18.04'
+        if: matrix.os == 'ubuntu-22.04'
         run: sudo apt-get install -y expect
       - name: Install Parquet-tools
         run: brew install parquet-tools
