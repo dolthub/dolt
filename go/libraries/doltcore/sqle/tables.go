@@ -1319,12 +1319,6 @@ func (t *AlterableDoltTable) RewriteInserter(
 		}
 	} else {
 		newSch = schema.CopyIndexes(oldSch, newSch)
-
-		// We are doing a primary key delete
-		if len(newSch.GetPkOrdinals()) == 0 && len(oldSch.GetPkOrdinals()) > 0 {
-			// Remove the primary key index
-			newSch.Indexes().RemoveIndex("PRIMARY")
-		}
 	}
 
 	// If we have an auto increment column, we need to set it here before we begin the rewrite process (it may have changed)
