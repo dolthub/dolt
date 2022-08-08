@@ -121,7 +121,13 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 		return nil, err
 	}
 
-	return matchTableDeltas(fromDeltas, toDeltas)
+	deltas = matchTableDeltas(fromDeltas, toDeltas)
+	deltas, err = filterUnmodifiedTableDeltas(deltas)
+	if err != nil {
+		return nil, err
+	}
+
+	return deltas, nil
 }
 
 func getFkParentSchs(ctx context.Context, root *doltdb.RootValue, fks ...doltdb.ForeignKey) (map[string]schema.Schema, error) {
@@ -143,8 +149,31 @@ func getFkParentSchs(ctx context.Context, root *doltdb.RootValue, fks ...doltdb.
 	return schs, nil
 }
 
-func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta, err error) {
-	var intersectedNames []string
+func filterUnmodifiedTableDeltas(deltas []TableDelta) ([]TableDelta, error) {
+	var filtered []TableDelta
+	for _, d := range deltas {
+		if d.ToTable == nil || d.FromTable == nil {
+			// Table was added or dropped
+			filtered = append(filtered, d)
+			continue
+		}
+
+		hasChanges, err := d.HasChanges()
+		if err != nil {
+			return nil, err
+		}
+
+		if hasChanges {
+			// Take only modified tables
+			filtered = append(filtered, d)
+		}
+	}
+
+	return filtered, nil
+}
+
+func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
+	var matchedNames []string
 	from := make(map[string]TableDelta, len(fromDeltas))
 	for _, f := range fromDeltas {
 		from[f.FromName] = f
@@ -154,7 +183,7 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta, e
 	for _, t := range toDeltas {
 		to[t.ToName] = t
 		if _, ok := from[t.ToName]; ok {
-			intersectedNames = append(intersectedNames, t.ToName)
+			matchedNames = append(matchedNames, t.ToName)
 		}
 	}
 
@@ -175,28 +204,14 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta, e
 
 	deltas = make([]TableDelta, 0)
 
-	var maybeAddToDeltas = func(matched TableDelta) error {
-		if matched.ToTable != nil && matched.FromTable != nil {
-			hasChanges, err := matched.HasChanges()
-			if err != nil {
-				return err
-			}
-
-			if hasChanges {
-				deltas = append(deltas, matched)
-			}
-		}
-		return nil
-	}
-
-	for _, name := range intersectedNames {
+	for _, name := range matchedNames {
 		t := to[name]
 		f := from[name]
 		if schemasOverlap(t.ToSch, f.FromSch) {
 			matched := match(t, f)
+			deltas = append(deltas, matched)
 			delete(from, f.FromName)
 			delete(to, t.ToName)
-			maybeAddToDeltas(matched)
 		}
 	}
 
@@ -204,10 +219,9 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta, e
 		for _, t := range to {
 			if schemasOverlap(f.FromSch, t.ToSch) {
 				matched := match(t, f)
+				deltas = append(deltas, matched)
 				delete(from, f.FromName)
 				delete(to, t.ToName)
-				maybeAddToDeltas(matched)
-				break
 			}
 		}
 	}
@@ -220,7 +234,7 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta, e
 		deltas = append(deltas, t)
 	}
 
-	return deltas, nil
+	return deltas
 }
 
 func schemasOverlap(from, to schema.Schema) bool {
