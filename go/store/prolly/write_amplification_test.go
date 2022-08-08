@@ -198,7 +198,7 @@ func prollyMapFromKeysAndValues(t *testing.T, kd, vd val.TupleDesc, keys, values
 	ns := tree.NewTestNodeStore()
 	require.Equal(t, len(keys), len(values))
 
-	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	serializer := message.NewProllyMapSerializer(vd, ns.Pool())
 	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 

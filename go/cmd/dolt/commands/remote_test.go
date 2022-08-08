@@ -112,14 +112,6 @@ func TestGetAbsRemoteUrl(t *testing.T) {
 			false,
 		},
 		{
-			// directory doesnt exist
-			"file://./doesnt_exist",
-			config.NewMapConfig(map[string]string{}),
-			"",
-			"",
-			true,
-		},
-		{
 			":/:/:/", // intended to fail earl.Parse
 			config.NewMapConfig(map[string]string{}),
 			"",

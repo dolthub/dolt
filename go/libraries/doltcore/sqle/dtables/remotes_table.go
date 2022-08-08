@@ -15,7 +15,6 @@
 package dtables
 
 import (
-	"errors"
 	"fmt"
 	"io"
 
@@ -25,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 var _ sql.Table = (*RemotesTable)(nil)
@@ -171,50 +169,6 @@ var _ sql.RowDeleter = remoteWriter{nil}
 
 type remoteWriter struct {
 	bt *RemotesTable
-}
-
-func validateRow(ctx *sql.Context, r sql.Row, sess *dsess.DoltSession) (*env.Remote, error) {
-	name, ok := r[0].(string)
-	if !ok {
-		return nil, errors.New("invalid type for name")
-	}
-
-	url, ok := r[1].(string)
-	if !ok {
-		return nil, errors.New("invalid value type for url")
-	}
-
-	_, absRemoteUrl, err := env.GetAbsRemoteUrl(sess.Provider().FileSystem(), &config.MapConfig{}, url)
-	if err != nil {
-		return nil, err
-	}
-
-	var fetchSpecs []string
-	if v, ok := r[2].(sql.JSONValue); ok {
-		fetchSpecsInterface, err := v.Unmarshall(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		fetchSpecs, ok = fetchSpecsInterface.Val.([]string)
-		if !ok {
-			return nil, errors.New("invalid value type for params json")
-		}
-	} else if v, ok := r[2].([]string); ok {
-		fetchSpecs = v
-	} else {
-		fetchSpecs = []string{"refs/heads/*:refs/remotes/" + name + "/*"}
-	}
-
-	var params map[string]string
-	if v, ok := r[3].(map[string]string); ok {
-		params = v
-	} else {
-		params = map[string]string{}
-	}
-
-	remote := env.Remote{Name: name, Url: absRemoteUrl, FetchSpecs: fetchSpecs, Params: params}
-	return &remote, nil
 }
 
 // Insert inserts the row given, returning an error if it cannot. Insert will be called once for each row to process

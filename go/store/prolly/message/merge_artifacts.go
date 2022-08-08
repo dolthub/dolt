@@ -37,9 +37,16 @@ const (
 
 var mergeArtifactFileID = []byte(serial.MergeArtifactsFileID)
 
+func NewMergeArtifactSerializer(keyDesc val.TupleDesc, pool pool.BuffPool) MergeArtifactSerializer {
+	return MergeArtifactSerializer{
+		keyDesc: keyDesc,
+		pool:    pool,
+	}
+}
+
 type MergeArtifactSerializer struct {
-	KeyDesc val.TupleDesc
-	Pool    pool.BuffPool
+	keyDesc val.TupleDesc
+	pool    pool.BuffPool
 }
 
 var _ Serializer = MergeArtifactSerializer{}
@@ -52,23 +59,23 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 		refArr, cardArr  fb.UOffsetT
 	)
 
-	keySz, valSz, bufSz := estimateMergeArtifactSize(keys, values, subtrees, s.KeyDesc.AddressFieldCount())
-	b := getFlatbufferBuilder(s.Pool, bufSz)
+	keySz, valSz, bufSz := estimateMergeArtifactSize(keys, values, subtrees, s.keyDesc.AddressFieldCount())
+	b := getFlatbufferBuilder(s.pool, bufSz)
 
 	// serialize keys and offsets
 	keyTups = writeItemBytes(b, keys, keySz)
-	serial.MergeArtifactsStartKeyOffsetsVector(b, len(keys)-1)
+	serial.MergeArtifactsStartKeyOffsetsVector(b, len(keys)+1)
 	keyOffs = writeItemOffsets(b, keys, keySz)
 
 	if level == 0 {
 		// serialize value tuples for leaf nodes
 		valTups = writeItemBytes(b, values, valSz)
-		serial.MergeArtifactsStartValueOffsetsVector(b, len(values)-1)
+		serial.MergeArtifactsStartValueOffsetsVector(b, len(values)+1)
 		valOffs = writeItemOffsets(b, values, valSz)
 		// serialize offsets of chunk addresses within |keyTups|
-		if s.KeyDesc.AddressFieldCount() > 0 {
-			serial.MergeArtifactsStartKeyAddressOffsetsVector(b, countAddresses(keys, s.KeyDesc))
-			keyAddrOffs = writeAddressOffsets(b, keys, keySz, s.KeyDesc)
+		if s.keyDesc.AddressFieldCount() > 0 {
+			serial.MergeArtifactsStartKeyAddressOffsetsVector(b, countAddresses(keys, s.keyDesc))
+			keyAddrOffs = writeAddressOffsets(b, keys, keySz, s.keyDesc)
 		}
 	} else {
 		// serialize child refs and subtree counts for internal nodes
@@ -95,17 +102,22 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 	return serial.FinishMessage(b, serial.MergeArtifactsEnd(b), mergeArtifactFileID)
 }
 
-func getMergeArtifactKeys(msg serial.Message) (keys val.SlicedBuffer) {
-	ma := serial.GetRootAsMergeArtifacts(msg, serial.MessagePrefixSz)
-	keys.Buf = ma.KeyItemsBytes()
-	keys.Offs = getMergeArtifactKeyOffsets(ma)
-	return
-}
+func getArtifactMapKeysAndValues(msg serial.Message) (keys, values ItemArray, cnt uint16) {
+	am := serial.GetRootAsMergeArtifacts(msg, serial.MessagePrefixSz)
 
-func getMergeArtifactValues(msg serial.Message) (values val.SlicedBuffer) {
-	ma := serial.GetRootAsMergeArtifacts(msg, serial.MessagePrefixSz)
-	values.Buf = ma.ValueItemsBytes()
-	values.Offs = getMergeArtifactValueOffsets(ma)
+	keys.Items = am.KeyItemsBytes()
+	keys.Offs = getMergeArtifactKeyOffsets(am)
+	cnt = uint16(keys.Len())
+
+	vv := am.ValueItemsBytes()
+	if vv != nil {
+		values.Items = vv
+		values.Offs = getMergeArtifactValueOffsets(am)
+	} else {
+		values.Items = am.AddressArrayBytes()
+		values.Offs = offsetsForAddressArray(values.Items)
+	}
+
 	return
 }
 
@@ -128,7 +140,7 @@ func walkMergeArtifactAddresses(ctx context.Context, msg serial.Message, cb func
 			return err
 		}
 	}
-	assertFalse((arr != nil) && (arr2 != nil))
+
 	return nil
 }
 

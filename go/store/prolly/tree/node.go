@@ -33,7 +33,7 @@ type subtreeCounts []uint64
 type Node struct {
 	// keys and values contain sub-slices of |msg|,
 	// allowing faster lookups by avoiding the vtable
-	keys, values val.SlicedBuffer
+	keys, values message.ItemArray
 	subtrees     subtreeCounts
 	count        uint16
 	msg          serial.Message
@@ -136,23 +136,28 @@ func (nd Node) IsLeaf() bool {
 
 // GetKey returns the |ith| key of this node
 func (nd Node) GetKey(i int) Item {
-	return nd.keys.GetSlice(i)
+	return nd.keys.GetItem(i)
 }
 
 // getValue returns the |ith| value of this node.
 func (nd Node) getValue(i int) Item {
-	return nd.values.GetSlice(i)
+	return nd.values.GetItem(i)
 }
 
-func (nd *Node) getSubtreeCount(i int) uint64 {
+func (nd Node) loadSubtrees() Node {
+	if nd.subtrees == nil {
+		// deserializing subtree counts requires a malloc,
+		// we don't load them unless explicitly requested
+		nd.subtrees = message.GetSubtrees(nd.msg)
+	}
+	return nd
+}
+
+func (nd Node) getSubtreeCount(i int) uint64 {
 	if nd.IsLeaf() {
 		return 1
 	}
-	if nd.subtrees == nil {
-		// deserializing subtree counts requires a
-		// malloc, so we lazily load them here
-		nd.subtrees = message.GetSubtrees(nd.msg)
-	}
+	// this will panic unless subtrees were loaded.
 	return nd.subtrees[i]
 }
 
@@ -179,7 +184,6 @@ func walkAddresses(ctx context.Context, nd Node, cb AddressCb) (err error) {
 // manner. Interior nodes have their child hash references spelled out, leaf nodes have value tuples delineated like
 // the keys
 func OutputProllyNode(w io.Writer, node Node) error {
-	w.Write([]byte("["))
 	for i := 0; i < int(node.count); i++ {
 		k := node.GetKey(i)
 		kt := val.Tuple(k)
@@ -214,12 +218,11 @@ func OutputProllyNode(w io.Writer, node Node) error {
 		}
 	}
 
-	w.Write([]byte("\n]\n"))
+	w.Write([]byte("\n"))
 	return nil
 }
 
 func OutputAddressMapNode(w io.Writer, node Node) error {
-	w.Write([]byte("["))
 	for i := 0; i < int(node.count); i++ {
 		k := node.GetKey(i)
 		w.Write([]byte("\n    { key: "))
@@ -231,7 +234,7 @@ func OutputAddressMapNode(w io.Writer, node Node) error {
 		w.Write([]byte(ref.String()))
 		w.Write([]byte(" }"))
 	}
-	w.Write([]byte("\n]\n"))
+	w.Write([]byte("\n"))
 	return nil
 }
 

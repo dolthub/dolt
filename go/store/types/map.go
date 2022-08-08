@@ -32,7 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-//type ValueInRange func(Value) (bool, error)
+// type ValueInRange func(Value) (bool, error)
 type ValueInRange func(context.Context, Value) (bool, bool, error)
 
 var ErrKeysNotOrdered = errors.New("streaming map keys not ordered")

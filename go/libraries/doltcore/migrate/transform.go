@@ -16,29 +16,57 @@ package migrate
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/vitess/go/vt/proto/query"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
-func migrateWorkingSet(ctx context.Context, wsRef ref.WorkingSetRef, old, new *doltdb.DoltDB, prog Progress) error {
+var (
+	flushRef = ref.NewInternalRef("migration-flush")
+)
+
+func migrateWorkingSet(ctx context.Context, brRef ref.BranchRef, wsRef ref.WorkingSetRef, old, new *doltdb.DoltDB) error {
 	oldWs, err := old.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
 		return err
 	}
 
-	wr, err := migrateRoot(ctx, oldWs.WorkingRoot(), new)
+	oldHead, err := old.ResolveCommitRef(ctx, brRef)
+	if err != nil {
+		return err
+	}
+	oldHeadRoot, err := oldHead.GetRootValue(ctx)
 	if err != nil {
 		return err
 	}
 
-	sr, err := migrateRoot(ctx, oldWs.StagedRoot(), new)
+	newHead, err := new.ResolveCommitRef(ctx, brRef)
+	if err != nil {
+		return err
+	}
+	newHeadRoot, err := newHead.GetRootValue(ctx)
+	if err != nil {
+		return err
+	}
+
+	wr, err := migrateRoot(ctx, oldHeadRoot, oldWs.WorkingRoot(), newHeadRoot)
+	if err != nil {
+		return err
+	}
+
+	sr, err := migrateRoot(ctx, oldHeadRoot, oldWs.StagedRoot(), newHeadRoot)
 	if err != nil {
 		return err
 	}
@@ -48,8 +76,8 @@ func migrateWorkingSet(ctx context.Context, wsRef ref.WorkingSetRef, old, new *d
 	return new.UpdateWorkingSet(ctx, wsRef, newWs, hash.Hash{}, oldWs.Meta())
 }
 
-func migrateCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
-	oldHash, err := cm.HashOf()
+func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
+	oldHash, err := oldCm.HashOf()
 	if err != nil {
 		return err
 	}
@@ -61,18 +89,51 @@ func migrateCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, p
 		return nil
 	}
 
-	if cm.NumParents() == 0 {
-		return migrateInitCommit(ctx, cm, new, prog)
+	if oldCm.NumParents() == 0 {
+		return migrateInitCommit(ctx, oldCm, new, prog)
 	}
 
 	prog.Log(ctx, "migrating commit %s", oldHash.String())
 
-	root, err := cm.GetRootValue(ctx)
+	oldRoot, err := oldCm.GetRootValue(ctx)
 	if err != nil {
 		return err
 	}
 
-	mRoot, err := migrateRoot(ctx, root, new)
+	oldParentCm, err := oldCm.GetParent(ctx, 0)
+	if err != nil {
+		return err
+	}
+	oldParentRoot, err := oldParentCm.GetRootValue(ctx)
+	if err != nil {
+		return err
+	}
+
+	oph, err := oldParentCm.HashOf()
+	if err != nil {
+		return err
+	}
+	ok, err = prog.Has(ctx, oph)
+	if err != nil {
+		return err
+	} else if !ok {
+		return fmt.Errorf("cannot find commit mapping for Commit (%s)", oph.String())
+	}
+
+	newParentAddr, err := prog.Get(ctx, oph)
+	if err != nil {
+		return err
+	}
+	newParentCm, err := new.ReadCommit(ctx, newParentAddr)
+	if err != nil {
+		return err
+	}
+	newParentRoot, err := newParentCm.GetRootValue(ctx)
+	if err != nil {
+		return err
+	}
+
+	mRoot, err := migrateRoot(ctx, oldParentRoot, oldRoot, newParentRoot)
 	if err != nil {
 		return err
 	}
@@ -85,7 +146,7 @@ func migrateCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, p
 		return err
 	}
 
-	opts, err := migrateCommitOptions(ctx, cm, prog)
+	opts, err := migrateCommitOptions(ctx, oldCm, prog)
 	if err != nil {
 		return err
 	}
@@ -100,8 +161,12 @@ func migrateCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, p
 	if err != nil {
 		return err
 	}
+	if err = prog.Put(ctx, oldHash, newHash); err != nil {
+		return err
+	}
 
-	return prog.Put(ctx, oldHash, newHash)
+	// flush ChunkStore
+	return new.SetHead(ctx, flushRef, newHash)
 }
 
 func migrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
@@ -172,13 +237,10 @@ func migrateCommitOptions(ctx context.Context, oldCm *doltdb.Commit, prog Progre
 	}, nil
 }
 
-func migrateRoot(ctx context.Context, root *doltdb.RootValue, new *doltdb.DoltDB) (*doltdb.RootValue, error) {
-	migrated, err := doltdb.EmptyRootValue(ctx, new.ValueReadWriter(), new.NodeStore())
-	if err != nil {
-		return nil, err
-	}
+func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.RootValue) (*doltdb.RootValue, error) {
+	migrated := newParent
 
-	fkc, err := root.GetForeignKeyCollection(ctx)
+	fkc, err := oldRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -188,8 +250,62 @@ func migrateRoot(ctx context.Context, root *doltdb.RootValue, new *doltdb.DoltDB
 		return nil, err
 	}
 
-	err = root.IterTables(ctx, func(name string, tbl *doltdb.Table, _ schema.Schema) (bool, error) {
-		mtbl, err := migrateTable(ctx, tbl, new)
+	err = oldRoot.IterTables(ctx, func(name string, oldTbl *doltdb.Table, sch schema.Schema) (bool, error) {
+		ok, err := oldTbl.HasConflicts(ctx)
+		if err != nil {
+			return true, err
+		} else if ok {
+			return true, fmt.Errorf("cannot migrate table with conflicts (%s)", name)
+		}
+
+		// maybe patch dolt_schemas, dolt docs
+		var newSch schema.Schema
+		if doltdb.HasDoltPrefix(name) {
+			if newSch, err = patchMigrateSchema(ctx, sch); err != nil {
+				return true, err
+			}
+		} else {
+			newSch = sch
+		}
+		if err = validateSchema(newSch); err != nil {
+			return true, err
+		}
+
+		// if there was a schema change in this commit,
+		// diff against an empty table and rewrite everything
+		var parentSch schema.Schema
+
+		oldParentTbl, ok, err := oldParent.GetTable(ctx, name)
+		if err != nil {
+			return true, err
+		}
+		if ok {
+			parentSch, err = oldParentTbl.GetSchema(ctx)
+			if err != nil {
+				return true, err
+			}
+		}
+		if !ok || !schema.SchemasAreEqual(sch, parentSch) {
+			// provide empty table to diff against
+			oldParentTbl, err = doltdb.NewEmptyTable(ctx, oldParent.VRW(), oldParent.NodeStore(), sch)
+			if err != nil {
+				return true, err
+			}
+		}
+
+		newParentTbl, ok, err := newParent.GetTable(ctx, name)
+		if err != nil {
+			return true, err
+		}
+		if !ok || !schema.SchemasAreEqual(sch, parentSch) {
+			// provide empty table to diff against
+			newParentTbl, err = doltdb.NewEmptyTable(ctx, newParent.VRW(), newParent.NodeStore(), newSch)
+			if err != nil {
+				return true, err
+			}
+		}
+
+		mtbl, err := migrateTable(ctx, newSch, oldParentTbl, oldTbl, newParentTbl)
 		if err != nil {
 			return true, err
 		}
@@ -204,56 +320,127 @@ func migrateRoot(ctx context.Context, root *doltdb.RootValue, new *doltdb.DoltDB
 		return nil, err
 	}
 
+	if err = validateRootValue(ctx, oldRoot, migrated); err != nil {
+		return nil, err
+	}
+
 	return migrated, nil
 }
 
-func migrateTable(ctx context.Context, table *doltdb.Table, new *doltdb.DoltDB) (*doltdb.Table, error) {
-	rows, err := table.GetRowData(ctx)
+func migrateTable(ctx context.Context, newSch schema.Schema, oldParentTbl, oldTbl, newParentTbl *doltdb.Table) (*doltdb.Table, error) {
+	idx, err := oldParentTbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	oldParentRows := durable.NomsMapFromIndex(idx)
+
+	idx, err = oldTbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	oldRows := durable.NomsMapFromIndex(idx)
+
+	idx, err = newParentTbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	newParentRows := durable.ProllyMapFromIndex(idx)
+
+	oldParentSet, err := oldParentTbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	err = migrateNomsMap(ctx, rows, table.ValueReadWriter(), new.ValueReadWriter())
+	oldSet, err := oldTbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	ai, err := table.GetAutoIncrementValue(ctx)
+	newParentSet, err := newParentTbl.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var newRows durable.Index
+	var newSet durable.IndexSet
+	eg, ctx := errgroup.WithContext(ctx)
+
+	eg.Go(func() error {
+		newRows, err = migrateIndex(ctx, newSch, oldParentRows, oldRows, newParentRows, newParentTbl.NodeStore())
+		return err
+	})
+
+	vrw, ns := newParentTbl.ValueReadWriter(), newParentTbl.NodeStore()
+	eg.Go(func() error {
+		newSet, err = migrateIndexSet(ctx, newSch, oldParentSet, oldSet, newParentSet, vrw, ns)
+		return err
+	})
+
+	if err = eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	ai, err := oldTbl.GetAutoIncrementValue(ctx)
 	if err != nil {
 		return nil, err
 	}
 	autoInc := types.Uint(ai)
 
-	sch, err := table.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	oldSet, err := table.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	newSet, err := migrateIndexSet(ctx, sch, oldSet, table.ValueReadWriter(), new)
-	if err != nil {
-		return nil, err
-	}
-
-	return doltdb.NewTable(ctx, new.ValueReadWriter(), new.NodeStore(), sch, rows, newSet, autoInc)
+	return doltdb.NewTable(ctx, vrw, ns, newSch, newRows, newSet, autoInc)
 }
 
-func migrateIndexSet(ctx context.Context, sch schema.Schema, oldSet durable.IndexSet, old types.ValueReadWriter, new *doltdb.DoltDB) (durable.IndexSet, error) {
-	newSet := durable.NewIndexSet(ctx, new.ValueReadWriter(), new.NodeStore())
+// patchMigrateSchema attempts to correct irregularities in existing schemas
+func patchMigrateSchema(ctx context.Context, existing schema.Schema) (schema.Schema, error) {
+	cols := existing.GetAllCols().GetColumns()
+
+	var patched bool
+	for i, c := range cols {
+		qt := c.TypeInfo.ToSqlType().Type()
+		// dolt_schemas and dolt_docs previously written with TEXT columns
+		if qt == query.Type_TEXT && c.Kind == types.StringKind {
+			cols[i] = schema.NewColumn(c.Name, c.Tag, c.Kind, c.IsPartOfPK, c.Constraints...)
+			patched = true
+		}
+	}
+	if !patched {
+		return existing, nil
+	}
+
+	return schema.SchemaFromCols(schema.NewColCollection(cols...))
+}
+
+func migrateIndexSet(
+	ctx context.Context,
+	sch schema.Schema,
+	oldParentSet, oldSet, newParentSet durable.IndexSet,
+	vrw types.ValueReadWriter, ns tree.NodeStore,
+) (durable.IndexSet, error) {
+	newSet := durable.NewIndexSet(ctx, vrw, ns)
 	for _, def := range sch.Indexes().AllIndexes() {
-		idx, err := oldSet.GetIndex(ctx, sch, def.Name())
+		idx, err := oldParentSet.GetIndex(ctx, sch, def.Name())
 		if err != nil {
 			return nil, err
 		}
-		if err = migrateNomsMap(ctx, idx, old, new.ValueReadWriter()); err != nil {
+		oldParent := durable.NomsMapFromIndex(idx)
+
+		idx, err = oldSet.GetIndex(ctx, sch, def.Name())
+		if err != nil {
+			return nil, err
+		}
+		old := durable.NomsMapFromIndex(idx)
+
+		idx, err = newParentSet.GetIndex(ctx, sch, def.Name())
+		if err != nil {
+			return nil, err
+		}
+		newParent := durable.ProllyMapFromIndex(idx)
+
+		newIdx, err := migrateIndex(ctx, def.Schema(), oldParent, old, newParent, ns)
+		if err != nil {
 			return nil, err
 		}
 
-		newSet, err = newSet.PutIndex(ctx, def.Name(), idx)
+		newSet, err = newSet.PutIndex(ctx, def.Name(), newIdx)
 		if err != nil {
 			return nil, err
 		}
@@ -261,36 +448,127 @@ func migrateIndexSet(ctx context.Context, sch schema.Schema, oldSet durable.Inde
 	return newSet, nil
 }
 
-func migrateNomsMap(ctx context.Context, idx durable.Index, old, new types.ValueReadWriter) error {
-	m := durable.NomsMapFromIndex(idx)
-	return copyTreeFromValue(ctx, m, old, new)
-}
+func migrateIndex(
+	ctx context.Context,
+	sch schema.Schema,
+	oldParent, oldMap types.Map,
+	newParent prolly.Map,
+	ns tree.NodeStore,
+) (durable.Index, error) {
 
-// copyTreeFromValue recursively copies |v| and all its children from |old| to |new|.
-func copyTreeFromValue(ctx context.Context, v types.Value, old, new types.ValueReadWriter) error {
-	if _, err := new.WriteValue(ctx, v); err != nil {
-		return err
-	}
-	return types.WalkAddrs(v, old.Format(), func(h hash.Hash, isleaf bool) error {
-		if err := copyValue(ctx, h, old, new); err != nil {
-			return err
-		}
-		if isleaf {
-			return nil
-		}
-		val, err := old.ReadValue(ctx, h)
-		if err != nil {
-			return err
-		}
-		return copyTreeFromValue(ctx, val, old, new)
+	eg, ctx := errgroup.WithContext(ctx)
+	differ := make(chan types.ValueChanged, 256)
+	writer := make(chan val.Tuple, 256)
+
+	kt, vt := tupleTranslatorsFromSchema(sch, ns)
+
+	// read old noms map
+	eg.Go(func() error {
+		defer close(differ)
+		return oldMap.Diff(ctx, oldParent, differ)
 	})
+
+	// translate noms tuples to prolly tuples
+	eg.Go(func() error {
+		defer close(writer)
+		return translateTuples(ctx, kt, vt, differ, writer)
+	})
+
+	var newMap prolly.Map
+	// write tuples in new prolly map
+	eg.Go(func() (err error) {
+		newMap, err = writeProllyMap(ctx, newParent, writer)
+		return
+	})
+
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	return durable.IndexFromProllyMap(newMap), nil
 }
 
-func copyValue(ctx context.Context, addr hash.Hash, old, new types.ValueReadWriter) (err error) {
-	var v types.Value
-	if v, err = old.ReadValue(ctx, addr); err != nil {
-		return err
+func translateTuples(ctx context.Context, kt, vt translator, differ <-chan types.ValueChanged, writer chan<- val.Tuple) error {
+	for {
+		var (
+			diff   types.ValueChanged
+			newKey val.Tuple
+			newVal val.Tuple
+			ok     bool
+			err    error
+		)
+
+		select {
+		case diff, ok = <-differ:
+			if !ok {
+				return nil // done
+			}
+		case _ = <-ctx.Done():
+			return ctx.Err()
+		}
+
+		switch diff.ChangeType {
+		case types.DiffChangeAdded:
+			fallthrough
+
+		case types.DiffChangeModified:
+			newVal, err = vt.TranslateTuple(ctx, diff.NewValue.(types.Tuple))
+			if err != nil {
+				return err
+			}
+			fallthrough
+
+		case types.DiffChangeRemoved:
+			newKey, err = kt.TranslateTuple(ctx, diff.Key.(types.Tuple))
+			if err != nil {
+				return err
+			}
+		}
+
+		select {
+		case writer <- newKey:
+		case _ = <-ctx.Done():
+			return ctx.Err()
+		}
+
+		select {
+		case writer <- newVal:
+		case _ = <-ctx.Done():
+			return ctx.Err()
+		}
 	}
-	_, err = new.WriteValue(ctx, v)
-	return
+}
+
+func writeProllyMap(ctx context.Context, prev prolly.Map, writer <-chan val.Tuple) (prolly.Map, error) {
+	return prolly.MutateMapWithTupleIter(ctx, prev, channelProvider{tuples: writer})
+}
+
+type channelProvider struct {
+	tuples <-chan val.Tuple
+}
+
+var _ prolly.TupleIter = channelProvider{}
+
+func (p channelProvider) Next(ctx context.Context) (val.Tuple, val.Tuple) {
+	var (
+		k, v val.Tuple
+		ok   bool
+	)
+
+	select {
+	case k, ok = <-p.tuples:
+		if !ok {
+			return nil, nil // done
+		}
+	case _ = <-ctx.Done():
+		return nil, nil
+	}
+
+	select {
+	case v, ok = <-p.tuples:
+		assertTrue(ok)
+	case _ = <-ctx.Done():
+		return nil, nil
+	}
+	return k, v
 }

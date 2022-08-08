@@ -23,7 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
-//  FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
+// FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
 // typeWidth are 0 or less than the length of the name or type, then the length of the name or type will be used
 func FmtCol(indent, nameWidth, typeWidth int, col schema.Column) string {
 	sqlType := col.TypeInfo.ToSqlType()

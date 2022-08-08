@@ -761,7 +761,12 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 
 // CreateTable creates a table with the name and schema given.
 func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema) error {
-	if doltdb.HasDoltPrefix(tableName) {
+	if strings.ToLower(tableName) == doltdb.DocTableName {
+		// validate correct schema
+		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) {
+			return fmt.Errorf("incorrect schema for dolt_docs table")
+		}
+	} else if doltdb.HasDoltPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
 
@@ -1178,8 +1183,8 @@ func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) 
 }
 
 // TODO: this is a hack to make user space DBs appear to the analyzer as full DBs with state etc., but the state is
-//  really skeletal. We need to reexamine the DB / session initialization to make this simpler -- most of these things
-//  aren't needed at initialization time and for most code paths.
+// really skeletal. We need to reexamine the DB / session initialization to make this simpler -- most of these things
+// aren't needed at initialization time and for most code paths.
 func getInitialDBStateForUserSpaceDb(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
 	return dsess.InitialDbState{
 		Db: db,

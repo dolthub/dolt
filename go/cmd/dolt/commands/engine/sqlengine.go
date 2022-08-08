@@ -51,9 +51,11 @@ type SqlEngineConfig struct {
 	InitialDb      string
 	IsReadOnly     bool
 	IsServerLocked bool
+	DoltCfgDirPath string
 	PrivFilePath   string
 	ServerUser     string
 	ServerPass     string
+	ServerHost     string
 	Autocommit     bool
 	Bulk           bool
 	JwksConfig     []JwksConfig
@@ -73,7 +75,7 @@ func NewSqlEngine(
 
 	parallelism := runtime.GOMAXPROCS(0)
 
-	dbs, err := CollectDBs(ctx, mrEnv, config.Bulk)
+	dbs, locations, err := CollectDBs(ctx, mrEnv, config.Bulk)
 	if err != nil {
 		return nil, err
 	}
@@ -86,29 +88,26 @@ func NewSqlEngine(
 
 	infoDB := information_schema.NewInformationSchemaDatabase()
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
+	locations = append(locations, nil)
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
-	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), all...).WithRemoteDialer(mrEnv.RemoteDialProvider())
+	pro, err := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations)
+	if err != nil {
+		return nil, err
+	}
+	pro = pro.WithRemoteDialer(mrEnv.RemoteDialProvider())
 
 	// Load in privileges from file, if it exists
-	persister := mysql_file_handler.NewPersister(config.PrivFilePath)
+	persister := mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
 	data, err := persister.LoadData()
 	if err != nil {
 		return nil, err
 	}
 
-	// Create temporary users if no privileges in config
-	var tempUsers []gms.TemporaryUser
-	if len(data) == 0 && len(config.ServerUser) > 0 {
-		tempUsers = append(tempUsers, gms.TemporaryUser{
-			Username: config.ServerUser,
-			Password: config.ServerPass,
-		})
-	}
-
 	// Set up engine
-	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: config.IsReadOnly, TemporaryUsers: tempUsers, IsServerLocked: config.IsServerLocked}).WithBackgroundThreads(bThreads)
+	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: config.IsReadOnly, IsServerLocked: config.IsServerLocked}).WithBackgroundThreads(bThreads)
 	engine.Analyzer.Catalog.MySQLDb.SetPersister(persister)
+
 	engine.Analyzer.Catalog.MySQLDb.SetPlugins(map[string]mysql_db.PlaintextAuthPlugin{
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
 	})
@@ -400,6 +399,8 @@ func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, err
 			InitialDb:  dbName,
 			IsReadOnly: false,
 			ServerUser: "root",
+			ServerPass: "",
+			ServerHost: "localhost",
 			Autocommit: false,
 		},
 	)

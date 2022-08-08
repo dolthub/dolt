@@ -129,13 +129,15 @@ func Serve(
 
 	// Create SQL Engine with users
 	config := &engine.SqlEngineConfig{
-		InitialDb:    "",
-		IsReadOnly:   serverConfig.ReadOnly(),
-		PrivFilePath: serverConfig.PrivilegeFilePath(),
-		ServerUser:   serverConfig.User(),
-		ServerPass:   serverConfig.Password(),
-		Autocommit:   serverConfig.AutoCommit(),
-		JwksConfig:   serverConfig.JwksConfig(),
+		InitialDb:      "",
+		IsReadOnly:     serverConfig.ReadOnly(),
+		PrivFilePath:   serverConfig.PrivilegeFilePath(),
+		DoltCfgDirPath: serverConfig.CfgDir(),
+		ServerUser:     serverConfig.User(),
+		ServerPass:     serverConfig.Password(),
+		ServerHost:     serverConfig.Host(),
+		Autocommit:     serverConfig.AutoCommit(),
+		JwksConfig:     serverConfig.JwksConfig(),
 	}
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,
@@ -147,6 +149,25 @@ func Serve(
 		return err, nil
 	}
 	defer sqlEngine.Close()
+
+	// TODO: move this to GMS
+	// set host to "%" if empty string or 0.0.0.0
+	serverHost := config.ServerHost
+	if serverHost == "" || serverHost == "0.0.0.0" {
+		serverHost = "%"
+	}
+
+	// Add superuser if specified user exists; add root superuser if no user specified and no existing privileges
+	userSpecified := config.ServerUser != ""
+	privsExist := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.UserTable().Data().Count() != 0
+	if userSpecified {
+		superuser := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, serverHost, false)
+		if userSpecified && superuser == nil {
+			sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, serverHost, config.ServerPass)
+		}
+	} else if !privsExist {
+		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(defaultUser, defaultHost, defaultPass)
+	}
 
 	labels := serverConfig.MetricsLabels()
 	listener := newMetricsListener(labels)

@@ -27,11 +27,10 @@ import (
 )
 
 var goldenHash = hash.Hash{
-	0xd5, 0x29, 0x8d, 0x3c,
-	0x97, 0xec, 0x9c, 0x26,
-	0x9e, 0x3f, 0x8a, 0x75,
-	0x54, 0xc2, 0xe0, 0xdd,
-	0x56, 0x73, 0x95, 0x77,
+	0x33, 0xba, 0x6a, 0x18, 0xcb,
+	0xcb, 0xa7, 0x41, 0x4a, 0xdb,
+	0x1e, 0x3d, 0xbf, 0x3f, 0x1e,
+	0xea, 0x7d, 0x47, 0x69, 0x6c,
 }
 
 // todo(andy): need and analogous test in pkg prolly
@@ -48,8 +47,8 @@ func makeTree(t *testing.T, tuples [][2]val.Tuple) Node {
 	ns := NewTestNodeStore()
 
 	// todo(andy): move this test
-	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
-	chunker, err := newEmptyChunker(ctx, ns, serializer)
+	s := message.NewProllyMapSerializer(val.TupleDesc{}, ns.Pool())
+	chunker, err := newEmptyChunker(ctx, ns, s)
 	require.NoError(t, err)
 	for _, pair := range tuples {
 		err := chunker.AddPair(ctx, Item(pair[0]), Item(pair[1]))

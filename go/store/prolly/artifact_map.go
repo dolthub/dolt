@@ -72,7 +72,7 @@ func NewArtifactMap(node tree.Node, ns tree.NodeStore, srcKeyDesc val.TupleDesc)
 // the corresponding row map and inserts the given |tups|. |tups| must be a key followed by a value.
 func NewArtifactMapFromTuples(ctx context.Context, ns tree.NodeStore, srcKeyDesc val.TupleDesc, tups ...val.Tuple) (ArtifactMap, error) {
 	kd, vd := mergeArtifactsDescriptorsFromSource(srcKeyDesc)
-	serializer := message.MergeArtifactSerializer{KeyDesc: kd, Pool: ns.Pool()}
+	serializer := message.NewMergeArtifactSerializer(kd, ns.Pool())
 
 	ch, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	if err != nil {
@@ -296,7 +296,7 @@ func (m ArtifactMap) iterAllOfTypes(ctx context.Context, artTypes ...ArtifactTyp
 }
 
 func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tree.CollisionFn) (ArtifactMap, error) {
-	serializer := message.ProllyMapSerializer{Pool: left.tuples.ns.Pool()}
+	serializer := message.NewMergeArtifactSerializer(base.keyDesc, left.tuples.ns.Pool())
 	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer, base.valDesc)
 	if err != nil {
 		return ArtifactMap{}, err
@@ -411,10 +411,7 @@ func (wr ArtifactsEditor) Delete(ctx context.Context, key val.Tuple) error {
 }
 
 func (wr ArtifactsEditor) Flush(ctx context.Context) (ArtifactMap, error) {
-	s := message.MergeArtifactSerializer{
-		KeyDesc: wr.artKB.Desc,
-		Pool:    wr.NodeStore().Pool(),
-	}
+	s := message.NewMergeArtifactSerializer(wr.artKB.Desc, wr.NodeStore().Pool())
 
 	m, err := wr.mut.flushWithSerializer(ctx, s)
 	if err != nil {

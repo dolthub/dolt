@@ -138,7 +138,7 @@ func TestWriteImmutableTree(t *testing.T) {
 			ctx := context.Background()
 			r := bytes.NewReader(buf)
 			ns := NewTestNodeStore()
-			serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+			serializer := message.NewBlobSerializer(ns.Pool())
 			root, err := buildImmutableTree(ctx, r, ns, serializer, tt.chunkSize)
 			if tt.err != nil {
 				require.True(t, errors.Is(err, tt.err))
@@ -159,11 +159,11 @@ func TestWriteImmutableTree(t *testing.T) {
 			WalkNodes(ctx, root, ns, func(ctx context.Context, n Node) error {
 				var keyCnt int
 				if n.IsLeaf() {
-					byteCnt += len(n.values.Buf)
+					byteCnt += len(n.values.Items)
 					for _, i := range n.getValue(0) {
 						sum += int(i)
 					}
-					keyCnt = len(n.values.Buf)
+					keyCnt = len(n.values.Items)
 					if keyCnt != tt.chunkSize {
 						unfilledCnt += 1
 					}
@@ -183,6 +183,7 @@ func TestWriteImmutableTree(t *testing.T) {
 			assert.Equal(t, tt.inputSize, byteCnt)
 			assert.Equal(t, expUnfilled, unfilledCnt)
 			if expLevel > 0 {
+				root = root.loadSubtrees()
 				for i := range expSubtrees {
 					assert.Equal(t, expSubtrees[i], root.getSubtreeCount(i))
 				}
@@ -360,8 +361,8 @@ func newTree(t *testing.T, ns NodeStore, keyCnt, blobLen, chunkSize int) Node {
 		tuples[i][1] = valBld.Build(sharedPool)
 	}
 
-	serializer := message.ProllyMapSerializer{Pool: ns.Pool(), ValDesc: valDesc}
-	chunker, err := newEmptyChunker(ctx, ns, serializer)
+	s := message.NewProllyMapSerializer(valDesc, ns.Pool())
+	chunker, err := newEmptyChunker(ctx, ns, s)
 	require.NoError(t, err)
 	for _, pair := range tuples {
 		err := chunker.AddPair(ctx, Item(pair[0]), Item(pair[1]))

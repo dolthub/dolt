@@ -32,10 +32,6 @@ func ValueFromMap(m prolly.Map) types.Value {
 	return tree.ValueFromNode(m.Node())
 }
 
-func ValueFromConflictMap(m prolly.ConflictMap) types.Value {
-	return tree.ValueFromNode(m.Node())
-}
-
 func ValueFromArtifactMap(m prolly.ArtifactMap) types.Value {
 	return tree.ValueFromNode(m.Node())
 }
@@ -45,14 +41,6 @@ func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore) prolly.Ma
 	kd := KeyDescriptorFromSchema(sch)
 	vd := ValueDescriptorFromSchema(sch)
 	return prolly.NewMap(root, ns, kd, vd)
-}
-
-func ConflictMapFromValue(v types.Value, ourSchema, theirSchema, baseSchema schema.Schema, ns tree.NodeStore) prolly.ConflictMap {
-	root := NodeFromValue(v)
-	kd, ourVD := MapDescriptorsFromSchema(ourSchema)
-	theirVD := ValueDescriptorFromSchema(theirSchema)
-	baseVD := ValueDescriptorFromSchema(baseSchema)
-	return prolly.NewConflictMap(root, ns, kd, ourVD, theirVD, baseVD)
 }
 
 func MapDescriptorsFromSchema(sch schema.Schema) (kd, vd val.TupleDesc) {

@@ -35,7 +35,7 @@ behavior:
     disable_client_multi_statements: false
 
 user:
-    name: root
+    name: ""
     password: ""
 
 listener:
@@ -86,7 +86,6 @@ jwks:
       field1: a
     fields_to_log:
 `
-
 	expected := serverConfigAsYAMLConfig(DefaultServerConfig())
 	expected.DatabaseConfig = []DatabaseYAMLConfig{
 		{
