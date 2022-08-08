@@ -144,6 +144,7 @@ func getFkParentSchs(ctx context.Context, root *doltdb.RootValue, fks ...doltdb.
 }
 
 func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta, err error) {
+	var intersectedNames []string
 	from := make(map[string]TableDelta, len(fromDeltas))
 	for _, f := range fromDeltas {
 		from[f.FromName] = f
@@ -152,6 +153,9 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta, e
 	to := make(map[string]TableDelta, len(toDeltas))
 	for _, t := range toDeltas {
 		to[t.ToName] = t
+		if _, ok := from[t.ToName]; ok {
+			intersectedNames = append(intersectedNames, t.ToName)
+		}
 	}
 
 	match := func(t, f TableDelta) TableDelta {
@@ -170,40 +174,40 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta, e
 	}
 
 	deltas = make([]TableDelta, 0)
-	for _, f := range from {
-		var matched TableDelta
 
-		// optimistically look for a match by name
-		t, ok := to[f.FromName]
-		if ok && schemasOverlap(t.ToSch, f.FromSch) {
-			matched = match(t, f)
-			delete(from, f.FromName)
-			delete(to, t.ToName)
-		}
-
-		if !ok {
-			// otherwise, search pairwise
-			for _, t = range to {
-				if schemasOverlap(f.FromSch, t.ToSch) {
-					matched = match(t, f)
-					delete(from, f.FromName)
-					delete(to, t.ToName)
-					break
-				}
-			}
-		}
-
+	var maybeAddToDeltas = func(matched TableDelta) error {
 		if matched.ToTable != nil && matched.FromTable != nil {
 			hasChanges, err := matched.HasChanges()
 			if err != nil {
-				return nil, err
+				return err
 			}
 
-			// See if matched is worth appending
 			if hasChanges {
 				deltas = append(deltas, matched)
+			}
+		}
+		return nil
+	}
+
+	for _, name := range intersectedNames {
+		t := to[name]
+		f := from[name]
+		if schemasOverlap(t.ToSch, f.FromSch) {
+			matched := match(t, f)
+			delete(from, f.FromName)
+			delete(to, t.ToName)
+			maybeAddToDeltas(matched)
+		}
+	}
+
+	for _, f := range from {
+		for _, t := range to {
+			if schemasOverlap(f.FromSch, t.ToSch) {
+				matched := match(t, f)
 				delete(from, f.FromName)
 				delete(to, t.ToName)
+				maybeAddToDeltas(matched)
+				break
 			}
 		}
 	}
