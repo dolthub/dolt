@@ -33,7 +33,7 @@ func PartitionIndexedTableRows(ctx *sql.Context, idx sql.Index, part sql.Partiti
 	rp := part.(rangePartition)
 	doltIdx := idx.(DoltIndex)
 
-	if types.IsFormat_DOLT_1(rp.durableState.Primary.Format()) {
+	if types.IsFormat_DOLT(rp.durableState.Primary.Format()) {
 		return RowIterForProllyRange(ctx, doltIdx, rp.prollyRange, pkSch, columns, rp.durableState)
 	}
 
@@ -50,7 +50,7 @@ func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, ilu sql.IndexLooku
 		return nil, err
 	}
 
-	if types.IsFormat_DOLT_1(idx.Format()) {
+	if types.IsFormat_DOLT(idx.Format()) {
 		if len(lookup.prollyRanges) > 1 {
 			return nil, fmt.Errorf("expected a single index range")
 		}
@@ -126,7 +126,7 @@ func (itr *rangePartitionIter) Close(*sql.Context) error {
 
 // Next returns the next partition if there is one, or io.EOF if there isn't.
 func (itr *rangePartitionIter) Next(_ *sql.Context) (sql.Partition, error) {
-	if types.IsFormat_DOLT_1(itr.durableState.Secondary.Format()) {
+	if types.IsFormat_DOLT(itr.durableState.Secondary.Format()) {
 		return itr.nextProllyPartition()
 	}
 	return itr.nextNomsPartition()

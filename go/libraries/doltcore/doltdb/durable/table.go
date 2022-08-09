@@ -962,7 +962,7 @@ func (t doltDevTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema
 // GetArtifacts implements Table.
 func (t doltDevTable) GetArtifacts(ctx context.Context) (ArtifactIndex, error) {
 	if t.Format() != types.Format_DOLT {
-		panic("artifacts only implemented for DOLT_1")
+		panic("artifacts only implemented for DOLT")
 	}
 
 	sch, err := t.GetSchema(ctx)
@@ -981,7 +981,7 @@ func (t doltDevTable) GetArtifacts(ctx context.Context) (ArtifactIndex, error) {
 // SetArtifacts implements Table.
 func (t doltDevTable) SetArtifacts(ctx context.Context, artifacts ArtifactIndex) (Table, error) {
 	if t.Format() != types.Format_DOLT {
-		panic("artifacts only implemented for DOLT_1")
+		panic("artifacts only implemented for DOLT")
 	}
 
 	var addr hash.Hash

@@ -64,7 +64,7 @@ func isFormat_7_18(nbf *NomsBinFormat) bool {
 	return nbf.tag == formatTag_7_18
 }
 
-func IsFormat_DOLT_1(nbf *NomsBinFormat) bool {
+func IsFormat_DOLT(nbf *NomsBinFormat) bool {
 	return nbf.tag == formatTag_DOLT
 }
 

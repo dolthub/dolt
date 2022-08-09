@@ -62,7 +62,7 @@ func (i rowIterImpl) Close(ctx context.Context) error {
 // |offset| can be supplied to read at some start point in |idx|.
 func NewTableIterator(ctx context.Context, sch schema.Schema, idx durable.Index, offset uint64) (RowIter, error) {
 	var rowItr sql.RowIter
-	if types.IsFormat_DOLT_1(idx.Format()) {
+	if types.IsFormat_DOLT(idx.Format()) {
 		m := durable.ProllyMapFromIndex(idx)
 		itr, err := m.IterOrdinalRange(ctx, offset, uint64(m.Count()))
 		if err != nil {

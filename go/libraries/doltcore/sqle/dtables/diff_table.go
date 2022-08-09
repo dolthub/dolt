@@ -300,7 +300,7 @@ func (dp DiffPartition) Key() []byte {
 }
 
 func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, lookup sql.IndexLookup) (sql.RowIter, error) {
-	if types.IsFormat_DOLT_1(ddb.Format()) {
+	if types.IsFormat_DOLT(ddb.Format()) {
 		return newProllyDiffIter(ctx, dp, ddb, dp.fromSch, dp.toSch)
 	} else {
 		return newNomsDiffIter(ctx, ddb, joiner, dp, lookup)
