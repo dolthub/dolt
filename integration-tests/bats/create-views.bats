@@ -313,7 +313,7 @@ SQL
 }
 
 @test "create-views: views get properly formatted in the information schema table" {
-    skip "views are not supported"
+    skip "views are not correctly formatted right now"
     dolt sql -q "create table t(pk int primary key, val int)"
     dolt sql -q "create view view1 as select pk from t"
 

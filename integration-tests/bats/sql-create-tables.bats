@@ -768,7 +768,7 @@ SQL
     [[ "$output" =~ "table not found: myTempTable" ]] || false
 }
 
-@test "sql-create-tables:BINARY attributes" {
+@test "sql-create-tables: BINARY attributes" {
     dolt sql <<SQL
 CREATE TABLE budgets(id CHAR(36) CHARACTER SET utf8mb4 BINARY);
 CREATE TABLE budgets2(id CHAR(36) BINARY);
