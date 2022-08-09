@@ -166,7 +166,17 @@ func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB
 	}
 
 	// flush ChunkStore
-	return new.SetHead(ctx, flushRef, newHash)
+	if err = new.SetHead(ctx, flushRef, newHash); err != nil {
+		return err
+	}
+
+	// validate root after we flush the ChunkStore to facilitate
+	// investigating failed migrations
+	if err = validateRootValue(ctx, oldRoot, mRoot); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func migrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
@@ -317,10 +327,6 @@ func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.Root
 		return false, nil
 	})
 	if err != nil {
-		return nil, err
-	}
-
-	if err = validateRootValue(ctx, oldRoot, migrated); err != nil {
 		return nil, err
 	}
 
