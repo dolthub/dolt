@@ -17,7 +17,6 @@ package migrate
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/vitess/go/sqltypes"
 	"io"
 	"strings"
 	"time"
@@ -155,11 +154,13 @@ func equalRows(old, new sql.Row, sch sql.Schema) (bool, error) {
 	var err error
 	var cmp int
 	for i := range new {
-		// special case char field comparisons
-		if sch[i].Type.Type() == sqltypes.Char {
-			if s, ok := new[i].(string); ok {
-				new[i] = strings.TrimRightFunc(s, unicode.IsSpace)
-			}
+
+		// special case string comparisons
+		if s, ok := old[i].(string); ok {
+			old[i] = strings.TrimRightFunc(s, unicode.IsSpace)
+		}
+		if s, ok := new[i].(string); ok {
+			new[i] = strings.TrimRightFunc(s, unicode.IsSpace)
 		}
 
 		// special case time comparison to account
