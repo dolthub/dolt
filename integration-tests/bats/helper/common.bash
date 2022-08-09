@@ -100,6 +100,16 @@ log_output_has() {
     fi
 }
 
+parquet() {
+  if [ -z "$PARQUET_RUNTIME_JAR" ]; then
+    echo "must supply PARQUET_RUNTIME_JAR to use parquet cli"
+    exit 1
+  else
+    out=$(hadoop jar "$PARQUET_RUNTIME_JAR" org.apache.parquet.cli.Main "$@")
+    echo "$out"
+  fi
+}
+
 nativevar DOLT_ROOT_PATH $BATS_TMPDIR/config-$$ /p
 dolt config --global --add metrics.disabled true > /dev/null 2>&1
 set_dolt_user "Bats Tests" "bats@email.fake" 
