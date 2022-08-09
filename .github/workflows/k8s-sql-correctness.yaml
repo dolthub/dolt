@@ -6,7 +6,7 @@ on:
 
 jobs:
   correctness:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     name: Dolt SQL Correctness
     strategy:
       matrix:

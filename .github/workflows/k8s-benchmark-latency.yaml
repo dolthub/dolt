@@ -6,7 +6,7 @@ on:
 
 jobs:
   performance:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     name: Benchmark Performance
     strategy:
       matrix:

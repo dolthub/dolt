@@ -17,7 +17,7 @@ require (
 	github.com/dolthub/ishell v0.0.0-20220112232610-14e753f0f371
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20220805233523-ca38c3b23325
+	github.com/dolthub/vitess v0.0.0-20220809164912-4bb30c793f1b
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -58,7 +58,7 @@ require (
 )
 
 require (
-	github.com/dolthub/go-mysql-server v0.12.1-0.20220808165327-b2d2409387d3
+	github.com/dolthub/go-mysql-server v0.12.1-0.20220809165815-50f64185343e
 	github.com/google/flatbuffers v2.0.6+incompatible
 	github.com/gosuri/uilive v0.0.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
@@ -125,7 +125,6 @@ require (
 	go.opencensus.io v0.22.4 // indirect
 	go.uber.org/atomic v1.6.0 // indirect
 	go.uber.org/multierr v1.5.0 // indirect
-	golang.org/x/exp v0.0.0-20220713135740-79cabaa25d75 // indirect
 	golang.org/x/image v0.0.0-20220302094943-723b81ca9867 // indirect
 	golang.org/x/lint v0.0.0-20201208152925-83fdc39ff7b5 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect

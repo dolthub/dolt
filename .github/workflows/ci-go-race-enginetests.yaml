@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-18.04 ]
+        os: [ ubuntu-22.04 ]
         dolt_fmt: [ "", "__DOLT_DEV__" ]
     steps:
     - name: Set up Go 1.x
