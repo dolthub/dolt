@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime"
 	"strings"
 	"time"
 	"unicode"
@@ -266,23 +267,23 @@ func assertNomsKind(kind types.NomsKind, candidates ...types.NomsKind) error {
 }
 
 func partitionTable(ctx context.Context, tbl *doltdb.Table) ([][2]uint64, error) {
-	const fixedSize uint64 = 16384
-
 	idx, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	} else if idx.Count() == 0 {
 		return nil, nil
 	}
+	n := runtime.NumCPU() * 2
+	sz := int(idx.Count()) / n
 
-	n := (idx.Count() + fixedSize - 1) / fixedSize
 	parts := make([][2]uint64, n)
 
 	parts[0][0] = 0
 	parts[n-1][1] = idx.Count()
+
 	for i := 1; i < len(parts); i++ {
-		parts[i-1][1] = uint64(i) * fixedSize
-		parts[i][0] = uint64(i) * fixedSize
+		parts[i-1][1] = uint64(i * sz)
+		parts[i][0] = uint64(i * sz)
 	}
 
 	return parts, nil

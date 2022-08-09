@@ -25,7 +25,7 @@ require (
 	github.com/gocraft/dbr/v2 v2.7.2
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.1
-	github.com/google/go-cmp v0.5.7
+	github.com/google/go-cmp v0.5.8
 	github.com/google/uuid v1.2.0
 	github.com/jpillora/backoff v1.0.0
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
@@ -125,6 +125,7 @@ require (
 	go.opencensus.io v0.22.4 // indirect
 	go.uber.org/atomic v1.6.0 // indirect
 	go.uber.org/multierr v1.5.0 // indirect
+	golang.org/x/exp v0.0.0-20220713135740-79cabaa25d75 // indirect
 	golang.org/x/image v0.0.0-20220302094943-723b81ca9867 // indirect
 	golang.org/x/lint v0.0.0-20201208152925-83fdc39ff7b5 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
