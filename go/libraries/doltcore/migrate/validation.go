@@ -17,13 +17,13 @@ package migrate
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/vitess/go/sqltypes"
 	"io"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"golang.org/x/sync/errgroup"
 
