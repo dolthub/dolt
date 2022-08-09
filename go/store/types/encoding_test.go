@@ -652,7 +652,7 @@ func TestNomsBinFormat(t *testing.T) {
 		assert.Equal(t, Format_7_18, Format_Default)
 	case constants.FormatLD1String:
 		assert.Equal(t, Format_LD_1, Format_Default)
-	case constants.FormatDolt1String:
+	case constants.FormatDoltString:
 		assert.Equal(t, Format_DOLT, Format_Default)
 	case constants.FormatDoltDevString:
 		assert.Equal(t, Format_DOLT_DEV, Format_Default)
