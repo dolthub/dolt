@@ -166,7 +166,17 @@ func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB
 	}
 
 	// flush ChunkStore
-	return new.SetHead(ctx, flushRef, newHash)
+	if err = new.SetHead(ctx, flushRef, newHash); err != nil {
+		return err
+	}
+
+	// validate root after we flush the ChunkStore to facilitate
+	// investigating failed migrations
+	if err = validateRootValue(ctx, oldRoot, mRoot); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func migrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
@@ -320,10 +330,6 @@ func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.Root
 		return nil, err
 	}
 
-	if err = validateRootValue(ctx, oldRoot, migrated); err != nil {
-		return nil, err
-	}
-
 	return migrated, nil
 }
 
@@ -346,11 +352,6 @@ func migrateTable(ctx context.Context, newSch schema.Schema, oldParentTbl, oldTb
 	}
 	newParentRows := durable.ProllyMapFromIndex(idx)
 
-	newRows, err := migrateIndex(ctx, newSch, oldParentRows, oldRows, newParentRows, newParentTbl.NodeStore())
-	if err != nil {
-		return nil, err
-	}
-
 	oldParentSet, err := oldParentTbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
@@ -366,9 +367,22 @@ func migrateTable(ctx context.Context, newSch schema.Schema, oldParentTbl, oldTb
 		return nil, err
 	}
 
+	var newRows durable.Index
+	var newSet durable.IndexSet
+	eg, ctx := errgroup.WithContext(ctx)
+
+	eg.Go(func() error {
+		newRows, err = migrateIndex(ctx, newSch, oldParentRows, oldRows, newParentRows, newParentTbl.NodeStore())
+		return err
+	})
+
 	vrw, ns := newParentTbl.ValueReadWriter(), newParentTbl.NodeStore()
-	newSet, err := migrateIndexSet(ctx, newSch, oldParentSet, oldSet, newParentSet, vrw, ns)
-	if err != nil {
+	eg.Go(func() error {
+		newSet, err = migrateIndexSet(ctx, newSch, oldParentSet, oldSet, newParentSet, vrw, ns)
+		return err
+	})
+
+	if err = eg.Wait(); err != nil {
 		return nil, err
 	}
 

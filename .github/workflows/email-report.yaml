@@ -6,7 +6,7 @@ on:
 
 jobs:
   email-team:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     name: Email Team Members
     steps:
       - uses: actions/checkout@v2

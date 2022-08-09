@@ -12,7 +12,7 @@ on:
 jobs:
   homebrew-bump:
     name: Bump Dolt Homebrew formula
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Create Homebrew PR
         uses: mislav/bump-homebrew-formula-action@v1

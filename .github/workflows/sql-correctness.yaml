@@ -17,7 +17,7 @@ on:
 jobs:
   set-version-actor:
     name: Set Version and Actor
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     outputs:
       version: ${{ steps.set-vars.outputs.version }}
       actor: ${{ steps.set-vars.outputs.actor }}
@@ -32,7 +32,7 @@ jobs:
           ACTOR: ${{ github.event.client_payload.actor || github.actor }}
 
   correctness:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     needs: set-version-actor
     name: Trigger SQL Correctness K8s Workflow
     steps:

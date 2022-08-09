@@ -1557,7 +1557,15 @@ behavior:
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
 
-    PORT="$$ % (65536-1024) + 1024 + 1"
+    echo "import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind(('', 0))
+addr = s.getsockname()
+print(addr[1])
+s.close()
+" > port_finder.py
+
+    PORT=$(python3 port_finder.py)
     run dolt sql-server --port=$PORT
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
