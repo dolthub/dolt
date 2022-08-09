@@ -37,7 +37,7 @@ teardown() {
 @test "multidb: incompatible BIN FORMATs" {
     mkdir dbs1/repo4
     cd dbs1/repo4
-    DOLT_DEFAULT_BIN_FORMAT=__DOLT_1__ dolt init
+    DOLT_DEFAULT_BIN_FORMAT=__DOLT__ dolt init
     cd ..
 
     dolt --help

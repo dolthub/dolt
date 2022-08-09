@@ -130,7 +130,7 @@ func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader,
 		return nil, err
 	}
 
-	if confIdx.Format() == types.Format_DOLT_1 {
+	if confIdx.Format() == types.Format_DOLT {
 		panic("conflict reader not implemented for new storage format")
 	}
 

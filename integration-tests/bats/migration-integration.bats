@@ -6,7 +6,7 @@ setup() {
     skip_nbf_dolt_dev
 
     setup_common
-    TARGET_NBF="__DOLT_1__"
+    TARGET_NBF="__DOLT__"
 }
 
 teardown() {

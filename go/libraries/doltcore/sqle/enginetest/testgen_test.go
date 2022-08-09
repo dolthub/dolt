@@ -32,7 +32,7 @@ import (
 )
 
 func TestGenNewFormatQueryPlans(t *testing.T) {
-	// must run with env var: DOLT_DEFAULT_BIN_FORMAT="__DOLT_1__"
+	// must run with env var: DOLT_DEFAULT_BIN_FORMAT="__DOLT__"
 	t.Skip()
 	harness := newDoltHarness(t).WithParallelism(1)
 	harness.Setup(setup.SimpleSetup...)

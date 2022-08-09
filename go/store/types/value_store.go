@@ -392,7 +392,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 		// in the general case.
 		//
 		// Buffering with full dependency tracking would be
-		// possible, and in __DOLT_1__, WalkAddrs may be
+		// possible, and in __DOLT__, WalkAddrs may be
 		// cheap enough that it would be possible to get back
 		// cache-locality in our flushes without ref heights.
 		if lvs.enforceCompleteness {
