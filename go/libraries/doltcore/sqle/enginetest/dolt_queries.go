@@ -249,7 +249,7 @@ var DoltScripts = []queries.ScriptTest{
 					{
 						"dolt_checkout",
 						"",
-						"CREATE PROCEDURE dolt_checkout() SELECT 'External stored procedure defined by mydb';",
+						"CREATE PROCEDURE dolt_checkout() SELECT 'External stored procedure';",
 						"utf8mb4",
 						"utf8mb4_0900_bin",
 						"utf8mb4_0900_bin",

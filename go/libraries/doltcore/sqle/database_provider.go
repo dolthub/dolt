@@ -17,6 +17,8 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"math"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -30,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
@@ -43,10 +46,11 @@ const (
 
 type DoltDatabaseProvider struct {
 	// dbLocations maps a database name to its file system root
-	dbLocations map[string]filesys.Filesys
-	databases   map[string]sql.Database
-	functions   map[string]sql.Function
-	mu          *sync.RWMutex
+	dbLocations   map[string]filesys.Filesys
+	databases     map[string]sql.Database
+	functions     map[string]sql.Function
+	externalProcs map[string]map[int]sql.ExternalStoredProcedureDetails
+	mu            *sync.RWMutex
 
 	defaultBranch string
 	fs            filesys.Filesys
@@ -58,6 +62,8 @@ type DoltDatabaseProvider struct {
 var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.ExternalStoredProcedureProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.TableFunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
 
 // NewDoltDatabaseProvider returns a new provider, initialized without any databases, along with any
@@ -97,15 +103,43 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		funcs[strings.ToLower(fn.FunctionName())] = fn
 	}
 
+	externalProcs := make(map[string]map[int]sql.ExternalStoredProcedureDetails)
+	// TODO: Copied from memory implementation... need to refactor and clean up this duplication...
+	for _, esp := range dprocedures.DoltProcedures {
+		numOfParams := countNumberOfParams(esp)
+
+		if _, ok := externalProcs[strings.ToLower(esp.Name)]; !ok {
+			externalProcs[strings.ToLower(esp.Name)] = make(map[int]sql.ExternalStoredProcedureDetails)
+		}
+		externalProcs[strings.ToLower(esp.Name)][numOfParams] = esp
+	}
+
 	return DoltDatabaseProvider{
 		dbLocations:   dbLocations,
 		databases:     dbs,
 		functions:     funcs,
+		externalProcs: externalProcs,
 		mu:            &sync.RWMutex{},
 		fs:            fs,
 		defaultBranch: defaultBranch,
 		dbFactoryUrl:  doltdb.LocalDirDoltDB,
 	}, nil
+}
+
+// TODO: Copied from memory implementation... need to refactor and clean up this duplication...
+func countNumberOfParams(externalProcedure sql.ExternalStoredProcedureDetails) int {
+	funcVal := reflect.ValueOf(externalProcedure.Function)
+	funcType := funcVal.Type()
+
+	// TODO: Explain with comment
+	if funcVal.Type().IsVariadic() {
+		return math.MaxInt
+	}
+
+	// We subtract one because ctx is required to always be the first parameter to a function, but
+	// customers won't actually pass that in to the stored procedure.
+	// TODO: Should we keep the ctx check in here?
+	return funcType.NumIn() - 1
 }
 
 // WithFunctions returns a copy of this provider with the functions given. Any previous functions are removed.
@@ -539,8 +573,48 @@ func (p DoltDatabaseProvider) Function(_ *sql.Context, name string) (sql.Functio
 	return fn, nil
 }
 
-// TableFunction implements the TableFunctionProvider interface
-func (p DoltDatabaseProvider) TableFunction(ctx *sql.Context, name string) (sql.TableFunction, error) {
+// ExternalStoredProcedure implements the sql.ExternalStoredProcedureProvider interface
+func (p DoltDatabaseProvider) ExternalStoredProcedure(_ *sql.Context, name string, numOfParams int) (*sql.ExternalStoredProcedureDetails, error) {
+	// TODO: This really really needs to be encapsulated in a shared util class somewhere...
+	procedureVariants, ok := p.externalProcs[strings.ToLower(name)]
+	if !ok {
+		return nil, sql.ErrStoredProcedureDoesNotExist.New(name)
+	}
+
+	// If we find an exact match, go ahead and return that stored procedure
+	procedure, ok := procedureVariants[numOfParams]
+	if ok {
+		return &procedure, nil
+	}
+
+	// Otherwise, find the largest param length and return that stored procedure
+	var largestParamLen int
+	var largestParamProc *sql.ExternalStoredProcedureDetails
+	for paramLen, procedure := range procedureVariants {
+		if largestParamProc == nil || largestParamLen < paramLen {
+			largestParamProc = &procedure
+			largestParamLen = paramLen
+		}
+	}
+	return largestParamProc, nil
+}
+
+func (p DoltDatabaseProvider) ExternalStoredProcedures(ctx *sql.Context, name string) ([]sql.ExternalStoredProcedureDetails, error) {
+	// TODO: Copy and pasted... clean up...
+	procedureVariants, ok := p.externalProcs[strings.ToLower(name)]
+	if !ok {
+		return nil, sql.ErrStoredProcedureDoesNotExist.New(name)
+	}
+
+	procedures := make([]sql.ExternalStoredProcedureDetails, 0, len(procedureVariants))
+	for _, procedure := range procedureVariants {
+		procedures = append(procedures, procedure)
+	}
+	return procedures, nil
+}
+
+// TableFunction implements the sql.TableFunctionProvider interface
+func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.TableFunction, error) {
 	// currently, only one table function is supported, if we extend this, we should clean this up
 	// and store table functions in a map, similar to regular functions.
 	if strings.ToLower(name) == "dolt_diff" {
