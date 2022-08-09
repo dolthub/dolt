@@ -21,6 +21,10 @@ nomsBinFormat="${11}"
 withTpcc="${12}"
 tpccRegex="tpcc%"
 
+if [ "$nomsBinFormat" = "__DOLT__" ]; then
+  initBigRepo="false"
+fi
+
 if [ -n "$initBigRepo" ]; then
   initBigRepo="\"--init-big-repo=$initBigRepo\","
 fi
