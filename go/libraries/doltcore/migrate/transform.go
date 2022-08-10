@@ -169,6 +169,9 @@ func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB
 	if err = new.SetHead(ctx, flushRef, newHash); err != nil {
 		return err
 	}
+	if err = new.ShallowGC(ctx); err != nil {
+		return err
+	}
 
 	// validate root after we flush the ChunkStore to facilitate
 	// investigating failed migrations
