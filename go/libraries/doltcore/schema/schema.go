@@ -201,17 +201,6 @@ func ArePrimaryKeySetsDiffable(format *types.NomsBinFormat, fromSch, toSch Schem
 		}
 	}
 
-	ords1 := fromSch.GetPkOrdinals()
-	ords2 := toSch.GetPkOrdinals()
-	if ords1 == nil || ords2 == nil || len(ords1) != len(ords2) {
-		return false
-	}
-	for i := 0; i < len(ords1); i++ {
-		if ords1[i] != ords2[i] {
-			return false
-		}
-	}
-
 	return true
 }
 

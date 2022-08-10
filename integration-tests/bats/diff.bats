@@ -539,6 +539,17 @@ SQL
     [[ "$output" =~ "where pk=4" ]] || false
 }
 
+@test "diff: diff summary incorrect primary key set change regression test" {
+    dolt sql -q "create table testdrop (col1 varchar(20), id int primary key, col2 varchar(20))"
+    dolt sql -q "insert into testdrop values ('test1', 1, 'test2')"
+    dolt commit -am "Add testdrop table"
+
+    dolt sql -q "alter table testdrop drop column col1"
+    run dolt diff --summary
+    [ $status -eq 0 ]
+    [[ $output =~ "1 Row Modified (100.00%)" ]]
+}
+
 @test "diff: with where clause errors" {
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
