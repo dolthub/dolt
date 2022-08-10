@@ -44,19 +44,26 @@ func (g GlobalState) GetAutoIncrementTracker(ctx *sql.Context, ws *doltdb.Workin
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	ctx.GetSessionVariable(ctx, dsess.PerBranchAutoIncrement)
+	perBranch, err := dsess.GetBooleanSystemVar(ctx, dsess.PerBranchAutoIncrement)
+	if err != nil {
+		return AutoIncrementTracker{}, err
+	}
 
-	ait, ok := g.trackerMap[ws.Ref()]
+	if !perBranch {
+
+	}
+
+	ref := ws.Ref()
+	ait, ok := g.trackerMap[ref]
 	if ok {
 		return ait, nil
 	}
 
-	var err error
 	ait, err = NewAutoIncrementTracker(ctx, ws)
 	if err != nil {
 		return AutoIncrementTracker{}, err
 	}
-	g.trackerMap[ws.Ref()] = ait
+	g.trackerMap[ref] = ait
 
 	return ait, nil
 }

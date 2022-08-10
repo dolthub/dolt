@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
@@ -49,7 +48,6 @@ func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 // NewAutoIncrementTracker returns a new autoincrement tracker for the working set given
 func NewAutoIncrementTracker(ctx context.Context, ws *doltdb.WorkingSet) (AutoIncrementTracker, error) {
 	ait := AutoIncrementTracker{
-		wsRef:     ws.Ref(),
 		sequences: make(map[string]uint64),
 		mu:        &sync.Mutex{},
 	}
@@ -60,10 +58,12 @@ func NewAutoIncrementTracker(ctx context.Context, ws *doltdb.WorkingSet) (AutoIn
 		if !ok {
 			return false, nil
 		}
+
 		seq, err := table.GetAutoIncrementValue(ctx)
 		if err != nil {
 			return true, err
 		}
+
 		ait.sequences[name] = seq
 		return false, nil
 	})
@@ -72,7 +72,6 @@ func NewAutoIncrementTracker(ctx context.Context, ws *doltdb.WorkingSet) (AutoIn
 }
 
 type AutoIncrementTracker struct {
-	wsRef     ref.WorkingSetRef
 	sequences map[string]uint64
 	mu        *sync.Mutex
 }

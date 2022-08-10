@@ -15,6 +15,7 @@
 package dsess
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -142,16 +143,24 @@ func IsWorkingKey(key string) (bool, string) {
 	return false, ""
 }
 
-func IsDefaultBranchKey(key string) (bool, string) {
-	if strings.HasSuffix(key, DefaultBranchKeySuffix) {
-		return true, key[:len(key)-len(DefaultBranchKeySuffix)]
-	}
-
-	return false, ""
-}
-
 func IsReadOnlyVersionKey(key string) bool {
 	return strings.HasSuffix(key, HeadKeySuffix) ||
 		strings.HasSuffix(key, StagedKeySuffix) ||
 		strings.HasSuffix(key, WorkingKeySuffix)
+}
+
+// GetBooleanSystemVar returns a boolean value for the system variable named, returning an error if the variable
+// doesn't exist in the session or has a non-boolean type.
+func GetBooleanSystemVar(ctx *sql.Context, varName string) (bool, error) {
+	val, err := ctx.GetSessionVariable(ctx, varName)
+	if err != nil {
+		return false, err
+	}
+
+	i8, isInt8 := val.(int8)
+	if !isInt8 {
+		return false, fmt.Errorf("unexpected type for variable %s: %T", varName, val)
+	}
+
+	return i8 == 1, nil
 }
