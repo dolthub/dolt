@@ -132,6 +132,13 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		}
 	}
 
+	if apr.Contains(cli.AmendFlag) {
+		err = actions.ResetSoftToRef(ctx, dEnv.DbData(), "HEAD~1")
+		if err != nil {
+			return handleResetError(err, usage)
+		}
+	}
+
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working set").AddCause(err).Build(), usage)
@@ -150,7 +157,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
-		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
+		AllowEmpty: apr.Contains(cli.AllowEmptyFlag) || apr.Contains(cli.AmendFlag),
 		Force:      apr.Contains(cli.ForceFlag),
 		Name:       name,
 		Email:      email,

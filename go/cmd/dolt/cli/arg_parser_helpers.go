@@ -98,6 +98,7 @@ const (
 	RemoteParam      = "remote"
 	BranchParam      = "branch"
 	TrackFlag        = "track"
+	AmendFlag        = "amend"
 )
 
 const (
@@ -123,6 +124,7 @@ func CreateCommitArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
 	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
 	ap.SupportsFlag(AllFlag, "a", "Adds all edited files in working to staged.")
+	ap.SupportsFlag(AmendFlag, "", "Amend previous commit")
 	return ap
 }
 
