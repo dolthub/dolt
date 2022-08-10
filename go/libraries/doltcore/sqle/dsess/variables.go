@@ -34,6 +34,16 @@ const (
 	ForceTransactionCommit        = "dolt_force_transaction_commit"
 	CurrentBatchModeKey           = "batch_mode"
 	AllowCommitConflicts          = "dolt_allow_commit_conflicts"
+	PerBranchAutoIncrement        = "dolt_per_branch_auto_increment"
+	ReplicateToRemoteKey     = "dolt_replicate_to_remote"
+	ReadReplicaRemoteKey     = "dolt_read_replica_remote"
+	SkipReplicationErrorsKey = "dolt_skip_replication_errors"
+	ReplicateHeadsKey        = "dolt_replicate_heads"
+	ReplicateAllHeadsKey     = "dolt_replicate_all_heads"
+	AsyncReplicationKey      = "dolt_async_replication"
+	AwsCredsFileKey          = "aws_credentials_file"
+	AwsCredsProfileKey       = "aws_credentials_profile"
+	AwsCredsRegionKey        = "aws_credentials_region"
 )
 
 func init() {
