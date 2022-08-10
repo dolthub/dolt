@@ -606,8 +606,6 @@ func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
 		return errors.New("failed to add chunk")
 	}
 
-	nbs.putCount++
-
 	nbs.stats.PutLatency.SampleTimeSince(t1)
 
 	return nil
@@ -619,12 +617,16 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, h addr, data []byte) bo
 	if nbs.mt == nil {
 		nbs.mt = newMemTable(nbs.mtSize)
 	}
-	if !nbs.mt.addChunk(h, data) {
+	added := nbs.mt.addChunk(h, data)
+	if !added {
 		nbs.tables = nbs.tables.Prepend(ctx, nbs.mt, nbs.stats)
 		nbs.mt = newMemTable(nbs.mtSize)
-		return nbs.mt.addChunk(h, data)
+		added = nbs.mt.addChunk(h, data)
 	}
-	return true
+	if added {
+		nbs.putCount++
+	}
+	return added
 }
 
 func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
