@@ -30,6 +30,7 @@ import (
 	"reflect"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -606,7 +607,7 @@ func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
 		return errors.New("failed to add chunk")
 	}
 
-	nbs.putCount++
+	atomic.AddUint64(&nbs.putCount, 1)
 
 	nbs.stats.PutLatency.SampleTimeSince(t1)
 
