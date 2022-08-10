@@ -7,7 +7,7 @@ on:
 jobs:
   report-pull-request:
     name: Report Performance Benchmarks on Pull Request
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     if: ${{ github.event.client_payload.issue_number != -1 }}
     steps:
       - name: Checkout

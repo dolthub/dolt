@@ -17,7 +17,7 @@ on:
 jobs:
   set-version-actor:
     name: Set Version and Actor
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     outputs:
       version: ${{ steps.set-vars.outputs.version }}
       actor: ${{ steps.set-vars.outputs.actor }}
@@ -35,7 +35,7 @@ jobs:
           ACTOR_EMAIL: ${{ github.event.inputs.email }}
 
   benchmark-dolt-mysql:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     needs: set-version-actor
     name: Trigger Benchmark Latency and Benchmark Import K8s Workflows
     steps:
@@ -48,4 +48,4 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-import
-          client-payload: '{"from_server": "dolt", "from_version": "${{ needs.set-version-actor.outputs.version }}", "to_server": "mysql", "to_version": "8.0.28", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/import-benchmarking/get-mysql-dolt-job-json.sh"}'
+          client-payload: '{"to_server": "dolt", "to_version": "${{ needs.set-version-actor.outputs.version }}", "from_server": "mysql", "from_version": "8.0.28", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/import-benchmarking/get-mysql-dolt-job-json.sh"}'

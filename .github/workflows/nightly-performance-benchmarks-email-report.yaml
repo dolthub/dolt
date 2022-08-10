@@ -7,7 +7,7 @@ on:
 
 jobs:
   perf:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     name: Trigger Benchmark Latency, Benchmark Import, and SQL Correctness K8s Workflows
     steps:
       - uses: peter-evans/repository-dispatch@v1
@@ -24,4 +24,4 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-import
-          client-payload: '{"from_server": "dolt", "from_version": "${{ github.sha }}", "to_server": "mysql", "to_version": "8.0.28", "mode": "nightly", "actor": "${{ github.actor }}", "actor_email": "vinai@dolthub.com", "template_script": "./.github/scripts/import-benchmarking/get-mysql-dolt-job-json.sh"}'
+          client-payload: '{"to_server": "dolt", "to_version": "${{ github.sha }}", "from_server": "mysql", "from_version": "8.0.28", "mode": "nightly", "actor": "${{ github.actor }}", "actor_email": "vinai@dolthub.com", "template_script": "./.github/scripts/import-benchmarking/get-mysql-dolt-job-json.sh"}'

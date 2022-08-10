@@ -17,9 +17,9 @@ package migrate
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -85,5 +85,5 @@ func (mem *memoryProgress) Pop(ctx context.Context) (cm *doltdb.Commit, err erro
 }
 
 func (mem *memoryProgress) Log(ctx context.Context, format string, args ...any) {
-	cli.Println(fmt.Sprintf(format, args...))
+	cli.Println(time.Now().UTC().String() + " " + fmt.Sprintf(format, args...))
 }

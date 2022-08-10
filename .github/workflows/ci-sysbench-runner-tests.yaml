@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   mysql_client_integrations_job:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     name: Test Sysbench Runner
     steps:
       - name: Checkout

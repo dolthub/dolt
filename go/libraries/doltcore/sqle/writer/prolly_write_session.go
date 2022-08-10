@@ -135,18 +135,18 @@ func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, err
 	tables := make(map[string]*doltdb.Table, len(s.tables))
 	mu := &sync.Mutex{}
 
-	eg, ctx := errgroup.WithContext(ctx)
+	eg, ctx2 := errgroup.WithContext(ctx)
 	for n := range s.tables {
 		name := n // make a copy
 		eg.Go(func() error {
 			wr := s.tables[name]
-			t, err := wr.table(ctx)
+			t, err := wr.table(ctx2)
 			if err != nil {
 				return err
 			}
 
 			if schema.HasAutoIncrement(wr.sch) {
-				t, err = t.SetAutoIncrementValue(ctx, s.tracker.Current(name))
+				t, err = t.SetAutoIncrementValue(ctx2, s.tracker.Current(name))
 				if err != nil {
 					return err
 				}

@@ -10,7 +10,7 @@ on:
 
 jobs:
   fuzzer:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     name: Run Fuzzer
     steps:
       - uses: actions/checkout@v2
