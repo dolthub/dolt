@@ -16,10 +16,8 @@ package index
 
 import (
 	"context"
-	"io"
-	"sync"
-
 	"github.com/dolthub/go-mysql-server/sql"
+	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -27,16 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-const (
-	ringBufferAllocSize = 1024
-)
-
-var resultBufferPool = &sync.Pool{
-	New: func() interface{} {
-		return async.NewRingBuffer(ringBufferAllocSize)
-	},
-}
 
 type indexLookupRowIterAdapter struct {
 	idx       DoltIndex
@@ -56,100 +44,31 @@ type indexLookupRowIterAdapter struct {
 // NewIndexLookupRowIterAdapter returns a new indexLookupRowIterAdapter.
 func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, durableState *durableIndexState, keyIter nomsKeyIter, columns []uint64) (*indexLookupRowIterAdapter, error) {
 	rows := durable.NomsMapFromIndex(durableState.Primary)
-
-	resBuf := resultBufferPool.Get().(*async.RingBuffer)
-	epoch := resBuf.Reset()
-
-	queueCtx, cancelF := context.WithCancel(ctx)
-
-	iter := &indexLookupRowIterAdapter{
+	return &indexLookupRowIterAdapter{
 		idx:        idx,
 		keyIter:    keyIter,
 		tableRows:  rows,
 		conv:       idx.sqlRowConverter(durableState, columns),
 		lookupTags: idx.lookupTags(durableState),
-		cancelF:    cancelF,
-		resultBuf:  resBuf,
-	}
-
-	go iter.queueRows(queueCtx, epoch)
-	return iter, nil
+	}, nil
 }
 
 // Next returns the next row from the iterator.
 func (i *indexLookupRowIterAdapter) Next(ctx *sql.Context) (sql.Row, error) {
 	for i.count == 0 || i.read < i.count {
-		item, err := i.resultBuf.Pop()
-
+		indexKey, err := i.keyIter.ReadKey(ctx)
 		if err != nil {
 			return nil, err
 		}
-
-		res := item.(lookupResult)
-
-		i.read++
-		if res.err != nil {
-			if res.err == io.EOF {
-				i.count = res.idx
-				continue
-			}
-
-			return nil, res.err
-		}
-
-		return res.r, res.err
+		i.count++
+		return i.processKey(ctx, indexKey)
 	}
 
 	return nil, io.EOF
 }
 
 func (i *indexLookupRowIterAdapter) Close(*sql.Context) error {
-	i.cancelF()
-	resultBufferPool.Put(i.resultBuf)
 	return nil
-}
-
-// queueRows reads each key from the key iterator and writes it to lookups.toLookupCh which manages a pool of worker
-// routines which will process the requests in parallel.
-func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context, epoch int) {
-	for idx := uint64(1); ; idx++ {
-		indexKey, err := i.keyIter.ReadKey(ctx)
-
-		if err != nil {
-			i.resultBuf.Push(lookupResult{
-				idx: idx,
-				r:   nil,
-				err: err,
-			}, epoch)
-
-			return
-		}
-
-		lookup := toLookup{
-			idx:        idx,
-			t:          indexKey,
-			tupleToRow: i.processKey,
-			resBuf:     i.resultBuf,
-			epoch:      epoch,
-			ctx:        ctx,
-		}
-
-		select {
-		case lookups.toLookupCh <- lookup:
-		case <-ctx.Done():
-			err := ctx.Err()
-			if err == nil {
-				err = io.EOF
-			}
-			i.resultBuf.Push(lookupResult{
-				idx: idx,
-				r:   nil,
-				err: err,
-			}, epoch)
-
-			return
-		}
-	}
 }
 
 func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat, indexKey types.Tuple) (types.Tuple, error) {
