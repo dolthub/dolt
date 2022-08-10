@@ -18,6 +18,7 @@ import (
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -43,7 +44,7 @@ func (g GlobalState) GetAutoIncrementTracker(ctx *sql.Context, ws *doltdb.Workin
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	// ctx.GetSessionVariable(ctx, )
+	ctx.GetSessionVariable(ctx, dsess.PerBranchAutoIncrement)
 
 	ait, ok := g.trackerMap[ws.Ref()]
 	if ok {

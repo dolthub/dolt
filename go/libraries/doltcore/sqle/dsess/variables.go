@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
+// Per-DB system variables
 const (
 	HeadKeySuffix          = "_head"
 	HeadRefKeySuffix       = "_head_ref"
@@ -28,6 +29,7 @@ const (
 	DefaultBranchKeySuffix = "_default_branch"
 )
 
+// General system variables
 const (
 	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
 	TransactionsDisabledSysVar    = "dolt_transactions_disabled"
@@ -45,75 +47,6 @@ const (
 	AwsCredsProfileKey       = "aws_credentials_profile"
 	AwsCredsRegionKey        = "aws_credentials_region"
 )
-
-func init() {
-	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-		{ // If true, causes a Dolt commit to occur when you commit a transaction.
-			Name:              DoltCommitOnTransactionCommit,
-			Scope:             sql.SystemVariableScope_Both,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(DoltCommitOnTransactionCommit),
-			Default:           int8(0),
-		},
-		{
-			Name:              TransactionsDisabledSysVar,
-			Scope:             sql.SystemVariableScope_Session,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(TransactionsDisabledSysVar),
-			Default:           int8(0),
-		},
-		{ // If true, disables the conflict and constraint violation check when you commit a transaction.
-			Name:              ForceTransactionCommit,
-			Scope:             sql.SystemVariableScope_Both,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(ForceTransactionCommit),
-			Default:           int8(0),
-		},
-		{
-			Name:              CurrentBatchModeKey,
-			Scope:             sql.SystemVariableScope_Session,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemIntType(CurrentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
-			Default:           int64(0),
-		},
-		{ // If true, disables the conflict violation check when you commit a transaction.
-			Name:              AllowCommitConflicts,
-			Scope:             sql.SystemVariableScope_Session,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(AllowCommitConflicts),
-			Default:           int8(0),
-		},
-		{
-			Name:              AwsCredsFileKey,
-			Scope:             sql.SystemVariableScope_Session,
-			Dynamic:           false,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(AwsCredsFileKey),
-			Default:           nil,
-		},
-		{
-			Name:              AwsCredsProfileKey,
-			Scope:             sql.SystemVariableScope_Session,
-			Dynamic:           false,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(AwsCredsProfileKey),
-			Default:           nil,
-		},
-		{
-			Name:              AwsCredsRegionKey,
-			Scope:             sql.SystemVariableScope_Session,
-			Dynamic:           false,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(AwsCredsRegionKey),
-			Default:           nil,
-		},
-	})
-}
 
 // DefineSystemVariablesForDB defines per database dolt-session variables in the engine as necessary
 func DefineSystemVariablesForDB(name string) {
