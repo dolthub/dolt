@@ -138,7 +138,7 @@ func (t *Table) SetConflicts(ctx context.Context, schemas conflict.ConflictSchem
 
 // GetConflicts returns a map built from ValueReadWriter when there are no conflicts in table.
 func (t *Table) GetConflicts(ctx context.Context) (conflict.ConflictSchema, durable.ConflictIndex, error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		panic("should use artifacts")
 	}
 
@@ -147,7 +147,7 @@ func (t *Table) GetConflicts(ctx context.Context) (conflict.ConflictSchema, dura
 
 // HasConflicts returns true if this table contains merge conflicts.
 func (t *Table) HasConflicts(ctx context.Context) (bool, error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		art, err := t.GetArtifacts(ctx)
 		if err != nil {
 			return false, err
@@ -174,7 +174,7 @@ func (t *Table) SetArtifacts(ctx context.Context, artifacts durable.ArtifactInde
 
 // NumRowsInConflict returns the number of rows with merge conflicts for this table.
 func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		artIdx, err := t.table.GetArtifacts(ctx)
 		if err != nil {
 			return 0, err
@@ -200,7 +200,7 @@ func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
 
 // NumConstraintViolations returns the number of constraint violations for this table.
 func (t *Table) NumConstraintViolations(ctx context.Context) (uint64, error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		artIdx, err := t.table.GetArtifacts(ctx)
 		if err != nil {
 			return 0, err
@@ -218,7 +218,7 @@ func (t *Table) NumConstraintViolations(ctx context.Context) (uint64, error) {
 
 // ClearConflicts deletes all merge conflicts for this table.
 func (t *Table) ClearConflicts(ctx context.Context) (*Table, error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		return t.clearArtifactConflicts(ctx)
 	}
 
@@ -251,7 +251,7 @@ func (t *Table) clearConflicts(ctx context.Context) (*Table, error) {
 
 // GetConflictSchemas returns the merge conflict schemas for this table.
 func (t *Table) GetConflictSchemas(ctx context.Context, tblName string) (base, sch, mergeSch schema.Schema, err error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		return t.getProllyConflictSchemas(ctx, tblName)
 	}
 
@@ -368,7 +368,7 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 
 	colColl := schema.NewColCollection()
 
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		// the commit hash or working set hash of the right side during merge
 		colColl = colColl.Append(schema.NewColumn("from_root_ish", 0, types.StringKind, false))
 	}
@@ -382,7 +382,7 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 // GetConstraintViolations returns a map of all constraint violations for this table, along with a bool indicating
 // whether the table has any violations.
 func (t *Table) GetConstraintViolations(ctx context.Context) (types.Map, error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		panic("should use artifacts")
 	}
 	return t.table.GetConstraintViolations(ctx)
@@ -391,7 +391,7 @@ func (t *Table) GetConstraintViolations(ctx context.Context) (types.Map, error) 
 // SetConstraintViolations sets this table's violations to the given map. If the map is empty, then the constraint
 // violations entry on the embedded struct is removed.
 func (t *Table) SetConstraintViolations(ctx context.Context, violationsMap types.Map) (*Table, error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		panic("should use artifacts")
 	}
 	table, err := t.table.SetConstraintViolations(ctx, violationsMap)
@@ -473,7 +473,7 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 		return nil, nil, nil, err
 	}
 
-	if confIdx.Format() == types.Format_DOLT_1 {
+	if confIdx.Format() == types.Format_DOLT {
 		panic("resolve conflicts not implemented for new storage format")
 	}
 

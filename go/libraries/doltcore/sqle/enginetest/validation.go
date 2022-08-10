@@ -45,7 +45,7 @@ func ValidateDatabase(ctx context.Context, db sql.Database) (err error) {
 }
 
 func ValidateDoltDatabase(ctx context.Context, db sqle.Database) (err error) {
-	if !types.IsFormat_DOLT_1(db.GetDoltDB().Format()) {
+	if !types.IsFormat_DOLT(db.GetDoltDB().Format()) {
 		return nil
 	}
 	for _, stage := range validationStages {

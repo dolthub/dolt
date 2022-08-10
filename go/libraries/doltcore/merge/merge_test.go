@@ -302,7 +302,7 @@ var testRows = []testRow{
 }
 
 func TestMergeCommits(t *testing.T) {
-	if !types.IsFormat_DOLT_1(types.Format_Default) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}
 
@@ -355,7 +355,7 @@ func TestMergeCommits(t *testing.T) {
 }
 
 func TestNomsMergeCommits(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
+	if types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}
 

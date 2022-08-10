@@ -167,7 +167,7 @@ func GetSharedCols(schema Schema, cmpNames []string, cmpKinds []types.NomsKind) 
 }
 
 // ArePrimaryKeySetsDiffable checks if two schemas are diffable. Assumes the
-// passed in schema are from the same table between commits. If __DOLT_1__, then
+// passed in schema are from the same table between commits. If __DOLT__, then
 // it also checks if the underlying SQL types of the columns are equal.
 func ArePrimaryKeySetsDiffable(format *types.NomsBinFormat, fromSch, toSch Schema) bool {
 	if fromSch == nil && toSch == nil {
@@ -196,7 +196,7 @@ func ArePrimaryKeySetsDiffable(format *types.NomsBinFormat, fromSch, toSch Schem
 		if (c1.Tag != c2.Tag) || (c1.IsPartOfPK != c2.IsPartOfPK) {
 			return false
 		}
-		if types.IsFormat_DOLT_1(format) && !c1.TypeInfo.ToSqlType().Equals(c2.TypeInfo.ToSqlType()) {
+		if types.IsFormat_DOLT(format) && !c1.TypeInfo.ToSqlType().Equals(c2.TypeInfo.ToSqlType()) {
 			return false
 		}
 	}

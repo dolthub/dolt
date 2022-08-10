@@ -36,8 +36,8 @@ func RefFromConflictIndex(ctx context.Context, vrw types.ValueReadWriter, idx Co
 	case types.Format_LD_1, types.Format_7_18, types.Format_DOLT_DEV:
 		return refFromNomsValue(ctx, vrw, idx.(nomsConflictIndex).index)
 
-	case types.Format_DOLT_1:
-		return types.Ref{}, fmt.Errorf("__DOLT_1__ conflicts should be stored in ArtifactIndex")
+	case types.Format_DOLT:
+		return types.Ref{}, fmt.Errorf("__DOLT__ conflicts should be stored in ArtifactIndex")
 
 	default:
 		return types.Ref{}, errNbfUnkown
@@ -54,8 +54,8 @@ func NewEmptyConflictIndex(ctx context.Context, vrw types.ValueReadWriter, ns tr
 		}
 		return ConflictIndexFromNomsMap(m, vrw), nil
 
-	case types.Format_DOLT_1:
-		return nil, fmt.Errorf("__DOLT_1__ conflicts should be stored in ArtifactIndex")
+	case types.Format_DOLT:
+		return nil, fmt.Errorf("__DOLT__ conflicts should be stored in ArtifactIndex")
 
 	default:
 		return nil, errNbfUnkown
@@ -87,8 +87,8 @@ func conflictIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tr
 	case types.Format_LD_1, types.Format_7_18, types.Format_DOLT_DEV:
 		return ConflictIndexFromNomsMap(v.(types.Map), vrw), nil
 
-	case types.Format_DOLT_1:
-		return nil, fmt.Errorf("__DOLT_1__ conflicts should be stored in ArtifactIndex")
+	case types.Format_DOLT:
+		return nil, fmt.Errorf("__DOLT__ conflicts should be stored in ArtifactIndex")
 
 	default:
 		return nil, errNbfUnkown

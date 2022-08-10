@@ -35,7 +35,7 @@ func NewConflictsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue,
 		return nil, sql.ErrTableNotFound.New(tblName)
 	}
 
-	if types.IsFormat_DOLT_1(tbl.Format()) {
+	if types.IsFormat_DOLT(tbl.Format()) {
 		return newProllyConflictsTable(ctx, tbl, tblName, root, rs)
 	}
 

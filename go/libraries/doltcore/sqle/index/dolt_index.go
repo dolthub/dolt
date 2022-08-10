@@ -270,7 +270,7 @@ func (s *durableIndexState) coversAllColumns(i *doltIndex) bool {
 	}
 	cols := i.Schema().GetAllCols()
 	var idxCols *schema.ColCollection
-	if types.IsFormat_DOLT_1(i.Format()) {
+	if types.IsFormat_DOLT(i.Format()) {
 		// prolly indexes can cover an index lookup using
 		// both the key and value fields of the index,
 		// this allows using covering index machinery for
@@ -402,7 +402,7 @@ func (di *doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.Index
 		return nil, nil
 	}
 
-	if types.IsFormat_DOLT_1(di.vrw.Format()) {
+	if types.IsFormat_DOLT(di.vrw.Format()) {
 		return di.newProllyLookup(ctx, di.ns, ranges...)
 	}
 
@@ -606,7 +606,7 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
 	}
 
 	var idxCols *schema.ColCollection
-	if types.IsFormat_DOLT_1(di.Format()) {
+	if types.IsFormat_DOLT(di.Format()) {
 		// prolly indexes can cover an index lookup using
 		// both the key and value fields of the index,
 		// this allows using covering index machinery for
@@ -741,7 +741,7 @@ func (di *doltIndex) keysToTuple(ctx *sql.Context, keys []interface{}) (types.Tu
 var sharePool = pool.NewBuffPool()
 
 func maybeGetKeyBuilder(idx durable.Index) *val.TupleBuilder {
-	if types.IsFormat_DOLT_1(idx.Format()) {
+	if types.IsFormat_DOLT(idx.Format()) {
 		kd, _ := durable.ProllyMapFromIndex(idx).Descriptors()
 		return val.NewTupleBuilder(kd)
 	}

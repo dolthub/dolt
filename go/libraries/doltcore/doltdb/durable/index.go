@@ -80,7 +80,7 @@ func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (ty
 	case types.Format_LD_1, types.Format_7_18, types.Format_DOLT_DEV:
 		return refFromNomsValue(ctx, vrw, idx.(nomsIndex).index)
 
-	case types.Format_DOLT_1:
+	case types.Format_DOLT:
 		b := shim.ValueFromMap(idx.(prollyIndex).index)
 		return refFromNomsValue(ctx, vrw, b)
 
@@ -104,7 +104,7 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 	case types.Format_LD_1, types.Format_7_18, types.Format_DOLT_DEV:
 		return IndexFromNomsMap(v.(types.Map), vrw, ns), nil
 
-	case types.Format_DOLT_1:
+	case types.Format_DOLT:
 		pm := shim.MapFromValue(v, sch, ns)
 		return IndexFromProllyMap(pm), nil
 
@@ -123,7 +123,7 @@ func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		}
 		return IndexFromNomsMap(m, vrw, ns), nil
 
-	case types.Format_DOLT_1:
+	case types.Format_DOLT:
 		kd, vd := shim.MapDescriptorsFromSchema(sch)
 		m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
 		if err != nil {

@@ -303,7 +303,7 @@ func TestInsertIgnoreInto(t *testing.T) {
 
 // todo: merge this into the above test when https://github.com/dolthub/dolt/issues/3836 is fixed
 func TestIgnoreIntoWithDuplicateUniqueKeyKeyless(t *testing.T) {
-	if !types.IsFormat_DOLT_1(types.Format_Default) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
 		// todo: fix https://github.com/dolthub/dolt/issues/3836
 		t.Skip()
 	}
@@ -360,7 +360,7 @@ func TestTruncate(t *testing.T) {
 
 func TestScripts(t *testing.T) {
 	var skipped []string
-	if types.IsFormat_DOLT_1(types.Format_Default) {
+	if types.IsFormat_DOLT(types.Format_Default) {
 		skipped = append(skipped, newFormatSkippedScripts...)
 	}
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
@@ -748,7 +748,7 @@ func TestDoltMerge(t *testing.T) {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
 
-	if types.IsFormat_DOLT_1(types.Format_Default) {
+	if types.IsFormat_DOLT(types.Format_Default) {
 		for _, script := range Dolt1MergeScripts {
 			enginetest.TestScript(t, newDoltHarness(t), script)
 		}
@@ -763,7 +763,7 @@ func TestDoltConflictsTableNameTable(t *testing.T) {
 
 // tests new format behavior for keyless merges that create CVs and conflicts
 func TestKeylessDoltMergeCVsAndConflicts(t *testing.T) {
-	if !types.IsFormat_DOLT_1(types.Format_Default) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}
 	for _, script := range KeylessMergeCVsAndConflictsScripts {
@@ -773,7 +773,7 @@ func TestKeylessDoltMergeCVsAndConflicts(t *testing.T) {
 
 // eventually this will be part of TestDoltMerge
 func TestDoltMergeArtifacts(t *testing.T) {
-	if !types.IsFormat_DOLT_1(types.Format_Default) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}
 	for _, script := range MergeArtifactsScripts {
@@ -784,7 +784,7 @@ func TestDoltMergeArtifacts(t *testing.T) {
 // these tests are temporary while there is a difference between the old format
 // and new format merge behaviors.
 func TestOldFormatMergeConflictsAndCVs(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
+	if types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}
 	for _, script := range OldFormatMergeConflictsAndCVsScripts {
@@ -971,7 +971,7 @@ func TestDiffSystemTable(t *testing.T) {
 		})
 	}
 
-	if types.IsFormat_DOLT_1(types.Format_Default) {
+	if types.IsFormat_DOLT(types.Format_Default) {
 		for _, test := range Dolt1DiffSystemTableScripts {
 			enginetest.TestScript(t, newDoltHarness(t), test)
 		}
@@ -1065,7 +1065,7 @@ func TestDeleteQueriesPrepared(t *testing.T) {
 
 func TestScriptsPrepared(t *testing.T) {
 	var skipped []string
-	if types.IsFormat_DOLT_1(types.Format_Default) {
+	if types.IsFormat_DOLT(types.Format_Default) {
 		skipped = append(skipped, newFormatSkippedScripts...)
 	}
 	skipPreparedTests(t)
@@ -1318,7 +1318,7 @@ var newFormatSkippedScripts = []string{
 }
 
 func skipOldFormat(t *testing.T) {
-	if !types.IsFormat_DOLT_1(types.Format_Default) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}
 }

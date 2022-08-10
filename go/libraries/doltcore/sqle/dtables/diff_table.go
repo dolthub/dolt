@@ -300,7 +300,7 @@ func (dp DiffPartition) Key() []byte {
 }
 
 func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, lookup sql.IndexLookup) (sql.RowIter, error) {
-	if types.IsFormat_DOLT_1(ddb.Format()) {
+	if types.IsFormat_DOLT(ddb.Format()) {
 		return newProllyDiffIter(ctx, dp, ddb, dp.fromSch, dp.toSch)
 	} else {
 		return newNomsDiffIter(ctx, ddb, joiner, dp, lookup)
@@ -520,7 +520,7 @@ func (dp DiffPartition) rowConvForSchema(ctx context.Context, vrw types.ValueRea
 // target schema for a row |sch|. In the old storage format, it also returns the
 // associated joiner.
 func GetDiffTableSchemaAndJoiner(format *types.NomsBinFormat, fromSch, toSch schema.Schema) (diffTableSchema schema.Schema, j *rowconv.Joiner, err error) {
-	if format == types.Format_DOLT_1 {
+	if format == types.Format_DOLT {
 		diffTableSchema, err = CalculateDiffSchema(fromSch, toSch)
 		if err != nil {
 			return nil, nil, err

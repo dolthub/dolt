@@ -364,7 +364,7 @@ func (t nomsTable) SetIndexes(ctx context.Context, indexes IndexSet) (Table, err
 
 // GetArtifacts implements Table.
 func (t nomsTable) GetArtifacts(ctx context.Context) (ArtifactIndex, error) {
-	if t.Format() != types.Format_DOLT_1 {
+	if t.Format() != types.Format_DOLT {
 		panic("artifacts not implemented for old storage format")
 	}
 
@@ -386,7 +386,7 @@ func (t nomsTable) GetArtifacts(ctx context.Context) (ArtifactIndex, error) {
 
 // SetArtifacts implements Table.
 func (t nomsTable) SetArtifacts(ctx context.Context, artifacts ArtifactIndex) (Table, error) {
-	if t.Format() != types.Format_DOLT_1 {
+	if t.Format() != types.Format_DOLT {
 		panic("artifacts not implemented for old storage format")
 	}
 
@@ -455,7 +455,7 @@ func (t nomsTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema, C
 
 // SetConflicts implements Table.
 func (t nomsTable) SetConflicts(ctx context.Context, schemas conflict.ConflictSchema, conflictData ConflictIndex) (Table, error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		panic("should use artifacts")
 	}
 
@@ -515,7 +515,7 @@ func (t nomsTable) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch 
 
 // ClearConflicts implements Table.
 func (t nomsTable) ClearConflicts(ctx context.Context) (Table, error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		panic("should use artifacts")
 	}
 
@@ -961,8 +961,8 @@ func (t doltDevTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema
 
 // GetArtifacts implements Table.
 func (t doltDevTable) GetArtifacts(ctx context.Context) (ArtifactIndex, error) {
-	if t.Format() != types.Format_DOLT_1 {
-		panic("artifacts only implemented for DOLT_1")
+	if t.Format() != types.Format_DOLT {
+		panic("artifacts only implemented for DOLT")
 	}
 
 	sch, err := t.GetSchema(ctx)
@@ -980,8 +980,8 @@ func (t doltDevTable) GetArtifacts(ctx context.Context) (ArtifactIndex, error) {
 
 // SetArtifacts implements Table.
 func (t doltDevTable) SetArtifacts(ctx context.Context, artifacts ArtifactIndex) (Table, error) {
-	if t.Format() != types.Format_DOLT_1 {
-		panic("artifacts only implemented for DOLT_1")
+	if t.Format() != types.Format_DOLT {
+		panic("artifacts only implemented for DOLT")
 	}
 
 	var addr hash.Hash

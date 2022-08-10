@@ -166,7 +166,7 @@ func newQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, id, name,
 
 	var sq SavedQuery
 	var newTable *doltdb.Table
-	if types.IsFormat_DOLT_1(tbl.Format()) {
+	if types.IsFormat_DOLT(tbl.Format()) {
 		sq, newTable, err = newQueryCatalogEntryProlly(ctx, tbl, id, name, query, description)
 	} else {
 		sq, newTable, err = newQueryCatalogEntryNoms(ctx, tbl, id, name, query, description)
@@ -298,7 +298,7 @@ func RetrieveFromQueryCatalog(ctx context.Context, root *doltdb.RootValue, id st
 		return SavedQuery{}, doltdb.ErrTableNotFound
 	}
 
-	if types.IsFormat_DOLT_1(tbl.Format()) {
+	if types.IsFormat_DOLT(tbl.Format()) {
 		return retrieveFromQueryCatalogProlly(ctx, tbl, id)
 	}
 
