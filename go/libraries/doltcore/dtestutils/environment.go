@@ -55,6 +55,7 @@ func CreateTestEnvWithName(envName string) *env.DoltEnv {
 		env.UserNameKey:  name,
 		env.UserEmailKey: email,
 	})
+
 	err := dEnv.InitRepo(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch)
 
 	if err != nil {
