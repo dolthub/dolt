@@ -379,8 +379,7 @@ type doltIndex struct {
 	ns     tree.NodeStore
 	keyBld *val.TupleBuilder
 
-	cache  cachedDurableIndexes
-	ranges []prolly.Range
+	cache cachedDurableIndexes
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
@@ -466,22 +465,14 @@ func (di *doltIndex) newProllyLookup(ctx *sql.Context, ns tree.NodeStore, irange
 	if err != nil {
 		return nil, err
 	}
-	if di.ranges == nil || len(ranges) != len(di.ranges) {
-		di.ranges = make([]prolly.Range, len(ranges))
-		for i := range di.ranges {
-			di.ranges[i] = prolly.Range{
-				Fields: make([]prolly.RangeField, len(ranges[i])),
-				Desc:   di.keyBld.Desc,
-			}
-		}
-	}
-	err = di.prollyRangesFromSqlRanges(ctx, ns, ranges, di.keyBld)
+
+	pranges, err := di.prollyRangesFromSqlRanges(ctx, ns, ranges, di.keyBld)
 	if err != nil {
 		return nil, err
 	}
 	return &doltIndexLookup{
 		idx:          di,
-		prollyRanges: di.ranges,
+		prollyRanges: pranges,
 		sqlRanges:    ranges,
 	}, nil
 }
@@ -774,9 +765,17 @@ func pruneEmptyRanges(sqlRanges []sql.Range) (pruned []sql.Range, err error) {
 	return pruned, nil
 }
 
-func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.NodeStore, ranges []sql.Range, tb *val.TupleBuilder) error {
+func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.NodeStore, ranges []sql.Range, tb *val.TupleBuilder) ([]prolly.Range, error) {
+	pranges := make([]prolly.Range, len(ranges))
+	for i := range pranges {
+		pranges[i] = prolly.Range{
+			Fields: make([]prolly.RangeField, len(ranges[i])),
+			Desc:   di.keyBld.Desc,
+		}
+	}
+
 	for k, rng := range ranges {
-		prollyRange := di.ranges[k]
+		prollyRange := pranges[k]
 		for j, expr := range rng {
 			if rangeCutIsBinding(expr.LowerBound) {
 				bound := expr.LowerBound.TypeAsLowerBound()
@@ -787,10 +786,10 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(expr.LowerBound, rng[j].Typ)
 				if err != nil {
-					return err
+					return nil, err
 				}
 				if err = PutField(ctx, ns, tb, j, v); err != nil {
-					return err
+					return nil, err
 				}
 			} else {
 				prollyRange.Fields[j].Lo = prolly.Bound{}
@@ -812,10 +811,10 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(expr.UpperBound, rng[i].Typ)
 				if err != nil {
-					return err
+					return nil, err
 				}
 				if err = PutField(ctx, ns, tb, i, v); err != nil {
-					return err
+					return nil, err
 				}
 			} else {
 				prollyRange.Fields[i].Hi = prolly.Bound{}
@@ -838,9 +837,8 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 			cmp := order.CompareValues(field.Hi.Value, field.Lo.Value, typ)
 			prollyRange.Fields[i].Exact = cmp == 0
 		}
-		di.ranges[k] = prollyRange
 	}
-	return nil
+	return pranges, nil
 }
 
 func rangeCutIsBinding(c sql.RangeCut) bool {
