@@ -2187,7 +2187,7 @@ SQL
 
 @test "sql: dolt_version() func" {
     SQL=$(dolt sql -q 'select dolt_version() from dual;' -r csv | tail -n 1)
-    CLI=$(dolt version | cut -f 3 -d ' ')
+    CLI=$(dolt version | sed '1p;d' | cut -d " " -f 3)
     [ "$SQL" == "$CLI" ]
 }
 
