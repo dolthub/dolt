@@ -49,7 +49,7 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool
 			return false, err
 		}
 
-		if _, remote, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemoteKey); ok && remote != "" {
+		if _, remote, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote); ok && remote != "" {
 			remoteName, ok := remote.(string)
 			if !ok {
 				return true, sql.ErrInvalidSystemVariableValue.New(remote)
@@ -131,9 +131,9 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 }
 
 func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.PushOnWriteHook, error) {
-	_, val, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemoteKey)
+	_, val, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
 	if !ok {
-		return nil, sql.ErrUnknownSystemVariable.New(dsess.ReplicateToRemoteKey)
+		return nil, sql.ErrUnknownSystemVariable.New(dsess.ReplicateToRemote)
 	} else if val == "" {
 		return nil, nil
 	}

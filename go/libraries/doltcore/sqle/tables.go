@@ -1160,11 +1160,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	}
 
 	if column.AutoIncrement {
-		ws, err := t.db.GetWorkingSet(ctx)
-		if err != nil {
-			return err
-		}
-		ait, err := t.db.gs.GetAutoIncrementTracker(ctx, ws)
+		ait, err := t.db.gs.GetAutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}
@@ -1371,7 +1367,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 
 	// TODO: figure out locking. Other DBs automatically lock a table during this kind of operation, we should probably
 	//  do the same. We're messing with global auto-increment values here and it's not safe.
-	ait, err := t.db.gs.GetAutoIncrementTracker(ctx, newWs)
+	ait, err := t.db.gs.GetAutoIncrementTracker(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1688,7 +1684,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 			return err
 		}
 
-		ait, err := t.db.gs.GetAutoIncrementTracker(ctx, ws)
+		ait, err := t.db.gs.GetAutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}

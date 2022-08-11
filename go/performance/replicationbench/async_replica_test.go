@@ -98,7 +98,7 @@ func getAsyncEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv,
 	if !ok {
 		b.Fatal("local config does not exist")
 	}
-	localCfg.SetStrings(map[string]string{fmt.Sprintf("%s.%s", env.SqlServerGlobalsPrefix, dsess.ReplicateToRemoteKey): "remote1", fmt.Sprintf("%s.%s", env.SqlServerGlobalsPrefix, dsess.AsyncReplicationKey): "1"})
+	localCfg.SetStrings(map[string]string{fmt.Sprintf("%s.%s", env.SqlServerGlobalsPrefix, dsess.ReplicateToRemote): "remote1", fmt.Sprintf("%s.%s", env.SqlServerGlobalsPrefix, dsess.AsyncReplication): "1"})
 
 	yaml := []byte(fmt.Sprintf(`
 log_level: warning

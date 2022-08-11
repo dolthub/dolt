@@ -770,7 +770,7 @@ func (d *DoltSession) SwitchWorkingSet(
 	// make a fresh WriteSession, discard existing WriteSession
 	opts := sessionState.WriteSession.GetOptions()
 	nbf := ws.WorkingRoot().VRW().Format()
-	tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx, ws)
+	tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx)
 	if err != nil {
 		return err
 	}
@@ -930,7 +930,7 @@ func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 
 	} else if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
-		tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx, sessionState.WorkingSet)
+		tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}

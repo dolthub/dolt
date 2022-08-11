@@ -32,51 +32,51 @@ func init() {
 func AddDoltSystemVariables() {
 	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 		{
-			Name:              dsess.ReplicateToRemoteKey,
+			Name:              dsess.ReplicateToRemote,
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dsess.ReplicateToRemoteKey),
+			Type:              sql.NewSystemStringType(dsess.ReplicateToRemote),
 			Default:           "",
 		},
 		{
-			Name:              dsess.ReadReplicaRemoteKey,
+			Name:              dsess.ReadReplicaRemote,
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dsess.ReadReplicaRemoteKey),
+			Type:              sql.NewSystemStringType(dsess.ReadReplicaRemote),
 			Default:           "",
 		},
 		{
-			Name:              dsess.SkipReplicationErrorsKey,
+			Name:              dsess.SkipReplicationErrors,
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(dsess.SkipReplicationErrorsKey),
+			Type:              sql.NewSystemBoolType(dsess.SkipReplicationErrors),
 			Default:           int8(0),
 		},
 		{
-			Name:              dsess.ReplicateHeadsKey,
+			Name:              dsess.ReplicateHeads,
 			Scope:             sql.SystemVariableScope_Both,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dsess.ReplicateHeadsKey),
+			Type:              sql.NewSystemStringType(dsess.ReplicateHeads),
 			Default:           "",
 		},
 		{
-			Name:              dsess.ReplicateAllHeadsKey,
+			Name:              dsess.ReplicateAllHeads,
 			Scope:             sql.SystemVariableScope_Both,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(dsess.ReplicateAllHeadsKey),
+			Type:              sql.NewSystemBoolType(dsess.ReplicateAllHeads),
 			Default:           int8(0),
 		},
 		{
-			Name:              dsess.AsyncReplicationKey,
+			Name:              dsess.AsyncReplication,
 			Scope:             sql.SystemVariableScope_Both,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(dsess.AsyncReplicationKey),
+			Type:              sql.NewSystemBoolType(dsess.AsyncReplication),
 			Default:           int8(0),
 		},
 		{
@@ -128,34 +128,34 @@ func AddDoltSystemVariables() {
 			Default:           int8(0),
 		},
 		{
-			Name:              dsess.AwsCredsFileKey,
+			Name:              dsess.AwsCredsFile,
 			Scope:             sql.SystemVariableScope_Session,
 			Dynamic:           false,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dsess.AwsCredsFileKey),
+			Type:              sql.NewSystemStringType(dsess.AwsCredsFile),
 			Default:           nil,
 		},
 		{
-			Name:              dsess.AwsCredsProfileKey,
+			Name:              dsess.AwsCredsProfile,
 			Scope:             sql.SystemVariableScope_Session,
 			Dynamic:           false,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dsess.AwsCredsProfileKey),
+			Type:              sql.NewSystemStringType(dsess.AwsCredsProfile),
 			Default:           nil,
 		},
 		{
-			Name:              dsess.AwsCredsRegionKey,
+			Name:              dsess.AwsCredsRegion,
 			Scope:             sql.SystemVariableScope_Session,
 			Dynamic:           false,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dsess.AwsCredsRegionKey),
+			Type:              sql.NewSystemStringType(dsess.AwsCredsRegion),
 			Default:           nil,
 		},
 	})
 }
 
 func SkipReplicationWarnings() bool {
-	_, skip, ok := sql.SystemVariables.GetGlobal(dsess.SkipReplicationErrorsKey)
+	_, skip, ok := sql.SystemVariables.GetGlobal(dsess.SkipReplicationErrors)
 	if !ok {
 		panic("dolt system variables not loaded")
 	}

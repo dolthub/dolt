@@ -67,6 +67,6 @@ type GlobalState struct {
 	mu         *sync.Mutex
 }
 
-func (g GlobalState) GetAutoIncrementTracker(ctx *sql.Context, ws *doltdb.WorkingSet) (AutoIncrementTracker, error) {
+func (g GlobalState) GetAutoIncrementTracker(ctx *sql.Context) (AutoIncrementTracker, error) {
 	return g.aiTracker, nil
 }

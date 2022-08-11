@@ -750,12 +750,7 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return err
 	}
 
-	ws, err := ds.WorkingSet(ctx, db.Name())
-	if err != nil {
-		return err
-	}
-
-	ait, err := db.gs.GetAutoIncrementTracker(ctx, ws)
+	ait, err := db.gs.GetAutoIncrementTracker(ctx)
 	if err != nil {
 		return err
 	}
@@ -812,7 +807,7 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 	}
 
 	if schema.HasAutoIncrement(doltSch) {
-		ait, err := db.gs.GetAutoIncrementTracker(ctx, ws)
+		ait, err := db.gs.GetAutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}
