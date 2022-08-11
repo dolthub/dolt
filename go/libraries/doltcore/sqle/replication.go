@@ -95,7 +95,10 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 		Deaf: dEnv.DbEaFactory(),
 	}
 
-	db := NewDatabase(name, dEnv.DbData(), opts)
+	db, err := NewDatabase(ctx, name, dEnv.DbData(), opts)
+	if err != nil {
+		return ReadReplicaDatabase{}, err
+	}
 
 	rrd, err := NewReadReplicaDatabase(ctx, db, remoteName, dEnv)
 	if err != nil {

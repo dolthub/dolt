@@ -298,7 +298,9 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 		store.SetValidateContentAddresses(true)
 
 		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-		db := sqle.NewDatabase(name, dEnv.DbData(), opts)
+		db, err := sqle.NewDatabase(context.Background(), name, dEnv.DbData(), opts)
+		require.NoError(d.t, err)
+
 		d.databases = append(d.databases, db)
 
 		globalState := globalstate.NewGlobalStateStore()

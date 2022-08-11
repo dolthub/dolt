@@ -42,23 +42,38 @@ func NewGlobalStateStoreForDb(ctx context.Context, db *doltdb.DoltDB) (GlobalSta
 		return GlobalState{}, err
 	}
 
+	var wses []*doltdb.WorkingSet
 	for _, b := range branches {
-		ws, err := ref.WorkingSetRefForHead(b)
+		wsRef, err := ref.WorkingSetRefForHead(b)
+		if err == doltdb.ErrWorkingSetNotFound {
+			// skip, continue working on other branches
+		} else if err != nil {
+			return GlobalState{}, err
+		}
+
+		ws, err := db.ResolveWorkingSet(ctx, wsRef)
 		if err != nil {
 			return GlobalState{}, err
 		}
 
+		wses = append(wses, ws)
+	}
 
+	tracker, err := NewAutoIncrementTracker(ctx, wses...)
+	if err != nil {
+		return GlobalState{}, err
 	}
 
 	return GlobalState{
 		trackerMap: make(map[ref.WorkingSetRef]AutoIncrementTracker),
+		aiTracker: tracker,
 		mu:         &sync.Mutex{},
 	}, nil
 }
 
 type GlobalState struct {
 	trackerMap map[ref.WorkingSetRef]AutoIncrementTracker
+	aiTracker AutoIncrementTracker
 	mu         *sync.Mutex
 }
 
@@ -72,7 +87,7 @@ func (g GlobalState) GetAutoIncrementTracker(ctx *sql.Context, ws *doltdb.Workin
 	}
 
 	if !perBranch {
-
+		return g.aiTracker, nil
 	}
 
 	ref := ws.Ref()

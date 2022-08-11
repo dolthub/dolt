@@ -46,29 +46,38 @@ func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 }
 
 // NewAutoIncrementTracker returns a new autoincrement tracker for the working set given
-func NewAutoIncrementTracker(ctx context.Context, ws *doltdb.WorkingSet) (AutoIncrementTracker, error) {
+func NewAutoIncrementTracker(ctx context.Context, wses ...*doltdb.WorkingSet) (AutoIncrementTracker, error) {
 	ait := AutoIncrementTracker{
 		sequences: make(map[string]uint64),
 		mu:        &sync.Mutex{},
 	}
 
-	// collect auto increment values
-	err := ws.WorkingRoot().IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (bool, error) {
-		ok := schema.HasAutoIncrement(sch)
-		if !ok {
+	// collect auto increment values from all working sets given
+	for _, ws := range wses {
+		err := ws.WorkingRoot().IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (bool, error) {
+			ok := schema.HasAutoIncrement(sch)
+			if !ok {
+				return false, nil
+			}
+
+			seq, err := table.GetAutoIncrementValue(ctx)
+			if err != nil {
+				return true, err
+			}
+
+			if seq > ait.sequences[name] {
+				ait.sequences[name] = seq
+			}
+
 			return false, nil
-		}
+		})
 
-		seq, err := table.GetAutoIncrementValue(ctx)
 		if err != nil {
-			return true, err
+			return AutoIncrementTracker{}, err
 		}
+	}
 
-		ait.sequences[name] = seq
-		return false, nil
-	})
-
-	return ait, err
+	return ait, nil
 }
 
 type AutoIncrementTracker struct {

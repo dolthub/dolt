@@ -578,7 +578,9 @@ func TestDropPks(t *testing.T) {
 			ctx := context.Background()
 
 			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-			db := NewDatabase("dolt", dEnv.DbData(), opts)
+			db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
+			require.NoError(t, err)
+
 			root, _ := dEnv.WorkingRoot(ctx)
 			engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
 			require.NoError(t, err)

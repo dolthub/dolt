@@ -166,15 +166,20 @@ var _ sql.TransactionDatabase = Database{}
 var _ globalstate.StateProvider = Database{}
 
 // NewDatabase returns a new dolt database to use in queries.
-func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Database {
+func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts editor.Options) (Database, error) {
+	globalState, err := globalstate.NewGlobalStateStoreForDb(ctx, dbData.Ddb)
+	if err != nil {
+		return Database{}, err
+	}
+
 	return Database{
 		name:     name,
 		ddb:      dbData.Ddb,
 		rsr:      dbData.Rsr,
 		rsw:      dbData.Rsw,
-		gs:       globalstate.NewGlobalStateStoreForDb(dbData.Ddb),
+		gs:       globalState,
 		editOpts: editOpts,
-	}
+	}, nil
 }
 
 // GetInitialDBState returns the InitialDbState for |db|.

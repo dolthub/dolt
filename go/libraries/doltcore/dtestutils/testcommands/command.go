@@ -182,7 +182,9 @@ func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-	sqlDb := dsqle.NewDatabase("dolt", dEnv.DbData(), opts)
+	sqlDb, err := dsqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
+	require.NoError(t, err)
+
 	engine, sqlCtx, err := dsqle.NewTestEngine(t, dEnv, context.Background(), sqlDb, root)
 	require.NoError(t, err)
 
