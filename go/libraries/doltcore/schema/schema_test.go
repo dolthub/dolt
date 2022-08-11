@@ -299,7 +299,7 @@ func TestArePrimaryKeySetsDiffableTypeChanges(t *testing.T) {
 			To: MustSchemaFromCols(NewColCollection(
 				NewColumn("pk", 0, types.StringKind, true))),
 			Diffable: false,
-			Format:   types.Format_DOLT_1,
+			Format:   types.Format_DOLT,
 		},
 		{
 			Name: "Int -> String (Old Format)",
