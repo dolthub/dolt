@@ -152,6 +152,19 @@ teardown() {
   [ "$status" -eq 1 ]
 }
 
+@test "init: running init with the new format, creates a new format database" {
+    set_dolt_user "baz", "baz@bash.com"
+
+    run dolt init --new-format
+    [ $status -eq 0 ]
+
+    run dolt init
+    [ "$status" -eq 1 ]
+
+    run cut -d ":" -f 2 .dolt/noms/manifest
+    [ "$output" = "__DOLT__" ]
+}
+
 assert_valid_repository () {
   run dolt log
   [ "$status" -eq 0 ]
