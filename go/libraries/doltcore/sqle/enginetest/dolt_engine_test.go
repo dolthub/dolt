@@ -46,7 +46,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 106
+const SkipPreparedsCount = 81
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -1330,7 +1330,7 @@ func TestDoltStorageFormat(t *testing.T) {
 	enginetest.TestScript(t, newDoltHarness(t), script)
 }
 
-func TestPreparedDoltStorageFormat(t *testing.T) {
+func TestDoltStorageFormatPrepared(t *testing.T) {
 	var expectedFormatString string
 	if types.IsFormat_DOLT(types.Format_Default) {
 		expectedFormatString = "NEW ( __DOLT__ )"
