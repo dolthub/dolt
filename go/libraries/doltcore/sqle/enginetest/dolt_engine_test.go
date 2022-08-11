@@ -1319,8 +1319,7 @@ func TestDoltStorageFormat(t *testing.T) {
 		expectedFormatString = "OLD ( __LD_1__ )"
 	}
 	script := queries.ScriptTest{
-		Name:        "dolt storage format function works",
-		SetUpScript: []string{},
+		Name: "dolt storage format function works",
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select dolt_storage_format()",

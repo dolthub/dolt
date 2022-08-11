@@ -2361,7 +2361,7 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false
 
-    skip_nbf_dolt_1 "__DOLT__ documents all matching rows for any unique key violations"
+    skip_nbf_dolt "__DOLT__ documents all matching rows for any unique key violations"
     [[ "$output" =~ "onepk,2" ]] || false
 }
 
