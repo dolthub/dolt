@@ -20,8 +20,8 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -67,11 +67,7 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 		return 2
 	} else if dEnv.HasDoltDir() {
 		nbf := dEnv.DoltDB.Format()
-		if types.IsFormat_DOLT(nbf) {
-			cli.Printf("database storage format: NEW ( %s )\n", nbf.VersionString())
-		} else {
-			cli.Printf("database storage format: OLD ( %s )\n", nbf.VersionString())
-		}
+		cli.Printf("database storage format: %s\n", dfunctions.GetStorageFormatDisplayString(nbf))
 	} else {
 		cli.Println("no valid database in this directory")
 	}

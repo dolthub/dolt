@@ -1311,6 +1311,26 @@ func TestDoltVerifyConstraints(t *testing.T) {
 	}
 }
 
+func TestDoltStorageFormat(t *testing.T) {
+	var expectedFormatString string
+	if types.IsFormat_DOLT(types.Format_Default) {
+		expectedFormatString = "NEW ( __DOLT__ )"
+	} else {
+		expectedFormatString = "OLD ( __LD_1__ )"
+	}
+	script := queries.ScriptTest{
+		Name:        "dolt storage format function works",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select dolt_storage_format()",
+				Expected: []sql.Row{{expectedFormatString}},
+			},
+		},
+	}
+	enginetest.TestScript(t, newDoltHarness(t), script)
+}
+
 var newFormatSkippedScripts = []string{
 	// Different query plans
 	"Partial indexes are used and return the expected result",

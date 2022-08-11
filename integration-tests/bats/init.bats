@@ -174,6 +174,9 @@ teardown() {
     run dolt version
     [ $status -eq 0 ]
     [[ $output =~ "database storage format: NEW ( __DOLT__ )" ]] || false
+
+    run dolt sql -q "SELECT dolt_storage_format();"
+    [[ $output =~ "NEW ( __DOLT__ )" ]] || false
 }
 
 @test "init: initing an old database displays the correct version" {
@@ -185,6 +188,9 @@ teardown() {
     run dolt version
     [ "$status" -eq 0 ]
     [[ $output =~ "database storage format: OLD ( __LD_1__ )" ]] || false
+
+    run dolt sql -q "SELECT dolt_storage_format();"
+    [[ $output =~ "OLD ( __LD_1__ )" ]] || false
 }
 
 @test "init: empty database folder displays no version" {
