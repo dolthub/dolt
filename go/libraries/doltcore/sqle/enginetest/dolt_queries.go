@@ -975,7 +975,8 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				// careful to filter out the initial commit, which will be later than the ones above
+				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
@@ -1013,7 +1014,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
 				Expected: []sql.Row{{"update a value"}},
 			},
 			{
@@ -1194,7 +1195,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{

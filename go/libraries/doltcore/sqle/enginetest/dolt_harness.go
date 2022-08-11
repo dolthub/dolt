@@ -20,9 +20,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/dolthub/dolt/go/store/datas"
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -75,14 +73,6 @@ var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
 var _ enginetest.ValidatingHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
-	prevCommitNow := datas.CommitNowFunc
-	datas.CommitNowFunc = func() time.Time {
-		return time.UnixMilli(0)
-	}
-	defer func() {
-		datas.CommitNowFunc = prevCommitNow
-	}()
-
 	dEnv := dtestutils.CreateTestEnv()
 	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	require.NoError(t, err)
@@ -163,14 +153,6 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 		var err error
 		d.session, err = dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), doltProvider, d.multiRepoEnv.Config())
 		require.NoError(t, err)
-
-		prevCommitNow := datas.CommitNowFunc
-		datas.CommitNowFunc = func() time.Time {
-			return time.UnixMilli(0)
-		}
-		defer func() {
-			datas.CommitNowFunc = prevCommitNow
-		}()
 
 		e, err := enginetest.NewEngineWithProviderSetup(t, d, pro, d.setupData)
 		if err != nil {
