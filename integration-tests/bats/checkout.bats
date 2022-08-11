@@ -178,3 +178,42 @@ SQL
   cmd=$(echo "${lines[1]}" | cut -d ' ' -f 1,2,3)
   [[ $cmd =~ "dolt checkout $sha" ]]
 }
+
+@test "commit --amend: only commit message is changed" {
+  dolt sql -q "create table test (id int primary key);"
+  dolt sql -q 'insert into test (id) values (8);'
+  dolt add .
+  dolt commit -m "original commit message"
+
+  dolt commit --amend -m "modified_commit_message"
+
+  commitmsg=$(dolt log --oneline | head -n 1)
+  [[ $commitmsg =~ "modified_commit_message" ]]
+
+  numcommits=$(dolt log --oneline | wc -l)
+  [[ $numcommits =~ "2" ]]
+
+  run dolt sql -q 'select * from test;'
+  [[ "$output" =~ "8" ]]
+}
+
+@test "commit --amend adds new changes to existing commit" {
+  dolt sql -q "create table test (id int primary key);"
+  dolt sql -q 'insert into test (id) values (8);'
+  dolt add .
+  dolt commit -m "original commit message"
+
+  dolt sql -q 'insert into test (id) values (9);'
+  dolt add .
+  dolt commit --amend -m "modified_commit_message"
+
+  commitmsg=$(dolt log --oneline | head -n 1)
+  [[ $commitmsg =~ "modified_commit_message" ]]
+
+  numcommits=$(dolt log --oneline | wc -l)
+  [[ $numcommits =~ "2" ]]
+
+  run dolt sql -q 'select * from test;'
+  [[ "$output" =~ "8" ]]
+  [[ "$output" =~ "9" ]]
+}
