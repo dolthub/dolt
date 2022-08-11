@@ -157,7 +157,7 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	root, _ := dEnv.WorkingRoot(ctx)
 
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-	db, err  := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
 	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)

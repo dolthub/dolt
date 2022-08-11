@@ -45,19 +45,19 @@ const (
 )
 
 type DoltHarness struct {
-	t                    *testing.T
-	multiRepoEnv         *env.MultiRepoEnv
-	createdEnvs          map[string]*env.DoltEnv
-	session              *dsess.DoltSession
-	databases            []sqle.Database
-	hashes               []string
-	parallelism          int
-	skippedQueries       []string
-	setupData            []setup.SetupScript
-	resetData            []setup.SetupScript
-	initDbs              map[string]struct{}
-	autoInc              bool
-	engine               *gms.Engine
+	t              *testing.T
+	multiRepoEnv   *env.MultiRepoEnv
+	createdEnvs    map[string]*env.DoltEnv
+	session        *dsess.DoltSession
+	databases      []sqle.Database
+	hashes         []string
+	parallelism    int
+	skippedQueries []string
+	setupData      []setup.SetupScript
+	resetData      []setup.SetupScript
+	initDbs        map[string]struct{}
+	autoInc        bool
+	engine         *gms.Engine
 }
 
 var _ enginetest.Harness = (*DoltHarness)(nil)
