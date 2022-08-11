@@ -32,7 +32,6 @@ const (
 	emailParamName      = "email"
 	usernameParamName   = "name"
 	initBranchParamName = "initial-branch"
-	newFormatFlagName   = "new-format"
 )
 
 var initDocs = cli.CommandDocumentationContent{
