@@ -172,7 +172,7 @@ func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Databa
 		ddb:      dbData.Ddb,
 		rsr:      dbData.Rsr,
 		rsw:      dbData.Rsw,
-		gs:       globalstate.NewGlobalStateStore(),
+		gs:       globalstate.NewGlobalStateStoreForDb(dbData.Ddb),
 		editOpts: editOpts,
 	}
 }

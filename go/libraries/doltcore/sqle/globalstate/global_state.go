@@ -15,6 +15,7 @@
 package globalstate
 
 import (
+	"context"
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -33,6 +34,27 @@ func NewGlobalStateStore() GlobalState {
 		trackerMap: make(map[ref.WorkingSetRef]AutoIncrementTracker),
 		mu:         &sync.Mutex{},
 	}
+}
+
+func NewGlobalStateStoreForDb(ctx context.Context, db *doltdb.DoltDB) (GlobalState, error) {
+	branches, err := db.GetBranches(ctx)
+	if err != nil {
+		return GlobalState{}, err
+	}
+
+	for _, b := range branches {
+		ws, err := ref.WorkingSetRefForHead(b)
+		if err != nil {
+			return GlobalState{}, err
+		}
+
+
+	}
+
+	return GlobalState{
+		trackerMap: make(map[ref.WorkingSetRef]AutoIncrementTracker),
+		mu:         &sync.Mutex{},
+	}, nil
 }
 
 type GlobalState struct {
