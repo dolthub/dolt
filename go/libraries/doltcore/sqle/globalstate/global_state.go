@@ -19,7 +19,6 @@ import (
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -27,13 +26,6 @@ import (
 
 type StateProvider interface {
 	GetGlobalState() GlobalState
-}
-
-func NewGlobalStateStore() GlobalState {
-	return GlobalState{
-		trackerMap: make(map[ref.WorkingSetRef]AutoIncrementTracker),
-		mu:         &sync.Mutex{},
-	}
 }
 
 func NewGlobalStateStoreForDb(ctx context.Context, db *doltdb.DoltDB) (GlobalState, error) {
@@ -65,42 +57,16 @@ func NewGlobalStateStoreForDb(ctx context.Context, db *doltdb.DoltDB) (GlobalSta
 	}
 
 	return GlobalState{
-		trackerMap: make(map[ref.WorkingSetRef]AutoIncrementTracker),
 		aiTracker: tracker,
 		mu:         &sync.Mutex{},
 	}, nil
 }
 
 type GlobalState struct {
-	trackerMap map[ref.WorkingSetRef]AutoIncrementTracker
 	aiTracker AutoIncrementTracker
 	mu         *sync.Mutex
 }
 
 func (g GlobalState) GetAutoIncrementTracker(ctx *sql.Context, ws *doltdb.WorkingSet) (AutoIncrementTracker, error) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	perBranch, err := dsess.GetBooleanSystemVar(ctx, dsess.PerBranchAutoIncrement)
-	if err != nil {
-		return AutoIncrementTracker{}, err
-	}
-
-	if !perBranch {
-		return g.aiTracker, nil
-	}
-
-	ref := ws.Ref()
-	ait, ok := g.trackerMap[ref]
-	if ok {
-		return ait, nil
-	}
-
-	ait, err = NewAutoIncrementTracker(ctx, ws)
-	if err != nil {
-		return AutoIncrementTracker{}, err
-	}
-	g.trackerMap[ref] = ait
-
-	return ait, nil
+	return g.aiTracker, nil
 }

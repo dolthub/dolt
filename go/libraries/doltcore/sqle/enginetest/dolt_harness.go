@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
@@ -51,7 +50,6 @@ type DoltHarness struct {
 	createdEnvs          map[string]*env.DoltEnv
 	session              *dsess.DoltSession
 	databases            []sqle.Database
-	databaseGlobalStates []globalstate.GlobalState
 	hashes               []string
 	parallelism          int
 	skippedQueries       []string
@@ -290,7 +288,6 @@ func (d *DoltHarness) NewDatabase(name string) sql.Database {
 
 func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.databases = nil
-	d.databaseGlobalStates = nil
 	for _, name := range names {
 		dEnv := dtestutils.CreateTestEnvWithName(name)
 
@@ -302,9 +299,6 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 		require.NoError(d.t, err)
 
 		d.databases = append(d.databases, db)
-
-		globalState := globalstate.NewGlobalStateStore()
-		d.databaseGlobalStates = append(d.databaseGlobalStates, globalState)
 
 		d.multiRepoEnv.AddOrReplaceEnv(name, dEnv)
 		d.createdEnvs[db.Name()] = dEnv
