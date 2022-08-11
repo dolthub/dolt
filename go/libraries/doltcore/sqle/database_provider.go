@@ -472,16 +472,6 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 			return nil, dsess.InitialDbState{}, false, nil
 		}
 
-		// tag, err := srcDb.(Database).DbData().Ddb.ResolveTag(ctx, ref.NewTagRef(revSpec))
-		// if err != nil {
-		// 	return nil, dsess.InitialDbState{}, false, err
-		// }
-
-		// commitHash, err := tag.Commit.HashOf()
-		// if err != nil {
-		// 	return nil, dsess.InitialDbState{}, false, err
-		// }
-
 		db, init, err := dbRevisionForTag(ctx, srcDb.(Database), revSpec)
 		if err != nil {
 			return nil, dsess.InitialDbState{}, false, err
