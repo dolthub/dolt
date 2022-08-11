@@ -18,9 +18,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 )
 
@@ -58,13 +58,13 @@ func NewGlobalStateStoreForDb(ctx context.Context, db *doltdb.DoltDB) (GlobalSta
 
 	return GlobalState{
 		aiTracker: tracker,
-		mu:         &sync.Mutex{},
+		mu:        &sync.Mutex{},
 	}, nil
 }
 
 type GlobalState struct {
 	aiTracker AutoIncrementTracker
-	mu         *sync.Mutex
+	mu        *sync.Mutex
 }
 
 func (g GlobalState) GetAutoIncrementTracker(ctx *sql.Context) (AutoIncrementTracker, error) {
