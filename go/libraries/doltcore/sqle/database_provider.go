@@ -472,17 +472,17 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 			return nil, dsess.InitialDbState{}, false, nil
 		}
 
-		tag, err := srcDb.(Database).DbData().Ddb.ResolveTag(ctx, ref.NewTagRef(revSpec))
-		if err != nil {
-			return nil, dsess.InitialDbState{}, false, err
-		}
+		// tag, err := srcDb.(Database).DbData().Ddb.ResolveTag(ctx, ref.NewTagRef(revSpec))
+		// if err != nil {
+		// 	return nil, dsess.InitialDbState{}, false, err
+		// }
 
-		commitHash, err := tag.Commit.HashOf()
-		if err != nil {
-			return nil, dsess.InitialDbState{}, false, err
-		}
+		// commitHash, err := tag.Commit.HashOf()
+		// if err != nil {
+		// 	return nil, dsess.InitialDbState{}, false, err
+		// }
 
-		db, init, err := dbRevisionForCommit(ctx, srcDb.(Database), commitHash.String())
+		db, init, err := dbRevisionForTag(ctx, srcDb.(Database), revSpec)
 		if err != nil {
 			return nil, dsess.InitialDbState{}, false, err
 		}
@@ -750,6 +750,36 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			Ddb: srcDb.DbData().Ddb,
 			Rsw: static,
 			Rsr: static,
+		},
+	}
+
+	return db, init, nil
+}
+
+func dbRevisionForTag(ctx context.Context, srcDb Database, revSpec string) (ReadOnlyDatabase, dsess.InitialDbState, error) {
+	tag := ref.NewTagRef(revSpec)
+
+	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, tag)
+	if err != nil {
+		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
+	}
+
+	name := srcDb.Name() + dbRevisionDelimiter + revSpec
+	db := ReadOnlyDatabase{Database: Database{
+		name:     name,
+		ddb:      srcDb.DbData().Ddb,
+		rsw:      srcDb.DbData().Rsw,
+		rsr:      srcDb.DbData().Rsr,
+		editOpts: srcDb.editOpts,
+	}}
+	init := dsess.InitialDbState{
+		Db:         db,
+		HeadCommit: cm,
+		ReadOnly:   true,
+		DbData: env.DbData{
+			Ddb: srcDb.DbData().Ddb,
+			Rsw: srcDb.DbData().Rsw,
+			Rsr: srcDb.DbData().Rsr,
 		},
 	}
 
