@@ -472,13 +472,13 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"create table foo1 (n int, de varchar(20));",
 			"insert into foo1 values (1, 'Ein'), (2, 'Zwei'), (3, 'Drei');",
-			"set @Commit1 = dolt_commit('-am', 'inserting into foo1');",
+			"set @Commit1 = dolt_commit('-am', 'inserting into foo1', '--date', '2022-08-06T12:00:00');",
 
 			"update foo1 set de='Eins' where n=1;",
-			"set @Commit2 = dolt_commit('-am', 'updating data in foo1');",
+			"set @Commit2 = dolt_commit('-am', 'updating data in foo1', '--date', '2022-08-06T12:00:01');",
 
 			"insert into foo1 values (4, 'Vier');",
-			"set @Commit3 = dolt_commit('-am', 'inserting data in foo1');",
+			"set @Commit3 = dolt_commit('-am', 'inserting data in foo1', '--date', '2022-08-06T12:00:02');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -504,21 +504,21 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"create table t1 (n int primary key, de varchar(20));",
 			"insert into t1 values (1, 'Eins'), (2, 'Zwei'), (3, 'Drei');",
-			"set @Commit1 = dolt_commit('-am', 'inserting into t1');",
+			"set @Commit1 = dolt_commit('-am', 'inserting into t1', '--date', '2022-08-06T12:00:01');",
 
 			"alter table t1 add column fr varchar(20);",
 			"insert into t1 values (4, 'Vier', 'Quatre');",
-			"set @Commit2 = dolt_commit('-am', 'adding column and inserting data in t1');",
+			"set @Commit2 = dolt_commit('-am', 'adding column and inserting data in t1', '--date', '2022-08-06T12:00:02');",
 
 			"update t1 set fr='Un' where n=1;",
 			"update t1 set fr='Deux' where n=2;",
-			"set @Commit3 = dolt_commit('-am', 'updating data in t1');",
+			"set @Commit3 = dolt_commit('-am', 'updating data in t1', '--date', '2022-08-06T12:00:03');",
 
 			"update t1 set de=concat(de, ', meine herren') where n>1;",
-			"set @Commit4 = dolt_commit('-am', 'be polite when you address a gentleman');",
+			"set @Commit4 = dolt_commit('-am', 'be polite when you address a gentleman', '--date', '2022-08-06T12:00:04');",
 
 			"delete from t1 where n=2;",
-			"set @Commit5 = dolt_commit('-am', 'we don''t need the number 2');",
+			"set @Commit5 = dolt_commit('-am', 'we don''t need the number 2', '--date', '2022-08-06T12:00:05');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -915,11 +915,11 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
 			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff', '--date', '2022-08-06T12:00:01');",
 			"SELECT DOLT_CHECKOUT('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -952,14 +952,14 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
 			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
 			"SELECT DOLT_CHECKOUT('main');",
 			"INSERT INTO test VALUES (5),(6),(7);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:03');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -975,7 +975,8 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				// careful to filter out the initial commit, which will be later than the ones above
+				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
@@ -990,14 +991,14 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"INSERT INTO test VALUES (0, 0)",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
 			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (1, 1);",
 			"UPDATE test SET val=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
 			"SELECT DOLT_CHECKOUT('main');",
 			"UPDATE test SET val=1001 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'update a value', '--date', '2022-08-06T12:00:03');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1013,7 +1014,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
 				Expected: []sql.Row{{"update a value"}},
 			},
 			{
@@ -1171,14 +1172,14 @@ var MergeScripts = []queries.ScriptTest{
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
 			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:01');",
 			"SELECT DOLT_CHECKOUT('main');",
 			"INSERT INTO test VALUES (5),(6),(7);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:02');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1194,7 +1195,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
