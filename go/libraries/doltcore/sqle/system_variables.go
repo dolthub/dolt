@@ -79,14 +79,6 @@ func AddDoltSystemVariables() {
 			Type:              sql.NewSystemBoolType(dsess.AsyncReplication),
 			Default:           int8(0),
 		},
-		{
-			Name:              dsess.PerBranchAutoIncrement,
-			Scope:             sql.SystemVariableScope_Both,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(dsess.PerBranchAutoIncrement),
-			Default:           int8(0),
-		},
 		{ // If true, causes a Dolt commit to occur when you commit a transaction.
 			Name:              dsess.DoltCommitOnTransactionCommit,
 			Scope:             sql.SystemVariableScope_Both,
