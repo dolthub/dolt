@@ -567,7 +567,7 @@ DELIM
 
     # assert that we already collected garbage
     BEFORE=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
-    skip_nbf_dolt_1 "dolt gc not implemented"
+    skip_nbf_dolt "dolt gc not implemented"
     dolt gc
     AFTER=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
 
