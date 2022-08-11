@@ -165,6 +165,36 @@ teardown() {
     [ "$output" = "__DOLT__" ]
 }
 
+@test "init: initing a new database displays the correct version" {
+    set_dolt_user "baz", "baz@bash.com"
+
+    run dolt init --new-format
+    [ $status -eq 0 ]
+
+    run dolt version
+    [ $status -eq 0 ]
+    [[ $output =~ "database storage format: NEW ( __DOLT__ )" ]] || false
+}
+
+@test "init: initing an old database displays the correct version" {
+    set_dolt_user "baz", "bazbash.com"
+
+    run dolt init
+    [ "$status" -eq 0 ]
+
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ $output =~ "database storage format: OLD ( __LD_1__ )" ]] || false
+}
+
+@test "init: empty database folder displays no version" {
+    set_dolt_user "baz", "bazbash.com"
+
+    run dolt version
+    [ $status -eq 0 ]
+    [[ $output =~ "no valid database in this directory" ]]
+}
+
 assert_valid_repository () {
   run dolt log
   [ "$status" -eq 0 ]
