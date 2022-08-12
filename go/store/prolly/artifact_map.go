@@ -107,11 +107,11 @@ func NewArtifactMapFromTuples(ctx context.Context, ns tree.NodeStore, srcKeyDesc
 	}, nil
 }
 
-func (m ArtifactMap) Count() int {
+func (m ArtifactMap) Count() (int, error) {
 	return m.tuples.count()
 }
 
-func (m ArtifactMap) Height() int {
+func (m ArtifactMap) Height() (int, error) {
 	return m.tuples.height()
 }
 
@@ -600,7 +600,10 @@ func ArtifactDebugFormat(ctx context.Context, m ArtifactMap) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	c := m.Count()
+	c, err := m.Count()
+	if err != nil {
+		return "", err
+	}
 
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Artifact Map (count: %d) {\n", c))

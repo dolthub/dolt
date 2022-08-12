@@ -76,7 +76,10 @@ func DeserializeSchema(ctx context.Context, nbf *types.NomsBinFormat, v types.Va
 
 func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Schema, error) {
 	assertTrue(serial.GetFileID(buf) == serial.TableSchemaFileID)
-	s := serial.GetRootAsTableSchema(buf, serial.MessagePrefixSz)
+	s, err := serial.TryGetRootAsTableSchema(buf, serial.MessagePrefixSz)
+	if err != nil {
+		return nil, err
+	}
 
 	cols, err := deserializeColumns(ctx, s)
 	if err != nil {

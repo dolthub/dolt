@@ -392,5 +392,5 @@ func isTableDataEmpty(ctx *sql.Context, table *doltdb.Table) (bool, error) {
 		return false, err
 	}
 
-	return rowData.Empty(), nil
+	return rowData.Empty()
 }

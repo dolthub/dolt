@@ -1229,8 +1229,12 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		// Assert the new index map is not empty
 		newRows, err := table.GetIndexRowData(ctx, "c1_idx")
 		require.NoError(t, err)
-		assert.False(t, newRows.Empty())
-		assert.Equal(t, newRows.Count(), uint64(2))
+		empty, err := newRows.Empty()
+		require.NoError(t, err)
+		assert.False(t, empty)
+		count, err := newRows.Count()
+		require.NoError(t, err)
+		assert.Equal(t, count, uint64(2))
 	})
 
 	t.Run("Add primary key when one more cells contain NULL", func(t *testing.T) {
@@ -1299,8 +1303,12 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		// Assert the index map is not empty
 		newIdx, err := table.GetIndexRowData(ctx, "c1_idx")
 		assert.NoError(t, err)
-		assert.False(t, newIdx.Empty())
-		assert.Equal(t, newIdx.Count(), uint64(2))
+		empty, err := newIdx.Empty()
+		require.NoError(t, err)
+		assert.False(t, empty)
+		count, err := newIdx.Count()
+		require.NoError(t, err)
+		assert.Equal(t, count, uint64(2))
 	})
 }
 

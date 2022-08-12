@@ -90,7 +90,10 @@ func NewTempTable(
 	if err != nil {
 		return nil, err
 	}
-	set := durable.NewIndexSet(ctx, vrw, ns)
+	set, err := durable.NewIndexSet(ctx, vrw, ns)
+	if err != nil {
+		return nil, err
+	}
 
 	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, idx, set, nil)
 	if err != nil {
@@ -197,7 +200,11 @@ func (t *TempTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newDoltTablePartitionIter(rows, partitionsFromRows(ctx, rows)...), nil
+	parts, err := partitionsFromRows(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
+	return newDoltTablePartitionIter(rows, parts...), nil
 }
 
 func (t *TempTable) IsTemporary() bool {
@@ -210,7 +217,7 @@ func (t *TempTable) DataLength(ctx *sql.Context) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return idx.Count(), nil
+	return idx.Count()
 }
 
 // AnalyzeTable implements the sql.StatisticsTable interface.

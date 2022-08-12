@@ -88,12 +88,13 @@ func mergeOrderedTrees[K, V ~[]byte, O ordering[K], S message.Serializer](
 	}, nil
 }
 
-func (t orderedTree[K, V, O]) count() int {
+func (t orderedTree[K, V, O]) count() (int, error) {
 	return t.root.TreeCount()
 }
 
-func (t orderedTree[K, V, O]) height() int {
-	return t.root.Level() + 1
+func (t orderedTree[K, V, O]) height() (int, error) {
+	l, err := t.root.Level()
+	return l + 1, err
 }
 
 func (t orderedTree[K, V, O]) hashOf() hash.Hash {
@@ -218,8 +219,14 @@ func (t orderedTree[K, V, O]) iterOrdinalRange(ctx context.Context, start, stop 
 	}
 	if stop < start {
 		return nil, fmt.Errorf("invalid ordinal bounds (%d, %d)", start, stop)
-	} else if stop > uint64(t.count()) {
-		return nil, fmt.Errorf("stop index (%d) out of bounds", stop)
+	} else {
+		c, err := t.count()
+		if err != nil {
+			return nil, err
+		}
+		if stop > uint64(c) {
+			return nil, fmt.Errorf("stop index (%d) out of bounds", stop)
+		}
 	}
 
 	lo, err := tree.NewCursorAtOrdinal(ctx, t.ns, t.root, start)

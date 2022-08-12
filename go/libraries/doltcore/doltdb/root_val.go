@@ -253,7 +253,10 @@ func newRootValue(vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value) (
 	var storage rvStorage
 
 	if vrw.Format().UsesFlatbuffers() {
-		srv := serial.GetRootAsRootValue([]byte(v.(types.SerialMessage)), serial.MessagePrefixSz)
+		srv, err := serial.TryGetRootAsRootValue([]byte(v.(types.SerialMessage)), serial.MessagePrefixSz)
+		if err != nil {
+			return nil, err
+		}
 		storage = fbRvStorage{srv}
 	} else {
 		st, ok := v.(types.Struct)
@@ -318,7 +321,10 @@ func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter, ns tree.Node
 	if vrw.Format().UsesFlatbuffers() {
 		builder := flatbuffers.NewBuilder(80)
 
-		emptyam := prolly.NewEmptyAddressMap(ns)
+		emptyam, err := prolly.NewEmptyAddressMap(ns)
+		if err != nil {
+			return nil, err
+		}
 		ambytes := []byte(tree.ValueFromNode(emptyam.Node()).(types.SerialMessage))
 		tablesoff := builder.CreateByteVector(ambytes)
 
@@ -798,7 +804,10 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 		return nil, err
 	}
 
-	indexes := durable.NewIndexSet(ctx, root.VRW(), root.ns)
+	indexes, err := durable.NewIndexSet(ctx, root.VRW(), root.ns)
+	if err != nil {
+		return nil, err
+	}
 	err = sch.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
 		// create an empty map for every index
 		indexes, err = indexes.PutIndex(ctx, index.Name(), empty)
@@ -1106,14 +1115,20 @@ func (r fbRvStorage) GetFeatureVersion() (FeatureVersion, bool, error) {
 	return FeatureVersion(r.srv.FeatureVersion()), true, nil
 }
 
-func (r fbRvStorage) getAddressMap(vrw types.ValueReadWriter, ns tree.NodeStore) prolly.AddressMap {
+func (r fbRvStorage) getAddressMap(vrw types.ValueReadWriter, ns tree.NodeStore) (prolly.AddressMap, error) {
 	tbytes := r.srv.TablesBytes()
-	node := shim.NodeFromValue(types.SerialMessage(tbytes))
+	node, err := shim.NodeFromValue(types.SerialMessage(tbytes))
+	if err != nil {
+		return prolly.AddressMap{}, err
+	}
 	return prolly.NewAddressMap(node, ns)
 }
 
 func (r fbRvStorage) GetTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore) (tableMap, error) {
-	am := r.getAddressMap(vrw, ns)
+	am, err := r.getAddressMap(vrw, ns)
+	if err != nil {
+		return nil, err
+	}
 	return fbTableMap{am}, nil
 }
 
@@ -1152,7 +1167,10 @@ func (r fbRvStorage) GetForeignKeys(ctx context.Context, vr types.ValueReader) (
 func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error) {
 	builder := flatbuffers.NewBuilder(80)
 
-	am := r.getAddressMap(vrw, ns)
+	am, err := r.getAddressMap(vrw, ns)
+	if err != nil {
+		return nil, err
+	}
 	ae := am.Editor()
 	for _, e := range edits {
 		if e.old_name != "" {
@@ -1192,7 +1210,7 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 			}
 		}
 	}
-	am, err := ae.Flush(ctx)
+	am, err = ae.Flush(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1207,12 +1225,20 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 	serial.RootValueAddForeignKeyAddr(builder, fkoff)
 
 	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
-	return fbRvStorage{serial.GetRootAsRootValue(bs, serial.MessagePrefixSz)}, nil
+	msg, err := serial.TryGetRootAsRootValue(bs, serial.MessagePrefixSz)
+	if err != nil {
+		return nil, err
+	}
+	return fbRvStorage{msg}, nil
 }
 
 func (r fbRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (rvStorage, error) {
 	var h hash.Hash
-	if !emptyForeignKeyCollection(v.(types.SerialMessage)) {
+	isempty, err := emptyForeignKeyCollection(v.(types.SerialMessage))
+	if err != nil {
+		return nil, err
+	}
+	if !isempty {
 		ref, err := vrw.WriteValue(ctx, v)
 		if err != nil {
 			return nil, err

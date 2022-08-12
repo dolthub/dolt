@@ -42,7 +42,9 @@ func TestRoundTripInts(t *testing.T) {
 	require.True(t, sumTupleSize(keys)+sumTupleSize(values) < message.MaxVectorOffset)
 
 	nd := NewTupleLeafNode(keys, values)
-	assert.True(t, nd.IsLeaf())
+	leaf, err := nd.IsLeaf()
+	require.NoError(t, err)
+	assert.True(t, leaf)
 	assert.Equal(t, len(keys), int(nd.count))
 	for i := range keys {
 		assert.Equal(t, keys[i], val.Tuple(nd.GetKey(i)))
@@ -56,7 +58,9 @@ func TestRoundTripNodeItems(t *testing.T) {
 		require.True(t, sumSize(keys)+sumSize(values) < message.MaxVectorOffset)
 
 		nd := newLeafNode(keys, values)
-		assert.True(t, nd.IsLeaf())
+		leaf, err := nd.IsLeaf()
+		require.NoError(t, err)
+		assert.True(t, leaf)
 		assert.Equal(t, len(keys), int(nd.count))
 		for i := range keys {
 			assert.Equal(t, keys[i], nd.GetKey(i))
@@ -85,7 +89,8 @@ func TestNodeHashValueCompatibility(t *testing.T) {
 		[][]byte{h1[:], h2[:]},
 		[]uint64{},
 		0)
-	nd = NodeFromBytes(msg)
+	nd, err = NodeFromBytes(msg)
+	require.NoError(t, err)
 	th, err = ValueFromNode(nd).Hash(nbf)
 	require.NoError(t, err)
 	assert.Equal(t, nd.HashOf(), th)

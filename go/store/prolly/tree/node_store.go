@@ -67,7 +67,7 @@ func NewNodeStore(cs chunks.ChunkStore) NodeStore {
 func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 	c, ok := ns.cache.get(ref)
 	if ok {
-		return NodeFromBytes(c.Data()), nil
+		return NodeFromBytes(c.Data())
 	}
 
 	c, err := ns.store.Get(ctx, ref)
@@ -78,7 +78,7 @@ func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 
 	ns.cache.insert(c)
 
-	return NodeFromBytes(c.Data()), err
+	return NodeFromBytes(c.Data())
 }
 
 // Write implements NodeStore.

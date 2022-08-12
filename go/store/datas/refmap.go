@@ -32,12 +32,18 @@ func storeroot_flatbuffer(am prolly.AddressMap) serial.Message {
 	return serial.FinishMessage(builder, serial.StoreRootEnd(builder), []byte(serial.StoreRootFileID))
 }
 
-func parse_storeroot(bs []byte, ns tree.NodeStore) prolly.AddressMap {
+func parse_storeroot(bs []byte, ns tree.NodeStore) (prolly.AddressMap, error) {
 	if serial.GetFileID(bs) != serial.StoreRootFileID {
 		panic("expected store root file id, got: " + serial.GetFileID(bs))
 	}
-	sr := serial.GetRootAsStoreRoot(bs, serial.MessagePrefixSz)
+	sr, err := serial.TryGetRootAsStoreRoot(bs, serial.MessagePrefixSz)
+	if err != nil {
+		return prolly.AddressMap{}, err
+	}
 	mapbytes := sr.AddressMapBytes()
-	node := tree.NodeFromBytes(mapbytes)
+	node, err := tree.NodeFromBytes(mapbytes)
+	if err != nil {
+		return prolly.AddressMap{}, err
+	}
 	return prolly.NewAddressMap(node, ns)
 }

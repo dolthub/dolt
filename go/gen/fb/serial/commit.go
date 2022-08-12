@@ -24,17 +24,34 @@ type Commit struct {
 	_tab flatbuffers.Table
 }
 
-func GetRootAsCommit(buf []byte, offset flatbuffers.UOffsetT) *Commit {
+func InitCommitRoot(o *Commit, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
+	o.Init(buf, n+offset)
+	if CommitNumFields < o.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
+}
+
+func TryGetRootAsCommit(buf []byte, offset flatbuffers.UOffsetT) (*Commit, error) {
 	x := &Commit{}
-	x.Init(buf, n+offset)
+	return x, InitCommitRoot(x, buf, offset)
+}
+
+func GetRootAsCommit(buf []byte, offset flatbuffers.UOffsetT) *Commit {
+	x := &Commit{}
+	InitCommitRoot(x, buf, offset)
 	return x
 }
 
-func GetSizePrefixedRootAsCommit(buf []byte, offset flatbuffers.UOffsetT) *Commit {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+func TryGetSizePrefixedRootAsCommit(buf []byte, offset flatbuffers.UOffsetT) (*Commit, error) {
 	x := &Commit{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x, InitCommitRoot(x, buf, offset+flatbuffers.SizeUint32)
+}
+
+func GetSizePrefixedRootAsCommit(buf []byte, offset flatbuffers.UOffsetT) *Commit {
+	x := &Commit{}
+	InitCommitRoot(x, buf, offset+flatbuffers.SizeUint32)
 	return x
 }
 
@@ -209,8 +226,10 @@ func (rcv *Commit) MutateUserTimestampMillis(n int64) bool {
 	return rcv._tab.MutateInt64Slot(20, n)
 }
 
+const CommitNumFields = 9
+
 func CommitStart(builder *flatbuffers.Builder) {
-	builder.StartObject(9)
+	builder.StartObject(CommitNumFields)
 }
 func CommitAddRoot(builder *flatbuffers.Builder, root flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(root), 0)

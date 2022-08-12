@@ -42,7 +42,15 @@ type nomsReporter func(ctx context.Context, change *diff.Difference, ch chan<- D
 // Summary reports a summary of diff changes between two values
 // todo: make package private once dolthub is migrated
 func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to durable.Index, fromSch, toSch schema.Schema) (err error) {
-	ch <- DiffSummaryProgress{OldSize: from.Count(), NewSize: to.Count()}
+	fc, err := from.Count()
+	if err != nil {
+		return err
+	}
+	tc, err := to.Count()
+	if err != nil {
+		return err
+	}
+	ch <- DiffSummaryProgress{OldSize: fc, NewSize: tc}
 
 	fk, tk := schema.IsKeyless(fromSch), schema.IsKeyless(toSch)
 	var keyless bool
@@ -102,10 +110,18 @@ func diffProllyTrees(ctx context.Context, ch chan DiffSummaryProgress, keyless b
 	if keyless {
 		rpr = reportKeylessChanges
 	} else {
+		fc, err := from.Count()
+		if err != nil {
+			return err
+		}
+		tc, err := to.Count()
+		if err != nil {
+			return err
+		}
 		rpr = reportPkChanges
 		ch <- DiffSummaryProgress{
-			OldSize: from.Count(),
-			NewSize: to.Count(),
+			OldSize: fc,
+			NewSize: tc,
 		}
 	}
 
@@ -123,10 +139,18 @@ func diffNomsMaps(ctx context.Context, ch chan DiffSummaryProgress, keyless bool
 	if keyless {
 		rpr = reportNomsKeylessChanges
 	} else {
+		fc, err := fromRows.Count()
+		if err != nil {
+			return err
+		}
+		tc, err := toRows.Count()
+		if err != nil {
+			return err
+		}
 		rpr = reportNomsPkChanges
 		ch <- DiffSummaryProgress{
-			OldSize: fromRows.Count(),
-			NewSize: toRows.Count(),
+			OldSize: fc,
+			NewSize: tc,
 		}
 	}
 

@@ -220,7 +220,11 @@ func nextSchemasTableIndex(ctx *sql.Context, root *doltdb.RootValue) (int64, err
 		return 0, err
 	}
 
-	if rows.Empty() {
+	empty, err := rows.Empty()
+	if err != nil {
+		return 0, err
+	}
+	if empty {
 		return 1, nil
 	}
 

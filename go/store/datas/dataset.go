@@ -147,8 +147,12 @@ type serialTagHead struct {
 	addr hash.Hash
 }
 
-func newSerialTagHead(bs []byte, addr hash.Hash) serialTagHead {
-	return serialTagHead{serial.GetRootAsTag(bs, serial.MessagePrefixSz), addr}
+func newSerialTagHead(bs []byte, addr hash.Hash) (serialTagHead, error) {
+	tm, err := serial.TryGetRootAsTag(bs, serial.MessagePrefixSz)
+	if err != nil {
+		return serialTagHead{}, err
+	}
+	return serialTagHead{tm, addr}, nil
 }
 
 func (h serialTagHead) TypeName() string {
@@ -306,7 +310,7 @@ func newHead(head types.Value, addr hash.Hash) (dsHead, error) {
 		data := []byte(sm)
 		fid := serial.GetFileID(data)
 		if fid == serial.TagFileID {
-			return newSerialTagHead(data, addr), nil
+			return newSerialTagHead(data, addr)
 		}
 		if fid == serial.WorkingSetFileID {
 			return newSerialWorkingSetHead(data, addr), nil
