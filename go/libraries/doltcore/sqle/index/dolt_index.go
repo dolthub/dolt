@@ -205,6 +205,8 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 
 	cols := sch.GetPKCols().GetColumns()
 
+	vrw := t.ValueReadWriter()
+
 	return &doltIndex{
 		id:                            "PRIMARY",
 		tblName:                       tbl,
@@ -215,11 +217,12 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 		unique:                        true,
 		isPk:                          true,
 		comment:                       "",
-		vrw:                           t.ValueReadWriter(),
+		vrw:                           vrw,
 		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
+		doltBinFormat:                 types.IsFormat_DOLT(vrw.Format()),
 	}, nil
 }
 
@@ -234,6 +237,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 	for i, tag := range idx.IndexedColumnTags() {
 		cols[i], _ = idx.GetColumn(tag)
 	}
+	vrw := t.ValueReadWriter()
 
 	return &doltIndex{
 		id:                            idx.Name(),
@@ -245,11 +249,12 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		unique:                        idx.IsUnique(),
 		isPk:                          false,
 		comment:                       idx.Comment(),
-		vrw:                           t.ValueReadWriter(),
+		vrw:                           vrw,
 		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
+		doltBinFormat:                 types.IsFormat_DOLT(vrw.Format()),
 	}, nil
 }
 
@@ -379,7 +384,8 @@ type doltIndex struct {
 	ns     tree.NodeStore
 	keyBld *val.TupleBuilder
 
-	cache cachedDurableIndexes
+	cache         cachedDurableIndexes
+	doltBinFormat bool
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
@@ -402,7 +408,7 @@ func (di *doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.Index
 		return nil, nil
 	}
 
-	if types.IsFormat_DOLT(di.vrw.Format()) {
+	if di.doltBinFormat {
 		return di.newProllyLookup(ctx, di.ns, ranges...)
 	}
 
