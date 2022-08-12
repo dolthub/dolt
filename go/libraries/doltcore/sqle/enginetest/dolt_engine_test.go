@@ -122,40 +122,6 @@ func TestSingleScript(t *testing.T) {
 				},
 			},
 		},
-		//{
-		//	Name: "dolt_merge() with a gap in an auto increment key",
-		//	SetUpScript: []string{
-		//		"CREATE TABLE t2 (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
-		//		"INSERT INTO t2 (c0) VALUES (1), (2);",
-		//		"CALL dolt_add('-A');",
-		//		"CALL dolt_commit('-am', 'cm1');",
-		//		"CALL dolt_checkout('-b', 'test2');",
-		//		"INSERT INTO t2 VALUES (4,4), (5,5);",
-		//		"CALL dolt_commit('-am', 'cm2');",
-		//		"CALL dolt_checkout('main');",
-		//	},
-		//	Assertions: []queries.ScriptTestAssertion{
-		//		{
-		//			Query:    "CALL dolt_merge('test2');",
-		//			Expected: []sql.Row{{1, 0}},
-		//		},
-		//		{
-		//			Query:    "INSERT INTO t2 VALUES (3,3),(NULL,6);",
-		//			Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
-		//		},
-		//		{
-		//			Query: "SELECT * FROM t2 ORDER BY pk;",
-		//			Expected: []sql.Row{
-		//				{1, 1},
-		//				{2, 2},
-		//				{3, 3},
-		//				{4, 4},
-		//				{5, 5},
-		//				{6, 6},
-		//			},
-		//		},
-		//	},
-		//},
 	}
 
 	harness := newDoltHarness(t)
@@ -702,6 +668,12 @@ func TestDoltScripts(t *testing.T) {
 	harness := newDoltHarness(t)
 	for _, script := range DoltScripts {
 		enginetest.TestScript(t, harness, script)
+	}
+}
+
+func TestDoltRevisionDbScripts(t *testing.T) {
+	for _, script := range DoltRevisionDbScripts {
+		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
 }
 

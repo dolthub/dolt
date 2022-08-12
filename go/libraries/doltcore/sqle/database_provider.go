@@ -188,7 +188,6 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 	} else {
 		return found, nil
 	}
-
 }
 
 func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
@@ -371,6 +370,9 @@ func createRemote(ctx *sql.Context, remoteName, remoteUrl string, params map[str
 }
 
 func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	isRevisionDatabase, err := p.IsRevisionDatabase(ctx, name)
 	if err != nil {
 		return err
@@ -383,9 +385,6 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	// TODO: there are still cases (not server-first) where we rename databases because the directory name would need
 	//  quoting if used as a database name, and that breaks here. We either need the database name to match the directory
 	//  name in all cases, or else keep a mapping from database name to directory on disk.
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
@@ -583,7 +582,7 @@ func (p DoltDatabaseProvider) GetRevisionForRevisionDatabase(ctx *sql.Context, d
 
 	sqldb, ok := db.(dsess.RevisionDatabase)
 	if !ok {
-		return "", "", fmt.Errorf("unexpected database type: %T", db)
+		return "", "", nil
 	}
 
 	if sqldb.Revision() != "" {
@@ -797,6 +796,7 @@ func dbRevisionForTag(ctx context.Context, srcDb Database, revSpec string) (Read
 		rsw:      srcDb.DbData().Rsw,
 		rsr:      srcDb.DbData().Rsr,
 		editOpts: srcDb.editOpts,
+		revision: revSpec,
 	}}
 	init := dsess.InitialDbState{
 		Db:         db,

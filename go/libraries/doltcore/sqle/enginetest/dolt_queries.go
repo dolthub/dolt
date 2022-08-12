@@ -125,6 +125,125 @@ var DescribeTableAsOfScriptTest = queries.ScriptTest{
 	},
 }
 
+var DoltRevisionDbScripts = []queries.ScriptTest{
+	{
+		Name: "revision databases: tag-qualified revision dbs",
+		SetUpScript: []string{
+			"create table t01 (pk int primary key, c1 int)",
+			"call dolt_commit('-am', 'creating table t on main');",
+			"insert into t01 values (1, 1), (2, 2);",
+			"call dolt_commit('-am', 'adding rows to table t on main');",
+			"call dolt_tag('tag1');",
+			"insert into t01 values (3, 3);",
+			"call dolt_commit('-am', 'adding another row to table t on main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}},
+			},
+			{
+				Query:    "use mydb/tag1;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb/tag1"}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/tag1"}},
+			},
+			{
+				// TODO: This used to panic, but we changed it to return an error that this is a read-only database.
+				//       or... should it check out the root database?
+				Query:          "call dolt_reset();",
+				ExpectedErrStr: "unable to reset HEAD a read-only revision database",
+			},
+			{
+				// TODO: What's the right behavior for dolt_checkout on a read-only, revision db?
+				Query:    "call dolt_checkout('main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb"}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "use mydb;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb"}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}},
+			},
+		},
+	},
+	{
+		Name: "revision databases: branch-qualified revision dbs",
+		SetUpScript: []string{
+			"create table t01 (pk int primary key, c1 int)",
+			"call dolt_commit('-am', 'creating table t on main');",
+			"insert into t01 values (1, 1), (2, 2);",
+			"call dolt_commit('-am', 'adding rows to table t on main');",
+			"call dolt_branch('branch1');",
+			"insert into t01 values (3, 3);",
+			"call dolt_commit('-am', 'adding another row to table t on main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "use mydb/branch1;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/branch1"}},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb/branch1"}},
+			},
+			{
+				// TODO: What if we call to checkout the same branch?
+				Query:    "call dolt_checkout('main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb"}},
+			},
+			{
+				Query:    "use mydb/branch1;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_reset();",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb/branch1"}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/branch1"}},
+			},
+		},
+	},
+}
+
 // DoltScripts are script tests specific to Dolt (not the engine in general), e.g. by involving Dolt functions. Break
 // this slice into others with good names as it grows.
 var DoltScripts = []queries.ScriptTest{

@@ -651,7 +651,7 @@ func (d *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.R
 
 // SetRoots sets new roots for the session for the database named. Typically clients should only set the working root,
 // via setRoot. This method is for clients that need to update more of the session state, such as the dolt_ functions.
-// Unlike setting the only the working root, this method always marks the database state dirty.
+// Unlike setting the working root, this method always marks the database state dirty.
 func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
 	// TODO: handle HEAD here?
 	sessionState, _, err := d.LookupDbState(ctx, dbName)

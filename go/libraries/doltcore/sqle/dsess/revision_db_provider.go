@@ -50,6 +50,7 @@ type RevisionDatabase interface {
 	Revision() string
 }
 type DoltDatabaseProvider interface {
+	sql.DatabaseProvider
 	RevisionDatabaseProvider
 
 	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases.
