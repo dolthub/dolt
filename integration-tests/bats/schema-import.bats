@@ -83,7 +83,7 @@ teardown() {
     [[ "$output" =~ "\`boolean\` tinyint" ]] || false
     [[ "$output" =~ "\`float\` float" ]] || false
     [[ "$output" =~ "\`uint\` int unsigned" ]] || false
-    [[ "$output" =~ "\`uuid\` char(36) character set ascii collate ascii_bin" ]] || false
+    [[ "$output" =~ "\`uuid\` char(36) CHARACTER SET ascii COLLATE ascii_bin" ]] || false
 }
 
 @test "schema-import: with an empty csv" {
@@ -108,7 +108,7 @@ DELIM
     [[ "$output" =~ "\`boolean\` tinyint" ]] || false
     [[ "$output" =~ "\`float\` float" ]] || false
     [[ "$output" =~ "\`uint\` int" ]] || false
-    [[ "$output" =~ "\`uuid\` char(36) character set ascii collate ascii_bin" ]] || false
+    [[ "$output" =~ "\`uuid\` char(36) CHARACTER SET ascii COLLATE ascii_bin" ]] || false
 }
 
 @test "schema-import: with invalid names" {
