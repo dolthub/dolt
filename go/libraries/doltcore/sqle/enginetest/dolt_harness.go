@@ -136,7 +136,7 @@ func commitScripts(dbs []string) []setup.SetupScript {
 	for i := range dbs {
 		db := dbs[i]
 		commitCmds = append(commitCmds, fmt.Sprintf("use %s", db))
-		commitCmds = append(commitCmds, fmt.Sprintf("call dolt_commit('--allow-empty', '-am', 'checkpoint enginetest database %s')", db))
+		commitCmds = append(commitCmds, fmt.Sprintf("call dolt_commit('--allow-empty', '-am', 'checkpoint enginetest database %s', '--date', '1970-01-01T12:00:00')", db))
 	}
 	commitCmds = append(commitCmds, "use mydb")
 	return []setup.SetupScript{commitCmds}
