@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -295,7 +294,7 @@ func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool p
 
 	return &valueMerger{
 		numCols:      n,
-		vD:           shim.ValueDescriptorFromSchema(merged),
+		vD:           merged.GetValueDescriptor(),
 		leftMapping:  leftMapping,
 		rightMapping: rightMapping,
 		baseMapping:  baseMapping,
@@ -345,7 +344,7 @@ func (m *valueMerger) processColumn(i int, left, right, base val.Tuple) ([]byte,
 		rightCol = right.GetField(r)
 	}
 
-	if m.vD.Comparator().CompareValues(leftCol, rightCol, m.vD.Types[i]) == 0 {
+	if m.vD.Comparator().CompareValues(i, leftCol, rightCol, m.vD.Types[i]) == 0 {
 		return leftCol, false
 	}
 
@@ -359,8 +358,8 @@ func (m *valueMerger) processColumn(i int, left, right, base val.Tuple) ([]byte,
 		baseVal = base.GetField(b)
 	}
 
-	leftModified := m.vD.Comparator().CompareValues(leftCol, baseVal, m.vD.Types[i]) != 0
-	rightModified := m.vD.Comparator().CompareValues(rightCol, baseVal, m.vD.Types[i]) != 0
+	leftModified := m.vD.Comparator().CompareValues(i, leftCol, baseVal, m.vD.Types[i]) != 0
+	rightModified := m.vD.Comparator().CompareValues(i, rightCol, baseVal, m.vD.Types[i]) != 0
 
 	switch {
 	case leftModified && rightModified:

@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -112,7 +111,7 @@ func (cvt *prollyConstraintViolationsTable) PartitionRows(ctx *sql.Context, part
 	if err != nil {
 		return nil, err
 	}
-	kd, vd := shim.MapDescriptorsFromSchema(sch)
+	kd, vd := sch.GetMapDescriptors()
 	return prollyCVIter{
 		itr: itr,
 		sch: sch,
