@@ -26,14 +26,19 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
-// NewAutoIncrementTracker returns a new autoincrement tracker for the working sets given
+type AutoIncrementTracker struct {
+	sequences map[string]uint64
+	mu        *sync.Mutex
+}
+
+// NewAutoIncrementTracker returns a new autoincrement tracker for the working sets given. All working sets must be
+// considered because the auto increment value for a table is tracked globally, across all branches.
 func NewAutoIncrementTracker(ctx context.Context, wses ...*doltdb.WorkingSet) (AutoIncrementTracker, error) {
 	ait := AutoIncrementTracker{
 		sequences: make(map[string]uint64),
 		mu:        &sync.Mutex{},
 	}
 
-	// collect auto increment values from all working sets given
 	for _, ws := range wses {
 		err := ws.WorkingRoot().IterTables(ctx, func(tableName string, table *doltdb.Table, sch schema.Schema) (bool, error) {
 			ok := schema.HasAutoIncrement(sch)
@@ -63,17 +68,15 @@ func NewAutoIncrementTracker(ctx context.Context, wses ...*doltdb.WorkingSet) (A
 	return ait, nil
 }
 
-type AutoIncrementTracker struct {
-	sequences map[string]uint64
-	mu        *sync.Mutex
-}
-
+// Current returns the next value to be generated in the auto increment sequence for the table named
 func (a AutoIncrementTracker) Current(tableName string) uint64 {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.sequences[strings.ToLower(tableName)]
 }
 
+// Next returns the next auto increment value for the table named using the provided value from an insert (which may
+// be null or 0, in which case it will be generated from the sequence).
 func (a AutoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -124,24 +127,36 @@ func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 	return val.(uint64), nil
 }
 
-// TODO: this needs to change
+// Set sets the auto increment value for the table named, if it's greater than the one already registered for this
+// table. Otherwise, the update is silently disregarded. So far this matches the MySQL behavior, but Dolt uses the
+// maximum value for this table across all branches.
 func (a AutoIncrementTracker) Set(tableName string, val uint64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.sequences[strings.ToLower(tableName)] = val
+
+	tableName = strings.ToLower(tableName)
+
+	existing := a.sequences[tableName]
+	if val > existing {
+		a.sequences[strings.ToLower(tableName)] = val
+	}
 }
 
+// AddNewTable initializes a new table with an auto increment column to the tracker, as necessary
 func (a AutoIncrementTracker) AddNewTable(tableName string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	tableName = strings.ToLower(tableName)
-	// only modify the sequence for this table if this is the only branch that has such a table
+	// only initialize the sequence for this table if no other branch has such a table
 	if _, ok := a.sequences[tableName]; !ok {
 		a.sequences[tableName] = uint64(1)
 	}
 }
 
+// DropTable drops the table with the name given.
+// To establish the new auto increment value, callers must also pass all other working sets in scope that may include
+// a table with the same name, omitting the working set that just deleted the table named.
 func (a AutoIncrementTracker) DropTable(ctx context.Context, tableName string, wses ...*doltdb.WorkingSet) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
