@@ -36,7 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -71,7 +70,7 @@ type rowV struct {
 	col1, col2 int
 }
 
-var vD = shim.ValueDescriptorFromSchema(sch)
+var vD = sch.GetValueDescriptor()
 var vB = val.NewTupleBuilder(vD)
 var syncPool = pool.NewBuffPool()
 
@@ -773,7 +772,7 @@ func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootT
 	return mergeCommit, ancCm, root, mergeRoot, ancRoot
 }
 
-var kD = shim.KeyDescriptorFromSchema(sch)
+var kD = sch.GetKeyDescriptor()
 var kB = val.NewTupleBuilder(kD)
 
 func key(i int) val.Tuple {

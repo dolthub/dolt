@@ -840,7 +840,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 			}
 			// maybe set RangeField.Exact
 			typ := prollyRange.Desc.Types[i]
-			cmp := order.CompareValues(field.Hi.Value, field.Lo.Value, typ)
+			cmp := order.CompareValues(i, field.Hi.Value, field.Lo.Value, typ)
 			prollyRange.Fields[i].Exact = cmp == 0
 		}
 	}

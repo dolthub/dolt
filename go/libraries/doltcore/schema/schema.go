@@ -21,6 +21,7 @@ import (
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // Schema is an interface for retrieving the columns that make up a schema
@@ -50,6 +51,15 @@ type Schema interface {
 	// AddColumn adds a column to this schema in the order given and returns the resulting Schema.
 	// The new column cannot be a primary key. To alter primary keys, create a new schema with those keys.
 	AddColumn(column Column, order *ColumnOrder) (Schema, error)
+
+	// GetMapDescriptors returns the key and value tuple descriptors for this schema.
+	GetMapDescriptors() (keyDesc, valueDesc val.TupleDesc)
+
+	// GetKeyDescriptor returns the key tuple descriptor for this schema.
+	GetKeyDescriptor() val.TupleDesc
+
+	// GetValueDescriptor returns the value tuple descriptor for this schema.
+	GetValueDescriptor() val.TupleDesc
 }
 
 // ColumnOrder is used in ALTER TABLE statements to change the order of inserted / modified columns.

@@ -66,7 +66,7 @@ func (r Range) aboveStart(t val.Tuple) bool {
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
-		cmp := order.CompareValues(field, bound.Value, typ)
+		cmp := order.CompareValues(i, field, bound.Value, typ)
 		if cmp < 0 {
 			// |field| is outside Range
 			return false
@@ -98,7 +98,7 @@ func (r Range) belowStop(t val.Tuple) bool {
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
-		cmp := order.CompareValues(field, bound.Value, typ)
+		cmp := order.CompareValues(i, field, bound.Value, typ)
 		if cmp > 0 {
 			// |field| is outside Range
 			return false
@@ -127,7 +127,7 @@ func (r Range) matches(t val.Tuple) bool {
 
 		if r.Fields[i].Exact {
 			v := r.Fields[i].Lo.Value
-			if order.CompareValues(field, v, typ) == 0 {
+			if order.CompareValues(i, field, v, typ) == 0 {
 				continue
 			}
 			return false
@@ -135,7 +135,7 @@ func (r Range) matches(t val.Tuple) bool {
 
 		lo := r.Fields[i].Lo
 		if lo.Binding {
-			cmp := order.CompareValues(field, lo.Value, typ)
+			cmp := order.CompareValues(i, field, lo.Value, typ)
 			if cmp < 0 || (cmp == 0 && !lo.Inclusive) {
 				return false
 			}
@@ -143,7 +143,7 @@ func (r Range) matches(t val.Tuple) bool {
 
 		hi := r.Fields[i].Hi
 		if hi.Binding {
-			cmp := order.CompareValues(field, hi.Value, typ)
+			cmp := order.CompareValues(i, field, hi.Value, typ)
 			if cmp > 0 || (cmp == 0 && !hi.Inclusive) {
 				return false
 			}
@@ -202,7 +202,7 @@ func closedRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 		rng.Fields[i] = RangeField{
 			Lo:    Bound{Binding: true, Inclusive: true, Value: lo},
 			Hi:    Bound{Binding: true, Inclusive: true, Value: hi},
-			Exact: order.CompareValues(lo, hi, desc.Types[i]) == 0,
+			Exact: order.CompareValues(i, lo, hi, desc.Types[i]) == 0,
 		}
 	}
 	return

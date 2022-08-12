@@ -21,16 +21,26 @@ type TupleComparator interface {
 	// Compare compares pairs of Tuples.
 	Compare(left, right Tuple, desc TupleDesc) int
 
-	// CompareValues compares pairs of values.
-	CompareValues(left, right []byte, typ Type) int
+	// CompareValues compares pairs of values. The index should match the index used to retrieve the type.
+	CompareValues(index int, left, right []byte, typ Type) int
+
+	// Prefix returns a TupleComparator for the first n types.
+	Prefix(n int) TupleComparator
+
+	// Suffix returns a TupleComparator for the last n types.
+	Suffix(n int) TupleComparator
+
+	// Validated returns a new TupleComparator that is valid against the given slice of types. Panics f a valid
+	// TupleComparator cannot be returned.
+	Validated(types []Type) TupleComparator
 }
 
-type defaultCompare struct{}
+type DefaultTupleComparator struct{}
 
-var _ TupleComparator = defaultCompare{}
+var _ TupleComparator = DefaultTupleComparator{}
 
 // Compare implements TupleComparator
-func (d defaultCompare) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
+func (d DefaultTupleComparator) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
 	for i := range desc.fast {
 		start, stop := desc.fast[i][0], desc.fast[i][1]
 		cmp = compare(desc.Types[i], left[start:stop], right[start:stop])
@@ -51,8 +61,23 @@ func (d defaultCompare) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
 }
 
 // CompareValues implements TupleComparator
-func (d defaultCompare) CompareValues(left, right []byte, typ Type) (cmp int) {
+func (d DefaultTupleComparator) CompareValues(_ int, left, right []byte, typ Type) (cmp int) {
 	return compare(typ, left, right)
+}
+
+// Prefix implements TupleComparator
+func (d DefaultTupleComparator) Prefix(n int) TupleComparator {
+	return d
+}
+
+// Suffix implements TupleComparator
+func (d DefaultTupleComparator) Suffix(n int) TupleComparator {
+	return d
+}
+
+// Validated implements TupleComparator
+func (d DefaultTupleComparator) Validated(types []Type) TupleComparator {
+	return d
 }
 
 func compare(typ Type, left, right []byte) int {
