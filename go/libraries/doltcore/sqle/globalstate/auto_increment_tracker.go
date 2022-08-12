@@ -17,6 +17,7 @@ package globalstate
 import (
 	"context"
 	"math"
+	"strings"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -25,27 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
-// CoerceAutoIncrementValue converts |val| into an AUTO_INCREMENT sequence value
-func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
-	switch typ := val.(type) {
-	case float32:
-		val = math.Round(float64(typ))
-	case float64:
-		val = math.Round(typ)
-	}
-
-	var err error
-	val, err = sql.Uint64.Convert(val)
-	if err != nil {
-		return 0, err
-	}
-	if val == nil || val == uint64(0) {
-		return 0, nil
-	}
-	return val.(uint64), nil
-}
-
-// NewAutoIncrementTracker returns a new autoincrement tracker for the working set given
+// NewAutoIncrementTracker returns a new autoincrement tracker for the working sets given
 func NewAutoIncrementTracker(ctx context.Context, wses ...*doltdb.WorkingSet) (AutoIncrementTracker, error) {
 	ait := AutoIncrementTracker{
 		sequences: make(map[string]uint64),
@@ -54,19 +35,21 @@ func NewAutoIncrementTracker(ctx context.Context, wses ...*doltdb.WorkingSet) (A
 
 	// collect auto increment values from all working sets given
 	for _, ws := range wses {
-		err := ws.WorkingRoot().IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (bool, error) {
+		err := ws.WorkingRoot().IterTables(ctx, func(tableName string, table *doltdb.Table, sch schema.Schema) (bool, error) {
 			ok := schema.HasAutoIncrement(sch)
 			if !ok {
 				return false, nil
 			}
+
+			tableName = strings.ToLower(tableName)
 
 			seq, err := table.GetAutoIncrementValue(ctx)
 			if err != nil {
 				return true, err
 			}
 
-			if seq > ait.sequences[name] {
-				ait.sequences[name] = seq
+			if seq > ait.sequences[tableName] {
+				ait.sequences[tableName] = seq
 			}
 
 			return false, nil
@@ -88,12 +71,14 @@ type AutoIncrementTracker struct {
 func (a AutoIncrementTracker) Current(tableName string) uint64 {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.sequences[tableName]
+	return a.sequences[strings.ToLower(tableName)]
 }
 
 func (a AutoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	tbl = strings.ToLower(tbl)
 
 	given, err := CoerceAutoIncrementValue(insertVal)
 	if err != nil {
@@ -118,20 +103,74 @@ func (a AutoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, e
 	return given, nil
 }
 
+
+// CoerceAutoIncrementValue converts |val| into an AUTO_INCREMENT sequence value
+func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
+	switch typ := val.(type) {
+	case float32:
+		val = math.Round(float64(typ))
+	case float64:
+		val = math.Round(typ)
+	}
+
+	var err error
+	val, err = sql.Uint64.Convert(val)
+	if err != nil {
+		return 0, err
+	}
+	if val == nil || val == uint64(0) {
+		return 0, nil
+	}
+	return val.(uint64), nil
+}
+
+// TODO: this needs to change
 func (a AutoIncrementTracker) Set(tableName string, val uint64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.sequences[tableName] = val
+	a.sequences[strings.ToLower(tableName)] = val
 }
 
 func (a AutoIncrementTracker) AddNewTable(tableName string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.sequences[tableName] = uint64(1)
+	a.sequences[strings.ToLower(tableName)] = uint64(1)
 }
 
-func (a AutoIncrementTracker) DropTable(tableName string) {
+func (a AutoIncrementTracker) DropTable(ctx context.Context, tableName string, wses ...*doltdb.WorkingSet) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	tableName = strings.ToLower(tableName)
 	delete(a.sequences, tableName)
+
+	// Get the new highest value from all tables in the working sets given
+	for _, ws := range wses {
+		table, _, exists, err := ws.WorkingRoot().GetTableInsensitive(ctx, tableName)
+		if err != nil {
+			return err
+		}
+
+		if !exists {
+			continue
+		}
+
+		sch, err := table.GetSchema(ctx)
+		if err != nil {
+			return err
+		}
+
+		if schema.HasAutoIncrement(sch) {
+			seq, err := table.GetAutoIncrementValue(ctx)
+			if err != nil {
+				return err
+			}
+
+			if seq > a.sequences[tableName] {
+				a.sequences[tableName] = seq
+			}
+		}
+	}
+
+	return nil
 }

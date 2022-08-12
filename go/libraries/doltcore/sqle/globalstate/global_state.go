@@ -37,15 +37,15 @@ func NewGlobalStateStoreForDb(ctx context.Context, db *doltdb.DoltDB) (GlobalSta
 	var wses []*doltdb.WorkingSet
 	for _, b := range branches {
 		wsRef, err := ref.WorkingSetRefForHead(b)
-		if err == doltdb.ErrWorkingSetNotFound {
-			// skip, continue working on other branches
-			continue
-		} else if err != nil {
+		if err != nil {
 			return GlobalState{}, err
 		}
 
 		ws, err := db.ResolveWorkingSet(ctx, wsRef)
-		if err != nil {
+		if err == doltdb.ErrWorkingSetNotFound {
+			// skip, continue working on other branches
+			continue
+		} else if err != nil {
 			return GlobalState{}, err
 		}
 
