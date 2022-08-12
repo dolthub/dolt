@@ -65,7 +65,11 @@ type SqlEngineTableWriter struct {
 }
 
 func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTableSchema, rowOperationSchema schema.Schema, options *MoverOptions, statsCB noms.StatsCB) (*SqlEngineTableWriter, error) {
-	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv)
+	if dEnv.IsLocked() {
+		return nil, env.ErrActiveServerLock.New(dEnv.LockFile())
+	}
+
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	if err != nil {
 		return nil, err
 	}
@@ -97,6 +101,11 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 		return nil, err
 	}
 	defer se.Close()
+
+	if se.GetUnderlyingEngine().IsReadOnly {
+		// SqlEngineTableWriter does not respect read only mode
+		return nil, analyzer.ErrReadOnlyDatabase.New(dbName)
+	}
 
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
@@ -262,7 +271,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 			switch n := err.(type) {
 			case sql.WrappedInsertError:
 				offendingRow = n.OffendingRow
-			case sql.ErrInsertIgnore:
+			case sql.IgnorableError:
 				offendingRow = n.OffendingRow
 			}
 

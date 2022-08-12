@@ -14,6 +14,8 @@
 
 package val
 
+import "bytes"
+
 // TupleComparator compares Tuples.
 type TupleComparator interface {
 	// Compare compares pairs of Tuples.
@@ -54,18 +56,14 @@ func (d defaultCompare) CompareValues(left, right []byte, typ Type) (cmp int) {
 }
 
 func compare(typ Type, left, right []byte) int {
-	// order NULLs last
-	if left == nil {
-		if right == nil {
+	// order NULLs first
+	if left == nil || right == nil {
+		if bytes.Equal(left, right) {
 			return 0
+		} else if left == nil {
+			return -1
 		} else {
 			return 1
-		}
-	} else if right == nil {
-		if left == nil {
-			return 0
-		} else {
-			return -1
 		}
 	}
 
@@ -77,7 +75,7 @@ func compare(typ Type, left, right []byte) int {
 	case Int16Enc:
 		return compareInt16(readInt16(left), readInt16(right))
 	case Uint16Enc:
-		return compareUint16(readUint16(left), readUint16(right))
+		return compareUint16(ReadUint16(left), ReadUint16(right))
 	case Int32Enc:
 		return compareInt32(readInt32(left), readInt32(right))
 	case Uint32Enc:

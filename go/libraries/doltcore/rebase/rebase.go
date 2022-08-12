@@ -19,7 +19,6 @@ import (
 	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -32,8 +31,7 @@ type NeedsRebaseFn func(ctx context.Context, cm *doltdb.Commit) (bool, error)
 // EntireHistory returns a |NeedsRebaseFn| that rebases the entire commit history.
 func EntireHistory() NeedsRebaseFn {
 	return func(_ context.Context, cm *doltdb.Commit) (bool, error) {
-		n, err := cm.NumParents()
-		return n != 0, err
+		return cm.NumParents() != 0, nil
 	}
 }
 
@@ -55,11 +53,7 @@ func StopAtCommit(stopCommit *doltdb.Commit) NeedsRebaseFn {
 			return false, nil
 		}
 
-		n, err := cm.NumParents()
-		if err != nil {
-			return false, err
-		}
-		if n == 0 {
+		if cm.NumParents() == 0 {
 			return false, fmt.Errorf("commit %s is missing from the commit history of at least one rebase head", sh)
 		}
 
@@ -129,16 +123,12 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
 	rsw := dbData.Rsw
-	drw := dbData.Drw
 
 	cwbRef := rsr.CWBHeadRef()
-	dd, err := drw.GetDocsOnDisk()
-	if err != nil {
-		return err
-	}
 
 	heads := make([]*doltdb.Commit, len(refs))
 	for i, dRef := range refs {
+		var err error
 		heads[i], err = ddb.ResolveCommitRef(ctx, dRef)
 		if err != nil {
 			return err
@@ -174,11 +164,6 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 	}
 
 	r, err := cm.GetRootValue(ctx)
-	if err != nil {
-		return err
-	}
-
-	_, err = doltdocs.UpdateRootWithDocs(ctx, r, dd)
 	if err != nil {
 		return err
 	}

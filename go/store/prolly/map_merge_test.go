@@ -15,6 +15,7 @@
 package prolly
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"testing"
@@ -76,9 +77,8 @@ func testEqualMapMerge(t *testing.T, sz int) {
 
 func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeStore) {
 	baseTuples, leftEdits, rightEdits := makeTuplesAndMutations(kd, vd, sz, ns)
-	om := prollyMapFromTuples(t, kd, vd, baseTuples)
+	base := mustProllyMapFromTuples(t, kd, vd, baseTuples)
 
-	base := om.(Map)
 	left := applyMutationSet(t, base, leftEdits)
 	right := applyMutationSet(t, base, rightEdits)
 
@@ -143,8 +143,7 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.No
 func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeStore) {
 	ctx := context.Background()
 	tuples := tree.RandomTuplePairs(sz, kd, vd, ns)
-	om := prollyMapFromTuples(t, kd, vd, tuples)
-	base := om.(Map)
+	base := mustProllyMapFromTuples(t, kd, vd, tuples)
 
 	mutSz := sz / 10
 	testRand.Shuffle(len(tuples), func(i, j int) {
@@ -173,6 +172,11 @@ func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeSt
 
 	idx := 0
 	final, err := MergeMaps(ctx, leftMap, rightMap, base, func(l, r tree.Diff) (merged tree.Diff, ok bool) {
+		if l.Type == r.Type && bytes.Equal(l.To, r.To) {
+			// convergent edit
+			return l, true
+		}
+
 		assert.Equal(t, l.Key, r.Key)
 		assert.Equal(t, l.From, r.From)
 
@@ -270,5 +274,9 @@ func applyMutationSet(t *testing.T, base Map, edits mutationSet) (m Map) {
 }
 
 func panicOnConflict(left, right tree.Diff) (tree.Diff, bool) {
+	if left.Type == right.Type && bytes.Equal(left.To, right.To) {
+		// convergent edit
+		return left, true
+	}
 	panic("cannot merge cells")
 }

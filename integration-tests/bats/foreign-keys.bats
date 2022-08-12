@@ -1259,8 +1259,6 @@ SQL
 }
 
 @test "foreign-keys: Resolve catches violations" {
-    skip_nbf_dolt_1 "resolve not implemented"
-
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);
 INSERT INTO parent VALUES (0,0,0);
@@ -1969,4 +1967,34 @@ SQL
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic:" ]] || false
     [[ "$output" =~ "cannot add or update a child row - Foreign key violation on fk: \`fk_b_a_id_refs_a\`, table: \`b\`, referenced table: \`a\`, key: \`[31337]\`" ]] || false
+}
+
+@test "foreign-keys: partial updates work against foreign key constraints" {
+    skip "Partial updates are unsupported"
+    dolt sql <<SQL
+DROP TABLE IF EXISTS parent;
+DROP TABLE IF EXISTS child;
+CREATE TABLE parent(
+  a int PRIMARY KEY
+);
+CREATE TABLE child (
+  a int NOT NULL,
+  b int DEFAULT NULL,
+  c int DEFAULT NULL,
+  PRIMARY KEY (a),
+  KEY child_b (b),
+  KEY child_c (c),
+  CONSTRAINT child_ibfk_1 FOREIGN KEY (b) REFERENCES parent (a),
+  CONSTRAINT child_ibfk_2 FOREIGN KEY (c) REFERENCES parent (a)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+INSERT INTO parent VALUES (1);
+
+SET FOREIGN_KEY_CHECKS=0;
+INSERT INTO child values (100, 1, 1), (101, 2, 2);
+SET FOREIGN_KEY_CHECKS=1;
+SQL
+
+    run dolt sql -q "update child set b = 1 where a = 101;"
+    [ "$status" -eq 0 ]
 }

@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/types/edits"
 )
@@ -46,7 +47,7 @@ const (
 )
 
 const (
-	creationBranch = "create"
+	CreationBranch = "create"
 
 	defaultChunksPerTF = 256 * 1024
 )
@@ -66,14 +67,22 @@ var ErrCannotDeleteLastBranch = errors.New("cannot delete the last branch")
 type DoltDB struct {
 	db  hooksDatabase
 	vrw types.ValueReadWriter
+	ns  tree.NodeStore
 }
 
 // DoltDBFromCS creates a DoltDB from a noms chunks.ChunkStore
 func DoltDBFromCS(cs chunks.ChunkStore) *DoltDB {
 	vrw := types.NewValueStore(cs)
-	db := datas.NewTypesDatabase(vrw)
+	ns := tree.NewNodeStore(cs)
+	db := datas.NewTypesDatabase(vrw, ns)
 
-	return &DoltDB{hooksDatabase{Database: db}, vrw}
+	return &DoltDB{hooksDatabase{Database: db}, vrw, ns}
+}
+
+// HackDatasDatabaseFromDoltDB unwraps a DoltDB to a datas.Database.
+// Deprecated: only for use in dolt migrate.
+func HackDatasDatabaseFromDoltDB(ddb *DoltDB) datas.Database {
+	return ddb.db
 }
 
 // LoadDoltDB will acquire a reference to the underlying noms db.  If the Location is InMemDoltDB then a reference
@@ -101,13 +110,13 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 		urlStr = fmt.Sprintf("file://%s", filepath.ToSlash(absPath))
 	}
 
-	db, vrw, err := dbfactory.CreateDB(ctx, nbf, urlStr, params)
+	db, vrw, ns, err := dbfactory.CreateDB(ctx, nbf, urlStr, params)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &DoltDB{hooksDatabase{Database: db}, vrw}, nil
+	return &DoltDB{hooksDatabase{Database: db}, vrw, ns}, nil
 }
 
 // NomsRoot returns the hash of the noms dataset map
@@ -152,7 +161,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		panic("Passed bad name or email.  Both should be valid")
 	}
 
-	ds, err := ddb.db.GetDataset(ctx, creationBranch)
+	ds, err := ddb.db.GetDataset(ctx, CreationBranch)
 
 	if err != nil {
 		return err
@@ -162,7 +171,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		return errors.New("database already exists")
 	}
 
-	rv, err := EmptyRootValue(ctx, ddb.vrw)
+	rv, err := EmptyRootValue(ctx, ddb.vrw, ddb.ns)
 
 	if err != nil {
 		return err
@@ -178,7 +187,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 
 	commitOpts := datas.CommitOptions{Meta: cm}
 
-	cb := ref.NewInternalRef(creationBranch)
+	cb := ref.NewInternalRef(CreationBranch)
 	ds, err = ddb.db.GetDataset(ctx, cb.String())
 
 	if err != nil {
@@ -318,7 +327,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 		return nil, err
 	}
 
-	commit, err := NewCommit(ctx, ddb.vrw, commitVal)
+	commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +341,7 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Comm
 	if err != nil {
 		return nil, err
 	}
-	return NewCommit(ctx, ddb.vrw, commitVal)
+	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
 }
 
 // ResolveTag takes a TagRef and returns the corresponding Tag object.
@@ -350,7 +359,7 @@ func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, err
 		return nil, fmt.Errorf("tagRef head is not a tag")
 	}
 
-	return NewTag(ctx, tagRef.GetPath(), ds, ddb.vrw)
+	return NewTag(ctx, tagRef.GetPath(), ds, ddb.vrw, ddb.ns)
 }
 
 // ResolveWorkingSet takes a WorkingSetRef and returns the corresponding WorkingSet object.
@@ -369,7 +378,7 @@ func (ddb *DoltDB) ResolveWorkingSet(ctx context.Context, workingSetRef ref.Work
 		return nil, fmt.Errorf("workingSetRef head is not a workingSetRef")
 	}
 
-	return NewWorkingSet(ctx, workingSetRef.GetPath(), ddb.vrw, ds)
+	return NewWorkingSet(ctx, workingSetRef.GetPath(), ddb.vrw, ddb.ns, ds)
 }
 
 // TODO: convenience method to resolve the head commit of a branch.
@@ -407,7 +416,16 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, 
 	if err != nil {
 		return nil, err
 	}
-	return decodeRootNomsValue(ddb.vrw, val)
+	return decodeRootNomsValue(ddb.vrw, ddb.ns, val)
+}
+
+// ReadCommit reads the Commit whose hash is |h|, if one exists.
+func (ddb *DoltDB) ReadCommit(ctx context.Context, h hash.Hash) (*Commit, error) {
+	c, err := datas.LoadCommitAddr(ctx, ddb.vrw, h)
+	if err != nil {
+		return nil, err
+	}
+	return NewCommit(ctx, ddb.vrw, ddb.ns, c)
 }
 
 // Commit will update a branch's head value to be that of a previously committed root value hash
@@ -522,10 +540,13 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 			parents = append(parents, addr)
 		}
 	}
-
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
-	ds, err = ddb.db.GetDataset(ctx, dref.String())
 
+	return ddb.CommitValue(ctx, dref, val, commitOpts)
+}
+
+func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.Value, commitOpts datas.CommitOptions) (*Commit, error) {
+	ds, err := ddb.db.GetDataset(ctx, dref.String())
 	if err != nil {
 		return nil, err
 	}
@@ -548,7 +569,7 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 		return nil, err
 	}
 
-	return NewCommit(ctx, ddb.vrw, dc)
+	return NewCommit(ctx, ddb.vrw, ddb.ns, dc)
 }
 
 // dangling commits are unreferenced by any branch or ref. They are created in the course of programmatic updates
@@ -570,9 +591,16 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 		}
 		parents = append(parents, addr)
 	}
-
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
-	dcommit, err := datas.NewCommitForValue(ctx, datas.ChunkStoreFromDatabase(ddb.db), ddb.vrw, val, commitOpts)
+
+	return ddb.CommitDangling(ctx, val, commitOpts)
+}
+
+// CommitDangling creates a new Commit for |val| that is not referenced by any DoltRef.
+func (ddb *DoltDB) CommitDangling(ctx context.Context, val types.Value, opts datas.CommitOptions) (*Commit, error) {
+	cs := datas.ChunkStoreFromDatabase(ddb.db)
+
+	dcommit, err := datas.NewCommitForValue(ctx, cs, ddb.vrw, ddb.ns, val, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -582,12 +610,16 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 		return nil, err
 	}
 
-	return NewCommit(ctx, ddb.vrw, dcommit)
+	return NewCommit(ctx, ddb.vrw, ddb.ns, dcommit)
 }
 
 // ValueReadWriter returns the underlying noms database as a types.ValueReadWriter.
 func (ddb *DoltDB) ValueReadWriter() types.ValueReadWriter {
 	return ddb.vrw
+}
+
+func (ddb *DoltDB) NodeStore() tree.NodeStore {
+	return ddb.ns
 }
 
 func (ddb *DoltDB) Format() *types.NomsBinFormat {
@@ -626,10 +658,7 @@ func (ddb *DoltDB) ResolveParent(ctx context.Context, commit *Commit, parentIdx 
 }
 
 func (ddb *DoltDB) ResolveAllParents(ctx context.Context, commit *Commit) ([]*Commit, error) {
-	num, err := commit.NumParents()
-	if err != nil {
-		return nil, err
-	}
+	num := commit.NumParents()
 	resolved := make([]*Commit, num)
 	for i := 0; i < num; i++ {
 		parent, err := ddb.ResolveParent(ctx, commit, i)
@@ -697,12 +726,28 @@ func (ddb *DoltDB) GetTags(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, tagsRefFilter)
 }
 
+// HasTag returns whether the DB has a tag with the name given
+func (ddb *DoltDB) HasTag(ctx context.Context, tagName string) (bool, error) {
+	tags, err := ddb.GetRefsOfType(ctx, tagsRefFilter)
+	if err != nil {
+		return false, err
+	}
+
+	for _, t := range tags {
+		if t.GetPath() == tagName {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 type TagWithHash struct {
-	Ref  ref.DoltRef
+	Tag  *Tag
 	Hash hash.Hash
 }
 
-// GetTagsWithHashes returns a list of objects containing TagRefs with their associated Commit's hash
+// GetTagsWithHashes returns a list of objects containing Tags with their associated Commit's hashes
 func (ddb *DoltDB) GetTagsWithHashes(ctx context.Context) ([]TagWithHash, error) {
 	var refs []TagWithHash
 	err := ddb.VisitRefsOfType(ctx, tagsRefFilter, func(r ref.DoltRef, _ hash.Hash) error {
@@ -715,7 +760,7 @@ func (ddb *DoltDB) GetTagsWithHashes(ctx context.Context) ([]TagWithHash, error)
 			if err != nil {
 				return err
 			}
-			refs = append(refs, TagWithHash{r, h})
+			refs = append(refs, TagWithHash{tag, h})
 		}
 		return nil
 	})
@@ -1011,7 +1056,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return nil, err
 	}
 
-	return NewCommit(ctx, ddb.vrw, dc)
+	return NewCommit(ctx, ddb.vrw, ddb.ns, dc)
 }
 
 // DeleteWorkingSet deletes the working set given

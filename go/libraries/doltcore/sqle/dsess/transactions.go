@@ -37,7 +37,7 @@ const (
 	maxTxCommitRetries = 5
 )
 
-var ErrRetryTransaction = errors.New("this transaction conflicts with a committed transaction from another client, please retry")
+var ErrRetryTransaction = errors.New("this transaction conflicts with a committed transaction from another client")
 var ErrUnresolvedConflictsCommit = errors.New("Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1")
 var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transaction resulted in a working set with constraint violations, transaction rolled back. " +
 	"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
@@ -116,13 +116,13 @@ func (tx DoltTransaction) IsReadOnly() bool {
 var txLock sync.Mutex
 
 // Commit attempts to merge the working set given into the current working set.
-// Uses the same algorithm as merge.Merger:
+// Uses the same algorithm as merge.RootMerger:
 // |current working set working root| is the root
 // |workingSet.workingRoot| is the mergeRoot
 // |tx.startRoot| is ancRoot
 // if workingSet.workingRoot == ancRoot, attempt a fast-forward merge
 // TODO: Non-working roots aren't merged into the working set and just stomp any changes made there. We need merge
-//  strategies for staged as well as merge state.
+// strategies for staged as well as merge state.
 func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
 	ws, _, err := tx.doCommit(ctx, workingSet, nil, txCommit)
 	return ws, err
@@ -266,48 +266,18 @@ func (tx *DoltTransaction) mergeRoots(
 	existingWorkingRoot *doltdb.WorkingSet,
 	workingSet *doltdb.WorkingSet,
 ) (*doltdb.WorkingSet, error) {
-
-	theirH, err := workingSet.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	baseH, err := tx.startState.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	mergedRoot, mergeStats, err := merge.MergeRoots(
+	mo := merge.MergeOpts{IsCherryPick: false}
+	mergedRoot, _, err := merge.MergeRoots(
 		ctx,
-		theirH,
-		baseH,
 		existingWorkingRoot.WorkingRoot(),
 		workingSet.WorkingRoot(),
 		tx.startState.WorkingRoot(),
-		tx.mergeEditOpts,
-		false,
-	)
+		workingSet,
+		tx.startState,
+		tx.mergeEditOpts, mo)
 	if err != nil {
 		return nil, err
 	}
-
-	// If the conflict stomp env variable is set, resolve conflicts automatically (using the "accept ours" strategy)
-	if transactionMergeStomp {
-		var tablesWithConflicts []string
-		for table, stat := range mergeStats {
-			if stat.Conflicts > 0 {
-				tablesWithConflicts = append(tablesWithConflicts, table)
-			}
-		}
-
-		if len(tablesWithConflicts) > 0 {
-			mergedRoot, err = tx.stompConflicts(ctx, mergedRoot, tablesWithConflicts)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
 	return workingSet.WithWorkingRoot(mergedRoot), nil
 }
 
@@ -393,7 +363,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 				return rollbackErr
 			}
 
-			return ErrRetryTransaction
+			return sql.ErrLockDeadlock.New(ErrRetryTransaction.Error())
 		}
 
 		// If there were conflicts before merge with the persisted working set, whether we allow it to be committed is a
@@ -427,25 +397,6 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 	}
 
 	return nil
-}
-
-// stompConflicts resolves the conflicted tables in the root given by blindly accepting theirs, and returns the
-// updated root value
-func (tx *DoltTransaction) stompConflicts(ctx *sql.Context, mergedRoot *doltdb.RootValue, tablesWithConflicts []string) (*doltdb.RootValue, error) {
-	start := time.Now()
-
-	var err error
-	root := mergedRoot
-	for _, tblName := range tablesWithConflicts {
-		root, err = merge.ResolveTable(ctx, mergedRoot.VRW(), tblName, root, merge.Theirs, tx.mergeEditOpts)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	logrus.Tracef("resolving conflicts took %s", time.Since(start))
-
-	return root, nil
 }
 
 // CreateSavepoint creates a new savepoint with the name and root value given. If a savepoint with the name given

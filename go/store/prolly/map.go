@@ -59,18 +59,34 @@ func NewMap(node tree.Node, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc) M
 
 // NewMapFromTuples creates a prolly tree Map from slice of sorted Tuples.
 func NewMapFromTuples(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
-	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	if len(tups)%2 != 0 {
+		return Map{}, fmt.Errorf("tuples must be key-value pairs")
+	}
+
+	return NewMapFromTupleIter(ctx, ns, keyDesc, valDesc, &tupleIter{tuples: tups})
+}
+
+type TupleIter interface {
+	Next(ctx context.Context) (k, v val.Tuple)
+}
+
+func NewMapFromTupleIter(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc, iter TupleIter) (Map, error) {
+	serializer := message.NewProllyMapSerializer(valDesc, ns.Pool())
 	ch, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	if err != nil {
 		return Map{}, err
 	}
 
-	if len(tups)%2 != 0 {
-		return Map{}, fmt.Errorf("tuples must be key-value pairs")
-	}
-
-	for i := 0; i < len(tups); i += 2 {
-		if err = ch.AddPair(ctx, tree.Item(tups[i]), tree.Item(tups[i+1])); err != nil {
+	var k, v val.Tuple
+	for {
+		k, v = iter.Next(ctx)
+		if k == nil {
+			break
+		}
+		if err != nil {
+			return Map{}, err
+		}
+		if err = ch.AddPair(ctx, tree.Item(k), tree.Item(v)); err != nil {
 			return Map{}, err
 		}
 	}
@@ -83,36 +99,33 @@ func NewMapFromTuples(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc v
 	return NewMap(root, ns, keyDesc, valDesc), nil
 }
 
+func MutateMapWithTupleIter(ctx context.Context, m Map, iter TupleIter) (Map, error) {
+	t := m.tuples
+	i := mutationIter{iter: iter}
+	s := message.NewProllyMapSerializer(m.valDesc, t.ns.Pool())
+
+	root, err := tree.ApplyMutations(ctx, t.ns, t.root, s, i, t.compareItems)
+	if err != nil {
+		return Map{}, err
+	}
+
+	return Map{
+		tuples: orderedTree[val.Tuple, val.Tuple, val.TupleDesc]{
+			root:  root,
+			ns:    t.ns,
+			order: t.order,
+		},
+		keyDesc: m.keyDesc,
+		valDesc: m.valDesc,
+	}, nil
+}
+
 func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
 	return diffOrderedTrees(ctx, from.tuples, to.tuples, cb)
 }
 
-func DiffMapSummary(ctx context.Context, from, to Map) (DiffSummary, error) {
-	s := DiffSummary{
-		OldSize: uint64(from.Count()),
-		NewSize: uint64(to.Count()),
-	}
-
-	err := DiffMaps(ctx, from, to, func(ctx context.Context, diff tree.Diff) error {
-		switch diff.Type {
-		case tree.AddedDiff:
-			s.Adds++
-		case tree.RemovedDiff:
-			s.Removes++
-		case tree.ModifiedDiff:
-			s.Changes++
-			s.CellChanges += val.CellWiseTupleDiff(val.Tuple(diff.From), val.Tuple(diff.To))
-		}
-		return nil
-	})
-	if err != nil && err != io.EOF {
-		return DiffSummary{}, err
-	}
-	return s, nil
-}
-
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
-	serializer := message.ProllyMapSerializer{Pool: left.tuples.ns.Pool()}
+	serializer := message.NewProllyMapSerializer(left.valDesc, base.NodeStore().Pool())
 	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer, base.valDesc)
 	if err != nil {
 		return Map{}, err
@@ -201,9 +214,13 @@ func (m Map) IterOrdinalRange(ctx context.Context, start, stop uint64) (MapIter,
 func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 	if rng.isPointLookup(m.keyDesc) {
 		return m.pointLookupFromRange(ctx, rng)
-	} else {
-		return m.iterFromRange(ctx, rng)
 	}
+
+	iter, err := treeIterFromRange(ctx, m.tuples.root, m.tuples.ns, rng)
+	if err != nil {
+		return nil, err
+	}
+	return filteredIter{iter: iter, rng: rng}, nil
 }
 
 func (m Map) Node() tree.Node {
@@ -216,8 +233,7 @@ func (m Map) Pool() pool.BuffPool {
 }
 
 func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup, error) {
-	search := pointLookupSearchFn(rng)
-	cur, err := tree.NewCursorFromSearchFn(ctx, m.tuples.ns, m.tuples.root, search)
+	cur, err := tree.NewCursorFromSearchFn(ctx, m.tuples.ns, m.tuples.root, rangeStartSearchFn(rng))
 	if err != nil {
 		return nil, err
 	}
@@ -228,16 +244,12 @@ func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup,
 
 	key := val.Tuple(cur.CurrentKey())
 	value := val.Tuple(cur.CurrentValue())
-	if compareBound(rng.Start, key, m.keyDesc) != 0 {
-		// map does not contain |rng|
+
+	if !rng.matches(key) {
 		return &pointLookup{}, nil
 	}
 
 	return &pointLookup{k: key, v: value}, nil
-}
-
-func (m Map) iterFromRange(ctx context.Context, rng Range) (*orderedTreeIter[val.Tuple, val.Tuple], error) {
-	return treeIterFromRange(ctx, m.tuples.root, m.tuples.ns, rng)
 }
 
 func treeIterFromRange(
@@ -252,22 +264,12 @@ func treeIterFromRange(
 		stop  *tree.Cursor
 	)
 
-	startSearch := rangeStartSearchFn(rng)
-	if rng.Start == nil {
-		start, err = tree.NewCursorAtStart(ctx, ns, root)
-	} else {
-		start, err = tree.NewCursorFromSearchFn(ctx, ns, root, startSearch)
-	}
+	start, err = tree.NewCursorFromSearchFn(ctx, ns, root, rangeStartSearchFn(rng))
 	if err != nil {
 		return nil, err
 	}
 
-	stopSearch := rangeStopSearchFn(rng)
-	if rng.Stop == nil {
-		stop, err = tree.NewCursorPastEnd(ctx, ns, root)
-	} else {
-		stop, err = tree.NewCursorFromSearchFn(ctx, ns, root, stopSearch)
-	}
+	stop, err = tree.NewCursorFromSearchFn(ctx, ns, root, rangeStopSearchFn(rng))
 	if err != nil {
 		return nil, err
 	}
@@ -297,12 +299,6 @@ func (p *pointLookup) Next(context.Context) (key, value val.Tuple, err error) {
 		p.k, p.v = nil, nil
 	}
 	return
-}
-
-func newEmptyMapNode(pool pool.BuffPool) tree.Node {
-	serializer := message.ProllyMapSerializer{Pool: pool}
-	msg := serializer.Serialize(nil, nil, nil, 0)
-	return tree.NodeFromBytes(msg)
 }
 
 // DebugFormat formats a Map.

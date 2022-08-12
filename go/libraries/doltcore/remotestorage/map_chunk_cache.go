@@ -26,6 +26,7 @@ type mapChunkCache struct {
 	mu          *sync.Mutex
 	hashToChunk map[hash.Hash]nbs.CompressedChunk
 	toFlush     map[hash.Hash]nbs.CompressedChunk
+	cm          CapacityMonitor
 }
 
 func newMapChunkCache() *mapChunkCache {
@@ -33,6 +34,17 @@ func newMapChunkCache() *mapChunkCache {
 		&sync.Mutex{},
 		make(map[hash.Hash]nbs.CompressedChunk),
 		make(map[hash.Hash]nbs.CompressedChunk),
+		NewUncappedCapacityMonitor(),
+	}
+}
+
+// used by DoltHub API
+func NewMapChunkCacheWithMaxCapacity(maxCapacity int64) *mapChunkCache {
+	return &mapChunkCache{
+		&sync.Mutex{},
+		make(map[hash.Hash]nbs.CompressedChunk),
+		make(map[hash.Hash]nbs.CompressedChunk),
+		NewFixedCapacityMonitor(maxCapacity),
 	}
 }
 
@@ -49,6 +61,10 @@ func (mcc *mapChunkCache) Put(chnks []nbs.CompressedChunk) bool {
 			if !curr.IsEmpty() {
 				continue
 			}
+		}
+
+		if mcc.cm.CapacityExceeded(len(c.FullCompressedChunk)) {
+			return true
 		}
 
 		mcc.hashToChunk[h] = c
@@ -102,6 +118,9 @@ func (mcc *mapChunkCache) PutChunk(ch nbs.CompressedChunk) bool {
 
 	h := ch.Hash()
 	if existing, ok := mcc.hashToChunk[h]; !ok || existing.IsEmpty() {
+		if mcc.cm.CapacityExceeded(len(ch.FullCompressedChunk)) {
+			return true
+		}
 		mcc.hashToChunk[h] = ch
 		mcc.toFlush[h] = ch
 	}

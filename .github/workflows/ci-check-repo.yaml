@@ -11,12 +11,12 @@ concurrency:
 jobs:
   verify:
     name: Verify format and committers
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Setup Go 1.x
         uses: actions/setup-go@v2
         with:
-          go-version: ^1.18
+          go-version: ^1.19
       - uses: actions/checkout@v2
       - name: Check all
         working-directory: ./go
@@ -28,6 +28,7 @@ jobs:
           ./utils/repofmt/check_fmt.sh
           ./Godeps/verify.sh
           ./utils/repofmt/check_bats_fmt.sh
+          ./utils/repofmt/check_prepared_tests.sh
         env:
           BRANCH_NAME: ${{ github.head_ref }}
           CHANGE_TARGET: ${{ github.base_ref }}

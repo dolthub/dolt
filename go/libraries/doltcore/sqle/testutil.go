@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -104,7 +105,7 @@ func NewTestSQLCtx(ctx context.Context) *sql.Context {
 	return NewTestSQLCtxWithProvider(ctx, dsess.EmptyDatabaseProvider())
 }
 
-func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.RevisionDatabaseProvider) *sql.Context {
+func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider) *sql.Context {
 	s, err := dsess.NewDoltSession(
 		sql.NewEmptyContext(),
 		sql.NewBaseSession(),
@@ -124,11 +125,12 @@ func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.RevisionDatabasePr
 // NewTestEngine creates a new default engine, and a *sql.Context and initializes indexes and schema fragments.
 func NewTestEngine(t *testing.T, dEnv *env.DoltEnv, ctx context.Context, db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro := NewDoltDatabaseProvider(b, dEnv.FS, db)
+	pro, err := NewDoltDatabaseProviderWithDatabase(b, dEnv.FS, db, dEnv.FS)
+	require.NoError(t, err)
 	engine := sqle.NewDefault(pro)
 	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro)
 
-	err := dsess.DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(t, db, dEnv))
+	err = dsess.DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(t, db, dEnv))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -140,6 +142,15 @@ func NewTestEngine(t *testing.T, dEnv *env.DoltEnv, ctx context.Context, db Data
 	}
 
 	return engine, sqlCtx, nil
+}
+
+// SkipByDefaultInCI skips the currently executing test as long as the CI env var is set
+// (GitHub Actions sets this automatically) and the DOLT_TEST_RUN_NON_RACE_TESTS env var
+// is not set. This is useful for filtering out tests that cause race detection to fail.
+func SkipByDefaultInCI(t *testing.T) {
+	if os.Getenv("CI") != "" && os.Getenv("DOLT_TEST_RUN_NON_RACE_TESTS") == "" {
+		t.Skip()
+	}
 }
 
 func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
@@ -168,7 +179,6 @@ func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *do
 		Ddb: ddb,
 		Rsw: dEnv.RepoStateWriter(),
 		Rsr: dEnv.RepoStateReader(),
-		Drw: dEnv.DocsReadWriter(),
 	}
 
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}

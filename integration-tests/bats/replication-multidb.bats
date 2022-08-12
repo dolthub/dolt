@@ -4,7 +4,6 @@ load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
     TMPDIRS=$(pwd)/tmpdirs
 
     init_helper $TMPDIRS
@@ -52,7 +51,7 @@ teardown() {
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR
 
-    if ! [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT_1__" ]; then
+    if ! [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT__" ]; then
       dolt config --list | awk '{ print $1 }' | grep sqlserver.global | xargs dolt config --global --unset
     fi
 }
@@ -62,18 +61,18 @@ teardown() {
     cd dbs1/repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote unknown
     cd ../..
-    run dolt sql --multi-db-dir=dbs1 -b -q "select @@GLOBAL.dolt_replicate_to_remote"
+    run dolt sql --data-dir=dbs1 -b -q "select @@GLOBAL.dolt_replicate_to_remote"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "remote1" ]] || false
 }
 
 @test "replication-multidb: push on sqlengine commit" {
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote remote1
-    dolt sql --multi-db-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
-    dolt sql --multi-db-dir=dbs1 -b -q "use repo1; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo1; select dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
-    run dolt sql --multi-db-dir=dbs2 -b -q "use repo1; show tables" -r csv
+    run dolt sql --data-dir=dbs2 -b -q "use repo1; show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     [[ "$output" =~ "t1" ]] || false
@@ -81,15 +80,15 @@ teardown() {
 
 @test "replication-multidb: pull on read" {
     push_helper $TMPDIRS
-    dolt sql --multi-db-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
-    dolt sql --multi-db-dir=dbs1 -b -q "use repo1; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo1; select dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
     push_helper $TMPDIRS
 
     dolt config --global --add sqlserver.global.dolt_read_replica_remote remote1
     dolt config --global --add sqlserver.global.dolt_replicate_heads main
-    run dolt sql --multi-db-dir=dbs2 -b -q "use repo1; show tables" -r csv
+    run dolt sql --data-dir=dbs2 -b -q "use repo1; show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     [[ "$output" =~ "t1" ]] || false
@@ -97,7 +96,7 @@ teardown() {
 
 @test "replication-multidb: missing database config" {
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote unknown
-    run dolt sql --multi-db-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
+    run dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
@@ -106,7 +105,7 @@ teardown() {
 @test "replication-multidb: missing database config quiet warning" {
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote unknown
     dolt config --global --add sqlserver.global.dolt_skip_replication_errors 1
-    dolt sql --multi-db-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
 }
 
 @test "replication-multidb: sql-server push on commit" {
@@ -119,7 +118,7 @@ teardown() {
     multi_query repo1 1 "select dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
-    run dolt sql --multi-db-dir=dbs2 -b -q "use repo1; show tables" -r csv
+    run dolt sql --data-dir=dbs2 -b -q "use repo1; show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     [[ "$output" =~ "t1" ]] || false
@@ -127,8 +126,8 @@ teardown() {
 
 @test "replication-multidb: sql-server pull on read" {
     push_helper $TMPDIRS
-    dolt sql --multi-db-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
-    dolt sql --multi-db-dir=dbs1 -b -q "use repo1; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo1; select dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
     push_helper $TMPDIRS

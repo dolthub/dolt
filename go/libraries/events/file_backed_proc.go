@@ -98,7 +98,7 @@ func newEventsDataDir(fs filesys.Filesys, homeDir string, doltDir string) *event
 	return &eventsDataDir{fs: fs, path: path}
 }
 
-//  MakeEventsDir creates a new events data dir in the main dolt dir
+// MakeEventsDir creates a new events data dir in the main dolt dir
 func (evd *eventsDataDir) MakeEventsDir() error {
 	if exists, _ := evd.fs.Exists(evd.path); !exists {
 		if err := evd.fs.MkDirs(evd.path); err != nil {

@@ -57,10 +57,18 @@ type DatabaseSessionState struct {
 
 	TblStats map[string]sql.TableStatistics
 
+	sessionCache *SessionCache
+
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a
 	// DatabaseSessionState with Err != nil will return that err.
 	Err error
+}
+
+func NewEmptyDatabaseSessionState() *DatabaseSessionState {
+	return &DatabaseSessionState{
+		sessionCache: newSessionCache(),
+	}
 }
 
 func (d DatabaseSessionState) GetRoots() doltdb.Roots {
@@ -76,6 +84,10 @@ func (d DatabaseSessionState) GetRoots() doltdb.Roots {
 		Working: d.WorkingSet.WorkingRoot(),
 		Staged:  d.WorkingSet.StagedRoot(),
 	}
+}
+
+func (d *DatabaseSessionState) SessionCache() *SessionCache {
+	return d.sessionCache
 }
 
 func (d DatabaseSessionState) EditOpts() editor.Options {

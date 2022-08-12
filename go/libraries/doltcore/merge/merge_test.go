@@ -16,6 +16,7 @@ package merge
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 	"testing"
 
@@ -33,7 +34,6 @@ import (
 	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/valutil"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
@@ -302,15 +302,18 @@ var testRows = []testRow{
 }
 
 func TestMergeCommits(t *testing.T) {
-	if !types.IsFormat_DOLT_1(types.Format_Default) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}
 
-	vrw, rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedConflicts := setupMergeTest(t)
-	merger := NewMerger(context.Background(), rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, vrw)
+	vrw, ns, rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedArtifacts := setupMergeTest(t)
+	merger, err := NewMerger(root, mergeRoot, ancRoot, rightCommitHash, ancCommitHash, vrw, ns)
+	if err != nil {
+		t.Fatal(err)
+	}
 	opts := editor.TestEditorOptions(vrw)
 	// TODO: stats
-	merged, _, err := merger.MergeTable(context.Background(), tableName, opts, false)
+	merged, _, err := merger.MergeTable(context.Background(), tableName, opts, MergeOpts{IsCherryPick: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,20 +322,20 @@ func TestMergeCommits(t *testing.T) {
 	assert.NoError(t, err)
 	sch, err := tbl.GetSchema(context.Background())
 	assert.NoError(t, err)
-	expected, err := doltdb.NewTable(context.Background(), vrw, sch, expectedRows, nil, nil)
+	expected, err := doltdb.NewTable(context.Background(), vrw, ns, sch, expectedRows, nil, nil)
 	assert.NoError(t, err)
 	expected, err = rebuildAllProllyIndexes(context.Background(), expected)
 	assert.NoError(t, err)
-	expected, err = expected.SetConflicts(context.Background(), conflict.ConflictSchema{Base: sch, Schema: sch, MergeSchema: sch}, durable.ConflictIndexFromProllyMap(expectedConflicts))
+	expected, err = expected.SetArtifacts(context.Background(), durable.ArtifactIndexFromProllyMap(expectedArtifacts))
 	require.NoError(t, err)
 
 	mergedRows, err := merged.GetRowData(context.Background())
 	assert.NoError(t, err)
 
-	_, conflictIdx, err := merged.GetConflicts(context.Background())
+	artIdx, err := merged.GetArtifacts(context.Background())
 	require.NoError(t, err)
-	conflicts := durable.ProllyMapFromConflictIndex(conflictIdx)
-	MustEqualConflictMap(t, expectedConflicts, conflicts)
+	artifacts := durable.ProllyMapFromArtifactIndex(artIdx)
+	MustEqualArtifactMap(t, expectedArtifacts, artifacts)
 
 	MustEqualProlly(t, durable.ProllyMapFromIndex(expectedRows), durable.ProllyMapFromIndex(mergedRows))
 
@@ -352,15 +355,18 @@ func TestMergeCommits(t *testing.T) {
 }
 
 func TestNomsMergeCommits(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
+	if types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}
 
-	vrw, rightCmHash, ancCmHash, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, expectedStats := setupNomsMergeTest(t)
+	vrw, ns, rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, expectedStats := setupNomsMergeTest(t)
 
-	merger := NewMerger(context.Background(), rightCmHash, ancCmHash, root, mergeRoot, ancRoot, vrw)
+	merger, err := NewMerger(root, mergeRoot, ancRoot, rightCommitHash, ancCommitHash, vrw, ns)
+	if err != nil {
+		t.Fatal(err)
+	}
 	opts := editor.TestEditorOptions(vrw)
-	merged, stats, err := merger.MergeTable(context.Background(), tableName, opts, false)
+	merged, stats, err := merger.MergeTable(context.Background(), tableName, opts, MergeOpts{IsCherryPick: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -370,7 +376,7 @@ func TestNomsMergeCommits(t *testing.T) {
 	assert.NoError(t, err)
 	sch, err := tbl.GetSchema(context.Background())
 	assert.NoError(t, err)
-	expected, err := doltdb.NewNomsTable(context.Background(), vrw, sch, expectedRows, nil, nil)
+	expected, err := doltdb.NewNomsTable(context.Background(), vrw, ns, sch, expectedRows, nil, nil)
 	assert.NoError(t, err)
 	expected, err = editor.RebuildAllIndexes(context.Background(), expected, editor.TestEditorOptions(vrw))
 	assert.NoError(t, err)
@@ -417,23 +423,16 @@ func sortTests(t []testRow) {
 	})
 }
 
-func setupMergeTest(t *testing.T) (types.ValueReadWriter, hash.Hash, hash.Hash, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index, prolly.ConflictMap) {
+func setupMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index, prolly.ArtifactMap) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
+	ns := ddb.NodeStore()
 	sortTests(testRows)
-
-	ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(vrw))
 
 	var initialKVs []val.Tuple
 	var expectedKVs []val.Tuple
-	conflictMap := prolly.NewEmptyConflictMap(ns, kD, vD, vD, vD)
-	confEdit := conflictMap.Editor()
-	for _, testCase := range testRows {
-		if testCase.conflict {
-			err := confEdit.Add(context.Background(), key(testCase.key), unwrap(testCase.leftValue), unwrap(testCase.rightValue), unwrap(testCase.initialValue))
-			require.NoError(t, err)
-		}
 
+	for _, testCase := range testRows {
 		if testCase.initialValue != nil {
 			initialKVs = append(initialKVs, key(testCase.key), testCase.initialValue.value())
 		}
@@ -445,8 +444,6 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, hash.Hash, hash.Hash, 
 	initialRows, err := prolly.NewMapFromTuples(context.Background(), ns, kD, vD, initialKVs...)
 	require.NoError(t, err)
 	expectedRows, err := prolly.NewMapFromTuples(context.Background(), ns, kD, vD, expectedKVs...)
-	require.NoError(t, err)
-	expectedConflicts, err := confEdit.Flush(context.Background())
 	require.NoError(t, err)
 
 	leftMut := initialRows.Mutate()
@@ -481,29 +478,56 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, hash.Hash, hash.Hash, 
 	mergeRows, err := rightMut.Map(context.Background())
 	require.NoError(t, err)
 
-	rootTbl, err := doltdb.NewTable(context.Background(), vrw, sch, durable.IndexFromProllyMap(updatedRows), nil, nil)
+	rootTbl, err := doltdb.NewTable(context.Background(), vrw, ns, sch, durable.IndexFromProllyMap(updatedRows), nil, nil)
 	require.NoError(t, err)
 	rootTbl, err = rebuildAllProllyIndexes(context.Background(), rootTbl)
 	require.NoError(t, err)
 
-	mergeTbl, err := doltdb.NewTable(context.Background(), vrw, sch, durable.IndexFromProllyMap(mergeRows), nil, nil)
+	mergeTbl, err := doltdb.NewTable(context.Background(), vrw, ns, sch, durable.IndexFromProllyMap(mergeRows), nil, nil)
 	require.NoError(t, err)
 	mergeTbl, err = rebuildAllProllyIndexes(context.Background(), mergeTbl)
 	require.NoError(t, err)
 
-	ancTbl, err := doltdb.NewTable(context.Background(), vrw, sch, durable.IndexFromProllyMap(initialRows), nil, nil)
+	ancTbl, err := doltdb.NewTable(context.Background(), vrw, ns, sch, durable.IndexFromProllyMap(initialRows), nil, nil)
 	require.NoError(t, err)
 	ancTbl, err = rebuildAllProllyIndexes(context.Background(), ancTbl)
 	require.NoError(t, err)
 
-	rightCmHash, baseCmHash, root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, rootTbl, mergeTbl, ancTbl)
+	rightCm, baseCm, root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, rootTbl, mergeTbl, ancTbl)
 
-	return vrw, rightCmHash, baseCmHash, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedConflicts
+	artifactMap, err := prolly.NewArtifactMapFromTuples(context.Background(), ns, kD)
+	require.NoError(t, err)
+	artEditor := artifactMap.Editor()
+
+	baseCmHash, err := baseCm.HashOf()
+	require.NoError(t, err)
+	rightCmHash, err := rightCm.HashOf()
+	require.NoError(t, err)
+
+	m := prolly.ConflictMetadata{
+		BaseRootIsh: baseCmHash,
+	}
+	d, err := json.Marshal(m)
+	require.NoError(t, err)
+
+	for _, testCase := range testRows {
+		if testCase.conflict {
+
+			err = artEditor.Add(context.Background(), key(testCase.key), rightCmHash, prolly.ArtifactTypeConflict, d)
+			require.NoError(t, err)
+		}
+	}
+
+	expectedArtifacts, err := artEditor.Flush(context.Background())
+	require.NoError(t, err)
+
+	return vrw, ns, rightCm, baseCm, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedArtifacts
 }
 
-func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, hash.Hash, hash.Hash, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, types.Map, types.Map, *MergeStats) {
+func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, types.Map, types.Map, *MergeStats) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
+	ns := ddb.NodeStore()
 	sortTests(testRows)
 
 	var initalKVs []types.Value
@@ -562,29 +586,29 @@ func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, hash.Hash, hash.Ha
 	mergeRows, err := rightE.Map(context.Background())
 	require.NoError(t, err)
 
-	tbl, err := doltdb.NewNomsTable(context.Background(), vrw, sch, initialRows, nil, nil)
+	tbl, err := doltdb.NewNomsTable(context.Background(), vrw, ns, sch, initialRows, nil, nil)
 	require.NoError(t, err)
 	tbl, err = editor.RebuildAllIndexes(context.Background(), tbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
-	updatedTbl, err := doltdb.NewNomsTable(context.Background(), vrw, sch, updatedRows, nil, nil)
+	updatedTbl, err := doltdb.NewNomsTable(context.Background(), vrw, ns, sch, updatedRows, nil, nil)
 	require.NoError(t, err)
 	updatedTbl, err = editor.RebuildAllIndexes(context.Background(), updatedTbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
-	mergeTbl, err := doltdb.NewNomsTable(context.Background(), vrw, sch, mergeRows, nil, nil)
+	mergeTbl, err := doltdb.NewNomsTable(context.Background(), vrw, ns, sch, mergeRows, nil, nil)
 	require.NoError(t, err)
 	mergeTbl, err = editor.RebuildAllIndexes(context.Background(), mergeTbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
-	ancTable, err := doltdb.NewNomsTable(context.Background(), vrw, sch, initialRows, nil, nil)
+	ancTable, err := doltdb.NewNomsTable(context.Background(), vrw, ns, sch, initialRows, nil, nil)
 	require.NoError(t, err)
 	ancTable, err = editor.RebuildAllIndexes(context.Background(), ancTable, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
-	rightCmHash, ancCommitHash, root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, updatedTbl, mergeTbl, ancTable)
+	rightCm, ancCommit, root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, updatedTbl, mergeTbl, ancTable)
 
-	return vrw, rightCmHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, calcExpectedStats(t)
+	return vrw, ns, rightCm, ancCommit, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, calcExpectedStats(t)
 }
 
 // rebuildAllProllyIndexes builds the data for the secondary indexes in |tbl|'s
@@ -611,7 +635,7 @@ func rebuildAllProllyIndexes(ctx context.Context, tbl *doltdb.Table) (*doltdb.Ta
 	primary := durable.ProllyMapFromIndex(tableRowData)
 
 	for _, index := range sch.Indexes().AllIndexes() {
-		rebuiltIndexRowData, err := creation.BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), sch, index, primary)
+		rebuiltIndexRowData, err := creation.BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, index, primary)
 		if err != nil {
 			return nil, err
 		}
@@ -694,7 +718,7 @@ func mustMakeEmptyRepo(t *testing.T) *doltdb.DoltDB {
 	return ddb
 }
 
-func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootTbl, mergeTbl, ancTbl *doltdb.Table) (hash.Hash, hash.Hash, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue) {
+func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootTbl, mergeTbl, ancTbl *doltdb.Table) (doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue) {
 	mainHeadSpec, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
 	mainHead, err := ddb.Resolve(context.Background(), mainHeadSpec, nil)
 	require.NoError(t, err)
@@ -746,13 +770,7 @@ func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootT
 	require.NoError(t, err)
 	require.False(t, ff)
 
-	rightCommitHash, err := mergeCommit.HashOf()
-	require.NoError(t, err)
-
-	ancCommitHash, err := ancCm.HashOf()
-	require.NoError(t, err)
-
-	return rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot
+	return mergeCommit, ancCm, root, mergeRoot, ancRoot
 }
 
 var kD = shim.KeyDescriptorFromSchema(sch)
@@ -803,37 +821,12 @@ func MustDebugFormatProlly(t *testing.T, m prolly.Map) string {
 	return s
 }
 
-func MustDebugFormatConflictMap(t *testing.T, m prolly.ConflictMap) string {
-	s, err := prolly.ConflictDebugFormat(context.Background(), m)
-	require.NoError(t, err)
-	return s
-}
-
 func MustEqualProlly(t *testing.T, expected prolly.Map, actual prolly.Map) {
 	require.Equal(t, expected.HashOf(), actual.HashOf(),
 		"hashes differed. expected: %s\nactual: %s", MustDebugFormatProlly(t, expected), MustDebugFormatProlly(t, actual))
 }
 
-func MustEqualConflictMap(t *testing.T, expected prolly.ConflictMap, actual prolly.ConflictMap) {
+func MustEqualArtifactMap(t *testing.T, expected prolly.ArtifactMap, actual prolly.ArtifactMap) {
 	require.Equal(t, expected.HashOf(), actual.HashOf(),
-		"conflict map hashes differed. expected: %s\nactual: %s", MustDebugFormatConflictMap(t, expected), MustDebugFormatConflictMap(t, actual))
+		"artifact map hashes differed.")
 }
-
-//func diffStr(t tree.Diff, kD val.TupleDesc) string {
-//	var str string
-//	switch t.Type {
-//	case tree.AddedDiff:
-//		str = "added"
-//	case tree.ModifiedDiff:
-//		str = "modified"
-//	case tree.RemovedDiff:
-//		str = "removed"
-//	default:
-//		panic("unknown type")
-//	}
-//
-//	key := kD.Format(val.Tuple(t.Key))
-//	str += " key " + key
-//
-//	return str
-//}

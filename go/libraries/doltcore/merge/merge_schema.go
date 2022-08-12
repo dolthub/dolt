@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type conflictKind byte
@@ -73,7 +74,7 @@ type ColConflict struct {
 func (c ColConflict) String() string {
 	switch c.Kind {
 	case NameCollision:
-		return fmt.Sprintf("two columns with the name '%s'", c.Ours.Name)
+		return fmt.Sprintf("two columns with the same name '%s' have different tags. See https://github.com/dolthub/dolt/issues/3963", c.Ours.Name)
 	case TagCollision:
 		return fmt.Sprintf("different column definitions for our column %s and their column %s", c.Ours.Name, c.Theirs.Name)
 	}
@@ -120,7 +121,7 @@ func (c ChkConflict) String() string {
 var ErrMergeWithDifferentPkSets = errors.New("error: cannot merge two tables with different primary key sets")
 
 // SchemaMerge performs a three-way merge of ourSch, theirSch, and ancSch.
-func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, err error) {
+func SchemaMerge(format *types.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, err error) {
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
 	sc = SchemaConflict{
 		TableName: tblName,
@@ -128,7 +129,7 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 
 	// TODO: We'll remove this once it's possible to get diff and merge on different primary key sets
 	// TODO: decide how to merge different orders of PKS
-	if !schema.ArePrimaryKeySetsDiffable(ourSch, theirSch) {
+	if !schema.ArePrimaryKeySetsDiffable(format, ourSch, theirSch) {
 		return nil, SchemaConflict{}, ErrMergeWithDifferentPkSets
 	}
 

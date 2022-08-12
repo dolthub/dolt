@@ -320,15 +320,15 @@ DELIM
 
     run dolt table import -u --continue persons persons.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "The following rows were skipped:" ]] || false
-    [[ "$output" =~ "[2,little,doe,10]" ]] || false
-    [[ "$output" =~ "[3,little,doe,4]" ]] || false
-    [[ "$output" =~ "[4,little,doe,1]" ]] || false
-    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
-    [[ "$output" =~ "Import completed successfully." ]] || false
+    [[ "${lines[0]}" =~ "The following rows were skipped:" ]] || false
+    [[ "${lines[1]}" =~ '[2,little,doe,10]' ]] || false
+    [[ "${lines[2]}" =~ '[3,little,doe,4]' ]] || false
+    [[ "${lines[3]}" =~ '[4,little,doe,1]' ]] || false
+    [[ "${lines[4]}" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "${lines[5]}" =~ "Lines skipped: 3" ]] || false
+    [[ "${lines[6]}" =~ "Import completed successfully." ]] || false
 
     run dolt sql -r csv -q "select * from persons"
-    skip "this only worked b/c no rollback on keyless tables; this also fails on primary key tables"
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "ID,LastName,FirstName,Age" ]] || false
     [[ "$output" =~ "1,jon,doe,20" ]] || false
@@ -350,7 +350,7 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Modifications: 3" ]] || falsa
 
-    skip_nbf_dolt_1
+
     run dolt diff
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 0 ]
@@ -381,7 +381,8 @@ DELIM
     run dolt table import -u test bad-updates.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
-    [[ "$output" =~ "csv reader's schema expects 2 fields, but line only has 3 values" ]] || false
+    [[ "$output" =~ "CSV reader expected 2 values, but saw 3" ]] || false
+    [[ "$output" =~ "with the following values left over: '[\"\"]'" ]] || false
 
     run dolt table import -u --continue test bad-updates.csv
     [ "$status" -eq 0 ]
@@ -438,7 +439,6 @@ DELIM
     dolt add .
     dolt commit --allow-empty -m "update table from parquet file"
 
-    skip_nbf_dolt_1
     run dolt diff --summary main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
@@ -814,8 +814,7 @@ DELIM
     ! [[ "$output" =~ "6,bottle,red" ]] || false
 }
 
-@test "import-update-tables: successfully update child table in multi-key fk relationship " {
-    skip_nbf_dolt_1
+@test "import-update-tables: successfully update child table in multi-key fk relationship" {
     dolt sql -q "drop table objects"
     dolt sql -q "drop table colors"
 
@@ -896,7 +895,6 @@ DELIM
 }
 
 @test "import-update-tables: import update with CASCADE ON UPDATE" {
-   skip_nbf_dolt_1
    dolt sql <<SQL
 CREATE TABLE one (
   pk int PRIMARY KEY,
@@ -1005,7 +1003,6 @@ DELIM
 }
 
 @test "import-update-tables: disable foreign key checks" {
-    skip_nbf_dolt_1
     cat <<DELIM > objects-bad.csv
 id,name,color
 4,laptop,blue
@@ -1171,4 +1168,49 @@ DELIM
     [[ "$output" =~ "2,medium" ]] || false
     [[ "$output" =~ "3,large" ]] || false
     [[ "$output" =~ "4,x-small" ]] || false # should be empty
+}
+
+@test "import-update-tables: test better error message for mismatching column count with schema" {
+    # Case where there are fewer values in a row than the number of columns in the schema
+    cat <<DELIM > bad-updates.csv
+pk,v1, v2
+5,5
+6,5
+DELIM
+
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT DEFAULT 2 NOT NULL, v2 int)"
+    dolt sql -q "INSERT INTO test (pk, v1, v2) VALUES (1, 2, 3), (2, 3, 4)"
+
+    run dolt table import -u test bad-updates.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "CSV reader expected 3 values, but saw 2" ]] || false
+    [[ "$output" =~ "row values:" ]]
+    ! [[ "$output" =~ "with the following values left over: '[\"\"]'" ]] || false
+
+    # Case there are more columns in the rows than the number of columns in the schema
+ cat <<DELIM > bad-updates.csv
+pk,v1
+5,7,5
+6,5,5
+DELIM
+
+    run dolt table import -u test bad-updates.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "CSV reader expected 2 values, but saw 3" ]] || false
+    [[ "$output" =~ "row values:" ]]
+    [[ "$output" =~ '"pk": "5"' ]]
+    [[ "$output" =~ '"v1": "7"' ]]
+    [[ "$output" =~ "with the following values left over: '[\"5\"]'" ]] || false
+
+    # Add a continue statement
+    run dolt table import -u --continue test bad-updates.csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[2]}" =~ "The following rows were skipped:" ]] || false
+    [[ "${lines[3]}" =~ '[5,7,5]' ]] || false
+    [[ "${lines[4]}" =~ '[6,5,5]' ]] || false
+    [[ "${lines[5]}" =~ "Rows Processed: 0, Additions: 0, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "${lines[6]}" =~ "Lines skipped: 2" ]] || false
+    [[ "${lines[7]}" =~ "Import completed successfully." ]] || false
 }

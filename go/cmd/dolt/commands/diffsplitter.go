@@ -114,10 +114,13 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 		}
 
 		for i := 0; i < ds.fromLen; i++ {
+			cmp := ds.diffQuerySch[i].Type.Compare
 			oldRow.row[ds.queryToTarget[i]] = row[i]
 
 			if diffTypeStr == "modified" {
-				if row[i] != row[ds.fromTo[i]] {
+				if n, err := cmp(row[i], row[ds.fromTo[i]]); err != nil {
+					return rowDiff{}, rowDiff{}, err
+				} else if n != 0 {
 					oldRow.colDiffs[ds.queryToTarget[i]] = diff.ModifiedOld
 				}
 			} else {
@@ -135,10 +138,14 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 		}
 
 		for i := ds.fromLen; i < len(ds.diffQuerySch)-1; i++ {
+			cmp := ds.diffQuerySch[i].Type.Compare
 			newRow.row[ds.queryToTarget[i]] = row[i]
 
 			if diffTypeStr == "modified" {
-				if row[i] != row[ds.toFrom[i]] {
+				// need this to compare map[string]interface{} and other incomparable result types
+				if n, err := cmp(row[i], row[ds.toFrom[i]]); err != nil {
+					return rowDiff{}, rowDiff{}, err
+				} else if n != 0 {
 					newRow.colDiffs[ds.queryToTarget[i]] = diff.ModifiedNew
 				}
 			} else {

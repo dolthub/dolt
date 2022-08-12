@@ -139,7 +139,7 @@ func outputType(value types.Value) {
 		case serial.RootValueFileID:
 			typeString = "RootValue"
 		case serial.TableFileID:
-			typeString = "TableFile"
+			typeString = "Table"
 		case serial.ProllyTreeNodeFileID:
 			typeString = "ProllyTreeNode"
 		case serial.AddressMapFileID:
@@ -159,16 +159,13 @@ func outputType(value types.Value) {
 
 func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) error {
 	switch value := value.(type) {
-	case types.TupleRowStorage:
-		node := shim.NodeFromValue(value)
-		return tree.OutputProllyNode(w, node)
 	// Some types of serial message need to be output here because of dependency cycles between types / tree package
 	case types.SerialMessage:
 		switch serial.GetFileID(value) {
 		case serial.TableFileID:
-			msg := serial.GetRootAsTable(value, 0)
+			msg := serial.GetRootAsTable(value, serial.MessagePrefixSz)
 
-			fmt.Fprintf(w, "{\n")
+			fmt.Fprintf(w, " {\n")
 			fmt.Fprintf(w, "\tSchema: #%s\n", hash.New(msg.SchemaBytes()).String())
 			fmt.Fprintf(w, "\tViolations: #%s\n", hash.New(msg.ViolationsBytes()).String())
 			fmt.Fprintf(w, "\tArtifacts: #%s\n", hash.New(msg.ArtifactsBytes()).String())
@@ -176,14 +173,17 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 
 			fmt.Fprintf(w, "\tAutoinc: %d\n", msg.AutoIncrementValue())
 
-			fmt.Fprintf(w, "\tPrimary index: {\n")
+			// clustered index
 			node := tree.NodeFromBytes(msg.PrimaryIndexBytes())
+			fmt.Fprintf(w, "\tPrimary Index (rows %d, depth %d) %s {",
+				node.TreeCount(), node.Level()+1, node.HashOf().String()[:8])
 			tree.OutputProllyNode(w, node)
 			fmt.Fprintf(w, "\t}\n")
 
-			fmt.Fprintf(w, "\tSecondary indexes: {\n")
-
+			// secondary indexes
 			node = tree.NodeFromBytes(msg.SecondaryIndexesBytes())
+			fmt.Fprintf(w, "\tSecondary Indexes (indexes %d, depth %d) %s {",
+				node.TreeCount(), node.Level()+1, node.HashOf().String()[:8])
 			err := tree.OutputAddressMapNode(w, node)
 			if err != nil {
 				return err
@@ -193,10 +193,17 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 
 			return nil
 		case serial.StoreRootFileID:
-			msg := serial.GetRootAsStoreRoot(value, 0)
+			msg := serial.GetRootAsStoreRoot(value, serial.MessagePrefixSz)
 			ambytes := msg.AddressMapBytes()
 			node := tree.NodeFromBytes(ambytes)
 			return tree.OutputAddressMapNode(w, node)
+		case serial.ProllyTreeNodeFileID:
+			fallthrough
+		case serial.AddressMapFileID:
+			fallthrough
+		case serial.CommitClosureFileID:
+			node := shim.NodeFromValue(value)
+			return tree.OutputProllyNode(w, node)
 		default:
 			return types.WriteEncodedValue(ctx, w, value)
 		}

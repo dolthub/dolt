@@ -359,7 +359,7 @@ SQL
     cd workspace
     dolt init
     cd ..
-    dolt sql --multi-db-dir ./ -b -q "USE workspace;CREATE TABLE mytable LIKE otherdb.othertable;"
+    dolt sql --data-dir ./ -b -q "USE workspace;CREATE TABLE mytable LIKE otherdb.othertable;"
     cd workspace
     run dolt schema show mytable
     [ "$status" -eq 0 ]
@@ -705,7 +705,7 @@ SQL
     cd repo2
     dolt init
     cd ..
-    run dolt sql --multi-db-dir ./ -b -q "USE repo2;CREATE TEMPORARY TABLE temp2 LIKE repo1.tableone;"
+    run dolt sql --data-dir ./ -b -q "USE repo2;CREATE TEMPORARY TABLE temp2 LIKE repo1.tableone;"
     [ "$status" -eq 0 ]
     cd repo2
 
@@ -766,4 +766,13 @@ SELECT * FROM myTempTable;
 SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "table not found: myTempTable" ]] || false
+}
+
+@test "sql-create-tables: BINARY attributes" {
+    dolt sql <<SQL
+CREATE TABLE budgets(id CHAR(36) CHARACTER SET utf8mb4 BINARY);
+CREATE TABLE budgets2(id CHAR(36) BINARY);
+SQL
+    dolt sql -q "INSERT INTO budgets VALUES (UUID());"
+    dolt sql -q "INSERT INTO budgets2 VALUES (UUID());"
 }

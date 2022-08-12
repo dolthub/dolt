@@ -12,6 +12,10 @@ make_repo() {
 setup() {
     skiponwindows "tests are flaky on Windows"
     setup_no_dolt_init
+    mkdir $BATS_TMPDIR/sql-server-test$$
+    nativevar DOLT_ROOT_PATH $BATS_TMPDIR/sql-server-test$$ /p
+    dolt config --global --add user.email "test@test.com"
+    dolt config --global --add user.name "test"
     make_repo repo1
     make_repo repo2
 }
@@ -20,6 +24,121 @@ teardown() {
     stop_sql_server
     teardown_common
 }
+
+@test "sql-server: server with no dbs yet should be able to clone" {
+    # make directories outside of the existing init'ed dolt repos to ensure that
+    # we are starting a sql-server with no existing dolt databases inside it
+    tempDir=$(mktemp -d)
+    cd $tempDir
+    mkdir empty_server
+    mkdir remote
+
+    # create a file remote to clone later
+    cd $BATS_TMPDIR/dolt-repo-$$/repo1
+    dolt remote add remote01 file:///$tempDir/remote
+    dolt push remote01 main
+
+    # start the server and ensure there are no databases yet
+    cd $tempDir/empty_server
+    start_sql_server
+    unselected_server_query 1 "show databases" "Database\ninformation_schema"
+
+    # verify that dolt_clone works
+    # TODO: Once dolt_clone can be called without a selected database, this can be removed
+    unselected_server_query 1 "create database test01;" ""
+    server_query "test01" 1 "call dolt_clone('file:///$tempDir/remote');" "status\n0"
+}
+
+@test "sql-server: server assumes existing user" {
+    cd repo1
+    dolt sql -q "create user dolt@'%' identified by '123'"
+
+    let PORT="$$ % (65536-1024) + 1024"
+    dolt sql-server --port=$PORT --user dolt > log.txt 2>&1 &
+    SERVER_PID=$!
+    sleep 5
+
+    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt --password=wrongpassword <<< "exit;"
+    run grep 'Error authenticating user using MySQL native password' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+}
+
+@test "sql-server: Database specific system variables should be loaded" {
+    cd repo1
+    dolt branch dev
+    dolt branch other
+
+    start_sql_server
+    server_query repo1 1 "SET PERSIST repo1_default_branch = 'dev';" ""
+    stop_sql_server
+    start_sql_server
+    server_query repo1 1 "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\ndev"
+    stop_sql_server
+
+    # system variable is lost when starting sql-server outside of the folder
+    # because global config is used.
+    cd ..
+    start_sql_server
+    server_query repo1 1 "SELECT LENGTH(@@repo1_default_branch);" "LENGTH(@@repo1_default_branch)\n0"
+    server_query repo1 1 "SET PERSIST repo1_default_branch = 'other';" ""
+    stop_sql_server
+    start_sql_server
+    server_query repo1 1 "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\nother"
+    stop_sql_server
+
+    # ensure we didn't blow away local setting
+    cd repo1
+    start_sql_server_with_args --user dolt --doltcfg-dir './'
+    server_query repo1 1 "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\ndev"
+}
+
+@test "sql-server: user session variables from config" {
+  cd repo1
+  echo "
+privilege_file: privs.json
+user_session_vars:
+- name: user0
+  vars:
+    aws_credentials_file: /Users/user0/.aws/config
+    aws_credentials_profile: default
+- name: user1
+  vars:
+    aws_credentials_file: /Users/user1/.aws/config
+    aws_credentials_profile: lddev" > server.yaml
+
+    dolt sql --privilege-file=privs.json -q "CREATE USER dolt@'127.0.0.1'"
+    dolt sql --privilege-file=privs.json -q "CREATE USER user0@'127.0.0.1' IDENTIFIED BY 'pass0'"
+    dolt sql --privilege-file=privs.json -q "CREATE USER user1@'127.0.0.1' IDENTIFIED BY 'pass1'"
+    dolt sql --privilege-file=privs.json -q "CREATE USER user2@'127.0.0.1' IDENTIFIED BY 'pass2'"
+
+    start_sql_server_with_config "" server.yaml
+
+    run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user0  --password=pass0<<SQL
+SELECT @@aws_credentials_file, @@aws_credentials_profile;
+SQL
+    echo $output
+    [[ "$output" =~ /Users/user0/.aws/config.*default ]] || false
+
+    run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user1 --password=pass1<<SQL
+SELECT @@aws_credentials_file, @@aws_credentials_profile;
+SQL
+    echo $output
+    [[ "$output" =~ /Users/user1/.aws/config.*lddev ]] || false
+
+    run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user2 --password=pass2<<SQL
+SELECT @@aws_credentials_file, @@aws_credentials_profile;
+SQL
+    echo $output
+    [[ "$output" =~ NULL.*NULL ]] || false
+
+    run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user2 --password=pass2<<SQL
+SET @@aws_credentials_file="/Users/should_fail";
+SQL
+    echo $output
+    [[ "$output" =~ "Variable 'aws_credentials_file' is a read only variable" ]] || false
+}
+
 
 @test "sql-server: port in use" {
     cd repo1
@@ -87,7 +206,7 @@ teardown() {
     # attempt to create table (autocommit on), expect either some exception
     server_query repo1 1 "CREATE TABLE i_should_not_exist (
             c0 INT
-        )" "" "not authorized"
+        )" "" "database server is set to read only mode"
 
     # Expect that there are still no tables
     run dolt ls
@@ -125,7 +244,7 @@ teardown() {
 
     # make a dolt_commit query
     skip "read-only flag does not prevent dolt_commit"
-    server_query repo1 1 "select dolt_commit('--allow-empty', '-m', 'msg')" "" "not authorized: user does not have permission: write"
+    server_query repo1 1 "select dolt_commit('--allow-empty', '-m', 'msg')" "" "database server is set to read only mode: user does not have permission: write"
 }
 
 @test "sql-server: test command line modification" {
@@ -151,15 +270,17 @@ teardown() {
     [[ "$output" =~ "one_pk" ]] || false
 
     # Add rows on the command line
-    dolt sql -q "insert into one_pk values (1,1,1)"
+    run dolt sql --user=dolt -q "insert into one_pk values (1,1,1)"
+    [ "$status" -eq 1 ]
 
-    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n1,1,1"
+    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" ""
 
     # Test import as well (used by doltpy)
     echo 'pk,c1,c2' > import.csv
     echo '2,2,2' >> import.csv
-    dolt table import -u one_pk import.csv
-    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n1,1,1\n2,2,2"
+    run dolt table import -u one_pk import.csv
+    [ "$status" -eq 1 ]
+    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" ""
 }
 
 @test "sql-server: test dolt sql interface works properly with autocommit" {
@@ -204,18 +325,18 @@ teardown() {
     [[ "$output" =~ "one_pk" ]] || false
 
     # check that dolt_commit works properly when autocommit is on
-    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+    run dolt sql --user=dolt -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
     [ "$status" -eq 0 ]
 
     # check that dolt_commit throws error now that there are no working set changes.
-    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+    run dolt sql --user=dolt -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
     [ "$status" -eq 1 ]
 
     # Make a change to the working set but not the staged set.
-    run dolt sql -q "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
+    run dolt sql --user=dolt -q "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
 
     # check that dolt_commit throws error now that there are no staged changes.
-    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+    run dolt sql --user=dolt -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
     [ "$status" -eq 1 ]
 
     run dolt log
@@ -292,7 +413,7 @@ SQL
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "working tree clean" ]] || false
-    run dolt sql -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
+    run dolt sql --user=dolt -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "6,6" ]] || false
 
@@ -304,7 +425,7 @@ SQL
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "working tree clean" ]] || false
-    run dolt sql -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
+    run dolt sql --user=dolt -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "6,6" ]] || false
 }
@@ -464,12 +585,12 @@ SQL
      "
 
      server_query repo1 1 "SELECT * FROM test" "pk\n0\n1\n2"
-     
+
      multi_query repo1 1 "
      SELECT DOLT_CHECKOUT('feature-branch');
      SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
      "
-     
+
      multi_query repo1 1 "
      INSERT INTO test VALUES (500000);
      INSERT INTO test VALUES (500001);
@@ -480,7 +601,7 @@ SQL
      SELECT DOLT_MERGE('feature-branch');
      SELECT DOLT_COMMIT('-a', '-m', 'Finish up Merge');
      "
-     
+
      server_query repo1 1 "SELECT * FROM test order by pk" "pk\n0\n1\n2\n3\n21\n60"
 
      run dolt status
@@ -574,11 +695,11 @@ SQL
 
      # verify changes outside the session
      cd repo2
-     run dolt sql -q "show tables"
+     run dolt sql --user=dolt -q "show tables"
      [ "$status" -eq 0 ]
      [[ "$output" =~ "one_pk" ]] || false
 
-     run dolt sql -q "select * from one_pk"
+     run dolt sql --user=dolt -q "select * from one_pk"
      [ "$status" -eq 0 ]
      [[ "$output" =~ "0" ]] || false
      [[ "$output" =~ "1" ]] || false
@@ -595,13 +716,13 @@ SQL
 
      # verify changes outside the session
      cd newdb
-     run dolt sql -q "show tables"
+     run dolt sql --user=dolt -q "show tables"
      [ "$status" -eq 0 ]
      [[ "$output" =~ "test" ]] || false
 }
 
 @test "sql-server: JSON queries" {
-    skip_nbf_dolt_1
+    skip_nbf_dolt
     cd repo1
     start_sql_server repo1
 
@@ -641,13 +762,16 @@ SQL
     SELECT commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');
     INSERT INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
 
-    dolt add .
+    server_query repo1 1 "call dolt_add('.')" "status\n0"
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
 
-    dolt sql -q "drop table one_pk"
-    dolt commit -am "Dropped table one_pk"
+    run dolt sql --user=dolt -q "drop table one_pk"
+    [ "$status" -eq 1 ]
+
+    server_query repo1 1 "drop table one_pk" ""
+    multi_query repo1 1 "call dolt_commit('-am', 'Dropped table one_pk')"
 
     run dolt ls
     [ "$status" -eq 0 ]
@@ -656,7 +780,6 @@ SQL
 
 # TODO: Need to update testing logic allow queries for a multiple session.
 @test "sql-server: Create a temporary table and validate that it doesn't persist after a session closes" {
-    skip_nbf_dolt_1
     skiponwindows "Missing dependencies"
 
     cd repo1
@@ -730,7 +853,7 @@ SQL
 
     multi_query repo1 1 '
     USE `repo1/feature-branch`;
-    CREATE TABLE test ( 
+    CREATE TABLE test (
         pk int,
         c1 int,
         PRIMARY KEY (pk)
@@ -978,7 +1101,6 @@ END""")
 
 @test "sql-server: sql-push --set-remote within session" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1
 
     mkdir rem1
     cd repo1
@@ -998,7 +1120,6 @@ END""")
 
 @test "sql-server: replicate to backup after sql-session commit" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1
 
     mkdir bac1
     cd repo1
@@ -1049,7 +1170,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table a" ]] || false
 
-    run dolt sql -q "show tables"
+    run dolt sql --user=dolt -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "a" ]] || false
 
@@ -1058,7 +1179,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table b" ]] || false
 
-    run dolt sql -q "show tables"
+    run dolt sql --user=dolt -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "b" ]] || false
 
@@ -1073,7 +1194,7 @@ END""")
 
     [ -d test3 ]
     [ ! -d test2 ]
-    
+
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server
@@ -1082,15 +1203,15 @@ END""")
 
 @test "sql-server: drop database with active connections" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1
-    
+    skip_nbf_dolt "json ordering of keys differs"
+
     mkdir no_dolt && cd no_dolt
     start_sql_server
 
     server_query "" 1 "create database test1"
     server_query "" 1 "create database test2"
     server_query "" 1 "create database test3"
-    
+
     server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest2\ntest3"
     server_query "test1" 1 "create table a(x int)"
     server_query "test1" 1 "insert into a values (1), (2)"
@@ -1103,7 +1224,7 @@ END""")
     server_query "test3" 1 "create table a(x int)"
     server_query "test3" 1 "insert into a values (5), (6)"
     run server_query "test3" 1 "select dolt_commit('-a', '-m', 'new table a')"
-    
+
     run server_query "test1" 1 "select dolt_checkout('-b', 'newbranch')"
     server_query "test1/newbranch" 1 "select * from a" "x\n1\n2"
 
@@ -1126,13 +1247,12 @@ END""")
     run server_query "test2/newbranch" 1 "select * from a"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "database not found: test2/newbranch" ]] || false
-    
+
     server_query "test3" 1 "select * from a" "x\n5\n6"
 }
 
 @test "sql-server: connect to databases case insensitive" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1
 
     mkdir no_dolt && cd no_dolt
     start_sql_server
@@ -1152,12 +1272,12 @@ END""")
     multi_query "" 1 "use test2; drop database TEST2; select database();" "null"
 }
 
-@test "sql-server: create and drop database with --multi-db-dir" {
+@test "sql-server: create and drop database with --data-dir" {
     skiponwindows "Missing dependencies"
 
     mkdir no_dolt && cd no_dolt
     mkdir db_dir
-    start_sql_server_with_args --host 0.0.0.0 --user dolt --multi-db-dir=db_dir
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
 
     server_query "" 1 "create database test1"
     server_query "" 1 "show databases" "Database\ninformation_schema\ntest1"
@@ -1167,7 +1287,7 @@ END""")
     run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
 
     [ -d db_dir/test1 ]
-    
+
     cd db_dir/test1
     run dolt log
     [ "$status" -eq 0 ]
@@ -1184,10 +1304,10 @@ END""")
 
     [ -d db_dir/test3 ]
     [ ! -d db_dir/test1 ]
-    
+
     # make sure the databases exist on restart
     stop_sql_server
-    start_sql_server_with_args --host 0.0.0.0 --user dolt --multi-db-dir=db_dir
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
     server_query "" 1 "show databases" "Database\ninformation_schema\ntest3"
 }
 
@@ -1198,7 +1318,7 @@ END""")
     mkdir dir_exists
     touch file_exists
     start_sql_server
-    
+
     server_query "" 1 "create database test1"
 
     # Error on creation, already exists
@@ -1206,7 +1326,7 @@ END""")
 
     # Files / dirs in the way
     server_query "" 1 "create database dir_exists" "" "exists"
-    server_query "" 1 "create database file_exists" "" "exists"        
+    server_query "" 1 "create database file_exists" "" "exists"
 }
 
 @test "sql-server: create database with existing repo" {
@@ -1214,7 +1334,7 @@ END""")
 
     cd repo1
     start_sql_server
-    
+
     server_query "" 1 "create database test1"
     server_query "repo1" 1 "show databases" "Database\ninformation_schema\nrepo1\ntest1"
     server_query "test1" 1 "create table a(x int)"
@@ -1233,7 +1353,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table a" ]] || false
 
-    run dolt sql -q "show tables"
+    run dolt sql --user=dolt -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "a" ]] || false
 
@@ -1242,7 +1362,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table b" ]] || false
 
-    run dolt sql -q "show tables"
+    run dolt sql --user=dolt -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "b" ]] || false
 
@@ -1255,7 +1375,6 @@ END""")
 
 @test "sql-server: fetch uses database tempdir from different working directory" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1
 
     mkdir remote1
     cd repo2
@@ -1312,4 +1431,183 @@ databases:
 
     run expect $BATS_TEST_DIRNAME/sql-server-mysql.expect $PORT repo1
     [ "$status" -eq 0 ]
+}
+
+@test "sql-server: sql-server lock cleanup" {
+    cd repo1
+    start_sql_server
+    stop_sql_server
+    start_sql_server
+    stop_sql_server
+}
+
+@test "sql-server: sql-server locks database" {
+    cd repo1
+    start_sql_server
+    let PORT="$$ % (65536-1024) + 1024"
+    run dolt sql-server -P $PORT
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: multi dir sql-server locks out childen" {
+    start_sql_server
+    cd repo2
+    let PORT="$$ % (65536-1024) + 1024"
+    run dolt sql-server -P $PORT
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: sql-server child locks out parent multi dir" {
+    cd repo2
+    start_sql_server
+    cd ..
+    let PORT="$$ % (65536-1024) + 1024"
+    run dolt sql-server -P $PORT
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: sql-server locks database to writes" {
+    cd repo2
+    dolt sql -q "create table a (x int primary key)" 
+    start_sql_server
+    run dolt sql -q "create table b (x int primary key)" 
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database is locked to writes" ]] || false
+    run dolt sql -q "insert into b values (0)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database is locked to writes" ]] || false
+}
+
+@test "sql-server: server fails to start up if there is already a file in the socket file path" {
+    skiponwindows "unix socket is not available on Windows"
+    cd repo2
+    touch mysql.sock
+
+    run pwd
+    REPO_NAME=$output
+
+    let PORT="$$ % (65536-1024) + 1024"
+    dolt sql-server --port=$PORT --socket="$REPO_NAME/mysql.sock" --user dolt > log.txt 2>&1 &
+    SERVER_PID=$!
+    run wait_for_connection $PORT 5000
+    [ "$status" -eq 1 ]
+
+    run grep 'address already in use' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+}
+
+@test "sql-server: start server with yaml config with socket file path defined" {
+    skiponwindows "unix socket is not available on Windows"
+    cd repo2
+    DEFAULT_DB="repo2"
+    let PORT="$$ % (65536-1024) + 1024"
+
+    echo "
+log_level: debug
+
+user:
+  name: dolt
+
+listener:
+  host: localhost
+  port: $PORT
+  max_connections: 10
+  socket: /tmp/mysql.sock
+
+behavior:
+  autocommit: true" > server.yaml
+
+    dolt sql-server --config server.yaml > log.txt 2>&1 &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+
+    server_query repo2 1 "select 1 as col1" "col1\n1"
+
+    run grep '\"/tmp/mysql.sock\"' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+}
+
+@test "sql-server: start server multidir creates sql-server.lock file in every rep" {
+    start_sql_server
+    run ls repo1/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    run ls repo2/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    stop_sql_server
+    run ls repo1/.dolt
+    ! [[ "$output" =~ "sql-server.lock" ]] || false
+
+    run ls repo2/.dolt
+    ! [[ "$output" =~ "sql-server.lock" ]] || false
+}
+
+@test "sql-server: running a dolt function in the same directory as a running server correctly errors" {
+    start_sql_server
+
+    cd repo1
+    run dolt commit --allow-empty --am "adasdasd"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
+
+    run dolt gc
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
+
+    echo "import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind(('', 0))
+addr = s.getsockname()
+print(addr[1])
+s.close()
+" > port_finder.py
+
+    PORT=$(python3 port_finder.py)
+    run dolt sql-server --port=$PORT
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
+
+    stop_sql_server
+
+    run dolt gc
+    [ "$status" -eq 0 ]
+}
+
+@test "sql-server: sigterm running server and restarting works correctly" {
+    start_sql_server
+    run ls repo1/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    run ls repo2/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    kill -9 $SERVER_PID
+
+    run ls repo1/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    run ls repo2/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    start_sql_server
+    server_query repo1 1 "SELECT 1" "1\n1"
+    stop_sql_server
+
+    # Try adding fake pid numbers. Could happen via debugger or something
+    echo "423423" > repo1/.dolt/sql-server.lock
+    echo "4123423" > repo2/.dolt/sql-server.lock
+
+    start_sql_server
+    server_query repo1 1 "SELECT 1" "1\n1"
+    stop_sql_server
+
+    # Add malicious text to lockfile and expect to fail
+    echo "iamamaliciousactor" > repo1/.dolt/sql-server.lock
+
+    run start_sql_server
+    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
+    [ "$status" -eq 1 ]
 }

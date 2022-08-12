@@ -95,7 +95,8 @@ func PanicIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.Chu
 	d.PanicIfError(err)
 
 	if len(absent) != 0 {
-		d.Panic("Found dangling references to %v", absent)
+		s := absent.String()
+		d.Panic("Found dangling references to %s", s)
 	}
 }
 
@@ -375,11 +376,11 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 // ChunkStore in a way which attempts to locate children and grandchildren
 // sequentially together. The following invariants are retained:
 //
-// 1. For any given chunk currently in the buffer, only direct children of the
-//    chunk may also be presently buffered (any grandchildren will have been
-//    flushed).
-// 2. The total data occupied by buffered chunks does not exceed
-//    lvs.bufferedChunksMax
+//  1. For any given chunk currently in the buffer, only direct children of the
+//     chunk may also be presently buffered (any grandchildren will have been
+//     flushed).
+//  2. The total data occupied by buffered chunks does not exceed
+//     lvs.bufferedChunksMax
 func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk, height uint64) error {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
@@ -391,7 +392,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 		// in the general case.
 		//
 		// Buffering with full dependency tracking would be
-		// possible, and in __DOLT_1__, WalkAddrs may be
+		// possible, and in __DOLT__, WalkAddrs may be
 		// cheap enough that it would be possible to get back
 		// cache-locality in our flushes without ref heights.
 		if lvs.enforceCompleteness {

@@ -65,15 +65,11 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	helpPr, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, addDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, helpPr)
 
-	if apr.ContainsArg(doltdb.DocTableName) {
-		// Only allow adding the dolt_docs table if it has a conflict to resolve
-		hasConflicts, _ := docCnfsOnWorkingRoot(ctx, dEnv)
-		if !hasConflicts {
-			return HandleDocTableVErrAndExitCode()
-		}
-	}
-
 	allFlag := apr.Contains(cli.AllFlag)
+
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), helpPr)
+	}
 
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
@@ -83,17 +79,12 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if apr.NArg() == 0 && !allFlag {
 		cli.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		roots, err = actions.StageAllTables(ctx, roots, dEnv.Docs)
+		roots, err = actions.StageAllTables(ctx, roots)
 		if err != nil {
 			return handleStageError(err)
 		}
 	} else {
-		tables, docs, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), apr.Args)
-		if err != nil {
-			return handleStageError(err)
-		}
-
-		roots, err = actions.StageTables(ctx, roots, docs, tables)
+		roots, err = actions.StageTables(ctx, roots, apr.Args)
 		if err != nil {
 			return handleStageError(err)
 		}

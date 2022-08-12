@@ -78,11 +78,35 @@ func init() {
 			Type:              sql.NewSystemBoolType(AllowCommitConflicts),
 			Default:           int8(0),
 		},
+		{
+			Name:              AwsCredsFileKey,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           false,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(AwsCredsFileKey),
+			Default:           nil,
+		},
+		{
+			Name:              AwsCredsProfileKey,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           false,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(AwsCredsProfileKey),
+			Default:           nil,
+		},
+		{
+			Name:              AwsCredsRegionKey,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           false,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(AwsCredsRegionKey),
+			Default:           nil,
+		},
 	})
 }
 
-// defineSystemVariables defines dolt-session variables in the engine as necessary
-func defineSystemVariables(name string) {
+// DefineSystemVariablesForDB defines per database dolt-session variables in the engine as necessary
+func DefineSystemVariablesForDB(name string) {
 	if _, _, ok := sql.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
 		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 			{

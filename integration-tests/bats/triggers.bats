@@ -128,7 +128,6 @@ SQL
 }
 
 @test "triggers: Merge with manual resolution" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE x(a BIGINT PRIMARY KEY);
 CREATE TRIGGER trigger1 BEFORE INSERT ON x FOR EACH ROW SET new.a = new.a + 1;

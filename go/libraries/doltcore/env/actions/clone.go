@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -56,6 +55,7 @@ var ErrUserNotFound = errors.New("could not determine user name. run dolt config
 var ErrEmailNotFound = errors.New("could not determine email. run dolt config --global --add user.email")
 var ErrCloneFailed = errors.New("clone failed")
 
+// EnvForClone creates a new DoltEnv and configures it with repo state from the specified remote. The returned DoltEnv is ready for content to be cloned into it. The directory used for the new DoltEnv is determined by resolving the specified dir against the specified Filesys.
 func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider) (*env.DoltEnv, error) {
 	exists, _ := fs.Exists(filepath.Join(dir, dbfactory.DoltDir))
 
@@ -64,20 +64,17 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 	}
 
 	err := fs.MkDirs(dir)
-
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateDirectory, dir, err.Error())
 	}
 
-	err = os.Chdir(dir)
-
+	newFs, err := fs.WithWorkingDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToAccessDir, dir, err.Error())
 	}
 
-	dEnv := env.Load(ctx, homeProvider, fs, doltdb.LocalDirDoltDB, version)
+	dEnv := env.Load(ctx, homeProvider, newFs, doltdb.LocalDirDoltDB, version)
 	err = dEnv.InitRepoWithNoData(ctx, nbf)
-
 	if err != nil {
 		return nil, fmt.Errorf("%w; %s", ErrFailedToInitRepo, err.Error())
 	}
@@ -85,7 +82,6 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 	dEnv.RSLoadErr = nil
 	if !env.IsEmptyRemote(r) {
 		dEnv.RepoState, err = env.CloneRepoState(dEnv.FS, r)
-
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateRepoStateWithRemote, r.Name, err.Error())
 		}
@@ -194,15 +190,11 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 
 	// If we couldn't find a branch but the repo cloned successfully, it's empty. Initialize it instead of pulling from
 	// the remote.
-	performPull := true
 	if branch == "" {
-		err = InitEmptyClonedRepo(ctx, dEnv)
-		if err != nil {
+		if err = InitEmptyClonedRepo(ctx, dEnv); err != nil {
 			return nil
 		}
-
 		branch = env.GetDefaultInitBranch(dEnv.Config)
-		performPull = false
 	}
 
 	cs, _ := doltdb.NewCommitSpec(branch)
@@ -243,13 +235,6 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 			if err != nil {
 				return fmt.Errorf("%w: %s; %s", ErrFailedToDeleteBranch, brnch.String(), err.Error())
 			}
-		}
-	}
-
-	if performPull {
-		err = SaveDocsFromRoot(ctx, rootVal, dEnv)
-		if err != nil {
-			return ErrFailedToUpdateDocs
 		}
 	}
 

@@ -31,7 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type testCommand struct {
@@ -612,7 +612,7 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 
 	otherSch := getSchema(t, dEnv)
 
-	_, actConflicts, err := merge.SchemaMerge(mainSch, otherSch, ancSch, "test")
+	_, actConflicts, err := merge.SchemaMerge(types.Format_Default, mainSch, otherSch, ancSch, "test")
 	if test.expectedErr != nil {
 		assert.True(t, errors.Is(err, test.expectedErr))
 		return
@@ -660,17 +660,20 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv)
 	require.Equal(t, 0, exitCode)
 
-	mainRoot, err := dEnv.WorkingRoot(ctx)
+	mainWS, err := dEnv.WorkingSet(ctx)
 	require.NoError(t, err)
+	mainRoot := mainWS.WorkingRoot()
 
 	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv)
 	require.Equal(t, 0, exitCode)
 
-	otherRoot, err := dEnv.WorkingRoot(ctx)
+	otherWS, err := dEnv.WorkingSet(ctx)
 	require.NoError(t, err)
+	otherRoot := otherWS.WorkingRoot()
 
 	opts := editor.TestEditorOptions(dEnv.DoltDB.ValueReadWriter())
-	mergedRoot, _, err := merge.MergeRoots(ctx, hash.Of(nil), hash.Of(nil), mainRoot, otherRoot, ancRoot, opts, false)
+	mo := merge.MergeOpts{IsCherryPick: false}
+	mergedRoot, _, err := merge.MergeRoots(ctx, mainRoot, otherRoot, ancRoot, mainWS, otherWS, opts, mo)
 	assert.NoError(t, err)
 
 	fkc, err := mergedRoot.GetForeignKeyCollection(ctx)

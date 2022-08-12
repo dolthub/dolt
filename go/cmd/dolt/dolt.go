@@ -28,16 +28,19 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/profile"
-	"github.com/uber/jaeger-client-go"
-	"github.com/uber/jaeger-client-go/transport"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/sdk/resource"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cnfcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/credcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cvcmds"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/docscmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/indexcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/schcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
@@ -53,7 +56,7 @@ import (
 )
 
 const (
-	Version = "0.40.12"
+	Version = "0.40.25"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -104,6 +107,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.InspectCmd{},
 	dumpDocsCommand,
 	dumpZshCommand,
+	docscmds.Commands,
 })
 
 func init() {
@@ -121,6 +125,8 @@ const stdInFlag = "--stdin"
 const stdOutFlag = "--stdout"
 const stdErrFlag = "--stderr"
 const stdOutAndErrFlag = "--out-and-err"
+const ignoreLocksFlag = "--ignore-lock-file"
+
 const cpuProf = "cpu"
 const memProf = "mem"
 const blockingProf = "blocking"
@@ -136,6 +142,7 @@ func runMain() int {
 	args := os.Args[1:]
 
 	csMetrics := false
+	ignoreLockFile := false
 	if len(args) > 0 {
 		var doneDebugFlags bool
 		for !doneDebugFlags && len(args) > 0 {
@@ -203,13 +210,21 @@ func runMain() int {
 			// and browse to http://localhost:16686
 			case jaegerFlag:
 				cli.Println("running with jaeger tracing reporting to localhost")
-				transport := transport.NewHTTPTransport("http://localhost:14268/api/traces?format=jaeger.thrift", transport.HTTPBatchSize(128000))
-				reporter := jaeger.NewRemoteReporter(transport)
-				tracer, closer := jaeger.NewTracer("dolt", jaeger.NewConstSampler(true), reporter)
-				opentracing.SetGlobalTracer(tracer)
-				defer closer.Close()
-				args = args[1:]
-
+				exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint("http://localhost:14268/api/traces")))
+				if err != nil {
+					cli.Println(color.YellowString("could not create jaeger collector: %v", err))
+				} else {
+					tp := tracesdk.NewTracerProvider(
+						tracesdk.WithBatcher(exp),
+						tracesdk.WithResource(resource.NewWithAttributes(
+							semconv.SchemaURL,
+							semconv.ServiceNameKey.String("dolt"),
+						)),
+					)
+					otel.SetTracerProvider(tp)
+					defer tp.Shutdown(context.Background())
+					args = args[1:]
+				}
 			// Currently goland doesn't support running with a different working directory when using go modules.
 			// This is a hack that allows a different working directory to be set after the application starts using
 			// chdir=<DIR>.  The syntax is not flexible and must match exactly this.
@@ -264,6 +279,10 @@ func runMain() int {
 				csMetrics = true
 				args = args[1:]
 
+			case ignoreLocksFlag:
+				ignoreLockFile = true
+				args = args[1:]
+
 			case featureVersionFlag:
 				if featureVersion, err := strconv.Atoi(args[1]); err == nil {
 					doltdb.DoltFeatureVersion = doltdb.FeatureVersion(featureVersion)
@@ -287,6 +306,7 @@ func runMain() int {
 
 	ctx := context.Background()
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
+	dEnv.IgnoreLockFile = ignoreLockFile
 
 	root, err := env.GetCurrentUserHomeDir()
 	if err != nil {
@@ -334,6 +354,33 @@ func runMain() int {
 	}
 
 	defer tempfiles.MovableTempFileProvider.Clean()
+
+	// Find all database names and add global variables for them. This needs to
+	// occur before a call to dsess.InitPersistedSystemVars. Otherwise, database
+	// specific persisted system vars will fail to load.
+	//
+	// In general, there is a lot of work TODO in this area. System global
+	// variables are persisted to the Dolt local config if found and if not
+	// found the Dolt global config (typically ~/.dolt/config_global.json).
+
+	// Depending on what directory a dolt sql-server is started in, users may
+	// see different variables values. For example, start a dolt sql-server in
+	// the dolt database folder and persist some system variable.
+
+	// If dolt sql-server is started outside that folder, those system variables
+	// will be lost. This is particularly confusing for database specific system
+	// variables like `${db_name}_default_branch` (maybe these should not be
+	// part of Dolt config in the first place!).
+
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	if err != nil {
+		cli.PrintErrln("failed to load database names")
+		return 1
+	}
+	_ = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
+		dsess.DefineSystemVariablesForDB(dbName)
+		return false, nil
+	})
 
 	err = dsess.InitPersistedSystemVars(dEnv)
 	if err != nil {

@@ -16,12 +16,15 @@ package commands
 
 import (
 	"context"
+	"fmt"
+	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -45,6 +48,7 @@ dolt checkout {{.LessThan}}table{{.GreaterThan}}...
 		`{{.LessThan}}branch{{.GreaterThan}}`,
 		`{{.LessThan}}table{{.GreaterThan}}...`,
 		`-b {{.LessThan}}new-branch{{.GreaterThan}} [{{.LessThan}}start-point{{.GreaterThan}}]`,
+		`--track {{.LessThan}}remote{{.GreaterThan}}/{{.LessThan}}branch{{.GreaterThan}}`,
 	},
 }
 
@@ -79,24 +83,18 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	ap := cli.CreateCheckoutArgParser()
 	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, checkoutDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, helpPrt)
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), helpPrt)
+	}
 
-	if (apr.Contains(cli.CheckoutCoBranch) && apr.NArg() > 1) || (!apr.Contains(cli.CheckoutCoBranch) && apr.NArg() == 0) {
+	branchOrTrack := apr.Contains(cli.CheckoutCoBranch) || apr.Contains(cli.TrackFlag)
+	if (branchOrTrack && apr.NArg() > 1) || (!branchOrTrack && apr.NArg() == 0) {
 		usagePrt()
 		return 1
 	}
 
-	if apr.ContainsArg(doltdb.DocTableName) {
-		verr := errhand.BuildDError("Use dolt checkout <filename> to check out individual docs.").Build()
-		return HandleVErrAndExitCode(verr, usagePrt)
-	}
-
-	if newBranch, newBranchOk := apr.GetValue(cli.CheckoutCoBranch); newBranchOk {
-		var verr errhand.VerboseError
-		if len(newBranch) == 0 {
-			verr = errhand.BuildDError("error: cannot checkout empty string").Build()
-		} else {
-			verr = checkoutNewBranch(ctx, dEnv, newBranch, apr)
-		}
+	if branchOrTrack {
+		verr := checkoutNewBranch(ctx, dEnv, apr)
 		return HandleVErrAndExitCode(verr, usagePrt)
 	}
 
@@ -126,14 +124,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return handleResetError(verr, usagePrt)
 	}
 
-	tbls, docs, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), args)
-	if err != nil {
-		verr := errhand.BuildDError("error: unable to parse arguments.").AddCause(err).Build()
-		return HandleVErrAndExitCode(verr, usagePrt)
-	}
-
-	verr := checkoutTablesAndDocs(ctx, dEnv, tbls, docs)
-
+	verr := checkoutTables(ctx, dEnv, args)
 	if verr != nil && apr.NArg() == 1 {
 		verr = checkoutRemoteBranchOrSuggestNew(ctx, dEnv, name)
 	}
@@ -141,12 +132,83 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	return HandleVErrAndExitCode(verr, usagePrt)
 }
 
+func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
+	var newBranchName string
+	var remoteName string
+	var remoteBranchName string
+	var startPt = "head"
+
+	if apr.NArg() == 1 {
+		startPt = apr.Arg(0)
+	}
+
+	trackVal, setTrackUpstream := apr.GetValue(cli.TrackFlag)
+	if setTrackUpstream {
+		if trackVal != "direct" && trackVal != "inherit" {
+			startPt = trackVal
+		} else if trackVal == "inherit" {
+			return errhand.VerboseErrorFromError(fmt.Errorf("--track='inherit' is not supported yet"))
+		}
+		remoteName, remoteBranchName = ParseRemoteBranchName(startPt)
+		remotes, err := dEnv.RepoStateReader().GetRemotes()
+		if err != nil {
+			return errhand.BuildDError(err.Error()).Build()
+		}
+		_, remoteOk := remotes[remoteName]
+		if !remoteOk {
+			return errhand.BuildDError(fmt.Errorf("'%s' is not a valid remote ref and a branch '%s' cannot be created from it", startPt, remoteBranchName).Error()).Build()
+		}
+		newBranchName = remoteBranchName
+	}
+
+	if newBranch, ok := apr.GetValue(cli.CheckoutCoBranch); ok {
+		if len(newBranch) == 0 {
+			return errhand.BuildDError("error: cannot checkout empty string").Build()
+		}
+		newBranchName = newBranch
+	}
+
+	verr := checkoutNewBranchFromStartPt(ctx, dEnv, newBranchName, startPt)
+	if verr != nil {
+		return verr
+	}
+
+	// the new branch is checked out at this point
+	if setTrackUpstream {
+		verr = SetRemoteUpstreamForBranchRef(dEnv, remoteName, remoteBranchName, dEnv.RepoStateReader().CWBHeadRef())
+		if verr != nil {
+			return verr
+		}
+	} else if autoSetupMerge, err := dEnv.Config.GetString("branch.autosetupmerge"); err != nil || autoSetupMerge != "false" {
+		// do guess remote branch if branch.autosetupmerge is not 'false', or if it is not set, it should default to 'true'.
+		// if no remote, it should not return an error
+		remotes, err := dEnv.RepoStateReader().GetRemotes()
+		if err != nil {
+			return nil
+		}
+		remoteName, remoteBranchName = ParseRemoteBranchName(startPt)
+		_, remoteOk := remotes[remoteName]
+		if !remoteOk {
+			return nil
+		}
+		verr = SetRemoteUpstreamForBranchRef(dEnv, remoteName, remoteBranchName, dEnv.RepoStateReader().CWBHeadRef())
+		if verr != nil {
+			return verr
+		}
+	}
+
+	return nil
+}
+
+// checkoutRemoteBranchOrSuggestNew checks out a new branch guessing the remote branch,
+// if there is a branch with matching name from exactly one remote.
 func checkoutRemoteBranchOrSuggestNew(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
-	if ref, refExists, err := actions.GetRemoteBranchRef(ctx, dEnv.DoltDB, name); err != nil {
+	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dEnv.DoltDB, name)
+	if err != nil {
 		return errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
-	} else if refExists {
-		return checkoutNewBranchFromStartPt(ctx, dEnv, name, ref.String())
-	} else {
+	}
+
+	if len(remoteRefs) == 0 {
 		// Check if the user is trying to enter a detached head state
 		commit, _ := actions.MaybeGetCommit(ctx, dEnv, name)
 		if commit != nil {
@@ -159,12 +221,20 @@ func checkoutRemoteBranchOrSuggestNew(ctx context.Context, dEnv *env.DoltEnv, na
 			return errhand.BuildDError(str, name).Build()
 		}
 		return errhand.BuildDError("error: could not find %s", name).Build()
+	} else if len(remoteRefs) == 1 {
+		verr := checkoutNewBranchFromStartPt(ctx, dEnv, name, remoteRefs[0].String())
+		if verr != nil {
+			return verr
+		}
+		return SetRemoteUpstreamForBranchRef(dEnv, remoteRefs[0].GetRemote(), remoteRefs[0].GetBranch(), dEnv.RepoStateReader().CWBHeadRef())
+	} else {
+		// TODO : add hint of using `dolt checkout --track <remote>/<branch>` when --track flag is supported
+		return errhand.BuildDError("'%s' matched multiple (%v) remote tracking branches", name, len(remoteRefs)).Build()
 	}
 }
 
 func checkoutNewBranchFromStartPt(ctx context.Context, dEnv *env.DoltEnv, newBranch, startPt string) errhand.VerboseError {
 	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, false)
-
 	if err != nil {
 		return errhand.BuildDError(err.Error()).Build()
 	}
@@ -172,28 +242,13 @@ func checkoutNewBranchFromStartPt(ctx context.Context, dEnv *env.DoltEnv, newBra
 	return checkoutBranch(ctx, dEnv, newBranch, false)
 }
 
-func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch string, apr *argparser.ArgParseResults) errhand.VerboseError {
-	startPt := "head"
-	if apr.NArg() == 1 {
-		startPt = apr.Arg(0)
-	}
-
-	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, false)
-
-	if err != nil {
-		return errhand.BuildDError(err.Error()).Build()
-	}
-
-	return checkoutBranch(ctx, dEnv, newBranch, false)
-}
-
-func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []string, docs doltdocs.Docs) errhand.VerboseError {
+func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, tables []string) errhand.VerboseError {
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = actions.CheckoutTablesAndDocs(ctx, roots, dEnv.DbData(), tables, docs)
+	err = actions.CheckoutTables(ctx, roots, dEnv.DbData(), tables)
 
 	if err != nil {
 		if doltdb.IsRootValUnreachable(err) {
@@ -235,7 +290,7 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string, force b
 			return bdr.Build()
 		} else if err == doltdb.ErrAlreadyOnBranch {
 			// Being on the same branch shouldn't be an error
-			cli.Printf("Already on branch '%s'", name)
+			cli.Printf("Already on branch '%s'\n", name)
 			return nil
 		} else {
 			bdr := errhand.BuildDError("fatal: Unexpected error checking out branch '%s'", name)
@@ -249,8 +304,46 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string, force b
 	return nil
 }
 
+// SetRemoteUpstreamForBranchRef sets upstream for checked out branch. This applies `dolt checkout <bn>`,
+// if <bn> matches any remote branch name. This should not happen for `dolt checkout -b <bn>` case.
+func SetRemoteUpstreamForBranchRef(dEnv *env.DoltEnv, remote, remoteBranch string, branchRef ref.DoltRef) errhand.VerboseError {
+	refSpec, err := ref.ParseRefSpecForRemote(remote, remoteBranch)
+	if err != nil {
+		return errhand.BuildDError(fmt.Errorf("%w: '%s'", err, remote).Error()).Build()
+	}
+
+	src := refSpec.SrcRef(branchRef)
+	dest := refSpec.DestRef(src)
+
+	err = dEnv.RepoStateWriter().UpdateBranch(branchRef.GetPath(), env.BranchConfig{
+		Merge: ref.MarshalableRef{
+			Ref: dest,
+		},
+		Remote: remote,
+	})
+	if err != nil {
+		return errhand.BuildDError(err.Error()).Build()
+	}
+	err = dEnv.RepoState.Save(dEnv.FS)
+	if err != nil {
+		return errhand.BuildDError(actions.ErrFailedToSaveRepoState.Error()).AddCause(err).Build()
+	}
+	cli.Printf("branch '%s' set up to track '%s/%s'.\n", branchRef.GetPath(), remote, remoteBranch)
+
+	return nil
+}
+
 func unreadableRootToVErr(err error) errhand.VerboseError {
 	rt := doltdb.GetUnreachableRootType(err)
 	bdr := errhand.BuildDError("error: unable to read the %s", rt.String())
 	return bdr.AddCause(doltdb.GetUnreachableRootCause(err)).Build()
+}
+
+func ParseRemoteBranchName(startPt string) (string, string) {
+	startPt = strings.TrimPrefix(startPt, "remotes/")
+	names := strings.Split(startPt, "/")
+	if len(names) < 2 {
+		return "", ""
+	}
+	return names[0], strings.Join(names[1:], "/")
 }

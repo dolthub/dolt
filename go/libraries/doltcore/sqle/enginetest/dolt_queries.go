@@ -129,6 +129,28 @@ var DescribeTableAsOfScriptTest = queries.ScriptTest{
 // this slice into others with good names as it grows.
 var DoltScripts = []queries.ScriptTest{
 	{
+		Name: "test backticks in index name (https://github.com/dolthub/dolt/issues/3776)",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t add index ```i```(c1);",
+				Expected: []sql.Row{{sql.OkResult{}}},
+			},
+			{
+				Query: "show create table t;",
+				Expected: []sql.Row{{"t",
+					"CREATE TABLE `t` (\n" +
+						"  `pk` int NOT NULL,\n" +
+						"  `c1` int,\n" +
+						"  PRIMARY KEY (`pk`),\n" +
+						"  KEY ```i``` (`c1`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
 		Name: "test as of indexed join (https://github.com/dolthub/dolt/issues/2189)",
 		SetUpScript: []string{
 			"create table a (pk int primary key, c1 int)",
@@ -227,7 +249,7 @@ var DoltScripts = []queries.ScriptTest{
 					{
 						"dolt_checkout",
 						"",
-						"CREATE PROCEDURE dolt_checkout() SELECT 'External stored procedure defined by mydb';",
+						"CREATE PROCEDURE dolt_checkout() SELECT 'External stored procedure';",
 						"utf8mb4",
 						"utf8mb4_0900_bin",
 						"utf8mb4_0900_bin",
@@ -273,6 +295,33 @@ var DoltScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, 0, nil}},
 				Bindings: map[string]sql.Expression{
 					"v1": expression.NewLiteral(0, sql.Int8),
+				},
+			},
+		},
+	},
+	{
+		Name: "blame: composite pk ordered output with correct header (bats repro)",
+		SetUpScript: []string{
+			"CREATE TABLE t(pk varchar(20), val int)",
+			"ALTER TABLE t ADD PRIMARY KEY (pk, val)",
+			"INSERT INTO t VALUES ('zzz',4),('mult',1),('sub',2),('add',5)",
+			"CALL dadd('.');",
+			"CALL dcommit('-am', 'add rows');",
+			"INSERT INTO t VALUES ('dolt',0),('alt',12),('del',8),('ctl',3)",
+			"CALL dcommit('-am', 'add more rows');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT pk, val, message FROM dolt_blame_t",
+				Expected: []sql.Row{
+					{"add", 5, "add rows"},
+					{"alt", 12, "add more rows"},
+					{"ctl", 3, "add more rows"},
+					{"del", 8, "add more rows"},
+					{"dolt", 0, "add more rows"},
+					{"mult", 1, "add rows"},
+					{"sub", 2, "add rows"},
+					{"zzz", 4, "add rows"},
 				},
 			},
 		},
@@ -423,13 +472,13 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"create table foo1 (n int, de varchar(20));",
 			"insert into foo1 values (1, 'Ein'), (2, 'Zwei'), (3, 'Drei');",
-			"set @Commit1 = dolt_commit('-am', 'inserting into foo1');",
+			"set @Commit1 = dolt_commit('-am', 'inserting into foo1', '--date', '2022-08-06T12:00:00');",
 
 			"update foo1 set de='Eins' where n=1;",
-			"set @Commit2 = dolt_commit('-am', 'updating data in foo1');",
+			"set @Commit2 = dolt_commit('-am', 'updating data in foo1', '--date', '2022-08-06T12:00:01');",
 
 			"insert into foo1 values (4, 'Vier');",
-			"set @Commit3 = dolt_commit('-am', 'inserting data in foo1');",
+			"set @Commit3 = dolt_commit('-am', 'inserting data in foo1', '--date', '2022-08-06T12:00:02');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -455,21 +504,21 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"create table t1 (n int primary key, de varchar(20));",
 			"insert into t1 values (1, 'Eins'), (2, 'Zwei'), (3, 'Drei');",
-			"set @Commit1 = dolt_commit('-am', 'inserting into t1');",
+			"set @Commit1 = dolt_commit('-am', 'inserting into t1', '--date', '2022-08-06T12:00:01');",
 
 			"alter table t1 add column fr varchar(20);",
 			"insert into t1 values (4, 'Vier', 'Quatre');",
-			"set @Commit2 = dolt_commit('-am', 'adding column and inserting data in t1');",
+			"set @Commit2 = dolt_commit('-am', 'adding column and inserting data in t1', '--date', '2022-08-06T12:00:02');",
 
 			"update t1 set fr='Un' where n=1;",
 			"update t1 set fr='Deux' where n=2;",
-			"set @Commit3 = dolt_commit('-am', 'updating data in t1');",
+			"set @Commit3 = dolt_commit('-am', 'updating data in t1', '--date', '2022-08-06T12:00:03');",
 
 			"update t1 set de=concat(de, ', meine herren') where n>1;",
-			"set @Commit4 = dolt_commit('-am', 'be polite when you address a gentleman');",
+			"set @Commit4 = dolt_commit('-am', 'be polite when you address a gentleman', '--date', '2022-08-06T12:00:04');",
 
 			"delete from t1 where n=2;",
-			"set @Commit5 = dolt_commit('-am', 'we don''t need the number 2');",
+			"set @Commit5 = dolt_commit('-am', 'we don''t need the number 2', '--date', '2022-08-06T12:00:05');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -576,21 +625,24 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "explain select pk, c from dolt_history_t1 where pk = 3",
 				Expected: []sql.Row{
-					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+					{"Exchange"},
 					{" └─ Filter(dolt_history_t1.pk = 3)"},
-					{"     └─ Projected table access on [pk c]"},
-					{"         └─ Exchange"},
-					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])"},
+					{"     └─ IndexedTableAccess(dolt_history_t1)"},
+					{"         ├─ index: [dolt_history_t1.pk]"},
+					{"         ├─ filters: [{[3, 3]}]"},
+					{"         └─ columns: [pk c]"},
 				},
 			},
 			{
 				Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
 				Expected: []sql.Row{
-					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{" └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
-					{"     └─ Projected table access on [pk c committer]"},
-					{"         └─ Exchange"},
-					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])"},
+					{"Exchange"},
+					{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+					{"     └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
+					{"         └─ IndexedTableAccess(dolt_history_t1)"},
+					{"             ├─ index: [dolt_history_t1.pk]"},
+					{"             ├─ filters: [{[3, 3]}]"},
+					{"             └─ columns: [pk c committer]"},
 				},
 			},
 		},
@@ -642,21 +694,25 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "explain select pk, c from dolt_history_t1 where c = 4",
 				Expected: []sql.Row{
-					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+					{"Exchange"},
 					{" └─ Filter(dolt_history_t1.c = 4)"},
-					{"     └─ Projected table access on [pk c]"},
-					{"         └─ Exchange"},
-					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.c] with ranges: [{[4, 4]}])"},
+					{"     └─ IndexedTableAccess(dolt_history_t1)"},
+					{"         ├─ index: [dolt_history_t1.c]"},
+					{"         ├─ filters: [{[4, 4]}]"},
+					{"         └─ columns: [pk c]"},
 				},
 			},
 			{
 				Query: "explain select pk, c from dolt_history_t1 where c = 10 and committer = 'someguy'",
 				Expected: []sql.Row{
-					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{" └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = 'someguy'))"},
-					{"     └─ Projected table access on [pk c committer]"},
-					{"         └─ Exchange"},
-					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.c] with ranges: [{[10, 10]}])"}},
+					{"Exchange"},
+					{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+					{"     └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = 'someguy'))"},
+					{"         └─ IndexedTableAccess(dolt_history_t1)"},
+					{"             ├─ index: [dolt_history_t1.c]"},
+					{"             ├─ filters: [{[10, 10]}]"},
+					{"             └─ columns: [pk c committer]"},
+				},
 			},
 		},
 	},
@@ -776,6 +832,47 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_history table with AS OF",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 varchar(20));",
+			"call dolt_add('-A');",
+			"call dolt_commit('-m', 'creating table t');",
+			"insert into t values (1, 2, '3'), (4, 5, '6');",
+			"call dolt_commit('-am', 'added values');",
+			"insert into t values (11, 22, '3'), (44, 55, '6');",
+			"call dolt_commit('-am', 'added values again');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from dolt_history_t;",
+				Expected: []sql.Row{{6}}, // 2 + 4
+			},
+			{
+				Query:    "select count(*) from dolt_history_t AS OF 'head^';",
+				Expected: []sql.Row{{2}}, // 2
+			},
+			{
+				Query: "select message from dolt_log;",
+				Expected: []sql.Row{
+					{"added values again"},
+					{"added values"},
+					{"creating table t"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+			{
+				Query: "select message from dolt_log AS OF 'head^';",
+				Expected: []sql.Row{
+					{"added values"},
+					{"creating table t"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+		},
+	},
 }
 
 var MergeScripts = []queries.ScriptTest{
@@ -818,11 +915,11 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
 			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff', '--date', '2022-08-06T12:00:01');",
 			"SELECT DOLT_CHECKOUT('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -855,14 +952,14 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
 			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
 			"SELECT DOLT_CHECKOUT('main');",
 			"INSERT INTO test VALUES (5),(6),(7);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:03');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -878,7 +975,8 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				// careful to filter out the initial commit, which will be later than the ones above
+				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
@@ -893,14 +991,14 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"INSERT INTO test VALUES (0, 0)",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
 			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (1, 1);",
 			"UPDATE test SET val=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
 			"SELECT DOLT_CHECKOUT('main');",
 			"UPDATE test SET val=1001 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'update a value', '--date', '2022-08-06T12:00:03');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -916,7 +1014,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
 				Expected: []sql.Row{{"update a value"}},
 			},
 			{
@@ -1074,14 +1172,14 @@ var MergeScripts = []queries.ScriptTest{
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
 			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:01');",
 			"SELECT DOLT_CHECKOUT('main');",
 			"INSERT INTO test VALUES (5),(6),(7);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:02');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1097,7 +1195,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
@@ -1486,6 +1584,462 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "insert two tables with the same name and different schema",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			"CALL DOLT_CHECKOUT('-b', 'other');",
+			"CREATE TABLE t (pk int PRIMARY key, col1 int, extracol int);",
+			"INSERT into t VALUES (1, 1, 1);",
+			"CALL DOLT_COMMIT('-am', 'right');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"CREATE TABLE t (pk int PRIMARY key, col1 int);",
+			"INSERT into t VALUES (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'left');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('other');",
+				ExpectedErrStr: "table with same name added in 2 commits can't be merged",
+			},
+		},
+	},
+	{
+		Name: "insert two tables with the same name and schema that don't conflict",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			"CALL DOLT_CHECKOUT('-b', 'other');",
+			"CREATE TABLE t (pk int PRIMARY key, col1 int);",
+			"INSERT into t VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'right');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"CREATE TABLE t (pk int PRIMARY key, col1 int);",
+			"INSERT into t VALUES (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'left');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "SELECT * from t;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+		},
+	},
+	{
+		Name: "insert two tables with the same name and schema that conflict",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			"CALL DOLT_CHECKOUT('-b', 'other');",
+			"CREATE TABLE t (pk int PRIMARY key, col1 int);",
+			"INSERT into t VALUES (1, -1);",
+			"CALL DOLT_COMMIT('-am', 'right');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"CREATE TABLE t (pk int PRIMARY key, col1 int);",
+			"INSERT into t VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'left');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{{nil, nil, 1, 1, 1, -1}},
+			},
+			{
+				Query:    "SELECT * from t;",
+				Expected: []sql.Row{{1, 1}},
+			},
+		},
+	},
+	{
+		Name: "merge with new triggers defined",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			// create table and trigger1 (main & other)
+			"CREATE TABLE x(a BIGINT PRIMARY KEY)",
+			"CREATE TRIGGER trigger1 BEFORE INSERT ON x FOR EACH ROW SET new.a = new.a + 1",
+			"CALL dolt_add('-A')",
+			"CALL dolt_commit('-m', 'added table with trigger')",
+			"INSERT INTO dolt_branches (name, hash) VALUES ('other',hashof('main'))",
+			// create trigger2 on main
+			"CREATE TRIGGER trigger2 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 10",
+			"CALL dolt_commit('-am', 'created trigger2 on main')",
+			// create trigger3 & trigger4 on other
+			"CALL dolt_checkout('other')",
+			"CREATE TRIGGER trigger3 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 100",
+			"CREATE TRIGGER trigger4 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 1000",
+			"UPDATE dolt_schemas SET id = id + 1 WHERE name = 'trigger4'",
+			"CALL dolt_commit('-am', 'created triggers 3 & 4 on other');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			// todo: merge triggers correctly
+			//{
+			//	Query:    "select count(*) from dolt_schemas where type = 'trigger';",
+			//	Expected: []sql.Row{{4}},
+			//},
+		},
+	},
+	{
+		Name: "dolt_merge() works with no auto increment overlap",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+			"INSERT INTO t (c0) VALUES (1), (2);",
+			"CALL dolt_commit('-a', '-m', 'cm1');",
+			"CALL dolt_checkout('-b', 'test');",
+			"INSERT INTO t (c0) VALUES (3), (4);",
+			"CALL dolt_commit('-a', '-m', 'cm2');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('test');",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 5}}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+					{7, 7},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_merge() (3way) works with no auto increment overlap",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+			"INSERT INTO t (c0) VALUES (1);",
+			"CALL dolt_commit('-a', '-m', 'cm1');",
+			"CALL dolt_checkout('-b', 'test');",
+			"INSERT INTO t (pk,c0) VALUES (3,3), (4,4);",
+			"CALL dolt_commit('-a', '-m', 'cm2');",
+			"CALL dolt_checkout('main');",
+			"INSERT INTO t (c0) VALUES (2);",
+			"CALL dolt_commit('-a', '-m', 'cm3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('test');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 5}}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+					{7, 7},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_merge() with a gap in an auto increment key",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+			"INSERT INTO t (c0) VALUES (1), (2);",
+			"CALL dolt_add('-A');",
+			"CALL dolt_commit('-am', 'cm1');",
+			"CALL dolt_checkout('-b', 'test');",
+			"INSERT INTO t VALUES (4,4), (5,5);",
+			"CALL dolt_commit('-am', 'cm2');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('test');",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (3,3),(NULL,6);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_merge() (3way) with a gap in an auto increment key",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+			"INSERT INTO t (c0) VALUES (1);",
+			"CALL dolt_add('-A');",
+			"CALL dolt_commit('-am', 'cm1');",
+			"CALL dolt_checkout('-b', 'test');",
+			"INSERT INTO t VALUES (4,4), (5,5);",
+			"CALL dolt_commit('-am', 'cm2');",
+			"CALL dolt_checkout('main');",
+			"INSERT INTO t (c0) VALUES (2);",
+			"CALL dolt_commit('-am', 'cm3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('test');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (3,3),(NULL,6);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+				},
+			},
+		},
+	},
+}
+
+var Dolt1MergeScripts = []queries.ScriptTest{
+	{
+		Name: "Merge errors if the primary key types have changed (even if the new type has the same NomsKind)",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk1 bigint, pk2 bigint, PRIMARY KEY (pk1, pk2));",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"ALTER TABLE t MODIFY COLUMN pk2 tinyint",
+			"INSERT INTO t VALUES (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'right commit');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'left commit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('right');",
+				ExpectedErrStr: "error: cannot merge two tables with different primary key sets",
+			},
+		},
+	},
+}
+
+var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
+	{
+		Name: "Keyless merge with unique indexes documents violations",
+		SetUpScript: []string{
+			"SET dolt_force_transaction_commit = on;",
+			"CREATE table t (col1 int, col2 int UNIQUE);",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"INSERT INTO t VALUES (2, 1);",
+			"CALL DOLT_COMMIT('-am', 'right');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t values (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'left');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT violation_type, col1, col2 from dolt_constraint_violations_t ORDER BY col1 ASC;",
+				Expected: []sql.Row{{uint64(merge.CvType_UniqueIndex), 1, 1}, {uint64(merge.CvType_UniqueIndex), 2, 1}},
+			},
+			{
+				Query:    "SELECT * from t ORDER BY col1 ASC;",
+				Expected: []sql.Row{{1, 1}, {2, 1}},
+			},
+		},
+	},
+	{
+		Name: "Keyless merge with foreign keys documents violations",
+		SetUpScript: []string{
+			"SET dolt_force_transaction_commit = on;",
+			"CREATE table parent (pk int PRIMARY KEY);",
+			"CREATE table child (parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent (pk));",
+			"INSERT INTO parent VALUES (1);",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"INSERT INTO child VALUES (1);",
+			"CALL DOLT_COMMIT('-am', 'right');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"DELETE from parent where pk = 1;",
+			"CALL DOLT_COMMIT('-am', 'left');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT violation_type, parent_fk from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{uint64(merge.CvType_ForeignKey), 1}},
+			},
+			{
+				Query:    "SELECT * from parent;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from child;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "Keyless merge documents conflicts",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			"CREATE table t (col1 int, col2 int);",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"INSERT INTO t VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'right');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'left');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT base_col1, base_col2, our_col1, our_col2, their_col1, their_col2 from dolt_conflicts_t;",
+				Expected: []sql.Row{{nil, nil, 1, 1, 1, 1}},
+			},
+		},
+	},
+}
+
+var DoltConflictTableNameTableTests = []queries.ScriptTest{
+	{
+		Name: "conflict diff types",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			"CREATE table t (pk int PRIMARY KEY, col1 int);",
+			"INSERT INTO t VALUES (1, 1);",
+			"INSERT INTO t VALUES (2, 2);",
+			"INSERT INTO t VALUES (3, 3);",
+			"CALL DOLT_COMMIT('-am', 'create table with row');",
+
+			"CALL DOLT_CHECKOUT('-b', 'other');",
+			"UPDATE t set col1 = 3 where pk = 1;",
+			"UPDATE t set col1 = 0 where pk = 2;",
+			"DELETE FROM t where pk = 3;",
+			"INSERT INTO t VALUES (4, -4);",
+			"CALL DOLT_COMMIT('-am', 'right edit');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"UPDATE t set col1 = 2 where pk = 1;",
+			"DELETE FROM t where pk = 2;",
+			"UPDATE t set col1 = 0 where pk = 3;",
+			"INSERT INTO t VALUES (4, 4);",
+			"CALL DOLT_COMMIT('-am', 'left edit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query: "SELECT base_pk, base_col1, our_pk, our_col1, our_diff_type, their_pk, their_col1, their_diff_type" +
+					" from dolt_conflicts_t ORDER BY COALESCE(base_pk, our_pk, their_pk) ASC;",
+				Expected: []sql.Row{
+					{1, 1, 1, 2, "modified", 1, 3, "modified"},
+					{2, 2, nil, nil, "removed", 2, 0, "modified"},
+					{3, 3, 3, 0, "modified", nil, nil, "removed"},
+					{nil, nil, 4, 4, "added", 4, -4, "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "keyless cardinality columns",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			"CREATE table t (col1 int);",
+			"INSERT INTO t VALUES (1), (2), (3), (4), (6);",
+			"CALL DOLT_COMMIT('-am', 'init');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"INSERT INTO t VALUES (1);",
+			"DELETE FROM t where col1 = 2;",
+			"INSERT INTO t VALUES (3);",
+			"INSERT INTO t VALUES (4), (4);",
+			"INSERT INTO t VALUES (5);",
+			"DELETE from t where col1 = 6;",
+			"CALL DOLT_COMMIT('-am', 'right');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"DELETE FROM t WHERE col1 = 1;",
+			"INSERT INTO t VALUES (2);",
+			"INSERT INTO t VALUES (3);",
+			"INSERT INTO t VALUES (4);",
+			"INSERT INTO t VALUES (5);",
+			"DELETE from t where col1 = 6;",
+			"CALL DOLT_COMMIT('-am', 'left');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query: "SELECT base_col1, our_col1, their_col1, our_diff_type, their_diff_type, base_cardinality, our_cardinality, their_cardinality from dolt_conflicts_t ORDER BY COALESCE(base_col1, our_col1, their_col1) ASC;",
+				Expected: []sql.Row{
+					{1, nil, 1, "removed", "modified", uint64(1), uint64(0), uint64(2)},
+					{2, 2, nil, "modified", "removed", uint64(1), uint64(2), uint64(0)},
+					{3, 3, 3, "modified", "modified", uint64(1), uint64(2), uint64(2)},
+					{4, 4, 4, "modified", "modified", uint64(1), uint64(2), uint64(3)},
+					{nil, 5, 5, "added", "added", uint64(0), uint64(1), uint64(1)},
+					{6, nil, nil, "removed", "removed", uint64(1), uint64(0), uint64(0)},
+				},
+			},
+		},
+	},
 }
 
 // MergeArtifactsScripts tests new format merge behavior where
@@ -1597,10 +2151,12 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			"CALL DOLT_COMMIT('-am', 'create table');",
 			"INSERT INTO t VALUES (1, 1);",
 			"CALL DOLT_COMMIT('-am', 'insert pk 1');",
+
 			"CALL DOLT_BRANCH('other');",
 			"UPDATE t set col1 = 100 where pk = 1;",
 			"CALL DOLT_COMMIT('-am', 'left edit');",
 			"CALL DOLT_CHECKOUT('other');",
+
 			"UPDATE T set col1 = -100 where pk = 1;",
 			"CALL DOLT_COMMIT('-am', 'right edit');",
 			"CALL DOLT_CHECKOUT('main');",
@@ -2243,7 +2799,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('right');",
-				ExpectedErrStr: "Duplicate entry for key 'col1_uniq': duplicate unique key given: [1,1]",
+				ExpectedErrStr: "duplicate unique key given: [1]",
 			},
 			{
 				Query:    "SELECT * from t",
@@ -2281,7 +2837,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('right');",
-				ExpectedErrStr: "Duplicate entry for key 'col1_uniq': duplicate unique key given: [1,1]",
+				ExpectedErrStr: "duplicate unique key given: [1]",
 			},
 		},
 	},
@@ -3033,6 +3589,29 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 	},
 }
 
+var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
+	{
+		Name: "Diff table stops creating diff partitions when any primary key type has changed",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk1 VARCHAR(100), pk2 VARCHAR(100), PRIMARY KEY (pk1, pk2));",
+			"INSERT INTO t VALUES ('1', '1');",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"ALTER TABLE t MODIFY COLUMN pk2 VARCHAR(101)",
+			"CALL DOLT_COMMIT('-am', 'modify column type');",
+
+			"INSERT INTO t VALUES ('2', '2');",
+			"CALL DOLT_COMMIT('-am', 'insert new row');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT to_pk1, to_pk2, from_pk1, from_pk2, diff_type from dolt_diff_t;",
+				Expected: []sql.Row{{"2", "2", nil, nil, "added"}},
+			},
+		},
+	},
+}
+
 var DiffTableFunctionScriptTests = []queries.ScriptTest{
 	{
 		Name: "invalid arguments",
@@ -3519,6 +4098,33 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				// Maybe confusing? We match the old table name as well
 				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD~', 'HEAD')",
 				Expected: []sql.Row{{3, 4, "HEAD~", "HEAD", "added"}},
+			},
+		},
+	},
+}
+
+var LargeJsonObjectScriptTests = []queries.ScriptTest{
+	{
+		Name: "JSON under max length limit",
+		SetUpScript: []string{
+			"create table t (j JSON)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    `insert into t set j= concat('[', repeat('"word",', 10000000), '"word"]')`,
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+			},
+		},
+	},
+	{
+		Name: "JSON over max length limit",
+		SetUpScript: []string{
+			"create table t (j JSON)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       `insert into t set j= concat('[', repeat('"word",', 50000000), '"word"]')`,
+				ExpectedErr: sql.ErrLengthTooLarge,
 			},
 		},
 	},
@@ -4450,6 +5056,189 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * from dolt_constraint_violations;",
 				Expected: []sql.Row{},
+			},
+		},
+	},
+}
+
+var DoltTagTestScripts = []queries.ScriptTest{
+	{
+		Name: "dolt-tag: SQL create tags",
+		SetUpScript: []string{
+			"CREATE TABLE test(pk int primary key);",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"CALL DOLT_COMMIT('-am','created table test')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_TAG('v1', 'HEAD')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT tag_name, IF(CHAR_LENGTH(tag_hash) < 0, NULL, 'not null'), tagger, email, IF(date IS NULL, NULL, 'not null'), message from dolt_tags",
+				Expected: []sql.Row{{"v1", "not null", "billy bob", "bigbillieb@fake.horse", "not null", ""}},
+			},
+			{
+				Query:    "CALL DOLT_TAG('v2', '-m', 'create tag v2')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT tag_name, message from dolt_tags",
+				Expected: []sql.Row{{"v1", ""}, {"v2", "create tag v2"}},
+			},
+		},
+	},
+	{
+		Name: "dolt-tag: SQL delete tags",
+		SetUpScript: []string{
+			"CREATE TABLE test(pk int primary key);",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"CALL DOLT_COMMIT('-am','created table test')",
+			"CALL DOLT_TAG('v1', '-m', 'create tag v1')",
+			"CALL DOLT_TAG('v2', '-m', 'create tag v2')",
+			"CALL DOLT_TAG('v3', '-m', 'create tag v3')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT tag_name, message from dolt_tags",
+				Expected: []sql.Row{{"v1", "create tag v1"}, {"v2", "create tag v2"}, {"v3", "create tag v3"}},
+			},
+			{
+				Query:    "CALL DOLT_TAG('-d','v1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT tag_name, message from dolt_tags",
+				Expected: []sql.Row{{"v2", "create tag v2"}, {"v3", "create tag v3"}},
+			},
+			{
+				Query:    "CALL DOLT_TAG('-d','v2','v3')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT tag_name, message from dolt_tags",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "dolt-tag: SQL use a tag as a ref for merge",
+		SetUpScript: []string{
+			"CREATE TABLE test(pk int primary key);",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"CALL DOLT_COMMIT('-am','created table test')",
+			"DELETE FROM test WHERE pk = 0",
+			"INSERT INTO test VALUES (3)",
+			"CALL DOLT_COMMIT('-am','made changes')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_TAG('v1','HEAD')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('-b','other','HEAD^')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "INSERT INTO test VALUES (8), (9)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2}}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-am','made changes in other')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_MERGE('v1')",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "SELECT * FROM test",
+				Expected: []sql.Row{{1}, {2}, {3}, {8}, {9}},
+			},
+		},
+	},
+}
+
+var DoltRemoteTestScripts = []queries.ScriptTest{
+	{
+		Name: "dolt-remote: SQL add remotes",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_REMOTE('add','origin','file://../test')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
+				Expected: []sql.Row{{"origin", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin/*"]`), sql.MustJSON(`{}`)}},
+			},
+			{
+				Query:          "CALL DOLT_REMOTE()",
+				ExpectedErrStr: "error: invalid argument, use 'dolt_remotes' system table to list remotes",
+			},
+			{
+				Query:          "CALL DOLT_REMOTE('origin')",
+				ExpectedErrStr: "error: invalid argument",
+			},
+			{
+				Query:          "INSERT INTO dolt_remotes (name, url) VALUES ('origin', 'file://../test')",
+				ExpectedErrStr: "the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes",
+			},
+		},
+	},
+	{
+		Name: "dolt-remote: SQL remove remotes",
+		SetUpScript: []string{
+			"CALL DOLT_REMOTE('add','origin1','file://.')",
+			"CALL DOLT_REMOTE('add','origin2','aws://[dynamo_db_table:s3_bucket]/repo_name')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
+				Expected: []sql.Row{
+					{"origin1", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), sql.MustJSON(`{}`)},
+					{"origin2", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin2/*"]`), sql.MustJSON(`{}`)}},
+			},
+			{
+				Query:    "CALL DOLT_REMOTE('remove','origin2')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
+				Expected: []sql.Row{{"origin1", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), sql.MustJSON(`{}`)}},
+			},
+			// 'origin1' remote must exist in order this error to be returned; otherwise, no error from EOF
+			{
+				Query:          "DELETE FROM dolt_remotes WHERE name = 'origin1'",
+				ExpectedErrStr: "the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes",
+			},
+		},
+	},
+	{
+		Name: "dolt-remote: multi-repo test",
+		SetUpScript: []string{
+			"create database one",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "use one;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "CALL DOLT_REMOTE('add','test01','file:///foo');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_remotes where name='test01';",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "use mydb;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select count(*) from dolt_remotes where name='test01';",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},

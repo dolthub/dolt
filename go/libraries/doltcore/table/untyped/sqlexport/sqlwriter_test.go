@@ -93,11 +93,11 @@ func TestEndToEnd(t *testing.T) {
 			empty, err := types.NewMap(ctx, root.VRW())
 			require.NoError(t, err)
 
-			indexes := durable.NewIndexSet(ctx, root.VRW())
+			indexes := durable.NewIndexSet(ctx, root.VRW(), root.NodeStore())
 			indexes, err = indexes.PutNomsIndex(ctx, dtestutils.IndexName, empty)
 			require.NoError(t, err)
 
-			tbl, err := doltdb.NewNomsTable(ctx, root.VRW(), tt.sch, empty, indexes, nil)
+			tbl, err := doltdb.NewNomsTable(ctx, root.VRW(), root.NodeStore(), tt.sch, empty, indexes, nil)
 			require.NoError(t, err)
 			root, err = root.PutTable(ctx, tableName, tbl)
 			require.NoError(t, err)

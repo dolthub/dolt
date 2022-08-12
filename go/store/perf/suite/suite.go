@@ -30,59 +30,61 @@
 //  4. Run go test with the -perf <path to noms db> flag.
 //
 // Flags:
-//  -perf.mem      Backs the database by a memory store, instead of nbs.
-//  -perf.prefix   Gives the dataset IDs for test results a prefix.
-//  -perf.repeat   Sets how many times tests are repeated ("reps").
-//  -perf.run      Only run tests that match a regex (case insensitive).
-//  -perf.testdata Sets a custom path to the Noms testdata directory.
+//
+//	-perf.mem      Backs the database by a memory store, instead of nbs.
+//	-perf.prefix   Gives the dataset IDs for test results a prefix.
+//	-perf.repeat   Sets how many times tests are repeated ("reps").
+//	-perf.run      Only run tests that match a regex (case insensitive).
+//	-perf.testdata Sets a custom path to the Noms testdata directory.
 //
 // PerfSuite also supports testify/suite style Setup/TearDown methods:
-//  Setup/TearDownSuite is called exactly once.
-//  Setup/TearDownRep   is called for each repetition of the test runs, i.e. -perf.repeat times.
-//  Setup/TearDownTest  is called for every test.
+//
+//	Setup/TearDownSuite is called exactly once.
+//	Setup/TearDownRep   is called for each repetition of the test runs, i.e. -perf.repeat times.
+//	Setup/TearDownTest  is called for every test.
 //
 // Test results are written to Noms, along with a dump of the environment they were recorded in.
 //
 // Test names are derived from that "non-empty capitalized string": "Test" is omitted because it's
 // redundant, and leading digits are omitted to allow for manual test ordering. For example:
 //
-//  > cat ./samples/go/csv/csv-import/perf_test.go
-//  type perfSuite {
-//    suite.PerfSuite
-//  }
+//	> cat ./samples/go/csv/csv-import/perf_test.go
+//	type perfSuite {
+//	  suite.PerfSuite
+//	}
 //
-//  func (s *perfSuite) TestFoo() { ... }
-//  func (s *perfSuite) TestZoo() { ... }
-//  func (s *perfSuite) Test01Qux() { ... }
-//  func (s *perfSuite) Test02Bar() { ... }
+//	func (s *perfSuite) TestFoo() { ... }
+//	func (s *perfSuite) TestZoo() { ... }
+//	func (s *perfSuite) Test01Qux() { ... }
+//	func (s *perfSuite) Test02Bar() { ... }
 //
-//  func TestPerf(t *testing.T) {
-//    suite.Run("csv-import", t, &perfSuite{})
-//  }
+//	func TestPerf(t *testing.T) {
+//	  suite.Run("csv-import", t, &perfSuite{})
+//	}
 //
-//  > noms serve &
-//  > go test -v ./samples/go/csv/... -perf http://localhost:8000 -perf.repeat 3
-//  (perf) RUN(1/3) Test01Qux (recorded as "Qux")
-//  (perf) PASS:    Test01Qux (5s, paused 15s, total 20s)
-//  (perf) RUN(1/3) Test02Bar (recorded as "Bar")
-//  (perf) PASS:    Test02Bar (15s, paused 2s, total 17s)
-//  (perf) RUN(1/3) TestFoo (recorded as "Foo")
-//  (perf) PASS:    TestFoo (10s, paused 1s, total 11s)
-//  (perf) RUN(1/3) TestZoo (recorded as "Zoo")
-//  (perf) PASS:    TestZoo (1s, paused 42s, total 43s)
-//  ...
+//	> noms serve &
+//	> go test -v ./samples/go/csv/... -perf http://localhost:8000 -perf.repeat 3
+//	(perf) RUN(1/3) Test01Qux (recorded as "Qux")
+//	(perf) PASS:    Test01Qux (5s, paused 15s, total 20s)
+//	(perf) RUN(1/3) Test02Bar (recorded as "Bar")
+//	(perf) PASS:    Test02Bar (15s, paused 2s, total 17s)
+//	(perf) RUN(1/3) TestFoo (recorded as "Foo")
+//	(perf) PASS:    TestFoo (10s, paused 1s, total 11s)
+//	(perf) RUN(1/3) TestZoo (recorded as "Zoo")
+//	(perf) PASS:    TestZoo (1s, paused 42s, total 43s)
+//	...
 //
-//  > noms show http://localhost:8000::csv-import
-//  {
-//    environment: ...
-//    tests: [{
-//      "Bar": {elapsed: 15s, paused: 2s,  total: 17s},
-//      "Foo": {elapsed: 10s, paused: 1s,  total: 11s},
-//      "Qux": {elapsed: 5s,  paused: 15s, total: 20s},
-//      "Zoo": {elapsed: 1s,  paused: 42s, total: 43s},
-//    }, ...]
-//    ...
-//  }
+//	> noms show http://localhost:8000::csv-import
+//	{
+//	  environment: ...
+//	  tests: [{
+//	    "Bar": {elapsed: 15s, paused: 2s,  total: 17s},
+//	    "Foo": {elapsed: 10s, paused: 1s,  total: 11s},
+//	    "Qux": {elapsed: 5s,  paused: 15s, total: 20s},
+//	    "Zoo": {elapsed: 1s,  paused: 42s, total: 43s},
+//	  }, ...]
+//	  ...
+//	}
 package suite
 
 import (
@@ -115,6 +117,7 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/marshal"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -304,7 +307,8 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 		memCS := storage.NewView()
 		suite.DatabaseSpec = "mem://"
 		suite.VS = types.NewValueStore(memCS)
-		suite.Database = datas.NewTypesDatabase(suite.VS)
+		ns := tree.NewNodeStore(memCS)
+		suite.Database = datas.NewTypesDatabase(suite.VS, ns)
 		defer suite.Database.Close()
 
 		if t, ok := suiteT.(SetupRepSuite); ok {

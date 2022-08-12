@@ -18,9 +18,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 )
 
 func TestUnmarshall(t *testing.T) {
@@ -34,7 +35,7 @@ behavior:
     disable_client_multi_statements: false
 
 user:
-    name: root
+    name: ""
     password: ""
 
 listener:
@@ -59,8 +60,32 @@ metrics:
         label1: value1
         label2: 2
         label3: true
-`
 
+user_session_vars:
+    - name: user0
+      vars:
+          var1: val0_1
+          var2: val0_2
+          var3: val0_3
+    - name: user1
+      vars:
+          var1: val1_1
+          var2: val1_2
+          var4: val1_4
+
+jwks:
+  - name: jwks_name
+    location_url: https://website.com
+    claims: 
+      field1: a
+      field2: b
+    fields_to_log: [field1, field2]
+  - name: jwks_name2
+    location_url: https://website.com
+    claims: 
+      field1: a
+    fields_to_log:
+`
 	expected := serverConfigAsYAMLConfig(DefaultServerConfig())
 	expected.DatabaseConfig = []DatabaseYAMLConfig{
 		{
@@ -82,6 +107,43 @@ metrics:
 		},
 	}
 	expected.DataDirStr = strPtr("some nonsense")
+	expected.Vars = []UserSessionVars{
+		{
+			Name: "user0",
+			Vars: map[string]string{
+				"var1": "val0_1",
+				"var2": "val0_2",
+				"var3": "val0_3",
+			},
+		},
+		{
+			Name: "user1",
+			Vars: map[string]string{
+				"var1": "val1_1",
+				"var2": "val1_2",
+				"var4": "val1_4",
+			},
+		},
+	}
+	expected.Jwks = []engine.JwksConfig{
+		{
+			Name:        "jwks_name",
+			LocationUrl: "https://website.com",
+			Claims: map[string]string{
+				"field1": "a",
+				"field2": "b",
+			},
+			FieldsToLog: []string{"field1", "field2"},
+		},
+		{
+			Name:        "jwks_name2",
+			LocationUrl: "https://website.com",
+			Claims: map[string]string{
+				"field1": "a",
+			},
+			FieldsToLog: nil,
+		},
+	}
 
 	config, err := NewYamlConfig([]byte(testStr))
 	require.NoError(t, err)
@@ -136,10 +198,12 @@ func TestYAMLConfigDefaults(t *testing.T) {
 	assert.Equal(t, "", cfg.TLSKey())
 	assert.Equal(t, "", cfg.TLSCert())
 	assert.Equal(t, false, cfg.RequireSecureTransport())
+	assert.Equal(t, false, cfg.AllowCleartextPasswords())
 	assert.Equal(t, false, cfg.DisableClientMultiStatements())
 	assert.Equal(t, defaultMetricsHost, cfg.MetricsHost())
 	assert.Equal(t, defaultMetricsPort, cfg.MetricsPort())
 	assert.Nil(t, cfg.MetricsConfig.Labels)
+	assert.Equal(t, defaultAllowCleartextPasswords, cfg.AllowCleartextPasswords())
 
 	c, err := LoadTLSConfig(cfg)
 	assert.NoError(t, err)
@@ -172,7 +236,7 @@ listener:
 	assert.NoError(t, err)
 	assert.NotNil(t, c)
 	assert.Len(t, c.Certificates, 1)
-	assert.Len(t, c.Certificates[0].Certificate, 2)
+	assert.Len(t, c.Certificates[0].Certificate, 1)
 
 	cfg = YAMLConfig{}
 	err = yaml.Unmarshal([]byte(`

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -53,7 +54,7 @@ type ArtifactMap struct {
 // NewArtifactMap creates an artifact map based on |srcKeyDesc| which is the key descriptor for
 // the corresponding row map.
 func NewArtifactMap(node tree.Node, ns tree.NodeStore, srcKeyDesc val.TupleDesc) ArtifactMap {
-	keyDesc, valDesc := calcArtifactsDescriptors(srcKeyDesc)
+	keyDesc, valDesc := mergeArtifactsDescriptorsFromSource(srcKeyDesc)
 	tuples := orderedTree[val.Tuple, val.Tuple, val.TupleDesc]{
 		root:  node,
 		ns:    ns,
@@ -70,7 +71,9 @@ func NewArtifactMap(node tree.Node, ns tree.NodeStore, srcKeyDesc val.TupleDesc)
 // NewArtifactMapFromTuples creates an artifact map based on |srcKeyDesc| which is the key descriptor for
 // the corresponding row map and inserts the given |tups|. |tups| must be a key followed by a value.
 func NewArtifactMapFromTuples(ctx context.Context, ns tree.NodeStore, srcKeyDesc val.TupleDesc, tups ...val.Tuple) (ArtifactMap, error) {
-	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	kd, vd := mergeArtifactsDescriptorsFromSource(srcKeyDesc)
+	serializer := message.NewMergeArtifactSerializer(kd, ns.Pool())
+
 	ch, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	if err != nil {
 		return ArtifactMap{}, err
@@ -91,7 +94,17 @@ func NewArtifactMapFromTuples(ctx context.Context, ns tree.NodeStore, srcKeyDesc
 		return ArtifactMap{}, err
 	}
 
-	return NewArtifactMap(root, ns, srcKeyDesc), nil
+	tuples := orderedTree[val.Tuple, val.Tuple, val.TupleDesc]{
+		root:  root,
+		ns:    ns,
+		order: kd,
+	}
+	return ArtifactMap{
+		tuples:     tuples,
+		srcKeyDesc: srcKeyDesc,
+		keyDesc:    kd,
+		valDesc:    vd,
+	}, nil
 }
 
 func (m ArtifactMap) Count() int {
@@ -146,7 +159,7 @@ func (m ArtifactMap) Editor() ArtifactsEditor {
 	artKD, artVD := m.Descriptors()
 	return ArtifactsEditor{
 		srcKeyDesc: m.srcKeyDesc,
-		Mut: MutableMap{
+		mut: MutableMap{
 			tuples:  m.tuples.mutate(),
 			keyDesc: m.keyDesc,
 			valDesc: m.valDesc,
@@ -283,7 +296,7 @@ func (m ArtifactMap) iterAllOfTypes(ctx context.Context, artTypes ...ArtifactTyp
 }
 
 func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tree.CollisionFn) (ArtifactMap, error) {
-	serializer := message.ProllyMapSerializer{Pool: left.tuples.ns.Pool()}
+	serializer := message.NewMergeArtifactSerializer(base.keyDesc, left.tuples.ns.Pool())
 	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer, base.valDesc)
 	if err != nil {
 		return ArtifactMap{}, err
@@ -297,7 +310,7 @@ func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tr
 }
 
 type ArtifactsEditor struct {
-	Mut          MutableMap
+	mut          MutableMap
 	srcKeyDesc   val.TupleDesc
 	artKB, artVB *val.TupleBuilder
 	pool         pool.BuffPool
@@ -314,7 +327,7 @@ func (wr ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, theirRootIs
 	wr.artVB.PutJSON(0, meta)
 	value := wr.artVB.Build(wr.pool)
 
-	return wr.Mut.Put(ctx, key, value)
+	return wr.mut.Put(ctx, key, value)
 }
 
 type ErrMergeArtifactCollision struct {
@@ -332,15 +345,14 @@ func (e *ErrMergeArtifactCollision) Error() string {
 // existing violation exists but has a different |meta.VInfo| value then
 // ErrMergeArtifactCollision is a returned.
 func (wr ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, artType ArtifactType, meta ConstraintViolationMeta) error {
-	rng := ClosedRange(srcKey, srcKey, wr.srcKeyDesc)
-	itr, err := wr.Mut.IterRange(ctx, rng)
+	itr, err := wr.mut.IterRange(ctx, PrefixRange(srcKey, wr.srcKeyDesc))
 	if err != nil {
 		return err
 	}
 	aItr := artifactIterImpl{
 		itr:    itr,
-		artKD:  wr.Mut.keyDesc,
-		artVD:  wr.Mut.valDesc,
+		artKD:  wr.mut.keyDesc,
+		artVD:  wr.mut.valDesc,
 		pool:   wr.pool,
 		tb:     val.NewTupleBuilder(wr.srcKeyDesc),
 		numPks: wr.srcKeyDesc.Count(),
@@ -395,11 +407,13 @@ func (wr ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey
 }
 
 func (wr ArtifactsEditor) Delete(ctx context.Context, key val.Tuple) error {
-	return wr.Mut.Delete(ctx, key)
+	return wr.mut.Delete(ctx, key)
 }
 
 func (wr ArtifactsEditor) Flush(ctx context.Context) (ArtifactMap, error) {
-	m, err := wr.Mut.Map(ctx)
+	s := message.NewMergeArtifactSerializer(wr.artKB.Desc, wr.NodeStore().Pool())
+
+	m, err := wr.mut.flushWithSerializer(ctx, s)
 	if err != nil {
 		return ArtifactMap{}, err
 	}
@@ -407,9 +421,13 @@ func (wr ArtifactsEditor) Flush(ctx context.Context) (ArtifactMap, error) {
 	return ArtifactMap{
 		tuples:     m.tuples,
 		srcKeyDesc: wr.srcKeyDesc,
-		keyDesc:    wr.Mut.keyDesc,
-		valDesc:    wr.Mut.valDesc,
+		keyDesc:    wr.mut.keyDesc,
+		valDesc:    wr.mut.valDesc,
 	}, nil
+}
+
+func (wr ArtifactsEditor) NodeStore() tree.NodeStore {
+	return wr.mut.NodeStore()
 }
 
 // ConflictArtifactIter iters all the conflicts in ArtifactMap.
@@ -447,7 +465,6 @@ type ConflictArtifact struct {
 type ConflictMetadata struct {
 	// BaseRootIsh is the target hash of the working set holding the base value for the conflict.
 	BaseRootIsh hash.Hash `json:"bc"`
-	TableName   string    `json:"tn"`
 }
 
 // ConstraintViolationMeta is the json metadata for foreign key constraint violations
@@ -540,7 +557,7 @@ func (itr artifactIterImpl) Next(ctx context.Context) (Artifact, error) {
 
 func (itr artifactIterImpl) getSrcKeyFromArtKey(k val.Tuple) val.Tuple {
 	for i := 0; i < itr.numPks; i++ {
-		itr.tb.PutRaw(0, k.GetField(i))
+		itr.tb.PutRaw(i, k.GetField(i))
 	}
 	return itr.tb.Build(itr.pool)
 }
@@ -559,7 +576,7 @@ type Artifact struct {
 	Metadata []byte
 }
 
-func calcArtifactsDescriptors(srcKd val.TupleDesc) (kd, vd val.TupleDesc) {
+func mergeArtifactsDescriptorsFromSource(srcKd val.TupleDesc) (kd, vd val.TupleDesc) {
 
 	// artifact key consists of keys of source schema, followed by target branch
 	// commit hash, and artifact type.
@@ -575,4 +592,33 @@ func calcArtifactsDescriptors(srcKd val.TupleDesc) (kd, vd val.TupleDesc) {
 	valTypes := []val.Type{{Enc: val.JSONEnc, Nullable: false}}
 
 	return val.NewTupleDescriptor(keyTypes...), val.NewTupleDescriptor(valTypes...)
+}
+
+func ArtifactDebugFormat(ctx context.Context, m ArtifactMap) (string, error) {
+	kd, vd := m.Descriptors()
+	iter, err := m.tuples.iterAll(ctx)
+	if err != nil {
+		return "", err
+	}
+	c := m.Count()
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Artifact Map (count: %d) {\n", c))
+	for {
+		k, v, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+
+		sb.WriteString("\t")
+		sb.WriteString(kd.Format(k))
+		sb.WriteString(": ")
+		sb.WriteString(vd.Format(v))
+		sb.WriteString(",\n")
+	}
+	sb.WriteString("}")
+	return sb.String(), nil
 }

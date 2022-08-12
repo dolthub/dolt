@@ -20,14 +20,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/store/hash"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
@@ -77,7 +75,9 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 	ap := cli.CreateCherryPickArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cherryPickDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
 	// This command creates a commit, so we need user identity
 	if !cli.CheckUserNameAndEmail(dEnv) {
 		return 1
@@ -142,7 +142,7 @@ func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cherryStr, authorStr str
 		return errhand.BuildDError("error: your local changes would be overwritten by cherry-pick.\nhint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt reset --hard) to proceed.").Build()
 	}
 
-	newWorkingRoot, commitMsg, err := getCherryPickedRootValue(ctx, dEnv, workingRoot, headHash, cherryStr)
+	newWorkingRoot, commitMsg, err := getCherryPickedRootValue(ctx, dEnv, workingRoot, cherryStr)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -182,39 +182,48 @@ func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cherryStr, authorStr str
 
 // getCherryPickedRootValue returns updated RootValue for current HEAD after cherry-pick commit is merged successfully and
 // commit message of cherry-picked commit.
-func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoot *doltdb.RootValue, headHash hash.Hash, cherryStr string) (*doltdb.RootValue, string, error) {
+func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoot *doltdb.RootValue, cherryStr string) (*doltdb.RootValue, string, error) {
 	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 
 	cherrySpec, err := doltdb.NewCommitSpec(cherryStr)
 	if err != nil {
 		return nil, "", err
 	}
-	cherryCommit, err := dEnv.DoltDB.Resolve(ctx, cherrySpec, dEnv.RepoStateReader().CWBHeadRef())
+	cherryCm, err := dEnv.DoltDB.Resolve(ctx, cherrySpec, dEnv.RepoStateReader().CWBHeadRef())
 	if err != nil {
 		return nil, "", err
 	}
 
-	cherryCM, err := cherryCommit.GetCommitMeta(ctx)
+	if len(cherryCm.DatasParents()) > 1 {
+		return nil, "", errhand.BuildDError("cherry-picking a merge commit is not supported.").Build()
+	}
+	if len(cherryCm.DatasParents()) == 0 {
+		return nil, "", errhand.BuildDError("cherry-picking a commit without parents is not supported.").Build()
+	}
+
+	cherryCM, err := cherryCm.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, "", err
 	}
 	commitMsg := cherryCM.Description
 
-	fromRoot, toRoot, err := getParentAndCherryRoots(ctx, dEnv.DoltDB, cherryCommit)
-	if err != nil {
-		return nil, "", errhand.BuildDError("failed to get cherry-picked commit and its parent commit").AddCause(err).Build()
-	}
-	fromHash, err := fromRoot.HashOf()
+	cherryRoot, err := cherryCm.GetRootValue(ctx)
 	if err != nil {
 		return nil, "", err
 	}
-	toHash, err := toRoot.HashOf()
+
+	parentCm, err := dEnv.DoltDB.ResolveParent(ctx, cherryCm, 0)
+	if err != nil {
+		return nil, "", err
+	}
+	parentRoot, err := parentCm.GetRootValue(ctx)
 	if err != nil {
 		return nil, "", err
 	}
 
 	// use parent of cherry-pick as ancestor to merge
-	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, toHash, fromHash, workingRoot, toRoot, fromRoot, opts, true)
+	mo := merge.MergeOpts{IsCherryPick: true}
+	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, workingRoot, cherryRoot, parentRoot, cherryCm, parentCm, opts, mo)
 	if err != nil {
 		return nil, "", err
 	}
@@ -232,32 +241,4 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 	}
 
 	return mergedRoot, commitMsg, nil
-}
-
-// getParentAndCherryRoots return root values of parent commit of cherry-picked commit and cherry-picked commit itself.
-func getParentAndCherryRoots(ctx context.Context, ddb *doltdb.DoltDB, cherryCommit *doltdb.Commit) (*doltdb.RootValue, *doltdb.RootValue, error) {
-	cherryRoot, err := cherryCommit.GetRootValue(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var parentRoot *doltdb.RootValue
-	if len(cherryCommit.DatasParents()) > 1 {
-		return nil, nil, errhand.BuildDError("cherry-picking a merge commit is not supported.").Build()
-	} else if len(cherryCommit.DatasParents()) == 1 {
-		parentCM, err := ddb.ResolveParent(ctx, cherryCommit, 0)
-		if err != nil {
-			return nil, nil, err
-		}
-		parentRoot, err = parentCM.GetRootValue(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-	} else {
-		parentRoot, err = doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	return parentRoot, cherryRoot, nil
 }

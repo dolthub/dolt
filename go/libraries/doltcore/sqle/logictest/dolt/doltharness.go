@@ -308,15 +308,18 @@ func schemaToSchemaString(sch sql.Schema) (string, error) {
 func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, error) {
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 	db := dsql.NewDatabase("dolt", dEnv.DbData(), opts)
-	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	if err != nil {
 		return nil, err
 	}
 
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro := dsql.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), db)
-	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
+	pro, err := dsql.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS)
+	if err != nil {
+		return nil, err
+	}
 
+	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 	engine := sqle.NewDefault(pro)
 
 	return engine, nil

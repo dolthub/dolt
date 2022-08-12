@@ -2,8 +2,8 @@
 
 set -e
 
-if [ "$#" -ne 6 ]; then
-    echo  "Usage: ./get-dolt-correctness-job-json.sh <jobname> <fromVersion> <toVersion> <timeprefix> <actorprefix> <format>"
+if [ "$#" -lt 6 ]; then
+    echo  "Usage: ./get-dolt-correctness-job-json.sh <jobname> <fromVersion> <toVersion> <timeprefix> <actorprefix> <format> <nomsBinFormat>"
     exit 1
 fi
 
@@ -13,8 +13,13 @@ toVersion="$3"
 timeprefix="$4"
 actorprefix="$5"
 format="$6"
+nomsBinFormat="$7"
 
 precision="2"
+
+if [ -n "$nomsBinFormat" ]; then
+  nomsBinFormat="\"--noms-bin-format=$nomsBinFormat\","
+fi
 
 resultCountQuery="select result, count(*) as total from results where result != 'skipped' group by result;"
 testCountQuery="select count(*) as total_tests from results where result != 'skipped';"
@@ -31,6 +36,14 @@ echo '
   "spec": {
     "backoffLimit": 3,
     "template": {
+      "metadata": {
+        "annotations": {
+          "alert_recipients": "'$ACTOR_EMAIL'"
+        },
+        "labels": {
+          "k8s-liquidata-inc-monitored-job": "created-by-static-config"
+        }
+      },
       "spec": {
         "serviceAccountName": "sql-correctness",
         "containers": [
@@ -40,12 +53,14 @@ echo '
             "env": [
               { "name": "REPO_ACCESS_TOKEN", "value": "'$REPO_ACCESS_TOKEN'"},
               { "name": "ACTOR", "value": "'$ACTOR'"},
-              { "name": "ACTOR_EMAIL", "value": "'$ACTOR_EMAIL'"}
+              { "name": "ACTOR_EMAIL", "value": "'$ACTOR_EMAIL'"},
+              { "name": "DOLT_DEFAULT_BIN_FORMAT", "value": "'$NOMS_BIN_FORMAT'"}
             ],
             "args": [
               "--schema=/correctness.sql",
               "--output='$format'",
               "--version='$toVersion'",
+              '"$nomsBinFormat"'
               "--bucket=sql-correctness-github-actions-results",
               "--region=us-west-2",
               "--results-dir='$timeprefix'",

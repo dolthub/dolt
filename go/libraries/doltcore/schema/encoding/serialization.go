@@ -62,8 +62,8 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 	serial.TableSchemaAddSecondaryIndexes(b, indexes)
 	serial.TableSchemaAddChecks(b, checks)
 	root := serial.TableSchemaEnd(b)
-	b.FinishWithFileIdentifier(root, []byte(serial.TableSchemaFileID))
-	return b.FinishedBytes(), nil
+	bs := serial.FinishMessage(b, root, []byte(serial.TableSchemaFileID))
+	return bs, nil
 }
 
 // DeserializeSchema deserializes a schema.Schema from a serial.Message.
@@ -76,7 +76,7 @@ func DeserializeSchema(ctx context.Context, nbf *types.NomsBinFormat, v types.Va
 
 func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Schema, error) {
 	assertTrue(serial.GetFileID(buf) == serial.TableSchemaFileID)
-	s := serial.GetRootAsTableSchema(buf, 0)
+	s := serial.GetRootAsTableSchema(buf, serial.MessagePrefixSz)
 
 	cols, err := deserializeColumns(ctx, s)
 	if err != nil {

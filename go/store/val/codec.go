@@ -41,25 +41,28 @@ const (
 type ByteSize uint16
 
 const (
-	int8Size     ByteSize = 1
-	uint8Size    ByteSize = 1
-	int16Size    ByteSize = 2
-	uint16Size   ByteSize = 2
-	int32Size    ByteSize = 4
-	uint32Size   ByteSize = 4
-	int64Size    ByteSize = 8
-	uint64Size   ByteSize = 8
-	float32Size  ByteSize = 4
-	float64Size  ByteSize = 8
-	bit64Size    ByteSize = 8
-	hash128Size  ByteSize = 16
-	yearSize     ByteSize = 1
-	dateSize     ByteSize = 4
-	timeSize     ByteSize = 8
-	datetimeSize ByteSize = 8
-	enumSize     ByteSize = 2
-	setSize      ByteSize = 8
-	addrSize     ByteSize = hash.ByteLen
+	int8Size      ByteSize = 1
+	uint8Size     ByteSize = 1
+	int16Size     ByteSize = 2
+	uint16Size    ByteSize = 2
+	int32Size     ByteSize = 4
+	uint32Size    ByteSize = 4
+	int64Size     ByteSize = 8
+	uint64Size    ByteSize = 8
+	float32Size   ByteSize = 4
+	float64Size   ByteSize = 8
+	bit64Size     ByteSize = 8
+	hash128Size   ByteSize = 16
+	yearSize      ByteSize = 1
+	dateSize      ByteSize = 4
+	timeSize      ByteSize = 8
+	datetimeSize  ByteSize = 8
+	enumSize      ByteSize = 2
+	setSize       ByteSize = 8
+	bytesAddrEnc  ByteSize = hash.ByteLen
+	commitAddrEnc ByteSize = hash.ByteLen
+	stringAddrEnc ByteSize = hash.ByteLen
+	jsonAddrEnc   ByteSize = hash.ByteLen
 )
 
 type Encoding byte
@@ -133,10 +136,10 @@ func sizeFromType(t Type) (ByteSize, bool) {
 		return float32Size, true
 	case Float64Enc:
 		return float64Size, true
+	case Bit64Enc:
+		return bit64Size, true
 	case Hash128Enc:
 		return hash128Size, true
-	case BytesAddrEnc:
-		return addrSize, true
 	case YearEnc:
 		return yearSize, true
 	case DateEnc:
@@ -149,8 +152,14 @@ func sizeFromType(t Type) (ByteSize, bool) {
 		return enumSize, true
 	case SetEnc:
 		return setSize, true
-	case Bit64Enc:
-		return bit64Size, true
+	case BytesAddrEnc:
+		return bytesAddrEnc, true
+	case CommitAddrEnc:
+		return commitAddrEnc, true
+	case StringAddrEnc:
+		return stringAddrEnc, true
+	case JSONAddrEnc:
+		return jsonAddrEnc, true
 	default:
 		return 0, false
 	}
@@ -241,12 +250,12 @@ func compareInt16(l, r int16) int {
 	}
 }
 
-func readUint16(val []byte) uint16 {
+func ReadUint16(val []byte) uint16 {
 	expectSize(val, uint16Size)
 	return binary.LittleEndian.Uint16(val)
 }
 
-func writeUint16(buf []byte, val uint16) {
+func WriteUint16(buf []byte, val uint16) {
 	expectSize(buf, uint16Size)
 	binary.LittleEndian.PutUint16(buf, val)
 }
@@ -502,11 +511,11 @@ func compareDatetime(l, r time.Time) int {
 }
 
 func readEnum(val []byte) uint16 {
-	return readUint16(val)
+	return ReadUint16(val)
 }
 
 func writeEnum(buf []byte, val uint16) {
-	writeUint16(buf, val)
+	WriteUint16(buf, val)
 }
 
 func compareEnum(l, r uint16) int {
@@ -576,12 +585,12 @@ func writeRaw(buf, val []byte) {
 }
 
 func writeAddr(buf []byte, v []byte) {
-	expectSize(buf, addrSize)
+	expectSize(buf, hash.ByteLen)
 	copy(buf, v)
 }
 
 func readAddr(val []byte) hash.Hash {
-	expectSize(val, addrSize)
+	expectSize(val, hash.ByteLen)
 	return hash.New(val)
 }
 

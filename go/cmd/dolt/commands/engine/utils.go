@@ -24,14 +24,17 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool) ([]sqle.SqlDatabase, error) {
+func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool) ([]sqle.SqlDatabase, []filesys.Filesys, error) {
 	var dbs []sqle.SqlDatabase
+	var locations []filesys.Filesys
 	var db sqle.SqlDatabase
 
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
@@ -43,7 +46,7 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool
 
 		db = newDatabase(name, dEnv, useBulkEditor)
 
-		if _, remote, ok := sql.SystemVariables.GetGlobal(sqle.ReadReplicaRemoteKey); ok && remote != "" {
+		if _, remote, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemoteKey); ok && remote != "" {
 			remoteName, ok := remote.(string)
 			if !ok {
 				return true, sql.ErrInvalidSystemVariableValue.New(remote)
@@ -55,14 +58,16 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool
 		}
 
 		dbs = append(dbs, db)
+		locations = append(locations, dEnv.FS)
+
 		return false, nil
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return dbs, nil
+	return dbs, locations, nil
 }
 
 // GetCommitHooks creates a list of hooks to execute on database commit. If doltdb.SkipReplicationErrorsKey is set,
@@ -120,9 +125,9 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 }
 
 func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.PushOnWriteHook, error) {
-	_, val, ok := sql.SystemVariables.GetGlobal(sqle.ReplicateToRemoteKey)
+	_, val, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemoteKey)
 	if !ok {
-		return nil, sql.ErrUnknownSystemVariable.New(sqle.ReplicateToRemoteKey)
+		return nil, sql.ErrUnknownSystemVariable.New(dsess.ReplicateToRemoteKey)
 	} else if val == "" {
 		return nil, nil
 	}
@@ -142,7 +147,7 @@ func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.PushOnW
 		return nil, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
 
-	ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
+	ddb, err := rem.GetRemoteDB(ctx, types.Format_Default, dEnv)
 	if err != nil {
 		return nil, err
 	}

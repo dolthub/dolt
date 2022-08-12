@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/async"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -55,7 +54,7 @@ type indexLookupRowIterAdapter struct {
 }
 
 // NewIndexLookupRowIterAdapter returns a new indexLookupRowIterAdapter.
-func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, durableState *durableIndexState, keyIter nomsKeyIter) (*indexLookupRowIterAdapter, error) {
+func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, durableState *durableIndexState, keyIter nomsKeyIter, columns []uint64) (*indexLookupRowIterAdapter, error) {
 	rows := durable.NomsMapFromIndex(durableState.Primary)
 
 	resBuf := resultBufferPool.Get().(*async.RingBuffer)
@@ -67,7 +66,7 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, durableState 
 		idx:        idx,
 		keyIter:    keyIter,
 		tableRows:  rows,
-		conv:       idx.sqlRowConverter(durableState),
+		conv:       idx.sqlRowConverter(durableState, columns),
 		lookupTags: idx.lookupTags(durableState),
 		cancelF:    cancelF,
 		resultBuf:  resBuf,
@@ -229,19 +228,31 @@ type CoveringIndexRowIterAdapter struct {
 	nbf       *types.NomsBinFormat
 }
 
-func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter *noms.NomsRangeReader, resultCols []string) *CoveringIndexRowIterAdapter {
+func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter *noms.NomsRangeReader, resultCols []uint64) *CoveringIndexRowIterAdapter {
 	idxCols := idx.IndexSchema().GetPKCols()
 	tblPKCols := idx.Schema().GetPKCols()
 	sch := idx.Schema()
-	cols := sch.GetAllCols().GetColumns()
+	allCols := sch.GetAllCols().GetColumns()
+	cols := make([]schema.Column, 0)
+	for _, col := range allCols {
+		for _, tag := range resultCols {
+			if col.Tag == tag {
+				cols = append(cols, col)
+			}
+		}
+
+	}
 	tagToSqlColIdx := make(map[uint64]int)
 	isPrimaryKeyIdx := idx.ID() == "PRIMARY"
 
-	resultColSet := set.NewCaseInsensitiveStrSet(resultCols)
+	resultColSet := make(map[uint64]bool)
+	for _, k := range resultCols {
+		resultColSet[k] = true
+	}
 	for i, col := range cols {
 		_, partOfIdxKey := idxCols.GetByNameCaseInsensitive(col.Name)
 		// Either this is a primary key index or the key is a part of the index and this part of the result column set.
-		if (partOfIdxKey || isPrimaryKeyIdx) && (len(resultCols) == 0 || resultColSet.Contains(col.Name)) {
+		if (partOfIdxKey || isPrimaryKeyIdx) && (len(resultCols) == 0 || resultColSet[col.Tag]) {
 			tagToSqlColIdx[col.Tag] = i
 		}
 	}

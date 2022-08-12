@@ -18,8 +18,6 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -27,14 +25,10 @@ import (
 )
 
 func NodeFromValue(v types.Value) tree.Node {
-	return tree.NodeFromBytes(v.(types.TupleRowStorage))
+	return tree.NodeFromBytes(v.(types.SerialMessage))
 }
 
 func ValueFromMap(m prolly.Map) types.Value {
-	return tree.ValueFromNode(m.Node())
-}
-
-func ValueFromConflictMap(m prolly.ConflictMap) types.Value {
 	return tree.ValueFromNode(m.Node())
 }
 
@@ -42,31 +36,11 @@ func ValueFromArtifactMap(m prolly.ArtifactMap) types.Value {
 	return tree.ValueFromNode(m.Node())
 }
 
-func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) prolly.Map {
+func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore) prolly.Map {
 	root := NodeFromValue(v)
 	kd := KeyDescriptorFromSchema(sch)
 	vd := ValueDescriptorFromSchema(sch)
-	ns := tree.NewNodeStore(ChunkStoreFromVRW(vrw))
 	return prolly.NewMap(root, ns, kd, vd)
-}
-
-func ConflictMapFromValue(v types.Value, ourSchema, theirSchema, baseSchema schema.Schema, vrw types.ValueReadWriter) prolly.ConflictMap {
-	root := NodeFromValue(v)
-	kd, ourVD := MapDescriptorsFromSchema(ourSchema)
-	theirVD := ValueDescriptorFromSchema(theirSchema)
-	baseVD := ValueDescriptorFromSchema(baseSchema)
-	ns := tree.NewNodeStore(ChunkStoreFromVRW(vrw))
-	return prolly.NewConflictMap(root, ns, kd, ourVD, theirVD, baseVD)
-}
-
-func ChunkStoreFromVRW(vrw types.ValueReadWriter) chunks.ChunkStore {
-	switch x := vrw.(type) {
-	case datas.Database:
-		return datas.ChunkStoreFromDatabase(x)
-	case *types.ValueStore:
-		return x.ChunkStore()
-	}
-	panic("unknown ValueReadWriter")
 }
 
 func MapDescriptorsFromSchema(sch schema.Schema) (kd, vd val.TupleDesc) {

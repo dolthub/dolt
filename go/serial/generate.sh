@@ -13,10 +13,12 @@ fi
 # generate golang (de)serialization package
 flatc -o $GEN_DIR --gen-onefile --filename-suffix "" --gen-mutable --go-namespace "serial" --go \
   addressmap.fbs \
+  blob.fbs \
   commit.fbs \
   commitclosure.fbs \
   encoding.fbs \
   foreign_key.fbs \
+  mergeartifacts.fbs \
   prolly.fbs \
   rootvalue.fbs \
   schema.fbs \

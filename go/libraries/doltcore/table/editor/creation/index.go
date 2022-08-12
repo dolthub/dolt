@@ -26,9 +26,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -141,9 +143,9 @@ func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Inde
 		if err != nil {
 			return nil, err
 		}
-		return durable.IndexFromNomsMap(m, tbl.ValueReadWriter()), nil
+		return durable.IndexFromNomsMap(m, tbl.ValueReadWriter(), tbl.NodeStore()), nil
 
-	case types.Format_DOLT_1:
+	case types.Format_DOLT:
 		sch, err := tbl.GetSchema(ctx)
 		if err != nil {
 			return nil, err
@@ -153,7 +155,7 @@ func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Inde
 			return nil, err
 		}
 		primary := durable.ProllyMapFromIndex(m)
-		return BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), sch, idx, primary)
+		return BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, idx, primary)
 
 	default:
 		return nil, fmt.Errorf("unknown NomsBinFormat")
@@ -162,32 +164,35 @@ func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Inde
 
 // BuildSecondaryProllyIndex builds secondary index data for the given primary
 // index row data |primary|. |sch| is the current schema of the table.
-func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, idx schema.Index, primary prolly.Map) (durable.Index, error) {
+func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, idx schema.Index, primary prolly.Map) (durable.Index, error) {
 	if idx.IsUnique() {
 		kd := shim.KeyDescriptorFromSchema(idx.Schema())
-		return BuildUniqueProllyIndex(ctx, vrw, sch, idx, primary, func(ctx context.Context, existingKey, newKey val.Tuple) error {
-			return sql.ErrDuplicateEntry.Wrap(&prollyUniqueKeyErr{k: newKey, kd: kd, IndexName: idx.Name()}, idx.Name())
+		return BuildUniqueProllyIndex(ctx, vrw, ns, sch, idx, primary, func(ctx context.Context, existingKey, newKey val.Tuple) error {
+			msg := writer.FormatKeyForUniqKeyErr(newKey, kd)
+			return sql.NewUniqueKeyErr(msg, false, nil)
 		})
 	}
 
-	empty, err := durable.NewEmptyIndex(ctx, vrw, idx.Schema())
+	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, idx.Schema())
 	if err != nil {
 		return nil, err
 	}
 	secondary := durable.ProllyMapFromIndex(empty)
-
-	iter, err := primary.IterAll(ctx)
-	if err != nil {
-		return nil, err
+	if schema.IsKeyless(sch) {
+		secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
 	}
-	pkLen := sch.GetPKCols().Size()
 
 	// create a key builder for index key tuples
 	kd, _ := secondary.Descriptors()
 	keyBld := val.NewTupleBuilder(kd)
-	keyMap := GetIndexKeyMapping(sch, idx)
+	pkLen, keyMap := GetIndexKeyMapping(sch, idx)
 
 	mut := secondary.Mutate()
+	iter, err := primary.IterAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	for {
 		k, v, err := iter.Next(ctx)
 		if err == io.EOF {
@@ -231,23 +236,25 @@ type DupEntryCb func(ctx context.Context, existingKey, newKey val.Tuple) error
 // BuildUniqueProllyIndex builds a unique index based on the given |primary| row
 // data. If any duplicate entries are found, they are passed to |cb|. If |cb|
 // returns a non-nil error then the process is stopped.
-func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, idx schema.Index, primary prolly.Map, cb DupEntryCb) (durable.Index, error) {
-	empty, err := durable.NewEmptyIndex(ctx, vrw, idx.Schema())
+func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, idx schema.Index, primary prolly.Map, cb DupEntryCb) (durable.Index, error) {
+	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, idx.Schema())
 	if err != nil {
 		return nil, err
 	}
 	secondary := durable.ProllyMapFromIndex(empty)
+	if schema.IsKeyless(sch) {
+		secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
+	}
 
 	iter, err := primary.IterAll(ctx)
 	if err != nil {
 		return nil, err
 	}
-	pkLen := sch.GetPKCols().Size()
 
 	// create a key builder for index key tuples
 	kd, _ := secondary.Descriptors()
 	keyBld := val.NewTupleBuilder(kd)
-	keyMap := GetIndexKeyMapping(sch, idx)
+	pkLen, keyMap := GetIndexKeyMapping(sch, idx)
 
 	// key builder for the indexed columns only which is a prefix of the index key
 	prefixKD := kd.PrefixDesc(idx.Count())
@@ -331,7 +338,7 @@ type PrefixItr struct {
 }
 
 func NewPrefixItr(ctx context.Context, p val.Tuple, d val.TupleDesc, m rangeIterator) (PrefixItr, error) {
-	rng := prolly.ClosedRange(p, p, d)
+	rng := prolly.PrefixRange(p, d)
 	itr, err := m.IterRange(ctx, rng)
 	if err != nil {
 		return PrefixItr{}, err
@@ -366,19 +373,39 @@ type rangeIterator interface {
 	IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error)
 }
 
-func GetIndexKeyMapping(sch schema.Schema, idx schema.Index) (m val.OrdinalMapping) {
+// GetIndexKeyMapping returns a mapping from primary row data to index data. It can handle keyless schema.
+func GetIndexKeyMapping(sch schema.Schema, idx schema.Index) (keyLen int, m val.OrdinalMapping) {
 	m = make(val.OrdinalMapping, len(idx.AllTags()))
+
+	keyless := schema.IsKeyless(sch)
+
+	if keyless {
+		// the only key is the hash of the values
+		keyLen = 1
+	} else {
+		keyLen = sch.GetPKCols().Size()
+	}
 
 	for i, tag := range idx.AllTags() {
 		j, ok := sch.GetPKCols().TagToIdx[tag]
 		if !ok {
-			j = sch.GetNonPKCols().TagToIdx[tag]
-			j += sch.GetPKCols().Size()
+			if keyless {
+				// Skip cardinality column
+				j = keyLen + 1 + sch.GetNonPKCols().TagToIdx[tag]
+			} else {
+				j = keyLen + sch.GetNonPKCols().TagToIdx[tag]
+			}
 		}
 		m[i] = j
 	}
 
-	return
+	if schema.IsKeyless(sch) {
+		// last key in index is hash which is the only column in the key
+		m = append(m, 0)
+		return keyLen, m
+	}
+
+	return keyLen, m
 }
 
 var _ error = (*prollyUniqueKeyErr)(nil)

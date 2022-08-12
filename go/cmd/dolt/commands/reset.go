@@ -86,8 +86,8 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, resetDocContent, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.ContainsArg(doltdb.DocTableName) {
-		return HandleDocTableVErrAndExitCode()
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 
 	roots, err := dEnv.Roots(ctx)
@@ -145,12 +145,6 @@ var tblDiffTypeToShortLabel = map[diff.TableDiffType]string{
 	diff.AddedTable:    "N",
 }
 
-var docDiffTypeToShortLabel = map[diff.DocDiffType]string{
-	diff.ModifiedDoc: "M",
-	diff.RemovedDoc:  "D",
-	diff.AddedDoc:    "N",
-}
-
 func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootValue) {
 	// Printing here is best effort.  Fail silently
 	working, err := dEnv.WorkingRoot(ctx)
@@ -164,11 +158,6 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		return
 	}
 
-	notStagedDocs, err := diff.NewDocDiffs(ctx, working, nil, nil)
-	if err != nil {
-		return
-	}
-
 	removeModified := 0
 	for _, td := range notStagedTbls {
 		if !td.IsAdd() {
@@ -176,7 +165,7 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		}
 	}
 
-	if removeModified+notStagedDocs.NumRemoved+notStagedDocs.NumModified > 0 {
+	if removeModified > 0 {
 		cli.Println("Unstaged changes after reset:")
 
 		var lines []string
@@ -193,14 +182,6 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.ModifiedTable], td.CurName()))
 			}
 		}
-
-		for _, docName := range notStagedDocs.Docs {
-			ddt := notStagedDocs.DocToType[docName]
-			if ddt != diff.AddedDoc {
-				lines = append(lines, fmt.Sprintf("%s\t%s", docDiffTypeToShortLabel[ddt], docName))
-			}
-		}
-
 		cli.Println(strings.Join(lines, "\n"))
 	}
 }
@@ -228,26 +209,4 @@ func handleResetError(err error, usage cli.UsagePrinter) int {
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
-}
-
-func getAllRoots(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, errhand.VerboseError) {
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-
-	if err != nil {
-		return nil, nil, nil, errhand.BuildDError("Unable to get staged.").AddCause(err).Build()
-	}
-
-	stagedRoot, err := dEnv.StagedRoot(ctx)
-
-	if err != nil {
-		return nil, nil, nil, errhand.BuildDError("Unable to get staged.").AddCause(err).Build()
-	}
-
-	headRoot, err := dEnv.HeadRoot(ctx)
-
-	if err != nil {
-		return nil, nil, nil, errhand.BuildDError("Unable to get at HEAD.").AddCause(err).Build()
-	}
-
-	return workingRoot, stagedRoot, headRoot, nil
 }

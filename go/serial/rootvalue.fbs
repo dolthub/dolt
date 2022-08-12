@@ -22,7 +22,6 @@ table RootValue {
   tables:[ubyte]; // Serialized AddressMap.
 
   foreign_key_addr:[ubyte];
-  super_schemas_addr:[ubyte];
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

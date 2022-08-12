@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -68,32 +69,42 @@ Multiple SQL statements must be separated by semicolons. Use {{.EmphasisLeft}}-b
 
 Queries can be saved to the query catalog with {{.EmphasisLeft}}-s{{.EmphasisRight}}. Alternatively {{.EmphasisLeft}}-x{{.EmphasisRight}} can be used to execute a saved query by name.
 
-By default this command uses the dolt database in the current working directory, as well as any dolt databases that are found in the current directory. Any databases created with CREATE DATABASE are placed in the current directory as well. Running with {{.EmphasisLeft}}--multi-db-dir <directory>{{.EmphasisRight}} uses each of the subdirectories of the supplied directory (each subdirectory must be a valid dolt data repository) as databases. Subdirectories starting with '.' are ignored.`,
+By default this command uses the dolt database in the current working directory, as well as any dolt databases that are found in the current directory. Any databases created with CREATE DATABASE are placed in the current directory as well. Running with {{.EmphasisLeft}}--data-dir <directory>{{.EmphasisRight}} uses each of the subdirectories of the supplied directory (each subdirectory must be a valid dolt data repository) as databases. Subdirectories starting with '.' are ignored.`,
 
 	Synopsis: []string{
 		"",
 		"< script.sql",
-		"[--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}] [-r {{.LessThan}}result format{{.GreaterThan}}]",
+		"[--data-dir {{.LessThan}}directory{{.GreaterThan}}] [-r {{.LessThan}}result format{{.GreaterThan}}]",
 		"-q {{.LessThan}}query{{.GreaterThan}} [-r {{.LessThan}}result format{{.GreaterThan}}] [-s {{.LessThan}}name{{.GreaterThan}} -m {{.LessThan}}message{{.GreaterThan}}] [-b]",
-		"-q {{.LessThan}}query{{.GreaterThan}} --multi-db-dir {{.LessThan}}directory{{.GreaterThan}} [-r {{.LessThan}}result format{{.GreaterThan}}] [-b]",
+		"-q {{.LessThan}}query{{.GreaterThan}} --data-dir {{.LessThan}}directory{{.GreaterThan}} [-r {{.LessThan}}result format{{.GreaterThan}}] [-b]",
 		"-x {{.LessThan}}name{{.GreaterThan}}",
 		"--list-saved",
 	},
 }
 
+var ErrMultipleDoltCfgDirs = errors.NewKind("multiple .doltcfg directories detected: '%s' and '%s'; pass one of the directories using option --doltcfg-dir")
+
 const (
-	QueryFlag             = "query"
-	FormatFlag            = "result-format"
-	saveFlag              = "save"
-	executeFlag           = "execute"
-	listSavedFlag         = "list-saved"
-	messageFlag           = "message"
-	BatchFlag             = "batch"
-	multiDBDirFlag        = "multi-db-dir"
-	continueFlag          = "continue"
-	fileInputFlag         = "file"
-	privilegeFilePathFlag = "privilege-file"
-	welcomeMsg            = `# Welcome to the DoltSQL shell.
+	QueryFlag         = "query"
+	FormatFlag        = "result-format"
+	saveFlag          = "save"
+	executeFlag       = "execute"
+	listSavedFlag     = "list-saved"
+	messageFlag       = "message"
+	BatchFlag         = "batch"
+	DataDirFlag       = "data-dir"
+	MultiDBDirFlag    = "multi-db-dir"
+	CfgDirFlag        = "doltcfg-dir"
+	DefaultCfgDirName = ".doltcfg"
+	PrivsFilePathFlag = "privilege-file"
+	DefaultPrivsName  = "privileges.db"
+	continueFlag      = "continue"
+	fileInputFlag     = "file"
+	UserFlag          = "user"
+	DefaultUser       = "root"
+	DefaultHost       = "localhost"
+
+	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
 )
@@ -133,17 +144,20 @@ func (cmd SqlCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsString(QueryFlag, "q", "SQL query to run", "Runs a single query and exits")
-	ap.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, vertical. Defaults to tabular. ")
+	ap.SupportsString(QueryFlag, "q", "SQL query to run", "Runs a single query and exits.")
+	ap.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, vertical. Defaults to tabular.")
 	ap.SupportsString(saveFlag, "s", "saved query name", "Used with --query, save the query to the query catalog with the name provided. Saved queries can be examined in the dolt_query_catalog system table.")
-	ap.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name")
-	ap.SupportsFlag(listSavedFlag, "l", "List all saved queries")
-	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
+	ap.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name.")
+	ap.SupportsFlag(listSavedFlag, "l", "List all saved queries.")
+	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also `--name`.")
 	ap.SupportsFlag(BatchFlag, "b", "Use to enable more efficient batch processing for large SQL import scripts consisting of only INSERT statements. Other statements types are not guaranteed to work in this mode.")
-	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
+	ap.SupportsString(DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
+	ap.SupportsString(MultiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory. This is deprecated, you should use `--data-dir` instead")
+	ap.SupportsString(CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change that affect configuration settings.")
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
-	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given")
-	ap.SupportsString(privilegeFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Without this flag, the database has a single user with all permissions, and more cannot be added.")
+	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given.")
+	ap.SupportsString(PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
+	ap.SupportsString(UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", DefaultUser))
 	return ap
 }
 
@@ -153,7 +167,7 @@ func (cmd SqlCmd) EventType() eventsapi.ClientEventType {
 }
 
 // RequiresRepo indicates that this command does not have to be run from within a dolt data repository directory.
-// In this case it is because this command supports the multiDBDirFlag which can pass in a directory.  In the event that
+// In this case it is because this command supports the DataDirFlag which can pass in a directory.  In the event that
 // that parameter is not provided there is additional error handling within this command to make sure that this was in
 // fact run from within a dolt data repository directory.
 func (cmd SqlCmd) RequiresRepo() bool {
@@ -173,14 +187,64 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	privsFp, _ := apr.GetValue(privilegeFilePathFlag)
-
 	// We need a username and password for many SQL commands, so set defaults if they don't exist
 	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
+
+	// Retrieve username and password from command line, if provided
+	username := DefaultUser
+	if user, ok := apr.GetValue(UserFlag); ok {
+		username = user
+	}
 
 	mrEnv, verr := getMultiRepoEnv(ctx, apr, dEnv, cmd)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	// need to return cfgdirpath and error
+	var cfgDirPath string
+	var dataDir string
+	if multiDbDir, ok := apr.GetValue(MultiDBDirFlag); ok {
+		dataDir = multiDbDir
+	} else if dataDirPath, ok := apr.GetValue(DataDirFlag); ok {
+		dataDir = dataDirPath
+	}
+
+	cfgDir, cfgDirSpecified := apr.GetValue(CfgDirFlag)
+	if cfgDirSpecified {
+		cfgDirPath = cfgDir
+	} else if len(dataDir) != 0 {
+		cfgDirPath = filepath.Join(dataDir, DefaultCfgDirName)
+	} else {
+		// Look in parent directory for doltcfg
+		path := filepath.Join("..", DefaultCfgDirName)
+		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
+			cfgDirPath = path
+		}
+
+		// Look in data directory (which is necessarily current directory) for doltcfg
+		path = filepath.Join(dataDir, DefaultCfgDirName)
+		if exists, isDir := dEnv.FS.Exists(path); exists && isDir && len(cfgDirPath) != 0 {
+			p1, err := dEnv.FS.Abs(cfgDirPath)
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			}
+			p2, err := dEnv.FS.Abs(path)
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			}
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(ErrMultipleDoltCfgDirs.New(p1, p2)), usage)
+		}
+		cfgDirPath = path
+	}
+
+	// If no privilege filepath specified, default to doltcfg directory
+	privsFp, hasPrivsFp := apr.GetValue(PrivsFilePathFlag)
+	if !hasPrivsFp {
+		privsFp, err = dEnv.FS.Abs(filepath.Join(cfgDirPath, DefaultPrivsName))
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
 	}
 
 	initialRoots, err := mrEnv.GetWorkingRoots(ctx)
@@ -204,12 +268,22 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
+	config := &engine.SqlEngineConfig{
+		InitialDb:      currentDb,
+		IsReadOnly:     false,
+		DoltCfgDirPath: cfgDirPath,
+		PrivFilePath:   privsFp,
+		ServerUser:     username,
+		ServerHost:     DefaultHost,
+		Autocommit:     true,
+	}
+
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
-		return queryMode(ctx, mrEnv, initialRoots, apr, query, currentDb, format, usage)
+		return queryMode(ctx, mrEnv, initialRoots, apr, query, format, usage, config)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		return savedQueryMode(ctx, mrEnv, initialRoots, savedQueryName, currentDb, format, usage, privsFp)
+		return savedQueryMode(ctx, mrEnv, initialRoots, savedQueryName, format, usage, config)
 	} else if apr.Contains(listSavedFlag) {
-		return listSavedQueriesMode(ctx, mrEnv, initialRoots, currentDb, format, usage, privsFp)
+		return listSavedQueriesMode(ctx, mrEnv, initialRoots, format, usage, config)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		isTty := false
@@ -236,17 +310,17 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if isTty {
-			verr := execShell(ctx, mrEnv, format, currentDb, privsFp)
+			verr := execShell(ctx, mrEnv, format, config)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else if runInBatchMode {
-			verr := execBatch(ctx, continueOnError, mrEnv, input, format, currentDb, privsFp)
+			verr := execBatch(ctx, continueOnError, mrEnv, input, format, config)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else {
-			verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, currentDb, privsFp)
+			verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, config)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
@@ -260,12 +334,11 @@ func listSavedQueriesMode(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
 	initialRoots map[string]*doltdb.RootValue,
-	currentDb string,
 	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) int {
-	hasQC, err := initialRoots[currentDb].HasTable(ctx, doltdb.DoltQueryCatalogTableName)
+	hasQC, err := initialRoots[config.InitialDb].HasTable(ctx, doltdb.DoltQueryCatalogTableName)
 
 	if err != nil {
 		verr := errhand.BuildDError("error: Failed to read from repository.").AddCause(err).Build()
@@ -277,7 +350,7 @@ func listSavedQueriesMode(
 	}
 
 	query := "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
-	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, query, format, currentDb, privsFp), usage)
+	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, query, format, config), usage)
 }
 
 func savedQueryMode(
@@ -285,19 +358,18 @@ func savedQueryMode(
 	mrEnv *env.MultiRepoEnv,
 	initialRoots map[string]*doltdb.RootValue,
 	savedQueryName string,
-	currentDb string,
 	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) int {
-	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoots[currentDb], savedQueryName)
+	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoots[config.InitialDb], savedQueryName)
 
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, sq.Query, format, currentDb, privsFp), usage)
+	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, sq.Query, format, config), usage)
 }
 
 func queryMode(
@@ -306,9 +378,9 @@ func queryMode(
 	initialRoots map[string]*doltdb.RootValue,
 	apr *argparser.ArgParseResults,
 	query string,
-	currentDb string,
 	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
+	config *engine.SqlEngineConfig,
 ) int {
 
 	// query mode has 3 sub modes:
@@ -320,34 +392,33 @@ func queryMode(
 
 	_, continueOnError := apr.GetValue(continueFlag)
 
-	privsFp, _ := apr.GetValue(privilegeFilePathFlag)
 	if saveName != "" {
-		verr := execQuery(ctx, mrEnv, query, format, currentDb, privsFp)
+		verr := execQuery(ctx, mrEnv, query, format, config)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
 
 		if saveName != "" {
 			saveMessage := apr.GetValueOrDefault(messageFlag, "")
-			newRoot, verr := saveQuery(ctx, initialRoots[currentDb], query, saveName, saveMessage)
+			newRoot, verr := saveQuery(ctx, initialRoots[config.InitialDb], query, saveName, saveMessage)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 
-			verr = UpdateWorkingWithVErr(mrEnv.GetEnv(currentDb), newRoot)
+			verr = UpdateWorkingWithVErr(mrEnv.GetEnv(config.InitialDb), newRoot)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		}
 	} else if batchMode {
 		batchInput := strings.NewReader(query)
-		verr := execBatch(ctx, continueOnError, mrEnv, batchInput, format, currentDb, privsFp)
+		verr := execBatch(ctx, continueOnError, mrEnv, batchInput, format, config)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
 	} else {
 		input := strings.NewReader(query)
-		verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, currentDb, privsFp)
+		verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, config)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
@@ -358,20 +429,22 @@ func queryMode(
 
 // getMultiRepoEnv returns an appropriate MultiRepoEnv for this invocation of the command
 func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, cmd SqlCmd) (*env.MultiRepoEnv, errhand.VerboseError) {
-	var mrEnv *env.MultiRepoEnv
-	multiDir, multiDbMode := apr.GetValue(multiDBDirFlag)
-	if multiDbMode {
-		var err error
-		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), dEnv.FS, multiDir, cmd.VersionStr)
-		if err != nil {
-			return nil, errhand.VerboseErrorFromError(err)
-		}
-	} else {
-		var err error
-		mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
-		if err != nil {
-			return nil, errhand.VerboseErrorFromError(err)
-		}
+	var err error
+	fs := dEnv.FS
+
+	if dataDir, ok := apr.GetValue(MultiDBDirFlag); ok {
+		fs, err = fs.WithWorkingDir(dataDir)
+	} else if dataDir, ok := apr.GetValue(DataDirFlag); ok {
+		fs, err = fs.WithWorkingDir(dataDir)
+	}
+
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
 	}
 
 	return mrEnv, nil
@@ -381,17 +454,8 @@ func execShell(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
 	format engine.PrintResultFormat,
-	initialDb string,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) errhand.VerboseError {
-	config := &engine.SqlEngineConfig{
-		InitialDb:    initialDb,
-		IsReadOnly:   false,
-		PrivFilePath: privsFp,
-		ServerUser:   "root",
-		ServerPass:   "",
-		Autocommit:   true,
-	}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
@@ -403,7 +467,7 @@ func execShell(
 	}
 	defer se.Close()
 
-	err = runShell(ctx, se, mrEnv)
+	err = runShell(ctx, se, mrEnv, config)
 	if err != nil {
 		return errhand.BuildDError(err.Error()).Build()
 	}
@@ -416,17 +480,8 @@ func execBatch(
 	mrEnv *env.MultiRepoEnv,
 	batchInput io.Reader,
 	format engine.PrintResultFormat,
-	initialDb string,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) errhand.VerboseError {
-	config := &engine.SqlEngineConfig{
-		InitialDb:    initialDb,
-		IsReadOnly:   false,
-		PrivFilePath: privsFp,
-		ServerUser:   "root",
-		ServerPass:   "",
-		Autocommit:   true,
-	}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
@@ -443,8 +498,13 @@ func execBatch(
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	// Add root client
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	// Add specified user as new superuser, if it doesn't already exist
+	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
+		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
+	}
+
+	// Set client to specified user
+	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
 	// In batch mode, we need to set a couple flags on the session to prevent constant flushes to disk
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
@@ -468,17 +528,8 @@ func execMultiStatements(
 	mrEnv *env.MultiRepoEnv,
 	batchInput io.Reader,
 	format engine.PrintResultFormat,
-	initialDb string,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) errhand.VerboseError {
-	config := &engine.SqlEngineConfig{
-		InitialDb:    initialDb,
-		IsReadOnly:   false,
-		PrivFilePath: privsFp,
-		ServerUser:   "root",
-		ServerPass:   "",
-		Autocommit:   true,
-	}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
@@ -495,8 +546,13 @@ func execMultiStatements(
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	// Add root client
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	// Add specified user as new superuser, if it doesn't already exist
+	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
+		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
+	}
+
+	// Set client to specified user
+	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
 	err = runMultiStatementMode(sqlCtx, se, batchInput, continueOnErr)
 	return errhand.VerboseErrorFromError(err)
@@ -507,17 +563,8 @@ func execQuery(
 	mrEnv *env.MultiRepoEnv,
 	query string,
 	format engine.PrintResultFormat,
-	initialDb string,
-	privsFp string,
+	config *engine.SqlEngineConfig,
 ) errhand.VerboseError {
-	config := &engine.SqlEngineConfig{
-		InitialDb:    initialDb,
-		IsReadOnly:   false,
-		PrivFilePath: privsFp,
-		ServerUser:   "root",
-		ServerPass:   "",
-		Autocommit:   true,
-	}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
@@ -534,10 +581,15 @@ func execQuery(
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	// Add root client
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	// Add specified user as new superuser, if it doesn't already exist
+	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
+		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
+	}
 
-	sqlSch, rowIter, err := processQuery(sqlCtx, query, se)
+	// Set client to specified user
+	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
+
+	sqlSch, rowIter, err := ProcessQuery(sqlCtx, query, se)
 	if err != nil {
 		return formatQueryError("", err)
 	}
@@ -635,10 +687,15 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 	_, batch := apr.GetValue(BatchFlag)
 	_, list := apr.GetValue(listSavedFlag)
 	_, execute := apr.GetValue(executeFlag)
-	_, multiDB := apr.GetValue(multiDBDirFlag)
+	_, dataDir := apr.GetValue(DataDirFlag)
+	_, multiDbDir := apr.GetValue(MultiDBDirFlag)
 
 	if len(apr.Args) > 0 && !query {
 		return errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build()
+	}
+
+	if dataDir && multiDbDir {
+		return errhand.BuildDError("Invalid Argument: --data-dir is not compatible with --multi-db-dir").Build()
 	}
 
 	if execute {
@@ -650,8 +707,8 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --message|-m").Build()
 		} else if save {
 			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --save|-s").Build()
-		} else if multiDB {
-			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --multi-db-dir").Build()
+		} else if dataDir || multiDbDir {
+			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --data-dir").Build()
 		}
 	}
 
@@ -664,13 +721,13 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 			return errhand.BuildDError("Invalid Argument: --list-saved is not compatible with --message|-m").Build()
 		} else if save {
 			return errhand.BuildDError("Invalid Argument: --list-saved is not compatible with --save|-s").Build()
-		} else if multiDB {
-			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --multi-db-dir").Build()
+		} else if dataDir || multiDbDir {
+			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --data-dir").Build()
 		}
 	}
 
-	if save && multiDB {
-		return errhand.BuildDError("Invalid Argument: --multi-db-dir queries cannot be saved").Build()
+	if save && (dataDir || multiDbDir) {
+		return errhand.BuildDError("Invalid Argument: --data-dir queries cannot be saved").Build()
 	}
 
 	if batch {
@@ -690,6 +747,10 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 		if msg {
 			return errhand.BuildDError("Invalid Argument: --message|-m is only used with --query|-q and --save|-s").Build()
 		}
+	}
+
+	if multiDbDir {
+		cli.PrintErrln("WARNING: --multi-db-dir is deprecated, use --data-dir instead")
 	}
 
 	return nil
@@ -722,7 +783,7 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 			shouldProcessQuery = false
 		}
 		if shouldProcessQuery {
-			sqlSch, rowIter, err := processQuery(ctx, query, se)
+			sqlSch, rowIter, err := ProcessQuery(ctx, query, se)
 			if err != nil {
 				verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
 				cli.PrintErrln(verr.Verbose())
@@ -793,7 +854,7 @@ func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, conti
 
 // runShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
 // be updated by any queries which were processed.
-func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv) error {
+func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv, config *engine.SqlEngineConfig) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 
 	sqlCtx, err := se.NewContext(ctx)
@@ -801,11 +862,16 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 		return err
 	}
 
-	currentDB := sqlCtx.Session.GetCurrentDatabase()
-	currEnv := mrEnv.GetEnv(currentDB)
+	// Add specified user as new superuser, if it doesn't already exist
+	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
+		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
+	}
 
 	// Add root client
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
+
+	currentDB := sqlCtx.Session.GetCurrentDatabase()
+	currEnv := mrEnv.GetEnv(currentDB)
 
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
 	initialPrompt := fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
@@ -906,7 +972,7 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 				return false
 			}
 
-			if sqlSch, rowIter, err = processQuery(sqlCtx, query, se); err != nil {
+			if sqlSch, rowIter, err = ProcessQuery(sqlCtx, query, se); err != nil {
 				verr := formatQueryError("", err)
 				shell.Println(verr.Verbose())
 			} else if rowIter != nil {
@@ -1049,9 +1115,9 @@ func prepend(s string, ss []string) []string {
 	return newSs
 }
 
-// Processes a single query. The Root of the sqlEngine will be updated if necessary.
+// ProcessQuery processes a single query. The Root of the sqlEngine will be updated if necessary.
 // Returns the schema and the row iterator for the results, which may be nil, and an error if one occurs.
-func processQuery(ctx *sql.Context, query string, se *engine.SqlEngine) (sql.Schema, sql.RowIter, error) {
+func ProcessQuery(ctx *sql.Context, query string, se *engine.SqlEngine) (sql.Schema, sql.RowIter, error) {
 	sqlStatement, err := sqlparser.Parse(query)
 	if err == sqlparser.ErrEmpty {
 		// silently skip empty statements
@@ -1211,7 +1277,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *engine.SqlEngine) err
 }
 
 func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query string, sqlStatement sqlparser.Statement) (returnErr error) {
-	sqlSch, rowIter, err := processQuery(ctx, query, se)
+	sqlSch, rowIter, err := ProcessQuery(ctx, query, se)
 	if err != nil {
 		return err
 	}

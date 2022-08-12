@@ -36,71 +36,27 @@ type DiffSummaryProgress struct {
 	Adds, Removes, Changes, CellChanges, NewSize, OldSize uint64
 }
 
-type reporter func(ctx context.Context, change *diff.Difference, ch chan<- DiffSummaryProgress) error
+type prollyReporter func(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD val.TupleDesc, change tree.Diff, ch chan<- DiffSummaryProgress) error
+type nomsReporter func(ctx context.Context, change *diff.Difference, ch chan<- DiffSummaryProgress) error
 
 // Summary reports a summary of diff changes between two values
 // todo: make package private once dolthub is migrated
 func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to durable.Index, fromSch, toSch schema.Schema) (err error) {
 	ch <- DiffSummaryProgress{OldSize: from.Count(), NewSize: to.Count()}
 
-	if types.IsFormat_DOLT_1(from.Format()) {
-		return prollySummary(ctx, ch, from, to, fromSch, toSch)
+	fk, tk := schema.IsKeyless(fromSch), schema.IsKeyless(toSch)
+	var keyless bool
+	if fk && tk {
+		keyless = true
+	} else if fk != tk {
+		return fmt.Errorf("cannot perform a diff between keyless and keyed schema")
 	}
 
-	return nomsSummary(ctx, ch, from, to)
-}
-
-func prollySummary(ctx context.Context, ch chan DiffSummaryProgress, from, to durable.Index, fromSch, toSch schema.Schema) error {
-	_, vMapping, err := MapSchemaBasedOnName(fromSch, toSch)
-	if err != nil {
-		return err
+	if types.IsFormat_DOLT(from.Format()) {
+		return diffProllyTrees(ctx, ch, keyless, from, to, fromSch, toSch)
 	}
 
-	f := durable.ProllyMapFromIndex(from)
-	t := durable.ProllyMapFromIndex(to)
-	_, fVD := f.Descriptors()
-	_, tVD := t.Descriptors()
-
-	err = prolly.DiffMaps(ctx, f, t, func(ctx context.Context, diff tree.Diff) error {
-		err := reportPkChanges(ctx, vMapping, fVD, tVD, diff, ch)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	if err != nil && err != io.EOF {
-		return err
-	}
-	return nil
-}
-
-func nomsSummary(ctx context.Context, ch chan DiffSummaryProgress, from, to durable.Index) (err error) {
-	ad := NewAsyncDiffer(1024)
-	ad.Start(ctx, durable.NomsMapFromIndex(from), durable.NomsMapFromIndex(to))
-	defer func() {
-		if cerr := ad.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-
-	hasMore := true
-	var diffs []*diff.Difference
-	for hasMore {
-		diffs, hasMore, err = ad.GetDiffs(100, time.Millisecond)
-		if err != nil {
-			return err
-		}
-
-		for i := range diffs {
-			curr := diffs[i]
-			err := reportNomsPkChanges(ctx, curr, ch)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
+	return diffNomsMaps(ctx, ch, keyless, from, to)
 }
 
 // SummaryForTableDelta pushes diff summary progress messages for the table delta given to the channel given
@@ -110,7 +66,7 @@ func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td T
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
 
-	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
+	if !schema.ArePrimaryKeySetsDiffable(td.Format(), fromSch, toSch) {
 		return errhand.BuildDError("diff summary will not compute due to primary key set change with table %s", td.CurName()).Build()
 	}
 
@@ -124,20 +80,48 @@ func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td T
 		return err
 	}
 
-	if types.IsFormat_DOLT_1(td.Format()) {
-		if keyless {
-			return fmt.Errorf("keyless diff not supported for format %s", td.Format().VersionString())
-		}
-		return diffProllyTrees(ctx, ch, durable.ProllyMapFromIndex(fromRows), durable.ProllyMapFromIndex(toRows))
+	if types.IsFormat_DOLT(td.Format()) {
+		return diffProllyTrees(ctx, ch, keyless, fromRows, toRows, fromSch, toSch)
 	} else {
 		return diffNomsMaps(ctx, ch, keyless, fromRows, toRows)
 	}
 }
 
-func diffNomsMaps(ctx context.Context, ch chan DiffSummaryProgress, keyless bool, fromRows durable.Index, toRows durable.Index) error {
-	var rpr reporter
+func diffProllyTrees(ctx context.Context, ch chan DiffSummaryProgress, keyless bool, from, to durable.Index, fromSch, toSch schema.Schema) error {
+	_, vMapping, err := MapSchemaBasedOnName(fromSch, toSch)
+	if err != nil {
+		return err
+	}
+
+	f := durable.ProllyMapFromIndex(from)
+	t := durable.ProllyMapFromIndex(to)
+	_, fVD := f.Descriptors()
+	_, tVD := t.Descriptors()
+
+	var rpr prollyReporter
 	if keyless {
 		rpr = reportKeylessChanges
+	} else {
+		rpr = reportPkChanges
+		ch <- DiffSummaryProgress{
+			OldSize: from.Count(),
+			NewSize: to.Count(),
+		}
+	}
+
+	err = prolly.DiffMaps(ctx, f, t, func(ctx context.Context, diff tree.Diff) error {
+		return rpr(ctx, vMapping, fVD, tVD, diff, ch)
+	})
+	if err != nil && err != io.EOF {
+		return err
+	}
+	return nil
+}
+
+func diffNomsMaps(ctx context.Context, ch chan DiffSummaryProgress, keyless bool, fromRows durable.Index, toRows durable.Index) error {
+	var rpr nomsReporter
+	if keyless {
+		rpr = reportNomsKeylessChanges
 	} else {
 		rpr = reportNomsPkChanges
 		ch <- DiffSummaryProgress{
@@ -149,23 +133,7 @@ func diffNomsMaps(ctx context.Context, ch chan DiffSummaryProgress, keyless bool
 	return summaryWithReporter(ctx, ch, durable.NomsMapFromIndex(fromRows), durable.NomsMapFromIndex(toRows), rpr)
 }
 
-func diffProllyTrees(ctx context.Context, ch chan DiffSummaryProgress, from, to prolly.Map) error {
-	diffSummary, err := prolly.DiffMapSummary(ctx, from, to)
-	if err != nil {
-		return err
-	}
-	ch <- DiffSummaryProgress{
-		Adds:        diffSummary.Adds,
-		Removes:     diffSummary.Removes,
-		Changes:     diffSummary.Changes,
-		CellChanges: diffSummary.CellChanges,
-		NewSize:     diffSummary.NewSize,
-		OldSize:     diffSummary.OldSize,
-	}
-	return nil
-}
-
-func summaryWithReporter(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Map, rpr reporter) (err error) {
+func summaryWithReporter(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Map, rpr nomsReporter) (err error) {
 	ad := NewAsyncDiffer(1024)
 	ad.Start(ctx, from, to)
 	defer func() {
@@ -198,20 +166,49 @@ func summaryWithReporter(ctx context.Context, ch chan DiffSummaryProgress, from,
 }
 
 func reportPkChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD val.TupleDesc, change tree.Diff, ch chan<- DiffSummaryProgress) error {
-	var summary DiffSummaryProgress
+	var sum DiffSummaryProgress
 	switch change.Type {
 	case tree.AddedDiff:
-		summary = DiffSummaryProgress{Adds: 1}
+		sum.Adds++
 	case tree.RemovedDiff:
-		summary = DiffSummaryProgress{Removes: 1}
+		sum.Removes++
 	case tree.ModifiedDiff:
-		cellChanges := prollyCountCellDiff(vMapping, fromD, toD, val.Tuple(change.From), val.Tuple(change.To))
-		summary = DiffSummaryProgress{Changes: 1, CellChanges: cellChanges}
+		sum.CellChanges = prollyCountCellDiff(vMapping, fromD, toD, val.Tuple(change.From), val.Tuple(change.To))
+		sum.Changes++
 	default:
 		return errors.New("unknown change type")
 	}
 	select {
-	case ch <- summary:
+	case ch <- sum:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func reportKeylessChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD val.TupleDesc, change tree.Diff, ch chan<- DiffSummaryProgress) error {
+	var sum DiffSummaryProgress
+	var n, n2 uint64
+	switch change.Type {
+	case tree.AddedDiff:
+		n, _ = toD.GetUint64(0, val.Tuple(change.To))
+		sum.Adds += n
+	case tree.RemovedDiff:
+		n, _ = fromD.GetUint64(0, val.Tuple(change.From))
+		sum.Removes += n
+	case tree.ModifiedDiff:
+		n, _ = fromD.GetUint64(0, val.Tuple(change.From))
+		n2, _ = toD.GetUint64(0, val.Tuple(change.To))
+		if n < n2 {
+			sum.Adds += n2 - n
+		} else {
+			sum.Removes += n - n2
+		}
+	default:
+		return errors.New("unknown change type")
+	}
+	select {
+	case ch <- sum:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -275,7 +272,7 @@ func reportNomsPkChanges(ctx context.Context, change *diff.Difference, ch chan<-
 	}
 }
 
-func reportKeylessChanges(ctx context.Context, change *diff.Difference, ch chan<- DiffSummaryProgress) error {
+func reportNomsKeylessChanges(ctx context.Context, change *diff.Difference, ch chan<- DiffSummaryProgress) error {
 	var oldCard uint64
 	if change.OldValue != nil {
 		v, err := change.OldValue.(types.Tuple).Get(row.KeylessCardinalityValIdx)

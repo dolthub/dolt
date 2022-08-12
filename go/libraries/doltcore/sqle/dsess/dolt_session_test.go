@@ -25,23 +25,22 @@ import (
 )
 
 func TestDoltSessionInit(t *testing.T) {
-	sess := DefaultSession()
+	dsess := DefaultSession(EmptyDatabaseProvider())
 	conf := config.NewMapConfig(make(map[string]string))
-	dsess := sess.NewDoltSession(conf)
 	assert.Equal(t, conf, dsess.globalsConf)
 }
 
 func TestNewPersistedSystemVariables(t *testing.T) {
-	sess := DefaultSession()
+	dsess := DefaultSession(EmptyDatabaseProvider())
 	conf := config.NewMapConfig(map[string]string{"max_connections": "1000"})
-	dsess := sess.NewDoltSession(conf)
+	dsess = dsess.WithGlobals(conf)
+
 	sysVars, err := dsess.SystemVariablesInConfig()
 	assert.NoError(t, err)
 
 	maxConRes := sysVars[0]
 	assert.Equal(t, "max_connections", maxConRes.Name)
 	assert.Equal(t, int64(1000), maxConRes.Default)
-
 }
 
 func TestValidatePeristableSystemVar(t *testing.T) {

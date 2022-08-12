@@ -36,10 +36,6 @@ type WriteSession interface {
 	// GetTableWriter creates a TableWriter and adds it to the WriteSession.
 	GetTableWriter(ctx context.Context, table, db string, setter SessionRootSetter, batched bool) (TableWriter, error)
 
-	// UpdateWorkingSet takes a callback to update this WriteSession's WorkingSet. The update method cannot change the
-	// WorkingSetRef of the WriteSession. WriteSession flushes the pending writes in the session before calling the update.
-	UpdateWorkingSet(ctx context.Context, cb func(ctx context.Context, current *doltdb.WorkingSet) (*doltdb.WorkingSet, error)) error
-
 	// SetWorkingSet modifies the state of the WriteSession. The WorkingSetRef of |ws| must match the existing Ref.
 	SetWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error
 
@@ -74,7 +70,7 @@ var _ WriteSession = &nomsWriteSession{}
 // locations that do not have a root at the time of this call. However, a root must be set through SetRoot before any
 // table editors are returned.
 func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, tracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession {
-	if types.IsFormat_DOLT_1(nbf) {
+	if types.IsFormat_DOLT(nbf) {
 		return &prollyWriteSession{
 			workingSet: ws,
 			tables:     make(map[string]*prollyTableWriter),
@@ -119,7 +115,7 @@ func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table, db string,
 		return nil, err
 	}
 
-	conv := index.NewKVToSqlRowConverterForCols(t.Format(), sch)
+	conv := index.NewKVToSqlRowConverterForCols(t.Format(), sch, nil)
 
 	return &nomsTableWriter{
 		tableName:   table,
@@ -148,25 +144,6 @@ func (s *nomsWriteSession) SetWorkingSet(ctx context.Context, ws *doltdb.Working
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	return s.setWorkingSet(ctx, ws)
-}
-
-// UpdateWorkingSet implements WriteSession.
-func (s *nomsWriteSession) UpdateWorkingSet(ctx context.Context, cb func(ctx context.Context, current *doltdb.WorkingSet) (*doltdb.WorkingSet, error)) error {
-	s.mut.Lock()
-	defer s.mut.Unlock()
-
-	current, err := s.flush(ctx)
-	if err != nil {
-		return err
-	}
-
-	mutated, err := cb(ctx, current)
-	if err != nil {
-		return err
-	}
-	s.workingSet = mutated
-
-	return s.setWorkingSet(ctx, s.workingSet)
 }
 
 func (s *nomsWriteSession) GetOptions() editor.Options {
@@ -287,7 +264,7 @@ func (s *nomsWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.Working
 	s.workingSet = ws
 
 	root := ws.WorkingRoot()
-	if err := s.updateAutoIncrementSequences(ctx, root); err != nil {
+	if err := updateAutoIncrementSequences(ctx, root, s.tracker); err != nil {
 		return err
 	}
 
@@ -318,18 +295,4 @@ func (s *nomsWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.Working
 		localTableEditor.tableEditor = newTableEditor
 	}
 	return nil
-}
-
-func (s *nomsWriteSession) updateAutoIncrementSequences(ctx context.Context, root *doltdb.RootValue) error {
-	return root.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
-		if !schema.HasAutoIncrement(sch) {
-			return
-		}
-		v, err := table.GetAutoIncrementValue(ctx)
-		if err != nil {
-			return true, err
-		}
-		s.tracker.Set(name, v)
-		return
-	})
 }

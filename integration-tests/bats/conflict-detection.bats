@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 }
 
 teardown() {
@@ -54,11 +53,13 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
+    skip_nbf_dolt "needs merge stats"
     [[ "$output" =~ "1 rows modified" ]] || false
 
 }
 
 @test "conflict-detection: two branches modify different cell different row. merge. no conflict" {
+
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -87,8 +88,9 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
-    [[ "$output" =~ "1 rows modified" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
+    skip_nbf_dolt "needs merge stats"
+    [[ "$output" =~ "1 rows modified" ]] || false
     run dolt status
     [[ "$output" =~ "All conflicts and constraint violations fixed" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
@@ -122,8 +124,9 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
-    [[ "$output" =~ "1 rows modified" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
+    skip_nbf_dolt "needs merge stats"
+    [[ "$output" =~ "1 rows modified" ]] || false
     run dolt status
     [[ "$output" =~ "All conflicts and constraint violations fixed" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
@@ -188,6 +191,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
+    skip_nbf_dolt "needs merge stats"
     [[ "$output" =~ "1 rows added" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }

@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -88,7 +87,7 @@ func LoadedLocalLocation() *time.Location {
 func BasicSelectTests() []SelectTest {
 	headCommitHash := "73hc2robs4v0kt9taoe3m5hd49dmrgun"
 	if types.Format_Default == types.Format_DOLT_DEV {
-		headCommitHash = "r5hevva9fc9ul414fm5lo11r8vcqifc1"
+		headCommitHash = "4ej7hfduufg4o2837g3gc4p5uolrlmv9"
 	}
 	return []SelectTest{
 		{
@@ -1492,15 +1491,15 @@ var systemTableSelectTests = []SelectTest{
 	{
 		Name: "select from dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
-			doltdocs.DocsSchema,
-			NewRowWithSchema(doltdocs.DocsSchema,
+			doltdb.DocsSchema,
+			NewRowWithSchema(doltdb.DocsSchema,
 				types.String("LICENSE.md"),
 				types.String("A license")),
 		),
 		Query: "select * from dolt_docs",
-		ExpectedRows: ToSqlRows(CompressSchema(doltdocs.DocsSchema),
+		ExpectedRows: ToSqlRows(CompressSchema(doltdb.DocsSchema),
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
-		ExpectedSchema: CompressSchema(doltdocs.DocsSchema),
+		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
 	},
 	{
 		Name: "select from dolt_query_catalog",

@@ -13,7 +13,6 @@ setup() {
     setup_no_dolt_init
     make_repo repo1
     mkdir rem1
-    skip_nbf_dolt_1
 
     cd repo1
     dolt remote add remote1 file://../rem1
@@ -41,14 +40,15 @@ teardown() {
 
     cd repo1
     dolt remote add origin file://../rem1
+    dolt commit -am "add test"
+    dolt checkout -b other
     start_sql_server repo1
 
-    dolt push origin main
     run server_query repo1 1 "select dolt_push() as p" "p\n0"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "the current branch has no upstream branch" ]] || false
 
-    server_query repo1 1 "select dolt_push('--set-upstream', 'origin', 'main') as p" "p\n1"
+    server_query repo1 1 "select dolt_push('--set-upstream', 'origin', 'other') as p" "p\n1"
 
     skip "In-memory branch doesn't track upstream"
     server_query repo1 1 "select dolt_push() as p" "p\n1"
@@ -314,6 +314,24 @@ teardown() {
 
     server_query repo2 1 "show tables" "Tables_in_repo2\ntest"
     server_query repo2 1 "use \`repo2/$head_hash\`" ""
+}
+
+@test "remotes-sql-server: connect to tag works" {
+    skiponwindows "Missing dependencies"
+    
+    cd repo1
+    dolt commit -am "cm"
+    dolt push remote1 main
+    head_hash=$(get_head_commit)
+
+    cd ../repo2
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+    dolt tag v1
+    start_sql_server repo2
+
+    server_query repo2 1 "show tables" "Tables_in_repo2\ntest"
+    server_query repo2 1 "use \`repo2/v1\`" ""
 }
 
 get_head_commit() {

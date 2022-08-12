@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/clienttest"
 )
@@ -136,9 +137,10 @@ func tempDirDB(ctx context.Context) (types.ValueReadWriter, datas.Database, erro
 		return nil, nil, err
 	}
 
+	ns := tree.NewNodeStore(st)
 	vs := types.NewValueStore(st)
 
-	return vs, datas.NewTypesDatabase(vs), nil
+	return vs, datas.NewTypesDatabase(vs, ns), nil
 }
 
 func TestPuller(t *testing.T) {

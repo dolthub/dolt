@@ -15,6 +15,7 @@
 package merge
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -23,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -39,8 +39,8 @@ import (
 //
 // It is invalid for |From| and |To| to be both be nil.
 type indexEdit interface {
-	leftEdit() *tree.Diff
-	rightEdit() *tree.Diff
+	leftEdit() tree.Diff
+	rightEdit() tree.Diff
 }
 
 // cellWiseMergeEdit implements indexEdit. It resets the left and updates the
@@ -53,18 +53,18 @@ type cellWiseMergeEdit struct {
 
 var _ indexEdit = cellWiseMergeEdit{}
 
-func (m cellWiseMergeEdit) leftEdit() *tree.Diff {
+func (m cellWiseMergeEdit) leftEdit() tree.Diff {
 	// Reset left
-	return &tree.Diff{
+	return tree.Diff{
 		Key:  m.left.Key,
 		From: m.left.To,
 		To:   m.left.From,
 	}
 }
 
-func (m cellWiseMergeEdit) rightEdit() *tree.Diff {
+func (m cellWiseMergeEdit) rightEdit() tree.Diff {
 	// Update right to merged val
-	return &tree.Diff{
+	return tree.Diff{
 		Key:  m.merged.Key,
 		From: m.right.To,
 		To:   m.merged.To,
@@ -78,14 +78,14 @@ type conflictEdit struct {
 
 var _ indexEdit = conflictEdit{}
 
-func (c conflictEdit) leftEdit() *tree.Diff {
+func (c conflictEdit) leftEdit() tree.Diff {
 	// Noop left
-	return nil
+	return tree.Diff{}
 }
 
-func (c conflictEdit) rightEdit() *tree.Diff {
+func (c conflictEdit) rightEdit() tree.Diff {
 	// Reset right
-	return &tree.Diff{
+	return tree.Diff{
 		Key:  c.right.Key,
 		From: c.right.To,
 		To:   c.right.From,
@@ -104,56 +104,20 @@ type confVals struct {
 // and returns its updated value.
 func mergeProllySecondaryIndexes(
 	ctx context.Context,
-	vrw types.ValueReadWriter,
-	postMergeSchema, rootSch, mergeSch, ancSch schema.Schema,
-	mergedData durable.Index,
-	tbl, mergeTbl, tableToUpdate *doltdb.Table,
-	ancSet durable.IndexSet,
-	artEditor prolly.ArtifactsEditor,
-	theirRootIsh hash.Hash,
-	tblName string) (*doltdb.Table, error) {
+	tm TableMerger,
+	leftSet, rightSet durable.IndexSet,
+	finalSch schema.Schema,
+	finalRows durable.Index,
+	artifacts prolly.ArtifactsEditor,
+) (durable.IndexSet, error) {
 
-	rootSet, err := tbl.GetIndexSet(ctx)
+	ancSet, err := tm.ancTbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
-	mergeSet, err := mergeTbl.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-	mergedSet, err := mergeProllyIndexSets(
-		ctx,
-		vrw,
-		postMergeSchema, rootSch, mergeSch, ancSch,
-		mergedData,
-		rootSet, mergeSet, ancSet,
-		artEditor,
-		theirRootIsh,
-		tblName)
-	if err != nil {
-		return nil, err
-	}
-	updatedTbl, err := tableToUpdate.SetIndexSet(ctx, mergedSet)
-	if err != nil {
-		return nil, err
-	}
-	return updatedTbl, nil
-}
+	mergedIndexSet := durable.NewIndexSet(ctx, tm.vrw, tm.ns)
 
-// mergeProllyIndexSets merges the |root|, |merge|, and |anc| index sets based
-// on the provided |postMergeSchema|. It returns the merged index set.
-func mergeProllyIndexSets(
-	ctx context.Context,
-	vrw types.ValueReadWriter,
-	postMergeSchema, rootSch, mergeSch, ancSch schema.Schema,
-	mergedData durable.Index,
-	root, merge, anc durable.IndexSet,
-	artEditor prolly.ArtifactsEditor,
-	theirRootIsh hash.Hash,
-	tblName string) (durable.IndexSet, error) {
-	mergedIndexSet := durable.NewIndexSet(ctx, vrw)
-
-	mergedM := durable.ProllyMapFromIndex(mergedData)
+	mergedM := durable.ProllyMapFromIndex(finalRows)
 
 	tryGetIdx := func(sch schema.Schema, iS durable.IndexSet, indexName string) (prolly.Map, bool, error) {
 		ok := sch.Indexes().Contains(indexName)
@@ -162,42 +126,51 @@ func mergeProllyIndexSets(
 			if err != nil {
 				return prolly.Map{}, false, err
 			}
-			return durable.ProllyMapFromIndex(idx), true, nil
+			m := durable.ProllyMapFromIndex(idx)
+			if schema.IsKeyless(sch) {
+				m = prolly.ConvertToSecondaryKeylessIndex(m)
+			}
+			return m, true, nil
 		}
 		return prolly.Map{}, false, nil
 	}
 
 	// Based on the indexes in the post merge schema, merge the root, merge,
 	// and ancestor indexes.
-	for _, index := range postMergeSchema.Indexes().AllIndexes() {
+	for _, index := range finalSch.Indexes().AllIndexes() {
 
-		rootI, rootOK, err := tryGetIdx(rootSch, root, index.Name())
+		left, rootOK, err := tryGetIdx(tm.leftSch, leftSet, index.Name())
 		if err != nil {
 			return nil, err
 		}
-		mergeI, mergeOK, err := tryGetIdx(mergeSch, merge, index.Name())
+		right, mergeOK, err := tryGetIdx(tm.rightSch, rightSet, index.Name())
 		if err != nil {
 			return nil, err
 		}
-		ancI, ancOK, err := tryGetIdx(ancSch, anc, index.Name())
+		anc, ancOK, err := tryGetIdx(tm.ancSch, ancSet, index.Name())
 		if err != nil {
 			return nil, err
 		}
 
 		mergedIndex, err := func() (durable.Index, error) {
 			if !rootOK || !mergeOK || !ancOK {
-				return buildIndex(ctx, vrw, postMergeSchema, index, mergedM, artEditor, theirRootIsh, tblName)
+				return buildIndex(ctx, tm.vrw, tm.ns, finalSch, index, mergedM, artifacts, tm.rightSrc, tm.name)
 			}
 
 			if index.IsUnique() {
-				err = addUniqIdxViols(ctx, postMergeSchema, index, rootI, mergeI, ancI, mergedM, artEditor, theirRootIsh, tblName)
+				err = addUniqIdxViols(ctx, finalSch, index, left, right, anc, mergedM, artifacts, tm.rightSrc, tm.name)
 				if err != nil {
 					return nil, err
 				}
 			}
 
 			var collision = false
-			merged, err := prolly.MergeMaps(ctx, rootI, mergeI, ancI, func(left, right tree.Diff) (tree.Diff, bool) {
+			merged, err := prolly.MergeMaps(ctx, left, right, anc, func(left, right tree.Diff) (tree.Diff, bool) {
+				if left.Type == right.Type && bytes.Equal(left.To, right.To) {
+					// convergent edit
+					return left, true
+				}
+
 				collision = true
 				return tree.Diff{}, true
 			})
@@ -222,7 +195,7 @@ func mergeProllyIndexSets(
 	return mergedIndexSet, nil
 }
 
-func buildIndex(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema schema.Schema, index schema.Index, m prolly.Map, artEditor prolly.ArtifactsEditor, theirRootIsh hash.Hash, tblName string) (durable.Index, error) {
+func buildIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, postMergeSchema schema.Schema, index schema.Index, m prolly.Map, artEditor prolly.ArtifactsEditor, theirRootIsh doltdb.Rootish, tblName string) (durable.Index, error) {
 	if index.IsUnique() {
 		meta, err := makeUniqViolMeta(postMergeSchema, index)
 		if err != nil {
@@ -239,6 +212,7 @@ func buildIndex(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema 
 		mergedMap, err := creation.BuildUniqueProllyIndex(
 			ctx,
 			vrw,
+			ns,
 			postMergeSchema,
 			index,
 			m,
@@ -261,7 +235,7 @@ func buildIndex(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema 
 		return mergedMap, nil
 	}
 
-	mergedIndex, err := creation.BuildSecondaryProllyIndex(ctx, vrw, postMergeSchema, index, m)
+	mergedIndex, err := creation.BuildSecondaryProllyIndex(ctx, vrw, ns, postMergeSchema, index, m)
 	if err != nil {
 		return nil, err
 	}
@@ -272,105 +246,90 @@ func buildIndex(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema 
 // |rootIndexSet| and |mergeIndexSet| such that when the index sets are merged,
 // they produce entries consistent with the cell-wise merges. The updated
 // |rootIndexSet| and |mergeIndexSet| are returned.
-func updateProllySecondaryIndexes(
-	ctx context.Context,
-	cellWiseChan chan indexEdit,
-	rootSchema, mergeSchema schema.Schema,
-	tbl, mergeTbl *doltdb.Table,
-	rootIndexSet, mergeIndexSet durable.IndexSet) (durable.IndexSet, durable.IndexSet, error) {
-
-	rootIdxs, err := getMutableSecondaryIdxs(ctx, rootSchema, tbl)
+func updateProllySecondaryIndexes(ctx context.Context, tm TableMerger, cellWiseEdits chan indexEdit) (durable.IndexSet, durable.IndexSet, error) {
+	ls, err := tm.leftTbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	mergeIdxs, err := getMutableSecondaryIdxs(ctx, mergeSchema, mergeTbl)
+	lm, err := getMutableSecondaryIdxs(ctx, tm.leftSch, ls)
 	if err != nil {
 		return nil, nil, err
 	}
 
-OUTER:
-	for {
-		select {
-		case e, ok := <-cellWiseChan:
-			if !ok {
-				break OUTER
-			}
-			// See cellWiseMergeEdit and conflictEdit for implementations of leftEdit and rightEdit
-			if edit := e.leftEdit(); edit != nil {
-				for _, idx := range rootIdxs {
-					err := applyEdit(ctx, idx, edit)
-					if err != nil {
-						return nil, nil, err
-					}
-				}
-			}
-			if edit := e.rightEdit(); edit != nil {
-				for _, idx := range mergeIdxs {
-					err := applyEdit(ctx, idx, edit)
-					if err != nil {
-						return nil, nil, err
-					}
-				}
-			}
-		case <-ctx.Done():
-			return nil, nil, ctx.Err()
-		}
+	rs, err := tm.rightTbl.GetIndexSet(ctx)
+	if err != nil {
+		return nil, nil, err
 	}
-
-	persistIndexMuts := func(indexSet durable.IndexSet, idxs []MutableSecondaryIdx) (durable.IndexSet, error) {
-		for _, idx := range idxs {
-			m, err := idx.Map(ctx)
-			if err != nil {
-				return nil, err
-			}
-			indexSet, err = indexSet.PutIndex(ctx, idx.Name, durable.IndexFromProllyMap(m))
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		return indexSet, nil
-	}
-
-	updatedRootIndexSet, err := persistIndexMuts(rootIndexSet, rootIdxs)
+	rm, err := getMutableSecondaryIdxs(ctx, tm.rightSch, rs)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	updatedMergeIndexSet, err := persistIndexMuts(mergeIndexSet, mergeIdxs)
+	err = applyCellwiseEdits(ctx, lm, rm, cellWiseEdits)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return updatedRootIndexSet, updatedMergeIndexSet, nil
+	ls, err = persistIndexMuts(ctx, ls, lm)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rs, err = persistIndexMuts(ctx, rs, rm)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return ls, rs, nil
 }
 
-// getMutableSecondaryIdxs returns a MutableSecondaryIdx for each secondary index
-// defined in |schema| and |tbl|.
-func getMutableSecondaryIdxs(ctx context.Context, schema schema.Schema, tbl *doltdb.Table) ([]MutableSecondaryIdx, error) {
-	indexSet, err := tbl.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	mods := make([]MutableSecondaryIdx, schema.Indexes().Count())
-	for i, index := range schema.Indexes().AllIndexes() {
-		idx, err := indexSet.GetIndex(ctx, schema, index.Name())
+func persistIndexMuts(ctx context.Context, indexSet durable.IndexSet, idxs []MutableSecondaryIdx) (durable.IndexSet, error) {
+	for _, idx := range idxs {
+		m, err := idx.Map(ctx)
 		if err != nil {
 			return nil, err
 		}
-		m := durable.ProllyMapFromIndex(idx)
-
-		mods[i] = NewMutableSecondaryIdx(m, schema, index, m.Pool())
+		indexSet, err = indexSet.PutIndex(ctx, idx.Name, durable.IndexFromProllyMap(m))
+		if err != nil {
+			return nil, err
+		}
 	}
+	return indexSet, nil
+}
 
-	return mods, nil
+func applyCellwiseEdits(ctx context.Context, rootIdxs, mergeIdxs []MutableSecondaryIdx, edits chan indexEdit) error {
+	for {
+		select {
+		case e, ok := <-edits:
+			if !ok {
+				return nil
+			}
+			// See cellWiseMergeEdit and conflictEdit for implementations of leftEdit and rightEdit
+			if edit := e.leftEdit(); !emptyDiff(edit) {
+				for _, idx := range rootIdxs {
+					if err := applyEdit(ctx, idx, edit); err != nil {
+						return err
+					}
+				}
+			}
+			if edit := e.rightEdit(); !emptyDiff(edit) {
+				for _, idx := range mergeIdxs {
+					if err := applyEdit(ctx, idx, edit); err != nil {
+						return err
+					}
+				}
+			}
+
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
 // applyEdit applies |edit| to |idx|. If |len(edit.To)| == 0, then action is
 // a delete, if |len(edit.From)| == 0 then it is an insert, otherwise it is an
 // update.
-func applyEdit(ctx context.Context, idx MutableSecondaryIdx, edit *tree.Diff) error {
+func applyEdit(ctx context.Context, idx MutableSecondaryIdx, edit tree.Diff) (err error) {
 	if len(edit.From) == 0 {
 		err := idx.InsertEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.To))
 		if err != nil {
@@ -388,4 +347,8 @@ func applyEdit(ctx context.Context, idx MutableSecondaryIdx, edit *tree.Diff) er
 		}
 	}
 	return nil
+}
+
+func emptyDiff(d tree.Diff) bool {
+	return d.Key == nil
 }

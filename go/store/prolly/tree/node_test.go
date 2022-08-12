@@ -67,20 +67,20 @@ func TestRoundTripNodeItems(t *testing.T) {
 
 func TestNodeSize(t *testing.T) {
 	sz := unsafe.Sizeof(Node{})
-	assert.Equal(t, 128, int(sz))
+	assert.Equal(t, 152, int(sz))
 }
 
 func TestNodeHashValueCompatibility(t *testing.T) {
 	keys, values := randomNodeItemPairs(t, (rand.Int()%101)+50)
 	nd := newLeafNode(keys, values)
-	nbf := types.Format_DOLT_1
+	nbf := types.Format_DOLT
 	th, err := ValueFromNode(nd).Hash(nbf)
 	require.NoError(t, err)
 	assert.Equal(t, nd.HashOf(), th)
 
 	h1 := hash.Parse("kvup5vdur99ush7c18g0kjc6rhdkfdgo")
 	h2 := hash.Parse("7e54ill10nji9oao1ja88buh9itaj7k9")
-	msg := message.AddressMapSerializer{Pool: sharedPool}.Serialize(
+	msg := message.NewAddressMapSerializer(sharedPool).Serialize(
 		[][]byte{[]byte("chopin"), []byte("listz")},
 		[][]byte{h1[:], h2[:]},
 		[]uint64{},
@@ -104,7 +104,7 @@ func TestNodeDecodeValueCompatibility(t *testing.T) {
 
 	v, err := vs.ReadValue(context.Background(), h)
 	require.NoError(t, err)
-	assert.Equal(t, nd.bytes(), []byte(v.(types.TupleRowStorage)))
+	assert.Equal(t, nd.bytes(), []byte(v.(types.SerialMessage)))
 }
 
 func randomNodeItemPairs(t *testing.T, count int) (keys, values []Item) {

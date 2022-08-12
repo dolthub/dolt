@@ -55,6 +55,7 @@ func CreateTestEnvWithName(envName string) *env.DoltEnv {
 		env.UserNameKey:  name,
 		env.UserEmailKey: email,
 	})
+
 	err := dEnv.InitRepo(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch)
 
 	if err != nil {
@@ -70,6 +71,7 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 
 	ctx := context.Background()
 	vrw := dEnv.DoltDB.ValueReadWriter()
+	ns := dEnv.DoltDB.NodeStore()
 
 	rowMap, err := types.NewMap(ctx, vrw)
 	require.NoError(t, err)
@@ -86,7 +88,7 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	ai := sch.Indexes().AllIndexes()
 	sch.Indexes().Merge(ai...)
 
-	tbl, err := doltdb.NewNomsTable(ctx, vrw, sch, rowMap, nil, nil)
+	tbl, err := doltdb.NewNomsTable(ctx, vrw, ns, sch, rowMap, nil, nil)
 	require.NoError(t, err)
 	tbl, err = editor.RebuildAllIndexes(ctx, tbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)

@@ -17,12 +17,12 @@ package indexcmds
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/store/types"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -45,10 +45,6 @@ func (cmd RebuildCmd) Name() string {
 
 func (cmd RebuildCmd) Description() string {
 	return "Internal debugging command to rebuild the contents of an index."
-}
-
-func (cmd RebuildCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT_1(nbf)
 }
 
 func (cmd RebuildCmd) Docs() *cli.CommandDocumentation {
@@ -74,6 +70,10 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 		return HandleErr(errhand.BuildDError("Both the table and index names must be provided.").Build(), usage)
 	}
 
+	if dEnv.IsLocked() {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), usage)
+	}
+
 	working, err := dEnv.WorkingRoot(context.Background())
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to get working.").AddCause(err).Build(), nil)
@@ -90,11 +90,19 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 		return HandleErr(errhand.BuildDError("The table `%s` does not exist.", tableName).Build(), nil)
 	}
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-	indexRowData, err := editor.RebuildIndex(ctx, table, indexName, opts)
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return HandleErr(errhand.BuildDError("could not get table schema").AddCause(err).Build(), nil)
+	}
+	idxSch := sch.Indexes().GetByName(indexName)
+	if idxSch == nil {
+		return HandleErr(errhand.BuildDError("the index `%s` does not exist on table `%s`", indexName, tableName).Build(), nil)
+	}
+	indexRowData, err := creation.BuildSecondaryIndex(ctx, table, idxSch, opts)
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to rebuild index `%s` on table `%s`.", indexName, tableName).AddCause(err).Build(), nil)
 	}
-	updatedTable, err := table.SetNomsIndexRows(ctx, indexName, indexRowData)
+	updatedTable, err := table.SetIndexRows(ctx, indexName, indexRowData)
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to set rebuilt index.").AddCause(err).Build(), nil)
 	}

@@ -104,6 +104,14 @@ func TestMutableMapReads(t *testing.T) {
 	}
 }
 
+func TestMutableMapFormat(t *testing.T) {
+	ctx := context.Background()
+	mutableMap, _ := makeMutableMap(t, 100)
+	s, err := debugFormat(ctx, mutableMap.(MutableMap))
+	assert.NoError(t, err)
+	assert.NotEmpty(t, s)
+}
+
 func makeMutableMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
@@ -129,7 +137,7 @@ func makeMutableMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	tree.SortTuplePairs(mapTuples, kd)
 	tree.SortTuplePairs(memTuples, kd)
 
-	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	serializer := message.NewProllyMapSerializer(vd, ns.Pool())
 	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 	for _, pair := range mapTuples {

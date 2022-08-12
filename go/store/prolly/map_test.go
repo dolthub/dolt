@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -90,12 +92,157 @@ func TestMap(t *testing.T) {
 	}
 }
 
+func TestMutateMapWithTupleIter(t *testing.T) {
+	kd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Uint32Enc, Nullable: false},
+	)
+	vd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+	)
+	ns := tree.NewTestNodeStore()
+
+	scales := []int{
+		20,
+		200,
+		2000,
+		20_000,
+	}
+
+	for _, s := range scales {
+		t.Run("scale "+strconv.Itoa(s), func(t *testing.T) {
+			all := tree.RandomTuplePairs(s, kd, vd, ns)
+
+			// randomize |all| and partition
+			rand.Shuffle(s, func(i, j int) {
+				all[i], all[j] = all[j], all[i]
+			})
+			q1, q2, q3 := s/4, (s*2)/4, (s*3)/4
+
+			// unchanged tuples
+			statics := make([][2]val.Tuple, s/4)
+			copy(statics, all[:q1])
+			tree.SortTuplePairs(statics, kd)
+
+			// tuples to be updated
+			updates := make([][2]val.Tuple, s/4)
+			copy(updates, all[q1:q2])
+			rand.Shuffle(len(updates), func(i, j int) {
+				// shuffle values relative to keys
+				updates[i][1], updates[j][1] = updates[j][1], updates[i][1]
+			})
+			tree.SortTuplePairs(updates, kd)
+
+			// tuples to be deleted
+			deletes := make([][2]val.Tuple, s/4)
+			copy(deletes, all[q2:q3])
+			for i := range deletes {
+				deletes[i][1] = nil
+			}
+			tree.SortTuplePairs(deletes, kd)
+
+			// tuples to be inserted
+			inserts := make([][2]val.Tuple, s/4)
+			copy(inserts, all[q3:])
+			tree.SortTuplePairs(inserts, kd)
+
+			var mutations [][2]val.Tuple
+			mutations = append(mutations, inserts...)
+			mutations = append(mutations, updates...)
+			mutations = append(mutations, deletes...)
+			tree.SortTuplePairs(mutations, kd)
+
+			// original tuples, before modification
+			base := all[:q3]
+			tree.SortTuplePairs(base, kd)
+			before := mustProllyMapFromTuples(t, kd, vd, base)
+
+			ctx := context.Background()
+			ds, err := DebugFormat(ctx, before)
+			assert.NoError(t, err)
+			assert.NotNil(t, ds)
+
+			for _, kv := range statics {
+				ok, err := before.Has(ctx, kv[0])
+				assert.NoError(t, err)
+				assert.True(t, ok)
+				err = before.Get(ctx, kv[0], func(k, v val.Tuple) error {
+					assert.Equal(t, k, kv[0])
+					assert.Equal(t, v, kv[1])
+					return nil
+				})
+				assert.NoError(t, err)
+			}
+			for _, kv := range inserts {
+				ok, err := before.Has(ctx, kv[0])
+				assert.NoError(t, err)
+				assert.False(t, ok)
+			}
+			for _, kv := range updates {
+				ok, err := before.Has(ctx, kv[0])
+				assert.NoError(t, err)
+				assert.True(t, ok)
+				assert.NoError(t, err)
+			}
+			for _, kv := range deletes {
+				ok, err := before.Has(ctx, kv[0])
+				assert.NoError(t, err)
+				assert.True(t, ok)
+			}
+
+			after, err := MutateMapWithTupleIter(ctx, before, &testTupleIter{tuples: mutations})
+			require.NoError(t, err)
+			for _, kv := range statics {
+				ok, err := after.Has(ctx, kv[0])
+				assert.NoError(t, err)
+				assert.True(t, ok)
+				err = after.Get(ctx, kv[0], func(k, v val.Tuple) error {
+					assert.Equal(t, k, kv[0])
+					assert.Equal(t, v, kv[1])
+					return nil
+				})
+				assert.NoError(t, err)
+			}
+			for _, kv := range inserts {
+				ok, err := after.Has(ctx, kv[0])
+				assert.NoError(t, err)
+				assert.True(t, ok)
+				err = after.Get(ctx, kv[0], func(k, v val.Tuple) error {
+					assert.Equal(t, k, kv[0])
+					assert.Equal(t, v, kv[1])
+					return nil
+				})
+				assert.NoError(t, err)
+			}
+			for _, kv := range updates {
+				ok, err := after.Has(ctx, kv[0])
+				assert.NoError(t, err)
+				assert.True(t, ok)
+				err = after.Get(ctx, kv[0], func(k, v val.Tuple) error {
+					assert.Equal(t, k, kv[0])
+					assert.Equal(t, v, kv[1])
+					return nil
+				})
+				assert.NoError(t, err)
+			}
+			for _, kv := range deletes {
+				ok, err := after.Has(ctx, kv[0])
+				assert.NoError(t, err)
+				assert.False(t, ok)
+			}
+		})
+	}
+}
+
 func TestNewEmptyNode(t *testing.T) {
-	empty := newEmptyMapNode(sharedPool)
+	s := message.NewProllyMapSerializer(val.TupleDesc{}, sharedPool)
+	msg := s.Serialize(nil, nil, nil, 0)
+	empty := tree.NodeFromBytes(msg)
 	assert.Equal(t, 0, empty.Level())
 	assert.Equal(t, 0, empty.Count())
 	assert.Equal(t, 0, empty.TreeCount())
-	assert.Equal(t, 75, empty.Size())
+	assert.Equal(t, 76, empty.Size())
 	assert.True(t, empty.IsLeaf())
 }
 
@@ -126,7 +273,7 @@ func makeProllyMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	ns := tree.NewTestNodeStore()
 
 	tuples := tree.RandomTuplePairs(count, kd, vd, ns)
-	om := prollyMapFromTuples(t, kd, vd, tuples)
+	om := mustProllyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
 }
@@ -139,27 +286,9 @@ func makeProllySecondaryIndex(t *testing.T, count int) (testMap, [][2]val.Tuple)
 	vd := val.NewTupleDescriptor()
 	ns := tree.NewTestNodeStore()
 	tuples := tree.RandomCompositeTuplePairs(count, kd, vd, ns)
-	om := prollyMapFromTuples(t, kd, vd, tuples)
+	om := mustProllyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
-}
-
-func prollyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tuple) testMap {
-	ctx := context.Background()
-	ns := tree.NewTestNodeStore()
-
-	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
-	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
-	require.NoError(t, err)
-
-	for _, pair := range tuples {
-		err := chunker.AddPair(ctx, tree.Item(pair[0]), tree.Item(pair[1]))
-		require.NoError(t, err)
-	}
-	root, err := chunker.Done(ctx)
-	require.NoError(t, err)
-
-	return NewMap(root, ns, kd, vd)
 }
 
 func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
@@ -235,17 +364,33 @@ func testIterAll(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 }
 
 func pointRangeFromTuple(tup val.Tuple, desc val.TupleDesc) Range {
-	start := make([]RangeCut, len(desc.Types))
-	stop := make([]RangeCut, len(desc.Types))
-	for i := range start {
-		start[i].Value = tup.GetField(i)
-		start[i].Inclusive = true
-	}
-	copy(stop, start)
+	return closedRange(tup, tup, desc)
+}
 
-	return Range{
-		Start: start,
-		Stop:  stop,
-		Desc:  desc,
+func formatTuples(tuples [][2]val.Tuple, kd, vd val.TupleDesc) string {
+	var sb strings.Builder
+	sb.WriteString("Tuples (")
+	sb.WriteString(strconv.Itoa(len(tuples)))
+	sb.WriteString(") {\n")
+	for _, kv := range tuples {
+		sb.WriteString("\t")
+		sb.WriteString(kd.Format(kv[0]))
+		sb.WriteString(", ")
+		sb.WriteString(vd.Format(kv[1]))
+		sb.WriteString("\n")
 	}
+	sb.WriteString("}\n")
+	return sb.String()
+}
+
+type testTupleIter struct {
+	tuples [][2]val.Tuple
+}
+
+func (t *testTupleIter) Next(context.Context) (k, v val.Tuple) {
+	if len(t.tuples) > 0 {
+		k, v = t.tuples[0][0], t.tuples[0][1]
+		t.tuples = t.tuples[1:]
+	}
+	return
 }

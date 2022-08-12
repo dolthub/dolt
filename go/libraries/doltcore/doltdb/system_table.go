@@ -20,9 +20,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
-
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -121,6 +122,7 @@ var writeableSystemTables = []string{
 	DoltQueryCatalogTableName,
 	SchemasTableName,
 	ProceduresTableName,
+	DocTableName,
 }
 
 var persistedSystemTables = []string{
@@ -152,6 +154,26 @@ var generatedSystemTablePrefixes = []string{
 	DoltConfTablePrefix,
 	DoltConstViolTablePrefix,
 }
+
+const (
+	// LicenseDoc is the key for accessing the license within the docs table
+	LicenseDoc = "LICENSE.md"
+	// ReadmeDoc is the key for accessing the readme within the docs table
+	ReadmeDoc = "README.md"
+)
+
+var doltDocsColumns = schema.NewColCollection(
+	schema.NewColumn(DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn(DocTextColumnName, schema.DocTextTag, types.StringKind, false),
+)
+var DocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
+
+var DocsMaybeCreateTableStmt = `
+CREATE TABLE IF NOT EXISTS dolt_docs (
+  doc_name varchar(16383) NOT NULL,
+  doc_text varchar(16383),
+  PRIMARY KEY (doc_name)
+);`
 
 const (
 	// DocTableName is the name of the dolt table containing documents such as the license and readme
@@ -242,6 +264,9 @@ const (
 
 	// StatusTableName is the status system table name.
 	StatusTableName = "dolt_status"
+
+	// TagsTableName is the tags table name
+	TagsTableName = "dolt_tags"
 )
 
 const (

@@ -21,11 +21,11 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ ubuntu-18.04, macos-10.15 ]
-        dolt_fmt: [ "", "__DOLT_DEV__", "__DOLT_1__" ]
+        os: [ ubuntu-22.04, macos-latest ]
+        dolt_fmt: [ "", "__DOLT_DEV__", "__DOLT__" ]
         exclude:
-          - os: "macos-10.15"
-            dolt_fmt: ["__DOLT_DEV__", "__DOLT_1__" ]
+          - os: "macos-latest"
+            dolt_fmt: ["__DOLT_DEV__", "__DOLT__" ]
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:
@@ -50,7 +50,7 @@ jobs:
       - name: Setup Go 1.x
         uses: actions/setup-go@v2
         with:
-          go-version: ^1.18
+          go-version: ^1.19
         id: go
       - name: Setup Python 3.x
         uses: actions/setup-python@v2
@@ -87,15 +87,35 @@ jobs:
           dolt config --global --add user.name 'Dolthub Actions'
           dolt config --global --add user.email 'actions@dolthub.com'
       - name: Install expect
-        if: matrix.os == 'ubuntu-18.04'
+        if: matrix.os == 'ubuntu-22.04'
         run: sudo apt-get install -y expect
-      - name: Install Parquet-tools
-        run: brew install parquet-tools
+      - name: Install Maven
+        working-directory: ./.ci_bin
+        run: |
+          curl -LO https://dlcdn.apache.org/maven/maven-3/3.8.6/binaries/apache-maven-3.8.6-bin.tar.gz
+          tar -xf apache-maven-3.8.6-bin.tar.gz
+          echo "$(pwd)/apache-maven-3.8.6/bin" >> $GITHUB_PATH
+      - name: Install Hadoop
+        working-directory: ./.ci_bin
+        run: |
+          curl -LO https://downloads.apache.org/hadoop/common/hadoop-3.3.4/hadoop-3.3.4.tar.gz
+          tar xvf hadoop-3.3.4.tar.gz
+          echo "$(pwd)/hadoop-3.3.4/bin" >> $GITHUB_PATH
+      - name: Install parquet-cli
+        id: parquet_cli
+        working-directory: ./.ci_bin
+        run: |
+          git clone https://github.com/apache/parquet-mr.git
+          cd parquet-mr/parquet-cli
+          mvn clean install -DskipTests
+          runtime_jar="$(pwd)"/target/parquet-cli-1.13.0-SNAPSHOT-runtime.jar
+          echo "::set-output name=runtime_jar::$runtime_jar"
       - name: Check expect
         run: expect -v
       - name: Test all Unix
         env:
           DOLT_FMT: ${{ matrix.dolt_fmt }}
+          PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
         run: |
           if [ -n "$DOLT_FMT" ]; then export DOLT_DEFAULT_BIN_FORMAT="$DOLT_FMT"; fi
           bats --tap .

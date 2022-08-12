@@ -37,9 +37,9 @@ var EmptyList List
 // or more types. The type of the list will reflect the type of the elements in the list. For
 // example:
 //
-//  l := NewList(Float(1), Bool(true))
-//  fmt.Println(l.Type().Describe())
-//  // outputs List<Bool | Float>
+//	l := NewList(Float(1), Bool(true))
+//	fmt.Println(l.Type().Describe())
+//	// outputs List<Bool | Float>
 //
 // Lists, like all Noms values are immutable so the "mutation" methods return a new list.
 type List struct {

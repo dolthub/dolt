@@ -148,7 +148,7 @@ type serialTagHead struct {
 }
 
 func newSerialTagHead(bs []byte, addr hash.Hash) serialTagHead {
-	return serialTagHead{serial.GetRootAsTag(bs, 0), addr}
+	return serialTagHead{serial.GetRootAsTag(bs, serial.MessagePrefixSz), addr}
 }
 
 func (h serialTagHead) TypeName() string {
@@ -185,7 +185,7 @@ type serialWorkingSetHead struct {
 }
 
 func newSerialWorkingSetHead(bs []byte, addr hash.Hash) serialWorkingSetHead {
-	return serialWorkingSetHead{serial.GetRootAsWorkingSet(bs, 0), addr}
+	return serialWorkingSetHead{serial.GetRootAsWorkingSet(bs, serial.MessagePrefixSz), addr}
 }
 
 func (h serialWorkingSetHead) TypeName() string {
@@ -304,13 +304,14 @@ func newHead(head types.Value, addr hash.Hash) (dsHead, error) {
 
 	if sm, ok := head.(types.SerialMessage); ok {
 		data := []byte(sm)
-		if serial.GetFileID(data) == serial.TagFileID {
+		fid := serial.GetFileID(data)
+		if fid == serial.TagFileID {
 			return newSerialTagHead(data, addr), nil
 		}
-		if serial.GetFileID(data) == serial.WorkingSetFileID {
+		if fid == serial.WorkingSetFileID {
 			return newSerialWorkingSetHead(data, addr), nil
 		}
-		if serial.GetFileID(data) == serial.CommitFileID {
+		if fid == serial.CommitFileID {
 			return newSerialCommitHead(sm, addr), nil
 		}
 	}
@@ -521,4 +522,12 @@ func (ds Dataset) MaybeHeadValue() (types.Value, bool, error) {
 
 func IsValidDatasetName(name string) bool {
 	return DatasetFullRe.MatchString(name)
+}
+
+func NewHeadlessDataset(db Database, id string) Dataset {
+	return Dataset{
+		id:   id,
+		head: nil,
+		db:   db.(*database),
+	}
 }

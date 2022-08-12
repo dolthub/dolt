@@ -1,4 +1,4 @@
-name: Release
+name: Release Dolt
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
 
 jobs:
   format-version:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     outputs:
       version: ${{ steps.format_version.outputs.version }}
     steps:
@@ -26,7 +26,7 @@ jobs:
   create-release:
     needs: format-version
     name: Create release
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     outputs:
       release_id: ${{ steps.create_release.outputs.id }}
     steps:
@@ -47,7 +47,7 @@ jobs:
         run: |
           latest=$(git rev-parse HEAD)
           echo "::set-output name=commitish::$latest"
-          GO_BUILD_VERSION=1.18.0 go/utils/publishrelease/buildbinaries.sh
+          GO_BUILD_VERSION=1.19 go/utils/publishrelease/buildbinaries.sh
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -59,8 +59,8 @@ jobs:
           draft: false
           prerelease: false
           commitish: ${{ steps.build_binaries.outputs.commitish }}
-      - name: Upload Linux Distro
-        id: upload-linux-distro
+      - name: Upload Linux AMD64 Distro
+        id: upload-linux-amd64-distro
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -68,6 +68,16 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: go/out/dolt-linux-amd64.tar.gz
           asset_name: dolt-linux-amd64.tar.gz
+          asset_content_type: application/zip
+      - name: Upload Linux ARM64 Distro
+        id: upload-linux-arm64-distro
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: go/out/dolt-linux-arm64.tar.gz
+          asset_name: dolt-linux-arm64.tar.gz
           asset_content_type: application/zip
       - name: Upload OSX AMD64 Distro
         id: upload-osx-amd64-distro
@@ -112,7 +122,7 @@ jobs:
 
   create-windows-msi:
     needs: [format-version, create-release]
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Trigger Upload MSI
         uses: peter-evans/repository-dispatch@v1
@@ -124,7 +134,7 @@ jobs:
 
   create-release-notes:
     needs: [format-version, create-release]
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Trigger Release Notes
         uses: peter-evans/repository-dispatch@v1
@@ -135,7 +145,7 @@ jobs:
 
   homebrew-bump:
     needs: [format-version, create-release]
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Trigger Bump Homebrew
         uses: peter-evans/repository-dispatch@v1
@@ -146,7 +156,7 @@ jobs:
 
   trigger-performance-benchmark-email:
     needs: [format-version, create-release]
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Trigger Performance Benchmarks
         uses: peter-evans/repository-dispatch@v1

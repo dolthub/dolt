@@ -28,21 +28,11 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func hackVRToCS(vr types.ValueReader) chunks.ChunkStore {
-	switch v := vr.(type) {
-	case Database:
-		return ChunkStoreFromDatabase(v)
-	case *types.ValueStore:
-		return v.ChunkStore()
-	}
-	panic("unknown ValueReader implementation...")
-}
-
-func newParentsClosureIterator(ctx context.Context, c *Commit, vr types.ValueReader) (parentsClosureIter, error) {
+func newParentsClosureIterator(ctx context.Context, c *Commit, vr types.ValueReader, ns tree.NodeStore) (parentsClosureIter, error) {
 	sv := c.NomsValue()
 
 	if _, ok := sv.(types.SerialMessage); ok {
-		msg := serial.GetRootAsCommit(sv.(types.SerialMessage), 0)
+		msg := serial.GetRootAsCommit(sv.(types.SerialMessage), serial.MessagePrefixSz)
 		addr := hash.New(msg.ParentClosureBytes())
 		if addr.IsEmpty() {
 			return nil, nil
@@ -54,8 +44,7 @@ func newParentsClosureIterator(ctx context.Context, c *Commit, vr types.ValueRea
 		if types.IsNull(v) {
 			return nil, fmt.Errorf("internal error or data loss: dangling commit parent closure for addr %s or commit %s", addr.String(), c.Addr().String())
 		}
-		node := tree.NodeFromBytes(v.(types.TupleRowStorage))
-		ns := tree.NewNodeStore(hackVRToCS(vr))
+		node := tree.NodeFromBytes(v.(types.SerialMessage))
 		cc := prolly.NewCommitClosure(node, ns)
 		ci, err := cc.IterAllReverse(ctx)
 		if err != nil {
@@ -384,7 +373,7 @@ func writeTypesCommitParentClosure(ctx context.Context, vrw types.ValueReadWrite
 	return r, true, nil
 }
 
-func writeFbCommitParentClosure(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, parents []*serial.Commit, parentAddrs []hash.Hash) (hash.Hash, error) {
+func writeFbCommitParentClosure(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, parents []*serial.Commit, parentAddrs []hash.Hash) (hash.Hash, error) {
 	if len(parents) == 0 {
 		// We write an empty hash for parent-less commits of height 1.
 		return hash.Hash{}, nil
@@ -399,11 +388,10 @@ func writeFbCommitParentClosure(ctx context.Context, cs chunks.ChunkStore, vrw t
 		return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: ReadManyValues: %w", err)
 	}
 	// Load them as ProllyTrees.
-	ns := tree.NewNodeStore(cs)
 	closures := make([]prolly.CommitClosure, len(parents))
 	for i := range addrs {
 		if !types.IsNull(vs[i]) {
-			node := tree.NodeFromBytes(vs[i].(types.TupleRowStorage))
+			node := tree.NodeFromBytes(vs[i].(types.SerialMessage))
 			closures[i] = prolly.NewCommitClosure(node, ns)
 		} else {
 			closures[i] = prolly.NewEmptyCommitClosure(ns)

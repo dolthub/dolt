@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/test"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -69,8 +70,8 @@ func createTestSchema(t *testing.T) schema.Schema {
 	return sch
 }
 
-func CreateTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*Table, error) {
-	tbl, err := NewNomsTable(context.Background(), vrw, tSchema, rowData, nil, nil)
+func CreateTestTable(vrw types.ValueReadWriter, ns tree.NodeStore, tSchema schema.Schema, rowData types.Map) (*Table, error) {
+	tbl, err := NewNomsTable(context.Background(), vrw, ns, tSchema, rowData, nil, nil)
 
 	if err != nil {
 		return nil, err
@@ -166,6 +167,14 @@ func TestSystemTableTags(t *testing.T) {
 		assert.Equal(t, doltSchemasMin+2, schema.DoltSchemasNameTag)
 		assert.Equal(t, doltSchemasMin+3, schema.DoltSchemasFragmentTag)
 		assert.Equal(t, doltSchemasMin+4, schema.DoltSchemasExtraTag)
+	})
+	t.Run("dolt_conflicts_ tags", func(t *testing.T) {
+		doltConflictsMin := sysTableMin + uint64(7000)
+		assert.Equal(t, doltConflictsMin+0, schema.DoltConflictsOurDiffTypeTag)
+		assert.Equal(t, doltConflictsMin+1, schema.DoltConflictsTheirDiffTypeTag)
+		assert.Equal(t, doltConflictsMin+2, schema.DoltConflictsBaseCardinalityTag)
+		assert.Equal(t, doltConflictsMin+3, schema.DoltConflictsOurCardinalityTag)
+		assert.Equal(t, doltConflictsMin+4, schema.DoltConflictsTheirCardinalityTag)
 	})
 }
 
@@ -283,7 +292,7 @@ func TestLDNoms(t *testing.T) {
 
 		tSchema := createTestSchema(t)
 		rowData, _ := createTestRowData(t, ddb.vrw, tSchema)
-		tbl, err = CreateTestTable(ddb.vrw, tSchema, rowData)
+		tbl, err = CreateTestTable(ddb.vrw, ddb.ns, tSchema, rowData)
 
 		if err != nil {
 			t.Fatal("Failed to create test table with data")
@@ -316,7 +325,7 @@ func TestLDNoms(t *testing.T) {
 		assert.Equal(t, len(branches), 1)
 		assert.Equal(t, branches[0].Ref.GetPath(), "master")
 
-		numParents, err := commit.NumParents()
+		numParents := commit.NumParents()
 		assert.NoError(t, err)
 
 		if numParents != 1 {

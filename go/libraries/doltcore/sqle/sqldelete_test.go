@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -193,10 +192,12 @@ var systemTableDeleteTests = []DeleteTest{
 	{
 		Name: "delete dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
-			doltdocs.DocsSchema,
+			doltdb.DocsSchema,
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
-		DeleteQuery: "delete from dolt_docs",
-		ExpectedErr: "cannot delete from table",
+		DeleteQuery:    "delete from dolt_docs where doc_name = 'LICENSE.md'",
+		SelectQuery:    "select * from dolt_docs",
+		ExpectedRows:   []sql.Row{},
+		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
 	},
 	{
 		Name: "delete dolt_query_catalog",

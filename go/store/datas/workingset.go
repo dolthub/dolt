@@ -90,12 +90,14 @@ type WorkingSetSpec struct {
 // A working set struct has the following type:
 //
 // ```
-// struct WorkingSet {
-//   meta: M,
-//   workingRootRef: R,
-//   stagedRootRef: R,
-//   mergeState: R,
-// }
+//
+//	struct WorkingSet {
+//	  meta: M,
+//	  workingRootRef: R,
+//	  stagedRootRef: R,
+//	  mergeState: R,
+//	}
+//
 // ```
 // where M is a struct type and R is a ref type.
 func newWorkingSet(ctx context.Context, db *database, meta *WorkingSetMeta, workingRef, stagedRef types.Ref, mergeState *MergeState) (hash.Hash, types.Ref, error) {
@@ -148,7 +150,7 @@ func newWorkingSet(ctx context.Context, db *database, meta *WorkingSetMeta, work
 	return ref.TargetHash(), ref, nil
 }
 
-func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *MergeState, meta *WorkingSetMeta) []byte {
+func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *MergeState, meta *WorkingSetMeta) serial.Message {
 	builder := flatbuffers.NewBuilder(1024)
 	workingoff := builder.CreateByteVector(working[:])
 	var stagedOff, mergeStateOff flatbuffers.UOffsetT
@@ -185,9 +187,7 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 		serial.WorkingSetAddDesc(builder, descOff)
 		serial.WorkingSetAddTimestampMillis(builder, meta.Timestamp)
 	}
-	builder.FinishWithFileIdentifier(serial.WorkingSetEnd(builder), []byte(serial.WorkingSetFileID))
-	return builder.FinishedBytes()
-
+	return serial.FinishMessage(builder, serial.WorkingSetEnd(builder), []byte(serial.WorkingSetFileID))
 }
 
 func NewMergeState(ctx context.Context, vrw types.ValueReadWriter, preMergeWorking types.Ref, commit *Commit) (*MergeState, error) {
@@ -222,7 +222,7 @@ func IsWorkingSet(v types.Value) (bool, error) {
 		// types.IsValueSubtypeOf is very strict about the type description.
 		return s.Name() == workingSetName, nil
 	} else if sm, ok := v.(types.SerialMessage); ok {
-		return serial.GetFileID([]byte(sm)) == serial.WorkingSetFileID, nil
+		return serial.GetFileID(sm) == serial.WorkingSetFileID, nil
 	} else {
 		return false, nil
 	}

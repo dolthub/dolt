@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -44,7 +43,7 @@ const (
 	// IndexNameRegexStr is the regular expression that valid indexes must match.
 	// From the unquoted identifiers: https://dev.mysql.com/doc/refman/8.0/en/identifiers.html
 	// We also allow the '-' character from quoted identifiers.
-	IndexNameRegexStr = `^[-$_0-9a-zA-Z]+$`
+	IndexNameRegexStr = "^[-`$_0-9a-zA-Z]+$"
 )
 
 var (
@@ -79,8 +78,8 @@ type Table struct {
 }
 
 // NewNomsTable creates a noms Struct which stores row data, index data, and schema.
-func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows types.Map, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
-	dt, err := durable.NewNomsTable(ctx, vrw, sch, rows, indexes, autoIncVal)
+func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, rows types.Map, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
+	dt, err := durable.NewNomsTable(ctx, vrw, ns, sch, rows, indexes, autoIncVal)
 	if err != nil {
 		return nil, err
 	}
@@ -89,12 +88,28 @@ func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sch
 }
 
 // NewTable creates a durable object which stores row data, index data, and schema.
-func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows durable.Index, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
-	dt, err := durable.NewTable(ctx, vrw, sch, rows, indexes, autoIncVal)
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, rows durable.Index, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
+	dt, err := durable.NewTable(ctx, vrw, ns, sch, rows, indexes, autoIncVal)
+	if err != nil {
+		return nil, err
+	}
+	return &Table{table: dt}, nil
+}
+
+func NewEmptyTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (*Table, error) {
+	rows, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
+	if err != nil {
+		return nil, err
+	}
+	indexes, err := durable.NewIndexSetWithEmptyIndexes(ctx, vrw, ns, sch)
 	if err != nil {
 		return nil, err
 	}
 
+	dt, err := durable.NewTable(ctx, vrw, ns, sch, rows, indexes, nil)
+	if err != nil {
+		return nil, err
+	}
 	return &Table{table: dt}, nil
 }
 
@@ -108,12 +123,8 @@ func (t *Table) ValueReadWriter() types.ValueReadWriter {
 	return durable.VrwFromTable(t.table)
 }
 
-// NodeStore returns the NodeStore for this table.
 func (t *Table) NodeStore() tree.NodeStore {
-	if t == nil {
-		return nil
-	}
-	return tree.NewNodeStore(shim.ChunkStoreFromVRW(t.ValueReadWriter()))
+	return durable.NodeStoreFromTable(t.table)
 }
 
 // SetConflicts sets the merge conflicts for this table.
@@ -127,7 +138,7 @@ func (t *Table) SetConflicts(ctx context.Context, schemas conflict.ConflictSchem
 
 // GetConflicts returns a map built from ValueReadWriter when there are no conflicts in table.
 func (t *Table) GetConflicts(ctx context.Context) (conflict.ConflictSchema, durable.ConflictIndex, error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		panic("should use artifacts")
 	}
 
@@ -136,7 +147,7 @@ func (t *Table) GetConflicts(ctx context.Context) (conflict.ConflictSchema, dura
 
 // HasConflicts returns true if this table contains merge conflicts.
 func (t *Table) HasConflicts(ctx context.Context) (bool, error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		art, err := t.GetArtifacts(ctx)
 		if err != nil {
 			return false, err
@@ -163,7 +174,7 @@ func (t *Table) SetArtifacts(ctx context.Context, artifacts durable.ArtifactInde
 
 // NumRowsInConflict returns the number of rows with merge conflicts for this table.
 func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		artIdx, err := t.table.GetArtifacts(ctx)
 		if err != nil {
 			return 0, err
@@ -189,7 +200,7 @@ func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
 
 // NumConstraintViolations returns the number of constraint violations for this table.
 func (t *Table) NumConstraintViolations(ctx context.Context) (uint64, error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		artIdx, err := t.table.GetArtifacts(ctx)
 		if err != nil {
 			return 0, err
@@ -207,7 +218,7 @@ func (t *Table) NumConstraintViolations(ctx context.Context) (uint64, error) {
 
 // ClearConflicts deletes all merge conflicts for this table.
 func (t *Table) ClearConflicts(ctx context.Context) (*Table, error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		return t.clearArtifactConflicts(ctx)
 	}
 
@@ -240,7 +251,7 @@ func (t *Table) clearConflicts(ctx context.Context) (*Table, error) {
 
 // GetConflictSchemas returns the merge conflict schemas for this table.
 func (t *Table) GetConflictSchemas(ctx context.Context, tblName string) (base, sch, mergeSch schema.Schema, err error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		return t.getProllyConflictSchemas(ctx, tblName)
 	}
 
@@ -279,20 +290,34 @@ func (t *Table) getProllyConflictSchemas(ctx context.Context, tblName string) (b
 		return nil, nil, nil, err
 	}
 
-	baseTbl, err := tableFromRootIsh(ctx, t.ValueReadWriter(), art.Metadata.BaseRootIsh, tblName)
+	baseTbl, baseOk, err := tableFromRootIsh(ctx, t.ValueReadWriter(), t.NodeStore(), art.Metadata.BaseRootIsh, tblName)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	theirTbl, err := tableFromRootIsh(ctx, t.ValueReadWriter(), art.TheirRootIsh, tblName)
+	theirTbl, theirOK, err := tableFromRootIsh(ctx, t.ValueReadWriter(), t.NodeStore(), art.TheirRootIsh, tblName)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if !theirOK {
+		return nil, nil, nil, fmt.Errorf("could not find tbl %s in right root value", tblName)
+	}
+
+	theirSch, err := theirTbl.GetSchema(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	baseSch, err := baseTbl.GetSchema(ctx)
-	if err != nil {
-		return nil, nil, nil, err
+	// If the table does not exist in the ancestor, pretend it existed and that
+	// it was completely empty.
+	if !baseOk {
+		if schema.SchemasAreEqual(ourSch, theirSch) {
+			return ourSch, ourSch, theirSch, nil
+		} else {
+			return nil, nil, nil, fmt.Errorf("expected our schema to equal their schema since the table did not exist in the ancestor")
+		}
 	}
-	theirSch, err := theirTbl.GetSchema(ctx)
+
+	baseSch, err := baseTbl.GetSchema(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -300,19 +325,16 @@ func (t *Table) getProllyConflictSchemas(ctx context.Context, tblName string) (b
 	return baseSch, ourSch, theirSch, nil
 }
 
-func tableFromRootIsh(ctx context.Context, vrw types.ValueReadWriter, h hash.Hash, tblName string) (*Table, error) {
-	rv, err := LoadRootValueFromRootIshAddr(ctx, vrw, h)
+func tableFromRootIsh(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, h hash.Hash, tblName string) (*Table, bool, error) {
+	rv, err := LoadRootValueFromRootIshAddr(ctx, vrw, ns, h)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	tbl, ok, err := rv.GetTable(ctx, tblName)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	if !ok {
-		return nil, fmt.Errorf("could not find tbl %s in root value", tblName)
-	}
-	return tbl, nil
+	return tbl, ok, nil
 }
 
 func (t *Table) getNomsConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
@@ -346,7 +368,7 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 
 	colColl := schema.NewColCollection()
 
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		// the commit hash or working set hash of the right side during merge
 		colColl = colColl.Append(schema.NewColumn("from_root_ish", 0, types.StringKind, false))
 	}
@@ -360,7 +382,7 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 // GetConstraintViolations returns a map of all constraint violations for this table, along with a bool indicating
 // whether the table has any violations.
 func (t *Table) GetConstraintViolations(ctx context.Context) (types.Map, error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		panic("should use artifacts")
 	}
 	return t.table.GetConstraintViolations(ctx)
@@ -369,7 +391,7 @@ func (t *Table) GetConstraintViolations(ctx context.Context) (types.Map, error) 
 // SetConstraintViolations sets this table's violations to the given map. If the map is empty, then the constraint
 // violations entry on the embedded struct is removed.
 func (t *Table) SetConstraintViolations(ctx context.Context, violationsMap types.Map) (*Table, error) {
-	if t.Format() == types.Format_DOLT_1 {
+	if t.Format() == types.Format_DOLT {
 		panic("should use artifacts")
 	}
 	table, err := t.table.SetConstraintViolations(ctx, violationsMap)
@@ -410,7 +432,7 @@ func (t *Table) HashOf() (hash.Hash, error) {
 // Calls to UpdateNomsRows will not be written to the database.  The root must
 // be updated with the updated table, and the root must be committed or written.
 func (t *Table) UpdateNomsRows(ctx context.Context, updatedRows types.Map) (*Table, error) {
-	table, err := t.table.SetTableRows(ctx, durable.IndexFromNomsMap(updatedRows, t.ValueReadWriter()))
+	table, err := t.table.SetTableRows(ctx, durable.IndexFromNomsMap(updatedRows, t.ValueReadWriter(), t.NodeStore()))
 	if err != nil {
 		return nil, err
 	}
@@ -451,7 +473,7 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 		return nil, nil, nil, err
 	}
 
-	if confIdx.Format() == types.Format_DOLT_1 {
+	if confIdx.Format() == types.Format_DOLT {
 		panic("resolve conflicts not implemented for new storage format")
 	}
 

@@ -382,7 +382,6 @@ SQL
 }
 
 @test "conflict-detection-2: two branches, one deletes rows, one modifies those same rows. merge. conflict" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE foo (
   pk INT PRIMARY KEY,
@@ -414,11 +413,6 @@ SQL
     dolt branch -d -f merge-into-modified
     dolt checkout -b merge-into-modified modifier
     dolt merge deleter
-
-    # Test resolve nonexistant key
-    run dolt conflicts resolve foo 999
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "no conflicts resolved" ]] || false
 
     dolt conflicts resolve --theirs foo
     run dolt sql -q 'select count(*) from foo'
@@ -471,7 +465,6 @@ SQL
 }
 
 @test "conflict-detection-2: dolt_force_transaction_commit along with dolt_allow_commit_conflicts ignores conflicts" {
-    skip_nbf_dolt_1
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);
 INSERT INTO test VALUES (1, 1), (2, 2);
@@ -502,7 +495,6 @@ SQL
 }
 
 @test "conflict-detection-2: conflicts table properly cleared on dolt conflicts resolve" {
-    skip_nbf_dolt_1
     dolt sql -q "create table test(pk int, c1 int, primary key(pk))"
 
     run dolt conflicts cat test

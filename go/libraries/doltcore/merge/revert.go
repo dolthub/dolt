@@ -18,10 +18,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/store/hash"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 // Revert is a convenience function for a three-way merge. In particular, given some root and a collection of commits
@@ -37,6 +35,16 @@ import (
 func Revert(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, headCommit *doltdb.Commit, commits []*doltdb.Commit, opts editor.Options) (*doltdb.RootValue, string, error) {
 	revertMessage := "Revert"
 
+	for _, cm := range commits {
+		if len(cm.DatasParents()) == 0 {
+			h, err := cm.HashOf()
+			if err != nil {
+				return nil, "", err
+			}
+			return nil, "", fmt.Errorf("cannot revert commit with no parents (%s)", h.String())
+		}
+	}
+
 	for i, baseCommit := range commits {
 		if i > 0 {
 			revertMessage += " and"
@@ -51,38 +59,16 @@ func Revert(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, hea
 		}
 		revertMessage = fmt.Sprintf(`%s "%s"`, revertMessage, baseMeta.Description)
 
-		baseCmHash, err := baseRoot.HashOf()
+		parentCM, err := ddb.ResolveParent(ctx, baseCommit, 0)
+		if err != nil {
+			return nil, "", err
+		}
+		theirRoot, err := parentCM.GetRootValue(ctx)
 		if err != nil {
 			return nil, "", err
 		}
 
-		var theirRoot *doltdb.RootValue
-		var theirCmHash hash.Hash
-		if len(baseCommit.DatasParents()) > 0 {
-			parentCM, err := ddb.ResolveParent(ctx, baseCommit, 0)
-			if err != nil {
-				return nil, "", err
-			}
-			theirRoot, err = parentCM.GetRootValue(ctx)
-			if err != nil {
-				return nil, "", err
-			}
-			theirCmHash, err = parentCM.HashOf()
-			if err != nil {
-				return nil, "", err
-			}
-		} else {
-			theirRoot, err = doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
-			if err != nil {
-				return nil, "", err
-			}
-			// Because we error on any conflicts or constraint violations,
-			// writing a constant hash here will not produce conflicts in the
-			// future.
-			theirCmHash = hash.Of(nil)
-		}
-
-		root, _, err = MergeRoots(ctx, theirCmHash, baseCmHash, root, theirRoot, baseRoot, opts, false)
+		root, _, err = MergeRoots(ctx, root, theirRoot, baseRoot, parentCM, baseCommit, opts, MergeOpts{IsCherryPick: false})
 		if err != nil {
 			return nil, "", err
 		}

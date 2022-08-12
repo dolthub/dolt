@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 
     dolt sql <<SQL
 CREATE TABLE test (
@@ -127,34 +126,22 @@ teardown() {
 @test "sql-reset: DOLT_RESET --hard does not ignore staged docs" {
     # New docs gets referred as untracked file.
     echo ~license~ > LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     dolt add .
 
     run dolt sql -q "SELECT DOLT_RESET('--hard')"
     [ $status -eq 0 ]
 
+    dolt status
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Untracked files:" ]] || false
-    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
-
-    # Tracked file gets reset
-    dolt commit -a -m "Add a the license file"
-    echo ~edited-license~ > LICENSE.md
-
-    dolt add .
-
-    run dolt sql -q "SELECT DOLT_RESET('--hard')"
-    [ $status -eq 0 ]
-
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Changes not staged for commit:" ]] || false
-    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 @test "sql-reset: CALL DOLT_RESET --hard does not ignore staged docs" {
     # New docs gets referred as untracked file.
     echo ~license~ > LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     dolt add .
 
     run dolt sql -q "CALL DOLT_RESET('--hard')"
@@ -162,22 +149,21 @@ teardown() {
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Untracked files:" ]] || false
-    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     # Tracked file gets reset
+    dolt docs read LICENSE.md LICENSE.md
+    dolt add .
     dolt commit -a -m "Add a the license file"
     echo ~edited-license~ > LICENSE.md
-
+    dolt docs read LICENSE.md LICENSE.md
     dolt add .
-
     run dolt sql -q "CALL DOLT_RESET('--hard')"
     [ $status -eq 0 ]
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Changes not staged for commit:" ]] || false
-    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 @test "sql-reset: DOLT_RESET --soft works on unstaged and staged table changes" {
@@ -228,6 +214,7 @@ teardown() {
 
 @test "sql-reset: DOLT_RESET --soft ignores staged docs" {
     echo ~license~ > LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     dolt add .
 
     run dolt sql -q "SELECT DOLT_RESET('--soft')"
@@ -235,17 +222,12 @@ teardown() {
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Changes to be committed:" ]] || false
-    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
-
-    # Explicitly defining the file ignores it.
-    run dolt sql -q "SELECT DOLT_RESET('LICENSE.md')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ ("error: the table(s) LICENSE.md do not exist") ]] || false
+    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*dolt_docs) ]] || false
 }
 
 @test "sql-reset: CALL DOLT_RESET --soft ignores staged docs" {
     echo ~license~ > LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     dolt add .
 
     run dolt sql -q "CALL DOLT_RESET('--soft')"
@@ -253,13 +235,7 @@ teardown() {
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Changes to be committed:" ]] || false
-    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
-
-    # Explicitly defining the file ignores it.
-    run dolt sql -q "CALL DOLT_RESET('LICENSE.md')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ ("error: the table(s) LICENSE.md do not exist") ]] || false
+    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*dolt_docs) ]] || false
 }
 
 @test "sql-reset: DOLT_RESET works on specific tables" {

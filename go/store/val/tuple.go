@@ -15,7 +15,6 @@
 package val
 
 import (
-	"bytes"
 	"math"
 
 	"github.com/dolthub/dolt/go/store/pool"
@@ -112,15 +111,6 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 	return tup
 }
 
-func CellWiseTupleDiff(from, to Tuple) (c uint64) {
-	for i := 0; i < from.Count(); i++ {
-		if !bytes.Equal(from.GetField(i), to.GetField(i)) {
-			c++
-		}
-	}
-	return
-}
-
 func cloneTuple(pool pool.BuffPool, tup Tuple) Tuple {
 	buf := pool.Get(uint64(len(tup)))
 	copy(buf, tup)
@@ -150,14 +140,14 @@ func (tup Tuple) GetOffset(i int) (int, bool) {
 	start, stop := uint16(0), uint16(split)
 	if i*2 < len(offs) {
 		pos := i * 2
-		stop = readUint16(offs[pos : pos+2])
+		stop = ReadUint16(offs[pos : pos+2])
 	}
 	if i > 0 {
 		pos := (i - 1) * 2
-		start = readUint16(offs[pos : pos+2])
+		start = ReadUint16(offs[pos : pos+2])
 	}
 
-	return int(start), start == stop
+	return int(start), start != stop
 }
 
 // GetField returns the value for field |i|.
@@ -174,11 +164,11 @@ func (tup Tuple) GetField(i int) []byte {
 	start, stop := uint16(0), uint16(split)
 	if i*2 < len(offs) {
 		pos := i * 2
-		stop = readUint16(offs[pos : pos+2])
+		stop = ReadUint16(offs[pos : pos+2])
 	}
 	if i > 0 {
 		pos := (i - 1) * 2
-		start = readUint16(offs[pos : pos+2])
+		start = ReadUint16(offs[pos : pos+2])
 	}
 
 	if start == stop {
@@ -200,7 +190,7 @@ func (tup Tuple) FieldIsNull(i int) bool {
 
 func (tup Tuple) Count() int {
 	sl := tup[len(tup)-int(countSize):]
-	return int(readUint16(sl))
+	return int(ReadUint16(sl))
 }
 
 func isNull(val []byte) bool {
@@ -213,7 +203,7 @@ func sizeOf(val []byte) ByteSize {
 
 func writeFieldCount(tup Tuple, count int) {
 	sl := tup[len(tup)-int(countSize):]
-	writeUint16(sl, uint16(count))
+	WriteUint16(sl, uint16(count))
 }
 
 func sliceManyFields(tuple Tuple, indexes []int, slices [][]byte) [][]byte {
@@ -237,7 +227,7 @@ func sliceManyFields(tuple Tuple, indexes []int, slices [][]byte) [][]byte {
 	// we don't have a "stop" offset for the last field
 	n := len(slices)
 	if indexes[n-1] == cnt-1 {
-		o := readUint16(offs[len(offs)-2:])
+		o := ReadUint16(offs[len(offs)-2:])
 		slices[n-1] = data[o:]
 		indexes = indexes[:n-1]
 		subset = subset[:n-1]
@@ -245,15 +235,15 @@ func sliceManyFields(tuple Tuple, indexes []int, slices [][]byte) [][]byte {
 
 	// we don't have a "start" offset for the first field
 	if len(indexes) > 0 && indexes[0] == 0 {
-		o := readUint16(offs[:2])
+		o := ReadUint16(offs[:2])
 		slices[0] = data[:o]
 		indexes = indexes[1:]
 		subset = subset[1:]
 	}
 
 	for i, k := range indexes {
-		start := readUint16(offs[(k-1)*2 : k*2])
-		stop := readUint16(offs[k*2 : (k+1)*2])
+		start := ReadUint16(offs[(k-1)*2 : k*2])
+		stop := ReadUint16(offs[k*2 : (k+1)*2])
 		subset[i] = tuple[start:stop]
 	}
 
@@ -264,4 +254,24 @@ func sliceManyFields(tuple Tuple, indexes []int, slices [][]byte) [][]byte {
 	}
 
 	return slices
+}
+
+type offsets []byte
+
+// offsetsSize returns the number of bytes needed to
+// store |fieldCount| offsets.
+func offsetsSize(count int) ByteSize {
+	if count == 0 {
+		return 0
+	}
+	return ByteSize((count - 1) * 2)
+}
+
+// writeOffset writes offset |pos| at index |i|.
+func writeOffset(i int, off ByteSize, arr offsets) {
+	if i == 0 {
+		return
+	}
+	start := (i - 1) * 2
+	WriteUint16(arr[start:start+2], uint16(off))
 }

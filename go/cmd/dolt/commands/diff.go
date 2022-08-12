@@ -32,9 +32,7 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -109,7 +107,6 @@ type diffArgs struct {
 	fromRef    string
 	toRef      string
 	tableSet   *set.StrSet
-	docSet     *set.StrSet
 	limit      int
 	where      string
 }
@@ -168,12 +165,6 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
-
-	err = diffDoltDocs(ctx, dEnv, dArgs)
-	if err != nil {
-		verr = errhand.BuildDError("error diffing dolt docs").AddCause(err).Build()
-	}
-
 	return HandleVErrAndExitCode(verr, usage)
 }
 
@@ -223,14 +214,8 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	}
 
 	dArgs.tableSet = set.NewStrSet(nil)
-	dArgs.docSet = set.NewStrSet(nil)
 
 	for _, tableName := range tableNames {
-		if tableName == doltdocs.ReadmeDoc || tableName == doltdocs.LicenseDoc {
-			dArgs.docSet.Add(tableName)
-			continue
-		}
-
 		// verify table args exist in at least one root
 		_, ok, err := dArgs.fromRoot.GetTable(ctx, tableName)
 		if err != nil {
@@ -257,7 +242,6 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 			return nil, err
 		}
 		dArgs.tableSet.Add(utn...)
-		dArgs.docSet.Add(doltdocs.ReadmeDoc, doltdocs.LicenseDoc)
 	}
 
 	return dArgs, nil
@@ -277,16 +261,6 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 	}
 
 	workingRoot, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	docs, err := dEnv.DocsReadWriter().GetDocsOnDisk()
-	if err != nil {
-		return nil, err
-	}
-
-	workingRoot, err = doltdocs.UpdateRootWithDocs(ctx, workingRoot, docs)
 	if err != nil {
 		return nil, err
 	}
@@ -390,10 +364,6 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) (ve
 			printTableDiffSummary(td)
 		}
 
-		if tblName == doltdb.DocTableName {
-			continue
-		}
-
 		fromSch, toSch, err := td.GetSchemas(ctx)
 		if err != nil {
 			return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
@@ -415,7 +385,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) (ve
 				fromSch = toSch
 			}
 
-			if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
+			if !schema.ArePrimaryKeySetsDiffable(td.Format(), fromSch, toSch) {
 				cli.PrintErrf("Primary key sets differ between revisions for table %s, skipping data diff\n", tblName)
 				continue
 			}
@@ -452,6 +422,7 @@ func printShowCreateTableDiff(ctx context.Context, td diff.TableDelta) errhand.V
 
 	var fromCreateStmt = ""
 	if td.FromTable != nil {
+		// TODO: use UserSpaceDatabase for these, no reason for this separate database implementation
 		sqlDb := sqle.NewSingleTableDatabase(td.FromName, fromSch, td.FromFks, td.FromFksParentSch)
 		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
 		fromCreateStmt, err = sqle.GetCreateTableStmt(sqlCtx, engine, td.FromName)
@@ -572,7 +543,7 @@ func diffRows(ctx context.Context, se *engine.SqlEngine, td diff.TableDelta, dAr
 		tableName = td.FromName
 	}
 
-	columns := getColumnNamesString(td.FromSch, td.ToSch, dArgs)
+	columns := getColumnNamesString(td.FromSch, td.ToSch)
 	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", tableName, from, to)
 
 	if len(dArgs.where) > 0 {
@@ -695,75 +666,21 @@ func writeDiffResults(
 	}
 }
 
-func getColumnNamesString(fromSch, toSch schema.Schema, args *diffArgs) string {
+func getColumnNamesString(fromSch, toSch schema.Schema) string {
 	var cols []string
 	if fromSch != nil {
 		fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			if args.diffOutput == TabularDiffOutput {
-				cols = append(cols, fmt.Sprintf("cast (from_%s as char) as `from_%s`", col.Name, col.Name))
-			} else if args.diffOutput == SQLDiffOutput {
-				cols = append(cols, fmt.Sprintf("from_%s", col.Name))
-			} else {
-				panic("unexpected format")
-			}
+			cols = append(cols, fmt.Sprintf("`from_%s`", col.Name))
 			return false, nil
 		})
 	}
 	if toSch != nil {
 		toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			if args.diffOutput == TabularDiffOutput {
-				cols = append(cols, fmt.Sprintf("cast (to_%s as char) as `to_%s`", col.Name, col.Name))
-			} else if args.diffOutput == SQLDiffOutput {
-				cols = append(cols, fmt.Sprintf("to_%s", col.Name))
-			} else {
-				panic("unexpected format")
-			}
+			cols = append(cols, fmt.Sprintf("`to_%s`", col.Name))
 			return false, nil
 		})
 	}
 	return strings.Join(cols, ",")
-}
-
-func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) error {
-	_, docs, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), dArgs.docSet.AsSlice())
-
-	if err != nil {
-		return err
-	}
-
-	return printDocDiffs(ctx, dArgs.fromRoot, dArgs.toRoot, docs)
-}
-
-func printDocDiffs(ctx context.Context, from, to *doltdb.RootValue, docsFilter doltdocs.Docs) error {
-	bold := color.New(color.Bold)
-
-	comparisons, err := diff.DocsDiffToComparisons(ctx, from, to, docsFilter)
-	if err != nil {
-		return err
-	}
-
-	for _, doc := range docsFilter {
-		for _, comparison := range comparisons {
-			if doc.DocPk == comparison.DocName {
-				if comparison.OldText == nil && comparison.CurrentText != nil {
-					printAddedDoc(bold, comparison.DocName)
-				} else if comparison.OldText != nil {
-					older := string(comparison.OldText)
-					newer := string(comparison.CurrentText)
-
-					lines := textdiff.LineDiffAsLines(older, newer)
-
-					if comparison.CurrentText == nil {
-						printDeletedDoc(bold, comparison.DocName, lines)
-					} else if len(lines) > 0 && newer != older {
-						printModifiedDoc(bold, comparison.DocName, lines)
-					}
-				}
-			}
-		}
-	}
-
-	return nil
 }
 
 func printDiffLines(bold *color.Color, lines []string) {
@@ -776,26 +693,6 @@ func printDiffLines(bold *color.Color, lines []string) {
 			cli.Println(" " + line)
 		}
 	}
-}
-
-func printModifiedDoc(bold *color.Color, pk string, lines []string) {
-	_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", pk)
-	_, _ = bold.Printf("--- a/%s\n", pk)
-	_, _ = bold.Printf("+++ b/%s\n", pk)
-
-	printDiffLines(bold, lines)
-}
-
-func printAddedDoc(bold *color.Color, pk string) {
-	_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", pk)
-	_, _ = bold.Println("added doc")
-}
-
-func printDeletedDoc(bold *color.Color, pk string, lines []string) {
-	_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", pk)
-	_, _ = bold.Println("deleted doc")
-
-	printDiffLines(bold, lines)
 }
 
 func printTableDiffSummary(td diff.TableDelta) {

@@ -210,7 +210,7 @@ func executeServerQueries(ctx context.Context, b *testing.B, dEnv *env.DoltEnv, 
 }
 
 func executeQuery(cfg srv.ServerConfig, q query) error {
-	cs := srv.ConnectionString(cfg) + database
+	cs := srv.ConnectionString(cfg, database)
 	conn, err := dbr.Open("mysql", cs, nil)
 	if err != nil {
 		return err

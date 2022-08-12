@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -73,14 +74,14 @@ var _ enginetest.ValidatingHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
 	dEnv := dtestutils.CreateTestEnv()
-	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	require.NoError(t, err)
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem())
+	pro, err := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem())
+	require.NoError(t, err)
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
 	localConfig := dEnv.Config.WriteableConfig()
-
 	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, localConfig)
 	require.NoError(t, err)
 	dh := &DoltHarness{
@@ -135,7 +136,7 @@ func commitScripts(dbs []string) []setup.SetupScript {
 	for i := range dbs {
 		db := dbs[i]
 		commitCmds = append(commitCmds, fmt.Sprintf("use %s", db))
-		commitCmds = append(commitCmds, fmt.Sprintf("call dolt_commit('--allow-empty', '-am', 'checkpoint enginetest database %s')", db))
+		commitCmds = append(commitCmds, fmt.Sprintf("call dolt_commit('--allow-empty', '-am', 'checkpoint enginetest database %s', '--date', '1970-01-01T12:00:00')", db))
 	}
 	commitCmds = append(commitCmds, "use mydb")
 	return []setup.SetupScript{commitCmds}
@@ -146,6 +147,13 @@ func commitScripts(dbs []string) []setup.SetupScript {
 func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 	if d.engine == nil {
 		pro := d.NewDatabaseProvider(information_schema.NewInformationSchemaDatabase())
+		doltProvider, ok := pro.(sqle.DoltDatabaseProvider)
+		require.True(t, ok)
+
+		var err error
+		d.session, err = dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), doltProvider, d.multiRepoEnv.Config())
+		require.NoError(t, err)
+
 		e, err := enginetest.NewEngineWithProviderSetup(t, d, pro, d.setupData)
 		if err != nil {
 			return nil, err
@@ -256,7 +264,7 @@ func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession
 	dSession, err := dsess.NewDoltSession(
 		enginetest.NewContext(d),
 		sql.NewBaseSessionWithClientServer("address", client, 1),
-		pro.(dsess.RevisionDatabaseProvider),
+		pro.(dsess.DoltDatabaseProvider),
 		localConfig,
 		states...,
 	)
@@ -322,17 +330,21 @@ func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDataba
 	// NewDatabases must be called before NewDatabaseProvider, we grab the DoltEnvs
 	// previously created by NewDatabases and re-add them to the new MultiRepoEnv.
 	dEnv := dtestutils.CreateTestEnv()
-	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	require.NoError(d.t, err)
 	d.multiRepoEnv = mrEnv
-	for _, db := range dbs {
+	locations := make([]filesys.Filesys, len(dbs))
+	for i, db := range dbs {
 		if db.Name() != information_schema.InformationSchemaDatabaseName {
 			d.multiRepoEnv.AddEnv(db.Name(), d.createdEnvs[db.Name()])
+			locations[i] = d.createdEnvs[db.Name()].FS
 		}
 	}
 
 	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())
-	pro := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem(), dbs...)
+	pro, err := sqle.NewDoltDatabaseProviderWithDatabases(b, d.multiRepoEnv.FileSystem(), dbs, locations)
+	require.NoError(d.t, err)
+
 	return pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 }
 

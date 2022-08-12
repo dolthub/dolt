@@ -23,7 +23,7 @@ teardown() {
 
 # Create a single primary key table and do stuff
 @test "1pk5col-ints: create a table with a schema file and examine repo" {
-    skip_nbf_dolt_1
+
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "test" ]] || false
@@ -72,7 +72,6 @@ teardown() {
 }
 
 @test "1pk5col-ints: add a row to a created table using dolt table put-row" {
-    skip_nbf_dolt_1
     dolt add test
     dolt commit -m "create table"
     run dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
@@ -390,7 +389,6 @@ teardown() {
 }
 
 @test "1pk5col-ints: generate a merge conflict and resolve with ours" {
-    skip_nbf_dolt_1
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
@@ -435,7 +433,6 @@ teardown() {
 }
 
 @test "1pk5col-ints: generate a merge conflict and try to roll back using dolt merge --abort" {
-    skip_nbf_dolt_1
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
@@ -467,7 +464,6 @@ teardown() {
 }
 
 @test "1pk5col-ints: generate a merge conflict and resolve with theirs" {
-    skip_nbf_dolt_1
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
@@ -517,10 +513,11 @@ pk,c1,c2,c3,c4,c5
 DELIM
     run dolt table import test -u badline.csv
     [ "$status" -eq 1 ]
-    [[ "${lines[0]}" =~ "Additions" ]] || false
+    echo $output
+    [[ "${lines[0]}" =~ "Additions: 2" ]] || false
     [[ "${lines[1]}" =~ "A bad row was encountered" ]] || false
-    [[ "${lines[2]}" =~ "expects 6 fields" ]] || false
-    [[ "${lines[2]}" =~ "line only has 1 value" ]] || false
+    [[ "${lines[2]}" =~ "Bad Row: [2]" ]] || false
+    [[ "${lines[3]}" =~ "CSV reader expected 6 values, but saw 1" ]] || false
 }
 
 @test "1pk5col-ints: import data from a csv file with a bad header" {
@@ -661,7 +658,6 @@ DELIM
 }
 
 @test "1pk5col-ints: display correct merge stats" {
-    skip_nbf_dolt_1
     dolt checkout -b test-branch
     dolt add test
     dolt commit -m "added test table"
@@ -684,7 +680,6 @@ DELIM
     dolt commit -m "added row to test"
     dolt checkout test-branch-m
     run dolt merge test-branch
-    echo $output
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "test | 1 +" ]
     [ "${lines[2]}" = "1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]

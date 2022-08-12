@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -33,7 +32,7 @@ import (
 )
 
 var ErrCantFF = errors.New("can't fast forward merge")
-var ErrInvalidPullArgs = errors.New("dolt pull takes at most one arg")
+var ErrInvalidPullArgs = errors.New("dolt pull takes at most two args")
 var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrFailedToSaveRepoState = errors.New("failed to save repo state")
 var ErrFailedToDeleteRemote = errors.New("failed to delete remote")
@@ -91,22 +90,8 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 	return err
 }
 
-func DoPush(ctx context.Context, rsr env.RepoStateReader, rsw env.RepoStateWriter, srcDB *doltdb.DoltDB, tempTableDir string, opts *env.PushOpts, progStarter ProgStarter, progStopper ProgStopper) error {
-	destDB, err := opts.Remote.GetRemoteDB(ctx, srcDB.ValueReadWriter().Format())
-
-	if err != nil {
-		if err == remotestorage.ErrInvalidDoltSpecPath {
-			urlObj, _ := earl.Parse(opts.Remote.Url)
-			path := urlObj.Path
-			if path[0] == '/' {
-				path = path[1:]
-			}
-
-			var detail = fmt.Sprintf("the remote: %s %s '%s' should be in the format 'organization/repo'", opts.Remote.Name, opts.Remote.Url, path)
-			return fmt.Errorf("%w; %s; %s", ErrFailedToGetRemoteDb, detail, err.Error())
-		}
-		return err
-	}
+func DoPush(ctx context.Context, rsr env.RepoStateReader, rsw env.RepoStateWriter, srcDB, destDB *doltdb.DoltDB, tempTableDir string, opts *env.PushOpts, progStarter ProgStarter, progStopper ProgStopper) error {
+	var err error
 
 	switch opts.SrcRef.GetType() {
 	case ref.BranchRefType:
@@ -160,8 +145,7 @@ func deleteRemoteBranch(ctx context.Context, toDelete, remoteRef ref.DoltRef, lo
 	err := DeleteRemoteBranch(ctx, toDelete.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB)
 
 	if err != nil {
-		return fmt.Errorf("%w; '%s' from remote '%s'", ErrFailedToDeleteRemote, toDelete.String(), remote.Name)
-		//return err
+		return fmt.Errorf("%w; '%s' from remote '%s'; %s", ErrFailedToDeleteRemote, toDelete.String(), remote.Name, err)
 	}
 
 	return nil
@@ -376,12 +360,9 @@ func FetchRemoteBranch(
 }
 
 // FetchRefSpecs is the common SQL and CLI entrypoint for fetching branches, tags, and heads from a remote.
-func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.RemoteRefSpec, remote env.Remote, mode ref.UpdateMode, progStarter ProgStarter, progStopper ProgStopper) error {
-	srcDB, err := remote.GetRemoteDBWithoutCaching(ctx, dbData.Ddb.ValueReadWriter().Format())
-	if err != nil {
-		return err
-	}
-
+// This function takes dbData which is a env.DbData object for handling repoState read and write, and srcDB is
+// a remote *doltdb.DoltDB object that is used to fetch remote branches from.
+func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB, refSpecs []ref.RemoteRefSpec, remote env.Remote, mode ref.UpdateMode, progStarter ProgStarter, progStopper ProgStopper) error {
 	branchRefs, err := srcDB.GetHeadRefs(ctx)
 	if err != nil {
 		return env.ErrFailedToReadDb
@@ -480,4 +461,15 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 	destDb.CommitRoot(ctx, srcRoot, destRoot)
 
 	return nil
+}
+
+func HandleInvalidDoltSpecPathErr(name, url string, err error) error {
+	urlObj, _ := earl.Parse(url)
+	path := urlObj.Path
+	if path[0] == '/' {
+		path = path[1:]
+	}
+
+	var detail = fmt.Sprintf("the remote: %s %s '%s' should be in the format 'organization/repo'", name, url, path)
+	return fmt.Errorf("%w; %s; %s", ErrFailedToGetRemoteDb, detail, err.Error())
 }

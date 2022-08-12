@@ -143,24 +143,24 @@ func (tc *chunker[S]) DeletePair(ctx context.Context, _, _ Item) error {
 // The method proceeds from the deepest chunker recursively into its
 // linked list parents:
 //
-//  (1) If the current cursor and all of its parents are aligned with |next|,
-//  we are done.
+//	(1) If the current cursor and all of its parents are aligned with |next|,
+//	we are done.
 //
-//  (2) In lockstep, a) append to the chunker and b) increment the cursor until
-//  we either meet condition (1) and return, or we synchronize and progress to
-//  (3) or (4). Synchronizing means that the current tree being built has
-//  reached a chunk boundary that aligns with a chunk boundary in the old tree
-//  being mutated. Synchronization means chunks between this boundary and
-//  |next| at the current cursor level will be unchanged and can be skipped.
+//	(2) In lockstep, a) append to the chunker and b) increment the cursor until
+//	we either meet condition (1) and return, or we synchronize and progress to
+//	(3) or (4). Synchronizing means that the current tree being built has
+//	reached a chunk boundary that aligns with a chunk boundary in the old tree
+//	being mutated. Synchronization means chunks between this boundary and
+//	|next| at the current cursor level will be unchanged and can be skipped.
 //
-//  (3) All parent cursors are (1) current or (2) synchronized, or there are no
-//  parents, and we are done.
+//	(3) All parent cursors are (1) current or (2) synchronized, or there are no
+//	parents, and we are done.
 //
-//  (4) The parent cursors are not aligned. Recurse into the parent. After
-//  parents are aligned, we need to reprocess the prefix of the current node in
-//  anticipation of impending edits that may edit the current chunk. Note that
-//  processPrefix is only necessary for the "fast forward" case where we
-//  synchronized the tree level before reaching |next|.
+//	(4) The parent cursors are not aligned. Recurse into the parent. After
+//	parents are aligned, we need to reprocess the prefix of the current node in
+//	anticipation of impending edits that may edit the current chunk. Note that
+//	processPrefix is only necessary for the "fast forward" case where we
+//	synchronized the tree level before reaching |next|.
 func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 	cmp := tc.cur.Compare(next)
 	if cmp == 0 { // step (1)

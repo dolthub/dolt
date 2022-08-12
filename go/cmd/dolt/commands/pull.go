@@ -36,7 +36,7 @@ var pullDocs = cli.CommandDocumentationContent{
 More precisely, dolt pull runs {{.EmphasisLeft}}dolt fetch{{.EmphasisRight}} with the given parameters and calls {{.EmphasisLeft}}dolt merge{{.EmphasisRight}} to merge the retrieved branch {{.EmphasisLeft}}HEAD{{.EmphasisRight}} into the current branch.
 `,
 	Synopsis: []string{
-		"{{.LessThan}}remote{{.GreaterThan}}",
+		`[{{.LessThan}}remote{{.GreaterThan}}, [{{.LessThan}}remoteBranch{{.GreaterThan}}]]`,
 	},
 }
 
@@ -59,6 +59,8 @@ func (cmd PullCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd PullCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"remote", "The name of the remote to pull from."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"remoteBranch", "The name of a branch on the specified remote to be merged into the current working set."})
 	ap.SupportsFlag(cli.SquashParam, "", "Merges changes to the working set without updating the commit history")
 	return ap
 }
@@ -75,17 +77,24 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.NArg() > 1 {
+	if apr.NArg() > 2 {
 		verr := errhand.VerboseErrorFromError(actions.ErrInvalidPullArgs)
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	var remoteName string
+	var remoteName, remoteRefName string
 	if apr.NArg() == 1 {
 		remoteName = apr.Arg(0)
+	} else if apr.NArg() == 2 {
+		remoteName = apr.Arg(0)
+		remoteRefName = apr.Arg(1)
 	}
 
-	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag))
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
+
+	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -99,7 +108,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 // pullHelper splits pull into fetch, prepare merge, and merge to interleave printing
 func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) error {
-	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
 	if err != nil {
 		return fmt.Errorf("failed to get remote db; %w", err)
 	}
@@ -108,6 +117,14 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 	branchRefs, err := srcDB.GetHeadRefs(ctx)
 	if err != nil {
 		return env.ErrFailedToReadDb
+	}
+
+	hasBranch, err := srcDB.HasBranch(ctx, pullSpec.Branch.GetPath())
+	if err != nil {
+		return err
+	}
+	if !hasBranch {
+		return fmt.Errorf("branch %q not found on remote", pullSpec.Branch.GetPath())
 	}
 
 	// Go through every reference and every branch in each reference
@@ -130,6 +147,11 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				return fmt.Errorf("fetch failed; %w", err)
 			}
 
+			// Only merge iff branch is current branch and there is an upstream set (pullSpec.Branch is set to nil if there is no upstream)
+			if branchRef != pullSpec.Branch {
+				continue
+			}
+
 			t := datas.CommitNowFunc()
 
 			roots, err := dEnv.Roots(ctx)
@@ -145,11 +167,6 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 					return configErr
 				}
 				name, email = "", ""
-			}
-
-			// Only merge iff branch is current branch
-			if branchRef != pullSpec.Branch {
-				continue
 			}
 
 			// Begin merge

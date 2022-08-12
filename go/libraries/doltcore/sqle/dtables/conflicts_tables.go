@@ -35,7 +35,7 @@ func NewConflictsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue,
 		return nil, sql.ErrTableNotFound.New(tblName)
 	}
 
-	if types.IsFormat_DOLT_1(tbl.Format()) {
+	if types.IsFormat_DOLT(tbl.Format()) {
 		return newProllyConflictsTable(ctx, tbl, tblName, root, rs)
 	}
 
@@ -65,6 +65,7 @@ func newNomsConflictsTable(ctx *sql.Context, tbl *doltdb.Table, tblName string, 
 }
 
 var _ sql.Table = ConflictsTable{}
+var _ sql.DeletableTable = ConflictsTable{}
 
 // ConflictsTable is a sql.Table implementation that provides access to the conflicts that exist for a user table
 type ConflictsTable struct {
@@ -102,7 +103,12 @@ func (ct ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error)
 
 // PartitionRows returns a RowIter for the given partition
 func (ct ConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return conflictRowIter{ct.rd}, nil
+	// conflict reader must be reset each time partitionRows is called.
+	rd, err := merge.NewConflictReader(ctx, ct.tbl)
+	if err != nil {
+		return nil, err
+	}
+	return conflictRowIter{rd}, nil
 }
 
 // Deleter returns a RowDeleter for this table. The RowDeleter will get one call to Delete for each row to be deleted,

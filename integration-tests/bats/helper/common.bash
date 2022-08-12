@@ -63,9 +63,15 @@ assert_feature_version() {
     fi
 }
 
-skip_nbf_dolt_1() {
-  if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT_1__" ]; then
-    skip "skipping test for nomsBinFormat __DOLT_1__"
+skip_nbf_dolt() {
+  if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT__" ]; then
+    skip "skipping test for nomsBinFormat __DOLT__"
+  fi
+}
+
+skip_nbf_dolt_dev() {
+  if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT_DEV__" ]; then
+    skip "skipping test for nomsBinFormat __DOLT_DEV__"
   fi
 }
 
@@ -92,6 +98,16 @@ log_output_has() {
         printf "output:\n$output"
         exit 1
     fi
+}
+
+parquet() {
+  if [ -z "$PARQUET_RUNTIME_JAR" ]; then
+    echo "must supply PARQUET_RUNTIME_JAR to use parquet cli"
+    exit 1
+  else
+    out=$(hadoop jar "$PARQUET_RUNTIME_JAR" org.apache.parquet.cli.Main "$@")
+    echo "$out"
+  fi
 }
 
 nativevar DOLT_ROOT_PATH $BATS_TMPDIR/config-$$ /p

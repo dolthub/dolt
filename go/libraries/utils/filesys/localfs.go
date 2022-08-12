@@ -85,7 +85,7 @@ func (fs localFS) WithWorkingDir(path string) (Filesys, error) {
 
 var errStopMarker = errors.New("stop")
 
-// Iter iterates over the files and subdirectories within a given directory (Optionally recursively.
+// Iter iterates over the files and subdirectories within a given directory (Optionally recursively).
 func (fs *localFS) Iter(path string, recursive bool, cb FSIterCB) error {
 	var err error
 	path, err = fs.Abs(path)
@@ -317,4 +317,8 @@ func (fs *localFS) LastModified(path string) (t time.Time, exists bool) {
 	}
 
 	return stat.ModTime(), true
+}
+
+func (fs *localFS) TempDir() string {
+	return os.TempDir()
 }

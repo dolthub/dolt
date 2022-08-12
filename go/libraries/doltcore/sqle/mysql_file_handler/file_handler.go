@@ -25,68 +25,35 @@ import (
 )
 
 type Persister struct {
-	privsFilePath string
-	fileMutex     *sync.Mutex
+	privsFilePath  string
+	doltCfgDirPath string
+	fileMutex      *sync.Mutex
 }
 
 var _ mysql_db.MySQLDbPersistence = &Persister{}
 
-func NewPersister(fp string) *Persister {
-	// Create file if it does not exist, panic if something goes wrong
-	if len(fp) > 0 {
-		_, err := os.Stat(fp)
-		if err != nil && errors.Is(err, os.ErrNotExist) {
-			err = ioutil.WriteFile(fp, []byte{}, 0644)
-		}
-		if err != nil {
-			panic(err)
-		}
-	}
-
+func NewPersister(fp string, dp string) *Persister {
 	return &Persister{
-		privsFilePath: fp,
-		fileMutex:     &sync.Mutex{},
+		privsFilePath:  fp,
+		doltCfgDirPath: dp,
+		fileMutex:      &sync.Mutex{},
 	}
-}
-
-func (p *Persister) ValidateCanPersist() error {
-	if len(p.privsFilePath) == 0 {
-		return errors.New("no privilege file specified, to persist users/grants run with --privilege-file=<file_path>")
-	}
-	return nil
 }
 
 func (p *Persister) Persist(ctx *sql.Context, data []byte) error {
 	p.fileMutex.Lock()
 	defer p.fileMutex.Unlock()
 
-	if err := p.ValidateCanPersist(); err != nil {
-		return err
+	// Create doltcfg directory if it doesn't already exist
+	if len(p.doltCfgDirPath) != 0 {
+		if _, err := os.Stat(p.doltCfgDirPath); os.IsNotExist(err) {
+			if err := os.Mkdir(p.doltCfgDirPath, 0777); err != nil {
+				return err
+			}
+		}
 	}
 
 	return ioutil.WriteFile(p.privsFilePath, data, 0777)
-}
-
-// SetPrivilegeFilePath sets the file path that will be used for loading privileges.
-// TODO: this is probably not needed
-func (p Persister) SetPrivilegeFilePath(fp string) {
-	// do nothing for empty file path
-	if len(fp) == 0 {
-		return
-	}
-
-	p.fileMutex.Lock()
-	defer p.fileMutex.Unlock()
-
-	// Create file if it does not exist, panic if something goes wrong
-	_, err := os.Stat(fp)
-	if err != nil && errors.Is(err, os.ErrNotExist) {
-		err = ioutil.WriteFile(fp, []byte{}, 0644)
-	}
-	if err != nil {
-		panic(err)
-	}
-	p.privsFilePath = fp
 }
 
 // LoadData reads the mysql.db file, returns nil if empty or not found

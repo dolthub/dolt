@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package import_benchmarker
 
 import (
 	"fmt"
@@ -28,14 +28,17 @@ import (
 )
 
 type result struct {
-	name    string
-	format  string
-	rows    int
-	columns int
-	br      testing.BenchmarkResult
+	name        string
+	format      string
+	rows        int
+	columns     int
+	sizeOnDisk  float64
+	br          testing.BenchmarkResult
+	program     string
+	doltVersion string
 }
 
-// RDSImpl is a Dataset containing results of benchmarking
+// RSImpl is a Dataset containing results of benchmarking
 type RSImpl struct {
 	// Schema defines the structure of the Dataset
 	Schema *SeedSchema
@@ -103,50 +106,47 @@ func getResultsRow(res result, cols []*SeedColumn) []string {
 
 	// set name
 	row[0] = res.name
+	// set program
+	row[1] = res.program
+	// set version
+	row[2] = res.doltVersion
 	// set format
-	row[1] = res.format
+	row[3] = res.format
 	// set rows
-	row[2] = fmt.Sprintf("%d", res.rows)
+	row[4] = fmt.Sprintf("%d", res.rows)
 	// set cols
-	row[3] = fmt.Sprintf("%d", res.columns)
+	row[5] = fmt.Sprintf("%d", res.columns)
 	// set iterations
-	row[4] = fmt.Sprintf("%d", res.br.N)
+	row[6] = fmt.Sprintf("%d", res.br.N)
 	// set time
-	row[5] = res.br.T.String()
-	// set bytes
-	row[6] = fmt.Sprintf("%v", res.br.Bytes)
-	// set mem_allocs
-	row[7] = fmt.Sprintf("%v", res.br.MemAllocs)
-	// set mem_bytes
-	row[8] = fmt.Sprintf("%v", res.br.MemBytes)
-	// set alloced_bytes_per_op
-	row[9] = fmt.Sprintf("%v", res.br.AllocedBytesPerOp())
-	//set allocs_per_op
-	row[10] = fmt.Sprintf("%v", res.br.AllocsPerOp())
+	row[7] = res.br.T.Round(time.Millisecond * 10).String()
+	// set size_on_disk
+	row[8] = fmt.Sprintf("%v", res.sizeOnDisk)
+	// set rows_per_second
+	row[9] = fmt.Sprintf("%.2f", float64(res.rows)/res.br.T.Seconds())
 	// set datetime
 	t := time.Now()
-	row[11] = fmt.Sprintf("%04d-%02d-%02d %02d:%02d", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute())
+	row[10] = fmt.Sprintf("%04d-%02d-%02d %02d:%02d", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute())
 	return row
 }
 
 func genResultsCols() []*SeedColumn {
 	return []*SeedColumn{
 		NewSeedColumn("name", false, types.StringKind, supplied),
+		NewSeedColumn("program", false, types.StringKind, supplied),
+		NewSeedColumn("version", false, types.StringKind, supplied),
 		NewSeedColumn("format", false, types.StringKind, supplied),
 		NewSeedColumn("rows", false, types.StringKind, supplied),
 		NewSeedColumn("columns", false, types.StringKind, supplied),
 		NewSeedColumn("iterations", false, types.StringKind, supplied),
 		NewSeedColumn("time", false, types.TimestampKind, supplied),
-		NewSeedColumn("bytes", false, types.IntKind, supplied),
-		NewSeedColumn("mem_allocs", false, types.IntKind, supplied),
-		NewSeedColumn("mem_bytes", false, types.IntKind, supplied),
-		NewSeedColumn("alloced_bytes_per_op", false, types.StringKind, supplied),
-		NewSeedColumn("allocs_per_op", false, types.StringKind, supplied),
+		NewSeedColumn("size_on_disk(MB)", false, types.StringKind, supplied),
+		NewSeedColumn("rows_per_second", false, types.StringKind, supplied),
 		NewSeedColumn("date_time", false, types.StringKind, supplied),
 	}
 }
 
-func serializeResults(results []result, path, tableName, format string) {
+func SerializeResults(results []result, path, tableName, format string) string {
 	var sch *SeedSchema
 	switch format {
 	case csvExt:
@@ -156,7 +156,7 @@ func serializeResults(results []result, path, tableName, format string) {
 	}
 	now := time.Now()
 	fs := filesys.LocalFS
-	resultsFile := filepath.Join(path, fmt.Sprintf("benchmark_results-%04d-%02d-%02d%s", now.Year(), now.Month(), now.Day(), format))
+	resultsFile := filepath.Join(path, fmt.Sprintf("benchmark_results-%04d-%02d-%02d.%s", now.Year(), now.Month(), now.Day(), format))
 	wc, err := fs.OpenForWrite(resultsFile, os.ModePerm)
 	if err != nil {
 		log.Fatal(err)
@@ -165,4 +165,6 @@ func serializeResults(results []result, path, tableName, format string) {
 
 	ds := NewRSImpl(wc, sch, results, tableName)
 	ds.GenerateData()
+
+	return resultsFile
 }

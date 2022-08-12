@@ -48,7 +48,10 @@ func diffOrderedTrees[K, V ~[]byte, O ordering[K]](
 	from, to orderedTree[K, V, O],
 	cb DiffFn,
 ) error {
-	differ, err := tree.DifferFromRoots(ctx, from.ns, from.root, to.root, to.compareItems)
+	cfn := func(left, right tree.Item) int {
+		return from.order.Compare(K(left), K(right))
+	}
+	differ, err := tree.DifferFromRoots(ctx, from.ns, from.root, to.root, cfn)
 	if err != nil {
 		return err
 	}
@@ -73,7 +76,9 @@ func mergeOrderedTrees[K, V ~[]byte, O ordering[K], S message.Serializer](
 	serializer S,
 	valDesc val.TupleDesc,
 ) (orderedTree[K, V, O], error) {
-	cfn := base.compareItems
+	cfn := func(left, right tree.Item) int {
+		return base.order.Compare(K(left), K(right))
+	}
 	root, err := tree.ThreeWayMerge(ctx, base.ns, l.root, r.root, base.root, cfn, cb, serializer, valDesc)
 	if err != nil {
 		return orderedTree[K, V, O]{}, err

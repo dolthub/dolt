@@ -30,20 +30,10 @@ import (
 
 // Cursor explores a tree of Nodes.
 type Cursor struct {
-	nd       Node
-	idx      int
-	parent   *Cursor
-	subtrees SubtreeCounts
-	nrw      NodeStore
-}
-
-type SubtreeCounts []uint64
-
-func (sc SubtreeCounts) Sum() (s uint64) {
-	for _, count := range sc {
-		s += count
-	}
-	return
+	nd     Node
+	idx    int
+	parent *Cursor
+	nrw    NodeStore
 }
 
 type CompareFn func(left, right Item) int
@@ -111,12 +101,10 @@ func NewCursorAtOrdinal(ctx context.Context, ns NodeStore, nd Node, ord uint64) 
 		if nd.IsLeaf() {
 			return int(distance)
 		}
+		nd = nd.loadSubtrees()
 
-		// |subtrees| contains cardinalities of each child tree in |nd|
-		subtrees := nd.getSubtreeCounts()
-
-		for idx = range subtrees {
-			card := int64(subtrees[idx])
+		for idx = 0; idx < nd.Count(); idx++ {
+			card := int64(nd.getSubtreeCount(idx))
 			if (distance - card) < 0 {
 				break
 			}
@@ -202,8 +190,8 @@ func NewLeafCursorAtItem(ctx context.Context, ns NodeStore, nd Node, item Item, 
 }
 
 func CurrentCursorItems(cur *Cursor) (key, value Item) {
-	key = cur.nd.keys.GetSlice(cur.idx)
-	value = cur.nd.values.GetSlice(cur.idx)
+	key = cur.nd.keys.GetItem(cur.idx)
+	value = cur.nd.values.GetItem(cur.idx)
 	return
 }
 
@@ -230,10 +218,8 @@ func (cur *Cursor) currentSubtreeSize() uint64 {
 	if cur.isLeaf() {
 		return 1
 	}
-	if cur.subtrees == nil { // lazy load
-		cur.subtrees = cur.nd.getSubtreeCounts()
-	}
-	return cur.subtrees[cur.idx]
+	cur.nd = cur.nd.loadSubtrees()
+	return cur.nd.getSubtreeCount(cur.idx)
 }
 
 func (cur *Cursor) firstKey() Item {
@@ -403,8 +389,6 @@ func (cur *Cursor) Advance(ctx context.Context) error {
 	}
 
 	cur.skipToNodeStart()
-	cur.subtrees = nil // lazy load
-
 	return nil
 }
 
@@ -440,8 +424,6 @@ func (cur *Cursor) Retreat(ctx context.Context) error {
 	}
 
 	cur.skipToNodeEnd()
-	cur.subtrees = nil // lazy load
-
 	return nil
 }
 
@@ -462,11 +444,13 @@ func (cur *Cursor) fetchNode(ctx context.Context) (err error) {
 //
 // cur:   L3 -> 4, L2 -> 2, L1 -> 5, L0 -> 2
 // other: L3 -> 4, L2 -> 2, L1 -> 5, L0 -> 4
-//    res => -2 (from level 0)
+//
+//	res => -2 (from level 0)
 //
 // cur:   L3 -> 4, L2 -> 2, L1 -> 5, L0 -> 2
 // other: L3 -> 4, L2 -> 3, L1 -> 5, L0 -> 4
-//    res => +1 (from level 2)
+//
+//	res => +1 (from level 2)
 func (cur *Cursor) Compare(other *Cursor) int {
 	return compareCursors(cur, other)
 }

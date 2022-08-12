@@ -424,8 +424,6 @@ DELIM
     [[ "$output" =~ "(3 Entries vs 4 Entries)" ]] || false
 
     dolt sql -q "replace into employees values (0, 'tim', 'sehn', 'ceo', '2 years ago', '', 'Santa Monica')"
-
-    skip_nbf_dolt_1 "invalid cell change count"
     
     dolt diff --summary
     run dolt diff --summary
@@ -472,18 +470,18 @@ SQL
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "table created"
-    dolt sql -q "insert into test values (2, 22, 0, 0, 0, 0)"
-    dolt sql -q "insert into test values (3, 33, 0, 0, 0, 0)"
+    dolt sql -q "insert into test values (2, 222, 0, 0, 0, 0)"
+    dolt sql -q "insert into test values (3, 333, 0, 0, 0, 0)"
 
     run dolt diff --where "to_pk=2"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "22" ]] || false
-    ! [[ "$output" =~ "33" ]] || false
+    [[ "$output" =~ "222" ]] || false
+    [[ ! "$output" =~ "333" ]] || false
 
     run dolt diff --where "to_pk < 3"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "22" ]] || false
-    ! [[ "$output" =~ "33" ]] || false
+    [[ "$output" =~ "222" ]] || false
+    ! [[ "$output" =~ "333" ]] || false
     
     dolt add test
     dolt commit -m "added two rows"
@@ -539,6 +537,17 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error running diff query" ]] || false
     [[ "$output" =~ "where pk=4" ]] || false
+}
+
+@test "diff: diff summary incorrect primary key set change regression test" {
+    dolt sql -q "create table testdrop (col1 varchar(20), id int primary key, col2 varchar(20))"
+    dolt sql -q "insert into testdrop values ('test1', 1, 'test2')"
+    dolt commit -am "Add testdrop table"
+
+    dolt sql -q "alter table testdrop drop column col1"
+    run dolt diff --summary
+    [ $status -eq 0 ]
+    [[ $output =~ "1 Row Modified (100.00%)" ]]
 }
 
 @test "diff: with where clause errors" {
@@ -707,7 +716,6 @@ SQL
 }
 
 @test "diff: keyless sql diffs" {
-    skip_nbf_dolt_1 "keyless diff not implemented"
     
     dolt sql -q "create table t(pk int, val int)"
     dolt commit -am "cm1"
@@ -730,11 +738,11 @@ SQL
     dolt diff -r sql
     run dolt diff -r sql
     [ $status -eq 0 ]
-    # TODO: this needs a limit
-    [ "${lines[0]}" = 'DELETE FROM `t` WHERE `pk`=1 AND `val`=1;' ]
-    [ "${lines[1]}" = 'DELETE FROM `t` WHERE `pk`=1 AND `val`=1;' ]
-    [ "${lines[2]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]
-    [ "${lines[3]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]
+    [[ "$output" =~ 'DELETE FROM `t` WHERE `pk`=1 AND `val`=1;' ]]
+    [[ "$output" =~ 'DELETE FROM `t` WHERE `pk`=1 AND `val`=1;' ]]
+    [[ "$output" =~ 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]]
+    [[ "$output" =~ 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]]
+    [ "${#lines[@]}" = "4" ]
 
     dolt commit -am "cm4"
 
@@ -852,4 +860,12 @@ SQL
 
     run dolt diff HEAD~1
     [ "${#lines[@]}" -eq 2007 ] # 2000 diffs + 6 for top rows before data + 1 for bottom row of table
+}
+
+@test "diff: works with spaces in column names" {
+   dolt sql -q 'CREATE table t (pk int, `type of food` varchar(100));'
+   dolt sql -q "INSERT INTO t VALUES (1, 'ramen');"
+   run dolt diff
+   [ $status -eq 0 ]
+   [[ $output =~ '| + | 1  | ramen        |' ]] || false
 }

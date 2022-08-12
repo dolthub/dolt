@@ -15,7 +15,10 @@
 package serial
 
 import (
+	"encoding/binary"
 	"unsafe"
+
+	fb "github.com/google/flatbuffers/go"
 )
 
 // KEEP THESE IN SYNC WITH .fbs FILES!
@@ -31,12 +34,47 @@ const AddressMapFileID = "ADRM"
 const CommitClosureFileID = "CMCL"
 const TableSchemaFileID = "DSCH"
 const ForeignKeyCollectionFileID = "DFKC"
+const MergeArtifactsFileID = "ARTM"
+const BlobFileID = "BLOB"
+
+const MessageTypesKind int = 27
+
+const MessagePrefixSz = 4
+
+type Message []byte
 
 func GetFileID(bs []byte) string {
-	if len(bs) < 8 {
+	if len(bs) < 8+MessagePrefixSz {
 		return ""
 	}
-	return byteSliceToString(bs[4:8])
+	return byteSliceToString(bs[MessagePrefixSz+4 : MessagePrefixSz+8])
+}
+
+func FinishMessage(b *fb.Builder, off fb.UOffsetT, fileID []byte) Message {
+	// We finish the buffer by prefixing it with:
+	// 1) 1 byte NomsKind == SerialMessage.
+	// 2) big endian 3 byte uint representing the size of the message, not
+	// including the kind or size prefix bytes.
+	//
+	// This allows chunks we serialize here to be read by types binary
+	// codec.
+	//
+	// All accessors in this package expect this prefix to be on the front
+	// of the message bytes as well. See |MessagePrefixSz|.
+
+	b.Prep(1, fb.SizeInt32+4+MessagePrefixSz)
+	b.FinishWithFileIdentifier(off, fileID)
+
+	var size [4]byte
+	binary.BigEndian.PutUint32(size[:], uint32(len(b.Bytes)-int(b.Head())))
+	if size[0] != 0 {
+		panic("message is too large to be encoded")
+	}
+
+	bytes := b.Bytes[b.Head()-MessagePrefixSz:]
+	bytes[0] = byte(MessageTypesKind)
+	copy(bytes[1:], size[1:])
+	return bytes
 }
 
 // byteSliceToString converts a []byte to string without a heap allocation.

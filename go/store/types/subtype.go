@@ -44,8 +44,10 @@ func isSubtypeTopLevel(nbf *NomsBinFormat, requiredType, concreteType *Type) (is
 }
 
 // IsSubtypeDetails returns two values:
-//   isSub - which indicates whether concreteType is a subtype of requiredType.
-//   hasExtra - which indicates whether concreteType has additional fields.
+//
+//	isSub - which indicates whether concreteType is a subtype of requiredType.
+//	hasExtra - which indicates whether concreteType has additional fields.
+//
 // See comment below on isValueSubtypeOfDetails
 func isSubtypeDetails(nbf *NomsBinFormat, requiredType, concreteType *Type, hasExtra bool, parentStructTypes []*Type) (bool, bool) {
 	if requiredType.Equals(concreteType) {
@@ -184,23 +186,28 @@ func IsValueSubtypeOf(nbf *NomsBinFormat, v Value, t *Type) (bool, error) {
 }
 
 // IsValueSubtypeOfDetails returns two values:
-//   isSub - which indicates whether v is a subtype of t.
-//   hasExtra - which indicates whether v has additional fields. This field has
-//              no meaning if IsSub is false.
+//
+//	isSub - which indicates whether v is a subtype of t.
+//	hasExtra - which indicates whether v has additional fields. This field has
+//	           no meaning if IsSub is false.
 //
 // For example, given the following data:
-//   type1 := struct S {               v := Struct S1 {
-//       a Float | string                 a: "hello"
-//       b ?int                            b: 2
-//   }                                 }
+//
+//	type1 := struct S {               v := Struct S1 {
+//	    a Float | string                 a: "hello"
+//	    b ?int                            b: 2
+//	}                                 }
+//
 // IsValueSubtypeOfDetails(v, type1) would return isSub == true, and hasExtra == false
 //
 // And given these types:
-//   type2 := struct S {               v := Struct S1 {
-//       a Float | string                 a: "hello"
-//       b ?int                            b: 2
-//   }                                     c: "hello again"
-//                                     }
+//
+//	type2 := struct S {               v := Struct S1 {
+//	    a Float | string                 a: "hello"
+//	    b ?int                            b: 2
+//	}                                     c: "hello again"
+//	                                  }
+//
 // IsValueSubtypeOfDetails(v, type1) would return isSub == true, and hasExtra == true
 func IsValueSubtypeOfDetails(nbf *NomsBinFormat, v Value, t *Type) (bool, bool, error) {
 	return isValueSubtypeOfDetails(nbf, v, t, false)

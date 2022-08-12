@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"runtime"
 	"sort"
@@ -116,7 +117,8 @@ type DoltTable struct {
 	sch          schema.Schema
 	autoIncCol   schema.Column
 
-	projectedCols []string
+	projectedCols   []uint64
+	projectedSchema sql.Schema
 
 	opts editor.Options
 
@@ -180,17 +182,17 @@ func (t DoltTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (*Dolt
 		return nil, err
 	}
 
-	return &DoltTable{
-		tableName:     t.tableName,
-		db:            t.db,
-		nbf:           tbl.Format(),
-		sch:           sch,
-		sqlSch:        sqlSch,
-		autoIncCol:    autoCol,
-		projectedCols: t.projectedCols,
-		opts:          t.opts,
-		lockedToRoot:  root,
-	}, nil
+	dt := &DoltTable{
+		tableName:    t.tableName,
+		db:           t.db,
+		nbf:          tbl.Format(),
+		sch:          sch,
+		sqlSch:       sqlSch,
+		autoIncCol:   autoCol,
+		opts:         t.opts,
+		lockedToRoot: root,
+	}
+	return dt.WithProjections(t.Projections()).(*DoltTable), nil
 }
 
 // Internal interface for declaring the interfaces that read-only dolt tables are expected to implement
@@ -248,7 +250,12 @@ func (t *DoltTable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, e
 	if err != nil {
 		return doltdb.DataCacheKey{}, false, err
 	}
-	return doltdb.NewDataCacheKey(r), true, nil
+	key, err := doltdb.NewDataCacheKey(r)
+	if err != nil {
+		return doltdb.DataCacheKey{}, false, err
+	}
+
+	return key, true, nil
 }
 
 func (t *DoltTable) workingRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
@@ -267,12 +274,46 @@ func (t *DoltTable) getRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 
 // GetIndexes implements sql.IndexedTable
 func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	key, tableIsCacheable, err := t.DataCacheKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if !tableIsCacheable {
+		tbl, err := t.DoltTable(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return index.DoltIndexesFromTable(ctx, t.db.Name(), t.tableName, tbl)
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.Name())
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, fmt.Errorf("couldn't find db state for database %s", t.db.Name())
+	}
+
+	indexes, ok := dbState.SessionCache().GetTableIndexesCache(key, t.Name())
+	if ok {
+		return indexes, nil
+	}
+
 	tbl, err := t.DoltTable(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return index.DoltIndexesFromTable(ctx, t.db.Name(), t.tableName, tbl)
+	indexes, err = index.DoltIndexesFromTable(ctx, t.db.Name(), t.tableName, tbl)
+	if err != nil {
+		return nil, err
+	}
+
+	dbState.SessionCache().CacheTableIndexes(key, t.Name(), indexes)
+	return indexes, nil
 }
 
 // HasIndex returns whether the given index is present in the table
@@ -326,6 +367,9 @@ func (t *DoltTable) Format() *types.NomsBinFormat {
 
 // Schema returns the schema for this table.
 func (t *DoltTable) Schema() sql.Schema {
+	if len(t.projectedSchema) > 0 {
+		return t.projectedSchema
+	}
 	return t.sqlSchema().Schema
 }
 
@@ -505,7 +549,7 @@ func (t DoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.Row
 	return iter.(sql.RowIter2), err
 }
 
-func partitionRows(ctx *sql.Context, t *doltdb.Table, sqlSch sql.Schema, projCols []string, partition sql.Partition) (sql.RowIter, error) {
+func partitionRows(ctx *sql.Context, t *doltdb.Table, sqlSch sql.Schema, projCols []uint64, partition sql.Partition) (sql.RowIter, error) {
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:
 		return newRowIterator(ctx, t, sqlSch, projCols, typedPartition)
@@ -657,7 +701,7 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 // truncate returns an empty copy of the table given by setting the rows and indexes to empty. The schema can be
 // updated at the same time.
 func truncate(ctx *sql.Context, table *doltdb.Table, sch schema.Schema) (*doltdb.Table, error) {
-	empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), sch)
+	empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), table.NodeStore(), sch)
 	if err != nil {
 		return nil, err
 	}
@@ -675,7 +719,7 @@ func truncate(ctx *sql.Context, table *doltdb.Table, sch schema.Schema) (*doltdb
 	}
 
 	// truncate table resets auto-increment value
-	return doltdb.NewTable(ctx, table.ValueReadWriter(), sch, empty, idxSet, nil)
+	return doltdb.NewTable(ctx, table.ValueReadWriter(), table.NodeStore(), sch, empty, idxSet, nil)
 }
 
 // Updater implements sql.UpdatableTable
@@ -884,13 +928,36 @@ func (t DoltTable) GetForeignKeyUpdater(ctx *sql.Context) sql.ForeignKeyUpdater 
 
 // Projections implements sql.ProjectedTable
 func (t *DoltTable) Projections() []string {
-	return t.projectedCols
+	names := make([]string, len(t.projectedCols))
+	cols := t.sch.GetAllCols()
+	for i := range t.projectedCols {
+		col := cols.TagToCol[t.projectedCols[i]]
+		names[i] = col.Name
+	}
+	return names
 }
 
 // WithProjections implements sql.ProjectedTable
 func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 	nt := *t
-	nt.projectedCols = colNames
+	nt.projectedCols = make([]uint64, 0, len(colNames))
+	nt.projectedSchema = make(sql.Schema, 0, len(colNames))
+	cols := t.sch.GetAllCols()
+	sch := t.Schema()
+	for i := range colNames {
+		lowerName := strings.ToLower(colNames[i])
+		col, ok := cols.LowerNameToCol[lowerName]
+		if !ok {
+			// The history iter projects a new schema onto an
+			// older table. When a requested projection does not
+			// exist in the older schema, the table will ignore
+			// the field. The history table is responsible for
+			// filling the gaps with nil values.
+			continue
+		}
+		nt.projectedCols = append(nt.projectedCols, col.Tag)
+		nt.projectedSchema = append(nt.projectedSchema, sch[sch.IndexOfColName(lowerName)])
+	}
 	return &nt
 }
 
@@ -930,7 +997,7 @@ func (itr *doltTablePartitionIter) Next(*sql.Context) (sql.Partition, error) {
 
 var _ sql.Partition = doltTablePartition{}
 
-const NoUpperBound = 0xffffffffffffffff
+const NoUpperBound = math.MaxUint64
 
 type doltTablePartition struct {
 	// half-open index range of partition: [start, end)
@@ -1150,7 +1217,7 @@ func (t *AlterableDoltTable) isIncompatibleTypeChange(oldColumn *sql.Column, new
 	}
 
 	if !existingCol.TypeInfo.Equals(newCol.TypeInfo) {
-		if types.IsFormat_DOLT_1(t.Format()) {
+		if types.IsFormat_DOLT(t.Format()) {
 			// This is overly broad, we could narrow this down a bit
 			return true
 		}
@@ -1230,11 +1297,10 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return nil, err
 	}
 
-	newSch, err := sqlutil.ToDoltSchema(ctx, ws.WorkingRoot(), t.Name(), newSchema, headRoot)
+	newSch, err := t.getNewSch(ctx, oldColumn, newColumn, oldSch, newSchema, ws.WorkingRoot(), headRoot)
 	if err != nil {
 		return nil, err
 	}
-
 	newSch = schema.CopyChecksConstraints(oldSch, newSch)
 
 	if isColumnDrop(oldSchema, newSchema) {
@@ -1319,6 +1385,92 @@ func (t *AlterableDoltTable) RewriteInserter(
 	return ed, nil
 }
 
+func (t *AlterableDoltTable) getNewSch(ctx context.Context, oldColumn, newColumn *sql.Column, oldSch schema.Schema, newSchema sql.PrimaryKeySchema, root, headRoot *doltdb.RootValue) (schema.Schema, error) {
+	if oldColumn == nil || newColumn == nil {
+		// Adding or dropping a column
+		newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot)
+		if err != nil {
+			return nil, err
+		}
+		return newSch, err
+	}
+
+	oldTi, err := typeinfo.FromSqlType(oldColumn.Type)
+	if err != nil {
+		return nil, err
+	}
+	newTi, err := typeinfo.FromSqlType(newColumn.Type)
+	if err != nil {
+		return nil, err
+	}
+
+	if oldTi.NomsKind() != newTi.NomsKind() {
+		oldCol, ok := oldSch.GetAllCols().GetByName(oldColumn.Name)
+		if !ok {
+			return nil, fmt.Errorf("expected column %s to exist in the old schema but did not find it", oldColumn.Name)
+		}
+		// Remove the old column from |root| so that its kind will not seed the
+		// new tag.
+		root, err = filterColumnFromRoot(ctx, root, oldCol.Tag)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	return newSch, nil
+}
+
+// filterColumnFromRoot removes any columns matching |colTag| from a |root|. Returns the updated root.
+func filterColumnFromRoot(ctx context.Context, root *doltdb.RootValue, colTag uint64) (*doltdb.RootValue, error) {
+	newRoot := root
+	err := root.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+		_, ok := sch.GetAllCols().GetByTag(colTag)
+		if !ok {
+			return false, nil
+		}
+
+		newSch, err := filterColumnFromSch(sch, colTag)
+		if err != nil {
+			return true, err
+		}
+		t, err := table.UpdateSchema(ctx, newSch)
+		if err != nil {
+			return true, err
+		}
+		newRoot, err = newRoot.PutTable(ctx, name, t)
+		if err != nil {
+			return true, err
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return newRoot, nil
+}
+
+func filterColumnFromSch(sch schema.Schema, colTag uint64) (schema.Schema, error) {
+	var cols []schema.Column
+	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if tag == colTag {
+			return false, nil
+		}
+		cols = append(cols, col)
+		return false, nil
+	})
+	colCol := schema.NewColCollection(cols...)
+	newSch, err := schema.SchemaFromCols(colCol)
+	if err != nil {
+		return nil, err
+	}
+	return newSch, nil
+}
+
 // validateSchemaChange returns an error if the schema change given is not legal
 func validateSchemaChange(
 	tableName string,
@@ -1370,7 +1522,7 @@ func (t *AlterableDoltTable) adjustForeignKeysForDroppedPk(ctx *sql.Context, roo
 
 // DropColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
+	if types.IsFormat_DOLT(t.nbf) {
 		return nil
 	}
 
@@ -1514,15 +1666,8 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 
 	// TODO: move this logic into ShouldRewrite
 	if !existingCol.TypeInfo.Equals(col.TypeInfo) {
-		if existingCol.Kind != col.Kind { // We only change the tag when the underlying Noms kind changes
-			tags, err := root.GenerateTagsForNewColumns(ctx, t.tableName, []string{col.Name}, []types.NomsKind{col.Kind}, nil)
-			if err != nil {
-				return err
-			}
-			if len(tags) != 1 {
-				return fmt.Errorf("expected a generated tag length of 1")
-			}
-			col.Tag = tags[0]
+		if existingCol.Kind != col.Kind {
+			panic("table cannot be modified in place")
 		}
 	}
 
@@ -1563,11 +1708,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		return err
 	}
 
-	return nil
-	// TODO: we can't make this update right now because renames happen in two passes if you rename a column mentioned in
-	//  a default value, and one of those two passes will have the old name for the column. Fix this by not analyzing
-	//  column defaults in NewDoltTable.
-	// return t.updateFromRoot(ctx, newRoot)
+	return t.updateFromRoot(ctx, newRoot)
 }
 
 // getFirstAutoIncrementValue returns the next auto increment value for a table that just acquired one through an
@@ -2301,6 +2442,10 @@ func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*dol
 	return newTable, tblSch, nil
 }
 
+// updateFromRoot updates the table using data and schema in the root given. This is necessary for some schema change
+// statements that take place in multiple steps (e.g. adding a foreign key may create an index, then add a constraint).
+// We can't update the session's working set until the statement boundary, so we have to do it here.
+// TODO: eliminate this pattern, store all table data and schema in the session rather than in these objects.
 func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootValue) error {
 	updatedTableSql, ok, err := t.db.getTable(ctx, root, t.tableName)
 	if err != nil {
@@ -2316,6 +2461,17 @@ func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootV
 		updatedTable = updatedTableSql.(*AlterableDoltTable)
 	}
 	t.WritableDoltTable.DoltTable = updatedTable.WritableDoltTable.DoltTable
+
+	// When we update this table we need to also clear any cached versions of the object, since they may now have
+	// incorrect schema information
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.name)
+	if !ok {
+		return fmt.Errorf("no db state found for %s", t.db.name)
+	}
+
+	dbState.SessionCache().ClearTableCache()
+
 	return nil
 }
 
@@ -2468,7 +2624,7 @@ func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string)
 }
 
 func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.IndexColumn) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
+	if types.IsFormat_DOLT(t.nbf) {
 		return nil
 	}
 
@@ -2502,7 +2658,7 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.In
 }
 
 func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
+	if types.IsFormat_DOLT(t.nbf) {
 		return nil
 	}
 

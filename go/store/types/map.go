@@ -32,7 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-//type ValueInRange func(Value) (bool, error)
+// type ValueInRange func(Value) (bool, error)
 type ValueInRange func(context.Context, Value) (bool, bool, error)
 
 var ErrKeysNotOrdered = errors.New("streaming map keys not ordered")
@@ -627,7 +627,7 @@ func (m Map) HumanReadableString() string {
 }
 
 // VisitMapLevelOrder writes hashes of internal node chunks to a writer
-// delimited with a newline character and returns the number or chunks written and the total number of
+// delimited with a newline character and returns the number of chunks written and the total number of
 // bytes written or an error if encountered
 func VisitMapLevelOrder(m Map, cb func(h hash.Hash) (int64, error)) (int64, int64, error) {
 	chunkCount := int64(0)

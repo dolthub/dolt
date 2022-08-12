@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 )
 
 // writeBufSize is the size of the buffer used when writing a csv file.  It is set at the package level and all
@@ -43,6 +44,8 @@ type CSVWriter struct {
 	sch     schema.Schema
 	useCRLF bool // True to use \r\n as the line terminator
 }
+
+var _ table.SqlTableWriter = (*CSVWriter)(nil)
 
 // NewCSVWriter writes rows to the given WriteCloser based on the Schema and CSVFileInfo provided
 func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {
@@ -233,19 +236,18 @@ func WriteCSVRow(wr *bufio.Writer, record []*string, delim string, useCRLF bool)
 // Below is the method comment from csv.Writer.fieldNeedsQuotes. It is relevant
 // to Dolt's quoting logic for NULLs and ""s, and for import/export compatibility
 //
-// 		fieldNeedsQuotes reports whether our field must be enclosed in quotes.
-// 		Fields with a Comma, fields with a quote or newline, and
-// 		fields which start with a space must be enclosed in quotes.
-// 		We used to quote empty strings, but we do not anymore (as of Go 1.4).
-// 		The two representations should be equivalent, but Postgres distinguishes
-// 		quoted vs non-quoted empty string during database imports, and it has
-// 		an option to force the quoted behavior for non-quoted CSV but it has
-// 		no option to force the non-quoted behavior for quoted CSV, making
-// 		CSV with quoted empty strings strictly less useful.
-// 		Not quoting the empty string also makes this package match the behavior
-// 		of Microsoft Excel and Google Drive.
-// 		For Postgres, quote the data terminating string `\.`.
-//
+//	fieldNeedsQuotes reports whether our field must be enclosed in quotes.
+//	Fields with a Comma, fields with a quote or newline, and
+//	fields which start with a space must be enclosed in quotes.
+//	We used to quote empty strings, but we do not anymore (as of Go 1.4).
+//	The two representations should be equivalent, but Postgres distinguishes
+//	quoted vs non-quoted empty string during database imports, and it has
+//	an option to force the quoted behavior for non-quoted CSV but it has
+//	no option to force the non-quoted behavior for quoted CSV, making
+//	CSV with quoted empty strings strictly less useful.
+//	Not quoting the empty string also makes this package match the behavior
+//	of Microsoft Excel and Google Drive.
+//	For Postgres, quote the data terminating string `\.`.
 func fieldNeedsQuotes(field *string, delim string) bool {
 	if field != nil && *field == "" {
 		// special Dolt logic

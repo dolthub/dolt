@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/nbs"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -57,10 +56,6 @@ func (cmd GarbageCollectionCmd) Name() string {
 // Description returns a description of the command
 func (cmd GarbageCollectionCmd) Description() string {
 	return gcDocs.ShortDesc
-}
-
-func (cmd GarbageCollectionCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT_1(nbf)
 }
 
 // Hidden should return true if this command should be hidden from the help text
@@ -98,6 +93,10 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, gcDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
+
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
 
 	var err error
 	if apr.Contains(gcShallowFlag) {
@@ -154,9 +153,6 @@ func MaybeMigrateEnv(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, erro
 	}
 	if tmp.RSLoadErr != nil {
 		return nil, tmp.RSLoadErr
-	}
-	if tmp.DocsLoadErr != nil {
-		return nil, tmp.DocsLoadErr
 	}
 	if tmp.DBLoadError != nil {
 		return nil, tmp.DBLoadError

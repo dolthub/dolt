@@ -28,6 +28,8 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -42,6 +44,8 @@ type ParquetReader struct {
 	fileData       map[string][]interface{}
 	columnName     []string
 }
+
+var _ table.SqlTableReader = (*ParquetReader)(nil)
 
 // OpenParquetReader opens a reader at a given path within local filesystem.
 func OpenParquetReader(vrw types.ValueReadWriter, path string, sch schema.Schema) (*ParquetReader, error) {
@@ -102,11 +106,11 @@ func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 	allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		val := pr.fileData[col.Name][pr.rowReadCounter]
 		if val != nil {
-			sqlType := col.TypeInfo.ToSqlType()
-			if _, ok := sqlType.(sql.DatetimeType); ok {
-				val = time.Unix(val.(int64), 0)
-			} else if _, ok := sqlType.(sql.TimeType); ok {
-				val = sql.Timespan(val.(int64))
+			switch col.TypeInfo.GetTypeIdentifier() {
+			case typeinfo.DatetimeTypeIdentifier:
+				val = time.UnixMicro(val.(int64))
+			case typeinfo.TimeTypeIdentifier:
+				val = sql.Timespan(time.Duration(val.(int64)).Microseconds())
 			}
 		}
 

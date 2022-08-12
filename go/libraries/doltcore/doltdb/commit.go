@@ -21,25 +21,38 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 var errCommitHasNoMeta = errors.New("commit has no metadata")
 var errHasNoRootValue = errors.New("no root value")
 
+// Rootish is an object resolvable to a RootValue.
+type Rootish interface {
+	// ResolveRootValue resolves a Rootish to a RootValue.
+	ResolveRootValue(ctx context.Context) (*RootValue, error)
+
+	// HashOf returns the hash.Hash of the Rootish.
+	HashOf() (hash.Hash, error)
+}
+
 // Commit contains information on a commit that was written to noms
 type Commit struct {
 	vrw     types.ValueReadWriter
+	ns      tree.NodeStore
 	parents []*datas.Commit
 	dCommit *datas.Commit
 }
 
-func NewCommit(ctx context.Context, vrw types.ValueReadWriter, commit *datas.Commit) (*Commit, error) {
+var _ Rootish = &Commit{}
+
+func NewCommit(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, commit *datas.Commit) (*Commit, error) {
 	parents, err := datas.GetCommitParents(ctx, vrw, commit.NomsValue())
 	if err != nil {
 		return nil, err
 	}
-	return &Commit{vrw, parents, commit}, nil
+	return &Commit{vrw, ns, parents, commit}, nil
 }
 
 // HashOf returns the hash of the commit
@@ -67,8 +80,8 @@ func (c *Commit) ParentHashes(ctx context.Context) ([]hash.Hash, error) {
 }
 
 // NumParents gets the number of parents a commit has.
-func (c *Commit) NumParents() (int, error) {
-	return len(c.parents), nil
+func (c *Commit) NumParents() int {
+	return len(c.parents)
 }
 
 func (c *Commit) Height() (uint64, error) {
@@ -84,17 +97,17 @@ func (c *Commit) GetRootValue(ctx context.Context) (*RootValue, error) {
 	if rootV == nil {
 		return nil, errHasNoRootValue
 	}
-	return newRootValue(c.vrw, rootV)
+	return newRootValue(c.vrw, c.ns, rootV)
 }
 
 func (c *Commit) GetParent(ctx context.Context, idx int) (*Commit, error) {
-	return NewCommit(ctx, c.vrw, c.parents[idx])
+	return NewCommit(ctx, c.vrw, c.ns, c.parents[idx])
 }
 
 var ErrNoCommonAncestor = errors.New("no common ancestor")
 
 func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
-	addr, err := getCommitAncestorAddr(ctx, cm1.dCommit, cm2.dCommit, cm1.vrw, cm2.vrw)
+	addr, err := getCommitAncestorAddr(ctx, cm1.dCommit, cm2.dCommit, cm1.vrw, cm2.vrw, cm1.ns, cm2.ns)
 	if err != nil {
 		return nil, err
 	}
@@ -104,11 +117,11 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 		return nil, err
 	}
 
-	return NewCommit(ctx, cm1.vrw, targetCommit)
+	return NewCommit(ctx, cm1.vrw, cm1.ns, targetCommit)
 }
 
-func getCommitAncestorAddr(ctx context.Context, c1, c2 *datas.Commit, vrw1, vrw2 types.ValueReadWriter) (hash.Hash, error) {
-	ancestorAddr, ok, err := datas.FindCommonAncestor(ctx, c1, c2, vrw1, vrw2)
+func getCommitAncestorAddr(ctx context.Context, c1, c2 *datas.Commit, vrw1, vrw2 types.ValueReadWriter, ns1, ns2 tree.NodeStore) (hash.Hash, error) {
+	ancestorAddr, ok, err := datas.FindCommonAncestor(ctx, c1, c2, vrw1, vrw2, ns1, ns2)
 	if err != nil {
 		return hash.Hash{}, err
 	}
@@ -167,14 +180,11 @@ func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*Commit, er
 
 	instructions := as.Instructions
 	for _, inst := range instructions {
-		n, err := cur.NumParents()
-		if err != nil {
-			return nil, err
-		}
-		if inst >= n {
+		if inst >= cur.NumParents() {
 			return nil, ErrInvalidAncestorSpec
 		}
 
+		var err error
 		cur, err = cur.GetParent(ctx, inst)
 		if err != nil {
 			return nil, err
@@ -185,6 +195,11 @@ func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*Commit, er
 	}
 
 	return cur, nil
+}
+
+// ResolveRootValue implements Rootish.
+func (c *Commit) ResolveRootValue(ctx context.Context) (*RootValue, error) {
+	return c.GetRootValue(ctx)
 }
 
 // PendingCommit represents a commit that hasn't yet been written to storage. It contains a root value and options to

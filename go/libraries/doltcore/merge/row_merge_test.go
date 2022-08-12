@@ -208,7 +208,7 @@ var testCases = []testCase{
 }
 
 func TestRowMerge(t *testing.T) {
-	if types.Format_Default != types.Format_DOLT_1 {
+	if types.Format_Default != types.Format_DOLT {
 		t.Skip()
 	}
 
@@ -230,7 +230,7 @@ func TestRowMerge(t *testing.T) {
 }
 
 func TestNomsRowMerge(t *testing.T) {
-	if types.Format_Default == types.Format_DOLT_1 {
+	if types.Format_Default == types.Format_DOLT {
 		t.Skip()
 	}
 

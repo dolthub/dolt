@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -32,20 +34,19 @@ import (
 )
 
 const (
-	hostFlag                = "host"
-	portFlag                = "port"
-	userFlag                = "user"
-	passwordFlag            = "password"
-	timeoutFlag             = "timeout"
-	readonlyFlag            = "readonly"
-	logLevelFlag            = "loglevel"
-	multiDBDirFlag          = "multi-db-dir"
-	noAutoCommitFlag        = "no-auto-commit"
-	configFileFlag          = "config"
-	queryParallelismFlag    = "query-parallelism"
-	maxConnectionsFlag      = "max-connections"
-	persistenceBehaviorFlag = "persistence-behavior"
-	privilegeFilePathFlag   = "privilege-file"
+	hostFlag                    = "host"
+	portFlag                    = "port"
+	passwordFlag                = "password"
+	timeoutFlag                 = "timeout"
+	readonlyFlag                = "readonly"
+	logLevelFlag                = "loglevel"
+	noAutoCommitFlag            = "no-auto-commit"
+	configFileFlag              = "config"
+	queryParallelismFlag        = "query-parallelism"
+	maxConnectionsFlag          = "max-connections"
+	persistenceBehaviorFlag     = "persistence-behavior"
+	allowCleartextPasswordsFlag = "allow-cleartext-passwords"
+	socketFlag                  = "socket"
 )
 
 func indentLines(s string) string {
@@ -102,7 +103,7 @@ SUPPORTED CONFIG FILE FIELDS:
 If a config file is not provided many of these settings may be configured on the command line.`,
 	Synopsis: []string{
 		"--config {{.LessThan}}file{{.GreaterThan}}",
-		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}] [--query-parallelism {{.LessThan}}num-go-routines{{.GreaterThan}}] [-r]",
+		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--data-dir {{.LessThan}}directory{{.GreaterThan}}] [--query-parallelism {{.LessThan}}num-go-routines{{.GreaterThan}}] [-r]",
 	},
 }
 
@@ -130,19 +131,23 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 
 	ap := argparser.NewArgParser()
 	ap.SupportsString(configFileFlag, "", "file", "When provided configuration is taken from the yaml config file and all command line parameters are ignored.")
-	ap.SupportsString(hostFlag, "H", "host address", fmt.Sprintf("Defines the host address that the server will run on (default `%v`)", serverConfig.Host()))
-	ap.SupportsUint(portFlag, "P", "port", fmt.Sprintf("Defines the port that the server will run on (default `%v`)", serverConfig.Port()))
-	ap.SupportsString(userFlag, "u", "user", fmt.Sprintf("Defines the server user (default `%v`)", serverConfig.User()))
-	ap.SupportsString(passwordFlag, "p", "password", fmt.Sprintf("Defines the server password (default `%v`)", serverConfig.Password()))
-	ap.SupportsInt(timeoutFlag, "t", "connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout (default `%v`)", serverConfig.ReadTimeout()))
-	ap.SupportsFlag(readonlyFlag, "r", "Disable modification of the database")
-	ap.SupportsString(logLevelFlag, "l", "log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `trace', `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel()))
-	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases.")
-	ap.SupportsFlag(noAutoCommitFlag, "", "Set @@autocommit = off for the server")
-	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", fmt.Sprintf("Set the number of go routines spawned to handle each query (default `%d`)", serverConfig.QueryParallelism()))
-	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server (default `%d`)", serverConfig.MaxConnections()))
-	ap.SupportsString(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables (default `%s`)", serverConfig.PersistenceBehavior()))
-	ap.SupportsString(privilegeFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Without this flag, the database has a single user with all permissions, and more cannot be added.")
+	ap.SupportsString(hostFlag, "H", "host address", fmt.Sprintf("Defines the host address that the server will run on. Defaults to `%v`.", serverConfig.Host()))
+	ap.SupportsUint(portFlag, "P", "port", fmt.Sprintf("Defines the port that the server will run on. Defaults to `%v`.", serverConfig.Port()))
+	ap.SupportsString(commands.UserFlag, "u", "user", fmt.Sprintf("Defines the server user. Defaults to `%v`. This should be explicit if desired.", serverConfig.User()))
+	ap.SupportsString(passwordFlag, "p", "password", fmt.Sprintf("Defines the server password. Defaults to `%v`.", serverConfig.Password()))
+	ap.SupportsInt(timeoutFlag, "t", "connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout. Defaults to `%v`.", serverConfig.ReadTimeout()))
+	ap.SupportsFlag(readonlyFlag, "r", "Disable modification of the database.")
+	ap.SupportsString(logLevelFlag, "l", "log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `trace', `debug`, `info`, `warning`, `error`, `fatal`. Defaults to `%v`.", serverConfig.LogLevel()))
+	ap.SupportsString(commands.DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
+	ap.SupportsString(commands.MultiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory. This is deprecated, you should use `--data-dir` instead.")
+	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change that affect configuration settings.")
+	ap.SupportsFlag(noAutoCommitFlag, "", "Set @@autocommit = off for the server.")
+	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", fmt.Sprintf("Set the number of go routines spawned to handle each query. Defaults to `%d`.", serverConfig.QueryParallelism()))
+	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server. Defaults to `%d`.", serverConfig.MaxConnections()))
+	ap.SupportsString(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables. Defaults to `%s`.", serverConfig.PersistenceBehavior()))
+	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
+	ap.SupportsString(allowCleartextPasswordsFlag, "", "allow-cleartext-passwords", "Allows use of cleartext passwords. Defaults to false.")
+	ap.SupportsString(socketFlag, "", "socket file", "Path for the unix socket file. Defaults to '/tmp/mysql.sock'.")
 	return ap
 }
 
@@ -152,7 +157,7 @@ func (cmd SqlServerCmd) EventType() eventsapi.ClientEventType {
 }
 
 // RequiresRepo indicates that this command does not have to be run from within a dolt data repository directory.
-// In this case it is because this command supports the multiDBDirFlag which can pass in a directory.  In the event that
+// In this case it is because this command supports the dataDirFlag which can pass in a directory.  In the event that
 // that parameter is not provided there is additional error handling within this command to make sure that this was in
 // fact run from within a dolt data repository directory.
 func (cmd SqlServerCmd) RequiresRepo() bool {
@@ -171,6 +176,14 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 	return startServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
 }
 
+func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
+	_, multiDbDir := apr.GetValue(commands.MultiDBDirFlag)
+	if multiDbDir {
+		cli.PrintErrln("WARNING: --multi-db-dir is deprecated, use --data-dir instead")
+	}
+	return nil
+}
+
 func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
 	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
@@ -179,9 +192,21 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
+	if err := validateSqlServerArgs(apr); err != nil {
+		return 1
+	}
 	serverConfig, err := GetServerConfig(dEnv, apr)
-
 	if err != nil {
+		if serverController != nil {
+			serverController.StopServer()
+			serverController.serverStopped(err)
+		}
+
+		cli.PrintErrln(color.RedString("Failed to start server. Bad Configuration"))
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+	if err = SetupDoltConfig(dEnv, apr, serverConfig); err != nil {
 		if serverController != nil {
 			serverController.StopServer()
 			serverController.serverStopped(err)
@@ -216,20 +241,84 @@ func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerC
 	return getCommandLineServerConfig(dEnv, apr)
 }
 
+// SetupDoltConfig updates the given server config with where to create .doltcfg directory
+func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config ServerConfig) error {
+	if _, ok := apr.GetValue(configFileFlag); ok {
+		return nil
+	}
+
+	serverConfig := config.(*commandLineServerConfig)
+
+	_, dataDirFlag1 := apr.GetValue(commands.MultiDBDirFlag)
+	_, dataDirFlag2 := apr.GetValue(commands.DataDirFlag)
+	dataDirSpecified := dataDirFlag1 || dataDirFlag2
+
+	var cfgDirPath string
+	dataDir := serverConfig.DataDir()
+	cfgDir, cfgDirSpecified := apr.GetValue(commands.CfgDirFlag)
+	if cfgDirSpecified {
+		cfgDirPath = cfgDir
+	} else if dataDirSpecified {
+		cfgDirPath = filepath.Join(dataDir, commands.DefaultCfgDirName)
+	} else {
+		// Look in parent directory for doltcfg
+		path := filepath.Join("..", commands.DefaultCfgDirName)
+		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
+			cfgDirPath = path
+		}
+
+		// Look in data directory (which is necessarily current directory) for doltcfg
+		path = filepath.Join(dataDir, commands.DefaultCfgDirName)
+		if exists, isDir := dEnv.FS.Exists(path); exists && isDir && len(cfgDirPath) != 0 {
+			p1, err := dEnv.FS.Abs(cfgDirPath)
+			if err != nil {
+				return err
+			}
+			p2, err := dEnv.FS.Abs(path)
+			if err != nil {
+				return err
+			}
+			return commands.ErrMultipleDoltCfgDirs.New(p1, p2)
+		}
+		cfgDirPath = path
+	}
+	serverConfig.withCfgDir(cfgDirPath)
+
+	if privsFp, ok := apr.GetValue(commands.PrivsFilePathFlag); ok {
+		serverConfig.withPrivilegeFilePath(privsFp)
+	} else {
+		path, err := dEnv.FS.Abs(filepath.Join(cfgDirPath, commands.DefaultPrivsName))
+		if err != nil {
+			return err
+		}
+		serverConfig.withPrivilegeFilePath(path)
+	}
+
+	return nil
+}
+
 // getCommandLineServerConfig sets server config variables and persisted global variables with values defined on command line.
 // If not defined, it sets variables to default values.
 func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	serverConfig := DefaultServerConfig()
 
+	if sock, ok := apr.GetValue(socketFlag); ok {
+		// defined without value gets default
+		if sock == "" {
+			sock = defaultUnixSocketFilePath
+		}
+		serverConfig.WithSocket(sock)
+	}
+
 	if host, ok := apr.GetValue(hostFlag); ok {
-		serverConfig.withHost(host)
+		serverConfig.WithHost(host)
 	}
 
 	if port, ok := apr.GetInt(portFlag); ok {
 		serverConfig.WithPort(port)
 	}
 
-	if user, ok := apr.GetValue(userFlag); ok {
+	if user, ok := apr.GetValue(commands.UserFlag); ok {
 		serverConfig.withUser(user)
 	}
 
@@ -268,16 +357,24 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		serverConfig.withLogLevel(LogLevel(logLevel))
 	}
 
-	if multiDBDir, ok := apr.GetValue(multiDBDirFlag); ok {
-		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, multiDBDir)
+	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
+		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, dataDir)
 
 		if err != nil {
-			return nil, errors.New("failed to read databases in path specified by --multi-db-dir. error: " + err.Error())
+			return nil, errors.New("failed to read databases in path specified by --data-dir. error: " + err.Error())
 		}
 
-		// We set datadir to multi-db-dir here too
-		// TODO: rename multi-db-dir to data_dir
-		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(multiDBDir)
+		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(dataDir)
+	}
+
+	if dataDir, ok := apr.GetValue(commands.DataDirFlag); ok {
+		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, dataDir)
+
+		if err != nil {
+			return nil, errors.New("failed to read databases in path specified by --data-dir. error: " + err.Error())
+		}
+
+		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(dataDir)
 	}
 
 	if queryParallelism, ok := apr.GetInt(queryParallelismFlag); ok {
@@ -293,9 +390,7 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	}
 
 	serverConfig.autoCommit = !apr.Contains(noAutoCommitFlag)
-	if privilegeFilePath, ok := apr.GetValue(privilegeFilePathFlag); ok {
-		serverConfig.withPrivilegeFilePath(privilegeFilePath)
-	}
+	serverConfig.allowCleartextPasswords = apr.Contains(allowCleartextPasswordsFlag)
 
 	return serverConfig, nil
 }

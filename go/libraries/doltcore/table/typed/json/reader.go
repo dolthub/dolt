@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -39,6 +40,8 @@ type JSONReader struct {
 	rowChan    chan *jstream.MetaValue
 	sampleRow  sql.Row
 }
+
+var _ table.SqlTableReader = (*JSONReader)(nil)
 
 func OpenJSONReader(vrw types.ValueReadWriter, path string, fs filesys.ReadableFS, sch schema.Schema) (*JSONReader, error) {
 	r, err := fs.OpenForRead(path)

@@ -15,8 +15,9 @@
 package dsess
 
 import (
+	"errors"
 	"fmt"
-	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -42,61 +44,71 @@ const (
 	Batched
 )
 
-func init() {
-	_, ok := os.LookupEnv(TransactionMergeStompEnvKey)
-	if ok {
-		transactionMergeStomp = true
-	}
-}
+const (
+	ReplicateToRemoteKey     = "dolt_replicate_to_remote"
+	ReadReplicaRemoteKey     = "dolt_read_replica_remote"
+	SkipReplicationErrorsKey = "dolt_skip_replication_errors"
+	ReplicateHeadsKey        = "dolt_replicate_heads"
+	ReplicateAllHeadsKey     = "dolt_replicate_all_heads"
+	AsyncReplicationKey      = "dolt_async_replication"
+	AwsCredsFileKey          = "aws_credentials_file"
+	AwsCredsProfileKey       = "aws_credentials_profile"
+	AwsCredsRegionKey        = "aws_credentials_region"
+)
 
-const TransactionMergeStompEnvKey = "DOLT_TRANSACTION_MERGE_STOMP"
-
-var transactionMergeStomp = false
 var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
 	"Rollback or commit changes before changing working sets.")
+var ErrSessionNotPeristable = errors.New("session is not persistable")
 
-// Session is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
-type Session struct {
+// DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
+type DoltSession struct {
 	sql.Session
-	batchMode  batchMode
-	username   string
-	email      string
-	dbStates   map[string]*DatabaseSessionState
-	provider   RevisionDatabaseProvider
-	tempTables map[string][]sql.Table
+	batchMode   batchMode
+	username    string
+	email       string
+	dbStates    map[string]*DatabaseSessionState
+	provider    DoltDatabaseProvider
+	tempTables  map[string][]sql.Table
+	globalsConf config.ReadWriteConfig
+	mu          *sync.Mutex
 }
 
-var _ sql.Session = &Session{}
+var _ sql.Session = (*DoltSession)(nil)
+var _ sql.PersistableSession = (*DoltSession)(nil)
 
-// DefaultSession creates a Session object with default values
-func DefaultSession() *Session {
-	sess := &Session{
-		Session:    sql.NewBaseSession(),
-		username:   "",
-		email:      "",
-		dbStates:   make(map[string]*DatabaseSessionState),
-		provider:   emptyRevisionDatabaseProvider{},
-		tempTables: make(map[string][]sql.Table),
+// DefaultSession creates a DoltSession with default values
+func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
+	return &DoltSession{
+		Session:     sql.NewBaseSession(),
+		username:    "",
+		email:       "",
+		dbStates:    make(map[string]*DatabaseSessionState),
+		provider:    pro,
+		tempTables:  make(map[string][]sql.Table),
+		globalsConf: config.NewMapConfig(make(map[string]string)),
+		mu:          &sync.Mutex{},
 	}
-	return sess
 }
 
-// NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
-func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabaseProvider, conf config.ReadableConfig, dbs ...InitialDbState) (*Session, error) {
+// NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
+func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro DoltDatabaseProvider, conf config.ReadWriteConfig, dbs ...InitialDbState) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")
-	sess := &Session{
-		Session:    sqlSess,
-		username:   username,
-		email:      email,
-		dbStates:   make(map[string]*DatabaseSessionState),
-		provider:   pro,
-		tempTables: make(map[string][]sql.Table),
+	globals := config.NewPrefixConfig(conf, env.SqlServerGlobalsPrefix)
+
+	sess := &DoltSession{
+		Session:     sqlSess,
+		username:    username,
+		email:       email,
+		dbStates:    make(map[string]*DatabaseSessionState),
+		provider:    pro,
+		tempTables:  make(map[string][]sql.Table),
+		globalsConf: globals,
+		mu:          &sync.Mutex{},
 	}
 
 	for _, db := range dbs {
 		err := sess.AddDB(ctx, db)
-
 		if err != nil {
 			return nil, err
 		}
@@ -106,15 +118,15 @@ func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabase
 }
 
 // Provider returns the RevisionDatabaseProvider for this session.
-func (sess *Session) Provider() RevisionDatabaseProvider {
-	return sess.provider
+func (d *DoltSession) Provider() DoltDatabaseProvider {
+	return d.provider
 }
 
 // EnableBatchedMode enables batched mode for this session. This is only safe to do during initialization.
 // Sessions operating in batched mode don't flush any edit buffers except when told to do so explicitly, or when a
 // transaction commits. Disable @@autocommit to prevent edit buffers from being flushed prematurely in this mode.
-func (sess *Session) EnableBatchedMode() {
-	sess.batchMode = Batched
+func (d *DoltSession) EnableBatchedMode() {
+	d.batchMode = Batched
 }
 
 // DSessFromSess retrieves a dolt session from a standard sql.Session
@@ -123,14 +135,13 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 }
 
 // LookupDbState returns the session state for the database named
-// TODO(zachmu) get rid of bool return param, use a not found error or similar
-func (sess *Session) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
-	dbState, ok := sess.dbStates[dbName]
+func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
+	dbState, ok := d.dbStates[dbName]
 	if ok {
 		return dbState, ok, nil
 	}
 
-	init, err := sess.provider.RevisionDbState(ctx, dbName)
+	init, err := d.provider.RevisionDbState(ctx, dbName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -139,33 +150,33 @@ func (sess *Session) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseSe
 	// 	for every commit in the history, leaking memory.
 	// 	We need a size-limited data structure for read-only
 	// 	revision databases reading from Commits.
-	if err = sess.AddDB(ctx, init); err != nil {
+	if err = d.AddDB(ctx, init); err != nil {
 		return nil, ok, err
 	}
-	dbState, ok = sess.dbStates[dbName]
+	dbState, ok = d.dbStates[dbName]
 	if !ok {
 		return nil, false, sql.ErrDatabaseNotFound.New(dbName)
 	}
 	return dbState, true, nil
 }
 
-func (sess *Session) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
-	s, ok, err := sess.lookupDbState(ctx, dbName)
+func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
+	s, ok, err := d.lookupDbState(ctx, dbName)
 	if ok && s.Err != nil {
 		return nil, false, s.Err
 	}
 	return s, ok, err
 }
 
-func (sess *Session) GetDbStates() map[string]*DatabaseSessionState {
-	return sess.dbStates
+func (d *DoltSession) GetDbStates() map[string]*DatabaseSessionState {
+	return d.dbStates
 }
 
 // Flush flushes all changes sitting in edit sessions to the session root for the database named. This normally
 // happens automatically as part of statement execution, and is only necessary when the session is manually batched (as
 // for bulk SQL import)
-func (sess *Session) Flush(ctx *sql.Context, dbName string) error {
-	dbState, _, err := sess.LookupDbState(ctx, dbName)
+func (d *DoltSession) Flush(ctx *sql.Context, dbName string) error {
+	dbState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
@@ -175,16 +186,16 @@ func (sess *Session) Flush(ctx *sql.Context, dbName string) error {
 		return err
 	}
 
-	return sess.SetRoot(ctx, dbName, ws.WorkingRoot())
+	return d.SetRoot(ctx, dbName, ws.WorkingRoot())
 }
 
 // StartTransaction refreshes the state of this session and starts a new transaction.
-func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
+func (d *DoltSession) StartTransaction(ctx *sql.Context, dbName string, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
 	if TransactionsDisabled(ctx) {
 		return DisabledTransaction{}, nil
 	}
 
-	sessionState, _, err := sess.LookupDbState(ctx, dbName)
+	sessionState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -193,16 +204,18 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacte
 		return DisabledTransaction{}, nil
 	}
 
-	err = sessionState.dbData.Ddb.Rebase(ctx)
-	if err != nil {
-		return nil, err
+	if _, v, ok := sql.SystemVariables.GetGlobal("dolt_read_replica_remote"); ok && v != "" {
+		err = sessionState.dbData.Ddb.Rebase(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	wsRef := sessionState.WorkingSet.Ref()
 	ws, err := sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
 	// TODO: every HEAD needs a working set created when it is. We can get rid of this in a 1.0 release when this is fixed
 	if err == doltdb.ErrWorkingSetNotFound {
-		ws, err = sess.newWorkingSetForHead(ctx, wsRef, dbName)
+		ws, err = d.newWorkingSetForHead(ctx, wsRef, dbName)
 		if err != nil {
 			return nil, err
 		}
@@ -213,23 +226,16 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacte
 	// logrus.Tracef("starting transaction with working root %s", ws.WorkingRoot().DebugString(ctx, true))
 
 	// TODO: this is going to do 2 resolves to get the head root, not ideal
-	err = sess.SetWorkingSet(ctx, dbName, ws)
+	err = d.SetWorkingSet(ctx, dbName, ws)
 
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
 
-	return NewDoltTransaction(
-		dbName,
-		ws,
-		wsRef,
-		sessionState.dbData,
-		sessionState.WriteSession.GetOptions(),
-		tCharacteristic,
-	), nil
+	return NewDoltTransaction(dbName, ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic), nil
 }
 
-func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
-	dbData, _ := sess.GetDbData(nil, dbName)
+func (d *DoltSession) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
+	dbData, _ := d.GetDbData(nil, dbName)
 
 	headSpec, _ := doltdb.NewCommitSpec("HEAD")
 	headRef, err := wsRef.ToHeadRef()
@@ -252,9 +258,9 @@ func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSet
 
 // CommitTransaction commits the in-progress transaction for the database named. Depending on session settings, this
 // may write only a new working set, or may additionally create a new dolt commit for the current HEAD.
-func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
-	if sess.BatchMode() == Batched {
-		err := sess.Flush(ctx, dbName)
+func (d *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
+	if d.BatchMode() == Batched {
+		err := d.Flush(ctx, dbName)
 		if err != nil {
 			return err
 		}
@@ -270,7 +276,7 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 		return nil
 	}
 
-	performDoltCommitVar, err := sess.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommit)
+	performDoltCommitVar, err := d.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommit)
 	if err != nil {
 		return err
 	}
@@ -281,13 +287,13 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 	}
 
 	if peformDoltCommitInt == 1 {
-		pendingCommit, err := sess.PendingCommitAllStaged(ctx, dbName, actions.CommitStagedProps{
+		pendingCommit, err := d.PendingCommitAllStaged(ctx, dbName, actions.CommitStagedProps{
 			Message:    "Transaction commit",
 			Date:       ctx.QueryTime(),
 			AllowEmpty: false,
 			Force:      false,
-			Name:       sess.Username(),
-			Email:      sess.Email(),
+			Name:       d.Username(),
+			Email:      d.Email(),
 		})
 		if err != nil {
 			return err
@@ -295,20 +301,20 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 
 		// Nothing to stage, so fall back to CommitWorkingSet logic instead
 		if pendingCommit == nil {
-			return sess.CommitWorkingSet(ctx, dbName, tx)
+			return d.CommitWorkingSet(ctx, dbName, tx)
 		}
 
-		_, err = sess.DoltCommit(ctx, dbName, tx, pendingCommit)
+		_, err = d.DoltCommit(ctx, dbName, tx, pendingCommit)
 		return err
 	} else {
-		return sess.CommitWorkingSet(ctx, dbName, tx)
+		return d.CommitWorkingSet(ctx, dbName, tx)
 	}
 }
 
 // CommitWorkingSet commits the working set for the transaction given, without creating a new dolt commit.
 // Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
-func (sess *Session) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error {
-	dbState, _, err := sess.LookupDbState(ctx, dbName)
+func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error {
+	dbState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
@@ -322,13 +328,13 @@ func (sess *Session) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Tr
 		return ws, nil, err
 	}
 
-	_, err = sess.doCommit(ctx, dbName, tx, commitFunc)
+	_, err = d.doCommit(ctx, dbName, tx, commitFunc)
 	return err
 }
 
 // DoltCommit commits the working set and a new dolt commit with the properties given.
 // Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
-func (sess *Session) DoltCommit(
+func (d *DoltSession) DoltCommit(
 	ctx *sql.Context,
 	dbName string,
 	tx sql.Transaction,
@@ -351,7 +357,7 @@ func (sess *Session) DoltCommit(
 		return ws, commit, err
 	}
 
-	return sess.doCommit(ctx, dbName, tx, commitFunc)
+	return d.doCommit(ctx, dbName, tx, commitFunc)
 }
 
 // doCommitFunc is a function to write to the database, which involves updating the working set and potentially
@@ -359,8 +365,8 @@ func (sess *Session) DoltCommit(
 type doCommitFunc func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error)
 
 // doCommit exercise the business logic for a particular doCommitFunc
-func (sess *Session) doCommit(ctx *sql.Context, dbName string, tx sql.Transaction, commitFunc doCommitFunc) (*doltdb.Commit, error) {
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
+func (d *DoltSession) doCommit(ctx *sql.Context, dbName string, tx sql.Transaction, commitFunc doCommitFunc) (*doltdb.Commit, error) {
+	dbState, ok, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
 	} else if !ok {
@@ -381,7 +387,7 @@ func (sess *Session) doCommit(ctx *sql.Context, dbName string, tx sql.Transactio
 		return nil, err
 	}
 
-	err = sess.SetWorkingSet(ctx, dbName, mergedWorkingSet)
+	err = d.SetWorkingSet(ctx, dbName, mergedWorkingSet)
 	if err != nil {
 		return nil, err
 	}
@@ -391,26 +397,26 @@ func (sess *Session) doCommit(ctx *sql.Context, dbName string, tx sql.Transactio
 }
 
 // PendingCommitAllStaged returns a pending commit with all tables staged. Returns nil if there are no changes to stage.
-func (sess *Session) PendingCommitAllStaged(ctx *sql.Context, dbName string, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
-	roots, ok := sess.GetRoots(ctx, dbName)
+func (d *DoltSession) PendingCommitAllStaged(ctx *sql.Context, dbName string, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
+	roots, ok := d.GetRoots(ctx, dbName)
 	if !ok {
 		return nil, fmt.Errorf("Couldn't get info for database %s", dbName)
 	}
 
 	var err error
-	roots, err = actions.StageAllTablesNoDocs(ctx, roots)
+	roots, err = actions.StageAllTables(ctx, roots)
 	if err != nil {
 		return nil, err
 	}
 
-	return sess.NewPendingCommit(ctx, dbName, roots, props)
+	return d.NewPendingCommit(ctx, dbName, roots, props)
 }
 
 // NewPendingCommit returns a new |doltdb.PendingCommit| for the database named, using the roots given, adding any
 // merge parent from an in progress merge as appropriate. The session working set is not updated with these new roots,
 // but they are set in the returned |doltdb.PendingCommit|. If there are no changes staged, this method returns nil.
-func (sess *Session) NewPendingCommit(ctx *sql.Context, dbName string, roots doltdb.Roots, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
-	sessionState, _, err := sess.LookupDbState(ctx, dbName)
+func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots doltdb.Roots, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
+	sessionState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -429,12 +435,12 @@ func (sess *Session) NewPendingCommit(ctx *sql.Context, dbName string, roots dol
 }
 
 // RollbackTransaction rolls the given transaction back
-func (sess *Session) RollbackTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
+func (d *DoltSession) RollbackTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
 	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
 
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
+	dbState, ok, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
@@ -451,7 +457,7 @@ func (sess *Session) RollbackTransaction(ctx *sql.Context, dbName string, tx sql
 	// This operation usually doesn't matter, because the engine will process a `rollback` statement by first calling
 	// this logic, then discarding any current transaction. So the next statement will get a fresh transaction regardless,
 	// and this is throwaway work. It only matters if this method is used outside a standalone `rollback` statement.
-	err = sess.SetRoot(ctx, dbName, dtx.startState.WorkingRoot())
+	err = d.SetRoot(ctx, dbName, dtx.startState.WorkingRoot())
 	if err != nil {
 		return err
 	}
@@ -462,7 +468,7 @@ func (sess *Session) RollbackTransaction(ctx *sql.Context, dbName string, tx sql
 
 // CreateSavepoint creates a new savepoint for this transaction with the name given. A previously created savepoint
 // with the same name will be overwritten.
-func (sess *Session) CreateSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
+func (d *DoltSession) CreateSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
 	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
@@ -472,7 +478,7 @@ func (sess *Session) CreateSavepoint(ctx *sql.Context, savepointName, dbName str
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
+	dbState, ok, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
@@ -483,7 +489,7 @@ func (sess *Session) CreateSavepoint(ctx *sql.Context, savepointName, dbName str
 
 // RollbackToSavepoint sets this session's root to the one saved in the savepoint name. It's an error if no savepoint
 // with that name exists.
-func (sess *Session) RollbackToSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
+func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
 	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
@@ -498,7 +504,7 @@ func (sess *Session) RollbackToSavepoint(ctx *sql.Context, savepointName, dbName
 		return sql.ErrSavepointDoesNotExist.New(savepointName)
 	}
 
-	err := sess.SetRoot(ctx, dbName, root)
+	err := d.SetRoot(ctx, dbName, root)
 	if err != nil {
 		return err
 	}
@@ -508,7 +514,7 @@ func (sess *Session) RollbackToSavepoint(ctx *sql.Context, savepointName, dbName
 
 // ReleaseSavepoint removes the savepoint name from the transaction. It's an error if no savepoint with that name
 // exists.
-func (sess *Session) ReleaseSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
+func (d *DoltSession) ReleaseSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
 	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
@@ -527,8 +533,8 @@ func (sess *Session) ReleaseSavepoint(ctx *sql.Context, savepointName, dbName st
 }
 
 // GetDoltDB returns the *DoltDB for a given database by name
-func (sess *Session) GetDoltDB(ctx *sql.Context, dbName string) (*doltdb.DoltDB, bool) {
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
+func (d *DoltSession) GetDoltDB(ctx *sql.Context, dbName string) (*doltdb.DoltDB, bool) {
+	dbState, ok, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, false
 	}
@@ -539,8 +545,8 @@ func (sess *Session) GetDoltDB(ctx *sql.Context, dbName string) (*doltdb.DoltDB,
 	return dbState.dbData.Ddb, true
 }
 
-func (sess *Session) GetDbData(ctx *sql.Context, dbName string) (env.DbData, bool) {
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
+func (d *DoltSession) GetDbData(ctx *sql.Context, dbName string) (env.DbData, bool) {
+	dbState, ok, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return env.DbData{}, false
 	}
@@ -552,8 +558,8 @@ func (sess *Session) GetDbData(ctx *sql.Context, dbName string) (env.DbData, boo
 }
 
 // GetRoots returns the current roots for a given database associated with the session
-func (sess *Session) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, bool) {
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
+func (d *DoltSession) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, bool) {
+	dbState, ok, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return doltdb.Roots{}, false
 	}
@@ -567,12 +573,12 @@ func (sess *Session) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, bo
 // ResolveRootForRef returns the root value for the ref given, which refers to either a commit spec or is one of the
 // special identifiers |WORKING| or |STAGED|
 // Returns the root value associated with the identifier given and its commit time
-func (sess *Session) ResolveRootForRef(ctx *sql.Context, dbName, hashStr string) (*doltdb.RootValue, *types.Timestamp, error) {
+func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, hashStr string) (*doltdb.RootValue, *types.Timestamp, error) {
 	if hashStr == doltdb.Working || hashStr == doltdb.Staged {
 		// TODO: get from working set / staged update time
 		now := types.Timestamp(time.Now())
 		// TODO: no current database
-		roots, _ := sess.GetRoots(ctx, ctx.GetCurrentDatabase())
+		roots, _ := d.GetRoots(ctx, ctx.GetCurrentDatabase())
 		if hashStr == doltdb.Working {
 			return roots.Working, &now, nil
 		} else if hashStr == doltdb.Staged {
@@ -587,12 +593,12 @@ func (sess *Session) ResolveRootForRef(ctx *sql.Context, dbName, hashStr string)
 		return nil, nil, err
 	}
 
-	dbData, ok := sess.GetDbData(ctx, dbName)
+	dbData, ok := d.GetDbData(ctx, dbName)
 	if !ok {
 		return nil, nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	headRef, err := sess.CWBHeadRef(ctx, dbName)
+	headRef, err := d.CWBHeadRef(ctx, dbName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -623,9 +629,9 @@ func (sess *Session) ResolveRootForRef(ctx *sql.Context, dbName, hashStr string)
 // update the session's root value via this method.
 // Data changes contained in the |newRoot| aren't persisted until this session is committed.
 // TODO: rename to SetWorkingRoot
-func (sess *Session) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
+func (d *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
 	// TODO: this is redundant with work done in setRoot
-	sessionState, _, err := sess.LookupDbState(ctx, dbName)
+	sessionState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
@@ -640,31 +646,31 @@ func (sess *Session) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 	}
 	sessionState.WorkingSet = sessionState.WorkingSet.WithWorkingRoot(newRoot)
 
-	return sess.SetWorkingSet(ctx, dbName, sessionState.WorkingSet)
+	return d.SetWorkingSet(ctx, dbName, sessionState.WorkingSet)
 }
 
 // SetRoots sets new roots for the session for the database named. Typically clients should only set the working root,
 // via setRoot. This method is for clients that need to update more of the session state, such as the dolt_ functions.
 // Unlike setting the only the working root, this method always marks the database state dirty.
-func (sess *Session) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
+func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
 	// TODO: handle HEAD here?
-	sessionState, _, err := sess.LookupDbState(ctx, dbName)
+	sessionState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
 
 	workingSet := sessionState.WorkingSet.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
-	return sess.SetWorkingSet(ctx, dbName, workingSet)
+	return d.SetWorkingSet(ctx, dbName, workingSet)
 }
 
 // SetWorkingSet sets the working set for this session.
 // Unlike setting the working root alone, this method always marks the session dirty.
-func (sess *Session) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.WorkingSet) error {
+func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.WorkingSet) error {
 	if ws == nil {
 		panic("attempted to set a nil working set for the session")
 	}
 
-	sessionState, _, err := sess.LookupDbState(ctx, dbName)
+	sessionState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
@@ -695,7 +701,7 @@ func (sess *Session) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.W
 	}
 	sessionState.headRoot = headRoot
 
-	err = sess.setSessionVarsForDb(ctx, dbName)
+	err = d.setSessionVarsForDb(ctx, dbName)
 	if err != nil {
 		return err
 	}
@@ -715,12 +721,12 @@ func (sess *Session) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.W
 // this session. It's equivalent to starting a new session with the working set reference provided. If the current
 // session is dirty, this method returns an error. Clients can only switch branches with a clean working set, and so
 // must either commit or rollback any changes before attempting to switch working sets.
-func (sess *Session) SwitchWorkingSet(
+func (d *DoltSession) SwitchWorkingSet(
 	ctx *sql.Context,
 	dbName string,
 	wsRef ref.WorkingSetRef,
 ) error {
-	sessionState, _, err := sess.LookupDbState(ctx, dbName)
+	sessionState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
@@ -730,13 +736,7 @@ func (sess *Session) SwitchWorkingSet(
 	}
 
 	ws, err := sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
-	if err == doltdb.ErrWorkingSetNotFound {
-		// no working set for this HEAD yet
-		ws, err = sess.newWorkingSetForHead(ctx, wsRef, dbName)
-		if err != nil {
-			return err
-		}
-	} else if err != nil {
+	if err != nil {
 		return err
 	}
 
@@ -764,7 +764,7 @@ func (sess *Session) SwitchWorkingSet(
 		return err
 	}
 
-	err = sess.setSessionVarsForDb(ctx, dbName)
+	err = d.setSessionVarsForDb(ctx, dbName)
 	if err != nil {
 		return err
 	}
@@ -774,7 +774,7 @@ func (sess *Session) SwitchWorkingSet(
 		return err
 	}
 
-	err = sess.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
+	err = d.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
 	if err != nil {
 		return err
 	}
@@ -810,8 +810,8 @@ func (sess *Session) SwitchWorkingSet(
 	return nil
 }
 
-func (sess *Session) WorkingSet(ctx *sql.Context, dbName string) (*doltdb.WorkingSet, error) {
-	sessionState, _, err := sess.LookupDbState(ctx, dbName)
+func (d *DoltSession) WorkingSet(ctx *sql.Context, dbName string) (*doltdb.WorkingSet, error) {
+	sessionState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -819,8 +819,8 @@ func (sess *Session) WorkingSet(ctx *sql.Context, dbName string) (*doltdb.Workin
 }
 
 // GetHeadCommit returns the parent commit of the current session.
-func (sess *Session) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Commit, error) {
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
+func (d *DoltSession) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Commit, error) {
+	dbState, ok, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -833,13 +833,13 @@ func (sess *Session) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Com
 
 // SetSessionVariable is defined on sql.Session. We intercept it here to interpret the special semantics of the system
 // vars that we define. Otherwise we pass it on to the base implementation.
-func (sess *Session) SetSessionVariable(ctx *sql.Context, key string, value interface{}) error {
+func (d *DoltSession) SetSessionVariable(ctx *sql.Context, key string, value interface{}) error {
 	if ok, db := IsHeadRefKey(key); ok {
 		v, ok := value.(string)
 		if !ok {
 			return doltdb.ErrInvalidBranchOrHash
 		}
-		if err := sess.setHeadRefSessionVar(ctx, db, v); err != nil {
+		if err := d.setHeadRefSessionVar(ctx, db, v); err != nil {
 			return err
 		}
 	}
@@ -848,13 +848,13 @@ func (sess *Session) SetSessionVariable(ctx *sql.Context, key string, value inte
 	}
 
 	if strings.ToLower(key) == "foreign_key_checks" {
-		return sess.setForeignKeyChecksSessionVar(ctx, key, value)
+		return d.setForeignKeyChecksSessionVar(ctx, key, value)
 	}
 
-	return sess.Session.SetSessionVariable(ctx, key, value)
+	return d.Session.SetSessionVariable(ctx, key, value)
 }
 
-func (sess *Session) setHeadRefSessionVar(ctx *sql.Context, db, value string) error {
+func (d *DoltSession) setHeadRefSessionVar(ctx *sql.Context, db, value string) error {
 	headRef, err := ref.Parse(value)
 	if err != nil {
 		return err
@@ -864,10 +864,14 @@ func (sess *Session) setHeadRefSessionVar(ctx *sql.Context, db, value string) er
 	if err != nil {
 		return err
 	}
-	return sess.SwitchWorkingSet(ctx, db, ws)
+	err = d.SwitchWorkingSet(ctx, db, ws)
+	if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
+		return fmt.Errorf("%w; %s: '%s'", doltdb.ErrBranchNotFound, err, value)
+	}
+	return err
 }
 
-func (sess *Session) setForeignKeyChecksSessionVar(ctx *sql.Context, key string, value interface{}) error {
+func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string, value interface{}) error {
 	convertedVal, err := sql.Int64.Convert(value)
 	if err != nil {
 		return err
@@ -877,13 +881,13 @@ func (sess *Session) setForeignKeyChecksSessionVar(ctx *sql.Context, key string,
 		intVal = convertedVal.(int64)
 	}
 	if intVal == 0 {
-		for _, dbState := range sess.dbStates {
+		for _, dbState := range d.dbStates {
 			opts := dbState.WriteSession.GetOptions()
 			opts.ForeignKeyChecksDisabled = true
 			dbState.WriteSession.SetOptions(opts)
 		}
 	} else if intVal == 1 {
-		for _, dbState := range sess.dbStates {
+		for _, dbState := range d.dbStates {
 			opts := dbState.WriteSession.GetOptions()
 			opts.ForeignKeyChecksDisabled = false
 			dbState.WriteSession.SetOptions(opts)
@@ -892,35 +896,38 @@ func (sess *Session) setForeignKeyChecksSessionVar(ctx *sql.Context, key string,
 		return fmt.Errorf("variable 'foreign_key_checks' can't be set to the value of '%d'", intVal)
 	}
 
-	return sess.Session.SetSessionVariable(ctx, key, value)
+	return d.Session.SetSessionVariable(ctx, key, value)
 }
 
 // HasDB returns true if |sess| is tracking state for this database.
-func (sess *Session) HasDB(ctx *sql.Context, dbName string) bool {
-	_, ok, err := sess.lookupDbState(ctx, dbName)
+func (d *DoltSession) HasDB(ctx *sql.Context, dbName string) bool {
+	_, ok, err := d.lookupDbState(ctx, dbName)
 	return ok && err == nil
 }
 
 // AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
-func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
+func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	db := dbState.Db
-	defineSystemVariables(db.Name())
+	DefineSystemVariablesForDB(db.Name())
 
-	sessionState := &DatabaseSessionState{}
-	sess.dbStates[db.Name()] = sessionState
+	sessionState := NewEmptyDatabaseSessionState()
+	d.dbStates[db.Name()] = sessionState
 	sessionState.dbName = db.Name()
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
 	sessionState.dbData = dbState.DbData
 	sessionState.tmpFileDir = dbState.DbData.Rsw.TempTableFilesDir()
-	adapter := NewSessionStateAdapter(sess, db.Name(), dbState.Remotes, dbState.Branches, dbState.Backups)
+	adapter := NewSessionStateAdapter(d, db.Name(), dbState.Remotes, dbState.Branches, dbState.Backups)
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
 	sessionState.readOnly, sessionState.readReplica = dbState.ReadOnly, dbState.ReadReplica
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
-	nbf := sessionState.dbData.Ddb.Format()
+	nbf := types.Format_Default
+	if sessionState.dbData.Ddb != nil {
+		nbf = sessionState.dbData.Ddb.Format()
+	}
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
 
 	stateProvider, ok := db.(globalstate.StateProvider)
@@ -940,7 +947,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 			return err
 		}
 		sessionState.WriteSession = writer.NewWriteSession(nbf, sessionState.WorkingSet, tracker, editOpts)
-		if err = sess.SetWorkingSet(ctx, db.Name(), dbState.WorkingSet); err != nil {
+		if err = d.SetWorkingSet(ctx, db.Name(), dbState.WorkingSet); err != nil {
 			return err
 		}
 
@@ -960,28 +967,28 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	sessionState.dirty = false
 
 	if sessionState.Err == nil {
-		return sess.setSessionVarsForDb(ctx, db.Name())
+		return d.setSessionVarsForDb(ctx, db.Name())
 	}
 	return nil
 }
 
-func (sess *Session) AddTemporaryTable(ctx *sql.Context, db string, tbl sql.Table) {
-	sess.tempTables[db] = append(sess.tempTables[db], tbl)
+func (d *DoltSession) AddTemporaryTable(ctx *sql.Context, db string, tbl sql.Table) {
+	d.tempTables[db] = append(d.tempTables[db], tbl)
 }
 
-func (sess *Session) DropTemporaryTable(ctx *sql.Context, db, name string) {
-	tables := sess.tempTables[db]
-	for i, tbl := range sess.tempTables[db] {
+func (d *DoltSession) DropTemporaryTable(ctx *sql.Context, db, name string) {
+	tables := d.tempTables[db]
+	for i, tbl := range d.tempTables[db] {
 		if strings.ToLower(tbl.Name()) == strings.ToLower(name) {
 			tables = append(tables[:i], tables[i+1:]...)
 			break
 		}
 	}
-	sess.tempTables[db] = tables
+	d.tempTables[db] = tables
 }
 
-func (sess *Session) GetTemporaryTable(ctx *sql.Context, db, name string) (sql.Table, bool) {
-	for _, tbl := range sess.tempTables[db] {
+func (d *DoltSession) GetTemporaryTable(ctx *sql.Context, db, name string) (sql.Table, bool) {
+	for _, tbl := range d.tempTables[db] {
 		if strings.ToLower(tbl.Name()) == strings.ToLower(name) {
 			return tbl, true
 		}
@@ -990,34 +997,34 @@ func (sess *Session) GetTemporaryTable(ctx *sql.Context, db, name string) (sql.T
 }
 
 // GetAllTemporaryTables returns all temp tables for this session.
-func (sess *Session) GetAllTemporaryTables(ctx *sql.Context, db string) ([]sql.Table, error) {
-	return sess.tempTables[db], nil
+func (d *DoltSession) GetAllTemporaryTables(ctx *sql.Context, db string) ([]sql.Table, error) {
+	return d.tempTables[db], nil
 }
 
 // CWBHeadRef returns the branch ref for this session HEAD for the database named
-func (sess *Session) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, error) {
-	dbState, _, err := sess.LookupDbState(ctx, dbName)
+func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, error) {
+	dbState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
 	return dbState.WorkingSet.Ref().ToHeadRef()
 }
 
-func (sess *Session) Username() string {
-	return sess.username
+func (d *DoltSession) Username() string {
+	return d.username
 }
 
-func (sess *Session) Email() string {
-	return sess.email
+func (d *DoltSession) Email() string {
+	return d.email
 }
 
-func (sess *Session) BatchMode() batchMode {
-	return sess.batchMode
+func (d *DoltSession) BatchMode() batchMode {
+	return d.batchMode
 }
 
 // setSessionVarsForDb updates the three session vars that track the value of the session root hashes
-func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error {
-	state, _, err := sess.lookupDbState(ctx, dbName)
+func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string) error {
+	state, _, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
@@ -1028,7 +1035,7 @@ func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error 
 			return err
 		}
 
-		err = sess.Session.SetSessionVariable(ctx, HeadRefKey(dbName), headRef.String())
+		err = d.Session.SetSessionVariable(ctx, HeadRefKey(dbName), headRef.String())
 		if err != nil {
 			return err
 		}
@@ -1040,7 +1047,7 @@ func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error 
 	if err != nil {
 		return err
 	}
-	err = sess.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
+	err = d.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
 	if err != nil {
 		return err
 	}
@@ -1049,7 +1056,7 @@ func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error 
 	if err != nil {
 		return err
 	}
-	err = sess.Session.SetSessionVariable(ctx, StagedKey(dbName), h.String())
+	err = d.Session.SetSessionVariable(ctx, StagedKey(dbName), h.String())
 	if err != nil {
 		return err
 	}
@@ -1058,7 +1065,7 @@ func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error 
 	if err != nil {
 		return err
 	}
-	err = sess.Session.SetSessionVariable(ctx, HeadKey(dbName), h.String())
+	err = d.Session.SetSessionVariable(ctx, HeadKey(dbName), h.String())
 	if err != nil {
 		return err
 	}
@@ -1066,7 +1073,227 @@ func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error 
 	return nil
 }
 
-// NewDoltSession creates a persistable DoltSession with the given config arg
-func (sess *Session) NewDoltSession(conf config.ReadWriteConfig) *DoltSession {
-	return &DoltSession{Session: sess, globalsConf: conf, mu: &sync.Mutex{}}
+func (d DoltSession) WithGlobals(conf config.ReadWriteConfig) *DoltSession {
+	d.globalsConf = conf
+	return &d
+}
+
+// PersistGlobal implements sql.PersistableSession
+func (d *DoltSession) PersistGlobal(sysVarName string, value interface{}) error {
+	if d.globalsConf == nil {
+		return ErrSessionNotPeristable
+	}
+
+	sysVar, _, err := validatePersistableSysVar(sysVarName)
+	if err != nil {
+		return err
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return setPersistedValue(d.globalsConf, sysVar.Name, value)
+}
+
+// RemovePersistedGlobal implements sql.PersistableSession
+func (d *DoltSession) RemovePersistedGlobal(sysVarName string) error {
+	if d.globalsConf == nil {
+		return ErrSessionNotPeristable
+	}
+
+	sysVar, _, err := validatePersistableSysVar(sysVarName)
+	if err != nil {
+		return err
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.globalsConf.Unset([]string{sysVar.Name})
+}
+
+// RemoveAllPersistedGlobals implements sql.PersistableSession
+func (d *DoltSession) RemoveAllPersistedGlobals() error {
+	if d.globalsConf == nil {
+		return ErrSessionNotPeristable
+	}
+
+	allVars := make([]string, d.globalsConf.Size())
+	i := 0
+	d.globalsConf.Iter(func(k, v string) bool {
+		allVars[i] = k
+		i++
+		return false
+	})
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.globalsConf.Unset(allVars)
+}
+
+// RemoveAllPersistedGlobals implements sql.PersistableSession
+func (d *DoltSession) GetPersistedValue(k string) (interface{}, error) {
+	if d.globalsConf == nil {
+		return nil, ErrSessionNotPeristable
+	}
+
+	return getPersistedValue(d.globalsConf, k)
+}
+
+// SystemVariablesInConfig returns a list of System Variables associated with the session
+func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
+	if d.globalsConf == nil {
+		return nil, ErrSessionNotPeristable
+	}
+	sysVars, _, err := SystemVariablesInConfig(d.globalsConf)
+	if err != nil {
+		return nil, err
+	}
+	return sysVars, nil
+}
+
+// validatePersistedSysVar checks whether a system variable exists and is dynamic
+func validatePersistableSysVar(name string) (sql.SystemVariable, interface{}, error) {
+	sysVar, val, ok := sql.SystemVariables.GetGlobal(name)
+	if !ok {
+		return sql.SystemVariable{}, nil, sql.ErrUnknownSystemVariable.New(name)
+	}
+	if !sysVar.Dynamic {
+		return sql.SystemVariable{}, nil, sql.ErrSystemVariableReadOnly.New(name)
+	}
+	return sysVar, val, nil
+}
+
+// getPersistedValue reads and converts a config value to the associated SystemVariable type
+func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error) {
+	v, err := conf.GetString(k)
+	if err != nil {
+		return nil, err
+	}
+
+	_, value, err := validatePersistableSysVar(k)
+	if err != nil {
+		return nil, err
+	}
+
+	var res interface{}
+	switch value.(type) {
+	case int8:
+		var tmp int64
+		tmp, err = strconv.ParseInt(v, 10, 8)
+		res = int8(tmp)
+	case int, int16, int32, int64:
+		res, err = strconv.ParseInt(v, 10, 64)
+	case uint, uint8, uint16, uint32, uint64:
+		res, err = strconv.ParseUint(v, 10, 64)
+	case float32, float64:
+		res, err = strconv.ParseFloat(v, 64)
+	case bool:
+		return nil, sql.ErrInvalidType.New(value)
+	case string:
+		return v, nil
+	default:
+		return nil, sql.ErrInvalidType.New(value)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+// setPersistedValue casts and persists a key value pair assuming thread safety
+func setPersistedValue(conf config.WritableConfig, key string, value interface{}) error {
+	switch v := value.(type) {
+	case int:
+		return config.SetInt(conf, key, int64(v))
+	case int8:
+		return config.SetInt(conf, key, int64(v))
+	case int16:
+		return config.SetInt(conf, key, int64(v))
+	case int32:
+		return config.SetInt(conf, key, int64(v))
+	case int64:
+		return config.SetInt(conf, key, v)
+	case uint:
+		return config.SetUint(conf, key, uint64(v))
+	case uint8:
+		return config.SetUint(conf, key, uint64(v))
+	case uint16:
+		return config.SetUint(conf, key, uint64(v))
+	case uint32:
+		return config.SetUint(conf, key, uint64(v))
+	case uint64:
+		return config.SetUint(conf, key, v)
+	case float32:
+		return config.SetFloat(conf, key, float64(v))
+	case float64:
+		return config.SetFloat(conf, key, v)
+	case string:
+		return config.SetString(conf, key, v)
+	case bool:
+		return sql.ErrInvalidType.New(v)
+	default:
+		return sql.ErrInvalidType.New(v)
+	}
+}
+
+// SystemVariablesInConfig returns system variables from the persisted config
+// and a list of persisted keys that have no corresponding definition in
+// |sql.SystemVariables|.
+func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, []string, error) {
+	allVars := make([]sql.SystemVariable, conf.Size())
+	var missingKeys []string
+	i := 0
+	var err error
+	var sysVar sql.SystemVariable
+	var def interface{}
+	conf.Iter(func(k, v string) bool {
+		def, err = getPersistedValue(conf, k)
+		if err != nil {
+			if sql.ErrUnknownSystemVariable.Is(err) {
+				err = nil
+				missingKeys = append(missingKeys, k)
+				return false
+			}
+			err = fmt.Errorf("key: '%s'; %w", k, err)
+			return true
+		}
+		// getPersistedVal already checked for errors
+		sysVar, _, _ = sql.SystemVariables.GetGlobal(k)
+		sysVar.Default = def
+		allVars[i] = sysVar
+		i++
+		return false
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return allVars, missingKeys, nil
+}
+
+var initMu = sync.Mutex{}
+
+func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
+	initMu.Lock()
+	defer initMu.Unlock()
+
+	var globals config.ReadWriteConfig
+	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); ok {
+		globals = config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
+	} else if globalConf, ok := dEnv.Config.GetConfig(env.GlobalConfig); ok {
+		globals = config.NewPrefixConfig(globalConf, env.SqlServerGlobalsPrefix)
+	} else {
+		cli.Println("warning: no local or global Dolt configuration found; session is not persistable")
+		globals = config.NewMapConfig(make(map[string]string))
+	}
+
+	persistedGlobalVars, missingKeys, err := SystemVariablesInConfig(globals)
+	if err != nil {
+		return err
+	}
+	for _, k := range missingKeys {
+		cli.Printf("warning: persisted system variable %s was not loaded since its definition does not exist.\n", k)
+	}
+	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
+	return nil
 }

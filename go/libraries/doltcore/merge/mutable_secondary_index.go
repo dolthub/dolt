@@ -17,12 +17,31 @@ package merge
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
+
+// getMutableSecondaryIdxs returns a MutableSecondaryIdx for each secondary index in |indexes|.
+func getMutableSecondaryIdxs(ctx context.Context, sch schema.Schema, indexes durable.IndexSet) ([]MutableSecondaryIdx, error) {
+	mods := make([]MutableSecondaryIdx, sch.Indexes().Count())
+	for i, index := range sch.Indexes().AllIndexes() {
+		idx, err := indexes.GetIndex(ctx, sch, index.Name())
+		if err != nil {
+			return nil, err
+		}
+		m := durable.ProllyMapFromIndex(idx)
+		if schema.IsKeyless(sch) {
+			m = prolly.ConvertToSecondaryKeylessIndex(m)
+		}
+		mods[i] = NewMutableSecondaryIdx(m, sch, index, m.Pool())
+	}
+	return mods, nil
+}
 
 // MutableSecondaryIdx wraps a prolly.MutableMap of a secondary table index. It
 // provides the InsertEntry, UpdateEntry, and DeleteEntry functions which can be
@@ -39,13 +58,14 @@ type MutableSecondaryIdx struct {
 // NewMutableSecondaryIdx returns a MutableSecondaryIdx. |m| is the secondary idx data.
 func NewMutableSecondaryIdx(m prolly.Map, sch schema.Schema, index schema.Index, syncPool pool.BuffPool) MutableSecondaryIdx {
 	kD, _ := m.Descriptors()
+	pkLen, keyMap := creation.GetIndexKeyMapping(sch, index)
 	return MutableSecondaryIdx{
-		index.Name(),
-		m.Mutate(),
-		creation.GetIndexKeyMapping(sch, index),
-		sch.GetPKCols().Size(),
-		val.NewTupleBuilder(kD),
-		syncPool,
+		Name:     index.Name(),
+		mut:      m.Mutate(),
+		keyMap:   keyMap,
+		pkLen:    pkLen,
+		keyBld:   val.NewTupleBuilder(kD),
+		syncPool: syncPool,
 	}
 }
 

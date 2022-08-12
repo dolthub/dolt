@@ -78,7 +78,7 @@ func ParseAuthor(authorStr string) (string, string, error) {
 const (
 	AllowEmptyFlag   = "allow-empty"
 	DateParam        = "date"
-	CommitMessageArg = "message"
+	MessageArg       = "message"
 	AuthorParam      = "author"
 	ForceFlag        = "force"
 	DryRunFlag       = "dry-run"
@@ -95,6 +95,10 @@ const (
 	DeleteFlag       = "delete"
 	DeleteForceFlag  = "D"
 	OutputOnlyFlag   = "output-only"
+	RemoteParam      = "remote"
+	BranchParam      = "branch"
+	TrackFlag        = "track"
+	NewFormatFlag    = "new-format"
 )
 
 const (
@@ -114,7 +118,7 @@ If there were uncommitted working set changes present when the merge started, {{
 // Creates the argparser shared dolt commit cli and DOLT_COMMIT.
 func CreateCommitArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsString(CommitMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
+	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
 	ap.SupportsFlag(AllowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
 	ap.SupportsString(DateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
@@ -127,7 +131,7 @@ func CreateMergeArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
 	ap.SupportsFlag(SquashParam, "", "Merges changes to the working set without updating the commit history")
-	ap.SupportsString(CommitMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
+	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
 	ap.SupportsFlag(AbortParam, "", mergeAbortDetails)
 	return ap
 }
@@ -146,10 +150,30 @@ func CreateAddArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateCloneArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsString(RemoteParam, "", "name", "Name of the remote to be added to the cloned database. The default is 'origin'.")
+	ap.SupportsString(BranchParam, "b", "branch", "The branch to be cloned. If not specified all branches will be cloned.")
+	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
+	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
+	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file.")
+	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use.")
+	return ap
+}
+
 func CreateResetArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(HardResetParam, "", "Resets the working tables and staged tables. Any changes to tracked tables in the working tree since {{.LessThan}}commit{{.GreaterThan}} are discarded.")
 	ap.SupportsFlag(SoftResetParam, "", "Does not touch the working tables, but removes all tables staged to be committed.")
+	return ap
+}
+
+func CreateRemoteArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
+	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
+	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
+	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
 	return ap
 }
 
@@ -163,6 +187,7 @@ func CreateCheckoutArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(CheckoutCoBranch, "", "branch", "Create a new branch named {{.LessThan}}new_branch{{.GreaterThan}} and start it at {{.LessThan}}start_point{{.GreaterThan}}.")
 	ap.SupportsFlag(ForceFlag, "f", "If there is any changes in working set, the force flag will wipe out the current changes and checkout the new branch.")
+	ap.SupportsString(TrackFlag, "t", "", "When creating a new branch, set up 'upstream' configuration.")
 	return ap
 }
 
@@ -203,6 +228,15 @@ func CreateBranchArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(DeleteFlag, "d", "Delete a branch. The branch must be fully merged in its upstream branch.")
 	ap.SupportsFlag(DeleteForceFlag, "", "Shortcut for {{.EmphasisLeft}}--delete --force{{.EmphasisRight}}.")
 
+	return ap
+}
+
+func CreateTagArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"ref", "A commit ref that the tag should point at."})
+	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the tag message.")
+	ap.SupportsFlag(VerboseFlag, "v", "list tags along with their metadata.")
+	ap.SupportsFlag(DeleteFlag, "d", "Delete a tag.")
 	return ap
 }
 

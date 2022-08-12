@@ -52,7 +52,7 @@ func createTestSchema() schema.Schema {
 
 func TestNomsMarshalling(t *testing.T) {
 	tSchema := createTestSchema()
-	_, vrw, err := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_Default, nil, nil)
+	_, vrw, _, err := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_Default, nil, nil)
 
 	if err != nil {
 		t.Fatal("Could not create in mem noms db.")
@@ -83,20 +83,6 @@ func TestNomsMarshalling(t *testing.T) {
 			t.Error("Value different after marshalling and unmarshalling.")
 		}
 	}
-
-	tSuperSchema, err := schema.NewSuperSchema(tSchema)
-	require.NoError(t, err)
-
-	ssVal, err := MarshalSuperSchemaAsNomsValue(context.Background(), vrw, tSuperSchema)
-	require.NoError(t, err)
-
-	unMarshalledSS, err := UnmarshalSuperSchemaNomsValue(context.Background(), types.Format_Default, ssVal)
-	require.NoError(t, err)
-
-	if !reflect.DeepEqual(tSuperSchema, unMarshalledSS) {
-		t.Error("Value different after marshalling and unmarshalling.")
-	}
-
 }
 
 func getSqlTypes() []sql.Type {
@@ -158,7 +144,7 @@ func TestTypeInfoMarshalling(t *testing.T) {
 
 			nbf, err := types.GetFormatForVersionString(constants.FormatDefaultString)
 			require.NoError(t, err)
-			_, vrw, err := dbfactory.MemFactory{}.CreateDB(context.Background(), nbf, nil, nil)
+			_, vrw, _, err := dbfactory.MemFactory{}.CreateDB(context.Background(), nbf, nil, nil)
 			require.NoError(t, err)
 			val, err := MarshalSchemaAsNomsValue(context.Background(), vrw, originalSch)
 			require.NoError(t, err)

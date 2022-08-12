@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/datas"
 )
@@ -91,7 +92,15 @@ func DoDoltPush(ctx *sql.Context, args []string) (int, error) {
 	if err != nil {
 		return cmdFailure, err
 	}
-	err = actions.DoPush(ctx, dbData.Rsr, dbData.Rsw, dbData.Ddb, dbData.Rsw.TempTableFilesDir(), opts, runProgFuncs, stopProgFuncs)
+	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb, opts.Remote, true)
+	if err != nil {
+		if err == remotestorage.ErrInvalidDoltSpecPath {
+			return 1, actions.HandleInvalidDoltSpecPathErr(opts.Remote.Name, opts.Remote.Url, err)
+		}
+		return 1, err
+	}
+
+	err = actions.DoPush(ctx, dbData.Rsr, dbData.Rsw, dbData.Ddb, remoteDB, dbData.Rsw.TempTableFilesDir(), opts, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:
@@ -102,5 +111,6 @@ func DoDoltPush(ctx *sql.Context, args []string) (int, error) {
 			return cmdFailure, err
 		}
 	}
+	// TODO : set upstream should be persisted outside of session
 	return cmdSuccess, nil
 }

@@ -53,7 +53,7 @@ func hashValueBytes(item sequenceItem, sp sequenceSplitter) error {
 	})
 }
 
-//  newSplitterFn makes a sequenceSplitter.
+// newSplitterFn makes a sequenceSplitter.
 type newSplitterFn func(fmt *NomsBinFormat, salt byte) sequenceSplitter
 
 // hashValueBytesFn translates |item| into a byte stream to provide to |sp|.

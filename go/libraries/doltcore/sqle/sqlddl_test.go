@@ -26,7 +26,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -774,7 +773,7 @@ func TestRenameTableStatements(t *testing.T) {
 }
 
 func TestAlterSystemTables(t *testing.T) {
-	systemTableNames := []string{"dolt_docs", "dolt_log", "dolt_history_people", "dolt_diff_people", "dolt_commit_diff_people"}
+	systemTableNames := []string{"dolt_log", "dolt_history_people", "dolt_diff_people", "dolt_commit_diff_people"} // "dolt_docs",
 	reservedTableNames := []string{"dolt_schemas", "dolt_query_catalog"}
 
 	var dEnv *env.DoltEnv
@@ -783,7 +782,7 @@ func TestAlterSystemTables(t *testing.T) {
 		CreateTestDatabase(dEnv, t)
 
 		dtestutils.CreateTestTable(t, dEnv, "dolt_docs",
-			doltdocs.DocsSchema,
+			doltdb.DocsSchema,
 			NewRow(types.String("LICENSE.md"), types.String("A license")))
 		dtestutils.CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName,
 			dtables.DoltQueryCatalogSchema,
