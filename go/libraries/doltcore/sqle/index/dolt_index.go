@@ -461,7 +461,12 @@ func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durab
 }
 
 func (di *doltIndex) newProllyLookup(ctx *sql.Context, ns tree.NodeStore, iranges ...sql.Range) (sql.IndexLookup, error) {
-	pranges, err := di.prollyRangesFromSqlRanges(ctx, ns, iranges, di.keyBld)
+	//todo(max): it is important that *doltIndexLookup maintains a reference
+	// to empty sqlRanges, otherwise the analyzer will dismiss the index and
+	// chose a less optimal lookup index. This is a GMS concern, so GMS should
+	// really not rely on the integrator to maintain this tenuous relationship.
+	ranges, err := pruneEmptyRanges(iranges)
+	pranges, err := di.prollyRangesFromSqlRanges(ctx, ns, ranges, di.keyBld)
 	if err != nil {
 		return nil, err
 	}
