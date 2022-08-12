@@ -205,6 +205,8 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 
 	cols := sch.GetPKCols().GetColumns()
 
+	vrw := t.ValueReadWriter()
+
 	return &doltIndex{
 		id:                            "PRIMARY",
 		tblName:                       tbl,
@@ -215,11 +217,12 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 		unique:                        true,
 		isPk:                          true,
 		comment:                       "",
-		vrw:                           t.ValueReadWriter(),
+		vrw:                           vrw,
 		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
+		doltBinFormat:                 types.IsFormat_DOLT(vrw.Format()),
 	}, nil
 }
 
@@ -234,6 +237,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 	for i, tag := range idx.IndexedColumnTags() {
 		cols[i], _ = idx.GetColumn(tag)
 	}
+	vrw := t.ValueReadWriter()
 
 	return &doltIndex{
 		id:                            idx.Name(),
@@ -245,11 +249,12 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		unique:                        idx.IsUnique(),
 		isPk:                          false,
 		comment:                       idx.Comment(),
-		vrw:                           t.ValueReadWriter(),
+		vrw:                           vrw,
 		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
+		doltBinFormat:                 types.IsFormat_DOLT(vrw.Format()),
 	}, nil
 }
 
@@ -379,7 +384,8 @@ type doltIndex struct {
 	ns     tree.NodeStore
 	keyBld *val.TupleBuilder
 
-	cache cachedDurableIndexes
+	cache         cachedDurableIndexes
+	doltBinFormat bool
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
@@ -402,7 +408,7 @@ func (di *doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.Index
 		return nil, nil
 	}
 
-	if types.IsFormat_DOLT(di.vrw.Format()) {
+	if di.doltBinFormat {
 		return di.newProllyLookup(ctx, di.ns, ranges...)
 	}
 
@@ -461,22 +467,18 @@ func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durab
 }
 
 func (di *doltIndex) newProllyLookup(ctx *sql.Context, ns tree.NodeStore, iranges ...sql.Range) (sql.IndexLookup, error) {
+	//todo(max): it is important that *doltIndexLookup maintains a reference
+	// to empty sqlRanges, otherwise the analyzer will dismiss the index and
+	// chose a less optimal lookup index. This is a GMS concern, so GMS should
+	// really not rely on the integrator to maintain this tenuous relationship.
 	ranges, err := pruneEmptyRanges(iranges)
+	pranges, err := di.prollyRangesFromSqlRanges(ctx, ns, ranges, di.keyBld)
 	if err != nil {
 		return nil, err
 	}
-
-	prs := make([]prolly.Range, len(ranges))
-	for i, sr := range ranges {
-		prs[i], err = prollyRangeFromSqlRange(ctx, ns, sr, di.keyBld)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return &doltIndexLookup{
 		idx:          di,
-		prollyRanges: prs,
+		prollyRanges: pranges,
 		sqlRanges:    iranges,
 	}, nil
 }
@@ -769,71 +771,80 @@ func pruneEmptyRanges(sqlRanges []sql.Range) (pruned []sql.Range, err error) {
 	return pruned, nil
 }
 
-func prollyRangeFromSqlRange(ctx context.Context, ns tree.NodeStore, rng sql.Range, tb *val.TupleBuilder) (prolly.Range, error) {
-	prollyRange := prolly.Range{
-		Fields: make([]prolly.RangeField, len(rng)),
-		Desc:   tb.Desc,
-	}
-
-	for i, expr := range rng {
-		if rangeCutIsBinding(expr.LowerBound) {
-			bound := expr.LowerBound.TypeAsLowerBound()
-			prollyRange.Fields[i].Lo = prolly.Bound{
-				Binding:   true,
-				Inclusive: bound == sql.Closed,
-			}
-			// accumulate bound values in |tb|
-			v, err := getRangeCutValue(expr.LowerBound, rng[i].Typ)
-			if err != nil {
-				return prolly.Range{}, err
-			}
-			if err = PutField(ctx, ns, tb, i, v); err != nil {
-				return prolly.Range{}, err
-			}
+func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.NodeStore, ranges []sql.Range, tb *val.TupleBuilder) ([]prolly.Range, error) {
+	pranges := make([]prolly.Range, len(ranges))
+	for i := range pranges {
+		pranges[i] = prolly.Range{
+			Fields: make([]prolly.RangeField, len(ranges[i])),
+			Desc:   di.keyBld.Desc,
 		}
 	}
 
-	// BuildPermissive() allows nulls in non-null fields
-	tup := tb.BuildPermissive(sharePool)
-	for i := range prollyRange.Fields {
-		prollyRange.Fields[i].Lo.Value = tup.GetField(i)
-	}
-
-	for i, expr := range rng {
-		if rangeCutIsBinding(expr.UpperBound) {
-			bound := expr.UpperBound.TypeAsUpperBound()
-			prollyRange.Fields[i].Hi = prolly.Bound{
-				Binding:   true,
-				Inclusive: bound == sql.Closed,
-			}
-			// accumulate bound values in |tb|
-			v, err := getRangeCutValue(expr.UpperBound, rng[i].Typ)
-			if err != nil {
-				return prolly.Range{}, err
-			}
-			if err = PutField(ctx, ns, tb, i, v); err != nil {
-				return prolly.Range{}, err
+	for k, rng := range ranges {
+		prollyRange := pranges[k]
+		for j, expr := range rng {
+			if rangeCutIsBinding(expr.LowerBound) {
+				bound := expr.LowerBound.TypeAsLowerBound()
+				prollyRange.Fields[j].Lo = prolly.Bound{
+					Binding:   true,
+					Inclusive: bound == sql.Closed,
+				}
+				// accumulate bound values in |tb|
+				v, err := getRangeCutValue(expr.LowerBound, rng[j].Typ)
+				if err != nil {
+					return nil, err
+				}
+				if err = PutField(ctx, ns, tb, j, v); err != nil {
+					return nil, err
+				}
+			} else {
+				prollyRange.Fields[j].Lo = prolly.Bound{}
 			}
 		}
-	}
-
-	tup = tb.BuildPermissive(sharePool)
-	for i := range prollyRange.Fields {
-		prollyRange.Fields[i].Hi.Value = tup.GetField(i)
-	}
-
-	order := prollyRange.Desc.Comparator()
-	for i, field := range prollyRange.Fields {
-		if !field.Hi.Binding || !field.Lo.Binding {
-			continue
+		// BuildPermissive() allows nulls in non-null fields
+		tup := tb.BuildPermissive(sharePool)
+		for i := range prollyRange.Fields {
+			prollyRange.Fields[i].Lo.Value = tup.GetField(i)
 		}
-		// maybe set RangeField.Exact
-		typ := prollyRange.Desc.Types[i]
-		cmp := order.CompareValues(field.Hi.Value, field.Lo.Value, typ)
-		prollyRange.Fields[i].Exact = cmp == 0
-	}
 
-	return prollyRange, nil
+		for i, expr := range rng {
+			if rangeCutIsBinding(expr.UpperBound) {
+				bound := expr.UpperBound.TypeAsUpperBound()
+				prollyRange.Fields[i].Hi = prolly.Bound{
+					Binding:   true,
+					Inclusive: bound == sql.Closed,
+				}
+				// accumulate bound values in |tb|
+				v, err := getRangeCutValue(expr.UpperBound, rng[i].Typ)
+				if err != nil {
+					return nil, err
+				}
+				if err = PutField(ctx, ns, tb, i, v); err != nil {
+					return nil, err
+				}
+			} else {
+				prollyRange.Fields[i].Hi = prolly.Bound{}
+			}
+		}
+
+		tup = tb.BuildPermissive(sharePool)
+		for i := range prollyRange.Fields {
+			prollyRange.Fields[i].Hi.Value = tup.GetField(i)
+		}
+
+		order := prollyRange.Desc.Comparator()
+		for i, field := range prollyRange.Fields {
+			if !field.Hi.Binding || !field.Lo.Binding {
+				prollyRange.Fields[i].Exact = false
+				continue
+			}
+			// maybe set RangeField.Exact
+			typ := prollyRange.Desc.Types[i]
+			cmp := order.CompareValues(field.Hi.Value, field.Lo.Value, typ)
+			prollyRange.Fields[i].Exact = cmp == 0
+		}
+	}
+	return pranges, nil
 }
 
 func rangeCutIsBinding(c sql.RangeCut) bool {
