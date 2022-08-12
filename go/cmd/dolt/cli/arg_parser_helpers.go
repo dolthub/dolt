@@ -98,6 +98,7 @@ const (
 	RemoteParam      = "remote"
 	BranchParam      = "branch"
 	TrackFlag        = "track"
+	NewFormatFlag    = "new-format"
 )
 
 const (

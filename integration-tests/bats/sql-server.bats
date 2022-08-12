@@ -722,7 +722,7 @@ SQL
 }
 
 @test "sql-server: JSON queries" {
-    skip_nbf_dolt_1
+    skip_nbf_dolt
     cd repo1
     start_sql_server repo1
 
@@ -1203,7 +1203,7 @@ END""")
 
 @test "sql-server: drop database with active connections" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1 "json ordering of keys differs"
+    skip_nbf_dolt "json ordering of keys differs"
 
     mkdir no_dolt && cd no_dolt
     start_sql_server
