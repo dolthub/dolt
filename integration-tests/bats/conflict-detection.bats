@@ -53,7 +53,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
-    skip_nbf_dolt_1 "needs merge stats"
+    skip_nbf_dolt "needs merge stats"
     [[ "$output" =~ "1 rows modified" ]] || false
 
 }
@@ -89,7 +89,7 @@ SQL
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
-    skip_nbf_dolt_1 "needs merge stats"
+    skip_nbf_dolt "needs merge stats"
     [[ "$output" =~ "1 rows modified" ]] || false
     run dolt status
     [[ "$output" =~ "All conflicts and constraint violations fixed" ]] || false
@@ -125,7 +125,7 @@ SQL
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
-    skip_nbf_dolt_1 "needs merge stats"
+    skip_nbf_dolt "needs merge stats"
     [[ "$output" =~ "1 rows modified" ]] || false
     run dolt status
     [[ "$output" =~ "All conflicts and constraint violations fixed" ]] || false
@@ -191,7 +191,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
-    skip_nbf_dolt_1 "needs merge stats"
+    skip_nbf_dolt "needs merge stats"
     [[ "$output" =~ "1 rows added" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }

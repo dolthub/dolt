@@ -22,7 +22,7 @@ table Table {
 
   // an embedded row map;
   // for __DOLT_DEV__, an EncodeValue(types.Map).
-  // for __DOLT_1__, a TupleMap.
+  // for __DOLT__, a TupleMap.
   primary_index:[ubyte] (required);
 
   // Entries map from index names to addresses of

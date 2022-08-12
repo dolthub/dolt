@@ -80,6 +80,20 @@ func (k keylessCompare) Compare(left, right Tuple, _ TupleDesc) int {
 }
 
 // CompareValues implements TupleComparator
-func (k keylessCompare) CompareValues(left, right []byte, typ Type) int {
+func (k keylessCompare) CompareValues(_ int, left, right []byte, typ Type) int {
 	return compare(typ, left, right)
+}
+
+// Prefix implements TupleComparator
+func (k keylessCompare) Prefix(n int) TupleComparator {
+	return k
+}
+
+// Suffix implements TupleComparator
+func (k keylessCompare) Suffix(n int) TupleComparator {
+	return k
+}
+
+func (k keylessCompare) Validated(types []Type) TupleComparator {
+	return k
 }

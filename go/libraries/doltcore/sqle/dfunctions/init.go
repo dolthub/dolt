@@ -21,6 +21,7 @@ var DoltFunctions = []sql.Function{
 	sql.FunctionN{Name: CommitFuncName, Fn: NewCommitFunc},
 	sql.FunctionN{Name: MergeFuncName, Fn: NewMergeFunc},
 	sql.Function0{Name: VersionFuncName, Fn: NewVersion},
+	sql.Function0{Name: StorageFormatFuncName, Fn: NewStorageFormat},
 	sql.FunctionN{Name: DoltCommitFuncName, Fn: NewDoltCommitFunc},
 	sql.FunctionN{Name: DoltAddFuncName, Fn: NewDoltAddFunc},
 	sql.FunctionN{Name: DoltCleanFuncName, Fn: NewDoltCleanFunc},
@@ -42,6 +43,7 @@ var DoltFunctions = []sql.Function{
 var DolthubApiFunctions = []sql.Function{
 	sql.Function1{Name: HashOfFuncName, Fn: NewHashOf},
 	sql.Function0{Name: VersionFuncName, Fn: NewVersion},
+	sql.Function0{Name: StorageFormatFuncName, Fn: NewStorageFormat},
 	sql.Function0{Name: ActiveBranchFuncName, Fn: NewActiveBranchFunc},
 	sql.Function2{Name: DoltMergeBaseFuncName, Fn: NewMergeBase},
 }

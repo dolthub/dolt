@@ -52,7 +52,7 @@ func (cmd *DumpDocsCmd) Description() string {
 }
 
 func (cmd *DumpDocsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT_1(nbf)
+	return types.IsFormat_DOLT(nbf)
 }
 
 // Hidden should return true if this command should be hidden from the help text

@@ -1213,7 +1213,7 @@ func (t *AlterableDoltTable) isIncompatibleTypeChange(oldColumn *sql.Column, new
 	}
 
 	if !existingCol.TypeInfo.Equals(newCol.TypeInfo) {
-		if types.IsFormat_DOLT_1(t.Format()) {
+		if types.IsFormat_DOLT(t.Format()) {
 			// This is overly broad, we could narrow this down a bit
 			return true
 		}
@@ -1518,7 +1518,7 @@ func (t *AlterableDoltTable) adjustForeignKeysForDroppedPk(ctx *sql.Context, roo
 
 // DropColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
+	if types.IsFormat_DOLT(t.nbf) {
 		return nil
 	}
 
@@ -2620,7 +2620,7 @@ func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string)
 }
 
 func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.IndexColumn) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
+	if types.IsFormat_DOLT(t.nbf) {
 		return nil
 	}
 
@@ -2654,7 +2654,7 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.In
 }
 
 func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
+	if types.IsFormat_DOLT(t.nbf) {
 		return nil
 	}
 

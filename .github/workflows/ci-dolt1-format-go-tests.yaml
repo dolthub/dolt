@@ -1,4 +1,4 @@
-name: __DOLT_1__ Enginetests
+name: __DOLT__ Enginetests
 
 on:
   pull_request:
@@ -35,4 +35,4 @@ jobs:
         go test -timeout 30m "./libraries/doltcore/sqle/enginetest/..."
       env:
         MATRIX_OS: ${{ matrix.os }}
-        DOLT_DEFAULT_BIN_FORMAT: "__DOLT_1__"
+        DOLT_DEFAULT_BIN_FORMAT: "__DOLT__"

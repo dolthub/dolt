@@ -21,6 +21,7 @@ import (
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // Schema is an interface for retrieving the columns that make up a schema
@@ -50,6 +51,15 @@ type Schema interface {
 	// AddColumn adds a column to this schema in the order given and returns the resulting Schema.
 	// The new column cannot be a primary key. To alter primary keys, create a new schema with those keys.
 	AddColumn(column Column, order *ColumnOrder) (Schema, error)
+
+	// GetMapDescriptors returns the key and value tuple descriptors for this schema.
+	GetMapDescriptors() (keyDesc, valueDesc val.TupleDesc)
+
+	// GetKeyDescriptor returns the key tuple descriptor for this schema.
+	GetKeyDescriptor() val.TupleDesc
+
+	// GetValueDescriptor returns the value tuple descriptor for this schema.
+	GetValueDescriptor() val.TupleDesc
 }
 
 // ColumnOrder is used in ALTER TABLE statements to change the order of inserted / modified columns.
@@ -167,7 +177,7 @@ func GetSharedCols(schema Schema, cmpNames []string, cmpKinds []types.NomsKind) 
 }
 
 // ArePrimaryKeySetsDiffable checks if two schemas are diffable. Assumes the
-// passed in schema are from the same table between commits. If __DOLT_1__, then
+// passed in schema are from the same table between commits. If __DOLT__, then
 // it also checks if the underlying SQL types of the columns are equal.
 func ArePrimaryKeySetsDiffable(format *types.NomsBinFormat, fromSch, toSch Schema) bool {
 	if fromSch == nil && toSch == nil {
@@ -196,18 +206,7 @@ func ArePrimaryKeySetsDiffable(format *types.NomsBinFormat, fromSch, toSch Schem
 		if (c1.Tag != c2.Tag) || (c1.IsPartOfPK != c2.IsPartOfPK) {
 			return false
 		}
-		if types.IsFormat_DOLT_1(format) && !c1.TypeInfo.ToSqlType().Equals(c2.TypeInfo.ToSqlType()) {
-			return false
-		}
-	}
-
-	ords1 := fromSch.GetPkOrdinals()
-	ords2 := toSch.GetPkOrdinals()
-	if ords1 == nil || ords2 == nil || len(ords1) != len(ords2) {
-		return false
-	}
-	for i := 0; i < len(ords1); i++ {
-		if ords1[i] != ords2[i] {
+		if types.IsFormat_DOLT(format) && !c1.TypeInfo.ToSqlType().Equals(c2.TypeInfo.ToSqlType()) {
 			return false
 		}
 	}

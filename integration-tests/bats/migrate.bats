@@ -2,10 +2,10 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    skip_nbf_dolt_1
+    skip_nbf_dolt
     skip_nbf_dolt_dev
 
-    TARGET_NBF="__DOLT_1__"
+    TARGET_NBF="__DOLT__"
     setup_common
 }
 

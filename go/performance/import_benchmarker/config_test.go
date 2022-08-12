@@ -46,7 +46,7 @@ func TestNewStorageFormat(t *testing.T) {
 	t.Skip() // Skipping since dolt isn't installed on the github actions vm
 
 	job := createSampleDoltJob()
-	config := &ImportBenchmarkConfig{Jobs: []*ImportBenchmarkJob{job}, NbfVersion: "__DOLT_1__"}
+	config := &ImportBenchmarkConfig{Jobs: []*ImportBenchmarkJob{job}, NbfVersion: "__DOLT__"}
 	err := config.ValidateAndUpdateDefaults()
 
 	assert.NoError(t, err)
