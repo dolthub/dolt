@@ -78,11 +78,11 @@ type emptyRevisionDatabaseProvider struct {
 	sql.DatabaseProvider
 }
 
-func (e emptyRevisionDatabaseProvider) GetRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, string, error) {
+func (e emptyRevisionDatabaseProvider) GetRevisionForRevisionDatabase(_ *sql.Context, _ string) (string, string, error) {
 	return "", "", nil
 }
 
-func (e emptyRevisionDatabaseProvider) IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error) {
+func (e emptyRevisionDatabaseProvider) IsRevisionDatabase(_ *sql.Context, _ string) (bool, error) {
 	return false, nil
 }
 
