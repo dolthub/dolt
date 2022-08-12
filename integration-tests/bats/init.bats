@@ -182,8 +182,7 @@ teardown() {
 @test "init: initing an old database displays the correct version" {
     set_dolt_user "baz", "bazbash.com"
 
-    run dolt init
-    [ "$status" -eq 0 ]
+    DOLT_DEFAULT_BIN_FORMAT="__LD_1__" dolt init
 
     run dolt version
     [ "$status" -eq 0 ]
