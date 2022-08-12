@@ -134,7 +134,12 @@ func (a AutoIncrementTracker) Set(tableName string, val uint64) {
 func (a AutoIncrementTracker) AddNewTable(tableName string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.sequences[strings.ToLower(tableName)] = uint64(1)
+
+	tableName = strings.ToLower(tableName)
+	// only modify the sequence for this table if this is the only branch that has such a table
+	if _, ok := a.sequences[tableName]; !ok {
+		a.sequences[tableName] = uint64(1)
+	}
 }
 
 func (a AutoIncrementTracker) DropTable(ctx context.Context, tableName string, wses ...*doltdb.WorkingSet) error {

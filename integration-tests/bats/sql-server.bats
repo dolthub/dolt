@@ -1121,11 +1121,11 @@ END""")
     insert_query repo1 1 "INSERT INTO t1 (val) VALUES (4)"
     server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2\n4,4"
     
-    # drop the table on main, should keep counting from 5
+    # drop the table on main, should keep counting from 4
     server_query repo1 1 "drop table t1;"
     server_query repo1 1 "CREATE TABLE t1(pk bigint primary key auto_increment, val int)" ""
-    insert_query repo1 1 "INSERT INTO t1 (val) VALUES (5)"
-    server_query repo1 1 "SELECT * FROM t1" "pk,val\n5,5"
+    insert_query repo1 1 "INSERT INTO t1 (val) VALUES (4)"
+    server_query repo1 1 "SELECT * FROM t1" "pk,val\n4,4"
 }
 
 @test "sql-server: sql-push --set-remote within session" {
