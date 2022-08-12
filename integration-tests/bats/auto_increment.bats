@@ -694,3 +694,79 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "NOT NULL AUTO_INCREMENT" ]] || false
 }
+
+@test "auto_increment: globally distinct auto increment values" {
+    dolt sql  <<SQL
+call dolt_commit('-am', 'empty table');
+call dolt_branch('branch1');
+call dolt_branch('branch2');
+
+insert into test (c0) values (1), (2);
+call dolt_commit('-am', 'main values');
+
+call dolt_checkout('branch1');
+insert into test (c0) values (3), (4);
+call dolt_commit('-am', 'branch1 values');
+
+call dolt_checkout('branch2');
+insert into test (c0) values (5), (6);
+call dolt_commit('-am', 'branch2 values');
+SQL
+
+    run dolt sql -q 'select * from test' -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+
+    dolt checkout branch1
+    dolt sql -q 'select * from test' -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "3,3" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+
+    dolt checkout branch2
+    run dolt sql -q 'select * from test' -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "5,5" ]] || false
+    [[ "$output" =~ "6,6" ]] || false
+
+    # Should have the same result across multiple invocations of sql as well
+    dolt checkout main
+    dolt sql  <<SQL
+create table t1 (ai serial, c0 int);
+call dolt_commit('-am', 'empty table');
+call dolt_branch('branch3');
+call dolt_branch('branch4');
+insert into t1 (c0) values (1), (2);
+call dolt_commit('-am', 'main values');
+SQL
+
+    dolt sql  <<SQL    
+call dolt_checkout('branch3');
+insert into t1 (c0) values (3), (4);
+call dolt_commit('-am', 'branch3 values');
+SQL
+
+    dolt sql  <<SQL        
+call dolt_checkout('branch4');
+insert into t1 (c0) values (5), (6);
+call dolt_commit('-am', 'branch4 values');
+SQL
+
+    dolt sql -q 'select * from t1' -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+
+    dolt checkout branch1
+    run dolt sql -q 'select * from t1' -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "3,3" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+
+    dolt checkout branch2
+    run dolt sql -q 'select * from t1' -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "5,5" ]] || false
+    [[ "$output" =~ "6,6" ]] || false    
+}
