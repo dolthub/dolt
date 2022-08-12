@@ -719,7 +719,7 @@ SQL
     [[ "$output" =~ "2,2" ]] || false
 
     dolt checkout branch1
-    dolt sql -q 'select * from test' -r csv
+    run dolt sql -q 'select * from test' -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "3,3" ]] || false
     [[ "$output" =~ "4,4" ]] || false
@@ -753,18 +753,18 @@ insert into t1 (c0) values (5), (6);
 call dolt_commit('-am', 'branch4 values');
 SQL
 
-    dolt sql -q 'select * from t1' -r csv
+    run dolt sql -q 'select * from t1' -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "1,1" ]] || false
     [[ "$output" =~ "2,2" ]] || false
 
-    dolt checkout branch1
+    dolt checkout branch3
     run dolt sql -q 'select * from t1' -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "3,3" ]] || false
     [[ "$output" =~ "4,4" ]] || false
 
-    dolt checkout branch2
+    dolt checkout branch4
     run dolt sql -q 'select * from t1' -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "5,5" ]] || false
