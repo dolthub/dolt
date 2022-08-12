@@ -461,19 +461,14 @@ func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durab
 }
 
 func (di *doltIndex) newProllyLookup(ctx *sql.Context, ns tree.NodeStore, iranges ...sql.Range) (sql.IndexLookup, error) {
-	ranges, err := pruneEmptyRanges(iranges)
-	if err != nil {
-		return nil, err
-	}
-
-	pranges, err := di.prollyRangesFromSqlRanges(ctx, ns, ranges, di.keyBld)
+	pranges, err := di.prollyRangesFromSqlRanges(ctx, ns, iranges, di.keyBld)
 	if err != nil {
 		return nil, err
 	}
 	return &doltIndexLookup{
 		idx:          di,
 		prollyRanges: pranges,
-		sqlRanges:    ranges,
+		sqlRanges:    iranges,
 	}, nil
 }
 
