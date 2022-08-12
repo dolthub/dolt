@@ -530,7 +530,7 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx *sql.Context, revDB string) (d
 }
 
 // DropRevisionDb implements RevisionDatabaseProvider
-func (p DoltDatabaseProvider) DropRevisionDb(_ *sql.Context, revDB string) error {
+func (p DoltDatabaseProvider) DropRevisionDb(ctx *sql.Context, revDB string) error {
 	isRevisionDatabase, err := p.IsRevisionDatabase(ctx, revDB)
 	if err != nil {
 		return err

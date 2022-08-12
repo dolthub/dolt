@@ -135,7 +135,7 @@ func getRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, st
 		return "", "", fmt.Errorf("unexpected session type: %T", ctx.Session)
 	}
 
-	provider := doltsess.Session.Provider()
+	provider := doltsess.Provider()
 	return provider.GetRevisionForRevisionDatabase(ctx, dbName)
 }
 
