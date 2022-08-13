@@ -188,13 +188,14 @@ SQL
   dolt commit --amend -m "modified_commit_message"
 
   commitmsg=$(dolt log --oneline | head -n 1)
-  [[ $commitmsg =~ "modified_commit_message" ]]
+  [[ $commitmsg =~ "modified_commit_message" ]] || false
 
   numcommits=$(dolt log --oneline | wc -l)
-  [[ $numcommits =~ "2" ]]
+  [[ $numcommits =~ "2" ]] || false
 
   run dolt sql -q 'select * from test;'
-  [[ "$output" =~ "8" ]]
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "8" ]] || false
 }
 
 @test "commit --amend adds new changes to existing commit" {
@@ -208,12 +209,45 @@ SQL
   dolt commit --amend -m "modified_commit_message"
 
   commitmsg=$(dolt log --oneline | head -n 1)
-  [[ $commitmsg =~ "modified_commit_message" ]]
+  [[ $commitmsg =~ "modified_commit_message" ]] || false
 
   numcommits=$(dolt log --oneline | wc -l)
-  [[ $numcommits =~ "2" ]]
+  [[ $numcommits =~ "2" ]] || false
 
   run dolt sql -q 'select * from test;'
-  [[ "$output" =~ "8" ]]
-  [[ "$output" =~ "9" ]]
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "8" ]] || false
+  [[ "$output" =~ "9" ]] || false
+}
+
+@test "commit --amend on merge commits does not modify metadata of merged parents" {
+  dolt sql -q "create table test (id int primary key, id2 int);"
+  dolt add .
+  dolt commit -m "original table"
+
+  dolt checkout -b test-branch
+  dolt sql -q 'insert into test (id, id2) values (0, 2);'
+  dolt add .
+  dolt commit -m "conclicting commit message"
+
+  shaparent1=$(dolt log --oneline --decorate=no | head -n 1 | cut -d ' ' -f 1)
+  # remove special characters (color)
+  shaparent1=$(echo $shaparent1 | sed -E "s/[[:cntrl:]]\[[0-9]{1,3}m//g")
+
+  dolt checkout main
+  dolt sql -q 'insert into test (id, id2) values (0, 1);'
+  dolt add .
+  dolt commit -m "original commit message"
+  shaparent2=$(dolt log --oneline --decorate=no | head -n 1 | cut -d ' ' -f 1)
+  # remove special characters (color)
+  shaparent2=$(echo $shaparent2 | sed -E "s/[[:cntrl:]]\[[0-9]{1,3}m//g")
+
+  dolt merge test-branch
+  dolt conflicts resolve --theirs .
+  dolt commit -m "final merge"
+
+  dolt commit --amend -m "new merge"
+  commitmeta=$(dolt log --oneline --parents | head -n 1)
+  [[ "$commitmeta" =~ "$shaparent1" ]] || false
+  [[ "$commitmeta" =~ "$shaparent2" ]] || false
 }
