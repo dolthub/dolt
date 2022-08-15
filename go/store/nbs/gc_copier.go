@@ -17,9 +17,13 @@ package nbs
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 type gcErrAccum map[string]error
@@ -59,19 +63,25 @@ func (gcc *gcCopier) addChunk(ctx context.Context, c CompressedChunk) error {
 	return gcc.writer.AddCmpChunk(c)
 }
 
-func (gcc *gcCopier) copyTablesToDir(ctx context.Context, destDir string) ([]tableSpec, error) {
-	filename, err := gcc.writer.Finish()
+func (gcc *gcCopier) copyTablesToDir(ctx context.Context, destDir string) (ts []tableSpec,  err error) {
+	var filename string
+	filename, err = gcc.writer.Finish()
 	if err != nil {
 		return nil, err
 	}
-
-	filepath := path.Join(destDir, filename)
 
 	if gcc.writer.ChunkCount() == 0 {
 		return []tableSpec{}, nil
 	}
 
-	addr, err := parseAddr(filename)
+	defer func() {
+		_ = gcc.writer.Remove()
+	}()
+
+	filepath := path.Join(destDir, filename)
+
+	var addr addr
+	addr, err = parseAddr(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -81,12 +91,54 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, destDir string) ([]tab
 		if gcc.writer.ContentLength() != uint64(info.Size()) {
 			return nil, fmt.Errorf("'%s' already exists with different contents.", filepath)
 		}
-	} else {
-		// file does not exist or error determining if it existed.  Try to create it.
-		err = gcc.writer.FlushToFile(filepath)
+		return []tableSpec{
+			{
+				name:       addr,
+				chunkCount: uint32(gcc.writer.ChunkCount()),
+			},
+		}, nil
+	}
+
+	// Otherwise, write the file.
+	var tf string
+	tf, err = func() (tf string, err error) {
+		var temp *os.File
+		temp, err = tempfiles.MovableTempFileProvider.NewFile(destDir, tempTablePrefix)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
+		defer func() {
+			cerr := temp.Close()
+			if err == nil {
+				err = cerr
+			}
+		}()
+
+		r, err := gcc.writer.Reader()
+		if err != nil {
+			return "", err
+		}
+		defer func() {
+			cerr := r.Close()
+			if err == nil {
+				err = cerr
+			}
+		}()
+
+		_, err = io.Copy(temp, r)
+		if err != nil {
+			return "", err
+		}
+
+		return temp.Name(), nil
+	}()
+	if err != nil {
+		return nil, err
+	}
+
+	err = file.Rename(tf, filepath)
+	if err != nil {
+		return nil, err
 	}
 
 	return []tableSpec{
