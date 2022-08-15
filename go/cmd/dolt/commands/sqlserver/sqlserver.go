@@ -262,28 +262,33 @@ func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config S
 		cfgDirPath = filepath.Join(dataDir, commands.DefaultCfgDirName)
 	} else {
 		// Look in parent directory for doltcfg
-		path := filepath.Join("..", commands.DefaultCfgDirName)
-		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
-			cfgDirPath = path
-		}
+		parentDirCfg := filepath.Join("..", commands.DefaultCfgDirName)
+		parentExists, isDir := dEnv.FS.Exists(parentDirCfg)
+		parentDirExists := parentExists && isDir
 
 		// Look in data directory (which is necessarily current directory) for doltcfg
-		path = filepath.Join(dataDir, commands.DefaultCfgDirName)
-		if exists, isDir := dEnv.FS.Exists(path); exists && isDir && len(cfgDirPath) != 0 {
+		currDirCfg := filepath.Join(dataDir, commands.DefaultCfgDirName)
+		currExists, isDir := dEnv.FS.Exists(currDirCfg)
+		currDirExists := currExists && isDir
+
+		// Error if both current and parent exist
+		if currDirExists && parentDirExists {
 			p1, err := dEnv.FS.Abs(cfgDirPath)
 			if err != nil {
 				return err
 			}
-			p2, err := dEnv.FS.Abs(path)
+			p2, err := dEnv.FS.Abs(parentDirCfg)
 			if err != nil {
 				return err
 			}
 			return commands.ErrMultipleDoltCfgDirs.New(p1, p2)
 		}
 
-		// None found anywhere, use current directory
-		if len(cfgDirPath) == 0 {
-			cfgDirPath = path
+		// Assign the one that exists, defaults to current if neither exist
+		if parentDirExists {
+			cfgDirPath = parentDirCfg
+		} else {
+			cfgDirPath = currDirCfg
 		}
 	}
 	serverConfig.withCfgDir(cfgDirPath)
