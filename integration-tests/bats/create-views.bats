@@ -303,3 +303,23 @@ SQL
     [[ "${lines[1]}" =~ 'v1,int,YES,"",NULL,""' ]] || false
     [[ "${lines[2]}" =~ 'v2,int,YES,"",NULL,""' ]] || false
 }
+
+@test "create-views: can correctly alter a view" {
+    skip "ALTER VIEW is unsupported"
+    dolt sql -q "create table t(pk int primary key, val int)"
+    dolt sql -q "create view view1 as select * from t"
+
+    dolt sql -q "alter view view1 as select val from t"
+}
+
+@test "create-views: views get properly formatted in the information schema table" {
+    skip "views are not correctly formatted right now"
+    dolt sql -q "create table t(pk int primary key, val int)"
+    dolt sql -q "create view view1 as select pk from t"
+
+    DATABASE=$(dolt sql -r csv -q "SELECT DATABASE()" | sed -n 2p)
+    run dolt sql -r csv -q "SELECT VIEW_DEFINITION FROM information_schema.views where TABLE_NAME='view1'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "VIEW_DEFINITION" ]] || false
+    [[ "$output" =~ "select $DATABASE.t from $DATABASE.t" ]] || false
+}

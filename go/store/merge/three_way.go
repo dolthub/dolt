@@ -95,13 +95,16 @@ func NewThreeWay(resolve ResolveFunc) Policy {
 // - If the values are primitives or Blob: conflict
 // - If the values are maps:
 //   - if the same key was inserted or updated in both candidates:
-//     - first run this same algorithm on those two values to attempt to merge them
-//     - if the two merged values are still different: conflict
+//   - first run this same algorithm on those two values to attempt to merge them
+//   - if the two merged values are still different: conflict
 //   - if a key was inserted in one candidate and removed in the other: conflict
+//
 // - If the values are structs:
 //   - Same as map, except using field names instead of map keys
+//
 // - If the values are sets:
 //   - Apply the changes from both candidates to the parent to get the result. No conflicts are possible.
+//
 // - If the values are list:
 //   - Apply list-merge (see below)
 //

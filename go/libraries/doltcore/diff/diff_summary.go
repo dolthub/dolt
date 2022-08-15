@@ -52,7 +52,7 @@ func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to durable.
 		return fmt.Errorf("cannot perform a diff between keyless and keyed schema")
 	}
 
-	if types.IsFormat_DOLT_1(from.Format()) {
+	if types.IsFormat_DOLT(from.Format()) {
 		return diffProllyTrees(ctx, ch, keyless, from, to, fromSch, toSch)
 	}
 
@@ -80,7 +80,7 @@ func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td T
 		return err
 	}
 
-	if types.IsFormat_DOLT_1(td.Format()) {
+	if types.IsFormat_DOLT(td.Format()) {
 		return diffProllyTrees(ctx, ch, keyless, fromRows, toRows, fromSch, toSch)
 	} else {
 		return diffNomsMaps(ctx, ch, keyless, fromRows, toRows)

@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
@@ -43,10 +44,11 @@ const (
 
 type DoltDatabaseProvider struct {
 	// dbLocations maps a database name to its file system root
-	dbLocations map[string]filesys.Filesys
-	databases   map[string]sql.Database
-	functions   map[string]sql.Function
-	mu          *sync.RWMutex
+	dbLocations        map[string]filesys.Filesys
+	databases          map[string]sql.Database
+	functions          map[string]sql.Function
+	externalProcedures sql.ExternalStoredProcedureRegistry
+	mu                 *sync.RWMutex
 
 	defaultBranch string
 	fs            filesys.Filesys
@@ -58,6 +60,8 @@ type DoltDatabaseProvider struct {
 var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.ExternalStoredProcedureProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.TableFunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
 
 // NewDoltDatabaseProvider returns a new provider, initialized without any databases, along with any
@@ -97,14 +101,20 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		funcs[strings.ToLower(fn.FunctionName())] = fn
 	}
 
+	externalProcedures := sql.NewExternalStoredProcedureRegistry()
+	for _, esp := range dprocedures.DoltProcedures {
+		externalProcedures.Register(esp)
+	}
+
 	return DoltDatabaseProvider{
-		dbLocations:   dbLocations,
-		databases:     dbs,
-		functions:     funcs,
-		mu:            &sync.RWMutex{},
-		fs:            fs,
-		defaultBranch: defaultBranch,
-		dbFactoryUrl:  doltdb.LocalDirDoltDB,
+		dbLocations:        dbLocations,
+		databases:          dbs,
+		functions:          funcs,
+		externalProcedures: externalProcedures,
+		mu:                 &sync.RWMutex{},
+		fs:                 fs,
+		defaultBranch:      defaultBranch,
+		dbFactoryUrl:       doltdb.LocalDirDoltDB,
 	}, nil
 }
 
@@ -360,7 +370,7 @@ func createRemote(ctx *sql.Context, remoteName, remoteUrl string, params map[str
 	return r, ddb, nil
 }
 
-func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
+func (p DoltDatabaseProvider) DropDatabase(_ *sql.Context, name string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -400,7 +410,7 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	return nil
 }
 
-//TODO: databaseForRevision should call checkout on the given branch/commit, returning a non-mutable session
+// TODO: databaseForRevision should call checkout on the given branch/commit, returning a non-mutable session
 // only if a non-branch revspec was indicated.
 func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string) (sql.Database, dsess.InitialDbState, bool, error) {
 	if !strings.Contains(revDB, dbRevisionDelimiter) {
@@ -462,17 +472,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 			return nil, dsess.InitialDbState{}, false, nil
 		}
 
-		tag, err := srcDb.(Database).DbData().Ddb.ResolveTag(ctx, ref.NewTagRef(revSpec))
-		if err != nil {
-			return nil, dsess.InitialDbState{}, false, err
-		}
-
-		commitHash, err := tag.Commit.HashOf()
-		if err != nil {
-			return nil, dsess.InitialDbState{}, false, err
-		}
-
-		db, init, err := dbRevisionForCommit(ctx, srcDb.(Database), commitHash.String())
+		db, init, err := dbRevisionForTag(ctx, srcDb.(Database), revSpec)
 		if err != nil {
 			return nil, dsess.InitialDbState{}, false, err
 		}
@@ -512,7 +512,7 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx *sql.Context, revDB string) (d
 }
 
 // DropRevisionDb implements RevisionDatabaseProvider
-func (p DoltDatabaseProvider) DropRevisionDb(ctx *sql.Context, revDB string) error {
+func (p DoltDatabaseProvider) DropRevisionDb(_ *sql.Context, revDB string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -539,8 +539,18 @@ func (p DoltDatabaseProvider) Function(_ *sql.Context, name string) (sql.Functio
 	return fn, nil
 }
 
-// TableFunction implements the TableFunctionProvider interface
-func (p DoltDatabaseProvider) TableFunction(ctx *sql.Context, name string) (sql.TableFunction, error) {
+// ExternalStoredProcedure implements the sql.ExternalStoredProcedureProvider interface
+func (p DoltDatabaseProvider) ExternalStoredProcedure(_ *sql.Context, name string, numOfParams int) (*sql.ExternalStoredProcedureDetails, error) {
+	return p.externalProcedures.LookupByNameAndParamCount(name, numOfParams)
+}
+
+// ExternalStoredProcedures implements the sql.ExternalStoredProcedureProvider interface
+func (p DoltDatabaseProvider) ExternalStoredProcedures(_ *sql.Context, name string) ([]sql.ExternalStoredProcedureDetails, error) {
+	return p.externalProcedures.LookupByName(name)
+}
+
+// TableFunction implements the sql.TableFunctionProvider interface
+func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.TableFunction, error) {
 	// currently, only one table function is supported, if we extend this, we should clean this up
 	// and store table functions in a map, similar to regular functions.
 	if strings.ToLower(name) == "dolt_diff" {
@@ -730,6 +740,36 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			Ddb: srcDb.DbData().Ddb,
 			Rsw: static,
 			Rsr: static,
+		},
+	}
+
+	return db, init, nil
+}
+
+func dbRevisionForTag(ctx context.Context, srcDb Database, revSpec string) (ReadOnlyDatabase, dsess.InitialDbState, error) {
+	tag := ref.NewTagRef(revSpec)
+
+	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, tag)
+	if err != nil {
+		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
+	}
+
+	name := srcDb.Name() + dbRevisionDelimiter + revSpec
+	db := ReadOnlyDatabase{Database: Database{
+		name:     name,
+		ddb:      srcDb.DbData().Ddb,
+		rsw:      srcDb.DbData().Rsw,
+		rsr:      srcDb.DbData().Rsr,
+		editOpts: srcDb.editOpts,
+	}}
+	init := dsess.InitialDbState{
+		Db:         db,
+		HeadCommit: cm,
+		ReadOnly:   true,
+		DbData: env.DbData{
+			Ddb: srcDb.DbData().Ddb,
+			Rsw: srcDb.DbData().Rsw,
+			Rsr: srcDb.DbData().Rsr,
 		},
 	}
 

@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -141,10 +140,10 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 
 	keyless := schema.IsKeyless(ct.ourSch)
 
-	kd := shim.KeyDescriptorFromSchema(ct.baseSch)
-	baseVD := shim.ValueDescriptorFromSchema(ct.baseSch)
-	oursVD := shim.ValueDescriptorFromSchema(ct.ourSch)
-	theirsVD := shim.ValueDescriptorFromSchema(ct.theirSch)
+	kd := ct.baseSch.GetKeyDescriptor()
+	baseVD := ct.baseSch.GetValueDescriptor()
+	oursVD := ct.ourSch.GetValueDescriptor()
+	theirsVD := ct.theirSch.GetValueDescriptor()
 
 	b := 1
 	var o, t, n int
@@ -443,7 +442,7 @@ func newProllyConflictDeleter(ct ProllyConflictsTable) *prollyConflictDeleter {
 	ed := ct.artM.Editor()
 	kB := val.NewTupleBuilder(kd)
 
-	vd := shim.ValueDescriptorFromSchema(ct.ourSch)
+	vd := ct.ourSch.GetValueDescriptor()
 	vB := val.NewTupleBuilder(vd)
 	p := ct.artM.Pool()
 

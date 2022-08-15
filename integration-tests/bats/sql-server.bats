@@ -25,6 +25,30 @@ teardown() {
     teardown_common
 }
 
+@test "sql-server: server with no dbs yet should be able to clone" {
+    # make directories outside of the existing init'ed dolt repos to ensure that
+    # we are starting a sql-server with no existing dolt databases inside it
+    tempDir=$(mktemp -d)
+    cd $tempDir
+    mkdir empty_server
+    mkdir remote
+
+    # create a file remote to clone later
+    cd $BATS_TMPDIR/dolt-repo-$$/repo1
+    dolt remote add remote01 file:///$tempDir/remote
+    dolt push remote01 main
+
+    # start the server and ensure there are no databases yet
+    cd $tempDir/empty_server
+    start_sql_server
+    unselected_server_query 1 "show databases" "Database\ninformation_schema"
+
+    # verify that dolt_clone works
+    # TODO: Once dolt_clone can be called without a selected database, this can be removed
+    unselected_server_query 1 "create database test01;" ""
+    server_query "test01" 1 "call dolt_clone('file:///$tempDir/remote');" "status\n0"
+}
+
 @test "sql-server: server assumes existing user" {
     cd repo1
     dolt sql -q "create user dolt@'%' identified by '123'"
@@ -698,7 +722,7 @@ SQL
 }
 
 @test "sql-server: JSON queries" {
-    skip_nbf_dolt_1
+    skip_nbf_dolt
     cd repo1
     start_sql_server repo1
 
@@ -1179,7 +1203,7 @@ END""")
 
 @test "sql-server: drop database with active connections" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1 "json ordering of keys differs"
+    skip_nbf_dolt "json ordering of keys differs"
 
     mkdir no_dolt && cd no_dolt
     start_sql_server
@@ -1533,7 +1557,15 @@ behavior:
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
 
-    PORT="$$ % (65536-1024) + 1024 + 1"
+    echo "import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind(('', 0))
+addr = s.getsockname()
+print(addr[1])
+s.close()
+" > port_finder.py
+
+    PORT=$(python3 port_finder.py)
     run dolt sql-server --port=$PORT
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false

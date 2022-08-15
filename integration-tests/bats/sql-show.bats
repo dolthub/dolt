@@ -39,12 +39,12 @@ teardown() {
 @test "sql-show: show table status has number of rows correct" {
     dolt sql -q "CREATE TABLE test(pk int NOT NULL AUTO_INCREMENT, c1 int, PRIMARY KEY (pk))"
 
-    run dolt sql -q "show table status where Rows=0"
+    run dolt sql -q 'show table status where `Rows`=0'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
     dolt sql -q "INSERT INTO test (c1) VALUES (0)"
-    run dolt sql -q "show table status where Rows=1;"
+    run dolt sql -q 'show table status where `Rows`=1;'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 }

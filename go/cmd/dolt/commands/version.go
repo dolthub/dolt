@@ -17,10 +17,10 @@ package commands
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -62,6 +62,15 @@ func (cmd VersionCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	cli.Println("dolt version", cmd.VersionStr)
+
+	if dEnv.HasDoltDir() && !cli.CheckEnvIsValid(dEnv) {
+		return 2
+	} else if dEnv.HasDoltDir() {
+		nbf := dEnv.DoltDB.Format()
+		cli.Printf("database storage format: %s\n", dfunctions.GetStorageFormatDisplayString(nbf))
+	} else {
+		cli.Println("no valid database in this directory")
+	}
 
 	usage := func() {}
 	ap := cmd.ArgParser()

@@ -75,22 +75,22 @@ import (
 // tag value. The "noms" key in the Go struct field's tag value is the field
 // name. Examples:
 //
-//   // Field is ignored.
-//   Field int `noms:"-"`
+//	// Field is ignored.
+//	Field int `noms:"-"`
 //
-//   // Field appears in a Noms struct as field "myName".
-//   MyName int
+//	// Field appears in a Noms struct as field "myName".
+//	MyName int
 //
-//   // Field appears in a Noms struct as key "myName".
-//   Field int `noms:"myName"`
+//	// Field appears in a Noms struct as key "myName".
+//	Field int `noms:"myName"`
 //
-//   // Field appears in a Noms struct as key "myName" and the field is
-//   //  omitted from the object if its value is empty, as defined above.
-//   Field int `noms:"myName,omitempty"
+//	// Field appears in a Noms struct as key "myName" and the field is
+//	//  omitted from the object if its value is empty, as defined above.
+//	Field int `noms:"myName,omitempty"
 //
-//   // Field appears in a Noms struct as key "field" and the field is
-//   //  omitted from the object if its value is empty, as defined above.
-//   Field int `noms:",omitempty"
+//	// Field appears in a Noms struct as key "field" and the field is
+//	//  omitted from the object if its value is empty, as defined above.
+//	Field int `noms:",omitempty"
 //
 // The name of the Noms struct is the name of the Go struct where the first
 // character is changed to upper case. You can also implement the

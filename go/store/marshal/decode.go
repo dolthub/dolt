@@ -61,23 +61,23 @@ import (
 // Go map keys corresponding to the set values and assigns each key a value of struct{}{}.
 //
 // When unmarshalling onto interface{} the following rules are used:
-//  - types.Bool -> bool
-//  - types.List -> []T, where T is determined recursively using the same rules.
-//  - types.Set -> depends on `noms:",set"` annotation and field type:
-//    - without the annotation, same as types.List
-//    - with the annotation, same as types.Map for map[T]struct{} fields and same as types.List for slice fields
-//  - types.Map -> map[T]V, where T and V is determined recursively using the
-//    same rules.
-//  - types.Float -> float64
-//  - types.String -> string
-//  - *types.Type -> *types.Type
-//  - types.Union -> interface
-//  - Everything else an error
+//   - types.Bool -> bool
+//   - types.List -> []T, where T is determined recursively using the same rules.
+//   - types.Set -> depends on `noms:",set"` annotation and field type:
+//   - without the annotation, same as types.List
+//   - with the annotation, same as types.Map for map[T]struct{} fields and same as types.List for slice fields
+//   - types.Map -> map[T]V, where T and V is determined recursively using the
+//     same rules.
+//   - types.Float -> float64
+//   - types.String -> string
+//   - *types.Type -> *types.Type
+//   - types.Union -> interface
+//   - Everything else an error
 //
 // Unmarshal returns an UnmarshalTypeMismatchError if:
-//  - a Noms value is not appropriate for a given target type
-//  - a Noms number overflows the target type
-//  - a Noms list is decoded into a Go array of a different length
+//   - a Noms value is not appropriate for a given target type
+//   - a Noms number overflows the target type
+//   - a Noms list is decoded into a Go array of a different length
 func Unmarshal(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, out interface{}) (err error) {
 	return UnmarshalOpt(ctx, nbf, v, Opt{}, out)
 }
@@ -114,7 +114,7 @@ func UnmarshalOpt(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, 
 // calling UnmarshalNoms will effectively do nothing. For example, to unmarshal
 // a MyType you would define:
 //
-//  func (t *MyType) UnmarshalNoms(v types.Value) error {}
+// func (t *MyType) UnmarshalNoms(v types.Value) error {}
 type Unmarshaler interface {
 	// UnmarshalNoms decodes v, or returns an error.
 	UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error

@@ -64,7 +64,7 @@ func (mrEnv *MultiRepoEnv) RemoteDialProvider() dbfactory.GRPCDialProvider {
 	for _, env := range mrEnv.envs {
 		return env.env
 	}
-	return nil
+	return NewGRPCDialProvider()
 }
 
 func (mrEnv *MultiRepoEnv) Config() config.ReadWriteConfig {
@@ -274,6 +274,8 @@ func MultiEnvForDirectory(
 	if dEnv.Valid() {
 		binFormat = dEnv.DoltDB.Format()
 		mrEnv.AddEnv(dbName, dEnv)
+	} else {
+		binFormat = types.Format_Default
 	}
 
 	// If there are other directories in the directory, try to load them as additional databases

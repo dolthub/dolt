@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
@@ -161,7 +160,6 @@ var _ sql.TemporaryTableCreator = Database{}
 var _ sql.TableRenamer = Database{}
 var _ sql.TriggerDatabase = Database{}
 var _ sql.StoredProcedureDatabase = Database{}
-var _ sql.ExternalStoredProcedureDatabase = Database{}
 var _ sql.TransactionDatabase = Database{}
 var _ globalstate.StateProvider = Database{}
 
@@ -1094,11 +1092,6 @@ func (db Database) DropStoredProcedure(ctx *sql.Context, name string) error {
 	return DoltProceduresDropProcedure(ctx, db, name)
 }
 
-// GetExternalStoredProcedures implements sql.ExternalStoredProcedureDatabase.
-func (db Database) GetExternalStoredProcedures(ctx *sql.Context) ([]sql.ExternalStoredProcedureDetails, error) {
-	return dprocedures.DoltProcedures, nil
-}
-
 func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, definition string, created time.Time, existingErr error) (err error) {
 	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
 	if err != nil {
@@ -1183,8 +1176,8 @@ func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) 
 }
 
 // TODO: this is a hack to make user space DBs appear to the analyzer as full DBs with state etc., but the state is
-//  really skeletal. We need to reexamine the DB / session initialization to make this simpler -- most of these things
-//  aren't needed at initialization time and for most code paths.
+// really skeletal. We need to reexamine the DB / session initialization to make this simpler -- most of these things
+// aren't needed at initialization time and for most code paths.
 func getInitialDBStateForUserSpaceDb(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
 	return dsess.InitialDbState{
 		Db: db,

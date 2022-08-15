@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -45,7 +44,7 @@ func prollyParentFkConstraintViolations(
 	postParentRowData := durable.ProllyMapFromIndex(postParent.RowData)
 	postParentIndexData := durable.ProllyMapFromIndex(postParent.IndexData)
 
-	idxDesc := shim.KeyDescriptorFromSchema(postParent.Index.Schema())
+	idxDesc := postParent.Index.Schema().GetKeyDescriptor()
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	partialKB := val.NewTupleBuilder(partialDesc)
 
@@ -128,7 +127,7 @@ func prollyChildFkConstraintViolations(
 	jsonData []byte) (*doltdb.Table, bool, error) {
 	postChildRowData := durable.ProllyMapFromIndex(postChild.RowData)
 
-	idxDesc := shim.KeyDescriptorFromSchema(postChild.Index.Schema())
+	idxDesc := postChild.Index.Schema().GetKeyDescriptor()
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	partialKB := val.NewTupleBuilder(partialDesc)
 

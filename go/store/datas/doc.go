@@ -27,6 +27,5 @@ the new storage format, this is the NodeStore.
 // TODO commit closures
 
 // TODO refwalks
-
 */
 package datas

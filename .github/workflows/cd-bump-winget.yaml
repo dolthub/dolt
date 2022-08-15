@@ -12,7 +12,7 @@ on:
 jobs:
   get-version:
     name: Get Version
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     outputs:
       version: ${{ steps.get_version.outputs.version }}
     steps:

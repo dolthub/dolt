@@ -60,7 +60,7 @@ func TestForeignKeyErrors(t *testing.T) {
 }
 
 func skipNewFormat(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
+	if types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}
 }

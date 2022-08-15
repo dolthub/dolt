@@ -70,7 +70,7 @@ var _ WriteSession = &nomsWriteSession{}
 // locations that do not have a root at the time of this call. However, a root must be set through SetRoot before any
 // table editors are returned.
 func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, tracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession {
-	if types.IsFormat_DOLT_1(nbf) {
+	if types.IsFormat_DOLT(nbf) {
 		return &prollyWriteSession{
 			workingSet: ws,
 			tables:     make(map[string]*prollyTableWriter),

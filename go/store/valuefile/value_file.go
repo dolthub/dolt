@@ -112,11 +112,13 @@ func WriteToWriter(ctx context.Context, wr io.Writer, store *FileValueStore, val
 // uint32 num chunks
 //
 // for each chunk:
-//   hash of chunk
-//   len of chunk
+//
+//	hash of chunk
+//	len of chunk
 //
 // for each chunk
-//   chunk bytes
+//
+//	chunk bytes
 func write(wr io.Writer, h hash.Hash, store *FileValueStore) error {
 	// The Write*IfNoErr functions makes the error handling code less annoying
 	err := iohelp.WritePrimIfNoErr(wr, uint32(len(store.nbf.VersionString())), nil)
@@ -224,8 +226,8 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 		nbf = types.Format_LD_1
 	case types.Format_DOLT_DEV.VersionString():
 		nbf = types.Format_DOLT_DEV
-	case types.Format_DOLT_1.VersionString():
-		nbf = types.Format_DOLT_1
+	case types.Format_DOLT.VersionString():
+		nbf = types.Format_DOLT
 	default:
 		return hash.Hash{}, nil, fmt.Errorf("unknown noms format: %s", string(data))
 	}

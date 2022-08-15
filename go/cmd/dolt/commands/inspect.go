@@ -59,7 +59,7 @@ func (cmd InspectCmd) Description() string {
 }
 
 func (cmd InspectCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT_1(nbf)
+	return types.IsFormat_DOLT(nbf)
 }
 
 func (cmd InspectCmd) Docs() *cli.CommandDocumentation {

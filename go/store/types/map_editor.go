@@ -33,11 +33,11 @@ type CreateEditAcc func(nbf *NomsBinFormat) EditAccumulator
 // CreateEditAccForMapEdits allows users to define the EditAccumulator that should be used when creating a MapEditor via
 // the Map.Edit method.  In most cases you should call:
 //
-// func init() {
-// 		types.CreateEditAccForMapEdits = func() EditAccumulator {
-//			return edits.NewAsyncSortedEdits(10000, 4, 2) // configure your own constants
-// 		}
-// }
+//	func init() {
+//			types.CreateEditAccForMapEdits = func() EditAccumulator {
+//				return edits.NewAsyncSortedEdits(10000, 4, 2) // configure your own constants
+//			}
+//	}
 var CreateEditAccForMapEdits CreateEditAcc = NewDumbEditAccumulator
 
 // EditAccumulator is an interface for a datastructure that can have edits added to it. Once all edits are
