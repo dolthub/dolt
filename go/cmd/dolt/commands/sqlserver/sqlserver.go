@@ -280,7 +280,11 @@ func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config S
 			}
 			return commands.ErrMultipleDoltCfgDirs.New(p1, p2)
 		}
-		cfgDirPath = path
+
+		// Only use current directory if there wasn't one in parent
+		if len(cfgDirPath) == 0 {
+			cfgDirPath = path
+		}
 	}
 	serverConfig.withCfgDir(cfgDirPath)
 
