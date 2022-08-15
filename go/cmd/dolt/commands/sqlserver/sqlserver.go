@@ -269,20 +269,21 @@ func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config S
 
 		// Look in data directory (which is necessarily current directory) for doltcfg
 		path = filepath.Join(dataDir, commands.DefaultCfgDirName)
-		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
-			if len(cfgDirPath) != 0 {
-				p1, err := dEnv.FS.Abs(cfgDirPath)
-				if err != nil {
-					return err
-				}
-				p2, err := dEnv.FS.Abs(path)
-				if err != nil {
-					return err
-				}
-				return commands.ErrMultipleDoltCfgDirs.New(p1, p2)
-			} else {
-				cfgDirPath = path
+		if exists, isDir := dEnv.FS.Exists(path); exists && isDir && len(cfgDirPath) != 0 {
+			p1, err := dEnv.FS.Abs(cfgDirPath)
+			if err != nil {
+				return err
 			}
+			p2, err := dEnv.FS.Abs(path)
+			if err != nil {
+				return err
+			}
+			return commands.ErrMultipleDoltCfgDirs.New(p1, p2)
+		}
+
+		// None found anywhere, use current directory
+		if len(cfgDirPath) == 0 {
+			cfgDirPath = path
 		}
 	}
 	serverConfig.withCfgDir(cfgDirPath)

@@ -236,9 +236,12 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 				}
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(ErrMultipleDoltCfgDirs.New(p1, p2)), usage)
-			} else {
-				cfgDirPath = path
 			}
+		}
+
+		// None found anywhere, use current directory
+		if len(cfgDirPath) == 0 {
+			cfgDirPath = path
 		}
 	}
 
