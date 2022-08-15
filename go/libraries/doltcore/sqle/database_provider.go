@@ -245,6 +245,12 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 		return err
 	}
 
+	// if calling process has a lockfile, also create one for new database
+	if env.FsIsLocked(p.fs) {
+		ctx.GetLogger().Logger.Println("locking ", name)
+		newEnv.Lock()
+	}
+
 	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
 	if err != nil {
 		return err

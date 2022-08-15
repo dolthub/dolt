@@ -588,7 +588,7 @@ func execQuery(
 
 	// Set client to specified user
 	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
-
+	
 	sqlSch, rowIter, err := ProcessQuery(sqlCtx, query, se)
 	if err != nil {
 		return formatQueryError("", err)

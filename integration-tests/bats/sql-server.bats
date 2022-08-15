@@ -1466,6 +1466,16 @@ databases:
     [ "$status" -eq 1 ]
 }
 
+@test "sql-server: sql-server lock for new databases" {
+    cd repo1
+    start_sql_server
+    server_query repo1 1 "create database newdb" ""
+    cd newdb
+    let PORT="$$ % (65536-1024) + 1024"
+    run dolt sql-server -P $PORT
+    [ "$status" -eq 1 ]
+}
+
 @test "sql-server: sql-server locks database to writes" {
     cd repo2
     dolt sql -q "create table a (x int primary key)" 
