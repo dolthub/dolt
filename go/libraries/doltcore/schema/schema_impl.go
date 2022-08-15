@@ -20,7 +20,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/vt/proto/query"
+
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var FeatureFlagKeylessSchema = true
@@ -340,6 +344,86 @@ func (si schemaImpl) AddColumn(newCol Column, order *ColumnOrder) (Schema, error
 	return &si, nil
 }
 
+// GetMapDescriptors implements the Schema interface.
+func (si *schemaImpl) GetMapDescriptors() (keyDesc, valueDesc val.TupleDesc) {
+	keyDesc = si.GetKeyDescriptor()
+	valueDesc = si.GetValueDescriptor()
+	return
+}
+
+// GetKeyDescriptor implements the Schema interface.
+func (si *schemaImpl) GetKeyDescriptor() val.TupleDesc {
+	if IsKeyless(si) {
+		return val.KeylessTupleDesc
+	}
+
+	var tt []val.Type
+	useCollations := false // We only use collations if a string exists
+	var collations []sql.CollationID
+	_ = si.GetPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
+		sqlType := col.TypeInfo.ToSqlType()
+		queryType := sqlType.Type()
+		tt = append(tt, val.Type{
+			Enc:      val.Encoding(EncodingFromSqlType(queryType)),
+			Nullable: columnMissingNotNullConstraint(col),
+		})
+		if queryType == query.Type_CHAR || queryType == query.Type_VARCHAR {
+			useCollations = true
+			collations = append(collations, sqlType.(sql.StringType).Collation())
+		} else {
+			collations = append(collations, sql.Collation_Invalid)
+		}
+		return
+	})
+
+	if useCollations {
+		if len(collations) != len(tt) {
+			panic(fmt.Errorf("cannot create tuple descriptor from %d collations and %d types", len(collations), len(tt)))
+		}
+		cmp := CollationTupleComparator{Collations: collations}
+		return val.NewTupleDescriptorWithComparator(cmp, tt...)
+	} else {
+		return val.NewTupleDescriptor(tt...)
+	}
+}
+
+// GetValueDescriptor implements the Schema interface.
+func (si *schemaImpl) GetValueDescriptor() val.TupleDesc {
+	var tt []val.Type
+	var collations []sql.CollationID
+	if IsKeyless(si) {
+		tt = []val.Type{val.KeylessCardType}
+		collations = []sql.CollationID{sql.Collation_Invalid}
+	}
+
+	useCollations := false // We only use collations if a string exists
+	_ = si.GetNonPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
+		sqlType := col.TypeInfo.ToSqlType()
+		queryType := sqlType.Type()
+		tt = append(tt, val.Type{
+			Enc:      val.Encoding(EncodingFromSqlType(queryType)),
+			Nullable: col.IsNullable(),
+		})
+		if queryType == query.Type_CHAR || queryType == query.Type_VARCHAR {
+			useCollations = true
+			collations = append(collations, sqlType.(sql.StringType).Collation())
+		} else {
+			collations = append(collations, sql.Collation_Invalid)
+		}
+		return
+	})
+
+	if useCollations {
+		if len(collations) != len(tt) {
+			panic(fmt.Errorf("cannot create tuple descriptor from %d collations and %d types", len(collations), len(tt)))
+		}
+		cmp := CollationTupleComparator{Collations: collations}
+		return val.NewTupleDescriptorWithComparator(cmp, tt...)
+	} else {
+		return val.NewTupleDescriptor(tt...)
+	}
+}
+
 // indexOf returns the index of the given column in the overall schema
 func (si *schemaImpl) indexOf(colName string) int {
 	i, idx := 0, -1
@@ -364,4 +448,13 @@ func primaryKeyOrdinals(sch *schemaImpl, keyCols []string) []int {
 	}
 
 	return ordinals
+}
+
+func columnMissingNotNullConstraint(col Column) bool {
+	for _, cnst := range col.Constraints {
+		if cnst.GetConstraintType() == NotNullConstraintType {
+			return false
+		}
+	}
+	return true
 }

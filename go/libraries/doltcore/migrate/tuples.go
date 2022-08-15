@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	geo "github.com/dolthub/dolt/go/store/geometry"
 	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -46,8 +45,8 @@ type translator struct {
 }
 
 func tupleTranslatorsFromSchema(sch schema.Schema, ns tree.NodeStore) (kt, vt translator) {
-	kd := shim.KeyDescriptorFromSchema(sch)
-	vd := shim.ValueDescriptorFromSchema(sch)
+	kd := sch.GetKeyDescriptor()
+	vd := sch.GetValueDescriptor()
 
 	keyMap := sch.GetPKCols().TagToIdx
 	valMap := sch.GetNonPKCols().TagToIdx

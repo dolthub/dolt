@@ -61,7 +61,7 @@ func NewEmptyArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, ns tr
 		panic("TODO")
 
 	case types.Format_DOLT:
-		kd := shim.KeyDescriptorFromSchema(tableSch)
+		kd := tableSch.GetKeyDescriptor()
 		m, err := prolly.NewArtifactMapFromTuples(ctx, ns, kd)
 		if err != nil {
 			return nil, err
@@ -99,7 +99,7 @@ func artifactIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tr
 
 	case types.Format_DOLT:
 		root := shim.NodeFromValue(v)
-		kd := shim.KeyDescriptorFromSchema(tableSch)
+		kd := tableSch.GetKeyDescriptor()
 		m := prolly.NewArtifactMap(root, ns, kd)
 		return ArtifactIndexFromProllyMap(m), nil
 
