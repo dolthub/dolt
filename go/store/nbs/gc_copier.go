@@ -63,7 +63,7 @@ func (gcc *gcCopier) addChunk(ctx context.Context, c CompressedChunk) error {
 	return gcc.writer.AddCmpChunk(c)
 }
 
-func (gcc *gcCopier) copyTablesToDir(ctx context.Context, destDir string) (ts []tableSpec,  err error) {
+func (gcc *gcCopier) copyTablesToDir(ctx context.Context, destDir string) (ts []tableSpec, err error) {
 	var filename string
 	filename, err = gcc.writer.Finish()
 	if err != nil {

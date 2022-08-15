@@ -1339,7 +1339,6 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 		return errors.New("Not implemented")
 	}
 
-
 	tn, err := func() (n string, err error) {
 		var r io.ReadCloser
 		r, _, err = getRd()
@@ -1366,12 +1365,12 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 			}
 		}()
 
-                _, err = io.Copy(temp, r)
-                if err != nil {
-                        return "", err
-                }
+		_, err = io.Copy(temp, r)
+		if err != nil {
+			return "", err
+		}
 
-                return temp.Name(), nil
+		return temp.Name(), nil
 	}()
 	if err != nil {
 		return err
