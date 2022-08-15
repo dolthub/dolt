@@ -1622,7 +1622,24 @@ SQL
 
     run dolt sql -q "select * from \`dolt_repo_$$/v1\`.a1 order by x;" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 4 ]  
+}
+
+@test "sql: USE tag doesn't create duplicate commit DB name" {
+    skip "unrelated panic when dolt_checkout is called after using a read-only revision db https://github.com/dolthub/dolt/issues/4067"
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+
+    # get the last commit hash
+    hash=`dolt log | grep commit | cut -d" " -f2 | tail -n+1 | head -n1`
+
+    dolt sql  <<SQL
+USE \`dolt_repo_$$/$hash\`;
+USE \`dolt_repo_$$/feature-branch\`;
+CALL DOLT_TAG("v1");
+USE \`dolt_repo_$$/v1\`;
+CALL dolt_checkout('feature-branch');
+SQL
 }
 
 @test "sql: tag qualified DB name in delete" {
