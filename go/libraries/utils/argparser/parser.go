@@ -103,6 +103,14 @@ func (ap *ArgParser) SupportsString(name, abbrev, valDesc, desc string) *ArgPars
 	return ap
 }
 
+// Adds support for a new string argument with the description given and optional empty value. See SupportOpt for details on params.
+func (ap *ArgParser) SupportsOptionalString(name, abbrev, valDesc, desc string) *ArgParser {
+	opt := &Option{name, abbrev, valDesc, OptionalEmptyValue, desc, nil}
+	ap.SupportOption(opt)
+
+	return ap
+}
+
 func (ap *ArgParser) SupportsValidatedString(name, abbrev, valDesc, desc string, validator ValidationFunc) *ArgParser {
 	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, validator}
 	ap.SupportOption(opt)
@@ -184,7 +192,7 @@ func (ap *ArgParser) matchModalOptions(arg string) (matches []*Option, rest stri
 func (ap *ArgParser) sortedValueOptions() []string {
 	vos := make([]string, 0, len(ap.Supported))
 	for s, opt := range ap.NameOrAbbrevToOpt {
-		if opt.OptType == OptionalValue && s != "" {
+		if (opt.OptType == OptionalValue || opt.OptType == OptionalEmptyValue) && s != "" {
 			vos = append(vos, s)
 		}
 	}
@@ -265,11 +273,15 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 
 		if value == nil {
 			i++
+			valueStr := ""
 			if i >= len(args) {
-				return nil, errors.New("error: no value for option `" + opt.Name + "'")
+				if opt.OptType != OptionalEmptyValue {
+					return nil, errors.New("error: no value for option `" + opt.Name + "'")
+				}
+			} else {
+				valueStr = args[i]
 			}
 
-			valueStr := args[i]
 			value = &valueStr
 		}
 
