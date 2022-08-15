@@ -67,7 +67,7 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, destDir string) ([]tab
 
 	filepath := path.Join(destDir, filename)
 
-	if gcc.writer.Size() == 0 {
+	if gcc.writer.ChunkCount() == 0 {
 		return []tableSpec{}, nil
 	}
 
@@ -92,7 +92,7 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, destDir string) ([]tab
 	return []tableSpec{
 		{
 			name:       addr,
-			chunkCount: gcc.writer.ChunkCount(),
+			chunkCount: uint32(gcc.writer.ChunkCount()),
 		},
 	}, nil
 }
