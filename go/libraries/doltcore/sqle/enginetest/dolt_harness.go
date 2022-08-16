@@ -112,17 +112,41 @@ func (d *DoltHarness) Setup(setupData ...[]setup.SetupScript) {
 // resetScripts returns a set of queries that will reset the given database
 // names. If [autoInc], the queries for resetting autoincrement tables are
 // included.
-func resetScripts(dbs []string, autoInc bool) []setup.SetupScript {
+func (d *DoltHarness) resetScripts() []setup.SetupScript {
+	ctx := enginetest.NewContext(d)
+	_, res := enginetest.MustQuery(ctx, d.engine, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
+	var dbs []string
+	for i := range res {
+		dbs = append(dbs, res[i][0].(string))
+	}
+
 	var resetCmds setup.SetupScript
 	for i := range dbs {
 		db := dbs[i]
 		resetCmds = append(resetCmds, fmt.Sprintf("use %s", db))
 		resetCmds = append(resetCmds, "call dclean()")
 		resetCmds = append(resetCmds, "call dreset('--hard', 'head')")
-		if autoInc {
-			resetCmds = append(resetCmds, setup.AutoincrementData[0]...)
+
+		// Any auto increment tables must be dropped and recreated to get a fresh state for the global auto increment
+		// sequence trackers
+		_, aiTables := enginetest.MustQuery(ctx, d.engine,
+			fmt.Sprintf("select distinct table_name from information_schema.columns where extra = 'auto_increment' and table_schema = '%s';", db))
+
+		for _, tableNameRow := range aiTables {
+			tableName := tableNameRow[0].(string)
+			resetCmds = append(resetCmds, fmt.Sprintf("drop table %s", tableName))
+
+			ctx := enginetest.NewContext(d).WithCurrentDB(db)
+			_, showCreateResult := enginetest.MustQuery(ctx, d.engine, fmt.Sprintf("show create table %s;", tableName))
+			var createTableStatement strings.Builder
+			for _, row := range showCreateResult {
+				createTableStatement.WriteString(row[1].(string))
+			}
+
+			resetCmds = append(resetCmds, createTableStatement.String())
 		}
 	}
+
 	resetCmds = append(resetCmds, "use mydb")
 	return []setup.SetupScript{resetCmds}
 }
@@ -159,11 +183,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 		d.engine = e
 
 		var res []sql.Row
-		// todo(max): need better way to reset autoincrement regardless of test type
 		ctx := enginetest.NewContext(d)
-		_, res = enginetest.MustQuery(ctx, e, "select count(*) from information_schema.tables where table_name = 'auto_increment_tbl';")
-		d.autoInc = res[0][0].(int64) > 0
-
 		_, res = enginetest.MustQuery(ctx, e, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
 		var dbs []string
 		for i := range res {
@@ -184,13 +204,9 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 
 	//todo(max): easier if tests specify their databases ahead of time
 	ctx := enginetest.NewContext(d)
-	_, res := enginetest.MustQuery(ctx, d.engine, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
-	var dbs []string
-	for i := range res {
-		dbs = append(dbs, res[i][0].(string))
-	}
+	e, err := enginetest.RunEngineScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
 
-	return enginetest.RunEngineScripts(ctx, d.engine, resetScripts(dbs, d.autoInc), d.SupportsNativeIndexCreation())
+	return e, err
 }
 
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
