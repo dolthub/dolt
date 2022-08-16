@@ -247,6 +247,24 @@ SQL
     server_query repo1 1 "select dolt_commit('--allow-empty', '-m', 'msg')" "" "database server is set to read only mode: user does not have permission: write"
 }
 
+@test "sql-server: read-only flag prevents dolt_reset" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+    run dolt commit --allow-empty -m 'empty test commit'
+
+    DEFAULT_DB="$1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+  read_only: true" > server.yaml
+    start_sql_server_with_config repo1 server.yaml
+
+    # try to execute dolt_reset
+    skip "read-only flag does not prevent dolt_reset"
+    server_query repo1 1 "call dolt_reset('--hard', 'HEAD~1')" "" "database server is set to read only mode: user does not have permission: write"
+}
+
+
 @test "sql-server: test command line modification" {
     skiponwindows "Missing dependencies"
 
