@@ -155,13 +155,10 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/tag1"}},
 			},
 			{
-				// TODO: This used to panic, but we changed it to return an error that this is a read-only database.
-				//       or... should it check out the root database?
 				Query:          "call dolt_reset();",
 				ExpectedErrStr: "unable to reset HEAD a read-only revision database",
 			},
 			{
-				// TODO: What's the right behavior for dolt_checkout on a read-only, revision db?
 				Query:    "call dolt_checkout('main');",
 				Expected: []sql.Row{{0}},
 			},
