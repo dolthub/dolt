@@ -371,7 +371,7 @@ func (td TableDelta) GetMaps(ctx context.Context) (from, to types.Map, err error
 			return from, to, err
 		}
 	} else {
-		from, _ = types.NewMap(ctx, td.ToTable.ValueReadWriter())
+		from, _ = types.NewMap(ctx, td.FromTable.ValueReadWriter())
 	}
 
 	if td.ToTable != nil {
@@ -380,7 +380,7 @@ func (td TableDelta) GetMaps(ctx context.Context) (from, to types.Map, err error
 			return from, to, err
 		}
 	} else {
-		to, _ = types.NewMap(ctx, td.FromTable.ValueReadWriter())
+		to, _ = types.NewMap(ctx, td.ToTable.ValueReadWriter())
 	}
 
 	return from, to, nil
