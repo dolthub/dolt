@@ -184,10 +184,11 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			}
 
 			// merge will not commit if
-			//   -merge is a fast-forward
-			//   -merge does not have conflicts or constraint violations
-			//   -mergeErr is ErrIsAhead, so there is no merge
-			if !apr.Contains(cli.NoCommitFlag) && !ff && !hasConflicts && !hasConstraintViolations && !errors.Is(mergeErr, doltdb.ErrIsAhead) {
+			//   - '--no-commit' flag is defined
+			//   - merge is a fast-forward
+			//   - merge does not have conflicts or constraint violations
+			//   - mergeErr is ErrIsAhead, so there is no merge
+			if !apr.Contains(cli.NoCommitFlag) && !ff && !hasConflictOrConstraintViolation(tblToStats) && !errors.Is(mergeErr, doltdb.ErrIsAhead) {
 				if msg == "" {
 					msg, err = getCommitMessageFromEditor(ctx, dEnv, suggestedMsg)
 					if err != nil {
@@ -493,4 +494,15 @@ func handleMergeErr(ctx context.Context, dEnv *env.DoltEnv, mergeErr error, hasC
 	}
 
 	return 0
+}
+
+// hasConflictOrConstraintViolation checks for conflicts or constraint violation regardless of a table being modified
+// This function checks in general for current working set, not for specific merge
+func hasConflictOrConstraintViolation(tblToStats map[string]*merge.MergeStats) bool {
+	for _, tblStats := range tblToStats {
+		if tblStats.Conflicts > 0 || tblStats.ConstraintViolations > 0 {
+			return true
+		}
+	}
+	return false
 }
