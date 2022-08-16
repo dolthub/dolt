@@ -598,8 +598,7 @@ SQL
      UPDATE test SET pk=60 WHERE pk=500000;
      SELECT DOLT_ADD('.');
      SELECT DOLT_COMMIT('-m', 'Insert 60');
-     SELECT DOLT_MERGE('feature-branch');
-     SELECT DOLT_COMMIT('-a', '-m', 'Finish up Merge');
+     SELECT DOLT_MERGE('feature-branch','-m','merge feature-branch');
      "
 
      server_query repo1 1 "SELECT * FROM test order by pk" "pk\n0\n1\n2\n3\n21\n60"
