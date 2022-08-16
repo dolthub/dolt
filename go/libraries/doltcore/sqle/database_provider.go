@@ -201,13 +201,8 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 	}
 	p.mu.RUnlock()
 
-	// If we didn't find the database actively in use for the current session, then the current
-	// session must be using a transitory revision DB.
+	// If the current database is not one of the primary databases, it must be a transitory revision database
 	if !foundDatabase {
-		// TODO: Does this cause problems if the database name has slashes in it? We don't support that case yet,
-		//       and it'll require more complex parsing to parse out the database in that case.
-		//       Otherwise the logic for creating a revisionDB seems pretty cheap; definitely cheaper than the
-		//       alternative of keeping every used revision db around forever.
 		revDb, _, ok, err := p.databaseForRevision(ctx, ctx.GetCurrentDatabase())
 		if err != nil {
 			// TODO: What to do here, since we can't return an error? Just log something?
