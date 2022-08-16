@@ -217,31 +217,33 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		cfgDirPath = filepath.Join(dataDir, DefaultCfgDirName)
 	} else {
 		// Look in parent directory for doltcfg
-		path := filepath.Join("..", DefaultCfgDirName)
-		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
-			cfgDirPath = path
-		}
+		parentDirCfg := filepath.Join("..", DefaultCfgDirName)
+		parentExists, isDir := dEnv.FS.Exists(parentDirCfg)
+		parentDirExists := parentExists && isDir
 
 		// Look in data directory (which is necessarily current directory) for doltcfg
-		path = filepath.Join(dataDir, DefaultCfgDirName)
-		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
-			// both parent and current dir have doltcfg
-			if len(cfgDirPath) != 0 {
-				p1, err := dEnv.FS.Abs(cfgDirPath)
-				if err != nil {
-					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-				}
-				p2, err := dEnv.FS.Abs(path)
-				if err != nil {
-					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-				}
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(ErrMultipleDoltCfgDirs.New(p1, p2)), usage)
+		currDirCfg := filepath.Join(dataDir, DefaultCfgDirName)
+		currExists, isDir := dEnv.FS.Exists(currDirCfg)
+		currDirExists := currExists && isDir
+
+		// Error if both current and parent exist
+		if currDirExists && parentDirExists {
+			p1, err := dEnv.FS.Abs(cfgDirPath)
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 			}
+			p2, err := dEnv.FS.Abs(parentDirCfg)
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			}
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(ErrMultipleDoltCfgDirs.New(p1, p2)), usage)
 		}
 
-		// None found anywhere, use current directory
-		if len(cfgDirPath) == 0 {
-			cfgDirPath = path
+		// Assign the one that exists, defaults to current if neither exist
+		if parentDirExists {
+			cfgDirPath = parentDirCfg
+		} else {
+			cfgDirPath = currDirCfg
 		}
 	}
 
