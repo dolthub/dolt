@@ -120,12 +120,12 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 		dbs = append(dbs, res[i][0].(string))
 	}
 
-	var resetCmds setup.SetupScript
+	var resetCmds []setup.SetupScript
 	for i := range dbs {
 		db := dbs[i]
-		resetCmds = append(resetCmds, fmt.Sprintf("use %s", db))
-		resetCmds = append(resetCmds, "call dclean()")
-		resetCmds = append(resetCmds, "call dreset('--hard', 'head')")
+		resetCmds = append(resetCmds, setup.SetupScript{fmt.Sprintf("use %s", db)})
+		resetCmds = append(resetCmds, setup.SetupScript{"call dclean()"})
+		resetCmds = append(resetCmds, setup.SetupScript{"call dreset('--hard', 'head')"})
 
 		// Any auto increment tables must be dropped and recreated to get a fresh state for the global auto increment
 		// sequence trackers
@@ -134,7 +134,14 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 
 		for _, tableNameRow := range aiTables {
 			tableName := tableNameRow[0].(string)
-			resetCmds = append(resetCmds, fmt.Sprintf("drop table %s", tableName))
+
+			// special handling for auto_increment_tbl, which is expected to start with particular values
+			if strings.ToLower(tableName) == "auto_increment_tbl" {
+				resetCmds = append(resetCmds, setup.AutoincrementData...)
+				continue
+			}
+
+			resetCmds = append(resetCmds, setup.SetupScript{fmt.Sprintf("drop table %s", tableName)})
 
 			ctx := enginetest.NewContext(d).WithCurrentDB(db)
 			_, showCreateResult := enginetest.MustQuery(ctx, d.engine, fmt.Sprintf("show create table %s;", tableName))
@@ -143,12 +150,12 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 				createTableStatement.WriteString(row[1].(string))
 			}
 
-			resetCmds = append(resetCmds, createTableStatement.String())
+			resetCmds = append(resetCmds, setup.SetupScript{createTableStatement.String()})
 		}
 	}
 
-	resetCmds = append(resetCmds, "use mydb")
-	return []setup.SetupScript{resetCmds}
+	resetCmds = append(resetCmds, setup.SetupScript{"use mydb"})
+	return resetCmds
 }
 
 // commitScripts returns a set of queries that will commit the workingsets
