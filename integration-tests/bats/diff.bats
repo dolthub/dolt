@@ -769,7 +769,7 @@ SQL
     dolt sql -q "alter table t add primary key (pk, val)"
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [ "${lines[0]}" = 'ALTER TABLE `t` ADD `pk2` INT;' ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` ADD `pk2` int;' ]
     [ "${lines[1]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
     [ "${lines[2]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk,val);' ]
     [ "${lines[3]}" = 'Primary key sets differ between revisions for table t, skipping data diff' ]

@@ -282,7 +282,7 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "alter table people modify rating double default 'not a number'",
-				ExpectedErrStr: "incompatible type for default value: error: 'not a number' is not a valid value for 'DOUBLE'",
+				ExpectedErrStr: "incompatible type for default value: error: 'not a number' is not a valid value for 'double'",
 			},
 		},
 	},

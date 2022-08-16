@@ -281,7 +281,7 @@ teardown() {
     [[ "$output" =~ "column \"c12\" could not be found in any table in scope" ]] || false
     run dolt sql -q "update test set c1='foo' where pk=0"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: 'foo' is not a valid value for 'BIGINT'" ]] || false
+    [[ "$output" =~ "error: 'foo' is not a valid value for 'bigint'" ]] || false
     run dolt sql -q "update test set c1=100,c2=100,c3=100,c4=100,c5=100 where pk>0"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Query OK, 3 rows affected" ]] || false
