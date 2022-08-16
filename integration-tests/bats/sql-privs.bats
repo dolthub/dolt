@@ -183,6 +183,13 @@ teardown() {
     [[ "$output" =~ "privileges.db" ]] || false
 }
 
+@test "sql-privs: host option doesn't affect user" {
+    make_test_repo
+
+    start_sql_server_with_args --host 127.0.0.1 --user=dolt
+    server_query test_db 1 "select user, host from mysql.user order by user" "User,Host\ndolt,%"
+}
+
 @test "sql-privs: multiple doltcfg directories causes error" {
     # setup repo
     rm -rf test_db

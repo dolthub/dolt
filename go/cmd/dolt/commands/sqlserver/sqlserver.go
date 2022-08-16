@@ -310,10 +310,6 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		serverConfig.WithSocket(sock)
 	}
 
-	if host, ok := apr.GetValue(hostFlag); ok {
-		serverConfig.WithHost(host)
-	}
-
 	if port, ok := apr.GetInt(portFlag); ok {
 		serverConfig.WithPort(port)
 	}
