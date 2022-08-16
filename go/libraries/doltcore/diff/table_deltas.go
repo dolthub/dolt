@@ -218,10 +218,6 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
 			ToFks:            t.ToFks,
 			FromFksParentSch: f.FromFksParentSch,
 			ToFksParentSch:   t.ToFksParentSch,
-			FromVRW:          f.FromVRW,
-			ToVRW:            t.ToVRW,
-			FromNodeStore:    f.FromNodeStore,
-			ToNodeStore:      t.ToNodeStore,
 		}
 	}
 
