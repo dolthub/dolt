@@ -180,14 +180,7 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 		return nil, sql.ErrDatabaseNotFound.New(name)
 	}
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if found, ok := p.databases[formatDbMapKeyName(name)]; !ok {
-		p.databases[formatDbMapKeyName(name)] = db
-		return db, nil
-	} else {
-		return found, nil
-	}
+	return db, nil
 }
 
 func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
@@ -195,16 +188,35 @@ func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 	return err == nil
 }
 
-func (p DoltDatabaseProvider) AllDatabases(_ *sql.Context) (all []sql.Database) {
+func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database) {
 	p.mu.RLock()
-	defer p.mu.RUnlock()
 
-	i := 0
-	all = make([]sql.Database, len(p.databases))
+	all = make([]sql.Database, 0, len(p.databases))
+	var foundDatabase bool
 	for _, db := range p.databases {
-		all[i] = db
-		i++
+		if db.Name() == ctx.GetCurrentDatabase() {
+			foundDatabase = true
+		}
+		all = append(all, db)
 	}
+	p.mu.RUnlock()
+
+	// If we didn't find the database actively in use for the current session, then the current
+	// session must be using a transitory revision DB.
+	if !foundDatabase {
+		// TODO: Does this cause problems if the database name has slashes in it? We don't support that case yet,
+		//       and it'll require more complex parsing to parse out the database in that case.
+		//       Otherwise the logic for creating a revisionDB seems pretty cheap; definitely cheaper than the
+		//       alternative of keeping every used revision db around forever.
+		revDb, _, ok, err := p.databaseForRevision(ctx, ctx.GetCurrentDatabase())
+		if err != nil {
+			// TODO: What to do here, since we can't return an error? Just log something?
+			//return nil
+		} else if ok {
+			all = append(all, revDb)
+		}
+	}
+
 	return
 }
 
