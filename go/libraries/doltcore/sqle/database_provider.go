@@ -377,9 +377,6 @@ func createRemote(ctx *sql.Context, remoteName, remoteUrl string, params map[str
 }
 
 func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	isRevisionDatabase, err := p.IsRevisionDatabase(ctx, name)
 	if err != nil {
 		return err
@@ -392,6 +389,9 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	// TODO: there are still cases (not server-first) where we rename databases because the directory name would need
 	//  quoting if used as a database name, and that breaks here. We either need the database name to match the directory
 	//  name in all cases, or else keep a mapping from database name to directory on disk.
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
