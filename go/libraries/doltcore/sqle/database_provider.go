@@ -175,11 +175,11 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 	if err != nil {
 		return nil, err
 	}
-
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(name)
 	}
 
+	// Don't track revision databases, just instantiate them on demand
 	return db, nil
 }
 
