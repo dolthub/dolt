@@ -1714,6 +1714,17 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		ait.Set(t.tableName, seq)
 	}
 
+	// If we're removing an auto inc property, we just need to update global auto increment tracking
+	if existingCol.AutoIncrement && !col.AutoIncrement {
+		// TODO: this isn't transactional, and it should be
+		sess := dsess.DSessFromSess(ctx.Session)
+		ddb, _ := sess.GetDoltDB(ctx, t.db.name)
+		err = t.db.removeTableFromAutoIncrementTracker(ctx, t.Name(), ddb, ws.Ref())
+		if err != nil {
+			return err
+		}
+	}
+
 	newRoot, err := root.PutTable(ctx, t.tableName, updatedTable)
 	if err != nil {
 		return err

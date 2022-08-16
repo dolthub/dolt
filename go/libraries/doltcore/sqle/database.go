@@ -773,7 +773,7 @@ func (db Database) removeTableFromAutoIncrementTracker(
 		ctx *sql.Context,
 		tableName string,
 		ddb *doltdb.DoltDB,
-		ws ref.WorkingSetRef ,
+		ws ref.WorkingSetRef,
 ) error {
 	branches, err := ddb.GetBranches(ctx)
 	if err != nil {
