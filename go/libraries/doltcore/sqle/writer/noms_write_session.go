@@ -58,9 +58,9 @@ type WriteSessionFlusher interface {
 // Serves as coordination for SessionedTableEditors.
 type nomsWriteSession struct {
 	workingSet *doltdb.WorkingSet
-	tables    map[string]*sessionedTableEditor
-	aiTracker globalstate.AutoIncrementTracker
-	mut       *sync.RWMutex // This mutex is specifically for changes that affect the TES or all STEs
+	tables     map[string]*sessionedTableEditor
+	aiTracker  globalstate.AutoIncrementTracker
+	mut        *sync.RWMutex // This mutex is specifically for changes that affect the TES or all STEs
 	opts       editor.Options
 }
 

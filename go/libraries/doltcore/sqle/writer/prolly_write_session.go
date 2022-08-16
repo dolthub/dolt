@@ -31,9 +31,9 @@ import (
 // Serves as coordination for SessionedTableEditors.
 type prollyWriteSession struct {
 	workingSet *doltdb.WorkingSet
-	tables    map[string]*prollyTableWriter
-	aiTracker globalstate.AutoIncrementTracker
-	mut       *sync.RWMutex
+	tables     map[string]*prollyTableWriter
+	aiTracker  globalstate.AutoIncrementTracker
+	mut        *sync.RWMutex
 }
 
 var _ WriteSession = &prollyWriteSession{}

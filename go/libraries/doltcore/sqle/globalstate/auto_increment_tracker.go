@@ -106,7 +106,6 @@ func (a AutoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, e
 	return given, nil
 }
 
-
 // CoerceAutoIncrementValue converts |val| into an AUTO_INCREMENT sequence value
 func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 	switch typ := val.(type) {
