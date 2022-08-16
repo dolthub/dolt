@@ -651,6 +651,38 @@ teardown() {
     rm -rf inner_db
 }
 
+@test "sql-shell: .doltcfg defaults to parent directory" {
+    # remove existing directories
+    rm -rf .doltcfg
+    rm -rf inner_db
+
+    # create user in parent
+    run dolt sql <<< "create user new_user"
+    [ "$status" -eq 0 ]
+
+    run dolt sql <<< "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    # check that .doltcfg and privileges.db was created
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
+    run ls .doltcfg
+    [[ "$output" =~ "privileges.db" ]] || false
+
+    mkdir inner_db
+    cd inner_db
+    run dolt sql <<< "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    # remove existing directories
+    rm -rf .doltcfg
+    rm -rf inner_db
+}
+
 @test "sql-shell: specify data directory outside of dolt repo" {
     # remove files
     rm -rf datadir
