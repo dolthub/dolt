@@ -127,21 +127,7 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 		}
 	}
 
-	err := actions.RenameBranch(ctx, dbData, loadConfig(ctx), oldBranchName, newBranchName, force)
-	if err != nil {
-		return err
-	}
-
-	dbName, revision, err := getRevisionForRevisionDatabase(ctx, ctx.GetCurrentDatabase())
-	if err != nil {
-		return err
-	}
-
-	if revision != "" {
-		return removeBranchRevisionDatabase(ctx, fmt.Sprintf("%s/%s", dbName, oldBranchName))
-	}
-
-	return nil
+	return actions.RenameBranch(ctx, dbData, loadConfig(ctx), oldBranchName, newBranchName, force)
 }
 
 func deleteBranches(ctx *sql.Context, apr *argparser.ArgParseResults, dbData env.DbData) error {
@@ -168,17 +154,6 @@ func deleteBranches(ctx *sql.Context, apr *argparser.ArgParseResults, dbData env
 			return err
 		}
 
-		dbName, revision, err := getRevisionForRevisionDatabase(ctx, ctx.GetCurrentDatabase())
-		if err != nil {
-			return err
-		}
-
-		if revision != "" {
-			err = removeBranchRevisionDatabase(ctx, fmt.Sprintf("%s/%s", dbName, branchName))
-			if err != nil {
-				return err
-			}
-		}
 	}
 	return nil
 }
@@ -234,26 +209,6 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 
 		return false, nil
 	})
-}
-
-// removeBranchRevisionDatabase updates database provider information to ensure the specified
-// revision DB name is not tracked as a valid database.
-func removeBranchRevisionDatabase(ctx *sql.Context, revisionDbName string) error {
-	doltsess, ok := ctx.Session.(*dsess.DoltSession)
-	if !ok {
-		return fmt.Errorf("unexpected session type: %T", ctx.Session)
-	}
-
-	provider := doltsess.Provider()
-	if provider, ok := provider.(dsess.RevisionDatabaseProvider); ok {
-		err := provider.DropRevisionDb(ctx, revisionDbName)
-		// Try to remove any branch-qualified database, but don't error if it isn't found
-		if err != nil && !dsess.ErrRevisionDbNotFound.Is(err) {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func loadConfig(ctx *sql.Context) *env.DoltCliConfig {

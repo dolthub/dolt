@@ -34,8 +34,6 @@ var ErrRevisionDbNotFound = errors.NewKind("revision database not found: '%s'")
 type RevisionDatabaseProvider interface {
 	// RevisionDbState provides the InitialDbState for a revision database.
 	RevisionDbState(ctx *sql.Context, revDB string) (InitialDbState, error)
-	// DropRevisionDb removes the specified revision database from the databases this provider is tracking.
-	DropRevisionDb(ctx *sql.Context, revDB string) error
 	// IsRevisionDatabase validates the specified dbName and returns true if it is a valid revision database.
 	IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error)
 	// GetRevisionForRevisionDatabase looks up the named database and returns the root database name as well as the
@@ -101,10 +99,6 @@ func (e emptyRevisionDatabaseProvider) FileSystemForDatabase(dbname string) (fil
 }
 
 func (e emptyRevisionDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error {
-	return nil
-}
-
-func (e emptyRevisionDatabaseProvider) DropRevisionDb(ctx *sql.Context, revDB string) error {
 	return nil
 }
 

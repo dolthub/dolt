@@ -530,30 +530,6 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx *sql.Context, revDB string) (d
 	return init, nil
 }
 
-// DropRevisionDb implements RevisionDatabaseProvider
-func (p DoltDatabaseProvider) DropRevisionDb(ctx *sql.Context, revDB string) error {
-	isRevisionDatabase, err := p.IsRevisionDatabase(ctx, revDB)
-	if err != nil {
-		return err
-	}
-
-	if isRevisionDatabase == false {
-		return dsess.ErrRevisionDbNotFound.New(revDB)
-	}
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	dbKey := formatDbMapKeyName(revDB)
-	_, ok := p.databases[dbKey]
-	if !ok {
-		return dsess.ErrRevisionDbNotFound.New(revDB)
-	}
-
-	delete(p.databases, dbKey)
-	return nil
-}
-
 // Function implements the FunctionProvider interface
 func (p DoltDatabaseProvider) Function(_ *sql.Context, name string) (sql.Function, error) {
 	fn, ok := p.functions[strings.ToLower(name)]
