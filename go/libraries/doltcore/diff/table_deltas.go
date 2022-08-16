@@ -407,13 +407,18 @@ func (td TableDelta) GetMaps(ctx context.Context) (from, to types.Map, err error
 
 // GetRowData returns the table's row data at the fromRoot and toRoot, or an empty map if the table did not exist.
 func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, err error) {
+	if td.FromTable == nil && td.ToTable == nil {
+		return nil, nil, fmt.Errorf("both from and to tables are missing from table delta")
+	}
+
 	if td.FromTable != nil {
 		from, err = td.FromTable.GetRowData(ctx)
 		if err != nil {
 			return from, to, err
 		}
 	} else {
-		from, _ = durable.NewEmptyIndex(ctx, td.FromVRW, td.FromNodeStore, td.FromSch)
+		// If there is no |FromTable| use the |ToTable|'s schema to make the index.
+		from, _ = durable.NewEmptyIndex(ctx, td.FromVRW, td.FromNodeStore, td.ToSch)
 	}
 
 	if td.ToTable != nil {
@@ -422,7 +427,8 @@ func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, er
 			return from, to, err
 		}
 	} else {
-		to, _ = durable.NewEmptyIndex(ctx, td.ToVRW, td.ToNodeStore, td.ToSch)
+		// If there is no |ToTable| use the |FromTable|'s schema to make the index.
+		to, _ = durable.NewEmptyIndex(ctx, td.ToVRW, td.ToNodeStore, td.FromSch)
 	}
 
 	return from, to, nil
