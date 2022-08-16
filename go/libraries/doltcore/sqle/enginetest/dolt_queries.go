@@ -209,7 +209,6 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"mydb/branch1"}},
 			},
 			{
-				// TODO: What if we call to checkout the same branch?
 				Query:    "call dolt_checkout('main');",
 				Expected: []sql.Row{{0}},
 			},
