@@ -162,6 +162,7 @@ func (p DoltDatabaseProvider) FileSystemForDatabase(dbname string) (filesys.File
 	return dbLocation, nil
 }
 
+// Database implements the sql.DatabaseProvider interface
 func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Database, err error) {
 	var ok bool
 	p.mu.RLock()
@@ -376,6 +377,7 @@ func createRemote(ctx *sql.Context, remoteName, remoteUrl string, params map[str
 	return r, ddb, nil
 }
 
+// DropDatabase implements the sql.MutableDatabaseProvider interface
 func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
 	isRevisionDatabase, err := p.IsRevisionDatabase(ctx, name)
 	if err != nil {
