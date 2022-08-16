@@ -394,7 +394,7 @@ func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, er
 			return from, to, err
 		}
 	} else {
-		from, _ = durable.NewEmptyIndex(ctx, td.ToTable.ValueReadWriter(), td.ToTable.NodeStore(), td.ToSch)
+		from, _ = durable.NewEmptyIndex(ctx, td.FromTable.ValueReadWriter(), td.FromTable.NodeStore(), td.FromSch)
 	}
 
 	if td.ToTable != nil {
@@ -403,7 +403,7 @@ func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, er
 			return from, to, err
 		}
 	} else {
-		to, _ = durable.NewEmptyIndex(ctx, td.FromTable.ValueReadWriter(), td.FromTable.NodeStore(), td.FromSch)
+		to, _ = durable.NewEmptyIndex(ctx, td.ToTable.ValueReadWriter(), td.ToTable.NodeStore(), td.ToSch)
 	}
 
 	return from, to, nil
