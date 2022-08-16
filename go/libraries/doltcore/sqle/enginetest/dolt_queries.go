@@ -156,7 +156,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "call dolt_reset();",
-				ExpectedErrStr: "unable to reset HEAD a read-only revision database",
+				ExpectedErrStr: "unable to reset HEAD in read-only databases",
 			},
 			{
 				Query:    "call dolt_checkout('main');",
@@ -235,6 +235,31 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			{
 				Query:    "show databases;",
 				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/branch1"}},
+			},
+			{
+				Query:    "create table working_set_table(pk int primary key);",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				// Create a table in the working set to verify the main db
+				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
+				Expected: []sql.Row{{"working_set_table"}},
+			},
+			{
+				Query:    "use mydb;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_checkout('branch1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
+				Expected: []sql.Row{{"working_set_table"}},
 			},
 		},
 	},
