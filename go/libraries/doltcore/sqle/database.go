@@ -750,48 +750,70 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 	}
 
 	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
 	if schema.HasAutoIncrement(sch) {
 		ddb, _ := ds.GetDoltDB(ctx, db.name)
-		branches, err := ddb.GetBranches(ctx)
-		if err != nil {
-			return err
-		}
-
-		var wses []*doltdb.WorkingSet
-		for _, b := range branches {
-			wsRef, err := ref.WorkingSetRefForHead(b)
-			if err != nil {
-				return err
-			}
-
-			if wsRef == ws.Ref() {
-				// skip this branch, we've deleted it here
-				continue
-			}
-
-			ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
-			if err == doltdb.ErrWorkingSetNotFound {
-				// skip, continue working on other branches
-				continue
-			} else if err != nil {
-				return err
-			}
-
-			wses = append(wses, ws)
-		}
-
-		ait, err := db.gs.GetAutoIncrementTracker(ctx)
-		if err != nil {
-			return err
-		}
-
-		err = ait.DropTable(ctx, tableName, wses...)
+		err = db.removeTableFromAutoIncrementTracker(ctx, tableName, ddb, ws.Ref())
 		if err != nil {
 			return err
 		}
 	}
 
 	return db.SetRoot(ctx, newRoot)
+}
+
+// removeTableFromAutoIncrementTracker updates the global auto increment tracking as necessary to deal with the table
+// given being dropped or truncated. The auto increment value for this table after this operation will either be reset
+// back to 1 if this table only exists in the working set given, or to the highest value in all other working sets
+// otherwise. This operation is expensive if the
+func (db Database) removeTableFromAutoIncrementTracker(
+		ctx *sql.Context,
+		tableName string,
+		ddb *doltdb.DoltDB,
+		ws ref.WorkingSetRef ,
+) error {
+	branches, err := ddb.GetBranches(ctx)
+	if err != nil {
+		return err
+	}
+
+	var wses []*doltdb.WorkingSet
+	for _, b := range branches {
+		wsRef, err := ref.WorkingSetRefForHead(b)
+		if err != nil {
+			return err
+		}
+
+		if wsRef == ws {
+			// skip this branch, we've deleted it here
+			continue
+		}
+
+		ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
+		if err == doltdb.ErrWorkingSetNotFound {
+			// skip, continue working on other branches
+			continue
+		} else if err != nil {
+			return err
+		}
+
+		wses = append(wses, ws)
+	}
+
+	ait, err := db.gs.GetAutoIncrementTracker(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = ait.DropTable(ctx, tableName, wses...)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // CreateTable creates a table with the name and schema given.
