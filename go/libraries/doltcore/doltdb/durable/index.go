@@ -124,7 +124,7 @@ func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		return IndexFromNomsMap(m, vrw, ns), nil
 
 	case types.Format_DOLT:
-		kd, vd := shim.MapDescriptorsFromSchema(sch)
+		kd, vd := sch.GetMapDescriptors()
 		m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
 		if err != nil {
 			return nil, err

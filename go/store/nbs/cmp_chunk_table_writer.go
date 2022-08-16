@@ -20,6 +20,7 @@ import (
 	"errors"
 	"hash"
 	"io"
+	"os"
 	"sort"
 
 	"github.com/golang/snappy"
@@ -46,26 +47,21 @@ type CmpChunkTableWriter struct {
 	prefixes              prefixIndexSlice // TODO: This is in danger of exploding memory
 	blockAddr             *addr
 	chunkHashes           nomshash.HashSet
+	path                  string
 }
 
 // NewCmpChunkTableWriter creates a new CmpChunkTableWriter instance with a default ByteSink
 func NewCmpChunkTableWriter(tempDir string) (*CmpChunkTableWriter, error) {
 	s, err := NewBufferedFileByteSink(tempDir, defaultTableSinkBlockSize, defaultChBufferSize)
-
 	if err != nil {
 		return nil, err
 	}
 
-	return &CmpChunkTableWriter{NewHashingByteSink(s), 0, 0, nil, nil, nomshash.NewHashSet()}, nil
+	return &CmpChunkTableWriter{NewHashingByteSink(s), 0, 0, nil, nil, nomshash.NewHashSet(), s.path}, nil
 }
 
-// Size returns the number of compressed chunks that have been added
-func (tw *CmpChunkTableWriter) Size() int {
+func (tw *CmpChunkTableWriter) ChunkCount() int {
 	return len(tw.prefixes)
-}
-
-func (tw *CmpChunkTableWriter) ChunkCount() uint32 {
-	return uint32(len(tw.prefixes))
 }
 
 // Gets the size of the entire table file in bytes
@@ -167,6 +163,17 @@ func (tw *CmpChunkTableWriter) Flush(wr io.Writer) error {
 	}
 
 	return nil
+}
+
+func (tw *CmpChunkTableWriter) Reader() (io.ReadCloser, error) {
+	if tw.blockAddr == nil {
+		return nil, ErrNotFinished
+	}
+	return tw.sink.Reader()
+}
+
+func (tw *CmpChunkTableWriter) Remove() error {
+	return os.Remove(tw.path)
 }
 
 func (tw *CmpChunkTableWriter) writeIndex() (hash.Hash, error) {

@@ -21,7 +21,7 @@ teardown() {
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
-    [[ ! "$output" =~ "tetumstdaa81t25h8p5tstsb1f94r4q1" ]] || false
+    [[ ! "$output" =~ "vkoodfe2im3pei1o0vurk66lna6jqhlc" ]] || false
 
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
@@ -29,7 +29,7 @@ teardown() {
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "tetumstdaa81t25h8p5tstsb1f94r4q1" ]] || false
+    [[ "$output" =~ "vkoodfe2im3pei1o0vurk66lna6jqhlc" ]] || false
     [[ ! "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
 
     # validate TEXT migration
@@ -46,7 +46,7 @@ teardown() {
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "u8s83gapv7ghnbmrtpm8q5es0dbl7lpd" ]] || false
-    [[ ! "$output" =~ "k0hgumfrd2i891h1nh172cfutih5n6ea" ]] || false
+    [[ ! "$output" =~ "hiqh64ar268flfg7vkldrs0k1f202vuh" ]] || false
 
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
@@ -54,6 +54,6 @@ teardown() {
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "k0hgumfrd2i891h1nh172cfutih5n6ea" ]] || false
+    [[ "$output" =~ "hiqh64ar268flfg7vkldrs0k1f202vuh" ]] || false
     [[ ! "$output" =~ "u8s83gapv7ghnbmrtpm8q5es0dbl7lpd" ]] || false
 }

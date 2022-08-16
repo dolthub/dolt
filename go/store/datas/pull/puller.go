@@ -31,7 +31,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -158,9 +157,14 @@ func (p *Puller) Logf(fmt string, args ...interface{}) {
 	}
 }
 
+type readable interface {
+	Reader() (io.ReadCloser, error)
+	Remove() error
+}
+
 type tempTblFile struct {
 	id          string
-	path        string
+	read        readable
 	numChunks   int
 	chunksLen   uint64
 	contentLen  uint64
@@ -286,14 +290,9 @@ func (s *stats) read() Stats {
 }
 
 func (p *Puller) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile) error {
-	fi, err := os.Stat(tmpTblFile.path)
-	if err != nil {
-		return err
-	}
-
-	fileSize := fi.Size()
+	fileSize := tmpTblFile.contentLen
 	defer func() {
-		_ = file.Remove(tmpTblFile.path)
+		_ = tmpTblFile.read.Remove()
 	}()
 
 	// By tracking the number of bytes uploaded here,
@@ -301,7 +300,7 @@ func (p *Puller) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile
 	// we have to retry a table file write.
 	var localUploaded uint64
 	return p.sinkDBCS.(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, tmpTblFile.contentHash, func() (io.ReadCloser, uint64, error) {
-		f, err := os.Open(tmpTblFile.path)
+		rc, err := tmpTblFile.read.Reader()
 		if err != nil {
 			return nil, 0, err
 		}
@@ -316,7 +315,7 @@ func (p *Puller) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile
 			atomic.AddUint64(&p.stats.bufferedSendBytes, uint64(localUploaded))
 			localUploaded = 0
 		}
-		fWithStats := countingReader{countingReader{f, &localUploaded}, &p.stats.finishedSendBytes}
+		fWithStats := countingReader{countingReader{rc, &localUploaded}, &p.stats.finishedSendBytes}
 
 		return fWithStats, uint64(fileSize), nil
 	})
@@ -343,16 +342,10 @@ LOOP:
 				return err
 			}
 
-			path := filepath.Join(p.tempDir, id)
-			err = tblFile.wr.FlushToFile(path)
-			if err != nil {
-				return err
-			}
-
 			ttf := tempTblFile{
 				id:          id,
-				path:        path,
-				numChunks:   tblFile.wr.Size(),
+				read:        tblFile.wr,
+				numChunks:   tblFile.wr.ChunkCount(),
 				chunksLen:   chunksLen,
 				contentLen:  tblFile.wr.ContentLength(),
 				contentHash: tblFile.wr.GetMD5(),
@@ -411,7 +404,7 @@ func (p *Puller) Pull(ctx context.Context) error {
 			}
 		}
 
-		if p.wr != nil && p.wr.Size() > 0 {
+		if p.wr != nil && p.wr.ChunkCount() > 0 {
 			select {
 			case completedTables <- FilledWriters{p.wr}:
 			case <-ctx.Done():
@@ -527,7 +520,7 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 
 				atomic.AddUint64(&p.stats.bufferedSendBytes, uint64(len(cmpAndRef.cmpChnk.FullCompressedChunk)))
 
-				if p.wr.Size() >= p.chunksPerTF {
+				if p.wr.ChunkCount() >= p.chunksPerTF {
 					select {
 					case completedTables <- FilledWriters{p.wr}:
 					case <-ctx.Done():

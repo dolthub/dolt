@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -115,8 +114,8 @@ func (sq SavedQuery) asRow(nbf *types.NomsBinFormat) (row.Row, error) {
 }
 
 var DoltQueryCatalogSchema = schema.MustSchemaFromCols(queryCatalogCols)
-var catalogKd = shim.KeyDescriptorFromSchema(DoltQueryCatalogSchema)
-var catalogVd = shim.ValueDescriptorFromSchema(DoltQueryCatalogSchema)
+var catalogKd = DoltQueryCatalogSchema.GetKeyDescriptor()
+var catalogVd = DoltQueryCatalogSchema.GetValueDescriptor()
 
 // Creates the query catalog table if it doesn't exist.
 func createQueryCatalogIfNotExists(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
