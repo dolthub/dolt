@@ -33,10 +33,13 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_revert", Schema: int64Schema("status"), Function: doltRevert},
 	{Name: "dolt_tag", Schema: int64Schema("status"), Function: doltTag},
 	{Name: "dolt_verify_constraints", Schema: int64Schema("violations"), Function: doltVerifyConstraints},
+
+	// Dolt stored procedure aliases
 	{Name: "dadd", Schema: int64Schema("status"), Function: doltAdd},
 	{Name: "dbranch", Schema: int64Schema("status"), Function: doltBranch},
 	{Name: "dcheckout", Schema: int64Schema("status"), Function: doltCheckout},
 	{Name: "dclean", Schema: int64Schema("status"), Function: doltClean},
+	{Name: "dclone", Schema: int64Schema("status"), Function: doltClone},
 	{Name: "dcommit", Schema: stringSchema("hash"), Function: doltCommit},
 	{Name: "dfetch", Schema: int64Schema("success"), Function: doltFetch},
 	{Name: "dmerge", Schema: int64Schema("fast_forward", "conflicts"), Function: doltMerge},

@@ -6,11 +6,11 @@ on:
 
 jobs:
   performance:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     name: Benchmark Performance
     strategy:
       matrix:
-        dolt_fmt: [ "__LD_1__", "__DOLT_1__" ]
+        dolt_fmt: [ "__LD_1__", "__DOLT__" ]
     steps:
       - name: Checkout
         uses: actions/checkout@v2

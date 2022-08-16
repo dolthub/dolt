@@ -15,13 +15,10 @@
 package shim
 
 import (
-	"github.com/dolthub/vitess/go/vt/proto/query"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 func NodeFromValue(v types.Value) (tree.Node, error) {
@@ -41,58 +38,7 @@ func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore) (prolly.M
 	if err != nil {
 		return prolly.Map{}, err
 	}
-	kd := KeyDescriptorFromSchema(sch)
-	vd := ValueDescriptorFromSchema(sch)
+	kd := sch.GetKeyDescriptor()
+	vd := sch.GetValueDescriptor()
 	return prolly.NewMap(root, ns, kd, vd), nil
-}
-
-func MapDescriptorsFromSchema(sch schema.Schema) (kd, vd val.TupleDesc) {
-	kd = KeyDescriptorFromSchema(sch)
-	vd = ValueDescriptorFromSchema(sch)
-	return
-}
-
-func KeyDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
-	if schema.IsKeyless(sch) {
-		return val.KeylessTupleDesc
-	}
-
-	var tt []val.Type
-	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		tt = append(tt, val.Type{
-			Enc:      encodingFromSqlType(col.TypeInfo.ToSqlType().Type()),
-			Nullable: columnNullable(col),
-		})
-		return
-	})
-	return val.NewTupleDescriptor(tt...)
-}
-
-func columnNullable(col schema.Column) bool {
-	for _, cnst := range col.Constraints {
-		if cnst.GetConstraintType() == schema.NotNullConstraintType {
-			return false
-		}
-	}
-	return true
-}
-
-func ValueDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
-	var tt []val.Type
-	if schema.IsKeyless(sch) {
-		tt = []val.Type{val.KeylessCardType}
-	}
-
-	_ = sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		tt = append(tt, val.Type{
-			Enc:      encodingFromSqlType(col.TypeInfo.ToSqlType().Type()),
-			Nullable: col.IsNullable(),
-		})
-		return
-	})
-	return val.NewTupleDescriptor(tt...)
-}
-
-func encodingFromSqlType(typ query.Type) val.Encoding {
-	return val.Encoding(schema.EncodingFromSqlType(typ))
 }

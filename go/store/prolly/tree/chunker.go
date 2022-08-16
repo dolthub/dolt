@@ -326,7 +326,7 @@ func (tc *chunker[S]) appendToParent(ctx context.Context, novel novelNode) (bool
 }
 
 func (tc *chunker[S]) handleChunkBoundary(ctx context.Context) error {
-	assertTrue(tc.builder.count() > 0)
+	assertTrue(tc.builder.count() > 0, "in-progress chunk must be non-empty to create chunk boundary")
 
 	novel, err := writeNewNode(ctx, tc.ns, tc.builder)
 	if err != nil {
@@ -343,7 +343,7 @@ func (tc *chunker[S]) handleChunkBoundary(ctx context.Context) error {
 }
 
 func (tc *chunker[S]) createParentChunker(ctx context.Context) (err error) {
-	assertTrue(tc.parent == nil)
+	assertTrue(tc.parent == nil, "chunker parent must be nil")
 
 	var parent *Cursor
 	if tc.cur != nil && tc.cur.parent != nil {
@@ -364,7 +364,7 @@ func (tc *chunker[S]) createParentChunker(ctx context.Context) (err error) {
 // Done returns the root Node of the resulting tree.
 // The logic here is subtle, but hopefully correct and understandable. See comments inline.
 func (tc *chunker[S]) Done(ctx context.Context) (Node, error) {
-	assertTrue(!tc.done)
+	assertTrue(!tc.done, "chunker must not be done")
 	tc.done = true
 
 	if tc.cur != nil {
@@ -409,7 +409,7 @@ func (tc *chunker[S]) Done(ctx context.Context) (Node, error) {
 	}
 	// (3) This is an internal Node of the tree with a single novelNode. This is a non-canonical root, and we must walk
 	//     down until we find cases (1) or (2), above.
-	assertTrue(!tc.isLeaf())
+	assertTrue(!tc.isLeaf(), "chunker must not be leaf chunker")
 	return getCanonicalRoot(ctx, tc.ns, tc.builder)
 }
 
@@ -473,7 +473,7 @@ func (tc *chunker[S]) isLeaf() bool {
 
 func getCanonicalRoot[S message.Serializer](ctx context.Context, ns NodeStore, builder *nodeBuilder[S]) (Node, error) {
 	cnt := builder.count()
-	assertTrue(cnt == 1)
+	assertTrue(cnt == 1, "in-progress chunk must be non-canonical to call getCanonicalRoot")
 
 	nd, err := builder.build()
 	if err != nil {

@@ -51,7 +51,7 @@ teardown() {
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR
 
-    if ! [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT_1__" ]; then
+    if ! [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT__" ]; then
       dolt config --list | awk '{ print $1 }' | grep sqlserver.global | xargs dolt config --global --unset
     fi
 }

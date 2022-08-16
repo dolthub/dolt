@@ -1,16 +1,19 @@
 ## Import Benchmarker
 
-This library is used to benchmark `dolt table import` with csv/json and `dolt sql` with SQL data. It uses 
-the Go testing.B package to run the import command. 
+This library is used to benchmark `dolt table import` on csv/json files and `dolt sql` on .sql files. It uses 
+the Go testing.B package to execute the relevant dolt commands.
 
 ### Test Files
 
 This package uses several test files that are stored in a private S3 bucket (import-benchmarking-github-actions-results)
 which represent different sort order, primary keys, etc.
 
-You can use the sample-config in the cmd package to benchmark against a sample set of files. If a filepath
-is not specified, Dolt will generate a random test file for you.
+The benchmarker supports custom configurations which runs different import jobs against a `dolt` database or a MySQL 
+server. The parameters of each job and the overall config file are specified in `config.go`. 
+
+Note that if you run the benchmarker without a filepath than the benchmarker will generate a sample file for you. It is 
+best to stick with the default files used in the production benchmarking system to maintain a sense of consistency.\
 
 ### Notes
 
-* You should name your table "test" in the schema file for the mysql provisioning.
+* You should name your table "test" in the MySQL schema file.

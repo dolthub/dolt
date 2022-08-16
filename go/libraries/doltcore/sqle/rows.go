@@ -75,7 +75,7 @@ func newRowIterator(ctx context.Context, tbl *doltdb.Table, sqlSch sql.Schema, p
 		return nil, err
 	}
 
-	if types.IsFormat_DOLT_1(tbl.Format()) {
+	if types.IsFormat_DOLT(tbl.Format()) {
 		return ProllyRowIterFromPartition(ctx, sch, sqlSch, projCols, partition)
 	}
 

@@ -17,7 +17,7 @@ CREATE TABLE two_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1,pk2)
 );
-CREATE TABLE empty (
+CREATE TABLE empty_table (
   pk BIGINT NOT NULL,
   PRIMARY KEY (pk)
 );
@@ -31,7 +31,7 @@ teardown() {
 }
 
 @test "sql-conflicts: read from empty table" {
-    dolt sql -q "SELECT * FROM dolt_conflicts_empty"
+    dolt sql -q "SELECT * FROM dolt_conflicts_empty_table"
 }
 
 @test "sql-conflicts: add conflict" {

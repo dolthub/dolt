@@ -77,7 +77,7 @@ func TestNodeSize(t *testing.T) {
 func TestNodeHashValueCompatibility(t *testing.T) {
 	keys, values := randomNodeItemPairs(t, (rand.Int()%101)+50)
 	nd := newLeafNode(keys, values)
-	nbf := types.Format_DOLT_1
+	nbf := types.Format_DOLT
 	th, err := ValueFromNode(nd).Hash(nbf)
 	require.NoError(t, err)
 	assert.Equal(t, nd.HashOf(), th)

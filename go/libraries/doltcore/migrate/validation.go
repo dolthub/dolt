@@ -18,8 +18,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
@@ -153,6 +155,15 @@ func equalRows(old, new sql.Row, sch sql.Schema) (bool, error) {
 	var err error
 	var cmp int
 	for i := range new {
+
+		// special case string comparisons
+		if s, ok := old[i].(string); ok {
+			old[i] = strings.TrimRightFunc(s, unicode.IsSpace)
+		}
+		if s, ok := new[i].(string); ok {
+			new[i] = strings.TrimRightFunc(s, unicode.IsSpace)
+		}
+
 		// special case time comparison to account
 		// for precision changes between formats
 		if _, ok := old[i].(time.Time); ok {
@@ -256,8 +267,6 @@ func assertNomsKind(kind types.NomsKind, candidates ...types.NomsKind) error {
 }
 
 func partitionTable(ctx context.Context, tbl *doltdb.Table) ([][2]uint64, error) {
-	const fixedSize uint64 = 16384
-
 	idx, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -270,8 +279,13 @@ func partitionTable(ctx context.Context, tbl *doltdb.Table) ([][2]uint64, error)
 	if c == 0 {
 		return nil, nil
 	}
+	n := runtime.NumCPU() * 2
+	szc, err := idx.Count()
+	if err != nil {
+		return nil, err
+	}
+	sz := int(szc) / n
 
-	n := (c + fixedSize - 1) / fixedSize
 	parts := make([][2]uint64, n)
 
 	parts[0][0] = 0
@@ -279,9 +293,10 @@ func partitionTable(ctx context.Context, tbl *doltdb.Table) ([][2]uint64, error)
 	if err != nil {
 		return nil, err
 	}
+
 	for i := 1; i < len(parts); i++ {
-		parts[i-1][1] = uint64(i) * fixedSize
-		parts[i][0] = uint64(i) * fixedSize
+		parts[i-1][1] = uint64(i * sz)
+		parts[i][0] = uint64(i * sz)
 	}
 
 	return parts, nil

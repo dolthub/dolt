@@ -1,4 +1,4 @@
-name: __DOLT_1__ Enginetests
+name: __DOLT__ Enginetests
 
 on:
   pull_request:
@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-18.04, windows-latest]
+        os: [macos-latest, ubuntu-22.04, windows-latest]
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
@@ -35,4 +35,4 @@ jobs:
         go test -timeout 30m "./libraries/doltcore/sqle/enginetest/..."
       env:
         MATRIX_OS: ${{ matrix.os }}
-        DOLT_DEFAULT_BIN_FORMAT: "__DOLT_1__"
+        DOLT_DEFAULT_BIN_FORMAT: "__DOLT__"

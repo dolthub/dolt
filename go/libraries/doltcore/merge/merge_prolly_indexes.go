@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -208,7 +207,7 @@ func buildIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStor
 		if err != nil {
 			return nil, err
 		}
-		kd := shim.KeyDescriptorFromSchema(postMergeSchema)
+		kd := postMergeSchema.GetKeyDescriptor()
 		kb := val.NewTupleBuilder(kd)
 		p := m.Pool()
 

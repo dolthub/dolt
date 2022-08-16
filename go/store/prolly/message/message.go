@@ -147,14 +147,14 @@ func GetSubtrees(msg serial.Message) ([]uint64, error) {
 	}
 }
 
-func assertTrue(b bool) {
+func assertTrue(b bool, msg string) {
 	if !b {
-		panic("assertion failed")
+		panic("assertion failed: " + msg)
 	}
 }
 
-func assertFalse(b bool) {
+func assertFalse(b bool, msg string) {
 	if b {
-		panic("assertion failed")
+		panic("assertion failed: " + msg)
 	}
 }

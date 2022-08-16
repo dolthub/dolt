@@ -722,7 +722,7 @@ SQL
 }
 
 @test "sql-server: JSON queries" {
-    skip_nbf_dolt_1
+    skip_nbf_dolt
     cd repo1
     start_sql_server repo1
 
@@ -1203,7 +1203,7 @@ END""")
 
 @test "sql-server: drop database with active connections" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1 "json ordering of keys differs"
+    skip_nbf_dolt "json ordering of keys differs"
 
     mkdir no_dolt && cd no_dolt
     start_sql_server
@@ -1478,6 +1478,23 @@ databases:
     [[ "$output" =~ "database is locked to writes" ]] || false
 }
 
+@test "sql-server: start server with socket option undefined should set default socket path" {
+    skiponwindows "unix socket is not available on Windows"
+    cd repo2
+    DEFAULT_DB="repo2"
+    let PORT="$$ % (65536-1024) + 1024"
+
+    dolt sql-server --port $PORT --user dolt --socket > log.txt 2>&1 &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+
+    server_query repo2 1 "select 1 as col1" "col1\n1"
+
+    run grep '\"/tmp/mysql.sock\"' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+}
+
 @test "sql-server: server fails to start up if there is already a file in the socket file path" {
     skiponwindows "unix socket is not available on Windows"
     cd repo2
@@ -1557,7 +1574,15 @@ behavior:
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
 
-    PORT="$$ % (65536-1024) + 1024 + 1"
+    echo "import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind(('', 0))
+addr = s.getsockname()
+print(addr[1])
+s.close()
+" > port_finder.py
+
+    PORT=$(python3 port_finder.py)
     run dolt sql-server --port=$PORT
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false

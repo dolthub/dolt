@@ -68,14 +68,14 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 
 // DeserializeSchema deserializes a schema.Schema from a serial.Message.
 func DeserializeSchema(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) (schema.Schema, error) {
-	assertTrue(nbf.UsesFlatbuffers())
+	assertTrue(nbf.UsesFlatbuffers(), "cannot call DeserializeSchema with non-Flatbuffers NomsBinFormat")
 	sm, ok := v.(types.SerialMessage)
-	assertTrue(ok)
+	assertTrue(ok, "must pass types.SerialMessage value to DeserializeSchema")
 	return deserializeSchemaFromFlatbuffer(ctx, sm)
 }
 
 func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Schema, error) {
-	assertTrue(serial.GetFileID(buf) == serial.TableSchemaFileID)
+	assertTrue(serial.GetFileID(buf) == serial.TableSchemaFileID, "serialized schema must have FileID == TableSchemaFileID")
 	s, err := serial.TryGetRootAsTableSchema(buf, serial.MessagePrefixSz)
 	if err != nil {
 		return nil, err
@@ -353,7 +353,7 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 	col := serial.Column{}
 	for i := 0; i < s.SecondaryIndexesLength(); i++ {
 		s.SecondaryIndexes(&idx, i)
-		assertTrue(!idx.PrimaryKey())
+		assertTrue(!idx.PrimaryKey(), "cannot deserialize secondary index with PrimaryKey() == true")
 
 		name := string(idx.Name())
 		props := schema.IndexProperties{
@@ -466,8 +466,8 @@ func constraintsFromSerialColumn(col *serial.Column) (cc []schema.ColConstraint)
 	return
 }
 
-func assertTrue(b bool) {
+func assertTrue(b bool, msg string) {
 	if !b {
-		panic("assertion failed")
+		panic("assertion failed: " + msg)
 	}
 }

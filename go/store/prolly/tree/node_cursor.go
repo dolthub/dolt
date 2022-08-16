@@ -496,7 +496,7 @@ func (cur *Cursor) Retreat(ctx context.Context) error {
 // fetchNode loads the Node that the cursor index points to.
 // It's called whenever the cursor advances/retreats to a different chunk.
 func (cur *Cursor) fetchNode(ctx context.Context) (err error) {
-	assertTrue(cur.parent != nil)
+	assertTrue(cur.parent != nil, "cannot fetch node for cursor with nil parent")
 	cur.nd, err = fetchChild(ctx, cur.nrw, cur.parent.CurrentRef())
 	cur.idx = -1 // caller must set
 	return err
@@ -541,10 +541,10 @@ func (cur *Cursor) copy(other *Cursor) {
 	cur.nrw = other.nrw
 
 	if cur.parent != nil {
-		assertTrue(other.parent != nil)
+		assertTrue(other.parent != nil, "cursors must be of equal height to call copy()")
 		cur.parent.copy(other.parent)
 	} else {
-		assertTrue(other.parent == nil)
+		assertTrue(other.parent == nil, "cursors must be of equal height to call copy()")
 	}
 }
 
@@ -569,8 +569,8 @@ func fetchChild(ctx context.Context, ns NodeStore, ref hash.Hash) (Node, error) 
 	return ns.Read(ctx, ref)
 }
 
-func assertTrue(b bool) {
+func assertTrue(b bool, msg string) {
 	if !b {
-		panic("assertion failed")
+		panic("assertion failed: " + msg)
 	}
 }

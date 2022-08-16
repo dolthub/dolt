@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -208,7 +207,7 @@ var testCases = []testCase{
 }
 
 func TestRowMerge(t *testing.T) {
-	if types.Format_Default != types.Format_DOLT_1 {
+	if types.Format_Default != types.Format_DOLT {
 		t.Skip()
 	}
 
@@ -223,14 +222,14 @@ func TestRowMerge(t *testing.T) {
 
 			merged, isConflict := v.tryMerge(test.row, test.mergeRow, test.ancRow)
 			assert.Equal(t, test.expectConflict, isConflict)
-			vD := shim.ValueDescriptorFromSchema(test.mergedSch)
+			vD := test.mergedSch.GetValueDescriptor()
 			assert.Equal(t, vD.Format(test.expectedResult), vD.Format(merged))
 		})
 	}
 }
 
 func TestNomsRowMerge(t *testing.T) {
-	if types.Format_Default == types.Format_DOLT_1 {
+	if types.Format_Default == types.Format_DOLT {
 		t.Skip()
 	}
 
@@ -342,7 +341,7 @@ func buildTup(sch schema.Schema, r []*int) val.Tuple {
 		return nil
 	}
 
-	vD := shim.ValueDescriptorFromSchema(sch)
+	vD := sch.GetValueDescriptor()
 	vB := val.NewTupleBuilder(vD)
 	for i, v := range r {
 		if v != nil {

@@ -30,6 +30,7 @@ import (
 	"reflect"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -40,9 +41,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 var (
@@ -606,7 +609,7 @@ func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
 		return errors.New("failed to add chunk")
 	}
 
-	nbs.putCount++
+	atomic.AddUint64(&nbs.putCount, 1)
 
 	nbs.stats.PutLatency.SampleTimeSince(t1)
 
@@ -1332,39 +1335,49 @@ func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
 func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	fsPersister, ok := nbs.p.(*fsTablePersister)
-
 	if !ok {
 		return errors.New("Not implemented")
 	}
 
+	tn, err := func() (n string, err error) {
+		var r io.ReadCloser
+		r, _, err = getRd()
+		if err != nil {
+			return "", err
+		}
+		defer func() {
+			cerr := r.Close()
+			if err == nil {
+				err = cerr
+			}
+		}()
+
+		var temp *os.File
+		temp, err = tempfiles.MovableTempFileProvider.NewFile(fsPersister.dir, tempTablePrefix)
+		if err != nil {
+			return "", err
+		}
+
+		defer func() {
+			cerr := temp.Close()
+			if err == nil {
+				err = cerr
+			}
+		}()
+
+		_, err = io.Copy(temp, r)
+		if err != nil {
+			return "", err
+		}
+
+		return temp.Name(), nil
+	}()
+	if err != nil {
+		return err
+	}
+
 	path := filepath.Join(fsPersister.dir, fileId)
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
-
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		closeErr := f.Close()
-
-		if err == nil {
-			err = closeErr
-		}
-	}()
-
-	r, _, err := getRd()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		closeErr := r.Close()
-
-		if err == nil {
-			err = closeErr
-		}
-	}()
-
-	return writeTo(f, r, copyTableFileBufferSize)
+	return file.Rename(tn, path)
 }
 
 // AddTableFilesToManifest adds table files to the manifest
@@ -1388,36 +1401,6 @@ func (nbs *NomsBlockStore) AddTableFilesToManifest(ctx context.Context, fileIdTo
 
 	_, err := nbs.UpdateManifest(ctx, fileIdHashToNumChunks)
 	return err
-}
-
-func writeTo(wr io.Writer, rd io.Reader, bufferSize uint32) error {
-	buf := make([]byte, bufferSize)
-
-	for {
-		// can return bytes and an io.EOF
-		n, err := rd.Read(buf)
-
-		if err != nil && err != io.EOF {
-			return err
-		}
-
-		pos := 0
-		for pos < n {
-			n, wrErr := wr.Write(buf[pos:n])
-
-			if wrErr != nil {
-				return wrErr
-			}
-
-			pos += n
-		}
-
-		if err == io.EOF {
-			break
-		}
-	}
-
-	return nil
 }
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.

@@ -74,7 +74,7 @@ func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 	if err != nil {
 		return Node{}, err
 	}
-	assertTrue(c.Size() > 0)
+	assertTrue(c.Size() > 0, "empty chunk returned from ChunkStore")
 
 	ns.cache.insert(c)
 
@@ -84,7 +84,7 @@ func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 // Write implements NodeStore.
 func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 	c := chunks.NewChunk(nd.bytes())
-	assertTrue(c.Size() > 0)
+	assertTrue(c.Size() > 0, "cannot write empty chunk to ChunkStore")
 
 	if err := ns.store.Put(ctx, c); err != nil {
 		return hash.Hash{}, err

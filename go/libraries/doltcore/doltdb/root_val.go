@@ -53,10 +53,11 @@ var DoltFeatureVersion FeatureVersion = 3 // last bumped when storing creation t
 
 // RootValue is the value of the Database and is the committed value in every Dolt commit.
 type RootValue struct {
-	vrw types.ValueReadWriter
-	ns  tree.NodeStore
-	st  rvStorage
-	fkc *ForeignKeyCollection // cache the first load
+	vrw  types.ValueReadWriter
+	ns   tree.NodeStore
+	st   rvStorage
+	fkc  *ForeignKeyCollection // cache the first load
+	hash hash.Hash             // cache first load
 }
 
 type tableEdit struct {
@@ -279,7 +280,7 @@ func newRootValue(vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value) (
 		}
 	}
 
-	return &RootValue{vrw, ns, storage, nil}, nil
+	return &RootValue{vrw, ns, storage, nil, hash.Hash{}}, nil
 }
 
 // LoadRootValueFromRootIshAddr takes the hash of the commit or the hash of a
@@ -762,7 +763,7 @@ func (root *RootValue) IterTables(ctx context.Context, cb func(name string, tabl
 }
 
 func (root *RootValue) withStorage(st rvStorage) *RootValue {
-	return &RootValue{root.vrw, root.ns, st, nil}
+	return &RootValue{root.vrw, root.ns, st, nil, hash.Hash{}}
 }
 
 func (root *RootValue) nomsValue() types.Value {
@@ -832,7 +833,14 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 
 // HashOf gets the hash of the root value
 func (root *RootValue) HashOf() (hash.Hash, error) {
-	return root.st.nomsValue().Hash(root.vrw.Format())
+	if root.hash.IsEmpty() {
+		var err error
+		root.hash, err = root.st.nomsValue().Hash(root.vrw.Format())
+		if err != nil {
+			return hash.Hash{}, nil
+		}
+	}
+	return root.hash, nil
 }
 
 // RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve

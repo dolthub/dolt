@@ -40,8 +40,8 @@ func (s BlobSerializer) Serialize(keys, values [][]byte, subtrees []uint64, leve
 	b := getFlatbufferBuilder(s.pool, bufSz)
 
 	if level == 0 {
-		assertTrue(len(values) == 1)
-		assertTrue(len(subtrees) == 1)
+		assertTrue(len(values) == 1, "num values != 1 when serialize Blob")
+		assertTrue(len(subtrees) == 1, "num subtrees != 1 when serialize Blob")
 		payload := b.CreateByteVector(values[0])
 
 		serial.BlobStart(b)

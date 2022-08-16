@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -145,7 +144,7 @@ func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Inde
 		}
 		return durable.IndexFromNomsMap(m, tbl.ValueReadWriter(), tbl.NodeStore()), nil
 
-	case types.Format_DOLT_1:
+	case types.Format_DOLT:
 		sch, err := tbl.GetSchema(ctx)
 		if err != nil {
 			return nil, err
@@ -166,7 +165,7 @@ func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Inde
 // index row data |primary|. |sch| is the current schema of the table.
 func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, idx schema.Index, primary prolly.Map) (durable.Index, error) {
 	if idx.IsUnique() {
-		kd := shim.KeyDescriptorFromSchema(idx.Schema())
+		kd := idx.Schema().GetKeyDescriptor()
 		return BuildUniqueProllyIndex(ctx, vrw, ns, sch, idx, primary, func(ctx context.Context, existingKey, newKey val.Tuple) error {
 			msg := writer.FormatKeyForUniqKeyErr(newKey, kd)
 			return sql.NewUniqueKeyErr(msg, false, nil)

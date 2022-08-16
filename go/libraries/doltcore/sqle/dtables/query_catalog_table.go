@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -115,8 +114,8 @@ func (sq SavedQuery) asRow(nbf *types.NomsBinFormat) (row.Row, error) {
 }
 
 var DoltQueryCatalogSchema = schema.MustSchemaFromCols(queryCatalogCols)
-var catalogKd = shim.KeyDescriptorFromSchema(DoltQueryCatalogSchema)
-var catalogVd = shim.ValueDescriptorFromSchema(DoltQueryCatalogSchema)
+var catalogKd = DoltQueryCatalogSchema.GetKeyDescriptor()
+var catalogVd = DoltQueryCatalogSchema.GetValueDescriptor()
 
 // Creates the query catalog table if it doesn't exist.
 func createQueryCatalogIfNotExists(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
@@ -166,7 +165,7 @@ func newQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, id, name,
 
 	var sq SavedQuery
 	var newTable *doltdb.Table
-	if types.IsFormat_DOLT_1(tbl.Format()) {
+	if types.IsFormat_DOLT(tbl.Format()) {
 		sq, newTable, err = newQueryCatalogEntryProlly(ctx, tbl, id, name, query, description)
 	} else {
 		sq, newTable, err = newQueryCatalogEntryNoms(ctx, tbl, id, name, query, description)
@@ -298,7 +297,7 @@ func RetrieveFromQueryCatalog(ctx context.Context, root *doltdb.RootValue, id st
 		return SavedQuery{}, doltdb.ErrTableNotFound
 	}
 
-	if types.IsFormat_DOLT_1(tbl.Format()) {
+	if types.IsFormat_DOLT(tbl.Format()) {
 		return retrieveFromQueryCatalogProlly(ctx, tbl, id)
 	}
 

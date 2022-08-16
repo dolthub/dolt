@@ -170,7 +170,7 @@ func getAddressMapKeyOffsets(pm *serial.AddressMap) []byte {
 }
 
 func estimateAddressMapSize(keys, addresses [][]byte, subtrees []uint64) (keySz, addrSz, totalSz int) {
-	assertTrue(len(keys) == len(addresses))
+	assertTrue(len(keys) == len(addresses), "num keys != num addresses for AddressMap")
 	for i := range keys {
 		keySz += len(keys[i])
 		addrSz += len(addresses[i])
