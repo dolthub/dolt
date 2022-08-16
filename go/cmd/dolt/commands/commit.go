@@ -223,6 +223,11 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 }
 
 func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg string) (string, error) {
+	// if message is not defined in dolt_merge, use suggestedMsg
+	if cli.ExecuteWithStdioRestored == nil {
+		return suggestedMsg, nil
+	}
+
 	var finalMsg string
 	initialMsg, err := buildInitalCommitMsg(ctx, dEnv, suggestedMsg)
 	if err != nil {
