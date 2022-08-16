@@ -59,7 +59,7 @@ func NewArgParser() *ArgParser {
 	return &ArgParser{supported, nameOrAbbrevToOpt, nil}
 }
 
-// Adds support for a new argument with the option given. Options must have a unique name and abbreviated name.
+// SupportOption adds support for a new argument with the option given. Options must have a unique name and abbreviated name.
 func (ap *ArgParser) SupportOption(opt *Option) {
 	name := opt.Name
 	abbrev := opt.Abbrev
@@ -87,7 +87,7 @@ func (ap *ArgParser) SupportOption(opt *Option) {
 	}
 }
 
-// Adds support for a new flag (argument with no value). See SupportOpt for details on params.
+// SupportsFlag adds support for a new flag (argument with no value). See SupportOpt for details on params.
 func (ap *ArgParser) SupportsFlag(name, abbrev, desc string) *ArgParser {
 	opt := &Option{name, abbrev, "", OptionalFlag, desc, nil}
 	ap.SupportOption(opt)
@@ -95,7 +95,7 @@ func (ap *ArgParser) SupportsFlag(name, abbrev, desc string) *ArgParser {
 	return ap
 }
 
-// Adds support for a new string argument with the description given. See SupportOpt for details on params.
+// SupportsString adds support for a new string argument with the description given. See SupportOpt for details on params.
 func (ap *ArgParser) SupportsString(name, abbrev, valDesc, desc string) *ArgParser {
 	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, nil}
 	ap.SupportOption(opt)
@@ -103,7 +103,7 @@ func (ap *ArgParser) SupportsString(name, abbrev, valDesc, desc string) *ArgPars
 	return ap
 }
 
-// Adds support for a new string argument with the description given and optional empty value. See SupportOpt for details on params.
+// SupportsOptionalString adds support for a new string argument with the description given and optional empty value.
 func (ap *ArgParser) SupportsOptionalString(name, abbrev, valDesc, desc string) *ArgParser {
 	opt := &Option{name, abbrev, valDesc, OptionalEmptyValue, desc, nil}
 	ap.SupportOption(opt)
@@ -111,6 +111,7 @@ func (ap *ArgParser) SupportsOptionalString(name, abbrev, valDesc, desc string) 
 	return ap
 }
 
+// SupportsValidatedString adds support for a new string argument with the description given and defined validation function.
 func (ap *ArgParser) SupportsValidatedString(name, abbrev, valDesc, desc string, validator ValidationFunc) *ArgParser {
 	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, validator}
 	ap.SupportOption(opt)
@@ -118,7 +119,7 @@ func (ap *ArgParser) SupportsValidatedString(name, abbrev, valDesc, desc string,
 	return ap
 }
 
-// Adds support for a new uint argument with the description given. See SupportOpt for details on params.
+// SupportsUint adds support for a new uint argument with the description given. See SupportOpt for details on params.
 func (ap *ArgParser) SupportsUint(name, abbrev, valDesc, desc string) *ArgParser {
 	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, isUintStr}
 	ap.SupportOption(opt)
@@ -126,7 +127,7 @@ func (ap *ArgParser) SupportsUint(name, abbrev, valDesc, desc string) *ArgParser
 	return ap
 }
 
-// Adds support for a new int argument with the description given. See SupportOpt for details on params.
+// SupportsInt adds support for a new int argument with the description given. See SupportOpt for details on params.
 func (ap *ArgParser) SupportsInt(name, abbrev, valDesc, desc string) *ArgParser {
 	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, isIntStr}
 	ap.SupportOption(opt)
