@@ -84,7 +84,7 @@ teardown() {
     dolt sql -q "insert into test values (1,1)"
     dolt add test
     dolt commit -m "Commit3"
-    dolt merge test-branch
+    dolt merge test-branch --no-commit
     run dolt log
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit1" ]] || false
@@ -203,7 +203,7 @@ teardown() {
     dolt sql -q "insert into test values (1,1)"
     dolt add test
     dolt commit -m "Commit3"
-    dolt merge test-branch
+    dolt merge test-branch --no-commit
 
     run dolt log test
     [ $status -eq 0 ]
@@ -283,8 +283,7 @@ teardown() {
     # Should be fast-forward 
     dolt merge branch1
     # An actual merge
-    dolt merge branch2
-    dolt commit -m "Merged branch2"
+    dolt merge branch2 -m "Merged branch2"
 
     # Only shows merge commits
     run dolt log --merges

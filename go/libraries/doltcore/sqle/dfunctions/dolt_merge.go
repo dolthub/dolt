@@ -123,8 +123,27 @@ func DoDoltMerge(ctx *sql.Context, args []string) (int, int, error) {
 		return noConflictsOrViolations, threeWayMerge, err
 	}
 	ws, conflicts, fastForward, err := mergeIntoWorkingSet(ctx, sess, roots, ws, dbName, mergeSpec)
-	if err != nil {
+	if err != nil || conflicts != 0 || fastForward != 0 {
 		return conflicts, fastForward, err
+	}
+
+	if !apr.Contains(cli.NoCommitFlag) {
+		dbData, ok := sess.GetDbData(ctx, dbName)
+		if !ok {
+			return noConflictsOrViolations, threeWayMerge, fmt.Errorf("Could not load database %s", dbName)
+		}
+
+		msg := ""
+		if userMsg, mOk := apr.GetValue(cli.MessageArg); mOk {
+			msg = userMsg
+		}
+		if msg == "" {
+			msg = fmt.Sprintf("Merge branch '%s' into %s", branchName, dbData.Rsr.CWBHeadRef().GetPath())
+		}
+		_, err = DoDoltCommit(ctx, []string{"-m", msg})
+		if err != nil {
+			return noConflictsOrViolations, threeWayMerge, err
+		}
 	}
 
 	return conflicts, fastForward, nil

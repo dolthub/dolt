@@ -396,9 +396,9 @@ SQL
     [[ "$output" =~ "John Doe" ]] || false
 
     dolt checkout main
-    run dolt merge feature-branch
-
+    run dolt merge feature-branch --no-commit
     [ $status -eq 0 ]
+
     run dolt log -n 1
     [[ "$output" =~ "Added 4" ]] || false
     [[ "$output" =~ "John Doe" ]] || false
@@ -429,7 +429,7 @@ SQL
     [[ "$output" =~ "John Doe" ]] || false
 
     dolt checkout main
-    run dolt merge feature-branch
+    run dolt merge feature-branch --no-commit
 
     [ $status -eq 0 ]
     run dolt log -n 1

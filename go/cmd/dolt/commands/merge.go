@@ -164,7 +164,8 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				return handleCommitErr(ctx, dEnv, nil, usage)
 			}
 
-			msg, err = getCommitMessage(ctx, apr, dEnv, spec)
+			suggestedMsg := fmt.Sprintf("Merge branch '%s' into %s", commitSpecStr, dEnv.RepoStateReader().CWBHeadRef().GetPath())
+			msg, err = getCommitMessage(ctx, apr, dEnv, spec, suggestedMsg)
 			if err != nil {
 				return handleCommitErr(ctx, dEnv, err, usage)
 			}
@@ -175,39 +176,28 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				return handleCommitErr(ctx, dEnv, err, usage)
 			}
 
-			tblToStats, mergeErr := merge.MergeCommitSpec(ctx, dEnv, spec)
+			ff, tblToStats, mergeErr := merge.MergeCommitSpec(ctx, dEnv, spec)
 			hasConflicts, hasConstraintViolations := printSuccessStats(tblToStats)
-			wRoot, err := dEnv.WorkingRoot(ctx)
-			if err != nil {
-				cli.PrintErrln(err.Error())
+			res := handleMergeErr(ctx, dEnv, mergeErr, hasConflicts, hasConstraintViolations, usage)
+			if res != 0 {
 				return 1
-			}
-			unmergedCnt, err := getUnmergedTableCount(ctx, wRoot)
-			if err != nil {
-				cli.PrintErrln(err.Error())
-				return 1
-			}
-			if hasConflicts && hasConstraintViolations {
-				cli.Printf("Automatic merge failed; %d table(s) are unmerged.\n"+
-					"Fix conflicts and constraint violations and then commit the result.\n"+
-					"Use 'dolt conflicts' to investigate and resolve conflicts.\n", unmergedCnt)
-			} else if hasConflicts {
-				cli.Printf("Automatic merge failed; %d table(s) are unmerged.\n"+
-					"Use 'dolt conflicts' to investigate and resolve conflicts.\n", unmergedCnt)
-			} else if hasConstraintViolations {
-				cli.Printf("Automatic merge failed; %d table(s) are unmerged.\n"+
-					"Fix constraint violations and then commit the result.\n"+
-					"Constraint violations for the working set may be viewed using the 'dolt_constraint_violations' system table.\n"+
-					"They may be queried and removed per-table using the 'dolt_constraint_violations_TABLENAME' system table.\n", unmergedCnt)
 			}
 
-			if mergeErr != nil {
-				if mergeErr == doltdb.ErrIsAhead {
-					return 0
+			if !apr.Contains(cli.NoCommitFlag) && !ff && !hasConflicts && !hasConstraintViolations {
+				if msg == "" {
+					msg, err = getCommitMessageFromEditor(ctx, dEnv, suggestedMsg)
+					if err != nil {
+						return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+					}
 				}
-				verr := errhand.BuildDError("Merge aborted due to error").AddCause(mergeErr).Build()
-				return HandleVErrAndExitCode(verr, usage)
+
+				res = CommitCmd{}.Exec(ctx, "commit", []string{"-m", msg}, dEnv)
+				if res != 0 {
+					return HandleVErrAndExitCode(errhand.BuildDError("dolt commit failed").AddCause(err).Build(), usage)
+				}
 			}
+
+			return 0
 		}
 	}
 
@@ -238,7 +228,7 @@ func getUnmergedTableCount(ctx context.Context, root *doltdb.RootValue) (int, er
 	return unmergedTableCount, nil
 }
 
-func getCommitMessage(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, spec *merge.MergeSpec) (string, errhand.VerboseError) {
+func getCommitMessage(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, spec *merge.MergeSpec, suggestedMsg string) (string, errhand.VerboseError) {
 	if m, ok := apr.GetValue(cli.MessageArg); ok {
 		return m, nil
 	}
@@ -248,7 +238,7 @@ func getCommitMessage(ctx context.Context, apr *argparser.ArgParseResults, dEnv 
 	}
 
 	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); ok {
-		msg, err := getCommitMessageFromEditor(ctx, dEnv)
+		msg, err := getCommitMessageFromEditor(ctx, dEnv, suggestedMsg)
 		if err != nil {
 			return "", errhand.VerboseErrorFromError(err)
 		}
@@ -459,4 +449,44 @@ func fillStringWithChar(ch rune, strLen int) string {
 	}
 
 	return string(runes)
+}
+
+func handleMergeErr(ctx context.Context, dEnv *env.DoltEnv, mergeErr error, hasConflicts, hasConstraintViolations bool, usage cli.UsagePrinter) int {
+	wRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+	unmergedCnt, err := getUnmergedTableCount(ctx, wRoot)
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+	if hasConflicts && hasConstraintViolations {
+		cli.Printf("Automatic merge failed; %d table(s) are unmerged.\n"+
+			"Fix conflicts and constraint violations and then commit the result.\n"+
+			"Use 'dolt conflicts' to investigate and resolve conflicts.\n", unmergedCnt)
+	} else if hasConflicts {
+		cli.Printf("Automatic merge failed; %d table(s) are unmerged.\n"+
+			"Use 'dolt conflicts' to investigate and resolve conflicts.\n", unmergedCnt)
+	} else if hasConstraintViolations {
+		cli.Printf("Automatic merge failed; %d table(s) are unmerged.\n"+
+			"Fix constraint violations and then commit the result.\n"+
+			"Constraint violations for the working set may be viewed using the 'dolt_constraint_violations' system table.\n"+
+			"They may be queried and removed per-table using the 'dolt_constraint_violations_TABLENAME' system table.\n", unmergedCnt)
+	}
+
+	if mergeErr != nil {
+		var verr errhand.VerboseError
+		switch mergeErr {
+		case doltdb.ErrIsAhead:
+			verr = nil
+		default:
+			verr = errhand.VerboseErrorFromError(mergeErr)
+			cli.Println("Unable to stage changes: add and commit to finish merge")
+		}
+		return handleCommitErr(ctx, dEnv, verr, usage)
+	}
+
+	return 0
 }

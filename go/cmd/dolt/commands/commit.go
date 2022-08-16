@@ -116,7 +116,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	msg, msgOk := apr.GetValue(cli.MessageArg)
 	if !msgOk {
-		msg, err = getCommitMessageFromEditor(ctx, dEnv)
+		msg, err = getCommitMessageFromEditor(ctx, dEnv, "")
 		if err != nil {
 			return handleCommitErr(ctx, dEnv, err, usage)
 		}
@@ -222,9 +222,9 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv) (string, error) {
+func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg string) (string, error) {
 	var finalMsg string
-	initialMsg, err := buildInitalCommitMsg(ctx, dEnv)
+	initialMsg, err := buildInitalCommitMsg(ctx, dEnv, suggestedMsg)
 	if err != nil {
 		return "", err
 	}
@@ -241,7 +241,7 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv) (string,
 	return finalMsg, nil
 }
 
-func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) (string, error) {
+func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg string) (string, error) {
 	initialNoColor := color.NoColor
 	color.NoColor = true
 
@@ -266,8 +266,8 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) (string, error
 	n = PrintDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, true, n, workingTblsInConflict, workingTblsWithViolations)
 
 	currBranch := dEnv.RepoStateReader().CWBHeadRef()
-	initialCommitMessage := "\n" + "# Please enter the commit message for your changes. Lines starting" + "\n" +
-		"# with '#' will be ignored, and an empty message aborts the commit." + "\n# On branch " + currBranch.GetPath() + "\n#" + "\n"
+	initialCommitMessage := fmt.Sprintf("%s\n# Please enter the commit message for your changes. Lines starting"+
+		"\n# with '#' will be ignored, and an empty message aborts the commit.\n# On branch %s\n#\n", suggestedMsg, currBranch)
 
 	msgLines := strings.Split(buf.String(), "\n")
 	for i, msg := range msgLines {

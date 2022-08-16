@@ -963,7 +963,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge', '--no-commit')",
 				Expected: []sql.Row{{0, 0}},
 			},
 			{
@@ -1183,7 +1183,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge', '--no-commit')",
 				Expected: []sql.Row{{0, 0}},
 			},
 			{
@@ -4366,7 +4366,7 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 			"insert into z values (100, 101, 102)",
 			"set @Commit2 = (select DOLT_COMMIT('-am', 'Creating tables z'))",
 
-			"select DOLT_MERGE('branch1')",
+			"select DOLT_MERGE('branch1', '--no-commit')",
 			"set @Commit3 = (select DOLT_COMMIT('-am', 'Merging branch1 into branch2'))",
 		},
 		Assertions: []queries.ScriptTestAssertion{

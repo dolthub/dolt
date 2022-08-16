@@ -913,8 +913,7 @@ SQL
     [[ ! "$output" =~ "test commit" ]] || false
     run dolt merge origin/main
     [ "$status" -eq 0 ]
-    # This needs to say up-to-date like the skipped test above
-    # [[ "$output" =~ "up to date" ]]
+    [[ "$output" =~ "up-to-date" ]]
     run dolt fetch
     [ "$status" -eq 0 ]
     run dolt merge origin/main
@@ -948,7 +947,6 @@ SQL
     cd "dolt-repo-clones/test-repo"
     run dolt merge remotes/origin/main
     [ "$status" -eq 0 ]
-    # This needs to say up-to-date like the skipped test above
     [[ "$output" =~ "Everything up-to-date" ]]
     run dolt fetch origin main
     [ "$status" -eq 0 ]
@@ -1475,7 +1473,7 @@ setup_ref_test() {
 
 @test "remotes: can use refs/remotes/origin/... as commit reference for merge" {
     setup_ref_test
-    dolt merge refs/remotes/origin/main
+    dolt merge refs/remotes/origin/main -m "merge"
 }
 
 @test "remotes: can use remotes/origin/... as commit reference for log" {
@@ -1491,7 +1489,7 @@ setup_ref_test() {
 
 @test "remotes: can use remotes/origin/... as commit reference for merge" {
     setup_ref_test
-    dolt merge remotes/origin/main
+    dolt merge remotes/origin/main -m "merge"
 }
 
 @test "remotes: can use origin/... as commit reference for log" {
@@ -1507,7 +1505,7 @@ setup_ref_test() {
 
 @test "remotes: can use origin/... as commit reference for merge" {
     setup_ref_test
-    dolt merge origin/main
+    dolt merge origin/main -m "merge"
 }
 
 @test "remotes: can delete remote reference branch as origin/..." {

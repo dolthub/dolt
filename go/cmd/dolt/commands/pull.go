@@ -195,7 +195,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				return err
 			}
 
-			stats, err := merge.MergeCommitSpec(ctx, dEnv, mergeSpec)
+			_, stats, err := merge.MergeCommitSpec(ctx, dEnv, mergeSpec)
 			printSuccessStats(stats)
 			if err != nil {
 				return err
