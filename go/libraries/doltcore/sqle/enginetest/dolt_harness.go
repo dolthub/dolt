@@ -124,8 +124,6 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 	for i := range dbs {
 		db := dbs[i]
 		resetCmds = append(resetCmds, setup.SetupScript{fmt.Sprintf("use %s", db)})
-		resetCmds = append(resetCmds, setup.SetupScript{"call dclean()"})
-		resetCmds = append(resetCmds, setup.SetupScript{"call dreset('--hard', 'head')"})
 
 		// Any auto increment tables must be dropped and recreated to get a fresh state for the global auto increment
 		// sequence trackers
@@ -152,6 +150,9 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 
 			resetCmds = append(resetCmds, setup.SetupScript{createTableStatement.String()})
 		}
+
+		resetCmds = append(resetCmds, setup.SetupScript{"call dclean()"})
+		resetCmds = append(resetCmds, setup.SetupScript{"call dreset('--hard', 'head')"})
 	}
 
 	resetCmds = append(resetCmds, setup.SetupScript{"use mydb"})
