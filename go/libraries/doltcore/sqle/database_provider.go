@@ -247,7 +247,6 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 
 	// if calling process has a lockfile, also create one for new database
 	if env.FsIsLocked(p.fs) {
-		ctx.GetLogger().Logger.Println("locking ", name)
 		newEnv.Lock()
 	}
 
