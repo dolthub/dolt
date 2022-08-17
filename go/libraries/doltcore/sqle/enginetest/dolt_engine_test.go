@@ -1318,7 +1318,7 @@ func TestDoltStorageFormat(t *testing.T) {
 	if types.IsFormat_DOLT(types.Format_Default) {
 		expectedFormatString = "NEW ( __DOLT__ )"
 	} else {
-		expectedFormatString = "OLD ( __LD_1__ )"
+		expectedFormatString = fmt.Sprintf("OLD ( %s )", types.Format_Default.VersionString())
 	}
 	script := queries.ScriptTest{
 		Name: "dolt storage format function works",
@@ -1337,7 +1337,7 @@ func TestDoltStorageFormatPrepared(t *testing.T) {
 	if types.IsFormat_DOLT(types.Format_Default) {
 		expectedFormatString = "NEW ( __DOLT__ )"
 	} else {
-		expectedFormatString = "OLD ( __LD_1__ )"
+		expectedFormatString = fmt.Sprintf("OLD ( %s )", types.Format_Default.VersionString())
 	}
 	enginetest.TestPreparedQuery(t, newDoltHarness(t), "SELECT dolt_storage_format()", []sql.Row{{expectedFormatString}}, nil)
 }
