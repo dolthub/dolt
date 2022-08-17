@@ -126,11 +126,6 @@ func Serve(
 	} else if sErr != nil {
 		return sErr, nil
 	}
-	// TODO: move this to GMS
-	serverHost := serverConfig.Host()
-	if serverHost == "" || serverHost == "0.0.0.0" {
-		serverHost = "%"
-	}
 
 	// Create SQL Engine with users
 	config := &engine.SqlEngineConfig{
@@ -140,7 +135,7 @@ func Serve(
 		DoltCfgDirPath: serverConfig.CfgDir(),
 		ServerUser:     serverConfig.User(),
 		ServerPass:     serverConfig.Password(),
-		ServerHost:     serverHost,
+		ServerHost:     "%",
 		Autocommit:     serverConfig.AutoCommit(),
 		JwksConfig:     serverConfig.JwksConfig(),
 	}
@@ -159,9 +154,9 @@ func Serve(
 	userSpecified := config.ServerUser != ""
 	privsExist := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.UserTable().Data().Count() != 0
 	if userSpecified {
-		superuser := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, serverHost, false)
+		superuser := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, "%", false)
 		if userSpecified && superuser == nil {
-			sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, serverHost, config.ServerPass)
+			sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, "%", config.ServerPass)
 		}
 	} else if !privsExist {
 		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(defaultUser, "%", defaultPass)
