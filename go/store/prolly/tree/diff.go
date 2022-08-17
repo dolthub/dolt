@@ -39,13 +39,13 @@ type Differ struct {
 	cmp      CompareFn
 }
 
-func DifferFromRoots(ctx context.Context, ns NodeStore, from, to Node, cmp CompareFn) (Differ, error) {
-	fc, err := NewCursorAtStart(ctx, ns, from)
+func DifferFromRoots(ctx context.Context, fromNs NodeStore, toNs NodeStore, from, to Node, cmp CompareFn) (Differ, error) {
+	fc, err := NewCursorAtStart(ctx, fromNs, from)
 	if err != nil {
 		return Differ{}, err
 	}
 
-	tc, err := NewCursorAtStart(ctx, ns, to)
+	tc, err := NewCursorAtStart(ctx, toNs, to)
 	if err != nil {
 		return Differ{}, err
 	}
