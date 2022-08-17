@@ -1117,6 +1117,35 @@ END""")
     server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2"
 }
 
+@test "sql-server: auto increment is globally distinct across branches and connections" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+    start_sql_server repo1
+
+    server_query repo1 1 "CREATE TABLE t1(pk bigint primary key auto_increment, val int)" ""
+    insert_query repo1 1 "INSERT INTO t1 (val) VALUES (1)"
+    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1"
+
+    insert_query repo1 1 "INSERT INTO t1 (val) VALUES (2)"
+    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2"
+
+    run server_query repo1 1 "call dolt_commit('-am', 'table with two values')"
+    run server_query repo1 1 "call dolt_branch('new_branch')"
+
+    insert_query repo1/new_branch 1 "INSERT INTO t1 (val) VALUES (3)"
+    server_query repo1/new_branch 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2\n3,3"
+
+    insert_query repo1 1 "INSERT INTO t1 (val) VALUES (4)"
+    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2\n4,4"
+    
+    # drop the table on main, should keep counting from 4
+    server_query repo1 1 "drop table t1;"
+    server_query repo1 1 "CREATE TABLE t1(pk bigint primary key auto_increment, val int)" ""
+    insert_query repo1 1 "INSERT INTO t1 (val) VALUES (4)"
+    server_query repo1 1 "SELECT * FROM t1" "pk,val\n4,4"
+}
+
 @test "sql-server: sql-push --set-remote within session" {
     skiponwindows "Missing dependencies"
 

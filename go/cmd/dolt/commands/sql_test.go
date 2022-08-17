@@ -568,8 +568,8 @@ func TestDelete(t *testing.T) {
 func TestCommitHooksNoErrors(t *testing.T) {
 	dEnv := dtestutils.CreateEnvWithSeedData(t)
 	sqle.AddDoltSystemVariables()
-	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrorsKey, true)
-	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemoteKey, "unknown")
+	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
+	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemote, "unknown")
 	hooks, err := engine.GetCommitHooks(context.Background(), dEnv)
 	assert.NoError(t, err)
 	if len(hooks) < 1 {

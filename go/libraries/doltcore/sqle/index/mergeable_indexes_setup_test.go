@@ -40,7 +40,9 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-	db := dsqle.NewDatabase("dolt", dEnv.DbData(), opts)
+	db, err := dsqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
+	require.NoError(t, err)
+
 	engine, sqlCtx, err := dsqle.NewTestEngine(t, dEnv, context.Background(), db, root)
 	require.NoError(t, err)
 
