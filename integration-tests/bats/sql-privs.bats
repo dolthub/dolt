@@ -388,3 +388,22 @@ teardown() {
     ! [[ "$output" =~ "privileges.db" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
 }
+
+@test "sql-privs: default to parent privilege file if current is missing" {
+    make_multi_test_repo
+
+    dolt init
+    start_sql_server_with_args --host 0.0.0.0 --user=dolt
+
+    server_query test_db 1 "create user new_user" ""
+    stop_sql_server
+    sleep 1
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
+    run ls -a .doltcfg
+    [[ "$output" =~ "privileges.db" ]] || false
+
+    cd db_dir
+    start_sql_server_with_args --host 0.0.0.0 --user=dolt
+    server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
+}

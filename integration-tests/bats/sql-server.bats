@@ -247,6 +247,24 @@ SQL
     server_query repo1 1 "select dolt_commit('--allow-empty', '-m', 'msg')" "" "database server is set to read only mode: user does not have permission: write"
 }
 
+@test "sql-server: read-only flag prevents dolt_reset" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+    run dolt commit --allow-empty -m 'empty test commit'
+
+    DEFAULT_DB="$1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+  read_only: true" > server.yaml
+    start_sql_server_with_config repo1 server.yaml
+
+    # try to execute dolt_reset
+    skip "read-only flag does not prevent dolt_reset"
+    server_query repo1 1 "call dolt_reset('--hard', 'HEAD~1')" "" "database server is set to read only mode: user does not have permission: write"
+}
+
+
 @test "sql-server: test command line modification" {
     skiponwindows "Missing dependencies"
 
@@ -1505,6 +1523,23 @@ databases:
     run dolt sql -q "insert into b values (0)"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database is locked to writes" ]] || false
+}
+
+@test "sql-server: start server with socket option undefined should set default socket path" {
+    skiponwindows "unix socket is not available on Windows"
+    cd repo2
+    DEFAULT_DB="repo2"
+    let PORT="$$ % (65536-1024) + 1024"
+
+    dolt sql-server --port $PORT --user dolt --socket > log.txt 2>&1 &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+
+    server_query repo2 1 "select 1 as col1" "col1\n1"
+
+    run grep '\"/tmp/mysql.sock\"' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
 }
 
 @test "sql-server: server fails to start up if there is already a file in the socket file path" {

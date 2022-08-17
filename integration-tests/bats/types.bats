@@ -867,7 +867,7 @@ CREATE TABLE test (
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` char(10) character set utf8mb3 collate utf8mb3_general_ci" ]] || false
+    [[ "$output" =~ "\`v\` char(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
 }
 
 @test "types: NATIONAL CHARACTER(10)" {
@@ -880,7 +880,7 @@ CREATE TABLE test (
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` char(10) character set utf8mb3 collate utf8mb3_general_ci" ]] || false
+    [[ "$output" =~ "\`v\` char(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
 }
 
 @test "types: NATIONAL CHARACTER VARYING(10)" {
@@ -893,7 +893,7 @@ CREATE TABLE test (
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` varchar(10) character set utf8mb3 collate utf8mb3_general_ci" ]] || false
+    [[ "$output" =~ "\`v\` varchar(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
 }
 
 @test "types: NATIONAL VARCHAR(10)" {
@@ -906,7 +906,7 @@ CREATE TABLE test (
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` varchar(10) character set utf8mb3 collate utf8mb3_general_ci" ]] || false
+    [[ "$output" =~ "\`v\` varchar(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
 }
 
 @test "types: NCHAR(10)" {
@@ -919,7 +919,7 @@ CREATE TABLE test (
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` char(10) character set utf8mb3 collate utf8mb3_general_ci" ]] || false
+    [[ "$output" =~ "\`v\` char(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
 }
 
 @test "types: NVARCHAR(10)" {
@@ -932,7 +932,7 @@ CREATE TABLE test (
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` varchar(10) character set utf8mb3 collate utf8mb3_general_ci" ]] || false
+    [[ "$output" =~ "\`v\` varchar(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
 }
 
 @test "types: NUMERIC" {
@@ -1290,7 +1290,7 @@ CREATE TABLE test (
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` varchar(10) character set utf32 collate utf32_general_ci" ]] || false
+    [[ "$output" =~ "\`v\` varchar(10) CHARACTER SET utf32 COLLATE utf32_general_ci" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]

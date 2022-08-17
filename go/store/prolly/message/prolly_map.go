@@ -139,7 +139,7 @@ func walkProllyMapAddresses(ctx context.Context, msg serial.Message, cb func(ctx
 			return err
 		}
 	}
-	assertFalse((arr != nil) && (arr2 != nil))
+	assertFalse((arr != nil) && (arr2 != nil), "cannot WalkAddresses for ProllyTreeNode with both AddressArray and ValueAddressOffsets")
 	return nil
 }
 
