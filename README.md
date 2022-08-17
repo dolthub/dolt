@@ -219,7 +219,7 @@ MySQL comes with a MySQL server called `mysqld` and a MySQL client called `mysql
 mysql  Ver 8.0.29 for macos12.2 on x86_64 (Homebrew)
 ```
 
-Now, to connect the `mysql` client to Dolt, you have to force the MySQL client through the TCP interface by passing in a host and port. The default is the socket interface which Dolt does not support. The MySQL client also requires you specify a user, in this case `root`.
+Now, to connect the `mysql` client to Dolt, you have to force the MySQL client through the TCP interface by passing in a host and port. The default is the socket interface which Dolt supports, but is not on by default. The MySQL client also requires you specify a user, in this case `root`.
 
 ```bash
 % mysql --host 127.0.0.1 --port 3306 -uroot
