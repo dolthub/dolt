@@ -13,10 +13,10 @@ do
     case "$1" in
 
         # benchmark with new NomsBinFmt
-        --new-nbf) export DOLT_DEFAULT_BIN_FORMAT="__DOLT_1__"
+        --new-nbf) export DOLT_DEFAULT_BIN_FORMAT="__DOLT__"
             ;;
 
-        --new-new) export DOLT_DEFAULT_BIN_FORMAT="__DOLT_1__" &&
+        --new-new) export DOLT_DEFAULT_BIN_FORMAT="__DOLT__" &&
             export ENABLE_ROW_ITER_2=true
             ;;
 

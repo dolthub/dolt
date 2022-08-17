@@ -41,7 +41,7 @@ teardown() {
     # start the server and ensure there are no databases yet
     cd $tempDir/empty_server
     start_sql_server
-    unselected_server_query 1 "show databases" "Database\ninformation_schema"
+    unselected_server_query 1 "show databases" "Database\ninformation_schema\nmysql"
 
     # verify that dolt_clone works
     # TODO: Once dolt_clone can be called without a selected database, this can be removed
@@ -246,6 +246,24 @@ SQL
     skip "read-only flag does not prevent dolt_commit"
     server_query repo1 1 "select dolt_commit('--allow-empty', '-m', 'msg')" "" "database server is set to read only mode: user does not have permission: write"
 }
+
+@test "sql-server: read-only flag prevents dolt_reset" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+    run dolt commit --allow-empty -m 'empty test commit'
+
+    DEFAULT_DB="$1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+  read_only: true" > server.yaml
+    start_sql_server_with_config repo1 server.yaml
+
+    # try to execute dolt_reset
+    skip "read-only flag does not prevent dolt_reset"
+    server_query repo1 1 "call dolt_reset('--hard', 'HEAD~1')" "" "database server is set to read only mode: user does not have permission: write"
+}
+
 
 @test "sql-server: test command line modification" {
     skiponwindows "Missing dependencies"
@@ -554,7 +572,7 @@ SQL
 
     server_query repo1 1 "SELECT * FROM test.pk ORDER BY pk" "pk\n0"
     server_query repo1 1 "DROP DATABASE test" ""
-    server_query repo1 1 "SHOW DATABASES" "Database\ninformation_schema\nrepo1"
+    server_query repo1 1 "SHOW DATABASES" "Database\ninformation_schema\nmysql\nrepo1"
 }
 
 @test "sql-server: DOLT_ADD, DOLT_COMMIT, DOLT_CHECKOUT, DOLT_MERGE work together in server mode" {
@@ -722,7 +740,7 @@ SQL
 }
 
 @test "sql-server: JSON queries" {
-    skip_nbf_dolt_1
+    skip_nbf_dolt
     cd repo1
     start_sql_server repo1
 
@@ -1153,7 +1171,7 @@ END""")
     start_sql_server
 
     server_query "" 1 "create database test1"
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest1"
     server_query "test1" 1 "create table a(x int)"
     server_query "test1" 1 "insert into a values (1), (2)"
     # not bothering to check the results of the commit here
@@ -1198,12 +1216,12 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest3"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest1\ntest3"
 }
 
 @test "sql-server: drop database with active connections" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1 "json ordering of keys differs"
+    skip_nbf_dolt "json ordering of keys differs"
 
     mkdir no_dolt && cd no_dolt
     start_sql_server
@@ -1212,7 +1230,7 @@ END""")
     server_query "" 1 "create database test2"
     server_query "" 1 "create database test3"
 
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest2\ntest3"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest1\ntest2\ntest3"
     server_query "test1" 1 "create table a(x int)"
     server_query "test1" 1 "insert into a values (1), (2)"
     run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
@@ -1259,7 +1277,7 @@ END""")
 
     server_query "" 1 "create database Test1"
 
-    server_query "" 1 "show databases" "Database\nTest1\ninformation_schema"
+    server_query "" 1 "show databases" "Database\nTest1\ninformation_schema\nmysql"
     multi_query "" 1 "use test1; create table a(x int);"
     multi_query "" 1 "use TEST1; insert into a values (1), (2);"
     run multi_query "" 1 "use test1; select dolt_commit('-a', '-m', 'new table a');"
@@ -1280,7 +1298,7 @@ END""")
     start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
 
     server_query "" 1 "create database test1"
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest1"
     server_query "test1" 1 "create table a(x int)"
     server_query "test1" 1 "insert into a values (1), (2)"
     # not bothering to check the results of the commit here
@@ -1308,7 +1326,7 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest3"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest3"
 }
 
 @test "sql-server: create database errors" {
@@ -1336,7 +1354,7 @@ END""")
     start_sql_server
 
     server_query "" 1 "create database test1"
-    server_query "repo1" 1 "show databases" "Database\ninformation_schema\nrepo1\ntest1"
+    server_query "repo1" 1 "show databases" "Database\ninformation_schema\nmysql\nrepo1\ntest1"
     server_query "test1" 1 "create table a(x int)"
     server_query "test1" 1 "insert into a values (1), (2)"
     # not bothering to check the results of the commit here
@@ -1370,7 +1388,7 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server
-    server_query "" 1 "show databases" "Database\ninformation_schema\nrepo1\ntest1\ntest2"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\nrepo1\ntest1\ntest2"
 }
 
 @test "sql-server: fetch uses database tempdir from different working directory" {
@@ -1466,6 +1484,16 @@ databases:
     [ "$status" -eq 1 ]
 }
 
+@test "sql-server: sql-server lock for new databases" {
+    cd repo1
+    start_sql_server
+    server_query repo1 1 "create database newdb" ""
+    cd newdb
+    let PORT="$$ % (65536-1024) + 1024"
+    run dolt sql-server -P $PORT
+    [ "$status" -eq 1 ]
+}
+
 @test "sql-server: sql-server locks database to writes" {
     cd repo2
     dolt sql -q "create table a (x int primary key)" 
@@ -1476,6 +1504,23 @@ databases:
     run dolt sql -q "insert into b values (0)"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database is locked to writes" ]] || false
+}
+
+@test "sql-server: start server with socket option undefined should set default socket path" {
+    skiponwindows "unix socket is not available on Windows"
+    cd repo2
+    DEFAULT_DB="repo2"
+    let PORT="$$ % (65536-1024) + 1024"
+
+    dolt sql-server --port $PORT --user dolt --socket > log.txt 2>&1 &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+
+    server_query repo2 1 "select 1 as col1" "col1\n1"
+
+    run grep '\"/tmp/mysql.sock\"' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
 }
 
 @test "sql-server: server fails to start up if there is already a file in the socket file path" {

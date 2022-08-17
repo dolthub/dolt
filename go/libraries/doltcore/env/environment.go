@@ -1193,24 +1193,20 @@ func (dEnv *DoltEnv) IsLocked() bool {
 	if dEnv.IgnoreLockFile {
 		return false
 	}
+	return FsIsLocked(dEnv.FS)
+}
 
-	ok, _ := dEnv.FS.Exists(dEnv.LockFile())
-	if !ok {
-		return false
+// Lock writes this database's lockfile with the pid of the calling process or errors if it already exists
+func (dEnv *DoltEnv) Lock() error {
+	if dEnv.IgnoreLockFile {
+		return nil
 	}
 
-	lockFilePid, err := getProcessFromLockFile(dEnv.FS, dEnv.LockFile())
-	if err != nil { // if there's any error assume that env is locked since the file exists
-		return true
+	if dEnv.IsLocked() {
+		return ErrActiveServerLock.New(dEnv.LockFile())
 	}
 
-	// Check whether the pid that spawned the lock file is still running. Ignore it if not.
-	p, err := ps.FindProcess(lockFilePid)
-	if err != nil {
-		return false
-	}
-
-	return p != nil
+	return WriteLockfile(dEnv.FS)
 }
 
 func getProcessFromLockFile(fs filesys.Filesys, lockFile string) (int, error) {
@@ -1237,19 +1233,6 @@ func getProcessFromLockFile(fs filesys.Filesys, lockFile string) (int, error) {
 	return pid, nil
 }
 
-// Lock writes this database's lockfile with the pid of the calling process or errors if it already exists
-func (dEnv *DoltEnv) Lock() error {
-	if dEnv.IgnoreLockFile {
-		return nil
-	}
-
-	if dEnv.IsLocked() {
-		return ErrActiveServerLock.New(dEnv.LockFile())
-	}
-
-	return dEnv.FS.WriteFile(dEnv.LockFile(), []byte(fmt.Sprintf("%d", os.Getpid())))
-}
-
 // Unlock deletes this database's lockfile
 func (dEnv *DoltEnv) Unlock() error {
 	if dEnv.IgnoreLockFile {
@@ -1257,4 +1240,34 @@ func (dEnv *DoltEnv) Unlock() error {
 	}
 
 	return dEnv.FS.DeleteFile(dEnv.LockFile())
+}
+
+// WriteLockfile writes a lockfile encoding the pid of the calling process.
+func WriteLockfile(fs filesys.Filesys) error {
+	lockFile, _ := fs.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
+	return fs.WriteFile(lockFile, []byte(fmt.Sprintf("%d", os.Getpid())))
+}
+
+// FsIsLocked returns true if a lockFile exists with the same pid as
+// any live process.
+func FsIsLocked(fs filesys.Filesys) bool {
+	lockFile, _ := fs.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
+
+	ok, _ := fs.Exists(lockFile)
+	if !ok {
+		return false
+	}
+
+	lockFilePid, err := getProcessFromLockFile(fs, lockFile)
+	if err != nil { // if there's any error assume that env is locked since the file exists
+		return true
+	}
+
+	// Check whether the pid that spawned the lock file is still running. Ignore it if not.
+	p, err := ps.FindProcess(lockFilePid)
+	if err != nil {
+		return false
+	}
+
+	return p != nil
 }

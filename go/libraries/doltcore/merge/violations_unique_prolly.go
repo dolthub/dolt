@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -52,7 +51,7 @@ func addUniqIdxViols(
 		return err
 	}
 
-	kd := shim.KeyDescriptorFromSchema(index.Schema())
+	kd := index.Schema().GetKeyDescriptor()
 	prefixKD := kd.PrefixDesc(index.Count())
 	prefixKB := val.NewTupleBuilder(prefixKD)
 	p := left.Pool()

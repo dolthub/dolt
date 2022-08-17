@@ -67,6 +67,7 @@ echo '
               "--mysql-exec=/usr/sbin/mysqld",
               "--mysql-schema-file=schema.sql",
               "--nbf='$nomsBinFormat'",
+              "--email-template=ImportBenchmarkingReleaseTemplate",
               "--results-schema=/results-schema.sql",
               "--issue-number='$issueNumber'",
               "--output='$format'",

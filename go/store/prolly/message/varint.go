@@ -53,6 +53,6 @@ func decodeSignedDeltas(buf []byte, ints []uint64) []uint64 {
 		ints[i] = uint64(curr)
 		prev = curr
 	}
-	assertTrue(len(buf) == 0)
+	assertTrue(len(buf) == 0, "extra bytes after decoding varints")
 	return ints
 }

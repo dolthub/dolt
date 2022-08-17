@@ -89,7 +89,7 @@ func MergeRoots(
 	var conflictStash *conflictStash
 	var violationStash *violationStash
 	var err error
-	if !types.IsFormat_DOLT_1(ourRoot.VRW().Format()) {
+	if !types.IsFormat_DOLT(ourRoot.VRW().Format()) {
 		ourRoot, conflictStash, err = stashConflicts(ctx, ourRoot)
 		if err != nil {
 			return nil, nil, err
@@ -189,7 +189,7 @@ func MergeRoots(
 		return nil, nil, err
 	}
 
-	if types.IsFormat_DOLT_1(ourRoot.VRW().Format()) {
+	if types.IsFormat_DOLT(ourRoot.VRW().Format()) {
 		err = getConstraintViolationStats(ctx, mergedRoot, tblToStats)
 		if err != nil {
 			return nil, nil, err

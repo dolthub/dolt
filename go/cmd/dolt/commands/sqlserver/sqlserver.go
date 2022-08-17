@@ -147,7 +147,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables. Defaults to `%s`.", serverConfig.PersistenceBehavior()))
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
 	ap.SupportsString(allowCleartextPasswordsFlag, "", "allow-cleartext-passwords", "Allows use of cleartext passwords. Defaults to false.")
-	ap.SupportsString(socketFlag, "", "socket file", "Path for the unix socket file. Defaults to '/tmp/mysql.sock'.")
+	ap.SupportsOptionalString(socketFlag, "", "socket file", "Path for the unix socket file. Defaults to '/tmp/mysql.sock'.")
 	return ap
 }
 
@@ -262,25 +262,34 @@ func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config S
 		cfgDirPath = filepath.Join(dataDir, commands.DefaultCfgDirName)
 	} else {
 		// Look in parent directory for doltcfg
-		path := filepath.Join("..", commands.DefaultCfgDirName)
-		if exists, isDir := dEnv.FS.Exists(path); exists && isDir {
-			cfgDirPath = path
-		}
+		parentDirCfg := filepath.Join("..", commands.DefaultCfgDirName)
+		parentExists, isDir := dEnv.FS.Exists(parentDirCfg)
+		parentDirExists := parentExists && isDir
 
 		// Look in data directory (which is necessarily current directory) for doltcfg
-		path = filepath.Join(dataDir, commands.DefaultCfgDirName)
-		if exists, isDir := dEnv.FS.Exists(path); exists && isDir && len(cfgDirPath) != 0 {
+		currDirCfg := filepath.Join(dataDir, commands.DefaultCfgDirName)
+		currExists, isDir := dEnv.FS.Exists(currDirCfg)
+		currDirExists := currExists && isDir
+
+		// Error if both current and parent exist
+		if currDirExists && parentDirExists {
 			p1, err := dEnv.FS.Abs(cfgDirPath)
 			if err != nil {
 				return err
 			}
-			p2, err := dEnv.FS.Abs(path)
+			p2, err := dEnv.FS.Abs(parentDirCfg)
 			if err != nil {
 				return err
 			}
 			return commands.ErrMultipleDoltCfgDirs.New(p1, p2)
 		}
-		cfgDirPath = path
+
+		// Assign the one that exists, defaults to current if neither exist
+		if parentDirExists {
+			cfgDirPath = parentDirCfg
+		} else {
+			cfgDirPath = currDirCfg
+		}
 	}
 	serverConfig.withCfgDir(cfgDirPath)
 

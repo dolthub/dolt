@@ -17,6 +17,7 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math/rand"
@@ -29,6 +30,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
@@ -120,6 +122,41 @@ func TestNBSAsTableFileStore(t *testing.T) {
 	size, err := st.Size(ctx)
 	require.NoError(t, err)
 	require.Greater(t, size, uint64(0))
+}
+
+func TestConcurrentPuts(t *testing.T) {
+	st, _, _ := makeTestLocalStore(t, 100)
+
+	errgrp, ctx := errgroup.WithContext(context.Background())
+
+	n := 10
+	hashes := make([]hash.Hash, n)
+	for i := 0; i < n; i++ {
+		c := makeChunk(uint32(i))
+		hashes[i] = c.Hash()
+		errgrp.Go(func() error {
+			err := st.Put(ctx, c)
+			require.NoError(t, err)
+			return nil
+		})
+	}
+
+	err := errgrp.Wait()
+	require.NoError(t, err)
+	require.Equal(t, uint64(n), st.putCount)
+
+	for i := 0; i < n; i++ {
+		h := hashes[i]
+		c, err := st.Get(ctx, h)
+		require.NoError(t, err)
+		require.False(t, c.IsEmpty())
+	}
+}
+
+func makeChunk(i uint32) chunks.Chunk {
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, i)
+	return chunks.NewChunk(b)
 }
 
 type tableFileSet map[string]TableFile

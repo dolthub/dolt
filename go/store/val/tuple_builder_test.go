@@ -215,6 +215,18 @@ func (tc testCompare) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
 	return
 }
 
-func (tc testCompare) CompareValues(left, right []byte, typ Type) int {
+func (tc testCompare) CompareValues(_ int, left, right []byte, typ Type) int {
 	return compare(typ, left, right)
+}
+
+func (tc testCompare) Prefix(n int) TupleComparator {
+	return tc
+}
+
+func (tc testCompare) Suffix(n int) TupleComparator {
+	return tc
+}
+
+func (tc testCompare) Validated(types []Type) TupleComparator {
+	return tc
 }

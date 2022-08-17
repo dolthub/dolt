@@ -163,7 +163,7 @@ func parentFkConstraintViolations(
 	theirRootIsh hash.Hash,
 	jsonData []byte,
 ) (*doltdb.Table, bool, error) {
-	if preParentRowData.Format() == types.Format_DOLT_1 {
+	if preParentRowData.Format() == types.Format_DOLT {
 		m := durable.ProllyMapFromIndex(preParentRowData)
 		return prollyParentFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, theirRootIsh, jsonData)
 	}
@@ -181,7 +181,7 @@ func childFkConstraintViolations(
 	preChildRowData durable.Index,
 	ourCmHash hash.Hash,
 	jsonData []byte) (*doltdb.Table, bool, error) {
-	if preChildRowData.Format() == types.Format_DOLT_1 {
+	if preChildRowData.Format() == types.Format_DOLT {
 		m := durable.ProllyMapFromIndex(preChildRowData)
 		return prollyChildFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, ourCmHash, jsonData)
 	}

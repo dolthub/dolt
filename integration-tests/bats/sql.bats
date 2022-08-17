@@ -684,6 +684,38 @@ teardown() {
     rm -rf inner_db
 }
 
+@test "sql: .doltcfg defaults to parent directory" {
+    # remove existing directories
+    rm -rf .doltcfg
+    rm -rf inner_db
+
+    # create user in parent
+    run dolt sql -q "create user new_user"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    # check that .doltcfg and privileges.db was created
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
+    run ls .doltcfg
+    [[ "$output" =~ "privileges.db" ]] || false
+
+    mkdir inner_db
+    cd inner_db
+    run dolt sql -q "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    # remove existing directories
+    rm -rf .doltcfg
+    rm -rf inner_db
+}
+
 @test "sql: dolt sql -q specify data directory outside of dolt repo" {
     # remove files
     rm -rf datadir
@@ -1622,7 +1654,24 @@ SQL
 
     run dolt sql -q "select * from \`dolt_repo_$$/v1\`.a1 order by x;" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 4 ]  
+}
+
+@test "sql: USE tag doesn't create duplicate commit DB name" {
+    skip "unrelated panic when dolt_checkout is called after using a read-only revision db https://github.com/dolthub/dolt/issues/4067"
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+
+    # get the last commit hash
+    hash=`dolt log | grep commit | cut -d" " -f2 | tail -n+1 | head -n1`
+
+    dolt sql  <<SQL
+USE \`dolt_repo_$$/$hash\`;
+USE \`dolt_repo_$$/feature-branch\`;
+CALL DOLT_TAG("v1");
+USE \`dolt_repo_$$/v1\`;
+CALL dolt_checkout('feature-branch');
+SQL
 }
 
 @test "sql: tag qualified DB name in delete" {
@@ -2187,7 +2236,7 @@ SQL
 
 @test "sql: dolt_version() func" {
     SQL=$(dolt sql -q 'select dolt_version() from dual;' -r csv | tail -n 1)
-    CLI=$(dolt version | cut -f 3 -d ' ')
+    CLI=$(dolt version | sed '1p;d' | cut -d " " -f 3)
     [ "$SQL" == "$CLI" ]
 }
 

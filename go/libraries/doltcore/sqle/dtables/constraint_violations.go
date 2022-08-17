@@ -28,7 +28,7 @@ import (
 
 // NewConstraintViolationsTable returns a sql.Table that lists constraint violations.
 func NewConstraintViolationsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
-	if root.VRW().Format() == types.Format_DOLT_1 {
+	if root.VRW().Format() == types.Format_DOLT {
 		return newProllyCVTable(ctx, tblName, root, rs)
 	}
 
