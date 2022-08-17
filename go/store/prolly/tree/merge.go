@@ -48,12 +48,12 @@ func ThreeWayMerge[S message.Serializer](
 	valDesc val.TupleDesc,
 ) (final Node, err error) {
 
-	ld, err := DifferFromRoots(ctx, ns, base, left, compare)
+	ld, err := DifferFromRoots(ctx, ns, ns, base, left, compare)
 	if err != nil {
 		return Node{}, err
 	}
 
-	rd, err := DifferFromRoots(ctx, ns, base, right, compare)
+	rd, err := DifferFromRoots(ctx, ns, ns, base, right, compare)
 	if err != nil {
 		return Node{}, err
 	}
