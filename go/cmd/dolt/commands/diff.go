@@ -551,7 +551,7 @@ func diffRows(ctx context.Context, se *engine.SqlEngine, td diff.TableDelta, dAr
 		query += " where " + dArgs.where
 	}
 
-	if dArgs.limit > 0 {
+	if dArgs.limit >= 0 {
 		query += " limit " + strconv.Itoa(dArgs.limit)
 	}
 
