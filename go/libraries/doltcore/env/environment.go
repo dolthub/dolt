@@ -1249,7 +1249,7 @@ func WriteLockfile(fs filesys.Filesys) error {
 }
 
 // FsIsLocked returns true if a lockFile exists with the same pid as
-// the calling process.
+// any live process.
 func FsIsLocked(fs filesys.Filesys) bool {
 	lockFile, _ := fs.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
 
