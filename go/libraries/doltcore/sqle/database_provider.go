@@ -567,7 +567,7 @@ func (p DoltDatabaseProvider) GetRevisionForRevisionDatabase(ctx *sql.Context, d
 
 	sqldb, ok := db.(dsess.RevisionDatabase)
 	if !ok {
-		return "", "", nil
+		return db.Name(), "", nil
 	}
 
 	if sqldb.Revision() != "" {

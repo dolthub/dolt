@@ -702,6 +702,12 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 	}
 }
 
+func TestDoltRevisionDbScriptsPrepared(t *testing.T) {
+	for _, script := range DoltRevisionDbScripts {
+		enginetest.TestScriptPrepared(t, newDoltHarness(t), script)
+	}
+}
+
 func TestDoltDdlScripts(t *testing.T) {
 	harness := newDoltHarness(t)
 	harness.Setup()
