@@ -215,7 +215,7 @@ teardown() {
     ! [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
-    server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema"
+    server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema\nmysql"
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt"
     server_query db1 1 "create user new_user" ""
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
@@ -285,7 +285,7 @@ teardown() {
     ! [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
-    server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema"
+    server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema\nmysql"
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt"
     server_query db1 1 "create user new_user" ""
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
@@ -316,7 +316,7 @@ teardown() {
     ! [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
 
-    server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema"
+    server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema\nmysql"
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt"
     server_query db1 1 "create user new_user" ""
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
@@ -368,7 +368,7 @@ teardown() {
     ! [[ "$output" =~ "privileges.db" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
 
-    server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema"
+    server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema\nmysql"
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt"
     server_query db1 1 "create user new_user" ""
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
