@@ -253,6 +253,10 @@ func (d *DoltHarness) NewSession() *sql.Context {
 
 func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession {
 	states := make([]dsess.InitialDbState, len(d.databases))
+	for i, db := range d.databases {
+		env := d.multiRepoEnv.GetEnv(db.Name())
+		states[i] = getDbState(d.t, db, env)
+	}
 	localConfig := d.multiRepoEnv.Config()
 	pro := d.session.Provider()
 
