@@ -191,7 +191,7 @@ teardown() {
     start_sql_server
     
     server_query "" 1 "create database testdb"
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntestdb"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntestdb"
     server_query "testdb" 1 "create table a(x int)"
     server_query "testdb" 1 "insert into a values (1), (2)"
 
