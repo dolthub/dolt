@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"strings"
 	"sync"
 
@@ -203,12 +204,14 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 	p.mu.RUnlock()
 
 	// If the current database is not one of the primary databases, it must be a transitory revision database
-	if !foundDatabase {
+	if !foundDatabase && ctx.GetCurrentDatabase() != "" {
 		revDb, _, ok, err := p.databaseForRevision(ctx, ctx.GetCurrentDatabase())
 		if err != nil {
-			// TODO: What to do here, since we can't return an error? Just log something?
-			//return nil
-		} else if ok {
+			// We can't return an error from this interface function, so just log a message
+			logrus.Warn("unable to load %q as a database revision: %s", ctx.GetCurrentDatabase(), err.Error())
+		} else if !ok {
+			logrus.Warn("unable to load %q as a database revision", ctx.GetCurrentDatabase())
+		} else {
 			all = append(all, revDb)
 		}
 	}
