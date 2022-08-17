@@ -725,6 +725,13 @@ func TestDoltMerge(t *testing.T) {
 	}
 }
 
+func TestDoltAutoIncrement(t *testing.T) {
+	for _, script := range DoltAutoIncrementTests {
+		// doing commits on different branches is antagonistic to engine reuse, use a new engine on each script
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+}
+
 func TestDoltConflictsTableNameTable(t *testing.T) {
 	for _, script := range DoltConflictTableNameTableTests {
 		enginetest.TestScript(t, newDoltHarness(t), script)
