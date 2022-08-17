@@ -180,5 +180,5 @@ jobs:
           region: us-west-2
           version: ${{ github.event.client_payload.ref }}
           template: 'BatsWindowsFailureTemplate'
-          toAddresses: '["${{ github.event.client_payload.actor_email }}"]'
+          toAddresses: '["${{ github.event.client_payload.actor_email }}", "tim@dolthub.com"]'
           workflowURL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
