@@ -930,6 +930,14 @@ func TestUnscopedDiffSystemTable(t *testing.T) {
 	}
 }
 
+func TestUnscopedDiffSystemTablePrepared(t *testing.T) {
+	for _, test := range UnscopedDiffSystemTableScriptTests {
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, newDoltHarness(t), test)
+		})
+	}
+}
+
 func TestDiffTableFunction(t *testing.T) {
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
