@@ -869,3 +869,117 @@ SQL
    [ $status -eq 0 ]
    [[ $output =~ '| + | 1  | ramen        |' ]] || false
 }
+
+@test "diff: with limit" {
+    dolt sql <<SQL
+CREATE TABLE test2 (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  PRIMARY KEY (pk)
+);
+SQL
+
+    dolt add .
+    dolt commit -m table
+
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
+    dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
+    dolt sql -q "insert into test2 values (0)"
+    dolt sql -q "insert into test2 values (1)"
+    dolt sql -q "insert into test2 values (2)"
+
+    run dolt diff
+
+    EXPECTED_TABLE1=$(cat <<'EOF'
++---+----+----+----+----+----+----+
+|   | pk | c1 | c2 | c3 | c4 | c5 |
++---+----+----+----+----+----+----+
+| + | 0  | 0  | 0  | 0  | 0  | 0  |
+| + | 1  | 1  | 1  | 1  | 1  | 1  |
++---+----+----+----+----+----+----+
+EOF
+)
+    EXPECTED_TABLE2=$(cat <<'EOF'
++---+----+
+|   | pk |
++---+----+
+| + | 0  |
+| + | 1  |
+| + | 2  |
++---+----+
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED_TABLE1" ]] || false
+    [[ "$output" =~ "$EXPECTED_TABLE2" ]] || false
+
+    run dolt diff --limit 0
+    [[ "$output" =~ "$EXPECTED_TABLE1" ]] || false
+    [[ "$output" =~ "$EXPECTED_TABLE2" ]] || false
+
+    run dolt diff --limit 3
+    [[ "$output" =~ "$EXPECTED_TABLE1" ]] || false
+    [[ "$output" =~ "$EXPECTED_TABLE2" ]] || false
+
+    run dolt diff --limit 100
+    [[ "$output" =~ "$EXPECTED_TABLE1" ]] || false
+    [[ "$output" =~ "$EXPECTED_TABLE2" ]] || false
+
+    run dolt diff --limit 1
+
+    EXPECTED_TABLE1=$(cat <<'EOF'
++---+----+----+----+----+----+----+
+|   | pk | c1 | c2 | c3 | c4 | c5 |
++---+----+----+----+----+----+----+
+| + | 0  | 0  | 0  | 0  | 0  | 0  |
++---+----+----+----+----+----+----+
+EOF
+)
+    EXPECTED_TABLE2=$(cat <<'EOF'
++---+----+
+|   | pk |
++---+----+
+| + | 0  |
++---+----+
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED_TABLE1" ]] || false
+    [[ "$output" =~ "$EXPECTED_TABLE2" ]] || false
+
+    run dolt diff --limit 2
+
+    EXPECTED_TABLE1=$(cat <<'EOF'
++---+----+----+----+----+----+----+
+|   | pk | c1 | c2 | c3 | c4 | c5 |
++---+----+----+----+----+----+----+
+| + | 0  | 0  | 0  | 0  | 0  | 0  |
+| + | 1  | 1  | 1  | 1  | 1  | 1  |
++---+----+----+----+----+----+----+
+EOF
+)
+    EXPECTED_TABLE2=$(cat <<'EOF'
++---+----+
+|   | pk |
++---+----+
+| + | 0  |
+| + | 1  |
++---+----+
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED_TABLE1" ]] || false
+    [[ "$output" =~ "$EXPECTED_TABLE2" ]] || false
+
+    run dolt diff test2 --where "to_pk > 0" --limit 1
+
+    EXPECTED_TABLE2=$(cat <<'EOF'
++---+----+
+|   | pk |
++---+----+
+| + | 1  |
++---+----+
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED_TABLE2" ]] || false
+}
