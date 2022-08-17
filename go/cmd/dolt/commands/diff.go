@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 
 	textdiff "github.com/andreyvit/diff"
@@ -548,6 +549,10 @@ func diffRows(ctx context.Context, se *engine.SqlEngine, td diff.TableDelta, dAr
 
 	if len(dArgs.where) > 0 {
 		query += " where " + dArgs.where
+	}
+
+	if dArgs.limit > 0 {
+		query += " limit " + strconv.Itoa(dArgs.limit)
 	}
 
 	sqlCtx, err := engine.NewLocalSqlContext(ctx, se)
