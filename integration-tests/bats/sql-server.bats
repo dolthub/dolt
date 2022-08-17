@@ -41,7 +41,7 @@ teardown() {
     # start the server and ensure there are no databases yet
     cd $tempDir/empty_server
     start_sql_server
-    unselected_server_query 1 "show databases" "Database\ninformation_schema"
+    unselected_server_query 1 "show databases" "Database\ninformation_schema\nmysql"
 
     # verify that dolt_clone works
     # TODO: Once dolt_clone can be called without a selected database, this can be removed
@@ -572,7 +572,7 @@ SQL
 
     server_query repo1 1 "SELECT * FROM test.pk ORDER BY pk" "pk\n0"
     server_query repo1 1 "DROP DATABASE test" ""
-    server_query repo1 1 "SHOW DATABASES" "Database\ninformation_schema\nrepo1"
+    server_query repo1 1 "SHOW DATABASES" "Database\ninformation_schema\nmysql\nrepo1"
 }
 
 @test "sql-server: DOLT_ADD, DOLT_COMMIT, DOLT_CHECKOUT, DOLT_MERGE work together in server mode" {
@@ -1200,7 +1200,7 @@ END""")
     start_sql_server
 
     server_query "" 1 "create database test1"
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest1"
     server_query "test1" 1 "create table a(x int)"
     server_query "test1" 1 "insert into a values (1), (2)"
     # not bothering to check the results of the commit here
@@ -1245,7 +1245,7 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest3"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest1\ntest3"
 }
 
 @test "sql-server: drop database with active connections" {
@@ -1259,7 +1259,7 @@ END""")
     server_query "" 1 "create database test2"
     server_query "" 1 "create database test3"
 
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest2\ntest3"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest1\ntest2\ntest3"
     server_query "test1" 1 "create table a(x int)"
     server_query "test1" 1 "insert into a values (1), (2)"
     run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
@@ -1306,7 +1306,7 @@ END""")
 
     server_query "" 1 "create database Test1"
 
-    server_query "" 1 "show databases" "Database\nTest1\ninformation_schema"
+    server_query "" 1 "show databases" "Database\nTest1\ninformation_schema\nmysql"
     multi_query "" 1 "use test1; create table a(x int);"
     multi_query "" 1 "use TEST1; insert into a values (1), (2);"
     run multi_query "" 1 "use test1; select dolt_commit('-a', '-m', 'new table a');"
@@ -1327,7 +1327,7 @@ END""")
     start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
 
     server_query "" 1 "create database test1"
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest1"
     server_query "test1" 1 "create table a(x int)"
     server_query "test1" 1 "insert into a values (1), (2)"
     # not bothering to check the results of the commit here
@@ -1355,7 +1355,7 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest3"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest3"
 }
 
 @test "sql-server: create database errors" {
@@ -1383,7 +1383,7 @@ END""")
     start_sql_server
 
     server_query "" 1 "create database test1"
-    server_query "repo1" 1 "show databases" "Database\ninformation_schema\nrepo1\ntest1"
+    server_query "repo1" 1 "show databases" "Database\ninformation_schema\nmysql\nrepo1\ntest1"
     server_query "test1" 1 "create table a(x int)"
     server_query "test1" 1 "insert into a values (1), (2)"
     # not bothering to check the results of the commit here
@@ -1417,7 +1417,7 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server
-    server_query "" 1 "show databases" "Database\ninformation_schema\nrepo1\ntest1\ntest2"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\nrepo1\ntest1\ntest2"
 }
 
 @test "sql-server: fetch uses database tempdir from different working directory" {
