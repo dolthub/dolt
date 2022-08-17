@@ -89,58 +89,37 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Temp playground for collation testing",
+			Name: "dolt_merge() (3way) works with no auto increment overlap",
 			SetUpScript: []string{
-				"CREATE TABLE test1 (pk BIGINT PRIMARY KEY, v1 VARCHAR(255) COLLATE utf16_unicode_ci, INDEX(v1));",
-				"CREATE TABLE test2 (pk BIGINT PRIMARY KEY, v1 VARCHAR(255) COLLATE utf8mb4_0900_bin, INDEX(v1));",
-				"INSERT INTO test1 VALUES (1, 'abc'), (2, 'ABC'), (3, 'aBc'), (4, 'AbC');",
-				"INSERT INTO test2 VALUES (1, 'abc'), (2, 'ABC'), (3, 'aBc'), (4, 'AbC');",
+				"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+				"INSERT INTO t (c0) VALUES (1);",
+				"CALL dolt_commit('-a', '-m', 'cm1');",
+				"CALL dolt_checkout('-b', 'test');",
+				"INSERT INTO t (pk,c0) VALUES (3,3), (4,4);",
+				"CALL dolt_commit('-a', '-m', 'cm2');",
+				"CALL dolt_checkout('main');",
+				"INSERT INTO t (c0) VALUES (5);",
+				"CALL dolt_commit('-a', '-m', 'cm3');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "SELECT v1, pk FROM test1 ORDER BY pk;",
-					Expected: []sql.Row{
-						{"abc", 1}, {"ABC", 2}, {"aBc", 3}, {"AbC", 4},
-					},
+					Query:    "CALL dolt_merge('test');",
+					Expected: []sql.Row{{0, 0}},
 				},
 				{
-					Query: "SELECT v1, pk FROM test1 ORDER BY v1, pk;",
-					Expected: []sql.Row{
-						{"abc", 1}, {"ABC", 2}, {"aBc", 3}, {"AbC", 4},
-					},
+					Query:    "INSERT INTO t VALUES (NULL,6),(7,7),(NULL,8);",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 6}}},
 				},
 				{
-					Query:    "SELECT v1, pk FROM test1 WHERE v1 > 'AbC' ORDER BY v1, pk;",
-					Expected: []sql.Row{},
-				},
-				{
-					Query: "SELECT v1, pk FROM test1 WHERE v1 >= 'AbC' ORDER BY v1, pk;",
+					Query: "SELECT * FROM t ORDER BY pk;",
 					Expected: []sql.Row{
-						{"abc", 1}, {"ABC", 2}, {"aBc", 3}, {"AbC", 4},
-					},
-				},
-				{
-					Query: "SELECT v1, pk FROM test2 ORDER BY pk;",
-					Expected: []sql.Row{
-						{"abc", 1}, {"ABC", 2}, {"aBc", 3}, {"AbC", 4},
-					},
-				},
-				{
-					Query: "SELECT v1, pk FROM test2 ORDER BY v1, pk;",
-					Expected: []sql.Row{
-						{"ABC", 2}, {"AbC", 4}, {"aBc", 3}, {"abc", 1},
-					},
-				},
-				{
-					Query: "SELECT v1, pk FROM test2 WHERE v1 > 'AbC' ORDER BY v1, pk;",
-					Expected: []sql.Row{
-						{"aBc", 3}, {"abc", 1},
-					},
-				},
-				{
-					Query: "SELECT v1, pk FROM test2 WHERE v1 >= 'AbC' ORDER BY v1, pk;",
-					Expected: []sql.Row{
-						{"AbC", 4}, {"aBc", 3}, {"abc", 1},
+						{1, 1},
+						{3, 3},
+						{4, 4},
+						{5, 5},
+						{6, 6},
+						{7, 7},
+						{8, 8},
 					},
 				},
 			},

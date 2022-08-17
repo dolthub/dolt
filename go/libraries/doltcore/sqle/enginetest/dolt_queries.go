@@ -1736,7 +1736,7 @@ var MergeScripts = []queries.ScriptTest{
 			"INSERT INTO t (pk,c0) VALUES (3,3), (4,4);",
 			"CALL dolt_commit('-a', '-m', 'cm2');",
 			"CALL dolt_checkout('main');",
-			"INSERT INTO t (c0) VALUES (2);",
+			"INSERT INTO t (c0) VALUES (5);",
 			"CALL dolt_commit('-a', '-m', 'cm3');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -1745,19 +1745,19 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, 0}},
 			},
 			{
-				Query:    "INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 5}}},
+				Query:    "INSERT INTO t VALUES (NULL,6),(7,7),(NULL,8);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 6}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
 				Expected: []sql.Row{
 					{1, 1},
-					{2, 2},
 					{3, 3},
 					{4, 4},
 					{5, 5},
 					{6, 6},
 					{7, 7},
+					{8, 8},
 				},
 			},
 		},
@@ -1807,7 +1807,7 @@ var MergeScripts = []queries.ScriptTest{
 			"INSERT INTO t VALUES (4,4), (5,5);",
 			"CALL dolt_commit('-am', 'cm2');",
 			"CALL dolt_checkout('main');",
-			"INSERT INTO t (c0) VALUES (2);",
+			"INSERT INTO t (c0) VALUES (6);",
 			"CALL dolt_commit('-am', 'cm3');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -1816,18 +1816,18 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, 0}},
 			},
 			{
-				Query:    "INSERT INTO t VALUES (3,3),(NULL,6);",
+				Query:    "INSERT INTO t VALUES (3,3),(NULL,7);",
 				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
 				Expected: []sql.Row{
 					{1, 1},
-					{2, 2},
 					{3, 3},
 					{4, 4},
 					{5, 5},
 					{6, 6},
+					{7, 7},
 				},
 			},
 		},
