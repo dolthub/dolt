@@ -782,6 +782,20 @@ func TestDoltAutoIncrement(t *testing.T) {
 	}
 }
 
+func TestDoltAutoIncrementPrepared(t *testing.T) {
+	for _, script := range DoltAutoIncrementTests {
+		// doing commits on different branches is antagonistic to engine reuse, use a new engine on each script
+		enginetest.TestScriptPrepared(t, newDoltHarness(t), script)
+	}
+
+	for _, script := range BrokenAutoIncrementTests {
+		t.Run(script.Name, func(t *testing.T) {
+			t.Skip()
+			enginetest.TestScriptPrepared(t, newDoltHarness(t), script)
+		})
+	}
+}
+
 func TestDoltConflictsTableNameTable(t *testing.T) {
 	for _, script := range DoltConflictTableNameTableTests {
 		enginetest.TestScript(t, newDoltHarness(t), script)
