@@ -733,7 +733,7 @@ SQL
     # Should have the same result across multiple invocations of sql as well
     dolt checkout main
     dolt sql  <<SQL
-create table t1 (ai serial, c0 int);
+create table t1 (ai bigint primary key auto_increment, c0 int);
 call dolt_commit('-am', 'empty table');
 call dolt_branch('branch3');
 call dolt_branch('branch4');
