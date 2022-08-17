@@ -25,7 +25,7 @@ teardown() {
     teardown_common
 }
 
-@test "revision-dbs: branch-qualified database revisions" {
+@test "db-revision-specifiers: branch-qualified database revisions" {
     # Can be selected as the current database
     run dolt sql -r=csv << SQL
 use $database_name/branch1;
@@ -62,7 +62,7 @@ SQL
     [[ "$output" =~ "OK, 1 row affected" ]] || false
 }
 
-@test "revision-dbs: tag-qualified database revisions" {
+@test "db-revision-specifiers: tag-qualified database revisions" {
     # Can be selected as the current database
     run dolt sql -r=csv << SQL
 use $database_name/v1;
@@ -98,7 +98,7 @@ SQL
     [[ "$output" =~ "$database_name/v1 is read-only" ]] || false
 }
 
-@test "revision-dbs: commit-qualified database revisions" {
+@test "db-revision-specifiers: commit-qualified database revisions" {
     commit=$(dolt sql -q "SELECT hashof('HEAD~1');" -r=csv | tail -1)
 
     # Can be selected as the current database
