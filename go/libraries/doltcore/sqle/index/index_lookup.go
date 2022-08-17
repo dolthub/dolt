@@ -18,6 +18,8 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/val"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -98,15 +100,27 @@ type IndexLookupKeyIterator interface {
 	NextKey(ctx *sql.Context) (row.TaggedValues, error)
 }
 
-func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup) (sql.PartitionIter, error) {
-	dlu := lookup.(*doltIndexLookup)
-	durableState, err := dlu.idx.getDurableState(ctx, t)
+func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup, isDoltFmt bool) (sql.PartitionIter, error) {
+	idx := lookup.Index.(*doltIndex)
+	durableState, err := idx.getDurableState(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+	var prollyRanges []prolly.Range
+	var nomsRanges []*noms.ReadRange
+	if isDoltFmt {
+		prollyRanges, err = idx.prollyRanges(ctx, idx.ns, lookup.Ranges...)
+	} else {
+		nomsRanges, err = idx.nomsRanges(ctx, lookup.Ranges...)
+	}
 	if err != nil {
 		return nil, err
 	}
 	return &rangePartitionIter{
-		nomsRanges:   dlu.nomsRanges,
-		prollyRanges: dlu.prollyRanges,
+		nomsRanges:   nomsRanges,
+		prollyRanges: prollyRanges,
+		//todo third condition for point lookup tuples?
+		// is that something we can even predict beforehand?
 		curr:         0,
 		durableState: durableState,
 	}, nil
@@ -177,15 +191,45 @@ func (rp rangePartition) Key() []byte {
 	return rp.key
 }
 
-type doltIndexLookup struct {
-	idx          DoltIndex
-	nomsRanges   []*noms.ReadRange
-	prollyRanges []prolly.Range
-	sqlRanges    sql.RangeCollection
+// LookupBuilder abstracts constructing index range iterators
+type LookupBuilder struct {
+	idx         *doltIndex
+	sch         sql.PrimaryKeySchema
+	projections []uint64
+
+	// plCur for point lookup reuse
+	plCur   *tree.Cursor
+	keyDesc val.TupleDesc
 }
 
-var _ sql.IndexLookup = (*doltIndexLookup)(nil)
+// can assume new format
 
+func (lb *LookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	p, ok := part.(*rangePartition)
+	if !ok {
+		panic(fmt.Sprintf("expected *rangePartition, found: %T", part))
+	}
+
+	if p.prollyRange.IsPointLookup(lb.keyDesc) {
+		// reuse the cursor
+		// convert range into a tuple? or keep as a tuple the whole time?
+		// implement a seek function on the cursor that can use a range comparison?
+	}
+
+	// else do the long way?
+	return RowIterForProllyRange(ctx, lb.idx, p.prollyRange, lb.sch, lb.projections, p.durableState)
+
+}
+
+//	type doltIndexLookup struct {
+//		idx          DoltIndex
+//		nomsRanges   []*noms.ReadRange
+//		prollyRanges []prolly.Range
+//		sqlRanges    sql.RangeCollection
+//	}
+//
+// //var _ sql.IndexLookup = (*doltIndexLookup)(nil)
+//
 // boundsCase determines the case upon which the bounds are tested.
 type boundsCase byte
 
@@ -215,20 +259,20 @@ type nomsRangeCheck []columnBounds
 
 var _ noms.InRangeCheck = nomsRangeCheck{}
 
-func (il *doltIndexLookup) String() string {
-	// TODO: this could be expanded with additional info (like the expression used to create the index lookup)
-	return fmt.Sprintf("doltIndexLookup:%s", il.idx.ID())
-}
-
-// Index implements the interface sql.IndexLookup
-func (il *doltIndexLookup) Index() sql.Index {
-	return il.idx
-}
-
-// Ranges implements the interface sql.IndexLookup
-func (il *doltIndexLookup) Ranges() sql.RangeCollection {
-	return il.sqlRanges
-}
+//func (il *doltIndexLookup) String() string {
+//	// TODO: this could be expanded with additional info (like the expression used to create the index lookup)
+//	return fmt.Sprintf("doltIndexLookup:%s", il.idx.ID())
+//}
+//
+//// Index implements the interface sql.IndexLookup
+//func (il *doltIndexLookup) Index() sql.Index {
+//	return il.idx
+//}
+//
+//// Ranges implements the interface sql.IndexLookup
+//func (il *doltIndexLookup) Ranges() sql.RangeCollection {
+//	return il.sqlRanges
+//}
 
 // Between returns whether the given types.Value is between the bounds. In addition, this returns if the value is outside
 // the bounds and above the upperbound.

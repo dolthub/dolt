@@ -212,7 +212,7 @@ func (m Map) IterOrdinalRange(ctx context.Context, start, stop uint64) (MapIter,
 
 // IterRange returns a mutableMapIter that iterates over a Range.
 func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
-	if rng.isPointLookup(m.keyDesc) {
+	if rng.IsPointLookup(m.keyDesc) {
 		return m.pointLookupFromRange(ctx, rng)
 	}
 

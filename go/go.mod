@@ -58,7 +58,7 @@ require (
 )
 
 require (
-	github.com/dolthub/go-mysql-server v0.12.1-0.20220815234915-ff553670a37a
+	github.com/dolthub/go-mysql-server v0.12.1-0.20220816175525-041c89b86fcd
 	github.com/google/flatbuffers v2.0.6+incompatible
 	github.com/gosuri/uilive v0.0.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
@@ -142,3 +142,5 @@ replace (
 )
 
 go 1.19
+
+replace github.com/dolthub/go-mysql-server => /Users/max-hoffman/go/src/github.com/dolthub/go-mysql-server/

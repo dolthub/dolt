@@ -152,7 +152,7 @@ func (r Range) matches(t val.Tuple) bool {
 	return true
 }
 
-func (r Range) isPointLookup(desc val.TupleDesc) bool {
+func (r Range) IsPointLookup(desc val.TupleDesc) bool {
 	if len(r.Fields) < len(desc.Types) {
 		return false
 	}
