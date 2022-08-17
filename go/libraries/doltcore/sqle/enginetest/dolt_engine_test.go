@@ -89,8 +89,8 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name:         "truncate table",
-			SetUpScript:  []string{
+			Name: "truncate table",
+			SetUpScript: []string{
 				"create table t (a int primary key auto_increment, b int)",
 				"call dolt_commit('-am', 'empty table')",
 				"call dolt_branch('branch1')",
@@ -104,13 +104,13 @@ func TestSingleScript(t *testing.T) {
 				"insert into t (b) values (5), (6)",
 				"call dolt_checkout('branch1')",
 			},
-			Assertions:   []queries.ScriptTestAssertion{
+			Assertions: []queries.ScriptTestAssertion{
 				{
 					Query:    "truncate table t",
 					Expected: []sql.Row{{sql.NewOkResult(2)}},
 				},
 				{
-					Query:    "call dolt_checkout('main')",
+					Query:            "call dolt_checkout('main')",
 					SkipResultsCheck: true,
 				},
 				{
@@ -119,12 +119,12 @@ func TestSingleScript(t *testing.T) {
 					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
 				},
 				{
-					Query:    "select * from t order by a",
+					Query: "select * from t order by a",
 					Expected: []sql.Row{
-						{1,1},
-						{2,2},
-						{7,7},
-						{8,8},
+						{1, 1},
+						{2, 2},
+						{7, 7},
+						{8, 8},
 					},
 				},
 				{
@@ -132,7 +132,7 @@ func TestSingleScript(t *testing.T) {
 					Expected: []sql.Row{{sql.NewOkResult(4)}},
 				},
 				{
-					Query:    "call dolt_checkout('branch2')",
+					Query:            "call dolt_checkout('branch2')",
 					SkipResultsCheck: true,
 				},
 				{
@@ -141,12 +141,12 @@ func TestSingleScript(t *testing.T) {
 					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
 				},
 				{
-					Query:    "select * from t order by a",
+					Query: "select * from t order by a",
 					Expected: []sql.Row{
-						{5,5},
-						{6,6},
-						{7,7},
-						{8,8},
+						{5, 5},
+						{6, 6},
+						{7, 7},
+						{8, 8},
 					},
 				},
 				{
@@ -159,10 +159,10 @@ func TestSingleScript(t *testing.T) {
 					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
 				},
 				{
-					Query:    "select * from t order by a",
+					Query: "select * from t order by a",
 					Expected: []sql.Row{
-						{1,1},
-						{2,2},
+						{1, 1},
+						{2, 2},
 					},
 				},
 			},

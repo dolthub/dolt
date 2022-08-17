@@ -5247,24 +5247,24 @@ var DoltRemoteTestScripts = []queries.ScriptTest{
 // DoltAutoIncrementTests is tests of dolt's global auto increment logic
 var DoltAutoIncrementTests = []queries.ScriptTest{
 	{
-		Name:         "insert on different branches",
-		SetUpScript:  []string{
+		Name: "insert on different branches",
+		SetUpScript: []string{
 			"create table t (a int primary key auto_increment, b int)",
 			"call dolt_commit('-am', 'empty table')",
 			"call dolt_branch('branch1')",
 			"call dolt_branch('branch2')",
 		},
-		Assertions:   []queries.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "insert into t (b) values (1), (2)",
 				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
 			},
 			{
-				Query:    "call dolt_commit('-am', 'two values on main')",
+				Query:            "call dolt_commit('-am', 'two values on main')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "call dolt_checkout('branch1')",
+				Query:            "call dolt_checkout('branch1')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -5272,18 +5272,18 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
 			},
 			{
-				Query:    "select * from t order by a",
+				Query: "select * from t order by a",
 				Expected: []sql.Row{
-					{3,3},
-					{4,4},
+					{3, 3},
+					{4, 4},
 				},
 			},
 			{
-				Query:    "call dolt_commit('-am', 'two values on branch1')",
+				Query:            "call dolt_commit('-am', 'two values on branch1')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "call dolt_checkout('branch2')",
+				Query:            "call dolt_checkout('branch2')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -5291,17 +5291,17 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 5}}},
 			},
 			{
-				Query:    "select * from t order by a",
+				Query: "select * from t order by a",
 				Expected: []sql.Row{
-					{5,5},
-					{6,6},
+					{5, 5},
+					{6, 6},
 				},
 			},
 		},
 	},
 	{
-		Name:         "drop table",
-		SetUpScript:  []string{
+		Name: "drop table",
+		SetUpScript: []string{
 			"create table t (a int primary key auto_increment, b int)",
 			"call dolt_commit('-am', 'empty table')",
 			"call dolt_branch('branch1')",
@@ -5315,13 +5315,13 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			"insert into t (b) values (5), (6)",
 			"call dolt_checkout('branch1')",
 		},
-		Assertions:   []queries.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "drop table t",
 				Expected: []sql.Row{{sql.NewOkResult(0)}},
 			},
 			{
-				Query:    "call dolt_checkout('main')",
+				Query:            "call dolt_checkout('main')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -5330,12 +5330,12 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
 			},
 			{
-				Query:    "select * from t order by a",
+				Query: "select * from t order by a",
 				Expected: []sql.Row{
-					{1,1},
-					{2,2},
-					{7,7},
-					{8,8},
+					{1, 1},
+					{2, 2},
+					{7, 7},
+					{8, 8},
 				},
 			},
 			{
@@ -5343,7 +5343,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				Expected: []sql.Row{{sql.NewOkResult(0)}},
 			},
 			{
-				Query:    "call dolt_checkout('branch2')",
+				Query:            "call dolt_checkout('branch2')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -5352,12 +5352,12 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
 			},
 			{
-				Query:    "select * from t order by a",
+				Query: "select * from t order by a",
 				Expected: []sql.Row{
-					{5,5},
-					{6,6},
-					{7,7},
-					{8,8},
+					{5, 5},
+					{6, 6},
+					{7, 7},
+					{8, 8},
 				},
 			},
 			{
@@ -5365,8 +5365,8 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				Expected: []sql.Row{{sql.NewOkResult(0)}},
 			},
 			{
-				Query: "create table t (a int primary key auto_increment, b int)",
-				SkipResultsCheck:true,
+				Query:            "create table t (a int primary key auto_increment, b int)",
+				SkipResultsCheck: true,
 			},
 			{
 				// no value on any branch
@@ -5374,23 +5374,23 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
 			},
 			{
-				Query:    "select * from t order by a",
+				Query: "select * from t order by a",
 				Expected: []sql.Row{
-					{1,1},
-					{2,2},
+					{1, 1},
+					{2, 2},
 				},
 			},
 		},
 	},
 }
 
-var BrokenAutoIncrementTests = []queries.ScriptTest {
+var BrokenAutoIncrementTests = []queries.ScriptTest{
 	{
 		// truncate table doesn't reset the persisted auto increment counter of tables on other branches, which leads to
 		// the value not resetting to 1 after a truncate if the table exists on other branches, even if truncated on every
 		// branch
-		Name:         "truncate table",
-		SetUpScript:  []string{
+		Name: "truncate table",
+		SetUpScript: []string{
 			"create table t (a int primary key auto_increment, b int)",
 			"call dolt_commit('-am', 'empty table')",
 			"call dolt_branch('branch1')",
@@ -5404,13 +5404,13 @@ var BrokenAutoIncrementTests = []queries.ScriptTest {
 			"insert into t (b) values (5), (6)",
 			"call dolt_checkout('branch1')",
 		},
-		Assertions:   []queries.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "truncate table t",
 				Expected: []sql.Row{{sql.NewOkResult(2)}},
 			},
 			{
-				Query:    "call dolt_checkout('main')",
+				Query:            "call dolt_checkout('main')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -5419,12 +5419,12 @@ var BrokenAutoIncrementTests = []queries.ScriptTest {
 				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
 			},
 			{
-				Query:    "select * from t order by a",
+				Query: "select * from t order by a",
 				Expected: []sql.Row{
-					{1,1},
-					{2,2},
-					{7,7},
-					{8,8},
+					{1, 1},
+					{2, 2},
+					{7, 7},
+					{8, 8},
 				},
 			},
 			{
@@ -5432,7 +5432,7 @@ var BrokenAutoIncrementTests = []queries.ScriptTest {
 				Expected: []sql.Row{{sql.NewOkResult(4)}},
 			},
 			{
-				Query:    "call dolt_checkout('branch2')",
+				Query:            "call dolt_checkout('branch2')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -5441,12 +5441,12 @@ var BrokenAutoIncrementTests = []queries.ScriptTest {
 				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
 			},
 			{
-				Query:    "select * from t order by a",
+				Query: "select * from t order by a",
 				Expected: []sql.Row{
-					{5,5},
-					{6,6},
-					{7,7},
-					{8,8},
+					{5, 5},
+					{6, 6},
+					{7, 7},
+					{8, 8},
 				},
 			},
 			{
@@ -5459,10 +5459,10 @@ var BrokenAutoIncrementTests = []queries.ScriptTest {
 				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
 			},
 			{
-				Query:    "select * from t order by a",
+				Query: "select * from t order by a",
 				Expected: []sql.Row{
-					{1,1},
-					{2,2},
+					{1, 1},
+					{2, 2},
 				},
 			},
 		},
