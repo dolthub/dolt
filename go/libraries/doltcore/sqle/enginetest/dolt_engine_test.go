@@ -89,37 +89,80 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "dolt_merge() (3way) works with no auto increment overlap",
-			SetUpScript: []string{
-				"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
-				"INSERT INTO t (c0) VALUES (1);",
-				"CALL dolt_commit('-a', '-m', 'cm1');",
-				"CALL dolt_checkout('-b', 'test');",
-				"INSERT INTO t (pk,c0) VALUES (3,3), (4,4);",
-				"CALL dolt_commit('-a', '-m', 'cm2');",
-				"CALL dolt_checkout('main');",
-				"INSERT INTO t (c0) VALUES (5);",
-				"CALL dolt_commit('-a', '-m', 'cm3');",
+			Name:         "truncate table",
+			SetUpScript:  []string{
+				"create table t (a int primary key auto_increment, b int)",
+				"call dolt_commit('-am', 'empty table')",
+				"call dolt_branch('branch1')",
+				"call dolt_branch('branch2')",
+				"insert into t (b) values (1), (2)",
+				"call dolt_commit('-am', 'two values on main')",
+				"call dolt_checkout('branch1')",
+				"insert into t (b) values (3), (4)",
+				"call dolt_commit('-am', 'two values on branch1')",
+				"call dolt_checkout('branch2')",
+				"insert into t (b) values (5), (6)",
+				"call dolt_checkout('branch1')",
 			},
-			Assertions: []queries.ScriptTestAssertion{
+			Assertions:   []queries.ScriptTestAssertion{
 				{
-					Query:    "CALL dolt_merge('test');",
-					Expected: []sql.Row{{0, 0}},
+					Query:    "truncate table t",
+					Expected: []sql.Row{{sql.NewOkResult(2)}},
 				},
 				{
-					Query:    "INSERT INTO t VALUES (NULL,6),(7,7),(NULL,8);",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 6}}},
+					Query:    "call dolt_checkout('main')",
+					SkipResultsCheck: true,
 				},
 				{
-					Query: "SELECT * FROM t ORDER BY pk;",
+					// highest value in any branch is 6
+					Query:    "insert into t (b) values (7), (8)",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+				},
+				{
+					Query:    "select * from t order by a",
 					Expected: []sql.Row{
-						{1, 1},
-						{3, 3},
-						{4, 4},
-						{5, 5},
-						{6, 6},
-						{7, 7},
-						{8, 8},
+						{1,1},
+						{2,2},
+						{7,7},
+						{8,8},
+					},
+				},
+				{
+					Query:    "truncate table t",
+					Expected: []sql.Row{{sql.NewOkResult(4)}},
+				},
+				{
+					Query:    "call dolt_checkout('branch2')",
+					SkipResultsCheck: true,
+				},
+				{
+					// highest value in any branch is still 6 (truncated table above)
+					Query:    "insert into t (b) values (7), (8)",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+				},
+				{
+					Query:    "select * from t order by a",
+					Expected: []sql.Row{
+						{5,5},
+						{6,6},
+						{7,7},
+						{8,8},
+					},
+				},
+				{
+					Query:    "truncate table t",
+					Expected: []sql.Row{{sql.NewOkResult(4)}},
+				},
+				{
+					// no value on any branch
+					Query:    "insert into t (b) values (1), (2)",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
+				},
+				{
+					Query:    "select * from t order by a",
+					Expected: []sql.Row{
+						{1,1},
+						{2,2},
 					},
 				},
 			},
@@ -729,6 +772,13 @@ func TestDoltAutoIncrement(t *testing.T) {
 	for _, script := range DoltAutoIncrementTests {
 		// doing commits on different branches is antagonistic to engine reuse, use a new engine on each script
 		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+
+	for _, script := range BrokenAutoIncrementTests {
+		t.Run(script.Name, func(t *testing.T) {
+			t.Skip()
+			enginetest.TestScript(t, newDoltHarness(t), script)
+		})
 	}
 }
 
