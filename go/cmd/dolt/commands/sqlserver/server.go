@@ -135,7 +135,7 @@ func Serve(
 		DoltCfgDirPath: serverConfig.CfgDir(),
 		ServerUser:     serverConfig.User(),
 		ServerPass:     serverConfig.Password(),
-		ServerHost:     "%",
+		ServerHost:     serverConfig.Host(),
 		Autocommit:     serverConfig.AutoCommit(),
 		JwksConfig:     serverConfig.JwksConfig(),
 	}
