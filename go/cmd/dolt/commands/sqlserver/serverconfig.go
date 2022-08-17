@@ -37,7 +37,7 @@ const (
 )
 
 const (
-	defaultHost                    = "0.0.0.0"
+	defaultHost                    = "localhost"
 	defaultPort                    = 3306
 	defaultUser                    = "root"
 	defaultPass                    = ""
