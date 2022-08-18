@@ -140,7 +140,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "use mydb/tag1;",
@@ -152,7 +152,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/tag1"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/tag1"}, {"mysql"}},
 			},
 			{
 				Query:          "call dolt_reset();",
@@ -180,7 +180,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 		},
 	},
@@ -202,7 +202,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/branch1"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/branch1"}, {"mysql"}},
 			},
 			{
 				Query:    "select database();",
@@ -214,7 +214,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "select database();",
@@ -234,7 +234,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/branch1"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/branch1"}, {"mysql"}},
 			},
 			{
 				Query:    "create table working_set_table(pk int primary key);",
