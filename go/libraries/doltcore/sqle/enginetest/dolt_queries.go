@@ -30,7 +30,8 @@ import (
 )
 
 var ViewsWithAsOfScriptTest = queries.ScriptTest{
-	Name: "Querying a view with a union using an as of expression",
+	SkipPrepared: true,
+	Name:         "Querying a view with a union using an as of expression",
 	SetUpScript: []string{
 		"CALL dolt_commit('--allow-empty', '-m', 'cm0');",
 
