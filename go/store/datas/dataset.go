@@ -40,13 +40,12 @@ import (
 var DatasetRe = regexp.MustCompile(`[^\:\?\[\\\^~ \t\*/]+`)
 
 type refnameAction byte
-
 const (
-	refnameOk  refnameAction = 0
-	refnameEof refnameAction = 1
-	refnameDot refnameAction = 2
+	refnameOk        refnameAction = 0
+	refnameEof       refnameAction = 1
+	refnameDot       refnameAction = 2
 	refnameLeftCurly refnameAction = 3
-	refnameIllegal refnameAction = 4
+	refnameIllegal   refnameAction = 4
 )
 
 /*
@@ -81,6 +80,14 @@ var refnameActions = [256]refnameAction{
 // * - it ends with ".lock"
 // * - it contains a "@{" portion
 func validateDatasetIdComponent(refname string) (int, error) {
+	if refname[0] == '.' { // Component starts with '.'
+		return -1, ErrInvalidDatasetID
+	}
+
+	if strings.HasSuffix(refname, ".lock") {
+		return -1, ErrInvalidDatasetID
+	}
+
 	var last rune
 	numChars := 0
 
@@ -94,7 +101,7 @@ func validateDatasetIdComponent(refname string) (int, error) {
 		switch refnameActions[ch] {
 		case refnameOk:
 		case refnameEof:
-			goto out
+			return numChars, nil
 		case refnameDot:
 			if last == '.' { // Refname contains ..
 				return -1, ErrInvalidDatasetID
@@ -104,26 +111,12 @@ func validateDatasetIdComponent(refname string) (int, error) {
 				return -1, ErrInvalidDatasetID
 			}
 		case refnameIllegal:
-			/* forbidden char */
 			return -1, ErrInvalidDatasetID
 		default:
 			panic("unrecognized case in refname")
 		}
 
 		last = ch
-	}
-
-out:
-	if numChars == len(refname) {
-		return 0, nil // Component has zero length
-	}
-
-	if refname[0] == '.' { // Component starts with '.'
-		return -1, ErrInvalidDatasetID
-	}
-
-	if strings.HasSuffix(refname, ".lock") {
-		return -1, ErrInvalidDatasetID
 	}
 
 	return numChars, nil
