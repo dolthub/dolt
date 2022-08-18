@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 
 	"github.com/dolthub/dolt/go/store/types"
 
@@ -117,6 +118,10 @@ func (cmd *DumpDocsCmd) Exec(ctx context.Context, commandStr string, args []stri
 }
 
 func (cmd *DumpDocsCmd) dumpDocs(wr io.Writer, cmdStr string, subCommands []cli.Command) error {
+	sort.Slice(subCommands, func(i, j int) bool {
+		return subCommands[i].Name() < subCommands[j].Name()
+	})
+
 	for _, curr := range subCommands {
 		var hidden bool
 		if hidCmd, ok := curr.(cli.HiddenCommand); ok {
