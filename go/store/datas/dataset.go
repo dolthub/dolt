@@ -48,15 +48,13 @@ const (
 	refnameIllegal   refnameAction = 4
 )
 
-/*
- * How to handle various characters in refnames:
- * 0: An acceptable character for refs
- * 1: End-of-component
- * 2: ., look for a preceding . to reject .. in refs
- * 3: {, look for a preceding @ to reject @{ in refs
- * 4: A bad character: ASCII control characters, and
- *    ":", "?", "[", "\", "^", "~", SP, or TAB
- */
+// How to handle various characters in refnames:
+// 0: An acceptable character for refs
+// 1: End-of-component
+// 2: ., look for a preceding . to reject .. in refs
+// 3: {, look for a preceding @ to reject @{ in refs
+// 4: A bad character: ASCII control characters, and
+//    ":", "?", "[", "\", "^", "~", SP, or TAB
 var refnameActions = [256]refnameAction{
 	1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
 	4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
@@ -68,8 +66,8 @@ var refnameActions = [256]refnameAction{
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 4, 4,
 }
 
-// validateDatasetIdComponent returns an error if the dataset name given is illegal.
-// We use the same rules as git for each /-separated component defined here
+// validateDatasetIdComponent returns an error if the dataset name component given is illegal.
+// We use the same rules as git for each slash-separated component. Rules defined here:
 // https://github.com/git/git/blob/master/refs.c
 // Names must be ascii only. We reject the following in ref components:
 // * - it begins with "."
@@ -130,6 +128,10 @@ func ValidateDatasetId(refname string) error {
 		return ErrInvalidDatasetID
 	}
 
+	if strings.HasSuffix(refname, "/") || strings.HasSuffix(refname, ".") {
+		return ErrInvalidDatasetID
+	}
+
 	for len(refname) > 0 {
 		componentLen, err := validateDatasetIdComponent(refname)
 		if err != nil {
@@ -140,11 +142,6 @@ func ValidateDatasetId(refname string) error {
 
 		// Next component
 		refname = refname[componentLen:]
-	}
-
-	if strings.HasSuffix(refname, ".") {
-		// Refname ends with '.'
-		return ErrInvalidDatasetID
 	}
 
 	if componentCount < 2 {
