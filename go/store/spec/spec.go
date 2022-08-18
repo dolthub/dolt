@@ -221,11 +221,7 @@ func ForDatasetOpts(spec string, opts SpecOptions) (Spec, error) {
 	if path.Dataset == "" {
 		return Spec{}, errors.New("dataset name required for dataset spec")
 	}
-
-	if !path.Path.IsEmpty() {
-		return Spec{}, errors.New("path is not allowed for dataset spec")
-	}
-
+	
 	sp.Path = path
 	return sp, nil
 }
