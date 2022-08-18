@@ -21,7 +21,6 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -208,9 +207,9 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 		revDb, _, ok, err := p.databaseForRevision(ctx, ctx.GetCurrentDatabase())
 		if err != nil {
 			// We can't return an error from this interface function, so just log a message
-			logrus.Warn("unable to load %q as a database revision: %s", ctx.GetCurrentDatabase(), err.Error())
+			ctx.GetLogger().Warnf("unable to load %q as a database revision: %s", ctx.GetCurrentDatabase(), err.Error())
 		} else if !ok {
-			logrus.Warn("unable to load %q as a database revision", ctx.GetCurrentDatabase())
+			ctx.GetLogger().Warnf("unable to load %q as a database revision", ctx.GetCurrentDatabase())
 		} else {
 			all = append(all, revDb)
 		}
