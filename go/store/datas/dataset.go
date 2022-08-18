@@ -26,15 +26,141 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
+	"unicode"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// DatasetRe is a regexp that matches a legal Dataset name anywhere within the
-// target string.
-var DatasetRe = regexp.MustCompile(`[a-zA-Z0-9\-_/]+`)
+// DatasetRe is a regexp that matches a legal Dataset name anywhere within the target string.
+// This regular expression isn't enough by itself, additional patterns are forbidden as well.
+// See ValidateDatasetId.
+var DatasetRe = regexp.MustCompile(`[^\:\?\[\\\^~ \t\*/]+`)
+
+type refnameAction byte
+
+const (
+	refnameOk  refnameAction = 0
+	refnameEof refnameAction = 1
+	refnameDot refnameAction = 2
+	refnameLeftCurly refnameAction = 3
+	refnameIllegal refnameAction = 4
+)
+
+/*
+ * How to handle various characters in refnames:
+ * 0: An acceptable character for refs
+ * 1: End-of-component
+ * 2: ., look for a preceding . to reject .. in refs
+ * 3: {, look for a preceding @ to reject @{ in refs
+ * 4: A bad character: ASCII control characters, and
+ *    ":", "?", "[", "\", "^", "~", SP, or TAB
+ */
+var refnameActions = [256]refnameAction{
+	1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+	4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+	4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 2, 1,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 4,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 0, 4, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 4, 4,
+}
+
+// validateDatasetIdComponent returns an error if the dataset name given is illegal.
+// We use the same rules as git for each /-separated component defined here
+// https://github.com/git/git/blob/master/refs.c
+// Names must be ascii only. We reject the following in ref components:
+// * - it begins with "."
+// * - it has double dots ".."
+// * - it has ASCII control characters
+// * - it has ":", "?", "[", "\", "^", "~", "*", SP, or TAB anywhere
+// * - it ends with a "/"
+// * - it ends with ".lock"
+// * - it contains a "@{" portion
+func validateDatasetIdComponent(refname string) (int, error) {
+	var last rune
+	numChars := 0
+
+	for _, ch := range refname {
+		if ch > unicode.MaxASCII {
+			return -1, ErrInvalidDatasetID
+		}
+
+		numChars++
+
+		switch refnameActions[ch] {
+		case refnameOk:
+		case refnameEof:
+			goto out
+		case refnameDot:
+			if last == '.' { // Refname contains ..
+				return -1, ErrInvalidDatasetID
+			}
+		case refnameLeftCurly:
+			if last == '@' { // Refname contains @{
+				return -1, ErrInvalidDatasetID
+			}
+		case refnameIllegal:
+			/* forbidden char */
+			return -1, ErrInvalidDatasetID
+		default:
+			panic("unrecognized case in refname")
+		}
+
+		last = ch
+	}
+
+out:
+	if numChars == len(refname) {
+		return 0, nil // Component has zero length
+	}
+
+	if refname[0] == '.' { // Component starts with '.'
+		return -1, ErrInvalidDatasetID
+	}
+
+	if strings.HasSuffix(refname, ".lock") {
+		return -1, ErrInvalidDatasetID
+	}
+
+	return numChars, nil
+}
+
+func ValidateDatasetId(refname string) error {
+	var componentCount int
+
+	if refname == "@" {
+		// Refname is a single character '@'.
+		return ErrInvalidDatasetID
+	}
+
+	for len(refname) > 0 {
+		componentLen, err := validateDatasetIdComponent(refname)
+		if err != nil {
+			return err
+		}
+
+		componentCount++
+
+		// Next component
+		refname = refname[componentLen:]
+	}
+
+	if strings.HasSuffix(refname, ".") {
+		// Refname ends with '.'
+		return ErrInvalidDatasetID
+	}
+
+	if componentCount < 2 {
+		// Refname has only one component
+		return ErrInvalidDatasetID
+	}
+
+	return nil
+}
 
 // DatasetFullRe is a regexp that matches a only a target string that is
 // entirely legal Dataset name.
