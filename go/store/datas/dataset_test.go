@@ -238,8 +238,24 @@ func TestValidateDatasetId(t *testing.T) {
 		{"f1", true},
 		{"1f", true},
 		{"", false},
-		{"f!!", false},
+		{"f!!", true},
+		{"!!", true},
+		{"refs/heads/", false},
+		{"refs/heads/hello", true},
+		{"refs/heads//hello", true},
+		{"refs/heads/hello world", false},
+		{"refs/heads/hello\tworld", false},
+		{"refs/heads/hello\nworld", false},
+		{"refs/heads/hello@world", true},
+		{"refs/heads/hello-world", true},
+		{"refs/heads/hello-world.", false},
+		{"refs/heads/hello..world", false},
+		{"refs/heads/helloworld]]", true},
+		{"refs/heads/hello[world", false},
+		{"refs/heads/hello@{world}", false},
+		{"refs/heads/hello-worبld", false},
 	}
+
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			err := ValidateDatasetId(c.name)

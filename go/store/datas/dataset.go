@@ -46,6 +46,10 @@ const (
 func ValidateDatasetId(refname string) error {
 	var componentCount int
 
+	if len(refname) == 0 {
+		return ErrInvalidDatasetID
+	}
+
 	if refname == "@" {
 		// Refname is a single character '@'.
 		return ErrInvalidDatasetID
