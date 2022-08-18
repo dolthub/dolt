@@ -189,9 +189,11 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			//   - merge does not have conflicts or constraint violations
 			//   - mergeErr is ErrIsAhead, so there is no merge
 			if !apr.Contains(cli.NoCommitFlag) && !ff && !hasConflictOrConstraintViolation(tblToStats) && !errors.Is(mergeErr, doltdb.ErrIsAhead) {
-				msg, err = getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, apr.Contains(cli.NoEditFlag))
-				if err != nil {
-					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+				if msg == "" {
+					msg, err = getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, apr.Contains(cli.NoEditFlag))
+					if err != nil {
+						return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+					}
 				}
 
 				res = CommitCmd{}.Exec(ctx, "commit", []string{"-m", msg}, dEnv)
