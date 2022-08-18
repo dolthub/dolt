@@ -44,18 +44,6 @@ const (
 	Batched
 )
 
-const (
-	ReplicateToRemoteKey     = "dolt_replicate_to_remote"
-	ReadReplicaRemoteKey     = "dolt_read_replica_remote"
-	SkipReplicationErrorsKey = "dolt_skip_replication_errors"
-	ReplicateHeadsKey        = "dolt_replicate_heads"
-	ReplicateAllHeadsKey     = "dolt_replicate_all_heads"
-	AsyncReplicationKey      = "dolt_async_replication"
-	AwsCredsFileKey          = "aws_credentials_file"
-	AwsCredsProfileKey       = "aws_credentials_profile"
-	AwsCredsRegionKey        = "aws_credentials_region"
-)
-
 var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
 	"Rollback or commit changes before changing working sets.")
 var ErrSessionNotPeristable = errors.New("session is not persistable")
@@ -782,7 +770,7 @@ func (d *DoltSession) SwitchWorkingSet(
 	// make a fresh WriteSession, discard existing WriteSession
 	opts := sessionState.WriteSession.GetOptions()
 	nbf := ws.WorkingRoot().VRW().Format()
-	tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx, ws)
+	tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx)
 	if err != nil {
 		return err
 	}
@@ -942,7 +930,7 @@ func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 
 	} else if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
-		tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx, sessionState.WorkingSet)
+		tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}

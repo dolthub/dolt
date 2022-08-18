@@ -120,7 +120,7 @@ func getEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv, cfg 
 	if !ok {
 		b.Fatal("local config does not exist")
 	}
-	localCfg.SetStrings(map[string]string{dsess.ReplicateToRemoteKey: "remote1"})
+	localCfg.SetStrings(map[string]string{dsess.ReplicateToRemote: "remote1"})
 
 	yaml := []byte(fmt.Sprintf(`
 log_level: warning

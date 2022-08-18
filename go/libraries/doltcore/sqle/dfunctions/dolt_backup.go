@@ -129,19 +129,19 @@ func DoDoltBackup(ctx *sql.Context, args []string) (int, error) {
 			return statusErr, err
 		}
 
-		credsFile, _ := sess.GetSessionVariable(ctx, dsess.AwsCredsFileKey)
+		credsFile, _ := sess.GetSessionVariable(ctx, dsess.AwsCredsFile)
 		credsFileStr, isStr := credsFile.(string)
 		if isStr && len(credsFileStr) > 0 {
 			params[dbfactory.AWSCredsFileParam] = credsFileStr
 		}
 
-		credsProfile, err := sess.GetSessionVariable(ctx, dsess.AwsCredsProfileKey)
+		credsProfile, err := sess.GetSessionVariable(ctx, dsess.AwsCredsProfile)
 		profStr, isStr := credsProfile.(string)
 		if isStr && len(profStr) > 0 {
 			params[dbfactory.AWSCredsProfile] = profStr
 		}
 
-		credsRegion, err := sess.GetSessionVariable(ctx, dsess.AwsCredsRegionKey)
+		credsRegion, err := sess.GetSessionVariable(ctx, dsess.AwsCredsRegion)
 		regionStr, isStr := credsRegion.(string)
 		if isStr && len(regionStr) > 0 {
 			params[dbfactory.AWSRegionParam] = regionStr

@@ -131,7 +131,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"dolt/branch2"}, {"information_schema"}},
+				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"dolt/branch2"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_BRANCH('-d', 'branch2');",
@@ -143,7 +143,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}},
+				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				// Call a stored procedure since this searches across all databases and will
@@ -178,7 +178,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"dolt/branch2"}, {"information_schema"}},
+				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"dolt/branch2"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_BRANCH('-m', 'branch2', 'newName');",
@@ -190,7 +190,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}},
+				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				// Call a stored procedure since this searches across all databases and will
