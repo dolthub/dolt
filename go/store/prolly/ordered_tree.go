@@ -1,4 +1,4 @@
-// Copyright 2021 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,6 +52,52 @@ func diffOrderedTrees[K, V ~[]byte, O ordering[K]](
 		return from.order.Compare(K(left), K(right))
 	}
 	differ, err := tree.DifferFromRoots(ctx, from.ns, to.ns, from.root, to.root, cfn)
+	if err != nil {
+		return err
+	}
+
+	for {
+		var diff tree.Diff
+		if diff, err = differ.Next(ctx); err != nil {
+			break
+		}
+
+		if err = cb(ctx, diff); err != nil {
+			break
+		}
+	}
+	return err
+}
+
+func rangeDiffOrderedTrees[K, V ~[]byte, O ordering[K]](
+	ctx context.Context,
+	from, to orderedTree[K, V, O],
+	rng Range,
+	cb DiffFn,
+) error {
+	cfn := func(left, right tree.Item) int {
+		return from.order.Compare(K(left), K(right))
+	}
+
+	fromStart, err := tree.NewCursorFromSearchFn(ctx, from.ns, from.root, rangeStartSearchFn(rng))
+	if err != nil {
+		return err
+	}
+	toStart, err := tree.NewCursorFromSearchFn(ctx, to.ns, to.root, rangeStartSearchFn(rng))
+	if err != nil {
+		return err
+	}
+
+	fromStop, err := tree.NewCursorFromSearchFn(ctx, from.ns, from.root, rangeStopSearchFn(rng))
+	if err != nil {
+		return err
+	}
+	toStop, err := tree.NewCursorFromSearchFn(ctx, to.ns, to.root, rangeStopSearchFn(rng))
+	if err != nil {
+		return err
+	}
+
+	differ, err := tree.DifferFromLeafCursors(fromStart, toStart, fromStop, toStop, cfn)
 	if err != nil {
 		return err
 	}
