@@ -755,6 +755,15 @@ func TestShowCreateTableAsOf(t *testing.T) {
 	enginetest.TestScript(t, newDoltHarness(t), ShowCreateTableAsOfScriptTest)
 }
 
+func TestViewsWithAsOf(t *testing.T) {
+	enginetest.TestScript(t, newDoltHarness(t), ViewsWithAsOfScriptTest)
+}
+
+func TestViewsWithAsOfPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	enginetest.TestScriptPrepared(t, newDoltHarness(t), ViewsWithAsOfScriptTest)
+}
+
 func TestDoltMerge(t *testing.T) {
 	for _, script := range MergeScripts {
 		// dolt versioning conflicts with reset harness -- use new harness every time
