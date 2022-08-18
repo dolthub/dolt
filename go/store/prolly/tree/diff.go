@@ -35,8 +35,9 @@ type Diff struct {
 }
 
 type Differ struct {
-	from, to *Cursor
-	cmp      CompareFn
+	from, to         *Cursor
+	fromStop, toStop *Cursor
+	cmp              CompareFn
 }
 
 func DifferFromRoots(ctx context.Context, fromNs NodeStore, toNs NodeStore, from, to Node, cmp CompareFn) (Differ, error) {
@@ -50,11 +51,25 @@ func DifferFromRoots(ctx context.Context, fromNs NodeStore, toNs NodeStore, from
 		return Differ{}, err
 	}
 
-	return Differ{from: fc, to: tc, cmp: cmp}, nil
+	fs, err := NewCursorPastEnd(ctx, fromNs, from)
+	if err != nil {
+		return Differ{}, err
+	}
+
+	ts, err := NewCursorPastEnd(ctx, toNs, to)
+	if err != nil {
+		return Differ{}, err
+	}
+
+	return Differ{from: fc, to: tc, fromStop: fs, toStop: ts, cmp: cmp}, nil
+}
+
+func RangeDifferFromRoots(ctx context.Context, fromNs NodeStore, toNs NodeStore, from, to Node, cmp CompareFn) (Differ, error) {
+
 }
 
 func (td Differ) Next(ctx context.Context) (diff Diff, err error) {
-	for td.from.Valid() && td.to.Valid() {
+	for td.from.Valid() && td.from.Compare(td.fromStop) < 0 && td.to.Valid() && td.to.Compare(td.toStop) < 0 {
 
 		f := td.from.CurrentKey()
 		t := td.to.CurrentKey()
@@ -79,10 +94,10 @@ func (td Differ) Next(ctx context.Context) (diff Diff, err error) {
 		}
 	}
 
-	if td.from.Valid() {
+	if td.from.Valid() && td.from.Compare(td.fromStop) < 0 {
 		return sendRemoved(ctx, td.from)
 	}
-	if td.to.Valid() {
+	if td.to.Valid() && td.to.Compare(td.toStop) < 0 {
 		return sendAdded(ctx, td.to)
 	}
 
