@@ -90,12 +90,12 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 
-	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
+	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	err = pullHelper(ctx, dEnv, pullSpec, apr.Contains(cli.NoEditFlag))
+	err = pullHelper(ctx, dEnv, pullSpec)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -103,7 +103,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 // pullHelper splits pull into fetch, prepare merge, and merge to interleave printing
-func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec, noEdit bool) error {
+func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) error {
 	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
 	if err != nil {
 		return fmt.Errorf("failed to get remote db; %w", err)
@@ -166,7 +166,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec, 
 			}
 
 			// Begin merge
-			mergeSpec, ok, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
+			mergeSpec, ok, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, pullSpec.NoCommit, pullSpec.NoEdit, t)
 			if err != nil {
 				return err
 			}
@@ -191,17 +191,20 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec, 
 				return err
 			}
 
-			ff, tblStats, err := merge.MergeCommitSpec(ctx, dEnv, mergeSpec)
+			doCommit, tblStats, err := merge.MergeCommitSpec(ctx, dEnv, mergeSpec)
 			printSuccessStats(tblStats)
 			if err != nil {
 				return err
 			}
 
-			if !ff && !hasConflictOrConstraintViolation(tblStats) {
-				suggestedMsg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, dEnv.RepoStateReader().CWBHeadRef().GetPath())
-				msg, err := getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, noEdit)
-				if err != nil {
-					return err
+			if doCommit {
+				msg := mergeSpec.Msg
+				if mergeSpec.Msg == "" {
+					suggestedMsg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, dEnv.RepoStateReader().CWBHeadRef().GetPath())
+					msg, err = getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, mergeSpec.NoEdit)
+					if err != nil {
+						return err
+					}
 				}
 
 				res := CommitCmd{}.Exec(ctx, "commit", []string{"-m", msg}, dEnv)

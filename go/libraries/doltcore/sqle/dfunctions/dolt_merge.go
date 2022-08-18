@@ -402,7 +402,7 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	mergeSpec, _, err := merge.NewMergeSpec(ctx, dbData.Rsr, ddb, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), t)
+	mergeSpec, _, err := merge.NewMergeSpec(ctx, dbData.Rsr, ddb, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), t)
 	if err != nil {
 		return nil, err
 	}

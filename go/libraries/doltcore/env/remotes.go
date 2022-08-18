@@ -353,6 +353,8 @@ type PullSpec struct {
 	Msg        string
 	Squash     bool
 	Noff       bool
+	NoCommit   bool
+	NoEdit     bool
 	Force      bool
 	RemoteName string
 	Remote     Remote
@@ -360,7 +362,7 @@ type PullSpec struct {
 	Branch     ref.DoltRef
 }
 
-func NewPullSpec(_ context.Context, rsr RepoStateReader, remoteName, remoteRefName string, squash, noff, force, remoteOnly bool) (*PullSpec, error) {
+func NewPullSpec(_ context.Context, rsr RepoStateReader, remoteName, remoteRefName string, squash, noff, noCommit, noEdit, force, remoteOnly bool) (*PullSpec, error) {
 	refSpecs, err := GetRefSpecs(rsr, remoteName)
 	if err != nil {
 		return nil, err
@@ -400,6 +402,8 @@ func NewPullSpec(_ context.Context, rsr RepoStateReader, remoteName, remoteRefNa
 	return &PullSpec{
 		Squash:     squash,
 		Noff:       noff,
+		NoCommit:   noCommit,
+		NoEdit:     noEdit,
 		RemoteName: remoteName,
 		Remote:     remote,
 		RefSpecs:   refSpecs,

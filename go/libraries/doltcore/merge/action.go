@@ -44,6 +44,8 @@ type MergeSpec struct {
 	Squash          bool
 	Msg             string
 	Noff            bool
+	NoCommit        bool
+	NoEdit          bool
 	Force           bool
 	AllowEmpty      bool
 	Email           string
@@ -51,7 +53,7 @@ type MergeSpec struct {
 	Date            time.Time
 }
 
-func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.DoltDB, roots doltdb.Roots, name, email, msg string, commitSpecStr string, squash bool, noff bool, force bool, date time.Time) (*MergeSpec, bool, error) {
+func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.DoltDB, roots doltdb.Roots, name, email, msg string, commitSpecStr string, squash bool, noff bool, force bool, noCommit bool, noEdit bool, date time.Time) (*MergeSpec, bool, error) {
 	headCS, err := doltdb.NewCommitSpec("HEAD")
 	if err != nil {
 		return nil, false, err
@@ -98,6 +100,8 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 		Squash:          squash,
 		Msg:             msg,
 		Noff:            noff,
+		NoCommit:        noCommit,
+		NoEdit:          noEdit,
 		Force:           force,
 		Email:           email,
 		Name:            name,
@@ -105,6 +109,7 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 	}, true, nil
 }
 
+// MergeCommitSpec returns MergeStats after performing merge and commits if applied.
 // TODO forcing a commit with a constrain violation should warn users that subsequest
 // FF merges will not surface constraint violations on their own; constraint verify --all
 // is required to reify violations.
@@ -115,12 +120,20 @@ func MergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (b
 	} else if ok {
 		if spec.Noff {
 			tblStats, err = ExecNoFFMerge(ctx, dEnv, spec)
-			return true, tblStats, err
+			return false, tblStats, err
 		}
-		return true, nil, ExecuteFFMerge(ctx, dEnv, spec)
+		return false, nil, ExecuteFFMerge(ctx, dEnv, spec)
 	}
 	tblStats, err := ExecuteMerge(ctx, dEnv, spec)
-	return false, tblStats, err
+	if err != nil {
+		return false, tblStats, err
+	}
+
+	// merge will commit if
+	//   - '--no-commit' flag is NOT defined
+	//   - merge is NOT a fast-forward
+	//   - merge does NOT have conflicts or constraint violations
+	return !spec.NoCommit && !hasConflictOrViolations(tblStats), tblStats, nil
 }
 
 func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
@@ -281,6 +294,7 @@ func mergedRootToWorking(
 	return dEnv.UpdateStagedRoot(context.Background(), mergedRoot)
 }
 
+// conflictsAndViolations returns array of conflicts and constraintViolations
 func conflictsAndViolations(tblToStats map[string]*MergeStats) (conflicts []string, constraintViolations []string) {
 	for tblName, stats := range tblToStats {
 		if stats.Operation == TableModified && (stats.Conflicts > 0 || stats.ConstraintViolations > 0) {
@@ -293,4 +307,14 @@ func conflictsAndViolations(tblToStats map[string]*MergeStats) (conflicts []stri
 		}
 	}
 	return
+}
+
+// hasConflictOrViolations checks for conflicts or constraint violation regardless of a table being modified
+func hasConflictOrViolations(tblToStats map[string]*MergeStats) bool {
+	for _, tblStats := range tblToStats {
+		if tblStats.Conflicts > 0 || tblStats.ConstraintViolations > 0 {
+			return true
+		}
+	}
+	return false
 }
