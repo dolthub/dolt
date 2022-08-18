@@ -24,7 +24,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -412,17 +411,4 @@ func min(i, j int) int {
 		return i
 	}
 	return j
-}
-
-func locationFromTimezoneArg(tz string, defaultTZ *time.Location) (*time.Location, error) {
-	switch tz {
-	case "local":
-		return time.Local, nil
-	case "utc":
-		return time.UTC, nil
-	case "":
-		return defaultTZ, nil
-	default:
-		return nil, errors.New("value must be: local or utc")
-	}
 }

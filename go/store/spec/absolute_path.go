@@ -25,14 +25,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-var datasetCapturePrefixRe = regexp.MustCompile("^(" + datas.DatasetRe.String() + ")")
 
 // AbsolutePath describes the location of a Value within a Noms database.
 //
@@ -79,13 +76,8 @@ func NewAbsolutePath(str string) (AbsolutePath, error) {
 
 		pathStr = tail[hash.StringLen:]
 	} else {
-		datasetParts := datasetCapturePrefixRe.FindStringSubmatch(str)
-		if datasetParts == nil {
-			return AbsolutePath{}, fmt.Errorf("invalid dataset name: %s", str)
-		}
-
-		dataset = datasetParts[1]
-		pathStr = str[len(dataset):]
+		dataset = str
+		pathStr = ""
 	}
 
 	if len(pathStr) == 0 {

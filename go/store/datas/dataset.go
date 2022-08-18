@@ -25,7 +25,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"unicode"
 
@@ -33,11 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-// DatasetRe is a regexp that matches a legal Dataset name anywhere within the target string.
-// This regular expression isn't enough by itself, additional patterns are forbidden as well.
-// See ValidateDatasetId.
-var DatasetRe = regexp.MustCompile(`[^\:\?\[\\\^~ \t\*/]+`)
 
 type refnameAction byte
 const (
@@ -47,6 +41,39 @@ const (
 	refnameLeftCurly refnameAction = 3
 	refnameIllegal   refnameAction = 4
 )
+
+// ValidateDatasetId returns ErrInvalidDatasetID if the given dataset ID is invalid
+func ValidateDatasetId(refname string) error {
+	var componentCount int
+
+	if refname == "@" {
+		// Refname is a single character '@'.
+		return ErrInvalidDatasetID
+	}
+
+	if strings.HasSuffix(refname, "/") || strings.HasSuffix(refname, ".") {
+		return ErrInvalidDatasetID
+	}
+
+	for len(refname) > 0 {
+		componentLen, err := validateDatasetIdComponent(refname)
+		if err != nil {
+			return err
+		}
+
+		componentCount++
+
+		// Next component
+		refname = refname[componentLen:]
+	}
+
+	// if componentCount < 2 {
+	// 	// Refname has only one component
+	// 	return ErrInvalidDatasetID
+	// }
+
+	return nil
+}
 
 // How to handle various characters in refnames:
 // 0: An acceptable character for refs
@@ -119,42 +146,6 @@ func validateDatasetIdComponent(refname string) (int, error) {
 
 	return numChars, nil
 }
-
-func ValidateDatasetId(refname string) error {
-	var componentCount int
-
-	if refname == "@" {
-		// Refname is a single character '@'.
-		return ErrInvalidDatasetID
-	}
-
-	if strings.HasSuffix(refname, "/") || strings.HasSuffix(refname, ".") {
-		return ErrInvalidDatasetID
-	}
-
-	for len(refname) > 0 {
-		componentLen, err := validateDatasetIdComponent(refname)
-		if err != nil {
-			return err
-		}
-
-		componentCount++
-
-		// Next component
-		refname = refname[componentLen:]
-	}
-
-	if componentCount < 2 {
-		// Refname has only one component
-		return ErrInvalidDatasetID
-	}
-
-	return nil
-}
-
-// DatasetFullRe is a regexp that matches a only a target string that is
-// entirely legal Dataset name.
-var DatasetFullRe = regexp.MustCompile("^" + DatasetRe.String() + "$")
 
 type WorkingSetHead struct {
 	Meta        *WorkingSetMeta
@@ -634,10 +625,6 @@ func (ds Dataset) MaybeHeadValue() (types.Value, bool, error) {
 		return v, v != nil, nil
 	}
 	return nil, false, nil
-}
-
-func IsValidDatasetName(name string) bool {
-	return DatasetFullRe.MatchString(name)
 }
 
 func NewHeadlessDataset(db Database, id string) Dataset {

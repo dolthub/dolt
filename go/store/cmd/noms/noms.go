@@ -40,12 +40,8 @@ import (
 )
 
 var commands = []*util.Command{
-	nomsCommit,
 	nomsConfig,
-	nomsDiff,
 	nomsDs,
-	nomsLog,
-	nomsMerge,
 	nomsRoot,
 	nomsShow,
 	nomsSync,

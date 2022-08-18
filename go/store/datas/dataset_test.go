@@ -228,8 +228,7 @@ func TestHeadValueFunctions(t *testing.T) {
 	assert.False(ok)
 }
 
-func TestIsValidDatasetName(t *testing.T) {
-	assert := assert.New(t)
+func TestValidateDatasetId(t *testing.T) {
 	cases := []struct {
 		name  string
 		valid bool
@@ -242,7 +241,13 @@ func TestIsValidDatasetName(t *testing.T) {
 		{"f!!", false},
 	}
 	for _, c := range cases {
-		assert.Equal(c.valid, IsValidDatasetName(c.name),
-			"Expected %s validity to be %t", c.name, c.valid)
+		t.Run(c.name, func(t *testing.T) {
+			err := ValidateDatasetId(c.name)
+			if c.valid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
 	}
 }
