@@ -243,7 +243,7 @@ teardown() {
     dolt commit -m "modify test1"
 
     dolt checkout main
-    run dolt merge merge_branch --no-ff -m "no-ff merge" --no-commit
+    run dolt merge merge_branch --no-ff -m "no-ff merge"
     log_status_eq 0
     [[ ! "$output" =~ "Fast-forward" ]] || false
 
@@ -265,7 +265,7 @@ teardown() {
     [[ "$output" =~ "test2" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
 
-    run dolt merge merge_branch --no-ff -m "no-ff merge" --no-commit
+    run dolt merge merge_branch --no-ff -m "no-ff merge"
     log_status_eq 0
     [[ ! "$output" =~ "Fast-forward" ]] || false
 
@@ -475,7 +475,7 @@ SQL
 
 @test "merge: merge a branch with a new table" {
     dolt branch feature-branch
-    
+
     dolt sql << SQL
 INSERT INTO test2 VALUES (0, 0, 0);
 INSERT INTO test2 VALUES (1, 1, 1);
@@ -490,7 +490,7 @@ SQL
     dolt commit -am "new table test3"
 
     dolt checkout main
-    
+
     run dolt merge feature-branch -m "merge feature-branch"
     log_status_eq 0
 
@@ -501,7 +501,7 @@ SQL
 
 @test "merge: merge a branch that deletes a table" {
     dolt branch feature-branch
-    
+
     dolt sql << SQL
 INSERT INTO test1 VALUES (0, 0, 0);
 INSERT INTO test1 VALUES (1, 1, 1);
@@ -545,14 +545,14 @@ INSERT INTO test1 VALUES (2, 2, 2);
 INSERT INTO test1 VALUES (3, 3, 3);
 SQL
     dolt commit -am "add data to test1"
-    
+
     dolt checkout feature-branch
     dolt sql << SQL
 INSERT INTO test1 VALUES (0, 0, 0);
 INSERT INTO test1 VALUES (1, 1, 1);
 SQL
     dolt commit -am "add data to test1"
-    
+
     dolt checkout main
     run dolt merge feature-branch -m "merge feature-branch"
     log_status_eq 0
@@ -631,7 +631,7 @@ SQL
 drop table test2;
 SQL
     dolt commit -am "drop test2"
-    
+
     dolt checkout feature-branch
     dolt sql -q "drop table test2"
     dolt commit -am "drop table test2"
@@ -845,4 +845,24 @@ SQL
     run dolt merge merge_branch
     log_status_eq 1
     [[ "$output" =~ "table with same name deleted and modified" ]] || false
+}
+
+@test "sql-pull: dolt merge commits successful non fast forward merge" {
+    dolt branch other
+    dolt sql -q "INSERT INTO test1 VALUES (1,2,3)"
+    dolt commit -am "add (1,2,3) to test1";
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO test1 VALUES (2,3,4)"
+    dolt commit -am "add (2,3,4) to test1";
+
+    dolt checkout main
+    run dolt merge other -m "merge other"
+    log_status_eq 0
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "merge other" ]] || false
+    [[ ! "$output" =~ "add (1,2) to t1" ]] || false
+    [[ ! "$output" =~ "add (2,3) to t1" ]] || false
 }

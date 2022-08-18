@@ -172,7 +172,9 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
-			ws, conflicts, fastForward, err = mergeIntoWorkingSet(ctx, sess, roots, ws, dbName, mergeSpec)
+
+			msg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, dbData.Rsr.CWBHeadRef().GetPath())
+			ws, conflicts, fastForward, err = mergeIntoWorkingSet(ctx, sess, roots, ws, dbName, mergeSpec, false, msg)
 			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
 				return conflicts, fastForward, err
 			}

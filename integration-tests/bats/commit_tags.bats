@@ -127,7 +127,7 @@ teardown() {
     run dolt push origin master
     [ $status -eq 0 ]
     cd ../repo_clone
-    run dolt pull
+    run dolt pull --no-edit
     [ $status -eq 0 ]
     run dolt tag
     [ $status -eq 0 ]

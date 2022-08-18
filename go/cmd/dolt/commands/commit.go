@@ -116,7 +116,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	msg, msgOk := apr.GetValue(cli.MessageArg)
 	if !msgOk {
-		msg, err = getCommitMessageFromEditor(ctx, dEnv, "")
+		msg, err = getCommitMessageFromEditor(ctx, dEnv, "", false)
 		if err != nil {
 			return handleCommitErr(ctx, dEnv, err, usage)
 		}
@@ -222,9 +222,9 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg string) (string, error) {
+func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg string, noEdit bool) (string, error) {
 	// if message is not defined in dolt_merge, use suggestedMsg
-	if cli.ExecuteWithStdioRestored == nil {
+	if cli.ExecuteWithStdioRestored == nil || noEdit {
 		return suggestedMsg, nil
 	}
 

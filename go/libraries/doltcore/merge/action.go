@@ -110,17 +110,16 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 // is required to reify violations.
 func MergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (bool, map[string]*MergeStats, error) {
 	var tblStats map[string]*MergeStats
-	var err error
-	if ok, fErr := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); fErr != nil && !errors.Is(fErr, doltdb.ErrUpToDate) {
-		return false, nil, fErr
+	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
+		return false, nil, err
 	} else if ok {
 		if spec.Noff {
 			tblStats, err = ExecNoFFMerge(ctx, dEnv, spec)
-			return false, tblStats, err
+			return true, tblStats, err
 		}
 		return true, nil, ExecuteFFMerge(ctx, dEnv, spec)
 	}
-	tblStats, err = ExecuteMerge(ctx, dEnv, spec)
+	tblStats, err := ExecuteMerge(ctx, dEnv, spec)
 	return false, tblStats, err
 }
 

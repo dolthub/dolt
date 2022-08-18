@@ -1019,9 +1019,15 @@ CREATE TABLE test2 (
 SQL
     dolt add test2
     dolt commit -m "another test commit"
-    run dolt pull origin
+    run dolt pull origin --no-edit
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Merge branch 'main' of" ]] || false
+    [[ ! "$output" =~ "test commit" ]] || false
+    [[ ! "$output" =~ "another test commit" ]] || false
 }
 
 @test "remotes: generate a merge with a conflict with a remote branch" {
@@ -1228,7 +1234,7 @@ SQL
     [ "$status" -ne 0 ]
     run dolt fetch -f test-remote
     [ "$status" -eq 0 ]
-    run dolt pull
+    run dolt pull --no-edit
     [ "$status" -eq 0 ]
 }
 
@@ -1923,9 +1929,7 @@ SQL
     [[ "$output" =~ "diverged" ]] || false
     [[ "$output" =~ "1 and 1" ]] || false
 
-    dolt pull
-    dolt commit -am "merge main"
-
+    dolt pull --no-edit
     run dolt status
     [[ "$output" =~ "ahead" ]] || false
     [[ "$output" =~ "2 commit" ]] || false

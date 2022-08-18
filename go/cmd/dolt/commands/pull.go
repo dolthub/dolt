@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -58,11 +57,7 @@ func (cmd PullCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd PullCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"remote", "The name of the remote to pull from."})
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"remoteBranch", "The name of a branch on the specified remote to be merged into the current working set."})
-	ap.SupportsFlag(cli.SquashParam, "", "Merges changes to the working set without updating the commit history")
-	return ap
+	return cli.CreatePullArgParser()
 }
 
 // EventType returns the type of the event to log
@@ -99,7 +94,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	err = pullHelper(ctx, dEnv, pullSpec)
+	err = pullHelper(ctx, dEnv, pullSpec, apr.Contains(cli.NoEditFlag))
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -107,7 +102,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 // pullHelper splits pull into fetch, prepare merge, and merge to interleave printing
-func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) error {
+func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec, noEdit bool) error {
 	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
 	if err != nil {
 		return fmt.Errorf("failed to get remote db; %w", err)
@@ -195,14 +190,24 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				return err
 			}
 
-			_, stats, err := merge.MergeCommitSpec(ctx, dEnv, mergeSpec)
-			printSuccessStats(stats)
+			ff, tblStats, err := merge.MergeCommitSpec(ctx, dEnv, mergeSpec)
+			printSuccessStats(tblStats)
 			if err != nil {
 				return err
 			}
 
-			// TODO: We should add functionality to create a commit from a no-ff/normal merge operation instead of
-			// leaving the branch in a merged state.
+			if !ff && !hasConflictOrConstraintViolation(tblStats) {
+				suggestedMsg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, dEnv.RepoStateReader().CWBHeadRef().GetPath())
+				msg, err := getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, noEdit)
+				if err != nil {
+					return err
+				}
+
+				res := CommitCmd{}.Exec(ctx, "commit", []string{"-m", msg}, dEnv)
+				if res != 0 {
+					return fmt.Errorf("dolt commit failed after merging")
+				}
+			}
 		}
 		if !rsSeen {
 			return fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, rs.GetRemRefToLocal())

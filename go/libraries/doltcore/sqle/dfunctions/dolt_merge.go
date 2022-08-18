@@ -122,28 +122,19 @@ func DoDoltMerge(ctx *sql.Context, args []string) (int, int, error) {
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, err
 	}
-	ws, conflicts, fastForward, err := mergeIntoWorkingSet(ctx, sess, roots, ws, dbName, mergeSpec)
-	if err != nil || conflicts != 0 || fastForward != 0 {
-		return conflicts, fastForward, err
+
+	dbData, ok := sess.GetDbData(ctx, dbName)
+	if !ok {
+		return noConflictsOrViolations, threeWayMerge, fmt.Errorf("Could not load database %s", dbName)
+	}
+	msg := fmt.Sprintf("Merge branch '%s' into %s", branchName, dbData.Rsr.CWBHeadRef().GetPath())
+	if userMsg, mOk := apr.GetValue(cli.MessageArg); mOk {
+		msg = userMsg
 	}
 
-	if !apr.Contains(cli.NoCommitFlag) {
-		dbData, ok := sess.GetDbData(ctx, dbName)
-		if !ok {
-			return noConflictsOrViolations, threeWayMerge, fmt.Errorf("Could not load database %s", dbName)
-		}
-
-		msg := ""
-		if userMsg, mOk := apr.GetValue(cli.MessageArg); mOk {
-			msg = userMsg
-		}
-		if msg == "" {
-			msg = fmt.Sprintf("Merge branch '%s' into %s", branchName, dbData.Rsr.CWBHeadRef().GetPath())
-		}
-		_, err = DoDoltCommit(ctx, []string{"-m", msg})
-		if err != nil {
-			return noConflictsOrViolations, threeWayMerge, err
-		}
+	ws, conflicts, fastForward, err := mergeIntoWorkingSet(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
+	if err != nil || conflicts != 0 || fastForward != 0 {
+		return conflicts, fastForward, err
 	}
 
 	return conflicts, fastForward, nil
@@ -152,11 +143,10 @@ func DoDoltMerge(ctx *sql.Context, args []string) (int, int, error) {
 // mergeIntoWorkingSet encapsulates server merge logic, switching between
 // fast-forward, no fast-forward, merge commit, and merging into working set.
 // Returns a new WorkingSet, whether there were merge conflicts, and whether a
-// fast-forward was performed. This currently persists merge commits in the
-// database, but expects the caller to update the working set.
+// fast-forward was performed. This commits the working set if merge is successful and
+// -no-commit flag is not defined and autocommit is on
 // TODO FF merging commit with constraint violations requires `constraint verify`
-func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots, ws *doltdb.WorkingSet, dbName string, spec *merge.MergeSpec) (*doltdb.WorkingSet, int, int, error) {
-
+func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots, ws *doltdb.WorkingSet, dbName string, spec *merge.MergeSpec, noCommit bool, msg string) (*doltdb.WorkingSet, int, int, error) {
 	// todo: allow merges even when an existing merge is uncommitted
 	if ws.MergeActive() {
 		return ws, noConflictsOrViolations, threeWayMerge, doltdb.ErrMergeActive
@@ -170,6 +160,16 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 	dbData, ok := sess.GetDbData(ctx, dbName)
 	if !ok {
 		return ws, noConflictsOrViolations, threeWayMerge, fmt.Errorf("failed to get dbData")
+	}
+
+	autocommit, err := ctx.GetSessionVariable(ctx, sql.AutoCommitSessionVar)
+	if err != nil {
+		return ws, noConflictsOrViolations, threeWayMerge, err
+	}
+
+	ac, err := sql.ConvertToBool(autocommit)
+	if err != nil {
+		return ws, noConflictsOrViolations, threeWayMerge, err
 	}
 
 	canFF, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC)
@@ -230,6 +230,13 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 	err = sess.SetWorkingSet(ctx, dbName, ws)
 	if err != nil {
 		return ws, noConflictsOrViolations, threeWayMerge, err
+	}
+
+	if !noCommit && ac {
+		_, err = DoDoltCommit(ctx, []string{"-m", msg})
+		if err != nil {
+			return ws, noConflictsOrViolations, threeWayMerge, fmt.Errorf("dolt_commit failed")
+		}
 	}
 
 	return ws, noConflictsOrViolations, threeWayMerge, nil
@@ -312,7 +319,7 @@ func executeNoFFMerge(
 	dbName string,
 	ws *doltdb.WorkingSet,
 	dbData env.DbData,
-	//headCommit, mergeCommit *doltdb.Commit,
+	// headCommit, mergeCommit *doltdb.Commit,
 ) (*doltdb.WorkingSet, error) {
 	mergeRoot, err := spec.MergeC.GetRootValue(ctx)
 	if err != nil {

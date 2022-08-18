@@ -189,16 +189,14 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			//   - merge does not have conflicts or constraint violations
 			//   - mergeErr is ErrIsAhead, so there is no merge
 			if !apr.Contains(cli.NoCommitFlag) && !ff && !hasConflictOrConstraintViolation(tblToStats) && !errors.Is(mergeErr, doltdb.ErrIsAhead) {
-				if msg == "" {
-					msg, err = getCommitMessageFromEditor(ctx, dEnv, suggestedMsg)
-					if err != nil {
-						return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-					}
+				msg, err = getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, apr.Contains(cli.NoEditFlag))
+				if err != nil {
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 				}
 
 				res = CommitCmd{}.Exec(ctx, "commit", []string{"-m", msg}, dEnv)
 				if res != 0 {
-					return HandleVErrAndExitCode(errhand.BuildDError("dolt commit failed").AddCause(err).Build(), usage)
+					return HandleVErrAndExitCode(errhand.BuildDError("dolt commit failed after merging").Build(), usage)
 				}
 			}
 
@@ -243,7 +241,7 @@ func getCommitMessage(ctx context.Context, apr *argparser.ArgParseResults, dEnv 
 	}
 
 	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); ok {
-		msg, err := getCommitMessageFromEditor(ctx, dEnv, suggestedMsg)
+		msg, err := getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, apr.Contains(cli.NoEditFlag))
 		if err != nil {
 			return "", errhand.VerboseErrorFromError(err)
 		}
