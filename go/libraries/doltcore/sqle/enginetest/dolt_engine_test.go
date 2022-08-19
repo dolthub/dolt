@@ -981,6 +981,17 @@ func TestHistorySystemTable(t *testing.T) {
 	}
 }
 
+func TestHistorySystemTablePrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range HistorySystemTableScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
 func TestUnscopedDiffSystemTable(t *testing.T) {
 	for _, test := range UnscopedDiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
@@ -1008,6 +1019,17 @@ func TestDiffTableFunction(t *testing.T) {
 	}
 }
 
+func TestDiffTableFunctionPrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range DiffTableFunctionScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
 func TestCommitDiffSystemTable(t *testing.T) {
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
@@ -1015,6 +1037,17 @@ func TestCommitDiffSystemTable(t *testing.T) {
 		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func TestCommitDiffSystemTablePrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range CommitDiffSystemTableScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
 		})
 	}
 }
@@ -1032,6 +1065,23 @@ func TestDiffSystemTable(t *testing.T) {
 	if types.IsFormat_DOLT(types.Format_Default) {
 		for _, test := range Dolt1DiffSystemTableScripts {
 			enginetest.TestScript(t, newDoltHarness(t), test)
+		}
+	}
+}
+
+func TestDiffSystemTablePrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range DiffSystemTableScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+
+	if types.IsFormat_DOLT(types.Format_Default) {
+		for _, test := range Dolt1DiffSystemTableScripts {
+			enginetest.TestScriptPrepared(t, newDoltHarness(t), test)
 		}
 	}
 }
