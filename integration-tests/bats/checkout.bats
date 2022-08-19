@@ -179,7 +179,7 @@ SQL
   [[ $cmd =~ "dolt checkout $sha" ]]
 }
 
-@test "commit --amend: only commit message is changed" {
+@test "checkout: commit --amend only changes commit message" {
   dolt sql -q "create table test (id int primary key);"
   dolt sql -q 'insert into test (id) values (8);'
   dolt add .
