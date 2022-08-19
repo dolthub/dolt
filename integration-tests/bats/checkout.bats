@@ -220,7 +220,7 @@ SQL
   [[ "$output" =~ "9" ]] || false
 }
 
-@test "commit --amend on merge commits does not modify metadata of merged parents" {
+@test "checkout: commit --amend on merge commits does not modify metadata of merged parents" {
   dolt sql -q "create table test (id int primary key, id2 int);"
   dolt add .
   dolt commit -m "original table"
