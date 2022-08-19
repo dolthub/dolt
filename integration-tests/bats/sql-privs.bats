@@ -53,7 +53,7 @@ teardown() {
     teardown_common
 }
 
-@test "sql-privs: default user is root" {
+@test "sql-privs: default user is root. create new user destroys default user." {
     make_test_repo
     let PORT="$$ % (65536-1024) + 1024"
     dolt sql-server --host 0.0.0.0 --port=$PORT &
@@ -413,4 +413,20 @@ teardown() {
     cd db_dir
     start_sql_server_with_args --host 0.0.0.0 --user=dolt
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
+}
+
+@test "sql-privs: creating user identified by password" {
+     make_test_repo
+     start_sql_server
+
+     server_query test_db 1 "create user test identified by 'test'" ""
+     server_query test_db 1 "grant select on mysql.user to test" ""
+
+     # Should not be able to connect to test_db
+     server_query_with_user_password test_db 1 test test "select user from mysql.user order by user" "" 1
+     
+     server_query_with_user_password "" 1 test test "select user from mysql.user order by user" "User\ndolt\ntest"
+
+     # Should only see mysql database
+     server_query_with_user_password "" 1 test test "show databases" "Database\nmysql"
 }
