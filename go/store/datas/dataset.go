@@ -34,6 +34,7 @@ import (
 )
 
 type refnameAction byte
+
 const (
 	refnameOk        refnameAction = 0
 	refnameEof       refnameAction = 1
@@ -82,7 +83,8 @@ func ValidateDatasetId(refname string) error {
 // 2: ., look for a preceding . to reject .. in refs
 // 3: {, look for a preceding @ to reject @{ in refs
 // 4: A bad character: ASCII control characters, and
-//    ":", "?", "[", "\", "^", "~", SP, or TAB
+//
+//	":", "?", "[", "\", "^", "~", SP, or TAB
 var refnameActions = [256]refnameAction{
 	4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
 	4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
