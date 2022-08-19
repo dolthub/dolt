@@ -415,6 +415,33 @@ teardown() {
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
 }
 
+@test "sql-privs: basic lack of privileges tests" {
+     make_test_repo
+     start_sql_server
+
+     server_query test_db 1 "create table t1(c1 int)"
+     server_query test_db 1 "create user test"
+     server_query test_db 1 "grant select on test_db.* to test"
+
+     # Should only see test_db database
+     server_query_with_user_password "" 1 test test "show databases" "Database\ntest_db"
+
+     server_query_with_user test_db 1 test "show tables" "Tables_in_test_db\nt1"
+     # Revoke works as expected
+     server_query test_db 1 "revoke select on test_db.* from test"
+     server_query_with_user test_db 1 test "show tables" "" 1
+
+     # Host in privileges is respected
+     server_query test_db 1 "drop user test"
+     server_query test_db 1 "create user test@'127.0.0.1'"
+     server_query test_db 1 "grant select on test_db.* to test@'127.0.0.1'"
+     server_query_with_user test_db 1 test "show tables" "Tables_in_test_db\nt1"
+     server_query test_db 1 "drop user test@'127.0.0.1'"
+     server_query test_db 1 "create user test@'10.10.10.10'"
+     server_query test_db 1 "grant select on test_db.* to test@'10.10.10.10'"
+     server_query_with_user test_db 1 test "show tables" "" 1
+}
+
 @test "sql-privs: creating user identified by password" {
      make_test_repo
      start_sql_server
