@@ -272,7 +272,8 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg s
 
 	currBranch := dEnv.RepoStateReader().CWBHeadRef()
 	initialCommitMessage := fmt.Sprintf("%s\n# Please enter the commit message for your changes. Lines starting"+
-		"\n# with '#' will be ignored, and an empty message aborts the commit.\n# On branch %s\n#\n", suggestedMsg, currBranch)
+		"\n# with '#' will be ignored, and an empty message aborts the commit."+
+		"\n# On branch %s\n#\n", suggestedMsg, currBranch)
 
 	msgLines := strings.Split(buf.String(), "\n")
 	for i, msg := range msgLines {

@@ -133,12 +133,12 @@ func CreateCommitArgParser() *argparser.ArgParser {
 func CreateMergeArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
-	ap.SupportsFlag(SquashParam, "", "Merges changes to the working set without updating the commit history")
+	ap.SupportsFlag(SquashParam, "", "Merge changes to the working set without updating the commit history")
 	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
 	ap.SupportsFlag(AbortParam, "", mergeAbortDetails)
 	ap.SupportsFlag(CommitFlag, "", "Perform the merge and commit the result.")
-	ap.SupportsFlag(NoCommitFlag, "", "Perform the merge and stop just before creating a merge commit.")
-	ap.SupportsFlag(NoEditFlag, "", "Uses the auto-generated message for commit message after a successful no-ff merge")
+	ap.SupportsFlag(NoCommitFlag, "", "Perform the merge and stop just before creating a merge commit. Note this will not prevent a fast-forward merge; use the --no-ff arg together with the --no-commit arg to prevent both fast-forwards and merge commits.")
+	ap.SupportsFlag(NoEditFlag, "", "Use an auto-generated commit message when creating a merge commit. The default for interactive CLI sessions is to open an editor.")
 	return ap
 }
 
@@ -221,12 +221,12 @@ func CreatePullArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"remote", "The name of the remote to pull from."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"remoteBranch", "The name of a branch on the specified remote to be merged into the current working set."})
-	ap.SupportsFlag(SquashParam, "", "Merges changes to the working set without updating the commit history")
+	ap.SupportsFlag(SquashParam, "", "Merge changes to the working set without updating the commit history")
 	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
-	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
-	ap.SupportsFlag(CommitFlag, "", "Perform the merge and commit the result.")
-	ap.SupportsFlag(NoCommitFlag, "", "Perform the merge and stop just before creating a merge commit.")
-	ap.SupportsFlag(NoEditFlag, "", "Uses the auto-generated message for commit message after a successful no-ff merge")
+	ap.SupportsFlag(ForceFlag, "f", "Ignore any foreign key warnings and proceed with the commit.")
+	ap.SupportsFlag(CommitFlag, "", "Perform the merge and commit the result. This is the default option, but can be overridden with the --no-commit flag. Note that this option does not affect fast-forward merges, which don't create a new merge commit, and if any merge conflicts or constraint violations are detected, no commit will be attempted.")
+	ap.SupportsFlag(NoCommitFlag, "", "Perform the merge and stop just before creating a merge commit. Note this will not prevent a fast-forward merge; use the --no-ff arg together with the --no-commit arg to prevent both fast-forwards and merge commits.")
+	ap.SupportsFlag(NoEditFlag, "", "Use an auto-generated commit message when creating a merge commit. The default for interactive CLI sessions is to open an editor.")
 	return ap
 }
 

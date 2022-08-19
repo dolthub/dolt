@@ -319,7 +319,6 @@ func executeNoFFMerge(
 	dbName string,
 	ws *doltdb.WorkingSet,
 	dbData env.DbData,
-	// headCommit, mergeCommit *doltdb.Commit,
 ) (*doltdb.WorkingSet, error) {
 	mergeRoot, err := spec.MergeC.GetRootValue(ctx)
 	if err != nil {

@@ -847,7 +847,7 @@ SQL
     [[ "$output" =~ "table with same name deleted and modified" ]] || false
 }
 
-@test "merge: dolt merge commits successful non fast forward merge" {
+@test "merge: dolt merge commits successful non-fast-forward merge" {
     dolt branch other
     dolt sql -q "INSERT INTO test1 VALUES (1,2,3)"
     dolt commit -am "add (1,2,3) to test1";
