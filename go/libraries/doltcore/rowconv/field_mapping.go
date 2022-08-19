@@ -261,27 +261,34 @@ func TagMappingWithNameFallback(srcSch, destSch schema.Schema) (*FieldMapping, e
 	return NewFieldMapping(srcSch, destSch, srcToDest)
 }
 
-// TagMappingByName takes a source schema and a destination schema and maps
-// columns by matching names.
-func TagMappingByName(srcSch, destSch schema.Schema) (*FieldMapping, error) {
-	successes := 0
-	srcCols := srcSch.GetAllCols()
-	destCols := destSch.GetAllCols()
+// TagMappingByTagAndName takes a source schema and a destination schema and maps
+// pks by tag and non-pks by name.
+func TagMappingByTagAndName(srcSch, destSch schema.Schema) (*FieldMapping, error) {
+	srcToDest := make(map[uint64]uint64, destSch.GetAllCols().Size())
 
-	srcToDest := make(map[uint64]uint64, destCols.Size())
-	err := destCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		srcCol, ok := srcCols.GetByName(col.Name)
-		if !ok {
-			return false, nil
-		}
-
-		srcToDest[srcCol.Tag] = col.Tag
-		successes++
-
-		return false, nil
-	})
+	keyMap, valMap, err := schema.MapSchemaBasedOnTagAndName(srcSch, destSch)
 	if err != nil {
 		return nil, err
+	}
+
+	var successes int
+	for i, j := range keyMap {
+		if j == -1 {
+			continue
+		}
+		srcTag := srcSch.GetPKCols().GetAtIndex(i).Tag
+		dstTag := destSch.GetPKCols().GetAtIndex(j).Tag
+		srcToDest[srcTag] = dstTag
+		successes++
+	}
+	for i, j := range valMap {
+		if j == -1 {
+			continue
+		}
+		srcTag := srcSch.GetNonPKCols().GetAtIndex(i).Tag
+		dstTag := destSch.GetNonPKCols().GetAtIndex(j).Tag
+		srcToDest[srcTag] = dstTag
+		successes++
 	}
 
 	if successes == 0 {

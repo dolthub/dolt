@@ -15,6 +15,7 @@
 package schema
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/dolthub/vitess/go/vt/proto/query"
@@ -212,6 +213,48 @@ func ArePrimaryKeySetsDiffable(format *types.NomsBinFormat, fromSch, toSch Schem
 	}
 
 	return true
+}
+
+// MapSchemaBasedOnTagAndName can be used to map column values from one schema
+// to another schema. A primary key column in |inSch| is mapped to |outSch| if
+// they share the same tag. A non-primary key column in |inSch| is mapped to
+// |outSch| purely based on the name. It returns ordinal mappings that can be
+// use to map key, value val.Tuple's of schema |inSch| to |outSch|. The first
+// ordinal map is for keys, and the second is for values. If a column of |inSch|
+// is missing in |outSch| then that column's index in the ordinal map holds -1.
+func MapSchemaBasedOnTagAndName(inSch, outSch Schema) ([]int, []int, error) {
+	keyMapping := make([]int, inSch.GetPKCols().Size())
+	valMapping := make([]int, inSch.GetNonPKCols().Size())
+
+	err := inSch.GetPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
+		i := inSch.GetPKCols().TagToIdx[tag]
+		if col, ok := outSch.GetPKCols().GetByTag(tag); ok {
+			j := outSch.GetPKCols().TagToIdx[col.Tag]
+			keyMapping[i] = j
+		} else {
+			return true, fmt.Errorf("could not map primary key column %s", col.Name)
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = inSch.GetNonPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
+		i := inSch.GetNonPKCols().TagToIdx[col.Tag]
+		if col, ok := outSch.GetNonPKCols().GetByName(col.Name); ok {
+			j := outSch.GetNonPKCols().TagToIdx[col.Tag]
+			valMapping[i] = j
+		} else {
+			valMapping[i] = -1
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return keyMapping, valMapping, nil
 }
 
 var ErrUsingSpatialKey = errors.NewKind("can't use Spatial Types as Primary Key for table %s")
