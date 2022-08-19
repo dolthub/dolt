@@ -106,7 +106,16 @@ if not database:
 else:
     dc = DoltConnection(port=int(port_str), database=database, user=username, auto_commit=auto_commit)
 
-dc.connect()
+try: 
+    dc.connect()
+except BaseException as e:
+    print('caught exception', str(e))
+    if expected_exception is not None and len(expected_exception) > 0:
+        if expected_exception not in str(e):
+            print('expected exception: ', expected_exception, '\n  got: ', str(e))
+            sys.exit(1)
+        else:
+            sys.exit(0)
 
 queries = query_strs.split(';')
 expected = [None]*len(queries)
