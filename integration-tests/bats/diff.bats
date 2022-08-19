@@ -987,4 +987,7 @@ EOF
     [[ "$output" =~ "diff --dolt a/test2 b/test2" ]] || false
     [[ "$output" =~ "--- a/test2 @" ]] || false
     [[ "$output" =~ "+++ b/test2 @" ]] || false
+    
+    run dolt diff --limit
+    [ "$status" -ne 0 ]
 }
