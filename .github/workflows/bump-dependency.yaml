@@ -9,7 +9,7 @@ jobs:
     name: Get Label
     outputs:
       label: ${{ steps.get-label.outputs.label }}
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Get Label
         id: get-label
@@ -29,7 +29,7 @@ jobs:
     needs: get-label
     outputs:
       stale-pulls: ${{ steps.get-stale-prs.outputs.open-pulls }}
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Get Open Bump PRs
         id: get-stale-prs
@@ -88,7 +88,7 @@ jobs:
   open-bump-pr:
     needs: [get-label, stale-bump-prs]
     name: Open Bump PR
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     outputs:
       latest-pr: ${{ steps.latest-pr.outputs.pr_url }}
     steps:
@@ -144,7 +144,7 @@ jobs:
   comment-on-stale-prs:
     needs: [open-bump-pr, stale-bump-prs]
     if: ${{ needs.stale-bump-prs.outputs.stale-pulls != '' }}
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         pull: ${{ fromJson(needs.stale-bump-prs.outputs.stale-pulls) }}
@@ -166,41 +166,20 @@ jobs:
 
               if (pull.keepAlive) process.exit(0);
 
-              const checkSuiteRes = await github.checks.listSuitesForRef({
+              console.log(`Closing open pr ${pull.number}`);
+              await github.issues.createComment({
+                issue_number: pull.number,
                 owner,
                 repo,
-                ref: pull.headRef,
+                body: `This PR has been superseded by ${SUPERSEDED_BY}`
               });
 
-              if (checkSuiteRes.data) {
-                for (const suite of checkSuiteRes.data.check_suites) {
-                  console.log("suite id:", suite.id);
-                  console.log("suite app slug:", suite.app.slug);
-                  console.log("suite status:", suite.status);
-                  console.log("suite conclusion:", suite.conclusion);
-                  if (suite.app.slug === "github-actions") {
-                     if (suite.status !== "completed" || suite.conclusion !== "success") {
-                       console.log(`Leaving pr open due to status:${suite.status} conclusion${suite.conclusion}`);
-                       process.exit(0);
-                     }
-                  }
-                }
-
-                console.log(`Closing open pr ${pull.number}`);
-                await github.issues.createComment({
-                  issue_number: pull.number,
-                  owner,
-                  repo,
-                  body: `This PR has been superseded by ${SUPERSEDED_BY}`
-                });
-
-                await github.pulls.update({
-                  owner,
-                  repo,
-                  pull_number: pull.number,
-                  state: 'closed',
-                });
-              }
+              await github.pulls.update({
+                owner,
+                repo,
+                pull_number: pull.number,
+                state: 'closed',
+              });
 
               process.exit(0);
             } catch(err) {

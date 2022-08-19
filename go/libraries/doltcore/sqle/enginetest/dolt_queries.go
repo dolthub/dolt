@@ -29,6 +29,58 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
+var ViewsWithAsOfScriptTest = queries.ScriptTest{
+	SkipPrepared: true,
+	Name:         "Querying a view with a union using an as of expression",
+	SetUpScript: []string{
+		"CALL dolt_commit('--allow-empty', '-m', 'cm0');",
+
+		"CREATE TABLE t1 (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+		"CALL dolt_commit('-am', 'cm1');",
+		"INSERT INTO t1 (c0) VALUES (1), (2);",
+		"CALL dolt_commit('-am', 'cm2');",
+
+		"CREATE TABLE t2 (pk int PRIMARY KEY AUTO_INCREMENT, vc varchar(100));",
+		"CALL dolt_commit('-am', 'cm3');",
+		"INSERT INTO t2 (vc) VALUES ('one'), ('two');",
+		"CALL dolt_commit('-am', 'cm4');",
+
+		"CREATE VIEW v1 as select * from t1 union select * from t2",
+		"CALL dolt_commit('-am', 'cm5');",
+	},
+	Assertions: []queries.ScriptTestAssertion{
+		{
+			Query:    "select * from v1",
+			Expected: []sql.Row{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
+		},
+		{
+			Query:    "select * from v1 as of 'HEAD'",
+			Expected: []sql.Row{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
+		},
+		{
+			Query:    "select * from v1 as of 'HEAD~1'",
+			Expected: []sql.Row{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
+		},
+		{
+			Query:    "select * from v1 as of 'HEAD~2'",
+			Expected: []sql.Row{{1, "1"}, {2, "2"}},
+		},
+		{
+			// At this point table t1 doesn't exist yet, so the view should return an error
+			Query:          "select * from v1 as of 'HEAD~3'",
+			ExpectedErrStr: "table not found: t2, maybe you mean t1?",
+		},
+		{
+			Query:          "select * from v1 as of 'HEAD~4'",
+			ExpectedErrStr: "table not found: t2, maybe you mean t1?",
+		},
+		{
+			Query:          "select * from v1 as of 'HEAD~5'",
+			ExpectedErrStr: "table not found: t1",
+		},
+	},
+}
+
 var ShowCreateTableAsOfScriptTest = queries.ScriptTest{
 	Name: "Show create table as of",
 	SetUpScript: []string{
@@ -249,7 +301,7 @@ var DoltScripts = []queries.ScriptTest{
 					{
 						"dolt_checkout",
 						"",
-						"CREATE PROCEDURE dolt_checkout() SELECT 'External stored procedure defined by mydb';",
+						"CREATE PROCEDURE dolt_checkout() SELECT 'External stored procedure';",
 						"utf8mb4",
 						"utf8mb4_0900_bin",
 						"utf8mb4_0900_bin",
@@ -472,13 +524,13 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"create table foo1 (n int, de varchar(20));",
 			"insert into foo1 values (1, 'Ein'), (2, 'Zwei'), (3, 'Drei');",
-			"set @Commit1 = dolt_commit('-am', 'inserting into foo1');",
+			"set @Commit1 = dolt_commit('-am', 'inserting into foo1', '--date', '2022-08-06T12:00:00');",
 
 			"update foo1 set de='Eins' where n=1;",
-			"set @Commit2 = dolt_commit('-am', 'updating data in foo1');",
+			"set @Commit2 = dolt_commit('-am', 'updating data in foo1', '--date', '2022-08-06T12:00:01');",
 
 			"insert into foo1 values (4, 'Vier');",
-			"set @Commit3 = dolt_commit('-am', 'inserting data in foo1');",
+			"set @Commit3 = dolt_commit('-am', 'inserting data in foo1', '--date', '2022-08-06T12:00:02');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -504,21 +556,21 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"create table t1 (n int primary key, de varchar(20));",
 			"insert into t1 values (1, 'Eins'), (2, 'Zwei'), (3, 'Drei');",
-			"set @Commit1 = dolt_commit('-am', 'inserting into t1');",
+			"set @Commit1 = dolt_commit('-am', 'inserting into t1', '--date', '2022-08-06T12:00:01');",
 
 			"alter table t1 add column fr varchar(20);",
 			"insert into t1 values (4, 'Vier', 'Quatre');",
-			"set @Commit2 = dolt_commit('-am', 'adding column and inserting data in t1');",
+			"set @Commit2 = dolt_commit('-am', 'adding column and inserting data in t1', '--date', '2022-08-06T12:00:02');",
 
 			"update t1 set fr='Un' where n=1;",
 			"update t1 set fr='Deux' where n=2;",
-			"set @Commit3 = dolt_commit('-am', 'updating data in t1');",
+			"set @Commit3 = dolt_commit('-am', 'updating data in t1', '--date', '2022-08-06T12:00:03');",
 
 			"update t1 set de=concat(de, ', meine herren') where n>1;",
-			"set @Commit4 = dolt_commit('-am', 'be polite when you address a gentleman');",
+			"set @Commit4 = dolt_commit('-am', 'be polite when you address a gentleman', '--date', '2022-08-06T12:00:04');",
 
 			"delete from t1 where n=2;",
-			"set @Commit5 = dolt_commit('-am', 'we don''t need the number 2');",
+			"set @Commit5 = dolt_commit('-am', 'we don''t need the number 2', '--date', '2022-08-06T12:00:05');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -915,11 +967,11 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
 			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff', '--date', '2022-08-06T12:00:01');",
 			"SELECT DOLT_CHECKOUT('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -952,14 +1004,14 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
 			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
 			"SELECT DOLT_CHECKOUT('main');",
 			"INSERT INTO test VALUES (5),(6),(7);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:03');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -975,7 +1027,8 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				// careful to filter out the initial commit, which will be later than the ones above
+				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
@@ -990,14 +1043,14 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"INSERT INTO test VALUES (0, 0)",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
 			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (1, 1);",
 			"UPDATE test SET val=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
 			"SELECT DOLT_CHECKOUT('main');",
 			"UPDATE test SET val=1001 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'update a value', '--date', '2022-08-06T12:00:03');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1013,7 +1066,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
 				Expected: []sql.Row{{"update a value"}},
 			},
 			{
@@ -1171,14 +1224,14 @@ var MergeScripts = []queries.ScriptTest{
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
 			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:01');",
 			"SELECT DOLT_CHECKOUT('main');",
 			"INSERT INTO test VALUES (5),(6),(7);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values');",
+			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:02');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1194,7 +1247,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
@@ -1735,7 +1788,7 @@ var MergeScripts = []queries.ScriptTest{
 			"INSERT INTO t (pk,c0) VALUES (3,3), (4,4);",
 			"CALL dolt_commit('-a', '-m', 'cm2');",
 			"CALL dolt_checkout('main');",
-			"INSERT INTO t (c0) VALUES (2);",
+			"INSERT INTO t (c0) VALUES (5);",
 			"CALL dolt_commit('-a', '-m', 'cm3');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -1744,19 +1797,19 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, 0}},
 			},
 			{
-				Query:    "INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 5}}},
+				Query:    "INSERT INTO t VALUES (NULL,6),(7,7),(NULL,8);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 6}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
 				Expected: []sql.Row{
 					{1, 1},
-					{2, 2},
 					{3, 3},
 					{4, 4},
 					{5, 5},
 					{6, 6},
 					{7, 7},
+					{8, 8},
 				},
 			},
 		},
@@ -1806,7 +1859,7 @@ var MergeScripts = []queries.ScriptTest{
 			"INSERT INTO t VALUES (4,4), (5,5);",
 			"CALL dolt_commit('-am', 'cm2');",
 			"CALL dolt_checkout('main');",
-			"INSERT INTO t (c0) VALUES (2);",
+			"INSERT INTO t (c0) VALUES (6);",
 			"CALL dolt_commit('-am', 'cm3');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -1815,18 +1868,18 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, 0}},
 			},
 			{
-				Query:    "INSERT INTO t VALUES (3,3),(NULL,6);",
+				Query:    "INSERT INTO t VALUES (3,3),(NULL,7);",
 				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
 				Expected: []sql.Row{
 					{1, 1},
-					{2, 2},
 					{3, 3},
 					{4, 4},
 					{5, 5},
 					{6, 6},
+					{7, 7},
 				},
 			},
 		},
@@ -5238,6 +5291,231 @@ var DoltRemoteTestScripts = []queries.ScriptTest{
 			{
 				Query:    "select count(*) from dolt_remotes where name='test01';",
 				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+}
+
+// DoltAutoIncrementTests is tests of dolt's global auto increment logic
+var DoltAutoIncrementTests = []queries.ScriptTest{
+	{
+		Name: "insert on different branches",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_commit('-am', 'empty table')",
+			"call dolt_branch('branch1')",
+			"call dolt_branch('branch2')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "insert into t (b) values (1), (2)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
+			},
+			{
+				Query:            "call dolt_commit('-am', 'two values on main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_checkout('branch1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "insert into t (b) values (3), (4)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{3, 3},
+					{4, 4},
+				},
+			},
+			{
+				Query:            "call dolt_commit('-am', 'two values on branch1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_checkout('branch2')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "insert into t (b) values (5), (6)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 5}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{5, 5},
+					{6, 6},
+				},
+			},
+		},
+	},
+	{
+		Name: "drop table",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_commit('-am', 'empty table')",
+			"call dolt_branch('branch1')",
+			"call dolt_branch('branch2')",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-am', 'two values on main')",
+			"call dolt_checkout('branch1')",
+			"insert into t (b) values (3), (4)",
+			"call dolt_commit('-am', 'two values on branch1')",
+			"call dolt_checkout('branch2')",
+			"insert into t (b) values (5), (6)",
+			"call dolt_checkout('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "drop table t",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:            "call dolt_checkout('main')",
+				SkipResultsCheck: true,
+			},
+			{
+				// highest value in any branch is 6
+				Query:    "insert into t (b) values (7), (8)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{7, 7},
+					{8, 8},
+				},
+			},
+			{
+				Query:    "drop table t",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:            "call dolt_checkout('branch2')",
+				SkipResultsCheck: true,
+			},
+			{
+				// highest value in any branch is still 6 (dropped table above)
+				Query:    "insert into t (b) values (7), (8)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{5, 5},
+					{6, 6},
+					{7, 7},
+					{8, 8},
+				},
+			},
+			{
+				Query:    "drop table t",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:            "create table t (a int primary key auto_increment, b int)",
+				SkipResultsCheck: true,
+			},
+			{
+				// no value on any branch
+				Query:    "insert into t (b) values (1), (2)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+				},
+			},
+		},
+	},
+}
+
+var BrokenAutoIncrementTests = []queries.ScriptTest{
+	{
+		// truncate table doesn't reset the persisted auto increment counter of tables on other branches, which leads to
+		// the value not resetting to 1 after a truncate if the table exists on other branches, even if truncated on every
+		// branch
+		Name: "truncate table",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_commit('-am', 'empty table')",
+			"call dolt_branch('branch1')",
+			"call dolt_branch('branch2')",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-am', 'two values on main')",
+			"call dolt_checkout('branch1')",
+			"insert into t (b) values (3), (4)",
+			"call dolt_commit('-am', 'two values on branch1')",
+			"call dolt_checkout('branch2')",
+			"insert into t (b) values (5), (6)",
+			"call dolt_checkout('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "truncate table t",
+				Expected: []sql.Row{{sql.NewOkResult(2)}},
+			},
+			{
+				Query:            "call dolt_checkout('main')",
+				SkipResultsCheck: true,
+			},
+			{
+				// highest value in any branch is 6
+				Query:    "insert into t (b) values (7), (8)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{7, 7},
+					{8, 8},
+				},
+			},
+			{
+				Query:    "truncate table t",
+				Expected: []sql.Row{{sql.NewOkResult(4)}},
+			},
+			{
+				Query:            "call dolt_checkout('branch2')",
+				SkipResultsCheck: true,
+			},
+			{
+				// highest value in any branch is still 6 (truncated table above)
+				Query:    "insert into t (b) values (7), (8)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{5, 5},
+					{6, 6},
+					{7, 7},
+					{8, 8},
+				},
+			},
+			{
+				Query:    "truncate table t",
+				Expected: []sql.Row{{sql.NewOkResult(4)}},
+			},
+			{
+				// no value on any branch
+				Query:    "insert into t (b) values (1), (2)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+				},
 			},
 		},
 	},

@@ -21,9 +21,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/store/hash"
-
 	"github.com/shopspring/decimal"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // TupleDesc describes a Tuple set.
@@ -32,12 +32,12 @@ import (
 type TupleDesc struct {
 	Types []Type
 	cmp   TupleComparator
-	fast  fixedAccess
+	fast  FixedAccess
 }
 
 // NewTupleDescriptor makes a TupleDescriptor from |types|.
 func NewTupleDescriptor(types ...Type) TupleDesc {
-	return NewTupleDescriptorWithComparator(defaultCompare{}, types...)
+	return NewTupleDescriptorWithComparator(DefaultTupleComparator{}, types...)
 }
 
 // NewTupleDescriptorWithComparator returns a TupleDesc from a slice of Types.
@@ -50,6 +50,7 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 			panic("invalid encoding")
 		}
 	}
+	cmp = cmp.Validated(types)
 
 	td = TupleDesc{
 		Types: types,
@@ -69,10 +70,10 @@ func IterAddressFields(td TupleDesc, cb func(int, Type)) {
 	}
 }
 
-type fixedAccess [][2]ByteSize
+type FixedAccess [][2]ByteSize
 
-func makeFixedAccess(types []Type) (acc fixedAccess) {
-	acc = make(fixedAccess, 0, len(types))
+func makeFixedAccess(types []Type) (acc FixedAccess) {
+	acc = make(FixedAccess, 0, len(types))
 
 	off := ByteSize(0)
 	for _, typ := range types {
@@ -98,12 +99,12 @@ func (td TupleDesc) AddressFieldCount() (n int) {
 
 // PrefixDesc returns a descriptor for the first n types.
 func (td TupleDesc) PrefixDesc(n int) TupleDesc {
-	return NewTupleDescriptor(td.Types[:n]...)
+	return NewTupleDescriptorWithComparator(td.cmp.Prefix(n), td.Types[:n]...)
 }
 
 // SuffixDesc returns a descriptor for the last n types.
 func (td TupleDesc) SuffixDesc(n int) TupleDesc {
-	return NewTupleDescriptor(td.Types[len(td.Types)-n:]...)
+	return NewTupleDescriptorWithComparator(td.cmp.Suffix(n), td.Types[len(td.Types)-n:]...)
 }
 
 // GetField returns the ith field of |tup|.
@@ -129,7 +130,7 @@ func (td TupleDesc) CompareField(value []byte, i int, tup Tuple) (cmp int) {
 	} else {
 		v = tup.GetField(i)
 	}
-	return td.cmp.CompareValues(value, v, td.Types[i])
+	return td.cmp.CompareValues(i, value, v, td.Types[i])
 }
 
 // Comparator returns the TupleDescriptor's TupleComparator.
@@ -146,6 +147,11 @@ func (td TupleDesc) Count() int {
 func (td TupleDesc) IsNull(i int, tup Tuple) bool {
 	b := td.GetField(i, tup)
 	return b == nil
+}
+
+// GetFixedAccess returns the FixedAccess for this tuple descriptor.
+func (td TupleDesc) GetFixedAccess() FixedAccess {
+	return td.fast
 }
 
 // GetBool reads a bool from the ith field of the Tuple.

@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
@@ -161,20 +160,24 @@ var _ sql.TemporaryTableCreator = Database{}
 var _ sql.TableRenamer = Database{}
 var _ sql.TriggerDatabase = Database{}
 var _ sql.StoredProcedureDatabase = Database{}
-var _ sql.ExternalStoredProcedureDatabase = Database{}
 var _ sql.TransactionDatabase = Database{}
 var _ globalstate.StateProvider = Database{}
 
 // NewDatabase returns a new dolt database to use in queries.
-func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Database {
+func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts editor.Options) (Database, error) {
+	globalState, err := globalstate.NewGlobalStateStoreForDb(ctx, dbData.Ddb)
+	if err != nil {
+		return Database{}, err
+	}
+
 	return Database{
 		name:     name,
 		ddb:      dbData.Ddb,
 		rsr:      dbData.Rsr,
 		rsw:      dbData.Rsw,
-		gs:       globalstate.NewGlobalStateStore(),
+		gs:       globalState,
 		editOpts: editOpts,
-	}
+	}, nil
 }
 
 // GetInitialDBState returns the InitialDbState for |db|.
@@ -726,12 +729,13 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return nil
 	}
 
-	root, err := db.GetRoot(ctx)
+	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
 		return err
 	}
 
-	tableExists, err := root.HasTable(ctx, tableName)
+	root := ws.WorkingRoot()
+	tbl, tableExists, err := root.GetTable(ctx, tableName)
 	if err != nil {
 		return err
 	}
@@ -745,18 +749,71 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return err
 	}
 
-	ws, err := ds.WorkingSet(ctx, db.Name())
+	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return err
 	}
 
-	ait, err := db.gs.GetAutoIncrementTracker(ctx, ws)
-	if err != nil {
-		return err
+	if schema.HasAutoIncrement(sch) {
+		ddb, _ := ds.GetDoltDB(ctx, db.name)
+		err = db.removeTableFromAutoIncrementTracker(ctx, tableName, ddb, ws.Ref())
+		if err != nil {
+			return err
+		}
 	}
-	ait.DropTable(tableName)
 
 	return db.SetRoot(ctx, newRoot)
+}
+
+// removeTableFromAutoIncrementTracker updates the global auto increment tracking as necessary to deal with the table
+// given being dropped or truncated. The auto increment value for this table after this operation will either be reset
+// back to 1 if this table only exists in the working set given, or to the highest value in all other working sets
+// otherwise. This operation is expensive if the
+func (db Database) removeTableFromAutoIncrementTracker(
+	ctx *sql.Context,
+	tableName string,
+	ddb *doltdb.DoltDB,
+	ws ref.WorkingSetRef,
+) error {
+	branches, err := ddb.GetBranches(ctx)
+	if err != nil {
+		return err
+	}
+
+	var wses []*doltdb.WorkingSet
+	for _, b := range branches {
+		wsRef, err := ref.WorkingSetRefForHead(b)
+		if err != nil {
+			return err
+		}
+
+		if wsRef == ws {
+			// skip this branch, we've deleted it here
+			continue
+		}
+
+		ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
+		if err == doltdb.ErrWorkingSetNotFound {
+			// skip, continue working on other branches
+			continue
+		} else if err != nil {
+			return err
+		}
+
+		wses = append(wses, ws)
+	}
+
+	ait, err := db.gs.GetAutoIncrementTracker(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = ait.DropTable(ctx, tableName, wses...)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // CreateTable creates a table with the name and schema given.
@@ -807,7 +864,7 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 	}
 
 	if schema.HasAutoIncrement(doltSch) {
-		ait, err := db.gs.GetAutoIncrementTracker(ctx, ws)
+		ait, err := db.gs.GetAutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}
@@ -1092,11 +1149,6 @@ func (db Database) SaveStoredProcedure(ctx *sql.Context, spd sql.StoredProcedure
 // DropStoredProcedure implements sql.StoredProcedureDatabase.
 func (db Database) DropStoredProcedure(ctx *sql.Context, name string) error {
 	return DoltProceduresDropProcedure(ctx, db, name)
-}
-
-// GetExternalStoredProcedures implements sql.ExternalStoredProcedureDatabase.
-func (db Database) GetExternalStoredProcedures(ctx *sql.Context) ([]sql.ExternalStoredProcedureDetails, error) {
-	return dprocedures.DoltProcedures, nil
 }
 
 func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, definition string, created time.Time, existingErr error) (err error) {

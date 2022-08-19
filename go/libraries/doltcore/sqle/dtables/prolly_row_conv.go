@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -88,7 +87,7 @@ func NewProllyRowConverter(inSch, outSch schema.Schema, warnFn rowconv.WarnFunct
 		nonPkTargetTypes = append([]sql.Type{nil}, nonPkTargetTypes...)
 	}
 
-	kd, vd := shim.MapDescriptorsFromSchema(inSch)
+	kd, vd := inSch.GetMapDescriptors()
 	return ProllyRowConverter{
 		inSchema:         inSch,
 		outSchema:        outSch,

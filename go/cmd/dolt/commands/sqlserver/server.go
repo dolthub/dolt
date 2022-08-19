@@ -150,23 +150,16 @@ func Serve(
 	}
 	defer sqlEngine.Close()
 
-	// TODO: move this to GMS
-	// set host to "%" if empty string or 0.0.0.0
-	serverHost := config.ServerHost
-	if serverHost == "" || serverHost == "0.0.0.0" {
-		serverHost = "%"
-	}
-
 	// Add superuser if specified user exists; add root superuser if no user specified and no existing privileges
 	userSpecified := config.ServerUser != ""
 	privsExist := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.UserTable().Data().Count() != 0
 	if userSpecified {
-		superuser := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, serverHost, false)
+		superuser := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, "%", false)
 		if userSpecified && superuser == nil {
-			sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, serverHost, config.ServerPass)
+			sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, "%", config.ServerPass)
 		}
 	} else if !privsExist {
-		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(defaultUser, defaultHost, defaultPass)
+		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(defaultUser, "%", defaultPass)
 	}
 
 	labels := serverConfig.MetricsLabels()

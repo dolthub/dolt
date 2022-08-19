@@ -99,6 +99,7 @@ const (
 	BranchParam      = "branch"
 	TrackFlag        = "track"
 	AmendFlag        = "amend"
+	NewFormatFlag    = "new-format"
 )
 
 const (

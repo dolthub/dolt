@@ -36,28 +36,28 @@ func TestFmtCol(t *testing.T) {
 			0,
 			0,
 			0,
-			"`first` VARCHAR(16383)",
+			"`first` varchar(16383)",
 		},
 		{
 			schema.NewColumn("last", 123, types.IntKind, true),
 			2,
 			0,
 			0,
-			"  `last` BIGINT",
+			"  `last` bigint",
 		},
 		{
 			schema.NewColumn("title", 2, types.UintKind, true),
 			0,
 			10,
 			0,
-			"   `title` BIGINT UNSIGNED",
+			"   `title` bigint unsigned",
 		},
 		{
 			schema.NewColumn("aoeui", 52, types.UintKind, true),
 			0,
 			10,
 			15,
-			"   `aoeui` BIGINT UNSIGNED",
+			"   `aoeui` bigint unsigned",
 		},
 	}
 

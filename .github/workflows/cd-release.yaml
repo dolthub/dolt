@@ -9,7 +9,7 @@ on:
 
 jobs:
   format-version:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     outputs:
       version: ${{ steps.format_version.outputs.version }}
     steps:
@@ -26,7 +26,7 @@ jobs:
   create-release:
     needs: format-version
     name: Create release
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     outputs:
       release_id: ${{ steps.create_release.outputs.id }}
     steps:
@@ -122,7 +122,7 @@ jobs:
 
   create-windows-msi:
     needs: [format-version, create-release]
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Trigger Upload MSI
         uses: peter-evans/repository-dispatch@v1
@@ -134,7 +134,7 @@ jobs:
 
   create-release-notes:
     needs: [format-version, create-release]
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Trigger Release Notes
         uses: peter-evans/repository-dispatch@v1
@@ -145,7 +145,7 @@ jobs:
 
   homebrew-bump:
     needs: [format-version, create-release]
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Trigger Bump Homebrew
         uses: peter-evans/repository-dispatch@v1
@@ -156,7 +156,7 @@ jobs:
 
   trigger-performance-benchmark-email:
     needs: [format-version, create-release]
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Trigger Performance Benchmarks
         uses: peter-evans/repository-dispatch@v1

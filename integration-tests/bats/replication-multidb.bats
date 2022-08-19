@@ -51,7 +51,7 @@ teardown() {
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR
 
-    if ! [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT_1__" ]; then
+    if ! [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT__" ]; then
       dolt config --list | awk '{ print $1 }' | grep sqlserver.global | xargs dolt config --global --unset
     fi
 }
@@ -70,28 +70,69 @@ teardown() {
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote remote1
     dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
     dolt sql --data-dir=dbs1 -b -q "use repo1; select dolt_commit('-am', 'cm')"
-
+    dolt sql --data-dir=dbs1 -b -q "use repo2; create table t2 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo2; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo3; create table t3 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo3; select dolt_commit('-am', 'cm')"
+    
     clone_helper $TMPDIRS
     run dolt sql --data-dir=dbs2 -b -q "use repo1; show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     [[ "$output" =~ "t1" ]] || false
+    [[ ! "$output" =~ "t2" ]] || false
+    [[ ! "$output" =~ "t3" ]] || false
+
+    run dolt sql --data-dir=dbs2 -b -q "use repo2; show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "$output" =~ "t2" ]] || false
+    [[ ! n"$output" =~ "t1" ]] || false
+    [[ ! "$output" =~ "t3" ]] || faalse
+
+    run dolt sql --data-dir=dbs2 -b -q "use repo3; show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "$output" =~ "t3" ]] || false
+    [[ ! "$output" =~ "t1" ]] || false
+    [[ ! "$output" =~ "t2" ]] || false
 }
 
 @test "replication-multidb: pull on read" {
     push_helper $TMPDIRS
     dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
     dolt sql --data-dir=dbs1 -b -q "use repo1; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo2; create table t2 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo2; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo3; create table t3 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo3; select dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
     push_helper $TMPDIRS
 
     dolt config --global --add sqlserver.global.dolt_read_replica_remote remote1
     dolt config --global --add sqlserver.global.dolt_replicate_heads main
+
     run dolt sql --data-dir=dbs2 -b -q "use repo1; show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     [[ "$output" =~ "t1" ]] || false
+    [[ ! "$output" =~ "t2" ]] || false
+    [[ ! "$output" =~ "t3" ]] || false
+
+    run dolt sql --data-dir=dbs2 -b -q "use repo2; show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "$output" =~ "t2" ]] || false
+    [[ ! n"$output" =~ "t1" ]] || false
+    [[ ! "$output" =~ "t3" ]] || faalse
+
+    run dolt sql --data-dir=dbs2 -b -q "use repo3; show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "$output" =~ "t3" ]] || false
+    [[ ! "$output" =~ "t1" ]] || false
+    [[ ! "$output" =~ "t2" ]] || false
 }
 
 @test "replication-multidb: missing database config" {
@@ -116,18 +157,43 @@ teardown() {
 
     server_query repo1 1 "create table t1 (a int primary key)"
     multi_query repo1 1 "select dolt_commit('-am', 'cm')"
+    server_query repo2 1 "create table t2 (a int primary key)"
+    multi_query repo2 1 "select dolt_commit('-am', 'cm')"
+    server_query repo3 1 "create table t3 (a int primary key)"
+    multi_query repo3 1 "select dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
+
     run dolt sql --data-dir=dbs2 -b -q "use repo1; show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     [[ "$output" =~ "t1" ]] || false
+    [[ ! "$output" =~ "t2" ]] || false
+    [[ ! "$output" =~ "t3" ]] || false
+
+    run dolt sql --data-dir=dbs2 -b -q "use repo2; show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "$output" =~ "t2" ]] || false
+    [[ ! n"$output" =~ "t1" ]] || false
+    [[ ! "$output" =~ "t3" ]] || faalse
+
+    run dolt sql --data-dir=dbs2 -b -q "use repo3; show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "$output" =~ "t3" ]] || false
+    [[ ! "$output" =~ "t1" ]] || false
+    [[ ! "$output" =~ "t2" ]] || false
 }
 
 @test "replication-multidb: sql-server pull on read" {
     push_helper $TMPDIRS
     dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
     dolt sql --data-dir=dbs1 -b -q "use repo1; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo2; create table t2 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo2; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo3; create table t3 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo3; select dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
     push_helper $TMPDIRS
@@ -136,5 +202,8 @@ teardown() {
     dolt config --global --add sqlserver.global.dolt_replicate_heads main
     cd dbs1
     start_multi_db_server repo1
+    
     server_query repo1 1 "show tables" "Tables_in_repo1\nt1"
+    server_query repo2 1 "show tables" "Tables_in_repo2\nt2"
+    server_query repo3 1 "show tables" "Tables_in_repo3\nt3"
 }

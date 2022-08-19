@@ -41,12 +41,12 @@ type formatTag struct {
 
 var formatTag_7_18 *formatTag = nil
 var formatTag_LD_1 = &formatTag{}
-var formatTag_DOLT_1 = &formatTag{}
+var formatTag_DOLT = &formatTag{}
 var formatTag_DOLT_DEV = &formatTag{}
 
 var Format_7_18 = &NomsBinFormat{}
 var Format_LD_1 = &NomsBinFormat{formatTag_LD_1}
-var Format_DOLT_1 = &NomsBinFormat{formatTag_DOLT_1}
+var Format_DOLT = &NomsBinFormat{formatTag_DOLT}
 var Format_DOLT_DEV = &NomsBinFormat{formatTag_DOLT_DEV}
 
 var nbfLock = &sync.Mutex{}
@@ -64,10 +64,8 @@ func isFormat_7_18(nbf *NomsBinFormat) bool {
 	return nbf.tag == formatTag_7_18
 }
 
-var ErrUnsupportedFormat = errors.New("operation not supported for format '__DOLT_1__' ")
-
-func IsFormat_DOLT_1(nbf *NomsBinFormat) bool {
-	return nbf.tag == formatTag_DOLT_1
+func IsFormat_DOLT(nbf *NomsBinFormat) bool {
+	return nbf.tag == formatTag_DOLT
 }
 
 func GetFormatForVersionString(s string) (*NomsBinFormat, error) {
@@ -75,8 +73,8 @@ func GetFormatForVersionString(s string) (*NomsBinFormat, error) {
 		return Format_7_18, nil
 	} else if s == constants.FormatLD1String {
 		return Format_LD_1, nil
-	} else if s == constants.FormatDolt1String {
-		return Format_DOLT_1, nil
+	} else if s == constants.FormatDoltString {
+		return Format_DOLT, nil
 	} else if s == constants.FormatDoltDevString {
 		return Format_DOLT_DEV, nil
 	} else {
@@ -89,8 +87,8 @@ func (nbf *NomsBinFormat) VersionString() string {
 		return constants.Format718String
 	} else if nbf.tag == formatTag_LD_1 {
 		return constants.FormatLD1String
-	} else if nbf.tag == formatTag_DOLT_1 {
-		return constants.FormatDolt1String
+	} else if nbf.tag == formatTag_DOLT {
+		return constants.FormatDoltString
 	} else if nbf.tag == formatTag_DOLT_DEV {
 		return constants.FormatDoltDevString
 	} else {
@@ -99,5 +97,5 @@ func (nbf *NomsBinFormat) VersionString() string {
 }
 
 func (nbf *NomsBinFormat) UsesFlatbuffers() bool {
-	return nbf.tag == formatTag_DOLT_1 || nbf.tag == formatTag_DOLT_DEV
+	return nbf.tag == formatTag_DOLT || nbf.tag == formatTag_DOLT_DEV
 }

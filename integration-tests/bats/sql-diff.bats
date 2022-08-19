@@ -499,11 +499,11 @@ SQL
 
 @test "sql-diff: reconciles CREATE/ALTER/DROP VIEW" {
     dolt sql -q 'create table test (pk int not null primary key)'
-    dolt sql -q 'create view double as select pk*2 from test'
+    dolt sql -q 'create view double_view as select pk*2 from test'
     run dolt diff -r sql
     [ "$status" -eq 0 ]
     skip "create view statements not implemented"
-    [[ "$output" =~ "CREATE VIEW `double`" ]] || false
+    [[ "$output" =~ "CREATE VIEW `double_view`" ]] || false
 }
 
 @test "sql-diff: diff sql recreates tables with all types" {

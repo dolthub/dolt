@@ -46,7 +46,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 106
+const SkipPreparedsCount = 83
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -85,77 +85,88 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "dolt_merge() works with no auto increment overlap",
+			Name: "truncate table",
 			SetUpScript: []string{
-				"CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
-				"INSERT INTO t (c0) VALUES (1), (2);",
-				"CALL dolt_commit('-a', '-m', 'cm1');",
-				"CALL dolt_checkout('-b', 'test');",
-				"INSERT INTO t (c0) VALUES (3), (4);",
-				"CALL dolt_commit('-a', '-m', 'cm2');",
-				"CALL dolt_checkout('main');",
+				"create table t (a int primary key auto_increment, b int)",
+				"call dolt_commit('-am', 'empty table')",
+				"call dolt_branch('branch1')",
+				"call dolt_branch('branch2')",
+				"insert into t (b) values (1), (2)",
+				"call dolt_commit('-am', 'two values on main')",
+				"call dolt_checkout('branch1')",
+				"insert into t (b) values (3), (4)",
+				"call dolt_commit('-am', 'two values on branch1')",
+				"call dolt_checkout('branch2')",
+				"insert into t (b) values (5), (6)",
+				"call dolt_checkout('branch1')",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "CALL dolt_merge('test');",
-					Expected: []sql.Row{{1, 0}},
+					Query:    "truncate table t",
+					Expected: []sql.Row{{sql.NewOkResult(2)}},
 				},
 				{
-					Query:    "INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 5}}},
+					Query:            "call dolt_checkout('main')",
+					SkipResultsCheck: true,
 				},
 				{
-					Query: "SELECT * FROM t ORDER BY pk;",
+					// highest value in any branch is 6
+					Query:    "insert into t (b) values (7), (8)",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+				},
+				{
+					Query: "select * from t order by a",
 					Expected: []sql.Row{
 						{1, 1},
 						{2, 2},
-						{3, 3},
-						{4, 4},
+						{7, 7},
+						{8, 8},
+					},
+				},
+				{
+					Query:    "truncate table t",
+					Expected: []sql.Row{{sql.NewOkResult(4)}},
+				},
+				{
+					Query:            "call dolt_checkout('branch2')",
+					SkipResultsCheck: true,
+				},
+				{
+					// highest value in any branch is still 6 (truncated table above)
+					Query:    "insert into t (b) values (7), (8)",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+				},
+				{
+					Query: "select * from t order by a",
+					Expected: []sql.Row{
 						{5, 5},
 						{6, 6},
 						{7, 7},
+						{8, 8},
+					},
+				},
+				{
+					Query:    "truncate table t",
+					Expected: []sql.Row{{sql.NewOkResult(4)}},
+				},
+				{
+					// no value on any branch
+					Query:    "insert into t (b) values (1), (2)",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
+				},
+				{
+					Query: "select * from t order by a",
+					Expected: []sql.Row{
+						{1, 1},
+						{2, 2},
 					},
 				},
 			},
 		},
-		//{
-		//	Name: "dolt_merge() with a gap in an auto increment key",
-		//	SetUpScript: []string{
-		//		"CREATE TABLE t2 (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
-		//		"INSERT INTO t2 (c0) VALUES (1), (2);",
-		//		"CALL dolt_add('-A');",
-		//		"CALL dolt_commit('-am', 'cm1');",
-		//		"CALL dolt_checkout('-b', 'test2');",
-		//		"INSERT INTO t2 VALUES (4,4), (5,5);",
-		//		"CALL dolt_commit('-am', 'cm2');",
-		//		"CALL dolt_checkout('main');",
-		//	},
-		//	Assertions: []queries.ScriptTestAssertion{
-		//		{
-		//			Query:    "CALL dolt_merge('test2');",
-		//			Expected: []sql.Row{{1, 0}},
-		//		},
-		//		{
-		//			Query:    "INSERT INTO t2 VALUES (3,3),(NULL,6);",
-		//			Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
-		//		},
-		//		{
-		//			Query: "SELECT * FROM t2 ORDER BY pk;",
-		//			Expected: []sql.Row{
-		//				{1, 1},
-		//				{2, 2},
-		//				{3, 3},
-		//				{4, 4},
-		//				{5, 5},
-		//				{6, 6},
-		//			},
-		//		},
-		//	},
-		//},
 	}
 
 	harness := newDoltHarness(t)
@@ -303,7 +314,7 @@ func TestInsertIgnoreInto(t *testing.T) {
 
 // todo: merge this into the above test when https://github.com/dolthub/dolt/issues/3836 is fixed
 func TestIgnoreIntoWithDuplicateUniqueKeyKeyless(t *testing.T) {
-	if !types.IsFormat_DOLT_1(types.Format_Default) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
 		// todo: fix https://github.com/dolthub/dolt/issues/3836
 		t.Skip()
 	}
@@ -360,7 +371,7 @@ func TestTruncate(t *testing.T) {
 
 func TestScripts(t *testing.T) {
 	var skipped []string
-	if types.IsFormat_DOLT_1(types.Format_Default) {
+	if types.IsFormat_DOLT(types.Format_Default) {
 		skipped = append(skipped, newFormatSkippedScripts...)
 	}
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
@@ -435,10 +446,12 @@ func TestJoinQueries(t *testing.T) {
 }
 
 func TestUserPrivileges(t *testing.T) {
+	t.Skip("Need to add more collations")
 	enginetest.TestUserPrivileges(t, newDoltHarness(t))
 }
 
 func TestUserAuthentication(t *testing.T) {
+	t.Skip("Need to add more collations")
 	enginetest.TestUserAuthentication(t, newDoltHarness(t))
 }
 
@@ -742,16 +755,53 @@ func TestShowCreateTableAsOf(t *testing.T) {
 	enginetest.TestScript(t, newDoltHarness(t), ShowCreateTableAsOfScriptTest)
 }
 
+func TestViewsWithAsOf(t *testing.T) {
+	enginetest.TestScript(t, newDoltHarness(t), ViewsWithAsOfScriptTest)
+}
+
+func TestViewsWithAsOfPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	enginetest.TestScriptPrepared(t, newDoltHarness(t), ViewsWithAsOfScriptTest)
+}
+
 func TestDoltMerge(t *testing.T) {
 	for _, script := range MergeScripts {
 		// dolt versioning conflicts with reset harness -- use new harness every time
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
 
-	if types.IsFormat_DOLT_1(types.Format_Default) {
+	if types.IsFormat_DOLT(types.Format_Default) {
 		for _, script := range Dolt1MergeScripts {
 			enginetest.TestScript(t, newDoltHarness(t), script)
 		}
+	}
+}
+
+func TestDoltAutoIncrement(t *testing.T) {
+	for _, script := range DoltAutoIncrementTests {
+		// doing commits on different branches is antagonistic to engine reuse, use a new engine on each script
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+
+	for _, script := range BrokenAutoIncrementTests {
+		t.Run(script.Name, func(t *testing.T) {
+			t.Skip()
+			enginetest.TestScript(t, newDoltHarness(t), script)
+		})
+	}
+}
+
+func TestDoltAutoIncrementPrepared(t *testing.T) {
+	for _, script := range DoltAutoIncrementTests {
+		// doing commits on different branches is antagonistic to engine reuse, use a new engine on each script
+		enginetest.TestScriptPrepared(t, newDoltHarness(t), script)
+	}
+
+	for _, script := range BrokenAutoIncrementTests {
+		t.Run(script.Name, func(t *testing.T) {
+			t.Skip()
+			enginetest.TestScriptPrepared(t, newDoltHarness(t), script)
+		})
 	}
 }
 
@@ -763,7 +813,7 @@ func TestDoltConflictsTableNameTable(t *testing.T) {
 
 // tests new format behavior for keyless merges that create CVs and conflicts
 func TestKeylessDoltMergeCVsAndConflicts(t *testing.T) {
-	if !types.IsFormat_DOLT_1(types.Format_Default) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}
 	for _, script := range KeylessMergeCVsAndConflictsScripts {
@@ -773,7 +823,7 @@ func TestKeylessDoltMergeCVsAndConflicts(t *testing.T) {
 
 // eventually this will be part of TestDoltMerge
 func TestDoltMergeArtifacts(t *testing.T) {
-	if !types.IsFormat_DOLT_1(types.Format_Default) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}
 	for _, script := range MergeArtifactsScripts {
@@ -784,7 +834,7 @@ func TestDoltMergeArtifacts(t *testing.T) {
 // these tests are temporary while there is a difference between the old format
 // and new format merge behaviors.
 func TestOldFormatMergeConflictsAndCVs(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
+	if types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}
 	for _, script := range OldFormatMergeConflictsAndCVsScripts {
@@ -971,7 +1021,7 @@ func TestDiffSystemTable(t *testing.T) {
 		})
 	}
 
-	if types.IsFormat_DOLT_1(types.Format_Default) {
+	if types.IsFormat_DOLT(types.Format_Default) {
 		for _, test := range Dolt1DiffSystemTableScripts {
 			enginetest.TestScript(t, newDoltHarness(t), test)
 		}
@@ -1065,7 +1115,7 @@ func TestDeleteQueriesPrepared(t *testing.T) {
 
 func TestScriptsPrepared(t *testing.T) {
 	var skipped []string
-	if types.IsFormat_DOLT_1(types.Format_Default) {
+	if types.IsFormat_DOLT(types.Format_Default) {
 		skipped = append(skipped, newFormatSkippedScripts...)
 	}
 	skipPreparedTests(t)
@@ -1126,6 +1176,17 @@ func TestPrepared(t *testing.T) {
 func TestPreparedInsert(t *testing.T) {
 	skipPreparedTests(t)
 	enginetest.TestPreparedInsert(t, newDoltHarness(t))
+}
+
+func TestCharsetCollationEngine(t *testing.T) {
+	skipOldFormat(t)
+	enginetest.TestCharsetCollationEngine(t, newDoltHarness(t))
+}
+
+func TestCharsetCollationWire(t *testing.T) {
+	skipOldFormat(t)
+	harness := newDoltHarness(t)
+	enginetest.TestCharsetCollationWire(t, harness, newSessionBuilder(harness))
 }
 
 func TestAddDropPrimaryKeys(t *testing.T) {
@@ -1311,6 +1372,35 @@ func TestDoltVerifyConstraints(t *testing.T) {
 	}
 }
 
+func TestDoltStorageFormat(t *testing.T) {
+	var expectedFormatString string
+	if types.IsFormat_DOLT(types.Format_Default) {
+		expectedFormatString = "NEW ( __DOLT__ )"
+	} else {
+		expectedFormatString = fmt.Sprintf("OLD ( %s )", types.Format_Default.VersionString())
+	}
+	script := queries.ScriptTest{
+		Name: "dolt storage format function works",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select dolt_storage_format()",
+				Expected: []sql.Row{{expectedFormatString}},
+			},
+		},
+	}
+	enginetest.TestScript(t, newDoltHarness(t), script)
+}
+
+func TestDoltStorageFormatPrepared(t *testing.T) {
+	var expectedFormatString string
+	if types.IsFormat_DOLT(types.Format_Default) {
+		expectedFormatString = "NEW ( __DOLT__ )"
+	} else {
+		expectedFormatString = fmt.Sprintf("OLD ( %s )", types.Format_Default.VersionString())
+	}
+	enginetest.TestPreparedQuery(t, newDoltHarness(t), "SELECT dolt_storage_format()", []sql.Row{{expectedFormatString}}, nil)
+}
+
 var newFormatSkippedScripts = []string{
 	// Different query plans
 	"Partial indexes are used and return the expected result",
@@ -1318,7 +1408,7 @@ var newFormatSkippedScripts = []string{
 }
 
 func skipOldFormat(t *testing.T) {
-	if !types.IsFormat_DOLT_1(types.Format_Default) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}
 }

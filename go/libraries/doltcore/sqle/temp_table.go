@@ -104,8 +104,7 @@ func NewTempTable(
 
 	newWs := ws.WithWorkingRoot(newRoot)
 
-	gs := globalstate.NewGlobalStateStore()
-	ait, err := gs.GetAutoIncrementTracker(ctx, newWs)
+	ait, err := globalstate.NewAutoIncrementTracker(ctx, newWs)
 	if err != nil {
 		return nil, err
 	}
@@ -152,8 +151,7 @@ func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoo
 		ws := dbState.WorkingSet
 		newWs := ws.WithWorkingRoot(newRoot)
 
-		gs := globalstate.NewGlobalStateStore()
-		ait, err := gs.GetAutoIncrementTracker(ctx, newWs)
+		ait, err := globalstate.NewAutoIncrementTracker(ctx, newWs)
 		if err != nil {
 			return err
 		}

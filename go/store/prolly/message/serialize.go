@@ -57,7 +57,7 @@ func writeItemOffsets(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
 		b.PrependUint16(uint16(off))
 		off -= len(items[i])
 	}
-	assertTrue(off == 0)
+	assertTrue(off == 0, "incorrect final value after serializing offsets")
 	b.PrependUint16(uint16(off))
 	return b.EndVector(len(items) + 1)
 }

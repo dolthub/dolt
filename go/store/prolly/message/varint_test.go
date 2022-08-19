@@ -225,7 +225,7 @@ func decodeVarintDirect(buf []byte, ints []uint64) []uint64 {
 		ints[i], n = binary.Uvarint(buf)
 		buf = buf[n:]
 	}
-	assertTrue(len(buf) == 0)
+	assertTrue(len(buf) == 0, "extra bytes after decoding varints")
 	return ints
 }
 
@@ -262,7 +262,7 @@ func decodeMinDeltas(buf []byte, ints []uint64) []uint64 {
 		buf = buf[k:]
 		ints[i] = min + delta
 	}
-	assertTrue(len(buf) == 0)
+	assertTrue(len(buf) == 0, "extra bytes after decoding varints")
 	return ints
 }
 
@@ -291,6 +291,6 @@ func decodeMeanDeltas(buf []byte, ints []uint64) []uint64 {
 		buf = buf[k:]
 		ints[i] = uint64(mean + delta)
 	}
-	assertTrue(len(buf) == 0)
+	assertTrue(len(buf) == 0, "extra bytes after decoding varints")
 	return ints
 }

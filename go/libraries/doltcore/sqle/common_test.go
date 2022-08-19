@@ -42,7 +42,9 @@ type SetupFn func(t *testing.T, dEnv *env.DoltEnv)
 func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) ([]sql.Row, sql.Schema, error) {
 	var err error
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-	db := NewDatabase("dolt", dEnv.DbData(), opts)
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
+	require.NoError(t, err)
+
 	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
 	if err != nil {
 		return nil, nil, err
@@ -69,7 +71,9 @@ func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 // Runs the query given and returns the error (if any).
 func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-	db := NewDatabase("dolt", dEnv.DbData(), opts)
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
+	require.NoError(t, err)
+
 	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
 
 	if err != nil {

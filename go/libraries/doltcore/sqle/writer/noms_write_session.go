@@ -59,7 +59,7 @@ type WriteSessionFlusher interface {
 type nomsWriteSession struct {
 	workingSet *doltdb.WorkingSet
 	tables     map[string]*sessionedTableEditor
-	tracker    globalstate.AutoIncrementTracker
+	aiTracker  globalstate.AutoIncrementTracker
 	mut        *sync.RWMutex // This mutex is specifically for changes that affect the TES or all STEs
 	opts       editor.Options
 }
@@ -69,12 +69,12 @@ var _ WriteSession = &nomsWriteSession{}
 // NewWriteSession creates and returns a WriteSession. Inserting a nil root is not an error, as there are
 // locations that do not have a root at the time of this call. However, a root must be set through SetRoot before any
 // table editors are returned.
-func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, tracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession {
-	if types.IsFormat_DOLT_1(nbf) {
+func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession {
+	if types.IsFormat_DOLT(nbf) {
 		return &prollyWriteSession{
 			workingSet: ws,
 			tables:     make(map[string]*prollyTableWriter),
-			tracker:    tracker,
+			aiTracker:  aiTracker,
 			mut:        &sync.RWMutex{},
 		}
 	}
@@ -82,7 +82,7 @@ func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, tracker gl
 	return &nomsWriteSession{
 		workingSet: ws,
 		tables:     make(map[string]*sessionedTableEditor),
-		tracker:    tracker,
+		aiTracker:  aiTracker,
 		mut:        &sync.RWMutex{},
 		opts:       opts,
 	}
@@ -127,7 +127,7 @@ func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table, db string,
 		tableEditor: te,
 		flusher:     s,
 		batched:     batched,
-		autoInc:     s.tracker,
+		autoInc:     s.aiTracker,
 		setter:      setter,
 	}, nil
 }
@@ -186,7 +186,7 @@ func (s *nomsWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, error
 			// Update the auto increment value for the table if a tracker was provided
 			// TODO: the table probably needs an autoincrement tracker no matter what
 			if schema.HasAutoIncrement(ed.Schema()) {
-				v := s.tracker.Current(name)
+				v := s.aiTracker.Current(name)
 				tbl, err = tbl.SetAutoIncrementValue(ctx, v)
 				if err != nil {
 					return err
@@ -264,10 +264,6 @@ func (s *nomsWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.Working
 	s.workingSet = ws
 
 	root := ws.WorkingRoot()
-	if err := updateAutoIncrementSequences(ctx, root, s.tracker); err != nil {
-		return err
-	}
-
 	for tableName, localTableEditor := range s.tables {
 		t, ok, err := root.GetTable(ctx, tableName)
 		if err != nil {
