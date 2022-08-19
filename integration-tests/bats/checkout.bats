@@ -198,7 +198,7 @@ SQL
   [[ "$output" =~ "8" ]] || false
 }
 
-@test "commit --amend adds new changes to existing commit" {
+@test "checkout: commit --amend adds new changes to existing commit" {
   dolt sql -q "create table test (id int primary key);"
   dolt sql -q 'insert into test (id) values (8);'
   dolt add .
