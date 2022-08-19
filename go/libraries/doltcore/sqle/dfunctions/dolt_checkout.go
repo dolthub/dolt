@@ -103,7 +103,7 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	} else if isBranch {
 		err = checkoutBranch(ctx, dbName, roots, dbData, name)
 		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-			err = checkoutRemoteBranch(ctx, dbName, dbData, roots, name)
+			err = checkoutRemoteBranch(ctx, dSess, dbName, dbData, roots, name)
 		}
 		if err != nil {
 			return 1, err
@@ -113,7 +113,7 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 
 	err = checkoutTables(ctx, roots, dbName, args)
 	if err != nil && apr.NArg() == 1 {
-		err = checkoutRemoteBranch(ctx, dbName, dbData, roots, name)
+		err = checkoutRemoteBranch(ctx, dSess, dbName, dbData, roots, name)
 	}
 
 	if err != nil {
@@ -123,9 +123,9 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	return 0, nil
 }
 
-func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, roots doltdb.Roots, branchName string) error {
-	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
-	if err != nil {
+func checkoutRemoteBranch(ctx *sql.Context, sess *dsess.DoltSession, dbName string, dbData env.DbData, roots doltdb.Roots, branchName string) error {
+	remoteRefs, rErr := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
+	if rErr != nil {
 		return errors.New("fatal: unable to read from data repository")
 	}
 
@@ -133,7 +133,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, ro
 		return fmt.Errorf("error: could not find %s", branchName)
 	} else if len(remoteRefs) == 1 {
 		remoteRef := remoteRefs[0]
-		err = checkoutNewBranch(ctx, dbName, dbData, roots, branchName, remoteRef.String())
+		err := checkoutNewBranch(ctx, dbName, dbData, roots, branchName, remoteRef.String())
 		if err != nil {
 			return err
 		}

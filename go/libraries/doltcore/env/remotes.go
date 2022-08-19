@@ -231,24 +231,31 @@ func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoSt
 	return opts, nil
 }
 
+// NewFetchOpts returns remote and refSpec for given remote name. If remote name is not defined,
+// default remote is used. Default remote is "origin" if there are multiple remotes for now.
 func NewFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRefSpec, error) {
-	var err error
+	if len(args) == 0 {
+		r, err := GetDefaultRemote(rsr)
+		if err != nil {
+			return r, nil, err
+		}
+		rs, err := GetRefSpecs(rsr, r.Name)
+		if err != nil {
+			return r, nil, err
+		}
+		return r, rs, nil
+	}
+
 	remotes, err := rsr.GetRemotes()
 	if err != nil {
 		return NoRemote, nil, err
 	}
-
 	if len(remotes) == 0 {
 		return NoRemote, nil, ErrNoRemote
 	}
 
-	var remName string
-	if len(args) == 0 {
-		remName = "origin"
-	} else {
-		remName = args[0]
-		args = args[1:]
-	}
+	remName := args[0]
+	args = args[1:]
 
 	remote, ok := remotes[remName]
 	if !ok {
@@ -256,18 +263,12 @@ func NewFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRefSp
 		return NoRemote, nil, fmt.Errorf("%w; '%s' %s", ErrUnknownRemote, remName, msg)
 	}
 
-	var rs []ref.RemoteRefSpec
-	if len(args) != 0 {
-		rs, err = ParseRSFromArgs(remName, args)
-	} else {
-		rs, err = GetRefSpecs(rsr, remName)
-	}
-
+	remoteRF, err := ParseRSFromArgs(remName, args)
 	if err != nil {
 		return NoRemote, nil, err
 	}
 
-	return remote, rs, err
+	return remote, remoteRF, err
 }
 
 func ParseRSFromArgs(remName string, args []string) ([]ref.RemoteRefSpec, error) {
