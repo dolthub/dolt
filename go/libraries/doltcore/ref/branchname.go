@@ -33,9 +33,10 @@ var InvalidBranchNameRegex = regexp.MustCompile(strings.Join([]string{
 }, "|"))
 
 func IsValidBranchName(s string) bool {
-	if !InvalidBranchNameRegex.MatchString(s) {
+	if InvalidBranchNameRegex.MatchString(s) {
 		return false
 	}
+
 	if err := datas.ValidateDatasetId(s); err != nil {
 		return false
 	}

@@ -241,6 +241,7 @@ func TestValidateDatasetId(t *testing.T) {
 		{"f!!", true},
 		{"!!", true},
 		{"refs/heads/", false},
+		{"refs/heads/.", false},
 		{"refs/heads/hello", true},
 		{"refs/heads//hello", true},
 		{"refs/heads/hello world", false},
@@ -248,12 +249,16 @@ func TestValidateDatasetId(t *testing.T) {
 		{"refs/heads/hello\nworld", false},
 		{"refs/heads/hello@world", true},
 		{"refs/heads/hello-world", true},
+		{"refs/heads\x00/hello-world", false},
 		{"refs/heads/hello-world.", false},
 		{"refs/heads/hello..world", false},
 		{"refs/heads/helloworld]]", true},
 		{"refs/heads/hello[world", false},
 		{"refs/heads/hello@{world}", false},
 		{"refs/heads/hello-worبld", false},
+		{"refs/.lock/hello-world", false},
+		{"refs/heads/.lock", false},
+		{"refs/heads/must.lockme", true},
 	}
 
 	for _, c := range cases {

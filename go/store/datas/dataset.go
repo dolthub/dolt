@@ -42,7 +42,9 @@ const (
 	refnameIllegal   refnameAction = 4
 )
 
-// ValidateDatasetId returns ErrInvalidDatasetID if the given dataset ID is invalid
+// ValidateDatasetId returns ErrInvalidDatasetID if the given dataset ID is invalid.
+// See rules in |validateDatasetIdComponent|
+// git additionally requires at least 2 path components to a ref, which we do not
 func ValidateDatasetId(refname string) error {
 	var componentCount int
 
@@ -71,23 +73,18 @@ func ValidateDatasetId(refname string) error {
 		refname = refname[componentLen:]
 	}
 
-	// if componentCount < 2 {
-	// 	// Refname has only one component
-	// 	return ErrInvalidDatasetID
-	// }
-
 	return nil
 }
 
 // How to handle various characters in refnames:
 // 0: An acceptable character for refs
-// 1: End-of-component
+// 1: End-of-component ('/')
 // 2: ., look for a preceding . to reject .. in refs
 // 3: {, look for a preceding @ to reject @{ in refs
 // 4: A bad character: ASCII control characters, and
 //    ":", "?", "[", "\", "^", "~", SP, or TAB
 var refnameActions = [256]refnameAction{
-	1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+	4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
 	4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
 	4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 2, 1,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 4,
@@ -113,10 +110,6 @@ func validateDatasetIdComponent(refname string) (int, error) {
 		return -1, ErrInvalidDatasetID
 	}
 
-	if strings.HasSuffix(refname, ".lock") {
-		return -1, ErrInvalidDatasetID
-	}
-
 	var last rune
 	numChars := 0
 
@@ -130,6 +123,9 @@ func validateDatasetIdComponent(refname string) (int, error) {
 		switch refnameActions[ch] {
 		case refnameOk:
 		case refnameEof:
+			if strings.HasSuffix(refname[:numChars-1], ".lock") {
+				return -1, ErrInvalidDatasetID
+			}
 			return numChars, nil
 		case refnameDot:
 			if last == '.' { // Refname contains ..
@@ -146,6 +142,10 @@ func validateDatasetIdComponent(refname string) (int, error) {
 		}
 
 		last = ch
+	}
+
+	if strings.HasSuffix(refname[:numChars], ".lock") {
+		return -1, ErrInvalidDatasetID
 	}
 
 	return numChars, nil
