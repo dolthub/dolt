@@ -42,12 +42,19 @@ type RevisionDatabaseProvider interface {
 	GetRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, string, error)
 }
 
-// RevisionDatabase allows callers to query a revision database for the commit, branch, or tag it is pinned to.
+// RevisionDatabase allows callers to query a revision database for the commit, branch, or tag it is pinned to. For
+// example, when using a database with a branch revision specification, that database is only able to use that branch
+// and cannot change branch heads. Calling `Revision` on that database will return the branch name. Similarly, for
+// databases using a commit revision spec or a tag revision spec, Revision will return the commit or tag, respectively.
+// Currently, only explicit branch names, commit hashes, and tag names are allowed as database revision specs. Other
+// refspecs, such as "HEAD~2" are not supported yet.
 type RevisionDatabase interface {
-	// Revision returns the branch or commit to which this revision database is pinned. If there is no pinned revision,
-	// empty string is returned.
+	// Revision returns the specific branch, commit, or tag to which this revision database has been pinned. Other
+	// revision specifications (e.g. "HEAD~2") are not supported. If a database implements RevisionDatabase, but
+	// is not pinned to a specific revision, the empty string is returned.
 	Revision() string
 }
+
 type DoltDatabaseProvider interface {
 	sql.DatabaseProvider
 	RevisionDatabaseProvider
