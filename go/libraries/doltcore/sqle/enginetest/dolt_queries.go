@@ -127,15 +127,15 @@ var DescribeTableAsOfScriptTest = queries.ScriptTest{
 
 var DoltRevisionDbScripts = []queries.ScriptTest{
 	{
-		Name: "revision databases: tag-qualified revision dbs",
+		Name: "database revision specs: tag-qualified revision spec",
 		SetUpScript: []string{
 			"create table t01 (pk int primary key, c1 int)",
-			"call dolt_commit('-am', 'creating table t on main');",
+			"call dolt_commit('-am', 'creating table t01 on main');",
 			"insert into t01 values (1, 1), (2, 2);",
-			"call dolt_commit('-am', 'adding rows to table t on main');",
+			"call dolt_commit('-am', 'adding rows to table t01 on main');",
 			"call dolt_tag('tag1');",
 			"insert into t01 values (3, 3);",
-			"call dolt_commit('-am', 'adding another row to table t on main');",
+			"call dolt_commit('-am', 'adding another row to table t01 on main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -153,6 +153,10 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			{
 				Query:    "show databases;",
 				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/tag1"}, {"mysql"}},
+			},
+			{
+				Query:    "select * from t01;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
 			},
 			{
 				Query:          "call dolt_reset();",
@@ -185,15 +189,15 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "revision databases: branch-qualified revision dbs",
+		Name: "database revision specs: branch-qualified revision spec",
 		SetUpScript: []string{
 			"create table t01 (pk int primary key, c1 int)",
-			"call dolt_commit('-am', 'creating table t on main');",
+			"call dolt_commit('-am', 'creating table t01 on main');",
 			"insert into t01 values (1, 1), (2, 2);",
-			"call dolt_commit('-am', 'adding rows to table t on main');",
+			"call dolt_commit('-am', 'adding rows to table t01 on main');",
 			"call dolt_branch('branch1');",
 			"insert into t01 values (3, 3);",
-			"call dolt_commit('-am', 'adding another row to table t on main');",
+			"call dolt_commit('-am', 'adding another row to table t01 on main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -207,6 +211,10 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			{
 				Query:    "select database();",
 				Expected: []sql.Row{{"mydb/branch1"}},
+			},
+			{
+				Query:    "select * from t01",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
 			},
 			{
 				Query:    "call dolt_checkout('main');",

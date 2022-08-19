@@ -700,6 +700,88 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 	for _, script := range DoltRevisionDbScripts {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
+
+	// Testing a commit-qualified database revision spec requires
+	// a little extra work to get the generated commit hash
+	harness := newDoltHarness(t)
+	e, err := harness.NewEngine(t)
+	require.NoError(t, err)
+	defer e.Close()
+	ctx := harness.NewContext()
+
+	setupScripts := []setup.SetupScript{
+		{"create table t01 (pk int primary key, c1 int)"},
+		{"call dolt_commit('-am', 'creating table t01 on main');"},
+		{"insert into t01 values (1, 1), (2, 2);"},
+		{"call dolt_commit('-am', 'adding rows to table t01 on main');"},
+		{"insert into t01 values (3, 3);"},
+		{"call dolt_commit('-am', 'adding another row to table t01 on main');"},
+	}
+	_, err = enginetest.RunEngineScripts(ctx, harness.engine, setupScripts, true)
+	require.NoError(t, err)
+
+	sch, iter, err := harness.engine.Query(ctx, "select hashof('HEAD~2');")
+	require.NoError(t, err)
+	rows, err := sql.RowIterToRows(ctx, sch, iter)
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(rows))
+	commithash := rows[0][0].(string)
+
+	scriptTest := queries.ScriptTest{
+		Name: "database revision specs: commit-qualified revision spec",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+			},
+			{
+				Query:    "use mydb/" + commithash,
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb/" + commithash}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/" + commithash}, {"mysql"}},
+			},
+			{
+				Query:    "select * from t01",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:          "call dolt_reset();",
+				ExpectedErrStr: "unable to reset HEAD in read-only databases",
+			},
+			{
+				Query:    "call dolt_checkout('main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb"}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "use mydb;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb"}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+			},
+		},
+	}
+
+	enginetest.TestScript(t, harness, scriptTest)
 }
 
 func TestDoltRevisionDbScriptsPrepared(t *testing.T) {
