@@ -37,7 +37,7 @@ func StageAllTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, erro
 func StageModifiedAndDeletedTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
 	_, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
-		return nil, err
+		return doltdb.Roots{}, err
 	}
 
 	tbls := []string{}
