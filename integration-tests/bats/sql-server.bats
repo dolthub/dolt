@@ -838,6 +838,7 @@ SQL
 
     cd repo1
     dolt sql -q "create table test (pk int primary key)"
+    dolt add .
     dolt commit -a -m "Created new table"
     dolt sql -q "insert into test values (1), (2), (3)"
     dolt commit -a -m "Inserted 3 values"
@@ -1428,6 +1429,7 @@ END""")
 
     cd ../repo2
     dolt sql -q "create table test (a int)"
+    dolt add .
     dolt commit -am "new commit"
     dolt push -u remote1 main
 
@@ -1456,6 +1458,7 @@ databases:
     dolt sql -q "create table r1t_one (id1 int primary key, col1 varchar(20));"
     dolt sql -q "insert into r1t_one values (1,'aaaa'), (2,'bbbb'), (3,'cccc');"
     dolt sql -q "create table r1t_two (id2 int primary key, col2 varchar(20));"
+    dolt add .
     dolt commit -am "create two tables"
 
     cd ../repo2
@@ -1463,6 +1466,7 @@ databases:
     dolt sql -q "create table r2t_two (id2 int primary key, col2 varchar(20));"
     dolt sql -q "create table r2t_three (id3 int primary key, col3 varchar(20));"
     dolt sql -q "insert into r2t_three values (4,'dddd'), (3,'gggg'), (2,'eeee'), (1,'ffff');"
+    dolt add .
     dolt commit -am "create three tables"
 
     cd ..

@@ -100,6 +100,7 @@ teardown() {
 }
 
 @test "multiple-tables: dolt commit with -a flag adds all changes" {
+    dolt add .
     dolt sql -q "insert into test1 values (0, 1, 2, 3, 4, 5)"
     dolt sql -q "insert into test2 values (0, 1, 2, 3, 4, 5)"
     run dolt commit -a -m "Commit1"

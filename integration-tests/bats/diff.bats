@@ -77,6 +77,7 @@ create table test (pk int primary key, c1 int, c2 int);
 insert into test values (1,2,3);
 insert into test values (4,5,6);
 SQL
+    dolt add .
     dolt commit -am "First commit"
 
     dolt sql <<SQL
@@ -153,6 +154,7 @@ EOF
 }
 
 @test "diff: data diff only" {
+    dolt add .
     dolt commit -am "First commit"
 
     dolt sql -q "insert into test (pk) values (10);"
@@ -166,6 +168,7 @@ EOF
 }
 
 @test "diff: schema changes only" {
+    dolt add .
     dolt commit -am "First commit"
 
     dolt sql <<SQL
@@ -541,6 +544,7 @@ SQL
 
 @test "diff: diff summary incorrect primary key set change regression test" {
     dolt sql -q "create table testdrop (col1 varchar(20), id int primary key, col2 varchar(20))"
+    dolt add .
     dolt sql -q "insert into testdrop values ('test1', 1, 'test2')"
     dolt commit -am "Add testdrop table"
 
@@ -682,6 +686,7 @@ SQL
 
 @test "diff: sql update queries only show changed columns" {
     dolt sql -q "create table t(pk int primary key, val1 int, val2 int)"
+    dolt add .
     dolt sql -q "INSERT INTO t VALUES (1, 1, 1)"
 
     dolt commit -am "cm1"
@@ -718,6 +723,7 @@ SQL
 @test "diff: keyless sql diffs" {
     
     dolt sql -q "create table t(pk int, val int)"
+    dolt add .
     dolt commit -am "cm1"
 
     dolt sql -q "INSERT INTO t values (1, 1)"
@@ -780,6 +786,7 @@ SQL
 create table t(pk int, val int);
 insert into t values (1,1);
 SQL
+    dolt add .
     dolt commit -am "creating table"
 
     dolt sql -q "alter table t add primary key (pk)"
@@ -816,6 +823,7 @@ SQL
 
 @test "diff: created and dropped tables include schema and data changes in results" {
   dolt sql -q "create table a(pk int primary key)"
+  dolt add .
   dolt commit -am "creating table a"
   dolt sql -q "insert into a values (1), (2)"
   dolt commit -am "inserting data into table a"
@@ -840,6 +848,7 @@ SQL
 
 @test "diff: large diff does not drop rows" {
     dolt sql -q "create table t(pk int primary key, val int)"
+    dolt add .
 
     VALUES=""
     for i in {1..1000}

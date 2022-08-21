@@ -186,6 +186,7 @@ teardown() {
     dolt init
     dolt remote add origin file://../remote
     dolt sql -q "CREATE TABLE a (pk int)"
+    dolt add .
     dolt commit -am "add table a"
     dolt push --set-upstream origin main
     dolt checkout -b other
@@ -226,6 +227,7 @@ teardown() {
     dolt init
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql -q "CREATE TABLE test (pk INT)"
+    dolt add .
     dolt commit -am "main commit"
     dolt push test-remote main
     run dolt branch -a
@@ -276,6 +278,7 @@ SQL
     dolt init
     dolt remote add origin file://../remote
     dolt sql -q "CREATE TABLE a (pk int)"
+    dolt add .
     dolt commit -am "add table a"
     dolt push --set-upstream origin main
     dolt checkout -b other
@@ -365,6 +368,7 @@ SQL
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
     dolt sql -q "create table t1(c0 varchar(100));"
+    dolt add .
     dolt commit -am "adding table t1"
     run dolt push test-remote test-branch
     [ "$status" -eq 0 ]
@@ -1829,6 +1833,7 @@ setup_ref_test() {
     cd repo2
     dolt checkout -b other
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt commit -am "adding table from other"
     dolt push origin other
 
@@ -1893,6 +1898,7 @@ SQL
 
     dolt checkout main
     dolt sql -q "CREATE TABLE a(pk int primary key)"
+    dolt add .
     dolt commit -am "add table a"
     dolt push
 
@@ -1917,6 +1923,7 @@ SQL
 
     cd repo2
     dolt sql -q "CREATE TABLE test (id int primary key)"
+    dolt add .
     dolt commit -am "create table"
     run dolt push
     [ "$status" -eq "0" ]
@@ -2021,6 +2028,7 @@ SQL
     dolt init
     dolt remote add origin file://../remote
     dolt sql -q "CREATE TABLE a (pk int)"
+    dolt add .
     dolt commit -am "add table a"
     dolt push --set-upstream origin main
     dolt checkout -b other
@@ -2135,6 +2143,7 @@ create table new_table(a int primary key);
 insert into new_table values (1), (2);
 SQL
     cd repo2
+    dolt add .
     dolt commit -am "a commit for main from repo2"
     dolt push origin main
     cd ..

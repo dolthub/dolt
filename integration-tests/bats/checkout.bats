@@ -15,6 +15,7 @@ teardown() {
 create table test(a int primary key);
 insert into test values (1);
 SQL
+    dolt add .
 
     dolt commit -am "Initial table with one row"
     dolt branch feature
@@ -59,6 +60,7 @@ create table test(a int primary key);
 insert into test values (1);
 SQL
 
+    dolt add .
     dolt commit -am "Initial table with one row"
     dolt branch feature
 

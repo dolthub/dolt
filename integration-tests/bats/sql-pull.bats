@@ -25,6 +25,7 @@ setup() {
     # table and commits only present on repo1, rem1 at start
     cd $TMPDIRS/repo1
     dolt sql -q "create table t1 (a int primary key, b int)"
+    dolt add .
     dolt commit -am "First commit"
     dolt sql -q "insert into t1 values (0,0)"
     dolt commit -am "Second commit"
@@ -424,6 +425,7 @@ teardown() {
 
     dolt checkout feature
     dolt sql -q "create table t2 (a int)"
+    dolt add .
     dolt commit -am "feature commit"
     dolt tag v3
     dolt push origin v3
@@ -446,6 +448,7 @@ teardown() {
 
     dolt checkout feature
     dolt sql -q "create table t2 (a int)"
+    dolt add .
     dolt commit -am "feature commit"
     dolt tag v3
     dolt push origin v3
