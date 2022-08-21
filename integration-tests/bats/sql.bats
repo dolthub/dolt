@@ -2398,6 +2398,7 @@ SQL
 
 @test "sql: dolt diff table correctly works with IN" {
     dolt sql -q "CREATE TABLE mytable(pk int primary key);"
+    dolt add .
     dolt sql -q "INSERT INTO mytable VALUES (1), (2)"
     dolt commit -am "Commit 1"
 

@@ -397,6 +397,7 @@ SQL
     [[ "$output" =~ 'local changes to the following tables would be overwritten by merge' ]] || false
 
     # Commit changes and test that a merge conflict fails the pull
+    dolt add .
     dolt commit -am "adding new t1 table"
     run dolt pull test-remote test-branch
     [ "$status" -eq 1 ]
@@ -1939,6 +1940,7 @@ SQL
     [[ "$output" =~ "1 commit" ]] || false
 
     dolt sql -q "CREATE TABLE different (id int primary key)"
+    dolt add .
     dolt commit -am "create different table"
 
     run dolt status
@@ -2174,6 +2176,7 @@ SQL
     cd repo2
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql -q "CREATE TABLE test_table (pk INT)"
+    dolt add .
     dolt commit -am "main commit"
     dolt push test-remote main
     cd ..
