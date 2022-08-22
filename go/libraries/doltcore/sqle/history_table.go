@@ -390,36 +390,46 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 		return nil, err
 	}
 
-	var sqlTable sql.IndexedTable
-	var newLookup sql.IndexLookup
-	if !lookup.IsEmpty() {
+	var partIter sql.PartitionIter
+	var histTable sql.Table
+	if lookup.IsEmpty() {
+		histTable = table
+		partIter, err = table.Partitions(ctx)
+		if err != nil {
+			return nil, err
+		}
+	} else {
 		indexes, err := table.GetIndexes(ctx)
 		if err != nil {
 			return nil, err
 		}
 		for _, idx := range indexes {
 			if idx.ID() == lookup.Index.ID() {
-				sqlTable = table.AsIndexedAccess(idx)
-				newLookup = sql.IndexLookup{Index: idx, Ranges: lookup.Ranges}
+				histTable = table.AsIndexedAccess(idx)
+				newLookup := sql.IndexLookup{Index: idx, Ranges: lookup.Ranges}
+				partIter, err = histTable.(sql.IndexedTable).LookupPartitions(ctx, newLookup)
+				if err != nil {
+					return nil, err
+				}
 				break
 			}
 		}
+		if histTable == nil {
+			histTable = table
+			partIter, err = table.Partitions(ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
-
-	if sqlTable == nil {
-		sqlTable = table.AsIndexedAccess(lookup.Index)
-	}
-
-	tablePartitions, err := sqlTable.LookupPartitions(ctx, newLookup)
 	if err != nil {
 		return nil, err
 	}
-
-	converter := rowConverter(sqlTable.Schema(), targetSchema, h, meta, projections)
+	converter := rowConverter(histTable.Schema(), targetSchema, h, meta, projections)
 
 	return &historyIter{
-		table:           sqlTable,
-		tablePartitions: tablePartitions,
+		table:           histTable,
+		tablePartitions: partIter,
 		rowConverter:    converter,
 	}, nil
 }

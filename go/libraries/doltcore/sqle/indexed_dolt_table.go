@@ -20,6 +20,70 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
+// IndexedDoltTable is a wrapper for a DoltTable and a doltIndexLookup. It implements the sql.Table interface like
+// DoltTable, but its RowIter function returns values that match the indexLookup, instead of all rows. It's returned by
+// the DoltTable WithIndexLookup function.
+type IndexedDoltTable struct {
+	table        *DoltTable
+	idx          index.DoltIndex
+	lb           index.LookupBuilder
+	isDoltFormat bool
+}
+
+func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
+	return &IndexedDoltTable{
+		table:        t,
+		idx:          idx,
+		isDoltFormat: types.IsFormat_DOLT(t.Format()),
+	}
+}
+
+var _ sql.IndexedTable = (*IndexedDoltTable)(nil)
+
+func (idt *IndexedDoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return idt.table.GetIndexes(ctx)
+}
+
+func (idt *IndexedDoltTable) Name() string {
+	return idt.table.Name()
+}
+
+func (idt *IndexedDoltTable) String() string {
+	return idt.table.String()
+}
+
+func (idt *IndexedDoltTable) Schema() sql.Schema {
+	return idt.table.Schema()
+}
+
+func (idt *IndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	return index.NewRangePartitionIter(ctx, idt.table, lookup, idt.isDoltFormat)
+}
+
+func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+	panic("not implemented")
+}
+
+func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	if idt.lb == nil {
+		idt.lb = index.NewLookupBuilder(part, idt.idx, nil, idt.table.sqlSch, idt.isDoltFormat)
+	}
+
+	return idt.lb.NewRowIter(ctx, part)
+}
+
+func (idt *IndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	if idt.lb == nil {
+		idt.lb = index.NewLookupBuilder(part, idt.idx, nil, idt.table.sqlSch, idt.isDoltFormat)
+	}
+
+	return idt.lb.NewRowIter(ctx, part)
+}
+
+func (idt *IndexedDoltTable) IsTemporary() bool {
+	return idt.table.IsTemporary()
+}
+
 var _ sql.IndexedTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.UpdatableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.DeletableTable = (*WritableIndexedDoltTable)(nil)
@@ -28,8 +92,6 @@ var _ sql.StatisticsTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.ProjectedTable = (*WritableIndexedDoltTable)(nil)
 
 func NewWritableIndexedDoltTable(t *WritableDoltTable, idx index.DoltIndex) *WritableIndexedDoltTable {
-	//todo backfill doltIndexedLookup info
-	// like index and durable state
 	return &WritableIndexedDoltTable{
 		WritableDoltTable: t,
 		idx:               idx,

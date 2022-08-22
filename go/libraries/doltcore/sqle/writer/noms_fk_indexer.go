@@ -30,24 +30,22 @@ type nomsFkIndexer struct {
 	nrr     *noms.ReadRange
 }
 
-var _ sql.Table = nomsFkIndexer{}
-var _ sql.IndexedTable = nomsFkIndexer{}
+var _ sql.Table = (*nomsFkIndexer)(nil)
+var _ sql.IndexedTable = (*nomsFkIndexer)(nil)
 
-func (n nomsFkIndexer) Name() string {
+func (n *nomsFkIndexer) Name() string {
 	return n.writer.tableName
 }
 
-func (n nomsFkIndexer) String() string {
+func (n *nomsFkIndexer) String() string {
 	return n.writer.tableName
 }
 
-func (n nomsFkIndexer) Schema() sql.Schema {
+func (n *nomsFkIndexer) Schema() sql.Schema {
 	return n.writer.sqlSch
 }
 
-func (n nomsFkIndexer) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
-	//TODO implement me
-	panic("implement me")
+func (n *nomsFkIndexer) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	nrr, err := index.NomsRangesFromIndexLookup(ctx, lookup)
 	if err != nil {
 		return nil, err
@@ -56,11 +54,11 @@ func (n nomsFkIndexer) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup
 	return sql.PartitionsToPartitionIter(fkDummyPartition{}), nil
 }
 
-func (n nomsFkIndexer) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+func (n *nomsFkIndexer) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return sql.PartitionsToPartitionIter(fkDummyPartition{}), nil
 }
 
-func (n nomsFkIndexer) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+func (n *nomsFkIndexer) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
 	dRows, err := n.writer.tableEditor.GetIndexedRows(ctx, n.nrr.Start, n.idxName, n.idxSch)
 	if err != nil {
 		return nil, err

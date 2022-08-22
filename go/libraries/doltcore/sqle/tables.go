@@ -216,7 +216,7 @@ var _ doltReadOnlyTableInterface = (*DoltTable)(nil)
 
 // AsIndexedAccess implements sql.IndexAddressableTable
 func (t *DoltTable) AsIndexedAccess(idx sql.Index) sql.IndexedTable {
-	return t.AsIndexedAccess(idx)
+	return NewIndexedDoltTable(t, idx.(index.DoltIndex))
 }
 
 // doltTable returns the underlying doltTable from the current session
