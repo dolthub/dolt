@@ -1013,33 +1013,25 @@ SQL
     run dolt diff HEAD~1 HEAD
     [ $status -eq 0 ]
 
-    [[ "$output" =~ ' CREATE TABLE `t1` (' ]] || false
-    [[ "$output" =~ '-  `pk` int NOT NULL,' ]] || false
-    [[ "$output" =~ '+  `pk2` int NOT NULL,' ]] || false
-    [[ "$output" =~ '   `col1` int,' ]] || false
-    [[ "$output" =~ '-  PRIMARY KEY (`pk`)' ]] || false
-    [[ "$output" =~ '+  PRIMARY KEY (`pk2`)' ]] || false
-    [[ "$output" =~ ' ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;' ]] || false
-    [[ "$output" =~ '+---+------+------+------+' ]] || false
-    [[ "$output" =~ '|   | pk   | col1 | pk2  |' ]] || false
-    [[ "$output" =~ '+---+------+------+------+' ]] || false
-    [[ "$output" =~ '| < | 1    | 1    | NULL |' ]] || false
-    [[ "$output" =~ '| > | NULL | 100  | 1    |' ]] || false
-    [[ "$output" =~ '+---+------+------+------+' ]] || false
+    EXPECTED_TABLE=$(cat <<'EOF'
++---+------+------+------+
+|   | pk   | col1 | pk2  |
++---+------+------+------+
+| < | 1    | 1    | NULL |
+| > | NULL | 100  | 1    |
++---+------+------+------+
+EOF
+)
+    [[ "$output" =~ "$EXPECTED_TABLE" ]]
 
-    [[ "$output" =~ 'CREATE TABLE `t2` (' ]] || false
-    [[ "$output" =~ '-  `pk1a` int NOT NULL,' ]] || false
-    [[ "$output" =~ '-  `pk1b` int NOT NULL,' ]] || false
-    [[ "$output" =~ '+  `pk2a` int NOT NULL,' ]] || false
-    [[ "$output" =~ '+  `pk2b` int NOT NULL,' ]] || false
-    [[ "$output" =~ '   `col1` int,' ]] || false
-    [[ "$output" =~ '-  PRIMARY KEY (`pk1a`,`pk1b`)' ]] || false
-    [[ "$output" =~ '+  PRIMARY KEY (`pk2a`,`pk2b`)' ]] || false
-    [[ "$output" =~ ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;' ]] || false
-    [[ "$output" =~ '+---+------+------+------+------+------+' ]] || false
-    [[ "$output" =~ '|   | pk1a | pk1b | col1 | pk2a | pk2b |' ]] || false
-    [[ "$output" =~ '+---+------+------+------+------+------+' ]] || false
-    [[ "$output" =~ '| < | 1    | 1    | 1    | NULL | NULL |' ]] || false
-    [[ "$output" =~ '| > | NULL | NULL | 100  | 1    | 1    |' ]] || false
-    [[ "$output" =~ '+---+------+------+------+------+------+' ]] || false
+    EXPECTED_TABLE=$(cat <<'EOF'
++---+------+------+------+------+------+
+|   | pk1a | pk1b | col1 | pk2a | pk2b |
++---+------+------+------+------+------+
+| < | 1    | 1    | 1    | NULL | NULL |
+| > | NULL | NULL | 100  | 1    | 1    |
++---+------+------+------+------+------+
+EOF
+)
+    [[ "$output" =~ "$EXPECTED_TABLE" ]]
 }
