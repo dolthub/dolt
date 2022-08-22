@@ -226,7 +226,10 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 // Some functionality will not work on this kind of engine, e.g. many DOLT_ functions.
 func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*sql.Context, *engine.SqlEngine, error) {
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-	db := dsqle.NewDatabase(dbName, dEnv.DbData(), opts)
+	db, err := dsqle.NewDatabase(ctx, dbName, dEnv.DbData(), opts)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	if err != nil {

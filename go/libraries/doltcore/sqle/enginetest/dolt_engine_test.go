@@ -89,58 +89,80 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Temp playground for collation testing",
+			Name: "truncate table",
 			SetUpScript: []string{
-				"CREATE TABLE test1 (pk BIGINT PRIMARY KEY, v1 VARCHAR(255) COLLATE utf16_unicode_ci, INDEX(v1));",
-				"CREATE TABLE test2 (pk BIGINT PRIMARY KEY, v1 VARCHAR(255) COLLATE utf8mb4_0900_bin, INDEX(v1));",
-				"INSERT INTO test1 VALUES (1, 'abc'), (2, 'ABC'), (3, 'aBc'), (4, 'AbC');",
-				"INSERT INTO test2 VALUES (1, 'abc'), (2, 'ABC'), (3, 'aBc'), (4, 'AbC');",
+				"create table t (a int primary key auto_increment, b int)",
+				"call dolt_commit('-am', 'empty table')",
+				"call dolt_branch('branch1')",
+				"call dolt_branch('branch2')",
+				"insert into t (b) values (1), (2)",
+				"call dolt_commit('-am', 'two values on main')",
+				"call dolt_checkout('branch1')",
+				"insert into t (b) values (3), (4)",
+				"call dolt_commit('-am', 'two values on branch1')",
+				"call dolt_checkout('branch2')",
+				"insert into t (b) values (5), (6)",
+				"call dolt_checkout('branch1')",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "SELECT v1, pk FROM test1 ORDER BY pk;",
+					Query:    "truncate table t",
+					Expected: []sql.Row{{sql.NewOkResult(2)}},
+				},
+				{
+					Query:            "call dolt_checkout('main')",
+					SkipResultsCheck: true,
+				},
+				{
+					// highest value in any branch is 6
+					Query:    "insert into t (b) values (7), (8)",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+				},
+				{
+					Query: "select * from t order by a",
 					Expected: []sql.Row{
-						{"abc", 1}, {"ABC", 2}, {"aBc", 3}, {"AbC", 4},
+						{1, 1},
+						{2, 2},
+						{7, 7},
+						{8, 8},
 					},
 				},
 				{
-					Query: "SELECT v1, pk FROM test1 ORDER BY v1, pk;",
+					Query:    "truncate table t",
+					Expected: []sql.Row{{sql.NewOkResult(4)}},
+				},
+				{
+					Query:            "call dolt_checkout('branch2')",
+					SkipResultsCheck: true,
+				},
+				{
+					// highest value in any branch is still 6 (truncated table above)
+					Query:    "insert into t (b) values (7), (8)",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+				},
+				{
+					Query: "select * from t order by a",
 					Expected: []sql.Row{
-						{"abc", 1}, {"ABC", 2}, {"aBc", 3}, {"AbC", 4},
+						{5, 5},
+						{6, 6},
+						{7, 7},
+						{8, 8},
 					},
 				},
 				{
-					Query:    "SELECT v1, pk FROM test1 WHERE v1 > 'AbC' ORDER BY v1, pk;",
-					Expected: []sql.Row{},
+					Query:    "truncate table t",
+					Expected: []sql.Row{{sql.NewOkResult(4)}},
 				},
 				{
-					Query: "SELECT v1, pk FROM test1 WHERE v1 >= 'AbC' ORDER BY v1, pk;",
-					Expected: []sql.Row{
-						{"abc", 1}, {"ABC", 2}, {"aBc", 3}, {"AbC", 4},
-					},
+					// no value on any branch
+					Query:    "insert into t (b) values (1), (2)",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
 				},
 				{
-					Query: "SELECT v1, pk FROM test2 ORDER BY pk;",
+					Query: "select * from t order by a",
 					Expected: []sql.Row{
-						{"abc", 1}, {"ABC", 2}, {"aBc", 3}, {"AbC", 4},
-					},
-				},
-				{
-					Query: "SELECT v1, pk FROM test2 ORDER BY v1, pk;",
-					Expected: []sql.Row{
-						{"ABC", 2}, {"AbC", 4}, {"aBc", 3}, {"abc", 1},
-					},
-				},
-				{
-					Query: "SELECT v1, pk FROM test2 WHERE v1 > 'AbC' ORDER BY v1, pk;",
-					Expected: []sql.Row{
-						{"aBc", 3}, {"abc", 1},
-					},
-				},
-				{
-					Query: "SELECT v1, pk FROM test2 WHERE v1 >= 'AbC' ORDER BY v1, pk;",
-					Expected: []sql.Row{
-						{"AbC", 4}, {"aBc", 3}, {"abc", 1},
+						{1, 1},
+						{2, 2},
 					},
 				},
 			},
@@ -733,6 +755,15 @@ func TestShowCreateTableAsOf(t *testing.T) {
 	enginetest.TestScript(t, newDoltHarness(t), ShowCreateTableAsOfScriptTest)
 }
 
+func TestViewsWithAsOf(t *testing.T) {
+	enginetest.TestScript(t, newDoltHarness(t), ViewsWithAsOfScriptTest)
+}
+
+func TestViewsWithAsOfPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	enginetest.TestScriptPrepared(t, newDoltHarness(t), ViewsWithAsOfScriptTest)
+}
+
 func TestDoltMerge(t *testing.T) {
 	for _, script := range MergeScripts {
 		// dolt versioning conflicts with reset harness -- use new harness every time
@@ -743,6 +774,34 @@ func TestDoltMerge(t *testing.T) {
 		for _, script := range Dolt1MergeScripts {
 			enginetest.TestScript(t, newDoltHarness(t), script)
 		}
+	}
+}
+
+func TestDoltAutoIncrement(t *testing.T) {
+	for _, script := range DoltAutoIncrementTests {
+		// doing commits on different branches is antagonistic to engine reuse, use a new engine on each script
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+
+	for _, script := range BrokenAutoIncrementTests {
+		t.Run(script.Name, func(t *testing.T) {
+			t.Skip()
+			enginetest.TestScript(t, newDoltHarness(t), script)
+		})
+	}
+}
+
+func TestDoltAutoIncrementPrepared(t *testing.T) {
+	for _, script := range DoltAutoIncrementTests {
+		// doing commits on different branches is antagonistic to engine reuse, use a new engine on each script
+		enginetest.TestScriptPrepared(t, newDoltHarness(t), script)
+	}
+
+	for _, script := range BrokenAutoIncrementTests {
+		t.Run(script.Name, func(t *testing.T) {
+			t.Skip()
+			enginetest.TestScriptPrepared(t, newDoltHarness(t), script)
+		})
 	}
 }
 
@@ -1318,7 +1377,7 @@ func TestDoltStorageFormat(t *testing.T) {
 	if types.IsFormat_DOLT(types.Format_Default) {
 		expectedFormatString = "NEW ( __DOLT__ )"
 	} else {
-		expectedFormatString = "OLD ( __LD_1__ )"
+		expectedFormatString = fmt.Sprintf("OLD ( %s )", types.Format_Default.VersionString())
 	}
 	script := queries.ScriptTest{
 		Name: "dolt storage format function works",
@@ -1337,7 +1396,7 @@ func TestDoltStorageFormatPrepared(t *testing.T) {
 	if types.IsFormat_DOLT(types.Format_Default) {
 		expectedFormatString = "NEW ( __DOLT__ )"
 	} else {
-		expectedFormatString = "OLD ( __LD_1__ )"
+		expectedFormatString = fmt.Sprintf("OLD ( %s )", types.Format_Default.VersionString())
 	}
 	enginetest.TestPreparedQuery(t, newDoltHarness(t), "SELECT dolt_storage_format()", []sql.Row{{expectedFormatString}}, nil)
 }

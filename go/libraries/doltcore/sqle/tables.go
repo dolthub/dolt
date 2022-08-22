@@ -670,7 +670,8 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	}
 	numOfRows := int(rowData.Count())
 
-	newTable, err := truncate(ctx, table, sch)
+	sess := dsess.DSessFromSess(ctx.Session)
+	newTable, err := t.truncate(ctx, table, sch, sess)
 	if err != nil {
 		return 0, err
 	}
@@ -694,7 +695,12 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 
 // truncate returns an empty copy of the table given by setting the rows and indexes to empty. The schema can be
 // updated at the same time.
-func truncate(ctx *sql.Context, table *doltdb.Table, sch schema.Schema) (*doltdb.Table, error) {
+func (t *WritableDoltTable) truncate(
+	ctx *sql.Context,
+	table *doltdb.Table,
+	sch schema.Schema,
+	sess *dsess.DoltSession,
+) (*doltdb.Table, error) {
 	empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), table.NodeStore(), sch)
 	if err != nil {
 		return nil, err
@@ -707,6 +713,19 @@ func truncate(ctx *sql.Context, table *doltdb.Table, sch schema.Schema) (*doltdb
 
 	for _, idx := range sch.Indexes().AllIndexes() {
 		idxSet, err = idxSet.PutIndex(ctx, idx.Name(), empty)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	ws, err := sess.WorkingSet(ctx, t.db.name)
+	if err != nil {
+		return nil, err
+	}
+
+	if schema.HasAutoIncrement(sch) {
+		ddb, _ := sess.GetDoltDB(ctx, t.db.name)
+		err = t.db.removeTableFromAutoIncrementTracker(ctx, t.Name(), ddb, ws.Ref())
 		if err != nil {
 			return nil, err
 		}
@@ -1154,11 +1173,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	}
 
 	if column.AutoIncrement {
-		ws, err := t.db.GetWorkingSet(ctx)
-		if err != nil {
-			return err
-		}
-		ait, err := t.db.gs.GetAutoIncrementTracker(ctx, ws)
+		ait, err := t.db.gs.GetAutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}
@@ -1339,7 +1354,8 @@ func (t *AlterableDoltTable) RewriteInserter(
 		})
 	}
 
-	dt, err = truncate(ctx, dt, newSch)
+	// TODO: test for this when the table is auto increment and exists on another branch
+	dt, err = t.truncate(ctx, dt, newSch, sess)
 	if err != nil {
 		return nil, err
 	}
@@ -1365,7 +1381,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 
 	// TODO: figure out locking. Other DBs automatically lock a table during this kind of operation, we should probably
 	//  do the same. We're messing with global auto-increment values here and it's not safe.
-	ait, err := t.db.gs.GetAutoIncrementTracker(ctx, newWs)
+	ait, err := t.db.gs.GetAutoIncrementTracker(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1682,7 +1698,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 			return err
 		}
 
-		ait, err := t.db.gs.GetAutoIncrementTracker(ctx, ws)
+		ait, err := t.db.gs.GetAutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}
@@ -1690,6 +1706,17 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		// TODO: this isn't transactional, and it should be
 		ait.AddNewTable(t.tableName)
 		ait.Set(t.tableName, seq)
+	}
+
+	// If we're removing an auto inc property, we just need to update global auto increment tracking
+	if existingCol.AutoIncrement && !col.AutoIncrement {
+		// TODO: this isn't transactional, and it should be
+		sess := dsess.DSessFromSess(ctx.Session)
+		ddb, _ := sess.GetDoltDB(ctx, t.db.name)
+		err = t.db.removeTableFromAutoIncrementTracker(ctx, t.Name(), ddb, ws.Ref())
+		if err != nil {
+			return err
+		}
 	}
 
 	newRoot, err := root.PutTable(ctx, t.tableName, updatedTable)

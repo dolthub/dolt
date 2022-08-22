@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -44,6 +45,10 @@ type TableDelta struct {
 	ToName           string
 	FromTable        *doltdb.Table
 	ToTable          *doltdb.Table
+	FromNodeStore    tree.NodeStore
+	ToNodeStore      tree.NodeStore
+	FromVRW          types.ValueReadWriter
+	ToVRW            types.ValueReadWriter
 	FromSch          schema.Schema
 	ToSch            schema.Schema
 	FromFks          []doltdb.ForeignKey
@@ -70,6 +75,11 @@ func GetStagedUnstagedTableDeltas(ctx context.Context, roots doltdb.Roots) (stag
 // GetTableDeltas returns a slice of TableDelta objects for each table that changed between fromRoot and toRoot.
 // It matches tables across roots by finding Schemas with Column tags in common.
 func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (deltas []TableDelta, err error) {
+	fromVRW := fromRoot.VRW()
+	fromNS := fromRoot.NodeStore()
+	toVRW := toRoot.VRW()
+	toNS := toRoot.NodeStore()
+
 	fromDeltas := make([]TableDelta, 0)
 	err = fromRoot.IterTables(ctx, func(name string, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		c, err := fromRoot.GetForeignKeyCollection(ctx)
@@ -88,6 +98,10 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 			FromSch:          sch,
 			FromFks:          fks,
 			FromFksParentSch: parentSchs,
+			FromVRW:          fromVRW,
+			FromNodeStore:    fromNS,
+			ToVRW:            toVRW,
+			ToNodeStore:      toNS,
 		})
 		return
 	})
@@ -96,6 +110,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 	}
 
 	toDeltas := make([]TableDelta, 0)
+
 	err = toRoot.IterTables(ctx, func(name string, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		c, err := toRoot.GetForeignKeyCollection(ctx)
 		if err != nil {
@@ -114,6 +129,10 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 			ToSch:          sch,
 			ToFks:          fks,
 			ToFksParentSch: parentSchs,
+			FromVRW:        fromVRW,
+			FromNodeStore:  fromNS,
+			ToVRW:          toVRW,
+			ToNodeStore:    toNS,
 		})
 		return
 	})
@@ -371,7 +390,7 @@ func (td TableDelta) GetMaps(ctx context.Context) (from, to types.Map, err error
 			return from, to, err
 		}
 	} else {
-		from, _ = types.NewMap(ctx, td.ToTable.ValueReadWriter())
+		from, _ = types.NewMap(ctx, td.FromVRW)
 	}
 
 	if td.ToTable != nil {
@@ -380,7 +399,7 @@ func (td TableDelta) GetMaps(ctx context.Context) (from, to types.Map, err error
 			return from, to, err
 		}
 	} else {
-		to, _ = types.NewMap(ctx, td.FromTable.ValueReadWriter())
+		to, _ = types.NewMap(ctx, td.ToVRW)
 	}
 
 	return from, to, nil
@@ -388,13 +407,18 @@ func (td TableDelta) GetMaps(ctx context.Context) (from, to types.Map, err error
 
 // GetRowData returns the table's row data at the fromRoot and toRoot, or an empty map if the table did not exist.
 func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, err error) {
+	if td.FromTable == nil && td.ToTable == nil {
+		return nil, nil, fmt.Errorf("both from and to tables are missing from table delta")
+	}
+
 	if td.FromTable != nil {
 		from, err = td.FromTable.GetRowData(ctx)
 		if err != nil {
 			return from, to, err
 		}
 	} else {
-		from, _ = durable.NewEmptyIndex(ctx, td.ToTable.ValueReadWriter(), td.ToTable.NodeStore(), td.ToSch)
+		// If there is no |FromTable| use the |ToTable|'s schema to make the index.
+		from, _ = durable.NewEmptyIndex(ctx, td.FromVRW, td.FromNodeStore, td.ToSch)
 	}
 
 	if td.ToTable != nil {
@@ -403,7 +427,8 @@ func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, er
 			return from, to, err
 		}
 	} else {
-		to, _ = durable.NewEmptyIndex(ctx, td.FromTable.ValueReadWriter(), td.FromTable.NodeStore(), td.FromSch)
+		// If there is no |ToTable| use the |FromTable|'s schema to make the index.
+		to, _ = durable.NewEmptyIndex(ctx, td.ToVRW, td.ToNodeStore, td.FromSch)
 	}
 
 	return from, to, nil

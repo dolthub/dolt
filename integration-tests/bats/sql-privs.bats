@@ -183,6 +183,13 @@ teardown() {
     [[ "$output" =~ "privileges.db" ]] || false
 }
 
+@test "sql-privs: host option doesn't affect user" {
+    make_test_repo
+
+    start_sql_server_with_args --host 127.0.0.1 --user=dolt
+    server_query test_db 1 "select user, host from mysql.user order by user" "User,Host\ndolt,%"
+}
+
 @test "sql-privs: multiple doltcfg directories causes error" {
     # setup repo
     rm -rf test_db
@@ -215,7 +222,7 @@ teardown() {
     ! [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
-    server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema"
+    server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema\nmysql"
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt"
     server_query db1 1 "create user new_user" ""
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
@@ -285,7 +292,7 @@ teardown() {
     ! [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
-    server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema"
+    server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema\nmysql"
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt"
     server_query db1 1 "create user new_user" ""
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
@@ -316,7 +323,7 @@ teardown() {
     ! [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
 
-    server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema"
+    server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema\nmysql"
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt"
     server_query db1 1 "create user new_user" ""
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
@@ -368,7 +375,7 @@ teardown() {
     ! [[ "$output" =~ "privileges.db" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
 
-    server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema"
+    server_query db1 1 "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema\nmysql"
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt"
     server_query db1 1 "create user new_user" ""
     server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
@@ -387,4 +394,23 @@ teardown() {
     run ls doltcfgdir
     ! [[ "$output" =~ "privileges.db" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
+}
+
+@test "sql-privs: default to parent privilege file if current is missing" {
+    make_multi_test_repo
+
+    dolt init
+    start_sql_server_with_args --host 0.0.0.0 --user=dolt
+
+    server_query test_db 1 "create user new_user" ""
+    stop_sql_server
+    sleep 1
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
+    run ls -a .doltcfg
+    [[ "$output" =~ "privileges.db" ]] || false
+
+    cd db_dir
+    start_sql_server_with_args --host 0.0.0.0 --user=dolt
+    server_query db1 1 "select user from mysql.user order by user" "User\ndolt\nnew_user"
 }

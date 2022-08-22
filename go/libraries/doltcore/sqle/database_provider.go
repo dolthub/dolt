@@ -245,6 +245,11 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 		return err
 	}
 
+	// if calling process has a lockfile, also create one for new database
+	if env.FsIsLocked(p.fs) {
+		newEnv.Lock()
+	}
+
 	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
 	if err != nil {
 		return err
@@ -256,7 +261,11 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 		ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
 	}
 
-	db := NewDatabase(name, newEnv.DbData(), opts)
+	db, err := NewDatabase(ctx, name, newEnv.DbData(), opts)
+	if err != nil {
+		return err
+	}
+
 	formattedName := formatDbMapKeyName(db.Name())
 	p.databases[formattedName] = db
 	p.dbLocations[formattedName] = newEnv.FS
@@ -339,7 +348,11 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 		ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
 	}
 
-	db := NewDatabase(dbName, dEnv.DbData(), opts)
+	db, err := NewDatabase(ctx, dbName, dEnv.DbData(), opts)
+	if err != nil {
+		return err
+	}
+
 	p.databases[formatDbMapKeyName(db.Name())] = db
 
 	dbstate, err := GetInitialDBState(ctx, db)

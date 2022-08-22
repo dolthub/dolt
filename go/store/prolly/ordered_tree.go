@@ -51,7 +51,7 @@ func diffOrderedTrees[K, V ~[]byte, O ordering[K]](
 	cfn := func(left, right tree.Item) int {
 		return from.order.Compare(K(left), K(right))
 	}
-	differ, err := tree.DifferFromRoots(ctx, from.ns, from.root, to.root, cfn)
+	differ, err := tree.DifferFromRoots(ctx, from.ns, to.ns, from.root, to.root, cfn)
 	if err != nil {
 		return err
 	}

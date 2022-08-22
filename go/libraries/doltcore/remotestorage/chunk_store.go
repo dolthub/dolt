@@ -45,6 +45,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+var ErrCacheCapacityExceeded = errors.New("too much data: the cache capacity has been reached")
 var DownloadHedger *Hedger
 
 func init() {
@@ -630,7 +631,7 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.H
 					return nil
 				}
 				if dcs.cache.PutChunk(chunk) {
-					return errors.New("too much data...")
+					return ErrCacheCapacityExceeded
 				}
 				h := chunk.Hash()
 
@@ -736,7 +737,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 
 	if len(found) > 0 {
 		if dcs.cache.Put(found) {
-			return hash.HashSet{}, errors.New("too much data")
+			return hash.HashSet{}, ErrCacheCapacityExceeded
 		}
 	}
 
@@ -750,7 +751,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk) error {
 	cc := nbs.ChunkToCompressedChunk(c)
 	if dcs.cache.Put([]nbs.CompressedChunk{cc}) {
-		return errors.New("too much data")
+		return ErrCacheCapacityExceeded
 	}
 	return nil
 }
