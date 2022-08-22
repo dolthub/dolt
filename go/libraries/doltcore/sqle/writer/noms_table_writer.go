@@ -153,7 +153,12 @@ func (te *nomsTableWriter) IndexedAccess(i sql.Index) sql.IndexedTable {
 }
 
 func (te *nomsTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	panic("not implemented")
+	indexes := ctx.GetIndexRegistry().IndexesByTable(te.dbName, te.tableName)
+	ret := make([]sql.Index, len(indexes))
+	for i := range indexes {
+		ret[i] = indexes[i]
+	}
+	return ret, nil
 }
 
 // Close implements Closer

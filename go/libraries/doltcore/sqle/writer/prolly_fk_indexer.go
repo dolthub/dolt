@@ -50,11 +50,11 @@ func (n *prollyFkIndexer) Schema() sql.Schema {
 }
 
 func (n *prollyFkIndexer) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
-	rang, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
+	ranges, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
 	if err != nil {
 		return nil, err
 	}
-	n.pRange = rang[0]
+	n.pRange = ranges[0]
 	return sql.PartitionsToPartitionIter(fkDummyPartition{}), nil
 }
 
