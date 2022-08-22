@@ -23,12 +23,12 @@ package spec
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -139,7 +139,7 @@ func TestMemHashPathSpec(t *testing.T) {
 func TestMemDatasetPathSpec(t *testing.T) {
 	assert := assert.New(t)
 
-	spec, err := ForPath("mem::test.value[0]")
+	spec, err := ForPath("mem::test")
 	assert.NoError(err)
 	defer spec.Close()
 
@@ -156,8 +156,8 @@ func TestMemDatasetPathSpec(t *testing.T) {
 	assert.NoError(err)
 
 	value, err := spec.GetValue(context.Background())
-	assert.NoError(err)
-	assert.Equal(types.Float(42), value)
+	require.NoError(t, err)
+	assert.NotNil(value)
 }
 
 func TestNBSDatabaseSpec(t *testing.T) {
@@ -302,8 +302,6 @@ func TestForDatabase(t *testing.T) {
 }
 
 func TestForDataset(t *testing.T) {
-	assert := assert.New(t)
-
 	badSpecs := []string{
 		"mem",
 		"mem:",
@@ -314,28 +312,23 @@ func TestForDataset(t *testing.T) {
 		"nbs:",
 		"nbs:hello",
 		"aws://[t:b]/db",
-		"mem::foo.value",
 	}
 
 	for _, spec := range badSpecs {
-		_, err := ForDataset(spec)
-		assert.Error(err, spec)
-	}
-
-	invalidDatasetNames := []string{" ", "", "$", "#", ":", "\n", "💩"}
-	for _, s := range invalidDatasetNames {
-		_, err := ForDataset("mem::" + s)
-		assert.Error(err)
+		t.Run(spec, func(t *testing.T) {
+			_, err := ForDataset(spec)
+			assert.Error(t, err, spec)
+		})
 	}
 
 	validDatasetNames := []string{"a", "Z", "0", "/", "-", "_"}
 	for _, s := range validDatasetNames {
 		_, err := ForDataset("mem::" + s)
-		assert.NoError(err)
+		assert.NoError(t, err)
 	}
 
 	tmpDir, err := os.MkdirTemp("", "spec_test")
-	assert.NoError(err)
+	assert.NoError(t, err)
 	defer file.RemoveAll(tmpDir)
 
 	testCases := []struct {
@@ -348,6 +341,7 @@ func TestForDataset(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		assert := assert.New(t)
 		spec, err := ForDataset(tc.spec)
 		assert.NoError(err, tc.spec)
 		defer spec.Close()
@@ -410,114 +404,6 @@ func TestForPath(t *testing.T) {
 	}
 }
 
-func TestPinPathSpec(t *testing.T) {
-	assert := assert.New(t)
-
-	unpinned, err := ForPath("mem::foo.value")
-	assert.NoError(err)
-	defer unpinned.Close()
-
-	db := unpinned.GetDatabase(context.Background())
-	vrw := unpinned.GetVRW(context.Background())
-	ds, err := db.GetDataset(context.Background(), "foo")
-	assert.NoError(err)
-	_, err = datas.CommitValue(context.Background(), db, ds, types.Float(42))
-	assert.NoError(err)
-
-	pinned, ok := unpinned.Pin(context.Background())
-	assert.True(ok)
-	defer pinned.Close()
-
-	ds, err = db.GetDataset(context.Background(), "foo")
-	assert.NoError(err)
-	head, ok := ds.MaybeHead()
-	assert.True(ok)
-
-	assert.Equal(mustHash(head.Hash(vrw.Format())), pinned.Path.Hash)
-	assert.Equal(fmt.Sprintf("mem::#%s.value", mustHash(head.Hash(vrw.Format())).String()), pinned.String())
-	pinnedValue, err := pinned.GetValue(context.Background())
-	assert.NoError(err)
-	assert.Equal(types.Float(42), pinnedValue)
-	unpinnedValue, err := unpinned.GetValue(context.Background())
-	assert.NoError(err)
-	assert.Equal(types.Float(42), unpinnedValue)
-
-	ds, err = db.GetDataset(context.Background(), "foo")
-	assert.NoError(err)
-	_, err = datas.CommitValue(context.Background(), db, ds, types.Float(43))
-	assert.NoError(err)
-	pinnedValue, err = pinned.GetValue(context.Background())
-	assert.NoError(err)
-	assert.Equal(types.Float(42), pinnedValue)
-	unpinnedValue, err = unpinned.GetValue(context.Background())
-	assert.NoError(err)
-	assert.Equal(types.Float(43), unpinnedValue)
-}
-
-func TestPinDatasetSpec(t *testing.T) {
-	assert := assert.New(t)
-
-	unpinned, err := ForDataset("mem::foo")
-	assert.NoError(err)
-	defer unpinned.Close()
-
-	vrw := unpinned.GetVRW(context.Background())
-
-	db := unpinned.GetDatabase(context.Background())
-	ds, err := db.GetDataset(context.Background(), "foo")
-	assert.NoError(err)
-	_, err = datas.CommitValue(context.Background(), db, ds, types.Float(42))
-	assert.NoError(err)
-
-	pinned, ok := unpinned.Pin(context.Background())
-	assert.True(ok)
-	defer pinned.Close()
-
-	ds, err = db.GetDataset(context.Background(), "foo")
-	assert.NoError(err)
-	head, ok := ds.MaybeHead()
-	assert.True(ok)
-
-	commitValue := func(val types.Value) types.Value {
-		v, err := datas.GetCommittedValue(context.Background(), vrw, val)
-		d.PanicIfError(err)
-		d.PanicIfFalse(v != nil)
-		return v
-	}
-
-	assert.Equal(mustHash(head.Hash(vrw.Format())), pinned.Path.Hash)
-	assert.Equal(fmt.Sprintf("mem::#%s", mustHash(head.Hash(vrw.Format())).String()), pinned.String())
-	pinnedValue, err := pinned.GetValue(context.Background())
-	assert.NoError(err)
-	assert.Equal(types.Float(42), commitValue(pinnedValue))
-	headVal, ok, err := unpinned.GetDataset(context.Background()).MaybeHeadValue()
-	assert.NoError(err)
-	assert.True(ok)
-	assert.Equal(types.Float(42), headVal)
-
-	ds, err = db.GetDataset(context.Background(), "foo")
-	assert.NoError(err)
-	_, err = datas.CommitValue(context.Background(), db, ds, types.Float(43))
-	assert.NoError(err)
-	pinnedValue, err = pinned.GetValue(context.Background())
-	assert.NoError(err)
-	assert.Equal(types.Float(42), commitValue(pinnedValue))
-	headVal, ok, err = unpinned.GetDataset(context.Background()).MaybeHeadValue()
-	assert.NoError(err)
-	assert.True(ok)
-	assert.Equal(types.Float(43), headVal)
-}
-
-func TestAlreadyPinnedPathSpec(t *testing.T) {
-	assert := assert.New(t)
-
-	unpinned, err := ForPath("mem::#imgp9mp1h3b9nv0gna6mri53dlj9f4ql.value")
-	assert.NoError(err)
-	pinned, ok := unpinned.Pin(context.Background())
-	assert.True(ok)
-	assert.Equal(unpinned, pinned)
-}
-
 func TestMultipleSpecsSameNBS(t *testing.T) {
 	assert := assert.New(t)
 
@@ -558,8 +444,6 @@ func TestAcccessingInvalidSpec(t *testing.T) {
 		assert.Panics(func() { sp.Close() })
 		// Spec was created with ForDatabase, so dataset/path related functions
 		// should just fail not panic.
-		_, ok := sp.Pin(context.Background())
-		assert.False(ok)
 		assert.Equal(datas.Dataset{}, sp.GetDataset(context.Background()))
 		assert.Nil(sp.GetValue(context.Background()))
 	}
