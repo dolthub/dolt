@@ -177,6 +177,154 @@ var DescribeTableAsOfScriptTest = queries.ScriptTest{
 	},
 }
 
+var DoltRevisionDbScripts = []queries.ScriptTest{
+	{
+		Name: "database revision specs: tag-qualified revision spec",
+		SetUpScript: []string{
+			"create table t01 (pk int primary key, c1 int)",
+			"call dolt_commit('-am', 'creating table t01 on main');",
+			"insert into t01 values (1, 1), (2, 2);",
+			"call dolt_commit('-am', 'adding rows to table t01 on main');",
+			"call dolt_tag('tag1');",
+			"insert into t01 values (3, 3);",
+			"call dolt_commit('-am', 'adding another row to table t01 on main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+			},
+			{
+				Query:    "use mydb/tag1;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb/tag1"}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/tag1"}, {"mysql"}},
+			},
+			{
+				Query:    "select * from t01;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:          "call dolt_reset();",
+				ExpectedErrStr: "unable to reset HEAD in read-only databases",
+			},
+			{
+				Query:    "call dolt_checkout('main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb"}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "use mydb;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb"}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+			},
+		},
+	},
+	{
+		Name: "database revision specs: branch-qualified revision spec",
+		SetUpScript: []string{
+			"create table t01 (pk int primary key, c1 int)",
+			"call dolt_commit('-am', 'creating table t01 on main');",
+			"insert into t01 values (1, 1), (2, 2);",
+			"call dolt_commit('-am', 'adding rows to table t01 on main');",
+			"call dolt_branch('branch1');",
+			"insert into t01 values (3, 3);",
+			"call dolt_commit('-am', 'adding another row to table t01 on main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "use mydb/branch1;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/branch1"}, {"mysql"}},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb/branch1"}},
+			},
+			{
+				Query:    "select * from t01",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "call dolt_checkout('main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb"}},
+			},
+			{
+				Query:    "use mydb/branch1;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_reset();",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb/branch1"}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/branch1"}, {"mysql"}},
+			},
+			{
+				Query:    "create table working_set_table(pk int primary key);",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				// Create a table in the working set to verify the main db
+				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
+				Expected: []sql.Row{{"working_set_table"}},
+			},
+			{
+				Query:    "use mydb;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_checkout('branch1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
+				Expected: []sql.Row{{"working_set_table"}},
+			},
+		},
+	},
+}
+
 // DoltScripts are script tests specific to Dolt (not the engine in general), e.g. by involving Dolt functions. Break
 // this slice into others with good names as it grows.
 var DoltScripts = []queries.ScriptTest{
