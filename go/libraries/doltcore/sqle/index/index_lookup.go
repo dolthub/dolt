@@ -18,8 +18,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/val"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -30,18 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-func PartitionIndexedTableRows(ctx *sql.Context, idx sql.Index, part sql.Partition, pkSch sql.PrimaryKeySchema, columns []uint64) (sql.RowIter, error) {
-	rp := part.(rangePartition)
-	doltIdx := idx.(DoltIndex)
-
-	if types.IsFormat_DOLT(rp.durableState.Primary.Format()) {
-		return RowIterForProllyRange(ctx, doltIdx, rp.prollyRange, pkSch, columns, rp.durableState)
-	}
-
-	ranges := []*noms.ReadRange{rp.nomsRange}
-	return RowIterForNomsRanges(ctx, doltIdx, ranges, columns, rp.durableState)
-}
 
 func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup, pkSch sql.PrimaryKeySchema, columns []uint64) (sql.RowIter, error) {
 	idx := lookup.Index.(*doltIndex)
@@ -250,7 +236,6 @@ var _ LookupBuilder = (*baseLookupBuilder)(nil)
 var _ LookupBuilder = (*nomsLookupBuilder)(nil)
 var _ LookupBuilder = (*coveringLookupBuilder)(nil)
 var _ LookupBuilder = (*keylessLookupBuilder)(nil)
-var _ LookupBuilder = (*pointLookupBuilder)(nil)
 
 func (lb *baseLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	p := part.(rangePartition)
@@ -271,61 +256,6 @@ func (lb *coveringLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition
 func (lb *keylessLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	p := part.(rangePartition)
 	return newProllyKeylessIndexIter(ctx, lb.idx, p.prollyRange, lb.sch, lb.projections, p.durableState.Primary, p.durableState.Secondary)
-}
-
-// pointLookupBuilder optimizes constructing repeated secondary point lookups
-type pointLookupBuilder struct {
-	*baseLookupBuilder
-
-	// primary for default/keyless, secondary for covering
-	indexData prolly.Map
-
-	// cur for point lookup reuse
-	cur                           *tree.Cursor
-	keyDesc                       val.TupleDesc
-	pkMap, keyMap, valMap, ordMap val.OrdinalMapping
-	pkBld                         *val.TupleBuilder
-}
-
-// NewRowIter returns a new index iter for the given partition
-func (lb *pointLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	// TODO refresh durable state and everything downstream
-	// primary, secondary
-
-	p := part.(*rangePartition)
-	if !p.prollyRange.IsPointLookup(lb.keyDesc) {
-		// fallback to default constructor
-		return lb.baseLookupBuilder.NewRowIter(ctx, part)
-	}
-
-	rangeIter, err := lb.newPointLookup(p.prollyRange)
-	if err != nil {
-		return nil, err
-	}
-
-	return prollyIndexIter{
-		idx:       lb.idx,
-		indexIter: rangeIter,
-		primary:   lb.indexData,
-		pkBld:     lb.pkBld,
-		pkMap:     lb.pkMap,
-		keyMap:    lb.keyMap,
-		valMap:    lb.valMap,
-		ordMap:    lb.ordMap,
-		sqlSch:    lb.sch.Schema,
-	}, nil
-}
-
-func (lb *pointLookupBuilder) newPointLookup(rang prolly.Range) (prolly.MapIter, error) {
-	//todo move cursor to new point
-	key := val.Tuple(lb.cur.CurrentKey())
-	value := val.Tuple(lb.cur.CurrentValue())
-
-	if !rang.Matches(key) {
-		return prolly.EmptyPointLookup, nil
-	}
-
-	return prolly.NewPointLookup(key, value), nil
 }
 
 // boundsCase determines the case upon which the bounds are tested.

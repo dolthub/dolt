@@ -15,9 +15,10 @@
 package sqle
 
 import (
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // IndexedDoltTable is a wrapper for a DoltTable and a doltIndexLookup. It implements the sql.Table interface like
@@ -125,11 +126,10 @@ func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Part
 }
 
 func (t *WritableIndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter2, error) {
-	iter, err := index.PartitionIndexedTableRows(ctx, t.idx, part, t.sqlSch, t.projectedCols)
+	iter, err := t.PartitionRows(ctx, part)
 	if err != nil {
 		return nil, err
 	}
-
 	return iter.(sql.RowIter2), nil
 }
 

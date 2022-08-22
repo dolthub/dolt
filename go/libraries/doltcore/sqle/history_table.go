@@ -392,13 +392,7 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 
 	var partIter sql.PartitionIter
 	var histTable sql.Table
-	if lookup.IsEmpty() {
-		histTable = table
-		partIter, err = table.Partitions(ctx)
-		if err != nil {
-			return nil, err
-		}
-	} else {
+	if !lookup.IsEmpty() {
 		indexes, err := table.GetIndexes(ctx)
 		if err != nil {
 			return nil, err
@@ -414,19 +408,15 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 				break
 			}
 		}
-		if histTable == nil {
-			histTable = table
-			partIter, err = table.Partitions(ctx)
-			if err != nil {
-				return nil, err
-			}
+	}
+	if histTable == nil {
+		histTable = table
+		partIter, err = table.Partitions(ctx)
+		if err != nil {
+			return nil, err
 		}
 	}
-	if err != nil {
-		return nil, err
-	}
 	converter := rowConverter(histTable.Schema(), targetSchema, h, meta, projections)
-
 	return &historyIter{
 		table:           histTable,
 		tablePartitions: partIter,
