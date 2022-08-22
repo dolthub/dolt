@@ -98,7 +98,6 @@ func TestMemDatasetSpec(t *testing.T) {
 	assert.Equal("mem", spec.Protocol)
 	assert.Equal("", spec.DatabaseName)
 	assert.Equal("test", spec.Path.Dataset)
-	assert.True(spec.Path.Path.IsEmpty())
 
 	ds := spec.GetDataset(context.Background())
 	_, ok, err := spec.GetDataset(context.Background()).MaybeHeadValue()

@@ -180,18 +180,6 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	assert.True(mustGetCommittedValue(dsy.db, mustHead(dsy)).Equals(c))
 }
 
-func TestIdValidation(t *testing.T) {
-	assert := assert.New(t)
-	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewViewWithDefaultFormat())
-
-	invalidDatasetNames := []string{" ", "", "a ", " a", "$", "#", ":", "\n", "💩"}
-	for _, id := range invalidDatasetNames {
-		_, err := store.GetDataset(context.Background(), id)
-		assert.Error(err)
-	}
-}
-
 func TestHeadValueFunctions(t *testing.T) {
 	assert := assert.New(t)
 
@@ -262,11 +250,20 @@ func TestValidateDatasetId(t *testing.T) {
 	}
 
 	for _, c := range cases {
+		stg := &chunks.MemoryStorage{}
+		store := NewDatabase(stg.NewViewWithDefaultFormat())
+
 		t.Run(c.name, func(t *testing.T) {
 			err := ValidateDatasetId(c.name)
 			if c.valid {
 				assert.NoError(t, err)
+
+				_, err := store.GetDataset(context.Background(), c.name)
+				assert.NoError(t, err)
 			} else {
+				assert.Error(t, err)
+
+				_, err := store.GetDataset(context.Background(), c.name)
 				assert.Error(t, err)
 			}
 		})
