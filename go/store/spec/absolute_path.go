@@ -24,7 +24,6 @@ package spec
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -120,29 +119,4 @@ func (p AbsolutePath) String() (str string) {
 	}
 
 	return str
-}
-
-// ReadAbsolutePaths attempts to parse each path in 'paths' and resolve them.
-// If any path fails to parse correctly or if any path can be resolved to an
-// existing Noms Value, then this function returns (nil, error).
-func ReadAbsolutePaths(ctx context.Context, db datas.Database, vrw types.ValueReadWriter, paths ...string) ([]types.Value, error) {
-	r := make([]types.Value, 0, len(paths))
-	for _, ps := range paths {
-		p, err := NewAbsolutePath(ps)
-		if err != nil {
-			return nil, fmt.Errorf("invalid input path '%s'", ps)
-		}
-
-		v, err := p.Resolve(ctx, db, vrw)
-		if err != nil {
-			return nil, err
-		}
-
-		if v == nil {
-			return nil, fmt.Errorf("input path '%s' does not exist in database", ps)
-		}
-
-		r = append(r, v)
-	}
-	return r, nil
 }
