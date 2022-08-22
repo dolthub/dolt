@@ -112,10 +112,12 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 	}, nil
 }
 
-// MergeCommitSpec returns whether to create new commit and MergeStats object after performing merge and commits
-// if applied. If merge can fast-forward, no commit is returned. ExecNoFFMerge function call commits after merge.
-// If merge is not fast-forward, 'no-commit' flag is not defined and if there are no conflicts and/or
-// constraint violations, commit(true) is returned.
+// MergeCommitSpec applies a merge spec, potentially fast-forwarding the current branch HEAD, and returns two 
+// results: true if a new Dolt commit needs to be created to complete the merge, and a MergeStats object.
+// If the merge can be applied as a fast-forward merge, no commit is needed, so false is returned for the first result.
+// If the merge is a fast-forward merge, but --no-ff has been supplied, the ExecNoFFMerge function will call
+// commit after merging. If the merge is not fast-forward, the 'no-commit' flag is not defined, and if there are 
+// no conflicts and/or constraint violations, commit(true) is returned.
 // TODO forcing a commit with a constrain violation should warn users that subsequest
 // FF merges will not surface constraint violations on their own; constraint verify --all
 // is required to reify violations.
