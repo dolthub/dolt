@@ -68,19 +68,40 @@ func TestSingleQuery(t *testing.T) {
 
 	var test queries.QueryTest
 	test = queries.QueryTest{
-		Query: `SELECT * FROM mytable`,
+		Query: "select n, de from dolt_history_foo1 where commit_hash=@Commit1;",
 		Expected: []sql.Row{
-			{1},
+			{1, "Ein"},
+			{2, "Zwei"},
+			{3, "Drei"},
 		},
 	}
 
 	harness := newDoltHarness(t)
-	//engine := enginetest.NewEngine(t, harness)
-	//enginetest.CreateIndexes(t, harness, engine)
+	//harness.Setup(setup.MydbData, setup.MytableData)
+	engine, err := harness.NewEngine(t)
+	if err != nil {
+		panic(err)
+	}
+
+	setupQueries := []string{
+		"create table foo1 (n int, de varchar(20));",
+		"insert into foo1 values (1, 'Ein'), (2, 'Zwei'), (3, 'Drei');",
+		"set @Commit1 = dolt_commit('-am', 'inserting into foo1', '--date', '2022-08-06T12:00:00');",
+
+		"update foo1 set de='Eins' where n=1;",
+		"set @Commit2 = dolt_commit('-am', 'updating data in foo1', '--date', '2022-08-06T12:00:01');",
+
+		"insert into foo1 values (4, 'Vier');",
+		"set @Commit3 = dolt_commit('-am', 'inserting data in foo1', '--date', '2022-08-06T12:00:02');",
+	}
+
+	for _, q := range setupQueries {
+		enginetest.RunQuery(t, engine, harness, q)
+	}
+
 	//engine.Analyzer.Debug = true
 	//engine.Analyzer.Verbose = true
-
-	enginetest.TestQuery(t, harness, test.Query, test.Expected, test.ExpectedColumns, nil)
+	enginetest.TestQueryWithEngine(t, harness, engine, test)
 }
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
@@ -178,20 +199,43 @@ func TestSingleScript(t *testing.T) {
 func TestSingleQueryPrepared(t *testing.T) {
 	//t.Skip()
 
-	var test queries.QueryTest
-	test = queries.QueryTest{
-		Query: `select i from mytable where i = 1`,
-		Expected: []sql.Row{
-			{1},
-		},
-	}
-
 	harness := newDoltHarness(t)
 	//engine := enginetest.NewEngine(t, harness)
 	//enginetest.CreateIndexes(t, harness, engine)
 	//engine := enginetest.NewSpatialEngine(t, harness)
+	engine, err := harness.NewEngine(t)
+	if err != nil {
+		panic(err)
+	}
+
+	setupQueries := []string{
+		"create table foo1 (n int, de varchar(20));",
+		"insert into foo1 values (1, 'Ein'), (2, 'Zwei'), (3, 'Drei');",
+		"set @Commit1 = dolt_commit('-am', 'inserting into foo1', '--date', '2022-08-06T12:00:00');",
+
+		"update foo1 set de='Eins' where n=1;",
+		"set @Commit2 = dolt_commit('-am', 'updating data in foo1', '--date', '2022-08-06T12:00:01');",
+
+		"insert into foo1 values (4, 'Vier');",
+		"set @Commit3 = dolt_commit('-am', 'inserting data in foo1', '--date', '2022-08-06T12:00:02');",
+	}
+
+	for _, q := range setupQueries {
+		enginetest.RunQuery(t, engine, harness, q)
+	}
+
 	//engine.Analyzer.Debug = true
 	//engine.Analyzer.Verbose = true
+	
+	var test queries.QueryTest
+	test = queries.QueryTest{
+		Query: "select n, de from dolt_history_foo1 where commit_hash=@Commit1;",
+		Expected: []sql.Row{
+			{1, "Ein"},
+			{2, "Zwei"},
+			{3, "Drei"},
+		},
+	}
 
 	enginetest.TestPreparedQuery(t, harness, test.Query, test.Expected, nil)
 }

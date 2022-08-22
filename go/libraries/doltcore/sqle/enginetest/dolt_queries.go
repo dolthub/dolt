@@ -654,19 +654,19 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 }
 
 var HistorySystemTableScriptTests = []queries.ScriptTest{
-	//{
-	//	Name: "empty table",
-	//	SetUpScript: []string{
-	//		"create table t (n int, c varchar(20));",
-	//		"set @Commit1 = dolt_commit('-am', 'creating table t');",
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			Query:    "select count(*) from DOLT_HISTORY_t;",
-	//			Expected: []sql.Row{{0}},
-	//		},
-	//	},
-	//},
+	{
+		Name: "empty table",
+		SetUpScript: []string{
+			"create table t (n int, c varchar(20));",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from DOLT_HISTORY_t;",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
 	{
 		Name: "keyless table",
 		SetUpScript: []string{
@@ -681,22 +681,22 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			"set @Commit3 = dolt_commit('-am', 'inserting data in foo1', '--date', '2022-08-06T12:00:02');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
-			//{
-			//	Query:    "select count(*) from DOLT_HISTORY_foO1;",
-			//	Expected: []sql.Row{{10}},
-			//},
+			{
+				Query:    "select count(*) from DOLT_HISTORY_foO1;",
+				Expected: []sql.Row{{10}},
+			},
 			{
 				Query:    "select n, de from dolt_history_foo1 where commit_hash=@Commit1;",
 				Expected: []sql.Row{{1, "Ein"}, {2, "Zwei"}, {3, "Drei"}},
 			},
-			//{
-			//	Query:    "select n, de from dolt_history_Foo1 where commit_hash=@Commit2;",
-			//	Expected: []sql.Row{{1, "Eins"}, {2, "Zwei"}, {3, "Drei"}},
-			//},
-			//{
-			//	Query:    "select n, de from dolt_history_foo1 where commit_hash=@Commit3;",
-			//	Expected: []sql.Row{{1, "Eins"}, {2, "Zwei"}, {3, "Drei"}, {4, "Vier"}},
-			//},
+			{
+				Query:    "select n, de from dolt_history_Foo1 where commit_hash=@Commit2;",
+				Expected: []sql.Row{{1, "Eins"}, {2, "Zwei"}, {3, "Drei"}},
+			},
+			{
+				Query:    "select n, de from dolt_history_foo1 where commit_hash=@Commit3;",
+				Expected: []sql.Row{{1, "Eins"}, {2, "Zwei"}, {3, "Drei"}, {4, "Vier"}},
+			},
 		},
 	},
 	{
