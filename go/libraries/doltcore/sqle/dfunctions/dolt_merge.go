@@ -162,16 +162,6 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 		return ws, noConflictsOrViolations, threeWayMerge, fmt.Errorf("failed to get dbData")
 	}
 
-	autocommit, err := ctx.GetSessionVariable(ctx, sql.AutoCommitSessionVar)
-	if err != nil {
-		return ws, noConflictsOrViolations, threeWayMerge, err
-	}
-
-	ac, err := sql.ConvertToBool(autocommit)
-	if err != nil {
-		return ws, noConflictsOrViolations, threeWayMerge, err
-	}
-
 	canFF, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC)
 	if err != nil {
 		switch err {
@@ -232,7 +222,7 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 		return ws, noConflictsOrViolations, threeWayMerge, err
 	}
 
-	if !noCommit && ac {
+	if !noCommit {
 		_, err = DoDoltCommit(ctx, []string{"-m", msg})
 		if err != nil {
 			return ws, noConflictsOrViolations, threeWayMerge, fmt.Errorf("dolt_commit failed")
@@ -401,7 +391,10 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	mergeSpec, _, err := merge.NewMergeSpec(ctx, dbData.Rsr, ddb, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), t)
+	if apr.Contains(cli.NoCommitFlag) && apr.Contains(cli.CommitFlag) {
+		return nil, errors.New("cannot define both 'commit' and 'no-commit' flags at the same time")
+	}
+	mergeSpec, err := merge.NewMergeSpec(ctx, dbData.Rsr, ddb, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), t)
 	if err != nil {
 		return nil, err
 	}

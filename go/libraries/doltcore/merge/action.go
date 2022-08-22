@@ -53,41 +53,44 @@ type MergeSpec struct {
 	Date            time.Time
 }
 
-func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.DoltDB, roots doltdb.Roots, name, email, msg string, commitSpecStr string, squash bool, noff bool, force bool, noCommit bool, noEdit bool, date time.Time) (*MergeSpec, bool, error) {
+// NewMergeSpec returns MergeSpec object using arguments passed into this function, which are doltdb.Roots, username,
+// user email, commit msg, commitSpecStr, to squash, to noff, to force, noCommit, noEdit and date. This function
+// resolves head and merge commit, and it gets current diffs between current head and working set if it exists.
+func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.DoltDB, roots doltdb.Roots, name, email, msg, commitSpecStr string, squash, noff, force, noCommit, noEdit bool, date time.Time) (*MergeSpec, error) {
 	headCS, err := doltdb.NewCommitSpec("HEAD")
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	headCM, err := ddb.Resolve(context.TODO(), headCS, rsr.CWBHeadRef())
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	mergeCS, err := doltdb.NewCommitSpec(commitSpecStr)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	mergeCM, err := ddb.Resolve(context.TODO(), mergeCS, rsr.CWBHeadRef())
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	headH, err := headCM.HashOf()
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	mergeH, err := mergeCM.HashOf()
 	if err != nil {
-		return nil, false, err
+		return nil, err
 
 	}
 
 	stompedTblNames, workingDiffs, err := MergeWouldStompChanges(ctx, roots, mergeCM)
 	if err != nil {
-		return nil, false, fmt.Errorf("%w; %s", ErrFailedToDetermineMergeability, err.Error())
+		return nil, fmt.Errorf("%w; %s", ErrFailedToDetermineMergeability, err.Error())
 	}
 
 	return &MergeSpec{
@@ -106,10 +109,13 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 		Email:           email,
 		Name:            name,
 		Date:            date,
-	}, true, nil
+	}, nil
 }
 
-// MergeCommitSpec returns MergeStats after performing merge and commits if applied.
+// MergeCommitSpec returns whether to create new commit and MergeStats object after performing merge and commits
+// if applied. If merge can fast-forward, no commit is returned. ExecNoFFMerge function call commits after merge.
+// If merge is not fast-forward, 'no-commit' flag is not defined and if there are no conflicts and/or
+// constraint violations, commit(true) is returned.
 // TODO forcing a commit with a constrain violation should warn users that subsequest
 // FF merges will not surface constraint violations on their own; constraint verify --all
 // is required to reify violations.
@@ -129,10 +135,6 @@ func MergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (b
 		return false, tblStats, err
 	}
 
-	// merge will commit if
-	//   - '--no-commit' flag is NOT defined
-	//   - merge is NOT a fast-forward
-	//   - merge does NOT have conflicts or constraint violations
 	return !spec.NoCommit && !hasConflictOrViolations(tblStats), tblStats, nil
 }
 

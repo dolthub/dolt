@@ -1669,7 +1669,7 @@ SQL
     dolt commit -am "changes to b2"
 
     dolt checkout main
-    run dolt merge b1 -m "merge b1"
+    run dolt merge b1 -m "merge b1" --commit
     log_status_eq 0
     run dolt merge b2 -m "merge b2"
     log_status_eq 1

@@ -105,7 +105,7 @@ SQL
     dolt checkout main
     dolt sql -q "INSERT INTO t VALUES (2,2);"
     dolt add -A && dolt commit -m "added values on branch main"
-    run dolt merge other -m "merge"
+    run dolt merge other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT (content): Merge conflict in t" ]] || false
     run dolt status

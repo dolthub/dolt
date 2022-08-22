@@ -180,7 +180,7 @@ teardown() {
     dolt add test1
     dolt commit -m "add pk 0 = 2,2 to test1"
 
-    run dolt merge merge_branch --no-commit
+    run dolt merge merge_branch -m "merge_branch"
     log_status_eq 0
     [[ "$output" =~ "test1" ]] || false
 
@@ -431,8 +431,11 @@ SQL
     dolt sql -q "UPDATE test SET c1 = 2 where c1 = 22"
     dolt commit -am "added row"
 
-    skip "merge fails on unique index violation, should log conflict"
-    dolt merge other
+    run dolt merge other
+    log_status_eq 0
+
+    run dolt sql -q "select * from dolt_constraint_violations" -r=csv
+    [[ "$output" =~ "test,2" ]] || false
 }
 
 @test "merge: composite indexes should be consistent post-merge" {
@@ -817,6 +820,9 @@ SQL
     dolt merge other
     run dolt sql -r csv -q "SELECT * from dolt_constraint_violations";
     [[ "$output" =~ "t,1" ]]
+
+    run dolt status
+    [[ ! "$output" =~ "nothing to commit, working tree clean" ]]
 }
 
 @test "merge: ourRoot renames, theirRoot modifies" {
@@ -857,6 +863,18 @@ SQL
     dolt commit -am "add (2,3,4) to test1";
 
     dolt checkout main
+    run dolt merge other --no-commit --commit
+    log_status_eq 1
+    [[ "$output" =~ "cannot define both 'commit' and 'no-commit' flags at the same time" ]] || false
+
+    run dolt merge other --no-commit
+    log_status_eq 0
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "merge other" ]] || false
+
+    dolt reset --hard
     run dolt merge other -m "merge other"
     log_status_eq 0
 

@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	goisatty "github.com/mattn/go-isatty"
 	"io"
 	"os"
 	"strings"
@@ -222,9 +223,20 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 	return HandleVErrAndExitCode(verr, usage)
 }
 
+// getCommitMessageFromEditor opens editor to ask user for commit message if none defined from command line.
+// suggestedMsg will be returned if no-edit flag is defined or if this function was called from sql dolt_merge command.
 func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg string, noEdit bool) (string, error) {
-	// if message is not defined in dolt_merge, use suggestedMsg
 	if cli.ExecuteWithStdioRestored == nil || noEdit {
+		return suggestedMsg, nil
+	}
+
+	isTerminal := false
+	cli.ExecuteWithStdioRestored(func() {
+		if goisatty.IsTerminal(os.Stdout.Fd()) {
+			isTerminal = true
+		}
+	})
+	if !isTerminal {
 		return suggestedMsg, nil
 	}
 

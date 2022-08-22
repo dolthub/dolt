@@ -246,7 +246,7 @@ SQL
     dolt sql -q "INSERT INTO test VALUES (20,20),(NULL,21);"
     dolt add -A
     dolt commit -m "inserted 20 & 21 on main"
-    dolt merge other -m "merge other"
+    dolt merge other
 
     dolt sql -q "INSERT INTO test VALUES (NULL,22);"
     run dolt sql -q "SELECT pk FROM test WHERE c0 = 22 ORDER BY pk;" -r csv

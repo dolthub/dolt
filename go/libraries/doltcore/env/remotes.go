@@ -362,6 +362,9 @@ type PullSpec struct {
 	Branch     ref.DoltRef
 }
 
+// NewPullSpec returns PullSpec object using arguments passed into this function, which are remoteName, remoteRefName,
+// squash, noff, noCommit, noEdit,  refSpecs, force and remoteOnly. This function validates remote and gets remoteRef
+// for given remoteRefName; if it's not defined, it uses current branch to get its upstream branch if it exists.
 func NewPullSpec(_ context.Context, rsr RepoStateReader, remoteName, remoteRefName string, squash, noff, noCommit, noEdit, force, remoteOnly bool) (*PullSpec, error) {
 	refSpecs, err := GetRefSpecs(rsr, remoteName)
 	if err != nil {
