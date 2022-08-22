@@ -214,8 +214,8 @@ var _ doltReadOnlyTableInterface = (*DoltTable)(nil)
 // may be other cases.
 //var _ sql.ProjectedTable = (*DoltTable)(nil)
 
-// AsIndexedAccess implements sql.IndexAddressableTable
-func (t *DoltTable) AsIndexedAccess(idx sql.Index) sql.IndexedTable {
+// IndexedAccess implements sql.IndexAddressableTable
+func (t *DoltTable) IndexedAccess(idx sql.Index) sql.IndexedTable {
 	return NewIndexedDoltTable(t, idx.(index.DoltIndex))
 }
 
@@ -582,7 +582,7 @@ func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue)
 	return t.db.SetRoot(ctx, newRoot)
 }
 
-func (t *WritableDoltTable) AsIndexedAccess(idx sql.Index) sql.IndexedTable {
+func (t *WritableDoltTable) IndexedAccess(idx sql.Index) sql.IndexedTable {
 	return NewWritableIndexedDoltTable(t, idx.(index.DoltIndex))
 }
 

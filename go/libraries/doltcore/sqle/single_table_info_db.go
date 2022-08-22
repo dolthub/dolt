@@ -163,7 +163,7 @@ func (db *SingleTableInfoDatabase) GetForeignKeyUpdater(ctx *sql.Context) sql.Fo
 }
 
 // WithIndexLookup implements sql.IndexedTable.
-func (db *SingleTableInfoDatabase) AsIndexedAccess(sql.Index) sql.IndexedTable {
+func (db *SingleTableInfoDatabase) IndexedAccess(sql.Index) sql.IndexedTable {
 	return db
 }
 
@@ -250,6 +250,11 @@ type fmtIndex struct {
 	comment   string
 }
 
+// CanSupport implements sql.Index
+func (idx fmtIndex) CanSupport(r ...sql.Range) bool {
+	return true
+}
+
 // ID implements sql.Index
 func (idx fmtIndex) ID() string {
 	return idx.id
@@ -295,7 +300,7 @@ func (idx fmtIndex) IsGenerated() bool {
 }
 
 // NewLookup implements sql.Index
-func (idx fmtIndex) AsIndexedAccess(index sql.IndexLookup) (sql.IndexedTable, error) {
+func (idx fmtIndex) IndexedAccess(index sql.IndexLookup) (sql.IndexedTable, error) {
 	panic("unimplemented")
 }
 

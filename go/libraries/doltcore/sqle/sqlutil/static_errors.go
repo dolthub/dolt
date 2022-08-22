@@ -101,7 +101,7 @@ func (e *StaticErrorEditor) Close(*sql.Context) error {
 	return nil
 }
 
-func (e *StaticErrorEditor) AsIndexedAccess(index sql.Index) sql.IndexedTable {
+func (e *StaticErrorEditor) IndexedAccess(index sql.Index) sql.IndexedTable {
 	return &StaticErrorTable{nil, e.err}
 }
 

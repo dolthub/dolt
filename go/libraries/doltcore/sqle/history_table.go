@@ -83,7 +83,7 @@ func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return index.DoltHistoryIndexesFromTable(ctx, ht.doltTable.db.Name(), ht.Name(), tbl)
 }
 
-func (ht *HistoryTable) AsIndexedAccess(i sql.Index) sql.IndexedTable {
+func (ht *HistoryTable) IndexedAccess(i sql.Index) sql.IndexedTable {
 	return ht
 }
 
@@ -399,7 +399,7 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 		}
 		for _, idx := range indexes {
 			if idx.ID() == lookup.Index.ID() {
-				histTable = table.AsIndexedAccess(idx)
+				histTable = table.IndexedAccess(idx)
 				newLookup := sql.IndexLookup{Index: idx, Ranges: lookup.Ranges}
 				partIter, err = histTable.(sql.IndexedTable).LookupPartitions(ctx, newLookup)
 				if err != nil {

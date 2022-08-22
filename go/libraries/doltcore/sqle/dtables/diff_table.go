@@ -211,7 +211,7 @@ func (dt *DiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return index.DoltDiffIndexesFromTable(ctx, "", dt.name, dt.table)
 }
 
-func (dt *DiffTable) AsIndexedAccess(index sql.Index) sql.IndexedTable {
+func (dt *DiffTable) IndexedAccess(index sql.Index) sql.IndexedTable {
 	nt := *dt
 	return &nt
 }

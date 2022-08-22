@@ -143,7 +143,7 @@ func (te *nomsTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) e
 	return te.flush(ctx)
 }
 
-func (te *nomsTableWriter) AsIndexedAccess(i sql.Index) sql.IndexedTable {
+func (te *nomsTableWriter) IndexedAccess(i sql.Index) sql.IndexedTable {
 	idx := index.DoltIndexFromSqlIndex(i)
 	return &nomsFkIndexer{
 		writer:  te,

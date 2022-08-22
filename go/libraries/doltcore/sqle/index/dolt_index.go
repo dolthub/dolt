@@ -390,6 +390,11 @@ type doltIndex struct {
 
 var _ DoltIndex = (*doltIndex)(nil)
 
+// CanSupport implements sql.Index
+func (di *doltIndex) CanSupport(...sql.Range) bool {
+	return true
+}
+
 // ColumnExpressionTypes implements the interface sql.Index.
 func (di *doltIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
 	cets := make([]sql.ColumnExpressionType, len(di.columns))

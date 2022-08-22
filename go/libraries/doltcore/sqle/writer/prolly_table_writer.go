@@ -231,11 +231,16 @@ func (w *prollyTableWriter) StatementComplete(ctx *sql.Context) error {
 
 // GetIndexes implements sql.IndexAddressableTable.
 func (w *prollyTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	panic("not implemented")
+	indexes := ctx.GetIndexRegistry().IndexesByTable(w.dbName, w.tableName)
+	ret := make([]sql.Index, len(indexes))
+	for i := range indexes {
+		ret[i] = indexes[i]
+	}
+	return ret, nil
 }
 
-// AsIndexedAccess implements sql.IndexAddressableTable.
-func (w *prollyTableWriter) AsIndexedAccess(i sql.Index) sql.IndexedTable {
+// IndexedAccess implements sql.IndexAddressableTable.
+func (w *prollyTableWriter) IndexedAccess(i sql.Index) sql.IndexedTable {
 	idx := index.DoltIndexFromSqlIndex(i)
 	return &prollyFkIndexer{
 		writer: w,

@@ -21,9 +21,9 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// IndexedDoltTable is a wrapper for a DoltTable and a doltIndexLookup. It implements the sql.Table interface like
-// DoltTable, but its RowIter function returns values that match the indexLookup, instead of all rows. It's returned by
-// the DoltTable WithIndexLookup function.
+// IndexedDoltTable is a wrapper for a DoltTable. It implements the sql.Table interface like
+// DoltTable, but its RowIter function returns values that match a sql.Range, instead of all
+// rows. It's returned by the DoltTable.IndexedAccess function.
 type IndexedDoltTable struct {
 	table        *DoltTable
 	idx          index.DoltIndex
@@ -62,7 +62,7 @@ func (idt *IndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.Index
 }
 
 func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	panic("not implemented")
+	panic("should call LookupPartitions on an IndexedDoltTable")
 }
 
 func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {

@@ -242,7 +242,7 @@ func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 	}
 }
 
-func (t *TempTable) AsIndexedAccess(idx sql.Index) sql.IndexedTable {
+func (t *TempTable) IndexedAccess(idx sql.Index) sql.IndexedTable {
 	return t
 }
 
