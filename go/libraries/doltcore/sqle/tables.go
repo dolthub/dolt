@@ -200,7 +200,7 @@ func (t DoltTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (*Dolt
 type doltReadOnlyTableInterface interface {
 	sql.Table2
 	sql.TemporaryTable
-	sql.IndexedTable
+	sql.IndexAddressableTable
 	sql.ForeignKeyTable
 	sql.StatisticsTable
 	sql.CheckTable
@@ -214,12 +214,9 @@ var _ doltReadOnlyTableInterface = (*DoltTable)(nil)
 // may be other cases.
 //var _ sql.ProjectedTable = (*DoltTable)(nil)
 
-// WithIndexLookup implements sql.IndexedTable
-func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	return &IndexedDoltTable{
-		table:       t,
-		indexLookup: lookup,
-	}
+// IndexedAccess implements sql.IndexAddressableTable
+func (t *DoltTable) IndexedAccess(idx sql.Index) sql.IndexedTable {
+	return NewIndexedDoltTable(t, idx.(index.DoltIndex))
 }
 
 // doltTable returns the underlying doltTable from the current session
@@ -585,11 +582,8 @@ func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue)
 	return t.db.SetRoot(ctx, newRoot)
 }
 
-func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	return &WritableIndexedDoltTable{
-		WritableDoltTable: t,
-		indexLookup:       lookup,
-	}
+func (t *WritableDoltTable) IndexedAccess(idx sql.Index) sql.IndexedTable {
+	return NewWritableIndexedDoltTable(t, idx.(index.DoltIndex))
 }
 
 // WithProjections implements sql.ProjectedTable

@@ -390,6 +390,11 @@ type doltIndex struct {
 
 var _ DoltIndex = (*doltIndex)(nil)
 
+// CanSupport implements sql.Index
+func (di *doltIndex) CanSupport(...sql.Range) bool {
+	return true
+}
+
 // ColumnExpressionTypes implements the interface sql.Index.
 func (di *doltIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
 	cets := make([]sql.ColumnExpressionType, len(di.columns))
@@ -400,19 +405,6 @@ func (di *doltIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpress
 		}
 	}
 	return cets
-}
-
-// NewLookup implements the interface sql.Index.
-func (di *doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
-	if len(ranges) == 0 {
-		return nil, nil
-	}
-
-	if di.doltBinFormat {
-		return di.newProllyLookup(ctx, di.ns, ranges...)
-	}
-
-	return di.newNomsLookup(ctx, ranges...)
 }
 
 func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durableIndexState, error) {
@@ -466,7 +458,7 @@ func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durab
 	return ret, nil
 }
 
-func (di *doltIndex) newProllyLookup(ctx *sql.Context, ns tree.NodeStore, iranges ...sql.Range) (sql.IndexLookup, error) {
+func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, iranges ...sql.Range) ([]prolly.Range, error) {
 	//todo(max): it is important that *doltIndexLookup maintains a reference
 	// to empty sqlRanges, otherwise the analyzer will dismiss the index and
 	// chose a less optimal lookup index. This is a GMS concern, so GMS should
@@ -476,14 +468,10 @@ func (di *doltIndex) newProllyLookup(ctx *sql.Context, ns tree.NodeStore, irange
 	if err != nil {
 		return nil, err
 	}
-	return &doltIndexLookup{
-		idx:          di,
-		prollyRanges: pranges,
-		sqlRanges:    iranges,
-	}, nil
+	return pranges, nil
 }
 
-func (di *doltIndex) newNomsLookup(ctx *sql.Context, iranges ...sql.Range) (sql.IndexLookup, error) {
+func (di *doltIndex) nomsRanges(ctx *sql.Context, iranges ...sql.Range) ([]*noms.ReadRange, error) {
 	// This might remain nil if the given nomsRanges each contain an EmptyRange for one of the columns. This will just
 	// cause the lookup to return no rows, which is the desired behavior.
 	var readRanges []*noms.ReadRange
@@ -587,11 +575,7 @@ RangeLoop:
 		})
 	}
 
-	return &doltIndexLookup{
-		idx:        di,
-		nomsRanges: readRanges,
-		sqlRanges:  iranges,
-	}, nil
+	return readRanges, nil
 }
 
 func (di *doltIndex) sqlRowConverter(s *durableIndexState, columns []uint64) *KVToSqlRowConverter {
@@ -772,6 +756,11 @@ func pruneEmptyRanges(sqlRanges []sql.Range) (pruned []sql.Range, err error) {
 }
 
 func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.NodeStore, ranges []sql.Range, tb *val.TupleBuilder) ([]prolly.Range, error) {
+	ranges, err := pruneEmptyRanges(ranges)
+	if err != nil {
+		return nil, err
+	}
+
 	pranges := make([]prolly.Range, len(ranges))
 	for i := range pranges {
 		pranges[i] = prolly.Range{

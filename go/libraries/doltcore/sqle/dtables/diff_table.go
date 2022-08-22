@@ -203,18 +203,16 @@ func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.Ro
 	return dp.GetRowIter(ctx, dt.ddb, dt.joiner, dt.lookup)
 }
 
+func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	return dt.Partitions(ctx)
+}
+
 func (dt *DiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return index.DoltDiffIndexesFromTable(ctx, "", dt.name, dt.table)
 }
 
-func (dt *DiffTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	if lookup == nil {
-		return dt
-	}
-
+func (dt *DiffTable) IndexedAccess(index sql.Index) sql.IndexedTable {
 	nt := *dt
-	nt.lookup = lookup
-
 	return &nt
 }
 

@@ -212,7 +212,7 @@ func (m Map) IterOrdinalRange(ctx context.Context, start, stop uint64) (MapIter,
 
 // IterRange returns a mutableMapIter that iterates over a Range.
 func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
-	if rng.isPointLookup(m.keyDesc) {
+	if rng.IsPointLookup(m.keyDesc) {
 		return m.pointLookupFromRange(ctx, rng)
 	}
 
@@ -245,7 +245,7 @@ func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup,
 	key := val.Tuple(cur.CurrentKey())
 	value := val.Tuple(cur.CurrentValue())
 
-	if !rng.matches(key) {
+	if !rng.Matches(key) {
 		return &pointLookup{}, nil
 	}
 
@@ -284,6 +284,12 @@ func treeIterFromRange(
 
 	return &orderedTreeIter[val.Tuple, val.Tuple]{curr: start, stop: stopF, step: start.Advance}, nil
 }
+
+func NewPointLookup(k, v val.Tuple) *pointLookup {
+	return &pointLookup{k, v}
+}
+
+var EmptyPointLookup = &pointLookup{}
 
 type pointLookup struct {
 	k, v val.Tuple
