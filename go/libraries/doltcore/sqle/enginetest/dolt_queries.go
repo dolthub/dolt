@@ -3787,6 +3787,31 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Diff table shows diffs across primary key renames",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk1 int PRIMARY KEY);",
+			"INSERT INTO t values (1);",
+			"CREATE table t2 (pk1a int, pk1b int, PRIMARY KEY (pk1a, pk1b));",
+			"INSERT INTO t2 values (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'initial');",
+
+			"ALTER TABLE t RENAME COLUMN pk1 to pk2",
+			"ALTER TABLE t2 RENAME COLUMN pk1a to pk2a",
+			"ALTER TABLE t2 RENAME COLUMN pk1b to pk2b",
+			"CALL DOLT_COMMIT('-am', 'rename primary key')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT from_pk2, to_pk2, diff_type from dolt_diff_t;",
+				Expected: []sql.Row{{nil, 1, "added"}},
+			},
+			{
+				Query:    "SELECT from_pk2a, from_pk2b, to_pk2a, to_pk2b, diff_type from dolt_diff_t2;",
+				Expected: []sql.Row{{nil, nil, 2, 2, "added"}},
+			},
+		},
+	},
 }
 
 var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
@@ -4298,6 +4323,33 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				// Maybe confusing? We match the old table name as well
 				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD~', 'HEAD')",
 				Expected: []sql.Row{{3, 4, "HEAD~", "HEAD", "added"}},
+			},
+		},
+	},
+	{
+		Name: "Renaming a primary key column shows PK values in both the to and from columns",
+		SetUpScript: []string{
+			"CREATE TABLE t1 (pk int PRIMARY KEY, col1 int);",
+			"INSERT INTO t1 VALUES (1, 1);",
+			"CREATE TABLE t2 (pk1a int, pk1b int, col1 int, PRIMARY KEY (pk1a, pk1b));",
+			"INSERT INTO t2 VALUES (1, 1, 1);",
+			"CALL DOLT_COMMIT('-am', 'initial');",
+
+			"ALTER TABLE t1 RENAME COLUMN pk to pk2;",
+			"UPDATE t1 set col1 = 100;",
+			"ALTER TABLE t2 RENAME COLUMN pk1a to pk2a;",
+			"ALTER TABLE t2 RENAME COLUMN pk1b to pk2b;",
+			"UPDATE t2 set col1 = 100;",
+			"CALL DOLT_COMMIT('-am', 'edit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select to_pk2, to_col1, from_pk, from_col1, diff_type from dolt_diff('t1', 'HEAD~', 'HEAD')",
+				Expected: []sql.Row{{1, 100, 1, 1, "modified"}},
+			},
+			{
+				Query:    "select to_pk2a, to_pk2b, to_col1, from_pk1a, from_pk1b, from_col1, diff_type from dolt_diff('t2', 'HEAD~', 'HEAD');",
+				Expected: []sql.Row{{1, 1, 100, 1, 1, 1, "modified"}},
 			},
 		},
 	},
