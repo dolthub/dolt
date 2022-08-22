@@ -200,7 +200,7 @@ stop_sql_server() {
     SERVER_PID=
 }
 
-# server_query_with_user connects to a running mysql server,
+# server_query connects to a running mysql server,
 # executes a query (or list of queries separated by a `;`),
 # and compares the results against what is expected.
 #
