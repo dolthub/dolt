@@ -132,7 +132,7 @@ func DoDoltMerge(ctx *sql.Context, args []string) (int, int, error) {
 		msg = userMsg
 	}
 
-	ws, conflicts, fastForward, err := mergeIntoWorkingSet(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
+	ws, conflicts, fastForward, err := performMerge(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
 	if err != nil || conflicts != 0 || fastForward != 0 {
 		return conflicts, fastForward, err
 	}
@@ -140,13 +140,13 @@ func DoDoltMerge(ctx *sql.Context, args []string) (int, int, error) {
 	return conflicts, fastForward, nil
 }
 
-// mergeIntoWorkingSet encapsulates server merge logic, switching between
+// performMerge encapsulates server merge logic, switching between
 // fast-forward, no fast-forward, merge commit, and merging into working set.
 // Returns a new WorkingSet, whether there were merge conflicts, and whether a
 // fast-forward was performed. This commits the working set if merge is successful and
-// -no-commit flag is not defined and autocommit is on
+// 'no-commit' flag is not defined.
 // TODO FF merging commit with constraint violations requires `constraint verify`
-func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots, ws *doltdb.WorkingSet, dbName string, spec *merge.MergeSpec, noCommit bool, msg string) (*doltdb.WorkingSet, int, int, error) {
+func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots, ws *doltdb.WorkingSet, dbName string, spec *merge.MergeSpec, noCommit bool, msg string) (*doltdb.WorkingSet, int, int, error) {
 	// todo: allow merges even when an existing merge is uncommitted
 	if ws.MergeActive() {
 		return ws, noConflictsOrViolations, threeWayMerge, doltdb.ErrMergeActive

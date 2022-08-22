@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -175,29 +176,9 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				return handleCommitErr(ctx, dEnv, err, usage)
 			}
 
-			doCommit, tblToStats, mergeErr := merge.MergeCommitSpec(ctx, dEnv, spec)
+			tblToStats, mergeErr := performMerge(ctx, dEnv, spec, suggestedMsg)
 			hasConflicts, hasConstraintViolations := printSuccessStats(tblToStats)
-			res := handleMergeErr(ctx, dEnv, mergeErr, hasConflicts, hasConstraintViolations, usage)
-			if res != 0 {
-				return 1
-			}
-
-			if doCommit {
-				msg = spec.Msg
-				if spec.Msg == "" {
-					msg, err = getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, "", spec.NoEdit)
-					if err != nil {
-						return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-					}
-				}
-
-				res = CommitCmd{}.Exec(ctx, "commit", []string{"-m", msg}, dEnv)
-				if res != 0 {
-					return HandleVErrAndExitCode(errhand.BuildDError("dolt commit failed after merging").Build(), usage)
-				}
-			}
-
-			return 0
+			return handleMergeErr(ctx, dEnv, mergeErr, hasConflicts, hasConstraintViolations, usage)
 		}
 	}
 
@@ -487,4 +468,56 @@ func handleMergeErr(ctx context.Context, dEnv *env.DoltEnv, mergeErr error, hasC
 	}
 
 	return 0
+}
+
+// performMerge applies a merge spec, potentially fast-forwarding the current branch HEAD, and returns a MergeStats object.
+// If the merge can be applied as a fast-forward merge, no commit is needed.
+// If the merge is a fast-forward merge, but --no-ff has been supplied, the ExecNoFFMerge function will call
+// commit after merging. If the merge is not fast-forward, the --no-commit flag is not defined, and there are
+// no conflicts and/or constraint violations, this function will call commit after merging.
+// TODO (10/6/21 by Max) forcing a commit with a constraint violation should warn users that subsequent
+// FF merges will not surface constraint violations on their own; constraint verify --all
+// is required to reify violations.
+func performMerge(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec, suggestedMsg string) (map[string]*merge.MergeStats, error) {
+	var tblStats map[string]*merge.MergeStats
+	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
+		return nil, err
+	} else if ok {
+		if spec.Noff {
+			tblStats, err = merge.ExecNoFFMerge(ctx, dEnv, spec)
+			return tblStats, err
+		}
+		return nil, merge.ExecuteFFMerge(ctx, dEnv, spec)
+	}
+	tblStats, err := merge.ExecuteMerge(ctx, dEnv, spec)
+	if err != nil {
+		return tblStats, err
+	}
+
+	if !spec.NoCommit && !hasConflictOrViolations(tblStats) {
+		msg := spec.Msg
+		if spec.Msg == "" {
+			msg, err = getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, "", spec.NoEdit)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		res := CommitCmd{}.Exec(ctx, "commit", []string{"-m", msg}, dEnv)
+		if res != 0 {
+			return nil, fmt.Errorf("dolt commit failed after merging")
+		}
+	}
+
+	return tblStats, nil
+}
+
+// hasConflictOrViolations checks for conflicts or constraint violation regardless of a table being modified
+func hasConflictOrViolations(tblToStats map[string]*merge.MergeStats) bool {
+	for _, tblStats := range tblToStats {
+		if tblStats.Conflicts > 0 || tblStats.ConstraintViolations > 0 {
+			return true
+		}
+	}
+	return false
 }

@@ -112,34 +112,6 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 	}, nil
 }
 
-// MergeCommitSpec applies a merge spec, potentially fast-forwarding the current branch HEAD, and returns two
-// results: true if a new Dolt commit needs to be created to complete the merge, and a MergeStats object.
-// If the merge can be applied as a fast-forward merge, no commit is needed, so false is returned for the first result.
-// If the merge is a fast-forward merge, but --no-ff has been supplied, the ExecNoFFMerge function will call
-// commit after merging. If the merge is not fast-forward, the 'no-commit' flag is not defined, and if there are
-// no conflicts and/or constraint violations, commit(true) is returned.
-// TODO forcing a commit with a constrain violation should warn users that subsequest
-// FF merges will not surface constraint violations on their own; constraint verify --all
-// is required to reify violations.
-func MergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (bool, map[string]*MergeStats, error) {
-	var tblStats map[string]*MergeStats
-	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
-		return false, nil, err
-	} else if ok {
-		if spec.Noff {
-			tblStats, err = ExecNoFFMerge(ctx, dEnv, spec)
-			return false, tblStats, err
-		}
-		return false, nil, ExecuteFFMerge(ctx, dEnv, spec)
-	}
-	tblStats, err := ExecuteMerge(ctx, dEnv, spec)
-	if err != nil {
-		return false, tblStats, err
-	}
-
-	return !spec.NoCommit && !hasConflictOrViolations(tblStats), tblStats, nil
-}
-
 func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
 	mergedRoot, err := spec.MergeC.GetRootValue(ctx)
 
@@ -311,14 +283,4 @@ func conflictsAndViolations(tblToStats map[string]*MergeStats) (conflicts []stri
 		}
 	}
 	return
-}
-
-// hasConflictOrViolations checks for conflicts or constraint violation regardless of a table being modified
-func hasConflictOrViolations(tblToStats map[string]*MergeStats) bool {
-	for _, tblStats := range tblToStats {
-		if tblStats.Conflicts > 0 || tblStats.ConstraintViolations > 0 {
-			return true
-		}
-	}
-	return false
 }

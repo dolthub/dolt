@@ -174,7 +174,7 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 			}
 
 			msg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, dbData.Rsr.CWBHeadRef().GetPath())
-			ws, conflicts, fastForward, err = mergeIntoWorkingSet(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
+			ws, conflicts, fastForward, err = performMerge(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
 			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
 				return conflicts, fastForward, err
 			}

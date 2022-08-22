@@ -191,26 +191,11 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				return err
 			}
 
-			doCommit, tblStats, err := merge.MergeCommitSpec(ctx, dEnv, mergeSpec)
+			suggestedMsg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, dEnv.RepoStateReader().CWBHeadRef().GetPath())
+			tblStats, err := performMerge(ctx, dEnv, mergeSpec, suggestedMsg)
 			printSuccessStats(tblStats)
 			if err != nil {
 				return err
-			}
-
-			if doCommit {
-				msg := mergeSpec.Msg
-				if mergeSpec.Msg == "" {
-					suggestedMsg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, dEnv.RepoStateReader().CWBHeadRef().GetPath())
-					msg, err = getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, "", mergeSpec.NoEdit)
-					if err != nil {
-						return err
-					}
-				}
-
-				res := CommitCmd{}.Exec(ctx, "commit", []string{"-m", msg}, dEnv)
-				if res != 0 {
-					return fmt.Errorf("dolt commit failed after merging")
-				}
 			}
 		}
 		if !rsSeen {
