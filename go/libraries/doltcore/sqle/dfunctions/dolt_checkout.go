@@ -55,6 +55,11 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Empty database name.")
 	}
 
+	dbName, _, err := getRevisionForRevisionDatabase(ctx, dbName)
+	if err != nil {
+		return -1, err
+	}
+
 	apr, err := cli.CreateCheckoutArgParser().Parse(args)
 	if err != nil {
 		return 1, err
@@ -103,7 +108,7 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	} else if isBranch {
 		err = checkoutBranch(ctx, dbName, roots, dbData, name)
 		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-			err = checkoutRemoteBranch(ctx, dSess, dbName, dbData, roots, name)
+			err = checkoutRemoteBranch(ctx, dbName, dbData, roots, name)
 		}
 		if err != nil {
 			return 1, err
@@ -113,7 +118,7 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 
 	err = checkoutTables(ctx, roots, dbName, args)
 	if err != nil && apr.NArg() == 1 {
-		err = checkoutRemoteBranch(ctx, dSess, dbName, dbData, roots, name)
+		err = checkoutRemoteBranch(ctx, dbName, dbData, roots, name)
 	}
 
 	if err != nil {
@@ -123,9 +128,20 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	return 0, nil
 }
 
-func checkoutRemoteBranch(ctx *sql.Context, sess *dsess.DoltSession, dbName string, dbData env.DbData, roots doltdb.Roots, branchName string) error {
-	remoteRefs, rErr := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
-	if rErr != nil {
+// getRevisionForRevisionDatabase returns the root database name and revision for a database, or just the root database name if the specified db name is not a revision database.
+func getRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, string, error) {
+	doltsess, ok := ctx.Session.(*dsess.DoltSession)
+	if !ok {
+		return "", "", fmt.Errorf("unexpected session type: %T", ctx.Session)
+	}
+
+	provider := doltsess.Provider()
+	return provider.GetRevisionForRevisionDatabase(ctx, dbName)
+}
+
+func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, roots doltdb.Roots, branchName string) error {
+	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
+	if err != nil {
 		return errors.New("fatal: unable to read from data repository")
 	}
 
@@ -180,6 +196,10 @@ func checkoutBranch(ctx *sql.Context, dbName string, roots doltdb.Roots, dbData 
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branchName))
 	if err != nil {
 		return err
+	}
+
+	if ctx.GetCurrentDatabase() != dbName {
+		ctx.SetCurrentDatabase(dbName)
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)

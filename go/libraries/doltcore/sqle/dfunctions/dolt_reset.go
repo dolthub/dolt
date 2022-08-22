@@ -65,6 +65,21 @@ func DoDoltReset(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.HardResetParam, cli.SoftResetParam)
 	}
 
+	provider := dSess.Provider()
+	db, err := provider.Database(ctx, dbName)
+	if err != nil {
+		return 1, err
+	}
+
+	// Disallow manipulating any roots for read-only databases – changing the branch
+	// HEAD would allow changing data, and working set and index shouldn't ever have
+	// any contents for a read-only database.
+	if rodb, ok := db.(sql.ReadOnlyDatabase); ok {
+		if rodb.IsReadOnly() {
+			return 1, fmt.Errorf("unable to reset HEAD in read-only databases")
+		}
+	}
+
 	// Get all the needed roots.
 	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
