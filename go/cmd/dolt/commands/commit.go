@@ -18,12 +18,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	goisatty "github.com/mattn/go-isatty"
 	"io"
 	"os"
 	"strings"
 
 	"github.com/fatih/color"
+	goisatty "github.com/mattn/go-isatty"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
