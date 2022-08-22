@@ -1,6 +1,7 @@
 SERVER_REQS_INSTALLED="FALSE"
 SERVER_PID=""
 DEFAULT_DB=""
+
 PYTHON_QUERY_SCRIPT="
 import os
 import sys
@@ -9,158 +10,10 @@ args = sys.argv[sys.argv.index('--') + 1:]
 query_results = None
 expected_exception = None
 
-working_dir, database, port_str, auto_commit, query_strs = args[0:5]
-if len(args) > 5:
-   query_results = args[5]
-if len(args) > 6:
-   expected_exception = args[6]
-
-print('Query Strings: ' + query_strs)
-print('Working Dir: ' + working_dir)
-print('Database: ' + database)
-print('Port: ' + port_str)
-print('Autocommit: ' + auto_commit)
-print('Expected Results: ' + str(query_results))
-
-os.chdir(working_dir)
-
-if auto_commit == '1':
-    auto_commit = True
-else:
-    auto_commit = False
-
-from pytest import DoltConnection, csv_to_row_maps
-
-if not database:
-    dc = DoltConnection(port=int(port_str), database=None, user='dolt', auto_commit=auto_commit)
-else:
-    dc = DoltConnection(port=int(port_str), database=database, user='dolt', auto_commit=auto_commit)
-
-dc.connect()
-
-queries = query_strs.split(';')
-expected = [None]*len(queries)
-
-if query_results is not None:
-    expected = query_results.split(';')
-    if len(expected) < len(queries):
-        expected.extend(['']*(len(queries)-len(expected)))
-
-for i in range(len(queries)):
-    query_str = queries[i].strip()
-    print('executing:', query_str)
-
-    actual_rows, num_rows = None, None
-    try:
-        actual_rows, num_rows = dc.query(query_str, False)
-    except BaseException as e:
-        print('caught exception', str(e))
-        if expected_exception is not None and len(expected_exception) > 0:
-            if expected_exception not in str(e):
-                print('expected exception: ', expected_exception, '\n  got: ', str(e))
-                sys.exit(1)
-            continue
-        else:
-            sys.exit(1)
-
-    if expected[i] is not None:
-        expected_rows = csv_to_row_maps(expected[i])
-        if expected_rows != actual_rows:
-            print('expected:', expected_rows, '\n  actual:', actual_rows)
-            sys.exit(1)
-"
-
-PYTHON_QUERY_SCRIPT_WITH_USER="
-import os
-import sys
-
-args = sys.argv[sys.argv.index('--') + 1:]
-query_results = None
-expected_exception = None
-
-working_dir, database, port_str, auto_commit, username, query_strs = args[0:6]
-if len(args) > 6:
-   query_results = args[6]
-if len(args) > 7:
-   expected_exception = args[7]
-
-print('User: ' + username)
-print('Query Strings: ' + query_strs)
-print('Working Dir: ' + working_dir)
-print('Database: ' + database)
-print('Port: ' + port_str)
-print('Autocommit: ' + auto_commit)
-print('Expected Results: ' + str(query_results))
-
-os.chdir(working_dir)
-
-if auto_commit == '1':
-    auto_commit = True
-else:
-    auto_commit = False
-
-from pytest import DoltConnection, csv_to_row_maps
-
-if not database:
-    dc = DoltConnection(port=int(port_str), database=None, user=username, auto_commit=auto_commit)
-else:
-    dc = DoltConnection(port=int(port_str), database=database, user=username, auto_commit=auto_commit)
-
-try: 
-    dc.connect()
-except BaseException as e:
-    print('caught exception', str(e))
-    if expected_exception is not None and len(expected_exception) > 0:
-        if expected_exception not in str(e):
-            print('expected exception: ', expected_exception, '\n  got: ', str(e))
-            sys.exit(1)
-        else:
-            sys.exit(0)
-
-queries = query_strs.split(';')
-expected = [None]*len(queries)
-
-if query_results is not None:
-    expected = query_results.split(';')
-    if len(expected) < len(queries):
-        expected.extend(['']*(len(queries)-len(expected)))
-
-for i in range(len(queries)):
-    query_str = queries[i].strip()
-    print('executing:', query_str)
-
-    actual_rows, num_rows = None, None
-    try:
-        actual_rows, num_rows = dc.query(query_str, False)
-    except BaseException as e:
-        print('caught exception', str(e))
-        if expected_exception is not None and len(expected_exception) > 0:
-            if expected_exception not in str(e):
-                print('expected exception: ', expected_exception, '\n  got: ', str(e))
-                sys.exit(1)
-            continue
-        else:
-            sys.exit(1)
-
-    if expected[i] is not None:
-        expected_rows = csv_to_row_maps(expected[i])
-        if expected_rows != actual_rows:
-            print('expected:', expected_rows, '\n  actual:', actual_rows)
-            sys.exit(1)
-"
-
-PYTHON_QUERY_SCRIPT_WITH_USER_PASSWORD="
-import os
-import sys
-
-args = sys.argv[sys.argv.index('--') + 1:]
-query_results = None
-expected_exception = None
-
 working_dir, database, port_str, auto_commit, username, password, query_strs = args[0:7]
-if len(args) > 6:
-   query_results = args[7]
 if len(args) > 7:
+   query_results = args[7]
+if len(args) > 8:
    expected_exception = args[8]
 
 print('User: ' + username)
@@ -171,7 +24,7 @@ print('Database: ' + database)
 print('Port: ' + port_str)
 print('Autocommit: ' + auto_commit)
 print('Expected Results: ' + str(query_results))
-print('Expected Exception: ' + expected_exception)
+print('Expected Exception: ' + str(expected_exception))
 
 os.chdir(working_dir)
 
@@ -223,7 +76,8 @@ for i in range(len(queries)):
         else:
             sys.exit(0)
 
-    if expected[i] is not None:
+    if expected[i] is not None and expected[i] != '':
+        print('Raw Expected: ', expected[i])
         expected_rows = csv_to_row_maps(expected[i])
         if expected_rows != actual_rows:
             print('expected:', expected_rows, '\n  actual:', actual_rows)
@@ -346,39 +200,21 @@ stop_sql_server() {
     SERVER_PID=
 }
 
-# server_query connects to a running mysql server, executes a query and compares the results against what is expected.
-# In the event that the results do not match expectations, the python process will exit with an exit code of 1
-#  * param1 is the database name for the connection string
-#  * param2 is 1 for autocommit = true, 0 for autocommit = false
-#  * param3 is the query_str
-#  * param4 is a csv representing the expected result set.  If a query is not expected to have a result set "" should
-#      be passed.
-#  * param5 is an expected exception string. Mutually exclusive with param4
-server_query() {
-    let PORT="$$ % (65536-1024) + 1024"
-    PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
-    echo Executing server_query
-    python3 -u -c "$PYTHON_QUERY_SCRIPT" -- "$PYTEST_DIR" "$1" "$PORT" "$2" "$3" "$4" "$5"
-}
-
-# server_query_with_user connects to a running mysql server, executes a query and compares the results against what is expected.
-# In the event that the results do not match expectations, the python process will exit with an exit code of 1
-#  * param1 is the database name for the connection string
-#  * param2 is 1 for autocommit = true, 0 for autocommit = false
-#  * param3 is the user
-#  * param4 is the query_str
-#  * param5 is a csv representing the expected result set.  If a query is not expected to have a result set "" should
-#      be passed.
-#  * param6 is an expected exception string. Mutually exclusive with param4
-server_query_with_user() {
-    let PORT="$$ % (65536-1024) + 1024"
-    PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
-    echo Executing server_query
-    python3 -u -c "$PYTHON_QUERY_SCRIPT_WITH_USER" -- "$PYTEST_DIR" "$1" "$PORT" "$2" "$3" "$4" "$5" "$6"
-}
-
-# server_query_with_user connects to a running mysql server, executes a query and compares the results against what is expected.
-# In the event that the results do not match expectations, the python process will exit with an exit code of 1
+# server_query_with_user connects to a running mysql server,
+# executes a query (or list of queries separated by a `;`),
+# and compares the results against what is expected.
+#
+# If executing multiple queries,  separate the expected CSV values with a `;`.
+#
+# If you expect an exception, leave query results blank and add an additional
+# value of 1 to the end of the call. This could be improved to actually send
+# up the exception string to be checked but I could not figure out how to do
+# that. When calling with bats use `run` and then check the $output if you
+# want to inspect the exception string.
+#
+# In the event that the results do not match expectations,
+# the python process will exit with an exit code of 1
+#
 #  * param1 is the database name for the connection string
 #  * param2 is 1 for autocommit = true, 0 for autocommit = false
 #  * param3 is the user
@@ -386,66 +222,11 @@ server_query_with_user() {
 #  * param5 is the query_str
 #  * param6 is a csv representing the expected result set.  If a query is not expected to have a result set "" should
 #      be passed.
-#  * param7 is an expected exception string. Mutually exclusive with param4
-
-server_query_with_user_password() {
+#  * param7 is an expected exception value of 1. Mutually exclusive with param6
+#
+server_query() {
     let PORT="$$ % (65536-1024) + 1024"
     PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
     echo Executing server_query
-    python3 -u -c "$PYTHON_QUERY_SCRIPT_WITH_USER_PASSWORD" -- "$PYTEST_DIR" "$1" "$PORT" "$2" "$3" "$4" "$5" "$6" "$7"
-}
-
-
-# server_query connects to a running mysql server, executes a query and compares the results against what is expected.
-# In the event that the results do not match expectations, the python process will exit with an exit code of 1
-#  * param1 is the database name for the connection string
-#  * param2 is 1 for autocommit = true, 0 for autocommit = false
-#  * param3 is the query_str
-multi_query() {
-    let PORT="$$ % (65536-1024) + 1024"
-    PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
-    echo Executing multi_query
-    python3 -c "$PYTHON_QUERY_SCRIPT" -- "$PYTEST_DIR" "$1" "$PORT" "$2" "$3"
-}
-
-# update_query runs an update query and should be called with 3 parameters
-#   * param1 is the database name for the connection string
-#   * param2 is 1 for autocommit = true, 0 for autocommit = false
-#   * param3 is the query string
-update_query() {
-    server_query "$1" "$2" "$3" ""
-}
-
-# insert_query runs an insert query and should be called with 3 parameters
-#   * param1 is the database name for the connection string
-#   * param2 is 1 for autocommit = true, 0 for autocommit = false
-#   * param3 is the query string
-insert_query() {
-    server_query "$1" "$2" "$3" ""
-}
-
-# unselected_server_query connects to a running mysql server, but not to a particular database, executes a query and
-# compares the results against what is expected.
-# In the event that the results do not match expectations, the python process will exit with an exit code of 1
-#  * param1 is 1 for autocommit = true, 0 for autocommit = false
-#  * param2 is the query_str
-unselected_server_query() {
-    let PORT="$$ % (65536-1024) + 1024"
-    PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
-    echo Executing server_query
-    python3 -c "$PYTHON_QUERY_SCRIPT" -- "$PYTEST_DIR" "" "$PORT" "$1" "$2" "$3"
-}
-
-# unselected_update_query runs an update query and should be called with 2 parameters
-#   * param1 is 1 for autocommit = true, 0 for autocommit = false
-#   * param2 is the query string
-unselected_update_query() {
-    unselected_server_query $1 "$2" ""
-}
-
-# unselected_insert_query runs an insert query and should be called with 2 parameters
-#   * param1 is 1 for autocommit = true, 0 for autocommit = false
-#   * param2 is the query string
-unselected_insert_query() {
-    unselected_server_query $1 "$2" ""
+    python3 -u -c "$PYTHON_QUERY_SCRIPT" -- "$PYTEST_DIR" "$1" "$PORT" "$2" "$3" "$4" "$5" "$6" "$7"
 }
