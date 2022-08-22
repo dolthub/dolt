@@ -226,7 +226,7 @@ func TestSingleQueryPrepared(t *testing.T) {
 
 	//engine.Analyzer.Debug = true
 	//engine.Analyzer.Verbose = true
-	
+
 	var test queries.QueryTest
 	test = queries.QueryTest{
 		Query: "select n, de from dolt_history_foo1 where commit_hash=@Commit1;",
