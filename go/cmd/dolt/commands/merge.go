@@ -503,7 +503,7 @@ func performMerge(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec,
 			}
 		}
 
-		res := CommitCmd{}.Exec(ctx, "commit", []string{"-m", msg}, dEnv)
+		res := performCommit(ctx, "commit", []string{"-m", msg}, dEnv)
 		if res != 0 {
 			return nil, fmt.Errorf("dolt commit failed after merging")
 		}

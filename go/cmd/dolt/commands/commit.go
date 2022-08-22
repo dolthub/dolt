@@ -77,6 +77,16 @@ func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	res := performCommit(ctx, commandStr, args, dEnv)
+	if res == 1 {
+		return res
+	}
+
+	// if the commit was successful, print it out using the log command
+	return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)
+}
+
+func performCommit(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateCommitArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -214,8 +224,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't commit").AddCause(err).Build(), usage)
 	}
 
-	// if the commit was successful, print it out using the log command
-	return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)
+	return 0
 }
 
 func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cli.UsagePrinter) int {
