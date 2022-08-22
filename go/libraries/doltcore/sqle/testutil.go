@@ -43,7 +43,8 @@ import (
 // the updated root, or an error. Statements in the input string are split by `;\n`
 func ExecuteSql(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-	db := NewDatabase("dolt", dEnv.DbData(), opts)
+	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
+	require.NoError(t, err)
 
 	engine, ctx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
 	dsess.DSessFromSess(ctx.Session).EnableBatchedMode()
@@ -182,7 +183,9 @@ func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *do
 	}
 
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-	db := NewDatabase("dolt", dbData, opts)
+	db, err := NewDatabase(context.Background(), "dolt", dbData, opts)
+	require.NoError(t, err)
+
 	engine, ctx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
 	if err != nil {
 		return nil, err

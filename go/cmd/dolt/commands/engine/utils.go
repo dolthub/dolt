@@ -44,9 +44,12 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool
 		}
 		dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
 
-		db = newDatabase(name, dEnv, useBulkEditor)
+		db, err = newDatabase(ctx, name, dEnv, useBulkEditor)
+		if err != nil {
+			return false, err
+		}
 
-		if _, remote, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemoteKey); ok && remote != "" {
+		if _, remote, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote); ok && remote != "" {
 			remoteName, ok := remote.(string)
 			if !ok {
 				return true, sql.ErrInvalidSystemVariableValue.New(remote)
@@ -89,7 +92,7 @@ func GetCommitHooks(ctx context.Context, dEnv *env.DoltEnv) ([]doltdb.CommitHook
 	return postCommitHooks, nil
 }
 
-func newDatabase(name string, dEnv *env.DoltEnv, useBulkEditor bool) sqle.Database {
+func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv, useBulkEditor bool) (sqle.Database, error) {
 	deaf := dEnv.DbEaFactory()
 	if useBulkEditor {
 		deaf = dEnv.BulkDbEaFactory()
@@ -98,7 +101,7 @@ func newDatabase(name string, dEnv *env.DoltEnv, useBulkEditor bool) sqle.Databa
 		Deaf:    deaf,
 		Tempdir: dEnv.TempTableFilesDir(),
 	}
-	return sqle.NewDatabase(name, dEnv.DbData(), opts)
+	return sqle.NewDatabase(ctx, name, dEnv.DbData(), opts)
 }
 
 // newReplicaDatabase creates a new dsqle.ReadReplicaDatabase. If the doltdb.SkipReplicationErrorsKey global variable is set,
@@ -110,7 +113,10 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 		Tempdir: dEnv.TempTableFilesDir(),
 	}
 
-	db := sqle.NewDatabase(name, dEnv.DbData(), opts)
+	db, err := sqle.NewDatabase(ctx, name, dEnv.DbData(), opts)
+	if err != nil {
+		return sqle.ReadReplicaDatabase{}, err
+	}
 
 	rrd, err := sqle.NewReadReplicaDatabase(ctx, db, remoteName, dEnv)
 	if err != nil {
@@ -125,9 +131,9 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 }
 
 func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.PushOnWriteHook, error) {
-	_, val, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemoteKey)
+	_, val, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
 	if !ok {
-		return nil, sql.ErrUnknownSystemVariable.New(dsess.ReplicateToRemoteKey)
+		return nil, sql.ErrUnknownSystemVariable.New(dsess.ReplicateToRemote)
 	} else if val == "" {
 		return nil, nil
 	}

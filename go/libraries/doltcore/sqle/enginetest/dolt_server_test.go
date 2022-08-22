@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/gocraft/dbr/v2"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
@@ -131,7 +132,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"dolt/branch2"}, {"information_schema"}},
+				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_BRANCH('-d', 'branch2');",
@@ -143,7 +144,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}},
+				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				// Call a stored procedure since this searches across all databases and will
@@ -178,7 +179,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"dolt/branch2"}, {"information_schema"}},
+				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_BRANCH('-m', 'branch2', 'newName');",
@@ -190,7 +191,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}},
+				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				// Call a stored procedure since this searches across all databases and will
@@ -280,37 +281,37 @@ func makeDestinationSlice(t *testing.T, columnTypes []*gosql.ColumnType) []inter
 
 func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
 	columnTypes, err := rows.ColumnTypes()
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	dest := makeDestinationSlice(t, columnTypes)
 
 	for _, expectedRow := range expected {
 		ok := rows.Next()
 		if !ok {
-			require.Fail(t, "Fewer results than expected")
+			assert.Fail(t, "Fewer results than expected")
 		}
 		err := rows.Scan(dest...)
-		require.NoError(t, err)
-		require.Equal(t, len(expectedRow), len(dest),
+		assert.NoError(t, err)
+		assert.Equal(t, len(expectedRow), len(dest),
 			"Different number of columns returned than expected")
 
 		for j, expectedValue := range expectedRow {
 			switch strings.ToUpper(columnTypes[j].DatabaseTypeName()) {
 			case "TEXT":
 				actualValue, ok := dest[j].(*string)
-				require.True(t, ok)
-				require.Equal(t, expectedValue, *actualValue)
+				assert.True(t, ok)
+				assert.Equal(t, expectedValue, *actualValue)
 			case "INT", "TINYINT", "BIGINT":
 				actualValue, ok := dest[j].(*int)
-				require.True(t, ok)
-				require.Equal(t, expectedValue, *actualValue)
+				assert.True(t, ok)
+				assert.Equal(t, expectedValue, *actualValue)
 			default:
-				require.Fail(t, "Unsupported datatype: %s", columnTypes[j].DatabaseTypeName())
+				assert.Fail(t, "Unsupported datatype: %s", columnTypes[j].DatabaseTypeName())
 			}
 		}
 	}
 
 	if rows.Next() {
-		require.Fail(t, "More results than expected")
+		assert.Fail(t, "More results than expected")
 	}
 }
 

@@ -162,6 +162,7 @@ func (p DoltDatabaseProvider) FileSystemForDatabase(dbname string) (filesys.File
 	return dbLocation, nil
 }
 
+// Database implements the sql.DatabaseProvider interface
 func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Database, err error) {
 	var ok bool
 	p.mu.RLock()
@@ -175,20 +176,12 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 	if err != nil {
 		return nil, err
 	}
-
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(name)
 	}
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if found, ok := p.databases[formatDbMapKeyName(name)]; !ok {
-		p.databases[formatDbMapKeyName(name)] = db
-		return db, nil
-	} else {
-		return found, nil
-	}
-
+	// Don't track revision databases, just instantiate them on demand
+	return db, nil
 }
 
 func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
@@ -196,16 +189,32 @@ func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 	return err == nil
 }
 
-func (p DoltDatabaseProvider) AllDatabases(_ *sql.Context) (all []sql.Database) {
+func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database) {
 	p.mu.RLock()
-	defer p.mu.RUnlock()
 
-	i := 0
-	all = make([]sql.Database, len(p.databases))
+	all = make([]sql.Database, 0, len(p.databases))
+	var foundDatabase bool
 	for _, db := range p.databases {
-		all[i] = db
-		i++
+		if db.Name() == ctx.GetCurrentDatabase() {
+			foundDatabase = true
+		}
+		all = append(all, db)
 	}
+	p.mu.RUnlock()
+
+	// If the current database is not one of the primary databases, it must be a transitory revision database
+	if !foundDatabase && ctx.GetCurrentDatabase() != "" {
+		revDb, _, ok, err := p.databaseForRevision(ctx, ctx.GetCurrentDatabase())
+		if err != nil {
+			// We can't return an error from this interface function, so just log a message
+			ctx.GetLogger().Warnf("unable to load %q as a database revision: %s", ctx.GetCurrentDatabase(), err.Error())
+		} else if !ok {
+			ctx.GetLogger().Warnf("unable to load %q as a database revision", ctx.GetCurrentDatabase())
+		} else {
+			all = append(all, revDb)
+		}
+	}
+
 	return
 }
 
@@ -245,6 +254,11 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 		return err
 	}
 
+	// if calling process has a lockfile, also create one for new database
+	if env.FsIsLocked(p.fs) {
+		newEnv.Lock()
+	}
+
 	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
 	if err != nil {
 		return err
@@ -256,7 +270,11 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 		ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
 	}
 
-	db := NewDatabase(name, newEnv.DbData(), opts)
+	db, err := NewDatabase(ctx, name, newEnv.DbData(), opts)
+	if err != nil {
+		return err
+	}
+
 	formattedName := formatDbMapKeyName(db.Name())
 	p.databases[formattedName] = db
 	p.dbLocations[formattedName] = newEnv.FS
@@ -339,7 +357,11 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 		ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
 	}
 
-	db := NewDatabase(dbName, dEnv.DbData(), opts)
+	db, err := NewDatabase(ctx, dbName, dEnv.DbData(), opts)
+	if err != nil {
+		return err
+	}
+
 	p.databases[formatDbMapKeyName(db.Name())] = db
 
 	dbstate, err := GetInitialDBState(ctx, db)
@@ -370,14 +392,23 @@ func createRemote(ctx *sql.Context, remoteName, remoteUrl string, params map[str
 	return r, ddb, nil
 }
 
-func (p DoltDatabaseProvider) DropDatabase(_ *sql.Context, name string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+// DropDatabase implements the sql.MutableDatabaseProvider interface
+func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
+	isRevisionDatabase, err := p.IsRevisionDatabase(ctx, name)
+	if err != nil {
+		return err
+	}
+	if isRevisionDatabase {
+		return fmt.Errorf("unable to drop revision database: %s", name)
+	}
 
 	// get the case-sensitive name for case-sensitive file systems
 	// TODO: there are still cases (not server-first) where we rename databases because the directory name would need
 	//  quoting if used as a database name, and that breaks here. We either need the database name to match the directory
 	//  name in all cases, or else keep a mapping from database name to directory on disk.
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
@@ -390,7 +421,7 @@ func (p DoltDatabaseProvider) DropDatabase(_ *sql.Context, name string) error {
 		return fmt.Errorf("unexpected error: %s exists but is not a directory", dbKey)
 	}
 
-	err := p.fs.Delete(db.Name(), true)
+	err = p.fs.Delete(db.Name(), true)
 	if err != nil {
 		return err
 	}
@@ -511,25 +542,6 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx *sql.Context, revDB string) (d
 	return init, nil
 }
 
-// DropRevisionDb implements RevisionDatabaseProvider
-func (p DoltDatabaseProvider) DropRevisionDb(_ *sql.Context, revDB string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	dbKey := formatDbMapKeyName(revDB)
-	_, ok := p.databases[dbKey]
-	if !ok {
-		return dsess.ErrRevisionDbNotFound.New(revDB)
-	}
-
-	if IsRevisionDatabase(revDB) {
-		delete(p.databases, dbKey)
-		return nil
-	} else {
-		return dsess.ErrRevisionDbNotFound.New(revDB)
-	}
-}
-
 // Function implements the FunctionProvider interface
 func (p DoltDatabaseProvider) Function(_ *sql.Context, name string) (sql.Function, error) {
 	fn, ok := p.functions[strings.ToLower(name)]
@@ -561,13 +573,34 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 	return nil, sql.ErrTableFunctionNotFound.New(name)
 }
 
+// GetRevisionForRevisionDatabase implements dsess.RevisionDatabaseProvider
+func (p DoltDatabaseProvider) GetRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, string, error) {
+	db, err := p.Database(ctx, dbName)
+	if err != nil {
+		return "", "", err
+	}
+
+	sqldb, ok := db.(dsess.RevisionDatabase)
+	if !ok {
+		return db.Name(), "", nil
+	}
+
+	if sqldb.Revision() != "" {
+		dbName = strings.TrimSuffix(dbName, dbRevisionDelimiter+sqldb.Revision())
+	}
+
+	return dbName, sqldb.Revision(), nil
+}
+
 // IsRevisionDatabase returns true if the specified dbName represents a database that is tied to a specific
 // branch or commit from a database (e.g. "dolt/branch1").
-func IsRevisionDatabase(dbName string) bool {
-	// TODO: This is only a heuristic to identify a revision database. Because
-	//       database names and branch names may contain slashes, we need to
-	//       do more work here to accurately check if this is a revision db.
-	return strings.Contains(dbName, dbRevisionDelimiter)
+func (p DoltDatabaseProvider) IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error) {
+	dbName, revision, err := p.GetRevisionForRevisionDatabase(ctx, dbName)
+	if err != nil {
+		return false, err
+	}
+
+	return revision != "", nil
 }
 
 // switchAndFetchReplicaHead tries to pull the latest version of a branch. Will fail if the branch
@@ -714,6 +747,7 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			rsr:      static,
 			gs:       v.gs,
 			editOpts: v.editOpts,
+			revision: revSpec,
 		}
 	case ReadReplicaDatabase:
 		db = ReadReplicaDatabase{
@@ -724,6 +758,7 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 				rsr:      static,
 				gs:       v.gs,
 				editOpts: v.editOpts,
+				revision: revSpec,
 			},
 			remote:  v.remote,
 			srcDB:   v.srcDB,
@@ -761,6 +796,7 @@ func dbRevisionForTag(ctx context.Context, srcDb Database, revSpec string) (Read
 		rsw:      srcDb.DbData().Rsw,
 		rsr:      srcDb.DbData().Rsr,
 		editOpts: srcDb.editOpts,
+		revision: revSpec,
 	}}
 	init := dsess.InitialDbState{
 		Db:         db,
@@ -794,6 +830,7 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		rsw:      srcDb.DbData().Rsw,
 		rsr:      srcDb.DbData().Rsr,
 		editOpts: srcDb.editOpts,
+		revision: revSpec,
 	}}
 	init := dsess.InitialDbState{
 		Db:         db,

@@ -425,7 +425,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if skipped > 0 {
 		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
 	}
-	cli.PrintErrln(color.CyanString("Import completed successfully."))
+	cli.Println(color.CyanString("Import completed successfully."))
 
 	return 0
 }

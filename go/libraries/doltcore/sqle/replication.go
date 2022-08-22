@@ -30,9 +30,9 @@ import (
 )
 
 func getPushOnWriteHook(ctx context.Context, bThreads *sql.BackgroundThreads, dEnv *env.DoltEnv, logger io.Writer) (doltdb.CommitHook, error) {
-	_, val, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemoteKey)
+	_, val, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
 	if !ok {
-		return nil, sql.ErrUnknownSystemVariable.New(dsess.ReplicateToRemoteKey)
+		return nil, sql.ErrUnknownSystemVariable.New(dsess.ReplicateToRemote)
 	} else if val == "" {
 		return nil, nil
 	}
@@ -57,8 +57,8 @@ func getPushOnWriteHook(ctx context.Context, bThreads *sql.BackgroundThreads, dE
 		return nil, err
 	}
 
-	_, val, ok = sql.SystemVariables.GetGlobal(dsess.AsyncReplicationKey)
-	if _, val, ok = sql.SystemVariables.GetGlobal(dsess.AsyncReplicationKey); ok && val == SysVarTrue {
+	_, val, ok = sql.SystemVariables.GetGlobal(dsess.AsyncReplication)
+	if _, val, ok = sql.SystemVariables.GetGlobal(dsess.AsyncReplication); ok && val == SysVarTrue {
 		return doltdb.NewAsyncPushOnWriteHook(bThreads, ddb, dEnv.TempTableFilesDir(), logger)
 	}
 
@@ -95,7 +95,10 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 		Deaf: dEnv.DbEaFactory(),
 	}
 
-	db := NewDatabase(name, dEnv.DbData(), opts)
+	db, err := NewDatabase(ctx, name, dEnv.DbData(), opts)
+	if err != nil {
+		return ReadReplicaDatabase{}, err
+	}
 
 	rrd, err := NewReadReplicaDatabase(ctx, db, remoteName, dEnv)
 	if err != nil {
@@ -123,7 +126,7 @@ func ApplyReplicationConfig(ctx context.Context, bThreads *sql.BackgroundThreads
 		}
 		dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
 
-		if _, remote, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemoteKey); ok && remote != "" {
+		if _, remote, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote); ok && remote != "" {
 			remoteName, ok := remote.(string)
 			if !ok {
 				return nil, sql.ErrInvalidSystemVariableValue.New(remote)

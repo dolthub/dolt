@@ -18,8 +18,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 )
 
@@ -27,33 +28,46 @@ type StateProvider interface {
 	GetGlobalState() GlobalState
 }
 
-func NewGlobalStateStore() GlobalState {
-	return GlobalState{
-		trackerMap: make(map[ref.WorkingSetRef]AutoIncrementTracker),
-		mu:         &sync.Mutex{},
+func NewGlobalStateStoreForDb(ctx context.Context, db *doltdb.DoltDB) (GlobalState, error) {
+	branches, err := db.GetBranches(ctx)
+	if err != nil {
+		return GlobalState{}, err
 	}
+
+	var wses []*doltdb.WorkingSet
+	for _, b := range branches {
+		wsRef, err := ref.WorkingSetRefForHead(b)
+		if err != nil {
+			return GlobalState{}, err
+		}
+
+		ws, err := db.ResolveWorkingSet(ctx, wsRef)
+		if err == doltdb.ErrWorkingSetNotFound {
+			// skip, continue working on other branches
+			continue
+		} else if err != nil {
+			return GlobalState{}, err
+		}
+
+		wses = append(wses, ws)
+	}
+
+	tracker, err := NewAutoIncrementTracker(ctx, wses...)
+	if err != nil {
+		return GlobalState{}, err
+	}
+
+	return GlobalState{
+		aiTracker: tracker,
+		mu:        &sync.Mutex{},
+	}, nil
 }
 
 type GlobalState struct {
-	trackerMap map[ref.WorkingSetRef]AutoIncrementTracker
-	mu         *sync.Mutex
+	aiTracker AutoIncrementTracker
+	mu        *sync.Mutex
 }
 
-func (g GlobalState) GetAutoIncrementTracker(ctx context.Context, ws *doltdb.WorkingSet) (AutoIncrementTracker, error) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	ait, ok := g.trackerMap[ws.Ref()]
-	if ok {
-		return ait, nil
-	}
-
-	var err error
-	ait, err = NewAutoIncrementTracker(ctx, ws)
-	if err != nil {
-		return AutoIncrementTracker{}, err
-	}
-	g.trackerMap[ws.Ref()] = ait
-
-	return ait, nil
+func (g GlobalState) GetAutoIncrementTracker(ctx *sql.Context) (AutoIncrementTracker, error) {
+	return g.aiTracker, nil
 }

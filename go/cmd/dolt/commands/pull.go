@@ -201,7 +201,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				msg := mergeSpec.Msg
 				if mergeSpec.Msg == "" {
 					suggestedMsg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, dEnv.RepoStateReader().CWBHeadRef().GetPath())
-					msg, err = getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, mergeSpec.NoEdit)
+					msg, err = getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, "", mergeSpec.NoEdit)
 					if err != nil {
 						return err
 					}

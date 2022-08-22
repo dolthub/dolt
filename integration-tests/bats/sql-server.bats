@@ -41,7 +41,7 @@ teardown() {
     # start the server and ensure there are no databases yet
     cd $tempDir/empty_server
     start_sql_server
-    unselected_server_query 1 "show databases" "Database\ninformation_schema"
+    unselected_server_query 1 "show databases" "Database\ninformation_schema\nmysql"
 
     # verify that dolt_clone works
     # TODO: Once dolt_clone can be called without a selected database, this can be removed
@@ -246,6 +246,24 @@ SQL
     skip "read-only flag does not prevent dolt_commit"
     server_query repo1 1 "select dolt_commit('--allow-empty', '-m', 'msg')" "" "database server is set to read only mode: user does not have permission: write"
 }
+
+@test "sql-server: read-only flag prevents dolt_reset" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+    run dolt commit --allow-empty -m 'empty test commit'
+
+    DEFAULT_DB="$1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+  read_only: true" > server.yaml
+    start_sql_server_with_config repo1 server.yaml
+
+    # try to execute dolt_reset
+    skip "read-only flag does not prevent dolt_reset"
+    server_query repo1 1 "call dolt_reset('--hard', 'HEAD~1')" "" "database server is set to read only mode: user does not have permission: write"
+}
+
 
 @test "sql-server: test command line modification" {
     skiponwindows "Missing dependencies"
@@ -554,7 +572,7 @@ SQL
 
     server_query repo1 1 "SELECT * FROM test.pk ORDER BY pk" "pk\n0"
     server_query repo1 1 "DROP DATABASE test" ""
-    server_query repo1 1 "SHOW DATABASES" "Database\ninformation_schema\nrepo1"
+    server_query repo1 1 "SHOW DATABASES" "Database\ninformation_schema\nmysql\nrepo1"
 }
 
 @test "sql-server: DOLT_ADD, DOLT_COMMIT, DOLT_CHECKOUT, DOLT_MERGE work together in server mode" {
@@ -1098,6 +1116,35 @@ END""")
     server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2"
 }
 
+@test "sql-server: auto increment is globally distinct across branches and connections" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+    start_sql_server repo1
+
+    server_query repo1 1 "CREATE TABLE t1(pk bigint primary key auto_increment, val int)" ""
+    insert_query repo1 1 "INSERT INTO t1 (val) VALUES (1)"
+    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1"
+
+    insert_query repo1 1 "INSERT INTO t1 (val) VALUES (2)"
+    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2"
+
+    run server_query repo1 1 "call dolt_commit('-am', 'table with two values')"
+    run server_query repo1 1 "call dolt_branch('new_branch')"
+
+    insert_query repo1/new_branch 1 "INSERT INTO t1 (val) VALUES (3)"
+    server_query repo1/new_branch 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2\n3,3"
+
+    insert_query repo1 1 "INSERT INTO t1 (val) VALUES (4)"
+    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2\n4,4"
+    
+    # drop the table on main, should keep counting from 4
+    server_query repo1 1 "drop table t1;"
+    server_query repo1 1 "CREATE TABLE t1(pk bigint primary key auto_increment, val int)" ""
+    insert_query repo1 1 "INSERT INTO t1 (val) VALUES (4)"
+    server_query repo1 1 "SELECT * FROM t1" "pk,val\n4,4"
+}
+
 @test "sql-server: sql-push --set-remote within session" {
     skiponwindows "Missing dependencies"
 
@@ -1152,7 +1199,7 @@ END""")
     start_sql_server
 
     server_query "" 1 "create database test1"
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest1"
     server_query "test1" 1 "create table a(x int)"
     server_query "test1" 1 "insert into a values (1), (2)"
     # not bothering to check the results of the commit here
@@ -1197,7 +1244,7 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest3"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest1\ntest3"
 }
 
 @test "sql-server: drop database with active connections" {
@@ -1211,7 +1258,7 @@ END""")
     server_query "" 1 "create database test2"
     server_query "" 1 "create database test3"
 
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest2\ntest3"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest1\ntest2\ntest3"
     server_query "test1" 1 "create table a(x int)"
     server_query "test1" 1 "insert into a values (1), (2)"
     run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
@@ -1239,7 +1286,7 @@ END""")
     # can't drop a branch-qualified database name
     run server_query "" 1 "drop database \`test2/newbranch\`"
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "database not found: test2/newbranch" ]] || false
+    [[ "$output" =~ "unable to drop revision database: test2/newbranch" ]] || false
 
     server_query "" 1 "drop database TEST2"
 
@@ -1258,7 +1305,7 @@ END""")
 
     server_query "" 1 "create database Test1"
 
-    server_query "" 1 "show databases" "Database\nTest1\ninformation_schema"
+    server_query "" 1 "show databases" "Database\nTest1\ninformation_schema\nmysql"
     multi_query "" 1 "use test1; create table a(x int);"
     multi_query "" 1 "use TEST1; insert into a values (1), (2);"
     run multi_query "" 1 "use test1; select dolt_commit('-a', '-m', 'new table a');"
@@ -1279,7 +1326,7 @@ END""")
     start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
 
     server_query "" 1 "create database test1"
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest1"
     server_query "test1" 1 "create table a(x int)"
     server_query "test1" 1 "insert into a values (1), (2)"
     # not bothering to check the results of the commit here
@@ -1307,7 +1354,7 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest3"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest3"
 }
 
 @test "sql-server: create database errors" {
@@ -1335,7 +1382,7 @@ END""")
     start_sql_server
 
     server_query "" 1 "create database test1"
-    server_query "repo1" 1 "show databases" "Database\ninformation_schema\nrepo1\ntest1"
+    server_query "repo1" 1 "show databases" "Database\ninformation_schema\nmysql\nrepo1\ntest1"
     server_query "test1" 1 "create table a(x int)"
     server_query "test1" 1 "insert into a values (1), (2)"
     # not bothering to check the results of the commit here
@@ -1369,7 +1416,7 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server
-    server_query "" 1 "show databases" "Database\ninformation_schema\nrepo1\ntest1\ntest2"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\nrepo1\ntest1\ntest2"
 }
 
 @test "sql-server: fetch uses database tempdir from different working directory" {
@@ -1460,6 +1507,16 @@ databases:
     cd repo2
     start_sql_server
     cd ..
+    let PORT="$$ % (65536-1024) + 1024"
+    run dolt sql-server -P $PORT
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: sql-server lock for new databases" {
+    cd repo1
+    start_sql_server
+    server_query repo1 1 "create database newdb" ""
+    cd newdb
     let PORT="$$ % (65536-1024) + 1024"
     run dolt sql-server -P $PORT
     [ "$status" -eq 1 ]

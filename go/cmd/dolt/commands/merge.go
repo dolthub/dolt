@@ -185,7 +185,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			if doCommit {
 				msg = spec.Msg
 				if spec.Msg == "" {
-					msg, err = getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, spec.NoEdit)
+					msg, err = getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, "", spec.NoEdit)
 					if err != nil {
 						return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 					}
@@ -237,7 +237,7 @@ func getCommitMessage(ctx context.Context, apr *argparser.ArgParseResults, dEnv 
 	}
 
 	if apr.Contains(cli.NoFFParam) {
-		msg, err := getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, apr.Contains(cli.NoEditFlag))
+		msg, err := getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, "", apr.Contains(cli.NoEditFlag))
 		if err != nil {
 			return "", errhand.VerboseErrorFromError(err)
 		}

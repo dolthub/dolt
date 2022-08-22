@@ -31,8 +31,8 @@ import (
 func TestCommitHooksNoErrors(t *testing.T) {
 	dEnv := dtestutils.CreateEnvWithSeedData(t)
 	AddDoltSystemVariables()
-	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrorsKey, true)
-	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemoteKey, "unknown")
+	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
+	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemote, "unknown")
 	bThreads := sql.NewBackgroundThreads()
 	hooks, err := GetCommitHooks(context.Background(), bThreads, dEnv, &buffer.Buffer{})
 	assert.NoError(t, err)
