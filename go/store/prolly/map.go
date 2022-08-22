@@ -245,7 +245,7 @@ func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup,
 	key := val.Tuple(cur.CurrentKey())
 	value := val.Tuple(cur.CurrentValue())
 
-	if !rng.matches(key) {
+	if !rng.Matches(key) {
 		return &pointLookup{}, nil
 	}
 
@@ -284,6 +284,12 @@ func treeIterFromRange(
 
 	return &orderedTreeIter[val.Tuple, val.Tuple]{curr: start, stop: stopF, step: start.Advance}, nil
 }
+
+func NewPointLookup(k, v val.Tuple) *pointLookup {
+	return &pointLookup{k, v}
+}
+
+var EmptyPointLookup = &pointLookup{}
 
 type pointLookup struct {
 	k, v val.Tuple

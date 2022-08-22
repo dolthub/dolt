@@ -216,7 +216,6 @@ var _ doltReadOnlyTableInterface = (*DoltTable)(nil)
 
 // AsIndexedAccess implements sql.IndexAddressableTable
 func (t *DoltTable) AsIndexedAccess(idx sql.Index) sql.IndexedTable {
-	// TODO probably not the correct type?
 	return t.AsIndexedAccess(idx)
 }
 
@@ -584,10 +583,7 @@ func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue)
 }
 
 func (t *WritableDoltTable) AsIndexedAccess(idx sql.Index) sql.IndexedTable {
-	return &WritableIndexedDoltTable{
-		WritableDoltTable: t,
-		idx:               idx.(index.DoltIndex),
-	}
+	return NewWritableIndexedDoltTable(t, idx.(index.DoltIndex))
 }
 
 // WithProjections implements sql.ProjectedTable

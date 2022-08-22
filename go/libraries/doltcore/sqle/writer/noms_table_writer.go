@@ -143,14 +143,17 @@ func (te *nomsTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) e
 	return te.flush(ctx)
 }
 
-func (te *nomsTableWriter) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	idx := index.IndexFromIndexLookup(lookup)
+func (te *nomsTableWriter) AsIndexedAccess(i sql.Index) sql.IndexedTable {
+	idx := index.DoltIndexFromSqlIndex(i)
 	return nomsFkIndexer{
 		writer:  te,
 		idxName: idx.ID(),
 		idxSch:  idx.IndexSchema(),
-		nrr:     index.NomsRangesFromIndexLookup(lookup)[0],
 	}
+}
+
+func (te *nomsTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	panic("not implemented")
 }
 
 // Close implements Closer

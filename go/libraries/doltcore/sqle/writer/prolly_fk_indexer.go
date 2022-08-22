@@ -32,6 +32,7 @@ type prollyFkIndexer struct {
 }
 
 var _ sql.Table = prollyFkIndexer{}
+var _ sql.IndexedTable = prollyFkIndexer{}
 
 // Name implements the interface sql.Table.
 func (n prollyFkIndexer) Name() string {
@@ -46,6 +47,15 @@ func (n prollyFkIndexer) String() string {
 // Schema implements the interface sql.Table.
 func (n prollyFkIndexer) Schema() sql.Schema {
 	return n.writer.sqlSch
+}
+
+func (n prollyFkIndexer) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	rang, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
+	if err != nil {
+		return nil, err
+	}
+	n.pRange = rang[0]
+	return sql.PartitionsToPartitionIter(fkDummyPartition{}), nil
 }
 
 // Partitions implements the interface sql.Table.

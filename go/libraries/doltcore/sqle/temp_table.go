@@ -231,16 +231,20 @@ func (t *TempTable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, e
 	return doltdb.DataCacheKey{}, false, nil
 }
 
+func (t *TempTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	t.lookup = lookup
+	return t.Partitions(ctx)
+}
+
 func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	if t.lookup != nil {
+	if !t.lookup.IsEmpty() {
 		return index.RowIterForIndexLookup(ctx, t, t.lookup, t.pkSch, nil)
 	} else {
 		return partitionRows(ctx, t.table, t.sqlSchema().Schema, nil, partition)
 	}
 }
 
-func (t *TempTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	t.lookup = lookup
+func (t *TempTable) AsIndexedAccess(idx sql.Index) sql.IndexedTable {
 	return t
 }
 
@@ -408,19 +412,19 @@ func (t *TempTable) StatementBegin(ctx *sql.Context) {
 }
 
 func (t *TempTable) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
-	t.lookup = nil
+	t.lookup = sql.IndexLookup{}
 	return nil
 }
 
 func (t *TempTable) StatementComplete(ctx *sql.Context) error {
-	t.lookup = nil
+	t.lookup = sql.IndexLookup{}
 	return nil
 }
 
 func (t *TempTable) Close(ctx *sql.Context) error {
 	err := t.ed.Close(ctx)
 
-	t.lookup = nil
+	t.lookup = sql.IndexLookup{}
 	return err
 }
 

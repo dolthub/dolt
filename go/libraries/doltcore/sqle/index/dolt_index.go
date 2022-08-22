@@ -402,19 +402,6 @@ func (di *doltIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpress
 	return cets
 }
 
-// NewLookup implements the interface sql.Index.
-func (di *doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
-	if len(ranges) == 0 {
-		return nil, nil
-	}
-
-	if di.doltBinFormat {
-		return di.newProllyLookup(ctx, di.ns, ranges...)
-	}
-
-	return di.newNomsLookup(ctx, ranges...)
-}
-
 func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durableIndexState, error) {
 	var newkey doltdb.DataCacheKey
 	var cancache bool

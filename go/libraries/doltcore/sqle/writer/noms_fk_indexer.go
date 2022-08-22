@@ -15,6 +15,7 @@
 package writer
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -30,6 +31,7 @@ type nomsFkIndexer struct {
 }
 
 var _ sql.Table = nomsFkIndexer{}
+var _ sql.IndexedTable = nomsFkIndexer{}
 
 func (n nomsFkIndexer) Name() string {
 	return n.writer.tableName
@@ -41,6 +43,17 @@ func (n nomsFkIndexer) String() string {
 
 func (n nomsFkIndexer) Schema() sql.Schema {
 	return n.writer.sqlSch
+}
+
+func (n nomsFkIndexer) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	//TODO implement me
+	panic("implement me")
+	nrr, err := index.NomsRangesFromIndexLookup(ctx, lookup)
+	if err != nil {
+		return nil, err
+	}
+	n.nrr = nrr[0]
+	return sql.PartitionsToPartitionIter(fkDummyPartition{}), nil
 }
 
 func (n nomsFkIndexer) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {

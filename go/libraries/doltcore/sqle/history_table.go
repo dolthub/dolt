@@ -83,9 +83,13 @@ func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return index.DoltHistoryIndexesFromTable(ctx, ht.doltTable.db.Name(), ht.Name(), tbl)
 }
 
-func (ht HistoryTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
+func (ht *HistoryTable) AsIndexedAccess(i sql.Index) sql.IndexedTable {
+	return ht
+}
+
+func (ht *HistoryTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	ht.indexLookup = lookup
-	return &ht
+	return ht.Partitions(ctx)
 }
 
 // NewHistoryTable creates a history table
@@ -386,29 +390,27 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 		return nil, err
 	}
 
-	var sqlTable sql.Table
-	sqlTable = table
-	if lookup != nil {
+	var sqlTable sql.IndexedTable
+	var newLookup sql.IndexLookup
+	if !lookup.IsEmpty() {
 		indexes, err := table.GetIndexes(ctx)
 		if err != nil {
 			return nil, err
 		}
-		var newLookup sql.IndexLookup
-		for i := range indexes {
-			if indexes[i].ID() == lookup.Index().ID() {
-				newLookup, err = indexes[i].NewLookup(ctx, lookup.Ranges()...)
-				if err != nil {
-					return nil, err
-				}
+		for _, idx := range indexes {
+			if idx.ID() == lookup.Index.ID() {
+				sqlTable = table.AsIndexedAccess(idx)
+				newLookup = sql.IndexLookup{Index: idx, Ranges: lookup.Ranges}
 				break
 			}
 		}
-		if newLookup != nil {
-			sqlTable = table.WithIndexLookup(newLookup)
-		}
 	}
 
-	tablePartitions, err := sqlTable.Partitions(ctx)
+	if sqlTable == nil {
+		sqlTable = table.AsIndexedAccess(lookup.Index)
+	}
+
+	tablePartitions, err := sqlTable.LookupPartitions(ctx, newLookup)
 	if err != nil {
 		return nil, err
 	}

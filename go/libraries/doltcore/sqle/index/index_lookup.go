@@ -43,22 +43,28 @@ func PartitionIndexedTableRows(ctx *sql.Context, idx sql.Index, part sql.Partiti
 	return RowIterForNomsRanges(ctx, doltIdx, ranges, columns, rp.durableState)
 }
 
-func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, ilu sql.IndexLookup, pkSch sql.PrimaryKeySchema, columns []uint64) (sql.RowIter, error) {
-	lookup := ilu.(*doltIndexLookup)
-	idx := lookup.idx
-
+func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup, pkSch sql.PrimaryKeySchema, columns []uint64) (sql.RowIter, error) {
+	idx := lookup.Index.(*doltIndex)
 	durableState, err := idx.getDurableState(ctx, t)
 	if err != nil {
 		return nil, err
 	}
 
 	if types.IsFormat_DOLT(idx.Format()) {
-		if len(lookup.prollyRanges) > 1 {
+		prollyRanges, err := idx.prollyRanges(ctx, idx.ns, lookup.Ranges...)
+		if len(prollyRanges) > 1 {
 			return nil, fmt.Errorf("expected a single index range")
 		}
-		return RowIterForProllyRange(ctx, idx, lookup.prollyRanges[0], pkSch, columns, durableState)
+		if err != nil {
+			return nil, err
+		}
+		return RowIterForProllyRange(ctx, idx, prollyRanges[0], pkSch, columns, durableState)
 	} else {
-		return RowIterForNomsRanges(ctx, idx, lookup.nomsRanges, columns, durableState)
+		nomsRanges, err := idx.nomsRanges(ctx, lookup.Ranges...)
+		if err != nil {
+			return nil, err
+		}
+		return RowIterForNomsRanges(ctx, idx, nomsRanges, columns, durableState)
 	}
 }
 
@@ -119,8 +125,6 @@ func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 	return &rangePartitionIter{
 		nomsRanges:   nomsRanges,
 		prollyRanges: prollyRanges,
-		//todo third condition for point lookup tuples?
-		// is that something we can even predict beforehand?
 		curr:         0,
 		durableState: durableState,
 	}, nil
@@ -191,45 +195,139 @@ func (rp rangePartition) Key() []byte {
 	return rp.key
 }
 
-// LookupBuilder abstracts constructing index range iterators
-type LookupBuilder struct {
+type LookupBuilder interface {
+	NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error)
+}
+
+func NewLookupBuilder(part sql.Partition, idx DoltIndex, projections []uint64, pkSch sql.PrimaryKeySchema, isDoltFormat bool) LookupBuilder {
+	p := part.(rangePartition)
+	if len(projections) == 0 {
+		projections = idx.Schema().GetAllCols().Tags
+	}
+
+	base := &baseLookupBuilder{
+		idx:         idx.(*doltIndex),
+		sch:         pkSch,
+		projections: projections,
+	}
+	switch {
+	case !isDoltFormat:
+		return &nomsLookupBuilder{
+			baseLookupBuilder: base,
+		}
+	case sql.IsKeyless(pkSch.Schema):
+		return &keylessLookupBuilder{
+			baseLookupBuilder: base,
+		}
+	case idx.coversColumns(p.durableState, projections) || idx.ID() == "PRIMARY":
+		return &coveringLookupBuilder{
+			baseLookupBuilder: base,
+		}
+	default:
+		return base
+	}
+}
+
+type baseLookupBuilder struct {
 	idx         *doltIndex
 	sch         sql.PrimaryKeySchema
 	projections []uint64
-
-	// plCur for point lookup reuse
-	plCur   *tree.Cursor
-	keyDesc val.TupleDesc
 }
 
-// can assume new format
-
-func (lb *LookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	p, ok := part.(*rangePartition)
-	if !ok {
-		panic(fmt.Sprintf("expected *rangePartition, found: %T", part))
-	}
-
-	if p.prollyRange.IsPointLookup(lb.keyDesc) {
-		// reuse the cursor
-		// convert range into a tuple? or keep as a tuple the whole time?
-		// implement a seek function on the cursor that can use a range comparison?
-	}
-
-	// else do the long way?
-	return RowIterForProllyRange(ctx, lb.idx, p.prollyRange, lb.sch, lb.projections, p.durableState)
-
+type coveringLookupBuilder struct {
+	*baseLookupBuilder
 }
 
-//	type doltIndexLookup struct {
-//		idx          DoltIndex
-//		nomsRanges   []*noms.ReadRange
-//		prollyRanges []prolly.Range
-//		sqlRanges    sql.RangeCollection
-//	}
-//
-// //var _ sql.IndexLookup = (*doltIndexLookup)(nil)
-//
+type nomsLookupBuilder struct {
+	*baseLookupBuilder
+}
+
+type keylessLookupBuilder struct {
+	*baseLookupBuilder
+}
+
+var _ LookupBuilder = (*baseLookupBuilder)(nil)
+var _ LookupBuilder = (*nomsLookupBuilder)(nil)
+var _ LookupBuilder = (*coveringLookupBuilder)(nil)
+var _ LookupBuilder = (*keylessLookupBuilder)(nil)
+var _ LookupBuilder = (*pointLookupBuilder)(nil)
+
+func (lb *baseLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	p := part.(rangePartition)
+	return newProllyIndexIter(ctx, lb.idx, p.prollyRange, lb.sch, lb.projections, p.durableState.Primary, p.durableState.Secondary)
+}
+
+func (lb *nomsLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	p := part.(rangePartition)
+	ranges := []*noms.ReadRange{p.nomsRange}
+	return RowIterForNomsRanges(ctx, lb.idx, ranges, lb.projections, p.durableState)
+}
+
+func (lb *coveringLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	p := part.(rangePartition)
+	return newProllyCoveringIndexIter(ctx, lb.idx, p.prollyRange, lb.sch, lb.projections, p.durableState.Secondary)
+}
+
+func (lb *keylessLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	p := part.(rangePartition)
+	return newProllyKeylessIndexIter(ctx, lb.idx, p.prollyRange, lb.sch, lb.projections, p.durableState.Primary, p.durableState.Secondary)
+}
+
+// pointLookupBuilder optimizes constructing repeated secondary point lookups
+type pointLookupBuilder struct {
+	*baseLookupBuilder
+
+	// primary for default/keyless, secondary for covering
+	indexData prolly.Map
+
+	// cur for point lookup reuse
+	cur                           *tree.Cursor
+	keyDesc                       val.TupleDesc
+	pkMap, keyMap, valMap, ordMap val.OrdinalMapping
+	pkBld                         *val.TupleBuilder
+}
+
+// NewRowIter returns a new index iter for the given partition
+func (lb *pointLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	// TODO refresh durable state and everything downstream
+	// primary, secondary
+
+	p := part.(*rangePartition)
+	if !p.prollyRange.IsPointLookup(lb.keyDesc) {
+		// fallback to default constructor
+		return lb.baseLookupBuilder.NewRowIter(ctx, part)
+	}
+
+	rangeIter, err := lb.newPointLookup(p.prollyRange)
+	if err != nil {
+		return nil, err
+	}
+
+	return prollyIndexIter{
+		idx:       lb.idx,
+		indexIter: rangeIter,
+		primary:   lb.indexData,
+		pkBld:     lb.pkBld,
+		pkMap:     lb.pkMap,
+		keyMap:    lb.keyMap,
+		valMap:    lb.valMap,
+		ordMap:    lb.ordMap,
+		sqlSch:    lb.sch.Schema,
+	}, nil
+}
+
+func (lb *pointLookupBuilder) newPointLookup(rang prolly.Range) (prolly.MapIter, error) {
+	//todo move cursor to new point
+	key := val.Tuple(lb.cur.CurrentKey())
+	value := val.Tuple(lb.cur.CurrentValue())
+
+	if !rang.Matches(key) {
+		return prolly.EmptyPointLookup, nil
+	}
+
+	return prolly.NewPointLookup(key, value), nil
+}
+
 // boundsCase determines the case upon which the bounds are tested.
 type boundsCase byte
 
@@ -258,21 +356,6 @@ type columnBounds struct {
 type nomsRangeCheck []columnBounds
 
 var _ noms.InRangeCheck = nomsRangeCheck{}
-
-//func (il *doltIndexLookup) String() string {
-//	// TODO: this could be expanded with additional info (like the expression used to create the index lookup)
-//	return fmt.Sprintf("doltIndexLookup:%s", il.idx.ID())
-//}
-//
-//// Index implements the interface sql.IndexLookup
-//func (il *doltIndexLookup) Index() sql.Index {
-//	return il.idx
-//}
-//
-//// Ranges implements the interface sql.IndexLookup
-//func (il *doltIndexLookup) Ranges() sql.RangeCollection {
-//	return il.sqlRanges
-//}
 
 // Between returns whether the given types.Value is between the bounds. In addition, this returns if the value is outside
 // the bounds and above the upperbound.

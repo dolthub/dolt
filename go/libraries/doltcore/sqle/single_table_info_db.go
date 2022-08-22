@@ -39,6 +39,7 @@ type SingleTableInfoDatabase struct {
 }
 
 var _ doltReadOnlyTableInterface = (*SingleTableInfoDatabase)(nil)
+var _ sql.IndexedTable = (*SingleTableInfoDatabase)(nil)
 var _ SqlDatabase = (*SingleTableInfoDatabase)(nil)
 
 func NewSingleTableDatabase(tableName string, sch schema.Schema, foreignKeys []doltdb.ForeignKey, parentSchs map[string]schema.Schema) *SingleTableInfoDatabase {
@@ -93,6 +94,10 @@ func (db *SingleTableInfoDatabase) PartitionRows(*sql.Context, sql.Partition) (s
 
 func (db *SingleTableInfoDatabase) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter2, error) {
 	return nil, fmt.Errorf("cannot get partition rows of a single table information database")
+}
+
+func (db *SingleTableInfoDatabase) LookupPartitions(context *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	return nil, fmt.Errorf("cannot get paritions of a single table information database")
 }
 
 // CreateIndexForForeignKey implements sql.ForeignKeyTable.
@@ -158,7 +163,7 @@ func (db *SingleTableInfoDatabase) GetForeignKeyUpdater(ctx *sql.Context) sql.Fo
 }
 
 // WithIndexLookup implements sql.IndexedTable.
-func (db *SingleTableInfoDatabase) WithIndexLookup(sql.IndexLookup) sql.Table {
+func (db *SingleTableInfoDatabase) AsIndexedAccess(sql.Index) sql.IndexedTable {
 	return db
 }
 
@@ -290,7 +295,7 @@ func (idx fmtIndex) IsGenerated() bool {
 }
 
 // NewLookup implements sql.Index
-func (idx fmtIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
+func (idx fmtIndex) AsIndexedAccess(index sql.IndexLookup) (sql.IndexedTable, error) {
 	panic("unimplemented")
 }
 
