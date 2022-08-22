@@ -31,25 +31,25 @@ type prollyFkIndexer struct {
 	pRange prolly.Range
 }
 
-var _ sql.Table = prollyFkIndexer{}
-var _ sql.IndexedTable = prollyFkIndexer{}
+var _ sql.Table = (*prollyFkIndexer)(nil)
+var _ sql.IndexedTable = (*prollyFkIndexer)(nil)
 
 // Name implements the interface sql.Table.
-func (n prollyFkIndexer) Name() string {
+func (n *prollyFkIndexer) Name() string {
 	return n.writer.tableName
 }
 
 // String implements the interface sql.Table.
-func (n prollyFkIndexer) String() string {
+func (n *prollyFkIndexer) String() string {
 	return n.writer.tableName
 }
 
 // Schema implements the interface sql.Table.
-func (n prollyFkIndexer) Schema() sql.Schema {
+func (n *prollyFkIndexer) Schema() sql.Schema {
 	return n.writer.sqlSch
 }
 
-func (n prollyFkIndexer) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+func (n *prollyFkIndexer) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	rang, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
 	if err != nil {
 		return nil, err
@@ -59,12 +59,12 @@ func (n prollyFkIndexer) LookupPartitions(ctx *sql.Context, lookup sql.IndexLook
 }
 
 // Partitions implements the interface sql.Table.
-func (n prollyFkIndexer) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+func (n *prollyFkIndexer) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return sql.PartitionsToPartitionIter(fkDummyPartition{}), nil
 }
 
 // PartitionRows implements the interface sql.Table.
-func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
+func (n *prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	var idxWriter indexWriter
 	var ok bool
 	if n.index.IsPrimaryKey() {
