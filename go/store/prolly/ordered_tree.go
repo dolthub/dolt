@@ -97,7 +97,7 @@ func rangeDiffOrderedTrees[K, V ~[]byte, O ordering[K]](
 		return err
 	}
 
-	differ, err := tree.DifferFromLeafCursors(fromStart, toStart, fromStop, toStop, cfn)
+	differ, err := tree.DifferFromCursors(fromStart, toStart, fromStop, toStop, cfn)
 	if err != nil {
 		return err
 	}

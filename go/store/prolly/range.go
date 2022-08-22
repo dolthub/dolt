@@ -90,7 +90,7 @@ func (r Range) aboveStart(t val.Tuple) bool {
 	return true
 }
 
-// belowStop is used to find the edge of the
+// belowStop is used to find the end of the
 // physical partition defined by a Range.
 func (r Range) belowStop(t val.Tuple) bool {
 	order := r.Desc.Comparator()

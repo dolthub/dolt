@@ -64,7 +64,7 @@ func DifferFromRoots(ctx context.Context, fromNs NodeStore, toNs NodeStore, from
 	return Differ{from: fc, to: tc, fromStop: fs, toStop: ts, cmp: cmp}, nil
 }
 
-func DifferFromLeafCursors(fromStart, toStart, fromStop, toStop *Cursor, cmp CompareFn) (Differ, error) {
+func DifferFromCursors(fromStart, toStart, fromStop, toStop *Cursor, cmp CompareFn) (Differ, error) {
 	return Differ{from: fromStart, to: toStart, fromStop: fromStop, toStop: toStop, cmp: cmp}, nil
 }
 
