@@ -98,6 +98,9 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		}
 	}
 
+	headCommit, _ := dEnv.HeadCommit(ctx)
+	headHash, _ := headCommit.HashOf()
+
 	var name, email string
 	// Check if the author flag is provided otherwise get the name and email stored in configs
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
@@ -116,7 +119,12 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	msg, msgOk := apr.GetValue(cli.MessageArg)
 	if !msgOk {
-		msg, err = getCommitMessageFromEditor(ctx, dEnv)
+		if apr.Contains(cli.AmendFlag) {
+			commitMeta, _ := headCommit.GetCommitMeta(ctx)
+			msg, err = getCommitMessageFromEditor(ctx, dEnv, commitMeta.Description)
+		} else {
+			msg, err = getCommitMessageFromEditor(ctx, dEnv, "")
+		}
 		if err != nil {
 			return handleCommitErr(ctx, dEnv, err, usage)
 		}
@@ -129,6 +137,22 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("error: invalid date").AddCause(err).Build(), usage)
+		}
+	}
+
+	var parentsHeadForAmend []*doltdb.Commit
+	if apr.Contains(cli.AmendFlag) {
+		numParentsHeadForAmend := headCommit.NumParents()
+		for i := 0; i < numParentsHeadForAmend; i++ {
+			parentCommit, err := headCommit.GetParent(ctx, i)
+			if err == nil {
+				parentsHeadForAmend = append(parentsHeadForAmend, parentCommit)
+			}
+		}
+
+		err = actions.ResetSoftToRef(ctx, dEnv.DbData(), "HEAD~1")
+		if err != nil {
+			return handleResetError(err, usage)
 		}
 	}
 
@@ -145,17 +169,25 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	var mergeParentCommits []*doltdb.Commit
 	if ws.MergeActive() {
 		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
+	} else if apr.Contains(cli.AmendFlag) && len(parentsHeadForAmend) > 1 {
+		mergeParentCommits = parentsHeadForAmend
 	}
 
 	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
-		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
+		AllowEmpty: apr.Contains(cli.AllowEmptyFlag) || apr.Contains(cli.AmendFlag),
 		Force:      apr.Contains(cli.ForceFlag),
 		Name:       name,
 		Email:      email,
 	})
 	if err != nil {
+		if apr.Contains(cli.AmendFlag) {
+			errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
+			if errRes != nil {
+				return handleResetError(errRes, usage)
+			}
+		}
 		return handleCommitErr(ctx, dEnv, err, usage)
 	}
 
@@ -169,6 +201,12 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		dEnv.NewWorkingSetMeta(fmt.Sprintf("Updated by %s %s", commandStr, strings.Join(args, " "))),
 	)
 	if err != nil {
+		if apr.Contains(cli.AmendFlag) {
+			errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
+			if errRes != nil {
+				return handleResetError(errRes, usage)
+			}
+		}
 		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't commit").AddCause(err).Build(), usage)
 	}
 
@@ -222,12 +260,14 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv) (string, error) {
+func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, amendString string) (string, error) {
 	var finalMsg string
 	initialMsg, err := buildInitalCommitMsg(ctx, dEnv)
 	if err != nil {
 		return "", err
 	}
+	initialMsg = fmt.Sprintf("%s\n%s", amendString, initialMsg)
+
 	backupEd := "vim"
 	if ed, edSet := os.LookupEnv("EDITOR"); edSet {
 		backupEd = ed
