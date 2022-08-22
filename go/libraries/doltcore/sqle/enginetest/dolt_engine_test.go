@@ -64,19 +64,19 @@ func TestQueries(t *testing.T) {
 }
 
 func TestSingleQuery(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
 	var test queries.QueryTest
 	test = queries.QueryTest{
-		Query: `select i from mytable where i = 1`,
+		Query: `SELECT * FROM mytable`,
 		Expected: []sql.Row{
 			{1},
 		},
 	}
 
 	harness := newDoltHarness(t)
-	engine := enginetest.NewEngine(t, harness)
-	enginetest.CreateIndexes(t, harness, engine)
+	//engine := enginetest.NewEngine(t, harness)
+	//enginetest.CreateIndexes(t, harness, engine)
 	//engine.Analyzer.Debug = true
 	//engine.Analyzer.Verbose = true
 
@@ -176,29 +176,24 @@ func TestSingleScript(t *testing.T) {
 }
 
 func TestSingleQueryPrepared(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
 	var test queries.QueryTest
 	test = queries.QueryTest{
-		Query: `SELECT ST_SRID(g, 0) from geometry_table order by i`,
+		Query: `select i from mytable where i = 1`,
 		Expected: []sql.Row{
-			{sql.Point{X: 1, Y: 2}},
-			{sql.LineString{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
-			{sql.Polygon{Lines: []sql.LineString{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
-			{sql.Point{X: 1, Y: 2}},
-			{sql.LineString{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
-			{sql.Polygon{Lines: []sql.LineString{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
+			{1},
 		},
 	}
 
 	harness := newDoltHarness(t)
 	//engine := enginetest.NewEngine(t, harness)
 	//enginetest.CreateIndexes(t, harness, engine)
-	engine := enginetest.NewSpatialEngine(t, harness)
-	engine.Analyzer.Debug = true
-	engine.Analyzer.Verbose = true
+	//engine := enginetest.NewSpatialEngine(t, harness)
+	//engine.Analyzer.Debug = true
+	//engine.Analyzer.Verbose = true
 
-	enginetest.TestQuery(t, harness, test.Query, test.Expected, nil, nil)
+	enginetest.TestPreparedQuery(t, harness, test.Query, test.Expected, nil)
 }
 
 func TestSingleScriptPrepared(t *testing.T) {
