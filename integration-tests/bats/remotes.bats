@@ -246,7 +246,7 @@ teardown() {
     dolt push test-remote test-branch
 
     cd ../repo2
-    dolt fetch
+    dolt fetch test-remote
     run dolt branch
     [[ ! "$output" =~ "test-branch" ]] || false
 
