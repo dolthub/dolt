@@ -1287,7 +1287,7 @@ END""")
     # can't drop a branch-qualified database name
     run server_query "" 1 "drop database \`test2/newbranch\`"
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "database not found: test2/newbranch" ]] || false
+    [[ "$output" =~ "unable to drop revision database: test2/newbranch" ]] || false
 
     server_query "" 1 "drop database TEST2"
 

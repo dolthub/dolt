@@ -34,10 +34,29 @@ var ErrRevisionDbNotFound = errors.NewKind("revision database not found: '%s'")
 type RevisionDatabaseProvider interface {
 	// RevisionDbState provides the InitialDbState for a revision database.
 	RevisionDbState(ctx *sql.Context, revDB string) (InitialDbState, error)
-	// DropRevisionDb removes the specified revision database from the databases this provider is tracking.
-	DropRevisionDb(ctx *sql.Context, revDB string) error
+	// IsRevisionDatabase validates the specified dbName and returns true if it is a valid revision database.
+	IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error)
+	// GetRevisionForRevisionDatabase looks up the named database and returns the root database name as well as the
+	// revision and any errors encountered. If the specified database is not a revision database, the root database
+	// name will still be returned, and the revision will be an empty string.
+	GetRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, string, error)
 }
+
+// RevisionDatabase allows callers to query a revision database for the commit, branch, or tag it is pinned to. For
+// example, when using a database with a branch revision specification, that database is only able to use that branch
+// and cannot change branch heads. Calling `Revision` on that database will return the branch name. Similarly, for
+// databases using a commit revision spec or a tag revision spec, Revision will return the commit or tag, respectively.
+// Currently, only explicit branch names, commit hashes, and tag names are allowed as database revision specs. Other
+// refspecs, such as "HEAD~2" are not supported yet.
+type RevisionDatabase interface {
+	// Revision returns the specific branch, commit, or tag to which this revision database has been pinned. Other
+	// revision specifications (e.g. "HEAD~2") are not supported. If a database implements RevisionDatabase, but
+	// is not pinned to a specific revision, the empty string is returned.
+	Revision() string
+}
+
 type DoltDatabaseProvider interface {
+	sql.DatabaseProvider
 	RevisionDatabaseProvider
 
 	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases.
@@ -62,7 +81,17 @@ func EmptyDatabaseProvider() DoltDatabaseProvider {
 	return emptyRevisionDatabaseProvider{}
 }
 
-type emptyRevisionDatabaseProvider struct{}
+type emptyRevisionDatabaseProvider struct {
+	sql.DatabaseProvider
+}
+
+func (e emptyRevisionDatabaseProvider) GetRevisionForRevisionDatabase(_ *sql.Context, _ string) (string, string, error) {
+	return "", "", nil
+}
+
+func (e emptyRevisionDatabaseProvider) IsRevisionDatabase(_ *sql.Context, _ string) (bool, error) {
+	return false, nil
+}
 
 func (e emptyRevisionDatabaseProvider) GetRemoteDB(ctx *sql.Context, srcDB *doltdb.DoltDB, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
 	return nil, nil
@@ -77,10 +106,6 @@ func (e emptyRevisionDatabaseProvider) FileSystemForDatabase(dbname string) (fil
 }
 
 func (e emptyRevisionDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error {
-	return nil
-}
-
-func (e emptyRevisionDatabaseProvider) DropRevisionDb(ctx *sql.Context, revDB string) error {
 	return nil
 }
 
