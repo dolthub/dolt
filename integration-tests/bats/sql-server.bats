@@ -340,8 +340,8 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
 
+    dolt sql --user=dolt -q "CALL DOLT_ADD('.')"
     # check that dolt_commit works properly when autocommit is on
-    dolt add .
     run dolt sql --user=dolt -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
     [ "$status" -eq 0 ]
 
@@ -775,6 +775,7 @@ SQL
         PRIMARY KEY (pk)
     );
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
+    CALL DOLT_ADD('.');
     SELECT commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');
     INSERT INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
 
@@ -1129,6 +1130,7 @@ END""")
     server_query repo1 1 dolt "" "INSERT INTO t1 (val) VALUES (2)"
     server_query repo1 1 dolt "" "SELECT * FROM t1" "pk,val\n1,1\n2,2"
 
+    run server_query repo1 1 dolt "" "call dolt_add('.')"
     run server_query repo1 1 dolt "" "call dolt_commit('-am', 'table with two values')"
     run server_query repo1 1 dolt "" "call dolt_branch('new_branch')"
 
@@ -1200,11 +1202,13 @@ END""")
     server_query "" 1 dolt "" "create database test1"
     server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntest1"
     server_query "test1" 1 dolt "" "create table a(x int)"
+    server_query "test1" 1 dolt "" "select dolt_add('.')"
     server_query "test1" 1 dolt "" "insert into a values (1), (2)"
     server_query "test1" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
 
     server_query "" 1 dolt "" "create database test2"
     server_query "test2" 1 dolt "" "create table b(x int)"
+    server_query "test2" 1 dolt "" "select dolt_add('.')"
     server_query "test2" 1 dolt "" "insert into b values (1), (2)"
     server_query "test2" 1 dolt "" "select dolt_commit('-a', '-m', 'new table b')"
 
@@ -1230,6 +1234,7 @@ END""")
 
     server_query "" 1 dolt "" "create database test3"
     server_query "test3" 1 dolt "" "create table c(x int)"
+    server_query "test3" 1 dolt "" "select dolt_add('.')"
     server_query "test3" 1 dolt "" "insert into c values (1), (2)"
     run server_query "test3" 1 dolt "" "select dolt_commit('-a', '-m', 'new table c')"
 
@@ -1257,14 +1262,17 @@ END""")
 
     server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntest1\ntest2\ntest3"
     server_query "test1" 1 dolt "" "create table a(x int)"
+    server_query "test1" 1 dolt "" "select dolt_add('.')"
     server_query "test1" 1 dolt "" "insert into a values (1), (2)"
     run server_query "test1" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
 
     server_query "test2" 1 dolt "" "create table a(x int)"
+    server_query "test2" 1 dolt "" "select dolt_add('.')"
     server_query "test2" 1 dolt "" "insert into a values (3), (4)"
     server_query "test2" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
 
     server_query "test3" 1 dolt "" "create table a(x int)"
+    server_query "test3" 1 dolt "" "select dolt_add('.')"
     server_query "test3" 1 dolt "" "insert into a values (5), (6)"
     server_query "test3" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
 
@@ -1303,7 +1311,7 @@ END""")
     server_query "" 1 dolt "" "show databases" "Database\nTest1\ninformation_schema\nmysql"
     server_query "" 1 dolt "" "use test1; create table a(x int);"
     server_query "" 1 dolt "" "use TEST1; insert into a values (1), (2);"
-    run server_query "" 1 dolt "" "use test1; select dolt_commit('-a', '-m', 'new table a');"
+    run server_query "" 1 dolt "" "use test1; select dolt_add('.'); select dolt_commit('-a', '-m', 'new table a');"
     server_query "" 1 dolt "" "use test1; call dolt_checkout('-b', 'newbranch');"
     server_query "" 1 dolt "" "use \`TEST1/newbranch\`; select * from a order by x" ";x\n1\n2"
     server_query "" 1 dolt "" "use \`test1/newbranch\`; select * from a order by x" ";x\n1\n2"
@@ -1323,6 +1331,7 @@ END""")
     server_query "" 1 dolt "" "create database test1"
     server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntest1"
     server_query "test1" 1 dolt "" "create table a(x int)"
+    server_query "test1" 1 dolt "" "select dolt_add('.')"
     server_query "test1" 1 dolt "" "insert into a values (1), (2)"
 
     server_query "test1" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
@@ -1338,6 +1347,7 @@ END""")
 
     server_query "" 1 dolt "" "create database test3"
     server_query "test3" 1 dolt "" "create table c(x int)"
+    server_query "test3" 1 dolt "" "select dolt_add('.')"
     server_query "test3" 1 dolt "" "insert into c values (1), (2)"
     server_query "test3" 1 dolt "" "call dolt_commit('-a', '-m', 'new table c')"
 
@@ -1379,12 +1389,15 @@ END""")
     server_query "" 1 dolt "" "create database test1"
     server_query "repo1" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\nrepo1\ntest1"
     server_query "test1" 1 dolt "" "create table a(x int)"
+    server_query "test1" 1 dolt "" "select dolt_add('.')"
     server_query "test1" 1 dolt "" "insert into a values (1), (2)"
+
     # not bothering to check the results of the commit here
     server_query "test1" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
 
     server_query "" 1 dolt "" "create database test2"
     server_query "test2" 1 dolt "" "create table b(x int)"
+    server_query "test2" 1 dolt "" "select dolt_add('.')"
     server_query "test2" 1 dolt "" "insert into b values (1), (2)"
     # not bothering to check the results of the commit here
     server_query "test2" 1 dolt "" "call dolt_commit('-a', '-m', 'new table b')"

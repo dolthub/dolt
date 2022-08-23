@@ -80,6 +80,7 @@ SQL
 create database mydb;
 use mydb;
 create table test(a int primary key);
+call dolt_add('.');
 select dolt_commit("-am", "first commit");
 SQL
 

@@ -162,10 +162,13 @@ teardown() {
     cd ..
 
     server_query repo1 1 dolt "" "create table t1 (a int primary key)"
+    server_query repo1 1 dolt "" "call dolt_add('.')"
     server_query repo1 1 dolt "" "call dolt_commit('-am', 'cm')"
     server_query repo2 1 dolt "" "create table t2 (a int primary key)"
+    server_query repo2 1 dolt "" "call dolt_add('.')"
     server_query repo2 1 dolt  "" "call dolt_commit('-am', 'cm')"
     server_query repo3 1 dolt "" "create table t3 (a int primary key)"
+    server_query repo3 1 dolt "" "call dolt_add('.')"
     server_query repo3 1 dolt "" "call dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
