@@ -893,6 +893,29 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 					{9, 10},
 				},
 			},
+			{
+				Query: "explain select pk, c from dolt_history_t1 where c = 4",
+				Expected: []sql.Row{
+					{"Exchange"},
+					{" └─ Filter(dolt_history_t1.c = 4)"},
+					{"     └─ IndexedTableAccess(dolt_history_t1)"},
+					{"         ├─ index: [dolt_history_t1.c]"},
+					{"         ├─ filters: [{[4, 4]}]"},
+					{"         └─ columns: [pk c]"},
+				},
+			},
+			{
+				Query: "explain select pk, c from dolt_history_t1 where c = 10 and committer = 'someguy'",
+				Expected: []sql.Row{
+					{"Exchange"},
+					{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+					{"     └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = 'someguy'))"},
+					{"         └─ IndexedTableAccess(dolt_history_t1)"},
+					{"             ├─ index: [dolt_history_t1.c]"},
+					{"             ├─ filters: [{[10, 10]}]"},
+					{"             └─ columns: [pk c committer]"},
+				},
+			},
 		},
 	},
 	{
@@ -1049,17 +1072,6 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 // for prepared queries.
 var BrokenHistorySystemTableScriptTests = []queries.ScriptTest{
 	{
-		Name: "index by primary key",
-		SetUpScript: []string{
-			"create table t1 (pk int primary key, c int);",
-			"insert into t1 values (1,2), (3,4)",
-			"set @Commit1 = dolt_commit('-am', 'initial table');",
-			"insert into t1 values (5,6), (7,8)",
-			"set @Commit2 = dolt_commit('-am', 'two more rows');",
-		},
-		Assertions: []queries.ScriptTestAssertion{},
-	},
-	{
 		Name: "adding an index",
 		SetUpScript: []string{
 			"create table t1 (pk int primary key, c int);",
@@ -1071,31 +1083,7 @@ var BrokenHistorySystemTableScriptTests = []queries.ScriptTest{
 			"create index t1_c on t1(c)",
 			"set @Commit2 = dolt_commit('-am', 'two more rows and an index');",
 		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "explain select pk, c from dolt_history_t1 where c = 4",
-				Expected: []sql.Row{
-					{"Exchange"},
-					{" └─ Filter(dolt_history_t1.c = 4)"},
-					{"     └─ IndexedTableAccess(dolt_history_t1)"},
-					{"         ├─ index: [dolt_history_t1.c]"},
-					{"         ├─ filters: [{[4, 4]}]"},
-					{"         └─ columns: [pk c]"},
-				},
-			},
-			{
-				Query: "explain select pk, c from dolt_history_t1 where c = 10 and committer = 'someguy'",
-				Expected: []sql.Row{
-					{"Exchange"},
-					{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{"     └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = 'someguy'))"},
-					{"         └─ IndexedTableAccess(dolt_history_t1)"},
-					{"             ├─ index: [dolt_history_t1.c]"},
-					{"             ├─ filters: [{[10, 10]}]"},
-					{"             └─ columns: [pk c committer]"},
-				},
-			},
-		},
+		Assertions: []queries.ScriptTestAssertion{},
 	},
 	{
 		Name: "dolt_history table with AS OF",
