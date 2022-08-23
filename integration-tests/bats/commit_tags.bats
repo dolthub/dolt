@@ -42,7 +42,6 @@ teardown() {
 }
 
 @test "commit_tags: create tag v1.2.3" {
-    skip "Noms doesn't support '.' in dataset names"
     run dolt tag v1.2.3
     [ $status -eq 0 ]
 }
@@ -136,4 +135,17 @@ teardown() {
     run dolt tag -v
     [ $status -eq 0 ]
     [[ "$output" =~ "SAMO" ]] || false
+}
+
+@test "commit_tags: create a tag with semver string" {
+    dolt tag v1.0.0 HEAD^
+
+    run dolt tag
+    [ $status -eq 0 ]
+    [[ "$output" =~ "v1.0.0" ]] || false
+
+    dolt tag 1.0.0 HEAD
+    run dolt tag
+    [ $status -eq 0 ]
+    [[ "$output" =~ "1.0.0" ]] || false
 }

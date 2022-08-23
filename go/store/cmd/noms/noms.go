@@ -40,12 +40,8 @@ import (
 )
 
 var commands = []*util.Command{
-	nomsCommit,
 	nomsConfig,
-	nomsDiff,
 	nomsDs,
-	nomsLog,
-	nomsMerge,
 	nomsRoot,
 	nomsShow,
 	nomsSync,
@@ -56,11 +52,7 @@ var commands = []*util.Command{
 
 var kingpinCommands = []util.KingpinCommand{
 	nomsBlob,
-	nomsList,
-	nomsMap,
-	nomsSet,
 	nomsStats,
-	nomsStruct,
 }
 
 var actions = []string{

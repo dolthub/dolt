@@ -172,8 +172,8 @@ var ErrInvalidDatasetID = errors.New("Invalid dataset ID")
 
 func (db *database) GetDataset(ctx context.Context, datasetID string) (Dataset, error) {
 	// precondition checks
-	if !DatasetFullRe.MatchString(datasetID) {
-		return Dataset{}, fmt.Errorf("%w: %s", ErrInvalidDatasetID, datasetID)
+	if err := ValidateDatasetId(datasetID); err != nil {
+		return Dataset{}, fmt.Errorf("%w: %s", err, datasetID)
 	}
 
 	datasets, err := db.Datasets(ctx)

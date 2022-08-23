@@ -209,6 +209,7 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 		From     Schema
 		To       Schema
 		Diffable bool
+		KeyMap   []int
 	}{
 		{
 			Name: "Basic",
@@ -217,14 +218,16 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 			To: MustSchemaFromCols(NewColCollection(
 				NewColumn("pk", 0, types.IntKind, true))),
 			Diffable: true,
+			KeyMap:   []int{0},
 		},
 		{
-			Name: "Column renames",
+			Name: "PK-Column renames",
 			From: MustSchemaFromCols(NewColCollection(
 				NewColumn("pk", 1, types.IntKind, true))),
 			To: MustSchemaFromCols(NewColCollection(
 				NewColumn("pk2", 1, types.IntKind, true))),
 			Diffable: true,
+			KeyMap:   []int{0},
 		},
 		{
 			Name: "Only pk ordering should matter for diffability",
@@ -234,6 +237,7 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 			To: MustSchemaFromCols(NewColCollection(
 				NewColumn("pk", 1, types.IntKind, true))),
 			Diffable: true,
+			KeyMap:   []int{0},
 		},
 		{
 			Name: "Only pk ordering should matter for diffability - inverse",
@@ -243,6 +247,7 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 				NewColumn("col1", 2, types.IntKind, false),
 				NewColumn("pk", 1, types.IntKind, true))),
 			Diffable: true,
+			KeyMap:   []int{0},
 		},
 		{
 			Name: "Only pk ordering should matter for diffability - compound",
@@ -254,6 +259,7 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 				NewColumn("pk1", 0, types.IntKind, true),
 				NewColumn("pk2", 2, types.IntKind, true))),
 			Diffable: true,
+			KeyMap:   []int{0, 1},
 		},
 		{
 			Name: "Tag mismatches",
@@ -279,6 +285,13 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			d := ArePrimaryKeySetsDiffable(types.Format_Default, test.From, test.To)
 			require.Equal(t, test.Diffable, d)
+
+			// If they are diffable then we should be able to map their schemas from one to another.
+			if d {
+				keyMap, _, err := MapSchemaBasedOnTagAndName(test.From, test.To)
+				require.NoError(t, err)
+				require.Equal(t, test.KeyMap, keyMap)
+			}
 		})
 	}
 }

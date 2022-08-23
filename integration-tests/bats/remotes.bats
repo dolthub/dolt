@@ -228,11 +228,16 @@ teardown() {
     dolt sql -q "CREATE TABLE test (pk INT)"
     dolt commit -am "main commit"
     dolt push test-remote main
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "remotes/test-remote/test-branch" ]] || false
 
     cd ..
-    run dolt clone http://localhost:50051/test-org/test-repo repo2
+    dolt clone --remote=test-remote http://localhost:50051/test-org/test-repo repo2
+    run dolt branch -a
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
+    [[ ! "$output" =~ "test-branch" ]] || false
+    [[ ! "$output" =~ "remotes/test-remote/test-branch" ]] || false
 
     cd repo1
     dolt checkout -b test-branch
@@ -241,8 +246,10 @@ teardown() {
     dolt push test-remote test-branch
 
     cd ../repo2
-    dolt fetch
-    # Checkout with DOLT_CHECKOUT and confirm the table has the row added in the remote
+    dolt fetch test-remote
+    run dolt branch
+    [[ ! "$output" =~ "test-branch" ]] || false
+
     run dolt sql << SQL
 SELECT DOLT_CHECKOUT('test-branch');
 SELECT * FROM test;
@@ -252,11 +259,13 @@ SQL
     [[ "$output" =~ "pk" ]] || false
     [[ "$output" =~ "1" ]] || false
 
-    skip # above checkout command should set upstream persisting outside of session
+    run dolt branch
+    [[ "$output" =~ "test-branch" ]] || false
+
     dolt checkout test-branch
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "branch 'test-branch' set up to track 'origin/test-branch'." ]] || false
+    [[ "$output" =~ "Your branch is up to date with 'test-remote/test-branch'." ]] || false
 }
 
 @test "remotes: select 'DOLT_CHECKOUT('-b','new_branch') should not set upstream if there is a remote branch with matching name" {

@@ -132,7 +132,19 @@ func (s SessionStateAdapter) GetBranches() (map[string]env.BranchConfig, error) 
 
 func (s SessionStateAdapter) UpdateBranch(name string, new env.BranchConfig) error {
 	s.branches[name] = new
-	return nil
+
+	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
+	if err != nil {
+		return err
+	}
+
+	repoState, err := env.LoadRepoState(fs)
+	if err != nil {
+		return err
+	}
+	repoState.Branches[name] = new
+
+	return repoState.Save(fs)
 }
 
 func (s SessionStateAdapter) AddRemote(remote env.Remote) error {

@@ -592,7 +592,7 @@ func diffRows(ctx context.Context, se *engine.SqlEngine, td diff.TableDelta, dAr
 	if dArgs.diffOutput == SQLDiffOutput &&
 		(td.ToSch == nil ||
 			(td.FromSch != nil && !schema.SchemasAreEqual(td.FromSch, td.ToSch))) {
-		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff")
+		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff\n")
 		return nil
 	}
 
