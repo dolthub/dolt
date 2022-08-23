@@ -618,7 +618,7 @@ func diffRows(ctx context.Context, se *engine.SqlEngine, td diff.TableDelta, dAr
 		if targetSch == nil {
 			targetSch = td.FromSch
 		}
-		diffWriter, err = json.NewJsonDiffWriter(iohelp.NopWrCloser(cli.CliOut), targetSch)
+		diffWriter, err = json.NewJsonDiffWriter(iohelp.NopWrCloser(cli.CliOut), td.ToName, targetSch)
 		if err != nil {
 			return nil
 		}

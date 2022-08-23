@@ -73,7 +73,7 @@ func ProcFuncForSourceFunc(sourceFunc SourceFunc) InFunc {
 }
 
 // ProcFuncForReader adapts a standard TableReader to work as an InFunc for a pipeline
-func ProcFuncForReader(ctx context.Context, rd table.TableReader) InFunc {
+func ProcFuncForReader(ctx context.Context, rd table.Reader) InFunc {
 	return ProcFuncForSourceFunc(func() (row.Row, ImmutableProperties, error) {
 		r, err := rd.ReadRow(ctx)
 

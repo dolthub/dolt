@@ -26,12 +26,12 @@ import (
 // of multiple TableReader instances into a single set of results.
 type CompositeTableReader struct {
 	sch     schema.Schema
-	readers []TableReadCloser
+	readers []ReadCloser
 	idx     int
 }
 
 // NewCompositeTableReader creates a new CompositeTableReader instance from a slice of TableReadClosers.
-func NewCompositeTableReader(readers []TableReadCloser) (*CompositeTableReader, error) {
+func NewCompositeTableReader(readers []ReadCloser) (*CompositeTableReader, error) {
 	if len(readers) == 0 {
 		panic("nothing to iterate")
 	}

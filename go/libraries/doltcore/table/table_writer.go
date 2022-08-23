@@ -31,7 +31,7 @@ type RowWriter interface {
 // TableWriteCloser is an interface for writing rows to a table, that can be closed
 type TableWriteCloser interface {
 	RowWriter
-	TableCloser
+	Closer
 }
 
 type SqlRowWriter interface {
