@@ -1195,7 +1195,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "CALL DOLT_MERGE without conflicts correctly works with autocommit off",
+		Name: "CALL DOLT_MERGE without conflicts correctly works with autocommit off with commit flag",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
@@ -1211,7 +1211,41 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge', '--commit')",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) from dolt_status",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{6}},
+			},
+			{
+				Query:    "select message from dolt_log where date > '2022-08-08' order by date DESC LIMIT 1;",
+				Expected: []sql.Row{{"this is a merge"}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE without conflicts correctly works with autocommit off and no commit flag",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET autocommit = 0",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
+			"SELECT DOLT_CHECKOUT('main');",
+			"INSERT INTO test VALUES (5),(6),(7);",
+			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:03');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge', '--no-commit')",
 				Expected: []sql.Row{{0, 0}},
 			},
 			{
@@ -1431,7 +1465,44 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:          "CALL DOLT_MERGE('feature-branch', '--no-commit', '--commit')",
+				ExpectedErrStr: "cannot define both 'commit' and 'no-commit' flags at the same time",
+			},
+			{
 				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) from dolt_status",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{6}}, // includes the merge commit and a new commit created by successful merge
+			},
+			{
+				Query:    "select message from dolt_log where date > '2022-08-08' order by date DESC LIMIT 1;",
+				Expected: []sql.Row{{"this is a merge"}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE with no conflicts works with no-commit flag",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:01');",
+			"SELECT DOLT_CHECKOUT('main');",
+			"INSERT INTO test VALUES (5),(6),(7);",
+			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:02');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge', '--no-commit')",
 				Expected: []sql.Row{{0, 0}},
 			},
 			{
@@ -3835,6 +3906,31 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Diff table shows diffs across primary key renames",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk1 int PRIMARY KEY);",
+			"INSERT INTO t values (1);",
+			"CREATE table t2 (pk1a int, pk1b int, PRIMARY KEY (pk1a, pk1b));",
+			"INSERT INTO t2 values (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'initial');",
+
+			"ALTER TABLE t RENAME COLUMN pk1 to pk2",
+			"ALTER TABLE t2 RENAME COLUMN pk1a to pk2a",
+			"ALTER TABLE t2 RENAME COLUMN pk1b to pk2b",
+			"CALL DOLT_COMMIT('-am', 'rename primary key')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT from_pk2, to_pk2, diff_type from dolt_diff_t;",
+				Expected: []sql.Row{{nil, 1, "added"}},
+			},
+			{
+				Query:    "SELECT from_pk2a, from_pk2b, to_pk2a, to_pk2b, diff_type from dolt_diff_t2;",
+				Expected: []sql.Row{{nil, nil, 2, 2, "added"}},
+			},
+		},
+	},
 }
 
 var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
@@ -4349,6 +4445,33 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Renaming a primary key column shows PK values in both the to and from columns",
+		SetUpScript: []string{
+			"CREATE TABLE t1 (pk int PRIMARY KEY, col1 int);",
+			"INSERT INTO t1 VALUES (1, 1);",
+			"CREATE TABLE t2 (pk1a int, pk1b int, col1 int, PRIMARY KEY (pk1a, pk1b));",
+			"INSERT INTO t2 VALUES (1, 1, 1);",
+			"CALL DOLT_COMMIT('-am', 'initial');",
+
+			"ALTER TABLE t1 RENAME COLUMN pk to pk2;",
+			"UPDATE t1 set col1 = 100;",
+			"ALTER TABLE t2 RENAME COLUMN pk1a to pk2a;",
+			"ALTER TABLE t2 RENAME COLUMN pk1b to pk2b;",
+			"UPDATE t2 set col1 = 100;",
+			"CALL DOLT_COMMIT('-am', 'edit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select to_pk2, to_col1, from_pk, from_col1, diff_type from dolt_diff('t1', 'HEAD~', 'HEAD')",
+				Expected: []sql.Row{{1, 100, 1, 1, "modified"}},
+			},
+			{
+				Query:    "select to_pk2a, to_pk2b, to_col1, from_pk1a, from_pk1b, from_col1, diff_type from dolt_diff('t2', 'HEAD~', 'HEAD');",
+				Expected: []sql.Row{{1, 1, 100, 1, 1, 1, "modified"}},
+			},
+		},
+	},
 }
 
 var LargeJsonObjectScriptTests = []queries.ScriptTest{
@@ -4614,7 +4737,7 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 			"insert into z values (100, 101, 102)",
 			"set @Commit2 = (select DOLT_COMMIT('-am', 'Creating tables z'))",
 
-			"select DOLT_MERGE('branch1')",
+			"select DOLT_MERGE('branch1', '--no-commit')",
 			"set @Commit3 = (select DOLT_COMMIT('-am', 'Merging branch1 into branch2'))",
 		},
 		Assertions: []queries.ScriptTestAssertion{

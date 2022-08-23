@@ -64,7 +64,11 @@ func NewTableIterator(ctx context.Context, sch schema.Schema, idx durable.Index,
 	var rowItr sql.RowIter
 	if types.IsFormat_DOLT(idx.Format()) {
 		m := durable.ProllyMapFromIndex(idx)
-		itr, err := m.IterOrdinalRange(ctx, offset, uint64(m.Count()))
+		c, err := m.Count()
+		if err != nil {
+			return nil, err
+		}
+		itr, err := m.IterOrdinalRange(ctx, offset, uint64(c))
 		if err != nil {
 			return nil, err
 		}

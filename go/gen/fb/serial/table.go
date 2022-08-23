@@ -24,17 +24,34 @@ type Table struct {
 	_tab flatbuffers.Table
 }
 
-func GetRootAsTable(buf []byte, offset flatbuffers.UOffsetT) *Table {
+func InitTableRoot(o *Table, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
+	o.Init(buf, n+offset)
+	if TableNumFields < o.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
+}
+
+func TryGetRootAsTable(buf []byte, offset flatbuffers.UOffsetT) (*Table, error) {
 	x := &Table{}
-	x.Init(buf, n+offset)
+	return x, InitTableRoot(x, buf, offset)
+}
+
+func GetRootAsTable(buf []byte, offset flatbuffers.UOffsetT) *Table {
+	x := &Table{}
+	InitTableRoot(x, buf, offset)
 	return x
 }
 
-func GetSizePrefixedRootAsTable(buf []byte, offset flatbuffers.UOffsetT) *Table {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+func TryGetSizePrefixedRootAsTable(buf []byte, offset flatbuffers.UOffsetT) (*Table, error) {
 	x := &Table{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x, InitTableRoot(x, buf, offset+flatbuffers.SizeUint32)
+}
+
+func GetSizePrefixedRootAsTable(buf []byte, offset flatbuffers.UOffsetT) *Table {
+	x := &Table{}
+	InitTableRoot(x, buf, offset+flatbuffers.SizeUint32)
 	return x
 }
 
@@ -174,6 +191,22 @@ func (rcv *Table) Conflicts(obj *Conflicts) *Conflicts {
 	return nil
 }
 
+func (rcv *Table) TryConflicts(obj *Conflicts) (*Conflicts, error) {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(Conflicts)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		if ConflictsNumFields < obj.Table().NumFields() {
+			return nil, flatbuffers.ErrTableHasUnknownFields
+		}
+		return obj, nil
+	}
+	return nil, nil
+}
+
 func (rcv *Table) Violations(j int) byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
@@ -242,8 +275,10 @@ func (rcv *Table) MutateArtifacts(j int, n byte) bool {
 	return false
 }
 
+const TableNumFields = 7
+
 func TableStart(builder *flatbuffers.Builder) {
-	builder.StartObject(7)
+	builder.StartObject(TableNumFields)
 }
 func TableAddSchema(builder *flatbuffers.Builder, schema flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(schema), 0)
@@ -289,17 +324,34 @@ type Conflicts struct {
 	_tab flatbuffers.Table
 }
 
-func GetRootAsConflicts(buf []byte, offset flatbuffers.UOffsetT) *Conflicts {
+func InitConflictsRoot(o *Conflicts, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
+	o.Init(buf, n+offset)
+	if ConflictsNumFields < o.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
+}
+
+func TryGetRootAsConflicts(buf []byte, offset flatbuffers.UOffsetT) (*Conflicts, error) {
 	x := &Conflicts{}
-	x.Init(buf, n+offset)
+	return x, InitConflictsRoot(x, buf, offset)
+}
+
+func GetRootAsConflicts(buf []byte, offset flatbuffers.UOffsetT) *Conflicts {
+	x := &Conflicts{}
+	InitConflictsRoot(x, buf, offset)
 	return x
 }
 
-func GetSizePrefixedRootAsConflicts(buf []byte, offset flatbuffers.UOffsetT) *Conflicts {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+func TryGetSizePrefixedRootAsConflicts(buf []byte, offset flatbuffers.UOffsetT) (*Conflicts, error) {
 	x := &Conflicts{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x, InitConflictsRoot(x, buf, offset+flatbuffers.SizeUint32)
+}
+
+func GetSizePrefixedRootAsConflicts(buf []byte, offset flatbuffers.UOffsetT) *Conflicts {
+	x := &Conflicts{}
+	InitConflictsRoot(x, buf, offset+flatbuffers.SizeUint32)
 	return x
 }
 
@@ -448,8 +500,10 @@ func (rcv *Conflicts) MutateAncestorSchema(j int, n byte) bool {
 	return false
 }
 
+const ConflictsNumFields = 4
+
 func ConflictsStart(builder *flatbuffers.Builder) {
-	builder.StartObject(4)
+	builder.StartObject(ConflictsNumFields)
 }
 func ConflictsAddData(builder *flatbuffers.Builder, data flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(data), 0)

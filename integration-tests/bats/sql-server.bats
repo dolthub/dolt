@@ -41,12 +41,12 @@ teardown() {
     # start the server and ensure there are no databases yet
     cd $tempDir/empty_server
     start_sql_server
-    unselected_server_query 1 "show databases" "Database\ninformation_schema\nmysql"
+    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql"
 
     # verify that dolt_clone works
     # TODO: Once dolt_clone can be called without a selected database, this can be removed
-    unselected_server_query 1 "create database test01;" ""
-    server_query "test01" 1 "call dolt_clone('file:///$tempDir/remote');" "status\n0"
+    server_query "" 1 dolt "" "create database test01;" ""
+    server_query "test01" 1 dolt "" "call dolt_clone('file:///$tempDir/remote');" "status\n0"
 }
 
 @test "sql-server: server assumes existing user" {
@@ -70,27 +70,27 @@ teardown() {
     dolt branch other
 
     start_sql_server
-    server_query repo1 1 "SET PERSIST repo1_default_branch = 'dev';" ""
+    server_query repo1 1 dolt "" "SET PERSIST repo1_default_branch = 'dev';" ""
     stop_sql_server
     start_sql_server
-    server_query repo1 1 "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\ndev"
+    server_query repo1 1 dolt "" "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\ndev"
     stop_sql_server
 
     # system variable is lost when starting sql-server outside of the folder
     # because global config is used.
     cd ..
     start_sql_server
-    server_query repo1 1 "SELECT LENGTH(@@repo1_default_branch);" "LENGTH(@@repo1_default_branch)\n0"
-    server_query repo1 1 "SET PERSIST repo1_default_branch = 'other';" ""
+    server_query repo1 1 dolt "" "SELECT LENGTH(@@repo1_default_branch);" "LENGTH(@@repo1_default_branch)\n0"
+    server_query repo1 1 dolt "" "SET PERSIST repo1_default_branch = 'other';" ""
     stop_sql_server
     start_sql_server
-    server_query repo1 1 "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\nother"
+    server_query repo1 1 dolt "" "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\nother"
     stop_sql_server
 
     # ensure we didn't blow away local setting
     cd repo1
     start_sql_server_with_args --user dolt --doltcfg-dir './'
-    server_query repo1 1 "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\ndev"
+    server_query repo1 1 dolt "" "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\ndev"
 }
 
 @test "sql-server: user session variables from config" {
@@ -165,7 +165,7 @@ SQL
     [[ "$output" =~ "No tables in working set" ]] || false
 
     # create table with autocommit off and verify there are still no tables
-    server_query repo1 0 "CREATE TABLE one_pk (
+    server_query repo1 0 dolt "" "CREATE TABLE one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c1 BIGINT COMMENT 'tag:1',
         c2 BIGINT COMMENT 'tag:2',
@@ -176,7 +176,7 @@ SQL
     [[ "$output" =~ "No tables in working set" ]] || false
 
     # create table with autocommit on and verify table creation
-    server_query repo1 1 "CREATE TABLE one_pk (
+    server_query repo1 1 dolt "" "CREATE TABLE one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c1 BIGINT COMMENT 'tag:1',
         c2 BIGINT COMMENT 'tag:2',
@@ -204,7 +204,7 @@ SQL
     [[ "$output" =~ "No tables in working set" ]] || false
 
     # attempt to create table (autocommit on), expect either some exception
-    server_query repo1 1 "CREATE TABLE i_should_not_exist (
+    server_query repo1 1 dolt "" "CREATE TABLE i_should_not_exist (
             c0 INT
         )" "" "database server is set to read only mode"
 
@@ -228,7 +228,7 @@ SQL
     start_sql_server_with_config repo1 server.yaml
 
     # make a select query
-    server_query repo1 1 "select * from t" "c0\n1"
+    server_query repo1 1 dolt "" "select * from t" "c0\n1"
 }
 
 @test "sql-server: read-only flag prevents dolt_commit" {
@@ -244,7 +244,7 @@ SQL
 
     # make a dolt_commit query
     skip "read-only flag does not prevent dolt_commit"
-    server_query repo1 1 "select dolt_commit('--allow-empty', '-m', 'msg')" "" "database server is set to read only mode: user does not have permission: write"
+    server_query repo1 1 dolt "" "call dolt_commit('--allow-empty', '-m', 'msg')" "" "database server is set to read only mode: user does not have permission: write"
 }
 
 @test "sql-server: read-only flag prevents dolt_reset" {
@@ -261,7 +261,7 @@ SQL
 
     # try to execute dolt_reset
     skip "read-only flag does not prevent dolt_reset"
-    server_query repo1 1 "call dolt_reset('--hard', 'HEAD~1')" "" "database server is set to read only mode: user does not have permission: write"
+    server_query repo1 1 dolt "" "call dolt_reset('--hard', 'HEAD~1')" "" "database server is set to read only mode: user does not have permission: write"
 }
 
 
@@ -276,12 +276,11 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false
 
-    server_query repo1 1 "CREATE TABLE one_pk (
+    server_query repo1 1 dolt "" "CREATE TABLE one_pk (
         pk BIGINT NOT NULL,
         c1 BIGINT,
         c2 BIGINT,
-        PRIMARY KEY (pk)
-    )" ""
+        PRIMARY KEY (pk)    )" ""
     run dolt ls
 
     [ "$status" -eq 0 ]
@@ -291,7 +290,7 @@ SQL
     run dolt sql --user=dolt -q "insert into one_pk values (1,1,1)"
     [ "$status" -eq 1 ]
 
-    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" ""
+    server_query repo1 1 dolt "" "SELECT * FROM one_pk ORDER by pk" ""
 
     # Test import as well (used by doltpy)
     echo 'pk,c1,c2' > import.csv
@@ -313,7 +312,7 @@ SQL
     [[ "$output" =~ "No tables in working set" ]] || false
 
     # create table with autocommit off and verify there are still no tables
-    server_query repo1 0 "CREATE TABLE one_pk (
+    server_query repo1 0 dolt "" "CREATE TABLE one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c1 BIGINT COMMENT 'tag:1',
         c2 BIGINT COMMENT 'tag:2',
@@ -324,15 +323,14 @@ SQL
     [[ "$output" =~ "No tables in working set" ]] || false
 
     # check that dolt_commit throws an error when there are no changes to commit
-    run server_query repo1 0 "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
-    [ "$status" -eq 1 ]
+    server_query repo1 0 dolt "" "CALL DOLT_COMMIT('-a', '-m', 'Commit1')" 1
 
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false
 
     # create table with autocommit on and verify table creation
-    server_query repo1 1 "CREATE TABLE one_pk (
+    server_query repo1 1 dolt "" "CREATE TABLE one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c1 BIGINT COMMENT 'tag:1',
         c2 BIGINT COMMENT 'tag:2',
@@ -368,20 +366,20 @@ SQL
     cd repo1
     start_sql_server repo1
 
-    server_query repo1 1 "SHOW tables" ""
-    server_query repo1 1 "CREATE TABLE one_pk (
+    server_query repo1 1 dolt "" "SHOW tables" ""
+    server_query repo1 1 dolt "" "CREATE TABLE one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c1 BIGINT COMMENT 'tag:1',
         c2 BIGINT COMMENT 'tag:2',
         PRIMARY KEY (pk)
     )" ""
-    server_query repo1 1 "SHOW tables" "Tables_in_repo1\none_pk"
-    insert_query repo1 1 "INSERT INTO one_pk (pk) VALUES (0)"
-    server_query repo1 1 "SELECT * FROM one_pk ORDER BY pk" "pk,c1,c2\n0,None,None"
-    insert_query repo1 1 "INSERT INTO one_pk (pk,c1) VALUES (1,1)"
-    insert_query repo1 1 "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
-    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
-    update_query repo1 1 "UPDATE one_pk SET c2=c1 WHERE c2 is NULL and c1 IS NOT NULL"
+    server_query repo1 1 dolt "" "SHOW tables" "Tables_in_repo1\none_pk"
+    server_query repo1 1 dolt "" "INSERT INTO one_pk (pk) VALUES (0)"
+    server_query repo1 1 dolt "" "SELECT * FROM one_pk ORDER BY pk" "pk,c1,c2\n0,None,None"
+    server_query repo1 1 dolt "" "INSERT INTO one_pk (pk,c1) VALUES (1,1)"
+    server_query repo1 1 dolt "" "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
+    server_query repo1 1 dolt "" "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
+    server_query repo1 1 dolt "" "UPDATE one_pk SET c2=c1 WHERE c2 is NULL and c1 IS NOT NULL"
 }
 
 @test "sql-server: test multiple queries on the same connection" {
@@ -390,7 +388,7 @@ SQL
     cd repo1
     start_sql_server repo1
 
-    multi_query repo1 1 "CREATE TABLE one_pk (
+    server_query repo1 1 dolt "" "CREATE TABLE one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c1 BIGINT COMMENT 'tag:1',
         c2 BIGINT COMMENT 'tag:2',
@@ -400,7 +398,7 @@ SQL
     INSERT INTO one_pk (pk,c1) VALUES (1,1);
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);"
 
-    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
+    server_query repo1 1 dolt "" "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
 }
 
 @test "sql-server: test reset_hard" {
@@ -419,12 +417,12 @@ SQL
     start_sql_server repo1
 
     # add some working changes
-    server_query repo1 1 "INSERT INTO test VALUES (7,7);"
+    server_query repo1 1 dolt "" "INSERT INTO test VALUES (7,7);"
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
-    multi_query repo1 1 "
+    server_query repo1 1 dolt "" "
         SELECT DOLT_RESET('--hard');
         REPLACE INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
 
@@ -435,7 +433,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "6,6" ]] || false
 
-    multi_query repo1 1 "
+    server_query repo1 1 dolt "" "
         INSERT INTO test VALUES (8,8);
         SELECT DOLT_RESET('--hard');
         REPLACE INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
@@ -454,7 +452,7 @@ SQL
     start_multi_db_server repo1
 
     # create a table in repo1
-    server_query repo1 1 "CREATE TABLE r1_one_pk (
+    server_query repo1 1 dolt "" "CREATE TABLE r1_one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c1 BIGINT COMMENT 'tag:1',
         c2 BIGINT COMMENT 'tag:2',
@@ -462,7 +460,7 @@ SQL
     )" ""
 
     # create a table in repo2
-    server_query repo1 1 "USE repo2; CREATE TABLE r2_one_pk (
+    server_query repo1 1 dolt "" "USE repo2; CREATE TABLE r2_one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c3 BIGINT COMMENT 'tag:1',
         c4 BIGINT COMMENT 'tag:2',
@@ -470,11 +468,11 @@ SQL
     )" ";"
 
     # validate tables in repos
-    server_query repo1 1 "SHOW tables" "Tables_in_repo1\nr1_one_pk"
-    server_query repo1 1 "USE repo2;SHOW tables" ";Tables_in_repo2\nr2_one_pk"
+    server_query repo1 1 dolt "" "SHOW tables" "Tables_in_repo1\nr1_one_pk"
+    server_query repo1 1 dolt "" "USE repo2;SHOW tables" ";Tables_in_repo2\nr2_one_pk"
 
     # put data in both
-    multi_query repo1 1 "
+    server_query repo1 1 dolt "" "
     INSERT INTO r1_one_pk (pk) VALUES (0);
     INSERT INTO r1_one_pk (pk,c1) VALUES (1,1);
     INSERT INTO r1_one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
@@ -483,24 +481,24 @@ SQL
     INSERT INTO r2_one_pk (pk,c3) VALUES (1,1);
     INSERT INTO r2_one_pk (pk,c3,c4) VALUES (2,2,2),(3,3,3)"
 
-    server_query repo1 1 "SELECT * FROM repo1.r1_one_pk ORDER BY pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
-    server_query repo1 1 "SELECT * FROM repo2.r2_one_pk ORDER BY pk" "pk,c3,c4\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
+    server_query repo1 1 dolt "" "SELECT * FROM repo1.r1_one_pk ORDER BY pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
+    server_query repo1 1 dolt "" "SELECT * FROM repo2.r2_one_pk ORDER BY pk" "pk,c3,c4\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
 
-    multi_query repo1 1 "
+    server_query repo1 1 dolt "" "
     DELETE FROM r1_one_pk where pk=0;
     USE repo2;
     DELETE FROM r2_one_pk where pk=0"
 
-    server_query repo1 1 "SELECT * FROM repo1.r1_one_pk ORDER BY pk" "pk,c1,c2\n1,1,None\n2,2,2\n3,3,3"
-    server_query repo1 1 "SELECT * FROM repo2.r2_one_pk ORDER BY pk" "pk,c3,c4\n1,1,None\n2,2,2\n3,3,3"
+    server_query repo1 1 dolt "" "SELECT * FROM repo1.r1_one_pk ORDER BY pk" "pk,c1,c2\n1,1,None\n2,2,2\n3,3,3"
+    server_query repo1 1 dolt "" "SELECT * FROM repo2.r2_one_pk ORDER BY pk" "pk,c3,c4\n1,1,None\n2,2,2\n3,3,3"
 
-    multi_query repo1 1 "
+    server_query repo1 1 dolt "" "
     UPDATE r1_one_pk SET c2=1 WHERE pk=1;
     USE repo2;
     UPDATE r2_one_pk SET c4=1 where pk=1"
 
-    server_query repo1 1 "SELECT * FROM repo1.r1_one_pk ORDER BY pk" "pk,c1,c2\n1,1,1\n2,2,2\n3,3,3"
-    server_query repo1 1 "SELECT * FROM repo2.r2_one_pk ORDER BY pk" "pk,c3,c4\n1,1,1\n2,2,2\n3,3,3"
+    server_query repo1 1 dolt "" "SELECT * FROM repo1.r1_one_pk ORDER BY pk" "pk,c1,c2\n1,1,1\n2,2,2\n3,3,3"
+    server_query repo1 1 dolt "" "SELECT * FROM repo2.r2_one_pk ORDER BY pk" "pk,c3,c4\n1,1,1\n2,2,2\n3,3,3"
 }
 
 @test "sql-server: test multi db without use statements" {
@@ -508,7 +506,7 @@ SQL
     start_multi_db_server repo1
 
     # create a table in repo1
-    server_query repo1 1 "CREATE TABLE repo1.r1_one_pk (
+    server_query repo1 1 dolt "" "CREATE TABLE repo1.r1_one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c1 BIGINT COMMENT 'tag:1',
         c2 BIGINT COMMENT 'tag:2',
@@ -516,7 +514,7 @@ SQL
     )" ""
 
     # create a table in repo2
-    server_query repo1 1 "USE repo2; CREATE TABLE repo2.r2_one_pk (
+    server_query repo1 1 dolt "" "USE repo2; CREATE TABLE repo2.r2_one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c3 BIGINT COMMENT 'tag:1',
         c4 BIGINT COMMENT 'tag:2',
@@ -524,11 +522,11 @@ SQL
     )" ";"
 
     # validate tables in repos
-    server_query repo1 1 "SHOW tables" "Table\nr1_one_pk"
-    server_query repo1 1 "USE repo2;SHOW tables" ";Table\nr2_one_pk"
+    server_query repo1 1 dolt "" "SHOW tables" "Table\nr1_one_pk"
+    server_query repo1 1 dolt "" "USE repo2;SHOW tables" ";Table\nr2_one_pk"
 
     # put data in both
-    multi_query repo1 1 "
+    server_query repo1 1 dolt "" "
     INSERT INTO repo1.r1_one_pk (pk) VALUES (0);
     INSERT INTO repo1.r1_one_pk (pk,c1) VALUES (1,1);
     INSERT INTO repo1.r1_one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
@@ -537,24 +535,24 @@ SQL
     INSERT INTO repo2.r2_one_pk (pk,c3) VALUES (1,1);
     INSERT INTO repo2.r2_one_pk (pk,c3,c4) VALUES (2,2,2),(3,3,3)"
 
-    server_query repo1 1 "SELECT * FROM repo1.r1_one_pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
-    server_query repo1 1 "SELECT * FROM repo2.r2_one_pk" "pk,c3,c4\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
+    server_query repo1 1 dolt "" "SELECT * FROM repo1.r1_one_pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
+    server_query repo1 1 dolt "" "SELECT * FROM repo2.r2_one_pk" "pk,c3,c4\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
 
-    multi_query repo1 1 "
+    server_query repo1 1 dolt "" "
     DELETE FROM repo1.r1_one_pk where pk=0;
     USE repo2;
     DELETE FROM repo2.r2_one_pk where pk=0"
 
-    server_query repo1 1 "SELECT * FROM repo1.r1_one_pk" "pk,c1,c2\n1,1,None\n2,2,2\n3,3,3"
-    server_query repo1 1 "SELECT * FROM repo2.r2_one_pk" "pk,c3,c4\n1,1,None\n2,2,2\n3,3,3"
+    server_query repo1 1 dolt "" "SELECT * FROM repo1.r1_one_pk" "pk,c1,c2\n1,1,None\n2,2,2\n3,3,3"
+    server_query repo1 1 dolt "" "SELECT * FROM repo2.r2_one_pk" "pk,c3,c4\n1,1,None\n2,2,2\n3,3,3"
 
-    multi_query repo1 1 "
+    server_query repo1 1 dolt "" "
     UPDATE repo1.r1_one_pk SET c2=1 WHERE pk=1;
     USE repo2;
     UPDATE repo2.r2_one_pk SET c4=1 where pk=1"
 
-    server_query repo1 1 "SELECT * FROM repo1.r1_one_pk" "pk,c1,c2\n1,1,1\n2,2,2\n3,3,3"
-    server_query repo1 1 "SELECT * FROM repo2.r2_one_pk" "pk,c3,c4\n1,1,1\n2,2,2\n3,3,3"
+    server_query repo1 1 dolt "" "SELECT * FROM repo1.r1_one_pk" "pk,c1,c2\n1,1,1\n2,2,2\n3,3,3"
+    server_query repo1 1 dolt "" "SELECT * FROM repo2.r2_one_pk" "pk,c3,c4\n1,1,1\n2,2,2\n3,3,3"
 }
 
 @test "sql-server: test CREATE and DROP database via sql-server" {
@@ -563,16 +561,16 @@ SQL
     cd repo1
     start_sql_server repo1
 
-    multi_query repo1 1 "
+    server_query repo1 1 dolt "" "
     CREATE DATABASE test;
     USE test;
     CREATE TABLE pk(pk int primary key);
     INSERT INTO pk (pk) VALUES (0);
     "
 
-    server_query repo1 1 "SELECT * FROM test.pk ORDER BY pk" "pk\n0"
-    server_query repo1 1 "DROP DATABASE test" ""
-    server_query repo1 1 "SHOW DATABASES" "Database\ninformation_schema\nmysql\nrepo1"
+    server_query repo1 1 dolt "" "SELECT * FROM test.pk ORDER BY pk" "pk\n0"
+    server_query repo1 1 dolt "" "DROP DATABASE test" ""
+    server_query repo1 1 dolt "" "SHOW DATABASES" "Database\ninformation_schema\nmysql\nrepo1"
 }
 
 @test "sql-server: DOLT_ADD, DOLT_COMMIT, DOLT_CHECKOUT, DOLT_MERGE work together in server mode" {
@@ -581,7 +579,7 @@ SQL
      cd repo1
      start_sql_server repo1
 
-     multi_query repo1 1 "
+     server_query repo1 1 dolt "" "
      CREATE TABLE test (
          pk int primary key
      );
@@ -591,9 +589,9 @@ SQL
      SELECT DOLT_CHECKOUT('-b', 'feature-branch');
      "
 
-     server_query repo1 1 "SELECT * FROM test" "pk\n0\n1\n2"
+     server_query repo1 1 dolt "" "SELECT * FROM testorder by pk" "pk\n0\n1\n2"
 
-     multi_query repo1 1 "
+     server_query repo1 1 dolt "" "
      SELECT DOLT_CHECKOUT('feature-branch');
      INSERT INTO test VALUES (3);
      INSERT INTO test VALUES (4);
@@ -602,25 +600,24 @@ SQL
      UPDATE test SET pk=21 WHERE pk=21232;
      "
 
-     server_query repo1 1 "SELECT * FROM test" "pk\n0\n1\n2"
+     server_query repo1 1 dolt "" "SELECT * FROM test" "pk\n0\n1\n2"
 
-     multi_query repo1 1 "
+     server_query repo1 1 dolt "" "
      SELECT DOLT_CHECKOUT('feature-branch');
      SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
      "
 
-     multi_query repo1 1 "
+     server_query repo1 1 dolt "" "
      INSERT INTO test VALUES (500000);
      INSERT INTO test VALUES (500001);
      DELETE FROM test WHERE pk=500001;
      UPDATE test SET pk=60 WHERE pk=500000;
      SELECT DOLT_ADD('.');
      SELECT DOLT_COMMIT('-m', 'Insert 60');
-     SELECT DOLT_MERGE('feature-branch');
-     SELECT DOLT_COMMIT('-a', '-m', 'Finish up Merge');
+     SELECT DOLT_MERGE('feature-branch','-m','merge feature-branch');
      "
 
-     server_query repo1 1 "SELECT * FROM test order by pk" "pk\n0\n1\n2\n3\n21\n60"
+     server_query repo1 1 dolt "" "SELECT * FROM test order by pk" "pk\n0\n1\n2\n3\n21\n60"
 
      run dolt status
      [ $status -eq 0 ]
@@ -633,7 +630,7 @@ SQL
      cd repo1
      start_sql_server repo1
 
-     multi_query repo1 1 "
+     server_query repo1 1 dolt "" "
      CREATE TABLE test (
           pk int primary key
      );
@@ -648,9 +645,9 @@ SQL
      SELECT DOLT_MERGE('feature-branch');
      "
 
-     server_query repo1 1 "SELECT * FROM test ORDER BY pk" "pk\n1\n2\n3\n1000"
+     server_query repo1 1 dolt "" "SELECT * FROM test ORDER BY pk" "pk\n1\n2\n3\n1000"
 
-     server_query repo1 1 "SELECT COUNT(*) FROM dolt_log" "COUNT(*)\n3"
+     server_query repo1 1 dolt "" "SELECT COUNT(*) FROM dolt_log" "COUNT(*)\n3"
 }
 
 @test "sql-server: LOAD DATA LOCAL INFILE works" {
@@ -659,13 +656,13 @@ SQL
      cd repo1
      start_sql_server repo1
 
-     multi_query repo1 1 "
+     server_query repo1 1 dolt "" "
      CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
      SET GLOBAL local_infile = 1;
      LOAD DATA LOCAL INFILE '$BATS_TEST_DIRNAME/helper/1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY ',' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
      "
 
-     server_query repo1 1 "SELECT * FROM test" "pk,c1,c2,c3,c4,c5\n0,1,2,3,4,5\n1,1,2,3,4,5"
+     server_query repo1 1 dolt "" "SELECT * FROM test" "pk,c1,c2,c3,c4,c5\n0,1,2,3,4,5\n1,1,2,3,4,5"
 }
 
 @test "sql-server: Run queries on database without ever selecting it" {
@@ -674,42 +671,42 @@ SQL
      start_multi_db_server repo1
 
      # create table with autocommit on and verify table creation
-     unselected_server_query 1 "CREATE TABLE repo2.one_pk (
+     server_query "" 1 dolt "" "CREATE TABLE repo2.one_pk (
         pk int,
         PRIMARY KEY (pk)
-      )" ""
+      )"
 
-     unselected_server_query 1 "INSERT INTO repo2.one_pk VALUES (0), (1), (2)"
-     unselected_server_query 1 "SELECT * FROM repo2.one_pk" "pk\n0\n1\n2"
+     server_query "" 1 dolt "" "INSERT INTO repo2.one_pk VALUES (0), (1), (2)"
+     server_query "" 1 dolt "" "SELECT * FROM repo2.one_pk" "pk\n0\n1\n2"
 
-     unselected_update_query 1 "UPDATE repo2.one_pk SET pk=3 WHERE pk=2"
-     unselected_server_query 1 "SELECT * FROM repo2.one_pk" "pk\n0\n1\n3"
+     server_query "" 1 dolt "" "UPDATE repo2.one_pk SET pk=3 WHERE pk=2"
+     server_query "" 1 dolt "" "SELECT * FROM repo2.one_pk" "pk\n0\n1\n3"
 
-     unselected_update_query 1 "DELETE FROM repo2.one_pk WHERE pk=3"
-     unselected_server_query 1 "SELECT * FROM repo2.one_pk" "pk\n0\n1"
+     server_query "" 1 dolt "" "DELETE FROM repo2.one_pk WHERE pk=3"
+     server_query "" 1 dolt "" "SELECT * FROM repo2.one_pk" "pk\n0\n1"
 
      # Empty commit statements should not error
-     unselected_server_query 1 "commit"
+     server_query "" 1 dolt "" "commit"
 
      # create a new database and table and rerun
-     unselected_server_query 1 "CREATE DATABASE testdb" ""
-     unselected_server_query 1 "CREATE TABLE testdb.one_pk (
+     server_query "" 1 dolt "" "CREATE DATABASE testdb" ""
+     server_query "" 1 dolt "" "CREATE TABLE testdb.one_pk (
         pk int,
         PRIMARY KEY (pk)
       )" ""
 
-     unselected_server_query 1 "INSERT INTO testdb.one_pk VALUES (0), (1), (2)"
-     unselected_server_query 1 "SELECT * FROM testdb.one_pk" "pk\n0\n1\n2"
+     server_query "" 1 dolt "" "INSERT INTO testdb.one_pk VALUES (0), (1), (2)"
+     server_query "" 1 dolt "" "SELECT * FROM testdb.one_pk" "pk\n0\n1\n2"
 
-     unselected_update_query 1 "UPDATE testdb.one_pk SET pk=3 WHERE pk=2"
-     unselected_server_query 1 "SELECT * FROM testdb.one_pk" "pk\n0\n1\n3"
+     server_query "" 1 dolt "" "UPDATE testdb.one_pk SET pk=3 WHERE pk=2"
+     server_query "" 1 dolt "" "SELECT * FROM testdb.one_pk" "pk\n0\n1\n3"
 
-     unselected_update_query 1 "DELETE FROM testdb.one_pk WHERE pk=3"
-     unselected_server_query 1 "SELECT * FROM testdb.one_pk" "pk\n0\n1"
+     server_query "" 1 dolt "" "DELETE FROM testdb.one_pk WHERE pk=3"
+     server_query "" 1 dolt "" "SELECT * FROM testdb.one_pk" "pk\n0\n1"
 
      # one last query on insert db.
-     unselected_server_query 1 "INSERT INTO repo2.one_pk VALUES (4)"
-     unselected_server_query 1 "SELECT * FROM repo2.one_pk" "pk\n0\n1\n4"
+     server_query "" 1 dolt "" "INSERT INTO repo2.one_pk VALUES (4)"
+     server_query "" 1 dolt "" "SELECT * FROM repo2.one_pk" "pk\n0\n1\n4"
 
      # verify changes outside the session
      cd repo2
@@ -729,8 +726,8 @@ SQL
 
      start_multi_db_server repo1
 
-     unselected_server_query 1 "CREATE DATABASE newdb" ""
-     unselected_server_query 1 "CREATE TABLE newdb.test (a int primary key)" ""
+     server_query "" 1 dolt "" "CREATE DATABASE newdb" ""
+     server_query "" 1 dolt "" "CREATE TABLE newdb.test (a int primary key)" ""
 
      # verify changes outside the session
      cd newdb
@@ -745,7 +742,7 @@ SQL
     start_sql_server repo1
 
     # create table with autocommit on and verify table creation
-    server_query repo1 1 "CREATE TABLE js_test (
+    server_query repo1 1 dolt "" "CREATE TABLE js_test (
         pk int NOT NULL,
         js json,
         PRIMARY KEY (pk)
@@ -754,8 +751,8 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "js_test" ]] || false
 
-    insert_query repo1 1 "INSERT INTO js_test VALUES (1, '{\"a\":1}');"
-    server_query repo1 1 "SELECT * FROM js_test;" "pk,js\n1,{\"a\": 1}"
+    server_query repo1 1 dolt "" "INSERT INTO js_test VALUES (1, '{\"a\":1}');"
+    server_query repo1 1 dolt "" "SELECT * FROM js_test;" "pk,js\n1,{\"a\": 1}"
 }
 
 @test "sql-server: manual commit table can be dropped (validates superschema structure)" {
@@ -765,10 +762,10 @@ SQL
     start_sql_server repo1
 
     # check no tables on main
-    server_query repo1 1 "SHOW Tables" ""
+    server_query repo1 1 dolt "" "SHOW Tables" ""
 
     # make some changes to main and commit to branch test_branch
-    multi_query repo1 1 "
+    server_query repo1 1 dolt "" "
     SET @@repo1_head_ref='main';
     CREATE TABLE one_pk (
         pk BIGINT NOT NULL,
@@ -780,7 +777,7 @@ SQL
     SELECT commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');
     INSERT INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
 
-    server_query repo1 1 "call dolt_add('.')" "status\n0"
+    server_query repo1 1 dolt "" "call dolt_add('.')" "status\n0"
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
@@ -788,8 +785,8 @@ SQL
     run dolt sql --user=dolt -q "drop table one_pk"
     [ "$status" -eq 1 ]
 
-    server_query repo1 1 "drop table one_pk" ""
-    multi_query repo1 1 "call dolt_commit('-am', 'Dropped table one_pk')"
+    server_query repo1 1 dolt "" "drop table one_pk" ""
+    server_query repo1 1 dolt "" "call dolt_commit('-am', 'Dropped table one_pk')"
 
     run dolt ls
     [ "$status" -eq 0 ]
@@ -804,17 +801,17 @@ SQL
     start_sql_server repo1
 
     # check no tables on main
-    server_query repo1 1 "SHOW Tables" ""
+    server_query repo1 1 dolt "" "SHOW Tables" ""
 
     # Create a temporary table with some indexes
-    server_query repo1 1 "CREATE TEMPORARY TABLE one_pk (
+    server_query repo1 1 dolt "" "CREATE TEMPORARY TABLE one_pk (
         pk int,
         c1 int,
         c2 int,
         PRIMARY KEY (pk),
         INDEX idx_v1 (c1, c2) COMMENT 'hello there'
     )" ""
-    server_query repo1 1 "SHOW tables" "" # validate that it does have show tables
+    server_query repo1 1 dolt "" "SHOW tables" "" # validate that it does have show tables
 }
 
 @test "sql-server: connect to another branch with connection string" {
@@ -825,15 +822,15 @@ SQL
     dolt checkout main
     start_sql_server repo1
 
-    server_query "repo1/feature-branch" 1 "CREATE TABLE test (
+    server_query "repo1/feature-branch" 1 dolt "" "CREATE TABLE test (
         pk int,
         c1 int,
         PRIMARY KEY (pk)
     )" ""
 
-    server_query repo1 1 "SHOW tables" "" # no tables on main
+    server_query repo1 1 dolt "" "SHOW tables" "" # no tables on main
 
-    server_query "repo1/feature-branch" 1 "SHOW Tables" "Tables_in_repo1/feature-branch\ntest"
+    server_query "repo1/feature-branch" 1 dolt "" "SHOW Tables" "Tables_in_repo1/feature-branch\ntest"
 }
 
 @test "sql-server: connect to a commit with connection string" {
@@ -852,13 +849,13 @@ SQL
     # get the second-to-last commit hash
     hash=`dolt log | grep commit | cut -d" " -f2 | tail -n+2 | head -n1`
 
-    server_query "repo1/$hash" 1 "select count(*) from test" "count(*)\n3"
+    server_query "repo1/$hash" 1 dolt "" "select count(*) from test" "count(*)\n3"
 
     # fails
-    server_query "repo1/$hash" 1 "insert into test values (7)" "" "read-only"
+    server_query "repo1/$hash" 1 dolt "" "insert into test values (7)" "" "read-only"
 
     # server should still be alive after an error
-    server_query "repo1/$hash" 1 "select count(*) from test" "count(*)\n3"
+    server_query "repo1/$hash" 1 dolt "" "select count(*) from test" "count(*)\n3"
 }
 
 @test "sql-server: select a branch with the USE syntax" {
@@ -869,7 +866,7 @@ SQL
     dolt checkout main
     start_sql_server repo1
 
-    multi_query repo1 1 '
+    server_query repo1 1 dolt "" '
     USE `repo1/feature-branch`;
     CREATE TABLE test (
         pk int,
@@ -877,9 +874,9 @@ SQL
         PRIMARY KEY (pk)
     )' ""
 
-    server_query repo1 1 "SHOW tables" "" # no tables on main
+    server_query repo1 1 dolt "" "SHOW tables" "" # no tables on main
 
-    server_query "repo1/feature-branch" 1 "SHOW Tables" "Tables_in_repo1/feature-branch\ntest"
+    server_query "repo1/feature-branch" 1 dolt "" "SHOW Tables" "Tables_in_repo1/feature-branch\ntest"
 }
 
 @test "sql-server: SET GLOBAL default branch as ref" {
@@ -890,16 +887,16 @@ SQL
     dolt checkout main
     start_sql_server repo1
 
-    multi_query repo1 1 '
+    server_query repo1 1 dolt "" '
     select dolt_checkout("new");
     CREATE TABLE t (a int primary key, b int);
     INSERT INTO t VALUES (2,2),(3,3);' ""
 
-    server_query repo1 1 "SHOW tables" "" # no tables on main
-    server_query repo1 1 "set GLOBAL repo1_default_branch = 'refs/heads/new';" ""
-    server_query repo1 1 "select @@GLOBAL.repo1_default_branch;" "@@GLOBAL.repo1_default_branch\nrefs/heads/new"
-    server_query repo1 1 "select active_branch()" "active_branch()\nnew"
-    server_query repo1 1 "SHOW tables" "Tables_in_repo1\nt"
+    server_query repo1 1 dolt "" "SHOW tables" "" # no tables on main
+    server_query repo1 1 dolt "" "set GLOBAL repo1_default_branch = 'refs/heads/new';" ""
+    server_query repo1 1 dolt "" "select @@GLOBAL.repo1_default_branch;" "@@GLOBAL.repo1_default_branch\nrefs/heads/new"
+    server_query repo1 1 dolt "" "select active_branch()" "active_branch()\nnew"
+    server_query repo1 1 dolt "" "SHOW tables" "Tables_in_repo1\nt"
 }
 
 @test "sql-server: SET GLOBAL default branch as branch name" {
@@ -910,16 +907,16 @@ SQL
     dolt checkout main
     start_sql_server repo1
 
-    multi_query repo1 1 '
+    server_query repo1 1 dolt "" '
     select dolt_checkout("new");
     CREATE TABLE t (a int primary key, b int);
     INSERT INTO t VALUES (2,2),(3,3);' ""
 
-    server_query repo1 1 "SHOW tables" "" # no tables on main
-    server_query repo1 1 "set GLOBAL repo1_default_branch = 'new';" ""
-    server_query repo1 1 "select @@GLOBAL.repo1_default_branch;" "@@GLOBAL.repo1_default_branch\nnew"
-    server_query repo1 1 "select active_branch()" "active_branch()\nnew"
-    server_query repo1 1 "SHOW tables" "Tables_in_repo1\nt"
+    server_query repo1 1 dolt "" "SHOW tables" "" # no tables on main
+    server_query repo1 1 dolt "" "set GLOBAL repo1_default_branch = 'new';" ""
+    server_query repo1 1 dolt "" "select @@GLOBAL.repo1_default_branch;" "@@GLOBAL.repo1_default_branch\nnew"
+    server_query repo1 1 dolt "" "select active_branch()" "active_branch()\nnew"
+    server_query repo1 1 dolt "" "SHOW tables" "Tables_in_repo1\nt"
 }
 
 @test "sql-server: require_secure_transport no key or cert" {
@@ -1106,15 +1103,15 @@ END""")
     cd repo1
     start_sql_server repo1
 
-    server_query repo1 1 "CREATE TABLE t1(pk int auto_increment primary key, val int)" ""
-    insert_query repo1 1 "INSERT INTO t1 VALUES (0, 1),(0, 2)"
-    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2"
+    server_query repo1 1 dolt "" "CREATE TABLE t1(pk int auto_increment primary key, val int)" ""
+    server_query repo1 1 dolt "" "INSERT INTO t1 VALUES (0, 1),(0, 2)"
+    server_query repo1 1 dolt "" "SELECT * FROM t1" "pk,val\n1,1\n2,2"
 
     # drop the table and try again
-    server_query repo1 1 "drop table t1;"
-    server_query repo1 1 "CREATE TABLE t1(pk int auto_increment primary key, val int)" ""
-    insert_query repo1 1 "INSERT INTO t1 VALUES (0, 1),(0, 2)"
-    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2"
+    server_query repo1 1 dolt "" "drop table t1;"
+    server_query repo1 1 dolt "" "CREATE TABLE t1(pk int auto_increment primary key, val int)" ""
+    server_query repo1 1 dolt "" "INSERT INTO t1 VALUES (0, 1),(0, 2)"
+    server_query repo1 1 dolt "" "SELECT * FROM t1" "pk,val\n1,1\n2,2"
 }
 
 @test "sql-server: auto increment is globally distinct across branches and connections" {
@@ -1123,27 +1120,27 @@ END""")
     cd repo1
     start_sql_server repo1
 
-    server_query repo1 1 "CREATE TABLE t1(pk bigint primary key auto_increment, val int)" ""
-    insert_query repo1 1 "INSERT INTO t1 (val) VALUES (1)"
-    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1"
+    server_query repo1 1 dolt "" "CREATE TABLE t1(pk bigint primary key auto_increment, val int)" ""
+    server_query repo1 1 dolt "" "INSERT INTO t1 (val) VALUES (1)"
+    server_query repo1 1 dolt "" "SELECT * FROM t1" "pk,val\n1,1"
 
-    insert_query repo1 1 "INSERT INTO t1 (val) VALUES (2)"
-    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2"
+    server_query repo1 1 dolt "" "INSERT INTO t1 (val) VALUES (2)"
+    server_query repo1 1 dolt "" "SELECT * FROM t1" "pk,val\n1,1\n2,2"
 
-    run server_query repo1 1 "call dolt_commit('-am', 'table with two values')"
-    run server_query repo1 1 "call dolt_branch('new_branch')"
+    run server_query repo1 1 dolt "" "call dolt_commit('-am', 'table with two values')"
+    run server_query repo1 1 dolt "" "call dolt_branch('new_branch')"
 
-    insert_query repo1/new_branch 1 "INSERT INTO t1 (val) VALUES (3)"
-    server_query repo1/new_branch 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2\n3,3"
+    server_query repo1/new_branch 1 dolt "" "INSERT INTO t1 (val) VALUES (3)"
+    server_query repo1/new_branch 1 dolt "" "SELECT * FROM t1" "pk,val\n1,1\n2,2\n3,3"
 
-    insert_query repo1 1 "INSERT INTO t1 (val) VALUES (4)"
-    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2\n4,4"
+    server_query repo1 1 dolt "" "INSERT INTO t1 (val) VALUES (4)"
+    server_query repo1 1 dolt "" "SELECT * FROM t1" "pk,val\n1,1\n2,2\n4,4"
     
     # drop the table on main, should keep counting from 4
-    server_query repo1 1 "drop table t1;"
-    server_query repo1 1 "CREATE TABLE t1(pk bigint primary key auto_increment, val int)" ""
-    insert_query repo1 1 "INSERT INTO t1 (val) VALUES (4)"
-    server_query repo1 1 "SELECT * FROM t1" "pk,val\n4,4"
+    server_query repo1 1 dolt "" "drop table t1;"
+    server_query repo1 1 dolt "" "CREATE TABLE t1(pk bigint primary key auto_increment, val int)" ""
+    server_query repo1 1 dolt "" "INSERT INTO t1 (val) VALUES (4)"
+    server_query repo1 1 dolt "" "SELECT * FROM t1" "pk,val\n4,4"
 }
 
 @test "sql-server: sql-push --set-remote within session" {
@@ -1155,14 +1152,13 @@ END""")
     start_sql_server repo1
 
     dolt push origin main
-    run server_query repo1 1 "select dolt_push() as p" "p\n0"
-    [ "$status" -eq 1 ]
+    run server_query repo1 1 dolt "" "select dolt_push() as p" "p\n0" 1
     [[ "$output" =~ "the current branch has no upstream branch" ]] || false
 
-    server_query repo1 1 "select dolt_push('--set-upstream', 'origin', 'main') as p" "p\n1"
+    server_query repo1 1 dolt "" "select dolt_push('--set-upstream', 'origin', 'main') as p" "p\n1"
 
     skip "In-memory branch doesn't track upstream correctly"
-    server_query repo1 1 "select dolt_push() as p" "p\n1"
+    server_query repo1 1 dolt "" "select dolt_push() as p" "p\n1"
 }
 
 @test "sql-server: replicate to backup after sql-session commit" {
@@ -1174,7 +1170,7 @@ END""")
     dolt config --local --add sqlserver.global.DOLT_REPLICATE_TO_REMOTE backup1
     start_sql_server repo1
 
-    multi_query repo1 1 "
+    server_query repo1 1 dolt "" "
     CREATE TABLE test (
       pk int primary key
     );
@@ -1199,18 +1195,16 @@ END""")
     mkdir no_dolt && cd no_dolt
     start_sql_server
 
-    server_query "" 1 "create database test1"
-    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest1"
-    server_query "test1" 1 "create table a(x int)"
-    server_query "test1" 1 "insert into a values (1), (2)"
-    # not bothering to check the results of the commit here
-    run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
+    server_query "" 1 dolt "" "create database test1"
+    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntest1"
+    server_query "test1" 1 dolt "" "create table a(x int)"
+    server_query "test1" 1 dolt "" "insert into a values (1), (2)"
+    server_query "test1" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
 
-    server_query "" 1 "create database test2"
-    server_query "test2" 1 "create table b(x int)"
-    server_query "test2" 1 "insert into b values (1), (2)"
-    # not bothering to check the results of the commit here
-    run server_query "test2" 1 "select dolt_commit('-a', '-m', 'new table b')"
+    server_query "" 1 dolt "" "create database test2"
+    server_query "test2" 1 dolt "" "create table b(x int)"
+    server_query "test2" 1 dolt "" "insert into b values (1), (2)"
+    server_query "test2" 1 dolt "" "select dolt_commit('-a', '-m', 'new table b')"
 
     cd test1
     run dolt log
@@ -1232,12 +1226,12 @@ END""")
 
     cd ..
 
-    server_query "" 1 "create database test3"
-    server_query "test3" 1 "create table c(x int)"
-    server_query "test3" 1 "insert into c values (1), (2)"
-    run server_query "test3" 1 "select dolt_commit('-a', '-m', 'new table c')"
+    server_query "" 1 dolt "" "create database test3"
+    server_query "test3" 1 dolt "" "create table c(x int)"
+    server_query "test3" 1 dolt "" "insert into c values (1), (2)"
+    run server_query "test3" 1 dolt "" "select dolt_commit('-a', '-m', 'new table c')"
 
-    server_query "" 1 "drop database test2"
+    server_query "" 1 dolt "" "drop database test2"
 
     [ -d test3 ]
     [ ! -d test2 ]
@@ -1245,7 +1239,7 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server
-    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest1\ntest3"
+    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntest1\ntest3"
 }
 
 @test "sql-server: drop database with active connections" {
@@ -1255,47 +1249,45 @@ END""")
     mkdir no_dolt && cd no_dolt
     start_sql_server
 
-    server_query "" 1 "create database test1"
-    server_query "" 1 "create database test2"
-    server_query "" 1 "create database test3"
+    server_query "" 1 dolt "" "create database test1"
+    server_query "" 1 dolt "" "create database test2"
+    server_query "" 1 dolt "" "create database test3"
 
-    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest1\ntest2\ntest3"
-    server_query "test1" 1 "create table a(x int)"
-    server_query "test1" 1 "insert into a values (1), (2)"
-    run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
+    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntest1\ntest2\ntest3"
+    server_query "test1" 1 dolt "" "create table a(x int)"
+    server_query "test1" 1 dolt "" "insert into a values (1), (2)"
+    run server_query "test1" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
 
-    server_query "test2" 1 "create table a(x int)"
-    server_query "test2" 1 "insert into a values (3), (4)"
-    run server_query "test2" 1 "select dolt_commit('-a', '-m', 'new table a')"
+    server_query "test2" 1 dolt "" "create table a(x int)"
+    server_query "test2" 1 dolt "" "insert into a values (3), (4)"
+    server_query "test2" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
 
-    server_query "test3" 1 "create table a(x int)"
-    server_query "test3" 1 "insert into a values (5), (6)"
-    run server_query "test3" 1 "select dolt_commit('-a', '-m', 'new table a')"
+    server_query "test3" 1 dolt "" "create table a(x int)"
+    server_query "test3" 1 dolt "" "insert into a values (5), (6)"
+    server_query "test3" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
 
-    run server_query "test1" 1 "select dolt_checkout('-b', 'newbranch')"
-    server_query "test1/newbranch" 1 "select * from a" "x\n1\n2"
+    server_query "test1" 1 dolt "" "call dolt_checkout('-b', 'newbranch')"
+    server_query "test1/newbranch" 1 dolt "" "select * from a" "x\n1\n2"
 
-    run server_query "test2" 1 "select dolt_checkout('-b', 'newbranch')"
-    server_query "test2/newbranch" 1 "select * from a" "x\n3\n4"
+    server_query "test2" 1 dolt "" "call dolt_checkout('-b', 'newbranch')"
+    server_query "test2/newbranch" 1 dolt "" "select * from a" "x\n3\n4"
 
-    server_query "" 1 "drop database TEST1"
+    server_query "" 1 dolt "" "drop database TEST1"
 
-    run server_query "test1/newbranch" 1 "select * from a"
-    [ "$status" -ne 0 ]
-    [[ "$output" =~ "database not found: test1/newbranch" ]] || false
+    run server_query "test1/newbranch" 1 dolt "" "select * from a" "" 1
+    [[ "$output" =~ "database not found" ]] || false
 
     # can't drop a branch-qualified database name
-    run server_query "" 1 "drop database \`test2/newbranch\`"
-    [ "$status" -ne 0 ]
+    run server_query "" 1 dolt "" "drop database \`test2/newbranch\`" "" 1
     [[ "$output" =~ "unable to drop revision database: test2/newbranch" ]] || false
 
-    server_query "" 1 "drop database TEST2"
 
-    run server_query "test2/newbranch" 1 "select * from a"
-    [ "$status" -ne 0 ]
-    [[ "$output" =~ "database not found: test2/newbranch" ]] || false
+    server_query "" 1 dolt "" "drop database TEST2"
 
-    server_query "test3" 1 "select * from a" "x\n5\n6"
+    run server_query "test2/newbranch" 1 dolt "" "select * from a" "" 1
+    [[ "$output" =~ "database not found" ]] || false
+
+    server_query "test3" 1 dolt "" "select * from a" "x\n5\n6"
 }
 
 @test "sql-server: connect to databases case insensitive" {
@@ -1304,19 +1296,19 @@ END""")
     mkdir no_dolt && cd no_dolt
     start_sql_server
 
-    server_query "" 1 "create database Test1"
+    server_query "" 1 dolt "" "create database Test1"
+    
+    server_query "" 1 dolt "" "show databases" "Database\nTest1\ninformation_schema\nmysql"
+    server_query "" 1 dolt "" "use test1; create table a(x int);"
+    server_query "" 1 dolt "" "use TEST1; insert into a values (1), (2);"
+    run server_query "" 1 dolt "" "use test1; select dolt_commit('-a', '-m', 'new table a');"
+    server_query "" 1 dolt "" "use test1; call dolt_checkout('-b', 'newbranch');"
+    server_query "" 1 dolt "" "use \`TEST1/newbranch\`; select * from a order by x" ";x\n1\n2"
+    server_query "" 1 dolt "" "use \`test1/newbranch\`; select * from a order by x" ";x\n1\n2"
+    server_query "" 1 dolt "" "use \`TEST1/NEWBRANCH\`" "" "database not found: TEST1/NEWBRANCH"
 
-    server_query "" 1 "show databases" "Database\nTest1\ninformation_schema\nmysql"
-    multi_query "" 1 "use test1; create table a(x int);"
-    multi_query "" 1 "use TEST1; insert into a values (1), (2);"
-    run multi_query "" 1 "use test1; select dolt_commit('-a', '-m', 'new table a');"
-    run multi_query "" 1 "use test1; select dolt_checkout('-b', 'newbranch');"
-    multi_query "" 1 "use \`TEST1/newbranch\`; select * from a" "x\n1\n2"
-    multi_query "" 1 "use \`test1/newbranch\`; select * from a" "x\n1\n2"
-    server_query "" 1 "use \`TEST1/NEWBRANCH\`" "" "database not found: TEST1/NEWBRANCH"
-
-    multi_query "" 1 "create database test2; use test2; select database();" "database()\ntest2"
-    multi_query "" 1 "use test2; drop database TEST2; select database();" "null"
+    server_query "" 1 dolt "" "create database test2; use test2; select database();" ";;database()\ntest2"
+    server_query "" 1 dolt "" "use test2; drop database TEST2; select database();" ";;database()\nNone"
 }
 
 @test "sql-server: create and drop database with --data-dir" {
@@ -1326,12 +1318,12 @@ END""")
     mkdir db_dir
     start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
 
-    server_query "" 1 "create database test1"
-    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest1"
-    server_query "test1" 1 "create table a(x int)"
-    server_query "test1" 1 "insert into a values (1), (2)"
-    # not bothering to check the results of the commit here
-    run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
+    server_query "" 1 dolt "" "create database test1"
+    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntest1"
+    server_query "test1" 1 dolt "" "create table a(x int)"
+    server_query "test1" 1 dolt "" "insert into a values (1), (2)"
+
+    server_query "test1" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
 
     [ -d db_dir/test1 ]
 
@@ -1342,12 +1334,12 @@ END""")
 
     cd ../..
 
-    server_query "" 1 "create database test3"
-    server_query "test3" 1 "create table c(x int)"
-    server_query "test3" 1 "insert into c values (1), (2)"
-    run server_query "test3" 1 "select dolt_commit('-a', '-m', 'new table c')"
+    server_query "" 1 dolt "" "create database test3"
+    server_query "test3" 1 dolt "" "create table c(x int)"
+    server_query "test3" 1 dolt "" "insert into c values (1), (2)"
+    server_query "test3" 1 dolt "" "call dolt_commit('-a', '-m', 'new table c')"
 
-    server_query "" 1 "drop database test1"
+    server_query "" 1 dolt "" "drop database test1"
 
     [ -d db_dir/test3 ]
     [ ! -d db_dir/test1 ]
@@ -1355,7 +1347,7 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
-    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntest3"
+    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntest3"
 }
 
 @test "sql-server: create database errors" {
@@ -1366,14 +1358,14 @@ END""")
     touch file_exists
     start_sql_server
 
-    server_query "" 1 "create database test1"
+    server_query "" 1 dolt "" "create database test1"
 
     # Error on creation, already exists
-    server_query "" 1 "create database test1" "" "exists"
+    server_query "" 1 dolt "" "create database test1" "" "exists"
 
     # Files / dirs in the way
-    server_query "" 1 "create database dir_exists" "" "exists"
-    server_query "" 1 "create database file_exists" "" "exists"
+    server_query "" 1 dolt "" "create database dir_exists" "" "exists"
+    server_query "" 1 dolt "" "create database file_exists" "" "exists"
 }
 
 @test "sql-server: create database with existing repo" {
@@ -1382,18 +1374,18 @@ END""")
     cd repo1
     start_sql_server
 
-    server_query "" 1 "create database test1"
-    server_query "repo1" 1 "show databases" "Database\ninformation_schema\nmysql\nrepo1\ntest1"
-    server_query "test1" 1 "create table a(x int)"
-    server_query "test1" 1 "insert into a values (1), (2)"
+    server_query "" 1 dolt "" "create database test1"
+    server_query "repo1" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\nrepo1\ntest1"
+    server_query "test1" 1 dolt "" "create table a(x int)"
+    server_query "test1" 1 dolt "" "insert into a values (1), (2)"
     # not bothering to check the results of the commit here
-    run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
+    server_query "test1" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
 
-    server_query "" 1 "create database test2"
-    server_query "test2" 1 "create table b(x int)"
-    server_query "test2" 1 "insert into b values (1), (2)"
+    server_query "" 1 dolt "" "create database test2"
+    server_query "test2" 1 dolt "" "create table b(x int)"
+    server_query "test2" 1 dolt "" "insert into b values (1), (2)"
     # not bothering to check the results of the commit here
-    run server_query "test2" 1 "select dolt_commit('-a', '-m', 'new table b')"
+    server_query "test2" 1 dolt "" "call dolt_commit('-a', '-m', 'new table b')"
 
     cd test1
     run dolt log
@@ -1417,7 +1409,7 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server
-    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\nrepo1\ntest1\ntest2"
+    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\nrepo1\ntest1\ntest2"
 }
 
 @test "sql-server: fetch uses database tempdir from different working directory" {
@@ -1451,7 +1443,7 @@ databases:
 
     start_sql_server_with_config repo1 server.yaml
 
-    server_query repo1 1 "select dolt_fetch() as f" "f\n1"
+    server_query repo1 1 dolt "" "call dolt_fetch() as f" "f\n1"
 }
 
 @test "sql-server: run mysql from shell" {
@@ -1516,7 +1508,7 @@ databases:
 @test "sql-server: sql-server lock for new databases" {
     cd repo1
     start_sql_server
-    server_query repo1 1 "create database newdb" ""
+    server_query repo1 1 dolt "" "create database newdb" ""
     cd newdb
     let PORT="$$ % (65536-1024) + 1024"
     run dolt sql-server -P $PORT
@@ -1545,7 +1537,7 @@ databases:
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 
-    server_query repo2 1 "select 1 as col1" "col1\n1"
+    server_query repo2 1 dolt "" "select 1 dolt ""as col1" "col1\n1"
 
     run grep '\"/tmp/mysql.sock\"' log.txt
     [ "$status" -eq 0 ]
@@ -1596,7 +1588,7 @@ behavior:
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 
-    server_query repo2 1 "select 1 as col1" "col1\n1"
+    server_query repo2 1 dolt "" "select 1 dolt ""as col1" "col1\n1"
 
     run grep '\"/tmp/mysql.sock\"' log.txt
     [ "$status" -eq 0 ]
@@ -1651,6 +1643,8 @@ s.close()
 }
 
 @test "sql-server: sigterm running server and restarting works correctly" {
+    skip "Skipping while we debug why this test hangs for hours in CI"
+
     start_sql_server
     run ls repo1/.dolt
     [[ "$output" =~ "sql-server.lock" ]] || false
@@ -1667,7 +1661,7 @@ s.close()
     [[ "$output" =~ "sql-server.lock" ]] || false
 
     start_sql_server
-    server_query repo1 1 "SELECT 1" "1\n1"
+    server_query repo1 1 dolt "" "SELECT 1" "1\n1"
     stop_sql_server
 
     # Try adding fake pid numbers. Could happen via debugger or something
@@ -1675,7 +1669,7 @@ s.close()
     echo "4123423" > repo2/.dolt/sql-server.lock
 
     start_sql_server
-    server_query repo1 1 "SELECT 1" "1\n1"
+    server_query repo1 1 dolt "" "SELECT 1" "1\n1"
     stop_sql_server
 
     # Add malicious text to lockfile and expect to fail

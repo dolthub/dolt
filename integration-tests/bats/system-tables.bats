@@ -431,8 +431,7 @@ teardown() {
     dolt add -A && dolt commit -m "commit C"
 
     dolt checkout main
-    dolt merge other
-    dolt add -A && dolt commit -m "commit M"
+    dolt merge other -m "merge other (commit M)"
 
     #         C--M
     #        /  /
@@ -457,8 +456,7 @@ teardown() {
     dolt add -A && dolt commit -m "commit C"
 
     dolt checkout main
-    dolt merge other
-    dolt add -A && dolt commit -m "commit M"
+    dolt merge other -m "merge other (commit M)"
 
     run dolt sql -q "
         SELECT an.parent_index,cm.message

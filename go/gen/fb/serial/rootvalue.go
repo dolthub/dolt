@@ -24,17 +24,34 @@ type RootValue struct {
 	_tab flatbuffers.Table
 }
 
-func GetRootAsRootValue(buf []byte, offset flatbuffers.UOffsetT) *RootValue {
+func InitRootValueRoot(o *RootValue, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
+	o.Init(buf, n+offset)
+	if RootValueNumFields < o.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
+}
+
+func TryGetRootAsRootValue(buf []byte, offset flatbuffers.UOffsetT) (*RootValue, error) {
 	x := &RootValue{}
-	x.Init(buf, n+offset)
+	return x, InitRootValueRoot(x, buf, offset)
+}
+
+func GetRootAsRootValue(buf []byte, offset flatbuffers.UOffsetT) *RootValue {
+	x := &RootValue{}
+	InitRootValueRoot(x, buf, offset)
 	return x
 }
 
-func GetSizePrefixedRootAsRootValue(buf []byte, offset flatbuffers.UOffsetT) *RootValue {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+func TryGetSizePrefixedRootAsRootValue(buf []byte, offset flatbuffers.UOffsetT) (*RootValue, error) {
 	x := &RootValue{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x, InitRootValueRoot(x, buf, offset+flatbuffers.SizeUint32)
+}
+
+func GetSizePrefixedRootAsRootValue(buf []byte, offset flatbuffers.UOffsetT) *RootValue {
+	x := &RootValue{}
+	InitRootValueRoot(x, buf, offset+flatbuffers.SizeUint32)
 	return x
 }
 
@@ -127,8 +144,10 @@ func (rcv *RootValue) MutateForeignKeyAddr(j int, n byte) bool {
 	return false
 }
 
+const RootValueNumFields = 3
+
 func RootValueStart(builder *flatbuffers.Builder) {
-	builder.StartObject(3)
+	builder.StartObject(RootValueNumFields)
 }
 func RootValueAddFeatureVersion(builder *flatbuffers.Builder, featureVersion int64) {
 	builder.PrependInt64Slot(0, featureVersion, 0)

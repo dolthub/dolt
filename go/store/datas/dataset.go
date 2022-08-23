@@ -25,20 +25,133 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
+	"strings"
+	"unicode"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// DatasetRe is a regexp that matches a legal Dataset name anywhere within the
-// target string.
-var DatasetRe = regexp.MustCompile(`[a-zA-Z0-9\-_/]+`)
+type refnameAction byte
 
-// DatasetFullRe is a regexp that matches a only a target string that is
-// entirely legal Dataset name.
-var DatasetFullRe = regexp.MustCompile("^" + DatasetRe.String() + "$")
+const (
+	refnameOk        refnameAction = 0
+	refnameEof       refnameAction = 1
+	refnameDot       refnameAction = 2
+	refnameLeftCurly refnameAction = 3
+	refnameIllegal   refnameAction = 4
+)
+
+// ValidateDatasetId returns ErrInvalidDatasetID if the given dataset ID is invalid.
+// See rules in |validateDatasetIdComponent|
+// git additionally requires at least 2 path components to a ref, which we do not
+func ValidateDatasetId(refname string) error {
+	var componentCount int
+
+	if len(refname) == 0 {
+		return ErrInvalidDatasetID
+	}
+
+	if refname == "@" {
+		// Refname is a single character '@'.
+		return ErrInvalidDatasetID
+	}
+
+	if strings.HasSuffix(refname, "/") || strings.HasSuffix(refname, ".") {
+		return ErrInvalidDatasetID
+	}
+
+	for len(refname) > 0 {
+		componentLen, err := validateDatasetIdComponent(refname)
+		if err != nil {
+			return err
+		}
+
+		componentCount++
+
+		// Next component
+		refname = refname[componentLen:]
+	}
+
+	return nil
+}
+
+// How to handle various characters in refnames:
+// 0: An acceptable character for refs
+// 1: End-of-component ('/')
+// 2: ., look for a preceding . to reject .. in refs
+// 3: {, look for a preceding @ to reject @{ in refs
+// 4: A bad character: ASCII control characters, and
+//
+//	":", "?", "[", "\", "^", "~", SP, or TAB
+var refnameActions = [256]refnameAction{
+	4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+	4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+	4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 2, 1,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 4,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 0, 4, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 4, 4,
+}
+
+// validateDatasetIdComponent returns an error if the dataset name component given is illegal.
+// We use the same rules as git for each slash-separated component. Rules defined here:
+// https://github.com/git/git/blob/master/refs.c
+// Names must be ascii only. We reject the following in ref components:
+// * - it begins with "."
+// * - it has double dots ".."
+// * - it has ASCII control characters
+// * - it has ":", "?", "[", "\", "^", "~", "*", SP, or TAB anywhere
+// * - it ends with a "/"
+// * - it ends with ".lock"
+// * - it contains a "@{" portion
+func validateDatasetIdComponent(refname string) (int, error) {
+	if refname[0] == '.' { // Component starts with '.'
+		return -1, ErrInvalidDatasetID
+	}
+
+	var last rune
+	numChars := 0
+
+	for _, ch := range refname {
+		if ch > unicode.MaxASCII {
+			return -1, ErrInvalidDatasetID
+		}
+
+		numChars++
+
+		switch refnameActions[ch] {
+		case refnameOk:
+		case refnameEof:
+			if strings.HasSuffix(refname[:numChars-1], ".lock") {
+				return -1, ErrInvalidDatasetID
+			}
+			return numChars, nil
+		case refnameDot:
+			if last == '.' { // Refname contains ..
+				return -1, ErrInvalidDatasetID
+			}
+		case refnameLeftCurly:
+			if last == '@' { // Refname contains @{
+				return -1, ErrInvalidDatasetID
+			}
+		case refnameIllegal:
+			return -1, ErrInvalidDatasetID
+		default:
+			panic("unrecognized case in refname")
+		}
+
+		last = ch
+	}
+
+	if strings.HasSuffix(refname[:numChars], ".lock") {
+		return -1, ErrInvalidDatasetID
+	}
+
+	return numChars, nil
+}
 
 type WorkingSetHead struct {
 	Meta        *WorkingSetMeta
@@ -147,8 +260,12 @@ type serialTagHead struct {
 	addr hash.Hash
 }
 
-func newSerialTagHead(bs []byte, addr hash.Hash) serialTagHead {
-	return serialTagHead{serial.GetRootAsTag(bs, serial.MessagePrefixSz), addr}
+func newSerialTagHead(bs []byte, addr hash.Hash) (serialTagHead, error) {
+	tm, err := serial.TryGetRootAsTag(bs, serial.MessagePrefixSz)
+	if err != nil {
+		return serialTagHead{}, err
+	}
+	return serialTagHead{tm, addr}, nil
 }
 
 func (h serialTagHead) TypeName() string {
@@ -306,7 +423,7 @@ func newHead(head types.Value, addr hash.Hash) (dsHead, error) {
 		data := []byte(sm)
 		fid := serial.GetFileID(data)
 		if fid == serial.TagFileID {
-			return newSerialTagHead(data, addr), nil
+			return newSerialTagHead(data, addr)
 		}
 		if fid == serial.WorkingSetFileID {
 			return newSerialWorkingSetHead(data, addr), nil
@@ -518,10 +635,6 @@ func (ds Dataset) MaybeHeadValue() (types.Value, bool, error) {
 		return v, v != nil, nil
 	}
 	return nil, false, nil
-}
-
-func IsValidDatasetName(name string) bool {
-	return DatasetFullRe.MatchString(name)
 }
 
 func NewHeadlessDataset(db Database, id string) Dataset {

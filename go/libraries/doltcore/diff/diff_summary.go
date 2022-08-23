@@ -42,7 +42,15 @@ type nomsReporter func(ctx context.Context, change *diff.Difference, ch chan<- D
 // Summary reports a summary of diff changes between two values
 // todo: make package private once dolthub is migrated
 func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to durable.Index, fromSch, toSch schema.Schema) (err error) {
-	ch <- DiffSummaryProgress{OldSize: from.Count(), NewSize: to.Count()}
+	fc, err := from.Count()
+	if err != nil {
+		return err
+	}
+	tc, err := to.Count()
+	if err != nil {
+		return err
+	}
+	ch <- DiffSummaryProgress{OldSize: fc, NewSize: tc}
 
 	fk, tk := schema.IsKeyless(fromSch), schema.IsKeyless(toSch)
 	var keyless bool
@@ -88,7 +96,7 @@ func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td T
 }
 
 func diffProllyTrees(ctx context.Context, ch chan DiffSummaryProgress, keyless bool, from, to durable.Index, fromSch, toSch schema.Schema) error {
-	_, vMapping, err := MapSchemaBasedOnName(fromSch, toSch)
+	_, vMapping, err := schema.MapSchemaBasedOnTagAndName(fromSch, toSch)
 	if err != nil {
 		return err
 	}
@@ -102,10 +110,18 @@ func diffProllyTrees(ctx context.Context, ch chan DiffSummaryProgress, keyless b
 	if keyless {
 		rpr = reportKeylessChanges
 	} else {
+		fc, err := from.Count()
+		if err != nil {
+			return err
+		}
+		tc, err := to.Count()
+		if err != nil {
+			return err
+		}
 		rpr = reportPkChanges
 		ch <- DiffSummaryProgress{
-			OldSize: from.Count(),
-			NewSize: to.Count(),
+			OldSize: fc,
+			NewSize: tc,
 		}
 	}
 
@@ -123,10 +139,18 @@ func diffNomsMaps(ctx context.Context, ch chan DiffSummaryProgress, keyless bool
 	if keyless {
 		rpr = reportNomsKeylessChanges
 	} else {
+		fc, err := fromRows.Count()
+		if err != nil {
+			return err
+		}
+		tc, err := toRows.Count()
+		if err != nil {
+			return err
+		}
 		rpr = reportNomsPkChanges
 		ch <- DiffSummaryProgress{
-			OldSize: fromRows.Count(),
-			NewSize: toRows.Count(),
+			OldSize: fc,
+			NewSize: tc,
 		}
 	}
 
@@ -307,47 +331,4 @@ func reportNomsKeylessChanges(ctx context.Context, change *diff.Difference, ch c
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-}
-
-// MapSchemaBasedOnName can be used to map column values from one schema to
-// another schema. A column in |inSch| is mapped to |outSch| if they share the
-// same name and primary key membership status. It returns ordinal mappings that
-// can be use to map key, value val.Tuple's of schema |inSch| to |outSch|. The
-// first ordinal map is for keys, and the second is for values. If a column of
-// |inSch| is missing in |outSch| then that column's index in the ordinal map
-// holds -1.
-// TODO (dhruv): Unit tests
-func MapSchemaBasedOnName(inSch, outSch schema.Schema) (val.OrdinalMapping, val.OrdinalMapping, error) {
-	keyMapping := make(val.OrdinalMapping, inSch.GetPKCols().Size())
-	valMapping := make(val.OrdinalMapping, inSch.GetNonPKCols().Size())
-
-	err := inSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		i := inSch.GetPKCols().TagToIdx[tag]
-		if col, ok := outSch.GetPKCols().GetByName(col.Name); ok {
-			j := outSch.GetPKCols().TagToIdx[col.Tag]
-			keyMapping[i] = j
-		} else {
-			return true, fmt.Errorf("could not map primary key column %s", col.Name)
-		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = inSch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		i := inSch.GetNonPKCols().TagToIdx[col.Tag]
-		if col, ok := outSch.GetNonPKCols().GetByName(col.Name); ok {
-			j := outSch.GetNonPKCols().TagToIdx[col.Tag]
-			valMapping[i] = j
-		} else {
-			valMapping[i] = -1
-		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return keyMapping, valMapping, nil
 }

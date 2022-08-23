@@ -123,7 +123,7 @@ SQL
 
     run dolt sql -q "SELECT count(*) FROM dolt_commits" -r csv
     [ $status -eq 0 ]
-    [[ "$output" =~ "4" ]] || false
+    [[ "$output" =~ "5" ]] || false
 }
 
 @test "migrate: tag and working set" {

@@ -147,7 +147,10 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore,
 	}
 
 	if indexes == nil {
-		indexes = NewIndexSet(ctx, vrw, ns)
+		indexes, err = NewIndexSet(ctx, vrw, ns)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	indexesRef, err := refFromNomsValue(ctx, vrw, mapFromIndexSet(indexes))
@@ -199,7 +202,11 @@ func TableFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 			err = errors.New("table ref is unexpected noms value; GetFileID == " + id)
 			return nil, err
 		}
-		return doltDevTable{vrw, ns, serial.GetRootAsTable([]byte(sm), serial.MessagePrefixSz)}, nil
+		st, err := serial.TryGetRootAsTable([]byte(sm), serial.MessagePrefixSz)
+		if err != nil {
+			return nil, err
+		}
+		return doltDevTable{vrw, ns, st}, nil
 	}
 }
 
@@ -328,7 +335,7 @@ func (t nomsTable) GetIndexes(ctx context.Context) (IndexSet, error) {
 		return nil, err
 	}
 	if !ok {
-		return NewIndexSet(ctx, t.vrw, t.ns), nil
+		return NewIndexSet(ctx, t.vrw, t.ns)
 	}
 
 	im, err := iv.(types.Ref).TargetValue(ctx, t.vrw)
@@ -346,7 +353,11 @@ func (t nomsTable) GetIndexes(ctx context.Context) (IndexSet, error) {
 // SetIndexes implements Table.
 func (t nomsTable) SetIndexes(ctx context.Context, indexes IndexSet) (Table, error) {
 	if indexes == nil {
-		indexes = NewIndexSet(ctx, t.vrw, t.ns)
+		var err error
+		indexes, err = NewIndexSet(ctx, t.vrw, t.ns)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	indexesRef, err := refFromNomsValue(ctx, t.vrw, mapFromIndexSet(indexes))
@@ -741,7 +752,7 @@ type serialTableFields struct {
 	autoincval        uint64
 }
 
-func (fields serialTableFields) write() *serial.Table {
+func (fields serialTableFields) write() (*serial.Table, error) {
 	// TODO: Chance for a pool.
 	builder := flatbuffers.NewBuilder(1024)
 
@@ -774,7 +785,7 @@ func (fields serialTableFields) write() *serial.Table {
 	serial.TableAddViolations(builder, violationsoff)
 	serial.TableAddArtifacts(builder, artifactsoff)
 	bs := serial.FinishMessage(builder, serial.TableEnd(builder), []byte(serial.TableFileID))
-	return serial.GetRootAsTable(bs, serial.MessagePrefixSz)
+	return serial.TryGetRootAsTable(bs, serial.MessagePrefixSz)
 }
 
 func newDoltDevTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, rows Index, indexes IndexSet, autoIncVal types.Value) (Table, error) {
@@ -795,7 +806,10 @@ func newDoltDevTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.Nod
 	}
 
 	if indexes == nil {
-		indexes = NewIndexSet(ctx, vrw, ns)
+		indexes, err = NewIndexSet(ctx, vrw, ns)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var autoInc uint64
@@ -804,7 +818,7 @@ func newDoltDevTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.Nod
 	}
 
 	var emptyhash hash.Hash
-	msg := serialTableFields{
+	msg, err := serialTableFields{
 		schema:            schemaAddr[:],
 		rows:              rowsbytes,
 		indexes:           indexes.(doltDevIndexSet).am,
@@ -816,6 +830,9 @@ func newDoltDevTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.Nod
 		artifacts:         emptyhash[:],
 		autoincval:        autoInc,
 	}.write()
+	if err != nil {
+		return nil, err
+	}
 
 	return doltDevTable{vrw, ns, msg}, nil
 }
@@ -872,7 +889,10 @@ func (t doltDevTable) GetTableRows(ctx context.Context) (Index, error) {
 		if err != nil {
 			return nil, err
 		}
-		m := shim.MapFromValue(types.SerialMessage(rowbytes), sch, t.ns)
+		m, err := shim.MapFromValue(types.SerialMessage(rowbytes), sch, t.ns)
+		if err != nil {
+			return nil, err
+		}
 		return IndexFromProllyMap(m), nil
 	}
 }
@@ -883,24 +903,43 @@ func (t doltDevTable) SetTableRows(ctx context.Context, rows Index) (Table, erro
 		return nil, err
 	}
 
-	fields := t.fields()
+	fields, err := t.fields()
+	if err != nil {
+		return nil, err
+	}
 	fields.rows = rowsbytes
-	msg := fields.write()
+	msg, err := fields.write()
+	if err != nil {
+		return nil, err
+	}
 
 	return doltDevTable{t.vrw, t.ns, msg}, nil
 }
 
 func (t doltDevTable) GetIndexes(ctx context.Context) (IndexSet, error) {
 	ambytes := t.msg.SecondaryIndexesBytes()
-	node := tree.NodeFromBytes(ambytes)
+	node, err := tree.NodeFromBytes(ambytes)
+	if err != nil {
+		return nil, err
+	}
 	ns := t.ns
-	return doltDevIndexSet{t.vrw, t.ns, prolly.NewAddressMap(node, ns)}, nil
+	am, err := prolly.NewAddressMap(node, ns)
+	if err != nil {
+		return nil, err
+	}
+	return doltDevIndexSet{t.vrw, t.ns, am}, nil
 }
 
 func (t doltDevTable) SetIndexes(ctx context.Context, indexes IndexSet) (Table, error) {
-	fields := t.fields()
+	fields, err := t.fields()
+	if err != nil {
+		return nil, err
+	}
 	fields.indexes = indexes.(doltDevIndexSet).am
-	msg := fields.write()
+	msg, err := fields.write()
+	if err != nil {
+		return nil, err
+	}
 	return doltDevTable{t.vrw, t.ns, msg}, nil
 }
 
@@ -985,12 +1024,18 @@ func (t doltDevTable) SetArtifacts(ctx context.Context, artifacts ArtifactIndex)
 	}
 
 	var addr hash.Hash
-	if artifacts != nil && artifacts.Count() != 0 {
-		ref, err := RefFromArtifactIndex(ctx, t.vrw, artifacts)
+	if artifacts != nil {
+		c, err := artifacts.Count()
 		if err != nil {
 			return nil, err
 		}
-		addr = ref.TargetHash()
+		if c != 0 {
+			ref, err := RefFromArtifactIndex(ctx, t.vrw, artifacts)
+			if err != nil {
+				return nil, err
+			}
+			addr = ref.TargetHash()
+		}
 	}
 	msg := t.clone()
 	copy(msg.ArtifactsBytes(), addr[:])
@@ -1083,9 +1128,15 @@ func (t doltDevTable) SetAutoIncrement(ctx context.Context, val uint64) (Table, 
 	// TODO: This clones before checking if the mutate will work.
 	msg := t.clone()
 	if !msg.MutateAutoIncrementValue(val) {
-		fields := t.fields()
+		fields, err := t.fields()
+		if err != nil {
+			return nil, err
+		}
 		fields.autoincval = val
-		msg = fields.write()
+		msg, err = fields.write()
+		if err != nil {
+			return nil, err
+		}
 	}
 	return doltDevTable{t.vrw, t.ns, msg}, nil
 }
@@ -1098,16 +1149,23 @@ func (t doltDevTable) clone() *serial.Table {
 	return &ret
 }
 
-func (t doltDevTable) fields() serialTableFields {
+func (t doltDevTable) fields() (serialTableFields, error) {
 	ambytes := t.msg.SecondaryIndexesBytes()
-	node := tree.NodeFromBytes(ambytes)
+	node, err := tree.NodeFromBytes(ambytes)
+	if err != nil {
+		return serialTableFields{}, err
+	}
 	ns := t.ns
 
 	conflicts := t.msg.Conflicts(nil)
+	am, err := prolly.NewAddressMap(node, ns)
+	if err != nil {
+		return serialTableFields{}, err
+	}
 	return serialTableFields{
 		schema:            t.msg.SchemaBytes(),
 		rows:              t.msg.PrimaryIndexBytes(),
-		indexes:           prolly.NewAddressMap(node, ns),
+		indexes:           am,
 		conflictsdata:     conflicts.DataBytes(),
 		conflictsours:     conflicts.OurSchemaBytes(),
 		conflictstheirs:   conflicts.TheirSchemaBytes(),
@@ -1115,7 +1173,7 @@ func (t doltDevTable) fields() serialTableFields {
 		violations:        t.msg.ViolationsBytes(),
 		artifacts:         t.msg.ArtifactsBytes(),
 		autoincval:        t.msg.AutoIncrementValue(),
-	}
+	}, nil
 }
 
 func getSchemaAtAddr(ctx context.Context, vrw types.ValueReadWriter, addr hash.Hash) (schema.Schema, error) {

@@ -180,18 +180,6 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	assert.True(mustGetCommittedValue(dsy.db, mustHead(dsy)).Equals(c))
 }
 
-func TestIdValidation(t *testing.T) {
-	assert := assert.New(t)
-	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewViewWithDefaultFormat())
-
-	invalidDatasetNames := []string{" ", "", "a ", " a", "$", "#", ":", "\n", "💩"}
-	for _, id := range invalidDatasetNames {
-		_, err := store.GetDataset(context.Background(), id)
-		assert.Error(err)
-	}
-}
-
 func TestHeadValueFunctions(t *testing.T) {
 	assert := assert.New(t)
 
@@ -228,8 +216,7 @@ func TestHeadValueFunctions(t *testing.T) {
 	assert.False(ok)
 }
 
-func TestIsValidDatasetName(t *testing.T) {
-	assert := assert.New(t)
+func TestValidateDatasetId(t *testing.T) {
 	cases := []struct {
 		name  string
 		valid bool
@@ -239,10 +226,46 @@ func TestIsValidDatasetName(t *testing.T) {
 		{"f1", true},
 		{"1f", true},
 		{"", false},
-		{"f!!", false},
+		{"f!!", true},
+		{"!!", true},
+		{"refs/heads/", false},
+		{"refs/heads/.", false},
+		{"refs/heads/hello", true},
+		{"refs/heads//hello", true},
+		{"refs/heads/hello world", false},
+		{"refs/heads/hello\tworld", false},
+		{"refs/heads/hello\nworld", false},
+		{"refs/heads/hello@world", true},
+		{"refs/heads/hello-world", true},
+		{"refs/heads\x00/hello-world", false},
+		{"refs/heads/hello-world.", false},
+		{"refs/heads/hello..world", false},
+		{"refs/heads/helloworld]]", true},
+		{"refs/heads/hello[world", false},
+		{"refs/heads/hello@{world}", false},
+		{"refs/heads/hello-worبld", false},
+		{"refs/.lock/hello-world", false},
+		{"refs/heads/.lock", false},
+		{"refs/heads/must.lockme", true},
 	}
+
 	for _, c := range cases {
-		assert.Equal(c.valid, IsValidDatasetName(c.name),
-			"Expected %s validity to be %t", c.name, c.valid)
+		stg := &chunks.MemoryStorage{}
+		store := NewDatabase(stg.NewViewWithDefaultFormat())
+
+		t.Run(c.name, func(t *testing.T) {
+			err := ValidateDatasetId(c.name)
+			if c.valid {
+				assert.NoError(t, err)
+
+				_, err := store.GetDataset(context.Background(), c.name)
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+
+				_, err := store.GetDataset(context.Background(), c.name)
+				assert.Error(t, err)
+			}
+		})
 	}
 }

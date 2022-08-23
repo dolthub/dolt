@@ -128,7 +128,10 @@ func _newInternal(ctx context.Context, ns NodeStore, s message.Serializer, nodes
 		treeCnt += nodes[i].treeCount
 	}
 	msg := s.Serialize(keys, vals, subtrees, level)
-	node := NodeFromBytes(msg)
+	node, err := NodeFromBytes(msg)
+	if err != nil {
+		return novelNode{}, err
+	}
 	addr, err := ns.Write(ctx, node)
 	if err != nil {
 		return novelNode{}, err
@@ -143,7 +146,10 @@ func _newInternal(ctx context.Context, ns NodeStore, s message.Serializer, nodes
 
 func _newLeaf(ctx context.Context, ns NodeStore, s message.Serializer, buf []byte) (novelNode, error) {
 	msg := s.Serialize([][]byte{{0}}, [][]byte{buf}, []uint64{1}, 0)
-	node := NodeFromBytes(msg)
+	node, err := NodeFromBytes(msg)
+	if err != nil {
+		return novelNode{}, err
+	}
 	addr, err := ns.Write(ctx, node)
 	if err != nil {
 		return novelNode{}, err
@@ -263,7 +269,11 @@ func (t *ImmutableTree) load(ctx context.Context) error {
 	}
 
 	WalkNodes(ctx, n, t.ns, func(ctx context.Context, n Node) error {
-		if n.IsLeaf() {
+		leaf, err := n.IsLeaf()
+		if err != nil {
+			return err
+		}
+		if leaf {
 			t.buf = append(t.buf, n.getValue(0)...)
 		}
 		return nil

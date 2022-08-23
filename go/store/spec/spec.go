@@ -222,10 +222,6 @@ func ForDatasetOpts(spec string, opts SpecOptions) (Spec, error) {
 		return Spec{}, errors.New("dataset name required for dataset spec")
 	}
 
-	if !path.Path.IsEmpty() {
-		return Spec{}, errors.New("path is not allowed for dataset spec")
-	}
-
 	sp.Path = path
 	return sp, nil
 }
@@ -432,42 +428,6 @@ func (sp Spec) Href() string {
 	default:
 		return ""
 	}
-}
-
-// Pin returns a Spec in which the dataset component, if any, has been replaced
-// with the hash of the HEAD of that dataset. This "pins" the path to the state
-// of the database at the current moment in time.  Returns itself if the
-// PathSpec is already "pinned".
-func (sp Spec) Pin(ctx context.Context) (Spec, bool) {
-	var ds datas.Dataset
-
-	if !sp.Path.IsEmpty() {
-		if !sp.Path.Hash.IsEmpty() {
-			// Spec is already pinned.
-			return sp, true
-		}
-
-		var err error
-		ds, err = sp.GetDatabase(ctx).GetDataset(ctx, sp.Path.Dataset)
-		d.PanicIfError(err)
-	} else {
-		ds = sp.GetDataset(ctx)
-	}
-
-	commit, ok := ds.MaybeHead()
-	if !ok {
-		return Spec{}, false
-	}
-
-	nbf := sp.GetVRW(ctx).Format()
-	r := sp
-
-	var err error
-	r.Path.Dataset = ""
-	r.Path.Hash, err = commit.Hash(nbf)
-	d.PanicIfError(err)
-
-	return r, true
 }
 
 func (sp Spec) Close() error {

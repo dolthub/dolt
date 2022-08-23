@@ -202,7 +202,7 @@ func (f filteredIter) Next(ctx context.Context) (k, v val.Tuple, err error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		if !f.rng.matches(k) {
+		if !f.rng.Matches(k) {
 			continue
 		}
 		return

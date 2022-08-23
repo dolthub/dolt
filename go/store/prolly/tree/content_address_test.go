@@ -39,7 +39,9 @@ func TestContentAddress(t *testing.T) {
 	m := makeTree(t, tups)
 	require.NotNil(t, m)
 	require.Equal(t, goldenHash, m.HashOf())
-	assert.Equal(t, 12345, m.TreeCount())
+	tc, err := m.TreeCount()
+	require.NoError(t, err)
+	assert.Equal(t, 12345, tc)
 }
 
 func makeTree(t *testing.T, tuples [][2]val.Tuple) Node {

@@ -238,12 +238,19 @@ func TestMutateMapWithTupleIter(t *testing.T) {
 func TestNewEmptyNode(t *testing.T) {
 	s := message.NewProllyMapSerializer(val.TupleDesc{}, sharedPool)
 	msg := s.Serialize(nil, nil, nil, 0)
-	empty := tree.NodeFromBytes(msg)
-	assert.Equal(t, 0, empty.Level())
+	empty, err := tree.NodeFromBytes(msg)
+	require.NoError(t, err)
+	l, err := empty.Level()
+	require.NoError(t, err)
+	assert.Equal(t, 0, l)
 	assert.Equal(t, 0, empty.Count())
-	assert.Equal(t, 0, empty.TreeCount())
+	tc, err := empty.TreeCount()
+	require.NoError(t, err)
+	assert.Equal(t, 0, tc)
 	assert.Equal(t, 76, empty.Size())
-	assert.True(t, empty.IsLeaf())
+	leaf, err := empty.IsLeaf()
+	require.NoError(t, err)
+	assert.True(t, leaf)
 }
 
 // credit: https://github.com/tailscale/tailscale/commit/88586ec4a43542b758d6f4e15990573970fb4e8a
@@ -311,7 +318,7 @@ func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 	// test point lookup
 	for _, kv := range tuples {
 		rng := pointRangeFromTuple(kv[0], desc)
-		require.True(t, rng.isPointLookup(desc))
+		require.True(t, rng.IsPointLookup(desc))
 
 		iter, err := om.IterRange(ctx, rng)
 		require.NoError(t, err)
