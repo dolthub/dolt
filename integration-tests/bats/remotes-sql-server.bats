@@ -240,8 +240,7 @@ teardown() {
     start_sql_server repo2
 
     server_query repo2 1 dolt "" "show tables" "" 1
-    [[ "$output" =~ "remote not found: 'unknown'" ]] || false
-    
+    [[ "$output" =~ "remote not found: 'unknown'" ]] || false    
 }
 
 @test "remotes-sql-server: pull multiple heads, one invalid" {

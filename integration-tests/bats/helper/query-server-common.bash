@@ -204,7 +204,11 @@ stop_sql_server() {
 # executes a query (or list of queries separated by a `;`),
 # and compares the results against what is expected.
 #
-# If executing multiple queries,  separate the expected CSV values with a `;`.
+# EXAMPLE: server_query db1 1 dolt "" "select * from test" "c1\n0"
+# 
+# If executing multiple queries, separate the expected CSV values with a `;`.
+#
+# EXAMPLE: server_query "" 1 dolt "" "use db1; select * from test" ";c1\n0"
 #
 # If you expect an exception, leave query results blank and add an additional
 # value of 1 to the end of the call. This could be improved to actually send
@@ -212,17 +216,21 @@ stop_sql_server() {
 # that. When calling with bats use `run` and then check the $output if you
 # want to inspect the exception string.
 #
+# EXAMPLE: server_query "" 1 dolt "" "garbage" "" 1
+#
 # In the event that the results do not match expectations,
 # the python process will exit with an exit code of 1
 #
-#  * param1 is the database name for the connection string
-#  * param2 is 1 for autocommit = true, 0 for autocommit = false
-#  * param3 is the user
-#  * param4 is the password
-#  * param5 is the query_str
-#  * param6 is a csv representing the expected result set.  If a query is not expected to have a result set "" should
-#      be passed.
-#  * param7 is an expected exception value of 1. Mutually exclusive with param6
+#  * param1: The database name for the connection string.
+#            Leave empy for no database.
+#  * param2: 1 for autocommit = true, 0 for autocommit = false
+#  * param3: User
+#  * param4: Password
+#  * param5: Query string or query strings separated by `;`
+#  * param6: A csv representing the expected result set.
+#            If a query is not expected to have a result set "" should
+#            be passed. Seprate multiple result sets with `;`
+#  * param7: Expected exception value of 1. Mutually exclusive with param6.
 #
 server_query() {
     let PORT="$$ % (65536-1024) + 1024"

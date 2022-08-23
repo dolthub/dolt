@@ -1280,12 +1280,12 @@ END""")
 
     # can't drop a branch-qualified database name
     run server_query "" 1 dolt "" "drop database \`test2/newbranch\`" "" 1
-    [[ "$output" =~ "database not found" ]] || false
+    [[ "$output" =~ "unable to drop revision database: test2/newbranch" ]] || false
 
 
     server_query "" 1 dolt "" "drop database TEST2"
 
-    server_query "test2/newbranch" 1 dolt "" "select * from a" "" 1
+    run server_query "test2/newbranch" 1 dolt "" "select * from a" "" 1
     [[ "$output" =~ "database not found" ]] || false
 
     server_query "test3" 1 dolt "" "select * from a" "x\n5\n6"
