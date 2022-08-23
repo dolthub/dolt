@@ -56,13 +56,13 @@ func NewJSONWriter(wr io.WriteCloser, outSch schema.Schema) (*JSONWriter, error)
 	return &JSONWriter{closer: wr, bWr: bwr, sch: outSch}, nil
 }
 
-func (jsonw *JSONWriter) GetSchema() schema.Schema {
-	return jsonw.sch
+func (j *JSONWriter) GetSchema() schema.Schema {
+	return j.sch
 }
 
 // WriteRow will write a row to a table
-func (jsonw *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
-	allCols := jsonw.sch.GetAllCols()
+func (j *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
+	allCols := j.sch.GetAllCols()
 	colValMap := make(map[string]interface{}, allCols.Size())
 	if err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		val, ok := r.GetColVal(tag)
@@ -108,25 +108,25 @@ func (jsonw *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
 		return errors.New("marshaling did not work")
 	}
 
-	if jsonw.rowsWritten != 0 {
-		_, err := jsonw.bWr.WriteRune(',')
+	if j.rowsWritten != 0 {
+		_, err := j.bWr.WriteRune(',')
 
 		if err != nil {
 			return err
 		}
 	}
 
-	newErr := iohelp.WriteAll(jsonw.bWr, data)
+	newErr := iohelp.WriteAll(j.bWr, data)
 	if newErr != nil {
 		return newErr
 	}
-	jsonw.rowsWritten++
+	j.rowsWritten++
 
 	return nil
 }
 
-func (jsonw *JSONWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
-	allCols := jsonw.sch.GetAllCols()
+func (j *JSONWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
+	allCols := j.sch.GetAllCols()
 	colValMap := make(map[string]interface{}, allCols.Size())
 	if err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		val := row[allCols.TagToIdx[tag]]
@@ -172,35 +172,35 @@ func (jsonw *JSONWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
 		return errors.New("marshaling did not work")
 	}
 
-	if jsonw.rowsWritten != 0 {
-		_, err := jsonw.bWr.WriteRune(',')
+	if j.rowsWritten != 0 {
+		_, err := j.bWr.WriteRune(',')
 
 		if err != nil {
 			return err
 		}
 	}
 
-	newErr := iohelp.WriteAll(jsonw.bWr, data)
+	newErr := iohelp.WriteAll(j.bWr, data)
 	if newErr != nil {
 		return newErr
 	}
-	jsonw.rowsWritten++
+	j.rowsWritten++
 
 	return nil
 }
 
 // Close should flush all writes, release resources being held
-func (jsonw *JSONWriter) Close(ctx context.Context) error {
-	if jsonw.closer != nil {
-		err := iohelp.WriteAll(jsonw.bWr, []byte(jsonFooter))
+func (j *JSONWriter) Close(ctx context.Context) error {
+	if j.closer != nil {
+		err := iohelp.WriteAll(j.bWr, []byte(jsonFooter))
 
 		if err != nil {
 			return err
 		}
 
-		errFl := jsonw.bWr.Flush()
-		errCl := jsonw.closer.Close()
-		jsonw.closer = nil
+		errFl := j.bWr.Flush()
+		errCl := j.closer.Close()
+		j.closer = nil
 
 		if errCl != nil {
 			return errCl

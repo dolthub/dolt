@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	textdiff "github.com/andreyvit/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
 	"github.com/dolthub/go-mysql-server/sql"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
@@ -60,6 +61,7 @@ const (
 
 	TabularDiffOutput diffOutput = 1
 	SQLDiffOutput     diffOutput = 2
+	JsonDiffOutput     diffOutput = 3
 
 	DataFlag    = "data"
 	SchemaFlag  = "schema"
@@ -178,7 +180,7 @@ func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 
 	f, _ := apr.GetValue(FormatFlag)
 	switch strings.ToLower(f) {
-	case "tabular", "sql", "":
+	case "tabular", "sql", "json", "":
 	default:
 		return errhand.BuildDError("invalid output format: %s", f).Build()
 	}
@@ -204,6 +206,8 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		dArgs.diffOutput = TabularDiffOutput
 	case "sql":
 		dArgs.diffOutput = SQLDiffOutput
+	case "json":
+		dArgs.diffOutput = JsonDiffOutput
 	}
 
 	dArgs.limit, _ = apr.GetInt(limitParam)
@@ -410,6 +414,8 @@ func diffSchemas(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDel
 
 	if dArgs.diffOutput == TabularDiffOutput {
 		return printShowCreateTableDiff(ctx, td)
+	} else if dArgs.diffOutput == JsonDiffOutput {
+		return nil
 	}
 
 	return sqlSchemaDiff(ctx, td, toSchemas)
@@ -607,6 +613,15 @@ func diffRows(ctx context.Context, se *engine.SqlEngine, td diff.TableDelta, dAr
 			targetSch = td.FromSch
 		}
 		diffWriter = sqlexport.NewSqlDiffWriter(tableName, targetSch, iohelp.NopWrCloser(cli.CliOut))
+	case JsonDiffOutput:
+		targetSch := td.ToSch
+		if targetSch == nil {
+			targetSch = td.FromSch
+		}
+		diffWriter, err = json.NewJsonDiffWriter(iohelp.NopWrCloser(cli.CliOut), targetSch)
+		if err != nil {
+			return nil
+		}
 	}
 
 	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, diffWriter)
