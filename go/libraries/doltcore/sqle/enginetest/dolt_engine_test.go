@@ -1195,6 +1195,7 @@ func TestCommitDiffSystemTable(t *testing.T) {
 }
 
 func TestCommitDiffSystemTablePrepared(t *testing.T) {
+	t.skip()
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range CommitDiffSystemTableScriptTests {
