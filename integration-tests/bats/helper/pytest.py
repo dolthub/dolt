@@ -6,8 +6,8 @@ import mysql.connector
 from io import StringIO
 from multiprocessing import Process
 
-def _connect(user, host, port, database):
-    return mysql.connector.connect(user=user, host=host, port=port, database=database, allow_local_infile=True)
+def _connect(user, password, host, port, database):
+    return mysql.connector.connect(user=user, password=password, host=host, port=port, database=database, allow_local_infile=True)
 
 def _print_err_and_exit(e):
     print(e, file=sys.stderr)
@@ -23,17 +23,18 @@ def csv_to_row_maps(csv_str):
     return rows
 
 class DoltConnection(object):
-    def __init__(self, user='root', host='127.0.0.1', port=3306, database='dolt', auto_commit=False):
-        self.user = user
-        self.host = host
-        self.port = port
-        self.database = database
+    def __init__(self, user='root', password=None, host='127.0.0.1', port=3306, database='dolt', auto_commit=False):
+        self.user        = user
+        self.password    = password
+        self.host        = host
+        self.port        = port
+        self.database    = database
         self.auto_commit = auto_commit
-        self.cnx = None
+        self.cnx         = None
 
     def connect(self):
         try:
-            self.cnx = _connect(self.user, self.host, self.port, self.database)
+            self.cnx = _connect(self.user, self.password, self.host, self.port, self.database)
             self.cnx.autocommit=self.auto_commit
         except BaseException as e:
             _print_err_and_exit(e)
@@ -69,7 +70,7 @@ class InfiniteRetryConnection(DoltConnection):
     def connect(self):
         while True:
             try:
-                self.cnx = _connect(user=self.user, host=self.host, port=self.port, database=self.database)
+                self.cnx = _connect(user=self.user, password=self.password, host=self.host, port=self.port, database=self.database)
 
                 try:
                     self.cnx.close()
@@ -81,9 +82,9 @@ class InfiniteRetryConnection(DoltConnection):
             except BaseException:
                 pass
 
-def wait_for_connection(user='root', host='127.0.0.1', port=3306, database='dolt', timeout_ms=5000):
+def wait_for_connection(user='root', password=None, host='127.0.0.1', port=3306, database='dolt', timeout_ms=5000):
     timeoutf = timeout_ms / 1000.0
-    exit_zero_on_connect = InfiniteRetryConnection(user=user, host=host, port=port, database=database)
+    exit_zero_on_connect = InfiniteRetryConnection(user=user, password=password, host=host, port=port, database=database)
 
     cnx_proc = Process(target=exit_zero_on_connect.connect)
     cnx_proc.start()
