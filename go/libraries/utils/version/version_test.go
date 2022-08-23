@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqlserver
+package version
 
 import (
 	"testing"
@@ -30,10 +30,10 @@ func TestEncodeDecodeVersion(t *testing.T) {
 
 	for _, version := range versions {
 		t.Run(version, func(t *testing.T) {
-			encoded, err := encodeVersion(version)
+			encoded, err := Encode(version)
 			require.NoError(t, err)
 
-			decoded := decodeVersion(encoded)
+			decoded := Decode(encoded)
 			require.Equal(t, version, decoded)
 		})
 	}
@@ -54,7 +54,7 @@ func TestBadVersionEncodeFailure(t *testing.T) {
 
 	for _, version := range versions {
 		t.Run(version, func(t *testing.T) {
-			_, err := encodeVersion(version)
+			_, err := Encode(version)
 			require.Error(t, err)
 		})
 	}
