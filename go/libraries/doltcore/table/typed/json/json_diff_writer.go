@@ -35,10 +35,15 @@ func NewJsonDiffWriter(wr io.WriteCloser, outSch schema.Schema) (*JsonDiffWriter
 	// leading diff type column with empty name
 	cols := outSch.GetAllCols()
 	newCols := schema.NewColCollection()
-	newCols.Append(schema.NewColumn("diff_type", 0, types.StringKind, false))
-	newCols.Append(cols.GetColumns()...)
+	newCols = newCols.Append(schema.NewColumn("diff_type", 0, types.StringKind, false))
+	newCols = newCols.AppendColl(cols)
 
-	writer, err := NewJSONWriter(wr, outSch)
+	newSchema, err := schema.SchemaFromCols(newCols)
+	if err != nil {
+		return nil, err
+	}
+
+	writer, err := NewJSONWriter(wr, newSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -76,4 +81,17 @@ func (j *JsonDiffWriter) WriteRow(
 
 func (j *JsonDiffWriter) Close(ctx context.Context) error {
 	return j.wr.Close(ctx)
+}
+ type JsonSchemaDiffWriter struct {
+	 wr io.WriteCloser
+ }
+
+var _ diff.SchemaDiffWriter = (*JsonSchemaDiffWriter)(nil)
+
+func (j JsonSchemaDiffWriter) WriteSchemaDiff(ctx context.Context, schemaDiffStatement string) error {
+	return nil
+}
+
+func (j JsonSchemaDiffWriter) Close(ctx context.Context) error {
+	return j.wr.Close()
 }

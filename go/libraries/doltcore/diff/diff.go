@@ -57,11 +57,22 @@ type RowDiffer interface {
 	Close() error
 }
 
-// SqlRowDiffWriter knows how to write diff rows to an arbitrary format and destination.
+// SqlRowDiffWriter knows how to write diff rows for a table to an arbitrary format and destination.
 type SqlRowDiffWriter interface {
 	// WriteRow writes the diff row given, of the diff type provided. colDiffTypes is guaranteed to be the same length as
 	// the input row.
 	WriteRow(ctx context.Context, row sql.Row, diffType ChangeType, colDiffTypes []ChangeType) error
+
+	// Close finalizes the work of this writer.
+	Close(ctx context.Context) error
+}
+
+// SchemaDiffWriter knows how to write SQL DDL statements for a schema diff for a table to an arbitrary format and
+// destination.
+type SchemaDiffWriter interface {
+	// WriteSchemaDiff writes the schema diff given (a SQL statement) and returns any error. A single table may have
+	// many SQL statements for a single diff.
+	WriteSchemaDiff(ctx context.Context, schemaDiffStatement string) error
 
 	// Close finalizes the work of this writer.
 	Close(ctx context.Context) error
