@@ -1,4 +1,4 @@
-// Copyright 2021 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,11 @@ import (
 
 	"github.com/dolthub/dolt/go/store/val"
 )
+
+// OpenStartRange defines a half-open Range of Tuples (start, stop].
+func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
+	return openStartRange(start, stop, desc)
+}
 
 // PrefixRange constructs a Range for Tuples with a prefix of |prefix|.
 func PrefixRange(prefix val.Tuple, desc val.TupleDesc) Range {
@@ -85,7 +90,7 @@ func (r Range) aboveStart(t val.Tuple) bool {
 	return true
 }
 
-// belowStop is used to find the eng of the
+// belowStop is used to find the end of the
 // physical partition defined by a Range.
 func (r Range) belowStop(t val.Tuple) bool {
 	order := r.Desc.Comparator()

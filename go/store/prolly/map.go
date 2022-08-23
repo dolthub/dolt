@@ -1,4 +1,4 @@
-// Copyright 2021 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -122,6 +122,10 @@ func MutateMapWithTupleIter(ctx context.Context, m Map, iter TupleIter) (Map, er
 
 func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
 	return diffOrderedTrees(ctx, from.tuples, to.tuples, cb)
+}
+
+func RangeDiffMaps(ctx context.Context, from, to Map, rng Range, cb DiffFn) error {
+	return rangeDiffOrderedTrees(ctx, from.tuples, to.tuples, rng, cb)
 }
 
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
