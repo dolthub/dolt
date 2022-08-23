@@ -589,7 +589,7 @@ SQL
      SELECT DOLT_CHECKOUT('-b', 'feature-branch');
      "
 
-     server_query repo1 1 dolt "" "SELECT * FROM test" "pk\n0\n1\n2"
+     server_query repo1 1 dolt "" "SELECT * FROM testorder by pk" "pk\n0\n1\n2"
 
      server_query repo1 1 dolt "" "
      SELECT DOLT_CHECKOUT('feature-branch');
@@ -1304,8 +1304,8 @@ END""")
     server_query "" 1 dolt "" "use TEST1; insert into a values (1), (2);"
     run server_query "" 1 dolt "" "use test1; select dolt_commit('-a', '-m', 'new table a');"
     server_query "" 1 dolt "" "use test1; call dolt_checkout('-b', 'newbranch');"
-    server_query "" 1 dolt "" "use \`TEST1/newbranch\`; select * from a" ";x\n1\n2"
-    server_query "" 1 dolt "" "use \`test1/newbranch\`; select * from a" ";x\n1\n2"
+    server_query "" 1 dolt "" "use \`TEST1/newbranch\`; select * from a order by x" ";x\n1\n2"
+    server_query "" 1 dolt "" "use \`test1/newbranch\`; select * from a order by x" ";x\n1\n2"
     server_query "" 1 dolt "" "use \`TEST1/NEWBRANCH\`" "" "database not found: TEST1/NEWBRANCH"
 
     server_query "" 1 dolt "" "create database test2; use test2; select database();" ";;database()\ntest2"
