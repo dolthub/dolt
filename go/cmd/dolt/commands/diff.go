@@ -372,7 +372,9 @@ func newDiffWriter(ctx context.Context, sqlEngine *engine.SqlEngine, args *diffA
 	case TabularDiffOutput:
 		return tabularDiffWriter{}
 	case SQLDiffOutput:
+		return sqlDiffWriter{}
 	case JsonDiffOutput:
+		return jsonDiffWriter{}
 	default:
 		panic(fmt.Sprintf("unexpected diff output: %v", args.diffOutput))
 	}
@@ -929,34 +931,28 @@ func (t tabularDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, un
 type sqlDiffWriter struct {}
 
 func (s sqlDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) error {
-	// TODO implement me
-	panic("implement me")
+	return nil
 }
 
 func (s sqlDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
-	// TODO implement me
-	panic("implement me")
+	return nil
 }
 
 func (s sqlDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
-	// TODO implement me
-	panic("implement me")
+	return nil, nil
 }
 
 type jsonDiffWriter struct {}
 
 func (j jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) error {
-	// TODO implement me
-	panic("implement me")
+	return nil
 }
 
 func (j jsonDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
-	// TODO implement me
-	panic("implement me")
+	return nil
 }
 
 func (j jsonDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
-	// TODO implement me
-	panic("implement me")
+	return nil, nil
 }
 
