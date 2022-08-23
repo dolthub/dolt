@@ -141,7 +141,10 @@ func (sm SerialMessage) HumanReadableString() string {
 		fmt.Fprintf(ret, "}")
 		return ret.String()
 	case serial.AddressMapFileID:
-		keys, values, cnt := message.GetKeysAndValues(serial.Message(sm))
+		keys, values, cnt, err := message.GetKeysAndValues(serial.Message(sm))
+		if err != nil {
+			return fmt.Sprintf("error in HumanReadString(): %s", err)
+		}
 		var b strings.Builder
 		b.Write([]byte("AddressMap{\n"))
 		for i := uint16(0); i < cnt; i++ {
@@ -174,13 +177,21 @@ const SerialMessageRefHeight = 1024
 func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	switch serial.GetFileID(sm) {
 	case serial.StoreRootFileID:
-		msg := serial.GetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
+		var msg serial.StoreRoot
+		err := serial.InitStoreRootRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		if err != nil {
+			return err
+		}
 		if msg.AddressMapLength() > 0 {
 			mapbytes := msg.AddressMapBytes()
 			return SerialMessage(mapbytes).walkRefs(nbf, cb)
 		}
 	case serial.TagFileID:
-		msg := serial.GetRootAsTag([]byte(sm), serial.MessagePrefixSz)
+		var msg serial.Tag
+		err := serial.InitTagRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		if err != nil {
+			return err
+		}
 		addr := hash.New(msg.CommitAddrBytes())
 		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 		if err != nil {
@@ -188,7 +199,11 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 		}
 		return cb(r)
 	case serial.WorkingSetFileID:
-		msg := serial.GetRootAsWorkingSet([]byte(sm), serial.MessagePrefixSz)
+		var msg serial.WorkingSet
+		err := serial.InitWorkingSetRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		if err != nil {
+			return err
+		}
 		addr := hash.New(msg.WorkingRootAddrBytes())
 		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 		if err != nil {
@@ -228,8 +243,12 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 			}
 		}
 	case serial.RootValueFileID:
-		msg := serial.GetRootAsRootValue([]byte(sm), serial.MessagePrefixSz)
-		err := SerialMessage(msg.TablesBytes()).walkRefs(nbf, cb)
+		var msg serial.RootValue
+		err := serial.InitRootValueRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		if err != nil {
+			return err
+		}
+		err = SerialMessage(msg.TablesBytes()).walkRefs(nbf, cb)
 		if err != nil {
 			return err
 		}
@@ -244,7 +263,11 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 			}
 		}
 	case serial.TableFileID:
-		msg := serial.GetRootAsTable([]byte(sm), serial.MessagePrefixSz)
+		var msg serial.Table
+		err := serial.InitTableRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		if err != nil {
+			return err
+		}
 		addr := hash.New(msg.SchemaBytes())
 		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 		if err != nil {
@@ -342,7 +365,11 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 				return err
 			}
 		}
-		msg := serial.GetRootAsCommit([]byte(sm), serial.MessagePrefixSz)
+		var msg serial.Commit
+		err = serial.InitCommitRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		if err != nil {
+			return err
+		}
 		addr := hash.New(msg.RootBytes())
 		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 		if err != nil {
@@ -389,7 +416,11 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 }
 
 func SerialCommitParentAddrs(nbf *NomsBinFormat, sm SerialMessage) ([]hash.Hash, error) {
-	msg := serial.GetRootAsCommit([]byte(sm), serial.MessagePrefixSz)
+	var msg serial.Commit
+	err := serial.InitCommitRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+	if err != nil {
+		return nil, err
+	}
 	addrs := msg.ParentAddrsBytes()
 	n := len(addrs) / 20
 	ret := make([]hash.Hash, n)

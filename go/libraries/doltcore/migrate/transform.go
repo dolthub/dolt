@@ -424,7 +424,10 @@ func migrateIndexSet(
 	oldParentSet, oldSet, newParentSet durable.IndexSet,
 	vrw types.ValueReadWriter, ns tree.NodeStore,
 ) (durable.IndexSet, error) {
-	newSet := durable.NewIndexSet(ctx, vrw, ns)
+	newSet, err := durable.NewIndexSet(ctx, vrw, ns)
+	if err != nil {
+		return nil, err
+	}
 	for _, def := range sch.Indexes().AllIndexes() {
 		idx, err := oldParentSet.GetIndex(ctx, sch, def.Name())
 		if err != nil {

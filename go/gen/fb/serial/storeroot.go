@@ -24,17 +24,34 @@ type StoreRoot struct {
 	_tab flatbuffers.Table
 }
 
-func GetRootAsStoreRoot(buf []byte, offset flatbuffers.UOffsetT) *StoreRoot {
+func InitStoreRootRoot(o *StoreRoot, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
+	o.Init(buf, n+offset)
+	if StoreRootNumFields < o.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
+}
+
+func TryGetRootAsStoreRoot(buf []byte, offset flatbuffers.UOffsetT) (*StoreRoot, error) {
 	x := &StoreRoot{}
-	x.Init(buf, n+offset)
+	return x, InitStoreRootRoot(x, buf, offset)
+}
+
+func GetRootAsStoreRoot(buf []byte, offset flatbuffers.UOffsetT) *StoreRoot {
+	x := &StoreRoot{}
+	InitStoreRootRoot(x, buf, offset)
 	return x
 }
 
-func GetSizePrefixedRootAsStoreRoot(buf []byte, offset flatbuffers.UOffsetT) *StoreRoot {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+func TryGetSizePrefixedRootAsStoreRoot(buf []byte, offset flatbuffers.UOffsetT) (*StoreRoot, error) {
 	x := &StoreRoot{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x, InitStoreRootRoot(x, buf, offset+flatbuffers.SizeUint32)
+}
+
+func GetSizePrefixedRootAsStoreRoot(buf []byte, offset flatbuffers.UOffsetT) *StoreRoot {
+	x := &StoreRoot{}
+	InitStoreRootRoot(x, buf, offset+flatbuffers.SizeUint32)
 	return x
 }
 
@@ -81,8 +98,10 @@ func (rcv *StoreRoot) MutateAddressMap(j int, n byte) bool {
 	return false
 }
 
+const StoreRootNumFields = 1
+
 func StoreRootStart(builder *flatbuffers.Builder) {
-	builder.StartObject(1)
+	builder.StartObject(StoreRootNumFields)
 }
 func StoreRootAddAddressMap(builder *flatbuffers.Builder, addressMap flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(addressMap), 0)

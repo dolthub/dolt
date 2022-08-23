@@ -101,7 +101,7 @@ func (db *database) loadDatasetsNomsMap(ctx context.Context, rootHash hash.Hash)
 
 func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) (prolly.AddressMap, error) {
 	if rootHash == (hash.Hash{}) {
-		return prolly.NewEmptyAddressMap(db.ns), nil
+		return prolly.NewEmptyAddressMap(db.ns)
 	}
 
 	val, err := db.ReadValue(ctx, rootHash)
@@ -113,15 +113,16 @@ func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) 
 		return prolly.AddressMap{}, errors.New("Root hash doesn't exist")
 	}
 
-	return parse_storeroot([]byte(val.(types.SerialMessage)), db.nodeStore()), nil
+	return parse_storeroot([]byte(val.(types.SerialMessage)), db.nodeStore())
 }
 
 type refmapDatasetsMap struct {
 	am prolly.AddressMap
 }
 
-func (m refmapDatasetsMap) Len() uint64 {
-	return uint64(m.am.Count())
+func (m refmapDatasetsMap) Len() (uint64, error) {
+	c, err := m.am.Count()
+	return uint64(c), err
 }
 
 func (m refmapDatasetsMap) IterAll(ctx context.Context, cb func(string, hash.Hash) error) error {
@@ -132,8 +133,8 @@ type nomsDatasetsMap struct {
 	m types.Map
 }
 
-func (m nomsDatasetsMap) Len() uint64 {
-	return m.m.Len()
+func (m nomsDatasetsMap) Len() (uint64, error) {
+	return m.m.Len(), nil
 }
 
 func (m nomsDatasetsMap) IterAll(ctx context.Context, cb func(string, hash.Hash) error) error {

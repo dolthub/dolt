@@ -59,8 +59,11 @@ func (s BlobSerializer) Serialize(keys, values [][]byte, subtrees []uint64, leve
 	return serial.FinishMessage(b, serial.BlobEnd(b), blobFileID)
 }
 
-func getBlobKeys(msg serial.Message) ItemArray {
-	cnt := getBlobCount(msg)
+func getBlobKeys(msg serial.Message) (ItemArray, error) {
+	cnt, err := getBlobCount(msg)
+	if err != nil {
+		return ItemArray{}, err
+	}
 	buf := make([]byte, cnt)
 	for i := range buf {
 		buf[i] = 0
@@ -73,37 +76,49 @@ func getBlobKeys(msg serial.Message) ItemArray {
 	return ItemArray{
 		Items: buf,
 		Offs:  offs,
-	}
+	}, nil
 }
 
-func getBlobValues(msg serial.Message) ItemArray {
-	b := serial.GetRootAsBlob(msg, serial.MessagePrefixSz)
+func getBlobValues(msg serial.Message) (ItemArray, error) {
+	var b serial.Blob
+	err := serial.InitBlobRoot(&b, msg, serial.MessagePrefixSz)
+	if err != nil {
+		return ItemArray{}, err
+	}
 	if b.TreeLevel() > 0 {
 		arr := b.AddressArrayBytes()
 		off := offsetsForAddressArray(arr)
 		return ItemArray{
 			Items: arr,
 			Offs:  off,
-		}
+		}, nil
 	}
 
 	buf := b.PayloadBytes()
 	offs := make([]byte, 4)
 	binary.LittleEndian.PutUint16(offs[2:], uint16(len(buf)))
 
-	return ItemArray{Items: buf, Offs: offs}
+	return ItemArray{Items: buf, Offs: offs}, nil
 }
 
-func getBlobCount(msg serial.Message) uint16 {
-	b := serial.GetRootAsBlob(msg, serial.MessagePrefixSz)
-	if b.TreeLevel() == 0 {
-		return 1
+func getBlobCount(msg serial.Message) (uint16, error) {
+	var b serial.Blob
+	err := serial.InitBlobRoot(&b, msg, serial.MessagePrefixSz)
+	if err != nil {
+		return 0, err
 	}
-	return uint16(b.AddressArrayLength() / hash.ByteLen)
+	if b.TreeLevel() == 0 {
+		return 1, nil
+	}
+	return uint16(b.AddressArrayLength() / hash.ByteLen), nil
 }
 
 func walkBlobAddresses(ctx context.Context, msg serial.Message, cb func(ctx context.Context, addr hash.Hash) error) error {
-	b := serial.GetRootAsBlob(msg, serial.MessagePrefixSz)
+	var b serial.Blob
+	err := serial.InitBlobRoot(&b, msg, serial.MessagePrefixSz)
+	if err != nil {
+		return err
+	}
 	arr := b.AddressArrayBytes()
 	for i := 0; i < len(arr)/hash.ByteLen; i++ {
 		addr := hash.New(arr[i*addrSize : (i+1)*addrSize])
@@ -114,23 +129,35 @@ func walkBlobAddresses(ctx context.Context, msg serial.Message, cb func(ctx cont
 	return nil
 }
 
-func getBlobTreeLevel(msg serial.Message) int {
-	b := serial.GetRootAsBlob(msg, serial.MessagePrefixSz)
-	return int(b.TreeLevel())
+func getBlobTreeLevel(msg serial.Message) (int, error) {
+	var b serial.Blob
+	err := serial.InitBlobRoot(&b, msg, serial.MessagePrefixSz)
+	if err != nil {
+		return 0, err
+	}
+	return int(b.TreeLevel()), nil
 }
 
-func getBlobTreeCount(msg serial.Message) int {
-	b := serial.GetRootAsBlob(msg, serial.MessagePrefixSz)
-	return int(b.TreeSize())
+func getBlobTreeCount(msg serial.Message) (int, error) {
+	var b serial.Blob
+	err := serial.InitBlobRoot(&b, msg, serial.MessagePrefixSz)
+	if err != nil {
+		return 0, err
+	}
+	return int(b.TreeSize()), nil
 }
 
-func getBlobSubtrees(msg serial.Message) []uint64 {
-	b := serial.GetRootAsBlob(msg, serial.MessagePrefixSz)
+func getBlobSubtrees(msg serial.Message) ([]uint64, error) {
+	var b serial.Blob
+	err := serial.InitBlobRoot(&b, msg, serial.MessagePrefixSz)
+	if err != nil {
+		return nil, err
+	}
 	if b.TreeLevel() == 0 {
-		return nil
+		return nil, nil
 	}
 	counts := make([]uint64, b.AddressArrayLength()/hash.ByteLen)
-	return decodeVarints(b.SubtreeSizesBytes(), counts)
+	return decodeVarints(b.SubtreeSizesBytes(), counts), nil
 }
 
 func estimateBlobSize(values [][]byte, subtrees []uint64) (bufSz int) {

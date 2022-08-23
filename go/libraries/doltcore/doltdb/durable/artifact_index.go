@@ -27,7 +27,7 @@ import (
 
 type ArtifactIndex interface {
 	HashOf() (hash.Hash, error)
-	Count() uint64
+	Count() (uint64, error)
 	Format() *types.NomsBinFormat
 	HasConflicts(ctx context.Context) (bool, error)
 	// ConflictCount returns the number of conflicts
@@ -98,7 +98,10 @@ func artifactIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tr
 		panic("TODO")
 
 	case types.Format_DOLT:
-		root := shim.NodeFromValue(v)
+		root, err := shim.NodeFromValue(v)
+		if err != nil {
+			return nil, err
+		}
 		kd := tableSch.GetKeyDescriptor()
 		m := prolly.NewArtifactMap(root, ns, kd)
 		return ArtifactIndexFromProllyMap(m), nil
@@ -116,8 +119,9 @@ func (i prollyArtifactIndex) HashOf() (hash.Hash, error) {
 	return i.index.HashOf(), nil
 }
 
-func (i prollyArtifactIndex) Count() uint64 {
-	return uint64(i.index.Count())
+func (i prollyArtifactIndex) Count() (uint64, error) {
+	c, err := i.index.Count()
+	return uint64(c), err
 }
 
 func (i prollyArtifactIndex) Format() *types.NomsBinFormat {

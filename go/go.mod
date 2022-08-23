@@ -137,7 +137,9 @@ require (
 
 replace (
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
+	github.com/google/flatbuffers => github.com/dolthub/flatbuffers v1.13.0-dh.1
 	github.com/oliveagle/jsonpath => github.com/dolthub/jsonpath v0.0.0-20210609232853-d49537a30474
+
 )
 
 go 1.19

@@ -24,17 +24,34 @@ type Blob struct {
 	_tab flatbuffers.Table
 }
 
-func GetRootAsBlob(buf []byte, offset flatbuffers.UOffsetT) *Blob {
+func InitBlobRoot(o *Blob, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
+	o.Init(buf, n+offset)
+	if BlobNumFields < o.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
+}
+
+func TryGetRootAsBlob(buf []byte, offset flatbuffers.UOffsetT) (*Blob, error) {
 	x := &Blob{}
-	x.Init(buf, n+offset)
+	return x, InitBlobRoot(x, buf, offset)
+}
+
+func GetRootAsBlob(buf []byte, offset flatbuffers.UOffsetT) *Blob {
+	x := &Blob{}
+	InitBlobRoot(x, buf, offset)
 	return x
 }
 
-func GetSizePrefixedRootAsBlob(buf []byte, offset flatbuffers.UOffsetT) *Blob {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+func TryGetSizePrefixedRootAsBlob(buf []byte, offset flatbuffers.UOffsetT) (*Blob, error) {
 	x := &Blob{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x, InitBlobRoot(x, buf, offset+flatbuffers.SizeUint32)
+}
+
+func GetSizePrefixedRootAsBlob(buf []byte, offset flatbuffers.UOffsetT) *Blob {
+	x := &Blob{}
+	InitBlobRoot(x, buf, offset+flatbuffers.SizeUint32)
 	return x
 }
 
@@ -173,8 +190,10 @@ func (rcv *Blob) MutateTreeLevel(n byte) bool {
 	return rcv._tab.MutateByteSlot(12, n)
 }
 
+const BlobNumFields = 5
+
 func BlobStart(builder *flatbuffers.Builder) {
-	builder.StartObject(5)
+	builder.StartObject(BlobNumFields)
 }
 func BlobAddPayload(builder *flatbuffers.Builder, payload flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(payload), 0)
