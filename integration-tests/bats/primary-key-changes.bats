@@ -229,7 +229,7 @@ teardown() {
     dolt commit -am "cm2"
     dolt checkout main
 
-    run dolt merge test
+    run dolt merge test -m "merge other"
     [ "$status" -eq 0 ]
 
     run dolt sql -q "describe t;"
@@ -257,7 +257,7 @@ teardown() {
     dolt sql -q "INSERT INTO t values (2,2,2)"
     dolt commit -am "cm3"
 
-    run dolt merge test
+    run dolt merge test -m "merge other"
     [ "$status" -eq 1 ]
     [[ "$output" =~ 'error: cannot merge two tables with different primary key sets' ]] || false
 }
@@ -283,7 +283,7 @@ teardown() {
     dolt sql -q "INSERT INTO t values (2,2,2)"
     dolt commit -am "cm3"
 
-    run dolt merge test
+    run dolt merge test -m "merge other"
     [ "$status" -eq 1 ]
     [[ "$output" =~ 'error: cannot merge two tables with different primary key sets' ]] || false
 }
@@ -516,7 +516,7 @@ SQL
     dolt sql -q "INSERT INTO t VALUES (1,1)"
     dolt commit -am "insert"
 
-    run dolt merge test
+    run dolt merge test -m "merge other"
     [ "$status" -eq 1 ]
     [[ "$output" =~ 'error: cannot merge two tables with different primary key sets' ]] || false
 

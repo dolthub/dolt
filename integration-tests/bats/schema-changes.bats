@@ -247,7 +247,7 @@ SQL
     dolt commit -m "Created table with one row"
 
     skip_nbf_dolt "In __DOLT__ the following throws an error since the primary key types changed"
-    dolt merge main
+    dolt merge main --no-commit
 
     run dolt sql -q 'show create table test2'
     [ "$status" -eq 0 ]

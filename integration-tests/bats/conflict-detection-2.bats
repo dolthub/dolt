@@ -57,7 +57,7 @@ SQL
     dolt add test
     dolt commit -m "changed c1 to type uint again"
     dolt checkout main
-    run dolt merge change-types
+    run dolt merge change-types -m "merge"
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
@@ -110,7 +110,7 @@ SQL
     dolt add test
     dolt commit -m "changed c1 to type float"
     dolt checkout main
-    run dolt merge change-types
+    run dolt merge change-types -m "merge"
     [ $status -eq 1 ]
     [[ "$output" =~ "Bad merge" ]] || false
     [ $status -eq 0 ]
@@ -163,7 +163,7 @@ SQL
     dolt add test
     dolt commit -m "made c1 a pk again"
     dolt checkout main
-    run dolt merge add-pk
+    run dolt merge add-pk -m "merge"
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
@@ -217,7 +217,7 @@ SQL
     dolt add test
     dolt commit -m "added pk pk1 again"
     dolt checkout main
-    run dolt merge add-pk
+    run dolt merge add-pk -m "merge"
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
@@ -271,7 +271,7 @@ SQL
     dolt add test
     dolt commit -m "added pk pk2"
     dolt checkout main
-    run dolt merge add-pk
+    run dolt merge add-pk -m "merge"
     [ $status -eq 0 ]
     skip "This merges fine right now. Should throw conflict."
     [[ "$output" =~ "CONFLICT" ]] || false
@@ -313,7 +313,7 @@ SQL
     run dolt merge table1
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Fast-forward" ]] || false
-    run dolt merge table2
+    run dolt merge table2 -m "merge"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
@@ -344,7 +344,7 @@ SQL
 
     dolt checkout main
     skip "test currently panics on merge at doltcore/env/actions/merge.go:79"
-    run dolt merge other
+    run dolt merge other -m "merge"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
@@ -375,7 +375,7 @@ SQL
 
     dolt checkout main
     skip "test currently panics on merge at doltcore/env/actions/merge.go:79"
-    run dolt merge other
+    run dolt merge other -m "merge"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
@@ -403,7 +403,7 @@ SQL
     dolt commit -m 'modify commit.'
 
     dolt checkout -b merge-into-modified modifier
-    run dolt merge deleter
+    run dolt merge deleter -m "merge"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
     dolt merge --abort
@@ -412,7 +412,7 @@ SQL
     dolt checkout main
     dolt branch -d -f merge-into-modified
     dolt checkout -b merge-into-modified modifier
-    dolt merge deleter
+    dolt merge deleter -m "merge"
 
     dolt conflicts resolve --theirs foo
     run dolt sql -q 'select count(*) from foo'
@@ -425,7 +425,7 @@ SQL
     dolt checkout main
     dolt branch -d -f merge-into-modified
     dolt checkout -b merge-into-modified modifier
-    dolt merge deleter
+    dolt merge deleter -m "merge"
     dolt conflicts resolve --ours foo
     run dolt sql -q 'select count(*) from foo'
     [ "$status" -eq 0 ]
@@ -434,7 +434,7 @@ SQL
     dolt reset --hard
 
     dolt checkout -b merge-into-deleter deleter
-    run dolt merge modifier
+    run dolt merge modifier -m "merge"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
     dolt merge --abort
@@ -443,7 +443,7 @@ SQL
     dolt checkout main
     dolt branch -d -f merge-into-deleter
     dolt checkout -b merge-into-deleter deleter
-    dolt merge modifier
+    dolt merge modifier -m "merge"
     dolt conflicts resolve --ours foo
     run dolt sql -q 'select count(*) from foo'
     [ "$status" -eq 0 ]
@@ -455,7 +455,7 @@ SQL
     dolt checkout main
     dolt branch -d -f merge-into-deleter
     dolt checkout -b merge-into-deleter deleter
-    dolt merge modifier
+    dolt merge modifier -m "merge"
     dolt conflicts resolve --theirs foo
     run dolt sql -q 'select count(*) from foo'
     [ "$status" -eq 0 ]
@@ -513,7 +513,7 @@ SQL
     dolt add .
     dolt commit -m "inserted 0,1"
     dolt checkout main
-    dolt merge branch1
+    dolt merge branch1 -m "merge"
     dolt conflicts resolve --ours test
 
     run dolt conflicts cat test

@@ -44,7 +44,7 @@ teardown() {
     [[ "$output" =~ "test2" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
 
-    run dolt merge merge_branch
+    run dolt merge merge_branch --no-commit
     log_status_eq 0
     [[ ! "$output" =~ "Fast-forward" ]] || false
 
@@ -78,7 +78,7 @@ teardown() {
     # dirty the working set with changes to test2
     dolt sql -q "INSERT INTO test2 VALUES (9,9,9);"
 
-    dolt merge other
+    dolt merge other --no-commit
     dolt merge --abort
 
     # per Git, working set changes to test2 should remain
@@ -99,7 +99,7 @@ teardown() {
     dolt commit -am "added rows to test1 on other"
 
     dolt checkout main
-    dolt merge other
+    dolt merge other --no-commit
     run dolt status
     log_status_eq 0
     [[ "$output" =~ "still merging" ]] || false
@@ -129,7 +129,7 @@ teardown() {
     [[ "$output" =~ "test2" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
 
-    run dolt merge --squash merge_branch
+    run dolt merge --squash merge_branch --no-commit
     log_status_eq 0
     [[ "$output" =~ "Squash" ]] || false
     [[ ! "$output" =~ "Fast-forward" ]] || false
@@ -161,7 +161,7 @@ teardown() {
 
     dolt checkout main
 
-    run dolt merge merge_branch~
+    run dolt merge merge_branch~ --no-commit
     log_status_eq 0
     [[ "$output" =~ "Fast-forward" ]] || false
     run dolt sql -q 'select count(*) from test1 where pk = 1'
@@ -180,7 +180,7 @@ teardown() {
     dolt add test1
     dolt commit -m "add pk 0 = 2,2 to test1"
 
-    run dolt merge merge_branch
+    run dolt merge merge_branch -m "merge_branch"
     log_status_eq 0
     [[ "$output" =~ "test1" ]] || false
 
@@ -203,7 +203,7 @@ teardown() {
     dolt add test1
     dolt commit -m "add pk 0 = 2,2 to test1"
 
-    run dolt merge merge_branch
+    run dolt merge merge_branch --no-commit
     log_status_eq 0
     [[ "$output" =~ "test1" ]] || false
 
@@ -334,7 +334,7 @@ SQL
     dolt add . && dolt commit -m "added table quiz on other"
 
     dolt checkout main
-    run dolt merge other
+    run dolt merge other -m "merge other"
     log_status_eq 0
     run dolt sql -q "SELECT * FROM quiz ORDER BY pk;" -r csv
     [[ "${lines[0]}" =~ "pk" ]] || false
@@ -356,7 +356,7 @@ SQL
     dolt add . && dolt commit -m "added view on table test2"
 
     dolt checkout main
-    run dolt merge other
+    run dolt merge other --no-commit
     log_status_eq 0
     [[ "$output" =~ "CONFLICT" ]] || false
     dolt conflicts resolve --theirs dolt_schemas
@@ -431,8 +431,11 @@ SQL
     dolt sql -q "UPDATE test SET c1 = 2 where c1 = 22"
     dolt commit -am "added row"
 
-    skip "merge fails on unique index violation, should log conflict"
-    dolt merge other
+    run dolt merge other
+    log_status_eq 0
+
+    run dolt sql -q "select * from dolt_constraint_violations" -r=csv
+    [[ "$output" =~ "test,2" ]] || false
 }
 
 @test "merge: composite indexes should be consistent post-merge" {
@@ -456,7 +459,7 @@ SQL
     dolt commit -am "right commit"
 
     dolt checkout main
-    dolt merge right && dolt commit -am "merge"
+    dolt merge right -m "merge"
 
     # left composite index left-over
     run dolt sql -r csv -q "SELECT count(*) from test WHERE c0 = 1 AND c1 = 0;"
@@ -475,7 +478,7 @@ SQL
 
 @test "merge: merge a branch with a new table" {
     dolt branch feature-branch
-    
+
     dolt sql << SQL
 INSERT INTO test2 VALUES (0, 0, 0);
 INSERT INTO test2 VALUES (1, 1, 1);
@@ -490,8 +493,8 @@ SQL
     dolt commit -am "new table test3"
 
     dolt checkout main
-    
-    run dolt merge feature-branch
+
+    run dolt merge feature-branch -m "merge feature-branch"
     log_status_eq 0
 
     run dolt sql -q "select * from test3"
@@ -501,7 +504,7 @@ SQL
 
 @test "merge: merge a branch that deletes a table" {
     dolt branch feature-branch
-    
+
     dolt sql << SQL
 INSERT INTO test1 VALUES (0, 0, 0);
 INSERT INTO test1 VALUES (1, 1, 1);
@@ -516,10 +519,8 @@ SQL
     dolt commit -am "add data to test1, drop test2"
 
     dolt checkout main
-    run dolt merge feature-branch
+    run dolt merge feature-branch -m "merge feature-branch"
     log_status_eq 0
-
-    dolt commit -m "merged feature-branch"
 
     run dolt sql -q "show tables"
     log_status_eq 0
@@ -547,19 +548,17 @@ INSERT INTO test1 VALUES (2, 2, 2);
 INSERT INTO test1 VALUES (3, 3, 3);
 SQL
     dolt commit -am "add data to test1"
-    
+
     dolt checkout feature-branch
     dolt sql << SQL
 INSERT INTO test1 VALUES (0, 0, 0);
 INSERT INTO test1 VALUES (1, 1, 1);
 SQL
     dolt commit -am "add data to test1"
-    
-    dolt checkout main
-    run dolt merge feature-branch
-    log_status_eq 0
 
-    dolt commit -m "merged feature-branch"
+    dolt checkout main
+    run dolt merge feature-branch -m "merge feature-branch"
+    log_status_eq 0
 
     run dolt sql -q "show tables"
     log_status_eq 0
@@ -635,15 +634,14 @@ SQL
 drop table test2;
 SQL
     dolt commit -am "drop test2"
-    
+
     dolt checkout feature-branch
     dolt sql -q "drop table test2"
     dolt commit -am "drop table test2"
 
     dolt checkout main
-    run dolt merge feature-branch
+    run dolt merge feature-branch -m "merge feature-branch"
     log_status_eq 0
-    dolt commit -m "merged feature-branch"
 
     run dolt sql -q "show tables"
     log_status_eq 0
@@ -673,10 +671,10 @@ SQL
     dolt commit -am "non-fk insert"
 
     dolt checkout main
-    run dolt merge right
+    dolt merge right
     dolt commit -afm "commit constraint violations"
 
-    dolt merge other
+    dolt merge other --no-commit
 
     run dolt sql -r csv -q "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;";
     [[ "${lines[1]}" = "foreign key,1,1" ]]
@@ -726,7 +724,7 @@ SQL
     dolt commit -afm "committing merge conflicts"
 
     # merge should be allowed and previous conflicts and violations should be retained
-    dolt merge other2
+    dolt merge other2 --no-commit
     run dolt sql -r csv -q "SELECT * FROM parent;"
     [[ "${lines[1]}" = "1,2" ]]
     [[ "${lines[2]}" = "3,1" ]]
@@ -822,6 +820,9 @@ SQL
     dolt merge other
     run dolt sql -r csv -q "SELECT * from dolt_constraint_violations";
     [[ "$output" =~ "t,1" ]]
+
+    run dolt status
+    [[ ! "$output" =~ "nothing to commit, working tree clean" ]]
 }
 
 @test "merge: ourRoot renames, theirRoot modifies" {
@@ -850,4 +851,36 @@ SQL
     run dolt merge merge_branch
     log_status_eq 1
     [[ "$output" =~ "table with same name deleted and modified" ]] || false
+}
+
+@test "merge: dolt merge commits successful non-fast-forward merge" {
+    dolt branch other
+    dolt sql -q "INSERT INTO test1 VALUES (1,2,3)"
+    dolt commit -am "add (1,2,3) to test1";
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO test1 VALUES (2,3,4)"
+    dolt commit -am "add (2,3,4) to test1";
+
+    dolt checkout main
+    run dolt merge other --no-commit --commit
+    log_status_eq 1
+    [[ "$output" =~ "cannot define both 'commit' and 'no-commit' flags at the same time" ]] || false
+
+    run dolt merge other --no-commit
+    log_status_eq 0
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "merge other" ]] || false
+
+    dolt reset --hard
+    run dolt merge other -m "merge other"
+    log_status_eq 0
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "merge other" ]] || false
+    [[ ! "$output" =~ "add (1,2) to t1" ]] || false
+    [[ ! "$output" =~ "add (2,3) to t1" ]] || false
 }

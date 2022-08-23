@@ -922,8 +922,7 @@ SQL
     [[ ! "$output" =~ "test commit" ]] || false
     run dolt merge origin/main
     [ "$status" -eq 0 ]
-    # This needs to say up-to-date like the skipped test above
-    # [[ "$output" =~ "up to date" ]]
+    [[ "$output" =~ "up-to-date" ]]
     run dolt fetch
     [ "$status" -eq 0 ]
     run dolt merge origin/main
@@ -957,7 +956,6 @@ SQL
     cd "dolt-repo-clones/test-repo"
     run dolt merge remotes/origin/main
     [ "$status" -eq 0 ]
-    # This needs to say up-to-date like the skipped test above
     [[ "$output" =~ "Everything up-to-date" ]]
     run dolt fetch origin main
     [ "$status" -eq 0 ]
@@ -1030,9 +1028,15 @@ CREATE TABLE test2 (
 SQL
     dolt add test2
     dolt commit -m "another test commit"
-    run dolt pull origin
+    run dolt pull origin --no-edit
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Merge branch 'main' of" ]] || false
+    [[ ! "$output" =~ "test commit" ]] || false
+    [[ ! "$output" =~ "another test commit" ]] || false
 }
 
 @test "remotes: generate a merge with a conflict with a remote branch" {
@@ -1239,7 +1243,7 @@ SQL
     [ "$status" -ne 0 ]
     run dolt fetch -f test-remote
     [ "$status" -eq 0 ]
-    run dolt pull
+    run dolt pull --no-edit
     [ "$status" -eq 0 ]
 }
 
@@ -1484,7 +1488,7 @@ setup_ref_test() {
 
 @test "remotes: can use refs/remotes/origin/... as commit reference for merge" {
     setup_ref_test
-    dolt merge refs/remotes/origin/main
+    dolt merge refs/remotes/origin/main -m "merge"
 }
 
 @test "remotes: can use remotes/origin/... as commit reference for log" {
@@ -1500,7 +1504,7 @@ setup_ref_test() {
 
 @test "remotes: can use remotes/origin/... as commit reference for merge" {
     setup_ref_test
-    dolt merge remotes/origin/main
+    dolt merge remotes/origin/main -m "merge"
 }
 
 @test "remotes: can use origin/... as commit reference for log" {
@@ -1516,7 +1520,7 @@ setup_ref_test() {
 
 @test "remotes: can use origin/... as commit reference for merge" {
     setup_ref_test
-    dolt merge origin/main
+    dolt merge origin/main -m "merge"
 }
 
 @test "remotes: can delete remote reference branch as origin/..." {
@@ -1934,9 +1938,7 @@ SQL
     [[ "$output" =~ "diverged" ]] || false
     [[ "$output" =~ "1 and 1" ]] || false
 
-    dolt pull
-    dolt commit -am "merge main"
-
+    dolt pull --no-edit
     run dolt status
     [[ "$output" =~ "ahead" ]] || false
     [[ "$output" =~ "2 commit" ]] || false

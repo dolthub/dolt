@@ -166,7 +166,7 @@ setup_merge() {
 @test "garbage_collection: leave merge commit" {
     skip_nbf_dolt
     setup_merge
-    dolt merge other
+    dolt merge other -m "merge"
 
     dolt gc
 
@@ -187,7 +187,7 @@ setup_merge() {
     # make a dirty working set with table quiz
     dolt sql -q "INSERT INTO quiz VALUES (9,99)"
 
-    dolt merge other
+    dolt merge other -m "merge"
     dolt gc
     run dolt merge --abort
     [ "$status" -eq 0 ]
