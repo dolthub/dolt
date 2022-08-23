@@ -333,6 +333,10 @@ func TestArePrimaryKeySetsDiffableTypeChanges(t *testing.T) {
 	}
 }
 
+func TestGetKeyColumnTags(t *testing.T) {
+
+}
+
 func testSchema(method string, sch Schema, t *testing.T) {
 	validateCols(t, allCols, sch.GetAllCols(), method+"GetAllCols")
 	validateCols(t, pkCols, sch.GetPKCols(), method+"GetPKCols")

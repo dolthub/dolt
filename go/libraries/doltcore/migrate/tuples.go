@@ -17,6 +17,7 @@ package migrate
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -33,6 +34,13 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
+
+const (
+	maxInlineValue = 16383
+)
+
+var ErrCannotMigrateText = errors.New("could not migrate TEXT value to VARCHAR, TEXT value exceeds 16383 size limit")
+var ErrCannotMigrateBlob = errors.New("could not migrate BLOB value to VARBINARY, BLOB value exceeds 16383 size limit")
 
 type translator struct {
 	builder *val.TupleBuilder
@@ -291,6 +299,17 @@ func translateJSONField(ctx context.Context, ns tree.NodeStore, value types.JSON
 }
 
 func translateBlobField(ctx context.Context, ns tree.NodeStore, value types.Blob, idx int, b *val.TupleBuilder) error {
+	switch b.Desc.Types[idx].Enc {
+	// maybe convert from TEXT/BLOB to VARBINARY/VARCHAR
+	// if this column is a primary/secondary index key
+	case val.StringEnc, val.ByteStringEnc:
+		return translateBlobValueToInlineField(ctx, value, idx, b)
+	case val.StringAddrEnc, val.BytesAddrEnc:
+		// common case
+	default:
+		return fmt.Errorf("unexpecte encoding for blob (%d)", b.Desc.Types[idx].Enc)
+	}
+
 	buf := make([]byte, value.Len())
 	_, err := value.ReadAt(ctx, buf, 0)
 	if err == io.EOF {
@@ -310,6 +329,33 @@ func translateBlobField(ctx context.Context, ns tree.NodeStore, value types.Blob
 		b.PutBytesAddr(idx, t.Addr)
 	case val.StringAddrEnc:
 		b.PutStringAddr(idx, t.Addr)
+	}
+	return nil
+}
+
+func translateBlobValueToInlineField(ctx context.Context, value types.Blob, idx int, b *val.TupleBuilder) error {
+	if value.Len() >= maxInlineValue {
+		if b.Desc.Types[idx].Enc == val.StringEnc {
+			return ErrCannotMigrateText
+		} else {
+			return ErrCannotMigrateBlob
+		}
+	}
+
+	buf := make([]byte, value.Len())
+	_, err := value.ReadAt(ctx, buf, 0)
+	if err == io.EOF {
+		err = nil
+	} else if err != nil {
+		return err
+	}
+
+	typ := b.Desc.Types[idx]
+	switch typ.Enc {
+	case val.ByteStringEnc:
+		b.PutByteString(idx, buf)
+	case val.StringEnc:
+		b.PutString(idx, string(buf))
 	default:
 		panic(fmt.Sprintf("unexpected encoding for blob (%d)", typ.Enc))
 	}

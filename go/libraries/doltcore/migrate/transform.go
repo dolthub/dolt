@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -271,14 +272,9 @@ func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.Root
 			return true, fmt.Errorf("cannot migrate table with conflicts (%s)", name)
 		}
 
-		// maybe patch dolt_schemas, dolt docs
-		var newSch schema.Schema
-		if doltdb.HasDoltPrefix(name) {
-			if newSch, err = patchMigrateSchema(ctx, sch); err != nil {
-				return true, err
-			}
-		} else {
-			newSch = sch
+		newSch, err := migrateSchema(ctx, name, sch)
+		if err != nil {
+			return true, err
 		}
 		if err = validateSchema(newSch); err != nil {
 			return true, err
@@ -398,24 +394,58 @@ func migrateTable(ctx context.Context, newSch schema.Schema, oldParentTbl, oldTb
 	return doltdb.NewTable(ctx, vrw, ns, newSch, newRows, newSet, autoInc)
 }
 
-// patchMigrateSchema attempts to correct irregularities in existing schemas
-func patchMigrateSchema(ctx context.Context, existing schema.Schema) (schema.Schema, error) {
-	cols := existing.GetAllCols().GetColumns()
-
-	var patched bool
-	for i, c := range cols {
-		qt := c.TypeInfo.ToSqlType().Type()
-		// dolt_schemas and dolt_docs previously written with TEXT columns
-		if qt == query.Type_TEXT && c.Kind == types.StringKind {
-			cols[i] = schema.NewColumn(c.Name, c.Tag, c.Kind, c.IsPartOfPK, c.Constraints...)
-			patched = true
+func migrateSchema(ctx context.Context, tableName string, existing schema.Schema) (schema.Schema, error) {
+	// dolt_schemas and dolt_docs previously included columns with
+	// SQL type TEXT, but NomsKind of StringKind
+	if doltdb.HasDoltPrefix(tableName) {
+		var patched bool
+		cols := existing.GetAllCols().GetColumns()
+		for i, c := range cols {
+			qt := c.TypeInfo.ToSqlType().Type()
+			if qt == query.Type_TEXT && c.Kind == types.StringKind {
+				// NewColumn picks SQL type from NomsKind, converting this TEXT column to VARCHAR
+				cols[i] = schema.NewColumn(c.Name, c.Tag, c.Kind, c.IsPartOfPK, c.Constraints...)
+				patched = true
+			}
 		}
-	}
-	if !patched {
+		if patched {
+			return schema.SchemaFromCols(schema.NewColCollection(cols...))
+		}
 		return existing, nil
 	}
 
-	return schema.SchemaFromCols(schema.NewColCollection(cols...))
+	// Blob types cannot be index keys in the new format:
+	// substitute VARCHAR(max) for TEXT, VARBINARY(max) for BLOB
+	// TODO: print warning to users
+	var patched bool
+	tags := schema.GetKeyColumnTags(existing)
+	cols := existing.GetAllCols().GetColumns()
+	for i, c := range cols {
+		if tags.Contains(c.Tag) {
+			var err error
+			switch c.TypeInfo.ToSqlType().Type() {
+			case query.Type_TEXT:
+				patched = true
+				info := typeinfo.StringDefaultType
+				cols[i], err = schema.NewColumnWithTypeInfo(
+					c.Name, c.Tag, info, c.IsPartOfPK, c.Default,
+					c.AutoIncrement, c.Comment, c.Constraints...)
+			case query.Type_BLOB:
+				patched = true
+				info := typeinfo.VarbinaryDefaultType
+				cols[i], err = schema.NewColumnWithTypeInfo(
+					c.Name, c.Tag, info, c.IsPartOfPK, c.Default,
+					c.AutoIncrement, c.Comment, c.Constraints...)
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	if patched {
+		return schema.SchemaFromCols(schema.NewColCollection(cols...))
+	}
+	return existing, nil
 }
 
 func migrateIndexSet(

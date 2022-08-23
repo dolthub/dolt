@@ -104,7 +104,7 @@ func validateTableData(ctx context.Context, name string, old, new *doltdb.Table)
 
 func validateTableDataPartition(ctx context.Context, name string, old, new *doltdb.Table, start, end uint64) error {
 	sctx := sql.NewContext(ctx)
-	oldSch, oldIter, err := sqle.DoltTablePartitionToRowIter(sctx, name, old, start, end)
+	_, oldIter, err := sqle.DoltTablePartitionToRowIter(sctx, name, old, start, end)
 	if err != nil {
 		return err
 	}
@@ -112,9 +112,10 @@ func validateTableDataPartition(ctx context.Context, name string, old, new *dolt
 	if err != nil {
 		return err
 	}
-	if !doltdb.HasDoltPrefix(name) && !oldSch.Equals(newSch) {
-		return fmt.Errorf("differing schemas for table %s", name)
-	}
+	// todo: validate schema equality
+	//if !doltdb.HasDoltPrefix(name) && !oldSch.Equals(newSch) {
+	//	return fmt.Errorf("differing schemas for table %s", name)
+	//}
 
 	var o, n sql.Row
 	for {
