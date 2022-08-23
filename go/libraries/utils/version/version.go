@@ -20,7 +20,12 @@ import (
 	"strings"
 )
 
-func Encode(version string) (float64, error) {
+// Encode encodes a version string in the format "X.Y.Z" into a uint32 (X represents the major version and must be
+// numeric and in the range 0-255, Y represents the minor version and must be in the range 0-255, and Z represents the
+// build which is in the range 0-65535). The encoded uint32 version uses the highest 8 bits for the major version,
+// the next 8 bits for the minor version, and the last 16 used for the build number. Encoded versions are numerically
+// comparable (as in the encoded value of the version 1.2.3 will be less than the encoded value of the version 1.11.0)
+func Encode(version string) (uint32, error) {
 	parts := strings.Split(version, ".")
 
 	if len(parts) != 3 {
@@ -41,14 +46,14 @@ func Encode(version string) (float64, error) {
 	}
 
 	versionUint32 := (uint32(partVals[0]&0xFF) << 24) | (uint32(partVals[1]&0xFF) << 16) | uint32(partVals[2]&0xFFFF)
-	return float64(versionUint32), nil
+	return versionUint32, nil
 }
 
-func Decode(version float64) string {
-	versInt32 := uint32(version)
-	major := (versInt32 & 0xFF000000) >> 24
-	minor := (versInt32 & 0x00FF0000) >> 16
-	build := versInt32 & 0x0000FFFF
+// Decode converts the uint32 encoding of the version (described by the Encode method) back to its string representation.
+func Decode(version uint32) string {
+	major := (version & 0xFF000000) >> 24
+	minor := (version & 0x00FF0000) >> 16
+	build := version & 0x0000FFFF
 
 	majorStr := strconv.FormatUint(uint64(major), 10)
 	minorStr := strconv.FormatUint(uint64(minor), 10)

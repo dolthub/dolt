@@ -15,6 +15,7 @@
 package sqlserver
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/version"
@@ -69,9 +70,15 @@ func newMetricsListener(labels prometheus.Labels, versionStr string) (*metricsLi
 		}),
 	}
 
-	version, err := version.Encode(versionStr)
+	u32Version, err := version.Encode(versionStr)
 	if err != nil {
 		return nil, err
+	}
+
+	f64Version := float64(u32Version)
+	decoded := version.Decode(uint32(f64Version))
+	if decoded != versionStr {
+		return nil, fmt.Errorf("the float64 encoded version does not decode back to its original value. version:'%s', decoded:'%s'", versionStr, decoded)
 	}
 
 	prometheus.MustRegister(ml.gaugeVersion)
@@ -81,8 +88,7 @@ func newMetricsListener(labels prometheus.Labels, versionStr string) (*metricsLi
 	prometheus.MustRegister(ml.gaugeConcurrentQueries)
 	prometheus.MustRegister(ml.histQueryDur)
 
-	ml.gaugeVersion.Set(version)
-
+	ml.gaugeVersion.Set(f64Version)
 	return ml, nil
 }
 
