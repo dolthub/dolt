@@ -23,11 +23,15 @@ type StaticErrorTable struct {
 	err error
 }
 
-func (t *StaticErrorTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+func (t *StaticErrorTable) Partitions(_ *sql.Context) (sql.PartitionIter, error) {
 	return nil, t.err
 }
 
-func (t *StaticErrorTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIter, error) {
+func (t *StaticErrorTable) PartitionRows(_ *sql.Context, _ sql.Partition) (sql.RowIter, error) {
+	return nil, t.err
+}
+
+func (t *StaticErrorTable) LookupPartitions(_ *sql.Context, _ sql.IndexLookup) (sql.PartitionIter, error) {
 	return nil, t.err
 }
 
@@ -95,4 +99,12 @@ func (e *StaticErrorEditor) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 func (e *StaticErrorEditor) Close(*sql.Context) error {
 	// Or e.err?
 	return nil
+}
+
+func (e *StaticErrorEditor) IndexedAccess(index sql.Index) sql.IndexedTable {
+	return &StaticErrorTable{nil, e.err}
+}
+
+func (e *StaticErrorEditor) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return nil, nil
 }

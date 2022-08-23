@@ -19,7 +19,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -43,7 +42,7 @@ type ProllyRowConverter struct {
 }
 
 func NewProllyRowConverter(inSch, outSch schema.Schema, warnFn rowconv.WarnFunction, ns tree.NodeStore) (ProllyRowConverter, error) {
-	keyProj, valProj, err := diff.MapSchemaBasedOnName(inSch, outSch)
+	keyProj, valProj, err := schema.MapSchemaBasedOnTagAndName(inSch, outSch)
 	if err != nil {
 		return ProllyRowConverter{}, err
 	}

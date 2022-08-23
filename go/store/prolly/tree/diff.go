@@ -1,4 +1,4 @@
-// Copyright 2021 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,26 +35,41 @@ type Diff struct {
 }
 
 type Differ struct {
-	from, to *Cursor
-	cmp      CompareFn
+	from, to         *Cursor
+	fromStop, toStop *Cursor
+	cmp              CompareFn
 }
 
-func DifferFromRoots(ctx context.Context, ns NodeStore, from, to Node, cmp CompareFn) (Differ, error) {
-	fc, err := NewCursorAtStart(ctx, ns, from)
+func DifferFromRoots(ctx context.Context, fromNs NodeStore, toNs NodeStore, from, to Node, cmp CompareFn) (Differ, error) {
+	fc, err := NewCursorAtStart(ctx, fromNs, from)
 	if err != nil {
 		return Differ{}, err
 	}
 
-	tc, err := NewCursorAtStart(ctx, ns, to)
+	tc, err := NewCursorAtStart(ctx, toNs, to)
 	if err != nil {
 		return Differ{}, err
 	}
 
-	return Differ{from: fc, to: tc, cmp: cmp}, nil
+	fs, err := NewCursorPastEnd(ctx, fromNs, from)
+	if err != nil {
+		return Differ{}, err
+	}
+
+	ts, err := NewCursorPastEnd(ctx, toNs, to)
+	if err != nil {
+		return Differ{}, err
+	}
+
+	return Differ{from: fc, to: tc, fromStop: fs, toStop: ts, cmp: cmp}, nil
+}
+
+func DifferFromCursors(fromStart, toStart, fromStop, toStop *Cursor, cmp CompareFn) (Differ, error) {
+	return Differ{from: fromStart, to: toStart, fromStop: fromStop, toStop: toStop, cmp: cmp}, nil
 }
 
 func (td Differ) Next(ctx context.Context) (diff Diff, err error) {
-	for td.from.Valid() && td.to.Valid() {
+	for td.from.Valid() && td.from.Compare(td.fromStop) < 0 && td.to.Valid() && td.to.Compare(td.toStop) < 0 {
 
 		f := td.from.CurrentKey()
 		t := td.to.CurrentKey()
@@ -79,10 +94,10 @@ func (td Differ) Next(ctx context.Context) (diff Diff, err error) {
 		}
 	}
 
-	if td.from.Valid() {
+	if td.from.Valid() && td.from.Compare(td.fromStop) < 0 {
 		return sendRemoved(ctx, td.from)
 	}
-	if td.to.Valid() {
+	if td.to.Valid() && td.to.Compare(td.toStop) < 0 {
 		return sendAdded(ctx, td.to)
 	}
 

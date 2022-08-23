@@ -32,7 +32,7 @@ import (
 type prollyWriteSession struct {
 	workingSet *doltdb.WorkingSet
 	tables     map[string]*prollyTableWriter
-	tracker    globalstate.AutoIncrementTracker
+	aiTracker  globalstate.AutoIncrementTracker
 	mut        *sync.RWMutex
 }
 
@@ -96,7 +96,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db strin
 		sch:       sch,
 		sqlSch:    pkSch.Schema,
 		aiCol:     autoCol,
-		aiTracker: s.tracker,
+		aiTracker: s.aiTracker,
 		flusher:   s,
 		setter:    setter,
 		batched:   batched,
@@ -146,7 +146,7 @@ func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, err
 			}
 
 			if schema.HasAutoIncrement(wr.sch) {
-				t, err = t.SetAutoIncrementValue(ctx2, s.tracker.Current(name))
+				t, err = t.SetAutoIncrementValue(ctx2, s.aiTracker.Current(name))
 				if err != nil {
 					return err
 				}
@@ -179,10 +179,6 @@ func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, err
 // setRoot is the inner implementation for SetRoot that does not acquire any locks
 func (s *prollyWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
 	root := ws.WorkingRoot()
-	if err := updateAutoIncrementSequences(ctx, root, s.tracker); err != nil {
-		return err
-	}
-
 	for tableName, tableWriter := range s.tables {
 		t, ok, err := root.GetTable(ctx, tableName)
 		if err != nil {
@@ -204,18 +200,4 @@ func (s *prollyWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.Worki
 	}
 	s.workingSet = ws
 	return nil
-}
-
-func updateAutoIncrementSequences(ctx context.Context, root *doltdb.RootValue, t globalstate.AutoIncrementTracker) error {
-	return root.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
-		if !schema.HasAutoIncrement(sch) {
-			return
-		}
-		v, err := table.GetAutoIncrementValue(ctx)
-		if err != nil {
-			return true, err
-		}
-		t.Set(name, v)
-		return
-	})
 }

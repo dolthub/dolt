@@ -248,7 +248,7 @@ func getCommitMessage(ctx context.Context, apr *argparser.ArgParseResults, dEnv 
 	}
 
 	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); ok {
-		msg, err := getCommitMessageFromEditor(ctx, dEnv)
+		msg, err := getCommitMessageFromEditor(ctx, dEnv, "")
 		if err != nil {
 			return "", errhand.VerboseErrorFromError(err)
 		}

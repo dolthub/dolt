@@ -229,13 +229,22 @@ func (w *prollyTableWriter) StatementComplete(ctx *sql.Context) error {
 	return err
 }
 
-// WithIndexLookup implements TableWriter.
-func (w *prollyTableWriter) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	idx := index.IndexFromIndexLookup(lookup)
-	return prollyFkIndexer{
+// GetIndexes implements sql.IndexAddressableTable.
+func (w *prollyTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	indexes := ctx.GetIndexRegistry().IndexesByTable(w.dbName, w.tableName)
+	ret := make([]sql.Index, len(indexes))
+	for i := range indexes {
+		ret[i] = indexes[i]
+	}
+	return ret, nil
+}
+
+// IndexedAccess implements sql.IndexAddressableTable.
+func (w *prollyTableWriter) IndexedAccess(i sql.Index) sql.IndexedTable {
+	idx := index.DoltIndexFromSqlIndex(i)
+	return &prollyFkIndexer{
 		writer: w,
 		index:  idx,
-		pRange: index.ProllyRangesFromIndexLookup(lookup)[0],
 	}
 }
 

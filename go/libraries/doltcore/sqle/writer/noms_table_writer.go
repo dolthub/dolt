@@ -143,14 +143,22 @@ func (te *nomsTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) e
 	return te.flush(ctx)
 }
 
-func (te *nomsTableWriter) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	idx := index.IndexFromIndexLookup(lookup)
-	return nomsFkIndexer{
+func (te *nomsTableWriter) IndexedAccess(i sql.Index) sql.IndexedTable {
+	idx := index.DoltIndexFromSqlIndex(i)
+	return &nomsFkIndexer{
 		writer:  te,
 		idxName: idx.ID(),
 		idxSch:  idx.IndexSchema(),
-		nrr:     index.NomsRangesFromIndexLookup(lookup)[0],
 	}
+}
+
+func (te *nomsTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	indexes := ctx.GetIndexRegistry().IndexesByTable(te.dbName, te.tableName)
+	ret := make([]sql.Index, len(indexes))
+	for i := range indexes {
+		ret[i] = indexes[i]
+	}
+	return ret, nil
 }
 
 // Close implements Closer

@@ -869,3 +869,169 @@ SQL
    [ $status -eq 0 ]
    [[ $output =~ '| + | 1  | ramen        |' ]] || false
 }
+
+@test "diff: with limit" {
+    dolt sql <<SQL
+CREATE TABLE test2 (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  PRIMARY KEY (pk)
+);
+SQL
+
+    dolt add .
+    dolt commit -m table
+
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
+    dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
+    dolt sql -q "insert into test2 values (0)"
+    dolt sql -q "insert into test2 values (1)"
+    dolt sql -q "insert into test2 values (2)"
+
+    run dolt diff
+
+    EXPECTED_TABLE1=$(cat <<'EOF'
++---+----+----+----+----+----+----+
+|   | pk | c1 | c2 | c3 | c4 | c5 |
++---+----+----+----+----+----+----+
+| + | 0  | 0  | 0  | 0  | 0  | 0  |
+| + | 1  | 1  | 1  | 1  | 1  | 1  |
++---+----+----+----+----+----+----+
+EOF
+)
+    EXPECTED_TABLE2=$(cat <<'EOF'
++---+----+
+|   | pk |
++---+----+
+| + | 0  |
+| + | 1  |
+| + | 2  |
++---+----+
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED_TABLE1" ]] || false
+    [[ "$output" =~ "$EXPECTED_TABLE2" ]] || false
+
+    run dolt diff --limit 3
+    [[ "$output" =~ "$EXPECTED_TABLE1" ]] || false
+    [[ "$output" =~ "$EXPECTED_TABLE2" ]] || false
+
+    run dolt diff --limit 100
+    [[ "$output" =~ "$EXPECTED_TABLE1" ]] || false
+    [[ "$output" =~ "$EXPECTED_TABLE2" ]] || false
+
+    run dolt diff --limit 1
+
+    EXPECTED_TABLE1=$(cat <<'EOF'
++---+----+----+----+----+----+----+
+|   | pk | c1 | c2 | c3 | c4 | c5 |
++---+----+----+----+----+----+----+
+| + | 0  | 0  | 0  | 0  | 0  | 0  |
++---+----+----+----+----+----+----+
+EOF
+)
+    EXPECTED_TABLE2=$(cat <<'EOF'
++---+----+
+|   | pk |
++---+----+
+| + | 0  |
++---+----+
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED_TABLE1" ]] || false
+    [[ "$output" =~ "$EXPECTED_TABLE2" ]] || false
+
+    run dolt diff --limit 2
+
+    EXPECTED_TABLE1=$(cat <<'EOF'
++---+----+----+----+----+----+----+
+|   | pk | c1 | c2 | c3 | c4 | c5 |
++---+----+----+----+----+----+----+
+| + | 0  | 0  | 0  | 0  | 0  | 0  |
+| + | 1  | 1  | 1  | 1  | 1  | 1  |
++---+----+----+----+----+----+----+
+EOF
+)
+    EXPECTED_TABLE2=$(cat <<'EOF'
++---+----+
+|   | pk |
++---+----+
+| + | 0  |
+| + | 1  |
++---+----+
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED_TABLE1" ]] || false
+    [[ "$output" =~ "$EXPECTED_TABLE2" ]] || false
+
+    run dolt diff test2 --where "to_pk > 0" --limit 1
+
+    EXPECTED_TABLE2=$(cat <<'EOF'
++---+----+
+|   | pk |
++---+----+
+| + | 1  |
++---+----+
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED_TABLE2" ]] || false
+
+    run dolt diff --limit 0
+
+    [[ "$output" =~ "diff --dolt a/test b/test" ]] || false
+    [[ "$output" =~ "--- a/test @" ]] || false
+    [[ "$output" =~ "+++ b/test @" ]] || false
+    [[ "$output" =~ "diff --dolt a/test2 b/test2" ]] || false
+    [[ "$output" =~ "--- a/test2 @" ]] || false
+    [[ "$output" =~ "+++ b/test2 @" ]] || false
+    
+    run dolt diff --limit
+    [ "$status" -ne 0 ]
+}
+
+@test "diff: allowed across primary key renames" {
+    dolt sql <<SQL
+CREATE TABLE t1 (pk int PRIMARY KEY, col1 int);
+INSERT INTO t1 VALUES (1, 1);
+CREATE TABLE t2 (pk1a int, pk1b int, col1 int, PRIMARY KEY (pk1a, pk1b));
+INSERT INTO t2 VALUES (1, 1, 1);
+SQL
+    dolt commit -am "initial"
+
+    dolt sql <<SQL
+ALTER TABLE t1 RENAME COLUMN pk to pk2;
+UPDATE t1 set col1 = 100;
+ALTER TABLE t2 RENAME COLUMN pk1a to pk2a;
+ALTER TABLE t2 RENAME COLUMN pk1b to pk2b;
+UPDATE t2 set col1 = 100;
+SQL
+    dolt commit -am 'rename primary key'
+
+    run dolt diff HEAD~1 HEAD
+    [ $status -eq 0 ]
+
+    EXPECTED_TABLE=$(cat <<'EOF'
++---+------+------+------+
+|   | pk   | col1 | pk2  |
++---+------+------+------+
+| < | 1    | 1    | NULL |
+| > | NULL | 100  | 1    |
++---+------+------+------+
+EOF
+)
+    [[ "$output" =~ "$EXPECTED_TABLE" ]]
+
+    EXPECTED_TABLE=$(cat <<'EOF'
++---+------+------+------+------+------+
+|   | pk1a | pk1b | col1 | pk2a | pk2b |
++---+------+------+------+------+------+
+| < | 1    | 1    | 1    | NULL | NULL |
+| > | NULL | NULL | 100  | 1    | 1    |
++---+------+------+------+------+------+
+EOF
+)
+    [[ "$output" =~ "$EXPECTED_TABLE" ]]
+}

@@ -194,8 +194,10 @@ teardown() {
     [ "$output" = "" ]
 }
 
-@test "empty-repo: branch names do not support ." {
-    run dolt branch "dots.are.not.supported"
-    [ "$status" -eq 1 ]
-    [ "$output" = "fatal: 'dots.are.not.supported' is an invalid branch name." ]
+@test "empty-repo: branch names support ." {
+    dolt branch "dots.are.supported"
+
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dots.are.supported" ]] || false
 }

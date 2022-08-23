@@ -35,9 +35,11 @@ func TestSchemaTableRecreationOlder(t *testing.T) {
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-	db := NewDatabase("dolt", dEnv.DbData(), opts)
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
+	require.NoError(t, err)
+
 	dbState := getDbState(t, db, dEnv)
-	err := dsess.DSessFromSess(ctx.Session).AddDB(ctx, dbState)
+	err = dsess.DSessFromSess(ctx.Session).AddDB(ctx, dbState)
 	require.NoError(t, err)
 	ctx.SetCurrentDatabase(db.Name())
 
@@ -111,9 +113,11 @@ func TestSchemaTableRecreation(t *testing.T) {
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-	db := NewDatabase("dolt", dEnv.DbData(), opts)
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
+	require.NoError(t, err)
+
 	dbState := getDbState(t, db, dEnv)
-	err := dsess.DSessFromSess(ctx.Session).AddDB(ctx, dbState)
+	err = dsess.DSessFromSess(ctx.Session).AddDB(ctx, dbState)
 	require.NoError(t, err)
 	ctx.SetCurrentDatabase(db.Name())
 

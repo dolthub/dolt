@@ -44,18 +44,6 @@ const (
 	Batched
 )
 
-const (
-	ReplicateToRemoteKey     = "dolt_replicate_to_remote"
-	ReadReplicaRemoteKey     = "dolt_read_replica_remote"
-	SkipReplicationErrorsKey = "dolt_skip_replication_errors"
-	ReplicateHeadsKey        = "dolt_replicate_heads"
-	ReplicateAllHeadsKey     = "dolt_replicate_all_heads"
-	AsyncReplicationKey      = "dolt_async_replication"
-	AwsCredsFileKey          = "aws_credentials_file"
-	AwsCredsProfileKey       = "aws_credentials_profile"
-	AwsCredsRegionKey        = "aws_credentials_region"
-)
-
 var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
 	"Rollback or commit changes before changing working sets.")
 var ErrSessionNotPeristable = errors.New("session is not persistable")
@@ -651,7 +639,7 @@ func (d *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.R
 
 // SetRoots sets new roots for the session for the database named. Typically clients should only set the working root,
 // via setRoot. This method is for clients that need to update more of the session state, such as the dolt_ functions.
-// Unlike setting the only the working root, this method always marks the database state dirty.
+// Unlike setting the working root, this method always marks the database state dirty.
 func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
 	// TODO: handle HEAD here?
 	sessionState, _, err := d.LookupDbState(ctx, dbName)
@@ -782,7 +770,7 @@ func (d *DoltSession) SwitchWorkingSet(
 	// make a fresh WriteSession, discard existing WriteSession
 	opts := sessionState.WriteSession.GetOptions()
 	nbf := ws.WorkingRoot().VRW().Format()
-	tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx, ws)
+	tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx)
 	if err != nil {
 		return err
 	}
@@ -942,7 +930,7 @@ func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 
 	} else if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
-		tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx, sessionState.WorkingSet)
+		tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}

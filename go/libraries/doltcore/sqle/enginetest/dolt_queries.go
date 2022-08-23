@@ -29,6 +29,58 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
+var ViewsWithAsOfScriptTest = queries.ScriptTest{
+	SkipPrepared: true,
+	Name:         "Querying a view with a union using an as of expression",
+	SetUpScript: []string{
+		"CALL dolt_commit('--allow-empty', '-m', 'cm0');",
+
+		"CREATE TABLE t1 (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);",
+		"CALL dolt_commit('-am', 'cm1');",
+		"INSERT INTO t1 (c0) VALUES (1), (2);",
+		"CALL dolt_commit('-am', 'cm2');",
+
+		"CREATE TABLE t2 (pk int PRIMARY KEY AUTO_INCREMENT, vc varchar(100));",
+		"CALL dolt_commit('-am', 'cm3');",
+		"INSERT INTO t2 (vc) VALUES ('one'), ('two');",
+		"CALL dolt_commit('-am', 'cm4');",
+
+		"CREATE VIEW v1 as select * from t1 union select * from t2",
+		"CALL dolt_commit('-am', 'cm5');",
+	},
+	Assertions: []queries.ScriptTestAssertion{
+		{
+			Query:    "select * from v1",
+			Expected: []sql.Row{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
+		},
+		{
+			Query:    "select * from v1 as of 'HEAD'",
+			Expected: []sql.Row{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
+		},
+		{
+			Query:    "select * from v1 as of 'HEAD~1'",
+			Expected: []sql.Row{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
+		},
+		{
+			Query:    "select * from v1 as of 'HEAD~2'",
+			Expected: []sql.Row{{1, "1"}, {2, "2"}},
+		},
+		{
+			// At this point table t1 doesn't exist yet, so the view should return an error
+			Query:          "select * from v1 as of 'HEAD~3'",
+			ExpectedErrStr: "table not found: t2, maybe you mean t1?",
+		},
+		{
+			Query:          "select * from v1 as of 'HEAD~4'",
+			ExpectedErrStr: "table not found: t2, maybe you mean t1?",
+		},
+		{
+			Query:          "select * from v1 as of 'HEAD~5'",
+			ExpectedErrStr: "table not found: t1",
+		},
+	},
+}
+
 var ShowCreateTableAsOfScriptTest = queries.ScriptTest{
 	Name: "Show create table as of",
 	SetUpScript: []string{
@@ -120,6 +172,154 @@ var DescribeTableAsOfScriptTest = queries.ScriptTest{
 			Expected: []sql.Row{
 				{"pk", "int", "NO", "PRI", "NULL", ""},
 				{"c2", "varchar(20)", "YES", "", "NULL", ""},
+			},
+		},
+	},
+}
+
+var DoltRevisionDbScripts = []queries.ScriptTest{
+	{
+		Name: "database revision specs: tag-qualified revision spec",
+		SetUpScript: []string{
+			"create table t01 (pk int primary key, c1 int)",
+			"call dolt_commit('-am', 'creating table t01 on main');",
+			"insert into t01 values (1, 1), (2, 2);",
+			"call dolt_commit('-am', 'adding rows to table t01 on main');",
+			"call dolt_tag('tag1');",
+			"insert into t01 values (3, 3);",
+			"call dolt_commit('-am', 'adding another row to table t01 on main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+			},
+			{
+				Query:    "use mydb/tag1;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb/tag1"}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/tag1"}, {"mysql"}},
+			},
+			{
+				Query:    "select * from t01;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:          "call dolt_reset();",
+				ExpectedErrStr: "unable to reset HEAD in read-only databases",
+			},
+			{
+				Query:    "call dolt_checkout('main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb"}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "use mydb;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb"}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+			},
+		},
+	},
+	{
+		Name: "database revision specs: branch-qualified revision spec",
+		SetUpScript: []string{
+			"create table t01 (pk int primary key, c1 int)",
+			"call dolt_commit('-am', 'creating table t01 on main');",
+			"insert into t01 values (1, 1), (2, 2);",
+			"call dolt_commit('-am', 'adding rows to table t01 on main');",
+			"call dolt_branch('branch1');",
+			"insert into t01 values (3, 3);",
+			"call dolt_commit('-am', 'adding another row to table t01 on main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "use mydb/branch1;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/branch1"}, {"mysql"}},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb/branch1"}},
+			},
+			{
+				Query:    "select * from t01",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "call dolt_checkout('main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb"}},
+			},
+			{
+				Query:    "use mydb/branch1;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_reset();",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb/branch1"}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/branch1"}, {"mysql"}},
+			},
+			{
+				Query:    "create table working_set_table(pk int primary key);",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				// Create a table in the working set to verify the main db
+				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
+				Expected: []sql.Row{{"working_set_table"}},
+			},
+			{
+				Query:    "use mydb;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_checkout('branch1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
+				Expected: []sql.Row{{"working_set_table"}},
 			},
 		},
 	},
@@ -1736,7 +1936,7 @@ var MergeScripts = []queries.ScriptTest{
 			"INSERT INTO t (pk,c0) VALUES (3,3), (4,4);",
 			"CALL dolt_commit('-a', '-m', 'cm2');",
 			"CALL dolt_checkout('main');",
-			"INSERT INTO t (c0) VALUES (2);",
+			"INSERT INTO t (c0) VALUES (5);",
 			"CALL dolt_commit('-a', '-m', 'cm3');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -1745,19 +1945,19 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, 0}},
 			},
 			{
-				Query:    "INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 5}}},
+				Query:    "INSERT INTO t VALUES (NULL,6),(7,7),(NULL,8);",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 6}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
 				Expected: []sql.Row{
 					{1, 1},
-					{2, 2},
 					{3, 3},
 					{4, 4},
 					{5, 5},
 					{6, 6},
 					{7, 7},
+					{8, 8},
 				},
 			},
 		},
@@ -1807,7 +2007,7 @@ var MergeScripts = []queries.ScriptTest{
 			"INSERT INTO t VALUES (4,4), (5,5);",
 			"CALL dolt_commit('-am', 'cm2');",
 			"CALL dolt_checkout('main');",
-			"INSERT INTO t (c0) VALUES (2);",
+			"INSERT INTO t (c0) VALUES (6);",
 			"CALL dolt_commit('-am', 'cm3');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -1816,18 +2016,18 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, 0}},
 			},
 			{
-				Query:    "INSERT INTO t VALUES (3,3),(NULL,6);",
+				Query:    "INSERT INTO t VALUES (3,3),(NULL,7);",
 				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
 				Expected: []sql.Row{
 					{1, 1},
-					{2, 2},
 					{3, 3},
 					{4, 4},
 					{5, 5},
 					{6, 6},
+					{7, 7},
 				},
 			},
 		},
@@ -3587,6 +3787,31 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Diff table shows diffs across primary key renames",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk1 int PRIMARY KEY);",
+			"INSERT INTO t values (1);",
+			"CREATE table t2 (pk1a int, pk1b int, PRIMARY KEY (pk1a, pk1b));",
+			"INSERT INTO t2 values (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'initial');",
+
+			"ALTER TABLE t RENAME COLUMN pk1 to pk2",
+			"ALTER TABLE t2 RENAME COLUMN pk1a to pk2a",
+			"ALTER TABLE t2 RENAME COLUMN pk1b to pk2b",
+			"CALL DOLT_COMMIT('-am', 'rename primary key')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT from_pk2, to_pk2, diff_type from dolt_diff_t;",
+				Expected: []sql.Row{{nil, 1, "added"}},
+			},
+			{
+				Query:    "SELECT from_pk2a, from_pk2b, to_pk2a, to_pk2b, diff_type from dolt_diff_t2;",
+				Expected: []sql.Row{{nil, nil, 2, 2, "added"}},
+			},
+		},
+	},
 }
 
 var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
@@ -4098,6 +4323,33 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				// Maybe confusing? We match the old table name as well
 				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD~', 'HEAD')",
 				Expected: []sql.Row{{3, 4, "HEAD~", "HEAD", "added"}},
+			},
+		},
+	},
+	{
+		Name: "Renaming a primary key column shows PK values in both the to and from columns",
+		SetUpScript: []string{
+			"CREATE TABLE t1 (pk int PRIMARY KEY, col1 int);",
+			"INSERT INTO t1 VALUES (1, 1);",
+			"CREATE TABLE t2 (pk1a int, pk1b int, col1 int, PRIMARY KEY (pk1a, pk1b));",
+			"INSERT INTO t2 VALUES (1, 1, 1);",
+			"CALL DOLT_COMMIT('-am', 'initial');",
+
+			"ALTER TABLE t1 RENAME COLUMN pk to pk2;",
+			"UPDATE t1 set col1 = 100;",
+			"ALTER TABLE t2 RENAME COLUMN pk1a to pk2a;",
+			"ALTER TABLE t2 RENAME COLUMN pk1b to pk2b;",
+			"UPDATE t2 set col1 = 100;",
+			"CALL DOLT_COMMIT('-am', 'edit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select to_pk2, to_col1, from_pk, from_col1, diff_type from dolt_diff('t1', 'HEAD~', 'HEAD')",
+				Expected: []sql.Row{{1, 100, 1, 1, "modified"}},
+			},
+			{
+				Query:    "select to_pk2a, to_pk2b, to_col1, from_pk1a, from_pk1b, from_col1, diff_type from dolt_diff('t2', 'HEAD~', 'HEAD');",
+				Expected: []sql.Row{{1, 1, 100, 1, 1, 1, "modified"}},
 			},
 		},
 	},
@@ -5239,6 +5491,231 @@ var DoltRemoteTestScripts = []queries.ScriptTest{
 			{
 				Query:    "select count(*) from dolt_remotes where name='test01';",
 				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+}
+
+// DoltAutoIncrementTests is tests of dolt's global auto increment logic
+var DoltAutoIncrementTests = []queries.ScriptTest{
+	{
+		Name: "insert on different branches",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_commit('-am', 'empty table')",
+			"call dolt_branch('branch1')",
+			"call dolt_branch('branch2')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "insert into t (b) values (1), (2)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
+			},
+			{
+				Query:            "call dolt_commit('-am', 'two values on main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_checkout('branch1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "insert into t (b) values (3), (4)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{3, 3},
+					{4, 4},
+				},
+			},
+			{
+				Query:            "call dolt_commit('-am', 'two values on branch1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_checkout('branch2')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "insert into t (b) values (5), (6)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 5}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{5, 5},
+					{6, 6},
+				},
+			},
+		},
+	},
+	{
+		Name: "drop table",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_commit('-am', 'empty table')",
+			"call dolt_branch('branch1')",
+			"call dolt_branch('branch2')",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-am', 'two values on main')",
+			"call dolt_checkout('branch1')",
+			"insert into t (b) values (3), (4)",
+			"call dolt_commit('-am', 'two values on branch1')",
+			"call dolt_checkout('branch2')",
+			"insert into t (b) values (5), (6)",
+			"call dolt_checkout('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "drop table t",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:            "call dolt_checkout('main')",
+				SkipResultsCheck: true,
+			},
+			{
+				// highest value in any branch is 6
+				Query:    "insert into t (b) values (7), (8)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{7, 7},
+					{8, 8},
+				},
+			},
+			{
+				Query:    "drop table t",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:            "call dolt_checkout('branch2')",
+				SkipResultsCheck: true,
+			},
+			{
+				// highest value in any branch is still 6 (dropped table above)
+				Query:    "insert into t (b) values (7), (8)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{5, 5},
+					{6, 6},
+					{7, 7},
+					{8, 8},
+				},
+			},
+			{
+				Query:    "drop table t",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:            "create table t (a int primary key auto_increment, b int)",
+				SkipResultsCheck: true,
+			},
+			{
+				// no value on any branch
+				Query:    "insert into t (b) values (1), (2)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+				},
+			},
+		},
+	},
+}
+
+var BrokenAutoIncrementTests = []queries.ScriptTest{
+	{
+		// truncate table doesn't reset the persisted auto increment counter of tables on other branches, which leads to
+		// the value not resetting to 1 after a truncate if the table exists on other branches, even if truncated on every
+		// branch
+		Name: "truncate table",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_commit('-am', 'empty table')",
+			"call dolt_branch('branch1')",
+			"call dolt_branch('branch2')",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-am', 'two values on main')",
+			"call dolt_checkout('branch1')",
+			"insert into t (b) values (3), (4)",
+			"call dolt_commit('-am', 'two values on branch1')",
+			"call dolt_checkout('branch2')",
+			"insert into t (b) values (5), (6)",
+			"call dolt_checkout('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "truncate table t",
+				Expected: []sql.Row{{sql.NewOkResult(2)}},
+			},
+			{
+				Query:            "call dolt_checkout('main')",
+				SkipResultsCheck: true,
+			},
+			{
+				// highest value in any branch is 6
+				Query:    "insert into t (b) values (7), (8)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{7, 7},
+					{8, 8},
+				},
+			},
+			{
+				Query:    "truncate table t",
+				Expected: []sql.Row{{sql.NewOkResult(4)}},
+			},
+			{
+				Query:            "call dolt_checkout('branch2')",
+				SkipResultsCheck: true,
+			},
+			{
+				// highest value in any branch is still 6 (truncated table above)
+				Query:    "insert into t (b) values (7), (8)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{5, 5},
+					{6, 6},
+					{7, 7},
+					{8, 8},
+				},
+			},
+			{
+				Query:    "truncate table t",
+				Expected: []sql.Row{{sql.NewOkResult(4)}},
+			},
+			{
+				// no value on any branch
+				Query:    "insert into t (b) values (1), (2)",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+				},
 			},
 		},
 	},
