@@ -334,7 +334,7 @@ func startServer(t *testing.T, withPort bool, host string, unixSocketPath string
 
 	sc := sqlserver.NewServerController()
 	go func() {
-		_, _ = sqlserver.Serve(context.Background(), "", serverConfig, sc, dEnv)
+		_, _ = sqlserver.Serve(context.Background(), "0.0.0", serverConfig, sc, dEnv)
 	}()
 	err := sc.WaitForStart()
 	require.NoError(t, err)
