@@ -337,6 +337,7 @@ type diffWriter interface {
 	// RowWriter returns a row writer for the table delta provided, which will have Close() called on it when rows are
 	// done being written.
 	RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error)
+	// todo: close method
 }
 
 func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) errhand.VerboseError {
@@ -468,10 +469,11 @@ func diffSchemas(
 		// handled by writer
 		return nil
 	} else if dArgs.diffOutput == JsonDiffOutput {
+		// handled by writer
 		return nil
 	}
 
-	return sqlSchemaDiff(ctx, td, toSchemas)
+	return writeSqlSchemaDiff(ctx, td, toSchemas)
 }
 
 func printShowCreateTableDiff(ctx context.Context, td diff.TableDelta) errhand.VerboseError {
@@ -508,31 +510,49 @@ func printShowCreateTableDiff(ctx context.Context, td diff.TableDelta) errhand.V
 	return nil
 }
 
-// TODO: this doesn't handle check constraints or triggers
-func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string]schema.Schema) errhand.VerboseError {
-	fromSch, toSch, err := td.GetSchemas(ctx)
+func writeSqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string]schema.Schema) errhand.VerboseError {
+	ddlStatements, err := sqlSchemaDiff(ctx, td, toSchemas)
 	if err != nil {
-		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
+		return err
 	}
 
+	for _, stmt := range ddlStatements {
+		cli.Println(stmt)
+	}
+
+	return nil
+}
+
+// sqlSchemaDiff returns a slice of DDL statements that will transform the schema in the from delta to the schema in
+// the to delta.
+// TODO: this doesn't handle constraints or triggers
+// TODO: this should live in the diff package
+func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string]schema.Schema) ([]string, errhand.VerboseError) {
+	fromSch, toSch, err := td.GetSchemas(ctx)
+	if err != nil {
+		return nil, errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
+	}
+
+	var ddlStatements []string
+
 	if td.IsDrop() {
-		cli.Println(sqlfmt.DropTableStmt(td.FromName))
+		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(td.FromName))
 	} else if td.IsAdd() {
 		sqlDb := sqle.NewSingleTableDatabase(td.ToName, toSch, td.ToFks, td.ToFksParentSch)
 		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
 		stmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, td.ToName)
 		if err != nil {
-			return errhand.VerboseErrorFromError(err)
+			return nil, errhand.VerboseErrorFromError(err)
 		}
-		cli.Println(stmt)
+		ddlStatements = append(ddlStatements, stmt)
 	} else {
 		if td.FromName != td.ToName {
-			cli.Println(sqlfmt.RenameTableStmt(td.FromName, td.ToName))
+			ddlStatements = append(ddlStatements, sqlfmt.RenameTableStmt(td.FromName, td.ToName))
 		}
 
 		eq := schema.SchemasAreEqual(fromSch, toSch)
 		if eq && !td.HasFKChanges() {
-			return nil
+			return ddlStatements, nil
 		}
 
 		colDiffs, unionTags := diff.DiffSchColumns(fromSch, toSch)
@@ -541,25 +561,25 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 			switch cd.DiffType {
 			case diff.SchDiffNone:
 			case diff.SchDiffAdded:
-				cli.Println(sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.FmtCol(0, 0, 0, *cd.New)))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.FmtCol(0, 0, 0, *cd.New)))
 			case diff.SchDiffRemoved:
-				cli.Println(sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
 			case diff.SchDiffModified:
 				// Ignore any primary key set changes here
 				if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
 					continue
 				}
 				if cd.Old.Name != cd.New.Name {
-					cli.Println(sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
+					ddlStatements = append(ddlStatements, sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
 				}
 			}
 		}
 
 		// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
 		if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
-			cli.Println(sqlfmt.AlterTableDropPks(td.ToName))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropPks(td.ToName))
 			if toSch.GetPKCols().Size() > 0 {
-				cli.Println(sqlfmt.AlterTableAddPrimaryKeys(td.ToName, toSch.GetPKCols()))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddPrimaryKeys(td.ToName, toSch.GetPKCols()))
 			}
 		}
 
@@ -567,12 +587,12 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 			switch idxDiff.DiffType {
 			case diff.SchDiffNone:
 			case diff.SchDiffAdded:
-				cli.Println(sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
 			case diff.SchDiffRemoved:
-				cli.Println(sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
 			case diff.SchDiffModified:
-				cli.Println(sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
-				cli.Println(sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
 			}
 		}
 
@@ -581,18 +601,19 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 			case diff.SchDiffNone:
 			case diff.SchDiffAdded:
 				parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-				cli.Println(sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
 			case diff.SchDiffRemoved:
-				cli.Println(sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
 			case diff.SchDiffModified:
-				cli.Println(sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
 
 				parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-				cli.Println(sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
 			}
 		}
 	}
-	return nil
+
+	return ddlStatements, nil
 }
 
 func diffRows(
@@ -942,13 +963,51 @@ func (s sqlDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionS
 	return nil, nil
 }
 
-type jsonDiffWriter struct {}
+type jsonDiffWriter struct {
+	wr io.WriteCloser
+	diffTableWriter diff.TableDiffWriter
+}
+
+func newJsonDiffWriter(wr io.WriteCloser) (*jsonDiffWriter, error) {
+	return &jsonDiffWriter{
+		wr: wr,
+	}, nil
+}
 
 func (j jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) error {
+	if j.diffTableWriter == nil {
+		err := iohelp.WriteAll(j.wr, []byte(`{"tables":[`))
+		if err != nil {
+			return err
+		}
+	} else {
+		err := iohelp.WriteAll(j.wr, []byte(`,`))
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 func (j jsonDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
+	toSchemas, err := toRoot.GetAllSchemas(ctx)
+	if err != nil {
+		return errhand.BuildDError("could not read schemas from toRoot").AddCause(err).Build()
+	}
+
+	stmts, err := sqlSchemaDiff(ctx, td, toSchemas)
+	if err != nil {
+		return err
+	}
+
+	for _, stmt := range stmts {
+		err := j.diffTableWriter.WriteSchemaDiff(ctx, stmt)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
