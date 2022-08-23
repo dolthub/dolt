@@ -1644,6 +1644,8 @@ s.close()
 }
 
 @test "sql-server: sigterm running server and restarting works correctly" {
+    skip "Skipping while we debug why this test hangs for hours in CI"
+
     start_sql_server
     run ls repo1/.dolt
     [[ "$output" =~ "sql-server.lock" ]] || false
