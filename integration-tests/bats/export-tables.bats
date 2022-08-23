@@ -68,7 +68,7 @@ for line in sys.stdin:
     if line != "":
         rows.append(line.strip().split(","))
 
-if len(rows) != 3:
+if len(rows) != 4: # extra line for success
     sys.exit(1)
 
 if rows[0] != "pk,c1,c2,c3,c4,c5".split(","):
