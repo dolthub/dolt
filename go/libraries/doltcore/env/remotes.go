@@ -231,6 +231,8 @@ func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoSt
 	return opts, nil
 }
 
+// NewFetchOpts returns remote and refSpec for given remote name. If remote name is not defined,
+// default remote is used. Default remote is "origin" if there are multiple remotes for now.
 func NewFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRefSpec, error) {
 	var err error
 	remotes, err := rsr.GetRemotes()

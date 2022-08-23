@@ -76,18 +76,13 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	roots, ok := dSess.GetRoots(ctx, dbName)
-	if !ok {
-		return 1, fmt.Errorf("Could not load database %s", dbName)
-	}
-
 	if newBranch, newBranchOk := apr.GetValue(cli.CheckoutCoBranch); newBranchOk {
 		if len(newBranch) == 0 {
 			err = errors.New("error: cannot checkout empty string")
 		} else if len(apr.Args) > 0 {
-			err = checkoutNewBranch(ctx, dbName, dbData, roots, newBranch, apr.Arg(0))
+			err = checkoutNewBranch(ctx, dbName, dbData, newBranch, apr.Arg(0))
 		} else {
-			err = checkoutNewBranch(ctx, dbName, dbData, roots, newBranch, "")
+			err = checkoutNewBranch(ctx, dbName, dbData, newBranch, "")
 		}
 
 		if err != nil {
@@ -106,9 +101,9 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, name); err != nil {
 		return 1, err
 	} else if isBranch {
-		err = checkoutBranch(ctx, dbName, roots, dbData, name)
+		err = checkoutBranch(ctx, dbName, name)
 		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-			err = checkoutRemoteBranch(ctx, dbName, dbData, roots, name)
+			err = checkoutRemoteBranch(ctx, dbName, dbData, name)
 		}
 		if err != nil {
 			return 1, err
@@ -116,9 +111,14 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		return 0, nil
 	}
 
+	roots, ok := dSess.GetRoots(ctx, dbName)
+	if !ok {
+		return 1, fmt.Errorf("Could not load database %s", dbName)
+	}
+
 	err = checkoutTables(ctx, roots, dbName, args)
 	if err != nil && apr.NArg() == 1 {
-		err = checkoutRemoteBranch(ctx, dbName, dbData, roots, name)
+		err = checkoutRemoteBranch(ctx, dbName, dbData, name)
 	}
 
 	if err != nil {
@@ -139,7 +139,9 @@ func getRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, st
 	return provider.GetRevisionForRevisionDatabase(ctx, dbName)
 }
 
-func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, roots doltdb.Roots, branchName string) error {
+// checkoutRemoteBranch checks out a remote branch creating a new local branch with the same name as the remote branch
+// and set its upstream. The upstream persists out of sql session.
+func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, branchName string) error {
 	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
 	if err != nil {
 		return errors.New("fatal: unable to read from data repository")
@@ -149,7 +151,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, ro
 		return fmt.Errorf("error: could not find %s", branchName)
 	} else if len(remoteRefs) == 1 {
 		remoteRef := remoteRefs[0]
-		err = checkoutNewBranch(ctx, dbName, dbData, roots, branchName, remoteRef.String())
+		err := checkoutNewBranch(ctx, dbName, dbData, branchName, remoteRef.String())
 		if err != nil {
 			return err
 		}
@@ -162,20 +164,18 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, ro
 		src := refSpec.SrcRef(dbData.Rsr.CWBHeadRef())
 		dest := refSpec.DestRef(src)
 
-		err = dbData.Rsw.UpdateBranch(src.GetPath(), env.BranchConfig{
+		return dbData.Rsw.UpdateBranch(src.GetPath(), env.BranchConfig{
 			Merge: ref.MarshalableRef{
 				Ref: dest,
 			},
 			Remote: remoteRef.GetRemote(),
 		})
-		// TODO : set upstream should be persisted outside of session
-		return err
 	} else {
 		return fmt.Errorf("'%s' matched multiple (%v) remote tracking branches", branchName, len(remoteRefs))
 	}
 }
 
-func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, roots doltdb.Roots, branchName, startPt string) error {
+func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, branchName, startPt string) error {
 	if len(branchName) == 0 {
 		return ErrEmptyBranchName
 	}
@@ -189,10 +189,10 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, roots
 		return err
 	}
 
-	return checkoutBranch(ctx, dbName, roots, dbData, branchName)
+	return checkoutBranch(ctx, dbName, branchName)
 }
 
-func checkoutBranch(ctx *sql.Context, dbName string, roots doltdb.Roots, dbData env.DbData, branchName string) error {
+func checkoutBranch(ctx *sql.Context, dbName string, branchName string) error {
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branchName))
 	if err != nil {
 		return err
