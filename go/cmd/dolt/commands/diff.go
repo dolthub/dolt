@@ -336,7 +336,7 @@ type diffWriter interface {
 	WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error
 	// RowWriter returns a row writer for the table delta provided, which will have Close() called on it when rows are
 	// done being written.
-	RowWriter(ctx context.Context, td diff.TableDelta) diff.SqlRowDiffWriter
+	RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error)
 }
 
 func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) errhand.VerboseError {
@@ -356,7 +356,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
 	})
 
-	dw := createDiffWriter(ctx, engine, dArgs)
+	dw := newDiffWriter(ctx, engine, dArgs)
 	for _, td := range tableDeltas {
 		verr := diffUserTable(ctx, td, engine, dArgs, dw)
 		if verr != nil {
@@ -367,7 +367,15 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 	return nil
 }
 
-func createDiffWriter(ctx context.Context, sqlEngine *engine.SqlEngine, args *diffArgs) diffWriter {
+func newDiffWriter(ctx context.Context, sqlEngine *engine.SqlEngine, args *diffArgs) diffWriter {
+	switch args.diffOutput {
+	case TabularDiffOutput:
+		return tabularDiffWriter{}
+	case SQLDiffOutput:
+	case JsonDiffOutput:
+	default:
+		panic(fmt.Sprintf("unexpected diff output: %v", args.diffOutput))
+	}
 	return nil
 }
 
@@ -393,11 +401,6 @@ func diffUserTable(
 	err := dw.BeginTable(ctx, td)
 	if err != nil {
 		return nil
-	}
-
-	// TODO: move into tabular writer BeginTable
-	if dArgs.diffOutput == TabularDiffOutput {
-		printTableDiffSummary(td)
 	}
 
 	fromSch, toSch, err := td.GetSchemas(ctx)
@@ -460,7 +463,8 @@ func diffSchemas(
 
 	// TODO: remove
 	if dArgs.diffOutput == TabularDiffOutput {
-		return printShowCreateTableDiff(ctx, td)
+		// handled by writer
+		return nil
 	} else if dArgs.diffOutput == JsonDiffOutput {
 		return nil
 	}
@@ -655,13 +659,15 @@ func diffRows(
 		return nil
 	}
 
-	rowWriter := dw.RowWriter(ctx, td)
+	rowWriter, err := dw.RowWriter(ctx, td, unionSch)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 
 	// TODO: replace these
 	switch dArgs.diffOutput {
 	case TabularDiffOutput:
-		// TODO: default sample size
-		rowWriter = tabular.NewFixedWidthDiffTableWriter(unionSch, iohelp.NopWrCloser(cli.CliOut), 100)
+		// handled by interface
 	case SQLDiffOutput:
 		targetSch := td.ToSch
 		if targetSch == nil {
@@ -905,6 +911,52 @@ func pluralize(singular, plural string, n uint64) string {
 	return fmt.Sprintf("%s %s", humanize.Comma(int64(n)), noun)
 }
 
-type jsonDiffWriter struct {
-	
+type tabularDiffWriter struct {}
+
+func (t tabularDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) error {
+	printTableDiffSummary(td)
+	return nil
 }
+
+func (t tabularDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
+	return printShowCreateTableDiff(ctx, td)
+}
+
+func (t tabularDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
+	return tabular.NewFixedWidthDiffTableWriter(unionSch, iohelp.NopWrCloser(cli.CliOut), 100), nil
+}
+
+type sqlDiffWriter struct {}
+
+func (s sqlDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s sqlDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s sqlDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+type jsonDiffWriter struct {}
+
+func (j jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (j jsonDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (j jsonDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
