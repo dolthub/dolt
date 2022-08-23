@@ -65,8 +65,6 @@ teardown() {
     [[ $output =~ 'utf8mb4_0900_ai_ci' ]] || false
     [[ ! $output =~ 'latin1_german1_ci' ]] || false
     [[ ! $output =~ 'latin1' ]] || false
-
-    
 }
 
 @test "sql-charsets-collations: Modify a collation on a column" {
