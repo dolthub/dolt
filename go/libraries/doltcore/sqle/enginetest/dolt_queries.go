@@ -824,6 +824,29 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 					{3, 4},
 				},
 			},
+			{
+				Query: "explain select pk, c from dolt_history_t1 where pk = 3",
+				Expected: []sql.Row{
+					{"Exchange"},
+					{" └─ Filter(dolt_history_t1.pk = 3)"},
+					{"     └─ IndexedTableAccess(dolt_history_t1)"},
+					{"         ├─ index: [dolt_history_t1.pk]"},
+					{"         ├─ filters: [{[3, 3]}]"},
+					{"         └─ columns: [pk c]"},
+				},
+			},
+			{
+				Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
+				Expected: []sql.Row{
+					{"Exchange"},
+					{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+					{"     └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
+					{"         └─ IndexedTableAccess(dolt_history_t1)"},
+					{"             ├─ index: [dolt_history_t1.pk]"},
+					{"             ├─ filters: [{[3, 3]}]"},
+					{"             └─ columns: [pk c committer]"},
+				},
+			},
 		},
 	},
 	{
@@ -1034,31 +1057,7 @@ var BrokenHistorySystemTableScriptTests = []queries.ScriptTest{
 			"insert into t1 values (5,6), (7,8)",
 			"set @Commit2 = dolt_commit('-am', 'two more rows');",
 		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "explain select pk, c from dolt_history_t1 where pk = 3",
-				Expected: []sql.Row{
-					{"Exchange"},
-					{" └─ Filter(dolt_history_t1.pk = 3)"},
-					{"     └─ IndexedTableAccess(dolt_history_t1)"},
-					{"         ├─ index: [dolt_history_t1.pk]"},
-					{"         ├─ filters: [{[3, 3]}]"},
-					{"         └─ columns: [pk c]"},
-				},
-			},
-			{
-				Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
-				Expected: []sql.Row{
-					{"Exchange"},
-					{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{"     └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
-					{"         └─ IndexedTableAccess(dolt_history_t1)"},
-					{"             ├─ index: [dolt_history_t1.pk]"},
-					{"             ├─ filters: [{[3, 3]}]"},
-					{"             └─ columns: [pk c committer]"},
-				},
-			},
-		},
+		Assertions: []queries.ScriptTestAssertion{},
 	},
 	{
 		Name: "adding an index",
