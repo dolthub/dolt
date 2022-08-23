@@ -107,12 +107,12 @@ func (ml *metricsListener) QueryCompleted(success bool, duration time.Duration) 
 }
 
 func (ml *metricsListener) Close() {
+	prometheus.Unregister(ml.gaugeVersion)
 	prometheus.Unregister(ml.cntConnections)
 	prometheus.Unregister(ml.cntDisconnects)
 	prometheus.Unregister(ml.gaugeConcurrentConn)
 	prometheus.Unregister(ml.gaugeConcurrentQueries)
 	prometheus.Unregister(ml.histQueryDur)
-	prometheus.Unregister(ml.gaugeVersion)
 }
 
 func encodeVersion(version string) (float64, error) {

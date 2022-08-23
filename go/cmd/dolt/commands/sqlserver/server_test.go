@@ -104,7 +104,7 @@ listener:
 	go func() {
 		dEnv := dtestutils.CreateEnvWithSeedData(t)
 		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig))
-		startServer(context.Background(), "test", "dolt sql-server", []string{
+		startServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"--config", "config.yaml",
 		}, dEnv, serverController)
 	}()
