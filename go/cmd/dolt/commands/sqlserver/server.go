@@ -163,7 +163,13 @@ func Serve(
 	}
 
 	labels := serverConfig.MetricsLabels()
-	listener := newMetricsListener(labels)
+
+	var listener *metricsListener
+	listener, startError = newMetricsListener(labels, version)
+	if startError != nil {
+		cli.Println(startError)
+		return
+	}
 	defer listener.Close()
 
 	mySQLServer, startError = server.NewServer(

@@ -77,8 +77,9 @@ SQL
     dolt add test
     dolt commit	-m "Added column c2 bigint"
     dolt checkout main
-    dolt merge branch1
-    dolt merge branch2
+    dolt merge branch1 -m "merge branch1"
+    run dolt merge branch2 -m "merge branch2"
+    [ $status -eq 0 ]
 }
 
 @test "column_tags: Merging branches that use the same tag referring to different schema fails" {
@@ -155,8 +156,8 @@ SQL
     dolt add test
     dolt commit -m "Added columns c2 bigint and c3 double to branch2"
     dolt checkout main
-    dolt merge branch1
-    run dolt merge branch2
+    dolt merge branch1 -m "merge branch1"
+    run dolt merge branch2 -m "merge branch2"
     [ $status -eq 0 ]
     run dolt schema show
     [[ "${lines[2]}" =~ "\`pk\` bigint NOT NULL" ]] || false
@@ -189,8 +190,8 @@ SQL
     # pk and c1 will have the same tags on both branches due to deterministic tag generation
     dolt commit -m "Committed test table"
     dolt checkout main
-    dolt merge branch1
-    run dolt merge branch2
+    dolt merge branch1 -m "merge branch1"
+    run dolt merge branch2 -m "merge branch2"
     [ $status -eq 0 ]
     run dolt schema show
     [[ "${lines[2]}" =~ "\`pk\` bigint NOT NULL" ]] || false

@@ -88,7 +88,11 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 		return nil, fmt.Errorf("expect Serial Message with ForeignKeyCollectionFileID")
 	}
 
-	c := serial.GetRootAsForeignKeyCollection(msg, serial.MessagePrefixSz)
+	var c serial.ForeignKeyCollection
+	err := serial.InitForeignKeyCollectionRoot(&c, msg, serial.MessagePrefixSz)
+	if err != nil {
+		return nil, err
+	}
 	collection := &ForeignKeyCollection{
 		foreignKeys: make(map[string]ForeignKey, c.ForeignKeysLength()),
 	}
@@ -226,10 +230,14 @@ func serializeUint64Vector(b *fb.Builder, u []uint64) fb.UOffsetT {
 	return b.EndVector(len(u))
 }
 
-func emptyForeignKeyCollection(msg types.SerialMessage) bool {
+func emptyForeignKeyCollection(msg types.SerialMessage) (bool, error) {
 	if serial.GetFileID(msg) != serial.ForeignKeyCollectionFileID {
-		return false
+		return false, nil
 	}
-	c := serial.GetRootAsForeignKeyCollection(msg, serial.MessagePrefixSz)
-	return c.ForeignKeysLength() == 0
+	var c serial.ForeignKeyCollection
+	err := serial.InitForeignKeyCollectionRoot(&c, msg, serial.MessagePrefixSz)
+	if err != nil {
+		return false, err
+	}
+	return c.ForeignKeysLength() == 0, nil
 }

@@ -122,9 +122,9 @@ func (r Range) belowStop(t val.Tuple) bool {
 	return true
 }
 
-// matches returns true if all of the filter predicates
+// Matches returns true if all of the filter predicates
 // for Range |r| are true for Tuple |t|.
-func (r Range) matches(t val.Tuple) bool {
+func (r Range) Matches(t val.Tuple) bool {
 	order := r.Desc.Comparator()
 	for i := range r.Fields {
 		field := r.Desc.GetField(i, t)
@@ -157,7 +157,7 @@ func (r Range) matches(t val.Tuple) bool {
 	return true
 }
 
-func (r Range) isPointLookup(desc val.TupleDesc) bool {
+func (r Range) IsPointLookup(desc val.TupleDesc) bool {
 	if len(r.Fields) < len(desc.Types) {
 		return false
 	}

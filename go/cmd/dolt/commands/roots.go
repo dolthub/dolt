@@ -152,10 +152,16 @@ func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified 
 			}
 		} else if sm, ok := value.(types.SerialMessage); ok {
 			if serial.GetFileID(sm) == serial.StoreRootFileID {
-				msg := serial.GetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
+				msg, err := serial.TryGetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
+				if err != nil {
+					return false, err
+				}
 				ambytes := msg.AddressMapBytes()
-				node := tree.NodeFromBytes(ambytes)
-				err := tree.OutputAddressMapNode(cli.OutStream, node)
+				node, err := tree.NodeFromBytes(ambytes)
+				if err != nil {
+					return false, err
+				}
+				err = tree.OutputAddressMapNode(cli.OutStream, node)
 				if err != nil {
 					return false, err
 				}

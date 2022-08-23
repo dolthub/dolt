@@ -17,28 +17,29 @@ package ref
 import (
 	"regexp"
 	"strings"
+
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
-// The following list of patterns are all forbidden in a branch name.
+// InvalidBranchNameRegex is a list of patterns forbidden in a branch name.
+// For additional constraints on ref names, see datas.ValidateDatasetId
 var InvalidBranchNameRegex = regexp.MustCompile(strings.Join([]string{
-	// Any appearance of a period, currently unsupported by noms layer
-	`[.*]`,
-	// Any appearance of the following characters: :, ?, [, \, ^, ~, SPACE, TAB, *
-	`:`, `\?`, `\[`, `\\`, `\^`, `~`, ` `, `\t`, `\*`,
-	// Any ASCII control character.
-	`[\x00-\x1f]`, `\x7f`,
-	// Any component ending with ".lock"
-	`\.lock\z`, `\.lock\/`,
 	// An exact name of "", "HEAD" or "-"
 	`\A\z`, `\AHEAD\z`, `\A-\z`,
 	// A name that looks exactly like a commit id
 	`\A[0-9a-v]{32}\z`,
-	// Any appearance of ".." or "@{"
-	`\.\.`, `@{`,
 	// Any empty component; that is, starting or ending with "/" or any appearance of "//"
 	`\/\/`, `\A\/`, `\/\z`,
 }, "|"))
 
 func IsValidBranchName(s string) bool {
-	return !InvalidBranchNameRegex.MatchString(s)
+	if InvalidBranchNameRegex.MatchString(s) {
+		return false
+	}
+
+	if err := datas.ValidateDatasetId(s); err != nil {
+		return false
+	}
+
+	return true
 }

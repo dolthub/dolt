@@ -158,7 +158,11 @@ func TestWriteImmutableTree(t *testing.T) {
 			byteCnt := 0
 			WalkNodes(ctx, root, ns, func(ctx context.Context, n Node) error {
 				var keyCnt int
-				if n.IsLeaf() {
+				leaf, err := n.IsLeaf()
+				if err != nil {
+					return err
+				}
+				if leaf {
 					byteCnt += len(n.values.Items)
 					for _, i := range n.getValue(0) {
 						sum += int(i)
@@ -176,16 +180,21 @@ func TestWriteImmutableTree(t *testing.T) {
 				return nil
 			})
 
-			assert.Equal(t, expLevel, root.Level())
+			level, err := root.Level()
+			require.NoError(t, err)
+			assert.Equal(t, expLevel, level)
 			if tt.checkSum {
 				assert.Equal(t, expSum, sum)
 			}
 			assert.Equal(t, tt.inputSize, byteCnt)
 			assert.Equal(t, expUnfilled, unfilledCnt)
 			if expLevel > 0 {
-				root = root.loadSubtrees()
+				root, err = root.loadSubtrees()
+				require.NoError(t, err)
 				for i := range expSubtrees {
-					assert.Equal(t, expSubtrees[i], root.getSubtreeCount(i))
+					sc, err := root.getSubtreeCount(i)
+					require.NoError(t, err)
+					assert.Equal(t, expSubtrees[i], sc)
 				}
 			}
 		})

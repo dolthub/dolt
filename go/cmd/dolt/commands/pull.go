@@ -58,11 +58,7 @@ func (cmd PullCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd PullCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"remote", "The name of the remote to pull from."})
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"remoteBranch", "The name of a branch on the specified remote to be merged into the current working set."})
-	ap.SupportsFlag(cli.SquashParam, "", "Merges changes to the working set without updating the commit history")
-	return ap
+	return cli.CreatePullArgParser()
 }
 
 // EventType returns the type of the event to log
@@ -94,7 +90,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 
-	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
+	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -170,9 +166,12 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 			}
 
 			// Begin merge
-			mergeSpec, ok, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
+			mergeSpec, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, pullSpec.NoCommit, pullSpec.NoEdit, t)
 			if err != nil {
 				return err
+			}
+			if mergeSpec == nil {
+				return nil
 			}
 
 			// If configurations are not set and a ff merge are not possible throw an error.
@@ -188,21 +187,16 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 			}
 
 			err = validateMergeSpec(ctx, mergeSpec)
-			if !ok {
-				return nil
-			}
 			if err != nil {
 				return err
 			}
 
-			stats, err := merge.MergeCommitSpec(ctx, dEnv, mergeSpec)
-			printSuccessStats(stats)
+			suggestedMsg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, dEnv.RepoStateReader().CWBHeadRef().GetPath())
+			tblStats, err := performMerge(ctx, dEnv, mergeSpec, suggestedMsg)
+			printSuccessStats(tblStats)
 			if err != nil {
 				return err
 			}
-
-			// TODO: We should add functionality to create a commit from a no-ff/normal merge operation instead of
-			// leaving the branch in a merged state.
 		}
 		if !rsSeen {
 			return fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, rs.GetRemRefToLocal())

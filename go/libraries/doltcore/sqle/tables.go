@@ -200,7 +200,7 @@ func (t DoltTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (*Dolt
 type doltReadOnlyTableInterface interface {
 	sql.Table2
 	sql.TemporaryTable
-	sql.IndexedTable
+	sql.IndexAddressableTable
 	sql.ForeignKeyTable
 	sql.StatisticsTable
 	sql.CheckTable
@@ -214,12 +214,9 @@ var _ doltReadOnlyTableInterface = (*DoltTable)(nil)
 // may be other cases.
 //var _ sql.ProjectedTable = (*DoltTable)(nil)
 
-// WithIndexLookup implements sql.IndexedTable
-func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	return &IndexedDoltTable{
-		table:       t,
-		indexLookup: lookup,
-	}
+// IndexedAccess implements sql.IndexAddressableTable
+func (t *DoltTable) IndexedAccess(idx sql.Index) sql.IndexedTable {
+	return NewIndexedDoltTable(t, idx.(index.DoltIndex))
 }
 
 // doltTable returns the underlying doltTable from the current session
@@ -357,7 +354,7 @@ func (t *DoltTable) numRows(ctx *sql.Context) (uint64, error) {
 		return 0, err
 	}
 
-	return m.Count(), nil
+	return m.Count()
 }
 
 // Format returns the NomsBinFormat for the underlying table
@@ -399,7 +396,10 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	if err != nil {
 		return nil, err
 	}
-	partitions := partitionsFromRows(ctx, rows)
+	partitions, err := partitionsFromRows(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
 
 	return newDoltTablePartitionIter(rows, partitions...), nil
 }
@@ -458,8 +458,12 @@ func (t *DoltTable) AnalyzeTable(ctx *sql.Context) error {
 		return err
 	}
 
+	mc, err := m.Count()
+	if err != nil {
+		return err
+	}
 	t.doltStats = &DoltTableStatistics{
-		rowCount:  m.Count(),
+		rowCount:  mc,
 		createdAt: time.Now(),
 	}
 
@@ -585,11 +589,8 @@ func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue)
 	return t.db.SetRoot(ctx, newRoot)
 }
 
-func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	return &WritableIndexedDoltTable{
-		WritableDoltTable: t,
-		indexLookup:       lookup,
-	}
+func (t *WritableDoltTable) IndexedAccess(idx sql.Index) sql.IndexedTable {
+	return NewWritableIndexedDoltTable(t, idx.(index.DoltIndex))
 }
 
 // WithProjections implements sql.ProjectedTable
@@ -674,7 +675,11 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	numOfRows := int(rowData.Count())
+	c, err := rowData.Count()
+	if err != nil {
+		return 0, err
+	}
+	numOfRows := int(c)
 
 	sess := dsess.DSessFromSess(ctx.Session)
 	newTable, err := t.truncate(ctx, table, sch, sess)
@@ -1025,18 +1030,25 @@ type doltTablePartition struct {
 	rowData durable.Index
 }
 
-func partitionsFromRows(ctx context.Context, rows durable.Index) []doltTablePartition {
-	if rows.Empty() {
+func partitionsFromRows(ctx context.Context, rows durable.Index) ([]doltTablePartition, error) {
+	empty, err := rows.Empty()
+	if err != nil {
+		return nil, err
+	}
+	if empty {
 		return []doltTablePartition{
 			{start: 0, end: 0, rowData: rows},
-		}
+		}, nil
 	}
 
 	return partitionsFromTableRows(rows)
 }
 
-func partitionsFromTableRows(rows durable.Index) []doltTablePartition {
-	numElements := rows.Count()
+func partitionsFromTableRows(rows durable.Index) ([]doltTablePartition, error) {
+	numElements, err := rows.Count()
+	if err != nil {
+		return nil, err
+	}
 	itemsPerPartition := MaxRowsPerPartition
 	numPartitions := (numElements / itemsPerPartition) + 1
 
@@ -1065,7 +1077,7 @@ func partitionsFromTableRows(rows durable.Index) []doltTablePartition {
 		rowData: rows,
 	}
 
-	return partitions
+	return partitions, nil
 }
 
 // Key returns the key for this partition, which must uniquely identity the partition.

@@ -24,17 +24,34 @@ type CommitClosure struct {
 	_tab flatbuffers.Table
 }
 
-func GetRootAsCommitClosure(buf []byte, offset flatbuffers.UOffsetT) *CommitClosure {
+func InitCommitClosureRoot(o *CommitClosure, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
+	o.Init(buf, n+offset)
+	if CommitClosureNumFields < o.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
+}
+
+func TryGetRootAsCommitClosure(buf []byte, offset flatbuffers.UOffsetT) (*CommitClosure, error) {
 	x := &CommitClosure{}
-	x.Init(buf, n+offset)
+	return x, InitCommitClosureRoot(x, buf, offset)
+}
+
+func GetRootAsCommitClosure(buf []byte, offset flatbuffers.UOffsetT) *CommitClosure {
+	x := &CommitClosure{}
+	InitCommitClosureRoot(x, buf, offset)
 	return x
 }
 
-func GetSizePrefixedRootAsCommitClosure(buf []byte, offset flatbuffers.UOffsetT) *CommitClosure {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+func TryGetSizePrefixedRootAsCommitClosure(buf []byte, offset flatbuffers.UOffsetT) (*CommitClosure, error) {
 	x := &CommitClosure{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x, InitCommitClosureRoot(x, buf, offset+flatbuffers.SizeUint32)
+}
+
+func GetSizePrefixedRootAsCommitClosure(buf []byte, offset flatbuffers.UOffsetT) *CommitClosure {
+	x := &CommitClosure{}
+	InitCommitClosureRoot(x, buf, offset+flatbuffers.SizeUint32)
 	return x
 }
 
@@ -173,8 +190,10 @@ func (rcv *CommitClosure) MutateTreeLevel(n byte) bool {
 	return rcv._tab.MutateByteSlot(12, n)
 }
 
+const CommitClosureNumFields = 5
+
 func CommitClosureStart(builder *flatbuffers.Builder) {
-	builder.StartObject(5)
+	builder.StartObject(CommitClosureNumFields)
 }
 func CommitClosureAddKeyItems(builder *flatbuffers.Builder, keyItems flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(keyItems), 0)

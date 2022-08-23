@@ -31,7 +31,6 @@ require (
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
 	github.com/mattn/go-isatty v0.0.14
 	github.com/mattn/go-runewidth v0.0.9
-	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.5.0
 	github.com/rivo/uniseg v0.1.0
@@ -58,7 +57,7 @@ require (
 )
 
 require (
-	github.com/dolthub/go-mysql-server v0.12.1-0.20220819145507-5fc5b73cb492
+	github.com/dolthub/go-mysql-server v0.12.1-0.20220822211638-1b639fa5a8f3
 	github.com/google/flatbuffers v2.0.6+incompatible
 	github.com/gosuri/uilive v0.0.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
@@ -138,7 +137,9 @@ require (
 
 replace (
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
+	github.com/google/flatbuffers => github.com/dolthub/flatbuffers v1.13.0-dh.1
 	github.com/oliveagle/jsonpath => github.com/dolthub/jsonpath v0.0.0-20210609232853-d49537a30474
+
 )
 
 go 1.19

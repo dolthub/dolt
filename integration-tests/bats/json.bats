@@ -134,7 +134,7 @@ SQL
     dolt commit -am "made changes on branch other"
 
     dolt checkout main
-    dolt merge other
+    dolt merge other --no-commit
     run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = '1,"{""a"": 11}"' ]
@@ -148,7 +148,7 @@ SQL
 SQL
     dolt commit -am "made changes on branch another"
 
-    run dolt merge other
+    run dolt merge other -m "merge"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
     run dolt conflicts resolve --ours js

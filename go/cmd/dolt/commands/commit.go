@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	goisatty "github.com/mattn/go-isatty"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -76,6 +77,16 @@ func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	res := performCommit(ctx, commandStr, args, dEnv)
+	if res == 1 {
+		return res
+	}
+
+	// if the commit was successful, print it out using the log command
+	return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)
+}
+
+func performCommit(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateCommitArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -119,12 +130,15 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	msg, msgOk := apr.GetValue(cli.MessageArg)
 	if !msgOk {
+		amendStr := ""
 		if apr.Contains(cli.AmendFlag) {
-			commitMeta, _ := headCommit.GetCommitMeta(ctx)
-			msg, err = getCommitMessageFromEditor(ctx, dEnv, commitMeta.Description)
-		} else {
-			msg, err = getCommitMessageFromEditor(ctx, dEnv, "")
+			commitMeta, cmErr := headCommit.GetCommitMeta(ctx)
+			if cmErr != nil {
+				return handleCommitErr(ctx, dEnv, cmErr, usage)
+			}
+			amendStr = commitMeta.Description
 		}
+		msg, err = getCommitMessageFromEditor(ctx, dEnv, "", amendStr, false)
 		if err != nil {
 			return handleCommitErr(ctx, dEnv, err, usage)
 		}
@@ -210,8 +224,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't commit").AddCause(err).Build(), usage)
 	}
 
-	// if the commit was successful, print it out using the log command
-	return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)
+	return 0
 }
 
 func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cli.UsagePrinter) int {
@@ -260,13 +273,31 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, amendString string) (string, error) {
+// getCommitMessageFromEditor opens editor to ask user for commit message if none defined from command line.
+// suggestedMsg will be returned if no-edit flag is defined or if this function was called from sql dolt_merge command.
+func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg, amendString string, noEdit bool) (string, error) {
+	if cli.ExecuteWithStdioRestored == nil || noEdit {
+		return suggestedMsg, nil
+	}
+
+	isTerminal := false
+	cli.ExecuteWithStdioRestored(func() {
+		if goisatty.IsTerminal(os.Stdout.Fd()) {
+			isTerminal = true
+		}
+	})
+	if !isTerminal {
+		return suggestedMsg, nil
+	}
+
 	var finalMsg string
-	initialMsg, err := buildInitalCommitMsg(ctx, dEnv)
+	initialMsg, err := buildInitalCommitMsg(ctx, dEnv, suggestedMsg)
 	if err != nil {
 		return "", err
 	}
-	initialMsg = fmt.Sprintf("%s\n%s", amendString, initialMsg)
+	if amendString != "" {
+		initialMsg = fmt.Sprintf("%s\n%s", amendString, initialMsg)
+	}
 
 	backupEd := "vim"
 	if ed, edSet := os.LookupEnv("EDITOR"); edSet {
@@ -281,7 +312,7 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, amendStr
 	return finalMsg, nil
 }
 
-func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) (string, error) {
+func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg string) (string, error) {
 	initialNoColor := color.NoColor
 	color.NoColor = true
 
@@ -306,8 +337,9 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) (string, error
 	n = PrintDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, true, n, workingTblsInConflict, workingTblsWithViolations)
 
 	currBranch := dEnv.RepoStateReader().CWBHeadRef()
-	initialCommitMessage := "\n" + "# Please enter the commit message for your changes. Lines starting" + "\n" +
-		"# with '#' will be ignored, and an empty message aborts the commit." + "\n# On branch " + currBranch.GetPath() + "\n#" + "\n"
+	initialCommitMessage := fmt.Sprintf("%s\n# Please enter the commit message for your changes. Lines starting"+
+		"\n# with '#' will be ignored, and an empty message aborts the commit."+
+		"\n# On branch %s\n#\n", suggestedMsg, currBranch)
 
 	msgLines := strings.Split(buf.String(), "\n")
 	for i, msg := range msgLines {

@@ -29,34 +29,28 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func PartitionIndexedTableRows(ctx *sql.Context, idx sql.Index, part sql.Partition, pkSch sql.PrimaryKeySchema, columns []uint64) (sql.RowIter, error) {
-	rp := part.(rangePartition)
-	doltIdx := idx.(DoltIndex)
-
-	if types.IsFormat_DOLT(rp.durableState.Primary.Format()) {
-		return RowIterForProllyRange(ctx, doltIdx, rp.prollyRange, pkSch, columns, rp.durableState)
-	}
-
-	ranges := []*noms.ReadRange{rp.nomsRange}
-	return RowIterForNomsRanges(ctx, doltIdx, ranges, columns, rp.durableState)
-}
-
-func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, ilu sql.IndexLookup, pkSch sql.PrimaryKeySchema, columns []uint64) (sql.RowIter, error) {
-	lookup := ilu.(*doltIndexLookup)
-	idx := lookup.idx
-
+func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup, pkSch sql.PrimaryKeySchema, columns []uint64) (sql.RowIter, error) {
+	idx := lookup.Index.(*doltIndex)
 	durableState, err := idx.getDurableState(ctx, t)
 	if err != nil {
 		return nil, err
 	}
 
 	if types.IsFormat_DOLT(idx.Format()) {
-		if len(lookup.prollyRanges) > 1 {
+		prollyRanges, err := idx.prollyRanges(ctx, idx.ns, lookup.Ranges...)
+		if len(prollyRanges) > 1 {
 			return nil, fmt.Errorf("expected a single index range")
 		}
-		return RowIterForProllyRange(ctx, idx, lookup.prollyRanges[0], pkSch, columns, durableState)
+		if err != nil {
+			return nil, err
+		}
+		return RowIterForProllyRange(ctx, idx, prollyRanges[0], pkSch, columns, durableState)
 	} else {
-		return RowIterForNomsRanges(ctx, idx, lookup.nomsRanges, columns, durableState)
+		nomsRanges, err := idx.nomsRanges(ctx, lookup.Ranges...)
+		if err != nil {
+			return nil, err
+		}
+		return RowIterForNomsRanges(ctx, idx, nomsRanges, columns, durableState)
 	}
 }
 
@@ -98,15 +92,25 @@ type IndexLookupKeyIterator interface {
 	NextKey(ctx *sql.Context) (row.TaggedValues, error)
 }
 
-func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup) (sql.PartitionIter, error) {
-	dlu := lookup.(*doltIndexLookup)
-	durableState, err := dlu.idx.getDurableState(ctx, t)
+func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup, isDoltFmt bool) (sql.PartitionIter, error) {
+	idx := lookup.Index.(*doltIndex)
+	durableState, err := idx.getDurableState(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+	var prollyRanges []prolly.Range
+	var nomsRanges []*noms.ReadRange
+	if isDoltFmt {
+		prollyRanges, err = idx.prollyRanges(ctx, idx.ns, lookup.Ranges...)
+	} else {
+		nomsRanges, err = idx.nomsRanges(ctx, lookup.Ranges...)
+	}
 	if err != nil {
 		return nil, err
 	}
 	return &rangePartitionIter{
-		nomsRanges:   dlu.nomsRanges,
-		prollyRanges: dlu.prollyRanges,
+		nomsRanges:   nomsRanges,
+		prollyRanges: prollyRanges,
 		curr:         0,
 		durableState: durableState,
 	}, nil
@@ -177,14 +181,82 @@ func (rp rangePartition) Key() []byte {
 	return rp.key
 }
 
-type doltIndexLookup struct {
-	idx          DoltIndex
-	nomsRanges   []*noms.ReadRange
-	prollyRanges []prolly.Range
-	sqlRanges    sql.RangeCollection
+type LookupBuilder interface {
+	NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error)
 }
 
-var _ sql.IndexLookup = (*doltIndexLookup)(nil)
+func NewLookupBuilder(part sql.Partition, idx DoltIndex, projections []uint64, pkSch sql.PrimaryKeySchema, isDoltFormat bool) LookupBuilder {
+	p := part.(rangePartition)
+	if len(projections) == 0 {
+		projections = idx.Schema().GetAllCols().Tags
+	}
+
+	base := &baseLookupBuilder{
+		idx:         idx.(*doltIndex),
+		sch:         pkSch,
+		projections: projections,
+	}
+	switch {
+	case !isDoltFormat:
+		return &nomsLookupBuilder{
+			baseLookupBuilder: base,
+		}
+	case sql.IsKeyless(pkSch.Schema):
+		return &keylessLookupBuilder{
+			baseLookupBuilder: base,
+		}
+	case idx.coversColumns(p.durableState, projections) || idx.ID() == "PRIMARY":
+		return &coveringLookupBuilder{
+			baseLookupBuilder: base,
+		}
+	default:
+		return base
+	}
+}
+
+type baseLookupBuilder struct {
+	idx         *doltIndex
+	sch         sql.PrimaryKeySchema
+	projections []uint64
+}
+
+type coveringLookupBuilder struct {
+	*baseLookupBuilder
+}
+
+type nomsLookupBuilder struct {
+	*baseLookupBuilder
+}
+
+type keylessLookupBuilder struct {
+	*baseLookupBuilder
+}
+
+var _ LookupBuilder = (*baseLookupBuilder)(nil)
+var _ LookupBuilder = (*nomsLookupBuilder)(nil)
+var _ LookupBuilder = (*coveringLookupBuilder)(nil)
+var _ LookupBuilder = (*keylessLookupBuilder)(nil)
+
+func (lb *baseLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	p := part.(rangePartition)
+	return newProllyIndexIter(ctx, lb.idx, p.prollyRange, lb.sch, lb.projections, p.durableState.Primary, p.durableState.Secondary)
+}
+
+func (lb *nomsLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	p := part.(rangePartition)
+	ranges := []*noms.ReadRange{p.nomsRange}
+	return RowIterForNomsRanges(ctx, lb.idx, ranges, lb.projections, p.durableState)
+}
+
+func (lb *coveringLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	p := part.(rangePartition)
+	return newProllyCoveringIndexIter(ctx, lb.idx, p.prollyRange, lb.sch, lb.projections, p.durableState.Secondary)
+}
+
+func (lb *keylessLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	p := part.(rangePartition)
+	return newProllyKeylessIndexIter(ctx, lb.idx, p.prollyRange, lb.sch, lb.projections, p.durableState.Primary, p.durableState.Secondary)
+}
 
 // boundsCase determines the case upon which the bounds are tested.
 type boundsCase byte
@@ -214,21 +286,6 @@ type columnBounds struct {
 type nomsRangeCheck []columnBounds
 
 var _ noms.InRangeCheck = nomsRangeCheck{}
-
-func (il *doltIndexLookup) String() string {
-	// TODO: this could be expanded with additional info (like the expression used to create the index lookup)
-	return fmt.Sprintf("doltIndexLookup:%s", il.idx.ID())
-}
-
-// Index implements the interface sql.IndexLookup
-func (il *doltIndexLookup) Index() sql.Index {
-	return il.idx
-}
-
-// Ranges implements the interface sql.IndexLookup
-func (il *doltIndexLookup) Ranges() sql.RangeCollection {
-	return il.sqlRanges
-}
 
 // Between returns whether the given types.Value is between the bounds. In addition, this returns if the value is outside
 // the bounds and above the upperbound.

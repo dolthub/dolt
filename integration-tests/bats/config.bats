@@ -190,10 +190,10 @@ teardown() {
     
     start_sql_server
     
-    server_query "" 1 "create database testdb"
-    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql\ntestdb"
-    server_query "testdb" 1 "create table a(x int)"
-    server_query "testdb" 1 "insert into a values (1), (2)"
+    server_query "" 1 dolt "" "create database testdb" ""
+    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntestdb" ""
+    server_query "testdb" 1 dolt "" "create table a(x int)" ""
+    server_query "testdb" 1 dolt "" "insert into a values (1), (2)" ""
 
     [ -d "testdb" ]
     cd testdb

@@ -26,31 +26,49 @@ type Serializer interface {
 	Serialize(keys, values [][]byte, subtrees []uint64, level int) serial.Message
 }
 
-func GetKeysAndValues(msg serial.Message) (keys, values ItemArray, cnt uint16) {
+func GetKeysAndValues(msg serial.Message) (keys, values ItemArray, cnt uint16, err error) {
 	id := serial.GetFileID(msg)
 
 	if id == serial.ProllyTreeNodeFileID {
 		return getProllyMapKeysAndValues(msg)
 	}
 	if id == serial.AddressMapFileID {
-		keys = getAddressMapKeys(msg)
-		values = getAddressMapValues(msg)
-		cnt = getAddressMapCount(msg)
+		keys, err = getAddressMapKeys(msg)
+		if err != nil {
+			return
+		}
+		values, err = getAddressMapValues(msg)
+		if err != nil {
+			return
+		}
+		cnt, err = getAddressMapCount(msg)
 		return
 	}
 	if id == serial.MergeArtifactsFileID {
 		return getArtifactMapKeysAndValues(msg)
 	}
 	if id == serial.CommitClosureFileID {
-		keys = getCommitClosureKeys(msg)
-		values = getCommitClosureValues(msg)
-		cnt = getCommitClosureCount(msg)
+		keys, err = getCommitClosureKeys(msg)
+		if err != nil {
+			return
+		}
+		values, err = getCommitClosureValues(msg)
+		if err != nil {
+			return
+		}
+		cnt, err = getCommitClosureCount(msg)
 		return
 	}
 	if id == serial.BlobFileID {
-		keys = getBlobKeys(msg)
-		values = getBlobValues(msg)
-		cnt = getBlobCount(msg)
+		keys, err = getBlobKeys(msg)
+		if err != nil {
+			return
+		}
+		values, err = getBlobValues(msg)
+		if err != nil {
+			return
+		}
+		cnt, err = getBlobCount(msg)
 		return
 	}
 
@@ -75,7 +93,7 @@ func WalkAddresses(ctx context.Context, msg serial.Message, cb func(ctx context.
 	}
 }
 
-func GetTreeLevel(msg serial.Message) int {
+func GetTreeLevel(msg serial.Message) (int, error) {
 	id := serial.GetFileID(msg)
 	switch id {
 	case serial.ProllyTreeNodeFileID:
@@ -93,7 +111,7 @@ func GetTreeLevel(msg serial.Message) int {
 	}
 }
 
-func GetTreeCount(msg serial.Message) int {
+func GetTreeCount(msg serial.Message) (int, error) {
 	id := serial.GetFileID(msg)
 	switch id {
 	case serial.ProllyTreeNodeFileID:
@@ -111,7 +129,7 @@ func GetTreeCount(msg serial.Message) int {
 	}
 }
 
-func GetSubtrees(msg serial.Message) []uint64 {
+func GetSubtrees(msg serial.Message) ([]uint64, error) {
 	id := serial.GetFileID(msg)
 	switch id {
 	case serial.ProllyTreeNodeFileID:
