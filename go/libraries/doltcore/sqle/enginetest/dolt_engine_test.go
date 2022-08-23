@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/vitess/go/mysql"
@@ -107,84 +106,29 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
 			Name: "truncate table",
 			SetUpScript: []string{
-				"create table t (a int primary key auto_increment, b int)",
-				"call dolt_commit('-am', 'empty table')",
-				"call dolt_branch('branch1')",
-				"call dolt_branch('branch2')",
-				"insert into t (b) values (1), (2)",
-				"call dolt_commit('-am', 'two values on main')",
-				"call dolt_checkout('branch1')",
-				"insert into t (b) values (3), (4)",
-				"call dolt_commit('-am', 'two values on branch1')",
-				"call dolt_checkout('branch2')",
-				"insert into t (b) values (5), (6)",
-				"call dolt_checkout('branch1')",
+				"create table t1 (pk int primary key, c int);",
+				"insert into t1 values (1,2), (3,4)",
+				"set @Commit1 = dolt_commit('-am', 'initial table');",
+				"insert into t1 values (5,6), (7,8)",
+				"set @Commit2 = dolt_commit('-am', 'two more rows');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "truncate table t",
-					Expected: []sql.Row{{sql.NewOkResult(2)}},
-				},
-				{
-					Query:            "call dolt_checkout('main')",
-					SkipResultsCheck: true,
-				},
-				{
-					// highest value in any branch is 6
-					Query:    "insert into t (b) values (7), (8)",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
-				},
-				{
-					Query: "select * from t order by a",
+					Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
 					Expected: []sql.Row{
-						{1, 1},
-						{2, 2},
-						{7, 7},
-						{8, 8},
-					},
-				},
-				{
-					Query:    "truncate table t",
-					Expected: []sql.Row{{sql.NewOkResult(4)}},
-				},
-				{
-					Query:            "call dolt_checkout('branch2')",
-					SkipResultsCheck: true,
-				},
-				{
-					// highest value in any branch is still 6 (truncated table above)
-					Query:    "insert into t (b) values (7), (8)",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
-				},
-				{
-					Query: "select * from t order by a",
-					Expected: []sql.Row{
-						{5, 5},
-						{6, 6},
-						{7, 7},
-						{8, 8},
-					},
-				},
-				{
-					Query:    "truncate table t",
-					Expected: []sql.Row{{sql.NewOkResult(4)}},
-				},
-				{
-					// no value on any branch
-					Query:    "insert into t (b) values (1), (2)",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
-				},
-				{
-					Query: "select * from t order by a",
-					Expected: []sql.Row{
-						{1, 1},
-						{2, 2},
+						{"Exchange"},
+						{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+						{"     └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
+						{"         └─ IndexedTableAccess(dolt_history_t1)"},
+						{"             ├─ index: [dolt_history_t1.pk]"},
+						{"             ├─ filters: [{[3, 3]}]"},
+						{"             └─ columns: [pk c committer]"},
 					},
 				},
 			},
@@ -242,24 +186,28 @@ func TestSingleQueryPrepared(t *testing.T) {
 }
 
 func TestSingleScriptPrepared(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
 	s := []setup.SetupScript{
 		{
-			"create table test (pk int primary key, c1 int)",
-			"insert into test values (0,0), (1,1);",
-			"set @Commit1 = dolt_commit('-am', 'creating table');",
-			"call dolt_branch('-c', 'main', 'newb')",
-			"alter table test add column c2 int;",
-			"set @Commit2 = dolt_commit('-am', 'alter table');",
+			"create table t1 (pk int primary key, c int);",
+			"insert into t1 values (1,2), (3,4)",
+			"set @Commit1 = dolt_commit('-am', 'initial table');",
+			"insert into t1 values (5,6), (7,8)",
+			"set @Commit2 = dolt_commit('-am', 'two more rows');",
 		},
 	}
 	tt := queries.QueryTest{
-		Query: "select * from test as of 'HEAD~2' where pk=?",
-		Bindings: map[string]sql.Expression{
-			"v1": expression.NewLiteral(0, sql.Int8),
+		Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
+		Expected: []sql.Row{
+			{"Exchange"},
+			{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+			{"     └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
+			{"         └─ IndexedTableAccess(dolt_history_t1)"},
+			{"             ├─ index: [dolt_history_t1.pk]"},
+			{"             ├─ filters: [{[3, 3]}]"},
+			{"             └─ columns: [pk c committer]"},
 		},
-		Expected: []sql.Row{{0, 0}},
 	}
 
 	harness := newDoltHarness(t)
@@ -268,24 +216,24 @@ func TestSingleScriptPrepared(t *testing.T) {
 	e, err := harness.NewEngine(t)
 	defer e.Close()
 	require.NoError(t, err)
-	ctx := harness.NewContext()
+	//ctx := harness.NewContext()
 
 	//e.Analyzer.Debug = true
 	//e.Analyzer.Verbose = true
 
 	// full impl
-	pre1, sch1, rows1 := enginetest.MustQueryWithPreBindings(ctx, e, tt.Query, tt.Bindings)
-	fmt.Println(pre1, sch1, rows1)
+	//pre1, sch1, rows1 := enginetest.MustQueryWithPreBindings(ctx, e, tt.Query, tt.Bindings)
+	//fmt.Println(pre1, sch1, rows1)
 
 	// inline bindings
-	sch2, rows2 := enginetest.MustQueryWithBindings(ctx, e, tt.Query, tt.Bindings)
-	fmt.Println(sch2, rows2)
+	//sch2, rows2 := enginetest.MustQueryWithBindings(ctx, e, tt.Query, tt.Bindings)
+	//fmt.Println(sch2, rows2)
 
 	// no bindings
 	//sch3, rows3 := enginetest.MustQuery(ctx, e, rawQuery)
 	//fmt.Println(sch3, rows3)
 
-	enginetest.TestQueryWithContext(t, ctx, e, harness, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings)
+	enginetest.TestPreparedQuery(t, harness, tt.Query, tt.Expected, nil)
 }
 
 func TestVersionedQueries(t *testing.T) {
