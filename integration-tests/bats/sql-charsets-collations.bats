@@ -61,7 +61,6 @@ teardown() {
     run dolt sql -q "show create table german1"
     [ $status -eq 0 ]
     [[ $output =~ 'utf8mb4' ]] || false
-    # Ask Daylon if this is the right collation
     [[ $output =~ 'utf8mb4_0900_ai_ci' ]] || false
     [[ ! $output =~ 'latin1_german1_ci' ]] || false
     [[ ! $output =~ 'latin1' ]] || false
