@@ -281,6 +281,7 @@ SQL
 CREATE TABLE test2 (pk int primary key, val int);
 INSERT INTO test2 VALUES (0, 0);
 SET autocommit = 0;
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test2 VALUES (1, 1);
@@ -303,6 +304,7 @@ SQL
 @test "sql-merge: CALL End to End Conflict Resolution with autocommit off." {
     dolt sql << SQL
 CREATE TABLE test2 (pk int primary key, val int);
+CALL DOLT_ADD('.');
 INSERT INTO test2 VALUES (0, 0);
 SET autocommit = 0;
 CALL DOLT_COMMIT('-a', '-m', 'Step 1');
@@ -630,6 +632,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -681,6 +684,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 CALL DOLT_COMMIT('-a', '-m', 'add tables');
 CALL DOLT_CHECKOUT('-b', 'feature-branch');
 CALL DOLT_CHECKOUT('main');
@@ -731,6 +735,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -797,6 +802,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -837,6 +843,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 CALL DOLT_COMMIT('-a', '-m', 'add tables');
 CALL DOLT_CHECKOUT('-b', 'feature-branch');
 CALL DOLT_CHECKOUT('main');
@@ -876,6 +883,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -906,6 +914,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 CALL DOLT_COMMIT('-a', '-m', 'add tables');
 CALL DOLT_CHECKOUT('-b', 'feature-branch');
 CALL DOLT_CHECKOUT('main');
@@ -936,6 +945,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -965,6 +975,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 CALL DOLT_COMMIT('-a', '-m', 'add tables');
 CALL DOLT_CHECKOUT('-b', 'feature-branch');
 CALL DOLT_CHECKOUT('main');
@@ -1292,6 +1303,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');

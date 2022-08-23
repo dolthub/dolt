@@ -341,6 +341,7 @@ SQL
     [[ "$output" =~ "one_pk" ]] || false
 
     # check that dolt_commit works properly when autocommit is on
+    dolt add .
     run dolt sql --user=dolt -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
     [ "$status" -eq 0 ]
 

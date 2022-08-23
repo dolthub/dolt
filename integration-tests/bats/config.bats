@@ -209,6 +209,7 @@ teardown() {
 
     dolt init
     dolt sql -q "CREATE TABLE test (pk int primary key)"
+    dolt add .
 
     dolt config --global --unset user.name
     dolt config --global --unset user.email
@@ -229,6 +230,7 @@ teardown() {
     CREATE TABLE test (
        pk int primary key
     )"
+    dolt add .
 
     dolt config --global --unset user.name
     dolt config --global --unset user.email
@@ -242,6 +244,7 @@ teardown() {
     [[ "$output" =~ "created table test" ]] || false
 
     dolt sql -q "create table test2 (pk int primary key)"
+    dolt add .
     
     dolt config --global --add user.name "bats tester"
 

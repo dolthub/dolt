@@ -237,6 +237,7 @@ teardown() {
     cd repo1
     dolt checkout -b feature2
     dolt sql -q "create table t2 (i int primary key);"
+    dolt sql -q "call dolt_add('.');"
     dolt sql -q "call dolt_commit('-am', 'create t2')"
     dolt push --set-upstream origin feature2
 
