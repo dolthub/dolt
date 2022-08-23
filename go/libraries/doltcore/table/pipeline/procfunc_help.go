@@ -135,7 +135,7 @@ func SourceFuncForRows(rows []row.Row) SourceFunc {
 }
 
 // ProcFuncForWriter adapts a standard TableWriter to work as an OutFunc for a pipeline
-func ProcFuncForWriter(ctx context.Context, wr table.TableWriter) OutFunc {
+func ProcFuncForWriter(ctx context.Context, wr table.RowWriter) OutFunc {
 	return ProcFuncForSinkFunc(func(r row.Row, props ReadableMap) error {
 		return wr.WriteRow(ctx, r)
 	})

@@ -30,10 +30,10 @@ type DataMoverPipeline struct {
 	g   *errgroup.Group
 	ctx context.Context
 	rd  table.SqlRowReader
-	wr  table.SqlTableWriter
+	wr  table.SqlRowWriter
 }
 
-func NewDataMoverPipeline(ctx context.Context, rd table.SqlRowReader, wr table.SqlTableWriter) *DataMoverPipeline {
+func NewDataMoverPipeline(ctx context.Context, rd table.SqlRowReader, wr table.SqlRowWriter) *DataMoverPipeline {
 	g, ctx := errgroup.WithContext(ctx)
 	return &DataMoverPipeline{
 		g:   g,

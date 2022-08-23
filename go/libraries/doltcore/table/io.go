@@ -42,14 +42,14 @@ func GetRow(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, key types
 	return
 }
 
-// PipeRows will read a row from given TableReader and write it to the provided TableWriter.  It will do this
+// PipeRows will read a row from given TableReader and write it to the provided RowWriter.  It will do this
 // for every row until the TableReader's ReadRow method returns io.EOF or encounters an error in either reading
 // or writing.  The caller will need to handle closing the tables as necessary. If contOnBadRow is true, errors reading
 // or writing will be ignored and the pipe operation will continue.
 //
 // Returns a tuple: (number of rows written, number of errors ignored, error). In the case that err is non-nil, the
 // row counter fields in the tuple will be set to -1.
-func PipeRows(ctx context.Context, rd TableReader, wr TableWriter, contOnBadRow bool) (int, int, error) {
+func PipeRows(ctx context.Context, rd TableReader, wr RowWriter, contOnBadRow bool) (int, int, error) {
 	var numBad, numGood int
 	for {
 		r, err := rd.ReadRow(ctx)

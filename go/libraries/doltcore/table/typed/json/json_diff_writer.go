@@ -21,17 +21,21 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type JsonDiffWriter struct {
-	wr *JSONWriter
+	wr *RowWriter
 }
+
+const jsonTableHeader = `{"table":{name: "%s",`
+const jsonTableFooter = `]}`
 
 var _ diff.SqlRowDiffWriter = (*JsonDiffWriter)(nil)
 
-func NewJsonDiffWriter(wr io.WriteCloser, outSch schema.Schema) (*JsonDiffWriter, error) {
+func NewJsonDiffWriter(wr io.WriteCloser, tableName string, outSch schema.Schema) (*JsonDiffWriter, error) {
 	// leading diff type column with empty name
 	cols := outSch.GetAllCols()
 	newCols := schema.NewColCollection()
@@ -43,7 +47,12 @@ func NewJsonDiffWriter(wr io.WriteCloser, outSch schema.Schema) (*JsonDiffWriter
 		return nil, err
 	}
 
-	writer, err := NewJSONWriter(wr, newSchema)
+	err = iohelp.WriteAll(wr, []byte(fmt.Sprintf(jsonTableHeader, tableName)))
+	if err != nil {
+		return nil, err
+	}
+
+	writer, err := NewJSONWriterWithHeader(wr, newSchema, `"rows":[`, "]")
 	if err != nil {
 		return nil, err
 	}

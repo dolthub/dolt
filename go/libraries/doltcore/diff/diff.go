@@ -67,16 +67,12 @@ type SqlRowDiffWriter interface {
 	Close(ctx context.Context) error
 }
 
-// SchemaDiffWriter knows how to write SQL DDL statements for a schema diff for a table to an arbitrary format and
+// TableDiffWriter knows how to write SQL DDL statements for a schema diff for a table to an arbitrary format and
 // destination.
-type SchemaDiffWriter interface {
+type TableDiffWriter interface {
+	SqlRowDiffWriter
+
 	// WriteSchemaDiff writes the schema diff given (a SQL statement) and returns any error. A single table may have
-	// many SQL statements for a single diff.
+	// many SQL statements for a single diff. WriteSchemaDiff will be called before any row diffs via |WriteRow|
 	WriteSchemaDiff(ctx context.Context, schemaDiffStatement string) error
-
-	// Close finalizes the work of this writer.
-	Close(ctx context.Context) error
 }
-
-// ColorFunc is a function that can color a format string
-type ColorFunc func(a ...interface{}) string

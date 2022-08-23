@@ -38,30 +38,47 @@ const jsonFooter = `]}`
 var WriteBufSize = 256 * 1024
 var defaultString = sql.MustCreateStringWithDefaults(sqltypes.VarChar, 16383)
 
-type JSONWriter struct {
+type RowWriter struct {
 	closer      io.Closer
+	header      string
+	footer      string
 	bWr         *bufio.Writer
 	sch         schema.Schema
 	rowsWritten int
 }
 
-var _ table.SqlTableWriter = (*JSONWriter)(nil)
+var _ table.SqlRowWriter = (*RowWriter)(nil)
 
-func NewJSONWriter(wr io.WriteCloser, outSch schema.Schema) (*JSONWriter, error) {
-	bwr := bufio.NewWriterSize(wr, WriteBufSize)
-	err := iohelp.WriteAll(bwr, []byte(jsonHeader))
-	if err != nil {
-		return nil, err
-	}
-	return &JSONWriter{closer: wr, bWr: bwr, sch: outSch}, nil
+// NewJSONWriter returns a new writer that encodes rows as a single JSON object with a single key: "rows", which is a
+// slice of all rows. To customize the output of the JSON object emitted, use |NewJSONWriterWithHeader|
+func NewJSONWriter(wr io.WriteCloser, outSch schema.Schema) (*RowWriter, error) {
+	return NewJSONWriterWithHeader(wr, outSch, jsonHeader, jsonFooter)
 }
 
-func (j *JSONWriter) GetSchema() schema.Schema {
+func NewJSONWriterWithHeader(wr io.WriteCloser, outSch schema.Schema, header, footer string) (*RowWriter, error) {
+	bwr := bufio.NewWriterSize(wr, WriteBufSize)
+	return &RowWriter{
+		closer: wr,
+		bWr: bwr,
+		sch: outSch,
+		header: header,
+		footer: footer,
+	}, nil
+}
+
+func (j *RowWriter) GetSchema() schema.Schema {
 	return j.sch
 }
 
-// WriteRow will write a row to a table
-func (j *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
+// WriteRow encodes the row given into JSON format and writes it, returning any error
+func (j *RowWriter) WriteRow(ctx context.Context, r row.Row) error {
+	if j.rowsWritten == 0 {
+		err := iohelp.WriteAll(j.bWr, []byte(j.header))
+		if err != nil {
+			return err
+		}
+	}
+
 	allCols := j.sch.GetAllCols()
 	colValMap := make(map[string]interface{}, allCols.Size())
 	if err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -125,7 +142,7 @@ func (j *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
 	return nil
 }
 
-func (j *JSONWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
+func (j *RowWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
 	allCols := j.sch.GetAllCols()
 	colValMap := make(map[string]interface{}, allCols.Size())
 	if err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -190,9 +207,9 @@ func (j *JSONWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
 }
 
 // Close should flush all writes, release resources being held
-func (j *JSONWriter) Close(ctx context.Context) error {
+func (j *RowWriter) Close(ctx context.Context) error {
 	if j.closer != nil {
-		err := iohelp.WriteAll(j.bWr, []byte(jsonFooter))
+		err := iohelp.WriteAll(j.bWr, []byte(j.footer))
 
 		if err != nil {
 			return err
@@ -208,8 +225,8 @@ func (j *JSONWriter) Close(ctx context.Context) error {
 
 		return errFl
 	}
-	return errors.New("already closed")
 
+	return errors.New("already closed")
 }
 
 func marshalToJson(valMap interface{}) ([]byte, error) {
