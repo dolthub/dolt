@@ -32,8 +32,8 @@ type JsonDiffWriter struct {
 	rowsWritten int
 }
 
-const jsonTableHeader = `{"tables":[{"table":{name: "%s","schema_diff":[`
-const jsonTableFooter = `]}]}`
+const jsonTableHeader = `{"table":{name: "%s","schema_diff":[`
+const jsonTableFooter = `]}`
 
 var _ diff.TableDiffWriter = (*JsonDiffWriter)(nil)
 
@@ -54,14 +54,14 @@ func NewJsonDiffWriter(wr io.WriteCloser, tableName string, outSch schema.Schema
 		return nil, err
 	}
 
-	// TODO: no-op write closer here
-	writer, err := NewJSONWriterWithHeader(wr, newSchema, `"rows":[`, "]")
+	writer, err := NewJSONWriterWithHeader(iohelp.NopWrCloser(wr), newSchema, `"rows":[`, "]")
 	if err != nil {
 		return nil, err
 	}
 
 	return &JsonDiffWriter{
 		rowWriter: writer,
+		wr: wr,
 	}, nil
 }
 
@@ -102,7 +102,7 @@ func (j *JsonDiffWriter) Close(ctx context.Context) error {
 		return err
 	}
 
-	err = iohelp.WriteAll(j.wr, []byte(jsonFooter))
+	err = iohelp.WriteAll(j.wr, []byte(jsonTableFooter))
 	if err != nil {
 		return err
 	}
