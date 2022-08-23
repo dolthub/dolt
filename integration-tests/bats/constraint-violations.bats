@@ -2842,6 +2842,7 @@ CREATE TABLE t (
   pk int PRIMARY KEY,
   col1 int
 );
+CALL DOLT_ADD('.');
 
 CALL DOLT_COMMIT('-am', 'create table');
 CALL DOLT_BRANCH('right');
