@@ -216,7 +216,8 @@ stop_sql_server() {
 # that. When calling with bats use `run` and then check the $output if you
 # want to inspect the exception string.
 #
-# EXAMPLE: server_query "" 1 dolt "" "garbage" "" 1
+# EXAMPLE: run server_query "" 1 dolt "" "garbage" "" 1
+#          [[ "$output" =~ "error" ]] || false
 #
 # In the event that the results do not match expectations,
 # the python process will exit with an exit code of 1
