@@ -35,12 +35,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -71,12 +69,6 @@ const (
 	SQLFlag     = "sql"
 	CachedFlag  = "cached"
 )
-
-type DiffSink interface {
-	GetSchema() schema.Schema
-	ProcRowWithProps(r row.Row, props pipeline.ReadableMap) error
-	Close() error
-}
 
 var diffDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Show changes between commits, commit and working tree, etc",
@@ -338,9 +330,13 @@ func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.
 
 // diffWriter is an interface that lets us write diffs in a variety of output formats
 type diffWriter interface {
-	io.Closer
-	// BeginTable is called when a new table is about to be written.
-	BeginTable(ctx context.Context) error
+	// BeginTable is called when a new table is about to be written, before any schema or row diffs are written
+	BeginTable(ctx context.Context, td diff.TableDelta) error
+	// WriteSchemaDiff is called to write a schema diff for the table given (if requested by args)
+	WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error
+	// RowWriter returns a row writer for the table delta provided, which will have Close() called on it when rows are
+	// done being written.
+	RowWriter(ctx context.Context, td diff.TableDelta) diff.SqlRowDiffWriter
 }
 
 func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) errhand.VerboseError {
@@ -360,8 +356,9 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
 	})
 
+	dw := createDiffWriter(ctx, engine, dArgs)
 	for _, td := range tableDeltas {
-		verr := diffUserTable(ctx, td, engine, dArgs)
+		verr := diffUserTable(ctx, td, engine, dArgs, dw)
 		if verr != nil {
 			return verr
 		}
@@ -370,7 +367,17 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 	return nil
 }
 
-func diffUserTable(ctx context.Context, td diff.TableDelta, engine *engine.SqlEngine, dArgs *diffArgs) errhand.VerboseError {
+func createDiffWriter(ctx context.Context, sqlEngine *engine.SqlEngine, args *diffArgs) diffWriter {
+	return nil
+}
+
+func diffUserTable(
+		ctx context.Context,
+		td diff.TableDelta,
+		engine *engine.SqlEngine,
+		dArgs *diffArgs,
+		dw diffWriter,
+) errhand.VerboseError {
 	if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
 		return nil
 	}
@@ -383,6 +390,12 @@ func diffUserTable(ctx context.Context, td diff.TableDelta, engine *engine.SqlEn
 		return errhand.BuildDError("error: both tables in tableDelta are nil").Build()
 	}
 
+	err := dw.BeginTable(ctx, td)
+	if err != nil {
+		return nil
+	}
+
+	// TODO: move into tabular writer BeginTable
 	if dArgs.diffOutput == TabularDiffOutput {
 		printTableDiffSummary(td)
 	}
@@ -401,7 +414,7 @@ func diffUserTable(ctx context.Context, td diff.TableDelta, engine *engine.SqlEn
 	}
 
 	if dArgs.diffParts&SchemaOnlyDiff != 0 {
-		verr := diffSchemas(ctx, dArgs.toRoot, td, dArgs)
+		verr := diffSchemas(ctx, dArgs.toRoot, td, dArgs, dw)
 		if verr != nil {
 			return verr
 		}
@@ -419,7 +432,7 @@ func diffUserTable(ctx context.Context, td diff.TableDelta, engine *engine.SqlEn
 			return nil
 		}
 
-		verr := diffRows(ctx, engine, td, dArgs)
+		verr := diffRows(ctx, engine, td, dArgs, dw)
 		if verr != nil {
 			return verr
 		}
@@ -428,12 +441,24 @@ func diffUserTable(ctx context.Context, td diff.TableDelta, engine *engine.SqlEn
 	return nil
 }
 
-func diffSchemas(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
+func diffSchemas(
+		ctx context.Context,
+		toRoot *doltdb.RootValue,
+		td diff.TableDelta,
+		dArgs *diffArgs,
+		dw diffWriter,
+) errhand.VerboseError {
 	toSchemas, err := toRoot.GetAllSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("could not read schemas from toRoot").AddCause(err).Build()
 	}
 
+	err = dw.WriteSchemaDiff(ctx, toRoot, td)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	// TODO: remove
 	if dArgs.diffOutput == TabularDiffOutput {
 		return printShowCreateTableDiff(ctx, td)
 	} else if dArgs.diffOutput == JsonDiffOutput {
@@ -564,7 +589,13 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 	return nil
 }
 
-func diffRows(ctx context.Context, se *engine.SqlEngine, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
+func diffRows(
+		ctx context.Context,
+		se *engine.SqlEngine,
+		td diff.TableDelta,
+		dArgs *diffArgs,
+		dw diffWriter,
+) errhand.VerboseError {
 	from, to := dArgs.fromRef, dArgs.toRef
 
 	tableName := td.ToName
@@ -624,29 +655,31 @@ func diffRows(ctx context.Context, se *engine.SqlEngine, td diff.TableDelta, dAr
 		return nil
 	}
 
-	var diffWriter diff.SqlRowDiffWriter
+	rowWriter := dw.RowWriter(ctx, td)
+
+	// TODO: replace these
 	switch dArgs.diffOutput {
 	case TabularDiffOutput:
 		// TODO: default sample size
-		diffWriter = tabular.NewFixedWidthDiffTableWriter(unionSch, iohelp.NopWrCloser(cli.CliOut), 100)
+		rowWriter = tabular.NewFixedWidthDiffTableWriter(unionSch, iohelp.NopWrCloser(cli.CliOut), 100)
 	case SQLDiffOutput:
 		targetSch := td.ToSch
 		if targetSch == nil {
 			targetSch = td.FromSch
 		}
-		diffWriter = sqlexport.NewSqlDiffWriter(tableName, targetSch, iohelp.NopWrCloser(cli.CliOut))
+		rowWriter = sqlexport.NewSqlDiffWriter(tableName, targetSch, iohelp.NopWrCloser(cli.CliOut))
 	case JsonDiffOutput:
 		targetSch := td.ToSch
 		if targetSch == nil {
 			targetSch = td.FromSch
 		}
-		diffWriter, err = json.NewJsonDiffWriter(iohelp.NopWrCloser(cli.CliOut), td.ToName, targetSch)
+		rowWriter, err = json.NewJsonDiffWriter(iohelp.NopWrCloser(cli.CliOut), td.ToName, targetSch)
 		if err != nil {
 			return nil
 		}
 	}
 
-	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, diffWriter)
+	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, rowWriter)
 	if err != nil {
 		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}
@@ -870,4 +903,8 @@ func pluralize(singular, plural string, n uint64) string {
 		noun = singular
 	}
 	return fmt.Sprintf("%s %s", humanize.Comma(int64(n)), noun)
+}
+
+type jsonDiffWriter struct {
+	
 }
