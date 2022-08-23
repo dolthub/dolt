@@ -30,6 +30,7 @@ type JsonDiffWriter struct {
 	rowWriter   *RowWriter
 	wr          io.WriteCloser
 	rowsWritten int
+	schemaDiffsWritten int
 }
 
 const jsonTableHeader = `{"table":{name: "%s","schema_diff":[`

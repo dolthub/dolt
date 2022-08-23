@@ -336,7 +336,14 @@ func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.
 	return root, true
 }
 
-func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) (verr errhand.VerboseError) {
+// diffWriter is an interface that lets us write diffs in a variety of output formats
+type diffWriter interface {
+	io.Closer
+	// BeginTable is called when a new table is about to be written.
+	BeginTable(ctx context.Context) error
+}
+
+func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) errhand.VerboseError {
 	var err error
 
 	tableDeltas, err := diff.GetTableDeltas(ctx, dArgs.fromRoot, dArgs.toRoot)
@@ -352,52 +359,67 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) (ve
 	sort.Slice(tableDeltas, func(i, j int) bool {
 		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
 	})
+
 	for _, td := range tableDeltas {
-		if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
-			continue
+		verr := diffUserTable(ctx, td, engine, dArgs)
+		if verr != nil {
+			return verr
+		}
+	}
+
+	return nil
+}
+
+func diffUserTable(ctx context.Context, td diff.TableDelta, engine *engine.SqlEngine, dArgs *diffArgs) errhand.VerboseError {
+	if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
+		return nil
+	}
+
+	tblName := td.ToName
+	fromTable := td.FromTable
+	toTable := td.ToTable
+
+	if fromTable == nil && toTable == nil {
+		return errhand.BuildDError("error: both tables in tableDelta are nil").Build()
+	}
+
+	if dArgs.diffOutput == TabularDiffOutput {
+		printTableDiffSummary(td)
+	}
+
+	fromSch, toSch, err := td.GetSchemas(ctx)
+	if err != nil {
+		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
+	}
+
+	if dArgs.diffParts&Summary != 0 {
+		numCols := fromSch.GetAllCols().Size()
+		verr := printDiffSummary(ctx, td, numCols)
+		if verr != nil {
+			return verr
+		}
+	}
+
+	if dArgs.diffParts&SchemaOnlyDiff != 0 {
+		verr := diffSchemas(ctx, dArgs.toRoot, td, dArgs)
+		if verr != nil {
+			return verr
+		}
+	}
+
+	if dArgs.diffParts&DataOnlyDiff != 0 {
+		if td.IsDrop() && dArgs.diffOutput == SQLDiffOutput {
+			return nil // don't output DELETE FROM statements after DROP TABLE
+		} else if td.IsAdd() {
+			fromSch = toSch
 		}
 
-		tblName := td.ToName
-		fromTable := td.FromTable
-		toTable := td.ToTable
-
-		if fromTable == nil && toTable == nil {
-			return errhand.BuildDError("error: both tables in tableDelta are nil").Build()
+		if !schema.ArePrimaryKeySetsDiffable(td.Format(), fromSch, toSch) {
+			cli.PrintErrf("Primary key sets differ between revisions for table %s, skipping data diff\n", tblName)
+			return nil
 		}
 
-		if dArgs.diffOutput == TabularDiffOutput {
-			printTableDiffSummary(td)
-		}
-
-		fromSch, toSch, err := td.GetSchemas(ctx)
-		if err != nil {
-			return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
-		}
-
-		if dArgs.diffParts&Summary != 0 {
-			numCols := fromSch.GetAllCols().Size()
-			verr = printDiffSummary(ctx, td, numCols)
-		}
-
-		if dArgs.diffParts&SchemaOnlyDiff != 0 {
-			verr = diffSchemas(ctx, dArgs.toRoot, td, dArgs)
-		}
-
-		if dArgs.diffParts&DataOnlyDiff != 0 {
-			if td.IsDrop() && dArgs.diffOutput == SQLDiffOutput {
-				continue // don't output DELETE FROM statements after DROP TABLE
-			} else if td.IsAdd() {
-				fromSch = toSch
-			}
-
-			if !schema.ArePrimaryKeySetsDiffable(td.Format(), fromSch, toSch) {
-				cli.PrintErrf("Primary key sets differ between revisions for table %s, skipping data diff\n", tblName)
-				continue
-			}
-
-			verr = diffRows(ctx, engine, td, dArgs)
-		}
-
+		verr := diffRows(ctx, engine, td, dArgs)
 		if verr != nil {
 			return verr
 		}
