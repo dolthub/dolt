@@ -112,10 +112,6 @@ func validateTableDataPartition(ctx context.Context, name string, old, new *dolt
 	if err != nil {
 		return err
 	}
-	// todo: validate schema equality
-	//if !doltdb.HasDoltPrefix(name) && !oldSch.Equals(newSch) {
-	//	return fmt.Errorf("differing schemas for table %s", name)
-	//}
 
 	var o, n sql.Row
 	for {

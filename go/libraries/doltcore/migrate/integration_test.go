@@ -28,6 +28,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/migrate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -37,10 +39,15 @@ import (
 
 type migrationTest struct {
 	name    string
+	hook    setupHook
 	setup   []string
 	asserts []assertion
 	err     string
 }
+
+// a setupHook performs special setup operations that cannot
+// be performed via SQL statements (eg TEXT type PRIMARY KEY)
+type setupHook func(context.Context, *env.DoltEnv) (*env.DoltEnv, error)
 
 type assertion struct {
 	query    string
@@ -68,13 +75,42 @@ func TestMigration(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "TEXT primary key, BLOB secondary key",
+			hook: SetupHookRefKeys,
+			setup: []string{
+				// from setup hook:
+				//   CREATE TABLE test (
+				//     pk TEXT PRIMARY KEY,
+				//     c0 int,
+				//     c1 BLOB,
+				//     INDEX blob_idx(c1),
+				//   );
+				"INSERT INTO test VALUES ('a', 2, 'a')",
+				"CALL dolt_add('.')",
+				"CALL dolt_commit('-am', 'new table')",
+			},
+			asserts: []assertion{
+				{
+					query:    "SELECT * FROM test",
+					expected: []sql.Row{{"a", int32(2), []byte("a")}},
+				},
+				{
+					query: "DESCRIBE test",
+					expected: []sql.Row{
+						{"pk", "varchar(16383)", "NO", "PRI", "NULL", ""},
+						{"c0", "int", "YES", "", "NULL", ""},
+						{"c1", "varbinary(16383)", "YES", "", "NULL", ""},
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			preEnv := runSetupSql(t, ctx, test.setup)
-
+			preEnv := setupMigrationTest(t, ctx, test)
 			postEnv := runMigration(t, ctx, preEnv)
 
 			ddb := postEnv.DoltDB
@@ -89,14 +125,50 @@ func TestMigration(t *testing.T) {
 	}
 }
 
-func runSetupSql(t *testing.T, ctx context.Context, setup []string) *env.DoltEnv {
+func setupMigrationTest(t *testing.T, ctx context.Context, test migrationTest) *env.DoltEnv {
 	dEnv := dtestutils.CreateTestEnv()
+
+	// run setup hook before other setup queries
+	if test.hook != nil {
+		var err error
+		dEnv, err = test.hook(ctx, dEnv)
+		require.NoError(t, err)
+	}
+
 	cmd := commands.SqlCmd{}
-	for _, query := range setup {
+	for _, query := range test.setup {
 		code := cmd.Exec(ctx, cmd.Name(), []string{"-q", query}, dEnv)
 		require.Equal(t, 0, code)
 	}
 	return dEnv
+}
+
+func SetupHookRefKeys(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, error) {
+	pk, _ := schema.NewColumnWithTypeInfo("pk", 1, typeinfo.TextType, true, "", false, "", schema.NotNullConstraint{})
+	c0, _ := schema.NewColumnWithTypeInfo("c0", 2, typeinfo.Int32Type, false, "", false, "")
+	c1, _ := schema.NewColumnWithTypeInfo("c1", 3, typeinfo.BlobType, false, "", false, "")
+
+	sch, err := schema.SchemaFromCols(schema.NewColCollection(pk, c0, c1))
+	if err != nil {
+		return nil, err
+	}
+	_, err = sch.Indexes().AddIndexByColNames("blob_idx", []string{"c1"}, schema.IndexProperties{IsUserDefined: true})
+	if err != nil {
+		return nil, err
+	}
+
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+	root, err := ws.WorkingRoot().CreateEmptyTable(ctx, "test", sch)
+	if err != nil {
+		return nil, err
+	}
+	if err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(root)); err != nil {
+		return nil, err
+	}
+	return dEnv, nil
 }
 
 func runMigration(t *testing.T, ctx context.Context, preEnv *env.DoltEnv) (postEnv *env.DoltEnv) {
