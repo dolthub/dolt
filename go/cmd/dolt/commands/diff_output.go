@@ -342,7 +342,7 @@ func (j *jsonDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unio
 		targetSch = td.FromSch
 	}
 
-	j.rowDiffWriter, err = json.NewJsonDiffWriter(iohelp.NopWrCloser(cli.CliOut), td.ToName, targetSch)
+	j.rowDiffWriter, err = json.NewJsonDiffWriter(iohelp.NopWrCloser(cli.CliOut), targetSch)
 	return j.rowDiffWriter, err
 }
 

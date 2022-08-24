@@ -42,6 +42,7 @@ type RowWriter struct {
 	closer      io.Closer
 	header      string
 	footer      string
+	separator   string
 	bWr         *bufio.Writer
 	sch         schema.Schema
 	rowsWritten int
@@ -52,10 +53,10 @@ var _ table.SqlRowWriter = (*RowWriter)(nil)
 // NewJSONWriter returns a new writer that encodes rows as a single JSON object with a single key: "rows", which is a
 // slice of all rows. To customize the output of the JSON object emitted, use |NewJSONWriterWithHeader|
 func NewJSONWriter(wr io.WriteCloser, outSch schema.Schema) (*RowWriter, error) {
-	return NewJSONWriterWithHeader(wr, outSch, jsonHeader, jsonFooter)
+	return NewJSONWriterWithHeader(wr, outSch, jsonHeader, jsonFooter, ",")
 }
 
-func NewJSONWriterWithHeader(wr io.WriteCloser, outSch schema.Schema, header, footer string) (*RowWriter, error) {
+func NewJSONWriterWithHeader(wr io.WriteCloser, outSch schema.Schema, header, footer, separator string) (*RowWriter, error) {
 	bwr := bufio.NewWriterSize(wr, WriteBufSize)
 	return &RowWriter{
 		closer: wr,
@@ -63,6 +64,7 @@ func NewJSONWriterWithHeader(wr io.WriteCloser, outSch schema.Schema, header, fo
 		sch: outSch,
 		header: header,
 		footer: footer,
+		separator: separator,
 	}, nil
 }
 
@@ -126,8 +128,7 @@ func (j *RowWriter) WriteRow(ctx context.Context, r row.Row) error {
 	}
 
 	if j.rowsWritten != 0 {
-		_, err := j.bWr.WriteRune(',')
-
+		_, err := j.bWr.WriteString(j.separator)
 		if err != nil {
 			return err
 		}
@@ -143,6 +144,13 @@ func (j *RowWriter) WriteRow(ctx context.Context, r row.Row) error {
 }
 
 func (j *RowWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
+	if j.rowsWritten == 0 {
+		err := iohelp.WriteAll(j.bWr, []byte(j.header))
+		if err != nil {
+			return err
+		}
+	}
+
 	allCols := j.sch.GetAllCols()
 	colValMap := make(map[string]interface{}, allCols.Size())
 	if err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -190,8 +198,7 @@ func (j *RowWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
 	}
 
 	if j.rowsWritten != 0 {
-		_, err := j.bWr.WriteRune(',')
-
+		_, err := j.bWr.WriteString(j.separator)
 		if err != nil {
 			return err
 		}
@@ -204,6 +211,10 @@ func (j *RowWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
 	j.rowsWritten++
 
 	return nil
+}
+
+func (j *RowWriter) Flush() error {
+	return j.bWr.Flush()
 }
 
 // Close should flush all writes, release resources being held
