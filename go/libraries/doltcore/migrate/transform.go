@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -170,7 +171,8 @@ func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB
 	if err = new.SetHead(ctx, flushRef, newHash); err != nil {
 		return err
 	}
-	if err = new.ShallowGC(ctx); err != nil {
+	err = new.ShallowGC(ctx)
+	if err != nil && err != chunks.ErrUnsupportedOperation {
 		return err
 	}
 
