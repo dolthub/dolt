@@ -1644,8 +1644,9 @@ s.close()
 }
 
 @test "sql-server: sigterm running server and restarting works correctly" {
-    skip "Skipping while we debug why this test hangs for hours in CI"
+#    skip "Skipping while we debug why this test hangs for hours in CI"
 
+    echo -e "start_sql_server... \n"
     start_sql_server
     run ls repo1/.dolt
     [[ "$output" =~ "sql-server.lock" ]] || false
@@ -1653,6 +1654,7 @@ s.close()
     run ls repo2/.dolt
     [[ "$output" =~ "sql-server.lock" ]] || false
 
+    echo -e "kill -9 $SERVER_PID \n"
     kill -9 $SERVER_PID
 
     run ls repo1/.dolt
@@ -1661,21 +1663,26 @@ s.close()
     run ls repo2/.dolt
     [[ "$output" =~ "sql-server.lock" ]] || false
 
+    echo -e "start_sql_server... \n"
     start_sql_server
     server_query repo1 1 dolt "" "SELECT 1" "1\n1"
+    echo -e "stop_sql_server... \n"
     stop_sql_server
 
     # Try adding fake pid numbers. Could happen via debugger or something
     echo "423423" > repo1/.dolt/sql-server.lock
     echo "4123423" > repo2/.dolt/sql-server.lock
 
+    echo -e "start_sql_server... \n"
     start_sql_server
     server_query repo1 1 dolt "" "SELECT 1" "1\n1"
+    echo -e "stop_sql_server... \n"
     stop_sql_server
 
     # Add malicious text to lockfile and expect to fail
     echo "iamamaliciousactor" > repo1/.dolt/sql-server.lock
 
+    echo -e "start_sql_server... \n"
     run start_sql_server
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
     [ "$status" -eq 1 ]
