@@ -27,6 +27,10 @@ teardown() {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "test" ]] || false
+    run dolt ls --verbose
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "0 rows" ]] || false
+
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ pk[[:space:]]+\|[[:space:]]+c1[[:space:]]+\|[[:space:]]+c2[[:space:]]+\|[[:space:]]+c3[[:space:]]+\|[[:space:]]+c4[[:space:]]+\|[[:space:]]+c5 ]] || false
