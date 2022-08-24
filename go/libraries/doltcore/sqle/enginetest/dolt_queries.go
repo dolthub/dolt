@@ -654,7 +654,6 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 }
 
 // HistorySystemTableScriptTests contains working tests for both prepared and non-prepared
-// TODO: combine HistorySystemTableScriptTests and BrokenHistorySystemTableScriptTests when working for prepareds
 var HistorySystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "empty table",
@@ -1012,6 +1011,105 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Query: "select message from dolt_log;",
 				Expected: []sql.Row{
 					{"added values again"},
+					{"added values"},
+					{"creating table t"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+		},
+	},
+	{
+		SkipPrepared: true,
+		Name:         "index by primary key",
+		SetUpScript: []string{
+			"create table t1 (pk int primary key, c int);",
+			"insert into t1 values (1,2), (3,4)",
+			"set @Commit1 = dolt_commit('-am', 'initial table');",
+			"insert into t1 values (5,6), (7,8)",
+			"set @Commit2 = dolt_commit('-am', 'two more rows');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "explain select pk, c from dolt_history_t1 where pk = 3",
+				Expected: []sql.Row{
+					{"Exchange"},
+					{" └─ Filter(dolt_history_t1.pk = 3)"},
+					{"     └─ IndexedTableAccess(dolt_history_t1)"},
+					{"         ├─ index: [dolt_history_t1.pk]"},
+					{"         ├─ filters: [{[3, 3]}]"},
+					{"         └─ columns: [pk c]"},
+				},
+			},
+			{
+				Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
+				Expected: []sql.Row{
+					{"Exchange"},
+					{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+					{"     └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
+					{"         └─ IndexedTableAccess(dolt_history_t1)"},
+					{"             ├─ index: [dolt_history_t1.pk]"},
+					{"             ├─ filters: [{[3, 3]}]"},
+					{"             └─ columns: [pk c committer]"},
+				},
+			},
+		},
+	},
+	{
+		SkipPrepared: true,
+		Name:         "adding an index",
+		SetUpScript: []string{
+			"create table t1 (pk int primary key, c int);",
+			"insert into t1 values (1,2), (3,4)",
+			"set @Commit1 = dolt_commit('-am', 'initial table');",
+			"insert into t1 values (5,6), (7,8)",
+			"set @Commit2 = dolt_commit('-am', 'two more rows');",
+			"insert into t1 values (9,10), (11,12)",
+			"create index t1_c on t1(c)",
+			"set @Commit2 = dolt_commit('-am', 'two more rows and an index');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "explain select pk, c from dolt_history_t1 where c = 4",
+				Expected: []sql.Row{
+					{"Exchange"},
+					{" └─ Filter(dolt_history_t1.c = 4)"},
+					{"     └─ IndexedTableAccess(dolt_history_t1)"},
+					{"         ├─ index: [dolt_history_t1.c]"},
+					{"         ├─ filters: [{[4, 4]}]"},
+					{"         └─ columns: [pk c]"},
+				},
+			},
+			{
+				Query: "explain select pk, c from dolt_history_t1 where c = 10 and committer = 'someguy'",
+				Expected: []sql.Row{
+					{"Exchange"},
+					{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+					{"     └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = 'someguy'))"},
+					{"         └─ IndexedTableAccess(dolt_history_t1)"},
+					{"             ├─ index: [dolt_history_t1.c]"},
+					{"             ├─ filters: [{[10, 10]}]"},
+					{"             └─ columns: [pk c committer]"},
+				},
+			},
+		},
+	},
+	{
+		SkipPrepared: true,
+		Name:         "dolt_history table with AS OF",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 varchar(20));",
+			"call dolt_add('-A');",
+			"call dolt_commit('-m', 'creating table t');",
+			"insert into t values (1, 2, '3'), (4, 5, '6');",
+			"call dolt_commit('-am', 'added values');",
+			"insert into t values (11, 22, '3'), (44, 55, '6');",
+			"call dolt_commit('-am', 'added values again');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select message from dolt_log AS OF 'head^';",
+				Expected: []sql.Row{
 					{"added values"},
 					{"creating table t"},
 					{"checkpoint enginetest database mydb"},

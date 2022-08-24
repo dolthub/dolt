@@ -1113,12 +1113,6 @@ func TestHistorySystemTable(t *testing.T) {
 			enginetest.TestScript(t, harness, test)
 		})
 	}
-	for _, test := range BrokenHistorySystemTableScriptTests {
-		harness.engine = nil
-		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScript(t, harness, test)
-		})
-	}
 }
 
 func TestHistorySystemTablePrepared(t *testing.T) {
