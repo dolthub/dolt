@@ -373,14 +373,16 @@ func migrateTable(ctx context.Context, newSch schema.Schema, oldParentTbl, oldTb
 	eg, ctx := errgroup.WithContext(ctx)
 
 	eg.Go(func() error {
-		newRows, err = migrateIndex(ctx, newSch, oldParentRows, oldRows, newParentRows, newParentTbl.NodeStore())
-		return err
+		var merr error
+		newRows, merr = migrateIndex(ctx, newSch, oldParentRows, oldRows, newParentRows, newParentTbl.NodeStore())
+		return merr
 	})
 
 	vrw, ns := newParentTbl.ValueReadWriter(), newParentTbl.NodeStore()
 	eg.Go(func() error {
-		newSet, err = migrateIndexSet(ctx, newSch, oldParentSet, oldSet, newParentSet, vrw, ns)
-		return err
+		var merr error
+		newSet, merr = migrateIndexSet(ctx, newSch, oldParentSet, oldSet, newParentSet, vrw, ns)
+		return merr
 	})
 
 	if err = eg.Wait(); err != nil {

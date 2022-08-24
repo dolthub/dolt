@@ -55,6 +55,10 @@ type assertion struct {
 }
 
 func TestMigration(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip()
+	}
+
 	tests := []migrationTest{
 		{
 			name: "smoke test",
