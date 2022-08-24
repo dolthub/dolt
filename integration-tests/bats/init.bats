@@ -228,6 +228,53 @@ teardown() {
     [[ $output =~ "no valid database in this directory" ]]
 }
 
+@test "init: run init with --new-format, CREATE DATABASE through sql-server running in new-format repo should create a new format database" {
+    set_dolt_user "baz", "baz@bash.com"
+
+    run dolt init --new-format
+    [ $status -eq 0 ]
+
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ ! $output =~ "OLD ( __LD_1__ )" ]] || false
+    [[ $output =~ "NEW ( __DOLT__ )" ]] || false
+
+    dolt sql -q "create database test"
+    run ls
+    [[ $output =~ "test" ]] || false
+
+    cd test
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ ! $output =~ "OLD ( __LD_1__ )" ]] || false
+    [[ $output =~ "NEW ( __DOLT__ )" ]] || false
+}
+
+@test "init: create a database when current working directory does not have a database yet" {
+    # it creates old format even though there is new format db exists in the current directory.
+    set_dolt_user "baz", "baz@bash.com"
+
+    mkdir new_format && cd new_format
+    run dolt init --new-format
+    [ $status -eq 0 ]
+
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ ! $output =~ "OLD ( __LD_1__ )" ]] || false
+    [[ $output =~ "NEW ( __DOLT__ )" ]] || false
+
+    cd ..
+    dolt sql -q "create database test"
+    run ls
+    [[ $output =~ "test" ]] || false
+
+    cd test
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ $output =~ "OLD ( __LD_1__ )" ]] || false
+    [[ ! $output =~ "NEW ( __DOLT__ )" ]] || false
+}
+
 assert_valid_repository () {
   run dolt log
   [ "$status" -eq 0 ]
