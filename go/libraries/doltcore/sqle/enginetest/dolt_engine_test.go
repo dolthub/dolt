@@ -114,6 +114,7 @@ func TestSingleScript(t *testing.T) {
 			Name: "truncate table",
 			SetUpScript: []string{
 				"create table t (a int primary key auto_increment, b int)",
+				"call dolt_add('.')",
 				"call dolt_commit('-am', 'empty table')",
 				"call dolt_branch('branch1')",
 				"call dolt_branch('branch2')",
@@ -247,6 +248,7 @@ func TestSingleScriptPrepared(t *testing.T) {
 	s := []setup.SetupScript{
 		{
 			"create table test (pk int primary key, c1 int)",
+			"call dolt_add('.')",
 			"insert into test values (0,0), (1,1);",
 			"set @Commit1 = dolt_commit('-am', 'creating table');",
 			"call dolt_branch('-c', 'main', 'newb')",
@@ -773,6 +775,7 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 
 	setupScripts := []setup.SetupScript{
 		{"create table t01 (pk int primary key, c1 int)"},
+		{"call dolt_add('.');"},
 		{"call dolt_commit('-am', 'creating table t01 on main');"},
 		{"insert into t01 values (1, 1), (2, 2);"},
 		{"call dolt_commit('-am', 'adding rows to table t01 on main');"},
@@ -1010,6 +1013,7 @@ func TestSingleTransactionScript(t *testing.T) {
 		Name: "allow commit conflicts on, conflict on dolt_merge",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
