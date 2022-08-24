@@ -10,6 +10,7 @@ CREATE TABLE test (
 );
 
 INSERT INTO test VALUES (0),(1),(2);
+CALL DOLT_ADD('.');
 SQL
 }
 
