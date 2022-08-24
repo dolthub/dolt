@@ -11,6 +11,15 @@ teardown() {
     teardown_common
 }
 
+@test "sql-charsets-collations: show character set" {
+    run dolt sql -q "show character set";
+    [ $status -eq 0 ]
+    [[ $output =~ "utf8mb4 " ]] || false
+    [[ $output =~ "ascii " ]] || false
+    [[ $output =~ "utf8mb4_0900_ai_ci" ]] || false
+    [[ $output =~ "ascii_general_ci" ]] || false
+}
+
 @test "sql-charsets-collations: define charset and collation on a column" {
       dolt sql -q "create table german1 (c char(10) CHARACTER SET latin1 COLLATE latin1_german1_ci)"
       run dolt sql -q "show create table german1";
