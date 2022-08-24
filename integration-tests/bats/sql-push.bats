@@ -159,27 +159,31 @@ teardown() {
 }
 
 @test "sql-push: dolt_push --set-upstream persists outside of session" {
-    skip # setting upstream run in a session should persist outside of session
     cd repo1
-    dolt push
     dolt checkout -b other
-    dolt sql -q "select dolt_push('-u', 'origin', 'other')"
+    run dolt push
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "The current branch other has no upstream branch." ]] || false
 
+    dolt sql -q "select dolt_push('-u', 'origin', 'other')"
     # upstream should be set still
-    run dolt sql -q "select dolt_push()"
+    run dolt push
     [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
 }
 
 @test "sql-push: CALL dolt_push --set-upstream persists outside of session" {
-    skip # setting upstream run in a session should persist outside of session
     cd repo1
-    dolt push
     dolt checkout -b other
-    dolt sql -q "CALL dolt_push('-u', 'origin', 'other')"
+    run dolt push
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "The current branch other has no upstream branch." ]] || false
 
+    dolt sql -q "call dolt_push('-u', 'origin', 'other')"
     # upstream should be set still
-    run dolt sql -q "CALL dolt_push()"
+    run dolt push
     [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
 }
 
 @test "sql-push: dolt_push --force flag" {

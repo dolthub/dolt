@@ -44,7 +44,12 @@ type ItemSearchFn func(item Item, nd Node) (idx int)
 
 func NewCursorAtStart(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, err error) {
 	cur = &Cursor{nd: nd, nrw: ns}
-	for !cur.isLeaf() {
+	var leaf bool
+	leaf, err = cur.isLeaf()
+	if err != nil {
+		return nil, err
+	}
+	for !leaf {
 		nd, err = fetchChild(ctx, ns, cur.CurrentRef())
 		if err != nil {
 			return nil, err
@@ -52,6 +57,10 @@ func NewCursorAtStart(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, 
 
 		parent := cur
 		cur = &Cursor{nd: nd, parent: parent, nrw: ns}
+		leaf, err = cur.isLeaf()
+		if err != nil {
+			return nil, err
+		}
 	}
 	return
 }
@@ -60,7 +69,12 @@ func NewCursorAtEnd(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, er
 	cur = &Cursor{nd: nd, nrw: ns}
 	cur.skipToNodeEnd()
 
-	for !cur.isLeaf() {
+	var leaf bool
+	leaf, err = cur.isLeaf()
+	if err != nil {
+		return nil, err
+	}
+	for !leaf {
 		nd, err = fetchChild(ctx, ns, cur.CurrentRef())
 		if err != nil {
 			return nil, err
@@ -69,6 +83,10 @@ func NewCursorAtEnd(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, er
 		parent := cur
 		cur = &Cursor{nd: nd, parent: parent, nrw: ns}
 		cur.skipToNodeEnd()
+		leaf, err = cur.isLeaf()
+		if err != nil {
+			return nil, err
+		}
 	}
 	return
 }
@@ -92,19 +110,25 @@ func NewCursorPastEnd(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, 
 }
 
 func NewCursorAtOrdinal(ctx context.Context, ns NodeStore, nd Node, ord uint64) (cur *Cursor, err error) {
-	if ord >= uint64(nd.TreeCount()) {
+	cnt, err := nd.TreeCount()
+	if err != nil {
+		return nil, err
+	}
+	if ord >= uint64(cnt) {
 		return NewCursorPastEnd(ctx, ns, nd)
 	}
 
 	distance := int64(ord)
 	return NewCursorFromSearchFn(ctx, ns, nd, func(nd Node) (idx int) {
-		if nd.IsLeaf() {
+		leaf, _ := nd.IsLeaf()
+		if leaf {
 			return int(distance)
 		}
-		nd = nd.loadSubtrees()
+		nd, _ = nd.loadSubtrees()
 
 		for idx = 0; idx < nd.Count(); idx++ {
-			card := int64(nd.getSubtreeCount(idx))
+			cnt, _ := nd.getSubtreeCount(idx)
+			card := int64(cnt)
 			if (distance - card) < 0 {
 				break
 			}
@@ -118,7 +142,12 @@ func NewCursorFromSearchFn(ctx context.Context, ns NodeStore, nd Node, search Se
 	cur = &Cursor{nd: nd, nrw: ns}
 
 	cur.idx = search(cur.nd)
-	for !cur.isLeaf() {
+	var leaf bool
+	leaf, err = cur.isLeaf()
+	if err != nil {
+		return nil, err
+	}
+	for !leaf {
 
 		// stay in bounds for internal nodes
 		cur.keepInBounds()
@@ -132,6 +161,10 @@ func NewCursorFromSearchFn(ctx context.Context, ns NodeStore, nd Node, search Se
 		cur = &Cursor{nd: nd, parent: parent, nrw: ns}
 
 		cur.idx = search(cur.nd)
+		leaf, err = cur.isLeaf()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return
@@ -149,7 +182,12 @@ func NewCursorAtItem(ctx context.Context, ns NodeStore, nd Node, item Item, sear
 	cur = &Cursor{nd: nd, nrw: ns}
 
 	cur.idx = search(item, cur.nd)
-	for !cur.isLeaf() {
+	var leaf bool
+	leaf, err = cur.isLeaf()
+	if err != nil {
+		return nil, err
+	}
+	for !leaf {
 
 		// stay in bounds for internal nodes
 		cur.keepInBounds()
@@ -163,6 +201,10 @@ func NewCursorAtItem(ctx context.Context, ns NodeStore, nd Node, item Item, sear
 		cur = &Cursor{nd: nd, parent: parent, nrw: ns}
 
 		cur.idx = search(item, cur.nd)
+		leaf, err = cur.isLeaf()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return
@@ -172,7 +214,12 @@ func NewLeafCursorAtItem(ctx context.Context, ns NodeStore, nd Node, item Item, 
 	cur = Cursor{nd: nd, parent: nil, nrw: ns}
 
 	cur.idx = search(item, cur.nd)
-	for !cur.isLeaf() {
+	var leaf bool
+	leaf, err = cur.isLeaf()
+	if err != nil {
+		return cur, err
+	}
+	for !leaf {
 
 		// stay in bounds for internal nodes
 		cur.keepInBounds()
@@ -184,6 +231,10 @@ func NewLeafCursorAtItem(ctx context.Context, ns NodeStore, nd Node, item Item, 
 		}
 
 		cur.idx = search(item, cur.nd)
+		leaf, err = cur.isLeaf()
+		if err != nil {
+			return cur, err
+		}
 	}
 
 	return cur, nil
@@ -214,11 +265,18 @@ func (cur *Cursor) CurrentRef() hash.Hash {
 	return cur.nd.getAddress(cur.idx)
 }
 
-func (cur *Cursor) currentSubtreeSize() uint64 {
-	if cur.isLeaf() {
-		return 1
+func (cur *Cursor) currentSubtreeSize() (uint64, error) {
+	leaf, err := cur.isLeaf()
+	if err != nil {
+		return 0, err
 	}
-	cur.nd = cur.nd.loadSubtrees()
+	if leaf {
+		return 1, nil
+	}
+	cur.nd, err = cur.nd.loadSubtrees()
+	if err != nil {
+		return 0, err
+	}
 	return cur.nd.getSubtreeCount(cur.idx)
 }
 
@@ -261,13 +319,21 @@ func (cur *Cursor) atNodeEnd() bool {
 	return cur.idx == lastKeyIdx
 }
 
-func (cur *Cursor) isLeaf() bool {
+func (cur *Cursor) isLeaf() (bool, error) {
 	// todo(andy): cache Level
-	return cur.level() == 0
+	lvl, err := cur.level()
+	if err != nil {
+		return false, err
+	}
+	return lvl == 0, nil
 }
 
-func (cur *Cursor) level() uint64 {
-	return uint64(cur.nd.Level())
+func (cur *Cursor) level() (uint64, error) {
+	lvl, err := cur.nd.Level()
+	if err != nil {
+		return 0, err
+	}
+	return uint64(lvl), nil
 }
 
 // seek updates the cursor's node to one whose range spans the key's value, or the last

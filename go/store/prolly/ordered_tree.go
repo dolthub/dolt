@@ -1,4 +1,4 @@
-// Copyright 2021 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,6 +69,52 @@ func diffOrderedTrees[K, V ~[]byte, O ordering[K]](
 	return err
 }
 
+func rangeDiffOrderedTrees[K, V ~[]byte, O ordering[K]](
+	ctx context.Context,
+	from, to orderedTree[K, V, O],
+	rng Range,
+	cb DiffFn,
+) error {
+	cfn := func(left, right tree.Item) int {
+		return from.order.Compare(K(left), K(right))
+	}
+
+	fromStart, err := tree.NewCursorFromSearchFn(ctx, from.ns, from.root, rangeStartSearchFn(rng))
+	if err != nil {
+		return err
+	}
+	toStart, err := tree.NewCursorFromSearchFn(ctx, to.ns, to.root, rangeStartSearchFn(rng))
+	if err != nil {
+		return err
+	}
+
+	fromStop, err := tree.NewCursorFromSearchFn(ctx, from.ns, from.root, rangeStopSearchFn(rng))
+	if err != nil {
+		return err
+	}
+	toStop, err := tree.NewCursorFromSearchFn(ctx, to.ns, to.root, rangeStopSearchFn(rng))
+	if err != nil {
+		return err
+	}
+
+	differ, err := tree.DifferFromCursors(fromStart, toStart, fromStop, toStop, cfn)
+	if err != nil {
+		return err
+	}
+
+	for {
+		var diff tree.Diff
+		if diff, err = differ.Next(ctx); err != nil {
+			break
+		}
+
+		if err = cb(ctx, diff); err != nil {
+			break
+		}
+	}
+	return err
+}
+
 func mergeOrderedTrees[K, V ~[]byte, O ordering[K], S message.Serializer](
 	ctx context.Context,
 	l, r, base orderedTree[K, V, O],
@@ -91,12 +137,13 @@ func mergeOrderedTrees[K, V ~[]byte, O ordering[K], S message.Serializer](
 	}, nil
 }
 
-func (t orderedTree[K, V, O]) count() int {
+func (t orderedTree[K, V, O]) count() (int, error) {
 	return t.root.TreeCount()
 }
 
-func (t orderedTree[K, V, O]) height() int {
-	return t.root.Level() + 1
+func (t orderedTree[K, V, O]) height() (int, error) {
+	l, err := t.root.Level()
+	return l + 1, err
 }
 
 func (t orderedTree[K, V, O]) hashOf() hash.Hash {
@@ -221,8 +268,14 @@ func (t orderedTree[K, V, O]) iterOrdinalRange(ctx context.Context, start, stop 
 	}
 	if stop < start {
 		return nil, fmt.Errorf("invalid ordinal bounds (%d, %d)", start, stop)
-	} else if stop > uint64(t.count()) {
-		return nil, fmt.Errorf("stop index (%d) out of bounds", stop)
+	} else {
+		c, err := t.count()
+		if err != nil {
+			return nil, err
+		}
+		if stop > uint64(c) {
+			return nil, fmt.Errorf("stop index (%d) out of bounds", stop)
+		}
 	}
 
 	lo, err := tree.NewCursorAtOrdinal(ctx, t.ns, t.root, start)

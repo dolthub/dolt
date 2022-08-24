@@ -28,7 +28,9 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
@@ -207,4 +209,21 @@ func (s *nomsSyncTestSuite) TestRewind() {
 	s.NoError(err)
 	s.True(types.Float(42).Equals(mustHeadValue(dest)))
 	db.Close()
+}
+
+func mustHeadValue(ds datas.Dataset) types.Value {
+	val, ok, err := ds.MaybeHeadValue()
+	d.PanicIfError(err)
+
+	if !ok {
+		panic("no head")
+	}
+
+	return val
+}
+
+func mustHeadAddr(ds datas.Dataset) hash.Hash {
+	addr, ok := ds.MaybeHeadAddr()
+	d.PanicIfFalse(ok)
+	return addr
 }

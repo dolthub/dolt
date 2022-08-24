@@ -236,8 +236,7 @@ teardown() {
     dolt checkout branch1
     dolt sql -q "INSERT INTO test VALUES (6, 'f'), (7, 'g')"
     dolt commit -am "add more rows in branch1"
-    dolt merge branch2
-    dolt commit -am "merge branch2"
+    dolt merge branch2 -m "merge branch2"
 
     dolt checkout main
     run dolt cherry-pick branch1

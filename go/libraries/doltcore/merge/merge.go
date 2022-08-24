@@ -362,6 +362,7 @@ func GetTablesWithConstraintViolations(ctx context.Context, roots doltdb.Roots) 
 	return workingViolations, stagedViolations, headViolations, err
 }
 
+// MergeWouldStompChanges returns list of table names that are stomped and the diffs map between head and working set.
 func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit *doltdb.Commit) ([]string, map[string]hash.Hash, error) {
 	mergeRoot, err := mergeCommit.GetRootValue(ctx)
 	if err != nil {

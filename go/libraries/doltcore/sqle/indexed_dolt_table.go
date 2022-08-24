@@ -15,28 +15,34 @@
 package sqle
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
-// IndexedDoltTable is a wrapper for a DoltTable and a doltIndexLookup. It implements the sql.Table interface like
-// DoltTable, but its RowIter function returns values that match the indexLookup, instead of all rows. It's returned by
-// the DoltTable WithIndexLookup function.
+// IndexedDoltTable is a wrapper for a DoltTable. It implements the sql.Table interface like
+// DoltTable, but its RowIter function returns values that match a sql.Range, instead of all
+// rows. It's returned by the DoltTable.IndexedAccess function.
 type IndexedDoltTable struct {
-	table       *DoltTable
-	indexLookup sql.IndexLookup
+	table        *DoltTable
+	idx          index.DoltIndex
+	lb           index.LookupBuilder
+	isDoltFormat bool
+}
+
+func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
+	return &IndexedDoltTable{
+		table:        t,
+		idx:          idx,
+		isDoltFormat: types.IsFormat_DOLT(t.Format()),
+	}
 }
 
 var _ sql.IndexedTable = (*IndexedDoltTable)(nil)
 
 func (idt *IndexedDoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return idt.table.GetIndexes(ctx)
-}
-
-func (idt *IndexedDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	// TODO: this should probably be an error (there should be at most one indexed lookup on a given table)
-	return idt.table.WithIndexLookup(lookup)
 }
 
 func (idt *IndexedDoltTable) Name() string {
@@ -51,16 +57,28 @@ func (idt *IndexedDoltTable) Schema() sql.Schema {
 	return idt.table.Schema()
 }
 
+func (idt *IndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	return index.NewRangePartitionIter(ctx, idt.table, lookup, idt.isDoltFormat)
+}
+
 func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return index.NewRangePartitionIter(ctx, idt.table, idt.indexLookup)
+	panic("should call LookupPartitions on an IndexedDoltTable")
 }
 
 func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return index.RowIterForIndexLookup(ctx, idt.table, idt.indexLookup, idt.table.sqlSch, nil)
+	if idt.lb == nil {
+		idt.lb = index.NewLookupBuilder(part, idt.idx, nil, idt.table.sqlSch, idt.isDoltFormat)
+	}
+
+	return idt.lb.NewRowIter(ctx, part)
 }
 
 func (idt *IndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return index.RowIterForIndexLookup(ctx, idt.table, idt.indexLookup, idt.table.sqlSch, nil)
+	if idt.lb == nil {
+		idt.lb = index.NewLookupBuilder(part, idt.idx, nil, idt.table.sqlSch, idt.isDoltFormat)
+	}
+
+	return idt.lb.NewRowIter(ctx, part)
 }
 
 func (idt *IndexedDoltTable) IsTemporary() bool {
@@ -74,27 +92,44 @@ var _ sql.ReplaceableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.StatisticsTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.ProjectedTable = (*WritableIndexedDoltTable)(nil)
 
+func NewWritableIndexedDoltTable(t *WritableDoltTable, idx index.DoltIndex) *WritableIndexedDoltTable {
+	return &WritableIndexedDoltTable{
+		WritableDoltTable: t,
+		idx:               idx,
+		isDoltFormat:      types.IsFormat_DOLT(idx.Format()),
+	}
+}
+
 type WritableIndexedDoltTable struct {
 	*WritableDoltTable
-	indexLookup sql.IndexLookup
+	idx          index.DoltIndex
+	isDoltFormat bool
+	lb           index.LookupBuilder
 }
 
 var _ sql.Table2 = (*WritableIndexedDoltTable)(nil)
 
+func (t *WritableIndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	return index.NewRangePartitionIter(ctx, t.DoltTable, lookup, t.isDoltFormat)
+}
+
 func (t *WritableIndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return index.NewRangePartitionIter(ctx, t.DoltTable, t.indexLookup)
+	panic("called partitions on a lookup indexed table")
 }
 
 func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return index.PartitionIndexedTableRows(ctx, t.indexLookup.Index(), part, t.sqlSch, t.projectedCols)
+	if t.lb == nil {
+		t.lb = index.NewLookupBuilder(part, t.idx, t.projectedCols, t.sqlSch, t.isDoltFormat)
+	}
+
+	return t.lb.NewRowIter(ctx, part)
 }
 
 func (t *WritableIndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter2, error) {
-	iter, err := index.PartitionIndexedTableRows(ctx, t.indexLookup.Index(), part, t.sqlSch, t.projectedCols)
+	iter, err := t.PartitionRows(ctx, part)
 	if err != nil {
 		return nil, err
 	}
-
 	return iter.(sql.RowIter2), nil
 }
 
@@ -102,7 +137,7 @@ func (t *WritableIndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Par
 func (t *WritableIndexedDoltTable) WithProjections(colNames []string) sql.Table {
 	return &WritableIndexedDoltTable{
 		WritableDoltTable: t.WithProjections(colNames).(*WritableDoltTable),
-		indexLookup:       t.indexLookup,
+		idx:               t.idx,
 	}
 }
 

@@ -135,7 +135,11 @@ func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []uin
 
 func iterForPartition(ctx context.Context, partition doltTablePartition) (types.MapTupleIterator, error) {
 	if partition.end == NoUpperBound {
-		partition.end = partition.rowData.Count()
+		c, err := partition.rowData.Count()
+		if err != nil {
+			return nil, err
+		}
+		partition.end = c
 	}
 	return partition.IteratorForPartition(ctx, partition.rowData)
 }
@@ -184,8 +188,12 @@ func ProllyRowIterFromPartition(
 	partition doltTablePartition,
 ) (sql.RowIter, error) {
 	rows := durable.ProllyMapFromIndex(partition.rowData)
-	if partition.end > uint64(rows.Count()) {
-		partition.end = uint64(rows.Count())
+	c, err := rows.Count()
+	if err != nil {
+		return nil, err
+	}
+	if partition.end > uint64(c) {
+		partition.end = uint64(c)
 	}
 
 	iter, err := rows.IterOrdinalRange(ctx, partition.start, partition.end)

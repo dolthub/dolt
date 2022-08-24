@@ -83,9 +83,13 @@ func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return index.DoltHistoryIndexesFromTable(ctx, ht.doltTable.db.Name(), ht.Name(), tbl)
 }
 
-func (ht HistoryTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
+func (ht *HistoryTable) IndexedAccess(i sql.Index) sql.IndexedTable {
+	return ht
+}
+
+func (ht *HistoryTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	ht.indexLookup = lookup
-	return &ht
+	return ht.Partitions(ctx)
 }
 
 // NewHistoryTable creates a history table
@@ -386,38 +390,36 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 		return nil, err
 	}
 
-	var sqlTable sql.Table
-	sqlTable = table
-	if lookup != nil {
+	var partIter sql.PartitionIter
+	var histTable sql.Table
+	if !lookup.IsEmpty() {
 		indexes, err := table.GetIndexes(ctx)
 		if err != nil {
 			return nil, err
 		}
-		var newLookup sql.IndexLookup
-		for i := range indexes {
-			if indexes[i].ID() == lookup.Index().ID() {
-				newLookup, err = indexes[i].NewLookup(ctx, lookup.Ranges()...)
+		for _, idx := range indexes {
+			if idx.ID() == lookup.Index.ID() {
+				histTable = table.IndexedAccess(idx)
+				newLookup := sql.IndexLookup{Index: idx, Ranges: lookup.Ranges}
+				partIter, err = histTable.(sql.IndexedTable).LookupPartitions(ctx, newLookup)
 				if err != nil {
 					return nil, err
 				}
 				break
 			}
 		}
-		if newLookup != nil {
-			sqlTable = table.WithIndexLookup(newLookup)
+	}
+	if histTable == nil {
+		histTable = table
+		partIter, err = table.Partitions(ctx)
+		if err != nil {
+			return nil, err
 		}
 	}
-
-	tablePartitions, err := sqlTable.Partitions(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	converter := rowConverter(sqlTable.Schema(), targetSchema, h, meta, projections)
-
+	converter := rowConverter(histTable.Schema(), targetSchema, h, meta, projections)
 	return &historyIter{
-		table:           sqlTable,
-		tablePartitions: tablePartitions,
+		table:           histTable,
+		tablePartitions: partIter,
 		rowConverter:    converter,
 	}, nil
 }

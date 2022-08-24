@@ -32,7 +32,7 @@ SQL
 
     dolt checkout main
 
-    run dolt merge feat
+    run dolt merge feat -m "merge feat"
     run dolt constraints verify --all
     [ "$status" -eq "1" ]
 

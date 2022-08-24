@@ -52,11 +52,16 @@ func TestCommitClosure(t *testing.T) {
 	})
 
 	t.Run("Empty", func(t *testing.T) {
-		cc := NewEmptyCommitClosure(ns)
+		cc, err := NewEmptyCommitClosure(ns)
+		require.NoError(t, err)
 		assert.NotNil(t, cc)
-		assert.Equal(t, 0, cc.Count())
+		c, err := cc.Count()
+		require.NoError(t, err)
+		assert.Equal(t, 0, c)
 		assert.Equal(t, 0, cc.closure.root.Count())
-		assert.Equal(t, 1, cc.Height())
+		c, err = cc.Height()
+		require.NoError(t, err)
+		assert.Equal(t, 1, c)
 
 		i, err := cc.IterAllReverse(ctx)
 		_, _, err = i.Next(ctx)
@@ -65,15 +70,18 @@ func TestCommitClosure(t *testing.T) {
 	})
 
 	t.Run("Insert", func(t *testing.T) {
-		cc := NewEmptyCommitClosure(ns)
+		cc, err := NewEmptyCommitClosure(ns)
+		require.NoError(t, err)
 		e := cc.Editor()
-		err := e.Add(ctx, NewCommitClosureKey(ns.Pool(), 0, hash.Parse("00000000000000000000000000000000")))
+		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 0, hash.Parse("00000000000000000000000000000000")))
 		assert.NoError(t, err)
 		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 1, hash.Parse("00000000000000000000000000000000")))
 		assert.NoError(t, err)
 		cc, err = e.Flush(ctx)
 		assert.NoError(t, err)
-		assert.Equal(t, 2, cc.Count())
+		ccc, err := cc.Count()
+		require.NoError(t, err)
+		assert.Equal(t, 2, ccc)
 
 		i, err := cc.IterAllReverse(ctx)
 		assert.NoError(t, err)
@@ -94,21 +102,27 @@ func TestCommitClosure(t *testing.T) {
 		assert.NoError(t, err)
 		cc, err = e.Flush(ctx)
 		assert.NoError(t, err)
-		assert.Equal(t, 2, cc.Count())
+		ccc, err = cc.Count()
+		require.NoError(t, err)
+		assert.Equal(t, 2, ccc)
 	})
 
 	t.Run("Diff", func(t *testing.T) {
-		ccl := NewEmptyCommitClosure(ns)
+		ccl, err := NewEmptyCommitClosure(ns)
+		require.NoError(t, err)
 		e := ccl.Editor()
-		err := e.Add(ctx, NewCommitClosureKey(ns.Pool(), 0, hash.Parse("00000000000000000000000000000000")))
+		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 0, hash.Parse("00000000000000000000000000000000")))
 		assert.NoError(t, err)
 		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 1, hash.Parse("00000000000000000000000000000000")))
 		assert.NoError(t, err)
 		ccl, err = e.Flush(ctx)
 		assert.NoError(t, err)
-		assert.Equal(t, 2, ccl.Count())
+		cclc, err := ccl.Count()
+		require.NoError(t, err)
+		assert.Equal(t, 2, cclc)
 
-		ccr := NewEmptyCommitClosure(ns)
+		ccr, err := NewEmptyCommitClosure(ns)
+		require.NoError(t, err)
 		e = ccr.Editor()
 		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 0, hash.Parse("00000000000000000000000000000000")))
 		assert.NoError(t, err)
@@ -120,7 +134,9 @@ func TestCommitClosure(t *testing.T) {
 		assert.NoError(t, err)
 		ccr, err = e.Flush(ctx)
 		assert.NoError(t, err)
-		assert.Equal(t, 4, ccr.Count())
+		ccrc, err := ccr.Count()
+		require.NoError(t, err)
+		assert.Equal(t, 4, ccrc)
 
 		var numadds, numdels int
 		err = DiffCommitClosures(ctx, ccl, ccr, func(ctx context.Context, d tree.Diff) error {
@@ -138,15 +154,18 @@ func TestCommitClosure(t *testing.T) {
 	})
 
 	t.Run("WalkAddresses", func(t *testing.T) {
-		cc := NewEmptyCommitClosure(ns)
+		cc, err := NewEmptyCommitClosure(ns)
+		require.NoError(t, err)
 		e := cc.Editor()
 		for i := 0; i < 4096; i++ {
 			err := e.Add(ctx, NewCommitClosureKey(ns.Pool(), uint64(i), hash.Parse(fmt.Sprintf("%0.32d", i))))
 			require.NoError(t, err)
 		}
-		cc, err := e.Flush(ctx)
+		cc, err = e.Flush(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, 4096, cc.Count())
+		ccc, err := cc.Count()
+		require.NoError(t, err)
+		assert.Equal(t, 4096, ccc)
 
 		// Walk the addresses in the root.
 		msg := serial.Message(tree.ValueFromNode(cc.closure.root).(types.SerialMessage))
@@ -169,15 +188,18 @@ func TestCommitClosure(t *testing.T) {
 	})
 
 	t.Run("WalkNodes", func(t *testing.T) {
-		cc := NewEmptyCommitClosure(ns)
+		cc, err := NewEmptyCommitClosure(ns)
+		require.NoError(t, err)
 		e := cc.Editor()
 		for i := 0; i < 4096; i++ {
 			err := e.Add(ctx, NewCommitClosureKey(ns.Pool(), uint64(i), hash.Parse(fmt.Sprintf("%0.32d", i))))
 			require.NoError(t, err)
 		}
-		cc, err := e.Flush(ctx)
+		cc, err = e.Flush(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, 4096, cc.Count())
+		ccc, err := cc.Count()
+		require.NoError(t, err)
+		assert.Equal(t, 4096, ccc)
 
 		numnodes := 0
 		totalentries := 0

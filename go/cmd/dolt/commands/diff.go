@@ -587,7 +587,7 @@ func diffRows(
 		(td.ToSch == nil ||
 			(td.FromSch != nil && !schema.SchemasAreEqual(td.FromSch, td.ToSch))) {
 		// TODO: this is overly broad, we can absolutely do better
-		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff")
+		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff\n")
 		return nil
 	}
 

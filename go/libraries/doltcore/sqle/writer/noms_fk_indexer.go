@@ -17,6 +17,8 @@ package writer
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
@@ -29,25 +31,35 @@ type nomsFkIndexer struct {
 	nrr     *noms.ReadRange
 }
 
-var _ sql.Table = nomsFkIndexer{}
+var _ sql.Table = (*nomsFkIndexer)(nil)
+var _ sql.IndexedTable = (*nomsFkIndexer)(nil)
 
-func (n nomsFkIndexer) Name() string {
+func (n *nomsFkIndexer) Name() string {
 	return n.writer.tableName
 }
 
-func (n nomsFkIndexer) String() string {
+func (n *nomsFkIndexer) String() string {
 	return n.writer.tableName
 }
 
-func (n nomsFkIndexer) Schema() sql.Schema {
+func (n *nomsFkIndexer) Schema() sql.Schema {
 	return n.writer.sqlSch
 }
 
-func (n nomsFkIndexer) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+func (n *nomsFkIndexer) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	nrr, err := index.NomsRangesFromIndexLookup(ctx, lookup)
+	if err != nil {
+		return nil, err
+	}
+	n.nrr = nrr[0]
 	return sql.PartitionsToPartitionIter(fkDummyPartition{}), nil
 }
 
-func (n nomsFkIndexer) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+func (n *nomsFkIndexer) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+	return sql.PartitionsToPartitionIter(fkDummyPartition{}), nil
+}
+
+func (n *nomsFkIndexer) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
 	dRows, err := n.writer.tableEditor.GetIndexedRows(ctx, n.nrr.Start, n.idxName, n.idxSch)
 	if err != nil {
 		return nil, err

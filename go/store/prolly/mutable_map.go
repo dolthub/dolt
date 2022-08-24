@@ -170,7 +170,12 @@ func debugFormat(ctx context.Context, m MutableMap) (string, error) {
 	}
 	sb.WriteString("\t},\n")
 
-	c = strconv.Itoa(m.tuples.tree.count())
+	ci, err := m.tuples.tree.count()
+	if err != nil {
+		return "", err
+	}
+
+	c = strconv.Itoa(ci)
 	sb.WriteString("\ttree (count: " + c + ") {\n")
 	for {
 		k, v, err := tupleIter.Next(ctx)

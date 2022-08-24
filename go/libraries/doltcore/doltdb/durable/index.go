@@ -35,10 +35,10 @@ type Index interface {
 	HashOf() (hash.Hash, error)
 
 	// Count returns the cardinality of the index.
-	Count() uint64
+	Count() (uint64, error)
 
 	// Empty returns true if the index is empty.
-	Empty() bool
+	Empty() (bool, error)
 
 	// Format returns the types.NomsBinFormat for this index.
 	Format() *types.NomsBinFormat
@@ -105,7 +105,10 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		return IndexFromNomsMap(v.(types.Map), vrw, ns), nil
 
 	case types.Format_DOLT:
-		pm := shim.MapFromValue(v, sch, ns)
+		pm, err := shim.MapFromValue(v, sch, ns)
+		if err != nil {
+			return nil, err
+		}
 		return IndexFromProllyMap(pm), nil
 
 	default:
@@ -184,13 +187,13 @@ func (i nomsIndex) HashOf() (hash.Hash, error) {
 }
 
 // Count implements Index.
-func (i nomsIndex) Count() uint64 {
-	return i.index.Len()
+func (i nomsIndex) Count() (uint64, error) {
+	return i.index.Len(), nil
 }
 
 // Empty implements Index.
-func (i nomsIndex) Empty() bool {
-	return i.index.Len() == 0
+func (i nomsIndex) Empty() (bool, error) {
+	return i.index.Len() == 0, nil
 }
 
 // Format implements Index.
@@ -234,13 +237,18 @@ func (i prollyIndex) HashOf() (hash.Hash, error) {
 }
 
 // Count implements Index.
-func (i prollyIndex) Count() uint64 {
-	return uint64(i.index.Count())
+func (i prollyIndex) Count() (uint64, error) {
+	c, err := i.index.Count()
+	return uint64(c), err
 }
 
 // Empty implements Index.
-func (i prollyIndex) Empty() bool {
-	return i.index.Count() == 0
+func (i prollyIndex) Empty() (bool, error) {
+	c, err := i.index.Count()
+	if err != nil {
+		return false, err
+	}
+	return c == 0, nil
 }
 
 // Format implements Index.
@@ -319,21 +327,30 @@ func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSche
 }
 
 // NewIndexSet returns an empty IndexSet.
-func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore) IndexSet {
+func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore) (IndexSet, error) {
 	if vrw.Format().UsesFlatbuffers() {
-		emptyam := prolly.NewEmptyAddressMap(ns)
-		return doltDevIndexSet{vrw, ns, emptyam}
+		emptyam, err := prolly.NewEmptyAddressMap(ns)
+		if err != nil {
+			return nil, err
+		}
+		return doltDevIndexSet{vrw, ns, emptyam}, nil
 	}
 
-	empty, _ := types.NewMap(ctx, vrw)
+	empty, err := types.NewMap(ctx, vrw)
+	if err != nil {
+		return nil, err
+	}
 	return nomsIndexSet{
 		indexes: empty,
 		vrw:     vrw,
-	}
+	}, nil
 }
 
 func NewIndexSetWithEmptyIndexes(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (IndexSet, error) {
-	s := NewIndexSet(ctx, vrw, ns)
+	s, err := NewIndexSet(ctx, vrw, ns)
+	if err != nil {
+		return nil, err
+	}
 	for _, index := range sch.Indexes().AllIndexes() {
 		empty, err := NewEmptyIndex(ctx, vrw, ns, index.Schema())
 		if err != nil {

@@ -1,4 +1,4 @@
-// Copyright 2021 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -124,6 +124,10 @@ func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
 	return diffOrderedTrees(ctx, from.tuples, to.tuples, cb)
 }
 
+func RangeDiffMaps(ctx context.Context, from, to Map, rng Range, cb DiffFn) error {
+	return rangeDiffOrderedTrees(ctx, from.tuples, to.tuples, rng, cb)
+}
+
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
 	serializer := message.NewProllyMapSerializer(left.valDesc, base.NodeStore().Pool())
 	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer, base.valDesc)
@@ -149,11 +153,11 @@ func (m Map) Mutate() MutableMap {
 }
 
 // Count returns the number of key-value pairs in the Map.
-func (m Map) Count() int {
+func (m Map) Count() (int, error) {
 	return m.tuples.count()
 }
 
-func (m Map) Height() int {
+func (m Map) Height() (int, error) {
 	return m.tuples.height()
 }
 
@@ -212,7 +216,7 @@ func (m Map) IterOrdinalRange(ctx context.Context, start, stop uint64) (MapIter,
 
 // IterRange returns a mutableMapIter that iterates over a Range.
 func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
-	if rng.isPointLookup(m.keyDesc) {
+	if rng.IsPointLookup(m.keyDesc) {
 		return m.pointLookupFromRange(ctx, rng)
 	}
 
@@ -245,7 +249,7 @@ func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup,
 	key := val.Tuple(cur.CurrentKey())
 	value := val.Tuple(cur.CurrentValue())
 
-	if !rng.matches(key) {
+	if !rng.Matches(key) {
 		return &pointLookup{}, nil
 	}
 
@@ -285,6 +289,12 @@ func treeIterFromRange(
 	return &orderedTreeIter[val.Tuple, val.Tuple]{curr: start, stop: stopF, step: start.Advance}, nil
 }
 
+func NewPointLookup(k, v val.Tuple) *pointLookup {
+	return &pointLookup{k, v}
+}
+
+var EmptyPointLookup = &pointLookup{}
+
 type pointLookup struct {
 	k, v val.Tuple
 }
@@ -308,7 +318,10 @@ func DebugFormat(ctx context.Context, m Map) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	c := m.Count()
+	c, err := m.Count()
+	if err != nil {
+		return "", err
+	}
 
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Prolly Map (count: %d) {\n", c))

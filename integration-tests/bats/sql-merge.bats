@@ -435,14 +435,14 @@ SELECT DOLT_COMMIT('-a', '-m', 'Insert 10000');
 SQL
 
     run dolt sql << SQL
-SELECT DOLT_MERGE('feature-branch');
+SELECT DOLT_MERGE('feature-branch', '--no-commit');
 SELECT COUNT(*) = 2 FROM test WHERE pk > 2;
 SQL
 
     log_status_eq 0
     [[ "$output" =~ "true" ]] || false
     [[ "$output" =~ "true" ]] || false
-    [[ "${lines[1]}" =~ "DOLT_MERGE('feature-branch')" ]] || false # validate that merge returns 1 not "Updating..."
+    [[ "${lines[1]}" =~ "DOLT_MERGE('feature-branch', '--no-commit')" ]] || false # validate that merge returns 1 not "Updating..."
     [[ "${lines[3]}" =~ "0" ]] || false
     ! [[ "$output" =~ "Updating" ]] || false
 
@@ -492,7 +492,7 @@ CALL DOLT_COMMIT('-a', '-m', 'Insert 10000');
 SQL
 
     run dolt sql << SQL
-CALL DOLT_MERGE('feature-branch');
+CALL DOLT_MERGE('feature-branch', '--no-commit');
 SELECT COUNT(*) = 2 FROM test WHERE pk > 2;
 SQL
 
@@ -993,7 +993,7 @@ SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
 SELECT DOLT_CHECKOUT('main');
 INSERT INTO test VALUES (500000);
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 500000');
-SELECT DOLT_MERGE('feature-branch');
+SELECT DOLT_MERGE('feature-branch', '--no-commit');
 SELECT DOLT_MERGE('feature-branch');
 SQL
 
@@ -1010,7 +1010,7 @@ CALL DOLT_COMMIT('-a', '-m', 'Insert 3');
 CALL DOLT_CHECKOUT('main');
 INSERT INTO test VALUES (500000);
 CALL DOLT_COMMIT('-a', '-m', 'Insert 500000');
-CALL DOLT_MERGE('feature-branch');
+CALL DOLT_MERGE('feature-branch', '--no-commit');
 CALL DOLT_MERGE('feature-branch');
 SQL
 
@@ -1097,7 +1097,7 @@ SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
 SELECT DOLT_CHECKOUT('main');
 INSERT INTO test VALUES (500000);
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 500000');
-SELECT DOLT_MERGE('feature-branch', '--squash');
+SELECT DOLT_MERGE('feature-branch', '--squash', '--no-commit');
 SQL
 
     run dolt status
@@ -1127,7 +1127,7 @@ CALL DOLT_COMMIT('-a', '-m', 'Insert 3');
 CALL DOLT_CHECKOUT('main');
 INSERT INTO test VALUES (500000);
 CALL DOLT_COMMIT('-a', '-m', 'Insert 500000');
-CALL DOLT_MERGE('feature-branch', '--squash');
+CALL DOLT_MERGE('feature-branch', '--squash', '--no-commit');
 SQL
 
     run dolt status
@@ -1196,7 +1196,7 @@ INSERT INTO test VALUES (500001);
 DELETE FROM test WHERE pk=500001;
 UPDATE test SET pk=60 WHERE pk=500000;
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 60');
-SELECT DOLT_MERGE('feature-branch');
+SELECT DOLT_MERGE('feature-branch', '--no-commit');
 SQL
 
     run dolt status
@@ -1247,7 +1247,7 @@ INSERT INTO test VALUES (500001);
 DELETE FROM test WHERE pk=500001;
 UPDATE test SET pk=60 WHERE pk=500000;
 CALL DOLT_COMMIT('-a', '-m', 'Insert 60');
-CALL DOLT_MERGE('feature-branch');
+CALL DOLT_MERGE('feature-branch', '--no-commit');
 SQL
 
     run dolt status
@@ -1389,7 +1389,7 @@ SQL
     dolt sql -q "alter table test_null add primary key(i)"
     dolt commit -am "main primary key changes"
 
-    run dolt merge b1
+    run dolt merge b1 -m "merge"
     log_status_eq 0
 }
 
@@ -1407,9 +1407,9 @@ SQL
     dolt sql -q "insert into t values (2, 2)"
     dolt commit -am "changes to b2"
     dolt checkout main
-    run dolt merge b1
+    run dolt merge b1 -m "merge b1"
     log_status_eq 0
-    run dolt merge b2
+    run dolt merge b2 -m "merge b2"
     log_status_eq 0
 }
 
@@ -1432,7 +1432,7 @@ SQL
     [[ "$output" =~ "(\`i\` < 10)" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other
+    run dolt merge other -m "merge other"
     log_status_eq 0
 
     run dolt sql -q "select * from t"
@@ -1461,7 +1461,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c1\` CHECK ((\`j\` < 0))" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other
+    run dolt merge other -m "merge other"
     log_status_eq 0
 
     run dolt sql -q "show create table t"
@@ -1488,7 +1488,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c1\` CHECK ((\`i\` < 0))" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other
+    run dolt merge other -m "merge other"
     log_status_eq 1
     [[ "$output" =~ "our check 'c1' and their check 'c0' both reference the same column(s)" ]] || false
 }
@@ -1517,7 +1517,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other
+    run dolt merge other -m "merge other"
     log_status_eq 0
 
     run dolt sql -q "select * from t"
@@ -1551,7 +1551,7 @@ SQL
     [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other
+    run dolt merge other -m "merge other"
     log_status_eq 0
 
     run dolt sql -q "select * from t"
@@ -1581,7 +1581,7 @@ SQL
     [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other
+    run dolt merge other -m "merge other"
     log_status_eq 0
 
     run dolt sql -q "show create table t"
@@ -1609,7 +1609,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other
+    run dolt merge other -m "merge other"
     log_status_eq 1
     [[ "$output" =~ "check 'c' was deleted in theirs but modified in ours" ]] || false
 }
@@ -1636,9 +1636,9 @@ SQL
     dolt commit -am "changes to b2"
 
     dolt checkout main
-    run dolt merge b1
+    run dolt merge b1 -m "merge b1"
     log_status_eq 0
-    run dolt merge b2
+    run dolt merge b2 -m "merge b2"
     log_status_eq 0
 
     run dolt sql -q "show create table t"
@@ -1669,9 +1669,9 @@ SQL
     dolt commit -am "changes to b2"
 
     dolt checkout main
-    run dolt merge b1
+    run dolt merge b1 -m "merge b1" --commit
     log_status_eq 0
-    run dolt merge b2
+    run dolt merge b2 -m "merge b2"
     log_status_eq 1
     [[ "$output" =~ "two checks with the name 'c' but different definitions" ]] || false
 }
@@ -1695,9 +1695,9 @@ SQL
     dolt commit -am "changes to b2"
 
     dolt checkout main
-    run dolt merge b1
+    run dolt merge b1 -m "merge b1"
     log_status_eq 0
-    run dolt merge b2
+    run dolt merge b2 -m "merge b2"
     log_status_eq 1
     [[ "$output" =~ "check 'c' references a column that will be deleted after merge" ]] || false
 }

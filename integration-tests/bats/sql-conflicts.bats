@@ -46,7 +46,7 @@ teardown() {
   dolt add .
   dolt commit -m "changed feature_branch"
   dolt checkout main
-  dolt merge feature_branch
+  dolt merge feature_branch -m "merge"
 
   EXPECTED=$( echo -e "table,num_conflicts\none_pk,1\ntwo_pk,1")
   run dolt sql -r csv -q "SELECT * FROM dolt_conflicts ORDER BY \`table\`"
@@ -108,7 +108,7 @@ SQL
   dolt add .
   dolt commit -m "changed feature_branch"
   dolt checkout main
-  dolt merge feature_branch
+  dolt merge feature_branch -m "merge"
 
   EXPECTED=$( echo -e "table,num_conflicts\none_pk,1\ntwo_pk,1")
   run dolt sql -r csv -q "SELECT * FROM dolt_conflicts ORDER BY \`table\`"
@@ -166,7 +166,7 @@ SQL
   dolt add .
   dolt commit -m "changed feature_branch"
   dolt checkout main
-  dolt merge feature_branch
+  dolt merge feature_branch -m "merge"
 
   EXPECTED=$( echo -e "table,num_conflicts\none_pk,1\ntwo_pk,1")
   run dolt sql -r csv -q "SELECT * FROM dolt_conflicts ORDER BY \`table\`"
@@ -229,7 +229,7 @@ SQL
   dolt add .
   dolt commit -m "changed feature_branch"
   dolt checkout main
-  dolt merge feature_branch
+  dolt merge feature_branch -m "merge"
 
   EXPECTED=$( echo -e "table,num_conflicts\none_pk,5")
   run dolt sql -r csv -q "SELECT * FROM dolt_conflicts"

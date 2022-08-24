@@ -114,7 +114,10 @@ func mergeProllySecondaryIndexes(
 	if err != nil {
 		return nil, err
 	}
-	mergedIndexSet := durable.NewIndexSet(ctx, tm.vrw, tm.ns)
+	mergedIndexSet, err := durable.NewIndexSet(ctx, tm.vrw, tm.ns)
+	if err != nil {
+		return nil, err
+	}
 
 	mergedM := durable.ProllyMapFromIndex(finalRows)
 

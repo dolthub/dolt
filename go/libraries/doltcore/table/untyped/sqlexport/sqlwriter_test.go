@@ -93,7 +93,8 @@ func TestEndToEnd(t *testing.T) {
 			empty, err := types.NewMap(ctx, root.VRW())
 			require.NoError(t, err)
 
-			indexes := durable.NewIndexSet(ctx, root.VRW(), root.NodeStore())
+			indexes, err := durable.NewIndexSet(ctx, root.VRW(), root.NodeStore())
+			require.NoError(t, err)
 			indexes, err = indexes.PutNomsIndex(ctx, dtestutils.IndexName, empty)
 			require.NoError(t, err)
 

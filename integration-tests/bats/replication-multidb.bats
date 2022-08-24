@@ -155,12 +155,12 @@ teardown() {
     start_multi_db_server repo1
     cd ..
 
-    server_query repo1 1 "create table t1 (a int primary key)"
-    multi_query repo1 1 "select dolt_commit('-am', 'cm')"
-    server_query repo2 1 "create table t2 (a int primary key)"
-    multi_query repo2 1 "select dolt_commit('-am', 'cm')"
-    server_query repo3 1 "create table t3 (a int primary key)"
-    multi_query repo3 1 "select dolt_commit('-am', 'cm')"
+    server_query repo1 1 dolt "" "create table t1 (a int primary key)"
+    server_query repo1 1 dolt "" "call dolt_commit('-am', 'cm')"
+    server_query repo2 1 dolt "" "create table t2 (a int primary key)"
+    server_query repo2 1 dolt  "" "call dolt_commit('-am', 'cm')"
+    server_query repo3 1 dolt "" "create table t3 (a int primary key)"
+    server_query repo3 1 dolt "" "call dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
 
@@ -203,7 +203,7 @@ teardown() {
     cd dbs1
     start_multi_db_server repo1
     
-    server_query repo1 1 "show tables" "Tables_in_repo1\nt1"
-    server_query repo2 1 "show tables" "Tables_in_repo2\nt2"
-    server_query repo3 1 "show tables" "Tables_in_repo3\nt3"
+    server_query repo1 1 dolt "" "show tables" "Tables_in_repo1\nt1"
+    server_query repo2 1 dolt "" "show tables" "Tables_in_repo2\nt2"
+    server_query repo3 1 dolt "" "show tables" "Tables_in_repo3\nt3"
 }

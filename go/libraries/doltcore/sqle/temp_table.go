@@ -90,7 +90,10 @@ func NewTempTable(
 	if err != nil {
 		return nil, err
 	}
-	set := durable.NewIndexSet(ctx, vrw, ns)
+	set, err := durable.NewIndexSet(ctx, vrw, ns)
+	if err != nil {
+		return nil, err
+	}
 
 	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, idx, set, nil)
 	if err != nil {
@@ -195,7 +198,11 @@ func (t *TempTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newDoltTablePartitionIter(rows, partitionsFromRows(ctx, rows)...), nil
+	parts, err := partitionsFromRows(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
+	return newDoltTablePartitionIter(rows, parts...), nil
 }
 
 func (t *TempTable) IsTemporary() bool {
@@ -208,7 +215,7 @@ func (t *TempTable) DataLength(ctx *sql.Context) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return idx.Count(), nil
+	return idx.Count()
 }
 
 // AnalyzeTable implements the sql.StatisticsTable interface.
@@ -229,16 +236,20 @@ func (t *TempTable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, e
 	return doltdb.DataCacheKey{}, false, nil
 }
 
+func (t *TempTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	t.lookup = lookup
+	return t.Partitions(ctx)
+}
+
 func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	if t.lookup != nil {
+	if !t.lookup.IsEmpty() {
 		return index.RowIterForIndexLookup(ctx, t, t.lookup, t.pkSch, nil)
 	} else {
 		return partitionRows(ctx, t.table, t.sqlSchema().Schema, nil, partition)
 	}
 }
 
-func (t *TempTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	t.lookup = lookup
+func (t *TempTable) IndexedAccess(idx sql.Index) sql.IndexedTable {
 	return t
 }
 
@@ -406,19 +417,19 @@ func (t *TempTable) StatementBegin(ctx *sql.Context) {
 }
 
 func (t *TempTable) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
-	t.lookup = nil
+	t.lookup = sql.IndexLookup{}
 	return nil
 }
 
 func (t *TempTable) StatementComplete(ctx *sql.Context) error {
-	t.lookup = nil
+	t.lookup = sql.IndexLookup{}
 	return nil
 }
 
 func (t *TempTable) Close(ctx *sql.Context) error {
 	err := t.ed.Close(ctx)
 
-	t.lookup = nil
+	t.lookup = sql.IndexLookup{}
 	return err
 }
 

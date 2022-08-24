@@ -102,17 +102,21 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 	return serial.FinishMessage(b, serial.MergeArtifactsEnd(b), mergeArtifactFileID)
 }
 
-func getArtifactMapKeysAndValues(msg serial.Message) (keys, values ItemArray, cnt uint16) {
-	am := serial.GetRootAsMergeArtifacts(msg, serial.MessagePrefixSz)
+func getArtifactMapKeysAndValues(msg serial.Message) (keys, values ItemArray, cnt uint16, err error) {
+	var am serial.MergeArtifacts
+	err = serial.InitMergeArtifactsRoot(&am, msg, serial.MessagePrefixSz)
+	if err != nil {
+		return
+	}
 
 	keys.Items = am.KeyItemsBytes()
-	keys.Offs = getMergeArtifactKeyOffsets(am)
+	keys.Offs = getMergeArtifactKeyOffsets(&am)
 	cnt = uint16(keys.Len())
 
 	vv := am.ValueItemsBytes()
 	if vv != nil {
 		values.Items = vv
-		values.Offs = getMergeArtifactValueOffsets(am)
+		values.Offs = getMergeArtifactValueOffsets(&am)
 	} else {
 		values.Items = am.AddressArrayBytes()
 		values.Offs = offsetsForAddressArray(values.Items)
@@ -122,7 +126,11 @@ func getArtifactMapKeysAndValues(msg serial.Message) (keys, values ItemArray, cn
 }
 
 func walkMergeArtifactAddresses(ctx context.Context, msg serial.Message, cb func(ctx context.Context, addr hash.Hash) error) error {
-	ma := serial.GetRootAsMergeArtifacts(msg, serial.MessagePrefixSz)
+	var ma serial.MergeArtifacts
+	err := serial.InitMergeArtifactsRoot(&ma, msg, serial.MessagePrefixSz)
+	if err != nil {
+		return err
+	}
 	arr := ma.AddressArrayBytes()
 	for i := 0; i < len(arr)/hash.ByteLen; i++ {
 		addr := hash.New(arr[i*addrSize : (i+1)*addrSize])
@@ -144,29 +152,49 @@ func walkMergeArtifactAddresses(ctx context.Context, msg serial.Message, cb func
 	return nil
 }
 
-func getMergeArtifactCount(msg serial.Message) uint16 {
-	ma := serial.GetRootAsMergeArtifacts(msg, serial.MessagePrefixSz)
+func getMergeArtifactCount(msg serial.Message) (uint16, error) {
+	var ma serial.MergeArtifacts
+	err := serial.InitMergeArtifactsRoot(&ma, msg, serial.MessagePrefixSz)
+	if err != nil {
+		return 0, err
+	}
 	if ma.KeyItemsLength() == 0 {
-		return 0
+		return 0, nil
 	}
 	// zeroth offset ommitted from array
-	return uint16(ma.KeyOffsetsLength() + 1)
+	return uint16(ma.KeyOffsetsLength() + 1), nil
 }
 
-func getMergeArtifactTreeLevel(msg serial.Message) int {
-	ma := serial.GetRootAsMergeArtifacts(msg, serial.MessagePrefixSz)
-	return int(ma.TreeLevel())
+func getMergeArtifactTreeLevel(msg serial.Message) (int, error) {
+	var ma serial.MergeArtifacts
+	err := serial.InitMergeArtifactsRoot(&ma, msg, serial.MessagePrefixSz)
+	if err != nil {
+		return 0, err
+	}
+	return int(ma.TreeLevel()), nil
 }
 
-func getMergeArtifactTreeCount(msg serial.Message) int {
-	ma := serial.GetRootAsMergeArtifacts(msg, serial.MessagePrefixSz)
-	return int(ma.TreeCount())
+func getMergeArtifactTreeCount(msg serial.Message) (int, error) {
+	var ma serial.MergeArtifacts
+	err := serial.InitMergeArtifactsRoot(&ma, msg, serial.MessagePrefixSz)
+	if err != nil {
+		return 0, err
+	}
+	return int(ma.TreeCount()), nil
 }
 
-func getMergeArtifactSubtrees(msg serial.Message) []uint64 {
-	counts := make([]uint64, getMergeArtifactCount(msg))
-	ma := serial.GetRootAsMergeArtifacts(msg, serial.MessagePrefixSz)
-	return decodeVarints(ma.SubtreeCountsBytes(), counts)
+func getMergeArtifactSubtrees(msg serial.Message) ([]uint64, error) {
+	sz, err := getMergeArtifactCount(msg)
+	if err != nil {
+		return nil, err
+	}
+	counts := make([]uint64, sz)
+	var ma serial.MergeArtifacts
+	err = serial.InitMergeArtifactsRoot(&ma, msg, serial.MessagePrefixSz)
+	if err != nil {
+		return nil, err
+	}
+	return decodeVarints(ma.SubtreeCountsBytes(), counts), nil
 }
 
 func getMergeArtifactKeyOffsets(ma *serial.MergeArtifacts) []byte {
