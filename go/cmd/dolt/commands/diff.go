@@ -413,7 +413,7 @@ func diffUserTable(
 
 	err := dw.BeginTable(ctx, td)
 	if err != nil {
-		return nil
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	fromSch, toSch, err := td.GetSchemas(ctx)
@@ -986,7 +986,7 @@ func newJsonDiffWriter(wr io.WriteCloser) (*jsonDiffWriter, error) {
 	}, nil
 }
 
-const jsonTableHeader = `{"table":{name: "%s","schema_diff":`
+const jsonTableHeader = `{"name":"%s","schema_diff":`
 const jsonTableFooter = `]}`
 
 func (j *jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) error {
@@ -996,18 +996,13 @@ func (j *jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) err
 			return err
 		}
 	} else {
-		err := j.rowDiffWriter.Close(ctx)
-		if err != nil {
-			return err
-		}
-
-		err = iohelp.WriteAll(j.wr, []byte(`},`))
+		err := iohelp.WriteAll(j.wr, []byte(`},`))
 		if err != nil {
 			return err
 		}
 	}
 
-	err := iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(jsonTableHeader, td.ToTable)))
+	err := iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(jsonTableHeader, td.ToName)))
 	if err != nil {
 		return err
 	}
@@ -1040,16 +1035,21 @@ func (j *jsonDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.Roo
 }
 
 func (j *jsonDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
+	// close off the schema diff block, start the data block
+	err := iohelp.WriteAll(j.wr, []byte(`],"data_diff":[`))
+	if err != nil {
+		return nil, err
+	}
+	
 	targetSch := td.ToSch
 	if targetSch == nil {
 		targetSch = td.FromSch
 	}
 
-	var err error
 	j.rowDiffWriter, err = json.NewJsonDiffWriter(iohelp.NopWrCloser(cli.CliOut), td.ToName, targetSch)
 	return j.rowDiffWriter, err
 }
 
 func (j *jsonDiffWriter) Close(ctx context.Context) error {
-	return iohelp.WriteAll(j.wr, []byte(`}`))
+	return iohelp.WriteAll(j.wr, []byte(`}]}`))
 }

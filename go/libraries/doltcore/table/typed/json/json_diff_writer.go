@@ -16,6 +16,7 @@ package json
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -126,7 +127,7 @@ func (j *SchemaDiffWriter) WriteSchemaDiff(ctx context.Context, schemaDiffStatem
 		}
 	}
 
-	return iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(`"%s"`, schemaDiffStatement)))
+	return iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(`"%s"`, jsonEscape(schemaDiffStatement))))
 }
 
 func (j *SchemaDiffWriter) Close(ctx context.Context) error {
@@ -136,4 +137,13 @@ func (j *SchemaDiffWriter) Close(ctx context.Context) error {
 	}
 
 	return j.wr.Close()
+}
+
+func jsonEscape(s string) string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		panic(err)
+	}
+	// Trim the beginning and trailing " character
+	return string(b[1:len(b)-1])
 }
