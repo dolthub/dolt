@@ -123,7 +123,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 
 	sch, err = tbl.GetSchema(ctx)
 	require.NoError(t, err)
-	rows, err := tbl.GetNomsRowData(ctx)
+	rows, err := tbl.GetRowData(ctx)
 	require.NoError(t, err)
 	indexes, err := tbl.GetIndexSet(ctx)
 	require.NoError(t, err)
@@ -131,7 +131,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	require.NoError(t, err)
 }
 
-func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema, rows types.Map, indexData durable.IndexSet, tableName string, autoVal types.Value) error {
+func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema, rows durable.Index, indexData durable.IndexSet, tableName string, autoVal types.Value) error {
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: %v", doltdb.ErrNomsIO, err)
@@ -139,7 +139,7 @@ func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
 	ns := dEnv.DoltDB.NodeStore()
-	tbl, err := doltdb.NewNomsTable(ctx, vrw, ns, sch, rows, indexData, autoVal)
+	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, rows, indexData, autoVal)
 	if err != nil {
 		return err
 	}
