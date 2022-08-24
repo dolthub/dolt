@@ -30,13 +30,9 @@ type JsonDiffWriter struct {
 	rowWriter   *RowWriter
 	wr          io.WriteCloser
 	rowsWritten int
-	schemaDiffsWritten int
 }
 
-const jsonTableHeader = `{"table":{name: "%s","schema_diff":[`
-const jsonTableFooter = `]}`
-
-var _ diff.TableDiffWriter = (*JsonDiffWriter)(nil)
+var _ diff.SqlRowDiffWriter = (*JsonDiffWriter)(nil)
 
 func NewJsonDiffWriter(wr io.WriteCloser, tableName string, outSch schema.Schema) (*JsonDiffWriter, error) {
 	// leading diff type column with empty name
@@ -46,11 +42,6 @@ func NewJsonDiffWriter(wr io.WriteCloser, tableName string, outSch schema.Schema
 	newCols = newCols.AppendColl(cols)
 
 	newSchema, err := schema.SchemaFromCols(newCols)
-	if err != nil {
-		return nil, err
-	}
-
-	err = iohelp.WriteAll(wr, []byte(fmt.Sprintf(jsonTableHeader, tableName)))
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +94,43 @@ func (j *JsonDiffWriter) Close(ctx context.Context) error {
 		return err
 	}
 
-	err = iohelp.WriteAll(j.wr, []byte(jsonTableFooter))
+	return j.wr.Close()
+}
+
+type SchemaDiffWriter struct {
+	wr          io.WriteCloser
+	schemaStmtsWritten int
+}
+
+var _ diff.SchemaDiffWriter = (*SchemaDiffWriter)(nil)
+
+const jsonSchemaHeader = `[`
+const jsonSchemaFooter = `]`
+
+func NewSchemaDiffWriter(wr io.WriteCloser) (*SchemaDiffWriter, error) {
+	err := iohelp.WriteAll(wr, []byte(jsonSchemaHeader))
+	if err != nil {
+		return nil, err
+	}
+
+	return &SchemaDiffWriter{
+		wr: wr,
+	}, nil
+}
+
+func (j *SchemaDiffWriter) WriteSchemaDiff(ctx context.Context, schemaDiffStatement string) error {
+	if j.schemaStmtsWritten > 0 {
+		err := iohelp.WriteAll(j.wr, []byte(","))
+		if err != nil {
+			return err
+		}
+	}
+
+	return iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(`"%s"`, schemaDiffStatement)))
+}
+
+func (j *SchemaDiffWriter) Close(ctx context.Context) error {
+	err := iohelp.WriteAll(j.wr, []byte(jsonSchemaFooter))
 	if err != nil {
 		return err
 	}
