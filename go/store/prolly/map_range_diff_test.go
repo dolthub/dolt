@@ -46,8 +46,8 @@ func TestMapRangeDiff(t *testing.T) {
 
 			kd := prollyMap.(Map).keyDesc
 
-			t.Run("OpenStartRange", func(t *testing.T) {
-				rngTest := makeRandomOpenStartRangeTest(kd, tuples)
+			t.Run("OpenStopRange", func(t *testing.T) {
+				rngTest := makeRandomOpenStopRangeTest(kd, tuples)
 				runDiffTestsWithRange(t, s, prollyMap, tuples, rngTest)
 			})
 
@@ -256,7 +256,7 @@ type rangeDiffTest struct {
 	rng    Range
 }
 
-func makeRandomOpenStartRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) rangeDiffTest {
+func makeRandomOpenStopRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) rangeDiffTest {
 	i := rand.Intn(len(tuples))
 	j := rand.Intn(len(tuples))
 	if j < i {
@@ -265,7 +265,7 @@ func makeRandomOpenStartRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) range
 	start := tuples[i][0]
 	stop := tuples[j][0]
 
-	return rangeDiffTest{tuples: tuples, rng: OpenStartRange(start, stop, kd)}
+	return rangeDiffTest{tuples: tuples, rng: OpenStopRange(start, stop, kd)}
 }
 
 func makeRandomGreaterOrEqualRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) rangeDiffTest {
