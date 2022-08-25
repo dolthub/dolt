@@ -367,7 +367,6 @@ func diffUserTable(
 		return nil
 	}
 
-	tblName := td.ToName
 	fromTable := td.FromTable
 	toTable := td.ToTable
 
@@ -397,22 +396,15 @@ func diffUserTable(
 		}
 	}
 
-	if dArgs.diffParts&DataOnlyDiff != 0 {
-		if td.IsDrop() && dArgs.diffOutput == SQLDiffOutput {
-			return nil // don't output DELETE FROM statements after DROP TABLE
-		} else if td.IsAdd() {
-			fromSch = toSch
-		}
+	if td.IsDrop() && dArgs.diffOutput == SQLDiffOutput {
+		return nil // don't output DELETE FROM statements after DROP TABLE
+	} else if td.IsAdd() {
+		fromSch = toSch
+	}
 
-		if !schema.ArePrimaryKeySetsDiffable(td.Format(), fromSch, toSch) {
-			cli.PrintErrf("Primary key sets differ between revisions for table %s, skipping data diff\n", tblName)
-			return nil
-		}
-
-		verr := diffRows(ctx, engine, td, dArgs, dw)
-		if verr != nil {
-			return verr
-		}
+	verr := diffRows(ctx, engine, td, dArgs, dw)
+	if verr != nil {
+		return verr
 	}
 
 	return nil
@@ -533,35 +525,7 @@ func diffRows(
 ) errhand.VerboseError {
 	from, to := dArgs.fromRef, dArgs.toRef
 
-	tableName := td.ToName
-	if len(tableName) == 0 {
-		tableName = td.FromName
-	}
-
-	columns := getColumnNamesString(td.FromSch, td.ToSch)
-	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", tableName, from, to)
-
-	if len(dArgs.where) > 0 {
-		query += " where " + dArgs.where
-	}
-
-	if dArgs.limit >= 0 {
-		query += " limit " + strconv.Itoa(dArgs.limit)
-	}
-
-	sqlCtx, err := engine.NewLocalSqlContext(ctx, se)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	sch, rowIter, err := se.Query(sqlCtx, query)
-	if sql.ErrSyntaxError.Is(err) {
-		return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
-	} else if err != nil {
-		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
-	}
-
-	defer rowIter.Close(sqlCtx)
+	diffable := schema.ArePrimaryKeySetsDiffable(td.Format(), td.FromSch, td.ToSch)
 
 	var toSch, fromSch sql.Schema
 	if td.FromSch != nil {
@@ -591,10 +555,62 @@ func diffRows(
 		return nil
 	}
 
+	// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
 	rowWriter, err := dw.RowWriter(ctx, td, unionSch)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
+	// can't diff
+	if !diffable {
+		// TODO: this messes up some structured output if the user didn't redirect it
+		cli.PrintErrf("Primary key sets differ between revisions for table %s, skipping data diff\n", td.ToName)
+		err := rowWriter.Close(ctx)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		return nil
+	}
+
+	// no data diff requested
+	if dArgs.diffParts&DataOnlyDiff == 0 {
+		err := rowWriter.Close(ctx)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		return nil
+	}
+
+	// do the data diff
+	tableName := td.ToName
+	if len(tableName) == 0 {
+		tableName = td.FromName
+	}
+
+	columns := getColumnNamesString(td.FromSch, td.ToSch)
+	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", tableName, from, to)
+
+	if len(dArgs.where) > 0 {
+		query += " where " + dArgs.where
+	}
+
+	if dArgs.limit >= 0 {
+		query += " limit " + strconv.Itoa(dArgs.limit)
+	}
+
+	sqlCtx, err := engine.NewLocalSqlContext(ctx, se)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	sch, rowIter, err := se.Query(sqlCtx, query)
+	if sql.ErrSyntaxError.Is(err) {
+		return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
+	} else if err != nil {
+		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
+	}
+
+	defer rowIter.Close(sqlCtx)
 
 	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, rowWriter)
 	if err != nil {
