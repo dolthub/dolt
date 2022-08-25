@@ -253,6 +253,7 @@ teardown() {
 @test "init: create a database when current working directory does not have a database yet" {
     # it creates old format even though there is new format db exists in the current directory.
     set_dolt_user "baz", "baz@bash.com"
+    orig_bin_format=$DOLT_DEFAULT_BIN_FORMAT
 
     mkdir new_format && cd new_format
     run dolt init --new-format
@@ -264,6 +265,10 @@ teardown() {
     [[ $output =~ "NEW ( __DOLT__ )" ]] || false
 
     cd ..
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ $output =~ "no valid database in this directory" ]] || false
+
     dolt sql -q "create database test"
     run ls
     [[ $output =~ "test" ]] || false
@@ -271,8 +276,7 @@ teardown() {
     cd test
     run dolt version
     [ "$status" -eq 0 ]
-    [[ $output =~ "OLD ( __LD_1__ )" ]] || false
-    [[ ! $output =~ "NEW ( __DOLT__ )" ]] || false
+    [[ "$output" =~ "$orig_bin_format" ]] || false
 }
 
 assert_valid_repository () {
