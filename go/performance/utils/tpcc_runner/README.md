@@ -24,7 +24,9 @@ Configuration:
 
 `ScriptDir`: The directory of the TPCC testing scripts
 
-`ScaleFactors`: The number of warehouse to be generated in the test case. 
+`ScaleFactors`: The number of warehouse to be generated in the test case.
+
+`NomsBinFormat`: The NomsBinFormat to use for this benchmark.
 
 Note that this configuration is still incomplete for the amount of the variable TPCC varies. This intentional as we 
 want expose small amounts of independent variables until Dolt gets more robust. See `config.go` to get a breakdown of all the
