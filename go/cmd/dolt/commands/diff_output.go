@@ -172,6 +172,8 @@ func pluralize(singular, plural string, n uint64) string {
 
 type tabularDiffWriter struct{}
 
+var _ diffWriter = (*tabularDiffWriter)(nil)
+
 func (t tabularDiffWriter) Close(ctx context.Context) error {
 	return nil
 }
@@ -245,6 +247,8 @@ func (t tabularDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, un
 
 type sqlDiffWriter struct{}
 
+var _ diffWriter = (*tabularDiffWriter)(nil)
+
 func (s sqlDiffWriter) Close(ctx context.Context) error {
 	return nil
 }
@@ -278,6 +282,8 @@ type jsonDiffWriter struct {
 	schemaDiffsWritten int
 	tablesWritten      int
 }
+
+var _ diffWriter = (*tabularDiffWriter)(nil)
 
 func newJsonDiffWriter(wr io.WriteCloser) (*jsonDiffWriter, error) {
 	return &jsonDiffWriter{
