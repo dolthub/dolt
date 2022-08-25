@@ -102,8 +102,9 @@ func (ns nodeStore) ReadMany(ctx context.Context, refs hash.HashSlice) ([]Node, 
 	mu := new(sync.Mutex)
 	err := ns.store.GetMany(ctx, gets, func(ctx context.Context, chunk *chunks.Chunk) {
 		mu.Lock()
-		defer mu.Unlock()
 		found[chunk.Hash()] = *chunk
+		mu.Unlock()
+		ns.cache.insert(*chunk)
 	})
 	if err != nil {
 		return nil, err
