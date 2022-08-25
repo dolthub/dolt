@@ -526,6 +526,7 @@ func diffRows(
 	from, to := dArgs.fromRef, dArgs.toRef
 
 	diffable := schema.ArePrimaryKeySetsDiffable(td.Format(), td.FromSch, td.ToSch)
+	canSqlDiff := !(td.ToSch == nil || (td.FromSch != nil && !schema.SchemasAreEqual(td.FromSch, td.ToSch)))
 
 	var toSch, fromSch sql.Schema
 	if td.FromSch != nil {
@@ -546,15 +547,6 @@ func diffRows(
 
 	unionSch := unionSchemas(fromSch, toSch)
 
-	// In some cases we can't print SQL output diffs
-	if dArgs.diffOutput == SQLDiffOutput &&
-		(td.ToSch == nil ||
-			(td.FromSch != nil && !schema.SchemasAreEqual(td.FromSch, td.ToSch))) {
-		// TODO: this is overly broad, we can absolutely do better
-		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff\n")
-		return nil
-	}
-
 	// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
 	rowWriter, err := dw.RowWriter(ctx, td, unionSch)
 	if err != nil {
@@ -565,6 +557,14 @@ func diffRows(
 	if !diffable {
 		// TODO: this messes up some structured output if the user didn't redirect it
 		cli.PrintErrf("Primary key sets differ between revisions for table %s, skipping data diff\n", td.ToName)
+		err := rowWriter.Close(ctx)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		return nil
+	} else if dArgs.diffOutput == SQLDiffOutput && !canSqlDiff {
+		// TODO: this is overly broad, we can absolutely do better
+		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff\n")
 		err := rowWriter.Close(ctx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
