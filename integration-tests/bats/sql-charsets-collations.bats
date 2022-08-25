@@ -63,7 +63,7 @@ teardown() {
     [[ $output =~ 'Bär' ]] || false
 }
 
-@test "sql-charsets-collations: Modify a charset on a column" {
+@test "sql-charsets-collations: modify a charset on a column" {
     dolt sql -q "create table german1 (c char(10) CHARACTER SET latin1 COLLATE latin1_german1_ci)"
     dolt sql -q	"insert into german1 values ('Bar'), ('Bär')"
     dolt sql -q "alter table german1 modify column c char(10) CHARACTER SET utf8mb4"
@@ -75,7 +75,7 @@ teardown() {
     [[ ! $output =~ 'latin1' ]] || false
 }
 
-@test "sql-charsets-collations: Modify a collation on a column" {
+@test "sql-charsets-collations: modify a collation on a column" {
     dolt sql -q "create table german1 (c char(10) CHARACTER SET latin1 COLLATE latin1_german1_ci)"
     dolt sql -q	"insert into german1 values ('Bar'), ('Bär')"
     dolt sql -q "alter table german1 modify column c char(10) COLLATE latin1_german2_ci"
@@ -89,4 +89,30 @@ teardown() {
     [ $status -eq 0 ]
     [[ ! $output =~ 'Bar' ]] || false
     [[ $output =~ 'Bär' ]] || false
+}
+
+@test "sql-charsets-collations: collations respected in regexes" {
+    # Simple case insensitive matches in utf8mb4 do the right thing
+    dolt sql -q "create table t (c char(10) character set utf8mb4 collate utf8mb4_0900_ai_ci)"
+    dolt sql -q "insert into t values ('A'), ('a')"
+    run dolt sql -q "select c from t where c like '%A%'"
+    [ $status -eq 0 ]
+    [[ $output =~ "a" ]] || false
+    [[ $output =~ "A" ]] || false
+
+    dolt sql -q "alter table t modify column c char(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin"
+    run	dolt sql -q "select c from t where c like '%A%'"
+    [[ ! $output =~ "a" ]] || false
+    [[ $output =~ "A" ]] || false
+
+    dolt sql -q "drop table t"
+    
+    # Outside of utf8, no such luck
+    dolt sql -q "create table t (c varchar(100) character set utf8mb4 collate utf8mb4_unicode_ci)"
+    dolt sql -q "insert into t values ('schön'), ('schon')"
+    run	dolt sql -q "select c from t where c like '%o%'"
+    [ $status -eq 0 ]
+    [[ $output =~ "schon" ]] || false
+    skip "Regexes in collations not fully supported"
+    [[ $output =~ "schön" ]] || false
 }
