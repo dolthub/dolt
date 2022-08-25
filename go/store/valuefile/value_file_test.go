@@ -67,8 +67,8 @@ func TestReadWriteValueFile(t *testing.T) {
 }
 
 func TestRoundtripProllyMapIntoValueFile(t *testing.T) {
-	const numMaps = 1
-	const numMapEntries = 1
+	const numMaps = 5
+	const numMapEntries = 1000
 
 	ctx := context.Background()
 	store, err := NewFileValueStore(types.Format_DOLT)
