@@ -271,9 +271,11 @@ func (s sqlDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionS
 }
 
 type jsonDiffWriter struct {
-	wr               io.WriteCloser
-	schemaDiffWriter diff.SchemaDiffWriter
-	rowDiffWriter    diff.SqlRowDiffWriter
+	wr                 io.WriteCloser
+	schemaDiffWriter   diff.SchemaDiffWriter
+	rowDiffWriter      diff.SqlRowDiffWriter
+	schemaDiffsWritten int
+	tablesWritten      int
 }
 
 func newJsonDiffWriter(wr io.WriteCloser) (*jsonDiffWriter, error) {
@@ -282,8 +284,8 @@ func newJsonDiffWriter(wr io.WriteCloser) (*jsonDiffWriter, error) {
 	}, nil
 }
 
-const jsonTableHeader = `{"name":"%s","schema_diff":`
-const jsonTableFooter = `}]}`
+const jsonDiffTableHeader = `{"name":"%s","schema_diff":`
+const jsonDiffFooter = `}]}`
 
 func (j *jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) error {
 	if j.schemaDiffWriter == nil {
@@ -298,14 +300,14 @@ func (j *jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) err
 		}
 	}
 
-	err := iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(jsonTableHeader, td.ToName)))
+	err := iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(jsonDiffTableHeader, td.ToName)))
 	if err != nil {
 		return err
 	}
 
+	j.tablesWritten++
 
 	j.schemaDiffWriter, err = json.NewSchemaDiffWriter(iohelp.NopWrCloser(j.wr))
-
 	return err
 }
 
@@ -347,5 +349,18 @@ func (j *jsonDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unio
 }
 
 func (j *jsonDiffWriter) Close(ctx context.Context) error {
-	return iohelp.WriteAll(j.wr, []byte(jsonTableFooter))
+	if j.tablesWritten > 0 {
+		err := iohelp.WriteLine(j.wr, jsonDiffFooter)
+		if err != nil {
+			return err
+		}
+	} else {
+		err := iohelp.WriteLine(j.wr, "")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Writer has already been closed here during row iteration, no need to close it here
+	return nil
 }

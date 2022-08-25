@@ -141,7 +141,7 @@ func (j *JsonDiffWriter) Close(ctx context.Context) error {
 }
 
 type SchemaDiffWriter struct {
-	wr          io.WriteCloser
+	wr                 io.WriteCloser
 	schemaStmtsWritten int
 }
 
@@ -168,6 +168,8 @@ func (j *SchemaDiffWriter) WriteSchemaDiff(ctx context.Context, schemaDiffStatem
 			return err
 		}
 	}
+
+	j.schemaStmtsWritten++
 
 	return iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(`"%s"`, jsonEscape(schemaDiffStatement))))
 }
