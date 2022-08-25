@@ -253,7 +253,14 @@ teardown() {
 @test "init: create a database when current working directory does not have a database yet" {
     # it creates old format even though there is new format db exists in the current directory.
     set_dolt_user "baz", "baz@bash.com"
-    orig_bin_format=$DOLT_DEFAULT_BIN_FORMAT
+
+    # Default format is OLD (__LD_1__) when DOLT_DEFAULT_BIN_FORMAT is undefined
+    if [ "$DOLT_DEFAULT_BIN_FORMAT" = "" ]
+    then
+        orig_bin_format="__LD_1__"
+    else
+        orig_bin_format=$DOLT_DEFAULT_BIN_FORMAT
+    fi
 
     mkdir new_format && cd new_format
     run dolt init --new-format
