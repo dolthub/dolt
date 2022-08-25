@@ -20,8 +20,6 @@ import (
 	"io"
 
 	textdiff "github.com/andreyvit/diff"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dustin/go-humanize"
 	"github.com/fatih/color"
@@ -30,7 +28,9 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
