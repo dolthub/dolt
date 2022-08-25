@@ -51,6 +51,16 @@ service ChunkStoreService {
   rpc AddTableFiles(AddTableFilesRequest) returns (AddTableFilesResponse);
 }
 
+// RepoId is how repositories are represented on dolthub, for example
+// `dolthub/us-housing-prices-v2` has org = dolthub, repo_name =
+// us-housing-prices-v2.
+//
+// All methods of ChunkStoreService targeting a repository take a RepoId. Many
+// will also take a `repo_token`, which can be provided in addition to a
+// RepoId. `repo_token`s can be returned from repository-accessing RPCs on
+// ChunkStoreService, and providing them instead of RepoId for future calls to
+// ChunkStoreService can be more efficient than providing RepoId itself.
+// `repo_token`s are fully opaque to the client.
 message RepoId {
   string org = 1;
   string repo_name = 2;
@@ -59,10 +69,14 @@ message RepoId {
 message HasChunksRequest {
   RepoId repo_id = 1;
   repeated bytes hashes = 2;
+
+  string repo_token = 3;
 }
 
 message HasChunksResponse {
   repeated int32 absent = 1;
+
+  string repo_token = 2;
 }
 
 message HttpGetChunk {
@@ -104,10 +118,14 @@ message UploadLoc {
 message GetDownloadLocsRequest {
   RepoId repo_id = 1;
   repeated bytes chunk_hashes = 2;
+
+  string repo_token = 3;
 }
 
 message GetDownloadLocsResponse {
   repeated DownloadLoc locs = 1;
+
+  string repo_token = 2;
 }
 
 message TableFileDetails {
@@ -120,25 +138,35 @@ message GetUploadLocsRequest {
   RepoId repo_id = 1;
   repeated bytes table_file_hashes = 2 [deprecated = true];
   repeated TableFileDetails table_file_details = 3;
+
+  string repo_token = 4;
 }
 
 message GetUploadLocsResponse {
   repeated UploadLoc locs = 1;
+
+  string repo_token = 2;
 }
 
 message RebaseRequest {
   RepoId repo_id = 1;
+  string repo_token = 2;
 }
 
 message RebaseResponse {
+  string repo_token = 1;
 }
 
 message RootRequest {
   RepoId repo_id = 1;
+
+  string repo_token = 2;
 }
 
 message RootResponse {
   bytes root_hash = 1;
+
+  string repo_token = 2;
 }
 
 message ChunkTableInfo {
@@ -161,6 +189,8 @@ message CommitResponse {
 message GetRepoMetadataRequest {
   RepoId repo_id = 1;
   ClientRepoFormat client_repo_format = 14;
+
+  string repo_token = 2;
 }
 
 message GetRepoMetadataResponse {
@@ -173,6 +203,8 @@ message GetRepoMetadataResponse {
   // Approximate number of bytes required for storage of all
   // currently-referenced repository table files.
   uint64 storage_size = 3;
+
+  string repo_token = 4;
 }
 
 message ClientRepoFormat {
@@ -183,6 +215,8 @@ message ClientRepoFormat {
 message ListTableFilesRequest  {
   RepoId repo_id = 1;
   bool appendix_only = 2 [deprecated = true];
+
+  string repo_token = 3;
 }
 
 message TableFileInfo {
@@ -196,17 +230,23 @@ message TableFileInfo {
 message RefreshTableFileUrlRequest {
   RepoId repo_id = 1;
   string file_id = 2;
+
+  string repo_token = 3;
 }
 
 message RefreshTableFileUrlResponse {
   string url = 1;
   google.protobuf.Timestamp refresh_after = 2;
+
+  string repo_token = 3;
 }
 
 message ListTableFilesResponse {
   bytes root_hash = 1;
   repeated TableFileInfo table_file_info = 2;
   repeated TableFileInfo appendix_table_file_info = 3;
+
+  string repo_token = 4;
 }
 
 enum ManifestAppendixOption {
@@ -226,8 +266,11 @@ message AddTableFilesRequest {
   // are removed from the manifest specs. If `append_option` is `APPEND`, then the
   // supplied table files are added to the appendix and to specs.
   ManifestAppendixOption appendix_option = 4;
+
+  string repo_token = 5;
 }
 
 message AddTableFilesResponse {
   bool success = 1;
+  string repo_token = 2;
 }
