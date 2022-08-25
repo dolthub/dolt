@@ -253,14 +253,20 @@ func (sink *BufferedFileByteSink) backgroundWrite() {
 }
 
 func (sink *BufferedFileByteSink) finish() error {
-	toWrite := len(sink.currentBlock)
-	if toWrite > 0 {
-		sink.writeCh <- sink.currentBlock[:toWrite]
+	// |finish()| is not thread-safe. We just use writeCh == nil as a
+	// sentinel to mean we've been called again from Reader() as part of a
+	// retry or something.
+	if sink.writeCh != nil {
+		toWrite := len(sink.currentBlock)
+		if toWrite > 0 {
+			sink.writeCh <- sink.currentBlock[:toWrite]
+		}
+
+		close(sink.writeCh)
+		sink.wg.Wait()
+
+		sink.writeCh = nil
 	}
-
-	close(sink.writeCh)
-	sink.wg.Wait()
-
 	return sink.ae.Get()
 }
 
