@@ -303,12 +303,11 @@ function count_string {
 }
 
 @test "json-diff: works with spaces in column names" {
-   dolt sql -q 'CREATE table t (pk int, `type of food` varchar(100));'
+   dolt sql -q 'CREATE table t (pk int primary key, `type of food` varchar(100));'
    dolt sql -q "INSERT INTO t VALUES (1, 'ramen');"
 
-
-       EXPECTED_TABLE1=$(cat <<'EOF'
-{"tables":[{"name":"t","schema_diff":["CREATE TABLE `t` (\n  `pk` int,\n  `type of food` varchar(100)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"],"data_diff":[{"from_row":{},"to_row":{"pk":1,"type of food":"ramen"}}]},{"name":"test","schema_diff":["CREATE TABLE `test` (\n  `pk` bigint NOT NULL COMMENT 'tag:0',\n  `c1` bigint COMMENT 'tag:1',\n  `c2` bigint COMMENT 'tag:2',\n  `c3` bigint COMMENT 'tag:3',\n  `c4` bigint COMMENT 'tag:4',\n  `c5` bigint COMMENT 'tag:5',\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"],"data_diff":[]}]}
+   EXPECTED=$(cat <<'EOF'
+{"tables":[{"name":"t","schema_diff":["CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `type of food` varchar(100),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"],"data_diff":[{"from_row":{},"to_row":{"pk":1,"type of food":"ramen"}}]},{"name":"test","schema_diff":["CREATE TABLE `test` (\n  `pk` bigint NOT NULL COMMENT 'tag:0',\n  `c1` bigint COMMENT 'tag:1',\n  `c2` bigint COMMENT 'tag:2',\n  `c3` bigint COMMENT 'tag:3',\n  `c4` bigint COMMENT 'tag:4',\n  `c5` bigint COMMENT 'tag:5',\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"],"data_diff":[]}]}
 EOF
 )
    
