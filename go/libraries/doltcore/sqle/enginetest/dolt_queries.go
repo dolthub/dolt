@@ -179,6 +179,81 @@ var DescribeTableAsOfScriptTest = queries.ScriptTest{
 
 var DoltRevisionDbScripts = []queries.ScriptTest{
 	{
+		Name: "database revision specs: Ancestor references",
+		SetUpScript: []string{
+			"create table t01 (pk int primary key, c1 int)",
+			"call dolt_commit('-am', 'creating table t01 on main');",
+			"call dolt_branch('branch1');",
+			"insert into t01 values (1, 1), (2, 2);",
+			"call dolt_commit('-am', 'adding rows to table t01 on main');",
+			"insert into t01 values (3, 3);",
+			"call dolt_commit('-am', 'adding another row to table t01 on main');",
+			"call dolt_tag('tag1');",
+			"call dolt_checkout('branch1');",
+			"insert into t01 values (100, 100), (200, 200);",
+			"call dolt_commit('-am', 'inserting rows in t01 on branch1');",
+			"insert into t01 values (1000, 1000);",
+			"call dolt_commit('-am', 'inserting another row in t01 on branch1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+			},
+			{
+				Query:    "use `mydb/tag1~`;",
+				Expected: []sql.Row{},
+			},
+			{
+				// The database name should be the resolved commit, not the revision spec we started with.
+				// We can't easily match the exact commit in these tests, so match against a commit hash pattern.
+				Query:    "select database() regexp '^mydb/[0-9a-v]{32}$', database() = 'mydb/tag1~';",
+				Expected: []sql.Row{{true, false}},
+			},
+			{
+				Query:    "select * from t01;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "select * from `mydb/tag1^`.t01;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				// Only merge commits are valid for ^2 ancestor spec
+				Query:          "select * from `mydb/tag1^2`.t01;",
+				ExpectedErrStr: "invalid ancestor spec",
+			},
+			{
+				Query:    "select * from `mydb/tag1~1`.t01;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "select * from `mydb/tag1~2`.t01;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:       "select * from `mydb/tag1~3`.t01;",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query:    "select * from `mydb/branch1~`.t01;",
+				Expected: []sql.Row{{100, 100}, {200, 200}},
+			},
+			{
+				Query:    "select * from `mydb/branch1^`.t01;",
+				Expected: []sql.Row{{100, 100}, {200, 200}},
+			},
+			{
+				Query:    "select * from `mydb/branch1~2`.t01;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:       "select * from `mydb/branch1~3`.t01;",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+		},
+	},
+	{
 		Name: "database revision specs: tag-qualified revision spec",
 		SetUpScript: []string{
 			"create table t01 (pk int primary key, c1 int)",
