@@ -107,7 +107,7 @@ teardown() {
 
     dolt sql -q "drop table t"
     
-    # Outside of utf8, no such luck
+    # Outside of ascii, no such luck
     dolt sql -q "create table t (c varchar(100) character set utf8mb4 collate utf8mb4_unicode_ci)"
     dolt sql -q "insert into t values ('schön'), ('schon')"
     run	dolt sql -q "select c from t where c like '%o%'"
