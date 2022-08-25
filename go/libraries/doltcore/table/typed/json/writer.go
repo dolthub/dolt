@@ -59,11 +59,11 @@ func NewJSONWriter(wr io.WriteCloser, outSch schema.Schema) (*RowWriter, error) 
 func NewJSONWriterWithHeader(wr io.WriteCloser, outSch schema.Schema, header, footer, separator string) (*RowWriter, error) {
 	bwr := bufio.NewWriterSize(wr, WriteBufSize)
 	return &RowWriter{
-		closer: wr,
-		bWr: bwr,
-		sch: outSch,
-		header: header,
-		footer: footer,
+		closer:    wr,
+		bWr:       bwr,
+		sch:       outSch,
+		header:    header,
+		footer:    footer,
 		separator: separator,
 	}, nil
 }

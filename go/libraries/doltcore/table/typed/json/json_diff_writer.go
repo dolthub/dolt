@@ -20,10 +20,11 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type JsonDiffWriter struct {
@@ -43,15 +44,15 @@ func NewJsonDiffWriter(wr io.WriteCloser, outSch schema.Schema) (*JsonDiffWriter
 
 	return &JsonDiffWriter{
 		rowWriter: writer,
-		wr: wr,
+		wr:        wr,
 	}, nil
 }
 
 func (j *JsonDiffWriter) WriteRow(
-		ctx context.Context,
-		row sql.Row,
-		rowDiffType diff.ChangeType,
-		colDiffTypes []diff.ChangeType,
+	ctx context.Context,
+	row sql.Row,
+	rowDiffType diff.ChangeType,
+	colDiffTypes []diff.ChangeType,
 ) error {
 	if len(row) != len(colDiffTypes) {
 		return fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
@@ -189,5 +190,5 @@ func jsonEscape(s string) string {
 		panic(err)
 	}
 	// Trim the beginning and trailing " character
-	return string(b[1:len(b)-1])
+	return string(b[1 : len(b)-1])
 }

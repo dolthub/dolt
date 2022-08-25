@@ -20,6 +20,10 @@ import (
 	"io"
 
 	textdiff "github.com/andreyvit/diff"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dustin/go-humanize"
+	"github.com/fatih/color"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -30,9 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/atomicerr"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dustin/go-humanize"
-	"github.com/fatih/color"
 )
 
 // diffWriter is an interface that lets us write diffs in a variety of output formats
@@ -169,7 +170,7 @@ func pluralize(singular, plural string, n uint64) string {
 	return fmt.Sprintf("%s %s", humanize.Comma(int64(n)), noun)
 }
 
-type tabularDiffWriter struct {}
+type tabularDiffWriter struct{}
 
 func (t tabularDiffWriter) Close(ctx context.Context) error {
 	return nil
@@ -242,7 +243,7 @@ func (t tabularDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, un
 	return tabular.NewFixedWidthDiffTableWriter(unionSch, iohelp.NopWrCloser(cli.CliOut), 100), nil
 }
 
-type sqlDiffWriter struct {}
+type sqlDiffWriter struct{}
 
 func (s sqlDiffWriter) Close(ctx context.Context) error {
 	return nil

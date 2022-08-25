@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -35,7 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type diffOutput int
@@ -50,7 +51,7 @@ const (
 
 	TabularDiffOutput diffOutput = 1
 	SQLDiffOutput     diffOutput = 2
-	JsonDiffOutput     diffOutput = 3
+	JsonDiffOutput    diffOutput = 3
 
 	DataFlag    = "data"
 	SchemaFlag  = "schema"
@@ -357,11 +358,11 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 }
 
 func diffUserTable(
-		ctx context.Context,
-		td diff.TableDelta,
-		engine *engine.SqlEngine,
-		dArgs *diffArgs,
-		dw diffWriter,
+	ctx context.Context,
+	td diff.TableDelta,
+	engine *engine.SqlEngine,
+	dArgs *diffArgs,
+	dw diffWriter,
 ) errhand.VerboseError {
 	if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
 		return nil
@@ -517,11 +518,11 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 }
 
 func diffRows(
-		ctx context.Context,
-		se *engine.SqlEngine,
-		td diff.TableDelta,
-		dArgs *diffArgs,
-		dw diffWriter,
+	ctx context.Context,
+	se *engine.SqlEngine,
+	td diff.TableDelta,
+	dArgs *diffArgs,
+	dw diffWriter,
 ) errhand.VerboseError {
 	from, to := dArgs.fromRef, dArgs.toRef
 
