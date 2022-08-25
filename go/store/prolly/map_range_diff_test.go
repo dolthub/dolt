@@ -50,6 +50,16 @@ func TestMapRangeDiff(t *testing.T) {
 				rngTest := makeRandomOpenStartRangeTest(kd, tuples)
 				runDiffTestsWithRange(t, s, prollyMap, tuples, rngTest)
 			})
+
+			t.Run("GreaterOrEqualRange", func(t *testing.T) {
+				rngTest := makeRandomGreaterOrEqualRangeTest(kd, tuples)
+				runDiffTestsWithRange(t, s, prollyMap, tuples, rngTest)
+			})
+
+			t.Run("LesserRange", func(t *testing.T) {
+				rngTest := makeRandomLesserRangeTest(kd, tuples)
+				runDiffTestsWithRange(t, s, prollyMap, tuples, rngTest)
+			})
 		})
 	}
 }
@@ -256,6 +266,18 @@ func makeRandomOpenStartRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) range
 	stop := tuples[j][0]
 
 	return rangeDiffTest{tuples: tuples, rng: OpenStartRange(start, stop, kd)}
+}
+
+func makeRandomGreaterOrEqualRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) rangeDiffTest {
+	i := rand.Intn(len(tuples))
+	start := tuples[i][0]
+	return rangeDiffTest{tuples: tuples, rng: GreaterOrEqualRange(start, kd)}
+}
+
+func makeRandomLesserRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) rangeDiffTest {
+	i := rand.Intn(len(tuples))
+	end := tuples[i][0]
+	return rangeDiffTest{tuples: tuples, rng: LesserRange(end, kd)}
 }
 
 func getPairsInRange(tuples [][2]val.Tuple, rng Range) (keys [][2]val.Tuple) {
