@@ -20,6 +20,8 @@ import (
 	"io"
 
 	textdiff "github.com/andreyvit/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dustin/go-humanize"
 	"github.com/fatih/color"
@@ -346,12 +348,22 @@ func (j *jsonDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unio
 		return nil, err
 	}
 
-	targetSch := td.ToSch
-	if targetSch == nil {
-		targetSch = td.FromSch
+	// Translate the union schema to its dolt version
+	cols := schema.NewColCollection()
+	for i, col := range unionSch {
+		doltCol, err := sqlutil.ToDoltCol(uint64(i), col)
+		if err != nil {
+			return nil, err
+		}
+		cols = cols.Append(doltCol)
 	}
 
-	j.rowDiffWriter, err = json.NewJsonDiffWriter(iohelp.NopWrCloser(cli.CliOut), targetSch)
+	sch, err := schema.SchemaFromCols(cols)
+	if err != nil {
+		return nil, err
+	}
+
+	j.rowDiffWriter, err = json.NewJsonDiffWriter(iohelp.NopWrCloser(cli.CliOut), sch)
 	return j.rowDiffWriter, err
 }
 
