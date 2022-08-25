@@ -23,6 +23,7 @@ package tree
 
 import (
 	"context"
+	"errors"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -240,6 +241,82 @@ func NewLeafCursorAtItem(ctx context.Context, ns NodeStore, nd Node, item Item, 
 	return cur, nil
 }
 
+type LeafSpan struct {
+	Leaves     []Node
+	LocalStart int
+	LocalStop  int
+}
+
+func FetchLeafNodeSpan(ctx context.Context, ns NodeStore, root Node, start, stop uint64) (LeafSpan, error) {
+	leaves, localStart, err := fetchLeafNodeSpan(ctx, ns, []Node{root}, start, stop)
+	if err != nil {
+		return LeafSpan{}, err
+	}
+
+	localStop := (stop - start) + localStart
+	for i := 0; i < len(leaves)-1; i++ {
+		localStop -= uint64(leaves[i].Count())
+	}
+
+	return LeafSpan{
+		Leaves:     leaves,
+		LocalStart: int(localStart),
+		LocalStop:  int(localStop),
+	}, nil
+}
+
+func fetchLeafNodeSpan(ctx context.Context, ns NodeStore, nodes []Node, start, stop uint64) ([]Node, uint64, error) {
+	ok, err := nodes[0].IsLeaf()
+	if err != nil {
+		return nil, 0, err
+	} else if ok {
+		// verify leaf homogeneity
+		for i := range nodes {
+			ok, err = nodes[i].IsLeaf()
+			if err != nil {
+				return nil, 0, err
+			} else if !ok {
+				return nil, 0, errors.New("mixed leaf/non-leaf set")
+			}
+		}
+		return nodes, start, nil
+	}
+
+	gets := make(hash.HashSlice, 0, len(nodes)*nodes[0].Count())
+	acc := uint64(0)
+
+	for _, nd := range nodes {
+		if nd, err = nd.loadSubtrees(); err != nil {
+			return nil, 0, err
+		}
+
+		for i := 0; i < nd.Count(); i++ {
+			card, err := nd.getSubtreeCount(i)
+			if err != nil {
+				return nil, 0, err
+			}
+
+			if acc == 0 && card < start {
+				start -= card
+				stop -= card
+				continue
+			}
+
+			gets = append(gets, hash.New(nd.GetValue(i)))
+			acc += card
+			if acc >= stop {
+				break
+			}
+		}
+	}
+
+	children, err := ns.ReadMany(ctx, gets)
+	if err != nil {
+		return nil, 0, err
+	}
+	return fetchLeafNodeSpan(ctx, ns, children, start, stop)
+}
+
 func CurrentCursorItems(cur *Cursor) (key, value Item) {
 	key = cur.nd.keys.GetItem(cur.idx)
 	value = cur.nd.values.GetItem(cur.idx)
@@ -258,7 +335,7 @@ func (cur *Cursor) CurrentKey() Item {
 }
 
 func (cur *Cursor) CurrentValue() Item {
-	return cur.nd.getValue(cur.idx)
+	return cur.nd.GetValue(cur.idx)
 }
 
 func (cur *Cursor) CurrentRef() hash.Hash {
