@@ -61,6 +61,9 @@ type TpccBenchmarkConfig struct {
 
 	// ScaleFactors represent the scale at which to run each TpccBenchmark at.
 	ScaleFactors []int
+
+	// NomsBinFormat specifies the NomsBinFormat
+	NomsBinFormat string
 }
 
 func NewTpccConfig() *TpccBenchmarkConfig {
