@@ -20,16 +20,16 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/message"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/val"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func TestReadWriteValueFile(t *testing.T) {
