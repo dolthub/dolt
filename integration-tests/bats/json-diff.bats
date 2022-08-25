@@ -76,7 +76,7 @@ SQL
     run dolt diff -r json
 
     EXPECTED=$(cat <<'EOF'
-{"tables":[{"name":"test","schema_diff":["ALTER TABLE `test` DROP `c2`;","ALTER TABLE `test` ADD `c3` varchar(10);"],"data_diff":[{"from_row":{"c1":2,"c3":3,"pk":1},"to_row":{}},{"from_row":{"c1":5,"c3":6,"pk":4},"to_row":{"c1":100,"pk":4}},{"from_row":{},"to_row":{"c1":8,"pk":7}}]}]}
+{"tables":[{"name":"test","schema_diff":["ALTER TABLE `test` DROP `c2`;","ALTER TABLE `test` ADD `c3` varchar(10);"],"data_diff":[{"from_row":{"c1":2,"c2":3,"pk":1},"to_row":{}},{"from_row":{"c1":5,"c2":6,"pk":4},"to_row":{"c1":100,"pk":4}},{"from_row":{},"to_row":{"c1":8,"c3":"9","pk":7}}]}]}
 EOF
 )
 
@@ -99,10 +99,23 @@ EOF
     dolt diff -r json --data
     run dolt diff -r json --data
     EXPECTED=$(cat <<'EOF'
-{"tables":[{"name":"test","schema_diff":[],"data_diff":[{"from_row":{"c1":2,"c3":3,"pk":1},"to_row":{}},{"from_row":{"c1":5,"c3":6,"pk":4},"to_row":{"c1":100,"pk":4}},{"from_row":{},"to_row":{"c1":8,"pk":7}}]}]}
+{"tables":[{"name":"test","schema_diff":[],"data_diff":[{"from_row":{"c1":2,"c2":3,"pk":1},"to_row":{}},{"from_row":{"c1":5,"c2":6,"pk":4},"to_row":{"c1":100,"pk":4}},{"from_row":{},"to_row":{"c1":8,"c3":"9","pk":7}}]}]}
 EOF
 )
     
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    dolt commit -am "committing changes"
+    dolt sql -q "alter table test rename column c1 to c1new"
+    dolt sql -q "update test set c1new = c1new*2"
+
+    dolt diff -r json --data
+    run dolt diff -r json --data
+    EXPECTED=$(cat <<'EOF'
+{"tables":[{"name":"test","schema_diff":[],"data_diff":[{"from_row":{"c1":100,"pk":4},"to_row":{"c1new":200,"pk":4}},{"from_row":{"c1":8,"c3":"9","pk":7},"to_row":{"c1new":16,"c3":"9","pk":7}}]}]}
+EOF
+)
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
 
