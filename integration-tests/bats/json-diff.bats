@@ -227,13 +227,18 @@ SQL
     dolt diff -r json 
     run dolt diff -r json
 
-    EXPECTED=$(cat <<'EOF'
-{"tables":[{"name":"t","schema_diff":[],"data_diff":[{"from_row":{"pk":1,"val":1},"to_row":{}},{"from_row":{"pk":1,"val":1},"to_row":{}},{"from_row":{},"to_row":{"pk":1,"val":2}},{"from_row":{},"to_row":{"pk":1,"val":2}}]}]}
-EOF
-)
-    
+    # The JSON output order for keyless diff isn't guaranteed, so we
+    # just count number of times the row diff strings occur
+    run count_string "$output" '{"from_row":{},"to_row":{"pk":1,"val":2}}'
     [ $status -eq 0 ]
-    [[ "$output" =~ "$EXPECTED" ]] || false
+    [ "$output" -eq "2" ]
+
+    dolt diff -r json 
+    run dolt diff -r json
+
+    run count_string "$output" '{"from_row":{"pk":1,"val":1},"to_row":{}}'
+    [ $status -eq 0 ]
+    [ "$output" -eq "2" ]
 }
 
 @test "json-diff: adding and removing primary key" {
@@ -260,7 +265,6 @@ SQL
     [[ "$output" =~ '{"tables":[{"name":"t","schema_diff":["ALTER TABLE `t` DROP PRIMARY KEY;","ALTER TABLE `t` ADD PRIMARY KEY (pk);"]' ]] || false
     [[ "$output" =~ 'Primary key sets differ between revisions for table t, skipping data diff' ]] || false
     
-
     dolt commit -am 'added primary key'
 
     dolt sql -q "alter table t drop primary key"
@@ -278,6 +282,11 @@ function no_stderr {
 
 function no_stdout {
     "$@" 1>/dev/null
+}
+
+function count_string {
+    cmd="echo '$1' | grep -o '$2' | wc -l"
+    eval "$cmd"
 }
 
 @test "json-diff: works with spaces in column names" {
