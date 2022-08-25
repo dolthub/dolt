@@ -53,12 +53,12 @@ func TestBufferedFileByteSink(t *testing.T) {
 	suite.Run(t, &TableSinkSuite{createSink, t})
 
 	t.Run("ReaderTwice", func(t *testing.T) {
-                sink, err := NewBufferedFileByteSink("", 4*1024, 16)
-                require.NoError(t, err)
+		sink, err := NewBufferedFileByteSink("", 4*1024, 16)
+		require.NoError(t, err)
 		_, err = sink.Write([]byte{1, 2, 3, 4})
-                require.NoError(t, err)
+		require.NoError(t, err)
 		r, err := sink.Reader()
-                require.NoError(t, err)
+		require.NoError(t, err)
 		require.NotNil(t, r)
 		var readbytes [5]byte
 		n, err := r.Read(readbytes[:])
@@ -66,7 +66,7 @@ func TestBufferedFileByteSink(t *testing.T) {
 		require.True(t, bytes.Equal(readbytes[:4], []byte{1, 2, 3, 4}))
 		r.Close()
 		r, err = sink.Reader()
-                require.NoError(t, err)
+		require.NoError(t, err)
 		require.NotNil(t, r)
 		n, err = r.Read(readbytes[:])
 		require.Equal(t, 4, n)
