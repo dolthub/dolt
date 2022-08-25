@@ -220,10 +220,11 @@ func (j *RowWriter) Flush() error {
 // Close should flush all writes, release resources being held
 func (j *RowWriter) Close(ctx context.Context) error {
 	if j.closer != nil {
-		err := iohelp.WriteAll(j.bWr, []byte(j.footer))
-
-		if err != nil {
-			return err
+		if j.rowsWritten > 0 {
+			err := iohelp.WriteAll(j.bWr, []byte(j.footer))
+			if err != nil {
+				return err
+			}
 		}
 
 		errFl := j.bWr.Flush()
