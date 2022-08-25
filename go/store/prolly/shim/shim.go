@@ -21,7 +21,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func NodeFromValue(v types.Value) tree.Node {
+func NodeFromValue(v types.Value) (tree.Node, error) {
 	return tree.NodeFromBytes(v.(types.SerialMessage))
 }
 
@@ -33,9 +33,12 @@ func ValueFromArtifactMap(m prolly.ArtifactMap) types.Value {
 	return tree.ValueFromNode(m.Node())
 }
 
-func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore) prolly.Map {
-	root := NodeFromValue(v)
+func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore) (prolly.Map, error) {
+	root, err := NodeFromValue(v)
+	if err != nil {
+		return prolly.Map{}, err
+	}
 	kd := sch.GetKeyDescriptor()
 	vd := sch.GetValueDescriptor()
-	return prolly.NewMap(root, ns, kd, vd)
+	return prolly.NewMap(root, ns, kd, vd), nil
 }

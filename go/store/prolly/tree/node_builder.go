@@ -31,7 +31,10 @@ type novelNode struct {
 }
 
 func writeNewNode[S message.Serializer](ctx context.Context, ns NodeStore, bld *nodeBuilder[S]) (novelNode, error) {
-	node := bld.build()
+	node, err := bld.build()
+	if err != nil {
+		return novelNode{}, err
+	}
 
 	addr, err := ns.Write(ctx, node)
 	if err != nil {
@@ -45,13 +48,16 @@ func writeNewNode[S message.Serializer](ctx context.Context, ns NodeStore, bld *
 		copy(lastKey, k)
 	}
 
-	treeCount := uint64(node.TreeCount())
+	cnt, err := node.TreeCount()
+	if err != nil {
+		return novelNode{}, err
+	}
 
 	return novelNode{
 		addr:      addr,
 		node:      node,
 		lastKey:   lastKey,
-		treeCount: treeCount,
+		treeCount: uint64(cnt),
 	}, nil
 }
 
@@ -91,7 +97,7 @@ func (nb *nodeBuilder[S]) count() int {
 	return len(nb.keys)
 }
 
-func (nb *nodeBuilder[S]) build() (node Node) {
+func (nb *nodeBuilder[S]) build() (node Node, err error) {
 	msg := nb.serializer.Serialize(nb.keys, nb.values, nb.subtrees, nb.level)
 	nb.recycleBuffers()
 	nb.size = 0

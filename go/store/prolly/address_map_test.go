@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -31,10 +32,10 @@ func TestAddressMap(t *testing.T) {
 		ns := tree.NewTestNodeStore()
 		pairs := randomAddressPairs(10_000)
 
-		empty := NewEmptyAddressMap(ns)
+		empty, err := NewEmptyAddressMap(ns)
+		require.NoError(t, err)
 		editor := empty.Editor()
 
-		var err error
 		for _, p := range pairs {
 			err = editor.Add(ctx, p.name(), p.addr())
 			assert.NoError(t, err)

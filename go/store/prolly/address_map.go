@@ -29,20 +29,24 @@ type AddressMap struct {
 	addresses orderedTree[stringSlice, address, lexicographic]
 }
 
-func NewEmptyAddressMap(ns tree.NodeStore) AddressMap {
+func NewEmptyAddressMap(ns tree.NodeStore) (AddressMap, error) {
 	serializer := message.NewAddressMapSerializer(ns.Pool())
 	msg := serializer.Serialize(nil, nil, nil, 0)
-	return NewAddressMap(tree.NodeFromBytes(msg), ns)
+	n, err := tree.NodeFromBytes(msg)
+	if err != nil {
+		return AddressMap{}, err
+	}
+	return NewAddressMap(n, ns)
 }
 
-func NewAddressMap(node tree.Node, ns tree.NodeStore) AddressMap {
+func NewAddressMap(node tree.Node, ns tree.NodeStore) (AddressMap, error) {
 	return AddressMap{
 		addresses: orderedTree[stringSlice, address, lexicographic]{
 			root:  node,
 			ns:    ns,
 			order: lexicographic{},
 		},
-	}
+	}, nil
 }
 
 type stringSlice []byte
@@ -57,11 +61,11 @@ func (l lexicographic) Compare(left, right stringSlice) int {
 	return bytes.Compare(left, right)
 }
 
-func (c AddressMap) Count() int {
+func (c AddressMap) Count() (int, error) {
 	return c.addresses.count()
 }
 
-func (c AddressMap) Height() int {
+func (c AddressMap) Height() (int, error) {
 	return c.addresses.height()
 }
 

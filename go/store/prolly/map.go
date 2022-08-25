@@ -153,11 +153,11 @@ func (m Map) Mutate() MutableMap {
 }
 
 // Count returns the number of key-value pairs in the Map.
-func (m Map) Count() int {
+func (m Map) Count() (int, error) {
 	return m.tuples.count()
 }
 
-func (m Map) Height() int {
+func (m Map) Height() (int, error) {
 	return m.tuples.height()
 }
 
@@ -318,7 +318,10 @@ func DebugFormat(ctx context.Context, m Map) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	c := m.Count()
+	c, err := m.Count()
+	if err != nil {
+		return "", err
+	}
 
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Prolly Map (count: %d) {\n", c))

@@ -46,28 +46,31 @@ func (o commitClosureKeyOrdering) Compare(left, right CommitClosureKey) int {
 	return 1
 }
 
-func NewEmptyCommitClosure(ns tree.NodeStore) CommitClosure {
+func NewEmptyCommitClosure(ns tree.NodeStore) (CommitClosure, error) {
 	serializer := message.NewCommitClosureSerializer(ns.Pool())
 	msg := serializer.Serialize(nil, nil, nil, 0)
-	node := tree.NodeFromBytes(msg)
+	node, err := tree.NodeFromBytes(msg)
+	if err != nil {
+		return CommitClosure{}, err
+	}
 	return NewCommitClosure(node, ns)
 }
 
-func NewCommitClosure(node tree.Node, ns tree.NodeStore) CommitClosure {
+func NewCommitClosure(node tree.Node, ns tree.NodeStore) (CommitClosure, error) {
 	return CommitClosure{
 		closure: orderedTree[CommitClosureKey, CommitClosureValue, commitClosureKeyOrdering]{
 			root:  node,
 			ns:    ns,
 			order: commitClosureKeyOrdering{},
 		},
-	}
+	}, nil
 }
 
-func (c CommitClosure) Count() int {
+func (c CommitClosure) Count() (int, error) {
 	return c.closure.count()
 }
 
-func (c CommitClosure) Height() int {
+func (c CommitClosure) Height() (int, error) {
 	return c.closure.height()
 }
 

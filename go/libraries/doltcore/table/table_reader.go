@@ -19,7 +19,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
@@ -60,30 +59,4 @@ type SqlTableReader interface {
 
 	// ReadRow reads a row from a table as go-mysql-server sql.Row.
 	ReadSqlRow(ctx context.Context) (sql.Row, error)
-}
-
-// NewTableReader creates a SqlTableReader from |tbl| starting from the first record.
-func NewTableReader(ctx context.Context, tbl *doltdb.Table) (SqlTableReader, error) {
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if schema.IsKeyless(sch) {
-		return newKeylessTableReader(ctx, tbl, sch, false)
-	}
-	return newPkTableReader(ctx, tbl, sch, false)
-}
-
-// NewBufferedTableReader creates a buffered SqlTableReader from |tbl| starting from the first record.
-func NewBufferedTableReader(ctx context.Context, tbl *doltdb.Table) (SqlTableReader, error) {
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if schema.IsKeyless(sch) {
-		return newKeylessTableReader(ctx, tbl, sch, true)
-	}
-	return newPkTableReader(ctx, tbl, sch, true)
 }

@@ -45,6 +45,13 @@ type varBinaryType struct {
 
 var _ TypeInfo = (*varBinaryType)(nil)
 
+var (
+	TinyBlobType   TypeInfo = &varBinaryType{sqlBinaryType: sql.TinyBlob}
+	BlobType       TypeInfo = &varBinaryType{sqlBinaryType: sql.Blob}
+	MediumBlobType TypeInfo = &varBinaryType{sqlBinaryType: sql.MediumBlob}
+	LongBlobType   TypeInfo = &varBinaryType{sqlBinaryType: sql.LongBlob}
+)
+
 func CreateVarBinaryTypeFromParams(params map[string]string) (TypeInfo, error) {
 	var length int64
 	var err error

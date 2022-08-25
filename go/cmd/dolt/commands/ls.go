@@ -172,24 +172,25 @@ func printUserTables(ctx context.Context, root *doltdb.RootValue, label string, 
 
 func listTableVerbose(ctx context.Context, tbl string, root *doltdb.RootValue) (string, errhand.VerboseError) {
 	h, _, err := root.GetTableHash(ctx, tbl)
-
 	if err != nil {
 		return "", errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
 	}
 
 	tblVal, _, err := root.GetTable(ctx, tbl)
-
 	if err != nil {
 		return "", errhand.BuildDError("error: failed to get table").AddCause(err).Build()
 	}
 
-	rows, err := tblVal.GetNomsRowData(ctx)
-
+	rows, err := tblVal.GetRowData(ctx)
 	if err != nil {
 		return "", errhand.BuildDError("error: failed to get row data").AddCause(err).Build()
 	}
+	cnt, err := rows.Count()
+	if err != nil {
+		return "", errhand.VerboseErrorFromError(err)
+	}
 
-	return fmt.Sprintf("\t%-32s %s    %d rows\n", tbl, h.String(), rows.Len()), nil
+	return fmt.Sprintf("\t%-32s %s    %d rows\n", tbl, h.String(), cnt), nil
 }
 
 func printSystemTables(ctx context.Context, root *doltdb.RootValue, ddb *doltdb.DoltDB, verbose bool) errhand.VerboseError {

@@ -122,22 +122,31 @@ func DoDoltMerge(ctx *sql.Context, args []string) (int, int, error) {
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, err
 	}
-	ws, conflicts, fastForward, err := mergeIntoWorkingSet(ctx, sess, roots, ws, dbName, mergeSpec)
-	if err != nil {
+
+	dbData, ok := sess.GetDbData(ctx, dbName)
+	if !ok {
+		return noConflictsOrViolations, threeWayMerge, fmt.Errorf("Could not load database %s", dbName)
+	}
+	msg := fmt.Sprintf("Merge branch '%s' into %s", branchName, dbData.Rsr.CWBHeadRef().GetPath())
+	if userMsg, mOk := apr.GetValue(cli.MessageArg); mOk {
+		msg = userMsg
+	}
+
+	ws, conflicts, fastForward, err := performMerge(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
+	if err != nil || conflicts != 0 || fastForward != 0 {
 		return conflicts, fastForward, err
 	}
 
 	return conflicts, fastForward, nil
 }
 
-// mergeIntoWorkingSet encapsulates server merge logic, switching between
+// performMerge encapsulates server merge logic, switching between
 // fast-forward, no fast-forward, merge commit, and merging into working set.
 // Returns a new WorkingSet, whether there were merge conflicts, and whether a
-// fast-forward was performed. This currently persists merge commits in the
-// database, but expects the caller to update the working set.
+// fast-forward was performed. This commits the working set if merge is successful and
+// 'no-commit' flag is not defined.
 // TODO FF merging commit with constraint violations requires `constraint verify`
-func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots, ws *doltdb.WorkingSet, dbName string, spec *merge.MergeSpec) (*doltdb.WorkingSet, int, int, error) {
-
+func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots, ws *doltdb.WorkingSet, dbName string, spec *merge.MergeSpec, noCommit bool, msg string) (*doltdb.WorkingSet, int, int, error) {
 	// todo: allow merges even when an existing merge is uncommitted
 	if ws.MergeActive() {
 		return ws, noConflictsOrViolations, threeWayMerge, doltdb.ErrMergeActive
@@ -211,6 +220,13 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 	err = sess.SetWorkingSet(ctx, dbName, ws)
 	if err != nil {
 		return ws, noConflictsOrViolations, threeWayMerge, err
+	}
+
+	if !noCommit {
+		_, err = DoDoltCommit(ctx, []string{"-m", msg})
+		if err != nil {
+			return ws, noConflictsOrViolations, threeWayMerge, fmt.Errorf("dolt_commit failed")
+		}
 	}
 
 	return ws, noConflictsOrViolations, threeWayMerge, nil
@@ -293,7 +309,6 @@ func executeNoFFMerge(
 	dbName string,
 	ws *doltdb.WorkingSet,
 	dbData env.DbData,
-	//headCommit, mergeCommit *doltdb.Commit,
 ) (*doltdb.WorkingSet, error) {
 	mergeRoot, err := spec.MergeC.GetRootValue(ctx)
 	if err != nil {
@@ -376,7 +391,10 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	mergeSpec, _, err := merge.NewMergeSpec(ctx, dbData.Rsr, ddb, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), t)
+	if apr.Contains(cli.NoCommitFlag) && apr.Contains(cli.CommitFlag) {
+		return nil, errors.New("cannot define both 'commit' and 'no-commit' flags at the same time")
+	}
+	mergeSpec, err := merge.NewMergeSpec(ctx, dbData.Rsr, ddb, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), t)
 	if err != nil {
 		return nil, err
 	}

@@ -47,7 +47,11 @@ func WalkAddresses(ctx context.Context, nd Node, ns NodeStore, cb AddressCb) err
 			return err
 		}
 
-		if nd.IsLeaf() {
+		leaf, err := nd.IsLeaf()
+		if err != nil {
+			return err
+		}
+		if leaf {
 			return nil
 		}
 
@@ -69,7 +73,11 @@ func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 		return err
 	}
 
-	if nd.IsLeaf() {
+	leaf, err := nd.IsLeaf()
+	if err != nil {
+		return err
+	}
+	if leaf {
 		return nil
 	}
 
@@ -98,14 +106,14 @@ func walkOpaqueNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) erro
 	})
 }
 
-func NodeFromBytes(msg []byte) Node {
-	keys, values, count := message.GetKeysAndValues(msg)
+func NodeFromBytes(msg []byte) (Node, error) {
+	keys, values, count, err := message.GetKeysAndValues(msg)
 	return Node{
 		keys:   keys,
 		values: values,
 		count:  count,
 		msg:    msg,
-	}
+	}, err
 }
 
 func (nd Node) HashOf() hash.Hash {
@@ -116,7 +124,7 @@ func (nd Node) Count() int {
 	return int(nd.count)
 }
 
-func (nd Node) TreeCount() int {
+func (nd Node) TreeCount() (int, error) {
 	return message.GetTreeCount(nd.msg)
 }
 
@@ -125,13 +133,14 @@ func (nd Node) Size() int {
 }
 
 // Level returns the tree Level for this node
-func (nd Node) Level() int {
+func (nd Node) Level() (int, error) {
 	return message.GetTreeLevel(nd.msg)
 }
 
 // IsLeaf returns whether this node is a leaf
-func (nd Node) IsLeaf() bool {
-	return nd.Level() == 0
+func (nd Node) IsLeaf() (bool, error) {
+	l, err := nd.Level()
+	return l == 0, err
 }
 
 // GetKey returns the |ith| key of this node
@@ -144,21 +153,26 @@ func (nd Node) getValue(i int) Item {
 	return nd.values.GetItem(i)
 }
 
-func (nd Node) loadSubtrees() Node {
+func (nd Node) loadSubtrees() (Node, error) {
+	var err error
 	if nd.subtrees == nil {
 		// deserializing subtree counts requires a malloc,
 		// we don't load them unless explicitly requested
-		nd.subtrees = message.GetSubtrees(nd.msg)
+		nd.subtrees, err = message.GetSubtrees(nd.msg)
 	}
-	return nd
+	return nd, err
 }
 
-func (nd Node) getSubtreeCount(i int) uint64 {
-	if nd.IsLeaf() {
-		return 1
+func (nd Node) getSubtreeCount(i int) (uint64, error) {
+	leaf, err := nd.IsLeaf()
+	if err != nil {
+		return 0, err
+	}
+	if leaf {
+		return 1, nil
 	}
 	// this will panic unless subtrees were loaded.
-	return nd.subtrees[i]
+	return nd.subtrees[i], nil
 }
 
 // getAddress returns the |ith| address of this node.
@@ -196,7 +210,11 @@ func OutputProllyNode(w io.Writer, node Node) error {
 			w.Write([]byte(hex.EncodeToString(kt.GetField(j))))
 		}
 
-		if node.IsLeaf() {
+		leaf, err := node.IsLeaf()
+		if err != nil {
+			return err
+		}
+		if leaf {
 			v := node.getValue(i)
 			vt := val.Tuple(v)
 

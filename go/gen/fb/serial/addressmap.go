@@ -24,17 +24,34 @@ type AddressMap struct {
 	_tab flatbuffers.Table
 }
 
-func GetRootAsAddressMap(buf []byte, offset flatbuffers.UOffsetT) *AddressMap {
+func InitAddressMapRoot(o *AddressMap, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
+	o.Init(buf, n+offset)
+	if AddressMapNumFields < o.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
+}
+
+func TryGetRootAsAddressMap(buf []byte, offset flatbuffers.UOffsetT) (*AddressMap, error) {
 	x := &AddressMap{}
-	x.Init(buf, n+offset)
+	return x, InitAddressMapRoot(x, buf, offset)
+}
+
+func GetRootAsAddressMap(buf []byte, offset flatbuffers.UOffsetT) *AddressMap {
+	x := &AddressMap{}
+	InitAddressMapRoot(x, buf, offset)
 	return x
 }
 
-func GetSizePrefixedRootAsAddressMap(buf []byte, offset flatbuffers.UOffsetT) *AddressMap {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+func TryGetSizePrefixedRootAsAddressMap(buf []byte, offset flatbuffers.UOffsetT) (*AddressMap, error) {
 	x := &AddressMap{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x, InitAddressMapRoot(x, buf, offset+flatbuffers.SizeUint32)
+}
+
+func GetSizePrefixedRootAsAddressMap(buf []byte, offset flatbuffers.UOffsetT) *AddressMap {
+	x := &AddressMap{}
+	InitAddressMapRoot(x, buf, offset+flatbuffers.SizeUint32)
 	return x
 }
 
@@ -199,8 +216,10 @@ func (rcv *AddressMap) MutateTreeLevel(n byte) bool {
 	return rcv._tab.MutateByteSlot(14, n)
 }
 
+const AddressMapNumFields = 6
+
 func AddressMapStart(builder *flatbuffers.Builder) {
-	builder.StartObject(6)
+	builder.StartObject(AddressMapNumFields)
 }
 func AddressMapAddKeyItems(builder *flatbuffers.Builder, keyItems flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(keyItems), 0)
