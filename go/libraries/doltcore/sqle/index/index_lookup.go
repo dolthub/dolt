@@ -196,17 +196,15 @@ func NewLookupBuilder(part sql.Partition, idx DoltIndex, projections []uint64, p
 		projections = idx.Schema().GetAllCols().Tags
 	}
 
-	secondary := durable.ProllyMapFromIndex(p.durableState.Secondary)
-	secKd, secVd := secondary.Descriptors()
-
 	base := &baseLookupBuilder{
 		idx:         idx.(*doltIndex),
 		sch:         pkSch,
 		projections: projections,
-		sec:         secondary,
-		secKd:       secKd,
-		secVd:       secVd,
-		ns:          secondary.NodeStore(),
+	}
+
+	if isDoltFormat {
+		base.sec = durable.ProllyMapFromIndex(p.durableState.Secondary)
+		base.secKd, base.secVd = base.sec.Descriptors()
 	}
 
 	switch {
