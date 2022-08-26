@@ -198,7 +198,19 @@ func (rcv *TableSchema) ChecksLength() int {
 	return 0
 }
 
-const TableSchemaNumFields = 4
+func (rcv *TableSchema) Collation() Collation {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		return Collation(rcv._tab.GetUint16(o + rcv._tab.Pos))
+	}
+	return 0
+}
+
+func (rcv *TableSchema) MutateCollation(n Collation) bool {
+	return rcv._tab.MutateUint16Slot(12, uint16(n))
+}
+
+const TableSchemaNumFields = 5
 
 func TableSchemaStart(builder *flatbuffers.Builder) {
 	builder.StartObject(TableSchemaNumFields)
@@ -223,6 +235,9 @@ func TableSchemaAddChecks(builder *flatbuffers.Builder, checks flatbuffers.UOffs
 }
 func TableSchemaStartChecksVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
+}
+func TableSchemaAddCollation(builder *flatbuffers.Builder, collation Collation) {
+	builder.PrependUint16Slot(4, uint16(collation), 0)
 }
 func TableSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

@@ -91,6 +91,10 @@ func (ct ProllyConflictsTable) Schema() sql.Schema {
 	return ct.sqlSch.Schema
 }
 
+func (ct ProllyConflictsTable) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
 func (ct ProllyConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil
 }

@@ -42,6 +42,7 @@ type schemaImpl struct {
 	indexCollection            IndexCollection
 	checkCollection            CheckCollection
 	pkOrdinals                 []int
+	collation                  Collation
 }
 
 var _ Schema = (*schemaImpl)(nil)
@@ -76,6 +77,7 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	if err != nil {
 		return nil, err
 	}
+	sch.SetCollation(Collation_Default)
 	return sch, nil
 }
 
@@ -87,6 +89,7 @@ func SchemaFromColCollections(allCols, pkColColl, nonPKColColl *ColCollection) S
 		indexCollection: NewIndexCollection(allCols, pkColColl),
 		checkCollection: NewCheckCollection(),
 		pkOrdinals:      []int{},
+		collation:       Collation_Default,
 	}
 }
 
@@ -177,6 +180,7 @@ func UnkeyedSchemaFromCols(allCols *ColCollection) Schema {
 		allCols:         nonPKColColl,
 		indexCollection: NewIndexCollection(nil, nil),
 		checkCollection: NewCheckCollection(),
+		collation:       Collation_Default,
 	}
 }
 
@@ -421,6 +425,26 @@ func (si *schemaImpl) GetValueDescriptor() val.TupleDesc {
 		return val.NewTupleDescriptorWithComparator(cmp, tt...)
 	} else {
 		return val.NewTupleDescriptor(tt...)
+	}
+}
+
+// GetCollation implements the Schema interface.
+func (si *schemaImpl) GetCollation() Collation {
+	// Schemas made before this change (and invalid schemas) will contain invalid, so we'll the default collation
+	// instead (as that matches their behavior).
+	if si.collation == Collation_Invalid {
+		return Collation_Default
+	}
+	return si.collation
+}
+
+// SetCollation implements the Schema interface.
+func (si *schemaImpl) SetCollation(collation Collation) {
+	// Schemas made before this change may try to set this to invalid, so we'll set it to the default collation.
+	if collation == Collation_Invalid {
+		si.collation = Collation_Default
+	} else {
+		si.collation = collation
 	}
 }
 

@@ -56,6 +56,11 @@ func (dt *TableOfTablesInConflict) Schema() sql.Schema {
 	}
 }
 
+// Collation implements the sql.Table interface.
+func (dt *TableOfTablesInConflict) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
 type tableInConflict struct {
 	name string
 	size uint64

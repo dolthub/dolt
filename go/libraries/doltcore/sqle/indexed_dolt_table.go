@@ -57,6 +57,10 @@ func (idt *IndexedDoltTable) Schema() sql.Schema {
 	return idt.table.Schema()
 }
 
+func (idt *IndexedDoltTable) Collation() sql.CollationID {
+	return sql.CollationID(idt.table.sch.GetCollation())
+}
+
 func (idt *IndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	return index.NewRangePartitionIter(ctx, idt.table, lookup, idt.isDoltFormat)
 }

@@ -97,6 +97,11 @@ func (dt *CommitDiffTable) Schema() sql.Schema {
 	return dt.sqlSch.Schema
 }
 
+// Collation implements the sql.Table interface.
+func (dt *CommitDiffTable) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
 type SliceOfPartitionsItr struct {
 	partitions []sql.Partition
 	i          int

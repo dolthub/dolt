@@ -54,6 +54,11 @@ func (totwv *TableOfTablesWithViolations) Schema() sql.Schema {
 	}
 }
 
+// Collation implements the interface sql.Table.
+func (totwv *TableOfTablesWithViolations) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
 // Partitions implements the interface sql.Table.
 func (totwv *TableOfTablesWithViolations) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	tblNames, err := totwv.root.TablesWithConstraintViolations(ctx)
