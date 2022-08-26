@@ -63,9 +63,9 @@ func (cmd VersionCmd) ArgParser() *argparser.ArgParser {
 func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	cli.Println("dolt version", cmd.VersionStr)
 
-	if dEnv.HasDoltDir() && !cli.CheckEnvIsValid(dEnv) {
+	if dEnv.HasDoltDir() && dEnv.RSLoadErr == nil && !cli.CheckEnvIsValid(dEnv) {
 		return 2
-	} else if dEnv.HasDoltDir() {
+	} else if dEnv.HasDoltDir() && dEnv.RSLoadErr == nil {
 		nbf := dEnv.DoltDB.Format()
 		cli.Printf("database storage format: %s\n", dfunctions.GetStorageFormatDisplayString(nbf))
 	} else {
