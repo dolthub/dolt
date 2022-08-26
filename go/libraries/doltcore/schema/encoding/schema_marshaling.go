@@ -161,10 +161,11 @@ type encodedCheck struct {
 }
 
 type schemaData struct {
-	Columns          []encodedColumn `noms:"columns" json:"columns"`
-	IndexCollection  []encodedIndex  `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
-	CheckConstraints []encodedCheck  `noms:"checks,omitempty" json:"checks,omitempty"`
-	PkOrdinals       []int           `noms:"pkOrdinals,omitempty" json:"pkOrdinals,omitEmpty"`
+	Columns          []encodedColumn  `noms:"columns" json:"columns"`
+	IndexCollection  []encodedIndex   `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
+	CheckConstraints []encodedCheck   `noms:"checks,omitempty" json:"checks,omitempty"`
+	PkOrdinals       []int            `noms:"pkOrdinals,omitempty" json:"pkOrdinals,omitEmpty"`
+	Collation        schema.Collation `noms:"collation,omitempty" json:"collation,omitempty"`
 }
 
 func (sd *schemaData) Copy() *schemaData {
@@ -209,6 +210,7 @@ func (sd *schemaData) Copy() *schemaData {
 		IndexCollection:  idxCol,
 		CheckConstraints: checks,
 		PkOrdinals:       pkOrdinals,
+		Collation:        sd.Collation,
 	}
 }
 
@@ -254,6 +256,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 		IndexCollection:  encodedIndexes,
 		CheckConstraints: encodedChecks,
 		PkOrdinals:       sch.GetPkOrdinals(),
+		Collation:        sch.GetCollation(),
 	}, nil
 }
 
@@ -275,12 +278,12 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 	if err != nil {
 		return nil, err
 	}
+	sch.SetCollation(sd.Collation)
 
 	return sch, nil
 }
 
 func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) error {
-
 	// initialize pk order before adding indexes
 	if sd.PkOrdinals != nil {
 		err := sch.SetPkOrdinals(sd.PkOrdinals)
@@ -314,6 +317,8 @@ func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) er
 			return err
 		}
 	}
+
+	sch.SetCollation(sd.Collation)
 
 	return nil
 }

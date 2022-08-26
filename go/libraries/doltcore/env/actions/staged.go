@@ -17,6 +17,7 @@ package actions
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
@@ -28,6 +29,22 @@ func StageAllTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, erro
 	tbls, err := doltdb.UnionTableNames(ctx, roots.Staged, roots.Working)
 	if err != nil {
 		return doltdb.Roots{}, err
+	}
+
+	return stageTables(ctx, roots, tbls)
+}
+
+func StageModifiedAndDeletedTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
+	_, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	tbls := []string{}
+	for _, tableDelta := range unstaged {
+		if !tableDelta.IsAdd() {
+			tbls = append(tbls, tableDelta.FromName)
+		}
 	}
 
 	return stageTables(ctx, roots, tbls)

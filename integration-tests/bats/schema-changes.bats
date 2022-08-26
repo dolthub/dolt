@@ -309,6 +309,7 @@ SQL
     # Commit is important here because we are testing column reuse on
     # drop / add, we want to be sure that we don't re-use any old
     # values from before the column was dropped
+    dolt add .
     dolt commit -am "Committing test table"
 
     dolt sql -q "alter table test2 drop column v1"
@@ -336,6 +337,7 @@ CREATE TABLE test2(
 insert into test2 values (1, 1, 1), (2, 2, 2);
 SQL
 
+    dolt add .
     # Commit is important here because we are testing column reuse on
     # drop / add, we want to be sure that we don't re-use any old
     # values from before the column was dropped

@@ -1290,6 +1290,7 @@ SQL
 USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE table_a(x int primary key);
 CREATE TABLE table_b(x int primary key);
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'two new tables');
 SQL
     
@@ -1314,6 +1315,7 @@ SQL
 CREATE DATABASE test1;
 USE test1;
 CREATE TABLE table_a(x int primary key);
+CALL DOLT_ADD('.');
 insert into table_a values (1), (2);
 SELECT DOLT_COMMIT('-a', '-m', 'created table_a');
 SQL
@@ -1376,6 +1378,7 @@ SQL
 CREATE DATABASE test1;
 USE test1;
 CREATE TABLE table_a(x int primary key);
+CALL DOLT_ADD('.');
 insert into table_a values (1), (2);
 SELECT DOLT_COMMIT('-a', '-m', 'created table_a');
 SQL
@@ -1470,6 +1473,7 @@ SQL
     dolt sql  <<SQL
 set @@dolt_repo_$$_head_ref = 'feature-branch';
 CREATE TABLE test (x int primary key);
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
 SQL
     
@@ -1520,6 +1524,7 @@ SQL
     dolt sql  <<SQL
 USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE a1(x int primary key);
+CALL DOLT_ADD('.');
 insert into a1 values (1), (2), (3);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
 SQL
@@ -1537,6 +1542,7 @@ SQL
     dolt sql  <<SQL
 USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE a1(x int primary key);
+CALL DOLT_ADD('.');
 insert into a1 values (1), (2), (3);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
 SQL
@@ -1555,6 +1561,7 @@ SQL
     
     dolt sql  <<SQL
 CREATE TABLE a1(x int primary key);
+CALL DOLT_ADD('.');
 insert into a1 values (1), (2), (3);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
 insert into a1 values (4), (5), (6);
@@ -1586,6 +1593,7 @@ SQL
     
     dolt sql  <<SQL
 CREATE TABLE a1(x int primary key);
+CALL DOLT_ADD('.');
 insert into a1 values (1), (2), (3);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
 insert into a1 values (4), (5), (6);
@@ -1615,6 +1623,7 @@ SQL
     
     dolt sql  <<SQL
 CREATE TABLE a1(x int primary key);
+CALL DOLT_ADD('.');
 insert into a1 values (1), (2), (3);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
 insert into a1 values (4), (5), (6);
@@ -1645,6 +1654,7 @@ SQL
     dolt sql  <<SQL
 USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE a1(x int primary key);
+CALL DOLT_ADD('.');
 insert into a1 values (1), (2), (3);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
 SQL
@@ -1680,6 +1690,7 @@ SQL
     
     dolt sql  <<SQL
 CREATE TABLE a1(x int primary key);
+CALL DOLT_ADD('.');
 insert into a1 values (1), (2), (3);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
 insert into a1 values (4), (5), (6);
@@ -1709,6 +1720,7 @@ SQL
     
     dolt sql  <<SQL
 CREATE TABLE a1(x int primary key);
+CALL DOLT_ADD('.');
 insert into a1 values (1), (2), (3);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
 insert into a1 values (4), (5), (6);
@@ -2398,6 +2410,7 @@ SQL
 
 @test "sql: dolt diff table correctly works with IN" {
     dolt sql -q "CREATE TABLE mytable(pk int primary key);"
+    dolt add .
     dolt sql -q "INSERT INTO mytable VALUES (1), (2)"
     dolt commit -am "Commit 1"
 

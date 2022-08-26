@@ -123,6 +123,7 @@ teardown() {
 
 @test "log: Log on a table has basic functionality" {
     dolt sql -q "create table test (pk int PRIMARY KEY)"
+    dolt add .
     dolt commit -am "first commit"
 
     run dolt log test
@@ -140,6 +141,7 @@ teardown() {
     [[ ! "$output" =~ "Initialize data repository" ]] || false
 
     dolt sql -q "create table test2 (pk int PRIMARY KEY)"
+    dolt add .
     dolt commit -am "third commit"
 
     # Validate we only look at the right commits
@@ -153,6 +155,7 @@ teardown() {
 
 @test "log: Log on a table works with -n" {
     dolt sql -q "create table test (pk int PRIMARY KEY)"
+    dolt add .
     dolt commit -am "first commit"
 
     run dolt log -n 1 test
@@ -168,6 +171,7 @@ teardown() {
     [[ "$output" =~ "first commit" ]] || false
 
     dolt sql -q "create table test2 (pk int PRIMARY KEY)"
+    dolt add .
     dolt commit -am "third commit"
 
     dolt sql -q "insert into test2 values (4)"

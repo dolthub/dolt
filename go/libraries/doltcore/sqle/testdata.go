@@ -95,7 +95,8 @@ func createPeopleTestSchema() schema.Schema {
 		schema.NewColumn("uuid", UuidTag, types.StringKind, false),
 		schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
 	)
-	return schema.MustSchemaFromCols(colColl)
+	sch := schema.MustSchemaFromCols(colColl)
+	return sch
 }
 
 func createEpisodesTestSchema() schema.Schema {
@@ -105,7 +106,8 @@ func createEpisodesTestSchema() schema.Schema {
 		newColumnWithTypeInfo("air_date", EpAirDateTag, typeinfo.DatetimeType, false),
 		schema.NewColumn("rating", EpRatingTag, types.FloatKind, false),
 	)
-	return schema.MustSchemaFromCols(colColl)
+	sch := schema.MustSchemaFromCols(colColl)
+	return sch
 }
 
 func createAppearancesTestSchema() schema.Schema {
@@ -114,7 +116,8 @@ func createAppearancesTestSchema() schema.Schema {
 		schema.NewColumn("episode_id", AppEpTag, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("comments", AppCommentsTag, types.StringKind, false),
 	)
-	return schema.MustSchemaFromCols(colColl)
+	sch := schema.MustSchemaFromCols(colColl)
+	return sch
 }
 
 func newColumnWithTypeInfo(name string, tag uint64, info typeinfo.TypeInfo, partOfPk bool, constraints ...schema.ColConstraint) schema.Column {

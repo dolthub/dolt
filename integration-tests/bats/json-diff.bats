@@ -58,6 +58,7 @@ teardown() {
     dolt sql <<SQL
 drop table test;
 create table test (pk int primary key, c1 int, c2 int);
+call dolt_add('.');
 insert into test values (1,2,3);
 insert into test values (4,5,6);
 SQL
@@ -215,6 +216,7 @@ SQL
 
 @test "json-diff: keyless table" {
     dolt sql -q "create table t(pk int, val int)"
+    dolt add .
     dolt commit -am "cm1"
 
     dolt sql -q "INSERT INTO t values (1, 1)"
@@ -259,6 +261,7 @@ SQL
 create table t(pk int, val int);
 insert into t values (1,1);
 SQL
+    dolt add .
     dolt commit -am "creating table"
 
     dolt sql -q "alter table t add primary key (pk)"

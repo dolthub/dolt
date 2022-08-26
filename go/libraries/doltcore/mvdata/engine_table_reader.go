@@ -87,7 +87,7 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 		return nil, err
 	}
 
-	doltSchema, err := sqlutil.ToDoltSchema(ctx, root, tableName, sql.NewPrimaryKeySchema(sch), nil)
+	doltSchema, err := sqlutil.ToDoltSchema(ctx, root, tableName, sql.NewPrimaryKeySchema(sch), nil, sql.Collation_Default)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func NewSqlEngineTableReaderWithEngine(sqlCtx *sql.Context, se *sqle.Engine, db 
 		return nil, err
 	}
 
-	doltSchema, err := sqlutil.ToDoltSchema(sqlCtx, root, tableName, sql.NewPrimaryKeySchema(sch), nil)
+	doltSchema, err := sqlutil.ToDoltSchema(sqlCtx, root, tableName, sql.NewPrimaryKeySchema(sch), nil, sql.Collation_Default)
 	if err != nil {
 		return nil, err
 	}
