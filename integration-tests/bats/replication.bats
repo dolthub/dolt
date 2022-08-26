@@ -26,6 +26,7 @@ teardown() {
 @test "replication: default no replication" {
     cd repo1
     dolt sql -q "create table t1 (a int primary key)"
+    dolt add .
     dolt commit -am "cm"
 
     [ ! -d "../bac1/.dolt" ] || false
@@ -36,6 +37,7 @@ teardown() {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
     dolt sql -q "create table t1 (a int primary key)"
+    dolt add .
     dolt commit -am "cm"
 
     cd ..
@@ -47,6 +49,7 @@ teardown() {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
     dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "call dolt_add('.')"
     dolt sql -q "select dolt_commit('-am', 'cm')"
 
     cd ..
@@ -139,6 +142,7 @@ teardown() {
     dolt clone file://./rem1 repo2
     cd repo2
     dolt sql -q "create table t1 (a int primary key)"
+    dolt add .
     dolt commit -am "new commit"
     dolt push origin main
 
@@ -177,6 +181,7 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
     dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_branch
     dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "call dolt_add('.')"
     dolt sql -q "call dolt_commit('-am', 'commit')"
     dolt sql -q "call dolt_branch('new_branch')"
 
@@ -195,6 +200,7 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
     dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_branch
     dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "call dolt_add('.')"
     dolt sql -q "call dolt_commit('-am', 'commit')"
     dolt sql -q "call dolt_checkout('-b', 'new_branch')"
 
@@ -213,9 +219,11 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
     dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_branch
     dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "call dolt_add('.')"
     dolt sql -q "call dolt_commit('-am', 'commit')"
     dolt sql -q "call dolt_checkout('-b', 'new_branch')"
     dolt sql -q "create table t2 (b int primary key)"
+    dolt sql -q "call dolt_add('.')"
     dolt sql -q "call dolt_commit('-am', 'commit')"
     dolt sql -q "call dolt_checkout('main')"
     dolt sql -q "call dolt_merge('new_branch')"
@@ -235,6 +243,7 @@ teardown() {
     cd repo2
     dolt checkout -b new_feature
     dolt sql -q "create table t1 (a int)"
+    dolt add .
     dolt commit -am "cm"
     dolt push origin new_feature
 
@@ -253,6 +262,7 @@ teardown() {
     cd repo2
     dolt checkout -b new_feature
     dolt sql -q "create table t1 (a int)"
+    dolt add .
     dolt commit -am "cm"
     dolt push origin new_feature
 
@@ -271,10 +281,12 @@ teardown() {
     cd repo2
     dolt checkout -b new_feature
     dolt sql -q "create table t1 (a int)"
+    dolt add .
     dolt commit -am "cm"
     dolt push origin new_feature
     dolt checkout main
     dolt sql -q "create table t2 (a int)"
+    dolt add .
     dolt commit -am "cm"
     dolt push origin main
 
@@ -390,6 +402,7 @@ teardown() {
     dolt checkout feat
     dolt sql -q "create table t1 (a int)"
     dolt sql -q "create table t2 (a int)"
+    dolt add .
     dolt commit -am "cm"
     # remote1 has tables
     dolt push remote1 feat
@@ -414,6 +427,7 @@ SQL
     cd repo2
     dolt checkout -b new_feature
     dolt sql -q "create table t1 (a int)"
+    dolt add .
     dolt commit -am "cm"
     dolt push origin new_feature
 
@@ -450,6 +464,7 @@ SQL
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
     dolt checkout -b new_feature
     dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "call dolt_add('.')"
     dolt sql -q "select dolt_commit('-am', 'cm')"
 
     cd ..
@@ -474,6 +489,8 @@ SQL
     run dolt sql -q "create table t1 (a int primary key)"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "remote not found" ]] || false
+
+    dolt add .
 
     run dolt sql -q "select dolt_commit('-am', 'cm')"
     [ "$status" -eq 0 ]
@@ -520,6 +537,7 @@ SQL
     cd repo2
     dolt checkout -b feature-branch
     dolt sql -q "create table t1 (a int primary key)"
+    dolt add .
     dolt commit -am "new commit"
     dolt push origin feature-branch
 
@@ -547,6 +565,7 @@ SQL
     cd ../repo2
     dolt checkout feature-branch
     dolt sql -q "create table t1 (a int primary key)"
+    dolt add .
     dolt commit -am "new commit"
     dolt push origin feature-branch
 
@@ -561,6 +580,7 @@ SQL
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
     dolt config --local --add sqlserver.global.dolt_async_replication 1
     dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "call dolt_add('.')"
     dolt sql -q "select dolt_commit('-am', 'cm')"
     sleep 5
 

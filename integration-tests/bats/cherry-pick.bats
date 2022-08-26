@@ -5,6 +5,7 @@ setup() {
     setup_common
 
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))"
+    dolt add .
     dolt commit -am "Created table"
     dolt checkout -b branch1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
@@ -103,6 +104,7 @@ teardown() {
 
 @test "cherry-pick: insert, update, delete rows and schema changes on non existent table in working set" {
     dolt sql -q "CREATE TABLE branch1table (id int primary key, col1 int)"
+    dolt add .
     dolt sql -q "INSERT INTO branch1table VALUES (9,8),(7,6),(5,4)"
     dolt commit -am "create table with rows"
 
@@ -156,12 +158,14 @@ teardown() {
 
 @test "cherry-pick: row data conflict, leave working set clean" {
     dolt sql -q "CREATE TABLE other (pk int primary key, v int)"
+    dolt add .
     dolt sql -q "INSERT INTO other VALUES (1, 2)"
     dolt sql -q "INSERT INTO test VALUES (4,'f')"
     dolt commit -am "add other table"
 
     dolt checkout main
     dolt sql -q "CREATE TABLE other (pk int primary key, v int)"
+    dolt add .
     dolt sql -q "INSERT INTO other VALUES (1, 3)"
     dolt sql -q "INSERT INTO test VALUES (4,'k')"
     dolt commit -am "add other table with conflict and test with conflict"
@@ -176,6 +180,7 @@ teardown() {
 
 @test "cherry-pick: commit with CREATE TABLE" {
     dolt sql -q "CREATE TABLE table_a (pk BIGINT PRIMARY KEY, v varchar(10))"
+    dolt add .
     dolt sql -q "INSERT INTO table_a VALUES (11, 'aa'), (22, 'ab'), (33, 'ac')"
     dolt sql -q "DELETE FROM test WHERE pk = 2"
     dolt commit -am "Added table_a with rows and delete pk=2 from test"
@@ -220,6 +225,7 @@ teardown() {
 
 @test "cherry-pick: commit with ALTER TABLE rename table name" {
     dolt sql -q "ALTER TABLE test RENAME TO new_name"
+    dolt add .
     dolt commit -am "rename table name"
 
     dolt checkout main
@@ -274,6 +280,7 @@ teardown() {
     run dolt sql -q "SELECT * FROM test"
     [[ "$output" =~ "z inserted" ]] || false
 
+    dolt add .
     dolt commit -am "add trigger"
 
     dolt checkout main
@@ -305,6 +312,7 @@ teardown() {
     run dolt sql -q "CALL proc1(434)"
     [[ "$output" =~ "434" ]] || false
 
+    dolt add .
     dolt commit -am "add procedure"
 
     dolt checkout main
@@ -324,6 +332,7 @@ teardown() {
 @test "cherry-pick: keyless table" {
     dolt checkout main
     dolt sql -q "CREATE TABLE keyless (id int, name varchar(10))"
+    dolt add .
     dolt commit -am "add keyless table"
 
     dolt checkout -b branch2

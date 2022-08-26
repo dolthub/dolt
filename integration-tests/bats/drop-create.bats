@@ -14,6 +14,7 @@ teardown() {
     dolt sql  <<SQL
 create table test(a int primary key, b int null);
 insert into test values (1,1), (2,2);
+call dolt_add('.');
 select dolt_commit("-am", "table with two rows");
 SQL
 
@@ -40,6 +41,7 @@ SQL
 @test "drop-create: same schema and data, commit after drop" {
     dolt sql  <<SQL
 create table test(a int primary key, b int null);
+call dolt_add('.');
 insert into test values (1,1), (2,2);
 select dolt_commit("-am", "table with two rows");
 SQL
@@ -77,6 +79,7 @@ SQL
 @test "drop-create: added column" {
     dolt sql  <<SQL
 create table test(a int primary key, b int null);
+call dolt_add('.');
 insert into test values (1,1), (2,2);
 select dolt_commit("-am", "table with two rows");
 SQL
@@ -131,6 +134,7 @@ EOF
 @test "drop-create: added column with data modifications" {
     dolt sql  <<SQL
 create table test(a int primary key, b int null);
+call dolt_add('.');
 insert into test values (1,1), (2,2);
 select dolt_commit("-am", "table with two rows");
 SQL
@@ -168,6 +172,7 @@ SQL
 @test "drop-create: dropped column" {
     dolt sql  <<SQL
 create table test(a int primary key, b int null, c int null);
+call dolt_add('.');
 insert into test values (1,2,3), (4,5,6);
 select dolt_commit("-am", "table with two rows");
 SQL
@@ -204,6 +209,7 @@ SQL
 @test "drop-create: dropped column with data modifications" {
     dolt sql  <<SQL
 create table test(a int primary key, b int null, c int null);
+call dolt_add('.');
 insert into test values (1,2,3), (4,5,6);
 select dolt_commit("-am", "table with two rows");
 SQL
@@ -241,6 +247,7 @@ SQL
 @test "drop-create: added column, modified column" {
     dolt sql  <<SQL
 create table test(a int primary key, b int null);
+call dolt_add('.');
 insert into test values (1,1), (2,2);
 select dolt_commit("-am", "table with two rows");
 SQL
@@ -290,6 +297,7 @@ EOF
 @test "drop-create: constraint changes" {
     dolt sql  <<SQL
 create table test(a int primary key, b int null);
+call dolt_add('.');
 insert into test values (1,1), (2,2);
 select dolt_commit("-am", "table with two rows");
 SQL
@@ -330,6 +338,7 @@ SQL
 @test "drop-create: default changes" {
     dolt sql  <<SQL
 create table test(a int primary key, b int null default 10);
+call dolt_add('.');
 insert into test values (1,1), (2,2);
 select dolt_commit("-am", "table with two rows");
 SQL

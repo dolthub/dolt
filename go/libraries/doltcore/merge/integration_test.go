@@ -96,9 +96,11 @@ func TestMerge(t *testing.T) {
 				{cmd.BranchCmd{}, args{"other"}},
 				{cmd.SqlCmd{}, args{"-q", "CREATE TABLE quiz (pk varchar(120) primary key);"}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO quiz VALUES ('a'),('b'),('c');"}},
+				{cmd.AddCmd{}, []string{"."}},
 				{cmd.CommitCmd{}, args{"-am", "added rows on main"}},
 				{cmd.CheckoutCmd{}, args{"other"}},
 				{cmd.SqlCmd{}, args{"-q", "CREATE TABLE quiz (pk varchar(120) primary key);"}},
+				{cmd.AddCmd{}, []string{"."}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO quiz VALUES ('x'),('y'),('z');"}},
 				{cmd.CommitCmd{}, args{"-am", "added rows on other"}},
 				{cmd.CheckoutCmd{}, args{env.DefaultInitBranch}},
@@ -145,6 +147,7 @@ func TestMergeConflicts(t *testing.T) {
 
 	setupCommon := []testCommand{
 		{cmd.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY, c0 int);"}},
+		{cmd.AddCmd{}, []string{"."}},
 		{cmd.CommitCmd{}, args{"-am", "created table test"}},
 	}
 
@@ -176,6 +179,7 @@ func TestMergeConflicts(t *testing.T) {
 			setup: []testCommand{
 				{cmd.CheckoutCmd{}, args{"-b", "other"}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (1,1),(2,2);"}},
+				{cmd.AddCmd{}, []string{"."}},
 				{cmd.CommitCmd{}, args{"-am", "added rows on other"}},
 				{cmd.CheckoutCmd{}, args{env.DefaultInitBranch}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (1,11),(2,22);"}},
@@ -195,10 +199,12 @@ func TestMergeConflicts(t *testing.T) {
 				{cmd.CheckoutCmd{}, args{"-b", "other"}},
 				{cmd.SqlCmd{}, args{"-q", "CREATE TABLE quiz (pk int PRIMARY KEY, c0 int);"}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO quiz VALUES (1,1),(2,2);"}},
+				{cmd.AddCmd{}, []string{"."}},
 				{cmd.CommitCmd{}, args{"-am", "added rows on other"}},
 				{cmd.CheckoutCmd{}, args{env.DefaultInitBranch}},
 				{cmd.SqlCmd{}, args{"-q", "CREATE TABLE quiz (pk int PRIMARY KEY, c0 int);"}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO quiz VALUES (1,11),(2,22);"}},
+				{cmd.AddCmd{}, []string{"."}},
 				{cmd.CommitCmd{}, args{"-am", "added the same rows on main"}},
 				{cmd.MergeCmd{}, args{"other"}},
 			},
@@ -213,10 +219,12 @@ func TestMergeConflicts(t *testing.T) {
 				{cmd.CheckoutCmd{}, args{"-b", "other"}},
 				{cmd.SqlCmd{}, args{"-q", "CREATE TABLE quiz (pk int PRIMARY KEY, c0 int);"}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO quiz VALUES (1,1),(2,2);"}},
+				{cmd.AddCmd{}, []string{"."}},
 				{cmd.CommitCmd{}, args{"-am", "added rows on other"}},
 				{cmd.CheckoutCmd{}, args{env.DefaultInitBranch}},
 				{cmd.SqlCmd{}, args{"-q", "CREATE TABLE quiz (pk int PRIMARY KEY, c0 int);"}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO quiz VALUES (1,11),(2,22);"}},
+				{cmd.AddCmd{}, []string{"."}},
 				{cmd.CommitCmd{}, args{"-am", "added the same rows on main"}},
 				{cmd.MergeCmd{}, args{"other"}},
 				{cnfcmds.ResolveCmd{}, args{"--theirs", "quiz"}},

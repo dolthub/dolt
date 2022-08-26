@@ -23,6 +23,7 @@ setup() {
     # table and comits only present on repo1, rem1 at start
     cd $TMPDIRS/repo1
     dolt sql -q "create table t1 (a int primary key, b int)"
+    dolt add .
     dolt commit -am "First commit"
     dolt sql -q "insert into t1 values (0,0)"
     dolt commit -am "Second commit"
@@ -189,6 +190,7 @@ teardown() {
 @test "sql-push: dolt_push --force flag" {
     cd repo2
     dolt sql -q "create table t2 (a int)"
+    dolt add .
     dolt commit -am "commit to override"
     dolt push origin main
 
@@ -203,6 +205,7 @@ teardown() {
 @test "sql-push: CALL dolt_push --force flag" {
     cd repo2
     dolt sql -q "create table t2 (a int)"
+    dolt add .
     dolt commit -am "commit to override"
     dolt push origin main
 

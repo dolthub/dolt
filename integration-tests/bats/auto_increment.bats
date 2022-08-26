@@ -440,6 +440,7 @@ CREATE TABLE t (
     c0 int
 );
 
+CALL DOLT_ADD('.');
 INSERT INTO t (c0) VALUES (1), (2);
 SELECT DOLT_COMMIT('-a', '-m', 'cm1');
 SELECT DOLT_CHECKOUT('-b', 'test');
@@ -471,6 +472,7 @@ CREATE TABLE t (
     c0 int
 );
 
+CALL DOLT_ADD('.');
 INSERT INTO t (c0) VALUES (1), (2);
 SELECT DOLT_COMMIT('-a', '-m', 'cm1');
 SELECT DOLT_CHECKOUT('-b', 'test');
@@ -504,6 +506,7 @@ CREATE TABLE t (
     c0 int
 );
 
+CALL DOLT_ADD('.');
 INSERT INTO t (c0) VALUES (1), (2);
 SELECT DOLT_COMMIT('-a', '-m', 'cm1');
 SELECT DOLT_CHECKOUT('-b', 'test');
@@ -537,6 +540,7 @@ CREATE TABLE t (
     c0 int
 );
 
+CALL DOLT_ADD('.');
 INSERT INTO t VALUES (4, 4), (5, 5);
 SELECT DOLT_COMMIT('-a', '-m', 'cm1');
 SELECT DOLT_CHECKOUT('-b', 'test');
@@ -697,6 +701,7 @@ SQL
 
 @test "auto_increment: globally distinct auto increment values" {
     dolt sql  <<SQL
+call dolt_add('.');
 call dolt_commit('-am', 'empty table');
 call dolt_branch('branch1');
 call dolt_branch('branch2');
@@ -734,6 +739,7 @@ SQL
     dolt checkout main
     dolt sql  <<SQL
 create table t1 (ai bigint primary key auto_increment, c0 int);
+call dolt_add('.');
 call dolt_commit('-am', 'empty table');
 call dolt_branch('branch3');
 call dolt_branch('branch4');

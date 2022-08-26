@@ -103,7 +103,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 	}
 
 	if allFlag {
-		roots, err = actions.StageAllTables(ctx, roots)
+		roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
 		if err != nil {
 			return handleCommitErr(ctx, dEnv, err, help)
 		}

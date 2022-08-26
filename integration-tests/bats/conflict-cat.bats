@@ -16,6 +16,7 @@ INSERT INTO t VALUES (1, 1);
 INSERT INTO t VALUES (2, 2);
 INSERT INTO t VALUES (3, 3);
 SQL
+    dolt add .
     dolt commit -am 'create table with rows'
 
     dolt checkout -b other
@@ -55,6 +56,7 @@ SQL
 
 @test "conflict-cat: conflicts should show using the union-schema (new schema on right)" {
     dolt sql -q "CREATE TABLE t (a INT PRIMARY KEY, b INT);"
+    dolt add .
     dolt commit -am "base"
 
     dolt checkout -b right
@@ -78,6 +80,7 @@ SQL
 
 @test "conflict-cat: conflicts should show using the union-schema (new schema on left)" {
     dolt sql -q "CREATE TABLE t (a INT PRIMARY KEY, b INT);"
+    dolt add .
     dolt commit -am "base"
 
     dolt checkout -b right
