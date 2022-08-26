@@ -59,6 +59,11 @@ func (dt *TagsTable) Schema() sql.Schema {
 	}
 }
 
+// Collation implements the sql.Table interface.
+func (dt *TagsTable) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
 // Partitions is a sql.Table interface function that returns a partition of the data. Currently, the data is unpartitioned.
 func (dt *TagsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil
