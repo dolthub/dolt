@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
@@ -253,43 +251,6 @@ func (nrr *NomsRangeReader) VerifySchema(outSch schema.Schema) (bool, error) {
 // Close should release resources being held
 func (nrr *NomsRangeReader) Close(ctx context.Context) error {
 	return nil
-}
-
-// SqlRowFromTuples constructs a go-mysql-server/sql.Row from Noms tuples.
-func SqlRowFromTuples(sch schema.Schema, key, val types.Tuple) (sql.Row, error) {
-	allCols := sch.GetAllCols()
-	colVals := make(sql.Row, allCols.Size())
-
-	keySl, err := key.AsSlice()
-	if err != nil {
-		return nil, err
-	}
-	valSl, err := val.AsSlice()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, sl := range []types.TupleValueSlice{keySl, valSl} {
-		var convErr error
-		err := row.IterPkTuple(sl, func(tag uint64, val types.Value) (stop bool, err error) {
-			if idx, ok := allCols.TagToIdx[tag]; ok {
-				col := allCols.GetByIndex(idx)
-				colVals[idx], convErr = col.TypeInfo.ConvertNomsValueToValue(val)
-
-				if convErr != nil {
-					return false, err
-				}
-			}
-
-			return false, nil
-		})
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return sql.NewRow(colVals...), nil
 }
 
 type CardinalityCounter struct {
