@@ -32,7 +32,6 @@ teardown() {
       dolt sql -q "create table german1 (c char(10)) CHARACTER SET latin1 COLLATE latin1_german1_ci"
       run dolt sql -q "show create table german1";
       [ $status -eq 0 ]
-      skip "Defining charsets and collations on a table not supported"
       [[ $output =~ "CHARACTER SET latin1" ]] || false
       [[ $output =~ "COLLATE latin1_german1_ci" ]] || false
 }
@@ -50,7 +49,6 @@ teardown() {
     dolt sql -q "create table german1 (c char(10) CHARACTER SET latin1 COLLATE latin1_german1_ci)"
     dolt sql -q "insert into german1 values ('Bar'), ('Bär')"
     run dolt sql -q "SELECT * FROM german1 WHERE c = 'Bär'"
-    skip "This panics"
     [ $status -eq 0 ]
     [[ $output =~ 'Bar' ]] || false
     [[ $output =~ 'Bär' ]] || false
@@ -84,7 +82,6 @@ teardown() {
     [[ $output =~ 'latin1_german2_ci' ]] || false
     [[ ! $output =~ 'latin1_german1_ci' ]] || false
 
-    skip "Panics"
     run dolt sql -q "SELECT * FROM german1 WHERE c = 'Bär'"
     [ $status -eq 0 ]
     [[ ! $output =~ 'Bar' ]] || false
