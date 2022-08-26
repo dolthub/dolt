@@ -22,19 +22,19 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 )
 
-// TableWriteCloser is an interface for writing rows to a table
-type TableWriter interface {
-	// WriteRow will write a row to a table
+// RowWriter knows how to write table rows to some destination
+type RowWriter interface {
+	// WriteRow writes a row to the destination of this writer
 	WriteRow(ctx context.Context, r row.Row) error
 }
 
 // TableWriteCloser is an interface for writing rows to a table, that can be closed
 type TableWriteCloser interface {
-	TableWriter
-	TableCloser
+	RowWriter
+	Closer
 }
 
-type SqlTableWriter interface {
+type SqlRowWriter interface {
 	TableWriteCloser
 	WriteSqlRow(ctx context.Context, r sql.Row) error
 }

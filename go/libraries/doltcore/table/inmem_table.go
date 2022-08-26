@@ -163,12 +163,12 @@ func (rd *InMemTableReader) VerifySchema(outSch schema.Schema) (bool, error) {
 	return schema.VerifyInSchema(rd.tt.sch, outSch)
 }
 
-// InMemTableWriter is an implementation of a TableWriter for an InMemTable
+// InMemTableWriter is an implementation of a RowWriter for an InMemTable
 type InMemTableWriter struct {
 	tt *InMemTable
 }
 
-// NewInMemTableWriter creates an instance of a TableWriter from an InMemTable
+// NewInMemTableWriter creates an instance of a RowWriter from an InMemTable
 func NewInMemTableWriter(imt *InMemTable) *InMemTableWriter {
 	return &InMemTableWriter{imt}
 }

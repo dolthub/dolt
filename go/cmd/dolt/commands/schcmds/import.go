@@ -344,7 +344,7 @@ func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, impOpts 
 		impOpts.fileType = impOpts.fileType[1:]
 	}
 
-	var rd table.TableReadCloser
+	var rd table.ReadCloser
 	csvInfo := csv.NewCSVInfo().SetDelim(",")
 
 	switch impOpts.fileType {

@@ -45,7 +45,7 @@ type CSVWriter struct {
 	useCRLF bool // True to use \r\n as the line terminator
 }
 
-var _ table.SqlTableWriter = (*CSVWriter)(nil)
+var _ table.SqlRowWriter = (*CSVWriter)(nil)
 
 // NewCSVWriter writes rows to the given WriteCloser based on the Schema and CSVFileInfo provided
 func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {

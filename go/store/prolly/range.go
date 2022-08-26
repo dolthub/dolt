@@ -22,9 +22,19 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// OpenStartRange defines a half-open Range of Tuples (start, stop].
-func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
-	return openStartRange(start, stop, desc)
+// OpenStopRange defines a half-open Range of Tuples [start, stop).
+func OpenStopRange(start, stop val.Tuple, desc val.TupleDesc) Range {
+	return openStopRange(start, stop, desc)
+}
+
+// GreaterOrEqualRange defines a Range of Tuples greater than or equal to |start|.
+func GreaterOrEqualRange(start val.Tuple, desc val.TupleDesc) Range {
+	return greaterOrEqualRange(start, desc)
+}
+
+// LesserRange defines a Range of Tuples less than |stop|.
+func LesserRange(stop val.Tuple, desc val.TupleDesc) Range {
+	return lesserRange(stop, desc)
 }
 
 // PrefixRange constructs a Range for Tuples with a prefix of |prefix|.
