@@ -762,15 +762,8 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 	}
 
 	pranges := make([]prolly.Range, len(ranges))
-	//for i := range pranges {
-	//	pranges[i] = prolly.Range{
-	//		Fields: make([]prolly.RangeField, len(ranges[i])),
-	//		Desc:   di.keyBld.Desc,
-	//	}
-	//}
 
 	for k, rng := range ranges {
-		//prollyRange := pranges[k]
 		fields := make([]prolly.RangeField, len(rng))
 		for j, expr := range rng {
 			if rangeCutIsBinding(expr.LowerBound) {
