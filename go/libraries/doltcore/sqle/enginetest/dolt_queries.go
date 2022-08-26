@@ -182,6 +182,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		Name: "database revision specs: Ancestor references",
 		SetUpScript: []string{
 			"create table t01 (pk int primary key, c1 int)",
+			"call dolt_add('t01');",
 			"call dolt_commit('-am', 'creating table t01 on main');",
 			"call dolt_branch('branch1');",
 			"insert into t01 values (1, 1), (2, 2);",
