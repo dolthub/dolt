@@ -236,6 +236,10 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				ExpectedErr: sql.ErrTableNotFound,
 			},
 			{
+				Query:          "select * from `mydb/tag1~20`.t01;",
+				ExpectedErrStr: "invalid ancestor spec",
+			},
+			{
 				Query:    "select * from `mydb/branch1~`.t01;",
 				Expected: []sql.Row{{100, 100}, {200, 200}},
 			},
