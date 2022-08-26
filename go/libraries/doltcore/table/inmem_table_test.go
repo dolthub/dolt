@@ -90,7 +90,7 @@ func TestInMemTable(t *testing.T) {
 	}()
 
 	func() {
-		var r TableReadCloser
+		var r ReadCloser
 		r = NewInMemTableReader(imt)
 		defer r.Close(context.Background())
 

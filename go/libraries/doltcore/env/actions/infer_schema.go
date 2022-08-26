@@ -54,7 +54,7 @@ type InferenceArgs interface {
 }
 
 // InferColumnTypesFromTableReader will infer a data types from a table reader.
-func InferColumnTypesFromTableReader(ctx context.Context, root *doltdb.RootValue, rd table.TableReadCloser, args InferenceArgs) (*schema.ColCollection, error) {
+func InferColumnTypesFromTableReader(ctx context.Context, root *doltdb.RootValue, rd table.ReadCloser, args InferenceArgs) (*schema.ColCollection, error) {
 	inferrer := newInferrer(rd.GetSchema(), args)
 
 	var rowFailure *pipeline.TransformRowFailure

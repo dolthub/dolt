@@ -37,7 +37,7 @@ type ParquetWriter struct {
 	sch        schema.Schema
 }
 
-var _ table.SqlTableWriter = (*ParquetWriter)(nil)
+var _ table.SqlRowWriter = (*ParquetWriter)(nil)
 
 var typeMap = map[typeinfo.Identifier]string{
 	typeinfo.DatetimeTypeIdentifier:   "type=INT64, convertedtype=TIMESTAMP_MICROS",
