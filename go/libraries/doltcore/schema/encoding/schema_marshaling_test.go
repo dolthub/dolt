@@ -214,6 +214,7 @@ type testEncodedIndex struct {
 type testSchemaData struct {
 	Columns         []testEncodedColumn `noms:"columns" json:"columns"`
 	IndexCollection []testEncodedIndex  `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
+	Collation       schema.Collation    `noms:"collation,omitempty" json:"collation,omitempty"`
 }
 
 func (tec testEncodedColumn) decodeColumn() (schema.Column, error) {
@@ -251,6 +252,7 @@ func (tsd testSchemaData) decodeSchema() (schema.Schema, error) {
 	if err != nil {
 		return nil, err
 	}
+	sch.SetCollation(tsd.Collation)
 
 	for _, encodedIndex := range tsd.IndexCollection {
 		_, err = sch.Indexes().AddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, schema.IndexProperties{IsUnique: encodedIndex.Unique, Comment: encodedIndex.Comment})

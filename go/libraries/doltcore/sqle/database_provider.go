@@ -249,7 +249,15 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	// TODO: fill in version appropriately
 	dsess := dsess.DSessFromSess(ctx.Session)
 	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
-	err = newEnv.InitRepo(ctx, types.Format_Default, dsess.Username(), dsess.Email(), p.defaultBranch)
+
+	// if currentDB is empty, it will create the database with the default format which is the old format
+	newDbStorageFormat := types.Format_Default
+	if curDB := dsess.GetCurrentDatabase(); curDB != "" {
+		if ddb, ok := dsess.GetDoltDB(ctx, curDB); ok {
+			newDbStorageFormat = ddb.ValueReadWriter().Format()
+		}
+	}
+	err = newEnv.InitRepo(ctx, newDbStorageFormat, dsess.Username(), dsess.Email(), p.defaultBranch)
 	if err != nil {
 		return err
 	}

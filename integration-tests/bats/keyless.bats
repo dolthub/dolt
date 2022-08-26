@@ -11,6 +11,7 @@ CREATE TABLE keyless (
 );
 INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);
 SQL
+    dolt add .
     dolt commit -am "init"
 }
 
@@ -363,6 +364,7 @@ INSERT INTO dupe (c0,c1) VALUES
     (1,1),(1,1),(1,1),(1,1),(1,1),
     (1,1),(1,1),(1,1),(1,1),(1,1);
 SQL
+    dolt add .
     dolt commit -am "created table dupe"
 }
 

@@ -36,7 +36,7 @@ func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, quer
 	}
 
 	ts := ddl.(*sqlparser.DDL).TableSpec
-	s, err := parse.TableSpecToSchema(sql.NewContext(ctx), ts)
+	s, collation, err := parse.TableSpecToSchema(sql.NewContext(ctx), ts, false)
 
 	if err != nil {
 		return "", nil, err
@@ -46,7 +46,7 @@ func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, quer
 	buf := sqlparser.NewTrackedBuffer(nil)
 	tn.Format(buf)
 	tableName := buf.String()
-	sch, err := ToDoltSchema(ctx, root, tableName, s, nil)
+	sch, err := ToDoltSchema(ctx, root, tableName, s, nil, collation)
 
 	if err != nil {
 		return "", nil, err

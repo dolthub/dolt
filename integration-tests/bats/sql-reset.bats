@@ -10,6 +10,7 @@ CREATE TABLE test (
 );
 SQL
 
+    dolt add .
     dolt commit -a -m "Add a table"
 }
 

@@ -218,6 +218,7 @@ SQL
 
 @test "status: dolt reset hard with ~ works" {
     dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
+    dolt add .
     dolt commit -am "cm1"
 
     dolt sql -q "INSERT INTO test values (1);"
@@ -261,6 +262,7 @@ SQL
 
 @test "status: dolt reset soft with ~ works" {
     dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
+    dolt add .
     dolt commit -am "cm1"
 
     dolt sql -q "INSERT INTO test values (1);"
@@ -306,6 +308,7 @@ CREATE TABLE one (
   v2 BIGINT
 );
 SQL
+    dolt add .
     dolt commit -am "added table"
     dolt sql -q "rename table one to one_super"
 
@@ -316,18 +319,21 @@ SQL
 @test "status: dolt reset works with commit hash ref" {
     dolt sql -q "CREATE TABLE tb1 (pk int PRIMARY KEY);"
     dolt sql -q "INSERT INTO tb1 values (1);"
+    dolt add .
     dolt commit -am "cm1"
 
     cm1=$(get_head_commit)
 
     dolt sql -q "CREATE TABLE tb2 (pk int PRIMARY KEY);"
     dolt sql -q "INSERT INTO tb2 values (11);"
+    dolt add .
     dolt commit -am "cm2"
 
     cm2=$(get_head_commit)
 
     dolt sql -q "CREATE TABLE tb3 (pk int PRIMARY KEY);"
     dolt sql -q "INSERT INTO tb3 values (11);"
+    dolt add .
     dolt commit -am "cm3"
 
     cm3=$(get_head_commit)
@@ -354,6 +360,7 @@ SQL
     run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
     [[ "$output" =~ "3" ]] || false # includes init commit
 
+    dolt add .
     dolt commit -am "commit 3"
 
     # Do a soft reset to commit 1
@@ -372,6 +379,7 @@ SQL
 
 @test "status: dolt reset works with branch ref" {
     dolt sql -q "CREATE TABLE tbl(pk int);"
+    dolt add .
     dolt sql -q "INSERT into tbl VALUES (1)"
     dolt commit -am "cm1"
 
@@ -379,6 +387,7 @@ SQL
     dolt checkout -b test
     dolt sql -q "INSERT INTO tbl VALUES (2),(3)"
     dolt sql -q "CREATE TABLE tbl2(pk int);"
+    dolt add .
     dolt commit -am "test cm1"
 
     # go back to main and merge
@@ -401,6 +410,7 @@ SQL
 
 @test "status: dolt reset ref properly manages staged changes as well" {
     dolt sql -q "CREATE TABLE tbl(pk int);"
+    dolt add .
     dolt sql -q "INSERT into tbl VALUES (1)"
     dolt commit -am "cm1"
 

@@ -312,6 +312,11 @@ func (ht *HistoryTable) Schema() sql.Schema {
 	return projectedSch
 }
 
+// Collation implements the sql.Table interface.
+func (ht *HistoryTable) Collation() sql.CollationID {
+	return sql.CollationID(ht.doltTable.sch.GetCollation())
+}
+
 // Partitions returns a PartitionIter which will be used in getting partitions each of which is used to create RowIter.
 func (ht *HistoryTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return &commitPartitioner{ht.cmItr}, nil

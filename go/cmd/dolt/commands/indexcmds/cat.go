@@ -176,7 +176,7 @@ func (cmd CatCmd) prettyPrintResults(ctx context.Context, doltSch schema.Schema,
 	return nil
 }
 
-func getTableWriter(format resultFormat, sch schema.Schema) (wr table.SqlTableWriter, err error) {
+func getTableWriter(format resultFormat, sch schema.Schema) (wr table.SqlRowWriter, err error) {
 	s, err := sqlutil.FromDoltSchema("", sch)
 	if err != nil {
 		return nil, err

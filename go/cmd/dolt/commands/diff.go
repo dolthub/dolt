@@ -22,10 +22,7 @@ import (
 	"strconv"
 	"strings"
 
-	textdiff "github.com/andreyvit/diff"
 	"github.com/dolthub/go-mysql-server/sql"
-	humanize "github.com/dustin/go-humanize"
-	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -34,18 +31,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/atomicerr"
 )
 
 type diffOutput int
@@ -60,6 +51,7 @@ const (
 
 	TabularDiffOutput diffOutput = 1
 	SQLDiffOutput     diffOutput = 2
+	JsonDiffOutput    diffOutput = 3
 
 	DataFlag    = "data"
 	SchemaFlag  = "schema"
@@ -69,12 +61,6 @@ const (
 	SQLFlag     = "sql"
 	CachedFlag  = "cached"
 )
-
-type DiffSink interface {
-	GetSchema() schema.Schema
-	ProcRowWithProps(r row.Row, props pipeline.ReadableMap) error
-	Close() error
-}
 
 var diffDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Show changes between commits, commit and working tree, etc",
@@ -139,7 +125,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
 	ap.SupportsFlag(SummaryFlag, "", "Show summary of data changes")
-	ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular & sql. Defaults to tabular. ")
+	ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular, sql, json. Defaults to tabular.")
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
 	ap.SupportsFlag(CachedFlag, "c", "Show only the unstaged data changes.")
@@ -178,7 +164,7 @@ func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 
 	f, _ := apr.GetValue(FormatFlag)
 	switch strings.ToLower(f) {
-	case "tabular", "sql", "":
+	case "tabular", "sql", "json", "":
 	default:
 		return errhand.BuildDError("invalid output format: %s", f).Build()
 	}
@@ -204,6 +190,8 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		dArgs.diffOutput = TabularDiffOutput
 	case "sql":
 		dArgs.diffOutput = SQLDiffOutput
+	case "json":
+		dArgs.diffOutput = JsonDiffOutput
 	}
 
 	dArgs.limit, _ = apr.GetInt(limitParam)
@@ -332,7 +320,7 @@ func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.
 	return root, true
 }
 
-func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) (verr errhand.VerboseError) {
+func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) errhand.VerboseError {
 	var err error
 
 	tableDeltas, err := diff.GetTableDeltas(ctx, dArgs.fromRoot, dArgs.toRoot)
@@ -348,132 +336,124 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) (ve
 	sort.Slice(tableDeltas, func(i, j int) bool {
 		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
 	})
+
+	dw, err := newDiffWriter(dArgs.diffOutput)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
 	for _, td := range tableDeltas {
-		if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
-			continue
-		}
-
-		tblName := td.ToName
-		fromTable := td.FromTable
-		toTable := td.ToTable
-
-		if fromTable == nil && toTable == nil {
-			return errhand.BuildDError("error: both tables in tableDelta are nil").Build()
-		}
-
-		if dArgs.diffOutput == TabularDiffOutput {
-			printTableDiffSummary(td)
-		}
-
-		fromSch, toSch, err := td.GetSchemas(ctx)
-		if err != nil {
-			return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
-		}
-
-		if dArgs.diffParts&Summary != 0 {
-			numCols := fromSch.GetAllCols().Size()
-			verr = printDiffSummary(ctx, td, numCols)
-		}
-
-		if dArgs.diffParts&SchemaOnlyDiff != 0 {
-			verr = diffSchemas(ctx, dArgs.toRoot, td, dArgs)
-		}
-
-		if dArgs.diffParts&DataOnlyDiff != 0 {
-			if td.IsDrop() && dArgs.diffOutput == SQLDiffOutput {
-				continue // don't output DELETE FROM statements after DROP TABLE
-			} else if td.IsAdd() {
-				fromSch = toSch
-			}
-
-			if !schema.ArePrimaryKeySetsDiffable(td.Format(), fromSch, toSch) {
-				cli.PrintErrf("Primary key sets differ between revisions for table %s, skipping data diff\n", tblName)
-				continue
-			}
-
-			verr = diffRows(ctx, engine, td, dArgs)
-		}
-
+		verr := diffUserTable(ctx, td, engine, dArgs, dw)
 		if verr != nil {
 			return verr
 		}
 	}
 
-	return nil
-}
-
-func diffSchemas(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
-	toSchemas, err := toRoot.GetAllSchemas(ctx)
+	err = dw.Close(ctx)
 	if err != nil {
-		return errhand.BuildDError("could not read schemas from toRoot").AddCause(err).Build()
-	}
-
-	if dArgs.diffOutput == TabularDiffOutput {
-		return printShowCreateTableDiff(ctx, td)
-	}
-
-	return sqlSchemaDiff(ctx, td, toSchemas)
-}
-
-func printShowCreateTableDiff(ctx context.Context, td diff.TableDelta) errhand.VerboseError {
-	fromSch, toSch, err := td.GetSchemas(ctx)
-	if err != nil {
-		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
-	}
-
-	var fromCreateStmt = ""
-	if td.FromTable != nil {
-		// TODO: use UserSpaceDatabase for these, no reason for this separate database implementation
-		sqlDb := sqle.NewSingleTableDatabase(td.FromName, fromSch, td.FromFks, td.FromFksParentSch)
-		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
-		fromCreateStmt, err = sqle.GetCreateTableStmt(sqlCtx, engine, td.FromName)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-	}
-
-	var toCreateStmt = ""
-	if td.ToTable != nil {
-		sqlDb := sqle.NewSingleTableDatabase(td.ToName, toSch, td.ToFks, td.ToFksParentSch)
-		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
-		toCreateStmt, err = sqle.GetCreateTableStmt(sqlCtx, engine, td.ToName)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-	}
-
-	if fromCreateStmt != toCreateStmt {
-		cli.Println(textdiff.LineDiff(fromCreateStmt, toCreateStmt))
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	return nil
 }
 
-// TODO: this doesn't handle check constraints or triggers
-func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string]schema.Schema) errhand.VerboseError {
+func diffUserTable(
+	ctx context.Context,
+	td diff.TableDelta,
+	engine *engine.SqlEngine,
+	dArgs *diffArgs,
+	dw diffWriter,
+) errhand.VerboseError {
+	if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
+		return nil
+	}
+
+	fromTable := td.FromTable
+	toTable := td.ToTable
+
+	if fromTable == nil && toTable == nil {
+		return errhand.BuildDError("error: both tables in tableDelta are nil").Build()
+	}
+
+	err := dw.BeginTable(ctx, td)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
+
+	if dArgs.diffParts&Summary != 0 {
+		numCols := fromSch.GetAllCols().Size()
+		return printDiffSummary(ctx, td, numCols)
+	}
+
+	if dArgs.diffParts&SchemaOnlyDiff != 0 {
+		err := dw.WriteSchemaDiff(ctx, dArgs.toRoot, td)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+	}
+
+	if td.IsDrop() && dArgs.diffOutput == SQLDiffOutput {
+		return nil // don't output DELETE FROM statements after DROP TABLE
+	} else if td.IsAdd() {
+		fromSch = toSch
+	}
+
+	verr := diffRows(ctx, engine, td, dArgs, dw)
+	if verr != nil {
+		return verr
+	}
+
+	return nil
+}
+
+func writeSqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string]schema.Schema) errhand.VerboseError {
+	ddlStatements, err := sqlSchemaDiff(ctx, td, toSchemas)
+	if err != nil {
+		return err
+	}
+
+	for _, stmt := range ddlStatements {
+		cli.Println(stmt)
+	}
+
+	return nil
+}
+
+// sqlSchemaDiff returns a slice of DDL statements that will transform the schema in the from delta to the schema in
+// the to delta.
+// TODO: this doesn't handle constraints or triggers
+// TODO: this should live in the diff package
+func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string]schema.Schema) ([]string, errhand.VerboseError) {
+	fromSch, toSch, err := td.GetSchemas(ctx)
+	if err != nil {
+		return nil, errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
+	}
+
+	var ddlStatements []string
 
 	if td.IsDrop() {
-		cli.Println(sqlfmt.DropTableStmt(td.FromName))
+		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(td.FromName))
 	} else if td.IsAdd() {
 		sqlDb := sqle.NewSingleTableDatabase(td.ToName, toSch, td.ToFks, td.ToFksParentSch)
 		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
 		stmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, td.ToName)
 		if err != nil {
-			return errhand.VerboseErrorFromError(err)
+			return nil, errhand.VerboseErrorFromError(err)
 		}
-		cli.Println(stmt)
+		ddlStatements = append(ddlStatements, stmt)
 	} else {
 		if td.FromName != td.ToName {
-			cli.Println(sqlfmt.RenameTableStmt(td.FromName, td.ToName))
+			ddlStatements = append(ddlStatements, sqlfmt.RenameTableStmt(td.FromName, td.ToName))
 		}
 
 		eq := schema.SchemasAreEqual(fromSch, toSch)
 		if eq && !td.HasFKChanges() {
-			return nil
+			return ddlStatements, nil
 		}
 
 		colDiffs, unionTags := diff.DiffSchColumns(fromSch, toSch)
@@ -482,25 +462,25 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 			switch cd.DiffType {
 			case diff.SchDiffNone:
 			case diff.SchDiffAdded:
-				cli.Println(sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.FmtCol(0, 0, 0, *cd.New)))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.FmtCol(0, 0, 0, *cd.New)))
 			case diff.SchDiffRemoved:
-				cli.Println(sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
 			case diff.SchDiffModified:
 				// Ignore any primary key set changes here
 				if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
 					continue
 				}
 				if cd.Old.Name != cd.New.Name {
-					cli.Println(sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
+					ddlStatements = append(ddlStatements, sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
 				}
 			}
 		}
 
 		// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
 		if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
-			cli.Println(sqlfmt.AlterTableDropPks(td.ToName))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropPks(td.ToName))
 			if toSch.GetPKCols().Size() > 0 {
-				cli.Println(sqlfmt.AlterTableAddPrimaryKeys(td.ToName, toSch.GetPKCols()))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddPrimaryKeys(td.ToName, toSch.GetPKCols()))
 			}
 		}
 
@@ -508,12 +488,12 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 			switch idxDiff.DiffType {
 			case diff.SchDiffNone:
 			case diff.SchDiffAdded:
-				cli.Println(sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
 			case diff.SchDiffRemoved:
-				cli.Println(sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
 			case diff.SchDiffModified:
-				cli.Println(sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
-				cli.Println(sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
 			}
 		}
 
@@ -522,23 +502,87 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 			case diff.SchDiffNone:
 			case diff.SchDiffAdded:
 				parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-				cli.Println(sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
 			case diff.SchDiffRemoved:
-				cli.Println(sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
 			case diff.SchDiffModified:
-				cli.Println(sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
 
 				parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-				cli.Println(sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
 			}
 		}
 	}
-	return nil
+
+	return ddlStatements, nil
 }
 
-func diffRows(ctx context.Context, se *engine.SqlEngine, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
+func diffRows(
+	ctx context.Context,
+	se *engine.SqlEngine,
+	td diff.TableDelta,
+	dArgs *diffArgs,
+	dw diffWriter,
+) errhand.VerboseError {
 	from, to := dArgs.fromRef, dArgs.toRef
 
+	diffable := schema.ArePrimaryKeySetsDiffable(td.Format(), td.FromSch, td.ToSch)
+	canSqlDiff := !(td.ToSch == nil || (td.FromSch != nil && !schema.SchemasAreEqual(td.FromSch, td.ToSch)))
+
+	var toSch, fromSch sql.Schema
+	if td.FromSch != nil {
+		pkSch, err := sqlutil.FromDoltSchema(td.FromName, td.FromSch)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		fromSch = pkSch.Schema
+	}
+
+	if td.ToSch != nil {
+		pkSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		toSch = pkSch.Schema
+	}
+
+	unionSch := unionSchemas(fromSch, toSch)
+
+	// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
+	rowWriter, err := dw.RowWriter(ctx, td, unionSch)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	// can't diff
+	if !diffable {
+		// TODO: this messes up some structured output if the user didn't redirect it
+		cli.PrintErrf("Primary key sets differ between revisions for table %s, skipping data diff\n", td.ToName)
+		err := rowWriter.Close(ctx)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		return nil
+	} else if dArgs.diffOutput == SQLDiffOutput && !canSqlDiff {
+		// TODO: this is overly broad, we can absolutely do better
+		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff\n")
+		err := rowWriter.Close(ctx)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		return nil
+	}
+
+	// no data diff requested
+	if dArgs.diffParts&DataOnlyDiff == 0 {
+		err := rowWriter.Close(ctx)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		return nil
+	}
+
+	// do the data diff
 	tableName := td.ToName
 	if len(tableName) == 0 {
 		tableName = td.FromName
@@ -569,47 +613,7 @@ func diffRows(ctx context.Context, se *engine.SqlEngine, td diff.TableDelta, dAr
 
 	defer rowIter.Close(sqlCtx)
 
-	var toSch, fromSch sql.Schema
-	if td.FromSch != nil {
-		pkSch, err := sqlutil.FromDoltSchema(td.FromName, td.FromSch)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-		fromSch = pkSch.Schema
-	}
-
-	if td.ToSch != nil {
-		pkSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-		toSch = pkSch.Schema
-	}
-
-	unionSch := unionSchemas(fromSch, toSch)
-
-	// In some cases we can't print SQL output diffs
-	if dArgs.diffOutput == SQLDiffOutput &&
-		(td.ToSch == nil ||
-			(td.FromSch != nil && !schema.SchemasAreEqual(td.FromSch, td.ToSch))) {
-		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff\n")
-		return nil
-	}
-
-	var diffWriter diff.SqlRowDiffWriter
-	switch dArgs.diffOutput {
-	case TabularDiffOutput:
-		// TODO: default sample size
-		diffWriter = tabular.NewFixedWidthDiffTableWriter(unionSch, iohelp.NopWrCloser(cli.CliOut), 100)
-	case SQLDiffOutput:
-		targetSch := td.ToSch
-		if targetSch == nil {
-			targetSch = td.FromSch
-		}
-		diffWriter = sqlexport.NewSqlDiffWriter(tableName, targetSch, iohelp.NopWrCloser(cli.CliOut))
-	}
-
-	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, diffWriter)
+	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, rowWriter)
 	if err != nil {
 		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}
@@ -628,6 +632,23 @@ func unionSchemas(s1 sql.Schema, s2 sql.Schema) sql.Schema {
 		}
 	}
 	return union
+}
+
+func getColumnNamesString(fromSch, toSch schema.Schema) string {
+	var cols []string
+	if fromSch != nil {
+		fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			cols = append(cols, fmt.Sprintf("`from_%s`", col.Name))
+			return false, nil
+		})
+	}
+	if toSch != nil {
+		toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			cols = append(cols, fmt.Sprintf("`to_%s`", col.Name))
+			return false, nil
+		})
+	}
+	return strings.Join(cols, ",")
 }
 
 func writeDiffResults(
@@ -669,168 +690,4 @@ func writeDiffResults(
 			}
 		}
 	}
-}
-
-func getColumnNamesString(fromSch, toSch schema.Schema) string {
-	var cols []string
-	if fromSch != nil {
-		fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			cols = append(cols, fmt.Sprintf("`from_%s`", col.Name))
-			return false, nil
-		})
-	}
-	if toSch != nil {
-		toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			cols = append(cols, fmt.Sprintf("`to_%s`", col.Name))
-			return false, nil
-		})
-	}
-	return strings.Join(cols, ",")
-}
-
-func printDiffLines(bold *color.Color, lines []string) {
-	for _, line := range lines {
-		if string(line[0]) == string("+") {
-			cli.Println(color.GreenString("+ " + line[1:]))
-		} else if string(line[0]) == ("-") {
-			cli.Println(color.RedString("- " + line[1:]))
-		} else {
-			cli.Println(" " + line)
-		}
-	}
-}
-
-func printTableDiffSummary(td diff.TableDelta) {
-	bold := color.New(color.Bold)
-	if td.IsDrop() {
-		_, _ = bold.Printf("diff --dolt a/%s b/%s\n", td.FromName, td.FromName)
-		_, _ = bold.Println("deleted table")
-	} else if td.IsAdd() {
-		_, _ = bold.Printf("diff --dolt a/%s b/%s\n", td.ToName, td.ToName)
-		_, _ = bold.Println("added table")
-	} else {
-		_, _ = bold.Printf("diff --dolt a/%s b/%s\n", td.FromName, td.ToName)
-		h1, err := td.FromTable.HashOf()
-
-		if err != nil {
-			panic(err)
-		}
-
-		_, _ = bold.Printf("--- a/%s @ %s\n", td.FromName, h1.String())
-
-		h2, err := td.ToTable.HashOf()
-
-		if err != nil {
-			panic(err)
-		}
-
-		_, _ = bold.Printf("+++ b/%s @ %s\n", td.ToName, h2.String())
-	}
-}
-
-func printDiffSummary(ctx context.Context, td diff.TableDelta, colLen int) errhand.VerboseError {
-	// todo: use errgroup.Group
-	ae := atomicerr.New()
-	ch := make(chan diff.DiffSummaryProgress)
-	go func() {
-		defer close(ch)
-		err := diff.SummaryForTableDelta(ctx, ch, td)
-
-		ae.SetIfError(err)
-	}()
-
-	acc := diff.DiffSummaryProgress{}
-	var count int64
-	var pos int
-	eP := cli.NewEphemeralPrinter()
-	for p := range ch {
-		if ae.IsSet() {
-			break
-		}
-
-		acc.Adds += p.Adds
-		acc.Removes += p.Removes
-		acc.Changes += p.Changes
-		acc.CellChanges += p.CellChanges
-		acc.NewSize += p.NewSize
-		acc.OldSize += p.OldSize
-
-		if count%10000 == 0 {
-			eP.Printf("prev size: %d, new size: %d, adds: %d, deletes: %d, modifications: %d\n", acc.OldSize, acc.NewSize, acc.Adds, acc.Removes, acc.Changes)
-			eP.Display()
-		}
-
-		count++
-	}
-
-	pos = cli.DeleteAndPrint(pos, "")
-
-	if err := ae.Get(); err != nil {
-		return errhand.BuildDError("").AddCause(err).Build()
-	}
-
-	keyless, err := td.IsKeyless(ctx)
-	if err != nil {
-		return nil
-	}
-
-	if (acc.Adds + acc.Removes + acc.Changes) == 0 {
-		cli.Println("No data changes. See schema changes by using -s or --schema.")
-		return nil
-	}
-
-	if keyless {
-		printKeylessSummary(acc)
-	} else {
-		printSummary(acc, colLen)
-	}
-
-	return nil
-}
-
-func printSummary(acc diff.DiffSummaryProgress, colLen int) {
-	rowsUnmodified := uint64(acc.OldSize - acc.Changes - acc.Removes)
-	unmodified := pluralize("Row Unmodified", "Rows Unmodified", rowsUnmodified)
-	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
-	deletions := pluralize("Row Deleted", "Rows Deleted", acc.Removes)
-	changes := pluralize("Row Modified", "Rows Modified", acc.Changes)
-	cellChanges := pluralize("Cell Modified", "Cells Modified", acc.CellChanges)
-
-	oldValues := pluralize("Entry", "Entries", acc.OldSize)
-	newValues := pluralize("Entry", "Entries", acc.NewSize)
-
-	percentCellsChanged := float64(100*acc.CellChanges) / (float64(acc.OldSize) * float64(colLen))
-
-	safePercent := func(num, dom uint64) float64 {
-		// returns +Inf for x/0 where x > 0
-		if num == 0 {
-			return float64(0)
-		}
-		return float64(100*num) / (float64(dom))
-	}
-
-	cli.Printf("%s (%.2f%%)\n", unmodified, safePercent(rowsUnmodified, acc.OldSize))
-	cli.Printf("%s (%.2f%%)\n", insertions, safePercent(acc.Adds, acc.OldSize))
-	cli.Printf("%s (%.2f%%)\n", deletions, safePercent(acc.Removes, acc.OldSize))
-	cli.Printf("%s (%.2f%%)\n", changes, safePercent(acc.Changes, acc.OldSize))
-	cli.Printf("%s (%.2f%%)\n", cellChanges, percentCellsChanged)
-	cli.Printf("(%s vs %s)\n\n", oldValues, newValues)
-}
-
-func printKeylessSummary(acc diff.DiffSummaryProgress) {
-	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
-	deletions := pluralize("Row Deleted", "Rows Deleted", acc.Removes)
-
-	cli.Printf("%s\n", insertions)
-	cli.Printf("%s\n", deletions)
-}
-
-func pluralize(singular, plural string, n uint64) string {
-	var noun string
-	if n != 1 {
-		noun = plural
-	} else {
-		noun = singular
-	}
-	return fmt.Sprintf("%s %s", humanize.Comma(int64(n)), noun)
 }

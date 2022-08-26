@@ -65,6 +65,7 @@ func NewTempTable(
 	pkSch sql.PrimaryKeySchema,
 	name, db string,
 	opts editor.Options,
+	collation sql.CollationID,
 ) (*TempTable, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 
@@ -79,7 +80,7 @@ func NewTempTable(
 
 	ws := dbState.WorkingSet
 
-	sch, err := temporaryDoltSchema(ctx, pkSch)
+	sch, err := temporaryDoltSchema(ctx, pkSch, collation)
 	if err != nil {
 		return nil, err
 	}
@@ -187,6 +188,10 @@ func (t *TempTable) Format() *types.NomsBinFormat {
 
 func (t *TempTable) Schema() sql.Schema {
 	return t.pkSch.Schema
+}
+
+func (t *TempTable) Collation() sql.CollationID {
+	return sql.CollationID(t.sch.GetCollation())
 }
 
 func (t *TempTable) sqlSchema() sql.PrimaryKeySchema {
@@ -433,7 +438,7 @@ func (t *TempTable) Close(ctx *sql.Context) error {
 	return err
 }
 
-func temporaryDoltSchema(ctx context.Context, pkSch sql.PrimaryKeySchema) (sch schema.Schema, err error) {
+func temporaryDoltSchema(ctx context.Context, pkSch sql.PrimaryKeySchema, collation sql.CollationID) (sch schema.Schema, err error) {
 	cols := make([]schema.Column, len(pkSch.Schema))
 	for i, col := range pkSch.Schema {
 		tag := uint64(i)
@@ -452,6 +457,7 @@ func temporaryDoltSchema(ctx context.Context, pkSch sql.PrimaryKeySchema) (sch s
 	if err != nil {
 		return nil, err
 	}
+	sch.SetCollation(schema.Collation(collation))
 
 	return sch, nil
 }
