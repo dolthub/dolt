@@ -762,19 +762,20 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 	}
 
 	pranges := make([]prolly.Range, len(ranges))
-	for i := range pranges {
-		pranges[i] = prolly.Range{
-			Fields: make([]prolly.RangeField, len(ranges[i])),
-			Desc:   di.keyBld.Desc,
-		}
-	}
+	//for i := range pranges {
+	//	pranges[i] = prolly.Range{
+	//		Fields: make([]prolly.RangeField, len(ranges[i])),
+	//		Desc:   di.keyBld.Desc,
+	//	}
+	//}
 
 	for k, rng := range ranges {
-		prollyRange := pranges[k]
+		//prollyRange := pranges[k]
+		fields := make([]prolly.RangeField, len(rng))
 		for j, expr := range rng {
 			if rangeCutIsBinding(expr.LowerBound) {
 				bound := expr.LowerBound.TypeAsLowerBound()
-				prollyRange.Fields[j].Lo = prolly.Bound{
+				fields[j].Lo = prolly.Bound{
 					Binding:   true,
 					Inclusive: bound == sql.Closed,
 				}
@@ -787,19 +788,19 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 					return nil, err
 				}
 			} else {
-				prollyRange.Fields[j].Lo = prolly.Bound{}
+				fields[j].Lo = prolly.Bound{}
 			}
 		}
 		// BuildPermissive() allows nulls in non-null fields
 		tup := tb.BuildPermissive(sharePool)
-		for i := range prollyRange.Fields {
-			prollyRange.Fields[i].Lo.Value = tup.GetField(i)
+		for i := range fields {
+			fields[i].Lo.Value = tup.GetField(i)
 		}
 
 		for i, expr := range rng {
 			if rangeCutIsBinding(expr.UpperBound) {
 				bound := expr.UpperBound.TypeAsUpperBound()
-				prollyRange.Fields[i].Hi = prolly.Bound{
+				fields[i].Hi = prolly.Bound{
 					Binding:   true,
 					Inclusive: bound == sql.Closed,
 				}
@@ -812,25 +813,30 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 					return nil, err
 				}
 			} else {
-				prollyRange.Fields[i].Hi = prolly.Bound{}
+				fields[i].Hi = prolly.Bound{}
 			}
 		}
 
 		tup = tb.BuildPermissive(sharePool)
-		for i := range prollyRange.Fields {
-			prollyRange.Fields[i].Hi.Value = tup.GetField(i)
+		for i := range fields {
+			fields[i].Hi.Value = tup.GetField(i)
 		}
 
-		order := prollyRange.Desc.Comparator()
-		for i, field := range prollyRange.Fields {
+		order := di.keyBld.Desc.Comparator()
+		for i, field := range fields {
 			if !field.Hi.Binding || !field.Lo.Binding {
-				prollyRange.Fields[i].Exact = false
+				fields[i].Exact = false
 				continue
 			}
 			// maybe set RangeField.Exact
-			typ := prollyRange.Desc.Types[i]
+			typ := di.keyBld.Desc.Types[i]
 			cmp := order.CompareValues(i, field.Hi.Value, field.Lo.Value, typ)
-			prollyRange.Fields[i].Exact = cmp == 0
+			fields[i].Exact = cmp == 0
+		}
+		pranges[k] = prolly.Range{
+			Fields: fields,
+			Desc:   di.keyBld.Desc,
+			Tup:    tup,
 		}
 	}
 	return pranges, nil

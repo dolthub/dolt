@@ -54,6 +54,7 @@ func PrefixRange(prefix val.Tuple, desc val.TupleDesc) Range {
 type Range struct {
 	Fields []RangeField
 	Desc   val.TupleDesc
+	Tup    val.Tuple
 }
 
 // RangeField bounds one dimension of a Range.

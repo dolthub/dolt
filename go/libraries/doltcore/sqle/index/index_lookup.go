@@ -18,15 +18,15 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"io"
-
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
+	"io"
 )
 
 func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup, pkSch sql.PrimaryKeySchema, columns []uint64) (sql.RowIter, error) {
@@ -181,7 +181,10 @@ func (rp rangePartition) Key() []byte {
 	return rp.key
 }
 
+// LookupBuilder generates secondary lookups for partitions and
+// encapsulates fast path optimizations for certain point lookups.
 type LookupBuilder interface {
+	// NewRowIter returns a new index iter for the given partition
 	NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error)
 }
 
@@ -191,11 +194,19 @@ func NewLookupBuilder(part sql.Partition, idx DoltIndex, projections []uint64, p
 		projections = idx.Schema().GetAllCols().Tags
 	}
 
+	secondary := durable.ProllyMapFromIndex(p.durableState.Secondary)
+	secKd, secVd := secondary.Descriptors()
+
 	base := &baseLookupBuilder{
 		idx:         idx.(*doltIndex),
 		sch:         pkSch,
 		projections: projections,
+		sec:         secondary,
+		secKd:       secKd,
+		secVd:       secVd,
+		ns:          secondary.NodeStore(),
 	}
+
 	switch {
 	case !isDoltFormat:
 		return &nomsLookupBuilder{
@@ -205,57 +216,206 @@ func NewLookupBuilder(part sql.Partition, idx DoltIndex, projections []uint64, p
 		return &keylessLookupBuilder{
 			baseLookupBuilder: base,
 		}
-	case idx.coversColumns(p.durableState, projections) || idx.ID() == "PRIMARY":
-		return &coveringLookupBuilder{
-			baseLookupBuilder: base,
-		}
+	case idx.coversColumns(p.durableState, projections):
+		return newCoveringLookupBuilder(base)
 	default:
-		return base
+		return newNonCoveringLookupBuilder(p, base)
 	}
 }
 
-type baseLookupBuilder struct {
-	idx         *doltIndex
-	sch         sql.PrimaryKeySchema
-	projections []uint64
+func newCoveringLookupBuilder(b *baseLookupBuilder) *coveringLookupBuilder {
+	var keyMap, valMap, ordMap val.OrdinalMapping
+	if b.idx.IsPrimaryKey() {
+		keyMap, valMap, ordMap = primaryIndexMapping(b.idx, b.sch, b.projections)
+	} else {
+		keyMap, ordMap = coveringIndexMapping(b.idx, b.projections)
+	}
+	return &coveringLookupBuilder{
+		baseLookupBuilder: b,
+		keyMap:            keyMap,
+		valMap:            valMap,
+		ordMap:            ordMap,
+	}
 }
 
-type coveringLookupBuilder struct {
-	*baseLookupBuilder
-}
-
-type nomsLookupBuilder struct {
-	*baseLookupBuilder
-}
-
-type keylessLookupBuilder struct {
-	*baseLookupBuilder
+func newNonCoveringLookupBuilder(p rangePartition, b *baseLookupBuilder) *nonCoveringLookupBuilder {
+	primary := durable.ProllyMapFromIndex(p.durableState.Primary)
+	priKd, _ := primary.Descriptors()
+	tbBld := val.NewTupleBuilder(priKd)
+	pkMap := ordinalMappingFromIndex(b.idx)
+	keyProj, valProj, ordProj := projectionMappings(b.idx.Schema(), b.projections)
+	return &nonCoveringLookupBuilder{
+		baseLookupBuilder: b,
+		pri:               primary,
+		priKd:             priKd,
+		pkBld:             tbBld,
+		pkMap:             pkMap,
+		keyMap:            keyProj,
+		valMap:            valProj,
+		ordMap:            ordProj,
+	}
 }
 
 var _ LookupBuilder = (*baseLookupBuilder)(nil)
 var _ LookupBuilder = (*nomsLookupBuilder)(nil)
 var _ LookupBuilder = (*coveringLookupBuilder)(nil)
 var _ LookupBuilder = (*keylessLookupBuilder)(nil)
+var _ LookupBuilder = (*nonCoveringLookupBuilder)(nil)
 
+// baseLookupBuilder is a common lookup builder for prolly covering and
+// non covering index lookups.
+type baseLookupBuilder struct {
+	idx         *doltIndex
+	sch         sql.PrimaryKeySchema
+	projections []uint64
+
+	sec          prolly.Map
+	secKd, secVd val.TupleDesc
+	ns           tree.NodeStore
+
+	cur *tree.Cursor
+}
+
+// NewRowIter implements IndexLookup
 func (lb *baseLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	p := part.(rangePartition)
 	return newProllyIndexIter(ctx, lb.idx, p.prollyRange, lb.sch, lb.projections, p.durableState.Primary, p.durableState.Secondary)
 }
 
+// newPointLookup will create a cursor once, and then use the same cursor for
+// every subsequent point lookup. Note that equality joins can have a mix of
+// point lookups on concrete values, and range lookups for null matches.
+func (lb *baseLookupBuilder) newPointLookup(ctx *sql.Context, rang prolly.Range) (prolly.MapIter, error) {
+	if lb.cur == nil {
+		cur, err := tree.NewCursorFromCompareFn(ctx, lb.sec.NodeStore(), lb.sec.Node(), tree.Item(rang.Tup), lb.sec.CompareItems)
+		if err != nil {
+			return nil, err
+		}
+		if !cur.Valid() {
+			// map does not contain |rng|
+			return prolly.EmptyPointLookup, nil
+		}
+
+		lb.cur = cur
+	}
+
+	err := lb.cur.Seek(ctx, tree.Item(rang.Tup), lb.sec.CompareItems)
+	if err != nil {
+		return nil, err
+	}
+	if !lb.cur.Valid() {
+		return prolly.EmptyPointLookup, nil
+	}
+
+	key := val.Tuple(lb.cur.CurrentKey())
+	value := val.Tuple(lb.cur.CurrentValue())
+
+	if !rang.Matches(key) {
+		return prolly.EmptyPointLookup, nil
+	}
+
+	return prolly.NewPointLookup(key, value), nil
+}
+
+// coveringLookupBuilder constructs row iters for covering lookups,
+// where we only need to cursor seek on a single index to both identify
+// target keys and fill all requested projections
+type coveringLookupBuilder struct {
+	*baseLookupBuilder
+
+	// keyMap transforms secondary index key tuples into SQL tuples.
+	// secondary index value tuples are assumed to be empty.
+	keyMap, valMap, ordMap val.OrdinalMapping
+}
+
+// NewRowIter implements IndexLookup
+func (lb *coveringLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	p := part.(rangePartition)
+
+	var rangeIter prolly.MapIter
+	var err error
+	if p.prollyRange.IsPointLookup(lb.secKd) {
+		rangeIter, err = lb.newPointLookup(ctx, p.prollyRange)
+	} else {
+		rangeIter, err = lb.sec.IterRange(ctx, p.prollyRange)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return prollyCoveringIndexIter{
+		idx:       lb.idx,
+		indexIter: rangeIter,
+		keyDesc:   lb.secKd,
+		valDesc:   lb.secVd,
+		keyMap:    lb.keyMap,
+		valMap:    lb.valMap,
+		ordMap:    lb.ordMap,
+		sqlSch:    lb.sch.Schema,
+		ns:        lb.ns,
+	}, nil
+}
+
+// nonCoveringLookupBuilder constructs row iters for non-covering lookups,
+// where we need to seek on the secondary table for key identity, and then
+// the primary table to fill all requrested projections.
+type nonCoveringLookupBuilder struct {
+	*baseLookupBuilder
+
+	pri   prolly.Map
+	priKd val.TupleDesc
+	pkBld *val.TupleBuilder
+
+	pkMap, keyMap, valMap, ordMap val.OrdinalMapping
+}
+
+// NewRowIter implements IndexLookup
+func (lb *nonCoveringLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	p := part.(rangePartition)
+	var rangeIter prolly.MapIter
+	var err error
+	if p.prollyRange.IsPointLookup(lb.secKd) {
+		rangeIter, err = lb.newPointLookup(ctx, p.prollyRange)
+	} else {
+		rangeIter, err = lb.sec.IterRange(ctx, p.prollyRange)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return prollyIndexIter{
+		idx:       lb.idx,
+		indexIter: rangeIter,
+		primary:   lb.pri,
+		pkBld:     lb.pkBld,
+		pkMap:     lb.pkMap,
+		keyMap:    lb.keyMap,
+		valMap:    lb.valMap,
+		ordMap:    lb.ordMap,
+		sqlSch:    lb.sch.Schema,
+	}, nil
+}
+
+// TODO keylessLookupBuilder should be similar to the non-covering
+// index case, where we will need to reference the primary index,
+// but can take advantage of point lookup optimizations
+type keylessLookupBuilder struct {
+	*baseLookupBuilder
+}
+
+// NewRowIter implements IndexLookup
+func (lb *keylessLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	p := part.(rangePartition)
+	return newProllyKeylessIndexIter(ctx, lb.idx, p.prollyRange, lb.sch, lb.projections, p.durableState.Primary, p.durableState.Secondary)
+}
+
+type nomsLookupBuilder struct {
+	*baseLookupBuilder
+}
+
+// NewRowIter implements IndexLookup
 func (lb *nomsLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	p := part.(rangePartition)
 	ranges := []*noms.ReadRange{p.nomsRange}
 	return RowIterForNomsRanges(ctx, lb.idx, ranges, lb.projections, p.durableState)
-}
-
-func (lb *coveringLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	p := part.(rangePartition)
-	return newProllyCoveringIndexIter(ctx, lb.idx, p.prollyRange, lb.sch, lb.projections, p.durableState.Secondary)
-}
-
-func (lb *keylessLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	p := part.(rangePartition)
-	return newProllyKeylessIndexIter(ctx, lb.idx, p.prollyRange, lb.sch, lb.projections, p.durableState.Primary, p.durableState.Secondary)
 }
 
 // boundsCase determines the case upon which the bounds are tested.

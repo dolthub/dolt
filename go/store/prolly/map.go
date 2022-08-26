@@ -236,6 +236,10 @@ func (m Map) Pool() pool.BuffPool {
 	return m.tuples.ns.Pool()
 }
 
+func (m Map) CompareItems(left, right tree.Item) int {
+	return m.keyDesc.Compare(val.Tuple(left), val.Tuple(right))
+}
+
 func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup, error) {
 	cur, err := tree.NewCursorFromSearchFn(ctx, m.tuples.ns, m.tuples.root, rangeStartSearchFn(rng))
 	if err != nil {
