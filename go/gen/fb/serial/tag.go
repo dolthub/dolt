@@ -24,17 +24,34 @@ type Tag struct {
 	_tab flatbuffers.Table
 }
 
-func GetRootAsTag(buf []byte, offset flatbuffers.UOffsetT) *Tag {
+func InitTagRoot(o *Tag, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
+	o.Init(buf, n+offset)
+	if TagNumFields < o.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
+}
+
+func TryGetRootAsTag(buf []byte, offset flatbuffers.UOffsetT) (*Tag, error) {
 	x := &Tag{}
-	x.Init(buf, n+offset)
+	return x, InitTagRoot(x, buf, offset)
+}
+
+func GetRootAsTag(buf []byte, offset flatbuffers.UOffsetT) *Tag {
+	x := &Tag{}
+	InitTagRoot(x, buf, offset)
 	return x
 }
 
-func GetSizePrefixedRootAsTag(buf []byte, offset flatbuffers.UOffsetT) *Tag {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+func TryGetSizePrefixedRootAsTag(buf []byte, offset flatbuffers.UOffsetT) (*Tag, error) {
 	x := &Tag{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x, InitTagRoot(x, buf, offset+flatbuffers.SizeUint32)
+}
+
+func GetSizePrefixedRootAsTag(buf []byte, offset flatbuffers.UOffsetT) *Tag {
+	x := &Tag{}
+	InitTagRoot(x, buf, offset+flatbuffers.SizeUint32)
 	return x
 }
 
@@ -129,8 +146,10 @@ func (rcv *Tag) MutateUserTimestampMillis(n int64) bool {
 	return rcv._tab.MutateInt64Slot(14, n)
 }
 
+const TagNumFields = 6
+
 func TagStart(builder *flatbuffers.Builder) {
-	builder.StartObject(6)
+	builder.StartObject(TagNumFields)
 }
 func TagAddCommitAddr(builder *flatbuffers.Builder, commitAddr flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(commitAddr), 0)

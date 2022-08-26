@@ -43,6 +43,13 @@ type blobStringType struct {
 
 var _ TypeInfo = (*blobStringType)(nil)
 
+var (
+	TinyTextType   TypeInfo = &blobStringType{sqlStringType: sql.TinyText}
+	TextType       TypeInfo = &blobStringType{sqlStringType: sql.Text}
+	MediumTextType TypeInfo = &blobStringType{sqlStringType: sql.MediumText}
+	LongTextType   TypeInfo = &blobStringType{sqlStringType: sql.LongText}
+)
+
 func CreateBlobStringTypeFromParams(params map[string]string) (TypeInfo, error) {
 	var length int64
 	var collation sql.CollationID

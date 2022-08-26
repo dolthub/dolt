@@ -1038,7 +1038,7 @@ SQL
     dolt add -A
     dolt commit -m "OC1"
     dolt checkout main
-    dolt merge other
+    dolt merge other -m "merge other"
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1084,7 +1084,7 @@ SQL
     dolt add -A
     dolt commit -m "OC1"
     dolt checkout main
-    dolt merge other
+    dolt merge other -m "merge other"
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2842,6 +2842,7 @@ CREATE TABLE t (
   pk int PRIMARY KEY,
   col1 int
 );
+CALL DOLT_ADD('.');
 
 CALL DOLT_COMMIT('-am', 'create table');
 CALL DOLT_BRANCH('right');

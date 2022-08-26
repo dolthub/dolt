@@ -152,7 +152,7 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ "CREATE TRIGGER trigger2 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 10" ]] || false
     [[ "$output" =~ "CREATE TRIGGER trigger3 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 100" ]] || false
-    dolt merge other
+    dolt merge other --no-commit
     dolt add dolt_schemas
     run dolt commit -am "can't commit conflicts"
     [ "$status" -eq "1" ]

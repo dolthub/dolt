@@ -47,6 +47,7 @@ func TestKeylessMerge(t *testing.T) {
 			name: "fast-forward merge",
 			setup: []testCommand{
 				{cmd.SqlCmd{}, []string{"-q", "insert into noKey values (1,2),(1,2);"}},
+				{cmd.AddCmd{}, []string{"."}},
 				{cmd.CommitCmd{}, []string{"-am", "added rows"}},
 				{cmd.CheckoutCmd{}, []string{"-b", "other"}},
 				{cmd.SqlCmd{}, []string{"-q", "insert into noKey values (3,4);"}},
@@ -63,6 +64,7 @@ func TestKeylessMerge(t *testing.T) {
 			name: "3-way merge",
 			setup: []testCommand{
 				{cmd.SqlCmd{}, []string{"-q", "insert into noKey values (1,2),(1,2);"}},
+				{cmd.AddCmd{}, []string{"."}},
 				{cmd.CommitCmd{}, []string{"-am", "added rows"}},
 				{cmd.CheckoutCmd{}, []string{"-b", "other"}},
 				{cmd.SqlCmd{}, []string{"-q", "insert into noKey values (3,4);"}},
@@ -82,6 +84,7 @@ func TestKeylessMerge(t *testing.T) {
 			name: "3-way merge with duplicates",
 			setup: []testCommand{
 				{cmd.SqlCmd{}, []string{"-q", "insert into noKey values (1,2),(1,2);"}},
+				{cmd.AddCmd{}, []string{"."}},
 				{cmd.CommitCmd{}, []string{"-am", "added rows"}},
 				{cmd.CheckoutCmd{}, []string{"-b", "other"}},
 				{cmd.SqlCmd{}, []string{"-q", "insert into noKey values (3,4), (3,4);"}},
@@ -145,6 +148,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 			name: "identical parallel changes",
 			setup: []testCommand{
 				{cmd.SqlCmd{}, []string{"-q", "insert into noKey values (1,2),(1,2);"}},
+				{cmd.AddCmd{}, []string{"."}},
 				{cmd.CommitCmd{}, []string{"-am", "added rows"}},
 				{cmd.CheckoutCmd{}, []string{"-b", "other"}},
 				{cmd.SqlCmd{}, []string{"-q", "insert into noKey values (3,4);"}},
@@ -174,6 +178,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 			name: "asymmetric parallel deletes",
 			setup: []testCommand{
 				{cmd.SqlCmd{}, []string{"-q", "insert into noKey values (1,2),(1,2),(1,2),(1,2);"}},
+				{cmd.AddCmd{}, []string{"."}},
 				{cmd.CommitCmd{}, []string{"-am", "added rows"}},
 				{cmd.CheckoutCmd{}, []string{"-b", "other"}},
 				{cmd.SqlCmd{}, []string{"-q", "delete from noKey where (c1,c2) = (1,2) limit 1;"}},
@@ -201,6 +206,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 			name: "asymmetric parallel updates",
 			setup: []testCommand{
 				{cmd.SqlCmd{}, []string{"-q", "insert into noKey values (1,2),(1,2),(1,2),(1,2);"}},
+				{cmd.AddCmd{}, []string{"."}},
 				{cmd.CommitCmd{}, []string{"-am", "added rows"}},
 				{cmd.CheckoutCmd{}, []string{"-b", "other"}},
 				{cmd.SqlCmd{}, []string{"-q", "update noKey set c2 = 9 limit 1;"}},

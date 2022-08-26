@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"gopkg.in/src-d/go-errors.v1"
 
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -61,6 +62,12 @@ type Schema interface {
 
 	// GetValueDescriptor returns the value tuple descriptor for this schema.
 	GetValueDescriptor() val.TupleDesc
+
+	// GetCollation returns the table's collation.
+	GetCollation() Collation
+
+	// SetCollation sets the table's collation.
+	SetCollation(collation Collation)
 }
 
 // ColumnOrder is used in ALTER TABLE statements to change the order of inserted / modified columns.
@@ -288,4 +295,15 @@ func CopyIndexes(from, to Schema) Schema {
 	fromSch, toSch := from.(*schemaImpl), to.(*schemaImpl)
 	toSch.indexCollection = fromSch.indexCollection
 	return toSch
+}
+
+// GetKeyColumnTags returns a set.Uint64Set containing the column tags
+// of every key column of every primary and secondary index in |sch|.
+func GetKeyColumnTags(sch Schema) *set.Uint64Set {
+	tags := set.NewUint64Set(sch.GetPKCols().Tags)
+	_ = sch.Indexes().Iter(func(index Index) (stop bool, err error) {
+		tags.Add(index.IndexedColumnTags()...)
+		return
+	})
+	return tags
 }

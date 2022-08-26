@@ -61,6 +61,7 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 	serial.TableSchemaAddColumns(b, columns)
 	serial.TableSchemaAddSecondaryIndexes(b, indexes)
 	serial.TableSchemaAddChecks(b, checks)
+	serial.TableSchemaAddCollation(b, serial.Collation(sch.GetCollation()))
 	root := serial.TableSchemaEnd(b)
 	bs := serial.FinishMessage(b, root, []byte(serial.TableSchemaFileID))
 	return bs, nil
@@ -76,7 +77,10 @@ func DeserializeSchema(ctx context.Context, nbf *types.NomsBinFormat, v types.Va
 
 func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Schema, error) {
 	assertTrue(serial.GetFileID(buf) == serial.TableSchemaFileID, "serialized schema must have FileID == TableSchemaFileID")
-	s := serial.GetRootAsTableSchema(buf, serial.MessagePrefixSz)
+	s, err := serial.TryGetRootAsTableSchema(buf, serial.MessagePrefixSz)
+	if err != nil {
+		return nil, err
+	}
 
 	cols, err := deserializeColumns(ctx, s)
 	if err != nil {
@@ -101,6 +105,8 @@ func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Sc
 	if err != nil {
 		return nil, err
 	}
+
+	sch.SetCollation(schema.Collation(s.Collation()))
 
 	return sch, nil
 }

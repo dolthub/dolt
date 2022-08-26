@@ -132,19 +132,29 @@ func write(wr io.Writer, h hash.Hash, store *FileValueStore) error {
 
 	err = store.iterChunks(func(ch chunks.Chunk) error {
 		h := ch.Hash()
-		err = iohelp.WriteIfNoErr(wr, h[:], err)
+		err = iohelp.WriteIfNoErr(wr, h[:], nil)
 		return iohelp.WritePrimIfNoErr(wr, uint32(len(ch.Data())), err)
 	})
+	if err != nil {
+		return err
+	}
 
 	err = store.iterChunks(func(ch chunks.Chunk) error {
-		return iohelp.WriteIfNoErr(wr, ch.Data(), err)
+		return iohelp.WriteIfNoErr(wr, ch.Data(), nil)
 	})
 
 	return err
 }
 
+// ValueFile is the in memory representation of a value file.
+type ValueFile struct {
+	Values []types.Value
+	Ns     tree.NodeStore
+	Vrw    types.ValueReadWriter
+}
+
 // ReadValueFile reads from the provided file and returns the values stored in the file
-func ReadValueFile(ctx context.Context, filepath string) ([]types.Value, error) {
+func ReadValueFile(ctx context.Context, filepath string) (*ValueFile, error) {
 	f, err := os.Open(filepath)
 
 	if err != nil {
@@ -158,7 +168,7 @@ func ReadValueFile(ctx context.Context, filepath string) ([]types.Value, error) 
 
 // ReadFromReader reads from the provided reader which should provided access to data in the value file format and returns
 // the values
-func ReadFromReader(ctx context.Context, rd io.Reader) ([]types.Value, error) {
+func ReadFromReader(ctx context.Context, rd io.Reader) (*ValueFile, error) {
 	h, store, err := read(ctx, rd)
 
 	if err != nil {
@@ -189,7 +199,13 @@ func ReadFromReader(ctx context.Context, rd io.Reader) ([]types.Value, error) {
 		return nil, err
 	}
 
-	return values, nil
+	ns := tree.NewNodeStore(store)
+
+	return &ValueFile{
+		Values: values,
+		Ns:     ns,
+		Vrw:    vrw,
+	}, nil
 }
 
 // see the write section to see the value file

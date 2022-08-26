@@ -65,6 +65,7 @@ func NewTempTable(
 	pkSch sql.PrimaryKeySchema,
 	name, db string,
 	opts editor.Options,
+	collation sql.CollationID,
 ) (*TempTable, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 
@@ -79,7 +80,7 @@ func NewTempTable(
 
 	ws := dbState.WorkingSet
 
-	sch, err := temporaryDoltSchema(ctx, pkSch)
+	sch, err := temporaryDoltSchema(ctx, pkSch, collation)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +91,10 @@ func NewTempTable(
 	if err != nil {
 		return nil, err
 	}
-	set := durable.NewIndexSet(ctx, vrw, ns)
+	set, err := durable.NewIndexSet(ctx, vrw, ns)
+	if err != nil {
+		return nil, err
+	}
 
 	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, idx, set, nil)
 	if err != nil {
@@ -186,6 +190,10 @@ func (t *TempTable) Schema() sql.Schema {
 	return t.pkSch.Schema
 }
 
+func (t *TempTable) Collation() sql.CollationID {
+	return sql.CollationID(t.sch.GetCollation())
+}
+
 func (t *TempTable) sqlSchema() sql.PrimaryKeySchema {
 	return t.pkSch
 }
@@ -195,7 +203,11 @@ func (t *TempTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newDoltTablePartitionIter(rows, partitionsFromRows(ctx, rows)...), nil
+	parts, err := partitionsFromRows(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
+	return newDoltTablePartitionIter(rows, parts...), nil
 }
 
 func (t *TempTable) IsTemporary() bool {
@@ -208,7 +220,7 @@ func (t *TempTable) DataLength(ctx *sql.Context) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return idx.Count(), nil
+	return idx.Count()
 }
 
 // AnalyzeTable implements the sql.StatisticsTable interface.
@@ -426,7 +438,7 @@ func (t *TempTable) Close(ctx *sql.Context) error {
 	return err
 }
 
-func temporaryDoltSchema(ctx context.Context, pkSch sql.PrimaryKeySchema) (sch schema.Schema, err error) {
+func temporaryDoltSchema(ctx context.Context, pkSch sql.PrimaryKeySchema, collation sql.CollationID) (sch schema.Schema, err error) {
 	cols := make([]schema.Column, len(pkSch.Schema))
 	for i, col := range pkSch.Schema {
 		tag := uint64(i)
@@ -445,6 +457,7 @@ func temporaryDoltSchema(ctx context.Context, pkSch sql.PrimaryKeySchema) (sch s
 	if err != nil {
 		return nil, err
 	}
+	sch.SetCollation(schema.Collation(collation))
 
 	return sch, nil
 }

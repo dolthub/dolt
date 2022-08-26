@@ -38,7 +38,7 @@ merge_without_conflicts() {
     dolt add test1
     dolt commit -m "update pk 0 = 1,2 to test1"
 
-    run dolt merge merge_branch
+    run dolt merge merge_branch -m "merge merge_branch"
 }
 
 merge_with_conflicts() {
@@ -54,7 +54,7 @@ merge_with_conflicts() {
     dolt add test1
     dolt commit -m "update pk 0 = 3,3 to test1"
 
-    run dolt merge merge_branch
+    run dolt merge merge_branch -m "merge merge_branch"
 }
 
 @test "reset: dolt reset --hard should clear an uncommitted merge state" {

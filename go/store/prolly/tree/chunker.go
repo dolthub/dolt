@@ -92,10 +92,15 @@ func (tc *chunker[S]) processPrefix(ctx context.Context) (err error) {
 	tc.cur.skipToNodeStart()
 
 	for tc.cur.idx < idx {
+		var sz uint64
+		sz, err = tc.cur.currentSubtreeSize()
+		if err != nil {
+			return err
+		}
 		_, err = tc.append(ctx,
 			tc.cur.CurrentKey(),
 			tc.cur.CurrentValue(),
-			tc.cur.currentSubtreeSize())
+			sz)
 
 		// todo(andy): seek to correct chunk
 		//  currently when inserting tuples between chunks
@@ -178,7 +183,11 @@ func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 		return nil
 	}
 
-	split, err := tc.append(ctx, tc.cur.CurrentKey(), tc.cur.CurrentValue(), tc.cur.currentSubtreeSize())
+	sz, err := tc.cur.currentSubtreeSize()
+	if err != nil {
+		return err
+	}
+	split, err := tc.append(ctx, tc.cur.CurrentKey(), tc.cur.CurrentValue(), sz)
 	if err != nil {
 		return err
 	}
@@ -192,7 +201,11 @@ func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 			// we caught up before synchronizing
 			return nil
 		}
-		split, err = tc.append(ctx, tc.cur.CurrentKey(), tc.cur.CurrentValue(), tc.cur.currentSubtreeSize())
+		sz, err := tc.cur.currentSubtreeSize()
+		if err != nil {
+			return err
+		}
+		split, err = tc.append(ctx, tc.cur.CurrentKey(), tc.cur.CurrentValue(), sz)
 		if err != nil {
 			return err
 		}
@@ -404,11 +417,16 @@ func (tc *chunker[S]) Done(ctx context.Context) (Node, error) {
 // boundary or the end of the Node.
 func (tc *chunker[S]) finalizeCursor(ctx context.Context) (err error) {
 	for tc.cur.Valid() {
+		var sz uint64
+		sz, err = tc.cur.currentSubtreeSize()
+		if err != nil {
+			return
+		}
 		var ok bool
 		ok, err = tc.append(ctx,
 			tc.cur.CurrentKey(),
 			tc.cur.CurrentValue(),
-			tc.cur.currentSubtreeSize())
+			sz)
 		if err != nil {
 			return err
 		}
@@ -457,7 +475,10 @@ func getCanonicalRoot[S message.Serializer](ctx context.Context, ns NodeStore, b
 	cnt := builder.count()
 	assertTrue(cnt == 1, "in-progress chunk must be non-canonical to call getCanonicalRoot")
 
-	nd := builder.build()
+	nd, err := builder.build()
+	if err != nil {
+		return Node{}, err
+	}
 	mt := nd.getAddress(0)
 
 	for {
@@ -466,7 +487,11 @@ func getCanonicalRoot[S message.Serializer](ctx context.Context, ns NodeStore, b
 			return Node{}, err
 		}
 
-		if child.IsLeaf() || child.count > 1 {
+		leaf, err := child.IsLeaf()
+		if err != nil {
+			return Node{}, err
+		}
+		if leaf || child.count > 1 {
 			return child, nil
 		}
 

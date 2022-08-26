@@ -123,7 +123,7 @@ SQL
 
     run dolt sql -q "SELECT count(*) FROM dolt_commits" -r csv
     [ $status -eq 0 ]
-    [[ "$output" =~ "4" ]] || false
+    [[ "$output" =~ "5" ]] || false
 }
 
 @test "migrate: tag and working set" {
@@ -168,6 +168,7 @@ CALL dadd('-A');
 CALL dcommit('-am', 'added table test');
 SQL
     dolt docs read README.md README.md
+    dolt add .
     dolt commit -am "added a README"
 
     dolt migrate

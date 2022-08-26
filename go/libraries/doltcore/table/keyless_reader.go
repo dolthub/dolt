@@ -38,7 +38,7 @@ type keylessTableReader struct {
 }
 
 var _ SqlTableReader = &keylessTableReader{}
-var _ TableReadCloser = &keylessTableReader{}
+var _ ReadCloser = &keylessTableReader{}
 
 // GetSchema implements the TableReader interface.
 func (rdr *keylessTableReader) GetSchema() schema.Schema {

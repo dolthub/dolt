@@ -18,6 +18,7 @@ CREATE TABLE twopk (
   PRIMARY KEY(pk1, pk2)
 );
 SQL
+    dolt add .
 }
 
 teardown() {
@@ -2187,7 +2188,7 @@ SQL
     dolt add -A
     dolt commit -m "other changes"
     dolt checkout main
-    dolt merge other
+    dolt merge other -m "merge"
     run dolt index ls onepk
     [ "$status" -eq "0" ]
     [[ "$output" =~ "idx_v1(v1)" ]] || false
@@ -2227,7 +2228,7 @@ SQL
     dolt add -A
     dolt commit -m "other changes"
     dolt checkout main
-    dolt merge other
+    dolt merge other -m "merge"
     run dolt index cat onepk idx_v1 -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "v1,pk1" ]] || false
@@ -2263,7 +2264,7 @@ SQL
     dolt add -A
     dolt commit -m "other changes"
     dolt checkout main
-    dolt merge other
+    dolt merge other -m "merge"
     dolt conflicts resolve --ours onepk
     run dolt index cat onepk idx_v1 -r=csv
     [ "$status" -eq "0" ]
@@ -2291,7 +2292,7 @@ SQL
     dolt add -A
     dolt commit -m "other changes"
     dolt checkout main
-    dolt merge other
+    dolt merge other -m "merge"
     dolt conflicts resolve --theirs onepk
     run dolt index cat onepk idx_v1 -r=csv
     [ "$status" -eq "0" ]
@@ -2319,7 +2320,7 @@ SQL
     dolt add -A
     dolt commit -m "other changes"
     dolt checkout main
-    dolt merge other
+    dolt merge other -m "merge"
     run dolt sql <<SQL
 SET dolt_allow_commit_conflicts = on;
 DELETE from dolt_conflicts_onepk where our_pk1 = 4;
@@ -2356,7 +2357,7 @@ SQL
 
     dolt checkout main
 
-    dolt merge other
+    dolt merge other -m "merge"
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false
@@ -2384,7 +2385,7 @@ SQL
     dolt sql -q "CREATE INDEX abc ON test (v1)"
     dolt add -A
     dolt commit -m "added index"
-    dolt merge main
+    dolt merge main -m "merge"
     run dolt sql -q "select * from test where v1 = 2" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1,v2" ]] || false
@@ -2418,7 +2419,7 @@ SQL
     dolt add -A
     dolt commit -m "added index"
     dolt checkout main
-    dolt merge other
+    dolt merge other -m "merge"
     run dolt sql -q "select * from test where v1 = 2" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1,v2" ]] || false

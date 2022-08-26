@@ -431,8 +431,7 @@ teardown() {
     dolt add -A && dolt commit -m "commit C"
 
     dolt checkout main
-    dolt merge other
-    dolt add -A && dolt commit -m "commit M"
+    dolt merge other -m "merge other (commit M)"
 
     #         C--M
     #        /  /
@@ -457,8 +456,7 @@ teardown() {
     dolt add -A && dolt commit -m "commit C"
 
     dolt checkout main
-    dolt merge other
-    dolt add -A && dolt commit -m "commit M"
+    dolt merge other -m "merge other (commit M)"
 
     run dolt sql -q "
         SELECT an.parent_index,cm.message
@@ -538,6 +536,7 @@ SQL
 @test "system-tables: dolt diff includes changes from initial commit" {
     dolt sql -q "CREATE TABLE test(pk int primary key, val int)"
     dolt sql -q "INSERT INTO test VALUES (1,1)"
+    dolt add .
     dolt commit -am "cm1"
 
     dolt sql -q "INSERT INTO test VALUES (2,2)"
@@ -551,6 +550,7 @@ SQL
 
 @test "system-tables: query dolt_tags" {
     dolt sql -q "CREATE TABLE test(pk int primary key, val int)"
+    dolt add .
     dolt sql -q "INSERT INTO test VALUES (1,1)"
     dolt commit -am "cm1"
     dolt tag v1 head -m "tag v1 from main"

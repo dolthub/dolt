@@ -11,6 +11,7 @@ CREATE TABLE test (
 
 INSERT INTO test VALUES (0),(1),(2);
 SQL
+dolt add .
 }
 
 teardown() {
@@ -280,6 +281,7 @@ SQL
 CREATE TABLE test2 (pk int primary key, val int);
 INSERT INTO test2 VALUES (0, 0);
 SET autocommit = 0;
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test2 VALUES (1, 1);
@@ -302,6 +304,7 @@ SQL
 @test "sql-merge: CALL End to End Conflict Resolution with autocommit off." {
     dolt sql << SQL
 CREATE TABLE test2 (pk int primary key, val int);
+CALL DOLT_ADD('.');
 INSERT INTO test2 VALUES (0, 0);
 SET autocommit = 0;
 CALL DOLT_COMMIT('-a', '-m', 'Step 1');
@@ -435,14 +438,14 @@ SELECT DOLT_COMMIT('-a', '-m', 'Insert 10000');
 SQL
 
     run dolt sql << SQL
-SELECT DOLT_MERGE('feature-branch');
+SELECT DOLT_MERGE('feature-branch', '--no-commit');
 SELECT COUNT(*) = 2 FROM test WHERE pk > 2;
 SQL
 
     log_status_eq 0
     [[ "$output" =~ "true" ]] || false
     [[ "$output" =~ "true" ]] || false
-    [[ "${lines[1]}" =~ "DOLT_MERGE('feature-branch')" ]] || false # validate that merge returns 1 not "Updating..."
+    [[ "${lines[1]}" =~ "DOLT_MERGE('feature-branch', '--no-commit')" ]] || false # validate that merge returns 1 not "Updating..."
     [[ "${lines[3]}" =~ "0" ]] || false
     ! [[ "$output" =~ "Updating" ]] || false
 
@@ -492,7 +495,7 @@ CALL DOLT_COMMIT('-a', '-m', 'Insert 10000');
 SQL
 
     run dolt sql << SQL
-CALL DOLT_MERGE('feature-branch');
+CALL DOLT_MERGE('feature-branch', '--no-commit');
 SELECT COUNT(*) = 2 FROM test WHERE pk > 2;
 SQL
 
@@ -629,6 +632,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -680,6 +684,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 CALL DOLT_COMMIT('-a', '-m', 'add tables');
 CALL DOLT_CHECKOUT('-b', 'feature-branch');
 CALL DOLT_CHECKOUT('main');
@@ -730,6 +735,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -796,6 +802,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -836,6 +843,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 CALL DOLT_COMMIT('-a', '-m', 'add tables');
 CALL DOLT_CHECKOUT('-b', 'feature-branch');
 CALL DOLT_CHECKOUT('main');
@@ -875,6 +883,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -905,6 +914,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 CALL DOLT_COMMIT('-a', '-m', 'add tables');
 CALL DOLT_CHECKOUT('-b', 'feature-branch');
 CALL DOLT_CHECKOUT('main');
@@ -935,6 +945,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -964,6 +975,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 CALL DOLT_COMMIT('-a', '-m', 'add tables');
 CALL DOLT_CHECKOUT('-b', 'feature-branch');
 CALL DOLT_CHECKOUT('main');
@@ -993,7 +1005,7 @@ SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
 SELECT DOLT_CHECKOUT('main');
 INSERT INTO test VALUES (500000);
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 500000');
-SELECT DOLT_MERGE('feature-branch');
+SELECT DOLT_MERGE('feature-branch', '--no-commit');
 SELECT DOLT_MERGE('feature-branch');
 SQL
 
@@ -1010,7 +1022,7 @@ CALL DOLT_COMMIT('-a', '-m', 'Insert 3');
 CALL DOLT_CHECKOUT('main');
 INSERT INTO test VALUES (500000);
 CALL DOLT_COMMIT('-a', '-m', 'Insert 500000');
-CALL DOLT_MERGE('feature-branch');
+CALL DOLT_MERGE('feature-branch', '--no-commit');
 CALL DOLT_MERGE('feature-branch');
 SQL
 
@@ -1097,7 +1109,7 @@ SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
 SELECT DOLT_CHECKOUT('main');
 INSERT INTO test VALUES (500000);
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 500000');
-SELECT DOLT_MERGE('feature-branch', '--squash');
+SELECT DOLT_MERGE('feature-branch', '--squash', '--no-commit');
 SQL
 
     run dolt status
@@ -1127,7 +1139,7 @@ CALL DOLT_COMMIT('-a', '-m', 'Insert 3');
 CALL DOLT_CHECKOUT('main');
 INSERT INTO test VALUES (500000);
 CALL DOLT_COMMIT('-a', '-m', 'Insert 500000');
-CALL DOLT_MERGE('feature-branch', '--squash');
+CALL DOLT_MERGE('feature-branch', '--squash', '--no-commit');
 SQL
 
     run dolt status
@@ -1196,7 +1208,7 @@ INSERT INTO test VALUES (500001);
 DELETE FROM test WHERE pk=500001;
 UPDATE test SET pk=60 WHERE pk=500000;
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 60');
-SELECT DOLT_MERGE('feature-branch');
+SELECT DOLT_MERGE('feature-branch', '--no-commit');
 SQL
 
     run dolt status
@@ -1247,7 +1259,7 @@ INSERT INTO test VALUES (500001);
 DELETE FROM test WHERE pk=500001;
 UPDATE test SET pk=60 WHERE pk=500000;
 CALL DOLT_COMMIT('-a', '-m', 'Insert 60');
-CALL DOLT_MERGE('feature-branch');
+CALL DOLT_MERGE('feature-branch', '--no-commit');
 SQL
 
     run dolt status
@@ -1291,6 +1303,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -1375,6 +1388,7 @@ SQL
 @test "sql-merge: adding and dropping primary keys any number of times not produce schema merge conflicts" {
     dolt commit -am "commit all changes"
     dolt sql -q "create table test_null (i int)"
+    dolt add .
     dolt commit -am "initial"
 
     dolt checkout -b b1
@@ -1389,12 +1403,13 @@ SQL
     dolt sql -q "alter table test_null add primary key(i)"
     dolt commit -am "main primary key changes"
 
-    run dolt merge b1
+    run dolt merge b1 -m "merge"
     log_status_eq 0
 }
 
 @test "sql-merge: identical schema changes with data changes merges correctly" {
     dolt sql -q "create table t (i int primary key)"
+    dolt add .
     dolt commit -am "initial commit"
     dolt branch b1
     dolt branch b2
@@ -1407,15 +1422,16 @@ SQL
     dolt sql -q "insert into t values (2, 2)"
     dolt commit -am "changes to b2"
     dolt checkout main
-    run dolt merge b1
+    run dolt merge b1 -m "merge b1"
     log_status_eq 0
-    run dolt merge b2
+    run dolt merge b2 -m "merge b2"
     log_status_eq 0
 }
 
 # TODO: what happens when the data conflicts with new check?
 @test "sql-merge: non-conflicting data and constraint changes are preserved" {
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt commit -am "initial commit"
 
     dolt checkout -b other
@@ -1432,7 +1448,7 @@ SQL
     [[ "$output" =~ "(\`i\` < 10)" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other
+    run dolt merge other -m "merge other"
     log_status_eq 0
 
     run dolt sql -q "select * from t"
@@ -1445,6 +1461,7 @@ SQL
 
 @test "sql-merge: non-overlapping check constraints merge successfully" {
     dolt sql -q "create table t (i int, j int)"
+    dolt add .
     dolt commit -am "initial commit"
 
     dolt checkout -b other
@@ -1461,7 +1478,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c1\` CHECK ((\`j\` < 0))" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other
+    run dolt merge other -m "merge other"
     log_status_eq 0
 
     run dolt sql -q "show create table t"
@@ -1472,6 +1489,7 @@ SQL
 
 @test "sql-merge: different check constraints on same column throw conflict" {
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt commit -am "initial commit"
 
     dolt checkout -b other
@@ -1488,7 +1506,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c1\` CHECK ((\`i\` < 0))" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other
+    run dolt merge other -m "merge other"
     log_status_eq 1
     [[ "$output" =~ "our check 'c1' and their check 'c0' both reference the same column(s)" ]] || false
 }
@@ -1496,6 +1514,7 @@ SQL
 # TODO: what happens when the new data conflicts with modified check?
 @test "sql-merge: non-conflicting constraint modification is preserved" {
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt sql -q "alter table t add constraint c check (i > 0)"
     dolt commit -am "initial commit"
 
@@ -1517,7 +1536,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other
+    run dolt merge other -m "merge other"
     log_status_eq 0
 
     run dolt sql -q "select * from t"
@@ -1531,6 +1550,7 @@ SQL
 # TODO: expected behavior for dropping constraints?
 @test "sql-merge: dropping constraint in one branch drops from both" {
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt sql -q "alter table t add constraint c check (i > 0)"
     dolt commit -am "initial commit"
 
@@ -1551,7 +1571,7 @@ SQL
     [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other
+    run dolt merge other -m "merge other"
     log_status_eq 0
 
     run dolt sql -q "select * from t"
@@ -1564,6 +1584,7 @@ SQL
 
 @test "sql-merge: dropping constraint on both branches merges successfully" {
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt sql -q "alter table t add constraint c check (i > 0)"
     dolt commit -am "initial commit"
 
@@ -1581,7 +1602,7 @@ SQL
     [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other
+    run dolt merge other -m "merge other"
     log_status_eq 0
 
     run dolt sql -q "show create table t"
@@ -1591,6 +1612,7 @@ SQL
 
 @test "sql-merge: dropping constraint in one branch and modifying same in other results in conflict" {
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt sql -q "alter table t add constraint c check (i > 0)"
     dolt commit -am "initial commit"
 
@@ -1609,13 +1631,14 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other
+    run dolt merge other -m "merge other"
     log_status_eq 1
     [[ "$output" =~ "check 'c' was deleted in theirs but modified in ours" ]] || false
 }
 
 @test "sql-merge: merging with not null and check constraints preserves both constraints" {
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt commit -am "initial commit"
 
     dolt branch b1
@@ -1636,9 +1659,9 @@ SQL
     dolt commit -am "changes to b2"
 
     dolt checkout main
-    run dolt merge b1
+    run dolt merge b1 -m "merge b1"
     log_status_eq 0
-    run dolt merge b2
+    run dolt merge b2 -m "merge b2"
     log_status_eq 0
 
     run dolt sql -q "show create table t"
@@ -1649,6 +1672,7 @@ SQL
 
 @test "sql-merge: check constraint with name collision" {
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt commit -am "initial commit"
 
     dolt branch b1
@@ -1669,15 +1693,16 @@ SQL
     dolt commit -am "changes to b2"
 
     dolt checkout main
-    run dolt merge b1
+    run dolt merge b1 -m "merge b1" --commit
     log_status_eq 0
-    run dolt merge b2
+    run dolt merge b2 -m "merge b2"
     log_status_eq 1
     [[ "$output" =~ "two checks with the name 'c' but different definitions" ]] || false
 }
 
 @test "sql-merge: check constraint for deleted column in another table" {
     dolt sql -q "create table t (i int primary key, j int)"
+    dolt add .
     dolt commit -am "initial commit"
 
     dolt branch b1
@@ -1695,9 +1720,9 @@ SQL
     dolt commit -am "changes to b2"
 
     dolt checkout main
-    run dolt merge b1
+    run dolt merge b1 -m "merge b1"
     log_status_eq 0
-    run dolt merge b2
+    run dolt merge b2 -m "merge b2"
     log_status_eq 1
     [[ "$output" =~ "check 'c' references a column that will be deleted after merge" ]] || false
 }

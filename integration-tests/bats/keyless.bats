@@ -11,6 +11,7 @@ CREATE TABLE keyless (
 );
 INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);
 SQL
+    dolt add .
     dolt commit -am "init"
 }
 
@@ -345,7 +346,7 @@ SQL
     dolt sql -q "DELETE FROM keyless WHERE c0 = 2;"
     dolt commit -am "deleted twos on left"
 
-    run dolt merge right
+    run dolt merge right -m "merge"
     [ $status -eq 0 ]
     run dolt diff main
     [ $status -eq 0 ]
@@ -363,6 +364,7 @@ INSERT INTO dupe (c0,c1) VALUES
     (1,1),(1,1),(1,1),(1,1),(1,1),
     (1,1),(1,1),(1,1),(1,1),(1,1);
 SQL
+    dolt add .
     dolt commit -am "created table dupe"
 }
 
@@ -411,7 +413,7 @@ SQL
     dolt sql -q "DELETE FROM dupe LIMIT 4;"
     dolt commit -am "deleted four rows on left"
 
-    run dolt merge right
+    run dolt merge right -m "merge"
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
@@ -459,7 +461,7 @@ SQL
     dolt sql -q "UPDATE dupe SET c1 = 2 LIMIT 4;"
     dolt commit -am "updated four rows on left"
 
-    run dolt merge right
+    run dolt merge right -m "merge"
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
@@ -623,7 +625,7 @@ CSV
     dolt sql -q "UPDATE keyless SET c1 = c1+20 WHERE c0 > 6"
     dolt commit -am "updated on other"
 
-    run dolt merge main
+    run dolt merge main -m "merge"
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
@@ -671,7 +673,7 @@ CSV
     dolt sql -q "INSERT INTO keyless VALUES (9,9),(8,8),(7,7);"
     dolt commit -am "inserted on other"
 
-    run dolt merge main
+    run dolt merge main -m "merge"
     [ $status -eq 0 ]
      run dolt sql -q "SELECT count(*) FROM keyless WHERE c0 > 6;" -r csv
     [ $status -eq 0 ]
@@ -718,7 +720,7 @@ UPDATE keyless SET c0 = 9, c1 = 9 WHERE c1 = 17;
 SQL
     dolt commit -am "inserted on other"
 
-    run dolt merge main
+    run dolt merge main -m "merge"
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
@@ -758,7 +760,7 @@ SQL
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(7,7),(8,8),(9,9);"
     dolt commit -am "inserted on other"
 
-    run dolt merge main
+    run dolt merge main -m "merge"
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
@@ -816,7 +818,7 @@ SQL
     dolt sql -q "INSERT INTO keyless VALUES (2,2);"
     dolt commit -am "inserted twos on left"
 
-    run dolt merge right
+    run dolt merge right -m "merge"
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 

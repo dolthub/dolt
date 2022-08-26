@@ -344,6 +344,7 @@ DELIM
 
     dolt sql < 1pk5col-ints-sch.sql
     dolt table import -u --continue test 1pk5col-rpt-ints.csv
+    dolt add .
     dolt commit -am "cm1"
 
     run dolt table import -u --continue test 1pk5col-rpt-ints.csv

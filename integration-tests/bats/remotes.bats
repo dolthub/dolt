@@ -186,6 +186,7 @@ teardown() {
     dolt init
     dolt remote add origin file://../remote
     dolt sql -q "CREATE TABLE a (pk int)"
+    dolt add .
     dolt commit -am "add table a"
     dolt push --set-upstream origin main
     dolt checkout -b other
@@ -226,6 +227,7 @@ teardown() {
     dolt init
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql -q "CREATE TABLE test (pk INT)"
+    dolt add .
     dolt commit -am "main commit"
     dolt push test-remote main
     run dolt branch -a
@@ -276,6 +278,7 @@ SQL
     dolt init
     dolt remote add origin file://../remote
     dolt sql -q "CREATE TABLE a (pk int)"
+    dolt add .
     dolt commit -am "add table a"
     dolt push --set-upstream origin main
     dolt checkout -b other
@@ -365,6 +368,7 @@ SQL
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
     dolt sql -q "create table t1(c0 varchar(100));"
+    dolt add .
     dolt commit -am "adding table t1"
     run dolt push test-remote test-branch
     [ "$status" -eq 0 ]
@@ -393,6 +397,7 @@ SQL
     [[ "$output" =~ 'local changes to the following tables would be overwritten by merge' ]] || false
 
     # Commit changes and test that a merge conflict fails the pull
+    dolt add .
     dolt commit -am "adding new t1 table"
     run dolt pull test-remote test-branch
     [ "$status" -eq 1 ]
@@ -922,8 +927,7 @@ SQL
     [[ ! "$output" =~ "test commit" ]] || false
     run dolt merge origin/main
     [ "$status" -eq 0 ]
-    # This needs to say up-to-date like the skipped test above
-    # [[ "$output" =~ "up to date" ]]
+    [[ "$output" =~ "up-to-date" ]]
     run dolt fetch
     [ "$status" -eq 0 ]
     run dolt merge origin/main
@@ -957,7 +961,6 @@ SQL
     cd "dolt-repo-clones/test-repo"
     run dolt merge remotes/origin/main
     [ "$status" -eq 0 ]
-    # This needs to say up-to-date like the skipped test above
     [[ "$output" =~ "Everything up-to-date" ]]
     run dolt fetch origin main
     [ "$status" -eq 0 ]
@@ -1030,9 +1033,15 @@ CREATE TABLE test2 (
 SQL
     dolt add test2
     dolt commit -m "another test commit"
-    run dolt pull origin
+    run dolt pull origin --no-edit
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Merge branch 'main' of" ]] || false
+    [[ ! "$output" =~ "test commit" ]] || false
+    [[ ! "$output" =~ "another test commit" ]] || false
 }
 
 @test "remotes: generate a merge with a conflict with a remote branch" {
@@ -1239,7 +1248,7 @@ SQL
     [ "$status" -ne 0 ]
     run dolt fetch -f test-remote
     [ "$status" -eq 0 ]
-    run dolt pull
+    run dolt pull --no-edit
     [ "$status" -eq 0 ]
 }
 
@@ -1484,7 +1493,7 @@ setup_ref_test() {
 
 @test "remotes: can use refs/remotes/origin/... as commit reference for merge" {
     setup_ref_test
-    dolt merge refs/remotes/origin/main
+    dolt merge refs/remotes/origin/main -m "merge"
 }
 
 @test "remotes: can use remotes/origin/... as commit reference for log" {
@@ -1500,7 +1509,7 @@ setup_ref_test() {
 
 @test "remotes: can use remotes/origin/... as commit reference for merge" {
     setup_ref_test
-    dolt merge remotes/origin/main
+    dolt merge remotes/origin/main -m "merge"
 }
 
 @test "remotes: can use origin/... as commit reference for log" {
@@ -1516,7 +1525,7 @@ setup_ref_test() {
 
 @test "remotes: can use origin/... as commit reference for merge" {
     setup_ref_test
-    dolt merge origin/main
+    dolt merge origin/main -m "merge"
 }
 
 @test "remotes: can delete remote reference branch as origin/..." {
@@ -1825,6 +1834,7 @@ setup_ref_test() {
     cd repo2
     dolt checkout -b other
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt commit -am "adding table from other"
     dolt push origin other
 
@@ -1889,6 +1899,7 @@ SQL
 
     dolt checkout main
     dolt sql -q "CREATE TABLE a(pk int primary key)"
+    dolt add .
     dolt commit -am "add table a"
     dolt push
 
@@ -1913,6 +1924,7 @@ SQL
 
     cd repo2
     dolt sql -q "CREATE TABLE test (id int primary key)"
+    dolt add .
     dolt commit -am "create table"
     run dolt push
     [ "$status" -eq "0" ]
@@ -1928,15 +1940,14 @@ SQL
     [[ "$output" =~ "1 commit" ]] || false
 
     dolt sql -q "CREATE TABLE different (id int primary key)"
+    dolt add .
     dolt commit -am "create different table"
 
     run dolt status
     [[ "$output" =~ "diverged" ]] || false
     [[ "$output" =~ "1 and 1" ]] || false
 
-    dolt pull
-    dolt commit -am "merge main"
-
+    dolt pull --no-edit
     run dolt status
     [[ "$output" =~ "ahead" ]] || false
     [[ "$output" =~ "2 commit" ]] || false
@@ -2019,6 +2030,7 @@ SQL
     dolt init
     dolt remote add origin file://../remote
     dolt sql -q "CREATE TABLE a (pk int)"
+    dolt add .
     dolt commit -am "add table a"
     dolt push --set-upstream origin main
     dolt checkout -b other
@@ -2133,6 +2145,7 @@ create table new_table(a int primary key);
 insert into new_table values (1), (2);
 SQL
     cd repo2
+    dolt add .
     dolt commit -am "a commit for main from repo2"
     dolt push origin main
     cd ..
@@ -2163,6 +2176,7 @@ SQL
     cd repo2
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql -q "CREATE TABLE test_table (pk INT)"
+    dolt add .
     dolt commit -am "main commit"
     dolt push test-remote main
     cd ..

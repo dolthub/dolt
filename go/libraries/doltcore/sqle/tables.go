@@ -354,7 +354,7 @@ func (t *DoltTable) numRows(ctx *sql.Context) (uint64, error) {
 		return 0, err
 	}
 
-	return m.Count(), nil
+	return m.Count()
 }
 
 // Format returns the NomsBinFormat for the underlying table
@@ -368,6 +368,11 @@ func (t *DoltTable) Schema() sql.Schema {
 		return t.projectedSchema
 	}
 	return t.sqlSchema().Schema
+}
+
+// Collation returns the collation for this table.
+func (t *DoltTable) Collation() sql.CollationID {
+	return sql.CollationID(t.sch.GetCollation())
 }
 
 func (t *DoltTable) sqlSchema() sql.PrimaryKeySchema {
@@ -396,7 +401,10 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	if err != nil {
 		return nil, err
 	}
-	partitions := partitionsFromRows(ctx, rows)
+	partitions, err := partitionsFromRows(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
 
 	return newDoltTablePartitionIter(rows, partitions...), nil
 }
@@ -455,8 +463,12 @@ func (t *DoltTable) AnalyzeTable(ctx *sql.Context) error {
 		return err
 	}
 
+	mc, err := m.Count()
+	if err != nil {
+		return err
+	}
 	t.doltStats = &DoltTableStatistics{
-		rowCount:  m.Count(),
+		rowCount:  mc,
 		createdAt: time.Now(),
 	}
 
@@ -668,7 +680,11 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	numOfRows := int(rowData.Count())
+	c, err := rowData.Count()
+	if err != nil {
+		return 0, err
+	}
+	numOfRows := int(c)
 
 	sess := dsess.DSessFromSess(ctx.Session)
 	newTable, err := t.truncate(ctx, table, sch, sess)
@@ -1019,18 +1035,25 @@ type doltTablePartition struct {
 	rowData durable.Index
 }
 
-func partitionsFromRows(ctx context.Context, rows durable.Index) []doltTablePartition {
-	if rows.Empty() {
+func partitionsFromRows(ctx context.Context, rows durable.Index) ([]doltTablePartition, error) {
+	empty, err := rows.Empty()
+	if err != nil {
+		return nil, err
+	}
+	if empty {
 		return []doltTablePartition{
 			{start: 0, end: 0, rowData: rows},
-		}
+		}, nil
 	}
 
 	return partitionsFromTableRows(rows)
 }
 
-func partitionsFromTableRows(rows durable.Index) []doltTablePartition {
-	numElements := rows.Count()
+func partitionsFromTableRows(rows durable.Index) ([]doltTablePartition, error) {
+	numElements, err := rows.Count()
+	if err != nil {
+		return nil, err
+	}
 	itemsPerPartition := MaxRowsPerPartition
 	numPartitions := (numElements / itemsPerPartition) + 1
 
@@ -1059,7 +1082,7 @@ func partitionsFromTableRows(rows durable.Index) []doltTablePartition {
 		rowData: rows,
 	}
 
-	return partitions
+	return partitions, nil
 }
 
 // Key returns the key for this partition, which must uniquely identity the partition.
@@ -1398,7 +1421,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 func (t *AlterableDoltTable) getNewSch(ctx context.Context, oldColumn, newColumn *sql.Column, oldSch schema.Schema, newSchema sql.PrimaryKeySchema, root, headRoot *doltdb.RootValue) (schema.Schema, error) {
 	if oldColumn == nil || newColumn == nil {
 		// Adding or dropping a column
-		newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot)
+		newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
 		if err != nil {
 			return nil, err
 		}
@@ -1427,7 +1450,7 @@ func (t *AlterableDoltTable) getNewSch(ctx context.Context, oldColumn, newColumn
 		}
 	}
 
-	newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot)
+	newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
 	if err != nil {
 		return nil, err
 	}

@@ -79,6 +79,11 @@ func (dt *UnscopedDiffTable) Schema() sql.Schema {
 	}
 }
 
+// Collation implements the sql.Table interface.
+func (dt *UnscopedDiffTable) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
 // Partitions is a sql.Table interface function that returns a partition of the data. Returns one
 // partition for working set changes and one partition for all commit history.
 func (dt *UnscopedDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
@@ -392,5 +397,5 @@ func isTableDataEmpty(ctx *sql.Context, table *doltdb.Table) (bool, error) {
 		return false, err
 	}
 
-	return rowData.Empty(), nil
+	return rowData.Empty()
 }

@@ -46,7 +46,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 83
+const SkipPreparedsCount = 77
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -66,21 +66,44 @@ func TestQueries(t *testing.T) {
 func TestSingleQuery(t *testing.T) {
 	t.Skip()
 
-	var test queries.QueryTest
-	test = queries.QueryTest{
-		Query: `select i from mytable where i = 1`,
-		Expected: []sql.Row{
-			{1},
-		},
+	harness := newDoltHarness(t)
+	//harness.Setup(setup.MydbData, setup.MytableData)
+	engine, err := harness.NewEngine(t)
+	if err != nil {
+		panic(err)
 	}
 
-	harness := newDoltHarness(t)
-	engine := enginetest.NewEngine(t, harness)
-	enginetest.CreateIndexes(t, harness, engine)
+	setupQueries := []string{
+		"create table t1 (pk int primary key, c int);",
+		"insert into t1 values (1,2), (3,4)",
+		"call dolt_add('.')",
+		"set @Commit1 = dolt_commit('-am', 'initial table');",
+		"insert into t1 values (5,6), (7,8)",
+		"set @Commit2 = dolt_commit('-am', 'two more rows');",
+	}
+
+	for _, q := range setupQueries {
+		enginetest.RunQuery(t, engine, harness, q)
+	}
+
 	//engine.Analyzer.Debug = true
 	//engine.Analyzer.Verbose = true
 
-	enginetest.TestQuery(t, harness, test.Query, test.Expected, test.ExpectedColumns, nil)
+	var test queries.QueryTest
+	test = queries.QueryTest{
+		Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
+		Expected: []sql.Row{
+			{"Exchange"},
+			{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+			{"     └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
+			{"         └─ IndexedTableAccess(dolt_history_t1)"},
+			{"             ├─ index: [dolt_history_t1.pk]"},
+			{"             ├─ filters: [{[3, 3]}]"},
+			{"             └─ columns: [pk c committer]"},
+		},
+	}
+
+	enginetest.TestQueryWithEngine(t, harness, engine, test)
 }
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
@@ -92,6 +115,7 @@ func TestSingleScript(t *testing.T) {
 			Name: "truncate table",
 			SetUpScript: []string{
 				"create table t (a int primary key auto_increment, b int)",
+				"call dolt_add('.')",
 				"call dolt_commit('-am', 'empty table')",
 				"call dolt_branch('branch1')",
 				"call dolt_branch('branch2')",
@@ -178,27 +202,46 @@ func TestSingleScript(t *testing.T) {
 func TestSingleQueryPrepared(t *testing.T) {
 	t.Skip()
 
-	var test queries.QueryTest
-	test = queries.QueryTest{
-		Query: `SELECT ST_SRID(g, 0) from geometry_table order by i`,
-		Expected: []sql.Row{
-			{sql.Point{X: 1, Y: 2}},
-			{sql.LineString{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
-			{sql.Polygon{Lines: []sql.LineString{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
-			{sql.Point{X: 1, Y: 2}},
-			{sql.LineString{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
-			{sql.Polygon{Lines: []sql.LineString{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
-		},
-	}
-
 	harness := newDoltHarness(t)
 	//engine := enginetest.NewEngine(t, harness)
 	//enginetest.CreateIndexes(t, harness, engine)
-	engine := enginetest.NewSpatialEngine(t, harness)
-	engine.Analyzer.Debug = true
-	engine.Analyzer.Verbose = true
+	//engine := enginetest.NewSpatialEngine(t, harness)
+	engine, err := harness.NewEngine(t)
+	if err != nil {
+		panic(err)
+	}
 
-	enginetest.TestQuery(t, harness, test.Query, test.Expected, nil, nil)
+	setupQueries := []string{
+		"create table t1 (pk int primary key, c int);",
+		"call dolt_add('.')",
+		"insert into t1 values (1,2), (3,4)",
+		"set @Commit1 = dolt_commit('-am', 'initial table');",
+		"insert into t1 values (5,6), (7,8)",
+		"set @Commit2 = dolt_commit('-am', 'two more rows');",
+	}
+
+	for _, q := range setupQueries {
+		enginetest.RunQuery(t, engine, harness, q)
+	}
+
+	//engine.Analyzer.Debug = true
+	//engine.Analyzer.Verbose = true
+
+	var test queries.QueryTest
+	test = queries.QueryTest{
+		Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
+		Expected: []sql.Row{
+			{"Exchange"},
+			{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+			{"     └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
+			{"         └─ IndexedTableAccess(dolt_history_t1)"},
+			{"             ├─ index: [dolt_history_t1.pk]"},
+			{"             ├─ filters: [{[3, 3]}]"},
+			{"             └─ columns: [pk c committer]"},
+		},
+	}
+
+	enginetest.TestPreparedQuery(t, harness, test.Query, test.Expected, nil)
 }
 
 func TestSingleScriptPrepared(t *testing.T) {
@@ -207,6 +250,7 @@ func TestSingleScriptPrepared(t *testing.T) {
 	s := []setup.SetupScript{
 		{
 			"create table test (pk int primary key, c1 int)",
+			"call dolt_add('.')",
 			"insert into test values (0,0), (1,1);",
 			"set @Commit1 = dolt_commit('-am', 'creating table');",
 			"call dolt_branch('-c', 'main', 'newb')",
@@ -733,6 +777,7 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 
 	setupScripts := []setup.SetupScript{
 		{"create table t01 (pk int primary key, c1 int)"},
+		{"call dolt_add('.');"},
 		{"call dolt_commit('-am', 'creating table t01 on main');"},
 		{"insert into t01 values (1, 1), (2, 2);"},
 		{"call dolt_commit('-am', 'adding rows to table t01 on main');"},
@@ -970,6 +1015,7 @@ func TestSingleTransactionScript(t *testing.T) {
 		Name: "allow commit conflicts on, conflict on dolt_merge",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
@@ -1075,10 +1121,41 @@ func TestHistorySystemTable(t *testing.T) {
 	}
 }
 
+func TestHistorySystemTablePrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range HistorySystemTableScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
+func TestBrokenHistorySystemTablePrepared(t *testing.T) {
+	t.Skip()
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range BrokenHistorySystemTableScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
 func TestUnscopedDiffSystemTable(t *testing.T) {
 	for _, test := range UnscopedDiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, newDoltHarness(t), test)
+		})
+	}
+}
+
+func TestUnscopedDiffSystemTablePrepared(t *testing.T) {
+	for _, test := range UnscopedDiffSystemTableScriptTests {
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, newDoltHarness(t), test)
 		})
 	}
 }
@@ -1094,6 +1171,18 @@ func TestDiffTableFunction(t *testing.T) {
 	}
 }
 
+func TestDiffTableFunctionPrepared(t *testing.T) {
+	t.Skip()
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range DiffTableFunctionScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
 func TestCommitDiffSystemTable(t *testing.T) {
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
@@ -1101,6 +1190,18 @@ func TestCommitDiffSystemTable(t *testing.T) {
 		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func TestCommitDiffSystemTablePrepared(t *testing.T) {
+	t.Skip()
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range CommitDiffSystemTableScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
 		})
 	}
 }
@@ -1118,6 +1219,24 @@ func TestDiffSystemTable(t *testing.T) {
 	if types.IsFormat_DOLT(types.Format_Default) {
 		for _, test := range Dolt1DiffSystemTableScripts {
 			enginetest.TestScript(t, newDoltHarness(t), test)
+		}
+	}
+}
+
+func TestDiffSystemTablePrepared(t *testing.T) {
+	t.Skip()
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range DiffSystemTableScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+
+	if types.IsFormat_DOLT(types.Format_Default) {
+		for _, test := range Dolt1DiffSystemTableScripts {
+			enginetest.TestScriptPrepared(t, newDoltHarness(t), test)
 		}
 	}
 }
@@ -1384,8 +1503,12 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		// Assert the new index map is not empty
 		newRows, err := table.GetIndexRowData(ctx, "c1_idx")
 		require.NoError(t, err)
-		assert.False(t, newRows.Empty())
-		assert.Equal(t, newRows.Count(), uint64(2))
+		empty, err := newRows.Empty()
+		require.NoError(t, err)
+		assert.False(t, empty)
+		count, err := newRows.Count()
+		require.NoError(t, err)
+		assert.Equal(t, count, uint64(2))
 	})
 
 	t.Run("Add primary key when one more cells contain NULL", func(t *testing.T) {
@@ -1454,8 +1577,12 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		// Assert the index map is not empty
 		newIdx, err := table.GetIndexRowData(ctx, "c1_idx")
 		assert.NoError(t, err)
-		assert.False(t, newIdx.Empty())
-		assert.Equal(t, newIdx.Count(), uint64(2))
+		empty, err := newIdx.Empty()
+		require.NoError(t, err)
+		assert.False(t, empty)
+		count, err := newIdx.Count()
+		require.NoError(t, err)
+		assert.Equal(t, count, uint64(2))
 	})
 }
 

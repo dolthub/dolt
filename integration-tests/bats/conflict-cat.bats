@@ -16,6 +16,7 @@ INSERT INTO t VALUES (1, 1);
 INSERT INTO t VALUES (2, 2);
 INSERT INTO t VALUES (3, 3);
 SQL
+    dolt add .
     dolt commit -am 'create table with rows'
 
     dolt checkout -b other
@@ -35,7 +36,7 @@ UPDATE t set col1 = 0 where pk = 3;
 INSERT INTO t VALUES (4, 4);
 SQL
     dolt commit -am 'left edit'
-    dolt merge other
+    dolt merge other -m "merge other"
 
     # trick to disable colors
     dolt conflicts cat . > output.txt
@@ -55,6 +56,7 @@ SQL
 
 @test "conflict-cat: conflicts should show using the union-schema (new schema on right)" {
     dolt sql -q "CREATE TABLE t (a INT PRIMARY KEY, b INT);"
+    dolt add .
     dolt commit -am "base"
 
     dolt checkout -b right
@@ -68,7 +70,7 @@ SQL
     dolt sql -q "INSERT INTO t values (1, 3);"
     dolt commit -am "left"
 
-    dolt merge right
+    dolt merge right -m "merge right"
 
     run dolt conflicts cat .
     [[ "$output" =~ "| a" ]]
@@ -78,6 +80,7 @@ SQL
 
 @test "conflict-cat: conflicts should show using the union-schema (new schema on left)" {
     dolt sql -q "CREATE TABLE t (a INT PRIMARY KEY, b INT);"
+    dolt add .
     dolt commit -am "base"
 
     dolt checkout -b right
@@ -90,7 +93,7 @@ ALTER TABLE t ADD c INT;
 INSERT INTO t VALUES (1, 3, 1);
 SQL
     dolt commit -am "left"
-    dolt merge right
+    dolt merge right -m "merge left"
 
     run dolt conflicts cat .
     [[ "$output" =~ "| a" ]]

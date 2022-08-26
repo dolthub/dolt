@@ -84,7 +84,7 @@ teardown() {
     dolt sql -q "insert into test values (1,1)"
     dolt add test
     dolt commit -m "Commit3"
-    dolt merge test-branch
+    dolt merge test-branch --no-commit
     run dolt log
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit1" ]] || false
@@ -123,6 +123,7 @@ teardown() {
 
 @test "log: Log on a table has basic functionality" {
     dolt sql -q "create table test (pk int PRIMARY KEY)"
+    dolt add .
     dolt commit -am "first commit"
 
     run dolt log test
@@ -140,6 +141,7 @@ teardown() {
     [[ ! "$output" =~ "Initialize data repository" ]] || false
 
     dolt sql -q "create table test2 (pk int PRIMARY KEY)"
+    dolt add .
     dolt commit -am "third commit"
 
     # Validate we only look at the right commits
@@ -153,6 +155,7 @@ teardown() {
 
 @test "log: Log on a table works with -n" {
     dolt sql -q "create table test (pk int PRIMARY KEY)"
+    dolt add .
     dolt commit -am "first commit"
 
     run dolt log -n 1 test
@@ -168,6 +171,7 @@ teardown() {
     [[ "$output" =~ "first commit" ]] || false
 
     dolt sql -q "create table test2 (pk int PRIMARY KEY)"
+    dolt add .
     dolt commit -am "third commit"
 
     dolt sql -q "insert into test2 values (4)"
@@ -203,7 +207,7 @@ teardown() {
     dolt sql -q "insert into test values (1,1)"
     dolt add test
     dolt commit -m "Commit3"
-    dolt merge test-branch
+    dolt merge test-branch --no-commit
 
     run dolt log test
     [ $status -eq 0 ]
@@ -283,8 +287,7 @@ teardown() {
     # Should be fast-forward 
     dolt merge branch1
     # An actual merge
-    dolt merge branch2
-    dolt commit -m "Merged branch2"
+    dolt merge branch2 -m "Merged branch2"
 
     # Only shows merge commits
     run dolt log --merges

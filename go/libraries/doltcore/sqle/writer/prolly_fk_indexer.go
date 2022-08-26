@@ -49,6 +49,11 @@ func (n *prollyFkIndexer) Schema() sql.Schema {
 	return n.writer.sqlSch
 }
 
+// Collation implements the interface sql.Table.
+func (n *prollyFkIndexer) Collation() sql.CollationID {
+	return sql.CollationID(n.writer.sch.GetCollation())
+}
+
 func (n *prollyFkIndexer) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	ranges, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
 	if err != nil {

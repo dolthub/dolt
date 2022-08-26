@@ -15,7 +15,10 @@
 package sqlserver
 
 import (
+	"fmt"
 	"time"
+
+	"github.com/dolthub/dolt/go/libraries/utils/version"
 
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/prometheus/client_golang/prometheus"
@@ -29,9 +32,10 @@ type metricsListener struct {
 	gaugeConcurrentConn    prometheus.Gauge
 	gaugeConcurrentQueries prometheus.Gauge
 	histQueryDur           prometheus.Histogram
+	gaugeVersion           prometheus.Gauge
 }
 
-func newMetricsListener(labels prometheus.Labels) *metricsListener {
+func newMetricsListener(labels prometheus.Labels, versionStr string) (*metricsListener, error) {
 	ml := &metricsListener{
 		cntConnections: prometheus.NewCounter(prometheus.CounterOpts{
 			Name:        "dss_connects",
@@ -59,15 +63,33 @@ func newMetricsListener(labels prometheus.Labels) *metricsListener {
 			ConstLabels: labels,
 			Buckets:     []float64{0.01, 0.1, 1.0, 10.0, 100.0, 1000.0}, // 10 ms to 16 mins 40 secs
 		}),
+		gaugeVersion: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name:        "dss_dolt_version",
+			Help:        "The version of dolt currently running on the machine",
+			ConstLabels: labels,
+		}),
 	}
 
+	u32Version, err := version.Encode(versionStr)
+	if err != nil {
+		return nil, err
+	}
+
+	f64Version := float64(u32Version)
+	decoded := version.Decode(uint32(f64Version))
+	if decoded != versionStr {
+		return nil, fmt.Errorf("the float64 encoded version does not decode back to its original value. version:'%s', decoded:'%s'", versionStr, decoded)
+	}
+
+	prometheus.MustRegister(ml.gaugeVersion)
 	prometheus.MustRegister(ml.cntConnections)
 	prometheus.MustRegister(ml.cntDisconnects)
 	prometheus.MustRegister(ml.gaugeConcurrentConn)
 	prometheus.MustRegister(ml.gaugeConcurrentQueries)
 	prometheus.MustRegister(ml.histQueryDur)
 
-	return ml
+	ml.gaugeVersion.Set(f64Version)
+	return ml, nil
 }
 
 func (ml *metricsListener) ClientConnected() {
@@ -90,6 +112,7 @@ func (ml *metricsListener) QueryCompleted(success bool, duration time.Duration) 
 }
 
 func (ml *metricsListener) Close() {
+	prometheus.Unregister(ml.gaugeVersion)
 	prometheus.Unregister(ml.cntConnections)
 	prometheus.Unregister(ml.cntDisconnects)
 	prometheus.Unregister(ml.gaugeConcurrentConn)

@@ -98,6 +98,7 @@ func UntypeSchema(sch schema.Schema) (schema.Schema, error) {
 	if err != nil {
 		return nil, err
 	}
+	newSch.SetCollation(sch.GetCollation())
 	return newSch, nil
 }
 

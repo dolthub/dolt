@@ -104,7 +104,7 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 		remoteRefName = apr.Arg(1)
 	}
 
-	pullSpec, err := env.NewPullSpec(ctx, dbData.Rsr, remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
+	pullSpec, err := env.NewPullSpec(ctx, dbData.Rsr, remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, err
 	}
@@ -172,7 +172,9 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
-			ws, conflicts, fastForward, err = mergeIntoWorkingSet(ctx, sess, roots, ws, dbName, mergeSpec)
+
+			msg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, dbData.Rsr.CWBHeadRef().GetPath())
+			ws, conflicts, fastForward, err = performMerge(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
 			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
 				return conflicts, fastForward, err
 			}

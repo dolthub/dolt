@@ -268,7 +268,9 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	defer newDB.Close()
 	datasets2, err := newDB.Datasets(context.Background())
 	suite.NoError(err)
-	suite.Equal(uint64(2), datasets2.Len())
+	l, err := datasets2.Len()
+	suite.NoError(err)
+	suite.Equal(uint64(2), l)
 }
 
 func mustNomsMap(t *testing.T, dsm DatasetsMap) types.Map {
@@ -399,7 +401,9 @@ func (suite *DatabaseSuite) TestDatabaseDelete() {
 	defer newDB.Close()
 	datasets, err = newDB.Datasets(context.Background())
 	suite.NoError(err)
-	suite.Equal(uint64(1), datasets.Len())
+	l, err := datasets.Len()
+	suite.NoError(err)
+	suite.Equal(uint64(1), l)
 	newDS, err := newDB.GetDataset(context.Background(), datasetID2)
 	suite.NoError(err)
 	present = newDS.HasHead()

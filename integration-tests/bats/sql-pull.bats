@@ -25,6 +25,7 @@ setup() {
     # table and commits only present on repo1, rem1 at start
     cd $TMPDIRS/repo1
     dolt sql -q "create table t1 (a int primary key, b int)"
+    dolt add .
     dolt commit -am "First commit"
     dolt sql -q "insert into t1 values (0,0)"
     dolt commit -am "Second commit"
@@ -236,6 +237,7 @@ teardown() {
     cd repo1
     dolt checkout -b feature2
     dolt sql -q "create table t2 (i int primary key);"
+    dolt sql -q "call dolt_add('.');"
     dolt sql -q "call dolt_commit('-am', 'create t2')"
     dolt push --set-upstream origin feature2
 
@@ -424,6 +426,7 @@ teardown() {
 
     dolt checkout feature
     dolt sql -q "create table t2 (a int)"
+    dolt add .
     dolt commit -am "feature commit"
     dolt tag v3
     dolt push origin v3
@@ -446,6 +449,7 @@ teardown() {
 
     dolt checkout feature
     dolt sql -q "create table t2 (a int)"
+    dolt add .
     dolt commit -am "feature commit"
     dolt tag v3
     dolt push origin v3
@@ -535,4 +539,36 @@ teardown() {
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "behind 'origin/other' by 1 commit" ]] || false
+}
+
+@test "sql-pull: dolt_pull commits successful merge on current branch" {
+    cd repo1
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+
+    cd ../repo2
+    dolt fetch
+    # this checkout will set upstream because 'other' branch is a new branch that matches one of remote tracking branch
+    dolt checkout other
+
+    cd ../repo1
+    dolt sql -q "insert into t1 values (1, 2)"
+    dolt commit -am "add (1,2) to t1"
+    dolt push
+
+    cd ../repo2
+    run dolt sql -q "select * from t1" -r csv
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "1,2" ]] || false
+
+    dolt sql -q "insert into t1 values (2, 3)"
+    dolt commit -am "add (2,3) to t1"
+    run dolt sql -q "select dolt_pull()"
+    [ "$status" -eq 0 ]
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Merge branch 'other' of" ]] || false
+    [[ ! "$output" =~ "add (1,2) to t1" ]] || false
+    [[ ! "$output" =~ "add (2,3) to t1" ]] || false
 }

@@ -62,7 +62,7 @@ var (
 func TestServerArgs(t *testing.T) {
 	serverController := NewServerController()
 	go func() {
-		startServer(context.Background(), "test", "dolt sql-server", []string{
+		startServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"-H", "localhost",
 			"-P", "15200",
 			"-u", "username",
@@ -104,7 +104,7 @@ listener:
 	go func() {
 		dEnv := dtestutils.CreateEnvWithSeedData(t)
 		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig))
-		startServer(context.Background(), "test", "dolt sql-server", []string{
+		startServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"--config", "config.yaml",
 		}, dEnv, serverController)
 	}()
@@ -170,7 +170,7 @@ func TestServerGoodParams(t *testing.T) {
 		t.Run(ConfigInfo(test), func(t *testing.T) {
 			sc := NewServerController()
 			go func(config ServerConfig, sc *ServerController) {
-				_, _ = Serve(context.Background(), "", config, sc, env)
+				_, _ = Serve(context.Background(), "0.0.0", config, sc, env)
 			}(test, sc)
 			err := sc.WaitForStart()
 			require.NoError(t, err)
@@ -192,7 +192,7 @@ func TestServerSelect(t *testing.T) {
 	sc := NewServerController()
 	defer sc.StopServer()
 	go func() {
-		_, _ = Serve(context.Background(), "", serverConfig, sc, env)
+		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, env)
 	}()
 	err := sc.WaitForStart()
 	require.NoError(t, err)
@@ -267,7 +267,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	sc := NewServerController()
 	defer sc.StopServer()
 	go func() {
-		_, _ = Serve(context.Background(), "", serverConfig, sc, dEnv)
+		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, dEnv)
 	}()
 	err := sc.WaitForStart()
 	require.NoError(t, err)
@@ -417,7 +417,7 @@ func TestReadReplica(t *testing.T) {
 	func() {
 		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
 		go func() {
-			_, _ = Serve(context.Background(), "", serverConfig, sc, multiSetup.MrEnv.GetEnv(readReplicaDbName))
+			_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, multiSetup.MrEnv.GetEnv(readReplicaDbName))
 		}()
 		err = sc.WaitForStart()
 		require.NoError(t, err)

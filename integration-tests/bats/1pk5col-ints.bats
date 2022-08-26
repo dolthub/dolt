@@ -27,6 +27,10 @@ teardown() {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "test" ]] || false
+    run dolt ls --verbose
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "0 rows" ]] || false
+
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ pk[[:space:]]+\|[[:space:]]+c1[[:space:]]+\|[[:space:]]+c2[[:space:]]+\|[[:space:]]+c3[[:space:]]+\|[[:space:]]+c4[[:space:]]+\|[[:space:]]+c5 ]] || false
@@ -400,7 +404,7 @@ teardown() {
     dolt add test
     dolt commit -m "added conflicting test row"
     dolt checkout main
-    run dolt merge test-branch
+    run dolt merge test-branch --no-commit
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT (content)" ]]
     run dolt conflicts cat test
@@ -665,13 +669,13 @@ DELIM
     dolt branch test-branch-m
     dolt branch test-branch-alt
     dolt checkout test-branch-m
-    dolt merge test-branch
+    dolt merge test-branch --no-commit
     dolt checkout test-branch-alt
     dolt sql -q "CREATE TABLE test_alt (pk BIGINT NOT NULL, c1 BIGINT, PRIMARY KEY (pk));"
     dolt add test_alt
     dolt commit -m 'add test_alt'
     dolt checkout test-branch-m
-    dolt merge test-branch-alt
+    dolt merge test-branch-alt --no-commit
     dolt add test_alt
     dolt commit -m 'merge test_alt'
     dolt checkout test-branch
@@ -679,7 +683,7 @@ DELIM
     dolt add test
     dolt commit -m "added row to test"
     dolt checkout test-branch-m
-    run dolt merge test-branch
+    run dolt merge test-branch -m "merge"
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "test | 1 +" ]
     [ "${lines[2]}" = "1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]

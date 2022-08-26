@@ -65,6 +65,11 @@ func (bt *BranchesTable) Schema() sql.Schema {
 	}
 }
 
+// Collation implements the sql.Table interface.
+func (bt *BranchesTable) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
 // Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.
 func (bt *BranchesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil

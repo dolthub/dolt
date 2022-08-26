@@ -36,7 +36,7 @@ import (
 
 type DatasetsMap interface {
 	// How many datasets are in the map
-	Len() uint64
+	Len() (uint64, error)
 
 	IterAll(ctx context.Context, cb func(id string, addr hash.Hash) error) error
 }

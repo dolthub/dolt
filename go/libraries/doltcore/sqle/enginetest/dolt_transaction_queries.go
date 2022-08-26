@@ -761,6 +761,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Name: "default behavior (rollback on commit conflict)",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
@@ -811,6 +812,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Name: "allow commit conflicts on, conflict on transaction commit",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
@@ -861,6 +863,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Name: "force commit on, conflict on transaction commit (same as dolt_allow_commit_conflicts)",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
@@ -911,6 +914,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Name: "allow commit conflicts on, conflict on dolt_merge",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
@@ -1001,6 +1005,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Name: "force commit on, conflict on dolt_merge (same as dolt_allow_commit_conflicts)",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
@@ -1089,6 +1094,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Name: "allow commit conflicts off, conflict on dolt_merge",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
@@ -1159,6 +1165,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Name: "conflicts from a DOLT_MERGE return an initially unhelpful error in a concurrent write scenario",
 		SetUpScript: []string{
 			"CREATE TABLE t (pk int PRIMARY KEY, col1 int);",
+			"CALL DOLT_ADD('.')",
 			"CALL DOLT_COMMIT('-am', 'create table');",
 
 			"CALL DOLT_CHECKOUT('-b', 'right');",
@@ -1341,6 +1348,7 @@ var DoltSqlFuncTransactionTests = []queries.TransactionTest{
 		Name: "committed conflicts are seen by other sessions",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
 			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
@@ -1482,6 +1490,7 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 		Name: "Constraint violations created by DOLT_MERGE should cause a roll back",
 		SetUpScript: []string{
 			"CREATE TABLE t (pk int PRIMARY KEY, col1 int UNIQUE);",
+			"CALL DOLT_ADD('.')",
 			"CALL DOLT_COMMIT('-am', 'create table');",
 
 			"CALL DOLT_CHECKOUT('-b', 'right');",
@@ -1515,6 +1524,7 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 		SetUpScript: []string{
 			"CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));",
 			"CREATE TABLE child (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO parent VALUES (10, 1), (20, 2);",
 			"INSERT INTO child VALUES (1, 1), (2, 2);",
 			"ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent (v1);",
@@ -1544,6 +1554,7 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 		SetUpScript: []string{
 			"CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));",
 			"CREATE TABLE child (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO parent VALUES (10, 1), (20, 2);",
 			"INSERT INTO child VALUES (1, 1), (2, 2);",
 			"ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent (v1);",
