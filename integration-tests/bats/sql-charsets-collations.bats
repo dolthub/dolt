@@ -51,14 +51,16 @@ teardown() {
     run dolt sql -q "SELECT * FROM german1 WHERE c = 'Bär'"
     [ $status -eq 0 ]
     [[ $output =~ 'Bar' ]] || false
-    [[ $output =~ 'Bär' ]] || false
+    # Hard to match a latin1 characeter in bash
+    [ ${#lines[@]} -eq 6 ]
 
     dolt sql -q	"create table german2 (c char(10) CHARACTER SET latin1 COLLATE latin1_german2_ci)"
     dolt sql -q	"insert into german1 values ('Bar'), ('Bär')"
     run dolt sql -q "SELECT * FROM german1 WHERE c = 'Bär'"
     [ $status -eq 0 ]
     [[ ! $output =~ 'Bar' ]] || false
-    [[ $output =~ 'Bär' ]] || false
+    # Hard to match a latin1 characeter in bash
+    [ ${#lines[@]} -eq 5 ]
 }
 
 @test "sql-charsets-collations: modify a charset on a column" {
@@ -85,7 +87,8 @@ teardown() {
     run dolt sql -q "SELECT * FROM german1 WHERE c = 'Bär'"
     [ $status -eq 0 ]
     [[ ! $output =~ 'Bar' ]] || false
-    [[ $output =~ 'Bär' ]] || false
+    # Hard to match a latin1 characeter in bash
+    [ ${#lines[@]} -eq 5 ]
 }
 
 @test "sql-charsets-collations: collations respected in regexes" {
