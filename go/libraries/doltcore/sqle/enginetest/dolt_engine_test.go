@@ -76,6 +76,7 @@ func TestSingleQuery(t *testing.T) {
 	setupQueries := []string{
 		"create table t1 (pk int primary key, c int);",
 		"insert into t1 values (1,2), (3,4)",
+		"call dolt_add('.')",
 		"set @Commit1 = dolt_commit('-am', 'initial table');",
 		"insert into t1 values (5,6), (7,8)",
 		"set @Commit2 = dolt_commit('-am', 'two more rows');",
@@ -212,6 +213,7 @@ func TestSingleQueryPrepared(t *testing.T) {
 
 	setupQueries := []string{
 		"create table t1 (pk int primary key, c int);",
+		"call dolt_add('.')",
 		"insert into t1 values (1,2), (3,4)",
 		"set @Commit1 = dolt_commit('-am', 'initial table');",
 		"insert into t1 values (5,6), (7,8)",

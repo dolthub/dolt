@@ -1045,6 +1045,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		Name:         "index by primary key",
 		SetUpScript: []string{
 			"create table t1 (pk int primary key, c int);",
+			"call dolt_add('.')",
 			"insert into t1 values (1,2), (3,4)",
 			"set @Commit1 = dolt_commit('-am', 'initial table');",
 			"insert into t1 values (5,6), (7,8)",
@@ -1081,6 +1082,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		Name:         "adding an index",
 		SetUpScript: []string{
 			"create table t1 (pk int primary key, c int);",
+			"call dolt_add('.')",
 			"insert into t1 values (1,2), (3,4)",
 			"set @Commit1 = dolt_commit('-am', 'initial table');",
 			"insert into t1 values (5,6), (7,8)",
@@ -1148,6 +1150,7 @@ var BrokenHistorySystemTableScriptTests = []queries.ScriptTest{
 		Name: "index by primary key",
 		SetUpScript: []string{
 			"create table t1 (pk int primary key, c int);",
+			"call dolt_add('.')",
 			"insert into t1 values (1,2), (3,4)",
 			"set @Commit1 = dolt_commit('-am', 'initial table');",
 			"insert into t1 values (5,6), (7,8)",
@@ -1183,6 +1186,7 @@ var BrokenHistorySystemTableScriptTests = []queries.ScriptTest{
 		Name: "adding an index",
 		SetUpScript: []string{
 			"create table t1 (pk int primary key, c int);",
+			"call dolt_add('.')",
 			"insert into t1 values (1,2), (3,4)",
 			"set @Commit1 = dolt_commit('-am', 'initial table');",
 			"insert into t1 values (5,6), (7,8)",
@@ -1254,6 +1258,7 @@ var MergeScripts = []queries.ScriptTest{
 			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"CALL DOLT_ADD('.');",
 			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
 			"SELECT DOLT_CHECKOUT('main');",
 		},
@@ -1319,7 +1324,7 @@ var MergeScripts = []queries.ScriptTest{
 		Name: "CALL DOLT_MERGE without conflicts correctly works with autocommit off with commit flag",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
-			"call DOLT_ADD('.')",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
 			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
@@ -1354,6 +1359,7 @@ var MergeScripts = []queries.ScriptTest{
 		Name: "CALL DOLT_MERGE without conflicts correctly works with autocommit off and no commit flag",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
 			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
@@ -1618,6 +1624,7 @@ var MergeScripts = []queries.ScriptTest{
 		Name: "CALL DOLT_MERGE with no conflicts works with no-commit flag",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
 			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
@@ -4095,6 +4102,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			"CREATE TABLE t (pk1 int PRIMARY KEY);",
 			"INSERT INTO t values (1);",
 			"CREATE table t2 (pk1a int, pk1b int, PRIMARY KEY (pk1a, pk1b));",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO t2 values (2, 2);",
 			"CALL DOLT_COMMIT('-am', 'initial');",
 
@@ -4647,6 +4655,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			"INSERT INTO t1 VALUES (1, 1);",
 			"CREATE TABLE t2 (pk1a int, pk1b int, col1 int, PRIMARY KEY (pk1a, pk1b));",
 			"INSERT INTO t2 VALUES (1, 1, 1);",
+			"CALL DOLT_ADD('.')",
 			"CALL DOLT_COMMIT('-am', 'initial');",
 
 			"ALTER TABLE t1 RENAME COLUMN pk to pk2;",

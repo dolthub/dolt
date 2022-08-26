@@ -1007,6 +1007,7 @@ CREATE TABLE t1 (pk int PRIMARY KEY, col1 int);
 INSERT INTO t1 VALUES (1, 1);
 CREATE TABLE t2 (pk1a int, pk1b int, col1 int, PRIMARY KEY (pk1a, pk1b));
 INSERT INTO t2 VALUES (1, 1, 1);
+SELECT DOLT_ADD('.');
 SQL
     dolt commit -am "initial"
 
@@ -1016,6 +1017,7 @@ UPDATE t1 set col1 = 100;
 ALTER TABLE t2 RENAME COLUMN pk1a to pk2a;
 ALTER TABLE t2 RENAME COLUMN pk1b to pk2b;
 UPDATE t2 set col1 = 100;
+SELECT DOLT_ADD('.');
 SQL
     dolt commit -am 'rename primary key'
 
