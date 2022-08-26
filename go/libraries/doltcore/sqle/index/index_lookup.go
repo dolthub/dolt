@@ -287,11 +287,6 @@ func (lb *baseLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (s
 // every subsequent point lookup. Note that equality joins can have a mix of
 // point lookups on concrete values, and range lookups for null matches.
 func (lb *baseLookupBuilder) newPointLookup(ctx *sql.Context, rang prolly.Range) (prolly.MapIter, error) {
-	for i := range rang.Tup {
-		if rang.Tup.FieldIsNull(i) {
-			return prolly.EmptyPointLookup, nil
-		}
-	}
 	if lb.cur == nil {
 		cur, err := tree.NewCursorFromCompareFn(ctx, lb.sec.NodeStore(), lb.sec.Node(), tree.Item(rang.Tup), lb.sec.CompareItems)
 		if err != nil {
