@@ -329,6 +329,24 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 // this slice into others with good names as it grows.
 var DoltScripts = []queries.ScriptTest{
 	{
+		Name: "test null filtering in secondary indexes (https://github.com/dolthub/dolt/issues/4199)",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, d datetime, index index1 (d));",
+			"insert into t (d) values (NOW()), (NOW());",
+			"insert into t (d) values (NULL), (NULL);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from t where d is not null",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select count(*) from t where d is null",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
 		Name: "test backticks in index name (https://github.com/dolthub/dolt/issues/3776)",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int)",
