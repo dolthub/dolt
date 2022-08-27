@@ -416,6 +416,49 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 // this slice into others with good names as it grows.
 var DoltScripts = []queries.ScriptTest{
 	{
+		Name: "test null filtering in secondary indexes (https://github.com/dolthub/dolt/issues/4199)",
+		SetUpScript: []string{
+			"create table t (pk int primary key auto_increment, d datetime, index index1 (d));",
+			"insert into t (d) values (NOW()), (NOW());",
+			"insert into t (d) values (NULL), (NULL);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from t where d is not null",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select count(*) from t where d is null",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				// Test the null-safe equals operator
+				Query:    "select count(*) from t where d <=> NULL",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				// Test the null-safe equals operator
+				Query:    "select count(*) from t where not(d <=> null)",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				// Test an IndexedJoin
+				Query:    "select count(ifnull(t.d, 1)) from t, t as t2 where t.d is not null and t.pk = t2.pk and t2.d is not null;",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				// Test an IndexedJoin
+				Query:    "select count(ifnull(t.d, 1)) from t, t as t2 where t.d is null and t.pk = t2.pk and t2.d is null;",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				// Test an IndexedJoin
+				Query:    "select count(ifnull(t.d, 1)) from t, t as t2 where t.d is null and t.pk = t2.pk and t2.d is not null;",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
 		Name: "test backticks in index name (https://github.com/dolthub/dolt/issues/3776)",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int)",
