@@ -51,15 +51,16 @@ teardown() {
     run dolt sql -q "SELECT * FROM german1 WHERE c = 'Bär'"
     [ $status -eq 0 ]
     [[ $output =~ 'Bar' ]] || false
-    # Hard to match a latin1 character in bash
+    skip "Daylon has a GMS PR to fix this"
+    [[ $output =~ 'Bär' ]] || false
     [ ${#lines[@]} -eq 6 ]
 
     dolt sql -q	"create table german2 (c char(10) CHARACTER SET latin1 COLLATE latin1_german2_ci)"
     dolt sql -q	"insert into german2 values ('Bar'), ('Bär')"
     run dolt sql -q "SELECT * FROM german2 WHERE c = 'Bär'"
     [ $status -eq 0 ]
+    [[ $output =~ 'Bär' ]] || false
     [[ ! $output =~ 'Bar' ]] || false
-    # Hard to match a latin1 character in bash
     [ ${#lines[@]} -eq 5 ]
 }
 
@@ -87,7 +88,8 @@ teardown() {
     run dolt sql -q "SELECT * FROM german1 WHERE c = 'Bär'"
     [ $status -eq 0 ]
     [[ ! $output =~ 'Bar' ]] || false
-    # Hard to match a latin1 characeter in bash
+    skip "Daylon has a GMS PR to fix this"
+    [[ $output =~ 'Bär' ]] || false
     [ ${#lines[@]} -eq 5 ]
 }
 
@@ -104,7 +106,7 @@ teardown() {
     run	dolt sql -q "select c from t where c like '%A%'"
     [[ ! $output =~ "a" ]] || false
     [[ $output =~ "A" ]] || false
-
+    
     dolt sql -q "drop table t"
     
     # Outside of ascii, no such luck
