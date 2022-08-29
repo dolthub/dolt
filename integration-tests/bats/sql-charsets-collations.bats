@@ -45,7 +45,7 @@ teardown() {
     server_query "test" 1 dolt "" "use test; SELECT @@character_set_database" ";@@SESSION.collation_database\nlatin1_swedish_ci"
 }
 
-@test "sql-charsets-collations: define and use a colation and charset" {
+@test "sql-charsets-collations: define and use a collation and charset" {
     dolt sql -q "create table german1 (c char(10) CHARACTER SET latin1 COLLATE latin1_german1_ci)"
     dolt sql -q "insert into german1 values ('Bar'), ('Bär')"
     run dolt sql -q "SELECT * FROM german1 WHERE c = 'Bär'"
