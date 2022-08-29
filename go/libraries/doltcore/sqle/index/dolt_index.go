@@ -753,10 +753,6 @@ func pruneEmptyRanges(sqlRanges []sql.Range) (pruned []sql.Range, err error) {
 				empty = true
 				break
 			}
-			if lb, ok := ce.UpperBound.(sql.Below); ok && lb.Key == nil {
-				empty = true
-				break
-			}
 		}
 		if !empty {
 			pruned = append(pruned, sr)
