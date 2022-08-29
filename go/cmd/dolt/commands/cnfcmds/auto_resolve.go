@@ -82,7 +82,7 @@ func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, strategy AutoReso
 // ResolveTable resolves all conflicts in the given table according to the given
 // |strategy|. It errors if the schema of the conflict version you are choosing
 // differs from the current schema.
-func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, tblName string, strategy AutoResolveStrategy) error {
+func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, tblName string, strategy AutoResolveStrategy) (err error) {
 	tbl, ok, err := root.GetTable(ctx, tblName)
 	if err != nil {
 		return err
@@ -149,6 +149,12 @@ func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 	if err != nil {
 		return err
 	}
+	defer func() {
+		err2 := execute(sqlCtx, eng, fmt.Sprintf("SET DOLT_ALLOW_COMMIT_CONFLICTS = %d", oldAllowCommitConflicts))
+		if err == nil {
+			err = err2
+		}
+	}()
 
 	if !schema.IsKeyless(sch) {
 		err = resolvePkTable(sqlCtx, tblName, sch, strategy, eng)
@@ -160,11 +166,6 @@ func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 	}
 
 	err = execute(sqlCtx, eng, "COMMIT;")
-	if err != nil {
-		return err
-	}
-
-	err = execute(sqlCtx, eng, fmt.Sprintf("SET DOLT_ALLOW_COMMIT_CONFLICTS = %d", oldAllowCommitConflicts))
 	if err != nil {
 		return err
 	}
