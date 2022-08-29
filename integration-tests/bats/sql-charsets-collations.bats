@@ -59,7 +59,7 @@ teardown() {
     run dolt sql -q "SELECT * FROM german2 WHERE c = 'Bär'"
     [ $status -eq 0 ]
     [[ ! $output =~ 'Bar' ]] || false
-    # Hard to match a latin1 characeter in bash
+    # Hard to match a latin1 character in bash
     [ ${#lines[@]} -eq 5 ]
 }
 
