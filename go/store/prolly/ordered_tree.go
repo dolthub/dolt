@@ -417,7 +417,7 @@ type orderedLeafSpanIter[K, V ~[]byte] struct {
 	nd tree.Node
 	// current index,
 	curr int
-	// last index for |ndf
+	// last index for |nd|
 	stop int
 	// remaining leaves
 	leaves []tree.Node

@@ -247,6 +247,8 @@ type LeafSpan struct {
 	LocalStop  int
 }
 
+// FetchLeafNodeSpan returns the leaf Node span for the ordinal range [start, stop). It fetches the span using
+// an eager breadth-first search and makes batch read calls to the persistence layer via NodeStore.ReadMany.
 func FetchLeafNodeSpan(ctx context.Context, ns NodeStore, root Node, start, stop uint64) (LeafSpan, error) {
 	leaves, localStart, err := fetchLeafNodeSpan(ctx, ns, []Node{root}, start, stop)
 	if err != nil {
