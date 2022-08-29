@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -188,9 +189,10 @@ func (rp rangePartition) Key() []byte {
 type LookupBuilder interface {
 	// NewRowIter returns a new index iter for the given partition
 	NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error)
+	Key() doltdb.DataCacheKey
 }
 
-func NewLookupBuilder(part sql.Partition, idx DoltIndex, projections []uint64, pkSch sql.PrimaryKeySchema, isDoltFormat bool) LookupBuilder {
+func NewLookupBuilder(key doltdb.DataCacheKey, part sql.Partition, idx DoltIndex, projections []uint64, pkSch sql.PrimaryKeySchema, isDoltFormat bool) LookupBuilder {
 	p := part.(rangePartition)
 	if len(projections) == 0 {
 		projections = idx.Schema().GetAllCols().Tags
@@ -198,6 +200,7 @@ func NewLookupBuilder(part sql.Partition, idx DoltIndex, projections []uint64, p
 
 	base := &baseLookupBuilder{
 		idx:         idx.(*doltIndex),
+		key:         key,
 		sch:         pkSch,
 		projections: projections,
 	}
@@ -266,6 +269,8 @@ var _ LookupBuilder = (*nonCoveringLookupBuilder)(nil)
 // baseLookupBuilder is a common lookup builder for prolly covering and
 // non covering index lookups.
 type baseLookupBuilder struct {
+	key doltdb.DataCacheKey
+
 	idx         *doltIndex
 	sch         sql.PrimaryKeySchema
 	projections []uint64
@@ -275,6 +280,10 @@ type baseLookupBuilder struct {
 	ns           tree.NodeStore
 
 	cur *tree.Cursor
+}
+
+func (lb *baseLookupBuilder) Key() doltdb.DataCacheKey {
+	return lb.key
 }
 
 // NewRowIter implements IndexLookup
