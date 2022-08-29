@@ -135,6 +135,15 @@ func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 		return err
 	}
 
+	v, err := getFirstColumn(sqlCtx, eng, "SELECT @@DOLT_ALLOW_COMMIT_CONFLICTS;")
+	if err != nil {
+		return err
+	}
+	oldAllowCommitConflicts, ok := v.(int8)
+	if !ok {
+		return fmt.Errorf("unexpected type of @DOLT_ALLOW_COMMIT_CONFLICTS: %T", v)
+	}
+
 	// Resolving conflicts for one table, will not resolve conflicts on another.
 	err = execute(sqlCtx, eng, "SET DOLT_ALLOW_COMMIT_CONFLICTS = 1;")
 	if err != nil {
@@ -151,6 +160,11 @@ func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 	}
 
 	err = execute(sqlCtx, eng, "COMMIT;")
+	if err != nil {
+		return err
+	}
+
+	err = execute(sqlCtx, eng, fmt.Sprintf("SET DOLT_ALLOW_COMMIT_CONFLICTS = %d", oldAllowCommitConflicts))
 	if err != nil {
 		return err
 	}
@@ -392,6 +406,21 @@ func execute(ctx *sql.Context, eng *engine.SqlEngine, query string) error {
 		return err
 	}
 	return nil
+}
+
+func getFirstColumn(ctx *sql.Context, eng *engine.SqlEngine, query string) (interface{}, error) {
+	_, itr, err := eng.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	r, err := itr.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(r) == 0 {
+		return nil, fmt.Errorf("no columns returned")
+	}
+	return r[0], nil
 }
 
 func validateConstraintViolations(ctx context.Context, before, after *doltdb.RootValue, table string) error {
