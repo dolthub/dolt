@@ -178,7 +178,7 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 // an existing table.
-func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, outSch schema.Schema, opts editor.Options, wr io.WriteCloser) (table.SqlTableWriter, error) {
+func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, outSch schema.Schema, opts editor.Options, wr io.WriteCloser) (table.SqlRowWriter, error) {
 	switch dl.Format {
 	case CsvFile:
 		return csv.NewCSVWriter(wr, outSch, csv.NewCSVInfo())

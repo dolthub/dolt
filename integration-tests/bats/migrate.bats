@@ -168,6 +168,7 @@ CALL dadd('-A');
 CALL dcommit('-am', 'added table test');
 SQL
     dolt docs read README.md README.md
+    dolt add .
     dolt commit -am "added a README"
 
     dolt migrate

@@ -69,10 +69,13 @@ teardown() {
 @test "replication-multidb: push on sqlengine commit" {
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote remote1
     dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo1; call dolt_add('.')"
     dolt sql --data-dir=dbs1 -b -q "use repo1; select dolt_commit('-am', 'cm')"
     dolt sql --data-dir=dbs1 -b -q "use repo2; create table t2 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo2; call dolt_add('.')"
     dolt sql --data-dir=dbs1 -b -q "use repo2; select dolt_commit('-am', 'cm')"
     dolt sql --data-dir=dbs1 -b -q "use repo3; create table t3 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo3; call dolt_add('.')"
     dolt sql --data-dir=dbs1 -b -q "use repo3; select dolt_commit('-am', 'cm')"
     
     clone_helper $TMPDIRS
@@ -101,10 +104,13 @@ teardown() {
 @test "replication-multidb: pull on read" {
     push_helper $TMPDIRS
     dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo1; call dolt_add('.')"
     dolt sql --data-dir=dbs1 -b -q "use repo1; select dolt_commit('-am', 'cm')"
     dolt sql --data-dir=dbs1 -b -q "use repo2; create table t2 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo2; call dolt_add('.')"
     dolt sql --data-dir=dbs1 -b -q "use repo2; select dolt_commit('-am', 'cm')"
     dolt sql --data-dir=dbs1 -b -q "use repo3; create table t3 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo3; call dolt_add('.')"
     dolt sql --data-dir=dbs1 -b -q "use repo3; select dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
@@ -156,10 +162,13 @@ teardown() {
     cd ..
 
     server_query repo1 1 dolt "" "create table t1 (a int primary key)"
+    server_query repo1 1 dolt "" "call dolt_add('.')"
     server_query repo1 1 dolt "" "call dolt_commit('-am', 'cm')"
     server_query repo2 1 dolt "" "create table t2 (a int primary key)"
+    server_query repo2 1 dolt "" "call dolt_add('.')"
     server_query repo2 1 dolt  "" "call dolt_commit('-am', 'cm')"
     server_query repo3 1 dolt "" "create table t3 (a int primary key)"
+    server_query repo3 1 dolt "" "call dolt_add('.')"
     server_query repo3 1 dolt "" "call dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
@@ -189,10 +198,13 @@ teardown() {
 @test "replication-multidb: sql-server pull on read" {
     push_helper $TMPDIRS
     dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo1; call dolt_add('.')"
     dolt sql --data-dir=dbs1 -b -q "use repo1; select dolt_commit('-am', 'cm')"
     dolt sql --data-dir=dbs1 -b -q "use repo2; create table t2 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo2; call dolt_add('.')"
     dolt sql --data-dir=dbs1 -b -q "use repo2; select dolt_commit('-am', 'cm')"
     dolt sql --data-dir=dbs1 -b -q "use repo3; create table t3 (a int primary key)"
+    dolt sql --data-dir=dbs1 -b -q "use repo3; call dolt_add('.')"
     dolt sql --data-dir=dbs1 -b -q "use repo3; select dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS

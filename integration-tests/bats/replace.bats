@@ -5,6 +5,7 @@ setup() {
     setup_common
 
     dolt sql -q "create table t1 (a bigint primary key, b bigint)"
+    dolt add .
     dolt sql -q "insert into t1 values (0,0), (1,1)"
     dolt commit -am "Init"
     dolt sql -q "drop table t1"

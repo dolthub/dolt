@@ -250,7 +250,7 @@ func nomsParentFkConstraintViolations(
 			}
 
 			shouldContinue, err := func() (bool, error) {
-				var mapIter table.TableReadCloser = noms.NewNomsRangeReader(
+				var mapIter table.ReadCloser = noms.NewNomsRangeReader(
 					postParent.IndexSchema,
 					durable.NomsMapFromIndex(postParent.IndexData),
 					[]*noms.ReadRange{{Start: postParentIndexPartialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(postParentIndexPartialKey)}})
@@ -458,7 +458,7 @@ func childFkConstraintViolationsProcess(
 	postChildCVMapEditor *types.MapEditor,
 	vInfo types.JSON,
 ) (bool, error) {
-	var mapIter table.TableReadCloser = noms.NewNomsRangeReader(
+	var mapIter table.ReadCloser = noms.NewNomsRangeReader(
 		postParent.IndexSchema,
 		durable.NomsMapFromIndex(postParent.IndexData),
 		[]*noms.ReadRange{{Start: parentPartialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(parentPartialKey)}})

@@ -166,6 +166,7 @@ func commitScripts(dbs []string) []setup.SetupScript {
 	for i := range dbs {
 		db := dbs[i]
 		commitCmds = append(commitCmds, fmt.Sprintf("use %s", db))
+		commitCmds = append(commitCmds, "call dolt_add('.')")
 		commitCmds = append(commitCmds, fmt.Sprintf("call dolt_commit('--allow-empty', '-am', 'checkpoint enginetest database %s', '--date', '1970-01-01T12:00:00')", db))
 	}
 	commitCmds = append(commitCmds, "use mydb")
@@ -389,9 +390,9 @@ func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv) dsess.Initial
 func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.PrimaryKeySchema) (sql.Table, error) {
 	var err error
 	if ro, ok := db.(sqle.ReadOnlyDatabase); ok {
-		err = ro.CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema)
+		err = ro.CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema, sql.Collation_Default)
 	} else {
-		err = db.(sqle.Database).CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema)
+		err = db.(sqle.Database).CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema, sql.Collation_Default)
 	}
 	if err != nil {
 		return nil, err
@@ -438,6 +439,8 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 
 	ctx := enginetest.NewContext(d)
 	_, iter, err := e.Query(ctx,
+		"CALL DOLT_ADD('.')")
+	_, iter, err = e.Query(ctx,
 		"SELECT COMMIT('-am', 'test commit');")
 	require.NoError(d.t, err)
 	_, err = sql.RowIterToRows(ctx, nil, iter)

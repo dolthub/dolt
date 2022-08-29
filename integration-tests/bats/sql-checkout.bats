@@ -489,6 +489,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+SELECT DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -522,6 +523,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+SELECT DOLT_ADD('.');
 CALL DOLT_COMMIT('-a', '-m', 'add tables');
 CALL DOLT_CHECKOUT('-b', 'feature-branch');
 CALL DOLT_CHECKOUT('main');

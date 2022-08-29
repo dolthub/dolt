@@ -448,6 +448,7 @@ CREATE TABLE test (
 );
 INSERT INTO test VALUES (1, 0, 0);
 SQL
+    dolt add .
     dolt commit -am "initial data"
     dolt branch right
 
@@ -490,6 +491,7 @@ SQL
 create table test3 (a int primary key);
 INSERT INTO test3 VALUES (0), (1);
 SQL
+    dolt add .
     dolt commit -am "new table test3"
 
     dolt checkout main
@@ -656,6 +658,7 @@ CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) R
 CREATE table other (pk int);
 INSERT INTO parent VALUES (1, 1);
 SQL
+    dolt add .
     dolt commit -am "create table with data";
     dolt branch right
     dolt sql -q "DELETE FROM parent where pk = 1;"
@@ -686,6 +689,7 @@ CREATE table parent (pk int PRIMARY KEY, col1 int);
 CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));
 INSERT INTO parent VALUES (1, 1), (2, 1);
 SQL
+    dolt add .
     dolt commit -am "create table with data";
     dolt branch other
     dolt branch other2
@@ -745,6 +749,7 @@ CREATE table parent (pk int PRIMARY KEY, col1 int);
 CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));
 INSERT INTO parent VALUES (1, 1), (2, 1);
 SQL
+    dolt add .
     dolt commit -am "create table with data";
     dolt branch other
     dolt branch other2
@@ -832,6 +837,7 @@ SQL
 
     dolt checkout main
     dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
+    dolt add .
     dolt commit -am "rename test1"
 
     run dolt merge merge_branch
@@ -842,6 +848,7 @@ SQL
 @test "merge: ourRoot modifies, theirRoot renames" {
     dolt checkout -b merge_branch
     dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
+    dolt add .
     dolt commit -am "rename test1"
 
     dolt checkout main
