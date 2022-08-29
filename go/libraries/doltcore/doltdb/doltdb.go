@@ -828,6 +828,42 @@ func (ddb *DoltDB) VisitRefsOfType(ctx context.Context, refTypeFilter map[ref.Re
 	})
 }
 
+// GetRefByNameInsensitive searches this Dolt database's branch, tag, and head refs for a case-insensitive
+// match of the specified ref name. If a matching DoltRef is found, it is returned; otherwise an error is returned.
+func (ddb *DoltDB) GetRefByNameInsensitive(ctx context.Context, refName string) (ref.DoltRef, error) {
+	branchRefs, err := ddb.GetBranches(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, branchRef := range branchRefs {
+		if strings.ToLower(branchRef.GetPath()) == strings.ToLower(refName) {
+			return branchRef, nil
+		}
+	}
+
+	headRefs, err := ddb.GetHeadRefs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, headRef := range headRefs {
+		if strings.ToLower(headRef.GetPath()) == strings.ToLower(refName) {
+			return headRef, nil
+		}
+	}
+
+	tagRefs, err := ddb.GetTags(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, tagRef := range tagRefs {
+		if strings.ToLower(tagRef.GetPath()) == strings.ToLower(refName) {
+			return tagRef, nil
+		}
+	}
+
+	return nil, ref.ErrInvalidRefSpec
+}
+
 func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) ([]ref.DoltRef, error) {
 	var refs []ref.DoltRef
 	err := ddb.VisitRefsOfType(ctx, refTypeFilter, func(r ref.DoltRef, _ hash.Hash) error {

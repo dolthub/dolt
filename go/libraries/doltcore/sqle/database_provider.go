@@ -471,6 +471,12 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		return nil, dsess.InitialDbState{}, false, nil
 	}
 
+	var err error
+	revSpec, err = p.resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
+	if err != nil {
+		return nil, dsess.InitialDbState{}, false, err
+	}
+
 	isBranch, err := isBranch(ctx, srcDb, revSpec, p.remoteDialer)
 	if err != nil {
 		return nil, dsess.InitialDbState{}, false, err
@@ -537,6 +543,41 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 	}
 
 	return nil, dsess.InitialDbState{}, false, nil
+}
+
+// resolveAncestorSpec resolves the specified revSpec to a specific commit hash if it contains an ancestor reference
+// such as ~ or ^. If no ancestor reference is present, the specified revSpec is returned as is. If any unexpected
+// problems are encountered, an error is returned.
+func (p DoltDatabaseProvider) resolveAncestorSpec(ctx *sql.Context, revSpec string, ddb *doltdb.DoltDB) (string, error) {
+	refname, ancestorSpec, err := doltdb.SplitAncestorSpec(revSpec)
+	if err != nil {
+		return "", err
+	}
+	if ancestorSpec == nil || ancestorSpec.SpecStr == "" {
+		return revSpec, nil
+	}
+
+	ref, err := ddb.GetRefByNameInsensitive(ctx, refname)
+	if err != nil {
+		return "", err
+	}
+
+	cm, err := ddb.ResolveCommitRef(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+
+	cm, err = cm.GetAncestor(ctx, ancestorSpec)
+	if err != nil {
+		return "", err
+	}
+
+	hash, err := cm.HashOf()
+	if err != nil {
+		return "", err
+	}
+
+	return hash.String(), nil
 }
 
 func (p DoltDatabaseProvider) RevisionDbState(ctx *sql.Context, revDB string) (dsess.InitialDbState, error) {
