@@ -288,8 +288,7 @@ func (lb *baseLookupBuilder) Key() doltdb.DataCacheKey {
 
 // NewRowIter implements IndexLookup
 func (lb *baseLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	p := part.(rangePartition)
-	return newProllyIndexIter(ctx, lb.idx, p.prollyRange, lb.sch, lb.projections, p.durableState.Primary, p.durableState.Secondary)
+	panic("cannot call NewRowIter on baseLookupBuilder")
 }
 
 // newPointLookup will create a cursor once, and then use the same cursor for
