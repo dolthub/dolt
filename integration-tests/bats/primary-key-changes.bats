@@ -220,6 +220,7 @@ teardown() {
 
 @test "primary-key-changes: ff merge with primary key schema differences correctly works" {
     dolt sql -q "create table t(pk int PRIMARY KEY, val1 int, val2 int)"
+    dolt add .
     dolt sql -q "INSERT INTO t values (1,1,1)"
 
     dolt commit -am "cm1"
@@ -238,6 +239,7 @@ teardown() {
 
 @test "primary-key-changes: merge on branch with primary key dropped throws an error" {
     dolt sql -q "create table t(pk int PRIMARY KEY, val1 int, val2 int)"
+    dolt add .
     dolt sql -q "INSERT INTO t values (1,1,1)"
     dolt commit -am "cm1"
     dolt checkout -b test
@@ -264,6 +266,7 @@ teardown() {
 
 @test "primary-key-changes: merge on branch with primary key added throws an error" {
     dolt sql -q "create table t(pk int, val1 int, val2 int)"
+    dolt add .
     dolt sql -q "INSERT INTO t values (1,1,1)"
     dolt commit -am "cm1"
     dolt checkout -b test
@@ -290,6 +293,7 @@ teardown() {
 
 @test "primary-key-changes: diff on primary key schema change shows schema level diff but does not show row level diff" {
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
+    dolt add .
     dolt sql -q "INSERT INTO t VALUES (1, 1)"
     dolt commit -am "cm1"
 
@@ -312,6 +316,7 @@ teardown() {
 
 @test "primary-key-changes: diff on composite schema" {
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
+    dolt add .
     dolt sql -q "INSERT INTO t VALUES (1, 1)"
     dolt commit -am "cm1"
 
@@ -413,6 +418,7 @@ SQL
 
 @test "primary-key-changes: test whether dolt_commit_diff correctly returns a diff whether there is or isn't a schema change" {
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
+    dolt add .
     dolt commit -am "cm0"
 
     dolt sql -q "INSERT INTO t VALUES (1, 1)"
@@ -455,6 +461,7 @@ SQL
 @test "primary-key-changes: dolt constraints verify works gracefully with schema violations" {
 
     dolt sql -q "CREATE table t (pk int primary key, val int)"
+    dolt add .
     dolt commit -am "cm1"
 
     dolt sql -q "alter table t drop primary key"
@@ -469,6 +476,7 @@ SQL
 
 @test "primary-key-changes: add/drop primary key in different order" {
     dolt sql -q "CREATE table t (pk int primary key, val int)"
+    dolt add .
     dolt commit -am "cm1"
 
     dolt sql -q "alter table t drop primary key"
@@ -494,6 +502,7 @@ SQL
 
 @test "primary-key-changes: same primary key set in different order is detected and blocked on merge" {
     dolt sql -q "CREATE table t (pk int, val int, primary key (pk, val))"
+    dolt add .
     dolt commit -am "cm1"
 
     dolt checkout -b test
@@ -553,6 +562,7 @@ SQL
 
 @test "primary-key-changes: column with duplicates throws an error when added as pk" {
     dolt sql -q "CREATE table t (pk int, val int)"
+    dolt add .
     dolt sql -q "INSERT INTO t VALUES (1,1),(2,1)"
     dolt commit -am "cm1"
 

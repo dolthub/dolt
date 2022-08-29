@@ -131,6 +131,10 @@ func (dt *DiffTable) Schema() sql.Schema {
 	return dt.sqlSch.Schema
 }
 
+func (dt *DiffTable) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
 func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	cmItr := doltdb.CommitItrForRoots(dt.ddb, dt.head)
 

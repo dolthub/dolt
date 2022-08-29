@@ -68,6 +68,7 @@ func ToDoltSchema(
 	tableName string,
 	sqlSchema sql.PrimaryKeySchema,
 	headRoot *doltdb.RootValue,
+	collation sql.CollationID,
 ) (schema.Schema, error) {
 	var cols []schema.Column
 	var err error
@@ -117,6 +118,7 @@ func ToDoltSchema(
 	if err != nil {
 		return nil, err
 	}
+	sch.SetCollation(schema.Collation(collation))
 
 	return sch, nil
 }

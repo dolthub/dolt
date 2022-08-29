@@ -36,7 +36,9 @@ import (
 // CreateSchema returns a schema from the columns given, panicking on any errors.
 func CreateSchema(columns ...schema.Column) schema.Schema {
 	colColl := schema.NewColCollection(columns...)
-	return schema.MustSchemaFromCols(colColl)
+	sch := schema.MustSchemaFromCols(colColl)
+	sch.SetCollation(schema.Collation_Default)
+	return sch
 }
 
 // Creates a row with the schema given, having the values given. Starts at tag 0 and counts up.
@@ -61,7 +63,9 @@ func NewRow(sch schema.Schema, values ...types.Value) row.Row {
 func AddColumnToSchema(sch schema.Schema, col schema.Column) schema.Schema {
 	columns := sch.GetAllCols()
 	columns = columns.Append(col)
-	return schema.MustSchemaFromCols(columns)
+	newSch := schema.MustSchemaFromCols(columns)
+	newSch.SetCollation(sch.GetCollation())
+	return newSch
 }
 
 // RemoveColumnFromSchema returns a new schema with the given tag missing, but otherwise identical. At least one
@@ -80,7 +84,9 @@ func RemoveColumnFromSchema(sch schema.Schema, tagToRemove uint64) schema.Schema
 	}
 
 	columns := schema.NewColCollection(newCols...)
-	return schema.MustSchemaFromCols(columns)
+	newSch := schema.MustSchemaFromCols(columns)
+	newSch.SetCollation(sch.GetCollation())
+	return newSch
 }
 
 // Compares two noms Floats for approximate equality

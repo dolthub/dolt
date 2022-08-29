@@ -31,7 +31,8 @@ import (
 )
 
 const (
-	dbName = "sbt"
+	dbName    = "sbt"
+	nbfEnvVar = "DOLT_DEFAULT_BIN_FORMAT"
 )
 
 // BenchmarkDolt executes a set of tpcc tests against a dolt server.
@@ -43,7 +44,7 @@ func BenchmarkDolt(ctx context.Context, tppcConfig *TpccBenchmarkConfig, serverC
 		return nil, err
 	}
 
-	testRepo, err := initDoltRepo(ctx, serverConfig)
+	testRepo, err := initDoltRepo(ctx, serverConfig, tppcConfig.NomsBinFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +111,13 @@ func BenchmarkDolt(ctx context.Context, tppcConfig *TpccBenchmarkConfig, serverC
 }
 
 // initDoltRepo initializes a dolt repo and returns the repo path
-func initDoltRepo(ctx context.Context, config *sysbench_runner.ServerConfig) (string, error) {
+func initDoltRepo(ctx context.Context, config *sysbench_runner.ServerConfig, nbf string) (string, error) {
+	if nbf != "" {
+		if err := os.Setenv(nbfEnvVar, nbf); err != nil {
+			return "", err
+		}
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err

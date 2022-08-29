@@ -50,6 +50,10 @@ func (s StatusTable) Schema() sql.Schema {
 	}
 }
 
+func (s StatusTable) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
 func (s StatusTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil
 }
