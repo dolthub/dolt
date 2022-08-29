@@ -51,7 +51,6 @@ teardown() {
     run dolt sql -q "SELECT * FROM german1 WHERE c = 'Bär'"
     [ $status -eq 0 ]
     [[ $output =~ 'Bar' ]] || false
-    skip "Daylon has a GMS PR to fix this"
     [[ $output =~ 'Bär' ]] || false
     [ ${#lines[@]} -eq 6 ]
 
@@ -88,7 +87,6 @@ teardown() {
     run dolt sql -q "SELECT * FROM german1 WHERE c = 'Bär'"
     [ $status -eq 0 ]
     [[ ! $output =~ 'Bar' ]] || false
-    skip "Daylon has a GMS PR to fix this"
     [[ $output =~ 'Bär' ]] || false
     [ ${#lines[@]} -eq 5 ]
 }

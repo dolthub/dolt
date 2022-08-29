@@ -144,6 +144,12 @@ func (j *RowWriter) WriteRow(ctx context.Context, r row.Row) error {
 }
 
 func (j *RowWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
+	// The Type.SQL() call takes in a SQL context to determine the output character set for types that use a collation.
+	// The context given is not a SQL context, so we force the `utf8mb4` character set to be used, as it is the most
+	// likely to be supported by the destination. `utf8mb4` is the default character set for empty SQL contexts, so we
+	// don't need to explicitly set it.
+	sqlContext := sql.NewEmptyContext()
+
 	if j.rowsWritten == 0 {
 		err := iohelp.WriteAll(j.bWr, []byte(j.header))
 		if err != nil {
@@ -169,7 +175,7 @@ func (j *RowWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
 			typeinfo.TupleTypeIdentifier,
 			typeinfo.UuidTypeIdentifier,
 			typeinfo.VarBinaryTypeIdentifier:
-			sqlVal, err := col.TypeInfo.ToSqlType().SQL(nil, val)
+			sqlVal, err := col.TypeInfo.ToSqlType().SQL(sqlContext, nil, val)
 			if err != nil {
 				return true, err
 			}
