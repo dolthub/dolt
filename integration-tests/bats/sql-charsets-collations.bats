@@ -51,7 +51,7 @@ teardown() {
     run dolt sql -q "SELECT * FROM german1 WHERE c = 'Bär'"
     [ $status -eq 0 ]
     [[ $output =~ 'Bar' ]] || false
-    # Hard to match a latin1 characeter in bash
+    # Hard to match a latin1 character in bash
     [ ${#lines[@]} -eq 6 ]
 
     dolt sql -q	"create table german2 (c char(10) CHARACTER SET latin1 COLLATE latin1_german2_ci)"
