@@ -160,8 +160,8 @@ func (a AutoIncrementTracker) DropTable(ctx context.Context, tableName string, w
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	tableName = strings.ToLower(tableName)
-	delete(a.sequences, tableName)
+	// reset sequence to the minimum value
+	a.sequences[strings.ToLower(tableName)] = 1
 
 	// Get the new highest value from all tables in the working sets given
 	for _, ws := range wses {
