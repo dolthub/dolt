@@ -74,7 +74,7 @@ func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sch
 	for _, col := range columns {
 		colData, _, _, cErr := pr.ReadColumnByPath(common.ReformPathStr(fmt.Sprintf("parquet_go_root.%s", col.Name)), num)
 		if cErr != nil {
-			return nil, err
+			return nil, fmt.Errorf("cannot read column: %s", cErr.Error())
 		}
 		data[col.Name] = colData
 		colName = append(colName, col.Name)
