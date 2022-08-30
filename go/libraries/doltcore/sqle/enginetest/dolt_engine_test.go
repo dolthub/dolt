@@ -107,29 +107,34 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "dolt_history table with AS OF",
+			Name: "basic case",
 			SetUpScript: []string{
-				"create table t (pk int primary key, c1 int, c2 varchar(20));",
-				"call dolt_add('-A');",
-				"call dolt_commit('-m', 'creating table t');",
-				"insert into t values (1, 2, '3'), (4, 5, '6');",
-				"call dolt_commit('-am', 'added values');",
-				"insert into t values (11, 22, '3'), (44, 55, '6');",
-				"call dolt_commit('-am', 'added values again');",
+				"set @Commit0 = HashOf('HEAD');",
+
+				"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+				"call dolt_add('.')",
+				"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+				"insert into t values(1, 'one', 'two');",
+				"set @Commit2 = dolt_commit('-am', 'inserting into table t');",
+
+				"create table t2 (pk int primary key, c1 varchar(20), c2 varchar(20));",
+				"call dolt_add('.')",
+				"insert into t2 values(100, 'hundred', 'hundert');",
+				"set @Commit3 = dolt_commit('-am', 'inserting into table t2');",
+
+				"insert into t values(2, 'two', 'three'), (3, 'three', 'four');",
+				"update t set c1='uno', c2='dos' where pk=1;",
+				"set @Commit4 = dolt_commit('-am', 'inserting into table t');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "select message from dolt_log AS OF 'head^';",
-					Expected: []sql.Row{
-						{"added values"},
-						{"creating table t"},
-						{"checkpoint enginetest database mydb"},
-						{"Initialize data repository"},
-					},
+					Query:    "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
+					Expected: []sql.Row{{1, "one", "two", nil, nil, nil, "added"}},
 				},
 			},
 		},
@@ -187,32 +192,33 @@ func TestSingleQueryPrepared(t *testing.T) {
 }
 
 func TestSingleScriptPrepared(t *testing.T) {
-	t.Skip()
-
-	// TODO: why this test fails
-	// the deferred column is attempting to be resolved in prePrepared rules
-	// there needs to be a way to skip
+	//t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "dolt_history table with AS OF",
+			Name: "basic case",
 			SetUpScript: []string{
-				"create table t (pk int primary key, c1 int, c2 varchar(20));",
-				"call dolt_add('-A');",
-				"call dolt_commit('-m', 'creating table t');",
-				"insert into t values (1, 2, '3'), (4, 5, '6');",
-				"call dolt_commit('-am', 'added values');",
-				"insert into t values (11, 22, '3'), (44, 55, '6');",
-				"call dolt_commit('-am', 'added values again');",
+				"set @Commit0 = HashOf('HEAD');",
+
+				"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+				"call dolt_add('.')",
+				"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+				"insert into t values(1, 'one', 'two');",
+				"set @Commit2 = dolt_commit('-am', 'inserting into table t');",
+
+				"create table t2 (pk int primary key, c1 varchar(20), c2 varchar(20));",
+				"call dolt_add('.')",
+				"insert into t2 values(100, 'hundred', 'hundert');",
+				"set @Commit3 = dolt_commit('-am', 'inserting into table t2');",
+
+				"insert into t values(2, 'two', 'three'), (3, 'three', 'four');",
+				"update t set c1='uno', c2='dos' where pk=1;",
+				"set @Commit4 = dolt_commit('-am', 'inserting into table t');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "select message from dolt_log AS OF 'head^';",
-					Expected: []sql.Row{
-						{"added values"},
-						{"creating table t"},
-						{"checkpoint enginetest database mydb"},
-						{"Initialize data repository"},
-					},
+					Query:    "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
+					Expected: []sql.Row{{1, "one", "two", nil, nil, nil, "added"}},
 				},
 			},
 		},
@@ -1104,7 +1110,7 @@ func TestDiffTableFunction(t *testing.T) {
 }
 
 func TestDiffTableFunctionPrepared(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffTableFunctionScriptTests {
@@ -1156,7 +1162,6 @@ func TestDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffSystemTablePrepared(t *testing.T) {
-	t.Skip()
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {

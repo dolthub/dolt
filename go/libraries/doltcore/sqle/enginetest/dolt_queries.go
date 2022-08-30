@@ -3647,7 +3647,8 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "base case: modified rows",
+		SkipPrepared: true,
+		Name:         "base case: modified rows",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
