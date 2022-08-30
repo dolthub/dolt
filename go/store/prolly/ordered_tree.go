@@ -321,6 +321,38 @@ func (t orderedTree[K, V, O]) compareItems(left, right tree.Item) int {
 	return t.order.Compare(K(left), K(right))
 }
 
+// getOrdinal returns the smallest ordinal position at which the key >= |query|.
+func (t orderedTree[K, V, O]) getOrdinal(ctx context.Context, query K) (uint64, error) {
+	n, err := t.count()
+	if err != nil {
+		return 0, err
+	}
+	// Define f(-1) == false and f(n) == true.
+	// Invariant: f(i-1) == false, f(j) == true.
+	var curr *tree.Cursor
+	i, j := uint64(0), uint64(n)
+	for i < j {
+		h := (i + j) >> 1 // avoid overflow when computing h
+		curr, err = tree.NewCursorAtOrdinal(ctx, t.ns, t.root, h)
+		if err != nil {
+			return 0, err
+		}
+		if !curr.Valid() {
+			return 0, fmt.Errorf("cursor could not be instantiated at ordinal pos %d", h)
+		}
+		currKey := curr.CurrentKey()
+		less := t.order.Compare(query, K(currKey)) <= 0
+		// i ≤ h < j
+		if !less {
+			i = h + 1 // preserves f(i-1) == false
+		} else {
+			j = h // preserves f(j) == true
+		}
+	}
+	// i == j, f(i-1) == false, and f(j) (= f(i)) == true  =>  answer is i.
+	return i, nil
+}
+
 var _ tree.ItemSearchFn = orderedTree[tree.Item, tree.Item, ordering[tree.Item]]{}.searchNode
 var _ tree.CompareFn = orderedTree[tree.Item, tree.Item, ordering[tree.Item]]{}.compareItems
 

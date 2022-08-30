@@ -113,6 +113,13 @@ func testIterRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 				}
 			}
 			assert.Equal(t, io.EOF, err)
+
+			if m, ok := om.(Map); ok {
+				card, err := m.GetRangeCardinality(ctx, test.testRange)
+				require.NoError(t, err)
+				assert.Equal(t, uint64(test.expCount), card)
+			}
+
 			if !assert.Equal(t, test.expCount, actCount) {
 				fmt.Println("here")
 			}

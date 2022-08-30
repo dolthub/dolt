@@ -302,7 +302,7 @@ func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 
 	// test get
-	for _, kv := range tuples {
+	for i, kv := range tuples {
 		err := om.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
 			assert.NotNil(t, kv[0])
 			expKey, expVal := kv[0], kv[1]
@@ -311,6 +311,12 @@ func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 			return
 		})
 		require.NoError(t, err)
+
+		if m, ok := om.(Map); ok {
+			ord, err := m.GetOrdinal(ctx, kv[0])
+			require.NoError(t, err)
+			assert.Equal(t, uint64(i), ord)
+		}
 	}
 
 	desc := keyDescFromMap(om)
