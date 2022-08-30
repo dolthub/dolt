@@ -194,6 +194,7 @@ func TestSingleScriptPrepared(t *testing.T) {
 	s := []setup.SetupScript{
 		{
 			"create table t1 (pk int primary key, c int);",
+			"call dolt_add('.')",
 			"insert into t1 values (1,2), (3,4)",
 			"set @Commit1 = dolt_commit('-am', 'initial table');",
 			"insert into t1 values (5,6), (7,8)",
