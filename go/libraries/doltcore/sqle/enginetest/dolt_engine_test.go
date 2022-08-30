@@ -109,85 +109,47 @@ func TestSingleQuery(t *testing.T) {
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
 	t.Skip()
-
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "truncate table",
+			Name: "Nautobot FOREIGN KEY panic repro",
 			SetUpScript: []string{
-				"create table t (a int primary key auto_increment, b int)",
-				"call dolt_add('.')",
-				"call dolt_commit('-am', 'empty table')",
-				"call dolt_branch('branch1')",
-				"call dolt_branch('branch2')",
-				"insert into t (b) values (1), (2)",
-				"call dolt_commit('-am', 'two values on main')",
-				"call dolt_checkout('branch1')",
-				"insert into t (b) values (3), (4)",
-				"call dolt_commit('-am', 'two values on branch1')",
-				"call dolt_checkout('branch2')",
-				"insert into t (b) values (5), (6)",
-				"call dolt_checkout('branch1')",
+				"CREATE TABLE `auth_user` (" +
+					"	`password` varchar(128) NOT NULL," +
+					"	`last_login` datetime," +
+					"	`is_superuser` tinyint NOT NULL," +
+					"	`username` varchar(150) NOT NULL," +
+					"	`first_name` varchar(150) NOT NULL," +
+					"	`last_name` varchar(150) NOT NULL," +
+					"	`email` varchar(254) NOT NULL," +
+					"	`is_staff` tinyint NOT NULL," +
+					"	`is_active` tinyint NOT NULL," +
+					"	`date_joined` datetime NOT NULL," +
+					"	`id` char(32) NOT NULL," +
+					"	`config_data` json NOT NULL," +
+					"	PRIMARY KEY (`id`)," +
+					"	UNIQUE KEY `username` (`username`)" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+				"CREATE TABLE `users_token` (" +
+					"	`id` char(32) NOT NULL," +
+					"	`created` datetime NOT NULL," +
+					"	`expires` datetime," +
+					"	`key` varchar(40) NOT NULL," +
+					"	`write_enabled` tinyint NOT NULL," +
+					"	`description` varchar(200) NOT NULL," +
+					"	`user_id` char(32) NOT NULL," +
+					"	PRIMARY KEY (`id`)," +
+					"	UNIQUE KEY `key` (`key`)," +
+					"	KEY `users_token_user_id_af964690` (`user_id`)," +
+					"	CONSTRAINT `users_token_user_id_af964690_fk_auth_user_id` FOREIGN KEY (`user_id`) REFERENCES `auth_user` (`id`)" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+				"INSERT INTO `auth_user` (`password`,`last_login`,`is_superuser`,`username`,`first_name`,`last_name`,`email`,`is_staff`,`is_active`,`date_joined`,`id`,`config_data`)" +
+					"VALUES ('pbkdf2_sha256$216000$KRpZeDPgwc5E$vl/2hwrmtnckaBT0A8pf63Ph+oYuCHYI7qozMTZihTo=',NULL,1,'admin','','','admin@example.com',1,1,'2022-08-30 18:27:21.810049','1056443cc03446c592fa4c06bb06a1a6','{}');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "truncate table t",
-					Expected: []sql.Row{{sql.NewOkResult(2)}},
-				},
-				{
-					Query:            "call dolt_checkout('main')",
-					SkipResultsCheck: true,
-				},
-				{
-					// highest value in any branch is 6
-					Query:    "insert into t (b) values (7), (8)",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
-				},
-				{
-					Query: "select * from t order by a",
-					Expected: []sql.Row{
-						{1, 1},
-						{2, 2},
-						{7, 7},
-						{8, 8},
-					},
-				},
-				{
-					Query:    "truncate table t",
-					Expected: []sql.Row{{sql.NewOkResult(4)}},
-				},
-				{
-					Query:            "call dolt_checkout('branch2')",
-					SkipResultsCheck: true,
-				},
-				{
-					// highest value in any branch is still 6 (truncated table above)
-					Query:    "insert into t (b) values (7), (8)",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
-				},
-				{
-					Query: "select * from t order by a",
-					Expected: []sql.Row{
-						{5, 5},
-						{6, 6},
-						{7, 7},
-						{8, 8},
-					},
-				},
-				{
-					Query:    "truncate table t",
-					Expected: []sql.Row{{sql.NewOkResult(4)}},
-				},
-				{
-					// no value on any branch
-					Query:    "insert into t (b) values (1), (2)",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
-				},
-				{
-					Query: "select * from t order by a",
-					Expected: []sql.Row{
-						{1, 1},
-						{2, 2},
-					},
+					Query: "INSERT INTO `users_token` (`id`, `user_id`, `created`, `expires`, `key`, `write_enabled`, `description`) " +
+						"VALUES ('acc2e157db2845a79221cc654b1dcecc', '1056443cc03446c592fa4c06bb06a1a6', '2022-08-30 18:27:21.948487', NULL, '0123456789abcdef0123456789abcdef01234567', 1, '');",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 0x1, InsertID: 0x0}}},
 				},
 			},
 		},
