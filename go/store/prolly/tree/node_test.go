@@ -48,7 +48,7 @@ func TestRoundTripInts(t *testing.T) {
 	assert.Equal(t, len(keys), int(nd.count))
 	for i := range keys {
 		assert.Equal(t, keys[i], val.Tuple(nd.GetKey(i)))
-		assert.Equal(t, values[i], val.Tuple(nd.getValue(i)))
+		assert.Equal(t, values[i], val.Tuple(nd.GetValue(i)))
 	}
 }
 
@@ -64,7 +64,7 @@ func TestRoundTripNodeItems(t *testing.T) {
 		assert.Equal(t, len(keys), int(nd.count))
 		for i := range keys {
 			assert.Equal(t, keys[i], nd.GetKey(i))
-			assert.Equal(t, values[i], nd.getValue(i))
+			assert.Equal(t, values[i], nd.GetValue(i))
 		}
 	}
 }
