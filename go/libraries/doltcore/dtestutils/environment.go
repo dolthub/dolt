@@ -95,7 +95,7 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 
 	sch, err = tbl.GetSchema(ctx)
 	require.NoError(t, err)
-	rows, err := tbl.GetNomsRowData(ctx)
+	rows, err := tbl.GetRowData(ctx)
 	require.NoError(t, err)
 	indexes, err := tbl.GetIndexSet(ctx)
 	require.NoError(t, err)

@@ -75,6 +75,7 @@ func TestSingleQuery(t *testing.T) {
 	setupQueries := []string{
 		"create table t1 (pk int primary key, c int);",
 		"insert into t1 values (1,2), (3,4)",
+		"call dolt_add('.')",
 		"set @Commit1 = dolt_commit('-am', 'initial table');",
 		"insert into t1 values (5,6), (7,8)",
 		"set @Commit2 = dolt_commit('-am', 'two more rows');",
@@ -155,6 +156,7 @@ func TestSingleQueryPrepared(t *testing.T) {
 
 	setupQueries := []string{
 		"create table t1 (pk int primary key, c int);",
+		"call dolt_add('.')",
 		"insert into t1 values (1,2), (3,4)",
 		"set @Commit1 = dolt_commit('-am', 'initial table');",
 		"insert into t1 values (5,6), (7,8)",
@@ -721,6 +723,7 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 
 	setupScripts := []setup.SetupScript{
 		{"create table t01 (pk int primary key, c1 int)"},
+		{"call dolt_add('.');"},
 		{"call dolt_commit('-am', 'creating table t01 on main');"},
 		{"insert into t01 values (1, 1), (2, 2);"},
 		{"call dolt_commit('-am', 'adding rows to table t01 on main');"},
@@ -958,6 +961,7 @@ func TestSingleTransactionScript(t *testing.T) {
 		Name: "allow commit conflicts on, conflict on dolt_merge",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
@@ -1056,12 +1060,6 @@ func TestHistorySystemTable(t *testing.T) {
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
-		harness.engine = nil
-		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScript(t, harness, test)
-		})
-	}
-	for _, test := range BrokenHistorySystemTableScriptTests {
 		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, test)

@@ -25,6 +25,7 @@ setup() {
     dolt remote add remote1 file://../rem1
     cd ../repo1
     dolt sql -q "create table test (pk int primary key)"
+    dolt add .
     dolt sql -q "insert into test values (0),(1),(2)"
 
     cd ..

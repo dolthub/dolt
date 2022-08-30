@@ -164,7 +164,7 @@ func TestWriteImmutableTree(t *testing.T) {
 				}
 				if leaf {
 					byteCnt += len(n.values.Items)
-					for _, i := range n.getValue(0) {
+					for _, i := range n.GetValue(0) {
 						sum += int(i)
 					}
 					keyCnt = len(n.values.Items)

@@ -82,7 +82,7 @@ func ApplyMutations[S message.Serializer](
 	for newKey != nil {
 
 		// move |cur| to the NextMutation mutation point
-		err = cur.seek(ctx, newKey, compare)
+		err = cur.Seek(ctx, newKey, compare)
 		if err != nil {
 			return Node{}, err
 		}

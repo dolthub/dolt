@@ -10,6 +10,7 @@ CREATE TABLE foo (
   PRIMARY KEY (a)
 );
 INSERT INTO foo VALUES (0,0), (1,1);
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-am', 'Initialize table');
 SQL
 }

@@ -41,6 +41,10 @@ type inlineBlobType struct {
 
 var _ TypeInfo = (*inlineBlobType)(nil)
 
+var (
+	VarbinaryDefaultType = &inlineBlobType{sql.MustCreateBinary(sqltypes.VarBinary, 16383)}
+)
+
 func CreateInlineBlobTypeFromParams(params map[string]string) (TypeInfo, error) {
 	var length int64
 	var err error

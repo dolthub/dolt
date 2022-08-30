@@ -13,6 +13,7 @@
 // limitations under the License.
 
 include "encoding.fbs";
+include "collation.fbs";
 
 namespace serial;
 
@@ -22,6 +23,7 @@ table TableSchema {
   clustered_index:Index (required);
   secondary_indexes:[Index];
   checks:[CheckConstraint];
+  collation:Collation;
 }
 
 table Column {

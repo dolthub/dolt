@@ -148,8 +148,8 @@ func (nd Node) GetKey(i int) Item {
 	return nd.keys.GetItem(i)
 }
 
-// getValue returns the |ith| value of this node.
-func (nd Node) getValue(i int) Item {
+// GetValue returns the |ith| value of this node.
+func (nd Node) GetValue(i int) Item {
 	return nd.values.GetItem(i)
 }
 
@@ -178,7 +178,7 @@ func (nd Node) getSubtreeCount(i int) (uint64, error) {
 // getAddress returns the |ith| address of this node.
 // This method assumes values are 20-byte address hashes.
 func (nd Node) getAddress(i int) hash.Hash {
-	return hash.New(nd.getValue(i))
+	return hash.New(nd.GetValue(i))
 }
 
 func (nd Node) empty() bool {
@@ -215,7 +215,7 @@ func OutputProllyNode(w io.Writer, node Node) error {
 			return err
 		}
 		if leaf {
-			v := node.getValue(i)
+			v := node.GetValue(i)
 			vt := val.Tuple(v)
 
 			w.Write([]byte(" value: "))

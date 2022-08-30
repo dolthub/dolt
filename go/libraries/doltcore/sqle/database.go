@@ -824,7 +824,7 @@ func (db Database) removeTableFromAutoIncrementTracker(
 }
 
 // CreateTable creates a table with the name and schema given.
-func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema) error {
+func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, collation sql.CollationID) error {
 	if strings.ToLower(tableName) == doltdb.DocTableName {
 		// validate correct schema
 		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) {
@@ -838,11 +838,11 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 		return ErrInvalidTableName.New(tableName)
 	}
 
-	return db.createSqlTable(ctx, tableName, sch)
+	return db.createSqlTable(ctx, tableName, sch, collation)
 }
 
 // Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.
-func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema) error {
+func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, collation sql.CollationID) error {
 	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
 		return err
@@ -860,7 +860,7 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 		return err
 	}
 
-	doltSch, err := sqlutil.ToDoltSchema(ctx, root, tableName, sch, headRoot)
+	doltSch, err := sqlutil.ToDoltSchema(ctx, root, tableName, sch, headRoot, collation)
 	if err != nil {
 		return err
 	}
@@ -915,7 +915,7 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, root *dol
 }
 
 // CreateTemporaryTable creates a table that only exists the length of a session.
-func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSch sql.PrimaryKeySchema) error {
+func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSch sql.PrimaryKeySchema, collation sql.CollationID) error {
 	if doltdb.HasDoltPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
@@ -924,7 +924,7 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 		return ErrInvalidTableName.New(tableName)
 	}
 
-	tmp, err := NewTempTable(ctx, db.ddb, pkSch, tableName, db.name, db.editOpts)
+	tmp, err := NewTempTable(ctx, db.ddb, pkSch, tableName, db.name, db.editOpts, collation)
 	if err != nil {
 		return err
 	}

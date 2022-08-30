@@ -917,7 +917,7 @@ func isCheckReferenced(sch schema.Schema, chk schema.Check) (bool, error) {
 		CheckExpression: chk.Expression(),
 		Enforced:        chk.Enforced(),
 	}
-	colNames, err := sqle.ColumnsFromCheckDefinition(nil, &chkDef)
+	colNames, err := sqle.ColumnsFromCheckDefinition(sql.NewEmptyContext(), &chkDef)
 	if err != nil {
 		return false, err
 	}

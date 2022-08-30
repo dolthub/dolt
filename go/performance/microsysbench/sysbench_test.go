@@ -60,6 +60,14 @@ func BenchmarkOltpPointSelect(b *testing.B) {
 	})
 }
 
+func BenchmarkOltpJoinScan(b *testing.B) {
+	benchmarkSysbenchQuery(b, func(int) string {
+		return `select a.id, a.k 
+				from sbtest1 a, sbtest1 b 
+				where a.id = b.id limit 500`
+	})
+}
+
 func BenchmarkProjectionAggregation(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
 		q := "SELECT c, count(id) FROM sbtest1 WHERE k > %d GROUP BY c ORDER BY c"

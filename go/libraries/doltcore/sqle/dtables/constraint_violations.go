@@ -90,6 +90,11 @@ func (cvt *constraintViolationsTable) Schema() sql.Schema {
 	return cvt.sqlSch.Schema
 }
 
+// Collation implements the interface sql.Table.
+func (cvt *constraintViolationsTable) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
 // Partitions implements the interface sql.Table.
 func (cvt *constraintViolationsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil

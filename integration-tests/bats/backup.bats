@@ -11,6 +11,7 @@ setup() {
     dolt init
     dolt tag v1
     dolt sql -q "create table t1 (a int)"
+    dolt add .
     dolt commit -am "cm"
     dolt branch feature
     dolt remote add origin file://../rem1
@@ -187,6 +188,7 @@ teardown() {
     cd .. && mkdir repo2 && cd repo2
     dolt init
     dolt sql -q "create table s1 (a int)"
+    dolt add .
     dolt commit -am "cm"
 
     dolt backup add bac1 file://../bac1

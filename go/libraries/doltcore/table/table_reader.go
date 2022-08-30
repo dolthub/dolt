@@ -19,13 +19,12 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
-// TableReader is an interface for reading rows from a table
-type TableReader interface {
+// Reader is an interface for reading rows from a table
+type Reader interface {
 	// GetSchema gets the schema of the rows that this reader will return
 	GetSchema() schema.Schema
 
@@ -35,55 +34,29 @@ type TableReader interface {
 	ReadRow(ctx context.Context) (row.Row, error)
 }
 
-// TableCloser is an interface for a table stream that can be closed to release resources
-type TableCloser interface {
+// Closer is an interface for a writer that can be closed to release resources
+type Closer interface {
 	// Close should release resources being held
 	Close(ctx context.Context) error
 }
 
-// TableReadCloser is an interface for reading rows from a table, that can be closed.
-type TableReadCloser interface {
-	TableReader
-	TableCloser
+// ReadCloser is an interface for reading rows from a table, that can be closed.
+type ReadCloser interface {
+	Reader
+	Closer
 }
 
 type SqlRowReader interface {
-	TableReadCloser
+	ReadCloser
 
 	ReadSqlRow(ctx context.Context) (sql.Row, error)
 }
 
-// SqlTableReader is a  TableReader that can read rows as sql.Row.
+// SqlTableReader is a Reader that can read rows as sql.Row.
 type SqlTableReader interface {
 	// GetSchema gets the schema of the rows that this reader will return
 	GetSchema() schema.Schema
 
-	// ReadRow reads a row from a table as go-mysql-server sql.Row.
+	// ReadSqlRow reads a row from a table as go-mysql-server sql.Row.
 	ReadSqlRow(ctx context.Context) (sql.Row, error)
-}
-
-// NewTableReader creates a SqlTableReader from |tbl| starting from the first record.
-func NewTableReader(ctx context.Context, tbl *doltdb.Table) (SqlTableReader, error) {
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if schema.IsKeyless(sch) {
-		return newKeylessTableReader(ctx, tbl, sch, false)
-	}
-	return newPkTableReader(ctx, tbl, sch, false)
-}
-
-// NewBufferedTableReader creates a buffered SqlTableReader from |tbl| starting from the first record.
-func NewBufferedTableReader(ctx context.Context, tbl *doltdb.Table) (SqlTableReader, error) {
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if schema.IsKeyless(sch) {
-		return newKeylessTableReader(ctx, tbl, sch, true)
-	}
-	return newPkTableReader(ctx, tbl, sch, true)
 }

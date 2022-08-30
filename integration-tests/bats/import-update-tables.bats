@@ -344,6 +344,7 @@ DELIM
 
     dolt sql < 1pk5col-ints-sch.sql
     dolt table import -u --continue test 1pk5col-rpt-ints.csv
+    dolt add .
     dolt commit -am "cm1"
 
     run dolt table import -u --continue test 1pk5col-rpt-ints.csv
@@ -442,6 +443,14 @@ DELIM
     run dolt diff --summary main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
+}
+
+@test "import-update-tables: bad parquet file import errors" {
+    dolt sql -q "CREATE TABLE test_table (pk int primary key, col1 text, col2 int);"
+    echo "This is a bad parquet file" > bad.parquet
+    run dolt table import -u test_table bad.parquet
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "When attempting to move data from parquet file:bad.parquet to test_table, could not open a reader." ]] || false
 }
 
 @test "import-update-tables: Subsequent updates with --continue correctly work" {

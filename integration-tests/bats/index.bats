@@ -18,6 +18,7 @@ CREATE TABLE twopk (
   PRIMARY KEY(pk1, pk2)
 );
 SQL
+    dolt add .
 }
 
 teardown() {

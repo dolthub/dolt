@@ -82,6 +82,11 @@ func (db *SingleTableInfoDatabase) Schema() sql.Schema {
 	return sqlSch.Schema
 }
 
+// Collation implements sql.Table.
+func (db *SingleTableInfoDatabase) Collation() sql.CollationID {
+	return sql.CollationID(db.sch.GetCollation())
+}
+
 // Partitions implements sql.Table.
 func (db *SingleTableInfoDatabase) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return nil, fmt.Errorf("cannot get paritions of a single table information database")

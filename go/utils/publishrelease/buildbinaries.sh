@@ -14,7 +14,7 @@ set -o pipefail
 apt-get update && apt-get install -y zip
 cd /src
 
-BINS="dolt git-dolt git-dolt-smudge"
+BINS="dolt"
 OS_ARCH_TUPLES="windows-amd64 linux-amd64 linux-arm64 darwin-amd64 darwin-arm64"
 
 for tuple in $OS_ARCH_TUPLES; do

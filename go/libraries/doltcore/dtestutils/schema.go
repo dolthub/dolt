@@ -36,7 +36,9 @@ import (
 // CreateSchema returns a schema from the columns given, panicking on any errors.
 func CreateSchema(columns ...schema.Column) schema.Schema {
 	colColl := schema.NewColCollection(columns...)
-	return schema.MustSchemaFromCols(colColl)
+	sch := schema.MustSchemaFromCols(colColl)
+	sch.SetCollation(schema.Collation_Default)
+	return sch
 }
 
 // Creates a row with the schema given, having the values given. Starts at tag 0 and counts up.
@@ -61,7 +63,9 @@ func NewRow(sch schema.Schema, values ...types.Value) row.Row {
 func AddColumnToSchema(sch schema.Schema, col schema.Column) schema.Schema {
 	columns := sch.GetAllCols()
 	columns = columns.Append(col)
-	return schema.MustSchemaFromCols(columns)
+	newSch := schema.MustSchemaFromCols(columns)
+	newSch.SetCollation(sch.GetCollation())
+	return newSch
 }
 
 // RemoveColumnFromSchema returns a new schema with the given tag missing, but otherwise identical. At least one
@@ -80,7 +84,9 @@ func RemoveColumnFromSchema(sch schema.Schema, tagToRemove uint64) schema.Schema
 	}
 
 	columns := schema.NewColCollection(newCols...)
-	return schema.MustSchemaFromCols(columns)
+	newSch := schema.MustSchemaFromCols(columns)
+	newSch.SetCollation(sch.GetCollation())
+	return newSch
 }
 
 // Compares two noms Floats for approximate equality
@@ -123,7 +129,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 
 	sch, err = tbl.GetSchema(ctx)
 	require.NoError(t, err)
-	rows, err := tbl.GetNomsRowData(ctx)
+	rows, err := tbl.GetRowData(ctx)
 	require.NoError(t, err)
 	indexes, err := tbl.GetIndexSet(ctx)
 	require.NoError(t, err)
@@ -131,7 +137,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	require.NoError(t, err)
 }
 
-func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema, rows types.Map, indexData durable.IndexSet, tableName string, autoVal types.Value) error {
+func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema, rows durable.Index, indexData durable.IndexSet, tableName string, autoVal types.Value) error {
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: %v", doltdb.ErrNomsIO, err)
@@ -139,7 +145,7 @@ func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
 	ns := dEnv.DoltDB.NodeStore()
-	tbl, err := doltdb.NewNomsTable(ctx, vrw, ns, sch, rows, indexData, autoVal)
+	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, rows, indexData, autoVal)
 	if err != nil {
 		return err
 	}

@@ -276,6 +276,21 @@ func (v nodeStoreValidator) Read(ctx context.Context, ref hash.Hash) (Node, erro
 	return nd, nil
 }
 
+func (v nodeStoreValidator) ReadMany(ctx context.Context, refs hash.HashSlice) ([]Node, error) {
+	nodes, err := v.ns.ReadMany(ctx, refs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range nodes {
+		actual := hash.Of(nodes[i].msg)
+		if refs[i] != actual {
+			err = fmt.Errorf("incorrect node hash (%s != %s)", refs[i], actual)
+			return nil, err
+		}
+	}
+	return nodes, nil
+}
+
 func (v nodeStoreValidator) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 	h, err := v.ns.Write(ctx, nd)
 	if err != nil {

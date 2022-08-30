@@ -17,5 +17,6 @@
     }
   ],
   "ScriptDir":"/Users/vinairachakonda/go/src/dolthub/sysbench-tpcc",
-  "ScaleFactors": [1]
+  "ScaleFactors": [1],
+  "NomsBinFormat": "__DOLT__"
 }
