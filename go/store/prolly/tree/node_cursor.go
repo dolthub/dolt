@@ -336,11 +336,11 @@ func (cur *Cursor) level() (uint64, error) {
 	return uint64(lvl), nil
 }
 
-// seek updates the cursor's node to one whose range spans the key's value, or the last
+// Seek updates the cursor's node to one whose range spans the key's value, or the last
 // node if the key is greater than all existing keys.
 // If a node does not contain the key, we recurse upwards to the parent cursor. If the
 // node contains a key, we recurse downwards into child nodes.
-func (cur *Cursor) seek(ctx context.Context, key Item, cb CompareFn) (err error) {
+func (cur *Cursor) Seek(ctx context.Context, key Item, cb CompareFn) (err error) {
 	inBounds := true
 	if cur.parent != nil {
 		inBounds = inBounds && cb(key, cur.firstKey()) >= 0
@@ -349,7 +349,7 @@ func (cur *Cursor) seek(ctx context.Context, key Item, cb CompareFn) (err error)
 
 	if !inBounds {
 		// |item| is outside the bounds of |cur.nd|, search up the tree
-		err = cur.parent.seek(ctx, key, cb)
+		err = cur.parent.Seek(ctx, key, cb)
 		if err != nil {
 			return err
 		}
