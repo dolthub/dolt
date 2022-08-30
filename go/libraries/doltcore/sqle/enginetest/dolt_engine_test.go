@@ -107,30 +107,28 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "truncate table",
+			Name: "dolt_history table with AS OF",
 			SetUpScript: []string{
-				"create table t1 (pk int primary key, c int);",
-				"call dolt_add('.')",
-				"insert into t1 values (1,2), (3,4)",
-				"set @Commit1 = dolt_commit('-am', 'initial table');",
-				"insert into t1 values (5,6), (7,8)",
-				"set @Commit2 = dolt_commit('-am', 'two more rows');",
+				"create table t (pk int primary key, c1 int, c2 varchar(20));",
+				"call dolt_add('-A');",
+				"call dolt_commit('-m', 'creating table t');",
+				"insert into t values (1, 2, '3'), (4, 5, '6');",
+				"call dolt_commit('-am', 'added values');",
+				"insert into t values (11, 22, '3'), (44, 55, '6');",
+				"call dolt_commit('-am', 'added values again');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
+					Query: "select message from dolt_log AS OF 'head^';",
 					Expected: []sql.Row{
-						{"Exchange"},
-						{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-						{"     └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
-						{"         └─ IndexedTableAccess(dolt_history_t1)"},
-						{"             ├─ index: [dolt_history_t1.pk]"},
-						{"             ├─ filters: [{[3, 3]}]"},
-						{"             └─ columns: [pk c committer]"},
+						{"added values"},
+						{"creating table t"},
+						{"checkpoint enginetest database mydb"},
+						{"Initialize data repository"},
 					},
 				},
 			},
@@ -191,53 +189,39 @@ func TestSingleQueryPrepared(t *testing.T) {
 func TestSingleScriptPrepared(t *testing.T) {
 	t.Skip()
 
-	s := []setup.SetupScript{
+	// TODO: why this test fails
+	// the deferred column is attempting to be resolved in prePrepared rules
+	// there needs to be a way to skip
+	var scripts = []queries.ScriptTest{
 		{
-			"create table t1 (pk int primary key, c int);",
-			"call dolt_add('.')",
-			"insert into t1 values (1,2), (3,4)",
-			"set @Commit1 = dolt_commit('-am', 'initial table');",
-			"insert into t1 values (5,6), (7,8)",
-			"set @Commit2 = dolt_commit('-am', 'two more rows');",
-		},
-	}
-	tt := queries.QueryTest{
-		Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
-		Expected: []sql.Row{
-			{"Exchange"},
-			{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-			{"     └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
-			{"         └─ IndexedTableAccess(dolt_history_t1)"},
-			{"             ├─ index: [dolt_history_t1.pk]"},
-			{"             ├─ filters: [{[3, 3]}]"},
-			{"             └─ columns: [pk c committer]"},
+			Name: "dolt_history table with AS OF",
+			SetUpScript: []string{
+				"create table t (pk int primary key, c1 int, c2 varchar(20));",
+				"call dolt_add('-A');",
+				"call dolt_commit('-m', 'creating table t');",
+				"insert into t values (1, 2, '3'), (4, 5, '6');",
+				"call dolt_commit('-am', 'added values');",
+				"insert into t values (11, 22, '3'), (44, 55, '6');",
+				"call dolt_commit('-am', 'added values again');",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query: "select message from dolt_log AS OF 'head^';",
+					Expected: []sql.Row{
+						{"added values"},
+						{"creating table t"},
+						{"checkpoint enginetest database mydb"},
+						{"Initialize data repository"},
+					},
+				},
+			},
 		},
 	}
 
 	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData, s)
-
-	e, err := harness.NewEngine(t)
-	defer e.Close()
-	require.NoError(t, err)
-	//ctx := harness.NewContext()
-
-	//e.Analyzer.Debug = true
-	//e.Analyzer.Verbose = true
-
-	// full impl
-	//pre1, sch1, rows1 := enginetest.MustQueryWithPreBindings(ctx, e, tt.Query, tt.Bindings)
-	//fmt.Println(pre1, sch1, rows1)
-
-	// inline bindings
-	//sch2, rows2 := enginetest.MustQueryWithBindings(ctx, e, tt.Query, tt.Bindings)
-	//fmt.Println(sch2, rows2)
-
-	// no bindings
-	//sch3, rows3 := enginetest.MustQuery(ctx, e, rawQuery)
-	//fmt.Println(sch3, rows3)
-
-	enginetest.TestPreparedQuery(t, harness, tt.Query, tt.Expected, nil)
+	for _, test := range scripts {
+		enginetest.TestScriptPrepared(t, harness, test)
+	}
 }
 
 func TestVersionedQueries(t *testing.T) {
