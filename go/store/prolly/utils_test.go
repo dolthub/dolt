@@ -37,13 +37,6 @@ type testMap interface {
 var _ testMap = Map{}
 var _ testMap = MutableMap{}
 
-type ordinalMap interface {
-	testMap
-	IterOrdinalRange(ctx context.Context, start, stop uint64) (MapIter, error)
-}
-
-var _ testMap = Map{}
-
 func countOrderedMap(t *testing.T, om testMap) (cnt int) {
 	iter, err := om.IterAll(context.Background())
 	require.NoError(t, err)

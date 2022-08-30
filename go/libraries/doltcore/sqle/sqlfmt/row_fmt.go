@@ -351,6 +351,22 @@ func SqlRowAsTupleString(r sql.Row, tableSch schema.Schema) (string, error) {
 	return b.String(), nil
 }
 
+// SqlRowAsStrings returns the string representation for each column of |r|
+// which should have schema |sch|.
+func SqlRowAsStrings(r sql.Row, sch sql.Schema) ([]string, error) {
+	out := make([]string, len(r))
+	for i := range out {
+		v := r[i]
+		sqlType := sch[i].Type
+		s, err := sqlutil.SqlColToStr(sqlType, v)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = s
+	}
+	return out, nil
+}
+
 // SqlRowAsDeleteStmt generates a sql statement. Non-zero |limit| adds a limit clause.
 func SqlRowAsDeleteStmt(r sql.Row, tableName string, tableSch schema.Schema, limit uint64) (string, error) {
 	var b strings.Builder

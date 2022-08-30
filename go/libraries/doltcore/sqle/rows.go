@@ -196,7 +196,7 @@ func ProllyRowIterFromPartition(
 		partition.end = uint64(c)
 	}
 
-	iter, err := rows.IterOrdinalRange(ctx, partition.start, partition.end)
+	iter, err := rows.FetchOrdinalRange(ctx, partition.start, partition.end)
 	if err != nil {
 		return nil, err
 	}
