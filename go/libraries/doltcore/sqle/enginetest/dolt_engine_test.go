@@ -114,6 +114,7 @@ func TestSingleScript(t *testing.T) {
 			Name: "truncate table",
 			SetUpScript: []string{
 				"create table t1 (pk int primary key, c int);",
+				"call dolt_add('.')",
 				"insert into t1 values (1,2), (3,4)",
 				"set @Commit1 = dolt_commit('-am', 'initial table');",
 				"insert into t1 values (5,6), (7,8)",
