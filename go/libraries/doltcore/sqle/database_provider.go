@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 
@@ -247,17 +248,65 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	}
 
 	// TODO: fill in version appropriately
-	dsess := dsess.DSessFromSess(ctx.Session)
+	sess := dsess.DSessFromSess(ctx.Session)
 	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
-	err = newEnv.InitRepo(ctx, types.Format_Default, dsess.Username(), dsess.Email(), p.defaultBranch)
+	err = newEnv.InitRepo(ctx, types.Format_Default, sess.Username(), sess.Email(), p.defaultBranch)
 	if err != nil {
 		return err
 	}
 
 	// if calling process has a lockfile, also create one for new database
 	if env.FsIsLocked(p.fs) {
-		newEnv.Lock()
+		err := newEnv.Lock()
+		if err != nil {
+			ctx.GetLogger().Warnf("Failed to lock newly created database: %s", err.Error())
+		}
 	}
+
+	// If replication is configured, set it up for the new database as well
+	_, val, _ := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
+	// TODO: this is the wrong return point for no replication config
+	if val == "" {
+		return nil
+	}
+
+	remoteName, ok := val.(string)
+	if !ok {
+		return sql.ErrInvalidSystemVariableValue.New(val)
+	}
+
+	// get a template for the remote, using the current D
+	// TODO: this won't work correctly unless all the remotes in a server use the same kind of remote
+	currentDb, ok := p.databases[ctx.GetCurrentDatabase()]
+	if !ok {
+		for _, database := range p.databases {
+			currentDb = database
+			break
+		}
+		if currentDb == nil {
+			return fmt.Errorf("cannot create new remote without at least one existing database with a remote")
+		}
+	}
+
+	db, ok := currentDb.(Database)
+	if !ok {
+		return fmt.Errorf("expected dsqle.Database but got %T", currentDb)
+	}
+
+	db.rsr.GetRemotes()
+
+	_, _, err = createRemote(ctx, remoteName, "", nil, p.remoteDialer)
+	if err != nil {
+		return err
+	}
+
+	// TODO: get background threads from the engine
+	commitHooks, err := GetCommitHooks(ctx, sql.NewBackgroundThreads(), newEnv, io.Discard)
+	if err != nil {
+		return err
+	}
+
+	newEnv.DoltDB.SetCommitHooks(ctx, commitHooks)
 
 	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
 	if err != nil {
@@ -284,7 +333,7 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 		return err
 	}
 
-	return dsess.AddDB(ctx, dbstate)
+	return sess.AddDB(ctx, dbstate)
 }
 
 // CloneDatabaseFromRemote implements DoltDatabaseProvider interface
@@ -373,7 +422,12 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 }
 
 // TODO: extract a shared library for this functionality
-func createRemote(ctx *sql.Context, remoteName, remoteUrl string, params map[string]string, dialer dbfactory.GRPCDialProvider) (env.Remote, *doltdb.DoltDB, error) {
+func createRemote(
+		ctx *sql.Context,
+		remoteName, remoteUrl string,
+		params map[string]string,
+		dialer dbfactory.GRPCDialProvider,
+) (env.Remote, *doltdb.DoltDB, error) {
 	r := env.NewRemote(remoteName, remoteUrl, params)
 
 	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dialer)

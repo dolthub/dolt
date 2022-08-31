@@ -482,6 +482,44 @@ func getAbsFileRemoteUrl(urlStr string, scheme string, fs filesys2.Filesys) (str
 	return scheme + "://" + urlStr, nil
 }
 
+func GetRemoteUrlTemplate(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg string) (string, string, error) {
+	u, err := earl.Parse(urlArg)
+
+	if err != nil {
+		return "", "", err
+	}
+
+	if u.Scheme != "" && fs != nil {
+		if u.Scheme == dbfactory.FileScheme || u.Scheme == dbfactory.LocalBSScheme {
+			absUrl, err := getAbsFileRemoteUrl(u.Host+u.Path, u.Scheme, fs)
+
+			if err != nil {
+				return "", "", err
+			}
+
+			return u.Scheme, absUrl, err
+		}
+
+		return u.Scheme, urlArg, nil
+	} else if u.Host != "" {
+		return dbfactory.HTTPSScheme, "https://" + urlArg, nil
+	}
+
+	hostName, err := cfg.GetString(RemotesApiHostKey)
+
+	if err != nil {
+		if err != config.ErrConfigParamNotFound {
+			return "", "", err
+		}
+
+		hostName = DefaultRemotesApiHost
+	}
+
+	hostName = strings.TrimSpace(hostName)
+
+	return dbfactory.HTTPSScheme, "https://" + path.Join(hostName, u.Path), nil
+}
+
 // GetDefaultBranch returns the default branch from among the branches given, returning
 // the configs default config branch first, then init branch main, then the old init branch master,
 // and finally the first lexicographical branch if none of the others are found
