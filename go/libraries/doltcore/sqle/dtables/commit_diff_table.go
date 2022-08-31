@@ -85,6 +85,14 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 	}, nil
 }
 
+func (dt *CommitDiffTable) Resolved() bool {
+	return true
+}
+
+func (dt *CommitDiffTable) Children() bool {
+	return true
+}
+
 func (dt *CommitDiffTable) Name() string {
 	return doltdb.DoltCommitDiffTablePrefix + dt.name
 }
@@ -288,6 +296,16 @@ func (dt *CommitDiffTable) Filters() []sql.Expression {
 
 // WithFilters returns a new sql.Table instance with the filters applied
 func (dt *CommitDiffTable) WithFilters(_ *sql.Context, _ []sql.Expression) sql.Table {
+	return dt
+}
+
+// Expressions returns the list of filters that are applied to this table.
+func (dt *CommitDiffTable) Expressions() []sql.Expression {
+	return dt.Filters()
+}
+
+// WithExpressions returns a new sql.Table instance with the filters applied
+func (dt *CommitDiffTable) WithExpressions(_ []sql.Expression) sql.Table {
 	return dt
 }
 

@@ -204,6 +204,16 @@ func (dt *DiffTable) WithFilters(_ *sql.Context, filters []sql.Expression) sql.T
 	return dt
 }
 
+// Expressions returns the list of filters that are applied to this table.
+func (dt *DiffTable) Expressions() []sql.Expression {
+	return dt.Filters()
+}
+
+// WithExpressions returns a new sql.Table instance with the filters applied
+func (dt *DiffTable) WithExpressions(filters []sql.Expression) sql.Table {
+	return dt.WithFilters(nil, filters)
+}
+
 func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	dp := part.(DiffPartition)
 	return dp.GetRowIter(ctx, dt.ddb, dt.joiner, dt.lookup)

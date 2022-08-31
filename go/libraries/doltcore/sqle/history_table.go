@@ -163,6 +163,16 @@ func (ht HistoryTable) WithFilters(ctx *sql.Context, filters []sql.Expression) s
 	return &ht
 }
 
+// Expressions returns the list of filters that are applied to this table.
+func (ht *HistoryTable) Expressions() []sql.Expression {
+	return ht.Filters()
+}
+
+// WithExpressions returns a new sql.Table instance with the filters applied. We handle filters on any commit columns.
+func (ht HistoryTable) WithExpressions(ctx *sql.Context, filters []sql.Expression) sql.Table {
+	return ht.WithFilters(nil, filters)
+}
+
 var historyTableCommitMetaCols = set.NewStrSet([]string{CommitHashCol, CommitDateCol, CommitterCol})
 
 func commitFilterForExprs(ctx *sql.Context, filters []sql.Expression) (doltdb.CommitFilter, error) {

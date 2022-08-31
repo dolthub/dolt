@@ -91,6 +91,16 @@ func (dt *UnscopedDiffTable) WithFilters(ctx *sql.Context, filters []sql.Express
 	return dt
 }
 
+// Expressions returns the list of filters that are applied to this table.
+func (dt *UnscopedDiffTable) Expressions() []sql.Expression {
+	return dt.Filters()
+}
+
+// WithExpressions returns a new sql.Table instance with the filters applied
+func (dt *UnscopedDiffTable) WithExpressions(filters []sql.Expression) sql.Table {
+	return dt.WithFilters(nil, filters)
+}
+
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
 // LogTableName
 func (dt *UnscopedDiffTable) Name() string {
