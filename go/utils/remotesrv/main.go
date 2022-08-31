@@ -76,30 +76,31 @@ func waitForSignal() {
 }
 
 func startServer(httpHost string, httpPort, grpcPort int) (chan interface{}, *sync.WaitGroup) {
+	dbCache := NewLocalCSCache(filesys.LocalFS)
+
 	wg := sync.WaitGroup{}
 	stopChan := make(chan interface{})
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		httpServer(httpPort, stopChan)
+		httpServer(dbCache, httpPort, stopChan)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		grpcServer(httpHost, grpcPort, stopChan)
+		grpcServer(httpHost, dbCache, grpcPort, stopChan)
 	}()
 
 	return stopChan, &wg
 }
 
-func grpcServer(httpHost string, grpcPort int, stopChan chan interface{}) {
+func grpcServer(httpHost string, dbCache *DBCache, grpcPort int, stopChan chan interface{}) {
 	defer func() {
 		log.Println("exiting grpc Server go routine")
 	}()
 
-	dbCache := NewLocalCSCache(filesys.LocalFS)
 	chnkSt := NewHttpFSBackedChunkStore(httpHost, dbCache)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", grpcPort))
@@ -120,14 +121,14 @@ func grpcServer(httpHost string, grpcPort int, stopChan chan interface{}) {
 	grpcServer.GracefulStop()
 }
 
-func httpServer(httpPort int, stopChan chan interface{}) {
+func httpServer(dbCache *DBCache, httpPort int, stopChan chan interface{}) {
 	defer func() {
 		log.Println("exiting http Server go routine")
 	}()
 
 	server := http.Server{
 		Addr:    fmt.Sprintf(":%d", httpPort),
-		Handler: http.HandlerFunc(ServeHTTP),
+		Handler: filehandler{dbCache},
 	}
 
 	go func() {

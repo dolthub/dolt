@@ -38,7 +38,11 @@ var (
 
 var expectedFiles = make(map[string]*remotesapi.TableFileDetails)
 
-func ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
+type filehandler struct {
+	dbCache *DBCache
+}
+
+func (filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	logger := getReqLogger("HTTP_"+req.Method, req.RequestURI)
 	defer func() { logger("finished") }()
 
