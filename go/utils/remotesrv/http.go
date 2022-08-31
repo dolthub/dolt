@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 
@@ -36,13 +37,32 @@ var (
 		"offset since the read would exceed the size of the file")
 )
 
-var expectedFiles = make(map[string]*remotesapi.TableFileDetails)
-
-type filehandler struct {
-	dbCache *DBCache
+type fileDetails struct {
+	details *sync.Map
 }
 
-func (filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
+func (fd fileDetails) Put(id string, tfd *remotesapi.TableFileDetails) {
+	fd.details.Store(id, tfd)
+}
+
+func (fd fileDetails) Get(id string) (*remotesapi.TableFileDetails, bool) {
+	v, ok := fd.details.Load(id)
+	if !ok {
+		return nil, false
+	}
+	return v.(*remotesapi.TableFileDetails), true
+}
+
+func newFileDetails() fileDetails {
+	return fileDetails{new(sync.Map)}
+}
+
+type filehandler struct {
+	dbCache       *DBCache
+	expectedFiles fileDetails
+}
+
+func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	logger := getReqLogger("HTTP_"+req.Method, req.RequestURI)
 	defer func() { logger("finished") }()
 
@@ -64,7 +84,7 @@ func (filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 		statusCode = readTableFile(logger, org, repo, hashStr, respWr, req)
 
 	case http.MethodPost, http.MethodPut:
-		statusCode = writeTableFile(logger, org, repo, hashStr, req)
+		statusCode = writeTableFile(logger, fh.expectedFiles, org, repo, hashStr, req)
 	}
 
 	if statusCode != -1 {
@@ -129,7 +149,7 @@ func readTableFile(logger func(string), org, repo, fileId string, respWr http.Re
 	return http.StatusOK
 }
 
-func writeTableFile(logger func(string), org, repo, fileId string, request *http.Request) int {
+func writeTableFile(logger func(string), expectedFiles fileDetails, org, repo, fileId string, request *http.Request) int {
 	_, ok := hash.MaybeParse(fileId)
 
 	if !ok {
@@ -137,8 +157,7 @@ func writeTableFile(logger func(string), org, repo, fileId string, request *http
 		return http.StatusBadRequest
 	}
 
-	tfd, ok := expectedFiles[fileId]
-
+	tfd, ok := expectedFiles.Get(fileId)
 	if !ok {
 		return http.StatusBadRequest
 	}
@@ -163,7 +182,6 @@ func writeTableFile(logger func(string), org, repo, fileId string, request *http
 	}
 
 	err = writeLocal(logger, org, repo, fileId, data)
-
 	if err != nil {
 		return http.StatusInternalServerError
 	}

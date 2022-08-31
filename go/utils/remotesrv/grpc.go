@@ -33,17 +33,19 @@ import (
 )
 
 type RemoteChunkStore struct {
-	HttpHost string
-	csCache  *DBCache
-	bucket   string
+	HttpHost      string
+	csCache       *DBCache
+	bucket        string
+	expectedFiles fileDetails
 	remotesapi.UnimplementedChunkStoreServiceServer
 }
 
-func NewHttpFSBackedChunkStore(httpHost string, csCache *DBCache) *RemoteChunkStore {
+func NewHttpFSBackedChunkStore(httpHost string, csCache *DBCache, expectedFiles fileDetails) *RemoteChunkStore {
 	return &RemoteChunkStore{
-		HttpHost: httpHost,
-		csCache:  csCache,
-		bucket:   "",
+		HttpHost:      httpHost,
+		csCache:       csCache,
+		bucket:        "",
+		expectedFiles: expectedFiles,
 	}
 }
 
@@ -245,7 +247,7 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 
 func (rs *RemoteChunkStore) getUploadUrl(logger func(string), org, repoName string, tfd *remotesapi.TableFileDetails) (string, error) {
 	fileID := hash.New(tfd.Id).String()
-	expectedFiles[fileID] = tfd
+	rs.expectedFiles.Put(fileID, tfd)
 	return fmt.Sprintf("http://%s/%s/%s/%s", rs.HttpHost, org, repoName, fileID), nil
 }
 
