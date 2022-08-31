@@ -216,10 +216,6 @@ func (dtf *DiffTableFunction) evaluateArguments() (string, interface{}, interfac
 		return "", nil, nil, nil
 	}
 
-	if sql.IsDeferred(dtf.tableNameExpr.Type()) {
-		return "", nil, nil, nil
-	}
-
 	if !sql.IsText(dtf.tableNameExpr.Type()) {
 		return "", nil, nil, sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.tableNameExpr.String())
 	}
