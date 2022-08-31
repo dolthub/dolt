@@ -138,6 +138,43 @@ func NewCursorAtOrdinal(ctx context.Context, ns NodeStore, nd Node, ord uint64) 
 	})
 }
 
+// GetOrdinalForItem returns the smallest ordinal position at which the current item >= |query|.
+func GetOrdinalForItem(ctx context.Context, ns NodeStore, root Node, query Item, compare CompareFn) (ord uint64, err error) {
+	_, err = NewCursorFromSearchFn(ctx, ns, root, func(node Node) (idx int) {
+		if err != nil {
+			return 0
+		}
+
+		leaf, _ := node.IsLeaf()
+		if leaf {
+			idx := sort.Search(node.Count(), func(i int) bool {
+				return compare(query, node.GetKey(i)) <= 0
+			})
+			ord += uint64(idx)
+			return idx
+		}
+
+		for idx = 0; idx < node.Count(); idx++ {
+			if compare(query, node.GetKey(idx)) <= 0 {
+				break
+			}
+			node, err = node.loadSubtrees()
+			if err != nil {
+				return 0
+			}
+			var cnt uint64
+			cnt, err = node.getSubtreeCount(idx)
+			if err != nil {
+				return 0
+			}
+			ord += cnt
+		}
+
+		return
+	})
+	return
+}
+
 func NewCursorFromSearchFn(ctx context.Context, ns NodeStore, nd Node, search SearchFn) (cur *Cursor, err error) {
 	cur = &Cursor{nd: nd, nrw: ns}
 
