@@ -1186,7 +1186,6 @@ func TestDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffSystemTablePrepared(t *testing.T) {
-	t.Skip()
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {
