@@ -20,9 +20,9 @@ import (
 	"crypto/md5"
 	"errors"
 	"fmt"
+	gohash "hash"
 	"io"
 	"net/http"
-	gohash "hash"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -153,11 +153,11 @@ func readTableFile(logger func(string), org, repo, fileId string, respWr http.Re
 }
 
 type uploadreader struct {
-	r io.ReadCloser
-	totalread int
+	r            io.ReadCloser
+	totalread    int
 	expectedread uint64
-	expectedsum []byte
-	checksum gohash.Hash
+	expectedsum  []byte
+	checksum     gohash.Hash
 }
 
 func (u *uploadreader) Read(p []byte) (n int, err error) {
@@ -208,7 +208,6 @@ func writeTableFile(ctx context.Context, logger func(string), dbCache *DBCache, 
 		logger("failed to get " + org + "/" + repo + " repository: " + err.Error())
 		return http.StatusInternalServerError
 	}
-
 
 	err = cs.WriteTableFile(ctx, fileId, int(tfd.NumChunks), tfd.ContentHash, func() (io.ReadCloser, uint64, error) {
 		reader := request.Body
