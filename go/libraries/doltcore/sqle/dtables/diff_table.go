@@ -53,6 +53,8 @@ var _ sql.FilteredTable = (*DiffTable)(nil)
 var _ sql.IndexedTable = (*DiffTable)(nil)
 var _ sql.ParallelizedIndexAddressableTable = (*DiffTable)(nil)
 
+//var _ sql.Expressioner = (*DiffTable)(nil)
+
 type DiffTable struct {
 	name        string
 	ddb         *doltdb.DoltDB

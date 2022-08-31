@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/vitess/go/mysql"
@@ -108,48 +107,38 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Nautobot FOREIGN KEY panic repro",
+			Name: "working set changes",
 			SetUpScript: []string{
-				"CREATE TABLE `auth_user` (" +
-					"	`password` varchar(128) NOT NULL," +
-					"	`last_login` datetime," +
-					"	`is_superuser` tinyint NOT NULL," +
-					"	`username` varchar(150) NOT NULL," +
-					"	`first_name` varchar(150) NOT NULL," +
-					"	`last_name` varchar(150) NOT NULL," +
-					"	`email` varchar(254) NOT NULL," +
-					"	`is_staff` tinyint NOT NULL," +
-					"	`is_active` tinyint NOT NULL," +
-					"	`date_joined` datetime NOT NULL," +
-					"	`id` char(32) NOT NULL," +
-					"	`config_data` json NOT NULL," +
-					"	PRIMARY KEY (`id`)," +
-					"	UNIQUE KEY `username` (`username`)" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
-				"CREATE TABLE `users_token` (" +
-					"	`id` char(32) NOT NULL," +
-					"	`created` datetime NOT NULL," +
-					"	`expires` datetime," +
-					"	`key` varchar(40) NOT NULL," +
-					"	`write_enabled` tinyint NOT NULL," +
-					"	`description` varchar(200) NOT NULL," +
-					"	`user_id` char(32) NOT NULL," +
-					"	PRIMARY KEY (`id`)," +
-					"	UNIQUE KEY `key` (`key`)," +
-					"	KEY `users_token_user_id_af964690` (`user_id`)," +
-					"	CONSTRAINT `users_token_user_id_af964690_fk_auth_user_id` FOREIGN KEY (`user_id`) REFERENCES `auth_user` (`id`)" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-				"INSERT INTO `auth_user` (`password`,`last_login`,`is_superuser`,`username`,`first_name`,`last_name`,`email`,`is_staff`,`is_active`,`date_joined`,`id`,`config_data`)" +
-					"VALUES ('pbkdf2_sha256$216000$KRpZeDPgwc5E$vl/2hwrmtnckaBT0A8pf63Ph+oYuCHYI7qozMTZihTo=',NULL,1,'admin','','','admin@example.com',1,1,'2022-08-30 18:27:21.810049','1056443cc03446c592fa4c06bb06a1a6','{}');",
+				"create table regularTable (a int primary key, b int, c int);",
+				"create table droppedTable (a int primary key, b int, c int);",
+				"create table renamedEmptyTable (a int primary key, b int, c int);",
+				"call dolt_add('.')",
+				"insert into droppedTable values (1, 2, 3), (2, 3, 4);",
+				"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'));",
+
+				// changeSet: STAGED; data change: false; schema change: true
+				"create table addedTable (a int primary key, b int, c int);",
+				"call DOLT_ADD('addedTable');",
+				// changeSet: STAGED; data change: true; schema change: true
+				"drop table droppedTable;",
+				"call DOLT_ADD('droppedTable');",
+				// changeSet: WORKING; data change: false; schema change: true
+				"rename table renamedEmptyTable to newRenamedEmptyTable",
+				// changeSet: WORKING; data change: true; schema change: false
+				"insert into regularTable values (1, 2, 3);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "INSERT INTO `users_token` (`id`, `user_id`, `created`, `expires`, `key`, `write_enabled`, `description`) " +
-						"VALUES ('acc2e157db2845a79221cc654b1dcecc', '1056443cc03446c592fa4c06bb06a1a6', '2022-08-30 18:27:21.948487', NULL, '0123456789abcdef0123456789abcdef01234567', 1, '');",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 0x1, InsertID: 0x0}}},
+					Query: "SELECT * FROM DOLT_DIFF WHERE COMMIT_HASH in ('WORKING', 'STAGED') ORDER BY table_name;",
+					Expected: []sql.Row{
+						{"STAGED", "addedTable", nil, nil, nil, nil, false, true},
+						{"STAGED", "droppedTable", nil, nil, nil, nil, true, true},
+						{"WORKING", "newRenamedEmptyTable", nil, nil, nil, nil, false, true},
+						{"WORKING", "regularTable", nil, nil, nil, nil, true, false},
+					},
 				},
 			},
 		},
@@ -207,51 +196,47 @@ func TestSingleQueryPrepared(t *testing.T) {
 }
 
 func TestSingleScriptPrepared(t *testing.T) {
-	t.Skip()
-
-	s := []setup.SetupScript{
+	//t.Skip()
+	var scripts = []queries.ScriptTest{
 		{
-			"create table test (pk int primary key, c1 int)",
-			"call dolt_add('.')",
-			"insert into test values (0,0), (1,1);",
-			"set @Commit1 = dolt_commit('-am', 'creating table');",
-			"call dolt_branch('-c', 'main', 'newb')",
-			"alter table test add column c2 int;",
-			"set @Commit2 = dolt_commit('-am', 'alter table');",
+			Name: "working set changes",
+			SetUpScript: []string{
+				"create table regularTable (a int primary key, b int, c int);",
+				"create table droppedTable (a int primary key, b int, c int);",
+				"create table renamedEmptyTable (a int primary key, b int, c int);",
+				"call dolt_add('.')",
+				"insert into droppedTable values (1, 2, 3), (2, 3, 4);",
+				"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'));",
+
+				// changeSet: STAGED; data change: false; schema change: true
+				"create table addedTable (a int primary key, b int, c int);",
+				"call DOLT_ADD('addedTable');",
+				// changeSet: STAGED; data change: true; schema change: true
+				"drop table droppedTable;",
+				"call DOLT_ADD('droppedTable');",
+				// changeSet: WORKING; data change: false; schema change: true
+				"rename table renamedEmptyTable to newRenamedEmptyTable",
+				// changeSet: WORKING; data change: true; schema change: false
+				"insert into regularTable values (1, 2, 3);",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query: "SELECT * FROM DOLT_DIFF WHERE COMMIT_HASH in ('WORKING', 'STAGED') ORDER BY table_name;",
+					Expected: []sql.Row{
+						{"STAGED", "addedTable", nil, nil, nil, nil, false, true},
+						{"STAGED", "droppedTable", nil, nil, nil, nil, true, true},
+						{"WORKING", "newRenamedEmptyTable", nil, nil, nil, nil, false, true},
+						{"WORKING", "regularTable", nil, nil, nil, nil, true, false},
+					},
+				},
+			},
 		},
-	}
-	tt := queries.QueryTest{
-		Query: "select * from test as of 'HEAD~2' where pk=?",
-		Bindings: map[string]sql.Expression{
-			"v1": expression.NewLiteral(0, sql.Int8),
-		},
-		Expected: []sql.Row{{0, 0}},
 	}
 
 	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData, s)
-
-	e, err := harness.NewEngine(t)
-	defer e.Close()
-	require.NoError(t, err)
-	ctx := harness.NewContext()
-
-	//e.Analyzer.Debug = true
-	//e.Analyzer.Verbose = true
-
-	// full impl
-	pre1, sch1, rows1 := enginetest.MustQueryWithPreBindings(ctx, e, tt.Query, tt.Bindings)
-	fmt.Println(pre1, sch1, rows1)
-
-	// inline bindings
-	sch2, rows2 := enginetest.MustQueryWithBindings(ctx, e, tt.Query, tt.Bindings)
-	fmt.Println(sch2, rows2)
-
-	// no bindings
-	//sch3, rows3 := enginetest.MustQuery(ctx, e, rawQuery)
-	//fmt.Println(sch3, rows3)
-
-	enginetest.TestQueryWithContext(t, ctx, e, harness, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings)
+	for _, test := range scripts {
+		enginetest.TestScriptPrepared(t, harness, test)
+	}
 }
 
 func TestVersionedQueries(t *testing.T) {
