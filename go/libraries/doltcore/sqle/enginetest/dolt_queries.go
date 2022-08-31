@@ -3647,8 +3647,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		SkipPrepared: true,
-		Name:         "base case: modified rows",
+		Name: "base case: modified rows",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
@@ -3663,6 +3662,21 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
 				Expected: []sql.Row{{3}},
 			},
+		},
+	},
+	{
+		SkipPrepared: true,
+		Name:         "base case: modified rows",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 int);",
+			"call dolt_add('.')",
+			"insert into t values (1, 2, 3), (4, 5, 6);",
+			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+
+			"update t set c2=0 where pk=1",
+			"set @Commit2 = (select DOLT_COMMIT('-am', 'modifying row'));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk, to_c2, to_c2, from_pk, from_c1, from_c2, diff_type;",
 				Expected: []sql.Row{

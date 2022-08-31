@@ -111,30 +111,22 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "basic case",
+			Name: "base case: modified rows",
 			SetUpScript: []string{
-				"set @Commit0 = HashOf('HEAD');",
-
-				"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+				"create table t (pk int primary key, c1 int, c2 int);",
 				"call dolt_add('.')",
-				"set @Commit1 = dolt_commit('-am', 'creating table t');",
+				"insert into t values (1, 2, 3), (4, 5, 6);",
+				"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
 
-				"insert into t values(1, 'one', 'two');",
-				"set @Commit2 = dolt_commit('-am', 'inserting into table t');",
-
-				"create table t2 (pk int primary key, c1 varchar(20), c2 varchar(20));",
-				"call dolt_add('.')",
-				"insert into t2 values(100, 'hundred', 'hundert');",
-				"set @Commit3 = dolt_commit('-am', 'inserting into table t2');",
-
-				"insert into t values(2, 'two', 'three'), (3, 'three', 'four');",
-				"update t set c1='uno', c2='dos' where pk=1;",
-				"set @Commit4 = dolt_commit('-am', 'inserting into table t');",
+				"update t set c2=0 where pk=1",
+				"set @Commit2 = (select DOLT_COMMIT('-am', 'modifying row'));",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
-					Expected: []sql.Row{{1, "one", "two", nil, nil, nil, "added"}},
+					Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk, to_c2, to_c2, from_pk, from_c1, from_c2, diff_type;",
+					Expected: []sql.Row{
+						{1, 2, 0, 1, 2, 3, "modified"},
+					},
 				},
 			},
 		},
@@ -195,30 +187,22 @@ func TestSingleScriptPrepared(t *testing.T) {
 	//t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "basic case",
+			Name: "base case: modified rows",
 			SetUpScript: []string{
-				"set @Commit0 = HashOf('HEAD');",
-
-				"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+				"create table t (pk int primary key, c1 int, c2 int);",
 				"call dolt_add('.')",
-				"set @Commit1 = dolt_commit('-am', 'creating table t');",
+				"insert into t values (1, 2, 3), (4, 5, 6);",
+				"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
 
-				"insert into t values(1, 'one', 'two');",
-				"set @Commit2 = dolt_commit('-am', 'inserting into table t');",
-
-				"create table t2 (pk int primary key, c1 varchar(20), c2 varchar(20));",
-				"call dolt_add('.')",
-				"insert into t2 values(100, 'hundred', 'hundert');",
-				"set @Commit3 = dolt_commit('-am', 'inserting into table t2');",
-
-				"insert into t values(2, 'two', 'three'), (3, 'three', 'four');",
-				"update t set c1='uno', c2='dos' where pk=1;",
-				"set @Commit4 = dolt_commit('-am', 'inserting into table t');",
+				"update t set c2=0 where pk=1",
+				"set @Commit2 = (select DOLT_COMMIT('-am', 'modifying row'));",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
-					Expected: []sql.Row{{1, "one", "two", nil, nil, nil, "added"}},
+					Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk, to_c2, to_c2, from_pk, from_c1, from_c2, diff_type;",
+					Expected: []sql.Row{
+						{1, 2, 0, 1, 2, 3, "modified"},
+					},
 				},
 			},
 		},
