@@ -140,9 +140,9 @@ func NewCursorAtOrdinal(ctx context.Context, ns NodeStore, nd Node, ord uint64) 
 
 // GetOrdinalForItem returns the smallest ordinal position at which the current item >= |query|.
 func GetOrdinalForItem(ctx context.Context, ns NodeStore, root Node, query Item, compare CompareFn) (ord uint64, err error) {
-	_, err = NewCursorFromSearchFn(ctx, ns, root, func(node Node) (idx int) {
+	err2 := searchNodes(ctx, ns, root, func(node Node) (idx int) {
 		if err != nil {
-			return 0
+			return -1
 		}
 
 		leaf, _ := node.IsLeaf()
@@ -154,24 +154,57 @@ func GetOrdinalForItem(ctx context.Context, ns NodeStore, root Node, query Item,
 			return idx
 		}
 
+		node, err = node.loadSubtrees()
+		if err != nil {
+			return -1
+		}
+
 		for idx = 0; idx < node.Count(); idx++ {
 			if compare(query, node.GetKey(idx)) <= 0 {
 				break
 			}
-			node, err = node.loadSubtrees()
-			if err != nil {
-				return 0
-			}
 			var cnt uint64
 			cnt, err = node.getSubtreeCount(idx)
 			if err != nil {
-				return 0
+				return -1
 			}
 			ord += cnt
 		}
 
 		return
 	})
+	if err == nil {
+		err = err2
+	}
+	return
+}
+
+// searchNodes walks a tree according to the indices returned by |search|. If
+// |search| returns an out-of-bounds index, the search is stopped.
+func searchNodes(ctx context.Context, ns NodeStore, nd Node, search SearchFn) (err error) {
+	idx := search(nd)
+	var leaf bool
+	leaf, err = nd.IsLeaf()
+	if err != nil {
+		return err
+	}
+	for !leaf {
+		// stop search if we go out of bounds
+		if idx < 0 || idx >= nd.Count() {
+			break
+		}
+
+		nd, err = fetchChild(ctx, ns, nd.getAddress(idx))
+		if err != nil {
+			return err
+		}
+
+		idx = search(nd)
+		leaf, err = nd.IsLeaf()
+		if err != nil {
+			return err
+		}
+	}
 	return
 }
 

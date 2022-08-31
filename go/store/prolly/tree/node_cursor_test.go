@@ -16,6 +16,7 @@ package tree
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"testing"
 
@@ -32,6 +33,15 @@ func TestNodeCursor(t *testing.T) {
 		testNewCursorAtItem(t, 100)
 		testNewCursorAtItem(t, 1000)
 		testNewCursorAtItem(t, 10_000)
+	})
+
+	t.Run("get ordinal at item", func(t *testing.T) {
+		counts := []int{10, 100, 1000, 10_000}
+		for _, c := range counts {
+			t.Run(fmt.Sprintf("%d", c), func(t *testing.T) {
+				testGetOrdinalForItem(t, c)
+			})
+		}
 	})
 
 	t.Run("retreat past beginning", func(t *testing.T) {
@@ -76,6 +86,42 @@ func testNewCursorAtItem(t *testing.T, count int) {
 	}
 
 	validateTreeItems(t, ns, root, items)
+}
+
+func testGetOrdinalForItem(t *testing.T, count int) {
+	tuples, d := AscendingUintTuples(count)
+
+	ctx := context.Background()
+	ns := NewTestNodeStore()
+	serializer := message.NewProllyMapSerializer(d, ns.Pool())
+	chkr, err := newEmptyChunker(ctx, ns, serializer)
+	require.NoError(t, err)
+
+	for _, item := range tuples {
+		err = chkr.AddPair(ctx, Item(item[0]), Item(item[1]))
+		assert.NoError(t, err)
+	}
+	nd, err := chkr.Done(ctx)
+	assert.NoError(t, err)
+
+	for i := 0; i < len(tuples); i++ {
+		ord, err := GetOrdinalForItem(ctx, ns, nd, Item(tuples[i][0]), func(left, right Item) int {
+			return d.Compare(val.Tuple(left), val.Tuple(right))
+		})
+		require.NoError(t, err)
+		assert.Equal(t, uint64(i), ord)
+	}
+
+	b := val.NewTupleBuilder(d)
+	b.PutUint32(0, uint32(len(tuples)))
+	aboveItem := b.Build(sharedPool)
+
+	ord, err := GetOrdinalForItem(ctx, ns, nd, Item(aboveItem), func(left, right Item) int {
+		return d.Compare(val.Tuple(left), val.Tuple(right))
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, uint64(len(tuples)), ord)
 }
 
 func randomTree(t *testing.T, count int) (Node, [][2]Item, NodeStore) {
