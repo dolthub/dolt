@@ -10,6 +10,7 @@ create table b (x int, y int, primary key (y,x), foreign key (y) references a(y)
 insert into a values (4,0), (3,1), (2,2);
 insert into b values (2,1), (4,2), (3,0);
 SQL
+    dolt add .
 }
 
 teardown() {

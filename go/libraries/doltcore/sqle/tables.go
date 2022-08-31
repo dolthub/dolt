@@ -370,6 +370,11 @@ func (t *DoltTable) Schema() sql.Schema {
 	return t.sqlSchema().Schema
 }
 
+// Collation returns the collation for this table.
+func (t *DoltTable) Collation() sql.CollationID {
+	return sql.CollationID(t.sch.GetCollation())
+}
+
 func (t *DoltTable) sqlSchema() sql.PrimaryKeySchema {
 	if len(t.sqlSch.Schema) > 0 {
 		return t.sqlSch
@@ -1416,7 +1421,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 func (t *AlterableDoltTable) getNewSch(ctx context.Context, oldColumn, newColumn *sql.Column, oldSch schema.Schema, newSchema sql.PrimaryKeySchema, root, headRoot *doltdb.RootValue) (schema.Schema, error) {
 	if oldColumn == nil || newColumn == nil {
 		// Adding or dropping a column
-		newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot)
+		newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
 		if err != nil {
 			return nil, err
 		}
@@ -1445,7 +1450,7 @@ func (t *AlterableDoltTable) getNewSch(ctx context.Context, oldColumn, newColumn
 		}
 	}
 
-	newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot)
+	newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
 	if err != nil {
 		return nil, err
 	}

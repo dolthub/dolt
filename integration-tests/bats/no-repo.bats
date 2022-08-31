@@ -116,6 +116,12 @@ teardown() {
     chmod 755 .
 }
 
+@test "no-repo: dolt version does not fail on empty .dolt dir" {
+    mkdir .dolt
+    run dolt version
+    [ "$status" -eq 0 ]
+}
+
 # Tests for dolt commands outside of a dolt repository
 NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
 @test "no-repo: dolt status outside of a dolt repository" {

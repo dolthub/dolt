@@ -111,6 +111,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     # string columns
     dolt sql -q "create table strings (a varchar(10) primary key, b char(10))"
     dolt sql -q "insert into strings values ('abc', '123'), ('def', '456')"
+    dolt add .
     dolt commit -am "Checkpoint"
 
     dolt table export strings -f export.sql
@@ -122,6 +123,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     # enum columns
     dolt sql -q "create table enums (a varchar(10) primary key, b enum('one','two','three'))"
     dolt sql -q "insert into enums values ('abc', 'one'), ('def', 'two')"
+    dolt add .
     dolt commit -am "Checkpoint"
 
     dolt table export enums -f export.sql
@@ -137,6 +139,7 @@ create table sets (a varchar(10) primary key, b set('one','two','three'));
 insert into sets values ('abc', 'one,two'), ('def', 'two,three');
 SQL
     
+    dolt add .
     dolt commit -am "Checkpoint"
 
     dolt table export sets -f export.sql
@@ -148,6 +151,7 @@ SQL
 
     # json columns
     dolt sql -q "create table json_vals (a varchar(10) primary key, b json)"
+    dolt add .
     dolt sql <<SQL
     insert into json_vals values ('abc', '{"key": "value"}'), ('def', '[{"a": "b"},{"conjuction": "it\'s"}]');
 SQL
@@ -192,6 +196,7 @@ alter table one add foreign key (b) references two (c);
 alter table two add foreign key (d) references one (a);
 SQL
 
+    dolt add .
     dolt commit -am "Added tables and data"
     
     dolt table export one one.sql

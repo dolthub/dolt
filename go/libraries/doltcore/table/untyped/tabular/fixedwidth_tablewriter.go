@@ -59,7 +59,7 @@ type FixedWidthTableWriter struct {
 	flushedSampleBuffer bool
 }
 
-var _ table.SqlTableWriter = (*FixedWidthTableWriter)(nil)
+var _ table.SqlRowWriter = (*FixedWidthTableWriter)(nil)
 
 type tableRow struct {
 	columns []string

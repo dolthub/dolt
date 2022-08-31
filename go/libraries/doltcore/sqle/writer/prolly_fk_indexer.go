@@ -49,6 +49,11 @@ func (n *prollyFkIndexer) Schema() sql.Schema {
 	return n.writer.sqlSch
 }
 
+// Collation implements the interface sql.Table.
+func (n *prollyFkIndexer) Collation() sql.CollationID {
+	return sql.CollationID(n.writer.sch.GetCollation())
+}
+
 func (n *prollyFkIndexer) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	ranges, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
 	if err != nil {
@@ -74,7 +79,7 @@ func (n *prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.
 	}
 
 	pkToIdxMap := make(val.OrdinalMapping, n.writer.sch.GetPKCols().Size())
-	for j, idxCol := range n.index.IndexSchema().GetAllCols().GetColumns() {
+	for j, idxCol := range n.index.IndexSchema().GetPKCols().GetColumns() {
 		if i, ok := n.writer.sch.GetPKCols().TagToIdx[idxCol.Tag]; ok {
 			pkToIdxMap[i] = j
 		}
@@ -116,41 +121,49 @@ var _ sql.RowIter = prollyFkPkRowIter{}
 
 // Next implements the interface sql.RowIter.
 func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	// |rangeIter| iterates on the foreign key index of the parent table
-	k, _, err := iter.rangeIter.Next(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if k == nil {
-		return nil, io.EOF
-	}
+	for {
+		// |rangeIter| iterates on the foreign key index of the parent table
+		k, _, err := iter.rangeIter.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if k == nil {
+			return nil, io.EOF
+		}
 
-	pkBld := iter.primary.keyBld
-	for pkPos, idxPos := range iter.pkToIdxMap {
-		pkBld.PutRaw(pkPos, k.GetField(idxPos))
-	}
-	pkTup := pkBld.BuildPermissive(sharePool)
+		pkBld := iter.primary.keyBld
+		for pkPos, idxPos := range iter.pkToIdxMap {
+			pkBld.PutRaw(pkPos, k.GetField(idxPos))
+		}
+		pkTup := pkBld.BuildPermissive(sharePool)
 
-	nextRow := make(sql.Row, len(iter.primary.keyMap)+len(iter.primary.valMap))
-	err = iter.primary.mut.Get(ctx, pkTup, func(tblKey, tblVal val.Tuple) error {
+		var tblKey, tblVal val.Tuple
+		err = iter.primary.mut.Get(ctx, pkTup, func(k, v val.Tuple) error {
+			tblKey, tblVal = k, v
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		if tblKey == nil {
+			continue // referential integrity broken
+		}
+
+		nextRow := make(sql.Row, len(iter.primary.keyMap)+len(iter.primary.valMap))
 		for from := range iter.primary.keyMap {
 			to := iter.primary.keyMap.MapOrdinal(from)
 			if nextRow[to], err = index.GetField(ctx, iter.primary.keyBld.Desc, from, tblKey, iter.primary.mut.NodeStore()); err != nil {
-				return err
+				return nil, err
 			}
 		}
 		for from := range iter.primary.valMap {
 			to := iter.primary.valMap.MapOrdinal(from)
 			if nextRow[to], err = index.GetField(ctx, iter.primary.valBld.Desc, from, tblVal, iter.primary.mut.NodeStore()); err != nil {
-				return err
+				return nil, err
 			}
 		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
+		return nextRow, nil
 	}
-	return nextRow, nil
 }
 
 // Close implements the interface sql.RowIter.

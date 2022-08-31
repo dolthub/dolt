@@ -62,6 +62,12 @@ type Schema interface {
 
 	// GetValueDescriptor returns the value tuple descriptor for this schema.
 	GetValueDescriptor() val.TupleDesc
+
+	// GetCollation returns the table's collation.
+	GetCollation() Collation
+
+	// SetCollation sets the table's collation.
+	SetCollation(collation Collation)
 }
 
 // ColumnOrder is used in ALTER TABLE statements to change the order of inserted / modified columns.

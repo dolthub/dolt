@@ -11,6 +11,7 @@ CREATE TABLE test (
 
 INSERT INTO test VALUES (0),(1),(2);
 SQL
+dolt add .
 }
 
 teardown() {
@@ -280,6 +281,7 @@ SQL
 CREATE TABLE test2 (pk int primary key, val int);
 INSERT INTO test2 VALUES (0, 0);
 SET autocommit = 0;
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test2 VALUES (1, 1);
@@ -302,6 +304,7 @@ SQL
 @test "sql-merge: CALL End to End Conflict Resolution with autocommit off." {
     dolt sql << SQL
 CREATE TABLE test2 (pk int primary key, val int);
+CALL DOLT_ADD('.');
 INSERT INTO test2 VALUES (0, 0);
 SET autocommit = 0;
 CALL DOLT_COMMIT('-a', '-m', 'Step 1');
@@ -629,6 +632,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -680,6 +684,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 CALL DOLT_COMMIT('-a', '-m', 'add tables');
 CALL DOLT_CHECKOUT('-b', 'feature-branch');
 CALL DOLT_CHECKOUT('main');
@@ -730,6 +735,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -796,6 +802,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -836,6 +843,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 CALL DOLT_COMMIT('-a', '-m', 'add tables');
 CALL DOLT_CHECKOUT('-b', 'feature-branch');
 CALL DOLT_CHECKOUT('main');
@@ -875,6 +883,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -905,6 +914,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 CALL DOLT_COMMIT('-a', '-m', 'add tables');
 CALL DOLT_CHECKOUT('-b', 'feature-branch');
 CALL DOLT_CHECKOUT('main');
@@ -935,6 +945,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -964,6 +975,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 CALL DOLT_COMMIT('-a', '-m', 'add tables');
 CALL DOLT_CHECKOUT('-b', 'feature-branch');
 CALL DOLT_CHECKOUT('main');
@@ -1291,6 +1303,7 @@ CREATE TABLE one_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1)
 );
+CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_CHECKOUT('main');
@@ -1375,6 +1388,7 @@ SQL
 @test "sql-merge: adding and dropping primary keys any number of times not produce schema merge conflicts" {
     dolt commit -am "commit all changes"
     dolt sql -q "create table test_null (i int)"
+    dolt add .
     dolt commit -am "initial"
 
     dolt checkout -b b1
@@ -1395,6 +1409,7 @@ SQL
 
 @test "sql-merge: identical schema changes with data changes merges correctly" {
     dolt sql -q "create table t (i int primary key)"
+    dolt add .
     dolt commit -am "initial commit"
     dolt branch b1
     dolt branch b2
@@ -1416,6 +1431,7 @@ SQL
 # TODO: what happens when the data conflicts with new check?
 @test "sql-merge: non-conflicting data and constraint changes are preserved" {
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt commit -am "initial commit"
 
     dolt checkout -b other
@@ -1445,6 +1461,7 @@ SQL
 
 @test "sql-merge: non-overlapping check constraints merge successfully" {
     dolt sql -q "create table t (i int, j int)"
+    dolt add .
     dolt commit -am "initial commit"
 
     dolt checkout -b other
@@ -1472,6 +1489,7 @@ SQL
 
 @test "sql-merge: different check constraints on same column throw conflict" {
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt commit -am "initial commit"
 
     dolt checkout -b other
@@ -1496,6 +1514,7 @@ SQL
 # TODO: what happens when the new data conflicts with modified check?
 @test "sql-merge: non-conflicting constraint modification is preserved" {
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt sql -q "alter table t add constraint c check (i > 0)"
     dolt commit -am "initial commit"
 
@@ -1531,6 +1550,7 @@ SQL
 # TODO: expected behavior for dropping constraints?
 @test "sql-merge: dropping constraint in one branch drops from both" {
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt sql -q "alter table t add constraint c check (i > 0)"
     dolt commit -am "initial commit"
 
@@ -1564,6 +1584,7 @@ SQL
 
 @test "sql-merge: dropping constraint on both branches merges successfully" {
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt sql -q "alter table t add constraint c check (i > 0)"
     dolt commit -am "initial commit"
 
@@ -1591,6 +1612,7 @@ SQL
 
 @test "sql-merge: dropping constraint in one branch and modifying same in other results in conflict" {
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt sql -q "alter table t add constraint c check (i > 0)"
     dolt commit -am "initial commit"
 
@@ -1616,6 +1638,7 @@ SQL
 
 @test "sql-merge: merging with not null and check constraints preserves both constraints" {
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt commit -am "initial commit"
 
     dolt branch b1
@@ -1649,6 +1672,7 @@ SQL
 
 @test "sql-merge: check constraint with name collision" {
     dolt sql -q "create table t (i int)"
+    dolt add .
     dolt commit -am "initial commit"
 
     dolt branch b1
@@ -1678,6 +1702,7 @@ SQL
 
 @test "sql-merge: check constraint for deleted column in another table" {
     dolt sql -q "create table t (i int primary key, j int)"
+    dolt add .
     dolt commit -am "initial commit"
 
     dolt branch b1
