@@ -40,6 +40,14 @@ func AddDoltSystemVariables() {
 			Default:           "",
 		},
 		{
+			Name:              dsess.ReplicationRemoteURLTemplate,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(dsess.ReplicationRemoteURLTemplate),
+			Default:           "",
+		},
+		{
 			Name:              dsess.ReadReplicaRemote,
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,

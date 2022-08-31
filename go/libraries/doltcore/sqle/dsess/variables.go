@@ -39,6 +39,7 @@ const (
 	AllowCommitConflicts          = "dolt_allow_commit_conflicts"
 	ReplicateToRemote             = "dolt_replicate_to_remote"
 	ReadReplicaRemote             = "dolt_read_replica_remote"
+	ReplicationRemoteURLTemplate  = "dolt_replication_remote_url_template"
 	SkipReplicationErrors         = "dolt_skip_replication_errors"
 	ReplicateHeads                = "dolt_replicate_heads"
 	ReplicateAllHeads             = "dolt_replicate_all_heads"
