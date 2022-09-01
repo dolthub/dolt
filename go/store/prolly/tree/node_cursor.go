@@ -23,6 +23,7 @@ package tree
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -138,74 +139,36 @@ func NewCursorAtOrdinal(ctx context.Context, ns NodeStore, nd Node, ord uint64) 
 	})
 }
 
-// GetOrdinalForItem returns the smallest ordinal position at which the current item >= |query|.
-func GetOrdinalForItem(ctx context.Context, ns NodeStore, root Node, query Item, compare CompareFn) (ord uint64, err error) {
-	err2 := searchNodes(ctx, ns, root, func(node Node) (idx int) {
+// GetOrdinalOfCursor returns the ordinal position of a Cursor.
+func GetOrdinalOfCursor(curr *Cursor) (ord uint64, err error) {
+	leaf, err := curr.isLeaf()
+	if err != nil {
+		return 0, err
+	}
+	if !leaf {
+		return 0, fmt.Errorf("|cur| must be at a leaf")
+	}
+
+	ord += uint64(curr.idx)
+
+	for curr.parent != nil {
+		curr = curr.parent
+
+		curr.nd, err = curr.nd.loadSubtrees()
 		if err != nil {
-			return -1
+			return 0, err
 		}
 
-		leaf, _ := node.IsLeaf()
-		if leaf {
-			idx := sort.Search(node.Count(), func(i int) bool {
-				return compare(query, node.GetKey(i)) <= 0
-			})
-			ord += uint64(idx)
-			return idx
-		}
-
-		node, err = node.loadSubtrees()
-		if err != nil {
-			return -1
-		}
-
-		for idx = 0; idx < node.Count(); idx++ {
-			if compare(query, node.GetKey(idx)) <= 0 {
-				break
-			}
-			var cnt uint64
-			cnt, err = node.getSubtreeCount(idx)
+		for idx := curr.idx - 1; idx >= 0; idx-- {
+			cnt, err := curr.nd.getSubtreeCount(idx)
 			if err != nil {
-				return -1
+				return 0, err
 			}
 			ord += cnt
 		}
-
-		return
-	})
-	if err == nil {
-		err = err2
 	}
-	return
-}
 
-// searchNodes walks a tree according to the indices returned by |search|. If
-// |search| returns an out-of-bounds index, the search is stopped.
-func searchNodes(ctx context.Context, ns NodeStore, nd Node, search SearchFn) (err error) {
-	idx := search(nd)
-	var leaf bool
-	leaf, err = nd.IsLeaf()
-	if err != nil {
-		return err
-	}
-	for !leaf {
-		// stop search if we go out of bounds
-		if idx < 0 || idx >= nd.Count() {
-			break
-		}
-
-		nd, err = fetchChild(ctx, ns, nd.getAddress(idx))
-		if err != nil {
-			return err
-		}
-
-		idx = search(nd)
-		leaf, err = nd.IsLeaf()
-		if err != nil {
-			return err
-		}
-	}
-	return
+	return ord, nil
 }
 
 func NewCursorFromSearchFn(ctx context.Context, ns NodeStore, nd Node, search SearchFn) (cur *Cursor, err error) {

@@ -39,7 +39,7 @@ func TestNodeCursor(t *testing.T) {
 		counts := []int{10, 100, 1000, 10_000}
 		for _, c := range counts {
 			t.Run(fmt.Sprintf("%d", c), func(t *testing.T) {
-				testGetOrdinalForItem(t, c)
+				testGetOrdinalOfCursor(t, c)
 			})
 		}
 	})
@@ -88,8 +88,15 @@ func testNewCursorAtItem(t *testing.T, count int) {
 	validateTreeItems(t, ns, root, items)
 }
 
-func testGetOrdinalForItem(t *testing.T, count int) {
+func testGetOrdinalOfCursor(t *testing.T, count int) {
 	tuples, d := AscendingUintTuples(count)
+
+	search := func(item Item, nd Node) (idx int) {
+		return sort.Search(int(nd.count), func(i int) bool {
+			l, r := val.Tuple(item), val.Tuple(nd.GetKey(i))
+			return d.Compare(l, r) <= 0
+		})
+	}
 
 	ctx := context.Background()
 	ns := NewTestNodeStore()
@@ -105,10 +112,12 @@ func testGetOrdinalForItem(t *testing.T, count int) {
 	assert.NoError(t, err)
 
 	for i := 0; i < len(tuples); i++ {
-		ord, err := GetOrdinalForItem(ctx, ns, nd, Item(tuples[i][0]), func(left, right Item) int {
-			return d.Compare(val.Tuple(left), val.Tuple(right))
-		})
+		curr, err := NewCursorAtItem(ctx, ns, nd, Item(tuples[i][0]), search)
 		require.NoError(t, err)
+
+		ord, err := GetOrdinalOfCursor(curr)
+		require.NoError(t, err)
+
 		assert.Equal(t, uint64(i), ord)
 	}
 
@@ -116,9 +125,10 @@ func testGetOrdinalForItem(t *testing.T, count int) {
 	b.PutUint32(0, uint32(len(tuples)))
 	aboveItem := b.Build(sharedPool)
 
-	ord, err := GetOrdinalForItem(ctx, ns, nd, Item(aboveItem), func(left, right Item) int {
-		return d.Compare(val.Tuple(left), val.Tuple(right))
-	})
+	curr, err := NewCursorAtItem(ctx, ns, nd, Item(aboveItem), search)
+	require.NoError(t, err)
+
+	ord, err := GetOrdinalOfCursor(curr)
 	require.NoError(t, err)
 
 	require.Equal(t, uint64(len(tuples)), ord)
