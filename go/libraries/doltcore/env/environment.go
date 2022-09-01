@@ -175,12 +175,7 @@ func loadWithFormat(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys
 	if rsErr == nil && dbLoadErr == nil && dbFormatErr == nil {
 		// If the working set isn't present in the DB, create it from the repo state. This step can be removed post 1.0.
 		_, err := dEnv.WorkingSet(ctx)
-		if err == doltdb.ErrWorkingSetNotFound {
-			err := dEnv.initWorkingSetFromRepoState(ctx)
-			if err != nil {
-				dEnv.RSLoadErr = err
-			}
-		} else if err != nil {
+		if err != nil && !errors.Is(err, doltdb.ErrWorkingSetNotFound) {
 			dEnv.RSLoadErr = err
 		}
 	}

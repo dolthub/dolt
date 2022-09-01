@@ -2199,7 +2199,7 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TRIGGER trigger1 BEFORE INSERT ON x FOR EACH ROW SET new.a = new.a + 1",
 			"CALL dolt_add('-A')",
 			"CALL dolt_commit('-m', 'added table with trigger')",
-			"INSERT INTO dolt_branches (name, hash) VALUES ('other',hashof('main'))",
+			"CALL dolt_branch('-c', 'main', 'other')",
 			// create trigger2 on main
 			"CREATE TRIGGER trigger2 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 10",
 			"CALL dolt_commit('-am', 'created trigger2 on main')",

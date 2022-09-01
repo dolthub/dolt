@@ -24,7 +24,11 @@ make_it() {
 @test "deleted-branches: can checkout existing branch after checked out branch is deleted" {
     make_it
 
-    dolt sql -q 'delete from dolt_branches where name = "main"'
+    run dolt sql -q 'delete from dolt_branches where name = "main"'
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "read-only" ]] || false
+
+    dolt sql -q 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");'
 
     dolt branch -av
 
@@ -38,7 +42,7 @@ make_it() {
 
     server_query "dolt_repo_$$" 1 dolt "" "SET @@GLOBAL.dolt_repo_$$_default_branch = 'to_keep'" ""
 
-    server_query "dolt_repo_$$"  1 dolt "" 'delete from dolt_branches where name = "main"' ""
+    server_query "dolt_repo_$$"  1 dolt "" 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");' ""
 
     server_query "dolt_repo_$$" 1 dolt "" "SELECT * FROM test" "id\n" ""
 }
@@ -48,7 +52,7 @@ make_it() {
 
     start_sql_server "dolt_repo_$$"
 
-    server_query "dolt_repo_$$" 1 dolt "" 'delete from dolt_branches where name = "main"' ""
+    server_query "dolt_repo_$$" 1 dolt "" 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");' ""
 
     # Against the default branch it fails
     run server_query "dolt_repo_$$" 1 "" dolt "" "SELECT * FROM test" "id\n" ""
@@ -93,7 +97,8 @@ make_it() {
 
     start_sql_server "dolt_repo_$$"
 
-    server_query "dolt_repo_$$"  1 dolt "" 'delete from dolt_branches where name = "main"' ""
+    server_query "dolt_repo_$$"  1 dolt "" 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");' ""
+
 
     # We are able to use a database branch revision in the connection string
     server_query "dolt_repo_$$/to_keep" 1 dolt "" "SELECT * FROM test;"
@@ -111,7 +116,7 @@ make_it() {
 
     server_query "dolt_repo_$$" 1 dolt "" "SET @@GLOBAL.dolt_repo_$$_default_branch = 'to_keep'" ""
 
-    server_query "dolt_repo_$$"  1 dolt "" 'delete from dolt_branches where name = "main"' ""
+    server_query "dolt_repo_$$"  1 dolt "" 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");' ""
 
     server_query "dolt_repo_$$" 1 dolt "" "SELECT * FROM test" ""
     

@@ -92,13 +92,28 @@ func DoDoltBranch(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
+	fs, err := dSess.Provider().FileSystemForDatabase(dbName)
+	if err != nil {
+		return 1, err
+	}
+	repoState, err := env.LoadRepoState(fs)
+	if err != nil {
+		return 1, err
+	}
+
 	switch {
 	case apr.Contains(cli.CopyFlag):
 		err = copyBranch(ctx, dbData, apr)
 	case apr.Contains(cli.MoveFlag):
-		err = renameBranch(ctx, dbData, apr)
+		err = renameBranch(ctx, dbData, apr, repoState)
+		if err == nil {
+			err = repoState.Save(fs)
+		}
 	case apr.Contains(cli.DeleteFlag), apr.Contains(cli.DeleteForceFlag):
-		err = deleteBranches(ctx, apr, dbData)
+		err = deleteBranches(ctx, dbData, apr, repoState)
+		if err == nil {
+			err = repoState.Save(fs)
+		}
 	default:
 		err = createNewBranch(ctx, dbData, apr)
 	}
@@ -110,7 +125,7 @@ func DoDoltBranch(ctx *sql.Context, args []string) (int, error) {
 	}
 }
 
-func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults) error {
+func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults, rs *env.RepoState) error {
 	if apr.NArg() != 2 {
 		return InvalidArgErr
 	}
@@ -127,10 +142,19 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 		}
 	}
 
-	return actions.RenameBranch(ctx, dbData, loadConfig(ctx), oldBranchName, newBranchName, force)
+	err := actions.RenameBranch(ctx, dbData, loadConfig(ctx), oldBranchName, newBranchName, force)
+	if err != nil {
+		return err
+	}
+
+	if rs.Head.Ref.GetPath() == oldBranchName {
+		rs.Head.Ref = ref.NewBranchRef(newBranchName)
+	}
+
+	return nil
 }
 
-func deleteBranches(ctx *sql.Context, apr *argparser.ArgParseResults, dbData env.DbData) error {
+func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults, rs *env.RepoState) error {
 	if apr.NArg() == 0 {
 		return InvalidArgErr
 	}
@@ -153,7 +177,9 @@ func deleteBranches(ctx *sql.Context, apr *argparser.ArgParseResults, dbData env
 		if err != nil {
 			return err
 		}
-
+		if rs.Head.Ref.GetPath() == branchName {
+			rs.Head.Ref = ref.NewBranchRef("")
+		}
 	}
 	return nil
 }
