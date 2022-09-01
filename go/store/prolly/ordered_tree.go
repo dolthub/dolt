@@ -415,6 +415,10 @@ func (t orderedTree[K, V, O]) iterKeyRange(ctx context.Context, start, stop K) (
 		return curr.Compare(hi) >= 0
 	}
 
+	if stopF(lo) {
+		return &orderedTreeIter[K, V]{curr: nil}, nil
+	}
+
 	return &orderedTreeIter[K, V]{curr: lo, stop: stopF, step: lo.Advance}, nil
 }
 
