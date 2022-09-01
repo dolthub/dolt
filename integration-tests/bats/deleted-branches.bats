@@ -24,10 +24,6 @@ make_it() {
 @test "deleted-branches: can checkout existing branch after checked out branch is deleted" {
     make_it
 
-    run dolt sql -q 'delete from dolt_branches where name = "main"'
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "read-only" ]] || false
-
     dolt sql -q 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");'
 
     dolt branch -av
