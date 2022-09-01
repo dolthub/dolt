@@ -214,6 +214,12 @@ func (m Map) IterOrdinalRange(ctx context.Context, start, stop uint64) (MapIter,
 	return m.tuples.iterOrdinalRange(ctx, start, stop)
 }
 
+// FetchOrdinalRange fetches all leaf Nodes for the ordinal range beginning at |start|
+// and ending before |stop| and returns an iterator over their Items.
+func (m Map) FetchOrdinalRange(ctx context.Context, start, stop uint64) (MapIter, error) {
+	return m.tuples.fetchOrdinalRange(ctx, start, stop)
+}
+
 // IterRange returns a mutableMapIter that iterates over a Range.
 func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 	if rng.IsPointLookup(m.keyDesc) {
@@ -272,6 +278,10 @@ func (m Map) Node() tree.Node {
 // Pool returns the pool.BuffPool of the underlying tuples' tree.NodeStore
 func (m Map) Pool() pool.BuffPool {
 	return m.tuples.ns.Pool()
+}
+
+func (m Map) CompareItems(left, right tree.Item) int {
+	return m.keyDesc.Compare(val.Tuple(left), val.Tuple(right))
 }
 
 func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup, error) {

@@ -274,7 +274,7 @@ func (t *ImmutableTree) load(ctx context.Context) error {
 			return err
 		}
 		if leaf {
-			t.buf = append(t.buf, n.getValue(0)...)
+			t.buf = append(t.buf, n.GetValue(0)...)
 		}
 		return nil
 	})

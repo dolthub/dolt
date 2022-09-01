@@ -16,6 +16,7 @@ package tree
 
 import (
 	"context"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -31,6 +32,9 @@ const (
 type NodeStore interface {
 	// Read reads a prolly tree Node from the store.
 	Read(ctx context.Context, ref hash.Hash) (Node, error)
+
+	// ReadMany reads many prolly tree Nodes from the store.
+	ReadMany(ctx context.Context, refs hash.HashSlice) ([]Node, error)
 
 	// Write writes a prolly tree Node to the store.
 	Write(ctx context.Context, nd Node) (hash.Hash, error)
@@ -79,6 +83,44 @@ func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 	ns.cache.insert(c)
 
 	return NodeFromBytes(c.Data())
+}
+
+// ReadMany implements NodeStore.
+func (ns nodeStore) ReadMany(ctx context.Context, refs hash.HashSlice) ([]Node, error) {
+	found := make(map[hash.Hash]chunks.Chunk)
+	gets := hash.HashSet{}
+
+	for _, r := range refs {
+		c, ok := ns.cache.get(r)
+		if ok {
+			found[r] = c
+		} else {
+			gets.Insert(r)
+		}
+	}
+
+	mu := new(sync.Mutex)
+	err := ns.store.GetMany(ctx, gets, func(ctx context.Context, chunk *chunks.Chunk) {
+		mu.Lock()
+		found[chunk.Hash()] = *chunk
+		mu.Unlock()
+		ns.cache.insert(*chunk)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	nodes := make([]Node, len(refs))
+	for i, r := range refs {
+		c, ok := found[r]
+		if ok {
+			nodes[i], err = NodeFromBytes(c.Data())
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return nodes, nil
 }
 
 // Write implements NodeStore.

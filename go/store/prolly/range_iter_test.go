@@ -437,7 +437,7 @@ func intTuple(ints ...int32) val.Tuple {
 	return tb.Build(sharedPool)
 }
 
-func testIterOrdinalRange(t *testing.T, om ordinalMap, tuples [][2]val.Tuple) {
+func testIterOrdinalRange(t *testing.T, om Map, tuples [][2]val.Tuple) {
 	cnt := len(tuples)
 	t.Run("test two sided bounds", func(t *testing.T) {
 		bounds := make([][2]int, 100)
@@ -459,36 +459,56 @@ func testIterOrdinalRange(t *testing.T, om ordinalMap, tuples [][2]val.Tuple) {
 	})
 }
 
-func testIterOrdinalRangeWithBounds(t *testing.T, om ordinalMap, tuples [][2]val.Tuple, bounds [][2]int) {
+func testIterOrdinalRangeWithBounds(t *testing.T, om Map, tuples [][2]val.Tuple, bounds [][2]int) {
 	ctx := context.Background()
-	for _, bound := range bounds {
-		start, stop := bound[0], bound[1]
-		if start > stop {
-			start, stop = stop, start
-		}
-		if start == stop {
-			continue
-		}
-
-		expected := tuples[start:stop]
-
-		iter, err := om.IterOrdinalRange(ctx, uint64(start), uint64(stop))
-		require.NoError(t, err)
-
-		var actual [][2]val.Tuple
-		var k, v val.Tuple
-
-		for {
-			k, v, err = iter.Next(ctx)
-			if err == io.EOF {
-				break
+	t.Run("IterOrdinalRange", func(t *testing.T) {
+		for _, bound := range bounds {
+			start, stop := bound[0], bound[1]
+			if start > stop {
+				start, stop = stop, start
+			} else if start == stop {
+				continue
 			}
+			expected := tuples[start:stop]
+
+			iter, err := om.IterOrdinalRange(ctx, uint64(start), uint64(stop))
 			require.NoError(t, err)
-			actual = append(actual, [2]val.Tuple{k, v})
+			actual := iterOrdinalRange(t, ctx, iter)
+			assert.Equal(t, len(expected), len(actual),
+				"expected equal tuple slices for bounds (%d, %d)", start, stop)
+			assert.Equal(t, expected, actual)
 		}
-		assert.Equal(t, len(expected), len(actual),
-			"expected equal tuple slices for bounds (%d, %d)", start, stop)
-		assert.Equal(t, expected, actual)
-		assert.Equal(t, io.EOF, err)
+	})
+	t.Run("FetchOrdinalRange", func(t *testing.T) {
+		for _, bound := range bounds {
+			start, stop := bound[0], bound[1]
+			if start > stop {
+				start, stop = stop, start
+			} else if start == stop {
+				continue
+			}
+			expected := tuples[start:stop]
+
+			iter, err := om.FetchOrdinalRange(ctx, uint64(start), uint64(stop))
+			require.NoError(t, err)
+			actual := iterOrdinalRange(t, ctx, iter)
+			assert.Equal(t, len(expected), len(actual),
+				"expected equal tuple slices for bounds (%d, %d)", start, stop)
+			assert.Equal(t, expected, actual)
+		}
+	})
+}
+
+func iterOrdinalRange(t *testing.T, ctx context.Context, iter MapIter) (actual [][2]val.Tuple) {
+	for {
+		k, v, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		assert.NotNil(t, k)
+		assert.NotNil(t, v)
+		actual = append(actual, [2]val.Tuple{k, v})
 	}
+	return
 }

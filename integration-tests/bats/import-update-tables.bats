@@ -445,6 +445,14 @@ DELIM
     [[ "$output" = "" ]] || false
 }
 
+@test "import-update-tables: bad parquet file import errors" {
+    dolt sql -q "CREATE TABLE test_table (pk int primary key, col1 text, col2 int);"
+    echo "This is a bad parquet file" > bad.parquet
+    run dolt table import -u test_table bad.parquet
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "When attempting to move data from parquet file:bad.parquet to test_table, could not open a reader." ]] || false
+}
+
 @test "import-update-tables: Subsequent updates with --continue correctly work" {
    dolt sql -q "create table t (pk int primary key, val varchar(1))"
    cat <<DELIM > file1.csv

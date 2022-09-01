@@ -295,6 +295,41 @@ func (t orderedTree[K, V, O]) iterOrdinalRange(ctx context.Context, start, stop 
 	return &orderedTreeIter[K, V]{curr: lo, stop: stopF, step: lo.Advance}, nil
 }
 
+func (t orderedTree[K, V, O]) fetchOrdinalRange(ctx context.Context, start, stop uint64) (*orderedLeafSpanIter[K, V], error) {
+	if stop == start {
+		return &orderedLeafSpanIter[K, V]{}, nil
+	}
+	if stop < start {
+		return nil, fmt.Errorf("invalid ordinal bounds (%d, %d)", start, stop)
+	} else {
+		c, err := t.count()
+		if err != nil {
+			return nil, err
+		} else if stop > uint64(c) {
+			return nil, fmt.Errorf("stop index (%d) out of bounds", stop)
+		}
+	}
+
+	span, err := tree.FetchLeafNodeSpan(ctx, t.ns, t.root, start, stop)
+	if err != nil {
+		return nil, err
+	}
+
+	nd, leaves := span.Leaves[0], span.Leaves[1:]
+	c, s := span.LocalStart, nd.Count()
+	if len(leaves) == 0 {
+		s = span.LocalStop // one leaf span
+	}
+
+	return &orderedLeafSpanIter[K, V]{
+		nd:     nd,
+		curr:   c,
+		stop:   s,
+		leaves: leaves,
+		final:  span.LocalStop,
+	}, nil
+}
+
 // searchNode returns the smallest index where nd[i] >= query
 // Adapted from search.Sort to inline comparison.
 func (t orderedTree[K, V, O]) searchNode(query tree.Item, nd tree.Node) int {
@@ -384,5 +419,43 @@ func (it *orderedTreeIter[K, V]) iterate(ctx context.Context) (err error) {
 		it.curr = nil
 	}
 
+	return
+}
+
+type orderedLeafSpanIter[K, V ~[]byte] struct {
+	// in-progress node
+	nd tree.Node
+	// current index,
+	curr int
+	// last index for |nd|
+	stop int
+	// remaining leaves
+	leaves []tree.Node
+	// stop index in last leaf node
+	final int
+}
+
+func (s *orderedLeafSpanIter[K, V]) Next(ctx context.Context) (key K, value V, err error) {
+	if s.curr >= s.stop {
+		// |s.nd| exhausted
+		if len(s.leaves) == 0 {
+			// span exhausted
+			return nil, nil, io.EOF
+		}
+
+		s.nd = s.leaves[0]
+		s.curr = 0
+		s.stop = s.nd.Count()
+
+		s.leaves = s.leaves[1:]
+		if len(s.leaves) == 0 {
+			// |s.nd| is the last leaf
+			s.stop = s.final
+		}
+	}
+
+	key = K(s.nd.GetKey(s.curr))
+	value = V(s.nd.GetValue(s.curr))
+	s.curr++
 	return
 }

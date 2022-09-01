@@ -82,7 +82,7 @@ func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, strategy AutoReso
 // ResolveTable resolves all conflicts in the given table according to the given
 // |strategy|. It errors if the schema of the conflict version you are choosing
 // differs from the current schema.
-func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, tblName string, strategy AutoResolveStrategy) error {
+func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, tblName string, strategy AutoResolveStrategy) (err error) {
 	tbl, ok, err := root.GetTable(ctx, tblName)
 	if err != nil {
 		return err
@@ -135,11 +135,37 @@ func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 		return err
 	}
 
+	v, err := getFirstColumn(sqlCtx, eng, "SELECT @@DOLT_ALLOW_COMMIT_CONFLICTS;")
+	if err != nil {
+		return err
+	}
+	oldAllowCommitConflicts, ok := v.(int8)
+	if !ok {
+		return fmt.Errorf("unexpected type of @DOLT_ALLOW_COMMIT_CONFLICTS: %T", v)
+	}
+
+	// Resolving conflicts for one table, will not resolve conflicts on another.
+	err = execute(sqlCtx, eng, "SET DOLT_ALLOW_COMMIT_CONFLICTS = 1;")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err2 := execute(sqlCtx, eng, fmt.Sprintf("SET DOLT_ALLOW_COMMIT_CONFLICTS = %d", oldAllowCommitConflicts))
+		if err == nil {
+			err = err2
+		}
+	}()
+
 	if !schema.IsKeyless(sch) {
 		err = resolvePkTable(sqlCtx, tblName, sch, strategy, eng)
 	} else {
 		err = resolveKeylessTable(sqlCtx, tblName, sch, strategy, eng)
 	}
+	if err != nil {
+		return err
+	}
+
+	err = execute(sqlCtx, eng, "COMMIT;")
 	if err != nil {
 		return err
 	}
@@ -157,14 +183,23 @@ func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 	return nil
 }
 
-func resolvePkTable(sqlCtx *sql.Context, tblName string, sch schema.Schema, strategy AutoResolveStrategy, eng *engine.SqlEngine) error {
-	queries := getResolveQueries(strategy, tblName, sch)
-	for _, query := range queries {
-		err := execute(sqlCtx, eng, query)
+func resolvePkTable(ctx *sql.Context, tblName string, sch schema.Schema, strategy AutoResolveStrategy, eng *engine.SqlEngine) error {
+	identCols := getIdentifyingColumnNames(sch)
+	allCols := sch.GetAllCols().GetColumnNames()
+
+	switch strategy {
+	case AutoResolveStrategyOurs:
+		err := oursPKResolver(ctx, eng, tblName)
+		if err != nil {
+			return err
+		}
+	case AutoResolveStrategyTheirs:
+		err := theirsPKResolver(ctx, eng, tblName, allCols, identCols)
 		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -248,19 +283,118 @@ func resolveKeylessTable(sqlCtx *sql.Context, tblName string, sch schema.Schema,
 				return err
 			}
 		}
+	}
 
-		err = execute(sqlCtx, eng, fmt.Sprintf("DELETE FROM dolt_conflicts_%s", tblName))
+	err = execute(sqlCtx, eng, fmt.Sprintf("DELETE FROM dolt_conflicts_%s", tblName))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func oursPKResolver(sqlCtx *sql.Context, eng *engine.SqlEngine, tblName string) error {
+	del := fmt.Sprintf("DELETE FROM dolt_conflicts_%s;", tblName)
+	err := execute(sqlCtx, eng, del)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func getIdentifyingColumnNames(sch schema.Schema) []string {
+	if schema.IsKeyless(sch) {
+		return sch.GetAllCols().GetColumnNames()
+	} else {
+		return sch.GetPKCols().GetColumnNames()
+	}
+}
+
+func theirsPKResolver(sqlCtx *sql.Context, eng *engine.SqlEngine, tblName string, allCols []string, identCols []string) error {
+	dstCols := strings.Join(allCols, ", ")
+	srcCols := strings.Join(withPrefix(allCols, "their_"), ", ")
+	q1 := fmt.Sprintf(
+		`
+REPLACE INTO %s (%s) (
+	SELECT %s
+	FROM dolt_conflicts_%s
+	WHERE their_diff_type = 'modified' OR their_diff_type = 'added'
+);
+`, tblName, dstCols, srcCols, tblName)
+	err := execute(sqlCtx, eng, q1)
+	if err != nil {
+		return err
+	}
+
+	selCols := strings.Join(coalesced(identCols), ", ")
+	q2 := fmt.Sprintf("SELECT %s from dolt_conflicts_%s WHERE their_diff_type = 'removed';", selCols, tblName)
+	sch, itr, err := eng.Query(sqlCtx, q2)
+	if err != nil {
+		return err
+	}
+
+	for {
+		row, err := itr.Next(sqlCtx)
+		if err != nil && err != io.EOF {
+			return err
+		}
+		if err == io.EOF {
+			break
+		}
+		deleteFilter, err := buildFilter(identCols, row, sch)
 		if err != nil {
 			return err
 		}
-
-		err = execute(sqlCtx, eng, "COMMIT;")
+		del := fmt.Sprintf("DELETE from %s WHERE %s;", tblName, deleteFilter)
+		err = execute(sqlCtx, eng, del)
 		if err != nil {
 			return err
 		}
 	}
 
+	q3 := fmt.Sprintf("DELETE FROM dolt_conflicts_%s;", tblName)
+	err = execute(sqlCtx, eng, q3)
+	if err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func buildFilter(columns []string, row sql.Row, rowSch sql.Schema) (string, error) {
+	if len(columns) != len(row) {
+		return "", errors.New("cannot build filter since number of columns does not match number of values")
+	}
+	vals, err := sqlfmt.SqlRowAsStrings(row, rowSch)
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	var seen bool
+	for i, v := range vals {
+		_, _ = fmt.Fprintf(&b, "%s = %s", columns[i], v)
+		if seen {
+			_, _ = fmt.Fprintf(&b, "AND %s = %s", columns[i], v)
+		}
+		seen = true
+	}
+	return b.String(), nil
+}
+
+func coalesced(cols []string) []string {
+	out := make([]string, len(cols))
+	for i := range out {
+		out[i] = fmt.Sprintf("coalesce(base_%s, our_%s, their_%s)", cols[i], cols[i], cols[i])
+	}
+	return out
+}
+
+func withPrefix(arr []string, prefix string) []string {
+	out := make([]string, len(arr))
+	for i := range arr {
+		out[i] = prefix + arr[i]
+	}
+	return out
 }
 
 func execute(ctx *sql.Context, eng *engine.SqlEngine, query string) error {
@@ -275,86 +409,19 @@ func execute(ctx *sql.Context, eng *engine.SqlEngine, query string) error {
 	return nil
 }
 
-func getResolveQueries(strategy AutoResolveStrategy, tblName string, sch schema.Schema) (queries []string) {
-	identCols := getIdentifyingColumnNames(sch)
-	allCols := sch.GetAllCols().GetColumnNames()
-
-	r := autoResolverMap[strategy]
-	queries = r(tblName, allCols, identCols)
-	// auto_commit is off
-	queries = append(queries, "COMMIT;")
-
-	return
-}
-
-func getIdentifyingColumnNames(sch schema.Schema) []string {
-	if schema.IsKeyless(sch) {
-		return sch.GetAllCols().GetColumnNames()
-	} else {
-		return sch.GetPKCols().GetColumnNames()
+func getFirstColumn(ctx *sql.Context, eng *engine.SqlEngine, query string) (interface{}, error) {
+	_, itr, err := eng.Query(ctx, query)
+	if err != nil {
+		return nil, err
 	}
-}
-
-var autoResolverMap = map[AutoResolveStrategy]autoResolver{
-	AutoResolveStrategyOurs:   ours,
-	AutoResolveStrategyTheirs: theirs,
-}
-
-type autoResolver func(tblName string, allCols []string, identCols []string) []string
-
-func theirs(tblName string, allCols []string, identCols []string) []string {
-	dstCols := strings.Join(allCols, ", ")
-	srcCols := strings.Join(withPrefix(allCols, "their_"), ", ")
-	q1 := fmt.Sprintf(
-		`
-REPLACE INTO %s (%s) (
-	SELECT %s
-	FROM dolt_conflicts_%s
-	WHERE their_diff_type = 'modified' OR their_diff_type = 'added'
-);
-`, tblName, dstCols, srcCols, tblName)
-
-	q2 := fmt.Sprintf(
-		`
-DELETE t1 
-FROM %s t1 
-WHERE ( 
-	SELECT count(*) from dolt_conflicts_%s t2
-	WHERE %s AND t2.their_diff_type = 'removed'
-) > 0;
-`, tblName, tblName, buildJoinCond(identCols, "base_"))
-
-	q3 := fmt.Sprintf("DELETE FROM dolt_conflicts_%s;", tblName)
-
-	return []string{q1, q2, q3}
-}
-
-func ours(tblName string, allCols []string, identCols []string) []string {
-
-	q3 := fmt.Sprintf("DELETE FROM dolt_conflicts_%s;", tblName)
-
-	return []string{q3}
-}
-
-func buildJoinCond(identCols []string, prefix string) string {
-	b := &strings.Builder{}
-	var seenOne bool
-	for _, col := range identCols {
-		if seenOne {
-			_, _ = b.WriteString(" AND ")
-		}
-		seenOne = true
-		_, _ = fmt.Fprintf(b, "t1.%s = t2.%s%s", col, prefix, col)
+	r, err := itr.Next(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return b.String()
-}
-
-func withPrefix(arr []string, prefix string) []string {
-	out := make([]string, len(arr))
-	for i := range arr {
-		out[i] = prefix + arr[i]
+	if len(r) == 0 {
+		return nil, fmt.Errorf("no columns returned")
 	}
-	return out
+	return r[0], nil
 }
 
 func validateConstraintViolations(ctx context.Context, before, after *doltdb.RootValue, table string) error {
