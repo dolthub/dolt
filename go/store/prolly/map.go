@@ -287,6 +287,13 @@ func (m Map) GetRangeCardinality(ctx context.Context, rng Range) (uint64, error)
 	return endOrd - startOrd, nil
 }
 
+// GetKeyRangeCardinality returns the number of key-value tuples between
+// |startInclusive| and |stopExclusive|. If |startInclusive| and/or
+// |endExclusive| is null that end is unbounded.
+func (m Map) GetKeyRangeCardinality(ctx context.Context, startInclusive val.Tuple, endExclusive val.Tuple) (uint64, error) {
+	return m.tuples.getKeyRangeCardinality(ctx, startInclusive, endExclusive)
+}
+
 func (m Map) Node() tree.Node {
 	return m.tuples.root
 }

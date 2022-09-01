@@ -406,31 +406,9 @@ func (t orderedTree[K, V, O]) fetchOrdinalRange(ctx context.Context, start, stop
 }
 
 func (t orderedTree[K, V, O]) iterKeyRange(ctx context.Context, startInclusive, stopExclusive K) (*orderedTreeIter[K, V], error) {
-	var lo, hi *tree.Cursor
-	var err error
-
-	if len(startInclusive) == 0 {
-		lo, err = tree.NewCursorAtStart(ctx, t.ns, t.root)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		lo, err = tree.NewCursorAtItem(ctx, t.ns, t.root, tree.Item(startInclusive), t.searchNode)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if len(stopExclusive) == 0 {
-		hi, err = tree.NewCursorPastEnd(ctx, t.ns, t.root)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		hi, err = tree.NewCursorAtItem(ctx, t.ns, t.root, tree.Item(startInclusive), t.searchNode)
-		if err != nil {
-			return nil, err
-		}
+	lo, hi, err := t.getKeyRangeCursors(ctx, startInclusive, stopExclusive)
+	if err != nil {
+		return nil, err
 	}
 
 	stopF := func(curr *tree.Cursor) bool {
@@ -438,6 +416,57 @@ func (t orderedTree[K, V, O]) iterKeyRange(ctx context.Context, startInclusive, 
 	}
 
 	return &orderedTreeIter[K, V]{curr: lo, stop: stopF, step: lo.Advance}, nil
+}
+
+func (t orderedTree[K, V, O]) getKeyRangeCardinality(ctx context.Context, startInclusive, stopExclusive K) (uint64, error) {
+	lo, hi, err := t.getKeyRangeCursors(ctx, startInclusive, stopExclusive)
+	if err != nil {
+		return 0, err
+	}
+
+	startOrd, err := tree.GetOrdinalOfCursor(lo)
+	if err != nil {
+		return 0, err
+	}
+
+	endOrd, err := tree.GetOrdinalOfCursor(hi)
+	if err != nil {
+		return 0, err
+	}
+
+	if startOrd > endOrd {
+		return 0, nil
+	}
+
+	return endOrd - startOrd, nil
+}
+
+func (t orderedTree[K, V, O]) getKeyRangeCursors(ctx context.Context, startInclusive, stopExclusive K) (lo, hi *tree.Cursor, err error) {
+	if len(startInclusive) == 0 {
+		lo, err = tree.NewCursorAtStart(ctx, t.ns, t.root)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		lo, err = tree.NewCursorAtItem(ctx, t.ns, t.root, tree.Item(startInclusive), t.searchNode)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	if len(stopExclusive) == 0 {
+		hi, err = tree.NewCursorPastEnd(ctx, t.ns, t.root)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		hi, err = tree.NewCursorAtItem(ctx, t.ns, t.root, tree.Item(stopExclusive), t.searchNode)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return
 }
 
 // searchNode returns the smallest index where nd[i] >= query
