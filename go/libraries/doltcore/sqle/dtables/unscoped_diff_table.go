@@ -62,6 +62,31 @@ func NewUnscopedDiffTable(_ *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commi
 	return &UnscopedDiffTable{ddb: ddb, head: head, cmItr: cmItr}
 }
 
+// Resolved implements the sql.Node interface.
+func (t *UnscopedDiffTable) Resolved() bool {
+	return true
+}
+
+// Children implements the sql.Node interface.
+func (t *UnscopedDiffTable) Children() []sql.Node {
+	return nil
+}
+
+// WithChildren implements the sql.Node interface.
+func (t *UnscopedDiffTable) WithChildren(_ ...sql.Node) (sql.Node, error) {
+	return t, nil
+}
+
+// RowIter implements the sql.Node interface.
+func (t *UnscopedDiffTable) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
+	return nil, nil
+}
+
+// CheckPrivileges implements the sql.Node interface.
+func (t *UnscopedDiffTable) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+	return true
+}
+
 // Filters returns the list of filters that are applied to this table.
 func (dt *UnscopedDiffTable) Filters() []sql.Expression {
 	return dt.partitionFilters
@@ -97,8 +122,21 @@ func (dt *UnscopedDiffTable) Expressions() []sql.Expression {
 }
 
 // WithExpressions returns a new sql.Table instance with the filters applied
-func (dt *UnscopedDiffTable) WithExpressions(filters []sql.Expression) sql.Table {
-	return dt.WithFilters(nil, filters)
+func (dt *UnscopedDiffTable) WithExpressions(filters ...sql.Expression) (sql.Node, error) {
+	if dt.partitionFilters == nil {
+		dt.partitionFilters = FilterFilters(filters, ColumnPredicate(filterColumnNameSet))
+	}
+
+	if len(dt.partitionFilters) > 0 {
+		commitCheck, err := commitFilterForDiffTableFilterExprs(dt.partitionFilters)
+		if err != nil {
+			return nil, nil
+		}
+
+		dt.cmItr = doltdb.NewFilteringCommitItr(dt.cmItr, commitCheck)
+	}
+
+	return dt, nil
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant

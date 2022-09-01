@@ -85,11 +85,28 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 	}, nil
 }
 
+// Resolved implements the sql.Node interface.
 func (dt *CommitDiffTable) Resolved() bool {
 	return true
 }
 
-func (dt *CommitDiffTable) Children() bool {
+// Children implements the sql.Node interface.
+func (dt *CommitDiffTable) Children() []sql.Node {
+	return nil
+}
+
+// WithChildren implements the sql.Node interface.
+func (dt *CommitDiffTable) WithChildren(_ ...sql.Node) (sql.Node, error) {
+	return dt, nil
+}
+
+// RowIter implements the sql.Node interface.
+func (dt *CommitDiffTable) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
+	return nil, nil
+}
+
+// CheckPrivileges implements the sql.Node interface.
+func (dt *CommitDiffTable) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
 	return true
 }
 
@@ -304,9 +321,9 @@ func (dt *CommitDiffTable) Expressions() []sql.Expression {
 	return dt.Filters()
 }
 
-// WithExpressions returns a new sql.Table instance with the filters applied
-func (dt *CommitDiffTable) WithExpressions(_ []sql.Expression) sql.Table {
-	return dt
+// WithExpressions returns a new sql.Node instance with the filters applied
+func (dt *CommitDiffTable) WithExpressions(_ ...sql.Expression) (sql.Node, error) {
+	return dt, nil
 }
 
 func (dt *CommitDiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {

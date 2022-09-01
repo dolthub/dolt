@@ -53,8 +53,6 @@ var _ sql.FilteredTable = (*DiffTable)(nil)
 var _ sql.IndexedTable = (*DiffTable)(nil)
 var _ sql.ParallelizedIndexAddressableTable = (*DiffTable)(nil)
 
-//var _ sql.Expressioner = (*DiffTable)(nil)
-
 type DiffTable struct {
 	name        string
 	ddb         *doltdb.DoltDB
@@ -119,6 +117,31 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		table:            table,
 		joiner:           j,
 	}, nil
+}
+
+// Resolved implements the sql.Node interface.
+func (dt *DiffTable) Resolved() bool {
+	return true
+}
+
+// Children implements the sql.Node interface.
+func (dt *DiffTable) Children() []sql.Node {
+	return nil
+}
+
+// WithChildren implements the sql.Node interface.
+func (dt *DiffTable) WithChildren(_ ...sql.Node) (sql.Node, error) {
+	return dt, nil
+}
+
+// RowIter implements the sql.Node interface.
+func (dt *DiffTable) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
+	return nil, nil
+}
+
+// CheckPrivileges implements the sql.Node interface.
+func (dt *DiffTable) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+	return true
 }
 
 func (dt *DiffTable) Name() string {
@@ -210,8 +233,11 @@ func (dt *DiffTable) Expressions() []sql.Expression {
 }
 
 // WithExpressions returns a new sql.Table instance with the filters applied
-func (dt *DiffTable) WithExpressions(filters []sql.Expression) sql.Table {
-	return dt.WithFilters(nil, filters)
+func (dt *DiffTable) WithExpressions(filters ...sql.Expression) (sql.Node, error) {
+	if dt.partitionFilters == nil {
+		dt.partitionFilters = FilterFilters(filters, ColumnPredicate(commitMetaColumns))
+	}
+	return dt, nil
 }
 
 func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {

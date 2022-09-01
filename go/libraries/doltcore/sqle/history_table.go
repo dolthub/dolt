@@ -134,6 +134,31 @@ func historyTableSchema(tableName string, table *DoltTable) sql.Schema {
 	return newSch
 }
 
+// Resolved implements the sql.Node interface.
+func (ht *HistoryTable) Resolved() bool {
+	return true
+}
+
+// Children implements the sql.Node interface.
+func (ht *HistoryTable) Children() []sql.Node {
+	return nil
+}
+
+// WithChildren implements the sql.Node interface.
+func (ht *HistoryTable) WithChildren(_ ...sql.Node) (sql.Node, error) {
+	return ht, nil
+}
+
+// RowIter implements the sql.Node interface.
+func (ht *HistoryTable) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
+	return nil, nil
+}
+
+// CheckPrivileges implements the sql.Node interface.
+func (ht *HistoryTable) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+	return true
+}
+
 // HandledFilters returns the list of filters that will be handled by the table itself
 func (ht *HistoryTable) HandledFilters(filters []sql.Expression) []sql.Expression {
 	ht.commitFilters = dtables.FilterFilters(filters, dtables.ColumnPredicate(historyTableCommitMetaCols))
@@ -169,8 +194,20 @@ func (ht *HistoryTable) Expressions() []sql.Expression {
 }
 
 // WithExpressions returns a new sql.Table instance with the filters applied. We handle filters on any commit columns.
-func (ht HistoryTable) WithExpressions(ctx *sql.Context, filters []sql.Expression) sql.Table {
-	return ht.WithFilters(nil, filters)
+func (ht *HistoryTable) WithExpressions(filters ...sql.Expression) (sql.Node, error) {
+	if ht.commitFilters == nil {
+		ht.commitFilters = dtables.FilterFilters(filters, dtables.ColumnPredicate(historyTableCommitMetaCols))
+	}
+
+	if len(ht.commitFilters) > 0 {
+		commitCheck, err := commitFilterForExprs(nil, ht.commitFilters)
+		if err != nil {
+			return nil, err
+		}
+
+		ht.cmItr = doltdb.NewFilteringCommitItr(ht.cmItr, commitCheck)
+	}
+	return ht, nil
 }
 
 var historyTableCommitMetaCols = set.NewStrSet([]string{CommitHashCol, CommitDateCol, CommitterCol})
