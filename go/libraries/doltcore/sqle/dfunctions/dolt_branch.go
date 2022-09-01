@@ -258,16 +258,23 @@ func loadConfig(ctx *sql.Context) *env.DoltCliConfig {
 }
 
 func createNewBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults) error {
-	if apr.NArg() != 1 {
-		return InvalidArgErr
+	var branchName string
+	var startPt = "HEAD"
+	if apr.NArg() == 1 {
+		branchName = apr.Arg(0)
+	} else if apr.NArg() == 2 {
+		branchName = apr.Arg(0)
+		startPt = apr.Arg(1)
+		if len(startPt) == 0 {
+			return InvalidArgErr
+		}
 	}
 
-	branchName := apr.Arg(0)
 	if len(branchName) == 0 {
 		return EmptyBranchNameErr
 	}
 
-	return actions.CreateBranchWithStartPt(ctx, dbData, branchName, "HEAD", apr.Contains(cli.ForceFlag))
+	return actions.CreateBranchWithStartPt(ctx, dbData, branchName, startPt, apr.Contains(cli.ForceFlag))
 }
 
 func copyBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults) error {
