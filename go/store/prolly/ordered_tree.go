@@ -356,6 +356,16 @@ func (t orderedTree[K, V, O]) compareItems(left, right tree.Item) int {
 	return t.order.Compare(K(left), K(right))
 }
 
+// getOrdinal returns the smallest ordinal position at which the key >= |query|.
+func (t orderedTree[K, V, O]) getOrdinal(ctx context.Context, query K) (uint64, error) {
+	cur, err := tree.NewCursorAtItem(ctx, t.ns, t.root, tree.Item(query), t.searchNode)
+	if err != nil {
+		return 0, err
+	}
+
+	return tree.GetOrdinalOfCursor(cur)
+}
+
 var _ tree.ItemSearchFn = orderedTree[tree.Item, tree.Item, ordering[tree.Item]]{}.searchNode
 var _ tree.CompareFn = orderedTree[tree.Item, tree.Item, ordering[tree.Item]]{}.compareItems
 

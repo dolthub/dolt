@@ -233,6 +233,44 @@ func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 	return filteredIter{iter: iter, rng: rng}, nil
 }
 
+// GetOrdinal returns the smallest ordinal position at which the key >= |query|.
+func (m Map) GetOrdinal(ctx context.Context, query val.Tuple) (uint64, error) {
+	return m.tuples.getOrdinal(ctx, query)
+}
+
+// GetRangeCardinality returns the number of key-value tuples in |rng|.
+func (m Map) GetRangeCardinality(ctx context.Context, rng Range) (uint64, error) {
+	start, err := tree.NewCursorFromSearchFn(ctx, m.tuples.ns, m.tuples.root, rangeStartSearchFn(rng))
+	if err != nil {
+		return 0, err
+	}
+
+	stop, err := tree.NewCursorFromSearchFn(ctx, m.tuples.ns, m.tuples.root, rangeStopSearchFn(rng))
+	if err != nil {
+		return 0, err
+	}
+
+	stopF := func(curr *tree.Cursor) bool {
+		return curr.Compare(stop) >= 0
+	}
+
+	if stopF(start) {
+		return 0, nil // empty range
+	}
+
+	startOrd, err := tree.GetOrdinalOfCursor(start)
+	if err != nil {
+		return 0, err
+	}
+
+	endOrd, err := tree.GetOrdinalOfCursor(stop)
+	if err != nil {
+		return 0, err
+	}
+
+	return endOrd - startOrd, nil
+}
+
 func (m Map) Node() tree.Node {
 	return m.tuples.root
 }
