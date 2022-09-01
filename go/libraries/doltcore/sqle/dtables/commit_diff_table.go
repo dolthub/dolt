@@ -244,9 +244,12 @@ func (dt *CommitDiffTable) rootValForFilter(ctx *sql.Context, eqFilter *expressi
 func (dt *CommitDiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
 	var commitFilters []sql.Expression
 	for _, filter := range filters {
-		isCommitFilter := false
+		hasCommitFilters := false
 
 		if eqFilter, isEquality := filter.(*expression.Equals); isEquality {
+			if eqFilter == nil {
+				continue
+			}
 			for _, e := range []sql.Expression{eqFilter.Left(), eqFilter.Right()} {
 				if val, ok := e.(*expression.GetField); ok {
 					switch strings.ToLower(val.Name()) {
@@ -255,21 +258,21 @@ func (dt *CommitDiffTable) HandledFilters(filters []sql.Expression) []sql.Expres
 							dt.requiredFilterErr = ErrExactlyOneToCommit
 						}
 
-						isCommitFilter = true
+						hasCommitFilters = true
 						dt.toCommitFilter = eqFilter
 					case fromCommit:
 						if dt.fromCommitFilter != nil {
 							dt.requiredFilterErr = ErrExactlyOneFromCommit
 						}
 
-						isCommitFilter = true
+						hasCommitFilters = true
 						dt.fromCommitFilter = eqFilter
 					}
 				}
 			}
 		}
 
-		if isCommitFilter {
+		if hasCommitFilters {
 			commitFilters = append(commitFilters, filter)
 		}
 	}
@@ -279,10 +282,6 @@ func (dt *CommitDiffTable) HandledFilters(filters []sql.Expression) []sql.Expres
 
 // Filters returns the list of filters that are applied to this table.
 func (dt *CommitDiffTable) Filters() []sql.Expression {
-	if dt.toCommitFilter == nil || dt.fromCommitFilter == nil {
-		return nil
-	}
-
 	return []sql.Expression{dt.toCommitFilter, dt.fromCommitFilter}
 }
 
