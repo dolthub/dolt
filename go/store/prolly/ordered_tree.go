@@ -115,6 +115,81 @@ func rangeDiffOrderedTrees[K, V ~[]byte, O ordering[K]](
 	return err
 }
 
+func diffKeyRangeOrderedTrees[K, V ~[]byte, O ordering[K]](
+	ctx context.Context,
+	from, to orderedTree[K, V, O],
+	startInclusive, stopExclusive K,
+	cb DiffFn,
+) error {
+	var fromStart, fromStop, toStart, toStop *tree.Cursor
+	var err error
+
+	if len(startInclusive) == 0 {
+		fromStart, err = tree.NewCursorAtStart(ctx, from.ns, from.root)
+		if err != nil {
+			return err
+		}
+
+		toStart, err = tree.NewCursorAtStart(ctx, to.ns, to.root)
+		if err != nil {
+			return err
+		}
+	} else {
+		fromStart, err = tree.NewCursorAtItem(ctx, from.ns, from.root, tree.Item(startInclusive), from.searchNode)
+		if err != nil {
+			return err
+		}
+
+		toStart, err = tree.NewCursorAtItem(ctx, to.ns, to.root, tree.Item(startInclusive), to.searchNode)
+		if err != nil {
+			return err
+		}
+	}
+
+	if len(stopExclusive) == 0 {
+		fromStop, err = tree.NewCursorPastEnd(ctx, from.ns, from.root)
+		if err != nil {
+			return err
+		}
+
+		toStop, err = tree.NewCursorPastEnd(ctx, to.ns, to.root)
+		if err != nil {
+			return err
+		}
+	} else {
+		fromStop, err = tree.NewCursorAtItem(ctx, from.ns, from.root, tree.Item(stopExclusive), from.searchNode)
+		if err != nil {
+			return err
+		}
+
+		toStop, err = tree.NewCursorAtItem(ctx, to.ns, to.root, tree.Item(stopExclusive), to.searchNode)
+		if err != nil {
+			return err
+		}
+	}
+
+	cfn := func(left, right tree.Item) int {
+		return from.order.Compare(K(left), K(right))
+	}
+
+	differ, err := tree.DifferFromCursors(fromStart, toStart, fromStop, toStop, cfn)
+	if err != nil {
+		return err
+	}
+
+	for {
+		var diff tree.Diff
+		if diff, err = differ.Next(ctx); err != nil {
+			break
+		}
+
+		if err = cb(ctx, diff); err != nil {
+			break
+		}
+	}
+	return err
+}
+
 func mergeOrderedTrees[K, V ~[]byte, O ordering[K], S message.Serializer](
 	ctx context.Context,
 	l, r, base orderedTree[K, V, O],
@@ -328,6 +403,41 @@ func (t orderedTree[K, V, O]) fetchOrdinalRange(ctx context.Context, start, stop
 		leaves: leaves,
 		final:  span.LocalStop,
 	}, nil
+}
+
+func (t orderedTree[K, V, O]) iterKeyRange(ctx context.Context, startInclusive, stopExclusive K) (*orderedTreeIter[K, V], error) {
+	var lo, hi *tree.Cursor
+	var err error
+
+	if len(startInclusive) == 0 {
+		lo, err = tree.NewCursorAtStart(ctx, t.ns, t.root)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		lo, err = tree.NewCursorAtItem(ctx, t.ns, t.root, tree.Item(startInclusive), t.searchNode)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(stopExclusive) == 0 {
+		hi, err = tree.NewCursorPastEnd(ctx, t.ns, t.root)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		hi, err = tree.NewCursorAtItem(ctx, t.ns, t.root, tree.Item(startInclusive), t.searchNode)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	stopF := func(curr *tree.Cursor) bool {
+		return curr.Compare(hi) >= 0
+	}
+
+	return &orderedTreeIter[K, V]{curr: lo, stop: stopF, step: lo.Advance}, nil
 }
 
 // searchNode returns the smallest index where nd[i] >= query
