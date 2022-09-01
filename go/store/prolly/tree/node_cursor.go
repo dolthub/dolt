@@ -155,6 +155,14 @@ func GetOrdinalOfCursor(curr *Cursor) (ord uint64, err error) {
 	for curr.parent != nil {
 		curr = curr.parent
 
+		// If a parent has been invalidated past end, act like we were at the
+		// last subtree.
+		if curr.idx >= curr.nd.Count() {
+			curr.skipToNodeEnd()
+		} else if curr.idx < 0 {
+			return 0, fmt.Errorf("found invalid parent cursor behind node start")
+		}
+
 		curr.nd, err = curr.nd.loadSubtrees()
 		if err != nil {
 			return 0, err

@@ -132,6 +132,16 @@ func testGetOrdinalOfCursor(t *testing.T, count int) {
 	require.NoError(t, err)
 
 	require.Equal(t, uint64(len(tuples)), ord)
+
+	// A cursor past the end should return an ordinal count equal to number of
+	// nodes.
+	curr, err = NewCursorPastEnd(ctx, ns, nd)
+	require.NoError(t, err)
+
+	ord, err = GetOrdinalOfCursor(curr)
+	require.NoError(t, err)
+
+	require.Equal(t, uint64(len(tuples)), ord)
 }
 
 func randomTree(t *testing.T, count int) (Node, [][2]Item, NodeStore) {
