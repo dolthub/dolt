@@ -313,7 +313,7 @@ func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 		require.NoError(t, err)
 
 		if m, ok := om.(Map); ok {
-			ord, err := m.GetOrdinal(ctx, kv[0])
+			ord, err := m.GetOrdinalForKey(ctx, kv[0])
 			require.NoError(t, err)
 			assert.Equal(t, uint64(i), ord)
 		}
@@ -340,7 +340,7 @@ func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 				}
 			}
 
-			ord, err := m.GetOrdinal(ctx, kv[0])
+			ord, err := m.GetOrdinalForKey(ctx, kv[0])
 			require.NoError(t, err)
 			assert.Equal(t, uint64(exp), ord)
 		}

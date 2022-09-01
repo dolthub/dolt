@@ -118,13 +118,13 @@ func rangeDiffOrderedTrees[K, V ~[]byte, O ordering[K]](
 func diffKeyRangeOrderedTrees[K, V ~[]byte, O ordering[K]](
 	ctx context.Context,
 	from, to orderedTree[K, V, O],
-	startInclusive, stopExclusive K,
+	start, stop K,
 	cb DiffFn,
 ) error {
 	var fromStart, fromStop, toStart, toStop *tree.Cursor
 	var err error
 
-	if len(startInclusive) == 0 {
+	if len(start) == 0 {
 		fromStart, err = tree.NewCursorAtStart(ctx, from.ns, from.root)
 		if err != nil {
 			return err
@@ -135,18 +135,18 @@ func diffKeyRangeOrderedTrees[K, V ~[]byte, O ordering[K]](
 			return err
 		}
 	} else {
-		fromStart, err = tree.NewCursorAtItem(ctx, from.ns, from.root, tree.Item(startInclusive), from.searchNode)
+		fromStart, err = tree.NewCursorAtItem(ctx, from.ns, from.root, tree.Item(start), from.searchNode)
 		if err != nil {
 			return err
 		}
 
-		toStart, err = tree.NewCursorAtItem(ctx, to.ns, to.root, tree.Item(startInclusive), to.searchNode)
+		toStart, err = tree.NewCursorAtItem(ctx, to.ns, to.root, tree.Item(start), to.searchNode)
 		if err != nil {
 			return err
 		}
 	}
 
-	if len(stopExclusive) == 0 {
+	if len(stop) == 0 {
 		fromStop, err = tree.NewCursorPastEnd(ctx, from.ns, from.root)
 		if err != nil {
 			return err
@@ -157,12 +157,12 @@ func diffKeyRangeOrderedTrees[K, V ~[]byte, O ordering[K]](
 			return err
 		}
 	} else {
-		fromStop, err = tree.NewCursorAtItem(ctx, from.ns, from.root, tree.Item(stopExclusive), from.searchNode)
+		fromStop, err = tree.NewCursorAtItem(ctx, from.ns, from.root, tree.Item(stop), from.searchNode)
 		if err != nil {
 			return err
 		}
 
-		toStop, err = tree.NewCursorAtItem(ctx, to.ns, to.root, tree.Item(stopExclusive), to.searchNode)
+		toStop, err = tree.NewCursorAtItem(ctx, to.ns, to.root, tree.Item(stop), to.searchNode)
 		if err != nil {
 			return err
 		}
@@ -405,8 +405,8 @@ func (t orderedTree[K, V, O]) fetchOrdinalRange(ctx context.Context, start, stop
 	}, nil
 }
 
-func (t orderedTree[K, V, O]) iterKeyRange(ctx context.Context, startInclusive, stopExclusive K) (*orderedTreeIter[K, V], error) {
-	lo, hi, err := t.getKeyRangeCursors(ctx, startInclusive, stopExclusive)
+func (t orderedTree[K, V, O]) iterKeyRange(ctx context.Context, start, stop K) (*orderedTreeIter[K, V], error) {
+	lo, hi, err := t.getKeyRangeCursors(ctx, start, stop)
 	if err != nil {
 		return nil, err
 	}
@@ -418,8 +418,8 @@ func (t orderedTree[K, V, O]) iterKeyRange(ctx context.Context, startInclusive, 
 	return &orderedTreeIter[K, V]{curr: lo, stop: stopF, step: lo.Advance}, nil
 }
 
-func (t orderedTree[K, V, O]) getKeyRangeCardinality(ctx context.Context, startInclusive, stopExclusive K) (uint64, error) {
-	lo, hi, err := t.getKeyRangeCursors(ctx, startInclusive, stopExclusive)
+func (t orderedTree[K, V, O]) getKeyRangeCardinality(ctx context.Context, start, stop K) (uint64, error) {
+	lo, hi, err := t.getKeyRangeCursors(ctx, start, stop)
 	if err != nil {
 		return 0, err
 	}
@@ -495,8 +495,8 @@ func (t orderedTree[K, V, O]) compareItems(left, right tree.Item) int {
 	return t.order.Compare(K(left), K(right))
 }
 
-// getOrdinal returns the smallest ordinal position at which the key >= |query|.
-func (t orderedTree[K, V, O]) getOrdinal(ctx context.Context, query K) (uint64, error) {
+// getOrdinalForKey returns the smallest ordinal position at which the key >= |query|.
+func (t orderedTree[K, V, O]) getOrdinalForKey(ctx context.Context, query K) (uint64, error) {
 	cur, err := tree.NewCursorAtItem(ctx, t.ns, t.root, tree.Item(query), t.searchNode)
 	if err != nil {
 		return 0, err

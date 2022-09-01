@@ -127,7 +127,7 @@ func testKeyRngMapDiffErrorHandling(t *testing.T, m Map, test keyRangeDiffTest) 
 	ctx := context.Background()
 
 	expErr := errors.New("error case")
-	err := DiffKeyRangeMaps(ctx, m, m, test.keyRange.startInclusive, test.keyRange.stopExclusive, func(ctx context.Context, diff tree.Diff) error {
+	err := DiffMapsKeyRange(ctx, m, m, test.keyRange.start, test.keyRange.stop, func(ctx context.Context, diff tree.Diff) error {
 		return expErr
 	})
 	require.Error(t, expErr, err)
@@ -136,7 +136,7 @@ func testKeyRngMapDiffErrorHandling(t *testing.T, m Map, test keyRangeDiffTest) 
 func testKeyRngEqualMapDiff(t *testing.T, m Map, rngTest keyRangeDiffTest) {
 	ctx := context.Background()
 	var counter int
-	err := DiffKeyRangeMaps(ctx, m, m, rngTest.keyRange.startInclusive, rngTest.keyRange.stopExclusive, func(ctx context.Context, diff tree.Diff) error {
+	err := DiffMapsKeyRange(ctx, m, m, rngTest.keyRange.start, rngTest.keyRange.stop, func(ctx context.Context, diff tree.Diff) error {
 		counter++
 		return nil
 	})
@@ -151,7 +151,7 @@ func testKeyRngMapDiffAgainstEmpty(t *testing.T, scale int, rngTest keyRangeDiff
 
 	inRange := getPairsInKeyRange(tuples, rngTest.keyRange)
 	cnt := 0
-	err := DiffKeyRangeMaps(ctx, m.(Map), empty.(Map), rngTest.keyRange.startInclusive, rngTest.keyRange.stopExclusive, func(ctx context.Context, diff tree.Diff) error {
+	err := DiffMapsKeyRange(ctx, m.(Map), empty.(Map), rngTest.keyRange.start, rngTest.keyRange.stop, func(ctx context.Context, diff tree.Diff) error {
 		assert.Equal(t, inRange[cnt][0], val.Tuple(diff.Key))
 		assert.Equal(t, inRange[cnt][1], val.Tuple(diff.From))
 		assert.Nil(t, val.Tuple(diff.To))
@@ -163,7 +163,7 @@ func testKeyRngMapDiffAgainstEmpty(t *testing.T, scale int, rngTest keyRangeDiff
 	assert.Equal(t, len(inRange), cnt)
 
 	cnt = 0
-	err = DiffKeyRangeMaps(ctx, empty.(Map), m.(Map), rngTest.keyRange.startInclusive, rngTest.keyRange.stopExclusive, func(ctx context.Context, diff tree.Diff) error {
+	err = DiffMapsKeyRange(ctx, empty.(Map), m.(Map), rngTest.keyRange.start, rngTest.keyRange.stop, func(ctx context.Context, diff tree.Diff) error {
 		assert.Equal(t, inRange[cnt][0], val.Tuple(diff.Key))
 		assert.Equal(t, inRange[cnt][1], val.Tuple(diff.To))
 		assert.Nil(t, val.Tuple(diff.From))
@@ -189,7 +189,7 @@ func testKeyRngDeleteDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numDelet
 	to := makeMapWithDeletes(t, from, deletes...)
 
 	cnt := 0
-	err := DiffKeyRangeMaps(ctx, from, to, rngTest.keyRange.startInclusive, rngTest.keyRange.stopExclusive, func(ctx context.Context, diff tree.Diff) error {
+	err := DiffMapsKeyRange(ctx, from, to, rngTest.keyRange.start, rngTest.keyRange.stop, func(ctx context.Context, diff tree.Diff) error {
 		assert.Equal(t, tree.RemovedDiff, diff.Type)
 		assert.Equal(t, inRange[cnt][0], val.Tuple(diff.Key))
 		assert.True(t, rngTest.keyRange.includes(val.Tuple(diff.Key)))
@@ -206,7 +206,7 @@ func testKeyRngInsertDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numInser
 
 	inRange := getPairsInKeyRange(inserts, rngTest.keyRange)
 	cnt := 0
-	err := DiffKeyRangeMaps(ctx, from, to, rngTest.keyRange.startInclusive, rngTest.keyRange.stopExclusive, func(ctx context.Context, diff tree.Diff) error {
+	err := DiffMapsKeyRange(ctx, from, to, rngTest.keyRange.start, rngTest.keyRange.stop, func(ctx context.Context, diff tree.Diff) error {
 		if !assert.Equal(t, tree.AddedDiff, diff.Type) {
 			fmt.Println("")
 		}
@@ -243,7 +243,7 @@ func testKeyRngUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdat
 	}
 
 	var cnt int
-	err := DiffKeyRangeMaps(ctx, from, to, rngTest.keyRange.startInclusive, rngTest.keyRange.stopExclusive, func(ctx context.Context, diff tree.Diff) error {
+	err := DiffMapsKeyRange(ctx, from, to, rngTest.keyRange.start, rngTest.keyRange.stop, func(ctx context.Context, diff tree.Diff) error {
 		assert.Equal(t, tree.ModifiedDiff, diff.Type)
 		assert.Equal(t, inRange[cnt][0], val.Tuple(diff.Key))
 		assert.Equal(t, inRange[cnt][1], val.Tuple(diff.From))
@@ -265,7 +265,7 @@ func makeRandomBoundedKeyRange(kd val.TupleDesc, tuples [][2]val.Tuple) keyRange
 	start := tuples[i][0]
 	stop := tuples[j][0]
 
-	kR := keyRange{kd: kd, startInclusive: start, stopExclusive: stop}
+	kR := keyRange{kd: kd, start: start, stop: stop}
 
 	return keyRangeDiffTest{tuples: tuples, keyRange: kR}
 }
@@ -274,7 +274,7 @@ func makeRandomUnboundedLowerKeyRange(kd val.TupleDesc, tuples [][2]val.Tuple) k
 	i := rand.Intn(len(tuples))
 	end := tuples[i][0]
 
-	kR := keyRange{kd: kd, stopExclusive: end}
+	kR := keyRange{kd: kd, stop: end}
 
 	return keyRangeDiffTest{tuples: tuples, keyRange: kR}
 }
@@ -283,7 +283,7 @@ func makeRandomUnboundedUpperKeyRange(kd val.TupleDesc, tuples [][2]val.Tuple) k
 	i := rand.Intn(len(tuples))
 	start := tuples[i][0]
 
-	kR := keyRange{kd: kd, startInclusive: start}
+	kR := keyRange{kd: kd, start: start}
 
 	return keyRangeDiffTest{tuples: tuples, keyRange: kR}
 }
@@ -295,7 +295,7 @@ func makeBoundedKeyRangeWithMissingKeys(t *testing.T, m Map, kd val.TupleDesc, v
 		hi, low = low, hi
 	}
 
-	kR := keyRange{kd: kd, startInclusive: low, stopExclusive: hi}
+	kR := keyRange{kd: kd, start: low, stop: hi}
 
 	return keyRangeDiffTest{tuples: tuples, keyRange: kR}
 }
@@ -310,16 +310,16 @@ func getPairsInKeyRange(tuples [][2]val.Tuple, rng keyRange) (keys [][2]val.Tupl
 }
 
 type keyRange struct {
-	startInclusive val.Tuple
-	stopExclusive  val.Tuple
-	kd             val.TupleDesc
+	start val.Tuple
+	stop  val.Tuple
+	kd    val.TupleDesc
 }
 
 func (kR keyRange) includes(k val.Tuple) bool {
-	if len(kR.startInclusive) != 0 && kR.kd.Compare(k, kR.startInclusive) < 0 {
+	if len(kR.start) != 0 && kR.kd.Compare(k, kR.start) < 0 {
 		return false
 	}
-	if len(kR.stopExclusive) != 0 && kR.kd.Compare(k, kR.stopExclusive) >= 0 {
+	if len(kR.stop) != 0 && kR.kd.Compare(k, kR.stop) >= 0 {
 		return false
 	}
 	return true

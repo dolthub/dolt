@@ -130,11 +130,11 @@ func RangeDiffMaps(ctx context.Context, from, to Map, rng Range, cb DiffFn) erro
 	return rangeDiffOrderedTrees(ctx, from.tuples, to.tuples, rng, cb)
 }
 
-// DiffKeyRangeMaps returns diffs within a physical key range. The key range is
-// specified by |startInclusive| and |stopExclusive|. If |startInclusive| or
-// |stopExclusive| is null, then the range is unbounded towards that end.
-func DiffKeyRangeMaps(ctx context.Context, from, to Map, startInclusive, stopExclusive val.Tuple, cb DiffFn) error {
-	return diffKeyRangeOrderedTrees(ctx, from.tuples, to.tuples, startInclusive, stopExclusive, cb)
+// DiffMapsKeyRange returns diffs within a physical key range. The key range is
+// specified by |start| and |stop|. If |start| and/or |stop| is null, then the
+// range is unbounded towards that end.
+func DiffMapsKeyRange(ctx context.Context, from, to Map, start, stop val.Tuple, cb DiffFn) error {
+	return diffKeyRangeOrderedTrees(ctx, from.tuples, to.tuples, start, stop, cb)
 }
 
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
@@ -242,54 +242,21 @@ func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 	return filteredIter{iter: iter, rng: rng}, nil
 }
 
-// IterKeyRange iterates over a physical key range defined by |startInclusive|
-// and |stopExclusive|. If |startInclusive| and/or |stopExclusive| is nil, the
-// range will be open towards that end.
-func (m Map) IterKeyRange(ctx context.Context, startInclusive, stopExclusive val.Tuple) (MapIter, error) {
-	return m.tuples.iterKeyRange(ctx, startInclusive, stopExclusive)
+// IterKeyRange iterates over a physical key range defined by |start| and
+// |stop|. If |startInclusive| and/or |stop| is nil, the range will be open
+// towards that end.
+func (m Map) IterKeyRange(ctx context.Context, start, stop val.Tuple) (MapIter, error) {
+	return m.tuples.iterKeyRange(ctx, start, stop)
 }
 
-// GetOrdinal returns the smallest ordinal position at which the key >= |query|.
-func (m Map) GetOrdinal(ctx context.Context, query val.Tuple) (uint64, error) {
-	return m.tuples.getOrdinal(ctx, query)
+// GetOrdinalForKey returns the smallest ordinal position at which the key >=
+// |query|.
+func (m Map) GetOrdinalForKey(ctx context.Context, query val.Tuple) (uint64, error) {
+	return m.tuples.getOrdinalForKey(ctx, query)
 }
 
-// GetRangeCardinality returns the number of key-value tuples in |rng|.
-func (m Map) GetRangeCardinality(ctx context.Context, rng Range) (uint64, error) {
-	start, err := tree.NewCursorFromSearchFn(ctx, m.tuples.ns, m.tuples.root, rangeStartSearchFn(rng))
-	if err != nil {
-		return 0, err
-	}
-
-	stop, err := tree.NewCursorFromSearchFn(ctx, m.tuples.ns, m.tuples.root, rangeStopSearchFn(rng))
-	if err != nil {
-		return 0, err
-	}
-
-	stopF := func(curr *tree.Cursor) bool {
-		return curr.Compare(stop) >= 0
-	}
-
-	if stopF(start) {
-		return 0, nil // empty range
-	}
-
-	startOrd, err := tree.GetOrdinalOfCursor(start)
-	if err != nil {
-		return 0, err
-	}
-
-	endOrd, err := tree.GetOrdinalOfCursor(stop)
-	if err != nil {
-		return 0, err
-	}
-
-	return endOrd - startOrd, nil
-}
-
-// GetKeyRangeCardinality returns the number of key-value tuples between
-// |startInclusive| and |stopExclusive|. If |startInclusive| and/or
-// |endExclusive| is null that end is unbounded.
+// GetKeyRangeCardinality returns the number of key-value tuples between |start|
+// and |stopExclusive|. If |start| and/or |stop| is null that end is unbounded.
 func (m Map) GetKeyRangeCardinality(ctx context.Context, startInclusive val.Tuple, endExclusive val.Tuple) (uint64, error) {
 	return m.tuples.getKeyRangeCardinality(ctx, startInclusive, endExclusive)
 }
