@@ -244,7 +244,7 @@ func (dt *CommitDiffTable) rootValForFilter(ctx *sql.Context, eqFilter *expressi
 func (dt *CommitDiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
 	var commitFilters []sql.Expression
 	for _, filter := range filters {
-		hasCommitFilters := false
+		isCommitFilter := false
 
 		if eqFilter, isEquality := filter.(*expression.Equals); isEquality {
 			if eqFilter == nil {
@@ -258,21 +258,21 @@ func (dt *CommitDiffTable) HandledFilters(filters []sql.Expression) []sql.Expres
 							dt.requiredFilterErr = ErrExactlyOneToCommit
 						}
 
-						hasCommitFilters = true
+						isCommitFilter = true
 						dt.toCommitFilter = eqFilter
 					case fromCommit:
 						if dt.fromCommitFilter != nil {
 							dt.requiredFilterErr = ErrExactlyOneFromCommit
 						}
 
-						hasCommitFilters = true
+						isCommitFilter = true
 						dt.fromCommitFilter = eqFilter
 					}
 				}
 			}
 		}
 
-		if hasCommitFilters {
+		if isCommitFilter {
 			commitFilters = append(commitFilters, filter)
 		}
 	}
