@@ -252,23 +252,14 @@ func (m Map) GetRangeCardinality(ctx context.Context, rng Range) (uint64, error)
 		return 0, nil // empty range
 	}
 
-	startOrd, err := m.tuples.getOrdinal(ctx, val.Tuple(start.CurrentKey()))
+	startOrd, err := tree.GetOrdinalOfCursor(start)
 	if err != nil {
 		return 0, err
 	}
 
-	var endOrd uint64
-	if !stop.Valid() {
-		n, err := m.tuples.count()
-		if err != nil {
-			return 0, err
-		}
-		endOrd = uint64(n)
-	} else {
-		endOrd, err = m.tuples.getOrdinal(ctx, val.Tuple(stop.CurrentKey()))
-		if err != nil {
-			return 0, err
-		}
+	endOrd, err := tree.GetOrdinalOfCursor(stop)
+	if err != nil {
+		return 0, err
 	}
 
 	return endOrd - startOrd, nil
