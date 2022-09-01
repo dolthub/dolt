@@ -70,7 +70,7 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	defer func() { logger("finished") }()
 
 	path := strings.TrimLeft(req.URL.Path, "/")
-	tokens := strings.Split(path, "/")
+	tokens := strings.SplitN(path, "/", 3)
 
 	if len(tokens) != 3 {
 		logger(fmt.Sprintf("response to: %v method: %v http response code: %v", req.RequestURI, req.Method, http.StatusNotFound))
@@ -79,15 +79,15 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 
 	org := tokens[0]
 	repo := tokens[1]
-	hashStr := tokens[2]
+	file := tokens[2]
 
 	statusCode := http.StatusMethodNotAllowed
 	switch req.Method {
 	case http.MethodGet:
-		statusCode = readTableFile(logger, org, repo, hashStr, respWr, req)
+		statusCode = readTableFile(logger, org, repo, file, respWr, req)
 
 	case http.MethodPost, http.MethodPut:
-		statusCode = writeTableFile(req.Context(), logger, fh.dbCache, fh.expectedFiles, org, repo, hashStr, req)
+		statusCode = writeTableFile(req.Context(), logger, fh.dbCache, fh.expectedFiles, org, repo, file, req)
 	}
 
 	if statusCode != -1 {

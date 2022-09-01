@@ -21,15 +21,28 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/chunks"
 )
 
 const (
 	defaultMemTableSize = 128 * 1024 * 1024
 )
 
+type store interface {
+	chunks.ChunkStore
+	nbs.TableFileStore
+
+	Path() (string, bool)
+	GetChunkLocations(hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, error)
+}
+
+var _ store = &nbs.NomsBlockStore{}
+var _ store = &nbs.GenerationalNBS{}
+
 type DBCache struct {
 	mu  *sync.Mutex
-	dbs map[string]*nbs.NomsBlockStore
+	dbs map[string]store
 
 	fs filesys.Filesys
 }
@@ -37,12 +50,12 @@ type DBCache struct {
 func NewLocalCSCache(filesys filesys.Filesys) *DBCache {
 	return &DBCache{
 		&sync.Mutex{},
-		make(map[string]*nbs.NomsBlockStore),
+		make(map[string]store),
 		filesys,
 	}
 }
 
-func (cache *DBCache) Get(org, repo, nbfVerStr string) (*nbs.NomsBlockStore, error) {
+func (cache *DBCache) Get(org, repo, nbfVerStr string) (store, error) {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
 
@@ -55,12 +68,15 @@ func (cache *DBCache) Get(org, repo, nbfVerStr string) (*nbs.NomsBlockStore, err
 	var newCS *nbs.NomsBlockStore
 	if cache.fs != nil {
 		err := cache.fs.MkDirs(id)
-
+		if err != nil {
+			return nil, err
+		}
+		path, err := cache.fs.Abs(id)
 		if err != nil {
 			return nil, err
 		}
 
-		newCS, err = nbs.NewLocalStore(context.TODO(), nbfVerStr, id, defaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
+		newCS, err = nbs.NewLocalStore(context.TODO(), nbfVerStr, path, defaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
 
 		if err != nil {
 			return nil, err

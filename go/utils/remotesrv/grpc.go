@@ -115,7 +115,7 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 			ranges = append(ranges, &remotesapi.RangeChunk{Hash: hCpy[:], Offset: r.Offset, Length: r.Length})
 		}
 
-		url, err := rs.getDownloadUrl(logger, org, repoName, loc.String())
+		url, err := rs.getDownloadUrl(logger, org, repoName, loc)
 		if err != nil {
 			log.Println("Failed to sign request", err)
 			return nil, err
@@ -135,7 +135,7 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 	defer func() { logger("finished") }()
 
 	var repoID *remotesapi.RepoId
-	var cs *nbs.NomsBlockStore
+	var cs store
 	for {
 		req, err := stream.Recv()
 		if err != nil {
@@ -170,7 +170,7 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 				ranges = append(ranges, &remotesapi.RangeChunk{Hash: hCpy[:], Offset: r.Offset, Length: r.Length})
 			}
 
-			url, err := rs.getDownloadUrl(logger, org, repoName, loc.String())
+			url, err := rs.getDownloadUrl(logger, org, repoName, loc)
 			if err != nil {
 				log.Println("Failed to sign request", err)
 				return err
@@ -306,12 +306,12 @@ func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRe
 	logger(fmt.Sprintf("found %s/%s", req.RepoId.Org, req.RepoId.RepoName))
 
 	//should validate
-	updates := make(map[hash.Hash]uint32)
+	updates := make(map[string]int)
 	for _, cti := range req.ChunkTableInfo {
-		updates[hash.New(cti.Hash)] = cti.ChunkCount
+		updates[hash.New(cti.Hash).String()] = int(cti.ChunkCount)
 	}
 
-	_, err := cs.UpdateManifest(ctx, updates)
+	err := cs.AddTableFilesToManifest(ctx, updates)
 
 	if err != nil {
 		logger(fmt.Sprintf("error occurred updating the manifest: %s", err.Error()))
@@ -422,12 +422,12 @@ func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.A
 	logger(fmt.Sprintf("found %s/%s", req.RepoId.Org, req.RepoId.RepoName))
 
 	// should validate
-	updates := make(map[hash.Hash]uint32)
+	updates := make(map[string]int)
 	for _, cti := range req.ChunkTableInfo {
-		updates[hash.New(cti.Hash)] = cti.ChunkCount
+		updates[hash.New(cti.Hash).String()] = int(cti.ChunkCount)
 	}
 
-	_, err := cs.UpdateManifest(ctx, updates)
+	err := cs.AddTableFilesToManifest(ctx, updates)
 
 	if err != nil {
 		logger(fmt.Sprintf("error occurred updating the manifest: %s", err.Error()))
@@ -437,11 +437,11 @@ func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.A
 	return &remotesapi.AddTableFilesResponse{Success: true}, nil
 }
 
-func (rs *RemoteChunkStore) getStore(repoId *remotesapi.RepoId, rpcName string) *nbs.NomsBlockStore {
+func (rs *RemoteChunkStore) getStore(repoId *remotesapi.RepoId, rpcName string) store {
 	return rs.getOrCreateStore(repoId, rpcName, types.Format_Default.VersionString())
 }
 
-func (rs *RemoteChunkStore) getOrCreateStore(repoId *remotesapi.RepoId, rpcName, nbfVerStr string) *nbs.NomsBlockStore {
+func (rs *RemoteChunkStore) getOrCreateStore(repoId *remotesapi.RepoId, rpcName, nbfVerStr string) store {
 	org := repoId.Org
 	repoName := repoId.RepoName
 

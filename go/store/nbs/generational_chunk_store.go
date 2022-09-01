@@ -308,3 +308,28 @@ func (gcs *GenerationalNBS) SetRootChunk(ctx context.Context, root, previous has
 func (gcs *GenerationalNBS) SupportedOperations() TableFileStoreOps {
 	return gcs.newGen.SupportedOperations()
 }
+
+func (gcs *GenerationalNBS) GetChunkLocations(hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
+	res, err := gcs.newGen.GetChunkLocations(hashes)
+	if err != nil {
+		return nil, err
+	}
+	if len(hashes) > 0 {
+		toadd, err := gcs.oldGen.GetChunkLocations(hashes)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range toadd {
+			res["oldgen/" + k] = v
+		}
+	}
+	return res, nil
+}
+
+func (gcs *GenerationalNBS) Path() (string, bool) {
+	return gcs.newGen.Path()
+}
+
+func (gcs *GenerationalNBS) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (mi ManifestInfo, err error) {
+	return gcs.newGen.UpdateManifest(ctx, updates)
+}

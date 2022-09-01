@@ -116,10 +116,10 @@ type Range struct {
 	Length uint32
 }
 
-func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
+func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
 	gr := toGetRecords(hashes)
 
-	ranges := make(map[hash.Hash]map[hash.Hash]Range)
+	ranges := make(map[string]map[hash.Hash]Range)
 	f := func(css chunkSources) error {
 		for _, cs := range css {
 			switch tr := cs.(type) {
@@ -129,7 +129,7 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 					return err
 				}
 				if len(offsetRecSlice) > 0 {
-					y, ok := ranges[hash.Hash(tr.h)]
+					y, ok := ranges[hash.Hash(tr.h).String()]
 
 					if !ok {
 						y = make(map[hash.Hash]Range)
@@ -146,10 +146,10 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 						gr = toGetRecords(hashes)
 					}
 
-					ranges[hash.Hash(tr.h)] = y
+					ranges[hash.Hash(tr.h).String()] = y
 				}
 			case *chunkSourceAdapter:
-				y, ok := ranges[hash.Hash(tr.h)]
+				y, ok := ranges[hash.Hash(tr.h).String()]
 
 				if !ok {
 					y = make(map[hash.Hash]Range)
@@ -174,7 +174,7 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 					}
 				}
 
-				ranges[hash.Hash(tr.h)] = y
+				ranges[hash.Hash(tr.h).String()] = y
 
 				for _, h := range foundHashes {
 					delete(hashes, h)
@@ -1330,6 +1330,14 @@ func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
 		CanPrune: ok,
 		CanGC:    ok,
 	}
+}
+
+func (nbs *NomsBlockStore) Path() (string, bool) {
+	fsPersister, ok := nbs.p.(*fsTablePersister)
+	if !ok {
+		return "", false
+	}
+	return fsPersister.dir, true
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
