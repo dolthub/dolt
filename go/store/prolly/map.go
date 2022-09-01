@@ -124,8 +124,17 @@ func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
 	return diffOrderedTrees(ctx, from.tuples, to.tuples, cb)
 }
 
+// RangeDiffMaps returns diffs within a Range. See Range for which diffs are
+// returned.
 func RangeDiffMaps(ctx context.Context, from, to Map, rng Range, cb DiffFn) error {
 	return rangeDiffOrderedTrees(ctx, from.tuples, to.tuples, rng, cb)
+}
+
+// DiffKeyRangeMaps returns diffs within a physical key range. The key range is
+// specified by |startInclusive| and |stopExclusive|. If |startInclusive| or
+// |stopExclusive| is null, then the range is unbounded towards that end.
+func DiffKeyRangeMaps(ctx context.Context, from, to Map, startInclusive, stopExclusive val.Tuple, cb DiffFn) error {
+	return diffKeyRangeOrderedTrees(ctx, from.tuples, to.tuples, startInclusive, stopExclusive, cb)
 }
 
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
@@ -231,6 +240,13 @@ func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 		return nil, err
 	}
 	return filteredIter{iter: iter, rng: rng}, nil
+}
+
+// IterKeyRange iterates over a physical key range defined by |startInclusive|
+// and |stopExclusive|. If |startInclusive| and/or |stopExclusive| is nil, the
+// range will be open towards that end.
+func (m Map) IterKeyRange(ctx context.Context, startInclusive, stopExclusive val.Tuple) (MapIter, error) {
+	return m.tuples.iterKeyRange(ctx, startInclusive, stopExclusive)
 }
 
 func (m Map) Node() tree.Node {
