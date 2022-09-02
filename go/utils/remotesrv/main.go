@@ -34,6 +34,8 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
+var readOnlyParam *bool = flag.Bool("read-only", false, "run a read-only server which does not allow writes")
+
 func main() {
 	repoModeParam := flag.Bool("repo-mode", false, "act as a remote for a dolt directory, instead of stand alone")
 	dirParam := flag.String("dir", "", "root directory that this command will run in.")
@@ -123,7 +125,11 @@ func grpcServer(dbCache DBCache, fs filesys.Filesys, expectedFiles fileDetails, 
 		log.Println("exiting grpc Server go routine")
 	}()
 
-	chnkSt := NewHttpFSBackedChunkStore(httpHost, dbCache, expectedFiles, fs)
+	var chnkSt remotesapi.ChunkStoreServiceServer
+	chnkSt = NewHttpFSBackedChunkStore(httpHost, dbCache, expectedFiles, fs)
+	if *readOnlyParam {
+		chnkSt = ReadOnlyChunkStore{chnkSt}
+	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", grpcPort))
 	if err != nil {
@@ -150,7 +156,7 @@ func httpServer(dbCache DBCache, fs filesys.Filesys, expectedFiles fileDetails, 
 
 	server := http.Server{
 		Addr:    fmt.Sprintf(":%d", httpPort),
-		Handler: newFileHandler(dbCache, expectedFiles, fs),
+		Handler: newFileHandler(dbCache, expectedFiles, fs, *readOnlyParam),
 	}
 
 	go func() {

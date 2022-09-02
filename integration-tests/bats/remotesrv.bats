@@ -74,3 +74,23 @@ teardown() {
     run dolt sql -q 'select count(*) from vals;'
     [[ "$output" =~ "5" ]] || false
 }
+
+@test "remotesrv: read only server rejects writes" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table vals (i int);'
+    dolt add vals
+    dolt commit -m 'create vals table.'
+
+    remotesrv --http-port 1234 --repo-mode -read-only &
+    remotesrv_pid=$!
+
+    cd ../
+    dolt clone http://localhost:50051/test-org/test-repo repo1
+    cd repo1
+    dolt sql -q 'insert into vals values (1), (2), (3), (4), (5);'
+    dolt commit -am 'insert some values'
+    run dolt push origin main:main
+    [[ "$status" != 0 ]] || false
+}

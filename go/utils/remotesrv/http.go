@@ -65,10 +65,11 @@ type filehandler struct {
 	dbCache       DBCache
 	expectedFiles fileDetails
 	fs            filesys.Filesys
+	readOnly      bool
 }
 
-func newFileHandler(dbCache DBCache, expectedFiles fileDetails, fs filesys.Filesys) filehandler {
-	return filehandler{dbCache, expectedFiles, fs}
+func newFileHandler(dbCache DBCache, expectedFiles fileDetails, fs filesys.Filesys, readOnly bool) filehandler {
+	return filehandler{dbCache, expectedFiles, fs, readOnly}
 }
 
 func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
@@ -107,6 +108,11 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 		statusCode = readTableFile(logger, abs, respWr, req)
 
 	case http.MethodPost, http.MethodPut:
+		if fh.readOnly {
+			respWr.WriteHeader(http.StatusForbidden)
+			return
+		}
+
 		tokens := strings.Split(path, "/")
 		if len(tokens) != 3 {
 			logger(fmt.Sprintf("response to: %v method: %v http response code: %v", req.RequestURI, req.Method, http.StatusNotFound))
