@@ -35,10 +35,7 @@ import (
 var workingSetPartitionKey = []byte("workingset")
 var commitHistoryPartitionKey = []byte("commithistory")
 var commitHashCol = "commit_hash"
-var committerCol = "committer"
-var commitDateCol = "commit_date"
-
-var filterColumnNameSet = set.NewStrSet([]string{commitHashCol, committerCol, commitDateCol})
+var filterColumnNameSet = set.NewStrSet([]string{commitHashCol})
 
 var _ sql.FilteredTable = (*UnscopedDiffTable)(nil)
 
@@ -241,13 +238,12 @@ type doltDiffCommitHistoryRowItr struct {
 // newCommitHistoryRowItr creates a doltDiffCommitHistoryRowItr from the current environment.
 func (dt *UnscopedDiffTable) newCommitHistoryRowItr(ctx *sql.Context) (*doltDiffCommitHistoryRowItr, error) {
 	dchItr := &doltDiffCommitHistoryRowItr{
-		ctx: ctx,
-		ddb: dt.ddb,
-
+		ctx:             ctx,
+		ddb:             dt.ddb,
 		tableChangesIdx: -1,
 	}
-	cms := getCommitsFromCommitHashEquality(ctx, dt.ddb, dt.partitionFilters)
-	if len(cms) > 0 {
+	cms, hasCommitHashEquality := getCommitsFromCommitHashEquality(ctx, dt.ddb, dt.partitionFilters)
+	if hasCommitHashEquality {
 		dchItr.commits = cms
 	} else {
 		dchItr.child = dt.cmItr
@@ -496,10 +492,6 @@ func transformFilters(filters ...sql.Expression) []sql.Expression {
 			switch gf.Name() {
 			case commitHashCol:
 				return gf.WithIndex(0), transform.NewTree, nil
-			case committerCol:
-				return gf.WithIndex(1), transform.NewTree, nil
-			case commitDateCol:
-				return gf.WithIndex(2), transform.NewTree, nil
 			default:
 				return gf, transform.SameTree, nil
 			}
@@ -508,13 +500,15 @@ func transformFilters(filters ...sql.Expression) []sql.Expression {
 	return filters
 }
 
-func getCommitsFromCommitHashEquality(ctx *sql.Context, ddb *doltdb.DoltDB, filters []sql.Expression) []*doltdb.Commit {
+func getCommitsFromCommitHashEquality(ctx *sql.Context, ddb *doltdb.DoltDB, filters []sql.Expression) ([]*doltdb.Commit, bool) {
 	var commits []*doltdb.Commit
+	var isCommitHashEquality bool
 	for i := range filters {
 		switch f := filters[i].(type) {
 		case *expression.Equals:
 			v, err := f.Right().Eval(ctx, nil)
 			if err == nil {
+				isCommitHashEquality = true
 				cm := getCommitFromHash(ctx, ddb, v.(string))
 				if cm != nil {
 					commits = append(commits, cm)
@@ -522,7 +516,7 @@ func getCommitsFromCommitHashEquality(ctx *sql.Context, ddb *doltdb.DoltDB, filt
 			}
 		}
 	}
-	return commits
+	return commits, isCommitHashEquality
 }
 
 func getCommitFromHash(ctx *sql.Context, ddb *doltdb.DoltDB, val string) *doltdb.Commit {
