@@ -35,7 +35,10 @@ import (
 var workingSetPartitionKey = []byte("workingset")
 var commitHistoryPartitionKey = []byte("commithistory")
 var commitHashCol = "commit_hash"
-var filterColumnNameSet = set.NewStrSet([]string{commitHashCol})
+var committerCol = "committer"
+var commitDateCol = "commit_date"
+
+var filterColumnNameSet = set.NewStrSet([]string{commitHashCol, committerCol, commitDateCol})
 
 var _ sql.FilteredTable = (*UnscopedDiffTable)(nil)
 
@@ -228,6 +231,7 @@ type doltDiffCommitHistoryRowItr struct {
 	ctx             *sql.Context
 	ddb             *doltdb.DoltDB
 	child           doltdb.CommitItr
+	commits         []*doltdb.Commit
 	meta            *datas.CommitMeta
 	hash            hash.Hash
 	tableChanges    []tableChange
@@ -236,12 +240,19 @@ type doltDiffCommitHistoryRowItr struct {
 
 // newCommitHistoryRowItr creates a doltDiffCommitHistoryRowItr from the current environment.
 func (dt *UnscopedDiffTable) newCommitHistoryRowItr(ctx *sql.Context) (*doltDiffCommitHistoryRowItr, error) {
-	return &doltDiffCommitHistoryRowItr{
-		ctx:             ctx,
-		ddb:             dt.ddb,
-		child:           dt.cmItr,
+	dchItr := &doltDiffCommitHistoryRowItr{
+		ctx: ctx,
+		ddb: dt.ddb,
+
 		tableChangesIdx: -1,
-	}, nil
+	}
+	cms := getCommitsFromCommitHashEquality(ctx, dt.ddb, dt.partitionFilters)
+	if len(cms) > 0 {
+		dchItr.commits = cms
+	} else {
+		dchItr.child = dt.cmItr
+	}
+	return dchItr, nil
 }
 
 // incrementIndexes increments the table changes index, and if it's the end of the table changes array, moves
@@ -260,9 +271,25 @@ func (itr *doltDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, error) 
 	defer itr.incrementIndexes()
 
 	for itr.tableChanges == nil {
-		err := itr.loadTableChanges(ctx)
-		if err != nil {
-			return nil, err
+		if itr.commits != nil {
+			for _, commit := range itr.commits {
+				err := itr.loadTableChanges(ctx, commit)
+				if err != nil {
+					return nil, err
+				}
+			}
+			itr.commits = nil
+		} else if itr.child != nil {
+			_, commit, err := itr.child.Next(ctx)
+			if err != nil {
+				return nil, err
+			}
+			err = itr.loadTableChanges(ctx, commit)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, io.EOF
 		}
 	}
 
@@ -284,12 +311,7 @@ func (itr *doltDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, error) 
 
 // loadTableChanges loads the next commit's table changes and metadata
 // into the iterator.
-func (itr *doltDiffCommitHistoryRowItr) loadTableChanges(ctx context.Context) error {
-	cmHash, commit, err := itr.child.Next(ctx)
-	if err != nil {
-		return err
-	}
-
+func (itr *doltDiffCommitHistoryRowItr) loadTableChanges(ctx context.Context, commit *doltdb.Commit) error {
 	tableChanges, err := itr.calculateTableChanges(ctx, commit)
 	if err != nil {
 		return err
@@ -306,7 +328,13 @@ func (itr *doltDiffCommitHistoryRowItr) loadTableChanges(ctx context.Context) er
 		return err
 	}
 	itr.meta = meta
+
+	cmHash, err := commit.HashOf()
+	if err != nil {
+		return err
+	}
 	itr.hash = cmHash
+
 	return nil
 }
 
@@ -438,8 +466,12 @@ func commitFilterForDiffTableFilterExprs(filters []sql.Expression) (doltdb.Commi
 
 	return func(ctx context.Context, h hash.Hash, cm *doltdb.Commit) (filterOut bool, err error) {
 		sc := sql.NewContext(ctx)
+		meta, err := cm.GetCommitMeta(ctx)
+		if err != nil {
+			return false, err
+		}
 		for _, filter := range filters {
-			res, err := filter.Eval(sc, sql.Row{h.String()})
+			res, err := filter.Eval(sc, sql.Row{h.String(), meta.Name, meta.Time()})
 			if err != nil {
 				return false, err
 			}
@@ -464,10 +496,47 @@ func transformFilters(filters ...sql.Expression) []sql.Expression {
 			switch gf.Name() {
 			case commitHashCol:
 				return gf.WithIndex(0), transform.NewTree, nil
+			case committerCol:
+				return gf.WithIndex(1), transform.NewTree, nil
+			case commitDateCol:
+				return gf.WithIndex(2), transform.NewTree, nil
 			default:
 				return gf, transform.SameTree, nil
 			}
 		})
 	}
 	return filters
+}
+
+func getCommitsFromCommitHashEquality(ctx *sql.Context, ddb *doltdb.DoltDB, filters []sql.Expression) []*doltdb.Commit {
+	var commits []*doltdb.Commit
+	for i := range filters {
+		switch f := filters[i].(type) {
+		case *expression.Equals:
+			v, err := f.Right().Eval(ctx, nil)
+			if err == nil {
+				cm := getCommitFromHash(ctx, ddb, v.(string))
+				if cm != nil {
+					commits = append(commits, cm)
+				}
+			}
+		}
+	}
+	return commits
+}
+
+func getCommitFromHash(ctx *sql.Context, ddb *doltdb.DoltDB, val string) *doltdb.Commit {
+	cmSpec, err := doltdb.NewCommitSpec(val)
+	if err != nil {
+		return nil
+	}
+	headRef, err := dsess.DSessFromSess(ctx.Session).CWBHeadRef(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return nil
+	}
+	cm, err := ddb.Resolve(ctx, cmSpec, headRef)
+	if err != nil {
+		return nil
+	}
+	return cm
 }
