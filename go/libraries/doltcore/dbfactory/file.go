@@ -17,6 +17,7 @@ package dbfactory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -41,6 +42,10 @@ var DoltDataDir = filepath.Join(DoltDir, DataDir)
 
 // FileFactory is a DBFactory implementation for creating local filesys backed databases
 type FileFactory struct {
+}
+
+func (fact FileFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
+	return fmt.Errorf("file scheme cannot support this operation")
 }
 
 // CreateDB creates a local filesys backed database

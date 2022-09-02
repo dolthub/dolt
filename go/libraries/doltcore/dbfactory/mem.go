@@ -16,6 +16,7 @@ package dbfactory
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -26,6 +27,10 @@ import (
 
 // MemFactory is a DBFactory implementation for creating in memory backed databases
 type MemFactory struct {
+}
+
+func (fact MemFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
+	return fmt.Errorf("memory scheme cannot support this operation")
 }
 
 // CreateDB creates an in memory backed database

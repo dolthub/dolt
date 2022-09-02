@@ -17,6 +17,7 @@ package dbfactory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -105,6 +106,10 @@ func AWSCredentialSourceFromStr(str string) AWSCredentialSource {
 
 // AWSFactory is a DBFactory implementation for creating AWS backed databases
 type AWSFactory struct {
+}
+
+func (fact AWSFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
+	return fmt.Errorf("aws scheme cannot support this operation")
 }
 
 // CreateDB creates an AWS backed database

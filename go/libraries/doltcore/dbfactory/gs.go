@@ -16,6 +16,7 @@ package dbfactory
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"path/filepath"
 
@@ -30,6 +31,10 @@ import (
 
 // GSFactory is a DBFactory implementation for creating GCS backed databases
 type GSFactory struct {
+}
+
+func (fact GSFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
+	return fmt.Errorf("gs scheme cannot support this operation")
 }
 
 // CreateDB creates an GCS backed database
@@ -58,6 +63,10 @@ func (fact GSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, ur
 
 // LocalBSFactory is a DBFactory implementation for creating a local filesystem blobstore backed databases for testing
 type LocalBSFactory struct {
+}
+
+func (fact LocalBSFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
+	return fmt.Errorf("bs scheme cannot support this operation")
 }
 
 // CreateDB creates a local filesystem blobstore backed database

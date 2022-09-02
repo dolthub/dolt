@@ -53,7 +53,7 @@ type DoltDatabaseProvider struct {
 
 	defaultBranch string
 	fs            filesys.Filesys
-	remoteDialer  dbfactory.GRPCDialProvider
+	remoteDialer  dbfactory.GRPCDialProvider  // TODO: why isn't this a method defined on the remote object
 
 	dbFactoryUrl string
 }
@@ -325,7 +325,11 @@ func configureReplication(ctx *sql.Context, name string, dialer dbfactory.GRPCDi
 	remoteUrl := fmt.Sprintf(remoteUrlTemplate.(string), name)
 
 	// TODO: params for AWS, others that need them
-	remote, _, err := createRemote(ctx, remoteName, remoteUrl, nil, dialer)
+	r := env.NewRemote(remoteName, remoteUrl, nil)
+	// TODO: use the correct format here, should match created DB
+	err := r.Prepare(ctx, types.Format_Default, dialer)
+
+	_, err = getRemoteDb(ctx, r, dialer)
 	if err != nil {
 		return err
 	}
@@ -338,7 +342,7 @@ func configureReplication(ctx *sql.Context, name string, dialer dbfactory.GRPCDi
 
 	newEnv.DoltDB.SetCommitHooks(ctx, commitHooks)
 
-	return db.rsw.AddRemote(remote)
+	return db.rsw.AddRemote(r)
 }
 
 // CloneDatabaseFromRemote implements DoltDatabaseProvider interface
@@ -379,7 +383,9 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 		return fmt.Errorf("unable to clone remote database; no remote dialer configured")
 	}
 
-	r, srcDB, err := createRemote(ctx, remoteName, remoteUrl, remoteParams, p.remoteDialer)
+	// TODO: params for AWS, others that need them
+	r := env.NewRemote(remoteName, remoteUrl, nil)
+	srcDB, err := getRemoteDb(ctx, r, p.remoteDialer)
 	if err != nil {
 		return err
 	}
@@ -427,28 +433,22 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 }
 
 // TODO: extract a shared library for this functionality
-func createRemote(
-		ctx *sql.Context,
-		remoteName, remoteUrl string,
-		params map[string]string,
-		dialer dbfactory.GRPCDialProvider,
-) (env.Remote, *doltdb.DoltDB, error) {
-	r := env.NewRemote(remoteName, remoteUrl, params)
-
+// TODO: this method only adds error handling. Remove?
+func getRemoteDb(ctx *sql.Context, r env.Remote, dialer dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {
 	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dialer)
 
 	if err != nil {
 		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
 
 		if err == remotestorage.ErrInvalidDoltSpecPath {
-			urlObj, _ := earl.Parse(remoteUrl)
+			urlObj, _ := earl.Parse(r.Url)
 			bdr.AddDetails("'%s' should be in the format 'organization/repo'", urlObj.Path)
 		}
 
-		return env.NoRemote, nil, bdr.Build()
+		return nil, bdr.Build()
 	}
 
-	return r, ddb, nil
+	return ddb, nil
 }
 
 // DropDatabase implements the sql.MutableDatabaseProvider interface
