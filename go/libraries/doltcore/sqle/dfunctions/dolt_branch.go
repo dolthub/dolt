@@ -134,6 +134,8 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 		return err
 	}
 
+	// The current branch on CLI can be deleted as user can be on different branch on SQL and delete it from SQL session.
+	// To update current head info on RepoState, we need DoltEnv to load CLI environment.
 	if fs, err := sess.Provider().FileSystemForDatabase(dbName); err == nil {
 		if repoState, err := env.LoadRepoState(fs); err == nil {
 			if repoState.Head.Ref.GetPath() == oldBranchName {
@@ -147,13 +149,15 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 }
 
 // deleteBranches takes DoltSession and database name to try accessing file system for dolt database.
-// If the database is not session state db and the branch being deletes is the current branch on CLI, it will update
+// If the database is not session state db and the branch being deleted is the current branch on CLI, it will update
 // the RepoState to set head as empty branchRef.
 func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults, sess *dsess.DoltSession, dbName string) error {
 	if apr.NArg() == 0 {
 		return InvalidArgErr
 	}
 
+	// The current branch on CLI can be deleted as user can be on different branch on SQL and delete it from SQL session.
+	// To update current head info on RepoState, we need DoltEnv to load CLI environment.
 	var rs *env.RepoState
 	var headOnCLI string
 	fs, err := sess.Provider().FileSystemForDatabase(dbName)

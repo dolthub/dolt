@@ -321,9 +321,9 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 
 	roots, err := dEnv.Roots(ctx)
 	// roots will be empty/nil if the working set is not set (working set is not set if the current branch was deleted)
-	if errors.Is(err, doltdb.ErrBranchNotFound) {
+	if errors.Is(err, doltdb.ErrBranchNotFound) || errors.Is(err, doltdb.ErrWorkingSetNotFound) {
 		roots, err = dEnv.RecoveryRoots(ctx)
-	} else if err != nil && !errors.Is(err, doltdb.ErrWorkingSetNotFound) {
+	} else if err != nil {
 		return err
 	}
 

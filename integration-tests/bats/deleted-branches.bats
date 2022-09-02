@@ -21,8 +21,15 @@ make_it() {
     dolt branch -c main to_keep
 }
 
-@test "deleted-branches: can checkout existing branch after checked out branch is deleted" {
+@test "deleted-branches: can checkout existing branch after checked out branch on CLI is deleted" {
     make_it
+
+    run dolt status
+    [[ "$output" =~ "On branch main" ]] || false
+
+    run dolt sql -q 'call dolt_branch("-D", "main");'
+    [ $status -eq 1 ]
+    [[ "$output" =~ "attempted to delete checked out branch" ]] || false
 
     dolt sql -q 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");'
 
@@ -94,7 +101,6 @@ make_it() {
     start_sql_server "dolt_repo_$$"
 
     server_query "dolt_repo_$$"  1 dolt "" 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");' ""
-
 
     # We are able to use a database branch revision in the connection string
     server_query "dolt_repo_$$/to_keep" 1 dolt "" "SELECT * FROM test;"
