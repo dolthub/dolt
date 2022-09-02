@@ -453,7 +453,7 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 	// TODO: there's a bug in test setup with transactions, where the HEAD session var gets overwritten on transaction
 	//  start, so we quote it here instead
 	// query := "insert into dolt_branches (name, hash) values ('" + asOfString + "', @@" + dsess.HeadKey(ddb.Name()) + ")"
-	query := "insert into dolt_branches (name, hash) values ('" + asOfString + "', '" + headHash.(string) + "')"
+	query := "CALL dolt_branch('" + asOfString + "', '" + headHash.(string) + "')"
 
 	_, iter, err = e.Query(ctx,
 		query)

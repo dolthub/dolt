@@ -423,9 +423,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
-    server_query repo1 1 dolt "" "
-        SELECT DOLT_RESET('--hard');
-        REPLACE INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
+    server_query repo1 1 dolt "" "SELECT DOLT_RESET('--hard');"
 
     run dolt status
     [ "$status" -eq 0 ]
@@ -436,8 +434,7 @@ SQL
 
     server_query repo1 1 dolt "" "
         INSERT INTO test VALUES (8,8);
-        SELECT DOLT_RESET('--hard');
-        REPLACE INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
+        SELECT DOLT_RESET('--hard');"
 
     run dolt status
     [ "$status" -eq 0 ]
@@ -777,7 +774,7 @@ SQL
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
     CALL DOLT_ADD('.');
     SELECT commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');
-    INSERT INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
+    CALL DOLT_BRANCH('main', @@repo1_head);"
 
     server_query repo1 1 dolt "" "call dolt_add('.')" "status\n0"
     run dolt ls

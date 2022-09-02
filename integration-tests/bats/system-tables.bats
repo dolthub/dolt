@@ -528,9 +528,18 @@ SQL
     [[ "$output" =~ "1" ]] || false
 }
 
-@test "system-tables: cannot delete last branch in dolt_branches" {
+@test "system-tables: dolt_branches is read-only" {
     run dolt sql -q "DELETE FROM dolt_branches"
     [ "$status" -ne 0 ]
+    [[ "$output" =~ "read-only" ]] || false
+
+    run dolt sql -q "INSERT INTO dolt_branches (name,hash) VALUES ('branch1', 'main');"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "read-only" ]] || false
+
+    run dolt sql -q "UPDATE dolt_branches SET name = 'branch1' WHERE name = 'main'"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "read-only" ]] || false
 }
 
 @test "system-tables: dolt diff includes changes from initial commit" {
