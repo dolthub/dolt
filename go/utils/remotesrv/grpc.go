@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"path/filepath"
 	"sync/atomic"
 
 	"google.golang.org/grpc/codes"
@@ -27,6 +28,7 @@ import (
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
@@ -37,15 +39,17 @@ type RemoteChunkStore struct {
 	csCache       *DBCache
 	bucket        string
 	expectedFiles fileDetails
+	fs            filesys.Filesys
 	remotesapi.UnimplementedChunkStoreServiceServer
 }
 
-func NewHttpFSBackedChunkStore(httpHost string, csCache *DBCache, expectedFiles fileDetails) *RemoteChunkStore {
+func NewHttpFSBackedChunkStore(httpHost string, csCache *DBCache, expectedFiles fileDetails, fs filesys.Filesys) *RemoteChunkStore {
 	return &RemoteChunkStore{
 		HttpHost:      httpHost,
 		csCache:       csCache,
 		bucket:        "",
 		expectedFiles: expectedFiles,
+		fs:            fs,
 	}
 }
 
@@ -86,6 +90,22 @@ func (rs *RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasCh
 	return resp, nil
 }
 
+func (rs *RemoteChunkStore) getRelativeStorePath(cs store) (string, error) {
+	cspath, ok := cs.Path()
+	if !ok {
+		return "", status.Error(codes.Internal, "chunkstore misconfigured; cannot generate HTTP paths")
+	}
+	httproot, err := rs.fs.Abs(".")
+	if err != nil {
+		return "", err
+	}
+	prefix, err := filepath.Rel(httproot, cspath)
+	if err != nil {
+		return "", err
+	}
+	return prefix, nil
+}
+
 func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remotesapi.GetDownloadLocsRequest) (*remotesapi.GetDownloadLocsResponse, error) {
 	logger := getReqLogger("GRPC", "GetDownloadLocations")
 	defer func() { logger("finished") }()
@@ -98,11 +118,14 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 
 	logger(fmt.Sprintf("found repo %s/%s", req.RepoId.Org, req.RepoId.RepoName))
 
-	org := req.RepoId.Org
-	repoName := req.RepoId.RepoName
 	hashes, _ := remotestorage.ParseByteSlices(req.ChunkHashes)
-	locations, err := cs.GetChunkLocations(hashes)
 
+	prefix, err := rs.getRelativeStorePath(cs)
+	if err != nil {
+		return nil, err
+	}
+
+	locations, err := cs.GetChunkLocations(hashes)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +138,7 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 			ranges = append(ranges, &remotesapi.RangeChunk{Hash: hCpy[:], Offset: r.Offset, Length: r.Length})
 		}
 
-		url, err := rs.getDownloadUrl(logger, org, repoName, loc)
+		url, err := rs.getDownloadUrl(logger, prefix+"/"+loc)
 		if err != nil {
 			log.Println("Failed to sign request", err)
 			return nil, err
@@ -136,6 +159,7 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 
 	var repoID *remotesapi.RepoId
 	var cs store
+	var prefix string
 	for {
 		req, err := stream.Recv()
 		if err != nil {
@@ -152,10 +176,13 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 				return status.Error(codes.Internal, "Could not get chunkstore")
 			}
 			logger(fmt.Sprintf("found repo %s/%s", repoID.Org, repoID.RepoName))
+
+			prefix, err = rs.getRelativeStorePath(cs)
+			if err != nil {
+				return err
+			}
 		}
 
-		org := req.RepoId.Org
-		repoName := req.RepoId.RepoName
 		hashes, _ := remotestorage.ParseByteSlices(req.ChunkHashes)
 		locations, err := cs.GetChunkLocations(hashes)
 		if err != nil {
@@ -170,7 +197,7 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 				ranges = append(ranges, &remotesapi.RangeChunk{Hash: hCpy[:], Offset: r.Offset, Length: r.Length})
 			}
 
-			url, err := rs.getDownloadUrl(logger, org, repoName, loc)
+			url, err := rs.getDownloadUrl(logger, prefix+"/"+loc)
 			if err != nil {
 				log.Println("Failed to sign request", err)
 				return err
@@ -188,8 +215,8 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 	}
 }
 
-func (rs *RemoteChunkStore) getDownloadUrl(logger func(string), org, repoName, fileId string) (string, error) {
-	return fmt.Sprintf("http://%s/%s/%s/%s", rs.HttpHost, org, repoName, fileId), nil
+func (rs *RemoteChunkStore) getDownloadUrl(logger func(string), path string) (string, error) {
+	return fmt.Sprintf("http://%s/%s", rs.HttpHost, path), nil
 }
 
 func parseTableFileDetails(req *remotesapi.GetUploadLocsRequest) []*remotesapi.TableFileDetails {
@@ -372,12 +399,12 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 		return nil, status.Error(codes.Internal, "failed to get sources")
 	}
 
-	tableFileInfo, err := getTableFileInfo(rs, logger, tables, req)
+	tableFileInfo, err := getTableFileInfo(rs, logger, tables, req, cs)
 	if err != nil {
 		return nil, err
 	}
 
-	appendixTableFileInfo, err := getTableFileInfo(rs, logger, appendixTables, req)
+	appendixTableFileInfo, err := getTableFileInfo(rs, logger, appendixTables, req, cs)
 	if err != nil {
 		return nil, err
 	}
@@ -391,10 +418,14 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 	return resp, nil
 }
 
-func getTableFileInfo(rs *RemoteChunkStore, logger func(string), tableList []nbs.TableFile, req *remotesapi.ListTableFilesRequest) ([]*remotesapi.TableFileInfo, error) {
+func getTableFileInfo(rs *RemoteChunkStore, logger func(string), tableList []nbs.TableFile, req *remotesapi.ListTableFilesRequest, cs store) ([]*remotesapi.TableFileInfo, error) {
+	prefix, err := rs.getRelativeStorePath(cs)
+	if err != nil {
+		return nil, err
+	}
 	appendixTableFileInfo := make([]*remotesapi.TableFileInfo, 0)
 	for _, t := range tableList {
-		url, err := rs.getDownloadUrl(logger, req.RepoId.Org, req.RepoId.RepoName, t.FileID())
+		url, err := rs.getDownloadUrl(logger, prefix+"/"+t.FileID())
 		if err != nil {
 			return nil, status.Error(codes.Internal, "failed to get download url for "+t.FileID())
 		}
