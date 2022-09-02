@@ -99,8 +99,7 @@ func (r *Remote) Prepare(ctx context.Context, nbf *types.NomsBinFormat, dialer d
 
 	params[dbfactory.GRPCDialProviderParam] = dialer
 
-	_, err := doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
-	return err
+	return dbfactory.PrepareDB(ctx, nbf, r.Url, params)
 }
 
 func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsBinFormat, dialer dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {

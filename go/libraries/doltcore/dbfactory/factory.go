@@ -54,8 +54,8 @@ const (
 
 // DBFactory is an interface for creating concrete datas.Database instances which may have different backing stores.
 type DBFactory interface {
-	CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error)
-	PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error
+	CreateDB(ctx context.Context, nbf *types.NomsBinFormat, u *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error)
+	PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, u *url.URL, params map[string]interface{}) error
 }
 
 // DBFactories is a map from url scheme name to DBFactory.  Additional factories can be added to the DBFactories map
@@ -95,19 +95,19 @@ func CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, para
 // all URL schemes can support this operation. The DBFactory used for preparing the DB is determined by the scheme of
 // the url. Naked urls will use https by default.
 func PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]interface{}) error {
-	urlObj, err := earl.Parse(urlStr)
+	url, err := earl.Parse(urlStr)
 	if err != nil {
 		return err
 	}
 
-	scheme := urlObj.Scheme
+	scheme := url.Scheme
 	if len(scheme) == 0 {
 		scheme = defaultScheme
 	}
 
 	if fact, ok := DBFactories[strings.ToLower(scheme)]; ok {
-		return fact.PrepareDB(ctx, nbf, urlObj, params)
+		return fact.PrepareDB(ctx, nbf, url, params)
 	}
 
-	return fmt.Errorf("unknown url scheme: '%s'", urlObj.Scheme)
+	return fmt.Errorf("unknown url scheme: '%s'", url.Scheme)
 }
