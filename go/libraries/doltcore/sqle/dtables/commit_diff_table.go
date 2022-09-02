@@ -245,7 +245,7 @@ func (dt *CommitDiffTable) HandledFilters(filters []sql.Expression) []sql.Expres
 	var commitFilters []sql.Expression
 	for _, filter := range filters {
 		eqFilter, isEquality := filter.(*expression.Equals)
-		if eqFilter == nil || !isEquality {
+		if !isEquality {
 			continue
 		}
 		for _, e := range []sql.Expression{eqFilter.Left(), eqFilter.Right()} {
