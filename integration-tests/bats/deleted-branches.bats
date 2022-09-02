@@ -38,6 +38,28 @@ make_it() {
     dolt checkout to_keep
 }
 
+@test "deleted-branches: attempt to delete the last branch when currently on no branch" {
+    make_it
+
+    dolt sql -q 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");'
+
+    dolt branch -av
+
+    run dolt branch -D to_keep
+    [[ "$output" =~ "cannot delete the last branch" ]] || false
+}
+
+@test "deleted-branches: renaming current branch on CLI deletes that branch and sets the current branch to the new branch on CLI" {
+    make_it
+
+    dolt sql -q 'call dolt_checkout("to_keep"); call dolt_branch("-m", "main", "master");'
+
+    dolt branch -av
+
+    run dolt status
+    [[ "$output" =~ "On branch master" ]] || false
+}
+
 @test "deleted-branches: can SQL connect with dolt_default_branch set to existing branch when checked out branch is deleted" {
     make_it
 
