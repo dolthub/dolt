@@ -132,6 +132,7 @@ message TableFileDetails {
   bytes id = 1;
   uint64 content_length = 2;
   bytes content_hash = 3;
+  uint64 num_chunks = 4;
 }
 
 message GetUploadLocsRequest {
