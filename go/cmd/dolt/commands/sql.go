@@ -401,6 +401,11 @@ func queryMode(
 
 	_, continueOnError := apr.GetValue(continueFlag)
 
+	query, verr := validateQuery(query)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
 	if saveName != "" {
 		verr := execQuery(ctx, mrEnv, query, format, config)
 		if verr != nil {
@@ -1506,4 +1511,14 @@ func mergeResultIntoStats(ctx *sql.Context, statement sqlparser.Statement, rowIt
 			}
 		}
 	}
+}
+
+func validateQuery(query string) (string, errhand.VerboseError) {
+	newQuery := ""
+	loweredString := strings.ToLower(query)
+	if strings.Contains(loweredString, "varchar(max)") {
+		newQuery = strings.ReplaceAll(loweredString, "varchar(max)", "varchar(16383)")
+	}
+
+	return newQuery, errhand.VerboseErrorFromError(nil)
 }
