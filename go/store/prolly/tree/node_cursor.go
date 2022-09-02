@@ -24,6 +24,7 @@ package tree
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -137,6 +138,46 @@ func NewCursorAtOrdinal(ctx context.Context, ns NodeStore, nd Node, ord uint64) 
 		}
 		return
 	})
+}
+
+// GetOrdinalOfCursor returns the ordinal position of a Cursor.
+func GetOrdinalOfCursor(curr *Cursor) (ord uint64, err error) {
+	leaf, err := curr.isLeaf()
+	if err != nil {
+		return 0, err
+	}
+	if !leaf {
+		return 0, fmt.Errorf("|cur| must be at a leaf")
+	}
+
+	ord += uint64(curr.idx)
+
+	for curr.parent != nil {
+		curr = curr.parent
+
+		// If a parent has been invalidated past end, act like we were at the
+		// last subtree.
+		if curr.idx >= curr.nd.Count() {
+			curr.skipToNodeEnd()
+		} else if curr.idx < 0 {
+			return 0, fmt.Errorf("found invalid parent cursor behind node start")
+		}
+
+		curr.nd, err = curr.nd.loadSubtrees()
+		if err != nil {
+			return 0, err
+		}
+
+		for idx := curr.idx - 1; idx >= 0; idx-- {
+			cnt, err := curr.nd.getSubtreeCount(idx)
+			if err != nil {
+				return 0, err
+			}
+			ord += cnt
+		}
+	}
+
+	return ord, nil
 }
 
 func NewCursorFromSearchFn(ctx context.Context, ns NodeStore, nd Node, search SearchFn) (cur *Cursor, err error) {
