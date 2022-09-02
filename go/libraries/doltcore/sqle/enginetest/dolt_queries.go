@@ -327,7 +327,8 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "database revision specs: branch-qualified revision spec",
+		SkipPrepared: true,
+		Name:         "database revision specs: branch-qualified revision spec",
 		SetUpScript: []string{
 			"create table t01 (pk int primary key, c1 int)",
 			"call dolt_add('.')",
