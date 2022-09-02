@@ -89,6 +89,20 @@ func (r *Remote) GetRemoteDB(ctx context.Context, nbf *types.NomsBinFormat, dial
 	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }
 
+// Prepare does whatever work is necessary to prepare the remote given to receive pushes. Not all remote types can
+// support this operations and must be prepared manually. For existing remotes, no work is done.
+func (r *Remote) Prepare(ctx context.Context, nbf *types.NomsBinFormat, dialer dbfactory.GRPCDialProvider) error {
+	params := make(map[string]interface{})
+	for k, v := range r.Params {
+		params[k] = v
+	}
+
+	params[dbfactory.GRPCDialProviderParam] = dialer
+
+	_, err := doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
+	return err
+}
+
 func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsBinFormat, dialer dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {
 	params := make(map[string]interface{})
 	for k, v := range r.Params {
@@ -480,44 +494,6 @@ func getAbsFileRemoteUrl(urlStr string, scheme string, fs filesys2.Filesys) (str
 		urlStr = "/" + urlStr
 	}
 	return scheme + "://" + urlStr, nil
-}
-
-func GetRemoteUrlTemplate(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg string) (string, string, error) {
-	u, err := earl.Parse(urlArg)
-
-	if err != nil {
-		return "", "", err
-	}
-
-	if u.Scheme != "" && fs != nil {
-		if u.Scheme == dbfactory.FileScheme || u.Scheme == dbfactory.LocalBSScheme {
-			absUrl, err := getAbsFileRemoteUrl(u.Host+u.Path, u.Scheme, fs)
-
-			if err != nil {
-				return "", "", err
-			}
-
-			return u.Scheme, absUrl, err
-		}
-
-		return u.Scheme, urlArg, nil
-	} else if u.Host != "" {
-		return dbfactory.HTTPSScheme, "https://" + urlArg, nil
-	}
-
-	hostName, err := cfg.GetString(RemotesApiHostKey)
-
-	if err != nil {
-		if err != config.ErrConfigParamNotFound {
-			return "", "", err
-		}
-
-		hostName = DefaultRemotesApiHost
-	}
-
-	hostName = strings.TrimSpace(hostName)
-
-	return dbfactory.HTTPSScheme, "https://" + path.Join(hostName, u.Path), nil
 }
 
 // GetDefaultBranch returns the default branch from among the branches given, returning

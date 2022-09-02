@@ -55,6 +55,7 @@ const (
 // DBFactory is an interface for creating concrete datas.Database instances which may have different backing stores.
 type DBFactory interface {
 	CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error)
+	PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error
 }
 
 // DBFactories is a map from url scheme name to DBFactory.  Additional factories can be added to the DBFactories map
@@ -88,4 +89,25 @@ func CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, para
 	}
 
 	return nil, nil, nil, fmt.Errorf("unknown url scheme: '%s'", urlObj.Scheme)
+}
+
+// PrepareDB does the necessary work to create a database at the URL given, e.g. to ready a new remote for pushing. Not
+// all URL schemes can support this operation. The DBFactory used for preparing the DB is determined by the scheme of
+// the url. Naked urls will use https by default.
+func PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]interface{}) error {
+	urlObj, err := earl.Parse(urlStr)
+	if err != nil {
+		return err
+	}
+
+	scheme := urlObj.Scheme
+	if len(scheme) == 0 {
+		scheme = defaultScheme
+	}
+
+	if fact, ok := DBFactories[strings.ToLower(scheme)]; ok {
+		return fact.PrepareDB(ctx, nbf, urlObj, params)
+	}
+
+	return fmt.Errorf("unknown url scheme: '%s'", urlObj.Scheme)
 }
