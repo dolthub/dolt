@@ -244,49 +244,61 @@ func (dt *CommitDiffTable) rootValForFilter(ctx *sql.Context, eqFilter *expressi
 func (dt *CommitDiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
 	var commitFilters []sql.Expression
 	for _, filter := range filters {
-		hasCommitFilters := false
-
-		if eqFilter, isEquality := filter.(*expression.Equals); isEquality {
-			if eqFilter == nil {
+		eqFilter, isEquality := filter.(*expression.Equals)
+		if !isEquality {
+			continue
+		}
+		for _, e := range []sql.Expression{eqFilter.Left(), eqFilter.Right()} {
+			val, ok := e.(*expression.GetField)
+			if !ok {
 				continue
 			}
-			for _, e := range []sql.Expression{eqFilter.Left(), eqFilter.Right()} {
-				if val, ok := e.(*expression.GetField); ok {
-					switch strings.ToLower(val.Name()) {
-					case toCommit:
-						if dt.toCommitFilter != nil {
-							dt.requiredFilterErr = ErrExactlyOneToCommit
-						}
-
-						hasCommitFilters = true
-						dt.toCommitFilter = eqFilter
-					case fromCommit:
-						if dt.fromCommitFilter != nil {
-							dt.requiredFilterErr = ErrExactlyOneFromCommit
-						}
-
-						hasCommitFilters = true
-						dt.fromCommitFilter = eqFilter
-					}
-				}
+			switch strings.ToLower(val.Name()) {
+			case toCommit, fromCommit:
+				commitFilters = append(commitFilters, filter)
 			}
 		}
-
-		if hasCommitFilters {
-			commitFilters = append(commitFilters, filter)
-		}
 	}
-
 	return commitFilters
 }
 
 // Filters returns the list of filters that are applied to this table.
 func (dt *CommitDiffTable) Filters() []sql.Expression {
+	if dt.toCommitFilter == nil || dt.fromCommitFilter == nil {
+		return nil
+	}
+
 	return []sql.Expression{dt.toCommitFilter, dt.fromCommitFilter}
 }
 
 // WithFilters returns a new sql.Table instance with the filters applied
-func (dt *CommitDiffTable) WithFilters(_ *sql.Context, _ []sql.Expression) sql.Table {
+func (dt *CommitDiffTable) WithFilters(_ *sql.Context, filters []sql.Expression) sql.Table {
+	for _, filter := range filters {
+		eqFilter, isEquality := filter.(*expression.Equals)
+		if eqFilter == nil || !isEquality {
+			continue
+		}
+		for _, e := range []sql.Expression{eqFilter.Left(), eqFilter.Right()} {
+			val, ok := e.(*expression.GetField)
+			if !ok {
+				continue
+			}
+			switch strings.ToLower(val.Name()) {
+			case toCommit:
+				if dt.toCommitFilter != nil {
+					dt.requiredFilterErr = ErrExactlyOneToCommit
+					return dt
+				}
+				dt.toCommitFilter = eqFilter
+			case fromCommit:
+				if dt.fromCommitFilter != nil {
+					dt.requiredFilterErr = ErrExactlyOneFromCommit
+					return dt
+				}
+				dt.fromCommitFilter = eqFilter
+			}
+		}
+	}
 	return dt
 }
 
