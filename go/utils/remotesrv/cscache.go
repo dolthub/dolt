@@ -40,22 +40,26 @@ type store interface {
 var _ store = &nbs.NomsBlockStore{}
 var _ store = &nbs.GenerationalNBS{}
 
-type DBCache struct {
+type LocalCSCache struct {
 	mu  *sync.Mutex
 	dbs map[string]store
 
 	fs filesys.Filesys
 }
 
-func NewLocalCSCache(filesys filesys.Filesys) *DBCache {
-	return &DBCache{
+func NewLocalCSCache(filesys filesys.Filesys) *LocalCSCache {
+	return &LocalCSCache{
 		&sync.Mutex{},
 		make(map[string]store),
 		filesys,
 	}
 }
 
-func (cache *DBCache) Get(org, repo, nbfVerStr string) (store, error) {
+type DBCache interface {
+	Get(org, repo, nbfVerStr string) (store, error)
+}
+
+func (cache *LocalCSCache) Get(org, repo, nbfVerStr string) (store, error) {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
 
@@ -86,4 +90,12 @@ func (cache *DBCache) Get(org, repo, nbfVerStr string) (store, error) {
 	cache.dbs[id] = newCS
 
 	return newCS, nil
+}
+
+type SingletonCSCache struct {
+	s store
+}
+
+func (cache SingletonCSCache) Get(org, repo, nbfVerStr string) (store, error) {
+	return cache.s, nil
 }

@@ -62,12 +62,12 @@ func newFileDetails() fileDetails {
 }
 
 type filehandler struct {
-	dbCache       *DBCache
+	dbCache       DBCache
 	expectedFiles fileDetails
 	fs            filesys.Filesys
 }
 
-func newFileHandler(dbCache *DBCache, expectedFiles fileDetails, fs filesys.Filesys) filehandler {
+func newFileHandler(dbCache DBCache, expectedFiles fileDetails, fs filesys.Filesys) filehandler {
 	return filehandler{dbCache, expectedFiles, fs}
 }
 
@@ -111,6 +111,7 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 		if len(tokens) != 3 {
 			logger(fmt.Sprintf("response to: %v method: %v http response code: %v", req.RequestURI, req.Method, http.StatusNotFound))
 			respWr.WriteHeader(http.StatusNotFound)
+			return
 		}
 
 		org := tokens[0]
@@ -178,7 +179,7 @@ func readTableFile(logger func(string), path string, respWr http.ResponseWriter,
 
 	logger(fmt.Sprintf("wrote %d bytes", n))
 
-	return http.StatusOK
+	return -1
 }
 
 type uploadreader struct {
@@ -216,7 +217,7 @@ func (u *uploadreader) Close() error {
 	return nil
 }
 
-func writeTableFile(ctx context.Context, logger func(string), dbCache *DBCache, expectedFiles fileDetails, org, repo, fileId string, request *http.Request) int {
+func writeTableFile(ctx context.Context, logger func(string), dbCache DBCache, expectedFiles fileDetails, org, repo, fileId string, request *http.Request) int {
 	_, ok := hash.MaybeParse(fileId)
 
 	if !ok {

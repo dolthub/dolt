@@ -36,14 +36,14 @@ import (
 
 type RemoteChunkStore struct {
 	HttpHost      string
-	csCache       *DBCache
+	csCache       DBCache
 	bucket        string
 	expectedFiles fileDetails
 	fs            filesys.Filesys
 	remotesapi.UnimplementedChunkStoreServiceServer
 }
 
-func NewHttpFSBackedChunkStore(httpHost string, csCache *DBCache, expectedFiles fileDetails, fs filesys.Filesys) *RemoteChunkStore {
+func NewHttpFSBackedChunkStore(httpHost string, csCache DBCache, expectedFiles fileDetails, fs filesys.Filesys) *RemoteChunkStore {
 	return &RemoteChunkStore{
 		HttpHost:      httpHost,
 		csCache:       csCache,
@@ -367,6 +367,11 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 	cs := rs.getOrCreateStore(req.RepoId, "GetRepoMetadata", req.ClientRepoFormat.NbfVersion)
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
+	}
+
+	err := cs.Rebase(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	size, err := cs.Size(ctx)

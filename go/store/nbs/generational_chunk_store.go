@@ -331,7 +331,7 @@ func (gcs *GenerationalNBS) GetChunkLocationsWithPaths(hashes hash.HashSet) (map
 			return nil, err
 		}
 		for k, v := range toadd {
-			res[prefix + "/" + k] = v
+			res[filepath.ToSlash(filepath.Join(prefix, k))] = v
 		}
 	}
 	return res, nil
