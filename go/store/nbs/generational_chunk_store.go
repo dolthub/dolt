@@ -319,19 +319,36 @@ func (gcs *GenerationalNBS) SupportedOperations() TableFileStoreOps {
 	return gcs.newGen.SupportedOperations()
 }
 
-func (gcs *GenerationalNBS) GetChunkLocations(hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
-	res, err := gcs.newGen.GetChunkLocations(hashes)
+func (gcs *GenerationalNBS) GetChunkLocationsWithPaths(hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
+	res, err := gcs.newGen.GetChunkLocationsWithPaths(hashes)
 	if err != nil {
 		return nil, err
 	}
 	if len(hashes) > 0 {
 		prefix := gcs.RelativeOldGenPath()
+		toadd, err := gcs.oldGen.GetChunkLocationsWithPaths(hashes)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range toadd {
+			res[prefix + "/" + k] = v
+		}
+	}
+	return res, nil
+}
+
+func (gcs *GenerationalNBS) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
+	res, err := gcs.newGen.GetChunkLocations(hashes)
+	if err != nil {
+		return nil, err
+	}
+	if len(hashes) > 0 {
 		toadd, err := gcs.oldGen.GetChunkLocations(hashes)
 		if err != nil {
 			return nil, err
 		}
 		for k, v := range toadd {
-			res[filepath.ToSlash(filepath.Join(prefix, k))] = v
+			res[k] = v
 		}
 	}
 	return res, nil

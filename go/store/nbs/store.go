@@ -116,10 +116,22 @@ type Range struct {
 	Length uint32
 }
 
-func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
+func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
+	locs, err := nbs.GetChunkLocations(hashes)
+	if err != nil {
+		return nil, err
+	}
+	toret := make(map[string]map[hash.Hash]Range, len(locs))
+	for k, v := range locs {
+		toret[k.String()] = v
+	}
+	return toret, nil
+}
+
+func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
 	gr := toGetRecords(hashes)
 
-	ranges := make(map[string]map[hash.Hash]Range)
+	ranges := make(map[hash.Hash]map[hash.Hash]Range)
 	f := func(css chunkSources) error {
 		for _, cs := range css {
 			switch tr := cs.(type) {
@@ -129,7 +141,7 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[string]ma
 					return err
 				}
 				if len(offsetRecSlice) > 0 {
-					y, ok := ranges[hash.Hash(tr.h).String()]
+					y, ok := ranges[hash.Hash(tr.h)]
 
 					if !ok {
 						y = make(map[hash.Hash]Range)
@@ -146,10 +158,10 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[string]ma
 						gr = toGetRecords(hashes)
 					}
 
-					ranges[hash.Hash(tr.h).String()] = y
+					ranges[hash.Hash(tr.h)] = y
 				}
 			case *chunkSourceAdapter:
-				y, ok := ranges[hash.Hash(tr.h).String()]
+				y, ok := ranges[hash.Hash(tr.h)]
 
 				if !ok {
 					y = make(map[hash.Hash]Range)
@@ -174,7 +186,7 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[string]ma
 					}
 				}
 
-				ranges[hash.Hash(tr.h).String()] = y
+				ranges[hash.Hash(tr.h)] = y
 
 				for _, h := range foundHashes {
 					delete(hashes, h)

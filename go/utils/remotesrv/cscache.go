@@ -34,7 +34,7 @@ type store interface {
 	nbs.TableFileStore
 
 	Path() (string, bool)
-	GetChunkLocations(hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, error)
+	GetChunkLocationsWithPaths(hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, error)
 }
 
 var _ store = &nbs.NomsBlockStore{}
