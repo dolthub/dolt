@@ -17,7 +17,6 @@ package dbfactory
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -44,8 +43,31 @@ var DoltDataDir = filepath.Join(DoltDir, DataDir)
 type FileFactory struct {
 }
 
-func (fact FileFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
-	return fmt.Errorf("file scheme cannot support this operation")
+// PrepareDB creates the directory for the DB if it doesn't exist, and returns and error if a file or symlink is at the
+// path given
+func (fact FileFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, u *url.URL, params map[string]interface{}) error {
+	path, err := url.PathUnescape(u.Path)
+	if err != nil {
+		return err
+	}
+
+	path = filepath.FromSlash(path)
+	path = u.Host + path
+
+
+	info, err := os.Stat(path)
+
+	if os.IsNotExist(err) {
+		return os.MkdirAll(path, os.ModeDir)
+	}
+
+	if err != nil {
+		return err
+	} else if !info.IsDir() {
+		return filesys.ErrIsFile
+	}
+
+	return nil
 }
 
 // CreateDB creates a local filesys backed database
