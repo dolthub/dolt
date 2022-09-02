@@ -182,8 +182,8 @@ func TestSingleScript(t *testing.T) {
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
-					Expected: []sql.Row{{1, "one", "two", nil, nil, nil, "added"}},
+					Query:    "SELECT COUNT(*) from dolt_diff('t', @Commit2, @Commit3);",
+					Expected: []sql.Row{{0}},
 				},
 			},
 		},
@@ -311,8 +311,8 @@ func TestSingleScriptPrepared(t *testing.T) {
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
-					Expected: []sql.Row{{1, "one", "two", nil, nil, nil, "added"}},
+					Query:    "SELECT COUNT(*) from dolt_diff('t', @Commit2, @Commit3);",
+					Expected: []sql.Row{{0}},
 				},
 			},
 		},
@@ -1204,7 +1204,6 @@ func TestDiffTableFunction(t *testing.T) {
 }
 
 func TestDiffTableFunctionPrepared(t *testing.T) {
-	//t.Skip()
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffTableFunctionScriptTests {
