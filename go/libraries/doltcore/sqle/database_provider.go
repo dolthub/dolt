@@ -178,7 +178,15 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 		return nil, err
 	}
 	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(name)
+		db, err = p.databaseForClone(ctx, name)
+		if err != nil {
+			// TODO: not found here?
+			return nil, err
+		}
+
+		if db == nil {
+			return nil, sql.ErrDatabaseNotFound.New(name)
+		}
 	}
 
 	// Don't track revision databases, just instantiate them on demand
@@ -638,9 +646,9 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 
 // databaseForClone returns a newly cloned database if read replication is enabled and a remote DB exists, or an error
 // otherwise
-func (p DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (sql.Database, dsess.InitialDbState, bool, error) {
+func (p DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (sql.Database, error) {
 	if !readReplicationActive(ctx) {
-		return nil, dsess.InitialDbState{}, false, nil
+		return nil, nil
 	}
 
 	var dbName string
@@ -653,10 +661,10 @@ func (p DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (
 
 	err := p.attemptCloneReplica(ctx, dbName)
 	if err != nil {
-		return nil, dsess.InitialDbState{}, false, err
+		return nil, err
 	}
 
-	return p.databaseForRevision(ctx, revDB)
+	return p.Database(ctx, revDB)
 }
 
 // TODO: figure out the right contract: which variables must be set? What happens if they aren't all set?
