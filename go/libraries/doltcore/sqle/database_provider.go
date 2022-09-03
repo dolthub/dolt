@@ -185,6 +185,38 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 	return db, nil
 }
 
+// attemptCloneReplica attempts to clone a database from the configured replication remote URL template, returning an error
+// if it cannot be found
+// TODO: distinct error for not found v. others
+func (p DoltDatabaseProvider) attemptCloneReplica(ctx *sql.Context, dbName string) error {
+	// TODO: these need some reworking, they don't make total sense together
+	_, readReplicaRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote)
+	if readReplicaRemoteName == "" {
+		// not a read replica DB
+		return nil
+	}
+
+	remoteName := readReplicaRemoteName.(string)
+
+	// TODO: error handling when not set
+	_, remoteUrlTemplate, _ := sql.SystemVariables.GetGlobal(dsess.ReplicationRemoteURLTemplate)
+	if remoteUrlTemplate == "" {
+		return nil
+	}
+
+	// TODO: url sanitize
+	// TODO: SQL identifiers aren't case sensitive, but URLs are, need a plan for this
+	remoteUrl := fmt.Sprintf(remoteUrlTemplate.(string), dbName)
+
+	// TODO: remote params for AWS, others
+	err := p.CloneDatabaseFromRemote(ctx, dbName, remoteName, "", remoteUrl, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 	_, err := p.Database(ctx, name)
 	return err == nil
@@ -382,7 +414,11 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 // is returned by this function, the caller can capture the error and safely clean up the failed
 // clone directory before returning the error to the user. This function should not be used directly;
 // use CloneDatabaseFromRemote instead.
-func (p DoltDatabaseProvider) cloneDatabaseFromRemote(ctx *sql.Context, dbName, remoteName, branch, remoteUrl string, remoteParams map[string]string) error {
+func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
+		ctx *sql.Context,
+		dbName, remoteName, branch, remoteUrl string,
+		remoteParams map[string]string,
+) error {
 	if p.remoteDialer == nil {
 		return fmt.Errorf("unable to clone remote database; no remote dialer configured")
 	}
@@ -598,6 +634,44 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 	}
 
 	return nil, dsess.InitialDbState{}, false, nil
+}
+
+// databaseForClone returns a newly cloned database if read replication is enabled and a remote DB exists, or an error
+// otherwise
+func (p DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (sql.Database, dsess.InitialDbState, bool, error) {
+	if !readReplicationActive(ctx) {
+		return nil, dsess.InitialDbState{}, false, nil
+	}
+
+	var dbName string
+	if strings.Contains(revDB, dbRevisionDelimiter) {
+		parts := strings.SplitN(revDB, dbRevisionDelimiter, 2)
+		dbName = parts[0]
+	} else {
+		dbName = revDB
+	}
+
+	err := p.attemptCloneReplica(ctx, dbName)
+	if err != nil {
+		return nil, dsess.InitialDbState{}, false, err
+	}
+
+	return p.databaseForRevision(ctx, revDB)
+}
+
+// TODO: figure out the right contract: which variables must be set? What happens if they aren't all set?
+func readReplicationActive(ctx *sql.Context) bool {
+	_, readReplicaRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote)
+	if readReplicaRemoteName == "" {
+		return false
+	}
+
+	_, remoteUrlTemplate, _ := sql.SystemVariables.GetGlobal(dsess.ReplicationRemoteURLTemplate)
+	if remoteUrlTemplate == "" {
+		return false
+	}
+
+	return true
 }
 
 // resolveAncestorSpec resolves the specified revSpec to a specific commit hash if it contains an ancestor reference
