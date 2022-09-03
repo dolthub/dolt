@@ -321,15 +321,18 @@ func configureReplication(ctx *sql.Context, name string, dialer dbfactory.GRPCDi
 		return nil
 	}
 
-	// TODO: url sanitize?
+	// TODO: url sanitize
 	remoteUrl := fmt.Sprintf(remoteUrlTemplate.(string), name)
 
 	// TODO: params for AWS, others that need them
 	r := env.NewRemote(remoteName, remoteUrl, nil)
 	// TODO: use the correct format here, should match created DB
 	err := r.Prepare(ctx, types.Format_Default, dialer)
+	if err != nil {
+		return err
+	}
 
-	_, err = getRemoteDb(ctx, r, dialer)
+	err = newEnv.AddRemote(r)
 	if err != nil {
 		return err
 	}
@@ -341,8 +344,8 @@ func configureReplication(ctx *sql.Context, name string, dialer dbfactory.GRPCDi
 	}
 
 	newEnv.DoltDB.SetCommitHooks(ctx, commitHooks)
-
-	return db.rsw.AddRemote(r)
+	
+	return nil
 }
 
 // CloneDatabaseFromRemote implements DoltDatabaseProvider interface

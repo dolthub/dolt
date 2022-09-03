@@ -18,8 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -439,7 +441,7 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 
 	if u.Scheme != "" && fs != nil {
 		if u.Scheme == dbfactory.FileScheme || u.Scheme == dbfactory.LocalBSScheme {
-			absUrl, err := getAbsFileRemoteUrl(u.Host+u.Path, u.Scheme, fs)
+			absUrl, err := getAbsFileRemoteUrl(u, fs)
 
 			if err != nil {
 				return "", "", err
@@ -468,7 +470,11 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 	return dbfactory.HTTPSScheme, "https://" + path.Join(hostName, u.Path), nil
 }
 
-func getAbsFileRemoteUrl(urlStr string, scheme string, fs filesys2.Filesys) (string, error) {
+func getAbsFileRemoteUrl(u *url.URL, fs filesys2.Filesys) (string, error) {
+
+	urlStr := u.Host+u.Path
+	scheme := u.Scheme
+
 	var err error
 	urlStr = filepath.Clean(urlStr)
 	urlStr, err = fs.Abs(urlStr)
@@ -489,10 +495,19 @@ func getAbsFileRemoteUrl(urlStr string, scheme string, fs filesys2.Filesys) (str
 	}
 
 	urlStr = strings.ReplaceAll(urlStr, `\`, "/")
-	if !strings.HasPrefix(urlStr, "/") {
+	if !strings.HasPrefix(urlStr, "/") && !isDriveLetterPath(urlStr) {
 		urlStr = "/" + urlStr
 	}
+
 	return scheme + "://" + urlStr, nil
+}
+
+func isDriveLetter(b byte) bool {
+	return 'a' <= b && b <= 'z' || 'A' <= b && b <= 'Z'
+}
+
+func isDriveLetterPath(name string) bool {
+	return runtime.GOOS == "windows" && len(name) >= 3 && isDriveLetter(name[0]) && name[1] == ':' && name[2] == '/'
 }
 
 // GetDefaultBranch returns the default branch from among the branches given, returning
