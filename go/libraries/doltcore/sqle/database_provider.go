@@ -338,6 +338,7 @@ func configureReplication(ctx *sql.Context, name string, dialer dbfactory.GRPCDi
 	}
 
 	// TODO: get background threads from the engine
+	// TODO: we need to run the hooks to push the init commit
 	commitHooks, err := GetCommitHooks(ctx, sql.NewBackgroundThreads(), newEnv, io.Discard)
 	if err != nil {
 		return err
