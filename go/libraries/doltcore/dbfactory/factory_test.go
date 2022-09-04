@@ -61,3 +61,12 @@ func TestCreateMemDB(t *testing.T) {
 	assert.NotNil(t, vrw)
 	assert.NotNil(t, ns)
 }
+
+func TestCreateDB(t *testing.T) {
+	ctx := context.Background()
+	db, vrw, ns, err := CreateDB(ctx, types.Format_Default, "oss://aaa/bbb", nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, db)
+	assert.NotNil(t, vrw)
+	assert.NotNil(t, ns)
+}
