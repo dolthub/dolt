@@ -720,6 +720,24 @@ SQL
     [[ "$output" = 'UPDATE `t` SET `val1`=30,`val3`=4 WHERE `pk`=1;' ]] || false
 }
 
+@test "diff: skinny flag only shows row changed" {
+    dolt sql -q "create table t(pk int primary key, val1 int, val2 int)"
+    dolt add .
+    dolt sql -q "INSERT INTO t VALUES (1, 1, 1)"
+    dolt commit -am "cm1"
+
+    dolt sql -q "UPDATE t SET val1=2 where pk=1"
+    dolt commit -am "cm2"
+
+    dolt sql -q "UPDATE t SET val1=3 where pk=1"
+    dolt commit -am "cm3"
+
+    run dolt diff --skinny HEAD~1
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ 'val2' ]] || false
+    [[ "$output" =~ 'val1' ]] || false
+}
+
 @test "diff: keyless sql diffs" {
     
     dolt sql -q "create table t(pk int, val int)"
