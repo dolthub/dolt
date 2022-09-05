@@ -12,6 +12,13 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"net/url"
+	"os"
+)
+
+const (
+	ossEndpointEnvKey        = "OSS_ENDPOINT"
+	ossAccessKeyIDEnvKey     = "OSS_ACCESS_KEY_ID"
+	ossAccessKeySecretEnvKey = "OSS_ACCESS_KEY_SECRET"
 )
 
 // OSSFactory is a DBFactory implementation for creating GCS backed databases
@@ -36,12 +43,7 @@ func (fact OSSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinForm
 	// oss://[bucket]/[key]
 	bucket := urlObj.Hostname()
 	prefix := urlObj.Path
-	// todo get endpoint accesskeyid and secret from env or params
-	ossClient, err := oss.New(
-		"endpoint",
-		"accesskey",
-		"secret",
-	)
+	ossClient, err := getOSSClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize oss err: %s", err)
 	}
@@ -51,4 +53,22 @@ func (fact OSSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinForm
 	}
 	q := nbs.NewUnlimitedMemQuotaProvider()
 	return nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
+}
+
+func getOSSClient() (*oss.Client, error) {
+	var endpoint, accessKeyID, accessKeySecret string
+	if endpoint = os.Getenv(ossEndpointEnvKey); endpoint == "" {
+		return nil, fmt.Errorf("failed to find endpoint from env %s", ossEndpointEnvKey)
+	}
+	if accessKeyID = os.Getenv(ossAccessKeyIDEnvKey); accessKeyID == "" {
+		return nil, fmt.Errorf("failed to find accessKeyID from env %s", ossAccessKeyIDEnvKey)
+	}
+	if accessKeySecret = os.Getenv(ossAccessKeySecretEnvKey); accessKeySecret == "" {
+		return nil, fmt.Errorf("failed to find accessKeySecret from env %s", ossAccessKeySecretEnvKey)
+	}
+	return oss.New(
+		endpoint,
+		accessKeyID,
+		accessKeySecret,
+	)
 }

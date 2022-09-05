@@ -2,6 +2,7 @@ package blobstore
 
 import (
 	"context"
+	"fmt"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"io"
 	"net/http"
@@ -58,7 +59,7 @@ func (ob *OSSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.R
 		if err != nil {
 			return nil, "", err
 		}
-		return reader, "", nil
+		return reader, ob.getVersion(meta), nil
 	}
 	size, err := strconv.ParseInt(meta.Get(oss.HTTPHeaderContentLength), 10, 64)
 	if err != nil {
@@ -69,7 +70,7 @@ func (ob *OSSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.R
 	if err != nil {
 		return nil, "", err
 	}
-	return reader, oss.GetVersionId(meta), nil
+	return reader, ob.getVersion(meta), nil
 }
 
 func (ob *OSSBlobstore) Put(ctx context.Context, key string, reader io.Reader) (string, error) {
@@ -77,25 +78,35 @@ func (ob *OSSBlobstore) Put(ctx context.Context, key string, reader io.Reader) (
 	if err := ob.bucket.PutObject(ob.absKey(key), reader, oss.GetResponseHeader(&meta)); err != nil {
 		return "", err
 	}
-	return oss.GetVersionId(meta), nil
+	return ob.getVersion(meta), nil
 }
 
 func (ob *OSSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, reader io.Reader) (string, error) {
 	var options []oss.Option
 	if expectedVersion != "" {
 		options = append(options, oss.VersionId(expectedVersion))
-	} else {
-		options = append(options, oss.ForbidOverWrite(true))
 	}
 	var meta http.Header
-	if err := ob.bucket.PutObject(ob.absKey(key), reader, oss.GetResponseHeader(&meta)); err != nil {
+	options = append(options, oss.GetResponseHeader(&meta))
+	if err := ob.bucket.PutObject(ob.absKey(key), reader, options...); err != nil {
+		ossErr, ok := err.(oss.ServiceError)
+		if ok {
+			return "", CheckAndPutError{key, expectedVersion, fmt.Sprintf("unknown (OSS error code %d)", ossErr.StatusCode)}
+		}
 		return "", err
 	}
-	return oss.GetVersionId(meta), nil
+	return ob.getVersion(meta), nil
 }
 
 func (ob *OSSBlobstore) absKey(key string) string {
 	return path.Join(ob.prefix, key)
+}
+
+func (ob *OSSBlobstore) getVersion(meta http.Header) string {
+	if ob.enableVersion {
+		return oss.GetVersionId(meta)
+	}
+	return ""
 }
 
 func normalizePrefix(prefix string) string {
