@@ -60,6 +60,7 @@ const (
 	limitParam  = "limit"
 	SQLFlag     = "sql"
 	CachedFlag  = "cached"
+	SkinnyFlag  = "skinny"
 )
 
 var diffDocs = cli.CommandDocumentationContent{
@@ -96,6 +97,7 @@ type diffArgs struct {
 	tableSet   *set.StrSet
 	limit      int
 	where      string
+	skinny     bool
 }
 
 type DiffCmd struct{}
@@ -129,6 +131,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
 	ap.SupportsFlag(CachedFlag, "c", "Show only the unstaged data changes.")
+	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only the primary key and the rows that changed")
 	return ap
 }
 
@@ -183,6 +186,8 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	} else if apr.Contains(SummaryFlag) {
 		dArgs.diffParts = Summary
 	}
+
+	dArgs.skinny = apr.Contains(SkinnyFlag)
 
 	f := apr.GetValueOrDefault(FormatFlag, "tabular")
 	switch strings.ToLower(f) {
@@ -613,9 +618,42 @@ func diffRows(
 
 	defer rowIter.Close(sqlCtx)
 
-	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, rowWriter)
-	if err != nil {
-		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
+	if dArgs.skinny {
+		oldRows, newRows, modifiedColNames, err := getDiffRows(sqlCtx, sch, rowIter, unionSch, dArgs.skinny)
+		if err != nil {
+			return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
+		}
+
+		// instantiate a new schema that only contains the columns with changes
+		var filteredUnionSch sql.Schema
+		for _, s := range unionSch {
+			for colName := range modifiedColNames {
+				if strings.Contains(s.Name, colName) {
+					filteredUnionSch = append(filteredUnionSch, s)
+				}
+			}
+		}
+
+		// instantiate a new RowWriter with the new schema that only contains the columns with changes
+		rowWriter, err = dw.RowWriter(ctx, td, filteredUnionSch)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+
+		writeFilteredResults(sqlCtx, oldRows, newRows, rowWriter)
+		if err != nil {
+			return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
+		}
+	} else {
+		oldRows, newRows, _, err := getDiffRows(sqlCtx, sch, rowIter, unionSch, dArgs.skinny)
+		if err != nil {
+			return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
+		}
+
+		writeFilteredResults(sqlCtx, oldRows, newRows, rowWriter)
+		if err != nil {
+			return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
+		}
 	}
 
 	return nil
@@ -651,30 +689,68 @@ func getColumnNamesString(fromSch, toSch schema.Schema) string {
 	return strings.Join(cols, ",")
 }
 
-func writeDiffResults(
-	ctx *sql.Context,
+func getDiffRows(
+	sqlCtx *sql.Context,
 	diffQuerySch sql.Schema,
-	targetSch sql.Schema,
-	iter sql.RowIter,
-	writer diff.SqlRowDiffWriter,
-) error {
-	ds, err := newDiffSplitter(diffQuerySch, targetSch)
+	rowIter sql.RowIter,
+	unionSch sql.Schema,
+	filterChangedCols bool,
+) ([]rowDiff, []rowDiff, map[string]bool, error) {
+	oldRows, newRows := []rowDiff{}, []rowDiff{}
+	modifiedColNames := make(map[string]bool)
+
+	ds, err := newDiffSplitter(diffQuerySch, unionSch)
 	if err != nil {
-		return err
+		return oldRows, newRows, modifiedColNames, err
 	}
 
 	for {
-		r, err := iter.Next(ctx)
+		r, err := rowIter.Next(sqlCtx)
 		if err == io.EOF {
-			return writer.Close(ctx)
-		} else if err != nil {
-			return err
+			break
 		}
 
 		oldRow, newRow, err := ds.splitDiffResultRow(r)
 		if err != nil {
-			return err
+			return oldRows, newRows, modifiedColNames, err
 		}
+
+		if filterChangedCols {
+			var filteredOldRow, filteredNewRow rowDiff
+			for i, changeType := range oldRow.colDiffs {
+				if changeType != diff.None || unionSch[i].PrimaryKey {
+					modifiedColNames[unionSch[i].Name] = true
+
+					filteredOldRow.row = append(filteredOldRow.row, oldRow.row[i])
+					filteredOldRow.colDiffs = append(filteredOldRow.colDiffs, oldRow.colDiffs[i])
+					filteredOldRow.rowDiff = oldRow.rowDiff
+
+					filteredNewRow.row = append(filteredNewRow.row, newRow.row[i])
+					filteredNewRow.colDiffs = append(filteredNewRow.colDiffs, newRow.colDiffs[i])
+					filteredNewRow.rowDiff = newRow.rowDiff
+				}
+			}
+
+			oldRows = append(oldRows, filteredOldRow)
+			newRows = append(newRows, filteredNewRow)
+		} else {
+			oldRows = append(oldRows, oldRow)
+			newRows = append(newRows, newRow)
+		}
+	}
+
+	return oldRows, newRows, modifiedColNames, nil
+}
+
+func writeFilteredResults(
+	ctx *sql.Context,
+	oldRows []rowDiff,
+	newRows []rowDiff,
+	writer diff.SqlRowDiffWriter,
+) error {
+	for i := range oldRows {
+		oldRow := oldRows[i]
+		newRow := newRows[i]
 
 		if oldRow.row != nil {
 			err := writer.WriteRow(ctx, oldRow.row, oldRow.rowDiff, oldRow.colDiffs)
@@ -690,4 +766,6 @@ func writeDiffResults(
 			}
 		}
 	}
+
+	return writer.Close(ctx)
 }
