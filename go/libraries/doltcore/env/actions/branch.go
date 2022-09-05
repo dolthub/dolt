@@ -243,6 +243,12 @@ func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoi
 // should be the pre-checkout head. The returned roots struct has |Head| set to |branchRoot|.
 func UpdateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, force bool) (doltdb.Roots, error) {
 	conflicts := set.NewStrSet([]string{})
+	if roots.Head == nil {
+		roots.Working = branchRoot
+		roots.Staged = branchRoot
+		roots.Head = branchRoot
+		return roots, nil
+	}
 
 	wrkTblHashes, err := moveModifiedTables(ctx, roots.Head, branchRoot, roots.Working, conflicts, force)
 	if err != nil {
@@ -314,10 +320,10 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	}
 
 	roots, err := dEnv.Roots(ctx)
-	if errors.Is(err, doltdb.ErrBranchNotFound) {
+	// roots will be empty/nil if the working set is not set (working set is not set if the current branch was deleted)
+	if errors.Is(err, doltdb.ErrBranchNotFound) || errors.Is(err, doltdb.ErrWorkingSetNotFound) {
 		roots, err = dEnv.RecoveryRoots(ctx)
-	}
-	if err != nil {
+	} else if err != nil {
 		return err
 	}
 

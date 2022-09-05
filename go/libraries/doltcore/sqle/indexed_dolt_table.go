@@ -15,6 +15,8 @@
 package sqle
 
 import (
+	"sync"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -29,6 +31,7 @@ type IndexedDoltTable struct {
 	idx          index.DoltIndex
 	lb           index.LookupBuilder
 	isDoltFormat bool
+	mu           *sync.Mutex
 }
 
 func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
@@ -36,6 +39,7 @@ func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
 		table:        t,
 		idx:          idx,
 		isDoltFormat: types.IsFormat_DOLT(t.Format()),
+		mu:           &sync.Mutex{},
 	}
 }
 
@@ -70,6 +74,8 @@ func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, er
 }
 
 func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	idt.mu.Lock()
+	defer idt.mu.Unlock()
 	key, canCache, err := idt.table.DataCacheKey(ctx)
 	if err != nil {
 		return nil, err
@@ -82,6 +88,8 @@ func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition)
 }
 
 func (idt *IndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	idt.mu.Lock()
+	defer idt.mu.Unlock()
 	key, canCache, err := idt.table.DataCacheKey(ctx)
 	if err != nil {
 		return nil, err
@@ -109,6 +117,7 @@ func NewWritableIndexedDoltTable(t *WritableDoltTable, idx index.DoltIndex) *Wri
 		WritableDoltTable: t,
 		idx:               idx,
 		isDoltFormat:      types.IsFormat_DOLT(idx.Format()),
+		mu:                &sync.Mutex{},
 	}
 }
 
@@ -117,6 +126,7 @@ type WritableIndexedDoltTable struct {
 	idx          index.DoltIndex
 	isDoltFormat bool
 	lb           index.LookupBuilder
+	mu           *sync.Mutex
 }
 
 var _ sql.Table2 = (*WritableIndexedDoltTable)(nil)
@@ -130,6 +140,8 @@ func (t *WritableIndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIt
 }
 
 func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	key, canCache, err := t.DataCacheKey(ctx)
 	if err != nil {
 		return nil, err

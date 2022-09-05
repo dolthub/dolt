@@ -124,8 +124,17 @@ func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
 	return diffOrderedTrees(ctx, from.tuples, to.tuples, cb)
 }
 
+// RangeDiffMaps returns diffs within a Range. See Range for which diffs are
+// returned.
 func RangeDiffMaps(ctx context.Context, from, to Map, rng Range, cb DiffFn) error {
 	return rangeDiffOrderedTrees(ctx, from.tuples, to.tuples, rng, cb)
+}
+
+// DiffMapsKeyRange returns diffs within a physical key range. The key range is
+// specified by |start| and |stop|. If |start| and/or |stop| is null, then the
+// range is unbounded towards that end.
+func DiffMapsKeyRange(ctx context.Context, from, to Map, start, stop val.Tuple, cb DiffFn) error {
+	return diffKeyRangeOrderedTrees(ctx, from.tuples, to.tuples, start, stop, cb)
 }
 
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
@@ -231,6 +240,25 @@ func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 		return nil, err
 	}
 	return filteredIter{iter: iter, rng: rng}, nil
+}
+
+// IterKeyRange iterates over a physical key range defined by |start| and
+// |stop|. If |startInclusive| and/or |stop| is nil, the range will be open
+// towards that end.
+func (m Map) IterKeyRange(ctx context.Context, start, stop val.Tuple) (MapIter, error) {
+	return m.tuples.iterKeyRange(ctx, start, stop)
+}
+
+// GetOrdinalForKey returns the smallest ordinal position at which the key >=
+// |query|.
+func (m Map) GetOrdinalForKey(ctx context.Context, query val.Tuple) (uint64, error) {
+	return m.tuples.getOrdinalForKey(ctx, query)
+}
+
+// GetKeyRangeCardinality returns the number of key-value tuples between |start|
+// and |stopExclusive|. If |start| and/or |stop| is null that end is unbounded.
+func (m Map) GetKeyRangeCardinality(ctx context.Context, startInclusive val.Tuple, endExclusive val.Tuple) (uint64, error) {
+	return m.tuples.getKeyRangeCardinality(ctx, startInclusive, endExclusive)
 }
 
 func (m Map) Node() tree.Node {
