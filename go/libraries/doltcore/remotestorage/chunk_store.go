@@ -941,7 +941,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 
 	for h, contentHash := range hashToContentHash {
 		// Can parallelize this in the future if needed
-		err := dcs.uploadTableFileWithRetries(ctx, h, contentHash, func() (io.ReadCloser, uint64, error) {
+		err := dcs.uploadTableFileWithRetries(ctx, h, uint64(hashToCount[h]), contentHash, func() (io.ReadCloser, uint64, error) {
 			data := hashToData[h]
 			return io.NopCloser(bytes.NewReader(data)), uint64(len(data)), nil
 		})
@@ -953,7 +953,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 	return hashToCount, nil
 }
 
-func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, tableFileId hash.Hash, tableFileContentHash []byte, getContent func() (io.ReadCloser, uint64, error)) error {
+func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, tableFileId hash.Hash, numChunks uint64, tableFileContentHash []byte, getContent func() (io.ReadCloser, uint64, error)) error {
 	op := func() error {
 		body, contentLength, err := getContent()
 		if err != nil {
@@ -964,6 +964,7 @@ func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, table
 			Id:            tableFileId[:],
 			ContentLength: contentLength,
 			ContentHash:   tableFileContentHash,
+			NumChunks:     numChunks,
 		}
 
 		dcs.logf("getting upload location for file %s", tableFileId.String())
@@ -1247,7 +1248,7 @@ func (dcs *DoltChunkStore) SupportedOperations() nbs.TableFileStoreOps {
 // WriteTableFile reads a table file from the provided reader and writes it to the chunk store.
 func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	fileIdBytes := hash.Parse(fileId)
-	err := dcs.uploadTableFileWithRetries(ctx, fileIdBytes, contentHash, getRd)
+	err := dcs.uploadTableFileWithRetries(ctx, fileIdBytes, uint64(numChunks), contentHash, getRd)
 	if err != nil {
 		return err
 	}

@@ -142,6 +142,11 @@ func (mut MutableMap) HasEdits() bool {
 	return mut.tuples.edits.Count() > 0
 }
 
+// Descriptors returns the key and value val.TupleDesc.
+func (mut MutableMap) Descriptors() (val.TupleDesc, val.TupleDesc) {
+	return mut.keyDesc, mut.valDesc
+}
+
 func debugFormat(ctx context.Context, m MutableMap) (string, error) {
 	kd, vd := m.keyDesc, m.valDesc
 
