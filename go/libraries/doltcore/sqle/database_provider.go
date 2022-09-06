@@ -330,7 +330,7 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	}
 
 	// If replication is configured, set it up for the new database as well
-	err = configureReplication(ctx, name, p.remoteDialer, newEnv, db)
+	err = p.configureReplication(ctx, name, newEnv)
 	if err != nil {
 		return err
 	}
@@ -347,7 +347,7 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	return sess.AddDB(ctx, dbstate)
 }
 
-func configureReplication(ctx *sql.Context, name string, dialer dbfactory.GRPCDialProvider, newEnv *env.DoltEnv, db Database) error {
+func (p DoltDatabaseProvider) configureReplication(ctx *sql.Context, name string, newEnv *env.DoltEnv) error {
 	_, replicationRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
 	if replicationRemoteName == "" {
 		return nil
@@ -369,7 +369,7 @@ func configureReplication(ctx *sql.Context, name string, dialer dbfactory.GRPCDi
 	// TODO: params for AWS, others that need them
 	r := env.NewRemote(remoteName, remoteUrl, nil)
 	// TODO: use the correct format here, should match created DB
-	err := r.Prepare(ctx, types.Format_Default, dialer)
+	err := r.Prepare(ctx, types.Format_Default, p.remoteDialer)
 	if err != nil {
 		return err
 	}
@@ -380,15 +380,16 @@ func configureReplication(ctx *sql.Context, name string, dialer dbfactory.GRPCDi
 	}
 
 	// TODO: get background threads from the engine
-	// TODO: we need to run the hooks to push the init commit
 	commitHooks, err := GetCommitHooks(ctx, sql.NewBackgroundThreads(), newEnv, io.Discard)
 	if err != nil {
 		return err
 	}
 
 	newEnv.DoltDB.SetCommitHooks(ctx, commitHooks)
-	
-	return nil
+
+	// After setting hooks on the newly created DB, we need to do the first push manually
+	branchRef := ref.NewBranchRef(p.defaultBranch)
+	return newEnv.DoltDB.ExecuteCommitHooks(ctx, branchRef.String())
 }
 
 // CloneDatabaseFromRemote implements DoltDatabaseProvider interface

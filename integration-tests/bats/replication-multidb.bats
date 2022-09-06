@@ -129,6 +129,26 @@ SQL
     [[ "$output" =~ "new_table" ]] || false
 }
 
+@test "replication-multidb: push newly created database with no commits" {
+    dolt config --global --add sqlserver.global.dolt_replicate_to_remote remote1
+    dolt sql -q "set @@persist.dolt_replication_remote_url_template = 'file://$TMPDIRS/rem1/%s'"
+
+    dolt sql --data-dir=dbs1 -q "create database newdb;"
+
+    mkdir -p "${TMPDIRS}/dbs2"
+    cd $TMPDIRS
+    dolt clone "file://./rem1/newdb" "dbs2/newdb"
+
+    # this is a hack: we have to change our persisted global server
+    # vars for the sql command to work on the replica TODO: fix this
+    # mess
+    dolt config --global --unset sqlserver.global.dolt_replicate_to_remote
+    
+    run dolt sql --data-dir=dbs2 -q "use newdb; show tables" -r csv
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+}
+
 @test "replication-multidb: pull on read" {
     push_helper $TMPDIRS
     dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
