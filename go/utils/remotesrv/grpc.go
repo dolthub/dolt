@@ -504,3 +504,19 @@ func getReqLogger(method, callName string) func(string) {
 		log.Println(callId, "-", msg)
 	}
 }
+
+type ReadOnlyChunkStore struct {
+	remotesapi.ChunkStoreServiceServer
+}
+
+func (rs ReadOnlyChunkStore) GetUploadLocations(ctx context.Context, req *remotesapi.GetUploadLocsRequest) (*remotesapi.GetUploadLocsResponse, error) {
+	return nil, status.Error(codes.PermissionDenied, "this server only provides read-only access")
+}
+
+func (rs ReadOnlyChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.AddTableFilesRequest) (*remotesapi.AddTableFilesResponse, error) {
+	return nil, status.Error(codes.PermissionDenied, "this server only provides read-only access")
+}
+
+func (rs ReadOnlyChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRequest) (*remotesapi.CommitResponse, error) {
+	return nil, status.Error(codes.PermissionDenied, "this server only provides read-only access")
+}
