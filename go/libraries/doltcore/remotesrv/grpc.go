@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package remotesrv
 
 import (
 	"context"
@@ -90,7 +90,7 @@ func (rs *RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasCh
 	return resp, nil
 }
 
-func (rs *RemoteChunkStore) getRelativeStorePath(cs store) (string, error) {
+func (rs *RemoteChunkStore) getRelativeStorePath(cs RemoteSrvStore) (string, error) {
 	cspath, ok := cs.Path()
 	if !ok {
 		return "", status.Error(codes.Internal, "chunkstore misconfigured; cannot generate HTTP paths")
@@ -158,7 +158,7 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 	defer func() { logger("finished") }()
 
 	var repoID *remotesapi.RepoId
-	var cs store
+	var cs RemoteSrvStore
 	var prefix string
 	for {
 		req, err := stream.Recv()
@@ -423,7 +423,7 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 	return resp, nil
 }
 
-func getTableFileInfo(rs *RemoteChunkStore, logger func(string), tableList []nbs.TableFile, req *remotesapi.ListTableFilesRequest, cs store) ([]*remotesapi.TableFileInfo, error) {
+func getTableFileInfo(rs *RemoteChunkStore, logger func(string), tableList []nbs.TableFile, req *remotesapi.ListTableFilesRequest, cs RemoteSrvStore) ([]*remotesapi.TableFileInfo, error) {
 	prefix, err := rs.getRelativeStorePath(cs)
 	if err != nil {
 		return nil, err
@@ -473,11 +473,11 @@ func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.A
 	return &remotesapi.AddTableFilesResponse{Success: true}, nil
 }
 
-func (rs *RemoteChunkStore) getStore(repoId *remotesapi.RepoId, rpcName string) store {
+func (rs *RemoteChunkStore) getStore(repoId *remotesapi.RepoId, rpcName string) RemoteSrvStore {
 	return rs.getOrCreateStore(repoId, rpcName, types.Format_Default.VersionString())
 }
 
-func (rs *RemoteChunkStore) getOrCreateStore(repoId *remotesapi.RepoId, rpcName, nbfVerStr string) store {
+func (rs *RemoteChunkStore) getOrCreateStore(repoId *remotesapi.RepoId, rpcName, nbfVerStr string) RemoteSrvStore {
 	org := repoId.Org
 	repoName := repoId.RepoName
 
