@@ -217,7 +217,8 @@ func (p DoltDatabaseProvider) attemptCloneReplica(ctx *sql.Context, dbName strin
 	remoteUrl := fmt.Sprintf(remoteUrlTemplate.(string), dbName)
 
 	// TODO: remote params for AWS, others
-	err := p.CloneDatabaseFromRemote(ctx, dbName, remoteName, "", remoteUrl, nil)
+	// TODO: this needs to be robust in the face of the DB not having the default branch
+	err := p.CloneDatabaseFromRemote(ctx, dbName, p.defaultBranch, remoteName, remoteUrl, nil)
 	if err != nil {
 		return err
 	}
