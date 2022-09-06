@@ -84,8 +84,9 @@ func (dt *UnscopedDiffTable) WithFilters(ctx *sql.Context, filters []sql.Express
 		if err != nil {
 			return nil
 		}
-
-		dt.cmItr = doltdb.NewFilteringCommitItr(dt.cmItr, commitCheck)
+		ndt := *dt
+		ndt.cmItr = doltdb.NewFilteringCommitItr(dt.cmItr, commitCheck)
+		return &ndt
 	}
 
 	return dt
@@ -305,7 +306,7 @@ func (itr *doltDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, error) 
 	), nil
 }
 
-// loadTableChanges loads the next commit's table changes and metadata
+// loadTableChanges loads the current commit's table changes and metadata
 // into the iterator.
 func (itr *doltDiffCommitHistoryRowItr) loadTableChanges(ctx context.Context, commit *doltdb.Commit) error {
 	tableChanges, err := itr.calculateTableChanges(ctx, commit)
@@ -512,6 +513,27 @@ func getCommitsFromCommitHashEquality(ctx *sql.Context, ddb *doltdb.DoltDB, filt
 				cm := getCommitFromHash(ctx, ddb, v.(string))
 				if cm != nil {
 					commits = append(commits, cm)
+				}
+			}
+		case *expression.InTuple:
+			switch r := f.Right().(type) {
+			case expression.Tuple:
+				right, err := r.Eval(ctx, nil)
+				if err == nil && right != nil {
+					isCommitHashEquality = true
+					if len(r) == 1 {
+						cm := getCommitFromHash(ctx, ddb, right.(string))
+						if cm != nil {
+							commits = append(commits, cm)
+						}
+					} else {
+						for _, el := range right.([]interface{}) {
+							cm := getCommitFromHash(ctx, ddb, el.(string))
+							if cm != nil {
+								commits = append(commits, cm)
+							}
+						}
+					}
 				}
 			}
 		}
