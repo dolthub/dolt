@@ -31,6 +31,7 @@ import (
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -61,8 +62,13 @@ func newFileDetails() fileDetails {
 }
 
 type filehandler struct {
-	dbCache       *DBCache
+	dbCache       DBCache
 	expectedFiles fileDetails
+	fs            filesys.Filesys
+}
+
+func newFileHandler(dbCache DBCache, expectedFiles fileDetails, fs filesys.Filesys) filehandler {
+	return filehandler{dbCache, expectedFiles, fs}
 }
 
 func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
@@ -70,24 +76,49 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	defer func() { logger("finished") }()
 
 	path := strings.TrimLeft(req.URL.Path, "/")
-	tokens := strings.Split(path, "/")
-
-	if len(tokens) != 3 {
-		logger(fmt.Sprintf("response to: %v method: %v http response code: %v", req.RequestURI, req.Method, http.StatusNotFound))
-		respWr.WriteHeader(http.StatusNotFound)
-	}
-
-	org := tokens[0]
-	repo := tokens[1]
-	hashStr := tokens[2]
 
 	statusCode := http.StatusMethodNotAllowed
 	switch req.Method {
 	case http.MethodGet:
-		statusCode = readTableFile(logger, org, repo, hashStr, respWr, req)
+		path = filepath.Clean(path)
+		if strings.HasPrefix(path, "../") || strings.Contains(path, "/../") || strings.HasSuffix(path, "/..") {
+			logger("bad request with .. for path " + path)
+			respWr.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		i := strings.LastIndex(path, "/")
+		if i == -1 {
+			logger("bad request with -1 LastIndex of '/' for path " + path)
+			respWr.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		_, ok := hash.MaybeParse(path[i+1:])
+		if !ok {
+			logger("bad request with unparseable last path component " + path[i+1:])
+			respWr.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		abs, err := fh.fs.Abs(path)
+		if err != nil {
+			logger(fmt.Sprintf("could not get absolute path: %s", err.Error()))
+			respWr.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		statusCode = readTableFile(logger, abs, respWr, req)
 
 	case http.MethodPost, http.MethodPut:
-		statusCode = writeTableFile(req.Context(), logger, fh.dbCache, fh.expectedFiles, org, repo, hashStr, req)
+		tokens := strings.Split(path, "/")
+		if len(tokens) != 3 {
+			logger(fmt.Sprintf("response to: %v method: %v http response code: %v", req.RequestURI, req.Method, http.StatusNotFound))
+			respWr.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		org := tokens[0]
+		repo := tokens[1]
+		file := tokens[2]
+
+		statusCode = writeTableFile(req.Context(), logger, fh.dbCache, fh.expectedFiles, org, repo, file, req)
 	}
 
 	if statusCode != -1 {
@@ -95,9 +126,8 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func readTableFile(logger func(string), org, repo, fileId string, respWr http.ResponseWriter, req *http.Request) int {
+func readTableFile(logger func(string), path string, respWr http.ResponseWriter, req *http.Request) int {
 	rangeStr := req.Header.Get("Range")
-	path := filepath.Join(org, repo, fileId)
 
 	var r io.ReadCloser
 	var readSize int64
@@ -149,7 +179,7 @@ func readTableFile(logger func(string), org, repo, fileId string, respWr http.Re
 
 	logger(fmt.Sprintf("wrote %d bytes", n))
 
-	return http.StatusOK
+	return -1
 }
 
 type uploadreader struct {
@@ -187,7 +217,7 @@ func (u *uploadreader) Close() error {
 	return nil
 }
 
-func writeTableFile(ctx context.Context, logger func(string), dbCache *DBCache, expectedFiles fileDetails, org, repo, fileId string, request *http.Request) int {
+func writeTableFile(ctx context.Context, logger func(string), dbCache DBCache, expectedFiles fileDetails, org, repo, fileId string, request *http.Request) int {
 	_, ok := hash.MaybeParse(fileId)
 
 	if !ok {
