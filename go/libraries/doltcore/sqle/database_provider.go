@@ -664,7 +664,8 @@ func (p DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (
 
 	err := p.attemptCloneReplica(ctx, dbName)
 	if err != nil {
-		return nil, err
+		ctx.GetLogger().Warnf("couldn't clone database %s: %s", dbName, err.Error())
+		return nil, nil
 	}
 
 	return p.Database(ctx, revDB)

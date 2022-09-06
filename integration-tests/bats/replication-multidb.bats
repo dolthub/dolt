@@ -217,6 +217,10 @@ SQL
     [[ "$output" =~ "new_table" ]] || false
 
     [ -d "dbs2/newdb" ]
+
+    run dolt sql --data-dir=dbs2 -q "use not_exist; show tables" -r csv
+    [ $status -ne 0 ]
+    [[ "$output" =~ "database not found" ]] || false
 }
 
 @test "replication-multidb: missing database config" {
