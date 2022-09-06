@@ -180,7 +180,6 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 	if !ok {
 		db, err = p.databaseForClone(ctx, name)
 		if err != nil {
-			// TODO: not found here?
 			return nil, err
 		}
 
@@ -347,6 +346,8 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	return sess.AddDB(ctx, dbstate)
 }
 
+// configureReplication sets up replication for a newly created database as necessary
+// TODO: consider the replication heads / all heads setting
 func (p DoltDatabaseProvider) configureReplication(ctx *sql.Context, name string, newEnv *env.DoltEnv) error {
 	_, replicationRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
 	if replicationRemoteName == "" {
@@ -668,6 +669,7 @@ func (p DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (
 		return nil, nil
 	}
 
+	// now that the database has been cloned, retry the Database call
 	return p.Database(ctx, revDB)
 }
 

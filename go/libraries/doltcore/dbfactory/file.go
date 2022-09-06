@@ -43,7 +43,7 @@ var DoltDataDir = filepath.Join(DoltDir, DataDir)
 type FileFactory struct {
 }
 
-// PrepareDB creates the directory for the DB if it doesn't exist, and returns and error if a file or symlink is at the
+// PrepareDB creates the directory for the DB if it doesn't exist, and returns an error if a file or symlink is at the
 // path given
 func (fact FileFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, u *url.URL, params map[string]interface{}) error {
 	path, err := url.PathUnescape(u.Path)
