@@ -34,7 +34,8 @@ type GSFactory struct {
 }
 
 func (fact GSFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
-	return fmt.Errorf("gs scheme cannot support this operation")
+	// nothing to prepare
+	return nil
 }
 
 // CreateDB creates an GCS backed database
