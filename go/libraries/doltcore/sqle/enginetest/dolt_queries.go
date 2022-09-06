@@ -1329,6 +1329,10 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1, 0}},
 			},
 			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
 				Query:    "SELECT * from dolt_status",
 				Expected: []sql.Row{},
 			},
@@ -1361,6 +1365,10 @@ var MergeScripts = []queries.ScriptTest{
 				// No-FF-Merge
 				Query:    "CALL DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
 				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
@@ -1402,6 +1410,10 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, 0}},
 			},
 			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
 				Query:    "SELECT COUNT(*) from dolt_status",
 				Expected: []sql.Row{{0}},
 			},
@@ -1435,6 +1447,10 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge', '--no-commit')",
 				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", ""}},
 			},
 			{
 				Query:    "SELECT COUNT(*) from dolt_status",
@@ -1475,6 +1491,10 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
 				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", "test"}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
@@ -1592,6 +1612,10 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1, 0}},
 			},
 			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
 				Query:    "SELECT * from dolt_status",
 				Expected: []sql.Row{},
 			},
@@ -1623,6 +1647,10 @@ var MergeScripts = []queries.ScriptTest{
 				// No-FF-Merge
 				Query:    "CALL DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
 				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
@@ -1748,6 +1776,10 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
 				Query:    "SELECT * FROM test",
 				Expected: []sql.Row{{0, 1001}},
 			},
@@ -1807,6 +1839,10 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
 				Query:    "SELECT * from dolt_status",
 				Expected: []sql.Row{},
 			},
@@ -1843,6 +1879,10 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:       "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
 				ExpectedErr: dfunctions.ErrUncommittedChanges,
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
 			},
 		},
 	},
@@ -1917,6 +1957,7 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL DOLT_BRANCH('other');",
 			"DELETE from parent WHERE pk = 20;",
 			"CALL DOLT_COMMIT('-am', 'MC2');",
+
 			"CALL DOLT_CHECKOUT('other');",
 			"INSERT INTO child VALUES (2, 2);",
 			"CALL DOLT_COMMIT('-am', 'OC1');",
@@ -1976,6 +2017,10 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
 				Expected: []sql.Row{{uint64(merge.CvType_UniqueIndex), 1, 1}, {uint64(merge.CvType_UniqueIndex), 2, 1}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{true, "right", "refs/heads/main", "t"}},
 			},
 		},
 	},

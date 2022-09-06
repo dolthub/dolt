@@ -345,7 +345,15 @@ func (rcv *MergeState) MutateFromCommitAddr(j int, n byte) bool {
 	return false
 }
 
-const MergeStateNumFields = 2
+func (rcv *MergeState) FromCommitSpecStr() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+const MergeStateNumFields = 3
 
 func MergeStateStart(builder *flatbuffers.Builder) {
 	builder.StartObject(MergeStateNumFields)
@@ -361,6 +369,9 @@ func MergeStateAddFromCommitAddr(builder *flatbuffers.Builder, fromCommitAddr fl
 }
 func MergeStateStartFromCommitAddrVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
+}
+func MergeStateAddFromCommitSpecStr(builder *flatbuffers.Builder, fromCommitSpecStr flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(fromCommitSpecStr), 0)
 }
 func MergeStateEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

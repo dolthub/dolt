@@ -54,6 +54,11 @@ teardown() {
     [[ "$output" =~ "test2" ]] || false
     [[ "$output" =~ "test1" ]] || false
 
+   run dolt sql -q "SELECT * from dolt_merge_status"
+   [[ "$output" =~ "true" ]] || false
+   [[ "$output" =~ "merge_branch" ]] || false
+   [[ "$output" =~ "refs/heads/main" ]] || false
+
     # make sure all the commits make it into the log
     dolt add .
     dolt commit -m "squash merge"
@@ -80,6 +85,9 @@ teardown() {
 
     dolt merge other --no-commit
     dolt merge --abort
+
+    run dolt sql -q "SELECT * from dolt_merge_status"
+    [[ "$output" =~ "false" ]] || false
 
     # per Git, working set changes to test2 should remain
     dolt sql -q "SELECT * FROM test2" -r csv
@@ -110,6 +118,9 @@ teardown() {
     log_status_eq 0
     [[ "${lines[0]}" =~ "On branch main" ]] || false
     [[ "${lines[1]}" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt sql -q "SELECT * from dolt_merge_status"
+    [[ "$output" =~ "false" ]] || false
 }
 
 @test "merge: squash merge" {
@@ -167,6 +178,9 @@ teardown() {
     run dolt sql -q 'select count(*) from test1 where pk = 1'
     log_status_eq 0
     [[ "$output" =~ "| 0 " ]] || false
+
+    run dolt sql -q "SELECT * from dolt_merge_status"
+    [[ "$output" =~ "false" ]] || false
 }
 
 @test "merge: dolt commit fails on table with conflict" {
@@ -189,6 +203,12 @@ teardown() {
     [ "$status" -ne 0 ]
     [[ "$output" =~ " unresolved conflicts from the merge" ]] || false
     [[ "$output" =~ "test1" ]] || false
+
+    run dolt sql -q "SELECT * from dolt_merge_status"
+    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ "merge_branch" ]] || false
+    [[ "$output" =~ "refs/heads/main" ]] || false
+
     dolt commit --force -am "force commit with conflicts"
 }
 

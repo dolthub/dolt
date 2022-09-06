@@ -769,7 +769,11 @@ func (dEnv *DoltEnv) ClearMerge(ctx context.Context) error {
 	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.ClearMerge(), h, dEnv.workingSetMeta())
 }
 
-func (dEnv *DoltEnv) StartMerge(ctx context.Context, commit *doltdb.Commit) error {
+// StartMerge updates the WorkingSet with merge information. |commit| is the
+// source commit of the merge and |commitSpecStr| is how that |commit| was
+// specified. Typically, |commitSpecStr| is specified by the user, but it could
+// also be specified by a transaction merge.
+func (dEnv *DoltEnv) StartMerge(ctx context.Context, commit *doltdb.Commit, commitSpecStr string) error {
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		return err
@@ -780,7 +784,7 @@ func (dEnv *DoltEnv) StartMerge(ctx context.Context, commit *doltdb.Commit) erro
 		return err
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.StartMerge(commit), h, dEnv.workingSetMeta())
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.StartMerge(commit, commitSpecStr), h, dEnv.workingSetMeta())
 }
 
 func (dEnv *DoltEnv) IsMergeActive(ctx context.Context) (bool, error) {
