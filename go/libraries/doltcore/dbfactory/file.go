@@ -58,7 +58,7 @@ func (fact FileFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat,
 	info, err := os.Stat(path)
 
 	if os.IsNotExist(err) {
-		return os.MkdirAll(path, os.ModeDir)
+		return os.MkdirAll(path, os.ModePerm)
 	}
 
 	if err != nil {

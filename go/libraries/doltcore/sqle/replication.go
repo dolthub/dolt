@@ -71,7 +71,7 @@ func GetCommitHooks(ctx context.Context, bThreads *sql.BackgroundThreads, dEnv *
 	postCommitHooks := make([]doltdb.CommitHook, 0)
 
 	if hook, err := getPushOnWriteHook(ctx, bThreads, dEnv, logger); err != nil {
-		path, err := dEnv.FS.Abs(".")
+		path, _ := dEnv.FS.Abs(".")
 		err = fmt.Errorf("failure loading hook for database at %s; %w", path, err)
 		if SkipReplicationWarnings() {
 			postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(err.Error()+"\n")))

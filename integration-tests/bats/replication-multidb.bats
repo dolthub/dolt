@@ -80,6 +80,7 @@ teardown() {
     
     clone_helper $TMPDIRS
     run dolt sql --data-dir=dbs2 -b -q "use repo1; show tables" -r csv
+
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     [[ "$output" =~ "t1" ]] || false
@@ -99,6 +100,34 @@ teardown() {
     [[ "$output" =~ "t3" ]] || false
     [[ ! "$output" =~ "t1" ]] || false
     [[ ! "$output" =~ "t2" ]] || false
+}
+
+@test "replication-multidb: push newly created database" {
+    dolt config --global --add sqlserver.global.dolt_replicate_to_remote remote1
+    dolt sql -q "set @@persist.dolt_replication_remote_url_template = 'file://$TMPDIRS/rem1/%s'"
+
+    dolt sql --data-dir=dbs1 <<SQL
+create database newdb;
+use newdb;
+create table new_table (b int primary key);
+call dolt_add('.');
+call dolt_commit('-am', 'new table');
+SQL
+
+    mkdir -p "${TMPDIRS}/dbs2"
+    cd $TMPDIRS
+    pwd
+    dolt clone "file://./rem1/newdb" "dbs2/newdb"
+
+    # this is a hack: we have to change our persisted global server
+    # vars for the sql command to work on the replica TODO: fix this
+    # mess
+    dolt config --global --unset sqlserver.global.dolt_replicate_to_remote
+    
+    run dolt sql --data-dir=dbs2 -q "use newdb; show tables" -r csv
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "new_table" ]] || false
 }
 
 @test "replication-multidb: pull on read" {
