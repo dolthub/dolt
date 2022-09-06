@@ -53,7 +53,7 @@ type DoltDatabaseProvider struct {
 
 	defaultBranch string
 	fs            filesys.Filesys
-	remoteDialer  dbfactory.GRPCDialProvider  // TODO: why isn't this a method defined on the remote object
+	remoteDialer  dbfactory.GRPCDialProvider // TODO: why isn't this a method defined on the remote object
 
 	dbFactoryUrl string
 }
@@ -426,9 +426,9 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 // clone directory before returning the error to the user. This function should not be used directly;
 // use CloneDatabaseFromRemote instead.
 func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
-		ctx *sql.Context,
-		dbName, remoteName, branch, remoteUrl string,
-		remoteParams map[string]string,
+	ctx *sql.Context,
+	dbName, remoteName, branch, remoteUrl string,
+	remoteParams map[string]string,
 ) error {
 	if p.remoteDialer == nil {
 		return fmt.Errorf("unable to clone remote database; no remote dialer configured")

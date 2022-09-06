@@ -472,7 +472,7 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 
 func getAbsFileRemoteUrl(u *url.URL, fs filesys2.Filesys) (string, error) {
 
-	urlStr := u.Host+u.Path
+	urlStr := u.Host + u.Path
 	scheme := u.Scheme
 
 	var err error

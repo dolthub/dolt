@@ -54,7 +54,6 @@ func (fact FileFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat,
 	path = filepath.FromSlash(path)
 	path = u.Host + path
 
-
 	info, err := os.Stat(path)
 
 	if os.IsNotExist(err) {

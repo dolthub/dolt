@@ -106,7 +106,7 @@ func NewSqlEngine(
 
 	// Set up engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
-		IsReadOnly: config.IsReadOnly,
+		IsReadOnly:     config.IsReadOnly,
 		IsServerLocked: config.IsServerLocked,
 	}).WithBackgroundThreads(bThreads)
 	engine.Analyzer.Catalog.MySQLDb.SetPersister(persister)
