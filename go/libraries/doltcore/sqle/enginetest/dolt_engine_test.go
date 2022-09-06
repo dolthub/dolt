@@ -159,7 +159,6 @@ func TestSingleScript(t *testing.T) {
 	for _, test := range scripts {
 		enginetest.TestScript(t, harness, test)
 	}
-	t.Skip()
 }
 
 func TestSingleQueryPrepared(t *testing.T) {
