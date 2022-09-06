@@ -19,11 +19,12 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // MergeStatusTable is a sql.Table implementation that implements a system table
