@@ -21,12 +21,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type PushOnWriteHook struct {
