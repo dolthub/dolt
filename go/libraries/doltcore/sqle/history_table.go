@@ -146,7 +146,7 @@ func (ht *HistoryTable) Filters() []sql.Expression {
 }
 
 // WithFilters returns a new sql.Table instance with the filters applied. We handle filters on any commit columns.
-func (ht HistoryTable) WithFilters(ctx *sql.Context, filters []sql.Expression) sql.Table {
+func (ht *HistoryTable) WithFilters(ctx *sql.Context, filters []sql.Expression) sql.Table {
 	if ht.commitFilters == nil {
 		ht.commitFilters = dtables.FilterFilters(filters, dtables.ColumnPredicate(historyTableCommitMetaCols))
 	}
@@ -154,13 +154,13 @@ func (ht HistoryTable) WithFilters(ctx *sql.Context, filters []sql.Expression) s
 	if len(ht.commitFilters) > 0 {
 		commitCheck, err := commitFilterForExprs(ctx, ht.commitFilters)
 		if err != nil {
-			return sqlutil.NewStaticErrorTable(&ht, err)
+			return sqlutil.NewStaticErrorTable(ht, err)
 		}
 
 		ht.cmItr = doltdb.NewFilteringCommitItr(ht.cmItr, commitCheck)
 	}
 
-	return &ht
+	return ht
 }
 
 var historyTableCommitMetaCols = set.NewStrSet([]string{CommitHashCol, CommitDateCol, CommitterCol})
@@ -473,7 +473,7 @@ func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.C
 		if srcIdx >= 0 {
 			// only add a conversion if the type is the same
 			// TODO: we could do a projection to convert between types in some cases
-			if srcSchema[srcIdx].Type == targetSchema[i].Type {
+			if srcSchema[srcIdx].Type.Equals(targetSchema[i].Type) {
 				srcToTarget[srcIdx] = i
 			}
 		}

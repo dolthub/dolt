@@ -1018,7 +1018,8 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
 				Expected: []sql.Row{
 					{"Exchange"},
-					{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+					{" └─ Project"},
+					{"     ├─ columns: [dolt_history_t1.pk, dolt_history_t1.c]"},
 					{"     └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
 					{"         └─ IndexedTableAccess(dolt_history_t1)"},
 					{"             ├─ index: [dolt_history_t1.pk]"},
@@ -1088,7 +1089,8 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Query: "explain select pk, c from dolt_history_t1 where c = 10 and committer = 'someguy'",
 				Expected: []sql.Row{
 					{"Exchange"},
-					{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+					{" └─ Project"},
+					{"     ├─ columns: [dolt_history_t1.pk dolt_history_t1.c]"},
 					{"     └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = 'someguy'))"},
 					{"         └─ IndexedTableAccess(dolt_history_t1)"},
 					{"             ├─ index: [dolt_history_t1.c]"},
@@ -1272,6 +1274,24 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 					{"creating table t"},
 					{"checkpoint enginetest database mydb"},
 					{"Initialize data repository"},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_history table with enums",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 enum('foo','bar'));",
+			"call dolt_add('-A');",
+			"call dolt_commit('-m', 'creating table t');",
+			"insert into t values (1, 'foo');",
+			"call dolt_commit('-am', 'added values');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select c1 from dolt_history_t;",
+				Expected: []sql.Row{
+					{uint64(1)},
 				},
 			},
 		},
@@ -4830,7 +4850,7 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{6}},
 			},
 			{
-				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit1)",
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash = @Commit1",
 				Expected: []sql.Row{{"x", true, true}, {"y", true, false}},
 			},
 			{
