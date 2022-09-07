@@ -473,7 +473,15 @@ func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.C
 		if srcIdx >= 0 {
 			// only add a conversion if the type is the same
 			// TODO: we could do a projection to convert between types in some cases
-			if srcSchema[srcIdx].Type == targetSchema[i].Type {
+			sourceType := srcSchema[srcIdx].Type
+			targetType := targetSchema[i].Type
+
+			// enumtypes contain a map, which panics when == opeartor is used
+			_, srcIsEnum := sourceType.(sql.EnumType)
+			_, tarIsEnum := targetType.(sql.EnumType)
+			if srcIsEnum && tarIsEnum {
+				srcToTarget[srcIdx] = i
+			} else if sourceType == targetType {
 				srcToTarget[srcIdx] = i
 			}
 		}
