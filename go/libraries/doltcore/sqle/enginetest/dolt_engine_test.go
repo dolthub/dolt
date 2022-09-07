@@ -208,7 +208,6 @@ func TestSingleQueryPrepared(t *testing.T) {
 
 func TestSingleScriptPrepared(t *testing.T) {
 	t.Skip()
-
 	s := []setup.SetupScript{
 		{
 			"create table test (pk int primary key, c1 int)",
@@ -1134,7 +1133,6 @@ func TestDiffTableFunction(t *testing.T) {
 }
 
 func TestDiffTableFunctionPrepared(t *testing.T) {
-	t.Skip()
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffTableFunctionScriptTests {

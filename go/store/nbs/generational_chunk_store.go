@@ -17,6 +17,7 @@ package nbs
 import (
 	"context"
 	"io"
+	"path/filepath"
 	"sync"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -236,29 +237,38 @@ func (gcs *GenerationalNBS) copyToOldGen(ctx context.Context, hashes hash.HashSe
 	return err
 }
 
+type prefixedTableFile struct {
+	TableFile
+	prefix string
+}
+
+func (p prefixedTableFile) FileID() string {
+	return filepath.ToSlash(filepath.Join(p.prefix, p.TableFile.FileID()))
+}
+
 // Sources retrieves the current root hash, a list of all the table files (which may include appendix table files),
 // and a second list containing only appendix table files for both the old gen and new gen stores.
 func (gcs *GenerationalNBS) Sources(ctx context.Context) (hash.Hash, []TableFile, []TableFile, error) {
-	_, tFiles, appFiles, err := gcs.oldGen.Sources(ctx)
-
+	root, tFiles, appFiles, err := gcs.newGen.Sources(ctx)
 	if err != nil {
 		return hash.Hash{}, nil, nil, err
 	}
 
-	newRoot, newTFiles, newAppFiles, err := gcs.newGen.Sources(ctx)
-
+	_, oldTFiles, oldAppFiles, err := gcs.oldGen.Sources(ctx)
 	if err != nil {
 		return hash.Hash{}, nil, nil, err
 	}
 
-	for _, tf := range newTFiles {
-		tFiles = append(tFiles, tf)
+	prefix := gcs.RelativeOldGenPath()
+
+	for _, tf := range oldTFiles {
+		tFiles = append(tFiles, prefixedTableFile{tf, prefix})
 	}
-	for _, tf := range newAppFiles {
-		appFiles = append(appFiles, tf)
+	for _, tf := range oldAppFiles {
+		appFiles = append(appFiles, prefixedTableFile{tf, prefix})
 	}
 
-	return newRoot, tFiles, appFiles, nil
+	return root, tFiles, appFiles, nil
 }
 
 // Size  returns the total size, in bytes, of the table files in the new and old gen stores combined
@@ -307,4 +317,58 @@ func (gcs *GenerationalNBS) SetRootChunk(ctx context.Context, root, previous has
 // SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
 func (gcs *GenerationalNBS) SupportedOperations() TableFileStoreOps {
 	return gcs.newGen.SupportedOperations()
+}
+
+func (gcs *GenerationalNBS) GetChunkLocationsWithPaths(hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
+	res, err := gcs.newGen.GetChunkLocationsWithPaths(hashes)
+	if err != nil {
+		return nil, err
+	}
+	if len(hashes) > 0 {
+		prefix := gcs.RelativeOldGenPath()
+		toadd, err := gcs.oldGen.GetChunkLocationsWithPaths(hashes)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range toadd {
+			res[filepath.ToSlash(filepath.Join(prefix, k))] = v
+		}
+	}
+	return res, nil
+}
+
+func (gcs *GenerationalNBS) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
+	res, err := gcs.newGen.GetChunkLocations(hashes)
+	if err != nil {
+		return nil, err
+	}
+	if len(hashes) > 0 {
+		toadd, err := gcs.oldGen.GetChunkLocations(hashes)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range toadd {
+			res[k] = v
+		}
+	}
+	return res, nil
+}
+
+func (gcs *GenerationalNBS) RelativeOldGenPath() string {
+	newgenpath, ngpok := gcs.newGen.Path()
+	oldgenpath, ogpok := gcs.oldGen.Path()
+	if ngpok && ogpok {
+		if p, err := filepath.Rel(newgenpath, oldgenpath); err == nil {
+			return p
+		}
+	}
+	return "oldgen"
+}
+
+func (gcs *GenerationalNBS) Path() (string, bool) {
+	return gcs.newGen.Path()
+}
+
+func (gcs *GenerationalNBS) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (mi ManifestInfo, err error) {
+	return gcs.newGen.UpdateManifest(ctx, updates)
 }

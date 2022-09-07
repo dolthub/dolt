@@ -4832,7 +4832,7 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{6}},
 			},
 			{
-				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit1)",
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash = @Commit1",
 				Expected: []sql.Row{{"x", true, true}, {"y", true, false}},
 			},
 			{

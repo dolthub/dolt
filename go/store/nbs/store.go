@@ -116,6 +116,18 @@ type Range struct {
 	Length uint32
 }
 
+func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
+	locs, err := nbs.GetChunkLocations(hashes)
+	if err != nil {
+		return nil, err
+	}
+	toret := make(map[string]map[hash.Hash]Range, len(locs))
+	for k, v := range locs {
+		toret[k.String()] = v
+	}
+	return toret, nil
+}
+
 func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
 	gr := toGetRecords(hashes)
 
@@ -1330,6 +1342,14 @@ func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
 		CanPrune: ok,
 		CanGC:    ok,
 	}
+}
+
+func (nbs *NomsBlockStore) Path() (string, bool) {
+	fsPersister, ok := nbs.p.(*fsTablePersister)
+	if !ok {
+		return "", false
+	}
+	return fsPersister.dir, true
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
