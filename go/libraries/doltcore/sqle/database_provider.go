@@ -374,7 +374,7 @@ func (p DoltDatabaseProvider) configureReplication(ctx *sql.Context, name string
 		return nil
 	}
 
-	// TODO: url sanitize name 
+	// TODO: url sanitize name
 	remoteUrl := strings.Replace(urlTemplate, dsess.URLTemplateDatabasePlaceholder, name, -1)
 
 	// TODO: params for AWS, others that need them
