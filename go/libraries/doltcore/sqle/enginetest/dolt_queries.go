@@ -1276,6 +1276,24 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_history table with enums",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 enum('foo','bar'));",
+			"call dolt_add('-A');",
+			"call dolt_commit('-m', 'creating table t');",
+			"insert into t values (1, 'foo');",
+			"call dolt_commit('-am', 'added values');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select c1 from dolt_history_t;",
+				Expected: []sql.Row{
+					{uint64(1)},
+				},
+			},
+		},
+	},
 }
 
 // BrokenHistorySystemTableScriptTests contains tests that work for non-prepared, but don't work
