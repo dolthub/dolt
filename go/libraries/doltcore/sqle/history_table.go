@@ -473,7 +473,7 @@ func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.C
 		if srcIdx >= 0 {
 			// only add a conversion if the type is the same
 			// TODO: we could do a projection to convert between types in some cases
-			if srcSchema[srcIdx].Type == targetSchema[i].Type {
+			if srcSchema[srcIdx].Type.Equals(targetSchema[i].Type) {
 				srcToTarget[srcIdx] = i
 			}
 		}

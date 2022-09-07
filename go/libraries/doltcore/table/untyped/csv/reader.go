@@ -102,6 +102,18 @@ func NewCSVReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *CSVFileInfo) 
 	}, nil
 }
 
+// trimBOM checks if the given string has the Byte Order Mark, and removes it if it is
+// the BOM is there if the first 3 bytes are xEF\xBB\xBF and indicates that a file is in UTF-8 encoding
+func trimBOM(s string) string {
+	if len(s) < 3 {
+		return s
+	}
+	if s[0] == '\xEF' && s[1] == '\xBB' && s[2] == '\xBF' {
+		return s[3:]
+	}
+	return s
+}
+
 func getColHeaders(br *bufio.Reader, info *CSVFileInfo) ([]string, error) {
 	colStrs := info.Columns
 	if info.HasHeaderLine {
@@ -112,7 +124,7 @@ func getColHeaders(br *bufio.Reader, info *CSVFileInfo) ([]string, error) {
 		} else if strings.TrimSpace(line) == "" {
 			return nil, errors.New("Header line is empty")
 		}
-
+		line = trimBOM(line)
 		colStrsFromFile, err := csvSplitLine(line, info.Delim, info.EscapeQuotes)
 
 		if err != nil {
