@@ -28,10 +28,16 @@ import (
 	"google.golang.org/grpc"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
+var readOnlyParam *bool = flag.Bool("read-only", false, "run a read-only server which does not allow writes")
+
 func main() {
+	repoModeParam := flag.Bool("repo-mode", false, "act as a remote for a dolt directory, instead of stand alone")
 	dirParam := flag.String("dir", "", "root directory that this command will run in.")
 	grpcPortParam := flag.Int("grpc-port", -1, "root directory that this command will run in.")
 	httpPortParam := flag.Int("http-port", -1, "root directory that this command will run in.")
@@ -62,7 +68,25 @@ func main() {
 		log.Println("'grpc-port' parameter not provided. Using default port 50051")
 	}
 
-	stopChan, wg := startServer(*httpHostParam, *httpPortParam, *grpcPortParam)
+	fs, err := filesys.LocalFilesysWithWorkingDir(".")
+	if err != nil {
+		log.Fatalln("could not get cwd path:", err.Error())
+	}
+
+	var dbCache DBCache
+	if *repoModeParam {
+		dEnv := env.Load(context.Background(), env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, "remotesrv")
+		if !dEnv.Valid() {
+			log.Fatalln("repo-mode failed to load repository")
+		}
+		db := doltdb.HackDatasDatabaseFromDoltDB(dEnv.DoltDB)
+		cs := datas.ChunkStoreFromDatabase(db)
+		dbCache = SingletonCSCache{cs.(store)}
+	} else {
+		dbCache = NewLocalCSCache(fs)
+	}
+
+	stopChan, wg := startServer(*httpHostParam, *httpPortParam, *grpcPortParam, fs, dbCache)
 	waitForSignal()
 
 	close(stopChan)
@@ -75,8 +99,7 @@ func waitForSignal() {
 	<-c
 }
 
-func startServer(httpHost string, httpPort, grpcPort int) (chan interface{}, *sync.WaitGroup) {
-	dbCache := NewLocalCSCache(filesys.LocalFS)
+func startServer(httpHost string, httpPort, grpcPort int, fs filesys.Filesys, dbCache DBCache) (chan interface{}, *sync.WaitGroup) {
 	expectedFiles := newFileDetails()
 
 	wg := sync.WaitGroup{}
@@ -85,24 +108,28 @@ func startServer(httpHost string, httpPort, grpcPort int) (chan interface{}, *sy
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		httpServer(dbCache, expectedFiles, httpPort, stopChan)
+		httpServer(dbCache, fs, expectedFiles, httpPort, stopChan)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		grpcServer(dbCache, expectedFiles, httpHost, grpcPort, stopChan)
+		grpcServer(dbCache, fs, expectedFiles, httpHost, grpcPort, stopChan)
 	}()
 
 	return stopChan, &wg
 }
 
-func grpcServer(dbCache *DBCache, expectedFiles fileDetails, httpHost string, grpcPort int, stopChan chan interface{}) {
+func grpcServer(dbCache DBCache, fs filesys.Filesys, expectedFiles fileDetails, httpHost string, grpcPort int, stopChan chan interface{}) {
 	defer func() {
 		log.Println("exiting grpc Server go routine")
 	}()
 
-	chnkSt := NewHttpFSBackedChunkStore(httpHost, dbCache, expectedFiles)
+	var chnkSt remotesapi.ChunkStoreServiceServer
+	chnkSt = NewHttpFSBackedChunkStore(httpHost, dbCache, expectedFiles, fs)
+	if *readOnlyParam {
+		chnkSt = ReadOnlyChunkStore{chnkSt}
+	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", grpcPort))
 	if err != nil {
@@ -122,14 +149,14 @@ func grpcServer(dbCache *DBCache, expectedFiles fileDetails, httpHost string, gr
 	grpcServer.GracefulStop()
 }
 
-func httpServer(dbCache *DBCache, expectedFiles fileDetails, httpPort int, stopChan chan interface{}) {
+func httpServer(dbCache DBCache, fs filesys.Filesys, expectedFiles fileDetails, httpPort int, stopChan chan interface{}) {
 	defer func() {
 		log.Println("exiting http Server go routine")
 	}()
 
 	server := http.Server{
 		Addr:    fmt.Sprintf(":%d", httpPort),
-		Handler: filehandler{dbCache, expectedFiles},
+		Handler: newFileHandler(dbCache, expectedFiles, fs, *readOnlyParam),
 	}
 
 	go func() {
