@@ -25,10 +25,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// var src = rand.New(rand.NewSource(time.Now().Unix()))
-var src = rand.New(rand.NewSource(0))
-
 func TestSkipList(t *testing.T) {
+	// set constant seed to improve debugging
+	randSrc = rand.New(rand.NewSource(0))
+
 	t.Run("test skip list", func(t *testing.T) {
 		vals := [][]byte{
 			b("a"), b("b"), b("c"), b("d"), b("e"),
@@ -39,7 +39,7 @@ func TestSkipList(t *testing.T) {
 	})
 
 	t.Run("test skip list of random bytes", func(t *testing.T) {
-		vals := randomVals((src.Int63() % 10_000) + 100)
+		vals := randomVals((randSrc.Int63() % 10_000) + 100)
 		testSkipList(t, bytes.Compare, vals...)
 	})
 	t.Run("test with custom compare function", func(t *testing.T) {
@@ -48,7 +48,7 @@ func TestSkipList(t *testing.T) {
 			r := int64(binary.LittleEndian.Uint64(right))
 			return int(l - r)
 		}
-		vals := randomInts((src.Int63() % 10_000) + 100)
+		vals := randomInts((randSrc.Int63() % 10_000) + 100)
 		testSkipList(t, compare, vals...)
 	})
 }
@@ -64,7 +64,7 @@ func TestSkipListCheckpoints(t *testing.T) {
 	})
 
 	t.Run("test skip list of random bytes", func(t *testing.T) {
-		vals := randomVals((src.Int63() % 10_000) + 100)
+		vals := randomVals((randSrc.Int63() % 10_000) + 100)
 		testSkipListCheckpoints(t, bytes.Compare, vals...)
 	})
 	t.Run("test with custom compare function", func(t *testing.T) {
@@ -73,7 +73,7 @@ func TestSkipListCheckpoints(t *testing.T) {
 			r := int64(binary.LittleEndian.Uint64(right))
 			return int(l - r)
 		}
-		vals := randomInts((src.Int63() % 10_000) + 100)
+		vals := randomInts((randSrc.Int63() % 10_000) + 100)
 		testSkipListCheckpoints(t, compare, vals...)
 	})
 }
@@ -81,9 +81,9 @@ func TestSkipListCheckpoints(t *testing.T) {
 func TestMemoryFootprint(t *testing.T) {
 	var sz int
 	sz = int(unsafe.Sizeof(skipNode{}))
-	assert.Equal(t, 80, sz)
+	assert.Equal(t, 104, sz)
 	sz = int(unsafe.Sizeof(skipPointer{}))
-	assert.Equal(t, 20, sz)
+	assert.Equal(t, 40, sz)
 }
 
 func BenchmarkList(b *testing.B) {
@@ -205,8 +205,8 @@ func BenchmarkList(b *testing.B) {
 	})
 }
 
-func testSkipList(t *testing.T, compare ValueCmp, vals ...[]byte) {
-	src.Shuffle(len(vals), func(i, j int) {
+func testSkipList(t *testing.T, compare KeyOrder, vals ...[]byte) {
+	randSrc.Shuffle(len(vals), func(i, j int) {
 		vals[i], vals[j] = vals[j], vals[i]
 	})
 
@@ -244,8 +244,8 @@ func testSkipListPuts(t *testing.T, list *List, vals ...[]byte) {
 }
 
 func testSkipListGets(t *testing.T, list *List, vals ...[]byte) {
-	// get in different order
-	src.Shuffle(len(vals), func(i, j int) {
+	// get in different keyOrder
+	randSrc.Shuffle(len(vals), func(i, j int) {
 		vals[i], vals[j] = vals[j], vals[i]
 	})
 
@@ -268,7 +268,7 @@ func testSkipListUpdates(t *testing.T, list *List, vals ...[]byte) {
 	}
 	assert.Equal(t, len(vals), list.Count())
 
-	src.Shuffle(len(vals), func(i, j int) {
+	randSrc.Shuffle(len(vals), func(i, j int) {
 		vals[i], vals[j] = vals[j], vals[i]
 	})
 	for _, exp := range vals {
@@ -282,7 +282,7 @@ func testSkipListUpdates(t *testing.T, list *List, vals ...[]byte) {
 }
 
 func testSkipListIterForward(t *testing.T, list *List, vals ...[]byte) {
-	// put |vals| back in order
+	// put |vals| back in keyOrder
 	sort.Slice(vals, func(i, j int) bool {
 		return list.compareKeys(vals[i], vals[j]) < 0
 	})
@@ -297,7 +297,7 @@ func testSkipListIterForward(t *testing.T, list *List, vals ...[]byte) {
 
 	// test iter at
 	for k := 0; k < 10; k++ {
-		idx = src.Int() % len(vals)
+		idx = randSrc.Int() % len(vals)
 		key := vals[idx]
 		act := validateIterForwardFrom(t, list, key)
 		exp := len(vals) - idx
@@ -311,14 +311,14 @@ func testSkipListIterForward(t *testing.T, list *List, vals ...[]byte) {
 }
 
 func testSkipListIterBackward(t *testing.T, list *List, vals ...[]byte) {
-	// put |vals| back in order
+	// put |vals| back in keyOrder
 	sort.Slice(vals, func(i, j int) bool {
 		return list.compareKeys(vals[i], vals[j]) < 0
 	})
 
 	// test iter at
 	for k := 0; k < 10; k++ {
-		idx := src.Int() % len(vals)
+		idx := randSrc.Int() % len(vals)
 		key := vals[idx]
 		act := validateIterBackwardFrom(t, list, key)
 		assert.Equal(t, idx+1, act)
@@ -395,8 +395,8 @@ func validateIterBackwardFrom(t *testing.T, l *List, key []byte) (count int) {
 func randomVals(cnt int64) (vals [][]byte) {
 	vals = make([][]byte, cnt)
 	for i := range vals {
-		bb := make([]byte, (src.Int63()%91)+10)
-		src.Read(bb)
+		bb := make([]byte, (randSrc.Int63()%91)+10)
+		randSrc.Read(bb)
 		vals[i] = bb
 	}
 	return
@@ -406,7 +406,7 @@ func randomInts(cnt int64) (vals [][]byte) {
 	vals = make([][]byte, cnt)
 	for i := range vals {
 		vals[i] = make([]byte, 8)
-		v := uint64(src.Int63())
+		v := uint64(randSrc.Int63())
 		binary.LittleEndian.PutUint64(vals[i], v)
 	}
 	return
@@ -436,8 +436,8 @@ func iterAllBackwards(l *List, cb func([]byte, []byte)) {
 	}
 }
 
-func testSkipListCheckpoints(t *testing.T, compare ValueCmp, data ...[]byte) {
-	src.Shuffle(len(data), func(i, j int) {
+func testSkipListCheckpoints(t *testing.T, compare KeyOrder, data ...[]byte) {
+	randSrc.Shuffle(len(data), func(i, j int) {
 		data[i], data[j] = data[j], data[i]
 	})
 

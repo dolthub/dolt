@@ -17,35 +17,28 @@ package skip
 import (
 	"math"
 	"math/rand"
-
-	"github.com/zeebo/xxh3"
 )
 
 const (
-	maxCount = math.MaxUint32 - 1
-
-	maxHeight = uint8(5)
-	highest   = maxHeight - 1
-
+	maxHeight  = 9
+	maxCount   = math.MaxUint32 - 1
 	sentinelId = nodeId(0)
 )
 
+type KeyOrder func(l, r []byte) (cmp int)
+
+type SeekFn func(key []byte) (advance bool)
+
 type List struct {
-	nodes []skipNode
-	count uint32
-
+	nodes      []skipNode
+	count      uint32
 	checkpoint nodeId
-	cmp        ValueCmp
-	salt       uint64
+	keyOrder   KeyOrder
 }
-
-type ValueCmp func(left, right []byte) int
-
-type SearchFn func(nodeKey []byte) bool
 
 type nodeId uint32
 
-type skipPointer [maxHeight]nodeId
+type skipPointer [maxHeight + 1]nodeId
 
 type skipNode struct {
 	key, val []byte
@@ -56,7 +49,7 @@ type skipNode struct {
 	height uint8
 }
 
-func NewSkipList(cmp ValueCmp) *List {
+func NewSkipList(order KeyOrder) *List {
 	nodes := make([]skipNode, 0, 8)
 
 	// initialize sentinel node
@@ -71,8 +64,7 @@ func NewSkipList(cmp ValueCmp) *List {
 	return &List{
 		nodes:      nodes,
 		checkpoint: nodeId(1),
-		cmp:        cmp,
-		salt:       rand.Uint64(),
+		keyOrder:   order,
 	}
 }
 
@@ -123,7 +115,7 @@ func (l *List) Put(key, val []byte) {
 	if key == nil {
 		panic("key must be non-nil")
 	}
-	if l.Count() >= maxCount {
+	if len(l.nodes) >= maxCount {
 		panic("list has no capacity")
 	}
 
@@ -147,7 +139,7 @@ func (l *List) pathToKey(key []byte) (path skipPointer) {
 	next := l.headPointer()
 	prev := sentinelId
 
-	for lvl := int(highest); lvl >= 0; {
+	for lvl := int(maxHeight); lvl >= 0; {
 		curr := l.getNode(next[lvl])
 
 		// descend if we can't advance at |lvl|
@@ -168,7 +160,7 @@ func (l *List) pathBeforeKey(key []byte) (path skipPointer) {
 	next := l.headPointer()
 	prev := sentinelId
 
-	for lvl := int(highest); lvl >= 0; {
+	for lvl := int(maxHeight); lvl >= 0; {
 		curr := l.getNode(next[lvl])
 
 		// descend if we can't advance at |lvl|
@@ -190,7 +182,7 @@ func (l *List) insert(key, value []byte, path skipPointer) {
 		key:    key,
 		val:    value,
 		id:     l.nextNodeId(),
-		height: rollHeight(key, l.salt),
+		height: rollHeight(),
 	}
 	l.nodes = append(l.nodes, novel)
 
@@ -255,22 +247,20 @@ func (it *ListIter) Retreat() {
 
 func (l *List) GetIterAt(key []byte) (it *ListIter) {
 	return l.GetIterFromSearchFn(func(nodeKey []byte) bool {
-		return l.compareKeysWithFn(key, nodeKey, l.cmp) > 0
+		return l.compareKeys(key, nodeKey) > 0
 	})
 }
 
-func (l *List) GetIterFromSearchFn(kontinue SearchFn) (it *ListIter) {
+func (l *List) GetIterFromSearchFn(fn SeekFn) (it *ListIter) {
 	it = &ListIter{
-		curr: l.seekWithSearchFn(kontinue),
+		curr: l.seekWithFn(fn),
 		list: l,
 	}
-
 	if it.curr.id == sentinelId {
 		// try to keep |it| in bounds if |key| is
 		// greater than the largest key in |l|
 		it.Retreat()
 	}
-
 	return
 }
 
@@ -290,20 +280,16 @@ func (l *List) IterAtEnd() *ListIter {
 
 // seek returns the skipNode with the smallest key >= |key|.
 func (l *List) seek(key []byte) skipNode {
-	return l.seekWithCompare(key, l.cmp)
-}
-
-func (l *List) seekWithCompare(key []byte, cmp ValueCmp) (node skipNode) {
-	return l.seekWithSearchFn(func(nodeKey []byte) bool {
-		return l.compareKeysWithFn(key, nodeKey, cmp) > 0
+	return l.seekWithFn(func(curr []byte) (advance bool) {
+		return l.compareKeys(key, curr) > 0
 	})
 }
 
-func (l *List) seekWithSearchFn(kontinue SearchFn) (node skipNode) {
+func (l *List) seekWithFn(cb SeekFn) (node skipNode) {
 	ptr := l.headPointer()
-	for h := int64(highest); h >= 0; h-- {
+	for h := int64(maxHeight); h >= 0; h-- {
 		node = l.getNode(ptr[h])
-		for kontinue(node.key) {
+		for cb(node.key) {
 			ptr = node.next
 			node = l.getNode(ptr[h])
 		}
@@ -336,43 +322,35 @@ func (l *List) nextNodeId() nodeId {
 	return nodeId(len(l.nodes))
 }
 
-func (l *List) compare(left, right skipNode) int {
-	return l.compareKeys(left.key, right.key)
-}
-
 func (l *List) compareKeys(left, right []byte) int {
-	return l.compareKeysWithFn(left, right, l.cmp)
-}
-
-func (l *List) compareKeysWithFn(left, right []byte, cmp ValueCmp) int {
 	if right == nil {
 		return -1 // |right| is sentinel key
 	}
-	return cmp(left, right)
+	return l.keyOrder(left, right)
 }
 
-const (
-	pattern0 = uint64(1<<3 - 1)
-	pattern1 = uint64(1<<6 - 1)
-	pattern2 = uint64(1<<9 - 1)
-	pattern3 = uint64(1<<12 - 1)
+var (
+	// Precompute the skiplist probabilities so that the optimal
+	// p-value can be used (inverse of Euler's number).
+	//
+	// https://github.com/andy-kimball/arenaskl/blob/master/skl.go
+	probabilities = [maxHeight]uint32{}
+	randSrc       = rand.New(rand.NewSource(rand.Int63()))
 )
 
-func rollHeight(key []byte, salt uint64) (h uint8) {
-	roll := xxh3.HashSeed(key, salt)
-	patterns := []uint64{
-		pattern0,
-		pattern1,
-		pattern2,
-		pattern3,
+func init() {
+	p := float64(1.0)
+	for i := uint8(0); i < maxHeight; i++ {
+		p /= math.E
+		probabilities[i] = uint32(float64(math.MaxUint32) * p)
 	}
+}
 
-	for _, pat := range patterns {
-		if uint64(roll)&pat != pat {
-			break
-		}
+func rollHeight() (h uint8) {
+	rnd := randSrc.Uint32()
+	h = 0
+	for h < maxHeight && rnd <= probabilities[h] {
 		h++
 	}
-
 	return
 }
