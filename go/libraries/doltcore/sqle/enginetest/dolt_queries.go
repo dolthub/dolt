@@ -327,7 +327,8 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "database revision specs: branch-qualified revision spec",
+		SkipPrepared: true,
+		Name:         "database revision specs: branch-qualified revision spec",
 		SetUpScript: []string{
 			"create table t01 (pk int primary key, c1 int)",
 			"call dolt_add('.')",
@@ -4767,7 +4768,8 @@ var LargeJsonObjectScriptTests = []queries.ScriptTest{
 
 var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 	{
-		Name: "working set changes",
+		SkipPrepared: true,
+		Name:         "working set changes",
 		SetUpScript: []string{
 			"create table regularTable (a int primary key, b int, c int);",
 			"create table droppedTable (a int primary key, b int, c int);",
@@ -4830,7 +4832,7 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{6}},
 			},
 			{
-				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit1)",
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash = @Commit1",
 				Expected: []sql.Row{{"x", true, true}, {"y", true, false}},
 			},
 			{
