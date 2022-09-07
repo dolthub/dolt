@@ -154,7 +154,7 @@ func TestPushOnWriteHook(t *testing.T) {
 		msg := "prince charles is a vampire"
 		hook.HandleError(ctx, errors.New(msg))
 
-		assert.Equal(t, buffer.String(), msg)
+		assert.Contains(t, buffer.String(), msg)
 	})
 }
 
