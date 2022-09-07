@@ -327,8 +327,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		SkipPrepared: true,
-		Name:         "database revision specs: branch-qualified revision spec",
+		Name: "database revision specs: branch-qualified revision spec",
 		SetUpScript: []string{
 			"create table t01 (pk int primary key, c1 int)",
 			"call dolt_add('.')",
@@ -4768,8 +4767,7 @@ var LargeJsonObjectScriptTests = []queries.ScriptTest{
 
 var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 	{
-		SkipPrepared: true,
-		Name:         "working set changes",
+		Name: "working set changes",
 		SetUpScript: []string{
 			"create table regularTable (a int primary key, b int, c int);",
 			"create table droppedTable (a int primary key, b int, c int);",
