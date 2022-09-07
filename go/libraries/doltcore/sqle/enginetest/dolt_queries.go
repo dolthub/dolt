@@ -1019,7 +1019,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"Exchange"},
 					{" └─ Project"},
-					{"     ├─ columns: [dolt_history_t1.pk dolt_history_t1.c]"},
+					{"     ├─ columns: [dolt_history_t1.pk, dolt_history_t1.c]"},
 					{"     └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
 					{"         └─ IndexedTableAccess(dolt_history_t1)"},
 					{"             ├─ index: [dolt_history_t1.pk]"},
@@ -1090,7 +1090,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"Exchange"},
 					{" └─ Project"},
-					{"     ├─ columns: [dolt_history_t1.pk dolt_history_t1.c]"},
+					{"     ├─ columns: [dolt_history_t1.pk, dolt_history_t1.c]"},
 					{"     └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = 'someguy'))"},
 					{"         └─ IndexedTableAccess(dolt_history_t1)"},
 					{"             ├─ index: [dolt_history_t1.c]"},
