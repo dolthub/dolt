@@ -484,7 +484,7 @@ func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.C
 			//} else if sourceType == targetType {
 			//	srcToTarget[srcIdx] = i
 			//}
-			
+
 			if srcSchema[srcIdx].Type.Equals(targetSchema[i].Type) {
 				srcToTarget[srcIdx] = i
 			}
