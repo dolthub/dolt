@@ -211,9 +211,14 @@ func (p DoltDatabaseProvider) attemptCloneReplica(ctx *sql.Context, dbName strin
 		return nil
 	}
 
+	urlTemplate, ok := remoteUrlTemplate.(string)
+	if !ok {
+		return nil
+	}
+
 	// TODO: url sanitize
 	// TODO: SQL identifiers aren't case sensitive, but URLs are, need a plan for this
-	remoteUrl := fmt.Sprintf(remoteUrlTemplate.(string), dbName)
+	remoteUrl := strings.Replace(urlTemplate, dsess.URLTemplateDatabasePlaceholder, dbName, -1)
 
 	// TODO: remote params for AWS, others
 	// TODO: this needs to be robust in the face of the DB not having the default branch
@@ -369,8 +374,8 @@ func (p DoltDatabaseProvider) configureReplication(ctx *sql.Context, name string
 		return nil
 	}
 
-	// TODO: url sanitize
-	remoteUrl := strings.Replace(urlTemplate, dsess.URLTemplateDatabasePlaceholder, name, 1)
+	// TODO: url sanitize name 
+	remoteUrl := strings.Replace(urlTemplate, dsess.URLTemplateDatabasePlaceholder, name, -1)
 
 	// TODO: params for AWS, others that need them
 	r := env.NewRemote(remoteName, remoteUrl, nil)

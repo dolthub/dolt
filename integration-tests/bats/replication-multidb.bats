@@ -208,7 +208,7 @@ SQL
     # mess
     dolt config --global --unset sqlserver.global.dolt_replicate_to_remote
     dolt config --global --add sqlserver.global.dolt_read_replica_remote remote1
-    dolt config --global --add sqlserver.global.dolt_read_replica_remote.dolt_replicate_all_heads 1
+    dolt config --global --add sqlserver.global.dolt_replicate_all_heads 1
 
     [ ! -d "dbs2/newdb" ]
     

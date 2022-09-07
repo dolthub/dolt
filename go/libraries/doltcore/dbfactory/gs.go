@@ -16,7 +16,6 @@ package dbfactory
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"path/filepath"
 
@@ -67,7 +66,8 @@ type LocalBSFactory struct {
 }
 
 func (fact LocalBSFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
-	return fmt.Errorf("bs scheme cannot support this operation")
+	// nothing to prepare
+	return nil
 }
 
 // CreateDB creates a local filesystem blobstore backed database

@@ -16,7 +16,6 @@ package dbfactory
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -30,7 +29,8 @@ type MemFactory struct {
 }
 
 func (fact MemFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
-	return fmt.Errorf("memory scheme cannot support this operation")
+	// nothing to prepare
+	return nil
 }
 
 // CreateDB creates an in memory backed database

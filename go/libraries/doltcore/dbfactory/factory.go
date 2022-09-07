@@ -52,9 +52,12 @@ const (
 	defaultMemTableSize = 256 * 1024 * 1024
 )
 
-// DBFactory is an interface for creating concrete datas.Database instances which may have different backing stores.
+// DBFactory is an interface for creating concrete datas.Database instances from different backing stores
 type DBFactory interface {
+	// CreateDB returns the database located at the URL given and its associated data access interfaces
 	CreateDB(ctx context.Context, nbf *types.NomsBinFormat, u *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error)
+	// PrepareDB does any necessary setup work for a new database to be created at the URL given, e.g. to receive a push.
+	// Not all factories support this operation.
 	PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, u *url.URL, params map[string]interface{}) error
 }
 
