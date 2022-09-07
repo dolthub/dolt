@@ -1237,6 +1237,6 @@ DELIM
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
     [[ "$output" =~ "CSV reader expected 3 values, but saw 4" ]] || false
-    [[ "$output" =~ "row values:" ]]
+    [[ "$output" =~ "row values:" ]] || false
     [[ "$output" =~ "with the following values left over: '[\"\"]'" ]] || false
 }
