@@ -75,9 +75,7 @@ func (dt *UnscopedDiffTable) HandledFilters(filters []sql.Expression) []sql.Expr
 
 // WithFilters returns a new sql.Table instance with the filters applied
 func (dt *UnscopedDiffTable) WithFilters(ctx *sql.Context, filters []sql.Expression) sql.Table {
-	if dt.partitionFilters == nil {
-		dt.partitionFilters = FilterFilters(filters, ColumnPredicate(filterColumnNameSet))
-	}
+	dt.partitionFilters = FilterFilters(filters, ColumnPredicate(filterColumnNameSet))
 
 	if len(dt.partitionFilters) > 0 {
 		commitCheck, err := commitFilterForDiffTableFilterExprs(dt.partitionFilters)
