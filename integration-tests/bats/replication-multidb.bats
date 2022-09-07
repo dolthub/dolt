@@ -104,7 +104,7 @@ teardown() {
 
 @test "replication-multidb: push newly created database" {
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote remote1
-    dolt sql -q "set @@persist.dolt_replication_remote_url_template = 'file://$TMPDIRS/rem1/%s'"
+    dolt sql -q "set @@persist.dolt_replication_remote_url_template = 'file://$TMPDIRS/rem1/{database}'"
 
     dolt sql --data-dir=dbs1 <<SQL
 create database newdb;
@@ -131,7 +131,7 @@ SQL
 
 @test "replication-multidb: push newly created database with no commits" {
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote remote1
-    dolt sql -q "set @@persist.dolt_replication_remote_url_template = 'file://$TMPDIRS/rem1/%s'"
+    dolt sql -q "set @@persist.dolt_replication_remote_url_template = 'file://$TMPDIRS/rem1/{database}'"
 
     dolt sql --data-dir=dbs1 -q "create database newdb;"
 
@@ -191,7 +191,7 @@ SQL
 
 @test "replication-multidb: pull newly created database" {
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote remote1
-    dolt sql -q "set @@persist.dolt_replication_remote_url_template = 'file://$TMPDIRS/rem1/%s'"
+    dolt sql -q "set @@persist.dolt_replication_remote_url_template = 'file://$TMPDIRS/rem1/{database}'"
 
     dolt sql --data-dir=dbs1 <<SQL
 create database newdb;
