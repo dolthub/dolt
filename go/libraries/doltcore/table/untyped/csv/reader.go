@@ -484,7 +484,11 @@ func interpretRowSizeError(schema schema.Schema, rowVals []*string) (string, []s
 		if i >= len(rowVals) {
 			keyValPairs[i] = []string{col.Name, ""}
 		} else {
-			keyValPairs[i] = []string{col.Name, *rowVals[i]}
+			if rowVals[i] == nil {
+				keyValPairs[i] = []string{col.Name, ""}
+			} else {
+				keyValPairs[i] = []string{col.Name, *rowVals[i]}
+			}
 		}
 	}
 
