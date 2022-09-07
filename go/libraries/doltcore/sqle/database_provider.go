@@ -364,13 +364,17 @@ func (p DoltDatabaseProvider) configureReplication(ctx *sql.Context, name string
 		return nil
 	}
 
+	urlTemplate, ok := remoteUrlTemplate.(string)
+	if !ok {
+		return nil
+	}
+
 	// TODO: url sanitize
-	remoteUrl := fmt.Sprintf(remoteUrlTemplate.(string), name)
+	remoteUrl := strings.Replace(urlTemplate, dsess.URLTemplateDatabasePlaceholder, name, 1)
 
 	// TODO: params for AWS, others that need them
 	r := env.NewRemote(remoteName, remoteUrl, nil)
-	// TODO: use the correct format here, should match created DB
-	err := r.Prepare(ctx, types.Format_Default, p.remoteDialer)
+	err := r.Prepare(ctx, newEnv.DoltDB.Format(), p.remoteDialer)
 	if err != nil {
 		return err
 	}

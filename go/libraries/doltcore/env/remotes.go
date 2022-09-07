@@ -21,7 +21,6 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 
@@ -471,7 +470,6 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 }
 
 func getAbsFileRemoteUrl(u *url.URL, fs filesys2.Filesys) (string, error) {
-
 	urlStr := u.Host + u.Path
 	scheme := u.Scheme
 
@@ -486,6 +484,8 @@ func getAbsFileRemoteUrl(u *url.URL, fs filesys2.Filesys) (string, error) {
 	exists, isDir := fs.Exists(urlStr)
 
 	if !exists {
+		// TODO: very odd that GetAbsRemoteUrl will create a directory if it doesn't exist.
+		//  This concern should be separated
 		err = fs.MkDirs(urlStr)
 		if err != nil {
 			return "", fmt.Errorf("failed to create directory '%s': %w", urlStr, err)
@@ -494,20 +494,8 @@ func getAbsFileRemoteUrl(u *url.URL, fs filesys2.Filesys) (string, error) {
 		return "", filesys2.ErrIsFile
 	}
 
-	urlStr = strings.ReplaceAll(urlStr, `\`, "/")
-	if !strings.HasPrefix(urlStr, "/") && !isDriveLetterPath(urlStr) {
-		urlStr = "/" + urlStr
-	}
-
+	urlStr = filepath.ToSlash(urlStr)
 	return scheme + "://" + urlStr, nil
-}
-
-func isDriveLetter(b byte) bool {
-	return 'a' <= b && b <= 'z' || 'A' <= b && b <= 'Z'
-}
-
-func isDriveLetterPath(name string) bool {
-	return runtime.GOOS == "windows" && len(name) >= 3 && isDriveLetter(name[0]) && name[1] == ':' && name[2] == '/'
 }
 
 // GetDefaultBranch returns the default branch from among the branches given, returning

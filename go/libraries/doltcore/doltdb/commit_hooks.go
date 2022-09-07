@@ -61,11 +61,6 @@ func (ph *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db dat
 }
 
 func (ph *PushOnWriteHook) pushDataset(ctx context.Context, ds datas.Dataset, db datas.Database) error {
-	targetHash, ok := ds.MaybeHeadAddr()
-	if !ok {
-		return fmt.Errorf("dataset empty")
-	}
-
 	addr, ok := ds.MaybeHeadAddr()
 	if !ok {
 		_, err := ph.destDB.Delete(ctx, ds)
@@ -81,7 +76,7 @@ func (ph *PushOnWriteHook) pushDataset(ctx context.Context, ds datas.Dataset, db
 	destCS := datas.ChunkStoreFromDatabase(ph.destDB)
 	waf := types.WalkAddrsForNBF(ph.fmt)
 
-	err = pull.Pull(ctx, srcCS, destCS, waf, targetHash, nil)
+	err = pull.Pull(ctx, srcCS, destCS, waf, addr, nil)
 	if err != nil {
 		return err
 	}
