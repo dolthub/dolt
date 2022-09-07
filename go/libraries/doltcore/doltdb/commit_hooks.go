@@ -16,23 +16,24 @@ package doltdb
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 	"time"
-
-	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type PushOnWriteHook struct {
 	destDB datas.Database
 	tmpDir string
 	out    io.Writer
+	fmt    *types.NomsBinFormat
 }
 
 var _ CommitHook = (*PushOnWriteHook)(nil)
@@ -40,18 +41,40 @@ var _ CommitHook = (*PushOnWriteHook)(nil)
 // NewPushOnWriteHook creates a ReplicateHook, parameterizaed by the backup database
 // and a local tempfile for pushing
 func NewPushOnWriteHook(destDB *DoltDB, tmpDir string) *PushOnWriteHook {
-	return &PushOnWriteHook{destDB: destDB.db, tmpDir: tmpDir}
+	return &PushOnWriteHook{
+		destDB: destDB.db,
+		tmpDir: tmpDir,
+		fmt:    destDB.Format(),
+	}
 }
 
 // Execute implements CommitHook, replicates head updates to the destDb field
 func (ph *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
-	return pushDataset(ctx, ph.destDB, db, ph.tmpDir, ds)
+	// TODO: this code and pushDataset are largely duplicated from doltDb.PullChunks.
+	//  Clean it up, and preferably make more db stores capable of using the puller interface
+	if datas.CanUsePuller(db) && datas.CanUsePuller(ph.destDB) {
+		return pushDataset(ctx, ph.destDB, db, ph.tmpDir, ds)
+	}
+
+	srcCS := datas.ChunkStoreFromDatabase(db)
+	destCS := datas.ChunkStoreFromDatabase(ph.destDB)
+	waf := types.WalkAddrsForNBF(ph.fmt)
+
+	targetHash, ok := ds.MaybeHeadAddr()
+	if !ok {
+		return fmt.Errorf("dataset empty")
+	}
+
+	return pull.Pull(ctx, srcCS, destCS, waf, targetHash, nil)
 }
 
 // HandleError implements CommitHook
 func (ph *PushOnWriteHook) HandleError(ctx context.Context, err error) error {
 	if ph.out != nil {
-		ph.out.Write([]byte(err.Error()))
+		_, err := ph.out.Write([]byte(fmt.Sprintf("error pushing: %+v", err)))
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

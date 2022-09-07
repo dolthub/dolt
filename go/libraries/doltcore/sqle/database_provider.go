@@ -17,10 +17,10 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
 	"sync"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -381,7 +381,7 @@ func (p DoltDatabaseProvider) configureReplication(ctx *sql.Context, name string
 	}
 
 	// TODO: get background threads from the engine
-	commitHooks, err := GetCommitHooks(ctx, sql.NewBackgroundThreads(), newEnv, io.Discard)
+	commitHooks, err := GetCommitHooks(ctx, sql.NewBackgroundThreads(), newEnv, cli.CliErr)
 	if err != nil {
 		return err
 	}
