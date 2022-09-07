@@ -97,7 +97,7 @@ type IndexLookupKeyIterator interface {
 
 func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup, isDoltFmt bool) (sql.PartitionIter, error) {
 	idx := lookup.Index.(*doltIndex)
-	if lookup.IsPointLookup && idx.unique && isDoltFmt {
+	if lookup.IsPointLookup && isDoltFmt {
 		return newPointPartitionIter(ctx, lookup, idx)
 	}
 
