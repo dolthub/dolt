@@ -382,13 +382,8 @@ SQL
 }
 
 @test "conflict-detection-2: two branches, one deletes rows, one modifies those same rows. merge. conflict" {
-    dolt sql <<SQL
-CREATE TABLE foo (
-  pk INT PRIMARY KEY,
-  val INT
-);
-INSERT INTO foo VALUES (1, 1), (2, 1), (3, 1), (4, 1), (5, 1);
-SQL
+    dolt sql -q 'CREATE TABLE foo (`pk` INT PRIMARY KEY, `col:1` INT);'
+    dolt sql -q "INSERT INTO foo VALUES (1, 1), (2, 1), (3, 1), (4, 1), (5, 1);"
     dolt add foo
     dolt commit -m 'initial commit.'
 
@@ -398,7 +393,7 @@ SQL
     dolt commit -m 'delete commit.'
 
     dolt checkout -b modifier main
-    dolt sql -q 'update foo set val = val + 1 where pk in (1, 3, 5);'
+    dolt sql -q 'update foo set `col:1` = `col:1` + 1 where pk in (1, 3, 5);'
     dolt add foo
     dolt commit -m 'modify commit.'
 
