@@ -201,7 +201,7 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 		return ws, noConflictsOrViolations, threeWayMerge, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	ws, err = executeMerge(ctx, spec.Squash, spec.HeadC, spec.MergeC, ws, dbState.EditOpts())
+	ws, err = executeMerge(ctx, spec.Squash, spec.HeadC, spec.MergeC, spec.MergeCSpecStr, ws, dbState.EditOpts())
 	if err == doltdb.ErrUnresolvedConflictsOrViolations {
 		// if there are unresolved conflicts, write the resulting working set back to the session and return an
 		// error message
@@ -248,7 +248,7 @@ func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 	return workingSet, nil
 }
 
-func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, ws *doltdb.WorkingSet, opts editor.Options) (*doltdb.WorkingSet, error) {
+func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, cmSpec string, ws *doltdb.WorkingSet, opts editor.Options) (*doltdb.WorkingSet, error) {
 	mergeRoot, mergeStats, err := merge.MergeCommits(ctx, head, cm, opts)
 
 	if err != nil {
@@ -262,7 +262,7 @@ func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, ws *do
 		}
 	}
 
-	return mergeRootToWorking(squash, ws, mergeRoot, cm, mergeStats)
+	return mergeRootToWorking(squash, ws, mergeRoot, cm, cmSpec, mergeStats)
 }
 
 func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.WorkingSet, dbData env.DbData, cm2 *doltdb.Commit) (*doltdb.WorkingSet, error) {
@@ -315,7 +315,7 @@ func executeNoFFMerge(
 		return nil, err
 	}
 
-	ws, err = mergeRootToWorking(false, ws, mergeRoot, spec.MergeC, map[string]*merge.MergeStats{})
+	ws, err = mergeRootToWorking(false, ws, mergeRoot, spec.MergeC, spec.MergeCSpecStr, map[string]*merge.MergeStats{})
 	if err != nil {
 		// This error is recoverable, so we return a working set value along with the error
 		return ws, err
@@ -407,12 +407,13 @@ func mergeRootToWorking(
 	ws *doltdb.WorkingSet,
 	mergedRoot *doltdb.RootValue,
 	cm2 *doltdb.Commit,
+	cm2Spec string,
 	mergeStats map[string]*merge.MergeStats,
 ) (*doltdb.WorkingSet, error) {
 
 	workingRoot := mergedRoot
 	if !squash {
-		ws = ws.StartMerge(cm2)
+		ws = ws.StartMerge(cm2, cm2Spec)
 	}
 
 	ws = ws.WithWorkingRoot(workingRoot).WithStagedRoot(workingRoot)

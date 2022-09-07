@@ -265,6 +265,9 @@ const (
 	// StatusTableName is the status system table name.
 	StatusTableName = "dolt_status"
 
+	// MergeStatusTableName is the merge status system table name.
+	MergeStatusTableName = "dolt_merge_status"
+
 	// TagsTableName is the tags table name
 	TagsTableName = "dolt_tags"
 )

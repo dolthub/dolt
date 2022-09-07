@@ -302,7 +302,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 			require.True(t, stats.Conflicts == 0)
 		}
 
-		err = dEnv.StartMerge(context.Background(), cm2)
+		err = dEnv.StartMerge(context.Background(), cm2, dref.String())
 		if err != nil {
 			return err
 		}
