@@ -205,9 +205,10 @@ func resolvePkTable(ctx *sql.Context, tblName string, sch schema.Schema, strateg
 
 func resolveKeylessTable(sqlCtx *sql.Context, tblName string, sch schema.Schema, strategy AutoResolveStrategy, eng *engine.SqlEngine) error {
 	allCols := sch.GetAllCols().GetColumnNames()
-	baseCols := strings.Join(withPrefix(allCols, "base_"), ", ")
-	ourCols := strings.Join(withPrefix(allCols, "our_"), ", ")
-	theirCols := strings.Join(withPrefix(allCols, "their_"), ", ")
+	baseCols := strings.Join(quoteWithPrefix(allCols, "base_"), ", ")
+	ourCols := strings.Join(quoteWithPrefix(allCols, "our_"), ", ")
+	theirCols := strings.Join(quoteWithPrefix(allCols, "their_"), ", ")
+	confTblName := fmt.Sprintf("`dolt_conflicts_%s`", tblName)
 
 	selectConfsQ := fmt.Sprintf(
 		`SELECT 
@@ -219,7 +220,7 @@ func resolveKeylessTable(sqlCtx *sql.Context, tblName string, sch schema.Schema,
 					base_cardinality, 
 					our_cardinality, 
 					their_cardinality
-				FROM dolt_conflicts_%s;`, baseCols, ourCols, theirCols, tblName)
+				FROM %s;`, baseCols, ourCols, theirCols, confTblName)
 
 	sqlSch, itr, err := eng.Query(sqlCtx, selectConfsQ)
 	if err != nil {
@@ -285,7 +286,7 @@ func resolveKeylessTable(sqlCtx *sql.Context, tblName string, sch schema.Schema,
 		}
 	}
 
-	err = execute(sqlCtx, eng, fmt.Sprintf("DELETE FROM dolt_conflicts_%s", tblName))
+	err = execute(sqlCtx, eng, fmt.Sprintf("DELETE FROM %s", confTblName))
 	if err != nil {
 		return err
 	}
@@ -294,7 +295,7 @@ func resolveKeylessTable(sqlCtx *sql.Context, tblName string, sch schema.Schema,
 }
 
 func oursPKResolver(sqlCtx *sql.Context, eng *engine.SqlEngine, tblName string) error {
-	del := fmt.Sprintf("DELETE FROM dolt_conflicts_%s;", tblName)
+	del := fmt.Sprintf("DELETE FROM `dolt_conflicts_%s`;", tblName)
 	err := execute(sqlCtx, eng, del)
 	if err != nil {
 		return err
@@ -311,23 +312,27 @@ func getIdentifyingColumnNames(sch schema.Schema) []string {
 }
 
 func theirsPKResolver(sqlCtx *sql.Context, eng *engine.SqlEngine, tblName string, allCols []string, identCols []string) error {
-	dstCols := strings.Join(allCols, ", ")
-	srcCols := strings.Join(withPrefix(allCols, "their_"), ", ")
+	dstCols := strings.Join(quoted(allCols), ", ")
+	srcCols := strings.Join(quoteWithPrefix(allCols, "their_"), ", ")
+
+	cnfTbl := fmt.Sprintf("`dolt_conflicts_%s`", tblName)
+	qName := fmt.Sprintf("`%s`", tblName)
+
 	q1 := fmt.Sprintf(
 		`
 REPLACE INTO %s (%s) (
 	SELECT %s
-	FROM dolt_conflicts_%s
+	FROM %s
 	WHERE their_diff_type = 'modified' OR their_diff_type = 'added'
 );
-`, tblName, dstCols, srcCols, tblName)
+`, qName, dstCols, srcCols, cnfTbl)
 	err := execute(sqlCtx, eng, q1)
 	if err != nil {
 		return err
 	}
 
 	selCols := strings.Join(coalesced(identCols), ", ")
-	q2 := fmt.Sprintf("SELECT %s from dolt_conflicts_%s WHERE their_diff_type = 'removed';", selCols, tblName)
+	q2 := fmt.Sprintf("SELECT %s from `dolt_conflicts_%s` WHERE their_diff_type = 'removed';", selCols, tblName)
 	sch, itr, err := eng.Query(sqlCtx, q2)
 	if err != nil {
 		return err
@@ -345,14 +350,14 @@ REPLACE INTO %s (%s) (
 		if err != nil {
 			return err
 		}
-		del := fmt.Sprintf("DELETE from %s WHERE %s;", tblName, deleteFilter)
+		del := fmt.Sprintf("DELETE from `%s` WHERE %s;", tblName, deleteFilter)
 		err = execute(sqlCtx, eng, del)
 		if err != nil {
 			return err
 		}
 	}
 
-	q3 := fmt.Sprintf("DELETE FROM dolt_conflicts_%s;", tblName)
+	q3 := fmt.Sprintf("DELETE FROM `dolt_conflicts_%s`;", tblName)
 	err = execute(sqlCtx, eng, q3)
 	if err != nil {
 		return err
@@ -372,9 +377,9 @@ func buildFilter(columns []string, row sql.Row, rowSch sql.Schema) (string, erro
 	var b strings.Builder
 	var seen bool
 	for i, v := range vals {
-		_, _ = fmt.Fprintf(&b, "%s = %s", columns[i], v)
+		_, _ = fmt.Fprintf(&b, "`%s` = %s", columns[i], v)
 		if seen {
-			_, _ = fmt.Fprintf(&b, "AND %s = %s", columns[i], v)
+			_, _ = fmt.Fprintf(&b, "AND `%s` = %s", columns[i], v)
 		}
 		seen = true
 	}
@@ -384,15 +389,23 @@ func buildFilter(columns []string, row sql.Row, rowSch sql.Schema) (string, erro
 func coalesced(cols []string) []string {
 	out := make([]string, len(cols))
 	for i := range out {
-		out[i] = fmt.Sprintf("coalesce(base_%s, our_%s, their_%s)", cols[i], cols[i], cols[i])
+		out[i] = fmt.Sprintf("coalesce(`base_%s`, `our_%s`, `their_%s`)", cols[i], cols[i], cols[i])
 	}
 	return out
 }
 
-func withPrefix(arr []string, prefix string) []string {
+func quoted(cols []string) []string {
+	out := make([]string, len(cols))
+	for i := range out {
+		out[i] = fmt.Sprintf("`%s`", cols[i])
+	}
+	return out
+}
+
+func quoteWithPrefix(arr []string, prefix string) []string {
 	out := make([]string, len(arr))
 	for i := range arr {
-		out[i] = prefix + arr[i]
+		out[i] = fmt.Sprintf("`%s%s`", prefix, arr[i])
 	}
 	return out
 }

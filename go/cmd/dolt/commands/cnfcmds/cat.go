@@ -241,10 +241,10 @@ func writeConflictResults(
 }
 
 func buildConflictQuery(base, sch, mergeSch schema.Schema, tblName string) string {
-	cols := withPrefix(base.GetAllCols().GetColumnNames(), "base_")
-	cols = append(cols, withPrefix(sch.GetAllCols().GetColumnNames(), "our_")...)
-	cols = append(cols, withPrefix(mergeSch.GetAllCols().GetColumnNames(), "their_")...)
+	cols := quoteWithPrefix(base.GetAllCols().GetColumnNames(), "base_")
+	cols = append(cols, quoteWithPrefix(sch.GetAllCols().GetColumnNames(), "our_")...)
+	cols = append(cols, quoteWithPrefix(mergeSch.GetAllCols().GetColumnNames(), "their_")...)
 	colNames := strings.Join(cols, ", ")
-	query := fmt.Sprintf("SELECT %s, our_diff_type, their_diff_type from dolt_conflicts_%s", colNames, tblName)
+	query := fmt.Sprintf("SELECT %s, our_diff_type, their_diff_type from `dolt_conflicts_%s`", colNames, tblName)
 	return query
 }
