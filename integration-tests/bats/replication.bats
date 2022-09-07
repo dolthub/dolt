@@ -476,10 +476,11 @@ SQL
 @test "replication: push to unknown remote error" {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote unknown
+
     run dolt sql -q "create table t1 (a int primary key)"
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "failure loading hook; remote not found: 'unknown'" ]] || false
+    [[ "$output" =~ "remote not found: 'unknown'" ]] || false
 }
 
 @test "replication: quiet push to unknown remote warnings" {
@@ -494,7 +495,7 @@ SQL
 
     run dolt sql -q "select dolt_commit('-am', 'cm')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "failure loading hook; remote not found: 'unknown'" ]] || false
+    [[ "$output" =~ "remote not found: 'unknown'" ]] || false
     [[ "$output" =~ "dolt_commit('-am', 'cm')" ]] || false
 }
 
