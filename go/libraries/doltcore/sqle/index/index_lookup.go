@@ -97,12 +97,13 @@ type IndexLookupKeyIterator interface {
 
 func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup, isDoltFmt bool) (sql.PartitionIter, error) {
 	idx := lookup.Index.(*doltIndex)
-	durableState, err := idx.getDurableState(ctx, t)
-	if err != nil {
-		return nil, err
+	if lookup.IsPointLookup && isDoltFmt {
+		return newPointPartitionIter(ctx, lookup, idx)
 	}
+
 	var prollyRanges []prolly.Range
 	var nomsRanges []*noms.ReadRange
+	var err error
 	if isDoltFmt {
 		prollyRanges, err = idx.prollyRanges(ctx, idx.ns, lookup.Ranges...)
 	} else {
@@ -115,15 +116,56 @@ func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 		nomsRanges:   nomsRanges,
 		prollyRanges: prollyRanges,
 		curr:         0,
-		durableState: durableState,
+		isDoltFmt:    isDoltFmt,
 	}, nil
+}
+
+func newPointPartitionIter(ctx *sql.Context, lookup sql.IndexLookup, idx *doltIndex) (sql.PartitionIter, error) {
+	tb := idx.keyBld
+	rng := lookup.Ranges[0]
+	ns := idx.ns
+	for j, expr := range rng {
+		v, err := getRangeCutValue(expr.LowerBound, rng[j].Typ)
+		if err != nil {
+			return nil, err
+		}
+		if err = PutField(ctx, ns, tb, j, v); err != nil {
+			return nil, err
+		}
+	}
+	tup := tb.BuildPermissive(sharePool)
+	return &pointPartition{r: prolly.Range{Tup: tup, Desc: tb.Desc}}, nil
+}
+
+var _ sql.PartitionIter = (*pointPartition)(nil)
+var _ sql.Partition = (*pointPartition)(nil)
+
+type pointPartition struct {
+	r    prolly.Range
+	used bool
+}
+
+func (p pointPartition) Key() []byte {
+	return []byte{0}
+}
+
+func (p *pointPartition) Close(c *sql.Context) error {
+	return nil
+}
+
+func (p *pointPartition) Next(c *sql.Context) (sql.Partition, error) {
+	if p.used {
+		return nil, io.EOF
+	}
+	p.used = true
+	return *p, nil
 }
 
 type rangePartitionIter struct {
 	nomsRanges   []*noms.ReadRange
 	prollyRanges []prolly.Range
 	curr         int
-	durableState *durableIndexState
+	isDoltFmt    bool
 }
 
 // Close is required by the sql.PartitionIter interface. Does nothing.
@@ -133,7 +175,7 @@ func (itr *rangePartitionIter) Close(*sql.Context) error {
 
 // Next returns the next partition if there is one, or io.EOF if there isn't.
 func (itr *rangePartitionIter) Next(_ *sql.Context) (sql.Partition, error) {
-	if types.IsFormat_DOLT(itr.durableState.Secondary.Format()) {
+	if itr.isDoltFmt {
 		return itr.nextProllyPartition()
 	}
 	return itr.nextNomsPartition()
@@ -150,9 +192,8 @@ func (itr *rangePartitionIter) nextProllyPartition() (sql.Partition, error) {
 	itr.curr += 1
 
 	return rangePartition{
-		prollyRange:  pr,
-		key:          bytes[:],
-		durableState: itr.durableState,
+		prollyRange: pr,
+		key:         bytes[:],
 	}, nil
 }
 
@@ -167,17 +208,15 @@ func (itr *rangePartitionIter) nextNomsPartition() (sql.Partition, error) {
 	itr.curr += 1
 
 	return rangePartition{
-		nomsRange:    nr,
-		key:          bytes[:],
-		durableState: itr.durableState,
+		nomsRange: nr,
+		key:       bytes[:],
 	}, nil
 }
 
 type rangePartition struct {
-	nomsRange    *noms.ReadRange
-	prollyRange  prolly.Range
-	key          []byte
-	durableState *durableIndexState
+	nomsRange   *noms.ReadRange
+	prollyRange prolly.Range
+	key         []byte
 }
 
 func (rp rangePartition) Key() []byte {
@@ -192,21 +231,33 @@ type LookupBuilder interface {
 	Key() doltdb.DataCacheKey
 }
 
-func NewLookupBuilder(key doltdb.DataCacheKey, part sql.Partition, idx DoltIndex, projections []uint64, pkSch sql.PrimaryKeySchema, isDoltFormat bool) LookupBuilder {
-	p := part.(rangePartition)
+func NewLookupBuilder(
+	ctx *sql.Context,
+	tab DoltTableable,
+	idx DoltIndex,
+	key doltdb.DataCacheKey,
+	projections []uint64,
+	pkSch sql.PrimaryKeySchema,
+	isDoltFormat bool,
+) (LookupBuilder, error) {
 	if len(projections) == 0 {
 		projections = idx.Schema().GetAllCols().Tags
 	}
 
+	di := idx.(*doltIndex)
+	s, err := di.getDurableState(ctx, tab)
+	if err != nil {
+		return nil, err
+	}
 	base := &baseLookupBuilder{
-		idx:         idx.(*doltIndex),
+		idx:         di,
 		key:         key,
 		sch:         pkSch,
 		projections: projections,
 	}
 
 	if isDoltFormat {
-		base.sec = durable.ProllyMapFromIndex(p.durableState.Secondary)
+		base.sec = durable.ProllyMapFromIndex(s.Secondary)
 		base.secKd, base.secVd = base.sec.Descriptors()
 		base.ns = base.sec.NodeStore()
 	}
@@ -215,15 +266,17 @@ func NewLookupBuilder(key doltdb.DataCacheKey, part sql.Partition, idx DoltIndex
 	case !isDoltFormat:
 		return &nomsLookupBuilder{
 			baseLookupBuilder: base,
-		}
+			s:                 s,
+		}, nil
 	case sql.IsKeyless(pkSch.Schema):
 		return &keylessLookupBuilder{
 			baseLookupBuilder: base,
-		}
-	case idx.coversColumns(p.durableState, projections):
-		return newCoveringLookupBuilder(base)
+			s:                 s,
+		}, nil
+	case idx.coversColumns(s, projections):
+		return newCoveringLookupBuilder(base), nil
 	default:
-		return newNonCoveringLookupBuilder(p, base)
+		return newNonCoveringLookupBuilder(s, base), nil
 	}
 }
 
@@ -242,8 +295,8 @@ func newCoveringLookupBuilder(b *baseLookupBuilder) *coveringLookupBuilder {
 	}
 }
 
-func newNonCoveringLookupBuilder(p rangePartition, b *baseLookupBuilder) *nonCoveringLookupBuilder {
-	primary := durable.ProllyMapFromIndex(p.durableState.Primary)
+func newNonCoveringLookupBuilder(s *durableIndexState, b *baseLookupBuilder) *nonCoveringLookupBuilder {
+	primary := durable.ProllyMapFromIndex(s.Primary)
 	priKd, _ := primary.Descriptors()
 	tbBld := val.NewTupleBuilder(priKd)
 	pkMap := ordinalMappingFromIndex(b.idx)
@@ -326,6 +379,17 @@ func (lb *baseLookupBuilder) newPointLookup(ctx *sql.Context, rang prolly.Range)
 	return prolly.NewPointLookup(key, value), nil
 }
 
+func (lb *baseLookupBuilder) rangeIter(ctx *sql.Context, part sql.Partition) (prolly.MapIter, error) {
+	switch p := part.(type) {
+	case pointPartition:
+		return lb.newPointLookup(ctx, p.r)
+	case rangePartition:
+		return lb.sec.IterRange(ctx, p.prollyRange)
+	default:
+		panic(fmt.Sprintf("unexpected prolly partition type: %T", part))
+	}
+}
+
 // coveringLookupBuilder constructs row iters for covering lookups,
 // where we only need to cursor seek on a single index to both identify
 // target keys and fill all requested projections
@@ -339,15 +403,7 @@ type coveringLookupBuilder struct {
 
 // NewRowIter implements IndexLookup
 func (lb *coveringLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	p := part.(rangePartition)
-
-	var rangeIter prolly.MapIter
-	var err error
-	if p.prollyRange.IsPointLookup(lb.secKd) {
-		rangeIter, err = lb.newPointLookup(ctx, p.prollyRange)
-	} else {
-		rangeIter, err = lb.sec.IterRange(ctx, p.prollyRange)
-	}
+	rangeIter, err := lb.rangeIter(ctx, part)
 	if err != nil {
 		return nil, err
 	}
@@ -379,14 +435,7 @@ type nonCoveringLookupBuilder struct {
 
 // NewRowIter implements IndexLookup
 func (lb *nonCoveringLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	p := part.(rangePartition)
-	var rangeIter prolly.MapIter
-	var err error
-	if p.prollyRange.IsPointLookup(lb.secKd) {
-		rangeIter, err = lb.newPointLookup(ctx, p.prollyRange)
-	} else {
-		rangeIter, err = lb.sec.IterRange(ctx, p.prollyRange)
-	}
+	rangeIter, err := lb.rangeIter(ctx, part)
 	if err != nil {
 		return nil, err
 	}
@@ -408,23 +457,31 @@ func (lb *nonCoveringLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partit
 // but can take advantage of point lookup optimizations
 type keylessLookupBuilder struct {
 	*baseLookupBuilder
+	s *durableIndexState
 }
 
 // NewRowIter implements IndexLookup
 func (lb *keylessLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	p := part.(rangePartition)
-	return newProllyKeylessIndexIter(ctx, lb.idx, p.prollyRange, lb.sch, lb.projections, p.durableState.Primary, p.durableState.Secondary)
+	var prollyRange prolly.Range
+	switch p := part.(type) {
+	case rangePartition:
+		prollyRange = p.prollyRange
+	case pointPartition:
+		prollyRange = p.r
+	}
+	return newProllyKeylessIndexIter(ctx, lb.idx, prollyRange, lb.sch, lb.projections, lb.s.Primary, lb.s.Secondary)
 }
 
 type nomsLookupBuilder struct {
 	*baseLookupBuilder
+	s *durableIndexState
 }
 
 // NewRowIter implements IndexLookup
 func (lb *nomsLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	p := part.(rangePartition)
 	ranges := []*noms.ReadRange{p.nomsRange}
-	return RowIterForNomsRanges(ctx, lb.idx, ranges, lb.projections, p.durableState)
+	return RowIterForNomsRanges(ctx, lb.idx, ranges, lb.projections, lb.s)
 }
 
 // boundsCase determines the case upon which the bounds are tested.

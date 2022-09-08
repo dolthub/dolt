@@ -237,7 +237,7 @@ func (t *DoltTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
 	return table, nil
 }
 
-// Return an opaque key that can be compared for equality to see if this
+// DataCacheKey returns an opaque key that can be compared for equality to see if this
 // table's data still matches a previous view of the data that was retrieved
 // through DoltTable() or NumRows(), for example.
 //
