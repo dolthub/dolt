@@ -89,7 +89,7 @@ func BenchmarkImportDolt(b *testing.B) {
 		desc := val.NewTupleDescriptor(val.Type{Enc: val.Uint64Enc})
 		m, err := prolly.NewMapFromTuples(ctx, tree.NewNodeStore(cs), desc, desc)
 		require.NoError(b, err)
-		return &doltWriter{mut: m.Mutate()}
+		return &doltWriter{mut: m.Mutate(), cs: cs}
 	}
 
 	b.Run("Dolt", func(b *testing.B) {
@@ -127,6 +127,7 @@ func (wr *bboltWriter) Flush() error {
 
 type doltWriter struct {
 	mut prolly.MutableMap
+	cs  *nbs.NomsBlockStore
 }
 
 func (wr *doltWriter) Put(key, value []byte) error {
@@ -139,7 +140,13 @@ func (wr *doltWriter) Flush() error {
 		return err
 	}
 	wr.mut = m.Mutate()
-	return nil
+
+	h, err := wr.cs.Root(context.Background())
+	if err != nil {
+		return err
+	}
+	_, err = wr.cs.Commit(context.Background(), h, h)
+	return err
 }
 
 func benchmarkBatchWrite(b *testing.B, wr writer) {
