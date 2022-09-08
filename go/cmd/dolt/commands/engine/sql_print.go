@@ -15,14 +15,15 @@
 package engine
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -66,41 +67,32 @@ func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch
 	var p *pipeline.Pipeline
 	switch resultFormat {
 	case FormatCsv:
-		p = createCSVPipeline(ctx, sqlSch, rowIter, hasTopLevelOrderBy)
-	case FormatJson:
-		p = createJSONPipeline(ctx, sqlSch, rowIter, hasTopLevelOrderBy)
-	case FormatTabular:
-		wr := tabular.NewFixedWidthTableWriter(sqlSch, iohelp.NopWrCloser(cli.CliOut), 100)
-
-		i := 0
-		for {
-			r, err := rowIter.Next(ctx)
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				return err
-			}
-
-			err = wr.WriteSqlRow(ctx, r)
-			if err != nil {
-				return err
-			}
-
-			i++
-		}
-
-		err := wr.Close(ctx)
+		sch, err := sqlutil.ToDoltResultSchema(sqlSch)
 		if err != nil {
 			return err
 		}
 
-		if i == 0 {
-			printEmptySetResult(ctx)
+		wr, err := csv.NewCSVWriter(iohelp.NopWrCloser(cli.CliOut), sch, csv.NewCSVInfo())
+
+		return writeResultSet(ctx, rowIter, wr)
+	case FormatJson:
+		sch, err := sqlutil.ToDoltResultSchema(sqlSch)
+		if err != nil {
+			return err
 		}
 
-		return nil
+		wr, err := json.NewJSONWriter(iohelp.NopWrCloser(cli.CliOut), sch)
+		if err != nil {
+			return err
+		}
+
+		return writeResultSet(ctx, rowIter, wr)
+	case FormatTabular:
+		wr := tabular.NewFixedWidthTableWriter(sqlSch, iohelp.NopWrCloser(cli.CliOut), 100)
+		return writeResultSet(ctx, rowIter, wr)
 	case FormatNull:
-		p = createNullPipeline(ctx, sqlSch, rowIter)
+		wr := newNullWriter()
+		return writeResultSet(ctx, rowIter, wr)
 	case FormatVertical:
 		p = createVerticalPipeline(ctx, sqlSch, rowIter)
 	}
@@ -109,6 +101,53 @@ func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch
 	rerr = p.Wait()
 
 	return rerr
+}
+
+type nullWriter struct {}
+
+func (n nullWriter) WriteRow(ctx context.Context, r row.Row) error {
+	return nil
+}
+
+func (n nullWriter) Close(ctx context.Context) error {
+	return nil
+}
+
+func (n nullWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
+	return nil
+}
+
+func newNullWriter() nullWriter {
+	return nullWriter{}
+}
+
+func writeResultSet(ctx *sql.Context, rowIter sql.RowIter, wr table.SqlRowWriter) error {
+	i := 0
+	for {
+		r, err := rowIter.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		err = wr.WriteSqlRow(ctx, r)
+		if err != nil {
+			return err
+		}
+
+		i++
+	}
+
+	err := wr.Close(ctx)
+	if err != nil {
+		return err
+	}
+
+	if i == 0 {
+		printEmptySetResult(ctx)
+	}
+	return nil
 }
 
 func printEmptySetResult(ctx *sql.Context) {
@@ -209,198 +248,6 @@ func writeToCliOutStageFunc(ctx context.Context, items []pipeline.ItemWithProps)
 	for _, item := range items {
 		str := *item.GetItem().(*string)
 		cli.Print(str)
-	}
-
-	return nil, nil
-}
-
-// Null pipeline creation and stage functions
-
-func createNullPipeline(ctx *sql.Context, sch sql.Schema, iter sql.RowIter) *pipeline.Pipeline {
-	return pipeline.NewPipeline(
-		pipeline.NewStage("read", noParallelizationInitFunc, getReadStageFunc(ctx, iter, readBatchSize), 0, 0, 0),
-		pipeline.NewStage("drop", nil, dropOnFloor, 0, 100, writeBatchSize),
-	)
-}
-
-func dropOnFloor(ctx context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
-	return nil, nil
-}
-
-// CSV Pipeline creation and stage functions
-
-func createCSVPipeline(ctx *sql.Context, sch sql.Schema, iter sql.RowIter, hasTopLevelOrderBy bool) *pipeline.Pipeline {
-	parallelism := 2
-
-	// On order by clauses do not turn on parallelism so results are processed in the correct order.
-	if hasTopLevelOrderBy {
-		parallelism = 0
-	}
-
-	p := pipeline.NewPipeline(
-		pipeline.NewStage("read", noParallelizationInitFunc, getReadStageFunc(ctx, iter, readBatchSize), 0, 0, 0),
-		pipeline.NewStage("process", nil, getCsvProcessStageFunc(sch), parallelism, 1000, readBatchSize),
-		pipeline.NewStage("write", noParallelizationInitFunc, writeToCliOutStageFunc, 0, 100, writeBatchSize),
-	)
-
-	writeIn, _ := p.GetInputChannel("write")
-	sb := strings.Builder{}
-	for i, col := range sch {
-		if i != 0 {
-			sb.WriteRune(',')
-		}
-
-		sb.WriteString(col.Name)
-	}
-	sb.WriteRune('\n')
-
-	str := sb.String()
-	writeIn <- []pipeline.ItemWithProps{pipeline.NewItemWithNoProps(&str)}
-
-	return p
-}
-
-func getCsvProcessStageFunc(sch sql.Schema) pipeline.StageFunc {
-	return func(ctx context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
-		if items == nil {
-			return nil, nil
-		}
-
-		var b bytes.Buffer
-		wr := bufio.NewWriter(&b)
-
-		for _, item := range items {
-			r := item.GetItem().(sql.Row)
-			colValStrs := make([]*string, len(r))
-
-			for colNum, col := range r {
-				if col != nil {
-					str, err := sqlutil.SqlColToStr(sch[colNum].Type, col)
-					if err != nil {
-						return nil, err
-					}
-					colValStrs[colNum] = &str
-				} else {
-					colValStrs[colNum] = nil
-				}
-			}
-
-			err := csv.WriteCSVRow(wr, colValStrs, ",", false)
-
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		wr.Flush()
-
-		str := b.String()
-		return []pipeline.ItemWithProps{pipeline.NewItemWithNoProps(&str)}, nil
-	}
-}
-
-// JSON pipeline creation and stage functions
-func createJSONPipeline(ctx *sql.Context, sch sql.Schema, iter sql.RowIter, hasTopLevelOrderBy bool) *pipeline.Pipeline {
-	parallelism := 2
-
-	// On order by clauses do not turn on parallelism so results are processed in the correct order.
-	if hasTopLevelOrderBy {
-		parallelism = 0
-	}
-
-	p := pipeline.NewPipeline(
-		pipeline.NewStage("read", noParallelizationInitFunc, getReadStageFunc(ctx, iter, readBatchSize), 0, 0, 0),
-		pipeline.NewStage("process", nil, getJSONProcessFunc(sch), parallelism, 1000, readBatchSize),
-		pipeline.NewStage("write", noParallelizationInitFunc, writeJSONToCliOutStageFunc, 0, 100, writeBatchSize),
-	)
-
-	return p
-}
-
-func getJSONProcessFunc(sch sql.Schema) pipeline.StageFunc {
-	formats := make([]string, len(sch))
-	for i, col := range sch {
-		switch col.Type.(type) {
-		case sql.StringType, sql.DatetimeType, sql.EnumType, sql.TimeType:
-			formats[i] = fmt.Sprintf(`"%s":"%%s"`, col.Name)
-		default:
-			formats[i] = fmt.Sprintf(`"%s":%%s`, col.Name)
-		}
-	}
-
-	return func(ctx context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
-		if items == nil {
-			return nil, nil
-		}
-
-		sb := &strings.Builder{}
-		sb.Grow(2048)
-		for i, item := range items {
-			r := item.GetItem().(sql.Row)
-
-			if i != 0 {
-				sb.WriteString(",{")
-			} else {
-				sb.WriteString("{")
-			}
-
-			validCols := 0
-			for colNum, col := range r {
-				if col != nil {
-					if validCols != 0 {
-						sb.WriteString(",")
-					}
-
-					validCols++
-					colStr, err := sqlutil.SqlColToStr(sch[colNum].Type, col)
-					if err != nil {
-						return nil, err
-					}
-
-					if _, ok := col.(sql.JSONValue); !ok {
-						// don't escape for JSONValue literals
-						colStr = strings.Replace(colStr, "\"", "\\\"", -1)
-					}
-
-					str := fmt.Sprintf(formats[colNum], colStr)
-					sb.WriteString(str)
-				}
-			}
-
-			sb.WriteRune('}')
-		}
-
-		str := sb.String()
-		return []pipeline.ItemWithProps{pipeline.NewItemWithNoProps(&str)}, nil
-	}
-}
-
-func writeJSONToCliOutStageFunc(ctx context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
-	const hasRunKey = 0
-
-	ls := pipeline.GetLocalStorage(ctx)
-	_, hasRun := ls.Get(hasRunKey)
-	ls.Put(hasRunKey, true)
-
-	if items == nil {
-		if hasRun {
-			cli.Print("]}")
-		} else {
-			cli.Print("{\"rows\":[]}")
-		}
-	} else {
-		for _, item := range items {
-			if hasRun {
-				cli.Print(",")
-			} else {
-				cli.Print("{\"rows\": [")
-			}
-
-			str := *item.GetItem().(*string)
-			cli.Print(str)
-
-			hasRun = true
-		}
 	}
 
 	return nil, nil
