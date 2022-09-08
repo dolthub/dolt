@@ -493,7 +493,7 @@ func interpretRowSizeError(schema schema.Schema, rowVals []*string) (string, []s
 
 	// 1. Start by adding all cols to the map and their relevant pair
 	for i, col := range cols {
-		if i >= len(rowVals) {
+		if i >= len(rowVals) || rowVals[i] == nil {
 			keyValPairs[i] = []string{col.Name, ""}
 		} else {
 			keyValPairs[i] = []string{col.Name, *rowVals[i]}

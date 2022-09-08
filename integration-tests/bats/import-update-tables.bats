@@ -1223,3 +1223,20 @@ DELIM
     [[ "${lines[6]}" =~ "Lines skipped: 2" ]] || false
     [[ "${lines[7]}" =~ "Import completed successfully." ]] || false
 }
+
+@test "import-update-tables: test error when import bad csv with nulls" {
+    # Case where there are fewer values in a row than the number of columns in the schema
+    cat <<DELIM > bad-updates.csv
+i,j,k
+,,,
+DELIM
+
+    dolt sql -q "CREATE TABLE test(i int, j int, k int, l int)"
+
+    run dolt table import -u test bad-updates.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "CSV reader expected 3 values, but saw 4" ]] || false
+    [[ "$output" =~ "row values:" ]] || false
+    [[ "$output" =~ "with the following values left over: '[\"\"]'" ]] || false
+}
