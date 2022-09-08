@@ -134,7 +134,7 @@ func memIterFromRange(list *skip.List, rng Range) *memRangeIter {
 }
 
 // skipSearchFromRange is a skip.SeekFn used to initialize
-// a skip.List iterator for a given Range. The skip.SeekFn
+// a skip.List iterator for a given Range. The skip.SearchFn
 // returns true if the iter being initialized is not yet
 // within the bounds of Range |rng|.
 func skipSearchFromRange(rng Range) skip.SeekFn {
