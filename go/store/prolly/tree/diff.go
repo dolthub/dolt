@@ -36,46 +36,67 @@ type Diff struct {
 
 type DiffFn func(context.Context, Diff) error
 
-type Differ struct {
+type Differ[K ~[]byte, O Ordering[K]] struct {
 	from, to         *Cursor
 	fromStop, toStop *Cursor
-	cmp              CompareFn
+	order            O
 }
 
-func DifferFromRoots(ctx context.Context, fromNs NodeStore, toNs NodeStore, from, to Node, cmp CompareFn) (Differ, error) {
+func DifferFromRoots[K ~[]byte, O Ordering[K]](
+	ctx context.Context,
+	fromNs NodeStore, toNs NodeStore,
+	from, to Node,
+	order O,
+) (Differ[K, O], error) {
 	fc, err := NewCursorAtStart(ctx, fromNs, from)
 	if err != nil {
-		return Differ{}, err
+		return Differ[K, O]{}, err
 	}
 
 	tc, err := NewCursorAtStart(ctx, toNs, to)
 	if err != nil {
-		return Differ{}, err
+		return Differ[K, O]{}, err
 	}
 
 	fs, err := NewCursorPastEnd(ctx, fromNs, from)
 	if err != nil {
-		return Differ{}, err
+		return Differ[K, O]{}, err
 	}
 
 	ts, err := NewCursorPastEnd(ctx, toNs, to)
 	if err != nil {
-		return Differ{}, err
+		return Differ[K, O]{}, err
 	}
 
-	return Differ{from: fc, to: tc, fromStop: fs, toStop: ts, cmp: cmp}, nil
+	return Differ[K, O]{
+		from:     fc,
+		to:       tc,
+		fromStop: fs,
+		toStop:   ts,
+		order:    order,
+	}, nil
 }
 
-func DifferFromCursors(fromStart, toStart, fromStop, toStop *Cursor, cmp CompareFn) (Differ, error) {
-	return Differ{from: fromStart, to: toStart, fromStop: fromStop, toStop: toStop, cmp: cmp}, nil
+func DifferFromCursors[K ~[]byte, O Ordering[K]](
+	fromStart, toStart,
+	fromStop, toStop *Cursor,
+	order O,
+) (Differ[K, O], error) {
+	return Differ[K, O]{
+		from:     fromStart,
+		to:       toStart,
+		fromStop: fromStop,
+		toStop:   toStop,
+		order:    order,
+	}, nil
 }
 
-func (td Differ) Next(ctx context.Context) (diff Diff, err error) {
+func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
 	for td.from.Valid() && td.from.Compare(td.fromStop) < 0 && td.to.Valid() && td.to.Compare(td.toStop) < 0 {
 
 		f := td.from.CurrentKey()
 		t := td.to.CurrentKey()
-		cmp := td.cmp(f, t)
+		cmp := td.order.Compare(K(f), K(t))
 
 		switch {
 		case cmp < 0:

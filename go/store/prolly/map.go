@@ -98,11 +98,10 @@ func NewMapFromTupleIter(ctx context.Context, ns tree.NodeStore, keyDesc, valDes
 }
 
 func MutateMapWithTupleIter(ctx context.Context, m Map, iter TupleIter) (Map, error) {
-	t := m.tuples
-	i := mutationIter{iter: iter}
-	s := message.NewProllyMapSerializer(m.valDesc, t.NodeStore.Pool())
+	fn := tree.ApplyMutations[val.Tuple, val.TupleDesc, message.ProllyMapSerializer]
+	s := message.NewProllyMapSerializer(m.valDesc, m.tuples.NodeStore.Pool())
 
-	root, err := tree.ApplyMutations(ctx, t.NodeStore, t.Root, s, i, t.CompareItems)
+	root, err := fn(ctx, m.tuples.NodeStore, m.tuples.Root, m.keyDesc, s, mutationIter{iter: iter})
 	if err != nil {
 		return Map{}, err
 	}
@@ -110,8 +109,8 @@ func MutateMapWithTupleIter(ctx context.Context, m Map, iter TupleIter) (Map, er
 	return Map{
 		tuples: tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
 			Root:      root,
-			NodeStore: t.NodeStore,
-			Order:     t.Order,
+			NodeStore: m.tuples.NodeStore,
+			Order:     m.tuples.Order,
 		},
 		keyDesc: m.keyDesc,
 		valDesc: m.valDesc,
@@ -125,9 +124,6 @@ func DiffMaps(ctx context.Context, from, to Map, cb tree.DiffFn) error {
 // RangeDiffMaps returns diffs within a Range. See Range for which diffs are
 // returned.
 func RangeDiffMaps(ctx context.Context, from, to Map, rng Range, cb tree.DiffFn) error {
-	cfn := func(left, right tree.Item) int {
-		return from.tuples.Order.Compare(val.Tuple(left), val.Tuple(right))
-	}
 	fns, tns := from.tuples.NodeStore, to.tuples.NodeStore
 
 	fromStart, err := tree.NewCursorFromSearchFn(ctx, fns, from.tuples.Root, rangeStartSearchFn(rng))
@@ -148,7 +144,11 @@ func RangeDiffMaps(ctx context.Context, from, to Map, rng Range, cb tree.DiffFn)
 		return err
 	}
 
-	differ, err := tree.DifferFromCursors(fromStart, toStart, fromStop, toStop, cfn)
+	differ, err := tree.DifferFromCursors[val.Tuple, val.TupleDesc](
+		fromStart, toStart,
+		fromStop, toStop,
+		from.tuples.Order,
+	)
 	if err != nil {
 		return err
 	}
@@ -175,7 +175,7 @@ func DiffMapsKeyRange(ctx context.Context, from, to Map, start, stop val.Tuple, 
 
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
 	serializer := message.NewProllyMapSerializer(left.valDesc, base.NodeStore().Pool())
-	tuples, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer, base.valDesc)
+	tuples, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
 	if err != nil {
 		return Map{}, err
 	}

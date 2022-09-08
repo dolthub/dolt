@@ -59,8 +59,10 @@ func (mut MutableMap) flushWithSerializer(ctx context.Context, s message.Seriali
 		return Map{}, err
 	}
 
-	tr := mut.tuples.StaticMap
-	root, err := tree.ApplyMutations(ctx, tr.NodeStore, tr.Root, s, mut.tuples.Mutations(), tr.CompareItems)
+	sm := mut.tuples.StaticMap
+	fn := tree.ApplyMutations[val.Tuple, val.TupleDesc, message.Serializer]
+
+	root, err := fn(ctx, sm.NodeStore, sm.Root, mut.keyDesc, s, mut.tuples.Mutations())
 	if err != nil {
 		return Map{}, err
 	}
@@ -68,8 +70,8 @@ func (mut MutableMap) flushWithSerializer(ctx context.Context, s message.Seriali
 	return Map{
 		tuples: tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
 			Root:      root,
-			NodeStore: tr.NodeStore,
-			Order:     tr.Order,
+			NodeStore: sm.NodeStore,
+			Order:     sm.Order,
 		},
 		keyDesc: mut.keyDesc,
 		valDesc: mut.valDesc,

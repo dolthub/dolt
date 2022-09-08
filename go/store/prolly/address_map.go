@@ -150,10 +150,11 @@ func (wr AddressMapEditor) Delete(ctx context.Context, name string) error {
 }
 
 func (wr AddressMapEditor) Flush(ctx context.Context) (AddressMap, error) {
-	tr := wr.addresses.StaticMap
-	serializer := message.NewAddressMapSerializer(tr.NodeStore.Pool())
+	sm := wr.addresses.StaticMap
+	serializer := message.NewAddressMapSerializer(sm.NodeStore.Pool())
+	fn := tree.ApplyMutations[stringSlice, lexicographic, message.AddressMapSerializer]
 
-	root, err := tree.ApplyMutations(ctx, tr.NodeStore, tr.Root, serializer, wr.addresses.Mutations(), tr.CompareItems)
+	root, err := fn(ctx, sm.NodeStore, sm.Root, lexicographic{}, serializer, wr.addresses.Mutations())
 	if err != nil {
 		return AddressMap{}, err
 	}
@@ -161,8 +162,8 @@ func (wr AddressMapEditor) Flush(ctx context.Context) (AddressMap, error) {
 	return AddressMap{
 		addresses: tree.StaticMap[stringSlice, address, lexicographic]{
 			Root:      root,
-			NodeStore: tr.NodeStore,
-			Order:     tr.Order,
+			NodeStore: sm.NodeStore,
+			Order:     sm.Order,
 		},
 	}, nil
 }

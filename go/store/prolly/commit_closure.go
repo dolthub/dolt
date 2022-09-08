@@ -140,10 +140,11 @@ func (wr CommitClosureEditor) Delete(ctx context.Context, key CommitClosureKey) 
 }
 
 func (wr CommitClosureEditor) Flush(ctx context.Context) (CommitClosure, error) {
-	tr := wr.closure.StaticMap
-	serializer := message.NewCommitClosureSerializer(tr.NodeStore.Pool())
+	sm := wr.closure.StaticMap
+	serializer := message.NewCommitClosureSerializer(sm.NodeStore.Pool())
+	fn := tree.ApplyMutations[CommitClosureKey, commitClosureKeyOrdering, message.CommitClosureSerializer]
 
-	root, err := tree.ApplyMutations(ctx, tr.NodeStore, tr.Root, serializer, wr.closure.Mutations(), tr.CompareItems)
+	root, err := fn(ctx, sm.NodeStore, sm.Root, commitClosureKeyOrdering{}, serializer, wr.closure.Mutations())
 	if err != nil {
 		return CommitClosure{}, err
 	}
@@ -151,8 +152,8 @@ func (wr CommitClosureEditor) Flush(ctx context.Context) (CommitClosure, error) 
 	return CommitClosure{
 		closure: tree.StaticMap[CommitClosureKey, CommitClosureValue, commitClosureKeyOrdering]{
 			Root:      root,
-			NodeStore: tr.NodeStore,
-			Order:     tr.Order,
+			NodeStore: sm.NodeStore,
+			Order:     sm.Order,
 		},
 	}, nil
 }

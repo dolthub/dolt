@@ -22,17 +22,12 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/skip"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 type KeyValueFn[K, V ~[]byte] func(key K, value V) error
 
 type KvIter[K, V ~[]byte] interface {
 	Next(ctx context.Context) (K, V, error)
-}
-
-type Ordering[K ~[]byte] interface {
-	Compare(left, right K) int
 }
 
 // StaticMap is a static prolly Tree with ordered elements.
@@ -47,10 +42,7 @@ func DiffOrderedTrees[K, V ~[]byte, O Ordering[K]](
 	from, to StaticMap[K, V, O],
 	cb DiffFn,
 ) error {
-	cfn := func(left, right Item) int {
-		return from.Order.Compare(K(left), K(right))
-	}
-	differ, err := DifferFromRoots(ctx, from.NodeStore, to.NodeStore, from.Root, to.Root, cfn)
+	differ, err := DifferFromRoots[K](ctx, from.NodeStore, to.NodeStore, from.Root, to.Root, from.Order)
 	if err != nil {
 		return err
 	}
@@ -121,11 +113,7 @@ func DiffKeyRangeOrderedTrees[K, V ~[]byte, O Ordering[K]](
 		}
 	}
 
-	cfn := func(left, right Item) int {
-		return from.Order.Compare(K(left), K(right))
-	}
-
-	differ, err := DifferFromCursors(fromStart, toStart, fromStop, toStop, cfn)
+	differ, err := DifferFromCursors[K](fromStart, toStart, fromStop, toStop, from.Order)
 	if err != nil {
 		return err
 	}
@@ -148,12 +136,8 @@ func MergeOrderedTrees[K, V ~[]byte, O Ordering[K], S message.Serializer](
 	l, r, base StaticMap[K, V, O],
 	cb CollisionFn,
 	serializer S,
-	valDesc val.TupleDesc,
 ) (StaticMap[K, V, O], error) {
-	cfn := func(left, right Item) int {
-		return base.Order.Compare(K(left), K(right))
-	}
-	root, err := ThreeWayMerge(ctx, base.NodeStore, l.Root, r.Root, base.Root, cfn, cb, serializer, valDesc)
+	root, err := ThreeWayMerge[K](ctx, base.NodeStore, l.Root, r.Root, base.Root, cb, base.Order, serializer)
 	if err != nil {
 		return StaticMap[K, V, O]{}, err
 	}
@@ -463,7 +447,6 @@ func (t StaticMap[K, V, O]) GetOrdinalForKey(ctx context.Context, query K) (uint
 }
 
 var _ ItemSearchFn = StaticMap[Item, Item, Ordering[Item]]{}.searchNode
-var _ CompareFn = StaticMap[Item, Item, Ordering[Item]]{}.CompareItems
 
 type OrderedTreeIter[K, V ~[]byte] struct {
 	// current tuple location
