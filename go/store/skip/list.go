@@ -92,11 +92,13 @@ func (l *List) Checkpoint() {
 
 // Revert reverts to the last recorded checkpoint.
 func (l *List) Revert() {
-	keepers := l.nodes[1:l.checkpoint]
+	cp := l.checkpoint
+	keepers := l.nodes[1:cp]
 	l.Truncate()
 	for _, nd := range keepers {
 		l.Put(nd.key, nd.val)
 	}
+	l.checkpoint = cp
 }
 
 // Truncate deletes all entries from the list.
