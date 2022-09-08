@@ -75,11 +75,13 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool
 
 // GetCommitHooks creates a list of hooks to execute on database commit. If doltdb.SkipReplicationErrorsKey is set,
 // replace misconfigured hooks with doltdb.LogHook instances that prints a warning when trying to execute.
+// TODO: this duplicates code in the sqle package
 func GetCommitHooks(ctx context.Context, dEnv *env.DoltEnv) ([]doltdb.CommitHook, error) {
 	postCommitHooks := make([]doltdb.CommitHook, 0)
 
 	if hook, err := getPushOnWriteHook(ctx, dEnv); err != nil {
-		err = fmt.Errorf("failure loading hook; %w", err)
+		path, _ := dEnv.FS.Abs(".")
+		err = fmt.Errorf("failure loading hook for database at %s; %w", path, err)
 		if sqle.SkipReplicationWarnings() {
 			postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(err.Error()+"\n")))
 		} else {

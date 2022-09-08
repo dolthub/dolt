@@ -107,6 +107,11 @@ func AWSCredentialSourceFromStr(str string) AWSCredentialSource {
 type AWSFactory struct {
 }
 
+func (fact AWSFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
+	// nothing to prepare
+	return nil
+}
+
 // CreateDB creates an AWS backed database
 func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	var db datas.Database

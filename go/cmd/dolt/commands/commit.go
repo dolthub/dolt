@@ -379,7 +379,7 @@ func PrintDiffsNotStaged(
 		if linesPrinted > 0 {
 			cli.Println()
 		}
-		iohelp.WriteLine(wr, mergedTableHeader)
+		iohelp.WriteLine(wr, unmergedPathsHeader)
 		if printHelp {
 			iohelp.WriteLine(wr, mergedTableHelp)
 		}
@@ -498,8 +498,8 @@ const (
 	allMergedHeader = `All conflicts and constraint violations fixed but you are still merging.
   (use "dolt commit" to conclude merge)`
 
-	mergedTableHeader = `Unmerged paths:`
-	mergedTableHelp   = `  (use "dolt add <file>..." to mark resolution)`
+	unmergedPathsHeader = `Unmerged paths:`
+	mergedTableHelp     = `  (use "dolt add <file>..." to mark resolution)`
 
 	workingHeader     = `Changes not staged for commit:`
 	workingHeaderHelp = `  (use "dolt add <table>" to update what will be committed)

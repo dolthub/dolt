@@ -163,6 +163,7 @@ type WorkingSetHead struct {
 type MergeState struct {
 	preMergeWorkingAddr *hash.Hash
 	fromCommitAddr      *hash.Hash
+	fromCommitSpec      string
 
 	nomsMergeStateRef *types.Ref
 	nomsMergeState    *types.Struct
@@ -227,6 +228,31 @@ func (ms *MergeState) FromCommit(ctx context.Context, vr types.ValueReader) (*Co
 	}
 
 	return commitFromValue(vr.Format(), commitV)
+}
+
+func (ms *MergeState) FromCommitSpec(ctx context.Context, vr types.ValueReader) (string, error) {
+	if vr.Format().UsesFlatbuffers() {
+		return ms.fromCommitSpec, nil
+	}
+
+	if ms.nomsMergeState == nil {
+		err := ms.loadIfNeeded(ctx, vr)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	commitSpecStr, ok, err := ms.nomsMergeState.MaybeGet(mergeStateCommitSpecField)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		// Allow noms merge state to be backwards compatible with merge states
+		// that previously did not have a commit spec string.
+		return "", nil
+	}
+
+	return string(commitSpecStr.(types.String)), nil
 }
 
 type dsHead interface {
@@ -339,6 +365,7 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		ret.MergeState = &MergeState{
 			preMergeWorkingAddr: new(hash.Hash),
 			fromCommitAddr:      new(hash.Hash),
+			fromCommitSpec:      string(mergeState.FromCommitSpecStr()),
 		}
 		*ret.MergeState.preMergeWorkingAddr = hash.New(mergeState.PreWorkingRootAddrBytes())
 		*ret.MergeState.fromCommitAddr = hash.New(mergeState.FromCommitAddrBytes())

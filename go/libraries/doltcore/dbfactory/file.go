@@ -43,6 +43,32 @@ var DoltDataDir = filepath.Join(DoltDir, DataDir)
 type FileFactory struct {
 }
 
+// PrepareDB creates the directory for the DB if it doesn't exist, and returns an error if a file or symlink is at the
+// path given
+func (fact FileFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, u *url.URL, params map[string]interface{}) error {
+	path, err := url.PathUnescape(u.Path)
+	if err != nil {
+		return err
+	}
+
+	path = filepath.FromSlash(path)
+	path = u.Host + path
+
+	info, err := os.Stat(path)
+
+	if os.IsNotExist(err) {
+		return os.MkdirAll(path, os.ModePerm)
+	}
+
+	if err != nil {
+		return err
+	} else if !info.IsDir() {
+		return filesys.ErrIsFile
+	}
+
+	return nil
+}
+
 // CreateDB creates a local filesys backed database
 func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	path, err := url.PathUnescape(urlObj.Path)

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"path"
 	"path/filepath"
 	"sort"
@@ -87,6 +88,19 @@ func (r *Remote) GetRemoteDB(ctx context.Context, nbf *types.NomsBinFormat, dial
 	params[dbfactory.GRPCDialProviderParam] = dialer
 
 	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
+}
+
+// Prepare does whatever work is necessary to prepare the remote given to receive pushes. Not all remote types can
+// support this operations and must be prepared manually. For existing remotes, no work is done.
+func (r *Remote) Prepare(ctx context.Context, nbf *types.NomsBinFormat, dialer dbfactory.GRPCDialProvider) error {
+	params := make(map[string]interface{})
+	for k, v := range r.Params {
+		params[k] = v
+	}
+
+	params[dbfactory.GRPCDialProviderParam] = dialer
+
+	return dbfactory.PrepareDB(ctx, nbf, r.Url, params)
 }
 
 func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsBinFormat, dialer dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {
@@ -426,7 +440,7 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 
 	if u.Scheme != "" && fs != nil {
 		if u.Scheme == dbfactory.FileScheme || u.Scheme == dbfactory.LocalBSScheme {
-			absUrl, err := getAbsFileRemoteUrl(u.Host+u.Path, u.Scheme, fs)
+			absUrl, err := getAbsFileRemoteUrl(u, fs)
 
 			if err != nil {
 				return "", "", err
@@ -455,7 +469,10 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 	return dbfactory.HTTPSScheme, "https://" + path.Join(hostName, u.Path), nil
 }
 
-func getAbsFileRemoteUrl(urlStr string, scheme string, fs filesys2.Filesys) (string, error) {
+func getAbsFileRemoteUrl(u *url.URL, fs filesys2.Filesys) (string, error) {
+	urlStr := u.Host + u.Path
+	scheme := u.Scheme
+
 	var err error
 	urlStr = filepath.Clean(urlStr)
 	urlStr, err = fs.Abs(urlStr)
@@ -467,6 +484,8 @@ func getAbsFileRemoteUrl(urlStr string, scheme string, fs filesys2.Filesys) (str
 	exists, isDir := fs.Exists(urlStr)
 
 	if !exists {
+		// TODO: very odd that GetAbsRemoteUrl will create a directory if it doesn't exist.
+		//  This concern should be separated
 		err = fs.MkDirs(urlStr)
 		if err != nil {
 			return "", fmt.Errorf("failed to create directory '%s': %w", urlStr, err)
@@ -475,10 +494,7 @@ func getAbsFileRemoteUrl(urlStr string, scheme string, fs filesys2.Filesys) (str
 		return "", filesys2.ErrIsFile
 	}
 
-	urlStr = strings.ReplaceAll(urlStr, `\`, "/")
-	if !strings.HasPrefix(urlStr, "/") {
-		urlStr = "/" + urlStr
-	}
+	urlStr = filepath.ToSlash(urlStr)
 	return scheme + "://" + urlStr, nil
 }
 

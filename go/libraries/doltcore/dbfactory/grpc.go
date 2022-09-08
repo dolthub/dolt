@@ -45,6 +45,10 @@ type DoltRemoteFactory struct {
 	insecure bool
 }
 
+func (fact DoltRemoteFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
+	return fmt.Errorf("http(s) scheme cannot support this operation")
+}
+
 // NewDoltRemoteFactory creates a DoltRemoteFactory instance using the given GRPCConnectionProvider, and insecure setting
 func NewDoltRemoteFactory(insecure bool) DoltRemoteFactory {
 	return DoltRemoteFactory{insecure}

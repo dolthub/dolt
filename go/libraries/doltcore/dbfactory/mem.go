@@ -28,6 +28,11 @@ import (
 type MemFactory struct {
 }
 
+func (fact MemFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
+	// nothing to prepare
+	return nil
+}
+
 // CreateDB creates an in memory backed database
 func (fact MemFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	var db datas.Database

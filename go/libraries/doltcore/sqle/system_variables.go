@@ -40,6 +40,14 @@ func AddDoltSystemVariables() {
 			Default:           "",
 		},
 		{
+			Name:              dsess.ReplicationRemoteURLTemplate,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(dsess.ReplicationRemoteURLTemplate),
+			Default:           "",
+		},
+		{
 			Name:              dsess.ReadReplicaRemote,
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
@@ -57,7 +65,7 @@ func AddDoltSystemVariables() {
 		},
 		{
 			Name:              dsess.ReplicateHeads,
-			Scope:             sql.SystemVariableScope_Both,
+			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemStringType(dsess.ReplicateHeads),
@@ -65,7 +73,7 @@ func AddDoltSystemVariables() {
 		},
 		{
 			Name:              dsess.ReplicateAllHeads,
-			Scope:             sql.SystemVariableScope_Both,
+			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(dsess.ReplicateAllHeads),
@@ -73,7 +81,7 @@ func AddDoltSystemVariables() {
 		},
 		{
 			Name:              dsess.AsyncReplication,
-			Scope:             sql.SystemVariableScope_Both,
+			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(dsess.AsyncReplication),

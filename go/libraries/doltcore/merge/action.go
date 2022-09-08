@@ -39,6 +39,7 @@ type MergeSpec struct {
 	MergeH          hash.Hash
 	HeadC           *doltdb.Commit
 	MergeC          *doltdb.Commit
+	MergeCSpecStr   string
 	StompedTblNames []string
 	WorkingDiffs    map[string]hash.Hash
 	Squash          bool
@@ -97,6 +98,7 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 		HeadH:           headH,
 		MergeH:          mergeH,
 		HeadC:           headCM,
+		MergeCSpecStr:   commitSpecStr,
 		MergeC:          mergeCM,
 		StompedTblNames: stompedTblNames,
 		WorkingDiffs:    workingDiffs,
@@ -120,7 +122,7 @@ func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map
 	}
 
 	tblToStats := make(map[string]*MergeStats)
-	err = mergedRootToWorking(ctx, false, dEnv, mergedRoot, spec.WorkingDiffs, spec.MergeC, tblToStats)
+	err = mergedRootToWorking(ctx, false, dEnv, mergedRoot, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr, tblToStats)
 
 	if err != nil {
 		return tblToStats, err
@@ -225,7 +227,7 @@ func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[
 		return tblToStats, err
 	}
 
-	return tblToStats, mergedRootToWorking(ctx, spec.Squash, dEnv, mergedRoot, spec.WorkingDiffs, spec.MergeC, tblToStats)
+	return tblToStats, mergedRootToWorking(ctx, spec.Squash, dEnv, mergedRoot, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr, tblToStats)
 }
 
 // TODO: change this to be functional and not write to repo state
@@ -236,6 +238,7 @@ func mergedRootToWorking(
 	mergedRoot *doltdb.RootValue,
 	workingDiffs map[string]hash.Hash,
 	cm2 *doltdb.Commit,
+	cm2SpecStr string,
 	tblToStats map[string]*MergeStats,
 ) error {
 	var err error
@@ -250,7 +253,7 @@ func mergedRootToWorking(
 	}
 
 	if !squash {
-		err = dEnv.StartMerge(ctx, cm2)
+		err = dEnv.StartMerge(ctx, cm2, cm2SpecStr)
 
 		if err != nil {
 			return actions.ErrFailedToSaveRepoState

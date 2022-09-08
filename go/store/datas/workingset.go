@@ -34,6 +34,7 @@ const (
 
 const (
 	mergeStateName                 = "MergeState"
+	mergeStateCommitSpecField      = "commitSpec"
 	mergeStateCommitField          = "commit"
 	mergeStateWorkingPreMergeField = "workingPreMerge"
 )
@@ -74,7 +75,7 @@ func workingSetMetaFromWorkingSetSt(workingSetSt types.Struct) (*WorkingSetMeta,
 	return workingSetMetaFromNomsSt(metaV.(types.Struct))
 }
 
-var mergeStateTemplate = types.MakeStructTemplate(mergeStateName, []string{mergeStateCommitField, mergeStateWorkingPreMergeField})
+var mergeStateTemplate = types.MakeStructTemplate(mergeStateName, []string{mergeStateCommitField, mergeStateCommitSpecField, mergeStateWorkingPreMergeField})
 
 type WorkingSetSpec struct {
 	Meta        *WorkingSetMeta
@@ -160,9 +161,11 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 	if mergeState != nil {
 		prerootaddroff := builder.CreateByteVector((*mergeState.preMergeWorkingAddr)[:])
 		fromaddroff := builder.CreateByteVector((*mergeState.fromCommitAddr)[:])
+		fromspecoff := builder.CreateString(mergeState.fromCommitSpec)
 		serial.MergeStateStart(builder)
 		serial.MergeStateAddPreWorkingRootAddr(builder, prerootaddroff)
 		serial.MergeStateAddFromCommitAddr(builder, fromaddroff)
+		serial.MergeStateAddFromCommitSpecStr(builder, fromspecoff)
 		mergeStateOff = serial.MergeStateEnd(builder)
 	}
 
@@ -190,17 +193,18 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 	return serial.FinishMessage(builder, serial.WorkingSetEnd(builder), []byte(serial.WorkingSetFileID))
 }
 
-func NewMergeState(ctx context.Context, vrw types.ValueReadWriter, preMergeWorking types.Ref, commit *Commit) (*MergeState, error) {
+func NewMergeState(ctx context.Context, vrw types.ValueReadWriter, preMergeWorking types.Ref, commit *Commit, commitSpecStr string) (*MergeState, error) {
 	if vrw.Format().UsesFlatbuffers() {
 		ms := &MergeState{
 			preMergeWorkingAddr: new(hash.Hash),
 			fromCommitAddr:      new(hash.Hash),
+			fromCommitSpec:      commitSpecStr,
 		}
 		*ms.preMergeWorkingAddr = preMergeWorking.TargetHash()
 		*ms.fromCommitAddr = commit.Addr()
 		return ms, nil
 	} else {
-		v, err := mergeStateTemplate.NewStruct(preMergeWorking.Format(), []types.Value{commit.NomsValue(), preMergeWorking})
+		v, err := mergeStateTemplate.NewStruct(preMergeWorking.Format(), []types.Value{commit.NomsValue(), types.String(commitSpecStr), preMergeWorking})
 		if err != nil {
 			return nil, err
 		}
