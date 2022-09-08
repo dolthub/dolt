@@ -1727,6 +1727,31 @@ SQL
     [[ "$output" =~ "check 'c' references a column that will be deleted after merge" ]] || false
 }
 
+@test "sql-merge: DOLT_MERGE with author flag specified" {
+    dolt sql <<SQL
+CALL DOLT_COMMIT('-a', '-m', 'Step 1');
+CALL DOLT_CHECKOUT('-b', 'feature-branch');
+INSERT INTO test VALUES (3);
+CALL DOLT_COMMIT('-a', '-m', 'add 3 from other');
+CALL DOLT_CHECKOUT('main');
+INSERT INTO test VALUES (4);
+CALL DOLT_COMMIT('-a', '-m', 'add 4 from main');
+SQL
+
+    run dolt config --list
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "user.email = bats@email.fake" ]] || false
+    [[ "$output" =~ "user.name = Bats Tests" ]] || false
+
+    run dolt sql -q "CALL DOLT_MERGE('feature-branch', '--author', 'John Doe <john@doe.com>');"
+    log_status_eq 0
+
+    run dolt log -n 1
+    [ "$status" -eq 0 ]
+    regex='John Doe <john@doe.com>'
+    [[ "$output" =~ "$regex" ]] || false
+}
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 13-44
 }

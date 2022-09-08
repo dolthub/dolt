@@ -148,9 +148,14 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				return handleCommitErr(ctx, dEnv, err, usage)
 			}
 
-			name, email, err := env.GetNameAndEmail(dEnv.Config)
-			if err != nil {
-				return handleCommitErr(ctx, dEnv, err, usage)
+			var name, email string
+			if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+				name, email, err = cli.ParseAuthor(authorStr)
+			} else {
+				name, email, err = env.GetNameAndEmail(dEnv.Config)
+				if err != nil {
+					return handleCommitErr(ctx, dEnv, err, usage)
+				}
 			}
 
 			suggestedMsg := fmt.Sprintf("Merge branch '%s' into %s", commitSpecStr, dEnv.RepoStateReader().CWBHeadRef().GetPath())
@@ -502,8 +507,9 @@ func performMerge(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec,
 				return nil, err
 			}
 		}
+		author := fmt.Sprintf("%s <%s>", spec.Name, spec.Email)
 
-		res := performCommit(ctx, "commit", []string{"-m", msg}, dEnv)
+		res := performCommit(ctx, "commit", []string{"-m", msg, "--author", author}, dEnv)
 		if res != 0 {
 			return nil, fmt.Errorf("dolt commit failed after merging")
 		}
