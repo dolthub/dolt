@@ -82,7 +82,7 @@ func TestMemoryFootprint(t *testing.T) {
 	var sz int
 	sz = int(unsafe.Sizeof(skipNode{}))
 	assert.Equal(t, 104, sz)
-	sz = int(unsafe.Sizeof(skipPointer{}))
+	sz = int(unsafe.Sizeof(tower{}))
 	assert.Equal(t, 40, sz)
 }
 

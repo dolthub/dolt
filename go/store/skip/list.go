@@ -25,30 +25,47 @@ const (
 	sentinelId = nodeId(0)
 )
 
+// A KeyOrder determines the ordering of two keys |l| and |r|.
 type KeyOrder func(l, r []byte) (cmp int)
 
+// A SeekFn facilitates seeking into a List. It returns true
+// if the seek operation should advance past |key|.
 type SeekFn func(key []byte) (advance bool)
 
+// List is an in-memory skip-list.
 type List struct {
-	nodes      []skipNode
-	count      uint32
+	// nodes contains all skipNode's in the List.
+	// skipNode's are assigned ascending id's and
+	// are stored in the order they were created,
+	// i.e. skipNode.id stores its index in |nodes|
+	nodes []skipNode
+
+	// count stores the current number of items in
+	// the list (updates are not made in-place)
+	count uint32
+
+	// checkpoint stores the nodeId of the last
+	// checkpoint made. All nodes created after this
+	// point will be discarded on a Revert()
 	checkpoint nodeId
-	keyOrder   KeyOrder
+
+	// keyOrder determines the ordering of items
+	keyOrder KeyOrder
 }
 
 type nodeId uint32
 
-type skipPointer [maxHeight + 1]nodeId
+type tower [maxHeight + 1]nodeId
 
 type skipNode struct {
 	key, val []byte
-
-	id     nodeId
-	next   skipPointer
-	prev   nodeId
-	height uint8
+	id       nodeId
+	next     tower
+	prev     nodeId
+	height   uint8
 }
 
+// NewSkipList returns a new skip.List.
 func NewSkipList(order KeyOrder) *List {
 	nodes := make([]skipNode, 0, 8)
 
@@ -57,7 +74,7 @@ func NewSkipList(order KeyOrder) *List {
 		id:  sentinelId,
 		key: nil, val: nil,
 		height: maxHeight,
-		next:   skipPointer{},
+		next:   tower{},
 		prev:   sentinelId,
 	})
 
@@ -87,21 +104,27 @@ func (l *List) Truncate() {
 	l.nodes = l.nodes[:1]
 	// point sentinel.prev at itself
 	s := l.getNode(sentinelId)
-	s.next = skipPointer{}
+	s.next = tower{}
 	s.prev = sentinelId
 	l.updateNode(s)
+	l.checkpoint = nodeId(1)
 	l.count = 0
 }
 
+// Count returns the number of items in the list.
 func (l *List) Count() int {
 	return int(l.count)
 }
 
+// Has returns true if |key| is a member of the list.
 func (l *List) Has(key []byte) (ok bool) {
 	_, ok = l.Get(key)
 	return
 }
 
+// Get returns the value associated with |key| and true
+// if |key| is a member of the list, otherwise it returns
+// nil and false.
 func (l *List) Get(key []byte) (val []byte, ok bool) {
 	path := l.pathToKey(key)
 	node := l.getNode(path[0])
@@ -111,6 +134,7 @@ func (l *List) Get(key []byte) (val []byte, ok bool) {
 	return
 }
 
+// Put adds |key| and |values| to the list.
 func (l *List) Put(key, val []byte) {
 	if key == nil {
 		panic("key must be non-nil")
@@ -135,7 +159,7 @@ func (l *List) Put(key, val []byte) {
 	}
 }
 
-func (l *List) pathToKey(key []byte) (path skipPointer) {
+func (l *List) pathToKey(key []byte) (path tower) {
 	next := l.headPointer()
 	prev := sentinelId
 
@@ -156,7 +180,7 @@ func (l *List) pathToKey(key []byte) (path skipPointer) {
 	return
 }
 
-func (l *List) pathBeforeKey(key []byte) (path skipPointer) {
+func (l *List) pathBeforeKey(key []byte) (path tower) {
 	next := l.headPointer()
 	prev := sentinelId
 
@@ -177,7 +201,7 @@ func (l *List) pathBeforeKey(key []byte) (path skipPointer) {
 	return
 }
 
-func (l *List) insert(key, value []byte, path skipPointer) {
+func (l *List) insert(key, value []byte, path tower) {
 	novel := skipNode{
 		key:    key,
 		val:    value,
@@ -202,7 +226,7 @@ func (l *List) insert(key, value []byte, path skipPointer) {
 	l.updateNode(n)
 }
 
-func (l *List) overwrite(key, value []byte, path skipPointer, old skipNode) {
+func (l *List) overwrite(key, value []byte, path tower, old skipNode) {
 	novel := old
 	novel.id = l.nextNodeId()
 	novel.key = key
@@ -227,30 +251,32 @@ type ListIter struct {
 	list *List
 }
 
-func (it *ListIter) Count() int {
-	return it.list.Count()
-}
-
+// Current returns the current key and value of the iterator.
 func (it *ListIter) Current() (key, val []byte) {
 	return it.curr.key, it.curr.val
 }
 
+// Advance advances the iterator.
 func (it *ListIter) Advance() {
 	it.curr = it.list.getNode(it.curr.next[0])
 	return
 }
 
+// Retreat retreats the iterator.
 func (it *ListIter) Retreat() {
 	it.curr = it.list.getNode(it.curr.prev)
 	return
 }
 
+// GetIterAt creates an iterator starting at the first item
+// of the list whose key is greater than or equal to |key|.
 func (l *List) GetIterAt(key []byte) (it *ListIter) {
 	return l.GetIterFromSearchFn(func(nodeKey []byte) bool {
 		return l.compareKeys(key, nodeKey) > 0
 	})
 }
 
+// GetIterFromSearchFn creates an iterator using a SeekFn.
 func (l *List) GetIterFromSearchFn(fn SeekFn) (it *ListIter) {
 	it = &ListIter{
 		curr: l.seekWithFn(fn),
@@ -264,6 +290,7 @@ func (l *List) GetIterFromSearchFn(fn SeekFn) (it *ListIter) {
 	return
 }
 
+// IterAtStart creates an iterator at the start of the list.
 func (l *List) IterAtStart() *ListIter {
 	return &ListIter{
 		curr: l.firstNode(),
@@ -271,6 +298,7 @@ func (l *List) IterAtStart() *ListIter {
 	}
 }
 
+// IterAtEnd creates an iterator at the end of the list.
 func (l *List) IterAtEnd() *ListIter {
 	return &ListIter{
 		curr: l.lastNode(),
@@ -297,7 +325,7 @@ func (l *List) seekWithFn(cb SeekFn) (node skipNode) {
 	return
 }
 
-func (l *List) headPointer() skipPointer {
+func (l *List) headPointer() tower {
 	return l.nodes[0].next
 }
 
