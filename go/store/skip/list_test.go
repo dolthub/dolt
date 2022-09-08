@@ -25,10 +25,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSkipList(t *testing.T) {
-	// set constant seed to improve debugging
-	randSrc = rand.New(rand.NewSource(0))
+var randSrc = rand.New(rand.NewSource(0))
 
+func TestSkipList(t *testing.T) {
 	t.Run("test skip list", func(t *testing.T) {
 		vals := [][]byte{
 			b("a"), b("b"), b("c"), b("d"), b("e"),

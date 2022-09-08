@@ -15,8 +15,8 @@
 package skip
 
 import (
+	"hash/maphash"
 	"math"
-	"math/rand"
 )
 
 const (
@@ -51,6 +51,9 @@ type List struct {
 
 	// keyOrder determines the ordering of items
 	keyOrder KeyOrder
+
+	// seed is hash salt
+	seed maphash.Seed
 }
 
 type nodeId uint32
@@ -82,6 +85,7 @@ func NewSkipList(order KeyOrder) *List {
 		nodes:      nodes,
 		checkpoint: nodeId(1),
 		keyOrder:   order,
+		seed:       maphash.MakeSeed(),
 	}
 }
 
@@ -208,7 +212,7 @@ func (l *List) insert(key, value []byte, path tower) {
 		key:    key,
 		val:    value,
 		id:     l.nextNodeId(),
-		height: rollHeight(),
+		height: l.rollHeight(key),
 	}
 	l.nodes = append(l.nodes, novel)
 
@@ -365,7 +369,6 @@ var (
 	//
 	// https://github.com/andy-kimball/arenaskl/blob/master/skl.go
 	probabilities = [maxHeight]uint32{}
-	randSrc       = rand.New(rand.NewSource(rand.Int63()))
 )
 
 func init() {
@@ -376,10 +379,9 @@ func init() {
 	}
 }
 
-func rollHeight() (h uint8) {
-	rnd := randSrc.Uint32()
-	h = 0
-	for h < maxHeight && rnd <= probabilities[h] {
+func (l *List) rollHeight(key []byte) (h uint8) {
+	rnd := maphash.Bytes(l.seed, key)
+	for h < maxHeight && uint32(rnd) <= probabilities[h] {
 		h++
 	}
 	return
