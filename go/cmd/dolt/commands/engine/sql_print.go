@@ -23,6 +23,8 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
 
@@ -61,8 +63,6 @@ func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch
 		return printOKResult(ctx, rowIter)
 	}
 
-	// For some output formats, we want to convert everything to strings to be processed by the pipeline. For others,
-	// we want to leave types alone and let the writer figure out how to format it for output.
 	var p *pipeline.Pipeline
 	switch resultFormat {
 	case FormatCsv:
@@ -70,7 +70,35 @@ func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch
 	case FormatJson:
 		p = createJSONPipeline(ctx, sqlSch, rowIter, hasTopLevelOrderBy)
 	case FormatTabular:
-		p = createTabularPipeline(ctx, sqlSch, rowIter)
+		wr := tabular.NewFixedWidthTableWriter(sqlSch, iohelp.NopWrCloser(cli.CliOut), 100)
+
+		i := 0
+		for {
+			r, err := rowIter.Next(ctx)
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return err
+			}
+
+			err = wr.WriteSqlRow(ctx, r)
+			if err != nil {
+				return err
+			}
+
+			i++
+		}
+
+		err := wr.Close(ctx)
+		if err != nil {
+			return err
+		}
+
+		if i == 0 {
+			printEmptySetResult(ctx)
+		}
+
+		return nil
 	case FormatNull:
 		p = createNullPipeline(ctx, sqlSch, rowIter)
 	case FormatVertical:
@@ -81,6 +109,10 @@ func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch
 	rerr = p.Wait()
 
 	return rerr
+}
+
+func printEmptySetResult(ctx *sql.Context) {
+	cli.Printf("Empty set\n") // TODO: timing info
 }
 
 func printOKResult(ctx *sql.Context, iter sql.RowIter) (returnErr error) {
@@ -372,32 +404,6 @@ func writeJSONToCliOutStageFunc(ctx context.Context, items []pipeline.ItemWithPr
 	}
 
 	return nil, nil
-}
-
-// tabular pipeline creation and pipeline functions
-func createTabularPipeline(ctx *sql.Context, sch sql.Schema, iter sql.RowIter) *pipeline.Pipeline {
-	const samplesForAutoSizing = 10000
-	tps := &tabularPipelineStages{}
-
-	p := pipeline.NewPipeline(
-		pipeline.NewStage("read", nil, getReadStageFunc(ctx, iter, readBatchSize), 0, 0, 0),
-		pipeline.NewStage("stringify", nil, getRowsToStringSlices(sch), 0, 1000, 1000),
-		pipeline.NewStage("fix_width", noParallelizationInitFunc, tps.getFixWidthStageFunc(samplesForAutoSizing), 0, 1000, readBatchSize),
-		pipeline.NewStage("cell_borders", noParallelizationInitFunc, tps.getBorderFunc(), 0, 1000, readBatchSize),
-		pipeline.NewStage("write", noParallelizationInitFunc, writeToCliOutStageFunc, 0, 100, writeBatchSize),
-	)
-
-	writeIn, _ := p.GetInputChannel("fix_width")
-	headers := make([]string, len(sch))
-	for i, col := range sch {
-		headers[i] = col.Name
-	}
-
-	writeIn <- []pipeline.ItemWithProps{
-		pipeline.NewItemWithProps(headers, pipeline.NewImmutableProps(map[string]interface{}{"headers": true})),
-	}
-
-	return p
 }
 
 func getRowsToStringSlices(sch sql.Schema) pipeline.StageFunc {
