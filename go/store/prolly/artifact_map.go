@@ -44,7 +44,7 @@ const (
 )
 
 type ArtifactMap struct {
-	tuples orderedTree[val.Tuple, val.Tuple, val.TupleDesc]
+	tuples tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]
 	// the description of the source table where these artifacts come from
 	srcKeyDesc val.TupleDesc
 	keyDesc    val.TupleDesc
@@ -55,10 +55,10 @@ type ArtifactMap struct {
 // the corresponding row map.
 func NewArtifactMap(node tree.Node, ns tree.NodeStore, srcKeyDesc val.TupleDesc) ArtifactMap {
 	keyDesc, valDesc := mergeArtifactsDescriptorsFromSource(srcKeyDesc)
-	tuples := orderedTree[val.Tuple, val.Tuple, val.TupleDesc]{
-		root:  node,
-		ns:    ns,
-		order: keyDesc,
+	tuples := tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
+		Root:      node,
+		NodeStore: ns,
+		Order:     keyDesc,
 	}
 	return ArtifactMap{
 		tuples:     tuples,
@@ -94,10 +94,10 @@ func NewArtifactMapFromTuples(ctx context.Context, ns tree.NodeStore, srcKeyDesc
 		return ArtifactMap{}, err
 	}
 
-	tuples := orderedTree[val.Tuple, val.Tuple, val.TupleDesc]{
-		root:  root,
-		ns:    ns,
-		order: kd,
+	tuples := tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
+		Root:      root,
+		NodeStore: ns,
+		Order:     kd,
 	}
 	return ArtifactMap{
 		tuples:     tuples,
@@ -108,27 +108,27 @@ func NewArtifactMapFromTuples(ctx context.Context, ns tree.NodeStore, srcKeyDesc
 }
 
 func (m ArtifactMap) Count() (int, error) {
-	return m.tuples.count()
+	return m.tuples.Count()
 }
 
 func (m ArtifactMap) Height() (int, error) {
-	return m.tuples.height()
+	return m.tuples.Height()
 }
 
 func (m ArtifactMap) HashOf() hash.Hash {
-	return m.tuples.hashOf()
+	return m.tuples.HashOf()
 }
 
 func (m ArtifactMap) Node() tree.Node {
-	return m.tuples.root
+	return m.tuples.Root
 }
 
 func (m ArtifactMap) NodeStore() tree.NodeStore {
-	return m.tuples.ns
+	return m.tuples.NodeStore
 }
 
 func (m ArtifactMap) Format() *types.NomsBinFormat {
-	return m.tuples.ns.Format()
+	return m.tuples.NodeStore.Format()
 }
 
 func (m ArtifactMap) Descriptors() (key, val val.TupleDesc) {
@@ -136,23 +136,23 @@ func (m ArtifactMap) Descriptors() (key, val val.TupleDesc) {
 }
 
 func (m ArtifactMap) WalkAddresses(ctx context.Context, cb tree.AddressCb) error {
-	return m.tuples.walkAddresses(ctx, cb)
+	return m.tuples.WalkAddresses(ctx, cb)
 }
 
 func (m ArtifactMap) WalkNodes(ctx context.Context, cb tree.NodeCb) error {
-	return m.tuples.walkNodes(ctx, cb)
+	return m.tuples.WalkNodes(ctx, cb)
 }
 
-func (m ArtifactMap) Get(ctx context.Context, key val.Tuple, cb KeyValueFn[val.Tuple, val.Tuple]) (err error) {
-	return m.tuples.get(ctx, key, cb)
+func (m ArtifactMap) Get(ctx context.Context, key val.Tuple, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
+	return m.tuples.Get(ctx, key, cb)
 }
 
 func (m ArtifactMap) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
-	return m.tuples.has(ctx, key)
+	return m.tuples.Has(ctx, key)
 }
 
 func (m ArtifactMap) Pool() pool.BuffPool {
-	return m.tuples.ns.Pool()
+	return m.tuples.NodeStore.Pool()
 }
 
 func (m ArtifactMap) Editor() ArtifactsEditor {
@@ -160,7 +160,7 @@ func (m ArtifactMap) Editor() ArtifactsEditor {
 	return ArtifactsEditor{
 		srcKeyDesc: m.srcKeyDesc,
 		mut: MutableMap{
-			tuples:  m.tuples.mutate(),
+			tuples:  m.tuples.Mutate(),
 			keyDesc: m.keyDesc,
 			valDesc: m.valDesc,
 		},
@@ -174,7 +174,7 @@ func (m ArtifactMap) Editor() ArtifactsEditor {
 func (m ArtifactMap) IterAll(ctx context.Context) (ArtifactIter, error) {
 	numPks := m.srcKeyDesc.Count()
 	tb := val.NewTupleBuilder(m.srcKeyDesc)
-	itr, err := m.tuples.iterAll(ctx)
+	itr, err := m.tuples.IterAll(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -296,8 +296,8 @@ func (m ArtifactMap) iterAllOfTypes(ctx context.Context, artTypes ...ArtifactTyp
 }
 
 func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tree.CollisionFn) (ArtifactMap, error) {
-	serializer := message.NewMergeArtifactSerializer(base.keyDesc, left.tuples.ns.Pool())
-	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer, base.valDesc)
+	serializer := message.NewMergeArtifactSerializer(base.keyDesc, left.tuples.NodeStore.Pool())
+	tuples, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer, base.valDesc)
 	if err != nil {
 		return ArtifactMap{}, err
 	}
@@ -596,7 +596,7 @@ func mergeArtifactsDescriptorsFromSource(srcKd val.TupleDesc) (kd, vd val.TupleD
 
 func ArtifactDebugFormat(ctx context.Context, m ArtifactMap) (string, error) {
 	kd, vd := m.Descriptors()
-	iter, err := m.tuples.iterAll(ctx)
+	iter, err := m.tuples.IterAll(ctx)
 	if err != nil {
 		return "", err
 	}

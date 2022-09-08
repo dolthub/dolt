@@ -34,7 +34,7 @@ const (
 // However, once ApplyPending() is called, those mutations are moved to the applied tier, and the pending tier is
 // cleared.
 type MutableMap struct {
-	tuples  orderedMap[val.Tuple, val.Tuple, val.TupleDesc]
+	tuples  tree.MutableMap[val.Tuple, val.Tuple, val.TupleDesc]
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
 }
@@ -42,7 +42,7 @@ type MutableMap struct {
 // newMutableMap returns a new MutableMap.
 func newMutableMap(m Map) MutableMap {
 	return MutableMap{
-		tuples:  m.tuples.mutate(),
+		tuples:  m.tuples.Mutate(),
 		keyDesc: m.keyDesc,
 		valDesc: m.valDesc,
 	}
@@ -59,17 +59,17 @@ func (mut MutableMap) flushWithSerializer(ctx context.Context, s message.Seriali
 		return Map{}, err
 	}
 
-	tr := mut.tuples.tree
-	root, err := tree.ApplyMutations(ctx, tr.ns, tr.root, s, mut.tuples.mutations(), tr.compareItems)
+	tr := mut.tuples.StaticMap
+	root, err := tree.ApplyMutations(ctx, tr.NodeStore, tr.Root, s, mut.tuples.Mutations(), tr.CompareItems)
 	if err != nil {
 		return Map{}, err
 	}
 
 	return Map{
-		tuples: orderedTree[val.Tuple, val.Tuple, val.TupleDesc]{
-			root:  root,
-			ns:    tr.ns,
-			order: tr.order,
+		tuples: tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
+			Root:      root,
+			NodeStore: tr.NodeStore,
+			Order:     tr.Order,
 		},
 		keyDesc: mut.keyDesc,
 		valDesc: mut.valDesc,
@@ -78,39 +78,39 @@ func (mut MutableMap) flushWithSerializer(ctx context.Context, s message.Seriali
 
 // NodeStore returns the map's NodeStore
 func (mut MutableMap) NodeStore() tree.NodeStore {
-	return mut.tuples.tree.ns
+	return mut.tuples.StaticMap.NodeStore
 }
 
 // Put adds the Tuple pair |key|, |value| to the MutableMap.
 func (mut MutableMap) Put(ctx context.Context, key, value val.Tuple) error {
-	return mut.tuples.put(ctx, key, value)
+	return mut.tuples.Put(ctx, key, value)
 }
 
 // Delete deletes the pair keyed by |key| from the MutableMap.
 func (mut MutableMap) Delete(ctx context.Context, key val.Tuple) error {
-	return mut.tuples.delete(ctx, key)
+	return mut.tuples.Delete(ctx, key)
 }
 
 // Get fetches the Tuple pair keyed by |key|, if it exists, and passes it to |cb|.
 // If the |key| is not present in the MutableMap, a nil Tuple pair is passed to |cb|.
-func (mut MutableMap) Get(ctx context.Context, key val.Tuple, cb KeyValueFn[val.Tuple, val.Tuple]) (err error) {
-	return mut.tuples.get(ctx, key, cb)
+func (mut MutableMap) Get(ctx context.Context, key val.Tuple, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
+	return mut.tuples.Get(ctx, key, cb)
 }
 
 // Has returns true if |key| is present in the MutableMap.
 func (mut MutableMap) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
-	return mut.tuples.has(ctx, key)
+	return mut.tuples.Has(ctx, key)
 }
 
 // ApplyPending moves all pending mutations to the underlying map.
 func (mut *MutableMap) ApplyPending(ctx context.Context) error {
-	mut.tuples.edits.Checkpoint()
+	mut.tuples.Edits.Checkpoint()
 	return nil
 }
 
 // DiscardPending removes all pending mutations.
 func (mut *MutableMap) DiscardPending(context.Context) {
-	mut.tuples.edits.Revert()
+	mut.tuples.Edits.Revert()
 }
 
 // IterAll returns a mutableMapIter that iterates over the entire MutableMap.
@@ -121,11 +121,11 @@ func (mut MutableMap) IterAll(ctx context.Context) (MapIter, error) {
 
 // IterRange returns a MapIter that iterates over a Range.
 func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapIter, error) {
-	treeIter, err := treeIterFromRange(ctx, mut.tuples.tree.root, mut.tuples.tree.ns, rng)
+	treeIter, err := treeIterFromRange(ctx, mut.tuples.StaticMap.Root, mut.tuples.StaticMap.NodeStore, rng)
 	if err != nil {
 		return nil, err
 	}
-	memIter := memIterFromRange(mut.tuples.edits, rng)
+	memIter := memIterFromRange(mut.tuples.Edits, rng)
 
 	iter := &mutableMapIter[val.Tuple, val.Tuple, val.TupleDesc]{
 		memory: memIter,
@@ -139,7 +139,7 @@ func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapIter, error)
 // HasEdits returns true when the MutableMap has performed at least one Put or Delete operation. This does not indicate
 // whether the materialized map contains different values to the contained unedited map.
 func (mut MutableMap) HasEdits() bool {
-	return mut.tuples.edits.Count() > 0
+	return mut.tuples.Edits.Count() > 0
 }
 
 // Descriptors returns the key and value val.TupleDesc.
@@ -150,8 +150,8 @@ func (mut MutableMap) Descriptors() (val.TupleDesc, val.TupleDesc) {
 func debugFormat(ctx context.Context, m MutableMap) (string, error) {
 	kd, vd := m.keyDesc, m.valDesc
 
-	editIter := m.tuples.edits.IterAtStart()
-	tupleIter, err := m.tuples.tree.iterAll(ctx)
+	editIter := m.tuples.Edits.IterAtStart()
+	tupleIter, err := m.tuples.StaticMap.IterAll(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -159,7 +159,7 @@ func debugFormat(ctx context.Context, m MutableMap) (string, error) {
 	var sb strings.Builder
 	sb.WriteString("Mutable Map {\n")
 
-	c := strconv.Itoa(m.tuples.edits.Count())
+	c := strconv.Itoa(m.tuples.Edits.Count())
 	sb.WriteString("\tedits (count: " + c + ") {\n")
 	for {
 		k, v := editIter.Current()
@@ -175,13 +175,13 @@ func debugFormat(ctx context.Context, m MutableMap) (string, error) {
 	}
 	sb.WriteString("\t},\n")
 
-	ci, err := m.tuples.tree.count()
+	ci, err := m.tuples.StaticMap.Count()
 	if err != nil {
 		return "", err
 	}
 
 	c = strconv.Itoa(ci)
-	sb.WriteString("\ttree (count: " + c + ") {\n")
+	sb.WriteString("\tTree (count: " + c + ") {\n")
 	for {
 		k, v, err := tupleIter.Next(ctx)
 		if err == io.EOF {

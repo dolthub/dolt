@@ -62,10 +62,10 @@ func (rk deleteSingleKey) makeMutations(ctx context.Context, leaf tree.Node) ([]
 //	t.Skip("unskip for metrics")
 //
 //	t.Run("Key Splitter", func(t *testing.T) {
-//		testWriteAmpWithSplitter(t, tree.newKeySplitter)
+//		testWriteAmpWithSplitter(t, Tree.newKeySplitter)
 //	})
 //	t.Run("Smooth Rolling Hasher", func(t *testing.T) {
-//		testWriteAmpWithSplitter(t, tree.newRollingHashSplitter)
+//		testWriteAmpWithSplitter(t, Tree.newRollingHashSplitter)
 //	})
 //}
 //
@@ -74,36 +74,36 @@ func (rk deleteSingleKey) makeMutations(ctx context.Context, leaf tree.Node) ([]
 //
 //	const scale = 100_000
 //	t.Run("Key Splitter", func(t *testing.T) {
-//		tree.defaultSplitterFactory = tree.newKeySplitter
+//		Tree.defaultSplitterFactory = Tree.newKeySplitter
 //		t.Run("Random Uints", func(t *testing.T) {
 //			pm, _ := makeProllyMap(t, scale)
 //			before := pm.(Map)
 //			printMapSummary(t, before)
 //		})
 //		t.Run("Ascending Uints", func(t *testing.T) {
-//			keys, values, desc := tree.AscendingCompositeIntTuples(scale)
+//			keys, values, desc := Tree.AscendingCompositeIntTuples(scale)
 //			before := prollyMapFromKeysAndValues(t, desc, desc, keys, values)
 //			printMapSummary(t, before)
 //		})
 //	})
 //	t.Run("Smooth Rolling Hasher", func(t *testing.T) {
-//		tree.defaultSplitterFactory = tree.newRollingHashSplitter
+//		Tree.defaultSplitterFactory = Tree.newRollingHashSplitter
 //		t.Run("Random Uints", func(t *testing.T) {
 //			pm, _ := makeProllyMap(t, scale)
 //			before := pm.(Map)
 //			printMapSummary(t, before)
 //		})
 //		t.Run("Ascending Uints", func(t *testing.T) {
-//			keys, values, desc := tree.AscendingCompositeIntTuples(scale)
+//			keys, values, desc := Tree.AscendingCompositeIntTuples(scale)
 //			before := prollyMapFromKeysAndValues(t, desc, desc, keys, values)
 //			printMapSummary(t, before)
 //		})
 //	})
 //}
 //
-//func testWriteAmpWithSplitter(t *testing.T, factory tree.splitterFactory) {
+//func testWriteAmpWithSplitter(t *testing.T, factory Tree.splitterFactory) {
 //	const scale = 100_000
-//	tree.defaultSplitterFactory = factory
+//	Tree.defaultSplitterFactory = factory
 //
 //	t.Run("Random Uint Map", func(t *testing.T) {
 //		pm, _ := makeProllyMap(t, scale)
@@ -116,7 +116,7 @@ func (rk deleteSingleKey) makeMutations(ctx context.Context, leaf tree.Node) ([]
 //		})
 //	})
 //	t.Run("Ascending Uint Map", func(t *testing.T) {
-//		keys, values, desc := tree.AscendingCompositeIntTuples(scale)
+//		keys, values, desc := Tree.AscendingCompositeIntTuples(scale)
 //		before := prollyMapFromKeysAndValues(t, desc, desc, keys, values)
 //		t.Run("delete random key", func(t *testing.T) {
 //			testWriteAmplification(t, before, deleteSingleKey{})
@@ -184,17 +184,17 @@ func measureWriteAmplification(t *testing.T, before, after Map) (count, size int
 	require.NoError(t, err)
 
 	for addr := range novel {
-		n, err := after.tuples.ns.Read(ctx, addr)
+		n, err := after.tuples.NodeStore.Read(ctx, addr)
 		require.NoError(t, err)
 		size += n.Size()
 	}
-	size += after.tuples.root.Size()
+	size += after.tuples.Root.Size()
 	count = novel.Size() + 1
 	return
 }
 
 func printMapSummary(t *testing.T, m Map) {
-	tree.PrintTreeSummaryByLevel(t, m.tuples.root, m.tuples.ns)
+	tree.PrintTreeSummaryByLevel(t, m.tuples.Root, m.tuples.NodeStore)
 }
 
 func prollyMapFromKeysAndValues(t *testing.T, kd, vd val.TupleDesc, keys, values []val.Tuple) Map {

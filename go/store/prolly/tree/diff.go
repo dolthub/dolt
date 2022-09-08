@@ -34,6 +34,8 @@ type Diff struct {
 	Type     DiffType
 }
 
+type DiffFn func(context.Context, Diff) error
+
 type Differ struct {
 	from, to         *Cursor
 	fromStop, toStop *Cursor
