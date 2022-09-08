@@ -134,38 +134,31 @@ func newPointPartitionIter(ctx *sql.Context, lookup sql.IndexLookup, idx *doltIn
 		}
 	}
 	tup := tb.BuildPermissive(sharePool)
-	return &pointPartitionIter{r: prolly.Range{Tup: tup, Desc: tb.Desc}}, nil
+	return &pointPartition{r: prolly.Range{Tup: tup, Desc: tb.Desc}}, nil
 }
 
-type pointPartitionIter struct {
-	r prolly.Range
+var _ sql.PartitionIter = (*pointPartition)(nil)
+var _ sql.Partition = (*pointPartition)(nil)
+
+type pointPartition struct {
+	r    prolly.Range
+	used bool
 }
 
-var _ sql.PartitionIter = (*pointPartitionIter)(nil)
+func (p pointPartition) Key() []byte {
+	return []byte{0}
+}
 
-func (p *pointPartitionIter) Close(c *sql.Context) error {
+func (p *pointPartition) Close(c *sql.Context) error {
 	return nil
 }
 
-func (p *pointPartitionIter) Next(c *sql.Context) (sql.Partition, error) {
-	if len(p.r.Tup) == 0 && len(p.r.Fields) == 0 {
+func (p *pointPartition) Next(c *sql.Context) (sql.Partition, error) {
+	if p.used {
 		return nil, io.EOF
 	}
-
-	ret := pointPartition{
-		prollyRange: p.r,
-	}
-
-	p.r = prolly.Range{}
-	return ret, nil
-}
-
-type pointPartition struct {
-	prollyRange prolly.Range
-}
-
-func (rp pointPartition) Key() []byte {
-	return []byte{0}
+	p.used = true
+	return *p, nil
 }
 
 type rangePartitionIter struct {
@@ -389,7 +382,7 @@ func (lb *baseLookupBuilder) newPointLookup(ctx *sql.Context, rang prolly.Range)
 func (lb *baseLookupBuilder) rangeIter(ctx *sql.Context, part sql.Partition) (prolly.MapIter, error) {
 	switch p := part.(type) {
 	case pointPartition:
-		return lb.newPointLookup(ctx, p.prollyRange)
+		return lb.newPointLookup(ctx, p.r)
 	case rangePartition:
 		return lb.sec.IterRange(ctx, p.prollyRange)
 	default:
@@ -474,7 +467,7 @@ func (lb *keylessLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition)
 	case rangePartition:
 		prollyRange = p.prollyRange
 	case pointPartition:
-		prollyRange = p.prollyRange
+		prollyRange = p.r
 	}
 	return newProllyKeylessIndexIter(ctx, lb.idx, prollyRange, lb.sch, lb.projections, lb.s.Primary, lb.s.Secondary)
 }
