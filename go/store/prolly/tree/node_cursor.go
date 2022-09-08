@@ -43,31 +43,6 @@ type Ordering[K ~[]byte] interface {
 	Compare(left, right K) int
 }
 
-// SearchForKey returns a SearchFn for |key|.
-func SearchForKey[K ~[]byte, O Ordering[K]](key K, order O) SearchFn {
-	return func(nd Node) (idx int) {
-		n := int(nd.Count())
-		// Define f(-1) == false and f(n) == true.
-		// Invariant: f(i-1) == false, f(j) == true.
-		i, j := 0, n
-		for i < j {
-			h := int(uint(i+j) >> 1) // avoid overflow when computing h
-			less := order.Compare(key, K(nd.GetKey(h))) <= 0
-			// i ≤ h < j
-			if !less {
-				i = h + 1 // preserves f(i-1) == false
-			} else {
-				j = h // preserves f(j) == true
-			}
-		}
-		// i == j, f(i-1) == false, and
-		// f(j) (= f(i)) == true  =>  answer is i.
-		return i
-	}
-}
-
-type ItemSearchFn func(item Item, nd Node) (idx int)
-
 func NewCursorAtStart(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, err error) {
 	cur = &Cursor{nd: nd, nrw: ns}
 	var leaf bool
@@ -240,48 +215,28 @@ func NewCursorFromSearchFn(ctx context.Context, ns NodeStore, nd Node, search Se
 	return
 }
 
-func NewCursorAtItem(ctx context.Context, ns NodeStore, nd Node, item Item, search ItemSearchFn) (cur *Cursor, err error) {
-	cur = &Cursor{nd: nd, nrw: ns}
+func NewLeafCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeStore, nd Node, key K, order O) (Cursor, error) {
+	cur := Cursor{nd: nd, nrw: ns}
+	for {
+		// binary search |cur.nd| for |key|
+		i, j := 0, cur.nd.Count()
+		for i < j {
+			h := int(uint(i+j) >> 1)
+			cmp := order.Compare(key, K(cur.nd.GetKey(h)))
+			if cmp > 0 {
+				i = h + 1
+			} else {
+				j = h
+			}
+		}
+		cur.idx = i
 
-	cur.idx = search(item, cur.nd)
-	var leaf bool
-	leaf, err = cur.isLeaf()
-	if err != nil {
-		return nil, err
-	}
-	for !leaf {
-
-		// stay in bounds for internal nodes
-		cur.keepInBounds()
-
-		nd, err = fetchChild(ctx, ns, cur.CurrentRef())
+		leaf, err := cur.isLeaf()
 		if err != nil {
 			return cur, err
+		} else if leaf {
+			break // done
 		}
-
-		parent := cur
-		cur = &Cursor{nd: nd, parent: parent, nrw: ns}
-
-		cur.idx = search(item, cur.nd)
-		leaf, err = cur.isLeaf()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return
-}
-
-func NewLeafCursorAtItem(ctx context.Context, ns NodeStore, nd Node, item Item, search ItemSearchFn) (cur Cursor, err error) {
-	cur = Cursor{nd: nd, parent: nil, nrw: ns}
-
-	cur.idx = search(item, cur.nd)
-	var leaf bool
-	leaf, err = cur.isLeaf()
-	if err != nil {
-		return cur, err
-	}
-	for !leaf {
 
 		// stay in bounds for internal nodes
 		cur.keepInBounds()
@@ -291,15 +246,31 @@ func NewLeafCursorAtItem(ctx context.Context, ns NodeStore, nd Node, item Item, 
 		if err != nil {
 			return cur, err
 		}
-
-		cur.idx = search(item, cur.nd)
-		leaf, err = cur.isLeaf()
-		if err != nil {
-			return cur, err
-		}
 	}
-
 	return cur, nil
+}
+
+// SearchForKey returns a SearchFn for |key|.
+func SearchForKey[K ~[]byte, O Ordering[K]](key K, order O) SearchFn {
+	return func(nd Node) (idx int) {
+		n := int(nd.Count())
+		// Define f(-1) == false and f(n) == true.
+		// Invariant: f(i-1) == false, f(j) == true.
+		i, j := 0, n
+		for i < j {
+			h := int(uint(i+j) >> 1) // avoid overflow when computing h
+			less := order.Compare(key, K(nd.GetKey(h))) <= 0
+			// i ≤ h < j
+			if !less {
+				i = h + 1 // preserves f(i-1) == false
+			} else {
+				j = h // preserves f(j) == true
+			}
+		}
+		// i == j, f(i-1) == false, and
+		// f(j) (= f(i)) == true  =>  answer is i.
+		return i
+	}
 }
 
 type LeafSpan struct {

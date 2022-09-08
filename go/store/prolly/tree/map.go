@@ -80,12 +80,12 @@ func DiffKeyRangeOrderedTrees[K, V ~[]byte, O Ordering[K]](
 			return err
 		}
 	} else {
-		fromStart, err = NewCursorAtItem(ctx, from.NodeStore, from.Root, Item(start), from.searchNode)
+		fromStart, err = NewCursorAtKey(ctx, from.NodeStore, from.Root, start, from.Order)
 		if err != nil {
 			return err
 		}
 
-		toStart, err = NewCursorAtItem(ctx, to.NodeStore, to.Root, Item(start), to.searchNode)
+		toStart, err = NewCursorAtKey(ctx, to.NodeStore, to.Root, start, to.Order)
 		if err != nil {
 			return err
 		}
@@ -102,12 +102,12 @@ func DiffKeyRangeOrderedTrees[K, V ~[]byte, O Ordering[K]](
 			return err
 		}
 	} else {
-		fromStop, err = NewCursorAtItem(ctx, from.NodeStore, from.Root, Item(stop), from.searchNode)
+		fromStop, err = NewCursorAtKey(ctx, from.NodeStore, from.Root, stop, from.Order)
 		if err != nil {
 			return err
 		}
 
-		toStop, err = NewCursorAtItem(ctx, to.NodeStore, to.Root, Item(stop), to.searchNode)
+		toStop, err = NewCursorAtKey(ctx, to.NodeStore, to.Root, stop, to.Order)
 		if err != nil {
 			return err
 		}
@@ -180,7 +180,7 @@ func (t StaticMap[K, V, O]) WalkNodes(ctx context.Context, cb NodeCb) error {
 }
 
 func (t StaticMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K, V]) (err error) {
-	cur, err := NewLeafCursorAtItem(ctx, t.NodeStore, t.Root, Item(query), t.searchNode)
+	cur, err := NewLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, t.Order)
 	if err != nil {
 		return err
 	}
@@ -200,7 +200,7 @@ func (t StaticMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K, V
 }
 
 func (t StaticMap[K, V, O]) Has(ctx context.Context, query K) (ok bool, err error) {
-	cur, err := NewLeafCursorAtItem(ctx, t.NodeStore, t.Root, Item(query), t.searchNode)
+	cur, err := NewLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, t.Order)
 	if err != nil {
 		return false, err
 	}
@@ -389,7 +389,7 @@ func (t StaticMap[K, V, O]) getKeyRangeCursors(ctx context.Context, startInclusi
 			return nil, nil, err
 		}
 	} else {
-		lo, err = NewCursorAtItem(ctx, t.NodeStore, t.Root, Item(startInclusive), t.searchNode)
+		lo, err = NewCursorAtKey(ctx, t.NodeStore, t.Root, startInclusive, t.Order)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -401,7 +401,7 @@ func (t StaticMap[K, V, O]) getKeyRangeCursors(ctx context.Context, startInclusi
 			return nil, nil, err
 		}
 	} else {
-		hi, err = NewCursorAtItem(ctx, t.NodeStore, t.Root, Item(stopExclusive), t.searchNode)
+		hi, err = NewCursorAtKey(ctx, t.NodeStore, t.Root, stopExclusive, t.Order)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -410,43 +410,15 @@ func (t StaticMap[K, V, O]) getKeyRangeCursors(ctx context.Context, startInclusi
 	return
 }
 
-// searchNode returns the smallest index where nd[i] >= query
-// Adapted from search.Sort to inline comparison.
-func (t StaticMap[K, V, O]) searchNode(query Item, nd Node) int {
-	n := int(nd.Count())
-	// Define f(-1) == false and f(n) == true.
-	// Invariant: f(i-1) == false, f(j) == true.
-	i, j := 0, n
-	for i < j {
-		h := int(uint(i+j) >> 1) // avoid overflow when computing h
-		less := t.Order.Compare(K(query), K(nd.GetKey(h))) <= 0
-		// i ≤ h < j
-		if !less {
-			i = h + 1 // preserves f(i-1) == false
-		} else {
-			j = h // preserves f(j) == true
-		}
-	}
-	// i == j, f(i-1) == false, and
-	// f(j) (= f(i)) == true  =>  answer is i.
-	return i
-}
-
-func (t StaticMap[K, V, O]) CompareItems(left, right Item) int {
-	return t.Order.Compare(K(left), K(right))
-}
-
 // getOrdinalForKey returns the smallest ordinal position at which the key >= |query|.
 func (t StaticMap[K, V, O]) GetOrdinalForKey(ctx context.Context, query K) (uint64, error) {
-	cur, err := NewCursorAtItem(ctx, t.NodeStore, t.Root, Item(query), t.searchNode)
+	cur, err := NewCursorAtKey(ctx, t.NodeStore, t.Root, query, t.Order)
 	if err != nil {
 		return 0, err
 	}
 
 	return GetOrdinalOfCursor(cur)
 }
-
-var _ ItemSearchFn = StaticMap[Item, Item, Ordering[Item]]{}.searchNode
 
 type OrderedTreeIter[K, V ~[]byte] struct {
 	// current tuple location
