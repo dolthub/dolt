@@ -25,7 +25,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -38,11 +37,11 @@ type Cursor struct {
 	nrw    NodeStore
 }
 
-type CompareFn func(left, right Item) int
-
 type SearchFn func(nd Node) (idx int)
 
-type ItemSearchFn func(item Item, nd Node) (idx int)
+type Ordering[K ~[]byte] interface {
+	Compare(left, right K) int
+}
 
 func NewCursorAtStart(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, err error) {
 	cur = &Cursor{nd: nd, nrw: ns}
@@ -180,6 +179,10 @@ func GetOrdinalOfCursor(curr *Cursor) (ord uint64, err error) {
 	return ord, nil
 }
 
+func NewCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeStore, nd Node, key K, order O) (cur *Cursor, err error) {
+	return NewCursorFromSearchFn(ctx, ns, nd, SearchForKey(key, order))
+}
+
 func NewCursorFromSearchFn(ctx context.Context, ns NodeStore, nd Node, search SearchFn) (cur *Cursor, err error) {
 	cur = &Cursor{nd: nd, nrw: ns}
 
@@ -212,56 +215,28 @@ func NewCursorFromSearchFn(ctx context.Context, ns NodeStore, nd Node, search Se
 	return
 }
 
-func NewCursorFromCompareFn(ctx context.Context, ns NodeStore, n Node, i Item, compare CompareFn) (*Cursor, error) {
-	return NewCursorAtItem(ctx, ns, n, i, func(item Item, node Node) (idx int) {
-		return sort.Search(node.Count(), func(i int) bool {
-			return compare(item, node.GetKey(i)) <= 0
-		})
-	})
-}
+func NewLeafCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeStore, nd Node, key K, order O) (Cursor, error) {
+	cur := Cursor{nd: nd, nrw: ns}
+	for {
+		// binary search |cur.nd| for |key|
+		i, j := 0, cur.nd.Count()
+		for i < j {
+			h := int(uint(i+j) >> 1)
+			cmp := order.Compare(key, K(cur.nd.GetKey(h)))
+			if cmp > 0 {
+				i = h + 1
+			} else {
+				j = h
+			}
+		}
+		cur.idx = i
 
-func NewCursorAtItem(ctx context.Context, ns NodeStore, nd Node, item Item, search ItemSearchFn) (cur *Cursor, err error) {
-	cur = &Cursor{nd: nd, nrw: ns}
-
-	cur.idx = search(item, cur.nd)
-	var leaf bool
-	leaf, err = cur.isLeaf()
-	if err != nil {
-		return nil, err
-	}
-	for !leaf {
-
-		// stay in bounds for internal nodes
-		cur.keepInBounds()
-
-		nd, err = fetchChild(ctx, ns, cur.CurrentRef())
+		leaf, err := cur.isLeaf()
 		if err != nil {
 			return cur, err
+		} else if leaf {
+			break // done
 		}
-
-		parent := cur
-		cur = &Cursor{nd: nd, parent: parent, nrw: ns}
-
-		cur.idx = search(item, cur.nd)
-		leaf, err = cur.isLeaf()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return
-}
-
-func NewLeafCursorAtItem(ctx context.Context, ns NodeStore, nd Node, item Item, search ItemSearchFn) (cur Cursor, err error) {
-	cur = Cursor{nd: nd, parent: nil, nrw: ns}
-
-	cur.idx = search(item, cur.nd)
-	var leaf bool
-	leaf, err = cur.isLeaf()
-	if err != nil {
-		return cur, err
-	}
-	for !leaf {
 
 		// stay in bounds for internal nodes
 		cur.keepInBounds()
@@ -271,15 +246,31 @@ func NewLeafCursorAtItem(ctx context.Context, ns NodeStore, nd Node, item Item, 
 		if err != nil {
 			return cur, err
 		}
-
-		cur.idx = search(item, cur.nd)
-		leaf, err = cur.isLeaf()
-		if err != nil {
-			return cur, err
-		}
 	}
-
 	return cur, nil
+}
+
+// SearchForKey returns a SearchFn for |key|.
+func SearchForKey[K ~[]byte, O Ordering[K]](key K, order O) SearchFn {
+	return func(nd Node) (idx int) {
+		n := int(nd.Count())
+		// Define f(-1) == false and f(n) == true.
+		// Invariant: f(i-1) == false, f(j) == true.
+		i, j := 0, n
+		for i < j {
+			h := int(uint(i+j) >> 1) // avoid overflow when computing h
+			less := order.Compare(key, K(nd.GetKey(h))) <= 0
+			// i ≤ h < j
+			if !less {
+				i = h + 1 // preserves f(i-1) == false
+			} else {
+				j = h // preserves f(j) == true
+			}
+		}
+		// i == j, f(i-1) == false, and
+		// f(j) (= f(i)) == true  =>  answer is i.
+		return i
+	}
 }
 
 type LeafSpan struct {
@@ -363,6 +354,37 @@ func fetchLeafNodeSpan(ctx context.Context, ns NodeStore, nodes []Node, start, s
 func CurrentCursorItems(cur *Cursor) (key, value Item) {
 	key = cur.nd.keys.GetItem(cur.idx)
 	value = cur.nd.values.GetItem(cur.idx)
+	return
+}
+
+// Seek updates the cursor's node to one whose range spans the key's value, or the last
+// node if the key is greater than all existing keys.
+// If a node does not contain the key, we recurse upwards to the parent cursor. If the
+// node contains a key, we recurse downwards into child nodes.
+func Seek[K ~[]byte, O Ordering[K]](ctx context.Context, cur *Cursor, key K, order O) (err error) {
+	inBounds := true
+	if cur.parent != nil {
+		inBounds = inBounds && order.Compare(key, K(cur.firstKey())) >= 0
+		inBounds = inBounds && order.Compare(key, K(cur.lastKey())) <= 0
+	}
+
+	if !inBounds {
+		// |item| is outside the bounds of |cur.nd|, search up the tree
+		err = Seek(ctx, cur.parent, key, order)
+		if err != nil {
+			return err
+		}
+		// stay in bounds for internal nodes
+		cur.parent.keepInBounds()
+
+		cur.nd, err = fetchChild(ctx, cur.nrw, cur.parent.CurrentRef())
+		if err != nil {
+			return err
+		}
+	}
+
+	cur.idx = SearchForKey(key, order)(cur.nd)
+
 	return
 }
 
@@ -454,47 +476,6 @@ func (cur *Cursor) level() (uint64, error) {
 		return 0, err
 	}
 	return uint64(lvl), nil
-}
-
-// Seek updates the cursor's node to one whose range spans the key's value, or the last
-// node if the key is greater than all existing keys.
-// If a node does not contain the key, we recurse upwards to the parent cursor. If the
-// node contains a key, we recurse downwards into child nodes.
-func (cur *Cursor) Seek(ctx context.Context, key Item, cb CompareFn) (err error) {
-	inBounds := true
-	if cur.parent != nil {
-		inBounds = inBounds && cb(key, cur.firstKey()) >= 0
-		inBounds = inBounds && cb(key, cur.lastKey()) <= 0
-	}
-
-	if !inBounds {
-		// |item| is outside the bounds of |cur.nd|, search up the tree
-		err = cur.parent.Seek(ctx, key, cb)
-		if err != nil {
-			return err
-		}
-		// stay in bounds for internal nodes
-		cur.parent.keepInBounds()
-
-		cur.nd, err = fetchChild(ctx, cur.nrw, cur.parent.CurrentRef())
-		if err != nil {
-			return err
-		}
-	}
-
-	cur.idx = cur.search(key, cb)
-
-	return
-}
-
-// search returns the index of |item| if it's present in |cur.nd|, or the
-// index of the next greatest element if it's not present.
-func (cur *Cursor) search(item Item, cb CompareFn) (idx int) {
-	idx = sort.Search(int(cur.nd.count), func(i int) bool {
-		return cb(item, cur.nd.GetKey(i)) <= 0
-	})
-
-	return idx
 }
 
 // invalidateAtEnd sets the cursor's index to the node count.

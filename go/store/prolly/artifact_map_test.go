@@ -62,7 +62,7 @@ func TestArtifactMapEditing(t *testing.T) {
 				return nil
 			})
 
-			// Verify that we found all the root-ish hashes
+			// Verify that we found all the Root-ish hashes
 			if nodeCount == 1 {
 				assert.Equal(t, n, addressCount)
 			} else {

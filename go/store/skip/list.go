@@ -58,6 +58,7 @@ type List struct {
 
 type nodeId uint32
 
+// tower is a multi-level skipNode pointer.
 type tower [maxHeight + 1]nodeId
 
 type skipNode struct {
