@@ -151,11 +151,14 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			var name, email string
 			if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
 				name, email, err = cli.ParseAuthor(authorStr)
+				if err != nil {
+					return handleCommitErr(ctx, dEnv, err, usage)
+				}
 			} else {
 				name, email, err = env.GetNameAndEmail(dEnv.Config)
-			}
-			if err != nil {
-				return handleCommitErr(ctx, dEnv, err, usage)
+				if err != nil {
+					return handleCommitErr(ctx, dEnv, err, usage)
+				}
 			}
 
 			suggestedMsg := fmt.Sprintf("Merge branch '%s' into %s", commitSpecStr, dEnv.RepoStateReader().CWBHeadRef().GetPath())
