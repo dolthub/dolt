@@ -20,6 +20,8 @@ import (
 	"io"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -28,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type PrintResultFormat byte
@@ -44,8 +45,8 @@ const (
 type PrintSummaryBehavior byte
 
 const (
-	PrintNoSummary PrintSummaryBehavior = 0
-	PrintRowCountAndTiming = 1
+	PrintNoSummary         PrintSummaryBehavior = 0
+	PrintRowCountAndTiming                      = 1
 )
 
 // PrettyPrintResults prints the result of a query in the format provided
@@ -184,10 +185,11 @@ func secondsSince(start time.Time) float64 {
 }
 
 // nullWriter is a no-op SqlRowWriter implementation
-type nullWriter struct {}
-func (n nullWriter) WriteRow(ctx context.Context, r row.Row) error {return nil}
-func (n nullWriter) Close(ctx context.Context) error {return nil}
-func (n nullWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {return nil}
+type nullWriter struct{}
+
+func (n nullWriter) WriteRow(ctx context.Context, r row.Row) error    { return nil }
+func (n nullWriter) Close(ctx context.Context) error                  { return nil }
+func (n nullWriter) WriteSqlRow(ctx context.Context, r sql.Row) error { return nil }
 
 func printEmptySetResult(start time.Time) {
 	seconds := secondsSince(start)
@@ -222,16 +224,16 @@ func isOkResult(sch sql.Schema) bool {
 }
 
 type verticalRowWriter struct {
-	wr io.WriteCloser
-	sch sql.Schema
-	idx int
+	wr      io.WriteCloser
+	sch     sql.Schema
+	idx     int
 	offsets []int
 }
 
 func newVerticalRowWriter(wr io.WriteCloser, sch sql.Schema) *verticalRowWriter {
 	return &verticalRowWriter{
-		wr:  wr,
-		sch: sch,
+		wr:      wr,
+		sch:     sch,
 		offsets: calculateVerticalOffsets(sch),
 	}
 }
