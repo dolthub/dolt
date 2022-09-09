@@ -175,7 +175,11 @@ func DoDoltBackup(ctx *sql.Context, args []string) (int, error) {
 		return statusErr, fmt.Errorf("error loading backup destination: %w", err)
 	}
 
-	err = actions.SyncRoots(ctx, dbData.Ddb, destDb, dbData.Rsw.TempTableFilesDir(), runProgFuncs, stopProgFuncs)
+	tmpDir, err := dbData.Rsw.TempTableFilesDir()
+	if err != nil {
+		return statusErr, err
+	}
+	err = actions.SyncRoots(ctx, dbData.Ddb, destDb, tmpDir, runProgFuncs, stopProgFuncs)
 	if err != nil && err != pull.ErrDBUpToDate {
 		return 1, fmt.Errorf("error syncing backup: %w", err)
 	}

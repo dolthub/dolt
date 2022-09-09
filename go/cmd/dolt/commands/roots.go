@@ -85,7 +85,13 @@ func (cmd RootsCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	dir := filepath.Join(dEnv.GetDoltDir(), dbfactory.DataDir)
+	doltDir := dEnv.GetDoltDir()
+	if doltDir == "" {
+		cli.Println(color.YellowString("can no longer find a database on disk"))
+		return 1
+	}
+
+	dir := filepath.Join(doltDir, dbfactory.DataDir)
 	oldgen := filepath.Join(dir, "oldgen")
 	itr, err := NewTableFileIter([]string{dir, oldgen}, dEnv.FS)
 

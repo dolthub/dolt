@@ -1694,3 +1694,21 @@ s.close()
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
     [ "$status" -eq 1 ]
 }
+
+@test "sql-server: deleting database directory when a running server is using it does not panic" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+    start_sql_server repo1
+
+    server_query repo1 1 dolt "" "CREATE DATABASE mydb1"
+    server_query repo1 1 dolt "" "CREATE DATABASE mydb2"
+
+    [ -d mydb1 ]
+    [ -d mydb2 ]
+
+    rm -rf mydb2
+
+    # should not panic
+    server_query repo1 1 dolt "" "SHOW databases" "" "Can no longer find a database on disk"
+}

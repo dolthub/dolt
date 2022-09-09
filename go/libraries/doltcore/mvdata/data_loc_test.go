@@ -204,7 +204,11 @@ func TestCreateRdWr(t *testing.T) {
 
 		loc := test.dl
 
-		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+		tmpDir, tdErr := dEnv.TempTableFilesDir()
+		if tdErr != nil {
+			t.Fatal("Unexpected error accessing .dolt directory.", tdErr)
+		}
+		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 
 		filePath, fpErr := dEnv.FS.Abs(strings.Split(loc.String(), ":")[1])
 		if fpErr != nil {

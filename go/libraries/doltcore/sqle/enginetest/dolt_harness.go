@@ -318,7 +318,9 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 		store := dEnv.DoltDB.ValueReadWriter().(*types.ValueStore)
 		store.SetValidateContentAddresses(true)
 
-		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+		tmpDir, err := dEnv.TempTableFilesDir()
+		require.NoError(d.t, err)
+		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 		db, err := sqle.NewDatabase(context.Background(), name, dEnv.DbData(), opts)
 		require.NoError(d.t, err)
 

@@ -138,7 +138,11 @@ func loadWithFormat(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys
 
 	if dbLoadErr == nil && dEnv.HasDoltDir() {
 		if !dEnv.HasDoltTempTableDir() {
-			err := dEnv.FS.MkDirs(dEnv.TempTableFilesDir())
+			tmpDir, err := dEnv.TempTableFilesDir()
+			if err != nil {
+				dEnv.DBLoadError = err
+			}
+			err = dEnv.FS.MkDirs(tmpDir)
 			dEnv.DBLoadError = err
 		} else {
 			// fire and forget cleanup routine.  Will delete as many old temp files as it can during the main commands execution.
@@ -279,7 +283,11 @@ func (dEnv *DoltEnv) HasDoltDataDir() bool {
 }
 
 func (dEnv *DoltEnv) HasDoltTempTableDir() bool {
-	ex, _ := dEnv.FS.Exists(dEnv.TempTableFilesDir())
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return false
+	}
+	ex, _ := dEnv.FS.Exists(tmpDir)
 
 	return ex
 }
@@ -297,7 +305,7 @@ func mustAbs(dEnv *DoltEnv, path ...string) string {
 // GetDoltDir returns the path to the .dolt directory
 func (dEnv *DoltEnv) GetDoltDir() string {
 	if !dEnv.HasDoltDataDir() {
-		panic("No dolt dir")
+		return ""
 	}
 
 	return mustAbs(dEnv, dbfactory.DoltDir)
@@ -402,10 +410,14 @@ func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
 		return "", fmt.Errorf("unable to make directory '%s', cause: %s", absDataDir, err.Error())
 	}
 
-	err = dEnv.FS.MkDirs(dEnv.TempTableFilesDir())
-
+	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
-		return "", fmt.Errorf("unable to make directory '%s', cause: %s", dEnv.TempTableFilesDir(), err.Error())
+		return "", err
+	}
+
+	err = dEnv.FS.MkDirs(tmpDir)
+	if err != nil {
+		return "", fmt.Errorf("unable to make directory '%s', cause: %s", tmpDir, err.Error())
 	}
 
 	return filepath.Join(absPath, dbfactory.DoltDir), nil
@@ -1115,8 +1127,12 @@ func (dEnv *DoltEnv) GetUserHomeDir() (string, error) {
 	return getHomeDir(dEnv.hdp)
 }
 
-func (dEnv *DoltEnv) TempTableFilesDir() string {
-	return mustAbs(dEnv, dEnv.GetDoltDir(), tempTablesDir)
+func (dEnv *DoltEnv) TempTableFilesDir() (string, error) {
+	doltDir := dEnv.GetDoltDir()
+	if doltDir == "" {
+		return "", nil
+	}
+	return mustAbs(dEnv, doltDir, tempTablesDir), nil
 }
 
 // GetGCKeepers returns the hashes of all the objects in the environment provided that should be perserved during GC.
@@ -1177,11 +1193,19 @@ func GetGCKeepers(ctx context.Context, env *DoltEnv) ([]hash.Hash, error) {
 }
 
 func (dEnv *DoltEnv) DbEaFactory() editor.DbEaFactory {
-	return editor.NewDbEaFactory(dEnv.TempTableFilesDir(), dEnv.DoltDB.ValueReadWriter())
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil
+	}
+	return editor.NewDbEaFactory(tmpDir, dEnv.DoltDB.ValueReadWriter())
 }
 
 func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
-	return editor.NewBulkImportTEAFactory(dEnv.DoltDB.Format(), dEnv.DoltDB.ValueReadWriter(), dEnv.TempTableFilesDir())
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil
+	}
+	return editor.NewBulkImportTEAFactory(dEnv.DoltDB.Format(), dEnv.DoltDB.ValueReadWriter(), tmpDir)
 }
 
 func (dEnv *DoltEnv) LockFile() string {

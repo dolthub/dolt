@@ -187,6 +187,6 @@ func (s SessionStateAdapter) RemoveBackup(_ context.Context, _ string) error {
 	return fmt.Errorf("cannot delete remote in an SQL session")
 }
 
-func (s SessionStateAdapter) TempTableFilesDir() string {
-	return s.session.GetDbStates()[s.dbName].tmpFileDir
+func (s SessionStateAdapter) TempTableFilesDir() (string, error) {
+	return s.session.GetDbStates()[s.dbName].tmpFileDir, nil
 }

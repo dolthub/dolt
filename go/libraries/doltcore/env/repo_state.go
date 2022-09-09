@@ -42,7 +42,7 @@ type RepoStateWriter interface {
 	AddBackup(r Remote) error
 	RemoveRemote(ctx context.Context, name string) error
 	RemoveBackup(ctx context.Context, name string) error
-	TempTableFilesDir() string
+	TempTableFilesDir() (string, error)
 	UpdateBranch(name string, new BranchConfig) error
 }
 
