@@ -26,7 +26,7 @@ type Serializer interface {
 	Serialize(keys, values [][]byte, subtrees []uint64, level int) serial.Message
 }
 
-func GetKeysAndValues(msg serial.Message) (keys, values ItemArray, cnt uint16, err error) {
+func GetKeysAndValues(msg serial.Message) (keys, values ItemAccess, cnt uint16, err error) {
 	id := serial.GetFileID(msg)
 
 	if id == serial.ProllyTreeNodeFileID {

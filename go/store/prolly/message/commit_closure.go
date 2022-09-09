@@ -50,36 +50,36 @@ func offsetsForCommitClosureKeys(buf []byte) []byte {
 	return commitClosureKeyOffsets[:cnt*uint16Size]
 }
 
-func getCommitClosureKeys(msg serial.Message) (ItemArray, error) {
-	var ret ItemArray
+func getCommitClosureKeys(msg serial.Message) (ItemAccess, error) {
+	var ret ItemAccess
 	var m serial.CommitClosure
 	err := serial.InitCommitClosureRoot(&m, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return ret, err
 	}
-	ret.Items = m.KeyItemsBytes()
-	ret.Offs = offsetsForCommitClosureKeys(ret.Items)
+	ret.items = m.KeyItemsBytes()
+	ret.offs = offsetsForCommitClosureKeys(ret.items)
 	return ret, nil
 }
 
-func getCommitClosureValues(msg serial.Message) (ItemArray, error) {
-	var ret ItemArray
+func getCommitClosureValues(msg serial.Message) (ItemAccess, error) {
+	var ret ItemAccess
 	var m serial.CommitClosure
 	err := serial.InitCommitClosureRoot(&m, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return ret, err
 	}
 	if m.AddressArrayLength() == 0 {
-		ret.Items = commitClosureEmptyValueBytes
+		ret.items = commitClosureEmptyValueBytes
 		cnt, err := getCommitClosureCount(msg)
 		if err != nil {
 			return ret, nil
 		}
-		ret.Offs = commitClosureValueOffsets[:cnt*uint16Size]
+		ret.offs = commitClosureValueOffsets[:cnt*uint16Size]
 		return ret, nil
 	}
-	ret.Items = m.AddressArrayBytes()
-	ret.Offs = offsetsForAddressArray(ret.Items)
+	ret.items = m.AddressArrayBytes()
+	ret.offs = offsetsForAddressArray(ret.items)
 	return ret, nil
 }
 

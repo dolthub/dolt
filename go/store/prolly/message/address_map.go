@@ -81,25 +81,25 @@ func (s AddressMapSerializer) Serialize(keys, addrs [][]byte, subtrees []uint64,
 	return serial.FinishMessage(b, serial.AddressMapEnd(b), addressMapFileID)
 }
 
-func getAddressMapKeys(msg serial.Message) (keys ItemArray, err error) {
+func getAddressMapKeys(msg serial.Message) (keys ItemAccess, err error) {
 	var am serial.AddressMap
 	err = serial.InitAddressMapRoot(&am, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return keys, err
 	}
-	keys.Items = am.KeyItemsBytes()
-	keys.Offs = getAddressMapKeyOffsets(&am)
+	keys.items = am.KeyItemsBytes()
+	keys.offs = getAddressMapKeyOffsets(&am)
 	return
 }
 
-func getAddressMapValues(msg serial.Message) (values ItemArray, err error) {
+func getAddressMapValues(msg serial.Message) (values ItemAccess, err error) {
 	var am serial.AddressMap
 	err = serial.InitAddressMapRoot(&am, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return values, err
 	}
-	values.Items = am.AddressArrayBytes()
-	values.Offs = offsetsForAddressArray(values.Items)
+	values.items = am.AddressArrayBytes()
+	values.offs = offsetsForAddressArray(values.items)
 	return
 }
 

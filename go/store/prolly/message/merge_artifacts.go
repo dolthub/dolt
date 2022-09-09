@@ -102,24 +102,24 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 	return serial.FinishMessage(b, serial.MergeArtifactsEnd(b), mergeArtifactFileID)
 }
 
-func getArtifactMapKeysAndValues(msg serial.Message) (keys, values ItemArray, cnt uint16, err error) {
+func getArtifactMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, cnt uint16, err error) {
 	var am serial.MergeArtifacts
 	err = serial.InitMergeArtifactsRoot(&am, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return
 	}
 
-	keys.Items = am.KeyItemsBytes()
-	keys.Offs = getMergeArtifactKeyOffsets(&am)
+	keys.items = am.KeyItemsBytes()
+	keys.offs = getMergeArtifactKeyOffsets(&am)
 	cnt = uint16(keys.Len())
 
 	vv := am.ValueItemsBytes()
 	if vv != nil {
-		values.Items = vv
-		values.Offs = getMergeArtifactValueOffsets(&am)
+		values.items = vv
+		values.offs = getMergeArtifactValueOffsets(&am)
 	} else {
-		values.Items = am.AddressArrayBytes()
-		values.Offs = offsetsForAddressArray(values.Items)
+		values.items = am.AddressArrayBytes()
+		values.offs = offsetsForAddressArray(values.items)
 	}
 
 	return

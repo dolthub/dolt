@@ -59,10 +59,10 @@ func (s BlobSerializer) Serialize(keys, values [][]byte, subtrees []uint64, leve
 	return serial.FinishMessage(b, serial.BlobEnd(b), blobFileID)
 }
 
-func getBlobKeys(msg serial.Message) (ItemArray, error) {
+func getBlobKeys(msg serial.Message) (ItemAccess, error) {
 	cnt, err := getBlobCount(msg)
 	if err != nil {
-		return ItemArray{}, err
+		return ItemAccess{}, err
 	}
 	buf := make([]byte, cnt)
 	for i := range buf {
@@ -73,24 +73,24 @@ func getBlobKeys(msg serial.Message) (ItemArray, error) {
 		b := offs[i*2 : (i+1)*2]
 		binary.LittleEndian.PutUint16(b, uint16(i))
 	}
-	return ItemArray{
-		Items: buf,
-		Offs:  offs,
+	return ItemAccess{
+		items: buf,
+		offs:  offs,
 	}, nil
 }
 
-func getBlobValues(msg serial.Message) (ItemArray, error) {
+func getBlobValues(msg serial.Message) (ItemAccess, error) {
 	var b serial.Blob
 	err := serial.InitBlobRoot(&b, msg, serial.MessagePrefixSz)
 	if err != nil {
-		return ItemArray{}, err
+		return ItemAccess{}, err
 	}
 	if b.TreeLevel() > 0 {
 		arr := b.AddressArrayBytes()
 		off := offsetsForAddressArray(arr)
-		return ItemArray{
-			Items: arr,
-			Offs:  off,
+		return ItemAccess{
+			items: arr,
+			offs:  off,
 		}, nil
 	}
 
@@ -98,7 +98,7 @@ func getBlobValues(msg serial.Message) (ItemArray, error) {
 	offs := make([]byte, 4)
 	binary.LittleEndian.PutUint16(offs[2:], uint16(len(buf)))
 
-	return ItemArray{Items: buf, Offs: offs}, nil
+	return ItemAccess{items: buf, offs: offs}, nil
 }
 
 func getBlobCount(msg serial.Message) (uint16, error) {

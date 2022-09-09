@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"math"
 	"testing"
 
@@ -163,11 +164,11 @@ func TestWriteImmutableTree(t *testing.T) {
 					return err
 				}
 				if leaf {
-					byteCnt += len(n.values.Items)
+					byteCnt += len(getBlobValues(n.msg))
 					for _, i := range n.GetValue(0) {
 						sum += int(i)
 					}
-					keyCnt = len(n.values.Items)
+					keyCnt = len(getBlobValues(n.msg))
 					if keyCnt != tt.chunkSize {
 						unfilledCnt += 1
 					}
@@ -393,4 +394,13 @@ func mustNewBlob(ctx context.Context, ns NodeStore, len, chunkSize int) *Immutab
 		panic(err)
 	}
 	return root
+}
+
+func getBlobValues(msg serial.Message) []byte {
+	var b serial.Blob
+	err := serial.InitBlobRoot(&b, msg, serial.MessagePrefixSz)
+	if err != nil {
+		panic(err)
+	}
+	return b.PayloadBytes()
 }

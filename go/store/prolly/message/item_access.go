@@ -16,23 +16,23 @@ package message
 
 import "github.com/dolthub/dolt/go/store/val"
 
-// ItemArray is an array of Items
-type ItemArray struct {
-	Items []byte
-	// Offs is an array of uint16 encoded offsets into |Items|.
+// ItemAccess is an array of Items
+type ItemAccess struct {
+	items []byte
+	// Offs is an array of uint16 encoded offsets into |items|.
 	// the first offset is 0, the last offset if len(Items).
-	Offs []byte
+	offs []byte
 }
 
 // GetItem returns the ith item in |arr|.
-func (arr ItemArray) GetItem(i int) []byte {
+func (arr ItemAccess) GetItem(i int) []byte {
 	pos := i * 2
-	start := val.ReadUint16(arr.Offs[pos : pos+2])
-	stop := val.ReadUint16(arr.Offs[pos+2 : pos+4])
-	return arr.Items[start:stop]
+	start := val.ReadUint16(arr.offs[pos : pos+2])
+	stop := val.ReadUint16(arr.offs[pos+2 : pos+4])
+	return arr.items[start:stop]
 }
 
 // Len returns the number of items in |arr|.
-func (arr ItemArray) Len() int {
-	return len(arr.Offs)/2 - 1
+func (arr ItemAccess) Len() int {
+	return len(arr.offs)/2 - 1
 }
