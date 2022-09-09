@@ -219,7 +219,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			}
 			if wrapper.HasMoreRows() {
 				sqlCtx := sql.NewContext(ctx)
-				err = engine.PrettyPrintResults(sqlCtx, 0, wrapper.Schema(), wrapper, commands.HasTopLevelOrderByClause(query))
+				err = engine.PrettyPrintResults(sqlCtx, 0, wrapper.Schema(), wrapper)
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 					return

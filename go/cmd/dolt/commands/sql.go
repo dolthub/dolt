@@ -604,7 +604,7 @@ func execQuery(
 	}
 
 	if rowIter != nil {
-		err = engine.PrettyPrintResults(sqlCtx, se.GetReturnFormat(), sqlSch, rowIter, HasTopLevelOrderByClause(query))
+		err = engine.PrettyPrintResults(sqlCtx, se.GetReturnFormat(), sqlSch, rowIter)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -803,7 +803,7 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 			}
 
 			if rowIter != nil {
-				err = engine.PrettyPrintResults(ctx, se.GetReturnFormat(), sqlSch, rowIter, HasTopLevelOrderByClause(query))
+				err = engine.PrettyPrintResults(ctx, se.GetReturnFormat(), sqlSch, rowIter)
 				if err != nil {
 					err = fmt.Errorf("error executing query on line %d: %v", scanner.statementStartLine, err)
 					return errhand.VerboseErrorFromError(err)
@@ -985,7 +985,7 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 				verr := formatQueryError("", err)
 				shell.Println(verr.Verbose())
 			} else if rowIter != nil {
-				err = engine.PrettyPrintResults(sqlCtx, returnFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
+				err = engine.PrettyPrintResults(sqlCtx, returnFormat, sqlSch, rowIter)
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 				}
@@ -1305,7 +1305,7 @@ func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query stri
 				cli.Print("\n")
 				displayStrLen = 0
 			}
-			err = engine.PrettyPrintResults(ctx, se.GetReturnFormat(), sqlSch, rowIter, HasTopLevelOrderByClause(query))
+			err = engine.PrettyPrintResults(ctx, se.GetReturnFormat(), sqlSch, rowIter)
 			if err != nil {
 				return err
 			}
@@ -1417,19 +1417,6 @@ func foundSubquery(node sqlparser.SQLNode) bool {
 		return true, nil
 	}, node)
 	return has
-}
-
-func HasTopLevelOrderByClause(query string) bool {
-	st, _ := sqlparser.Parse(query)
-
-	switch s := st.(type) {
-	case *sqlparser.Select:
-		return s.OrderBy != nil
-	case *sqlparser.Union:
-		return s.OrderBy != nil
-	default:
-		return false
-	}
 }
 
 // parses the query to check if it inserts into a table with AUTO_INCREMENT
