@@ -907,7 +907,7 @@ func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	sessionState.dbData = dbState.DbData
 	tmpDir, err := dbState.DbData.Rsw.TempTableFilesDir()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to access database '%s': %s", dbState.Db.Name(), err.Error())
 	}
 	sessionState.tmpFileDir = tmpDir
 	adapter := NewSessionStateAdapter(d, db.Name(), dbState.Remotes, dbState.Branches, dbState.Backups)

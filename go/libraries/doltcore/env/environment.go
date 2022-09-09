@@ -1130,7 +1130,7 @@ func (dEnv *DoltEnv) GetUserHomeDir() (string, error) {
 func (dEnv *DoltEnv) TempTableFilesDir() (string, error) {
 	doltDir := dEnv.GetDoltDir()
 	if doltDir == "" {
-		return "", nil
+		return "", fmt.Errorf("can no longer find a database on disk")
 	}
 	return mustAbs(dEnv, doltDir, tempTablesDir), nil
 }
