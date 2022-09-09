@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -40,14 +41,32 @@ const (
 	FormatVertical
 )
 
-// PrettyPrintResults prints the result of a query (schema + row iter).
+type PrintSummaryBehavior byte
+
+const (
+	PrintNoSummary PrintSummaryBehavior = 0
+	PrintRowCountAndTiming = 1
+)
+
+// PrettyPrintResults prints the result of a query in the format provided
 func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
+	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintNoSummary)
+}
+
+// PrettyPrintResultsExtended prints the result of a query in the format provided, including row count and timing info
+func PrettyPrintResultsExtended(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
+	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintRowCountAndTiming)
+}
+
+func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, summary PrintSummaryBehavior) (rerr error) {
 	defer func() {
 		closeErr := rowIter.Close(ctx)
 		if rerr == nil && closeErr != nil {
 			rerr = closeErr
 		}
 	}()
+
+	start := time.Now()
 
 	if isOkResult(sqlSch) {
 		return printOKResult(ctx, rowIter)
@@ -86,8 +105,30 @@ func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch
 		wr = newVerticalRowWriter(iohelp.NopWrCloser(cli.CliOut), sqlSch)
 	}
 
-	return writeResultSet(ctx, rowIter, wr)
+	numRows, err := writeResultSet(ctx, rowIter, wr)
+	if err != nil {
+		return err
+	}
+
+	if summary == PrintRowCountAndTiming {
+		noun := "rows"
+		if numRows == 1 {
+			noun = "row"
+		}
+
+		runTime := time.Since(start)
+		seconds := runTime / time.Second
+		milliRemainder := (runTime - seconds) / time.Millisecond
+		timeDisplay := float64(seconds) + float64(milliRemainder) * .001
+		err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("%d %s in set (%.2f sec)", numRows, noun, timeDisplay))
+		if err != nil {
+			return err
+		}
+	}
+
+	return iohelp.WriteLine(cli.CliOut, "")
 }
+
 
 type nullWriter struct {}
 
@@ -107,19 +148,19 @@ func newNullWriter() nullWriter {
 	return nullWriter{}
 }
 
-func writeResultSet(ctx *sql.Context, rowIter sql.RowIter, wr table.SqlRowWriter) error {
+func writeResultSet(ctx *sql.Context, rowIter sql.RowIter, wr table.SqlRowWriter) (int, error) {
 	i := 0
 	for {
 		r, err := rowIter.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return err
+			return 0, err
 		}
 
 		err = wr.WriteSqlRow(ctx, r)
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		i++
@@ -127,20 +168,21 @@ func writeResultSet(ctx *sql.Context, rowIter sql.RowIter, wr table.SqlRowWriter
 
 	err := wr.Close(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if i == 0 {
 		printEmptySetResult(ctx)
 	}
-	return nil
+
+	return i, nil
 }
 
 func printEmptySetResult(ctx *sql.Context) {
 	cli.Printf("Empty set\n") // TODO: timing info
 }
 
-func printOKResult(ctx *sql.Context, iter sql.RowIter) (returnErr error) {
+func printOKResult(ctx *sql.Context, iter sql.RowIter) error {
 	row, err := iter.Next(ctx)
 	if err != nil {
 		return err

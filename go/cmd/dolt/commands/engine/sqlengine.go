@@ -215,8 +215,9 @@ func (se *SqlEngine) NewDoltSession(ctx context.Context, mysqlSess *sql.BaseSess
 	return se.dsessFactory(ctx, mysqlSess, se.engine.Analyzer.Catalog.AllDatabases(tempCtx))
 }
 
-// GetReturnFormat() returns the printing format the engine is associated with.
-func (se *SqlEngine) GetReturnFormat() PrintResultFormat {
+// GetResultFormat returns the printing format of the engine. The format isn't used by the engine internally, only
+// stored for reference by clients who wish to use it to print results.
+func (se *SqlEngine) GetResultFormat() PrintResultFormat {
 	return se.resultFormat
 }
 
