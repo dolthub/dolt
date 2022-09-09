@@ -1709,6 +1709,6 @@ s.close()
 
     rm -rf mydb2
 
-    # should not panic
-    server_query repo1 1 dolt "" "SHOW databases" "" "Can no longer find a database on disk"
+    # TODO test the server log, it should not panic
+    server_query repo1 1 dolt "" "SHOW databases" "failed to access database 'mydb2': can no longer find a database on disk" 1
 }
