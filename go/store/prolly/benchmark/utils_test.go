@@ -16,12 +16,13 @@ package benchmark
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
-	"go.etcd.io/bbolt"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"go.etcd.io/bbolt"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/pool"
