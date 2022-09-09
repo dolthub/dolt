@@ -542,11 +542,11 @@ func makeDelete(k int64) (key val.Tuple) {
 }
 
 // validates edit provider and materializes map
-func materializeMap(t *testing.T, mut MutableMap) Map {
+func materializeMap(t *testing.T, mut *MutableMap) Map {
 	ctx := context.Background()
 
 	// ensure Edits are provided in Order
-	err := mut.ApplyPending(ctx)
+	err := mut.Checkpoint(ctx)
 	require.NoError(t, err)
 	iter := mut.tuples.Mutations()
 	prev, _ := iter.NextMutation(ctx)

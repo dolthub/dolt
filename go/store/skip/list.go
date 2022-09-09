@@ -23,6 +23,7 @@ const (
 	maxHeight  = 9
 	maxCount   = math.MaxUint32 - 1
 	sentinelId = nodeId(0)
+	initSize   = 8
 )
 
 // A KeyOrder determines the ordering of two keys |l| and |r|.
@@ -71,14 +72,12 @@ type skipNode struct {
 
 // NewSkipList returns a new skip.List.
 func NewSkipList(order KeyOrder) *List {
-	nodes := make([]skipNode, 0, 8)
+	nodes := make([]skipNode, 0, initSize)
 
 	// initialize sentinel node
 	nodes = append(nodes, skipNode{
-		id:  sentinelId,
-		key: nil, val: nil,
+		id:     sentinelId,
 		height: maxHeight,
-		next:   tower{},
 		prev:   sentinelId,
 	})
 
@@ -93,6 +92,10 @@ func NewSkipList(order KeyOrder) *List {
 // Checkpoint records a checkpoint that can be reverted to.
 func (l *List) Checkpoint() {
 	l.checkpoint = l.nextNodeId()
+}
+
+func (l *List) HasCheckpoint() bool {
+	return l.checkpoint > nodeId(1)
 }
 
 // Revert reverts to the last recorded checkpoint.
@@ -163,6 +166,18 @@ func (l *List) Put(key, val []byte) {
 	} else {
 		l.insert(key, val, path)
 		l.count++
+	}
+}
+
+func (l *List) Copy() *List {
+	copies := make([]skipNode, len(l.nodes))
+	copy(copies, l.nodes)
+	return &List{
+		nodes:      copies,
+		count:      l.count,
+		checkpoint: l.checkpoint,
+		keyOrder:   l.keyOrder,
+		seed:       l.seed,
 	}
 }
 
@@ -278,13 +293,13 @@ func (it *ListIter) Retreat() {
 // GetIterAt creates an iterator starting at the first item
 // of the list whose key is greater than or equal to |key|.
 func (l *List) GetIterAt(key []byte) (it *ListIter) {
-	return l.GetIterFromSearchFn(func(nodeKey []byte) bool {
+	return l.GetIterFromSeekFn(func(nodeKey []byte) bool {
 		return l.compareKeys(key, nodeKey) > 0
 	})
 }
 
-// GetIterFromSearchFn creates an iterator using a SeekFn.
-func (l *List) GetIterFromSearchFn(fn SeekFn) (it *ListIter) {
+// GetIterFromSeekFn creates an iterator using a SeekFn.
+func (l *List) GetIterFromSeekFn(fn SeekFn) (it *ListIter) {
 	it = &ListIter{
 		curr: l.seekWithFn(fn),
 		list: l,

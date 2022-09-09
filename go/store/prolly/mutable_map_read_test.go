@@ -61,7 +61,7 @@ func TestMutableMapReads(t *testing.T) {
 				testIterPrefixRange(t, mutableIndex, idxTuples)
 			})
 
-			mutableMap2, tuples2, deletes := deleteFromMutableMap(mutableMap.(MutableMap), tuples)
+			mutableMap2, tuples2, deletes := deleteFromMutableMap(mutableMap.(*MutableMap), tuples)
 			t.Run("get item from map with deletes", func(t *testing.T) {
 				testMutableMapGetAndHas(t, mutableMap2, tuples2, deletes)
 			})
@@ -75,7 +75,7 @@ func TestMutableMapReads(t *testing.T) {
 				t.Skip("todo(andy)")
 			})
 
-			mutableIndex2, idxTuples2, _ := deleteFromMutableMap(mutableIndex.(MutableMap), idxTuples)
+			mutableIndex2, idxTuples2, _ := deleteFromMutableMap(mutableIndex.(*MutableMap), idxTuples)
 			t.Run("iter prefix range", func(t *testing.T) {
 				testIterPrefixRange(t, mutableIndex, idxTuples2)
 			})
@@ -107,7 +107,7 @@ func TestMutableMapReads(t *testing.T) {
 func TestMutableMapFormat(t *testing.T) {
 	ctx := context.Background()
 	mutableMap, _ := makeMutableMap(t, 100)
-	s, err := debugFormat(ctx, mutableMap.(MutableMap))
+	s, err := debugFormat(ctx, mutableMap.(*MutableMap))
 	assert.NoError(t, err)
 	assert.NotEmpty(t, s)
 }
@@ -162,7 +162,7 @@ func makeMutableSecondaryIndex(t *testing.T, count int) (testMap, [][2]val.Tuple
 	return newMutableMap(m.(Map)), tuples
 }
 
-func deleteFromMutableMap(mut MutableMap, tt [][2]val.Tuple) (MutableMap, [][2]val.Tuple, [][2]val.Tuple) {
+func deleteFromMutableMap(mut *MutableMap, tt [][2]val.Tuple) (*MutableMap, [][2]val.Tuple, [][2]val.Tuple) {
 	count := len(tt)
 	testRand.Shuffle(count, func(i, j int) {
 		tt[i], tt[j] = tt[j], tt[i]
@@ -186,7 +186,7 @@ func deleteFromMutableMap(mut MutableMap, tt [][2]val.Tuple) (MutableMap, [][2]v
 	return mut, remaining, deletes
 }
 
-func testMutableMapGetAndHas(t *testing.T, mut MutableMap, tuples, deletes [][2]val.Tuple) {
+func testMutableMapGetAndHas(t *testing.T, mut *MutableMap, tuples, deletes [][2]val.Tuple) {
 	ctx := context.Background()
 	for _, kv := range tuples {
 		ok, err := mut.Has(ctx, kv[0])

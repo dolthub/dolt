@@ -193,7 +193,7 @@ func (m Map) NodeStore() tree.NodeStore {
 }
 
 // Mutate makes a MutableMap from a Map.
-func (m Map) Mutate() MutableMap {
+func (m Map) Mutate() *MutableMap {
 	return newMutableMap(m)
 }
 

@@ -37,7 +37,7 @@ type testMap interface {
 }
 
 var _ testMap = Map{}
-var _ testMap = MutableMap{}
+var _ testMap = &MutableMap{}
 
 func countOrderedMap(t *testing.T, om testMap) (cnt int) {
 	iter, err := om.IterAll(context.Background())
@@ -57,7 +57,7 @@ func keyDescFromMap(om testMap) val.TupleDesc {
 	switch m := om.(type) {
 	case Map:
 		return m.keyDesc
-	case MutableMap:
+	case *MutableMap:
 		return m.keyDesc
 	default:
 		panic("unknown ordered map")
