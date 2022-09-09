@@ -202,7 +202,7 @@ func (m Map) Count() (int, error) {
 	return m.tuples.Count()
 }
 
-func (m Map) Height() (int, error) {
+func (m Map) Height() int {
 	return m.tuples.Height()
 }
 

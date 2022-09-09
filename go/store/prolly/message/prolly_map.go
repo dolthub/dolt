@@ -101,7 +101,7 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 	return serial.FinishMessage(b, serial.ProllyTreeNodeEnd(b), prollyMapFileID)
 }
 
-func getProllyMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, cnt uint16, err error) {
+func getProllyMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, level, count uint16, err error) {
 	var pm serial.ProllyTreeNode
 	err = serial.InitProllyTreeNodeRoot(&pm, msg, serial.MessagePrefixSz)
 	if err != nil {
@@ -110,7 +110,8 @@ func getProllyMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, cnt
 
 	keys.items = pm.KeyItemsBytes()
 	keys.offs = getProllyMapKeyOffsets(&pm)
-	cnt = uint16(keys.Len())
+	count = uint16(keys.Len())
+	level = uint16(pm.TreeLevel())
 
 	vv := pm.ValueItemsBytes()
 	if vv != nil {
@@ -120,7 +121,6 @@ func getProllyMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, cnt
 		values.items = pm.AddressArrayBytes()
 		values.offs = offsetsForAddressArray(values.items)
 	}
-
 	return
 }
 

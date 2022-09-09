@@ -34,7 +34,7 @@ func TestGetKeyValueOffsetsVectors(t *testing.T) {
 		msg := s.Serialize(keys, values, nil, 0)
 
 		// uses hard-coded vtable slot
-		keyBuf, valBuf, _, _ := getProllyMapKeysAndValues(msg)
+		keyBuf, valBuf, _, _, _ := getProllyMapKeysAndValues(msg)
 
 		for i := range keys {
 			assert.Equal(t, keys[i], keyBuf.GetItem(i))

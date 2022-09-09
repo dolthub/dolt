@@ -153,9 +153,8 @@ func (t StaticMap[K, V, O]) Count() (int, error) {
 	return t.Root.TreeCount()
 }
 
-func (t StaticMap[K, V, O]) Height() (int, error) {
-	l, err := t.Root.Level()
-	return l + 1, err
+func (t StaticMap[K, V, O]) Height() int {
+	return t.Root.Level() + 1
 }
 
 func (t StaticMap[K, V, O]) HashOf() hash.Hash {

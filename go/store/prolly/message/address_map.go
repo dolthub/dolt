@@ -128,13 +128,13 @@ func getAddressMapCount(msg serial.Message) (uint16, error) {
 	return uint16(am.KeyOffsetsLength() - 1), nil
 }
 
-func getAddressMapTreeLevel(msg serial.Message) (int, error) {
+func getAddressMapTreeLevel(msg serial.Message) (uint16, error) {
 	var am serial.AddressMap
 	err := serial.InitAddressMapRoot(&am, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return 0, err
 	}
-	return int(am.TreeLevel()), nil
+	return uint16(am.TreeLevel()), nil
 }
 
 func getAddressMapTreeCount(msg serial.Message) (int, error) {

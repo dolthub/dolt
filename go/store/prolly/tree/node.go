@@ -34,8 +34,8 @@ type Node struct {
 	// keys and values contain sub-slices of |msg|,
 	// allowing faster lookups by avoiding the vtable
 	keys, values message.ItemAccess
+	count, level uint16
 	subtrees     subtreeCounts
-	count        uint16
 	msg          serial.Message
 }
 
@@ -47,11 +47,7 @@ func WalkAddresses(ctx context.Context, nd Node, ns NodeStore, cb AddressCb) err
 			return err
 		}
 
-		leaf, err := nd.IsLeaf()
-		if err != nil {
-			return err
-		}
-		if leaf {
+		if nd.IsLeaf() {
 			return nil
 		}
 
@@ -72,12 +68,7 @@ func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 	if err := cb(ctx, nd); err != nil {
 		return err
 	}
-
-	leaf, err := nd.IsLeaf()
-	if err != nil {
-		return err
-	}
-	if leaf {
+	if nd.IsLeaf() {
 		return nil
 	}
 
@@ -107,11 +98,12 @@ func walkOpaqueNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) erro
 }
 
 func NodeFromBytes(msg []byte) (Node, error) {
-	keys, values, count, err := message.GetKeysAndValues(msg)
+	keys, values, level, count, err := message.UnpackFields(msg)
 	return Node{
 		keys:   keys,
 		values: values,
 		count:  count,
+		level:  level,
 		msg:    msg,
 	}, err
 }
@@ -133,14 +125,13 @@ func (nd Node) Size() int {
 }
 
 // Level returns the tree Level for this node
-func (nd Node) Level() (int, error) {
-	return message.GetTreeLevel(nd.msg)
+func (nd Node) Level() int {
+	return int(nd.level)
 }
 
 // IsLeaf returns whether this node is a leaf
-func (nd Node) IsLeaf() (bool, error) {
-	l, err := nd.Level()
-	return l == 0, err
+func (nd Node) IsLeaf() bool {
+	return nd.level == 0
 }
 
 // GetKey returns the |ith| key of this node
@@ -164,11 +155,7 @@ func (nd Node) loadSubtrees() (Node, error) {
 }
 
 func (nd Node) getSubtreeCount(i int) (uint64, error) {
-	leaf, err := nd.IsLeaf()
-	if err != nil {
-		return 0, err
-	}
-	if leaf {
+	if nd.IsLeaf() {
 		return 1, nil
 	}
 	// this will panic unless subtrees were loaded.
@@ -210,11 +197,7 @@ func OutputProllyNode(w io.Writer, node Node) error {
 			w.Write([]byte(hex.EncodeToString(kt.GetField(j))))
 		}
 
-		leaf, err := node.IsLeaf()
-		if err != nil {
-			return err
-		}
-		if leaf {
+		if node.IsLeaf() {
 			v := node.GetValue(i)
 			vt := val.Tuple(v)
 

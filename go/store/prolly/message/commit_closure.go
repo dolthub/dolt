@@ -95,13 +95,13 @@ func getCommitClosureCount(msg serial.Message) (uint16, error) {
 	return uint16(m.KeyItemsLength() / commitClosureKeyLength), nil
 }
 
-func getCommitClosureTreeLevel(msg serial.Message) (int, error) {
+func getCommitClosureTreeLevel(msg serial.Message) (uint16, error) {
 	var m serial.CommitClosure
 	err := serial.InitCommitClosureRoot(&m, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return 0, err
 	}
-	return int(m.TreeLevel()), nil
+	return uint16(m.TreeLevel()), nil
 }
 
 func getCommitClosureTreeCount(msg serial.Message) (int, error) {

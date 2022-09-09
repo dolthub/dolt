@@ -65,7 +65,7 @@ func (c AddressMap) Count() (int, error) {
 	return c.addresses.Count()
 }
 
-func (c AddressMap) Height() (int, error) {
+func (c AddressMap) Height() int {
 	return c.addresses.Height()
 }
 

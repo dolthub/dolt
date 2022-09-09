@@ -129,13 +129,13 @@ func walkBlobAddresses(ctx context.Context, msg serial.Message, cb func(ctx cont
 	return nil
 }
 
-func getBlobTreeLevel(msg serial.Message) (int, error) {
+func getBlobTreeLevel(msg serial.Message) (uint16, error) {
 	var b serial.Blob
 	err := serial.InitBlobRoot(&b, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return 0, err
 	}
-	return int(b.TreeLevel()), nil
+	return uint16(b.TreeLevel()), nil
 }
 
 func getBlobTreeCount(msg serial.Message) (int, error) {

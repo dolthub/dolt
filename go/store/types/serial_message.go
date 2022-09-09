@@ -141,7 +141,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		fmt.Fprintf(ret, "}")
 		return ret.String()
 	case serial.AddressMapFileID:
-		keys, values, cnt, err := message.GetKeysAndValues(serial.Message(sm))
+		keys, values, _, cnt, err := message.UnpackFields(serial.Message(sm))
 		if err != nil {
 			return fmt.Sprintf("error in HumanReadString(): %s", err)
 		}
