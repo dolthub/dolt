@@ -153,9 +153,9 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				name, email, err = cli.ParseAuthor(authorStr)
 			} else {
 				name, email, err = env.GetNameAndEmail(dEnv.Config)
-				if err != nil {
-					return handleCommitErr(ctx, dEnv, err, usage)
-				}
+			}
+			if err != nil {
+				return handleCommitErr(ctx, dEnv, err, usage)
 			}
 
 			suggestedMsg := fmt.Sprintf("Merge branch '%s' into %s", commitSpecStr, dEnv.RepoStateReader().CWBHeadRef().GetPath())
