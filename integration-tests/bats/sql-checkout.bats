@@ -561,8 +561,31 @@ SQL
   [[ "$output" =~ "0" ]] || false
 }
 
+@test "sql-checkout: CALL DOLT_CHECKOUT can successfully checkout a branch that does not have a workingset" {
+  # Some code paths in dolt, especially in older versions of dolt, would create
+  # branches without working sets. CLI `dolt checkout` will check these out
+  # fine. CALL DOLT_CHECKOUT needs to be able to too.
+
+  h=`get_head_commit`
+
+  # First we test the case where there is no remote tracking branch associate with this branch.
+
+  dolt admin set-ref --branch no_working_set --to "$h"
+  run dolt sql -q 'CALL DOLT_CHECKOUT("no_working_set")'
+  [ $status -eq 0 ]
+  [[ "$output" =~ "0" ]] || false
+
+  # Then we test the same behavior but with a remote tracking branch around as well.
+
+  dolt remote add origin https://localhost:50051/doesnot/work
+  dolt admin set-ref --remote-name origin --remote-branch no_working_set --to "$h"
+  run dolt sql -q 'CALL DOLT_CHECKOUT("no_working_set")'
+  [ $status -eq 0 ]
+  [[ "$output" =~ "0" ]] || false
+}
+
 get_head_commit() {
-    dolt log -n 1 | grep -m 1 commit | cut -c 8-
+    dolt log -n 1 | grep -m 1 commit | awk '{print $2}'
 }
 
 get_working_hash() {
