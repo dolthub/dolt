@@ -150,7 +150,7 @@ func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeSt
 		tuples[i], tuples[j] = tuples[j], tuples[i]
 	})
 
-	// make overlapping edits
+	// make overlapping Edits
 	left := makeUpdatesToTuples(kd, vd, tuples[:mutSz]...)
 	right := makeUpdatesToTuples(kd, vd, tuples[:mutSz]...)
 

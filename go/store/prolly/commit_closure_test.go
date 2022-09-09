@@ -58,7 +58,7 @@ func TestCommitClosure(t *testing.T) {
 		c, err := cc.Count()
 		require.NoError(t, err)
 		assert.Equal(t, 0, c)
-		assert.Equal(t, 0, cc.closure.root.Count())
+		assert.Equal(t, 0, cc.closure.Root.Count())
 		c, err = cc.Height()
 		require.NoError(t, err)
 		assert.Equal(t, 1, c)
@@ -167,8 +167,8 @@ func TestCommitClosure(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 4096, ccc)
 
-		// Walk the addresses in the root.
-		msg := serial.Message(tree.ValueFromNode(cc.closure.root).(types.SerialMessage))
+		// Walk the addresses in the Root.
+		msg := serial.Message(tree.ValueFromNode(cc.closure.Root).(types.SerialMessage))
 		numaddresses := 0
 		err = message.WalkAddresses(ctx, msg, func(ctx context.Context, addr hash.Hash) error {
 			numaddresses++
@@ -177,9 +177,9 @@ func TestCommitClosure(t *testing.T) {
 		require.NoError(t, err)
 		assert.Less(t, numaddresses, 4096)
 
-		// Walk all addresses in the tree.
+		// Walk all addresses in the Tree.
 		numaddresses = 0
-		err = tree.WalkAddresses(ctx, cc.closure.root, ns, func(ctx context.Context, addr hash.Hash) error {
+		err = tree.WalkAddresses(ctx, cc.closure.Root, ns, func(ctx context.Context, addr hash.Hash) error {
 			numaddresses++
 			return nil
 		})
@@ -203,13 +203,13 @@ func TestCommitClosure(t *testing.T) {
 
 		numnodes := 0
 		totalentries := 0
-		err = tree.WalkNodes(ctx, cc.closure.root, ns, func(ctx context.Context, node tree.Node) error {
+		err = tree.WalkNodes(ctx, cc.closure.Root, ns, func(ctx context.Context, node tree.Node) error {
 			numnodes++
 			totalentries += node.Count()
 			return nil
 		})
 		require.NoError(t, err)
-		assert.Less(t, cc.closure.root.Count(), numnodes)
+		assert.Less(t, cc.closure.Root.Count(), numnodes)
 		assert.Less(t, 4096, totalentries)
 	})
 }

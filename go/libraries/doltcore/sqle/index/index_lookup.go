@@ -349,7 +349,7 @@ func (lb *baseLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (s
 // point lookups on concrete values, and range lookups for null matches.
 func (lb *baseLookupBuilder) newPointLookup(ctx *sql.Context, rang prolly.Range) (prolly.MapIter, error) {
 	if lb.cur == nil {
-		cur, err := tree.NewCursorFromCompareFn(ctx, lb.sec.NodeStore(), lb.sec.Node(), tree.Item(rang.Tup), lb.sec.CompareItems)
+		cur, err := tree.NewCursorAtKey(ctx, lb.sec.NodeStore(), lb.sec.Node(), rang.Tup, lb.secKd)
 		if err != nil {
 			return nil, err
 		}
@@ -361,7 +361,7 @@ func (lb *baseLookupBuilder) newPointLookup(ctx *sql.Context, rang prolly.Range)
 		lb.cur = cur
 	}
 
-	err := lb.cur.Seek(ctx, tree.Item(rang.Tup), lb.sec.CompareItems)
+	err := tree.Seek(ctx, lb.cur, rang.Tup, lb.secKd)
 	if err != nil {
 		return nil, err
 	}
