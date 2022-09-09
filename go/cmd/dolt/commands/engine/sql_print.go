@@ -545,3 +545,70 @@ func (vps *verticalPipelineStages) getSeparatorFunc() func(context.Context, []pi
 		return []pipeline.ItemWithProps{pipeline.NewItemWithNoProps(&str)}, nil
 	}
 }
+
+type verticalRowWriter struct {
+	wr io.WriteCloser
+	sch sql.Schema
+	idx int
+	offsets []int
+}
+
+func newVerticalRowWriter(wr io.WriteCloser, sch sql.Schema) verticalRowWriter {
+	return verticalRowWriter{
+		wr:  wr,
+		sch: sch,
+		offsets: calculateVerticalOffsets(sch),
+	}
+}
+
+func calculateVerticalOffsets(sch sql.Schema) []int {
+	offsets := make([]int, len(sch))
+
+	maxLen := 0
+	for i := range sch {
+		if len(sch[i].Name) > maxLen {
+			maxLen = len(sch[i].Name)
+		}
+	}
+
+	for i := range sch {
+		offsets[i] = maxLen - len(sch[i].Name)
+	}
+
+	return offsets
+}
+
+func (v verticalRowWriter) WriteRow(ctx context.Context, r row.Row) error {
+	return fmt.Errorf("unimplemented")
+}
+
+func (v verticalRowWriter) Close(ctx context.Context) error {
+	return v.wr.Close()
+}
+
+var space = []byte{' '}
+
+func (v *verticalRowWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
+	v.idx++
+	sep := fmt.Sprintf("*************************** %d. row ***************************\n", v.idx)
+	_, err := v.wr.Write([]byte(sep))
+	if err != nil {
+		return err
+	}
+
+	for i := range r {
+		for numSpaces := 0; numSpaces < v.offsets[i]; numSpaces++ {
+			_, err = v.wr.Write(space)
+			if err != nil {
+				return err
+			}
+		}
+
+		_, err = v.wr.Write([]byte(v.sch[i].Name))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
