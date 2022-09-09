@@ -68,8 +68,9 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 
 	start := time.Now()
 
+	// TODO: this isn't appropriate for JSON, CSV, other structured result formats
 	if isOkResult(sqlSch) {
-		return printOKResult(ctx, rowIter)
+		return printOKResult(ctx, rowIter, start)
 	}
 
 	var wr table.SqlRowWriter
@@ -100,7 +101,7 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 	case FormatTabular:
 		wr = tabular.NewFixedWidthTableWriter(sqlSch, iohelp.NopWrCloser(cli.CliOut), 100)
 	case FormatNull:
-		wr = newNullWriter()
+		wr = nullWriter{}
 	case FormatVertical:
 		wr = newVerticalRowWriter(iohelp.NopWrCloser(cli.CliOut), sqlSch)
 	}
@@ -111,43 +112,42 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 	}
 
 	if summary == PrintRowCountAndTiming {
-		noun := "rows"
-		if numRows == 1 {
-			noun = "row"
-		}
-
-		runTime := time.Since(start)
-		seconds := runTime / time.Second
-		milliRemainder := (runTime - seconds) / time.Millisecond
-		timeDisplay := float64(seconds) + float64(milliRemainder) * .001
-		err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("%d %s in set (%.2f sec)", numRows, noun, timeDisplay))
+		err = printResultSetSummary(numRows, start)
 		if err != nil {
 			return err
 		}
 	}
 
-	return iohelp.WriteLine(cli.CliOut, "")
+	// Some output formats need a final newline printed, others do not
+	switch resultFormat {
+	case FormatJson, FormatTabular, FormatVertical:
+		return iohelp.WriteLine(cli.CliOut, "")
+	default:
+		return nil
+	}
 }
 
+func printResultSetSummary(numRows int, start time.Time) error {
+	if numRows == 0 {
+		printEmptySetResult(start)
+		return nil
+	}
 
-type nullWriter struct {}
+	noun := "rows"
+	if numRows == 1 {
+		noun = "row"
+	}
 
-func (n nullWriter) WriteRow(ctx context.Context, r row.Row) error {
+	secondsSinceStart := secondsSince(start)
+	err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("%d %s in set (%.2f sec)", numRows, noun, secondsSinceStart))
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (n nullWriter) Close(ctx context.Context) error {
-	return nil
-}
-
-func (n nullWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
-	return nil
-}
-
-func newNullWriter() nullWriter {
-	return nullWriter{}
-}
-
+// writeResultSet drains the iterator given, printing rows from it to the writer given. Returns the number of rows.
 func writeResultSet(ctx *sql.Context, rowIter sql.RowIter, wr table.SqlRowWriter) (int, error) {
 	i := 0
 	for {
@@ -171,18 +171,30 @@ func writeResultSet(ctx *sql.Context, rowIter sql.RowIter, wr table.SqlRowWriter
 		return 0, err
 	}
 
-	if i == 0 {
-		printEmptySetResult(ctx)
-	}
-
 	return i, nil
 }
 
-func printEmptySetResult(ctx *sql.Context) {
-	cli.Printf("Empty set\n") // TODO: timing info
+// secondsSince returns the number of full and partial seconds since the time given
+func secondsSince(start time.Time) float64 {
+	runTime := time.Since(start)
+	seconds := runTime / time.Second
+	milliRemainder := (runTime - seconds) / time.Millisecond
+	timeDisplay := float64(seconds) + float64(milliRemainder)*.001
+	return timeDisplay
 }
 
-func printOKResult(ctx *sql.Context, iter sql.RowIter) error {
+// nullWriter is a no-op SqlRowWriter implementation
+type nullWriter struct {}
+func (n nullWriter) WriteRow(ctx context.Context, r row.Row) error {return nil}
+func (n nullWriter) Close(ctx context.Context) error {return nil}
+func (n nullWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {return nil}
+
+func printEmptySetResult(start time.Time) {
+	seconds := secondsSince(start)
+	cli.Printf("Empty set (%.2f sec)\n", seconds)
+}
+
+func printOKResult(ctx *sql.Context, iter sql.RowIter, start time.Time) error {
 	row, err := iter.Next(ctx)
 	if err != nil {
 		return err
@@ -194,7 +206,8 @@ func printOKResult(ctx *sql.Context, iter sql.RowIter) error {
 			rowNoun = "rows"
 		}
 
-		cli.Printf("Query OK, %d %s affected\n", okResult.RowsAffected, rowNoun)
+		seconds := secondsSince(start)
+		cli.Printf("Query OK, %d %s affected (%.2f sec)\n", okResult.RowsAffected, rowNoun, seconds)
 
 		if okResult.Info != nil {
 			cli.Printf("%s\n", okResult.Info)

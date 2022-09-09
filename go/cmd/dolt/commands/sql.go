@@ -995,7 +995,7 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 				default:
 					err = engine.PrettyPrintResults(sqlCtx, resultFormat, sqlSch, rowIter)
 				}
-				
+
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 				}
