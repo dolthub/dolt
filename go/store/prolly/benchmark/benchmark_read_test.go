@@ -17,10 +17,11 @@ package benchmark
 import (
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"math/rand"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/val"
 )
