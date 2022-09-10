@@ -558,7 +558,6 @@ func diffRows(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	defer rowWriter.Close(ctx)
 
 	// can't diff
 	if !diffable {
@@ -618,9 +617,11 @@ func diffRows(
 	}
 
 	defer rowIter.Close(sqlCtx)
+	defer rowWriter.Close(ctx)
 
+	var modifiedColNames map[string]bool
 	if dArgs.skinny {
-		modifiedColNames, err := getModifiedCols(sqlCtx, rowIter, unionSch, sch)
+		modifiedColNames, err = getModifiedCols(sqlCtx, rowIter, unionSch, sch)
 		if err != nil {
 			return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 		}
@@ -629,7 +630,7 @@ func diffRows(
 		var filteredUnionSch sql.Schema
 		for _, s := range unionSch {
 			for colName := range modifiedColNames {
-				if strings.Contains(s.Name, colName) {
+				if s.Name == colName {
 					filteredUnionSch = append(filteredUnionSch, s)
 				}
 			}
@@ -643,17 +644,20 @@ func diffRows(
 		defer rowWriter.Close(ctx)
 
 		// reset the row iterator
-		rowIter.Close(sqlCtx)
+		err = rowIter.Close(sqlCtx)
+		if err != nil {
+			return errhand.BuildDError("Error closing row iterator:\n%s", query).AddCause(err).Build()
+		}
 		_, rowIter, err = se.Query(sqlCtx, query)
+		defer rowIter.Close(sqlCtx)
 		if sql.ErrSyntaxError.Is(err) {
 			return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
 		} else if err != nil {
 			return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 		}
-		defer rowIter.Close(sqlCtx)
 	}
 
-	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, rowWriter, dArgs.skinny)
+	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, rowWriter, modifiedColNames, dArgs.skinny)
 	if err != nil {
 		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}
@@ -697,6 +701,7 @@ func writeDiffResults(
 	targetSch sql.Schema,
 	iter sql.RowIter,
 	writer diff.SqlRowDiffWriter,
+	modifiedColNames map[string]bool,
 	filterChangedCols bool,
 ) error {
 	ds, err := newDiffSplitter(diffQuerySch, targetSch)
@@ -719,15 +724,19 @@ func writeDiffResults(
 
 		if filterChangedCols {
 			var filteredOldRow, filteredNewRow rowDiff
-			for i, changeType := range oldRow.colDiffs {
-				if changeType != diff.None || targetSch[i].PrimaryKey {
-					filteredOldRow.row = append(filteredOldRow.row, oldRow.row[i])
-					filteredOldRow.colDiffs = append(filteredOldRow.colDiffs, oldRow.colDiffs[i])
-					filteredOldRow.rowDiff = oldRow.rowDiff
+			for i, changeType := range newRow.colDiffs {
+				if (changeType == diff.Added|diff.Removed) || modifiedColNames[targetSch[i].Name] {
+					if i < len(oldRow.row) {
+						filteredOldRow.row = append(filteredOldRow.row, oldRow.row[i])
+						filteredOldRow.colDiffs = append(filteredOldRow.colDiffs, oldRow.colDiffs[i])
+						filteredOldRow.rowDiff = oldRow.rowDiff
+					}
 
-					filteredNewRow.row = append(filteredNewRow.row, newRow.row[i])
-					filteredNewRow.colDiffs = append(filteredNewRow.colDiffs, newRow.colDiffs[i])
-					filteredNewRow.rowDiff = newRow.rowDiff
+					if i < len(newRow.row) {
+						filteredNewRow.row = append(filteredNewRow.row, newRow.row[i])
+						filteredNewRow.colDiffs = append(filteredNewRow.colDiffs, newRow.colDiffs[i])
+						filteredNewRow.rowDiff = newRow.rowDiff
+					}
 				}
 			}
 
@@ -751,6 +760,10 @@ func writeDiffResults(
 	}
 }
 
+// getModifiedCols returns a set of the names of columns that are modified, as well as the name of the primary key for a particular row iterator and schema.
+// In the case where rows are added or removed, all columns will be included
+// unionSch refers to a joint schema between the schema before and after any schema changes pertaining to the diff,
+// while diffQuerySch refers to the schema returned by the "dolt_diff" sql query.
 func getModifiedCols(
 	ctx *sql.Context,
 	iter sql.RowIter,
@@ -769,9 +782,15 @@ func getModifiedCols(
 			return modifiedColNames, err
 		}
 
-		oldRow, _, err := ds.splitDiffResultRow(r)
+		oldRow, newRow, err := ds.splitDiffResultRow(r)
 		if err != nil {
 			return modifiedColNames, err
+		}
+
+		for i, changeType := range newRow.colDiffs {
+			if changeType != diff.None || unionSch[i].PrimaryKey {
+				modifiedColNames[unionSch[i].Name] = true
+			}
 		}
 
 		for i, changeType := range oldRow.colDiffs {
