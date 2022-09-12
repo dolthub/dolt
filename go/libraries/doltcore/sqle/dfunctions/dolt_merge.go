@@ -223,7 +223,8 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 	}
 
 	if !noCommit {
-		_, err = DoDoltCommit(ctx, []string{"-m", msg})
+		author := fmt.Sprintf("%s <%s>", spec.Name, spec.Email)
+		_, err = DoDoltCommit(ctx, []string{"-m", msg, "--author", author})
 		if err != nil {
 			return ws, noConflictsOrViolations, threeWayMerge, fmt.Errorf("dolt_commit failed")
 		}

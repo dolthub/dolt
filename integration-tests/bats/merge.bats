@@ -911,3 +911,27 @@ SQL
     [[ ! "$output" =~ "add (1,2) to t1" ]] || false
     [[ ! "$output" =~ "add (2,3) to t1" ]] || false
 }
+
+@test "merge: specify ---author for merge that's used for creating commit" {
+    dolt branch other
+    dolt sql -q "INSERT INTO test1 VALUES (1,2,3)"
+    dolt commit -am "add (1,2,3) to test1";
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO test1 VALUES (2,3,4)"
+    dolt commit -am "add (2,3,4) to test1";
+
+    run dolt config --list
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "user.email = bats@email.fake" ]] || false
+    [[ "$output" =~ "user.name = Bats Tests" ]] || false
+
+    dolt checkout main
+    run dolt merge other --author "John Doe <john@doe.com>" -m "merge other"
+    log_status_eq 0
+
+    run dolt log -n 1
+    [ "$status" -eq 0 ]
+    regex='John Doe <john@doe.com>'
+    [[ "$output" =~ "$regex" ]] || false
+}

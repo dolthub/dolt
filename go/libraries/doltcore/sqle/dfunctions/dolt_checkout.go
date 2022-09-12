@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const DoltCheckoutFuncName = "dolt_checkout"
@@ -103,7 +104,21 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	} else if isBranch {
 		err = checkoutBranch(ctx, dbName, name)
 		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-			err = checkoutRemoteBranch(ctx, dbName, dbData, name)
+			// If there is a branch but there is no working set,
+			// somehow the local branch ref was created without a
+			// working set. This happened with old versions of dolt
+			// when running as a read replica, for example. Try to
+			// create a working set pointing at the existing branch
+			// HEAD and check out the branch again.
+			//
+			// TODO: This is all quite racey, but so is the
+			// handling in DoltDB, etc.
+			err = createWorkingSetForLocalBranch(ctx, dbData.Ddb, name)
+			if err != nil {
+				return 1, err
+			}
+
+			err = checkoutBranch(ctx, dbName, name)
 		}
 		if err != nil {
 			return 1, err
@@ -126,6 +141,46 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	return 0, nil
+}
+
+// createWorkingSetForLocalBranch will make a new working set for a local
+// branch ref if one does not already exist. Can be used to fix up local branch
+// state when branches have been created without working sets in the past.
+//
+// This makes it so that dolt_checkout can checkout workingset-less branches,
+// the same as `dolt checkout` at the CLI. The semantics of exactly what
+// working set gets created in the new case are different, since the CLI takes
+// the working set with it.
+//
+// TODO: This is cribbed heavily from doltdb.*DoltDB.NewBranchAtCommit.
+func createWorkingSetForLocalBranch(ctx *sql.Context, ddb *doltdb.DoltDB, branchName string) error {
+	branchRef := ref.NewBranchRef(branchName)
+	commit, err := ddb.ResolveCommitRef(ctx, branchRef)
+	if err != nil {
+		return err
+	}
+
+	commitRoot, err := commit.GetRootValue(ctx)
+	if err != nil {
+		return err
+	}
+
+	wsRef, err := ref.WorkingSetRefForHead(branchRef)
+	if err != nil {
+		return err
+	}
+
+	_, err = ddb.ResolveWorkingSet(ctx, wsRef)
+	if err == nil {
+		// This already exists. Return...
+		return nil
+	}
+	if !errors.Is(err, doltdb.ErrWorkingSetNotFound) {
+		return err
+	}
+
+	ws := doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
+	return ddb.UpdateWorkingSet(ctx, wsRef, ws, hash.Hash{} /* current hash... */, doltdb.TodoWorkingSetMeta())
 }
 
 // getRevisionForRevisionDatabase returns the root database name and revision for a database, or just the root database name if the specified db name is not a revision database.

@@ -180,15 +180,19 @@ func (j *RowWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
 				return true, err
 			}
 			val = sqlVal.ToString()
+		case typeinfo.JSONTypeIdentifier:
+			sqlVal, err := col.TypeInfo.ToSqlType().SQL(sqlContext, nil, val)
+			if err != nil {
+				return true, err
+			}
+			str := sqlVal.ToString()
 
-		case typeinfo.BitTypeIdentifier,
-			typeinfo.BoolTypeIdentifier,
-			typeinfo.VarStringTypeIdentifier,
-			typeinfo.UintTypeIdentifier,
-			typeinfo.IntTypeIdentifier,
-			typeinfo.FloatTypeIdentifier,
-			typeinfo.YearTypeIdentifier:
-			// use primitive type
+			// This is kind of silly: we are unmarshalling JSON just to marshall it back again
+			// But it makes marshalling much simpler
+			err = json.Unmarshal([]byte(str), &val)
+			if err != nil {
+				return false, err
+			}
 		}
 
 		colValMap[col.Name] = val

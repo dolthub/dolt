@@ -720,6 +720,105 @@ SQL
     [[ "$output" = 'UPDATE `t` SET `val1`=30,`val3`=4 WHERE `pk`=1;' ]] || false
 }
 
+@test "diff: skinny flag only shows row changed without schema changes" {
+    dolt sql -q "CREATE TABLE t(pk int primary key, val1 int, val2 int)"
+    dolt add .
+    dolt sql -q "INSERT INTO t VALUES (1, 1, 1)"
+    dolt commit -am "cm1"
+
+    run dolt diff --skinny --data HEAD~1
+    [ $status -eq 0 ]
+    [[ "$output" =~ 'pk' ]] || false
+    [[ "$output" =~ 'val1' ]] || false
+    [[ "$output" =~ 'val2' ]] || false
+
+    dolt sql -q "UPDATE t SET val1=2 WHERE pk=1"
+    dolt commit -am "cm2"
+
+    dolt sql -q "UPDATE t SET val1=3 WHERE pk=1"
+    dolt commit -am "cm3"
+
+    run dolt diff --skinny HEAD~1
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ 'val2' ]] || false
+    [[ "$output" =~ 'pk' ]] || false
+    [[ "$output" =~ 'val1' ]] || false
+}
+
+@test "diff: skinny flag only shows row changed when both schema (column added) and data is changed (row updated)" {
+    dolt sql -q "create table t(pk int primary key, val1 int, val2 int)"
+    dolt add .
+    dolt sql -q "INSERT INTO t VALUES (1, 1, 1)"
+    dolt sql -q "INSERT INTO t VALUES (2, 2, 2)"
+    dolt commit -am "cm1"
+
+    run dolt diff --skinny --data HEAD~1
+    [ $status -eq 0 ]
+    [[ "$output" =~ 'pk' ]] || false
+    [[ "$output" =~ 'val1' ]] || false
+    [[ "$output" =~ 'val2' ]] || false
+
+    dolt sql -q "UPDATE t SET val1=3 WHERE pk=1"
+    dolt sql -q "ALTER TABLE t ADD val3 int "
+    dolt sql -q "UPDATE t SET val3=4 WHERE pk=1"
+    dolt commit -am "cm2"
+
+    run dolt diff --skinny --data HEAD~1
+    [ $status -eq 0 ]
+    [[ "$output" =~ 'pk' ]] || false
+    [[ "$output" =~ 'val1' ]] || false
+    [[ "$output" =~ 'val3' ]] || false
+    [[ ! "$output" =~ 'val2' ]] || false
+}
+
+@test "diff: skinny flag only shows row changed when both schema (column dropped) and data is changed (row updated)" {
+    dolt sql -q "create table t(pk int primary key, val1 int, s varchar(255))"
+    dolt add .
+    dolt sql -q "INSERT INTO t VALUES (1, 1, 'bla')"
+    dolt sql -q "INSERT INTO t VALUES (2, 2, 'bla2')"
+    dolt commit -am "cm1"
+
+    run dolt diff --skinny --data HEAD~1
+    [ $status -eq 0 ]
+    [[ "$output" =~ 'pk' ]] || false
+    [[ "$output" =~ 'val1' ]] || false
+    [[ "$output" =~ 's' ]] || false
+
+    dolt sql -q "ALTER TABLE t DROP COLUMN s"
+    dolt sql -q "UPDATE t SET val1=3 WHERE pk=1"
+    dolt sql -q "UPDATE t SET val1=4 WHERE pk=2"
+    dolt commit -am "cm2"
+
+    run dolt diff --skinny --data HEAD~1
+    [ $status -eq 0 ]
+    [[ "$output" =~ 'pk' ]] || false
+    [[ "$output" =~ 'val1' ]] || false
+    [[ "$output" =~ 's' ]] || false
+}
+
+@test "diff: skinny flag only shows row changed when data is changed (row deleted)" {
+    dolt sql -q "create table t(pk int primary key, val1 int, val2 int)"
+    dolt add .
+    dolt sql -q "INSERT INTO t VALUES (1, 1, 1)"
+    dolt sql -q "INSERT INTO t VALUES (2, 2, 2)"
+    dolt commit -am "cm1"
+
+    run dolt diff --skinny --data HEAD~1
+    [ $status -eq 0 ]
+    [[ "$output" =~ 'pk' ]] || false
+    [[ "$output" =~ 'val1' ]] || false
+    [[ "$output" =~ 'val2' ]] || false
+
+    dolt sql -q "DELETE FROM t WHERE pk=1"
+    dolt commit -am "cm2"
+
+    run dolt diff --skinny --data HEAD~1
+    [ $status -eq 0 ]
+    [[ "$output" =~ 'pk' ]] || false
+    [[ "$output" =~ 'val1' ]] || false
+    [[ "$output" =~ 'val2' ]] || false
+}
+
 @test "diff: keyless sql diffs" {
     
     dolt sql -q "create table t(pk int, val int)"

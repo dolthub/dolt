@@ -42,7 +42,7 @@ func PrefixRange(prefix val.Tuple, desc val.TupleDesc) Range {
 	return closedRange(prefix, prefix, desc)
 }
 
-// Range defines a subset of a prolly tree Tuple index.
+// Range defines a subset of a prolly Tree Tuple index.
 //
 // Range can be used either to physically partition an index or
 // to logically filter an index.

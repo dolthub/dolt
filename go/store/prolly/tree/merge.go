@@ -15,14 +15,12 @@
 package tree
 
 import (
-	"bytes"
 	"context"
 	"io"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/prolly/message"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 const patchBufferSize = 1024
@@ -38,22 +36,21 @@ type CollisionFn func(left, right Diff) (Diff, bool)
 // |right| are applied directly to |left|. This reduces the amount of write work and improves performance.
 // In the case that a key-value pair was modified on both |left| and |right| with different resulting
 // values, the CollisionFn is called to perform a cell-wise merge, or to throw a conflict.
-func ThreeWayMerge[S message.Serializer](
+func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 	ctx context.Context,
 	ns NodeStore,
 	left, right, base Node,
-	compare CompareFn,
 	collide CollisionFn,
+	order O,
 	serializer S,
-	valDesc val.TupleDesc,
 ) (final Node, err error) {
 
-	ld, err := DifferFromRoots(ctx, ns, ns, base, left, compare)
+	ld, err := DifferFromRoots[K](ctx, ns, ns, base, left, order)
 	if err != nil {
 		return Node{}, err
 	}
 
-	rd, err := DifferFromRoots(ctx, ns, ns, base, right, compare)
+	rd, err := DifferFromRoots[K](ctx, ns, ns, base, right, order)
 	if err != nil {
 		return Node{}, err
 	}
@@ -74,7 +71,7 @@ func ThreeWayMerge[S message.Serializer](
 
 	// consume |patches| and apply them to |left|
 	eg.Go(func() error {
-		final, err = ApplyMutations(ctx, ns, left, serializer, patches, compare)
+		final, err = ApplyMutations[K](ctx, ns, left, order, serializer, patches)
 		return err
 	})
 
@@ -126,7 +123,12 @@ func (ps patchBuffer) Close() error {
 	return nil
 }
 
-func sendPatches(ctx context.Context, l, r Differ, buf patchBuffer, cb CollisionFn) (err error) {
+func sendPatches[K ~[]byte, O Ordering[K]](
+	ctx context.Context,
+	l, r Differ[K, O],
+	buf patchBuffer,
+	cb CollisionFn,
+) (err error) {
 	var (
 		left, right Diff
 		lok, rok    = true, true
@@ -149,7 +151,7 @@ func sendPatches(ctx context.Context, l, r Differ, buf patchBuffer, cb Collision
 	}
 
 	for lok && rok {
-		cmp := compareDiffKeys(left, right, l.cmp)
+		cmp := l.order.Compare(K(left.Key), K(right.Key))
 
 		switch {
 		case cmp < 0:
@@ -224,14 +226,4 @@ func sendPatches(ctx context.Context, l, r Differ, buf patchBuffer, cb Collision
 	}
 
 	return nil
-}
-
-func compareDiffKeys(left, right Diff, cmp CompareFn) int {
-	return cmp(Item(left.Key), Item(right.Key))
-}
-
-func equalDiffVals(left, right Diff) bool {
-	// todo(andy): bytes must be comparable
-	ok := left.Type == right.Type
-	return ok && bytes.Equal(left.To, right.To)
 }
