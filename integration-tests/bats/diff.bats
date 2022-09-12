@@ -793,7 +793,6 @@ SQL
     [[ "$output" =~ 'pk' ]] || false
     [[ "$output" =~ 'val1' ]] || false
     [[ "$output" =~ 's' ]] || false
-    [[ ! "$output" =~ 'val3' ]] || false
 }
 
 @test "diff: skinny flag only shows row changed when data is changed (row deleted)" {
