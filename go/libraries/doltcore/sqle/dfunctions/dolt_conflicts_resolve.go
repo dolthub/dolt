@@ -33,8 +33,6 @@ import (
 
 var ErrConfSchIncompatible = errors.New("the conflict schema's columns are not equal to the current schema's columns, please resolve manually")
 
-const DoltConflictsResolveFuncName = "dolt_conflicts_resolve"
-
 // DoltConflictsCatFunc runs a `dolt commit` in the SQL context, committing staged changes to head.
 // Deprecated: please use the version in the dprocedures package
 type DoltConflictsCatFunc struct {
