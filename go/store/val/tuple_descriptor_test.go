@@ -40,3 +40,57 @@ func TestTupleDescriptorAddressTypes(t *testing.T) {
 		assert.Equal(t, types[i], typ)
 	})
 }
+
+func TestTupleCanCompare(t *testing.T) {
+	tests := []struct {
+		Name       string
+		From       []Type
+		To         []Type
+		Comparable bool
+	}{
+		{
+			Name:       "empty",
+			From:       nil,
+			To:         nil,
+			Comparable: true,
+		},
+		{
+			Name:       "modified a column",
+			From:       []Type{{Enc: Int16Enc, Nullable: true}},
+			To:         []Type{{Enc: Int16Enc, Nullable: true}},
+			Comparable: true,
+		},
+		{
+			Name:       "added nullable columns",
+			From:       nil,
+			To:         []Type{{Enc: Int16Enc, Nullable: true}, {Enc: Int16Enc, Nullable: true}},
+			Comparable: true,
+		},
+		{
+			Name:       "added non-null columns",
+			From:       nil,
+			To:         []Type{{Enc: Int16Enc, Nullable: true}, {Enc: Int16Enc, Nullable: false}},
+			Comparable: false,
+		},
+		{
+			Name:       "modified a column",
+			From:       []Type{{Enc: Int16Enc, Nullable: true}},
+			To:         []Type{{Enc: Int16Enc, Nullable: false}},
+			Comparable: false,
+		},
+		{
+			Name:       "dropped a column",
+			From:       []Type{{Enc: Int16Enc, Nullable: true}},
+			To:         nil,
+			Comparable: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.Name, func(t *testing.T) {
+			fd := NewTupleDescriptor(tc.From...)
+			td := NewTupleDescriptor(tc.To...)
+			assert.Equal(t, tc.Comparable, CanCompareTuples(fd, td))
+		})
+	}
+}
