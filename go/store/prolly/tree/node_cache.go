@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -27,7 +26,7 @@ const (
 	numStripes = 256
 )
 
-func newChunkCache(maxSize int) (c chunkCache) {
+func newChunkCache(maxSize int) (c nodeCache) {
 	sz := maxSize / numStripes
 	for i := range c.stripes {
 		c.stripes[i] = newStripe(sz)
@@ -35,25 +34,26 @@ func newChunkCache(maxSize int) (c chunkCache) {
 	return
 }
 
-type chunkCache struct {
+type nodeCache struct {
 	stripes [numStripes]*stripe
 }
 
-func (c chunkCache) get(addr hash.Hash) (chunks.Chunk, bool) {
+func (c nodeCache) get(addr hash.Hash) (Node, bool) {
 	return c.pickStripe(addr).get(addr)
 }
 
-func (c chunkCache) insert(ch chunks.Chunk) {
-	c.pickStripe(ch.Hash()).insert(ch)
+func (c nodeCache) insert(addr hash.Hash, node Node) {
+	c.pickStripe(addr).insert(addr, node)
 }
 
-func (c chunkCache) pickStripe(addr hash.Hash) *stripe {
+func (c nodeCache) pickStripe(addr hash.Hash) *stripe {
 	i := binary.LittleEndian.Uint32(addr[:4]) % numStripes
 	return c.stripes[i]
 }
 
 type centry struct {
-	c    chunks.Chunk
+	a    hash.Hash
+	n    Node
 	i    int
 	prev *centry
 	next *centry
@@ -102,31 +102,28 @@ func (s *stripe) moveToFront(e *centry) {
 	s.head = e
 }
 
-func (s *stripe) get(h hash.Hash) (chunks.Chunk, bool) {
+func (s *stripe) get(h hash.Hash) (Node, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if e, ok := s.chunks[h]; ok {
 		s.moveToFront(e)
-		return e.c, true
+		return e.n, true
 	} else {
-		return chunks.EmptyChunk, false
+		return Node{}, false
 	}
 }
 
-func (s *stripe) insert(c chunks.Chunk) {
+func (s *stripe) insert(addr hash.Hash, node Node) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.addIfAbsent(c)
-}
 
-func (s *stripe) addIfAbsent(c chunks.Chunk) {
-	if e, ok := s.chunks[c.Hash()]; !ok {
-		e = &centry{c, 0, nil, nil}
+	if e, ok := s.chunks[addr]; !ok {
+		e = &centry{addr, node, 0, nil, nil}
 		e.next = e
 		e.prev = e
 		s.moveToFront(e)
-		s.chunks[c.Hash()] = e
-		s.sz += c.Size()
+		s.chunks[addr] = e
+		s.sz += node.Size()
 		s.shrinkToMaxSz()
 	} else {
 		s.moveToFront(e)
@@ -141,8 +138,8 @@ func (s *stripe) shrinkToMaxSz() {
 			if t == s.head {
 				s.head = nil
 			}
-			delete(s.chunks, t.c.Hash())
-			s.sz -= t.c.Size()
+			delete(s.chunks, t.a)
+			s.sz -= t.n.Size()
 		} else {
 			panic("cache is empty but cache Size is > than max Size")
 		}
@@ -153,11 +150,11 @@ func (s *stripe) sanityCheck() {
 	if s.head != nil {
 		p := s.head.next
 		i := 1
-		sz := s.head.c.Size()
+		sz := s.head.n.Size()
 		lasti := s.head.i
 		for p != s.head {
 			i++
-			sz += p.c.Size()
+			sz += p.n.Size()
 			if p.i >= lasti {
 				panic("encountered lru list entry with higher rev later in the list.")
 			}
