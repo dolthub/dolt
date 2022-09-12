@@ -20,8 +20,11 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
@@ -46,49 +49,71 @@ func (s *Server) GracefulStop() {
 func NewServer(httpHost string, httpPort, grpcPort int, fs filesys.Filesys, dbCache DBCache, readOnly bool) *Server {
 	s := new(Server)
 	s.stopChan = make(chan struct{})
-	s.wg.Add(4)
 
 	expectedFiles := newFileDetails()
 
+	s.wg.Add(2)
 	s.grpcPort = grpcPort
 	s.grpcSrv = grpc.NewServer(grpc.MaxRecvMsgSize(128 * 1024 * 1024))
-        var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(httpHost, dbCache, expectedFiles, fs)
-        if readOnly {
-                chnkSt = ReadOnlyChunkStore{chnkSt}
-        }
+	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(httpHost, dbCache, expectedFiles, fs)
+	if readOnly {
+		chnkSt = ReadOnlyChunkStore{chnkSt}
+	}
 	remotesapi.RegisterChunkStoreServiceServer(s.grpcSrv, chnkSt)
+
+	var handler http.Handler = newFileHandler(dbCache, expectedFiles, fs, readOnly)
+	if httpPort == grpcPort {
+		handler = grpcMultiplexHandler(s.grpcSrv, handler)
+	} else {
+		s.wg.Add(2)
+	}
 
 	s.httpPort = httpPort
 	s.httpSrv = http.Server{
 		Addr:    fmt.Sprintf(":%d", httpPort),
-		Handler: newFileHandler(dbCache, expectedFiles, fs, readOnly),
+		Handler: handler,
 	}
 
 	return s
 }
 
+func grpcMultiplexHandler(grpcSrv *grpc.Server, handler http.Handler) http.Handler {
+	h2s := &http2.Server{}
+	newHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.ProtoMajor == 2 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {
+			grpcSrv.ServeHTTP(w, r)
+		} else {
+			handler.ServeHTTP(w, r)
+		}
+	})
+	return h2c.NewHandler(newHandler, h2s)
+}
+
 func (s *Server) Serve() error {
-	grpcListener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.grpcPort))
-	if err != nil {
-		return err
-	}
 	httpListener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.httpPort))
 	if err != nil {
-		grpcListener.Close()
 		return err
 	}
 
-	go func() {
-		defer s.wg.Done()
-		log.Println("Starting grpc server on port", s.grpcPort)
-		err = s.grpcSrv.Serve(grpcListener)
-		log.Println("grpc server exited. error:", err)
-	}()
-	go func() {
-		defer s.wg.Done()
-		<-s.stopChan
-		s.grpcSrv.GracefulStop()
-	}()
+	if s.grpcPort != s.httpPort {
+		grpcListener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.grpcPort))
+		if err != nil {
+			httpListener.Close()
+			return err
+		}
+
+		go func() {
+			defer s.wg.Done()
+			log.Println("Starting grpc server on port", s.grpcPort)
+			err = s.grpcSrv.Serve(grpcListener)
+			log.Println("grpc server exited. error:", err)
+		}()
+		go func() {
+			defer s.wg.Done()
+			<-s.stopChan
+			s.grpcSrv.GracefulStop()
+		}()
+	}
 
 	go func() {
 		defer s.wg.Done()

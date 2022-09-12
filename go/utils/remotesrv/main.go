@@ -29,14 +29,13 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
-var readOnlyParam *bool = flag.Bool("read-only", false, "run a read-only server which does not allow writes")
-
 func main() {
-	repoModeParam := flag.Bool("repo-mode", false, "act as a remote for a dolt directory, instead of stand alone")
-	dirParam := flag.String("dir", "", "root directory that this command will run in.")
-	grpcPortParam := flag.Int("grpc-port", -1, "root directory that this command will run in.")
-	httpPortParam := flag.Int("http-port", -1, "root directory that this command will run in.")
-	httpHostParam := flag.String("http-host", "localhost", "host url that this command will assume.")
+	readOnlyParam := flag.Bool("read-only", false, "run a read-only server which does not allow writes")
+	repoModeParam := flag.Bool("repo-mode", false, "act as a remote for an existing dolt directory, instead of stand alone")
+	dirParam := flag.String("dir", "", "root directory that this command will run in; default cwd")
+	grpcPortParam := flag.Int("grpc-port", -1, "the port the grpc server will listen on; default 50051")
+	httpPortParam := flag.Int("http-port", -1, "the port the http server will listen on; default 80; if http-port is equal to grpc-port, both services will serve over the same port")
+	httpHostParam := flag.String("http-host", "", "hostname to use in the host component of the URLs that the server generates; default ''; if '', server will echo the :authority header")
 	flag.Parse()
 
 	if dirParam != nil && len(*dirParam) > 0 {

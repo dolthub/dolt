@@ -20,9 +20,11 @@ import (
 	"io"
 	"log"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -130,6 +132,8 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 		return nil, err
 	}
 
+	md, _ := metadata.FromIncomingContext(ctx)
+
 	var locs []*remotesapi.DownloadLoc
 	for loc, hashToRange := range locations {
 		var ranges []*remotesapi.RangeChunk
@@ -138,7 +142,7 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 			ranges = append(ranges, &remotesapi.RangeChunk{Hash: hCpy[:], Offset: r.Offset, Length: r.Length})
 		}
 
-		url, err := rs.getDownloadUrl(logger, prefix+"/"+loc)
+		url, err := rs.getDownloadUrl(logger, md, prefix+"/"+loc)
 		if err != nil {
 			log.Println("Failed to sign request", err)
 			return nil, err
@@ -156,6 +160,8 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStoreService_StreamDownloadLocationsServer) error {
 	logger := getReqLogger("GRPC", "StreamDownloadLocations")
 	defer func() { logger("finished") }()
+
+	md, _ := metadata.FromIncomingContext(stream.Context())
 
 	var repoID *remotesapi.RepoId
 	var cs RemoteSrvStore
@@ -197,7 +203,7 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 				ranges = append(ranges, &remotesapi.RangeChunk{Hash: hCpy[:], Offset: r.Offset, Length: r.Length})
 			}
 
-			url, err := rs.getDownloadUrl(logger, prefix+"/"+loc)
+			url, err := rs.getDownloadUrl(logger, md, prefix+"/"+loc)
 			if err != nil {
 				log.Println("Failed to sign request", err)
 				return err
@@ -215,8 +221,21 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 	}
 }
 
-func (rs *RemoteChunkStore) getDownloadUrl(logger func(string), path string) (string, error) {
-	return fmt.Sprintf("http://%s/%s", rs.HttpHost, path), nil
+func (rs *RemoteChunkStore) getDownloadUrl(logger func(string), md metadata.MD, path string) (string, error) {
+	host := rs.HttpHost
+	if strings.HasPrefix(rs.HttpHost, ":") && rs.HttpHost != ":80" {
+		hosts := md.Get(":authority")
+		if len(hosts) > 0 {
+			host = strings.Split(hosts[0], ":")[0] + rs.HttpHost
+		}
+	} else if rs.HttpHost == "" || rs.HttpHost == ":80" {
+		hosts := md.Get(":authority")
+		if len(hosts) > 0 {
+			host = hosts[0]
+		}
+	}
+
+	return fmt.Sprintf("http://%s/%s", host, path), nil
 }
 
 func parseTableFileDetails(req *remotesapi.GetUploadLocsRequest) []*remotesapi.TableFileDetails {
@@ -404,12 +423,14 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 		return nil, status.Error(codes.Internal, "failed to get sources")
 	}
 
-	tableFileInfo, err := getTableFileInfo(rs, logger, tables, req, cs)
+	md, _ := metadata.FromIncomingContext(ctx)
+
+	tableFileInfo, err := getTableFileInfo(logger, md, rs, tables, req, cs)
 	if err != nil {
 		return nil, err
 	}
 
-	appendixTableFileInfo, err := getTableFileInfo(rs, logger, appendixTables, req, cs)
+	appendixTableFileInfo, err := getTableFileInfo(logger, md, rs, appendixTables, req, cs)
 	if err != nil {
 		return nil, err
 	}
@@ -423,14 +444,21 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 	return resp, nil
 }
 
-func getTableFileInfo(rs *RemoteChunkStore, logger func(string), tableList []nbs.TableFile, req *remotesapi.ListTableFilesRequest, cs RemoteSrvStore) ([]*remotesapi.TableFileInfo, error) {
+func getTableFileInfo(
+	logger func(string),
+	md metadata.MD,
+	rs *RemoteChunkStore,
+	tableList []nbs.TableFile,
+	req *remotesapi.ListTableFilesRequest,
+	cs RemoteSrvStore,
+) ([]*remotesapi.TableFileInfo, error) {
 	prefix, err := rs.getRelativeStorePath(cs)
 	if err != nil {
 		return nil, err
 	}
 	appendixTableFileInfo := make([]*remotesapi.TableFileInfo, 0)
 	for _, t := range tableList {
-		url, err := rs.getDownloadUrl(logger, prefix+"/"+t.FileID())
+		url, err := rs.getDownloadUrl(logger, md, prefix+"/"+t.FileID())
 		if err != nil {
 			return nil, status.Error(codes.Internal, "failed to get download url for "+t.FileID())
 		}
