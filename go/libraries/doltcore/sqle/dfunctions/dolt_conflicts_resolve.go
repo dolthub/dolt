@@ -17,11 +17,13 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/store/types"
+	"io"
 	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 )
@@ -50,9 +52,10 @@ func (d DoltConflictsCatFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, 
 	return DoDoltConflictsResolve(ctx, args)
 }
 
-func AutoResolveTables(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.RootValue, ours bool, tblNames []string) error {
+func AutoResolveTables(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
+	newRoot := root
 	for _, tblName := range tblNames {
-		tbl, ok, err := root.GetTable(ctx, tblName)
+		tbl, ok, err := newRoot.GetTable(ctx, tblName)
 		if err != nil {
 			return err
 		}
@@ -60,42 +63,102 @@ func AutoResolveTables(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.
 			return doltdb.ErrTableNotFound
 		}
 
-		has, err := tbl.HasConflicts(ctx)
+		//has, err := tbl.HasConflicts(ctx)
+		//if err != nil {
+		//	return err
+		//}
+		//if !has {
+		//	continue
+		//}
+		//
+		//sch, err := tbl.GetSchema(ctx)
+		//if err != nil {
+		//	return err
+		//}
+		//
+		_, _, theirSch, err := tbl.GetConflictSchemas(ctx, tblName)
 		if err != nil {
 			return err
 		}
-		if !has {
-			continue
+		//
+		//conflictSchema, conflictIndex, err := tbl.GetConflicts(ctx)
+		//if conflictSchema.Base == nil {
+		//}
+		//if conflictIndex == nil {
+		//}
+
+		cnfReader, err := merge.NewConflictReader(ctx, tbl)
+		if err != nil {
 		}
 
-		sch, err := tbl.GetSchema(ctx)
+		joiner := cnfReader.GetJoiner()
+
+		var pkVals []types.Value
+		for {
+			cnfRow, _, err := cnfReader.NextConflict(ctx)
+			if err == io.EOF {
+				break
+			}
+			cnfMap, err := joiner.Split(cnfRow)
+			if err != nil {
+				return err
+			}
+
+			vrw := tbl.ValueReadWriter()
+			var pkVal types.Value
+			if ours {
+				row := cnfMap["their"]
+				k := row.NomsMapKey(theirSch)
+				v := row.NomsMapValue(theirSch)
+
+				kv, _ := k.Value(ctx)
+				vv, _ := v.Value(ctx)
+
+				newMap, _ := types.NewMap(ctx, vrw, kv, vv)
+
+				updatedTable, _ := tbl.UpdateNomsRows(ctx, newMap)
+				pkVals = append(pkVals, kv)
+				_, _, updatedTbl, _ := updatedTable.ResolveConflicts(ctx, pkVals)
+				newRoot, _ = newRoot.PutTable(ctx, tblName, updatedTbl)
+				return dSess.SetRoot(ctx, dbName, newRoot)
+			} else {
+				row := cnfMap["their"]
+				pkVal, err = row.NomsMapKey(theirSch).Value(ctx)
+				aa, _ := pkVal.Value(ctx)
+				panic(fmt.Sprintf("%v, %v, %v", pkVal, aa, row))
+			}
+			if err != nil {
+				return err
+			}
+			pkVals = append(pkVals, pkVal)
+		}
+
+		// TODO: problem is that this always picks ours...
+		_, _, updatedTbl, err := tbl.ResolveConflicts(ctx, pkVals)
+		if err != nil {
+			if errors.Is(err, doltdb.ErrNoConflictsResolved) {
+				return nil
+			}
+			return err
+		}
+
+		newRoot, err = newRoot.PutTable(ctx, tblName, updatedTbl)
 		if err != nil {
 			return err
 		}
 
-		_, ourSch, theirSch, err := tbl.GetConflictSchemas(ctx, tblName)
-		if err != nil {
-			return err
-		}
-
-		conflictSchema, conflictIndex, err := tbl.GetConflicts(ctx)
-		if conflictSchema.Base == nil {
-		}
-		if conflictIndex == nil {
-		}
-
-		if ours && !schema.ColCollsAreEqual(sch.GetAllCols(), ourSch.GetAllCols()) {
-			return ErrConfSchIncompatible
-		} else if !ours && !schema.ColCollsAreEqual(sch.GetAllCols(), theirSch.GetAllCols()) {
-			return ErrConfSchIncompatible
-		}
-
+		//if ours && !schema.ColCollsAreEqual(sch.GetAllCols(), ourSch.GetAllCols()) {
+		//	return ErrConfSchIncompatible
+		//} else if !ours && !schema.ColCollsAreEqual(sch.GetAllCols(), theirSch.GetAllCols()) {
+		//	return ErrConfSchIncompatible
+		//}
 	}
-	return nil
+	return dSess.SetRoot(ctx, dbName, newRoot)
 }
 
 func DoDoltConflictsResolve(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
+	fmt.Printf("database name: %s", dbName)
 
 	apr, err := cli.CreateConflictsResolveArgParser().Parse(args)
 	if err != nil {
@@ -131,7 +194,7 @@ func DoDoltConflictsResolve(ctx *sql.Context, args []string) (int, error) {
 		}
 	}
 
-	err = AutoResolveTables(ctx, dSess, root, ours, tbls)
+	err = AutoResolveTables(ctx, dSess, root, dbName, ours, tbls)
 	if err != nil {
 		return 1, err
 	}
