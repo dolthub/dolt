@@ -467,7 +467,6 @@ func TestInferSchema(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
 
 			wrCl, err := dEnv.FS.OpenForWrite(importFilePath, os.ModePerm)
@@ -483,9 +482,7 @@ func TestInferSchema(t *testing.T) {
 			csvRd, err := csv.NewCSVReader(types.Format_Default, rdCl, csv.NewCSVInfo())
 			require.NoError(t, err)
 
-			root, err := dEnv.WorkingRoot(ctx)
-			require.NoError(t, err)
-			allCols, err := InferColumnTypesFromTableReader(context.Background(), root, csvRd, test.infArgs)
+			allCols, err := InferColumnTypesFromTableReader(context.Background(), csvRd, test.infArgs)
 			require.NoError(t, err)
 
 			assert.Equal(t, len(test.expTypes), allCols.Size())
