@@ -62,11 +62,11 @@ teardown() {
     rm -rf .doltcfg
 }
 
-@test "sql-shell: run a query in sql shell" {
+@test "sql-shell: pipe query text to sql shell" {
     skiponwindows "Works on Windows command prompt but not the WSL terminal used during bats"
-    run bash -c "echo 'select * from test;' | dolt sql"
+    run bash -c "echo 'show tables' | dolt sql"
     [ $status -eq 0 ]
-    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "test" ]] || false
 }
 
 @test "sql-shell: sql shell writes to disk after every iteration (autocommit)" {
@@ -792,9 +792,12 @@ SQL
   [ $status -eq 0 ]
   [[ "$output" =~ "$TESTSTR" ]] || false
 
+  dolt sql -q "SELECT * FROM test2" -r json
   run dolt sql -q "SELECT * FROM test2" -r json
   [ $status -eq 0 ]
-  [[ "$output" =~ "$TESTSTR" ]] || false
+  # The golang json encoder escapes < and > and & for HTML compatibility
+  JSON_TESTSTR='0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`~!@#$%^\u0026*()){}[]/=?+|,.\u003c\u003e;:_-_%d%s%f'
+  [[ "$output" =~ "$JSON_TESTSTR" ]] || false
 
   dolt add .
   dolt commit -m "added data"

@@ -43,7 +43,7 @@ teardown() {
     [ "${#lines[@]}" -eq 6 ]
     run dolt sql -q "select * from test where pk='bob'"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 0 ]
 }
 
 @test "1pk5col-strings: interact with a strings type table with sql" {
