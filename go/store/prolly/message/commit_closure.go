@@ -25,30 +25,12 @@ import (
 	"github.com/dolthub/dolt/go/store/pool"
 )
 
-var commitClosureKeyOffsets []byte
-var commitClosureValueOffsets []byte
-var commitClosureEmptyValueBytes []byte
+var commitClosureEmptyValueBytes = []byte{}
 
-func init() {
-	maxOffsets := (maxChunkSz / commitClosureKeyLength) + 1
-	commitClosureKeyOffsets = make([]byte, maxOffsets*uint16Size)
-	commitClosureValueOffsets = make([]byte, maxOffsets*uint16Size)
-	commitClosureEmptyValueBytes = make([]byte, 0)
-
-	buf := commitClosureKeyOffsets
-	off := uint16(0)
-	for len(buf) > 0 {
-		binary.LittleEndian.PutUint16(buf, off)
-		buf = buf[uint16Size:]
-		off += uint16(commitClosureKeyLength)
-	}
-}
-
-// see offsetsForAddressArray()
-func offsetsForCommitClosureKeys(buf []byte) []byte {
-	cnt := (len(buf) / commitClosureKeyLength) + 1
-	return commitClosureKeyOffsets[:cnt*uint16Size]
-}
+const (
+	commitClosureKeyItemBytesVOffset fb.VOffsetT = 4
+	commitClosureAddressArrayVOffset fb.VOffsetT = 6
+)
 
 func getCommitClosureKeys(msg serial.Message) (ItemAccess, error) {
 	var ret ItemAccess
@@ -57,8 +39,9 @@ func getCommitClosureKeys(msg serial.Message) (ItemAccess, error) {
 	if err != nil {
 		return ret, err
 	}
-	ret.items = m.KeyItemsBytes()
-	ret.offs = offsetsForCommitClosureKeys(ret.items)
+	ret.bufStart = lookupVectorOffset(commitClosureKeyItemBytesVOffset, m.Table())
+	ret.bufLen = uint16(m.KeyItemsLength())
+	ret.staticSize = uint16(commitClosureKeyLength)
 	return ret, nil
 }
 
@@ -70,16 +53,14 @@ func getCommitClosureValues(msg serial.Message) (ItemAccess, error) {
 		return ret, err
 	}
 	if m.AddressArrayLength() == 0 {
-		ret.items = commitClosureEmptyValueBytes
-		cnt, err := getCommitClosureCount(msg)
-		if err != nil {
-			return ret, nil
-		}
-		ret.offs = commitClosureValueOffsets[:cnt*uint16Size]
-		return ret, nil
+		ret.bufStart = 0
+		ret.bufLen = 0
+		ret.staticSize = 0
+	} else {
+		ret.bufStart = lookupVectorOffset(commitClosureAddressArrayVOffset, m.Table())
+		ret.bufLen = uint16(m.AddressArrayLength())
+		ret.bufLen = hash.ByteLen
 	}
-	ret.items = m.AddressArrayBytes()
-	ret.offs = offsetsForAddressArray(ret.items)
 	return ret, nil
 }
 

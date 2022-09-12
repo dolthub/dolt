@@ -28,7 +28,9 @@ import (
 const (
 	// This constant is mirrored from serial.AddressMap.KeyOffsetsLength()
 	// It is only as stable as the flatbuffers schema that defines it.
-	addressMapKeyOffsetsVOffset = 6
+	addressMapKeyItemsBytesVOffset   fb.VOffsetT = 4
+	addressMapKeyItemsOffsetsVOffset fb.VOffsetT = 6
+	addressMapAddressArrayVOffset    fb.VOffsetT = 8
 )
 
 var addressMapFileID = []byte(serial.AddressMapFileID)
@@ -87,8 +89,10 @@ func getAddressMapKeys(msg serial.Message) (keys ItemAccess, err error) {
 	if err != nil {
 		return keys, err
 	}
-	keys.items = am.KeyItemsBytes()
-	keys.offs = getAddressMapKeyOffsets(&am)
+	keys.bufStart = lookupVectorOffset(addressMapKeyItemsBytesVOffset, am.Table())
+	keys.bufLen = uint16(am.KeyItemsLength())
+	keys.offStart = lookupVectorOffset(addressMapKeyItemsOffsetsVOffset, am.Table())
+	keys.offLen = uint16(am.KeyOffsetsLength() * uint16Size)
 	return
 }
 
@@ -98,8 +102,9 @@ func getAddressMapValues(msg serial.Message) (values ItemAccess, err error) {
 	if err != nil {
 		return values, err
 	}
-	values.items = am.AddressArrayBytes()
-	values.offs = offsetsForAddressArray(values.items)
+	values.bufStart = lookupVectorOffset(addressMapAddressArrayVOffset, am.Table())
+	values.bufLen = uint16(am.AddressArrayLength())
+	values.staticSize = hash.ByteLen
 	return
 }
 
@@ -158,15 +163,6 @@ func getAddressMapSubtrees(msg serial.Message) ([]uint64, error) {
 		return nil, err
 	}
 	return decodeVarints(am.SubtreeCountsBytes(), counts), nil
-}
-
-func getAddressMapKeyOffsets(pm *serial.AddressMap) []byte {
-	sz := pm.KeyOffsetsLength() * 2
-	tab := pm.Table()
-	vec := tab.Offset(addressMapKeyOffsetsVOffset)
-	start := int(tab.Vector(fb.UOffsetT(vec)))
-	stop := start + sz
-	return tab.Bytes[start:stop]
 }
 
 func estimateAddressMapSize(keys, addresses [][]byte, subtrees []uint64) (keySz, addrSz, totalSz int) {

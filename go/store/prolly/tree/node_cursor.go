@@ -346,8 +346,8 @@ func fetchLeafNodeSpan(ctx context.Context, ns NodeStore, nodes []Node, start, s
 }
 
 func CurrentCursorItems(cur *Cursor) (key, value Item) {
-	key = cur.nd.keys.GetItem(cur.idx)
-	value = cur.nd.values.GetItem(cur.idx)
+	key = cur.nd.keys.GetItem(cur.idx, cur.nd.msg)
+	value = cur.nd.values.GetItem(cur.idx, cur.nd.msg)
 	return
 }
 

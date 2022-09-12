@@ -18,9 +18,16 @@ import (
 	"context"
 	"encoding/binary"
 
+	fb "github.com/google/flatbuffers/go"
+
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
+)
+
+const (
+	blobPayloadBytesVOffset fb.VOffsetT = 4
+	blobAddressArrayVOffset fb.VOffsetT = 6
 )
 
 var blobFileID = []byte(serial.BlobFileID)
@@ -60,45 +67,25 @@ func (s BlobSerializer) Serialize(keys, values [][]byte, subtrees []uint64, leve
 }
 
 func getBlobKeys(msg serial.Message) (ItemAccess, error) {
-	cnt, err := getBlobCount(msg)
-	if err != nil {
-		return ItemAccess{}, err
-	}
-	buf := make([]byte, cnt)
-	for i := range buf {
-		buf[i] = 0
-	}
-	offs := make([]byte, cnt*2)
-	for i := 0; i < int(cnt); i++ {
-		b := offs[i*2 : (i+1)*2]
-		binary.LittleEndian.PutUint16(b, uint16(i))
-	}
-	return ItemAccess{
-		items: buf,
-		offs:  offs,
-	}, nil
+	return ItemAccess{}, nil
 }
 
-func getBlobValues(msg serial.Message) (ItemAccess, error) {
+func getBlobValues(msg serial.Message) (values ItemAccess, err error) {
 	var b serial.Blob
-	err := serial.InitBlobRoot(&b, msg, serial.MessagePrefixSz)
+	err = serial.InitBlobRoot(&b, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return ItemAccess{}, err
 	}
 	if b.TreeLevel() > 0 {
-		arr := b.AddressArrayBytes()
-		off := offsetsForAddressArray(arr)
-		return ItemAccess{
-			items: arr,
-			offs:  off,
-		}, nil
+		values.bufStart = lookupVectorOffset(blobAddressArrayVOffset, b.Table())
+		values.bufLen = uint16(b.AddressArrayLength() * uint16Size)
+		values.staticSize = hash.ByteLen
+	} else {
+		values.bufStart = lookupVectorOffset(blobPayloadBytesVOffset, b.Table())
+		values.bufLen = uint16(b.PayloadLength())
+		values.staticSize = uint16(b.PayloadLength())
 	}
-
-	buf := b.PayloadBytes()
-	offs := make([]byte, 4)
-	binary.LittleEndian.PutUint16(offs[2:], uint16(len(buf)))
-
-	return ItemAccess{items: buf, offs: offs}, nil
+	return
 }
 
 func getBlobCount(msg serial.Message) (uint16, error) {

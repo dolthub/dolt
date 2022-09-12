@@ -31,8 +31,12 @@ const (
 	// These constants are mirrored from serial.MergeArtifacts.KeyOffsets()
 	// and serial.MergeArtifacts.ValueOffsets() respectively.
 	// They are only as stable as the flatbuffers schema that define them.
-	mergeArtifactKeyOffsetsVOffset   = 6
-	mergeArtifactValueOffsetsVOffset = 12
+
+	mergeArtifactKeyItemBytesVOffset   fb.VOffsetT = 4
+	mergeArtifactKeyOffsetsVOffset     fb.VOffsetT = 6
+	mergeArtifactValueItemBytesVOffset fb.VOffsetT = 10
+	mergeArtifactValueOffsetsVOffset   fb.VOffsetT = 12
+	mergeArtifactAddressArrayVOffset   fb.VOffsetT = 14
 )
 
 var mergeArtifactFileID = []byte(serial.MergeArtifactsFileID)
@@ -62,7 +66,7 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 	keySz, valSz, bufSz := estimateMergeArtifactSize(keys, values, subtrees, s.keyDesc.AddressFieldCount())
 	b := getFlatbufferBuilder(s.pool, bufSz)
 
-	// serialize keys and offsets
+	// serialize keys and offStart
 	keyTups = writeItemBytes(b, keys, keySz)
 	serial.MergeArtifactsStartKeyOffsetsVector(b, len(keys)+1)
 	keyOffs = writeItemOffsets(b, keys, keySz)
@@ -72,7 +76,7 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 		valTups = writeItemBytes(b, values, valSz)
 		serial.MergeArtifactsStartValueOffsetsVector(b, len(values)+1)
 		valOffs = writeItemOffsets(b, values, valSz)
-		// serialize offsets of chunk addresses within |keyTups|
+		// serialize offStart of chunk addresses within |keyTups|
 		if s.keyDesc.AddressFieldCount() > 0 {
 			serial.MergeArtifactsStartKeyAddressOffsetsVector(b, countAddresses(keys, s.keyDesc))
 			keyAddrOffs = writeAddressOffsets(b, keys, keySz, s.keyDesc)
@@ -103,26 +107,30 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 }
 
 func getArtifactMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, level, count uint16, err error) {
-	var am serial.MergeArtifacts
-	err = serial.InitMergeArtifactsRoot(&am, msg, serial.MessagePrefixSz)
+	var ma serial.MergeArtifacts
+	err = serial.InitMergeArtifactsRoot(&ma, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return
 	}
+	keys.bufStart = lookupVectorOffset(mergeArtifactKeyItemBytesVOffset, ma.Table())
+	keys.bufLen = uint16(ma.KeyItemsLength())
+	keys.offStart = lookupVectorOffset(mergeArtifactKeyOffsetsVOffset, ma.Table())
+	keys.offLen = uint16(ma.KeyOffsetsLength() * uint16Size)
 
-	keys.items = am.KeyItemsBytes()
-	keys.offs = getMergeArtifactKeyOffsets(&am)
-	count = uint16(keys.Len())
-	level = uint16(am.TreeLevel())
+	count = (keys.offLen / 2) - 1
+	level = uint16(ma.TreeLevel())
 
-	vv := am.ValueItemsBytes()
+	vv := ma.ValueItemsBytes()
 	if vv != nil {
-		values.items = vv
-		values.offs = getMergeArtifactValueOffsets(&am)
+		values.bufStart = lookupVectorOffset(mergeArtifactValueItemBytesVOffset, ma.Table())
+		values.bufLen = uint16(ma.ValueItemsLength())
+		values.offStart = lookupVectorOffset(mergeArtifactValueOffsetsVOffset, ma.Table())
+		values.offLen = uint16(ma.ValueOffsetsLength() * uint16Size)
 	} else {
-		values.items = am.AddressArrayBytes()
-		values.offs = offsetsForAddressArray(values.items)
+		values.bufStart = lookupVectorOffset(mergeArtifactAddressArrayVOffset, ma.Table())
+		values.bufLen = uint16(ma.AddressArrayLength())
+		values.staticSize = hash.ByteLen
 	}
-
 	return
 }
 
@@ -198,24 +206,6 @@ func getMergeArtifactSubtrees(msg serial.Message) ([]uint64, error) {
 	return decodeVarints(ma.SubtreeCountsBytes(), counts), nil
 }
 
-func getMergeArtifactKeyOffsets(ma *serial.MergeArtifacts) []byte {
-	sz := ma.KeyOffsetsLength() * 2
-	tab := ma.Table()
-	vec := tab.Offset(mergeArtifactKeyOffsetsVOffset)
-	start := int(tab.Vector(fb.UOffsetT(vec)))
-	stop := start + sz
-	return tab.Bytes[start:stop]
-}
-
-func getMergeArtifactValueOffsets(ma *serial.MergeArtifacts) []byte {
-	sz := ma.ValueOffsetsLength() * 2
-	tab := ma.Table()
-	vec := tab.Offset(mergeArtifactValueOffsetsVOffset)
-	start := int(tab.Vector(fb.UOffsetT(vec)))
-	stop := start + sz
-	return tab.Bytes[start:stop]
-}
-
 // estimateMergeArtifact>Size returns the exact Size of the tuple vectors for keys and values,
 // and an estimate of the overall Size of the final flatbuffer.
 func estimateMergeArtifactSize(keys, values [][]byte, subtrees []uint64, keyAddrs int) (int, int, int) {
@@ -237,7 +227,7 @@ func estimateMergeArtifactSize(keys, values [][]byte, subtrees []uint64, keyAddr
 	// todo(andy): better estimates
 	bufSz += keySz + valSz               // tuples
 	bufSz += refCntSz                    // subtree counts
-	bufSz += len(keys)*2 + len(values)*2 // offsets
+	bufSz += len(keys)*2 + len(values)*2 // offStart
 	bufSz += 8 + 1 + 1 + 1               // metadata
 	bufSz += 72                          // vtable (approx)
 	bufSz += 100                         // padding?

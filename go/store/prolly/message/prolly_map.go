@@ -31,8 +31,11 @@ const (
 	// These constants are mirrored from serial.ProllyTreeNode.KeyOffsets()
 	// and serial.ProllyTreeNode.ValueOffsets() respectively.
 	// They are only as stable as the flatbuffers schema that define them.
-	prollyMapKeyOffsetsVOffset   = 6
-	prollyMapValueOffsetsVOffset = 12
+	prollyMapKeyItemBytesVOffset      fb.VOffsetT = 4
+	prollyMapKeyOffsetsVOffset        fb.VOffsetT = 6
+	prollyMapValueItemBytesVOffset    fb.VOffsetT = 10
+	prollyMapValueOffsetsVOffset      fb.VOffsetT = 12
+	prollyMapAddressArrayBytesVOffset fb.VOffsetT = 18
 )
 
 var prollyMapFileID = []byte(serial.ProllyTreeNodeFileID)
@@ -59,7 +62,7 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 	keySz, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees, s.valDesc.AddressFieldCount())
 	b := getFlatbufferBuilder(s.pool, bufSz)
 
-	// serialize keys and offsets
+	// serialize keys and offStart
 	keyTups = writeItemBytes(b, keys, keySz)
 	serial.ProllyTreeNodeStartKeyOffsetsVector(b, len(keys)+1)
 	keyOffs = writeItemOffsets(b, keys, keySz)
@@ -69,7 +72,7 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		valTups = writeItemBytes(b, values, valSz)
 		serial.ProllyTreeNodeStartValueOffsetsVector(b, len(values)+1)
 		valOffs = writeItemOffsets(b, values, valSz)
-		// serialize offsets of chunk addresses within |valTups|
+		// serialize offStart of chunk addresses within |valTups|
 		if s.valDesc.AddressFieldCount() > 0 {
 			serial.ProllyTreeNodeStartValueAddressOffsetsVector(b, countAddresses(values, s.valDesc))
 			valAddrOffs = writeAddressOffsets(b, values, valSz, s.valDesc)
@@ -107,19 +110,24 @@ func getProllyMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, lev
 	if err != nil {
 		return
 	}
+	keys.bufStart = lookupVectorOffset(prollyMapKeyItemBytesVOffset, pm.Table())
+	keys.bufLen = uint16(pm.KeyItemsLength())
+	keys.offStart = lookupVectorOffset(prollyMapKeyOffsetsVOffset, pm.Table())
+	keys.offLen = uint16(pm.KeyOffsetsLength() * uint16Size)
 
-	keys.items = pm.KeyItemsBytes()
-	keys.offs = getProllyMapKeyOffsets(&pm)
-	count = uint16(keys.Len())
+	count = (keys.offLen / 2) - 1
 	level = uint16(pm.TreeLevel())
 
 	vv := pm.ValueItemsBytes()
 	if vv != nil {
-		values.items = vv
-		values.offs = getProllyMapValueOffsets(&pm)
+		values.bufStart = lookupVectorOffset(prollyMapValueItemBytesVOffset, pm.Table())
+		values.bufLen = uint16(pm.ValueItemsLength())
+		values.offStart = lookupVectorOffset(prollyMapValueOffsetsVOffset, pm.Table())
+		values.offLen = uint16(pm.ValueOffsetsLength() * uint16Size)
 	} else {
-		values.items = pm.AddressArrayBytes()
-		values.offs = offsetsForAddressArray(values.items)
+		values.bufStart = lookupVectorOffset(prollyMapAddressArrayBytesVOffset, pm.Table())
+		values.bufLen = uint16(pm.AddressArrayLength())
+		values.staticSize = hash.ByteLen
 	}
 	return
 }
@@ -196,26 +204,6 @@ func getProllyMapSubtrees(msg serial.Message) ([]uint64, error) {
 	return decodeVarints(pm.SubtreeCountsBytes(), counts), nil
 }
 
-func getProllyMapKeyOffsets(pm *serial.ProllyTreeNode) []byte {
-	sz := pm.KeyOffsetsLength() * 2
-	tab := pm.Table()
-	vec := tab.Offset(prollyMapKeyOffsetsVOffset)
-	start := int(tab.Vector(fb.UOffsetT(vec)))
-	stop := start + sz
-
-	return tab.Bytes[start:stop]
-}
-
-func getProllyMapValueOffsets(pm *serial.ProllyTreeNode) []byte {
-	sz := pm.ValueOffsetsLength() * 2
-	tab := pm.Table()
-	vec := tab.Offset(prollyMapValueOffsetsVOffset)
-	start := int(tab.Vector(fb.UOffsetT(vec)))
-	stop := start + sz
-
-	return tab.Bytes[start:stop]
-}
-
 // estimateProllyMapSize returns the exact Size of the tuple vectors for keys and values,
 // and an estimate of the overall Size of the final flatbuffer.
 func estimateProllyMapSize(keys, values [][]byte, subtrees []uint64, valAddrsCnt int) (int, int, int) {
@@ -237,7 +225,7 @@ func estimateProllyMapSize(keys, values [][]byte, subtrees []uint64, valAddrsCnt
 	// todo(andy): better estimates
 	bufSz += keySz + valSz               // tuples
 	bufSz += subtreesSz                  // subtree counts
-	bufSz += len(keys)*2 + len(values)*2 // offsets
+	bufSz += len(keys)*2 + len(values)*2 // offStart
 	bufSz += 8 + 1 + 1 + 1               // metadata
 	bufSz += 72                          // vtable (approx)
 	bufSz += 100                         // padding?

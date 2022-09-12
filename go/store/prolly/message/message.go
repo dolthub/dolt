@@ -17,9 +17,18 @@ package message
 import (
 	"context"
 	"fmt"
+	"math"
+
+	fb "github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
+)
+
+const (
+	maxChunkSz = math.MaxUint16
+	addrSize   = hash.ByteLen
+	uint16Size = 2
 )
 
 type Serializer interface {
@@ -138,6 +147,13 @@ func GetSubtrees(msg serial.Message) ([]uint64, error) {
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}
+}
+
+func lookupVectorOffset(vo fb.VOffsetT, tab fb.Table) uint16 {
+	off := fb.UOffsetT(tab.Offset(vo)) + tab.Pos
+	off += fb.GetUOffsetT(tab.Bytes[off:])
+	// data starts after metadata containing the vector length
+	return uint16(off + fb.UOffsetT(fb.SizeUOffsetT))
 }
 
 func assertTrue(b bool, msg string) {

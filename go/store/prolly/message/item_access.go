@@ -14,25 +14,29 @@
 
 package message
 
-import "github.com/dolthub/dolt/go/store/val"
+import (
+	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/val"
+)
 
-// ItemAccess is an array of Items
+// ItemAccess accesses items in a serial.Message.
 type ItemAccess struct {
-	items []byte
-	// Offs is an array of uint16 encoded offsets into |items|.
-	// the first offset is 0, the last offset if len(Items).
-	offs []byte
+	bufStart, bufLen uint16
+	offStart, offLen uint16
+	staticSize       uint16
 }
 
 // GetItem returns the ith item in |arr|.
-func (arr ItemAccess) GetItem(i int) []byte {
-	pos := i * 2
-	start := val.ReadUint16(arr.offs[pos : pos+2])
-	stop := val.ReadUint16(arr.offs[pos+2 : pos+4])
-	return arr.items[start:stop]
-}
-
-// Len returns the number of items in |arr|.
-func (arr ItemAccess) Len() int {
-	return len(arr.offs)/2 - 1
+func (acc ItemAccess) GetItem(i int, msg serial.Message) []byte {
+	buf := msg[acc.bufStart : acc.bufStart+acc.bufLen]
+	off := msg[acc.offStart : acc.offStart+acc.offLen]
+	if acc.offStart != 0 {
+		stop := val.ReadUint16(off[(i*2)+2 : (i*2)+4])
+		start := val.ReadUint16(off[(i * 2) : (i*2)+2])
+		return buf[start:stop]
+	} else {
+		stop := int(acc.staticSize) * (i + 1)
+		start := int(acc.staticSize) * i
+		return buf[start:stop]
+	}
 }
