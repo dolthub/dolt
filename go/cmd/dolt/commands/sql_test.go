@@ -154,6 +154,7 @@ func TestCreateTable(t *testing.T) {
 		{"create table (id int ", 1}, // bad syntax
 		{"create table people (id int primary key)", 0},
 		{"create table people (id int primary key, age int)", 0},
+		{"create table people (id int primary key, age int, first_name varchar(MAX))", 0},
 		{"create table people (id int primary key, age int, first_name varchar(80), is_married bit)", 0},
 		{"create table people (`id` int, `age` int, `first_name` varchar(80), `last_name` varchar(80), `title` varchar(80), `is_married` bit, primary key (`id`, `age`))", 0},
 	}
