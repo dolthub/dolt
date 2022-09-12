@@ -741,6 +741,7 @@ SQL
     run dolt diff --skinny HEAD~1
     [ $status -eq 0 ]
     [[ ! "$output" =~ 'val2' ]] || false
+    [[ "$output" =~ 'pk' ]] || false
     [[ "$output" =~ 'val1' ]] || false
 }
 
