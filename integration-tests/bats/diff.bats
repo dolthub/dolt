@@ -788,8 +788,6 @@ SQL
     dolt sql -q "UPDATE t SET val1=4 WHERE pk=2"
     dolt commit -am "cm2"
 
-    test=$(dolt diff --skinny --data HEAD~1)
-    echo $test
     run dolt diff --skinny --data HEAD~1
     [ $status -eq 0 ]
     [[ "$output" =~ 'pk' ]] || false
