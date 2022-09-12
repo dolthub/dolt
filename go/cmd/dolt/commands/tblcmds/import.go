@@ -42,7 +42,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
@@ -400,24 +399,12 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	skipped, err := move(ctx, rd, wr, mvOpts)
 	if err != nil {
-		if pipeline.IsTransformFailure(err) {
-			bdr := errhand.BuildDError("\nA bad row was encountered while moving data.")
-			r := pipeline.GetTransFailureSqlRow(err)
+		bdr := errhand.BuildDError("\nAn error occurred while moving data")
+		bdr.AddCause(err)
 
-			if r != nil {
-				bdr.AddDetails("Bad Row: " + sql.FormatRow(r))
-			}
+		bdr.AddDetails("Errors during import can be ignored using '--continue'")
 
-			details := pipeline.GetTransFailureDetails(err)
-
-			bdr.AddDetails(details)
-			bdr.AddDetails("These can be ignored using '--continue'")
-
-			return commands.HandleVErrAndExitCode(bdr.Build(), usage)
-		}
-
-		verr = errhand.BuildDError("An error occurred moving data:\n").AddCause(err).Build()
-		return commands.HandleVErrAndExitCode(verr, usage)
+		return commands.HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 
 	cli.PrintErrln()
@@ -513,23 +500,28 @@ func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema sc
 	return mv, nil
 }
 
-type badRowFn func(trf *pipeline.TransformRowFailure) (quit bool)
+type badRowFn func(row sql.Row, err error) (quit bool)
 
 func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableWriter, options *importOptions) (int64, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
-	// Setup the necessary data points for the import job
+	// Set up the necessary data points for the import job
 	parsedRowChan := make(chan sql.Row)
 	var rowErr error
 	var printStarted bool
 	var badCount int64
-	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
-		if !options.contOnErr {
-			rowErr = trf
-			return true
+
+	badRowCB := func(row sql.Row, err error) (quit bool) {
+		// record the first error encountered
+		if row != nil && rowErr == nil {
+			rowErr = fmt.Errorf("A bad row was encountered: %s: %w", sql.FormatRow(row), err)
 		}
 
 		atomic.AddInt64(&badCount, 1)
+
+		if !options.contOnErr {
+			return true
+		}
 
 		// Don't log the skipped rows when the ignore-skipped-rows param is specified.
 		if options.ignoreSkippedRows {
@@ -541,11 +533,7 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 			printStarted = true
 		}
 
-		r := pipeline.GetTransFailureSqlRow(trf)
-
-		if r != nil {
-			cli.PrintErr(sql.FormatRow(r), "\n")
-		}
+		cli.PrintErrln(sql.FormatRow(row))
 
 		return false
 	}
@@ -604,10 +592,9 @@ func moveRows(
 
 		if err != nil {
 			if table.IsBadRow(err) {
-				trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: sqlRow, TransformName: "reader", Details: err.Error()}
-				quit := badRowCb(trf)
+				quit := badRowCb(sqlRow, err)
 				if quit {
-					return trf
+					return err
 				}
 			} else {
 				return err
