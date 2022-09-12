@@ -29,16 +29,22 @@ const (
 	maxPending = 64 * 1024
 )
 
-// MutableMap represents a Map that is able to store mutations in-memory. A MutableMap has two tiers of in-memory storage:
-// pending and applied. All mutations are first written to the pending tier, which may be discarded at any time.
-// However, once Checkpoint() is called, those mutations are moved to the applied tier, and the pending tier is
-// cleared.
-// todo
+// MutableMap is an ordered collection of val.Tuple backed by a Prolly Tree.
+// Writes to the map are queued in a skip.List and periodically flushed when
+// the maximum number of pending writes is exceeded.
 type MutableMap struct {
-	tuples     tree.MutableMap[val.Tuple, val.Tuple, val.TupleDesc]
-	checkpoint *tree.MutableMap[val.Tuple, val.Tuple, val.TupleDesc]
-	keyDesc    val.TupleDesc
-	valDesc    val.TupleDesc
+	// tuples contains the primary Prolly Tree and skip.List for this map.
+	tuples tree.MutableMap[val.Tuple, val.Tuple, val.TupleDesc]
+
+	// stash, if not nil, contains a previous checkpoint of this map.
+	// stashes are created when a MutableMap has been check-pointed, but
+	// the number of in-memory pending writes exceeds, maxPending.
+	// In this case we stash a copy MutableMap containing the checkpoint,
+	// flush the pending writes and continue accumulating
+	stash *tree.MutableMap[val.Tuple, val.Tuple, val.TupleDesc]
+
+	// keyDesc and valDesc are tuples descriptors for the map.
+	keyDesc, valDesc val.TupleDesc
 }
 
 // newMutableMap returns a new MutableMap.
@@ -91,7 +97,7 @@ func (mut *MutableMap) Put(ctx context.Context, key, value val.Tuple) error {
 		return err
 	}
 	if mut.tuples.Edits.Count() > maxPending {
-		return mut.flushEdits(ctx)
+		return mut.flushPending(ctx)
 	}
 	return nil
 }
@@ -112,39 +118,41 @@ func (mut *MutableMap) Has(ctx context.Context, key val.Tuple) (ok bool, err err
 	return mut.tuples.Has(ctx, key)
 }
 
-// Checkpoint todo
+// Checkpoint records a checkpoint that can be reverted to.
 func (mut *MutableMap) Checkpoint(context.Context) error {
-	// discard previous checkpoint, if one exists
-	mut.checkpoint = nil
+	// discard previous stash, if one exists
+	mut.stash = nil
 	mut.tuples.Edits.Checkpoint()
 	return nil
 }
 
-// Revert todo
+// Revert discards writes made since the last checkpoint.
 func (mut *MutableMap) Revert(context.Context) {
-	// if we've accumulated a large number of edits
-	// since we check-pointed, our checkpoint may
+	// if we've accumulated a large number of writes
+	// since we check-pointed, our stash may
 	// be stashed in a separate tree.MutableMap
-	if mut.checkpoint != nil {
-		mut.tuples = *mut.checkpoint
+	if mut.stash != nil {
+		mut.tuples = *mut.stash
 		return
 	}
 	mut.tuples.Edits.Revert()
 }
 
-func (mut *MutableMap) flushEdits(ctx context.Context) error {
-	// if our in-memory edit set contains a checkpoint, we
+func (mut *MutableMap) flushPending(ctx context.Context) error {
+	// if our in-memory edit set contains a stash, we
 	// must stash a copy of |mut.tuples| we can revert to.
+	var stash *tree.MutableMap[val.Tuple, val.Tuple, val.TupleDesc]
 	if mut.tuples.Edits.HasCheckpoint() {
 		cp := mut.tuples.Copy()
 		cp.Edits.Revert()
-		mut.checkpoint = &cp
+		stash = &cp
 	}
 	sm, err := mut.Map(ctx)
 	if err != nil {
 		return err
 	}
 	mut.tuples = sm.Mutate().tuples
+	mut.stash = stash
 	return nil
 }
 
