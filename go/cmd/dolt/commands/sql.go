@@ -604,7 +604,7 @@ func execQuery(
 	}
 
 	if rowIter != nil {
-		err = engine.PrettyPrintResults(sqlCtx, se.GetReturnFormat(), sqlSch, rowIter, HasTopLevelOrderByClause(query))
+		err = engine.PrettyPrintResults(sqlCtx, se.GetResultFormat(), sqlSch, rowIter)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -803,7 +803,7 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 			}
 
 			if rowIter != nil {
-				err = engine.PrettyPrintResults(ctx, se.GetReturnFormat(), sqlSch, rowIter, HasTopLevelOrderByClause(query))
+				err = engine.PrettyPrintResults(ctx, se.GetResultFormat(), sqlSch, rowIter)
 				if err != nil {
 					err = fmt.Errorf("error executing query on line %d: %v", scanner.statementStartLine, err)
 					return errhand.VerboseErrorFromError(err)
@@ -895,14 +895,16 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 		HistorySearchFold:      true,
 		DisableAutoSaveHistory: true,
 	}
-	supportingMysqlShellCmds := []string{"\\g", "\\G"}
+
+	verticalOutputLineTerminators := []string{"\\g", "\\G"}
+
 	shellConf := ishell.UninterpretedConfig{
 		ReadlineConfig: &rlConf,
 		QuitKeywords: []string{
 			"quit", "exit", "quit()", "exit()",
 		},
 		LineTerminator: ";",
-		MysqlShellCmds: supportingMysqlShellCmds,
+		MysqlShellCmds: verticalOutputLineTerminators,
 	}
 
 	shell := ishell.NewUninterpreted(&shellConf)
@@ -946,13 +948,15 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 			shell.Println(color.RedString(err.Error()))
 		}
 
-		returnFormat := se.GetReturnFormat()
 		query = strings.TrimSuffix(query, shell.LineTerminator())
-		for _, sc := range supportingMysqlShellCmds {
+		resultFormat := se.GetResultFormat()
+
+		// TODO: it would be better to build this into the statement parser rahter than special case it here
+		for _, terminator := range verticalOutputLineTerminators {
 			if strings.HasSuffix(query, "\\G") {
-				returnFormat = engine.FormatVertical
+				resultFormat = engine.FormatVertical
 			}
-			query = strings.TrimSuffix(query, sc)
+			query = strings.TrimSuffix(query, terminator)
 		}
 
 		//TODO: Handle comments and enforce the current line terminator
@@ -985,7 +989,13 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 				verr := formatQueryError("", err)
 				shell.Println(verr.Verbose())
 			} else if rowIter != nil {
-				err = engine.PrettyPrintResults(sqlCtx, returnFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
+				switch resultFormat {
+				case engine.FormatTabular, engine.FormatVertical:
+					err = engine.PrettyPrintResultsExtended(sqlCtx, resultFormat, sqlSch, rowIter)
+				default:
+					err = engine.PrettyPrintResults(sqlCtx, resultFormat, sqlSch, rowIter)
+				}
+
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 				}
@@ -1305,7 +1315,7 @@ func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query stri
 				cli.Print("\n")
 				displayStrLen = 0
 			}
-			err = engine.PrettyPrintResults(ctx, se.GetReturnFormat(), sqlSch, rowIter, HasTopLevelOrderByClause(query))
+			err = engine.PrettyPrintResults(ctx, se.GetResultFormat(), sqlSch, rowIter)
 			if err != nil {
 				return err
 			}
@@ -1417,19 +1427,6 @@ func foundSubquery(node sqlparser.SQLNode) bool {
 		return true, nil
 	}, node)
 	return has
-}
-
-func HasTopLevelOrderByClause(query string) bool {
-	st, _ := sqlparser.Parse(query)
-
-	switch s := st.(type) {
-	case *sqlparser.Select:
-		return s.OrderBy != nil
-	case *sqlparser.Union:
-		return s.OrderBy != nil
-	default:
-		return false
-	}
 }
 
 // parses the query to check if it inserts into a table with AUTO_INCREMENT

@@ -81,11 +81,6 @@ func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*
 	return csvw, nil
 }
 
-// GetSchema gets the schema of the rows that this writer writes
-func (csvw *CSVWriter) GetSchema() schema.Schema {
-	return csvw.sch
-}
-
 // WriteRow will write a row to a table
 func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 	allCols := csvw.sch.GetAllCols()

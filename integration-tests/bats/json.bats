@@ -73,9 +73,20 @@ SQL
     [ "${lines[1]}" = '1,"{""a"": 1}"' ]
     [ "${lines[2]}" = '2,"{""b"": 2}"' ]
 
+    dolt sql -q "SELECT * FROM js;" -r json
     run dolt sql -q "SELECT * FROM js;" -r json
     [ "$status" -eq 0 ]
-    [ "${lines[0]}" = '{"rows": [{"pk":1,"js":{"a": 1}},{"pk":2,"js":{"b": 2}}]}' ]
+    [ "${lines[0]}" = '{"rows": [{"js":{"a":1},"pk":1},{"js":{"b":2},"pk":2}]}' ]
+
+    dolt sql <<SQL
+insert into js values (3, '["abc", 123, 1.5, {"a": 123, "b":[456, "def"]}]');
+SQL
+    
+    dolt sql -q "SELECT * FROM js where pk = 3" -r json
+    run dolt sql -q "SELECT * FROM js where pk = 3" -r json
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = '{"rows": [{"js":["abc",123,1.5,{"a":123,"b":[456,"def"]}],"pk":3}]}' ]
+    
 }
 
 @test "json: diff JSON values" {
