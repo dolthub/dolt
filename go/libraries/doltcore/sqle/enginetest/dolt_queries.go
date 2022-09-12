@@ -2442,7 +2442,7 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL DOLT_CHECKOUT('-b', 'right');",
 			"update t set col1 = 1 where pk = 1;",
 			"update t set col1 = null where pk = 1;",
-			"CALL DOLT_COMMIT('-am', 'right cm');",
+			"CALL DOLT_COMMIT('--allow-empty', '-am', 'right cm');",
 			"CALL DOLT_CHECKOUT('main');",
 			"DELETE from t where pk = 1;",
 			"CALL DOLT_COMMIT('-am', 'left cm');",
@@ -4840,7 +4840,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			"CALL DOLT_COMMIT('-am', 'setup');",
 			"UPDATE t set col1 = 1 where pk = 1;",
 			"UPDATE t set col1 = null where pk = 1;",
-			"CALL DOLT_COMMIT('-am', 'fix short tuple');",
+			"CALL DOLT_COMMIT('--allow-empty', '-am', 'fix short tuple');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
