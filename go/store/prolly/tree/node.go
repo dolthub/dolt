@@ -35,7 +35,7 @@ type Node struct {
 	// allowing faster lookups by avoiding the vtable
 	keys, values message.ItemAccess
 	count, level uint16
-	subtrees     subtreeCounts
+	subtrees     *subtreeCounts
 	msg          serial.Message
 }
 
@@ -149,7 +149,11 @@ func (nd Node) loadSubtrees() (Node, error) {
 	if nd.subtrees == nil {
 		// deserializing subtree counts requires a malloc,
 		// we don't load them unless explicitly requested
-		nd.subtrees, err = message.GetSubtrees(nd.msg)
+		sc, err := message.GetSubtrees(nd.msg)
+		if err != nil {
+			return Node{}, err
+		}
+		nd.subtrees = (*subtreeCounts)(&sc)
 	}
 	return nd, err
 }
@@ -159,7 +163,7 @@ func (nd Node) getSubtreeCount(i int) (uint64, error) {
 		return 1, nil
 	}
 	// this will panic unless subtrees were loaded.
-	return nd.subtrees[i], nil
+	return (*nd.subtrees)[i], nil
 }
 
 // getAddress returns the |ith| address of this node.
