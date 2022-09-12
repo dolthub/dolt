@@ -545,10 +545,10 @@ func makeDelete(k int64) (key val.Tuple) {
 func materializeMap(t *testing.T, mut MutableMap) Map {
 	ctx := context.Background()
 
-	// ensure edits are provided in order
+	// ensure Edits are provided in Order
 	err := mut.ApplyPending(ctx)
 	require.NoError(t, err)
-	iter := mut.tuples.mutations()
+	iter := mut.tuples.Mutations()
 	prev, _ := iter.NextMutation(ctx)
 	require.NotNil(t, prev)
 	for {

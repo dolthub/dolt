@@ -56,7 +56,7 @@ require (
 )
 
 require (
-	github.com/dolthub/go-mysql-server v0.12.1-0.20220908194409-edcfbd91cf62
+	github.com/dolthub/go-mysql-server v0.12.1-0.20220912181513-390f047d064f
 	github.com/google/flatbuffers v2.0.6+incompatible
 	github.com/gosuri/uilive v0.0.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
@@ -68,6 +68,7 @@ require (
 	github.com/xitongsys/parquet-go-source v0.0.0-20211010230925-397910c5e371
 	github.com/zeebo/blake3 v0.2.3
 	github.com/zeebo/xxh3 v1.0.2
+	go.etcd.io/bbolt v1.3.6
 	go.opentelemetry.io/otel v1.7.0
 	go.opentelemetry.io/otel/exporters/jaeger v1.7.0
 	go.opentelemetry.io/otel/sdk v1.7.0

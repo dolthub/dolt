@@ -17,7 +17,12 @@ package benchmark
 import (
 	"context"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"go.etcd.io/bbolt"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -37,6 +42,11 @@ type typesBench struct {
 	tups [][2]types.Tuple
 }
 
+type bboltBench struct {
+	db   *bbolt.DB
+	tups [][2]val.Tuple
+}
+
 func generateProllyBench(b *testing.B, size uint64) prollyBench {
 	b.StopTimer()
 	defer b.StartTimer()
@@ -44,7 +54,7 @@ func generateProllyBench(b *testing.B, size uint64) prollyBench {
 	ns := newTestNodeStore()
 
 	kd := val.NewTupleDescriptor(
-		val.Type{Enc: val.Int64Enc, Nullable: false},
+		val.Type{Enc: val.Uint64Enc, Nullable: false},
 	)
 	vd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Int64Enc, Nullable: true},
@@ -85,7 +95,7 @@ func generateProllyTuples(kd, vd val.TupleDesc, size uint64) [][2]val.Tuple {
 
 	for i := range tups {
 		// key
-		kb.PutInt64(0, int64(i))
+		kb.PutUint64(0, uint64(i))
 		tups[i][0] = kb.Build(shared)
 
 		// val
@@ -150,4 +160,52 @@ func generateTypesTuples(size uint64) [][2]types.Tuple {
 	}
 
 	return tups
+}
+
+func generateBBoltBench(b *testing.B, size uint64) bboltBench {
+	b.StopTimer()
+	defer b.StartTimer()
+	kd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Uint64Enc, Nullable: false},
+	)
+	vd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+	)
+
+	path, err := os.MkdirTemp("", "*")
+	require.NoError(b, err)
+	path = filepath.Join(path, "bolt.db")
+
+	db, err := bbolt.Open(path, 0666, &bbolt.Options{
+		// turn off fsync
+		NoGrowSync:     true,
+		NoFreelistSync: true,
+		NoSync:         true,
+	})
+	require.NoError(b, err)
+
+	err = db.Update(func(tx *bbolt.Tx) error {
+		_, err = tx.CreateBucket(bucket)
+		return err
+	})
+	require.NoError(b, err)
+
+	tups := generateProllyTuples(kd, vd, size)
+
+	const batch = 4096
+	for i := 0; i < len(tups); i += batch {
+		err = db.Update(func(tx *bbolt.Tx) error {
+			bck := tx.Bucket(bucket)
+			for j := i; j < (i+batch) && j < len(tups); j++ {
+				require.NoError(b, bck.Put(tups[j][0], tups[j][1]))
+			}
+			return nil
+		})
+		require.NoError(b, err)
+	}
+	return bboltBench{db: db, tups: tups}
 }

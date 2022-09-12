@@ -37,6 +37,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/admin"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cnfcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/credcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cvcmds"
@@ -56,7 +57,7 @@ import (
 )
 
 const (
-	Version = "0.41.0"
+	Version = "0.41.1"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -70,6 +71,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.CleanCmd{},
 	commands.CommitCmd{},
 	commands.SqlCmd{VersionStr: Version},
+	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{},
 	commands.LogCmd{},

@@ -17,7 +17,6 @@ package tree
 import (
 	"context"
 	"fmt"
-	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -79,7 +78,7 @@ func testNewCursorAtItem(t *testing.T, count int) {
 	ctx := context.Background()
 	for i := range items {
 		key, value := items[i][0], items[i][1]
-		cur, err := NewCursorAtItem(ctx, ns, root, key, searchTestTree)
+		cur, err := NewCursorAtKey(ctx, ns, root, val.Tuple(key), keyDesc)
 		require.NoError(t, err)
 		assert.Equal(t, key, cur.CurrentKey())
 		assert.Equal(t, value, cur.CurrentValue())
@@ -89,18 +88,11 @@ func testNewCursorAtItem(t *testing.T, count int) {
 }
 
 func testGetOrdinalOfCursor(t *testing.T, count int) {
-	tuples, d := AscendingUintTuples(count)
-
-	search := func(item Item, nd Node) (idx int) {
-		return sort.Search(int(nd.count), func(i int) bool {
-			l, r := val.Tuple(item), val.Tuple(nd.GetKey(i))
-			return d.Compare(l, r) <= 0
-		})
-	}
+	tuples, desc := AscendingUintTuples(count)
 
 	ctx := context.Background()
 	ns := NewTestNodeStore()
-	serializer := message.NewProllyMapSerializer(d, ns.Pool())
+	serializer := message.NewProllyMapSerializer(desc, ns.Pool())
 	chkr, err := newEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 
@@ -112,7 +104,7 @@ func testGetOrdinalOfCursor(t *testing.T, count int) {
 	assert.NoError(t, err)
 
 	for i := 0; i < len(tuples); i++ {
-		curr, err := NewCursorAtItem(ctx, ns, nd, Item(tuples[i][0]), search)
+		curr, err := NewCursorAtKey(ctx, ns, nd, tuples[i][0], desc)
 		require.NoError(t, err)
 
 		ord, err := GetOrdinalOfCursor(curr)
@@ -121,11 +113,11 @@ func testGetOrdinalOfCursor(t *testing.T, count int) {
 		assert.Equal(t, uint64(i), ord)
 	}
 
-	b := val.NewTupleBuilder(d)
+	b := val.NewTupleBuilder(desc)
 	b.PutUint32(0, uint32(len(tuples)))
 	aboveItem := b.Build(sharedPool)
 
-	curr, err := NewCursorAtItem(ctx, ns, nd, Item(aboveItem), search)
+	curr, err := NewCursorAtKey(ctx, ns, nd, aboveItem, desc)
 	require.NoError(t, err)
 
 	ord, err := GetOrdinalOfCursor(curr)
@@ -170,13 +162,6 @@ var valDesc = val.NewTupleDescriptor(
 	val.Type{Enc: val.Int64Enc, Nullable: true},
 	val.Type{Enc: val.Int64Enc, Nullable: true},
 )
-
-func searchTestTree(item Item, nd Node) int {
-	return sort.Search(int(nd.count), func(i int) bool {
-		l, r := val.Tuple(item), val.Tuple(nd.GetKey(i))
-		return keyDesc.Compare(l, r) <= 0
-	})
-}
 
 func randomTupleItemPairs(count int, ns NodeStore) (items [][2]Item) {
 	tups := RandomTuplePairs(count, keyDesc, valDesc, ns)

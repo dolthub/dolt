@@ -30,7 +30,7 @@ import (
 // harness for Map, memoryMap, and MutableMap.
 type testMap interface {
 	Has(ctx context.Context, key val.Tuple) (bool, error)
-	Get(ctx context.Context, key val.Tuple, cb KeyValueFn[val.Tuple, val.Tuple]) (err error)
+	Get(ctx context.Context, key val.Tuple, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error)
 	IterAll(ctx context.Context) (MapIter, error)
 	IterRange(ctx context.Context, rng Range) (MapIter, error)
 	Descriptors() (val.TupleDesc, val.TupleDesc)
