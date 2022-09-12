@@ -15,7 +15,6 @@
 package tree
 
 import (
-	"encoding/binary"
 	"fmt"
 	"sync"
 
@@ -23,7 +22,8 @@ import (
 )
 
 const (
-	numStripes = 256
+	numStripes      = 32
+	stripeMask byte = 0b00011111
 )
 
 func newChunkCache(maxSize int) (c nodeCache) {
@@ -39,16 +39,13 @@ type nodeCache struct {
 }
 
 func (c nodeCache) get(addr hash.Hash) (Node, bool) {
-	return c.pickStripe(addr).get(addr)
+	s := c.stripes[addr[0]&stripeMask]
+	return s.get(addr)
 }
 
 func (c nodeCache) insert(addr hash.Hash, node Node) {
-	c.pickStripe(addr).insert(addr, node)
-}
-
-func (c nodeCache) pickStripe(addr hash.Hash) *stripe {
-	i := binary.LittleEndian.Uint32(addr[:4]) % numStripes
-	return c.stripes[i]
+	s := c.stripes[addr[0]&stripeMask]
+	s.insert(addr, node)
 }
 
 type centry struct {
