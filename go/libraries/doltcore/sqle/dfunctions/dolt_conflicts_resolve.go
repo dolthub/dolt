@@ -55,7 +55,7 @@ func (d DoltConflictsCatFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, 
 	return DoDoltConflictsResolve(ctx, args)
 }
 
-func AutoResolveTables(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
+func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
 	newRoot := root
 	for _, tblName := range tblNames {
 		tbl, ok, err := newRoot.GetTable(ctx, tblName)
@@ -191,7 +191,7 @@ func DoDoltConflictsResolve(ctx *sql.Context, args []string) (int, error) {
 		}
 	}
 
-	err = AutoResolveTables(ctx, dSess, root, dbName, ours, tbls)
+	err = ResolveConflicts(ctx, dSess, root, dbName, ours, tbls)
 	if err != nil {
 		return 1, err
 	}
