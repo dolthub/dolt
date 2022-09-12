@@ -18,6 +18,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
 	"io"
 	"strings"
@@ -63,37 +65,36 @@ func AutoResolveTables(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.
 			return doltdb.ErrTableNotFound
 		}
 
-		//has, err := tbl.HasConflicts(ctx)
-		//if err != nil {
-		//	return err
-		//}
-		//if !has {
-		//	continue
-		//}
-		//
-		//sch, err := tbl.GetSchema(ctx)
-		//if err != nil {
-		//	return err
-		//}
-		//
-		_, _, theirSch, err := tbl.GetConflictSchemas(ctx, tblName)
+		if has, err := tbl.HasConflicts(ctx); err != nil {
+			return err
+		} else if !has {
+			return nil
+		}
+
+		sch, err := tbl.GetSchema(ctx)
 		if err != nil {
 			return err
 		}
-		//
-		//conflictSchema, conflictIndex, err := tbl.GetConflicts(ctx)
-		//if conflictSchema.Base == nil {
-		//}
-		//if conflictIndex == nil {
-		//}
+		_, ourSch, theirSch, err := tbl.GetConflictSchemas(ctx, tblName)
+		if err != nil {
+			return err
+		}
+
+		if ours && !schema.ColCollsAreEqual(sch.GetAllCols(), ourSch.GetAllCols()) {
+			return ErrConfSchIncompatible
+		} else if !ours && !schema.ColCollsAreEqual(sch.GetAllCols(), theirSch.GetAllCols()) {
+			return ErrConfSchIncompatible
+		}
 
 		cnfReader, err := merge.NewConflictReader(ctx, tbl)
 		if err != nil {
+			return err
 		}
 
 		joiner := cnfReader.GetJoiner()
 
-		var pkVals []types.Value
+		var pkTuples []types.Value
+		vrw := tbl.ValueReadWriter()
 		for {
 			cnfRow, _, err := cnfReader.NextConflict(ctx)
 			if err == io.EOF {
@@ -104,54 +105,49 @@ func AutoResolveTables(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.
 				return err
 			}
 
-			vrw := tbl.ValueReadWriter()
-			var pkVal types.Value
+			var row row.Row
+			var k, v types.Value
 			if ours {
-				row := cnfMap["their"]
-				k := row.NomsMapKey(theirSch)
-				v := row.NomsMapValue(theirSch)
-
-				kv, _ := k.Value(ctx)
-				vv, _ := v.Value(ctx)
-
-				newMap, _ := types.NewMap(ctx, vrw, kv, vv)
-
-				updatedTable, _ := tbl.UpdateNomsRows(ctx, newMap)
-				pkVals = append(pkVals, kv)
-				_, _, updatedTbl, _ := updatedTable.ResolveConflicts(ctx, pkVals)
-				newRoot, _ = newRoot.PutTable(ctx, tblName, updatedTbl)
-				return dSess.SetRoot(ctx, dbName, newRoot)
+				row = cnfMap["our"]
+				k, err = row.NomsMapKey(ourSch).Value(ctx)
+				if err != nil {
+					return err
+				}
+				v, err = row.NomsMapValue(ourSch).Value(ctx)
+				if err != nil {
+					return err
+				}
 			} else {
 				row := cnfMap["their"]
-				pkVal, err = row.NomsMapKey(theirSch).Value(ctx)
-				aa, _ := pkVal.Value(ctx)
-				panic(fmt.Sprintf("%v, %v, %v", pkVal, aa, row))
+				k, err = row.NomsMapKey(theirSch).Value(ctx)
+				if err != nil {
+					return err
+				}
+				v, err = row.NomsMapValue(theirSch).Value(ctx)
+				if err != nil {
+					return err
+				}
 			}
-			if err != nil {
-				return err
-			}
-			pkVals = append(pkVals, pkVal)
+			pkTuples = append(pkTuples, k, v)
 		}
 
-		// TODO: problem is that this always picks ours...
-		_, _, updatedTbl, err := tbl.ResolveConflicts(ctx, pkVals)
-		if err != nil {
-			if errors.Is(err, doltdb.ErrNoConflictsResolved) {
-				return nil
-			}
-			return err
-		}
-
-		newRoot, err = newRoot.PutTable(ctx, tblName, updatedTbl)
+		newMap, err := types.NewMap(ctx, vrw, pkTuples...)
 		if err != nil {
 			return err
 		}
 
-		//if ours && !schema.ColCollsAreEqual(sch.GetAllCols(), ourSch.GetAllCols()) {
-		//	return ErrConfSchIncompatible
-		//} else if !ours && !schema.ColCollsAreEqual(sch.GetAllCols(), theirSch.GetAllCols()) {
-		//	return ErrConfSchIncompatible
-		//}
+		updatedTable, err := tbl.UpdateNomsRows(ctx, newMap)
+		if err != nil {
+			return err
+		}
+		_, _, newTbl, err := updatedTable.ResolveConflicts(ctx, pkTuples)
+		if err != nil {
+			return err
+		}
+		newRoot, err = newRoot.PutTable(ctx, tblName, newTbl)
+		if err != nil {
+			return err
+		}
 	}
 	return dSess.SetRoot(ctx, dbName, newRoot)
 }
