@@ -30,13 +30,29 @@ type Item []byte
 
 type subtreeCounts []uint64
 
+// Node is a generic implementation of a prolly tree node.
+// Elements in a Node are generic Items. Interpreting Item
+// contents is deferred to higher layers (see prolly.Map).
 type Node struct {
-	// keys and values contain sub-slices of |msg|,
-	// allowing faster lookups by avoiding the vtable
+	// keys and values cache offset metadata
+	// to accelerate Item lookups into msg.
 	keys, values message.ItemAccess
-	count, level uint16
-	subtrees     *subtreeCounts
-	msg          serial.Message
+
+	// count is the Item pair count.
+	count uint16
+
+	// level is 0-indexed tree height.
+	level uint16
+
+	// subtrees contains the key cardinality
+	// of each child tree of a non-leaf Node.
+	// this field is lazily decoded from msg
+	// because it requires a malloc.
+	subtrees *subtreeCounts
+
+	// msg is the underlying buffer for the Node
+	// encoded as a Flatbuffers message.
+	msg serial.Message
 }
 
 type AddressCb func(ctx context.Context, addr hash.Hash) error

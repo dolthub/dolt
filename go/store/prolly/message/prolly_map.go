@@ -127,7 +127,7 @@ func getProllyMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, lev
 	} else {
 		values.bufStart = lookupVectorOffset(prollyMapAddressArrayBytesVOffset, pm.Table())
 		values.bufLen = uint16(pm.AddressArrayLength())
-		values.staticSize = hash.ByteLen
+		values.itemWidth = hash.ByteLen
 	}
 	return
 }

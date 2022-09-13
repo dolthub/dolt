@@ -129,7 +129,7 @@ func getArtifactMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, l
 	} else {
 		values.bufStart = lookupVectorOffset(mergeArtifactAddressArrayVOffset, ma.Table())
 		values.bufLen = uint16(ma.AddressArrayLength())
-		values.staticSize = hash.ByteLen
+		values.itemWidth = hash.ByteLen
 	}
 	return
 }

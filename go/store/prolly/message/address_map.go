@@ -104,7 +104,7 @@ func getAddressMapValues(msg serial.Message) (values ItemAccess, err error) {
 	}
 	values.bufStart = lookupVectorOffset(addressMapAddressArrayVOffset, am.Table())
 	values.bufLen = uint16(am.AddressArrayLength())
-	values.staticSize = hash.ByteLen
+	values.itemWidth = hash.ByteLen
 	return
 }
 

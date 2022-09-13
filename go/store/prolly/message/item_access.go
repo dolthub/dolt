@@ -21,12 +21,25 @@ import (
 
 // ItemAccess accesses items in a serial.Message.
 type ItemAccess struct {
+	// bufStart is the offset to the start of the
+	// Item buffer within a serial.Message.
+	// bufLen is the length of the Item buffer.
 	bufStart, bufLen uint16
+
+	// offStart, if nonzero, is the offset to the
+	// start of the uin16 offset buffer within a
+	// serial.Message. A zero value for offStart
+	// indicates an empty offset buffer.
+	// bufLen is the length of the Item buffer.
 	offStart, offLen uint16
-	staticSize       uint16
+
+	// If the serial.Message does not contain an
+	// offset buffer (offStart is zero), then
+	// Items have a fixed width equal to itemWidth.
+	itemWidth uint16
 }
 
-// GetItem returns the ith item in |arr|.
+// GetItem returns the ith Item from the buffer.
 func (acc ItemAccess) GetItem(i int, msg serial.Message) []byte {
 	buf := msg[acc.bufStart : acc.bufStart+acc.bufLen]
 	off := msg[acc.offStart : acc.offStart+acc.offLen]
@@ -35,8 +48,8 @@ func (acc ItemAccess) GetItem(i int, msg serial.Message) []byte {
 		start := val.ReadUint16(off[(i * 2) : (i*2)+2])
 		return buf[start:stop]
 	} else {
-		stop := int(acc.staticSize) * (i + 1)
-		start := int(acc.staticSize) * i
+		stop := int(acc.itemWidth) * (i + 1)
+		start := int(acc.itemWidth) * i
 		return buf[start:stop]
 	}
 }
