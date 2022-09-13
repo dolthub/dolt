@@ -118,8 +118,7 @@ func MutateMapWithTupleIter(ctx context.Context, m Map, iter TupleIter) (Map, er
 }
 
 func DiffMaps(ctx context.Context, from, to Map, cb tree.DiffFn) error {
-	fcb := makeFilterCb(from.valDesc, to.valDesc, cb)
-	return tree.DiffOrderedTrees(ctx, from.tuples, to.tuples, fcb)
+	return tree.DiffOrderedTrees(ctx, from.tuples, to.tuples, cb)
 }
 
 // RangeDiffMaps returns diffs within a Range. See Range for which diffs are
@@ -154,15 +153,13 @@ func RangeDiffMaps(ctx context.Context, from, to Map, rng Range, cb tree.DiffFn)
 		return err
 	}
 
-	fcb := makeFilterCb(from.valDesc, to.valDesc, cb)
-
 	for {
 		var diff tree.Diff
 		if diff, err = differ.Next(ctx); err != nil {
 			break
 		}
 
-		if err = fcb(ctx, diff); err != nil {
+		if err = cb(ctx, diff); err != nil {
 			break
 		}
 	}
@@ -173,32 +170,12 @@ func RangeDiffMaps(ctx context.Context, from, to Map, rng Range, cb tree.DiffFn)
 // specified by |start| and |stop|. If |start| and/or |stop| is null, then the
 // range is unbounded towards that end.
 func DiffMapsKeyRange(ctx context.Context, from, to Map, start, stop val.Tuple, cb tree.DiffFn) error {
-	fcb := makeFilterCb(from.valDesc, to.valDesc, cb)
-	return tree.DiffKeyRangeOrderedTrees(ctx, from.tuples, to.tuples, start, stop, fcb)
+	return tree.DiffKeyRangeOrderedTrees(ctx, from.tuples, to.tuples, start, stop, cb)
 }
 
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
-
-	canCompareLeftDiff := val.CanCompareTuples(base.valDesc, left.valDesc)
-	canCompareRightDiff := val.CanCompareTuples(base.valDesc, right.valDesc)
-
-	ignoreShortTuplesCb := func(l, r tree.Diff) (tree.Diff, bool) {
-		// Prevent conflicts caused by a short tuple diff
-		if canCompareLeftDiff &&
-			len(l.From) > 0 && len(l.To) > 0 &&
-			left.valDesc.Compare(val.Tuple(l.From), val.Tuple(l.To)) == 0 {
-			return r, true
-		}
-		if canCompareRightDiff &&
-			len(r.From) > 0 && len(r.To) > 0 &&
-			right.valDesc.Compare(val.Tuple(r.From), val.Tuple(r.To)) == 0 {
-			return l, true
-		}
-		return cb(l, r)
-	}
-
 	serializer := message.NewProllyMapSerializer(left.valDesc, base.NodeStore().Pool())
-	tuples, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, ignoreShortTuplesCb, serializer)
+	tuples, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
 	if err != nil {
 		return Map{}, err
 	}
@@ -208,25 +185,6 @@ func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) 
 		keyDesc: base.keyDesc,
 		valDesc: base.valDesc,
 	}, nil
-}
-
-// filters diffs where the tuple compare function asserts that the |From| and
-// |To| are equal. This was necessary to add because val.Tuple's that had
-// different byte representations could hold the same values. Specifically, in
-// the case where a nullable field was appended and some tuples became short.
-func makeFilterCb(fromVD, toVD val.TupleDesc, cb tree.DiffFn) tree.DiffFn {
-	if !val.CanCompareTuples(fromVD, toVD) {
-		return cb
-	}
-
-	return func(ctx context.Context, diff tree.Diff) error {
-		if len(diff.From) > 0 && len(diff.To) > 0 &&
-			toVD.Compare(val.Tuple(diff.From), val.Tuple(diff.To)) == 0 {
-			return nil
-		}
-
-		return cb(ctx, diff)
-	}
 }
 
 // NodeStore returns the map's NodeStore

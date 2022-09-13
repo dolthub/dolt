@@ -237,8 +237,8 @@ func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sq
 }
 
 func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Context, prefixKey val.Tuple) error {
-	for i := 0; i < prefixKey.Count(); i++ {
-		if prefixKey.FieldIsNull(i) {
+	for i := 0; i < writer.prefixBld.Desc.Count(); i++ {
+		if writer.prefixBld.Desc.IsNull(i, prefixKey) {
 			return nil
 		}
 	}

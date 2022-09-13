@@ -569,26 +569,3 @@ func (td TupleDesc) Equals(other TupleDesc) bool {
 	}
 	return true
 }
-
-// CanCompareTuples returns true if tuples of |fromVD| can be compared with
-// tuples of |toVD|. The comparison is directional as CanCompareTuples(a, b) may
-// or may not be equal to CanCompareTuples(b, a).
-func CanCompareTuples(fromVD, toVD TupleDesc) bool {
-	if toVD.Count() < fromVD.Count() {
-		return false
-	}
-
-	for i := 0; i < fromVD.Count(); i++ {
-		if fromVD.Types[i].Enc != toVD.Types[i].Enc || fromVD.Types[i].Nullable != toVD.Types[i].Nullable {
-			return false
-		}
-	}
-
-	for j := fromVD.Count(); j < toVD.Count(); j++ {
-		if !toVD.Types[j].Nullable {
-			return false
-		}
-	}
-
-	return true
-}
