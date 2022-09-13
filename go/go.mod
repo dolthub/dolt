@@ -58,12 +58,12 @@ require (
 require (
 	github.com/dolthub/go-mysql-server v0.12.1-0.20220912181513-390f047d064f
 	github.com/google/flatbuffers v2.0.6+incompatible
-	github.com/gosuri/uilive v0.0.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/mitchellh/go-ps v1.0.0
 	github.com/pquerna/cachecontrol v0.1.0
 	github.com/prometheus/client_golang v1.11.0
 	github.com/shirou/gopsutil/v3 v3.22.1
+	github.com/vbauerster/mpb v3.4.0+incompatible
 	github.com/xitongsys/parquet-go v1.6.1
 	github.com/xitongsys/parquet-go-source v0.0.0-20211010230925-397910c5e371
 	github.com/zeebo/blake3 v0.2.3
@@ -118,7 +118,6 @@ require (
 	github.com/src-d/go-oniguruma v1.1.0 // indirect
 	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/tklauser/numcpus v0.3.0 // indirect
-	github.com/vbauerster/mpb v3.4.0+incompatible // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.opencensus.io v0.22.4 // indirect
 	go.uber.org/atomic v1.6.0 // indirect

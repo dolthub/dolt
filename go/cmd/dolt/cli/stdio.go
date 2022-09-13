@@ -25,7 +25,6 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/google/uuid"
-	"github.com/gosuri/uilive"
 	"github.com/vbauerster/mpb/cwriter"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -182,9 +181,11 @@ func DeleteAndPrint(prevMsgLen int, msg string) int {
 // console. Each time Display is called, the output is reset, and you can begin
 // writing anew.
 type EphemeralPrinter struct {
-	w     *cwriter.Writer
-	mu    sync.Mutex // protects the following
-	lines int
+	w           *cwriter.Writer
+	mu          sync.Mutex // protects the following
+	lines       int
+	wrote       bool
+	atLineStart bool
 }
 
 // NewEphemeralPrinter creates a new EphemeralPrinter.
@@ -198,7 +199,7 @@ func NewEphemeralPrinter() *EphemeralPrinter {
 		out = CliOut
 	}
 	w := cwriter.New(out)
-	e := &EphemeralPrinter{w: w, mu: sync.Mutex{}}
+	e := &EphemeralPrinter{w: w, mu: sync.Mutex{}, atLineStart: true}
 	return e
 }
 
@@ -219,9 +220,14 @@ func (e *EphemeralPrinter) Printf(format string, a ...interface{}) {
 		if i != 0 {
 			_, _ = e.w.Write([]byte("\n"))
 			e.lines++
+			e.atLineStart = true
 		}
 
 		_, _ = e.w.Write([]byte(line))
+		e.wrote = true
+		if len(line) > 0 {
+			e.atLineStart = false
+		}
 	}
 }
 
@@ -233,15 +239,18 @@ func (e *EphemeralPrinter) Display() {
 	if outputIsClosed() {
 		return
 	}
-	if e.lines == 0 {
-		// If no newline was written, add it. This will ensure that the output
-		// is cleared properly.
+
+	if e.wrote && !e.atLineStart {
+		// Cursor needs to be at the start of a line. This will ensure that the
+		// output is cleared properly.
 		_, _ = e.w.Write([]byte("\n"))
 		e.lines++
+		e.atLineStart = true
 	}
 
 	_ = e.w.Flush(e.lines)
 	e.lines = 0
+	e.wrote = false
 }
 
 func outputIsClosed() bool {
@@ -253,8 +262,6 @@ type fdProvider struct {
 	io.Writer
 	fd uintptr
 }
-
-var _ uilive.FdWriter = fdProvider{}
 
 func (p fdProvider) Fd() uintptr {
 	return p.fd
