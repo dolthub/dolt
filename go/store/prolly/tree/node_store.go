@@ -90,38 +90,43 @@ func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 }
 
 // ReadMany implements NodeStore.
-func (ns nodeStore) ReadMany(ctx context.Context, refs hash.HashSlice) ([]Node, error) {
-	found := make(map[hash.Hash]chunks.Chunk)
+func (ns nodeStore) ReadMany(ctx context.Context, addrs hash.HashSlice) ([]Node, error) {
+	found := make(map[hash.Hash]Node)
 	gets := hash.HashSet{}
 
-	for _, r := range refs {
+	for _, r := range addrs {
 		n, ok := ns.cache.get(r)
 		if ok {
-			found[r] = chunks.NewChunkWithHash(r, n.bytes())
+			found[r] = n
 		} else {
 			gets.Insert(r)
 		}
 	}
 
+	var nerr error
 	mu := new(sync.Mutex)
 	err := ns.store.GetMany(ctx, gets, func(ctx context.Context, chunk *chunks.Chunk) {
+		n, err := NodeFromBytes(chunk.Data())
+		if err != nil {
+			nerr = err
+		}
 		mu.Lock()
-		found[chunk.Hash()] = *chunk
+		found[chunk.Hash()] = n
 		mu.Unlock()
 	})
+	if err == nil {
+		err = nerr
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	nodes := make([]Node, len(refs))
-	for i, r := range refs {
-		c, ok := found[r]
+	var ok bool
+	nodes := make([]Node, len(addrs))
+	for i, addr := range addrs {
+		nodes[i], ok = found[addr]
 		if ok {
-			nodes[i], err = NodeFromBytes(c.Data())
-			if err != nil {
-				return nil, err
-			}
-			ns.cache.insert(c.Hash(), nodes[i])
+			ns.cache.insert(addr, nodes[i])
 		}
 	}
 	return nodes, nil

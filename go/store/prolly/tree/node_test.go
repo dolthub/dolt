@@ -70,6 +70,29 @@ func TestNodeSize(t *testing.T) {
 	assert.Equal(t, 56, int(sz))
 }
 
+func BenchmarkNodeGet(b *testing.B) {
+	const (
+		count int = 128
+		mask  int = 0x7f
+	)
+	tuples, _ := AscendingUintTuples(count)
+	assert.Len(b, tuples, count)
+	keys := make([]Item, count)
+	vals := make([]Item, count)
+	for i := range tuples {
+		keys[i] = Item(tuples[i][0])
+		vals[i] = Item(tuples[i][1])
+	}
+	nd := newLeafNode(keys, vals)
+	b.ResetTimer()
+
+	var k Item
+	for i := 0; i < b.N; i++ {
+		k = nd.GetKey(i & mask)
+	}
+	assert.NotNil(b, k)
+}
+
 func TestNodeHashValueCompatibility(t *testing.T) {
 	keys, values := randomNodeItemPairs(t, (rand.Int()%101)+50)
 	nd := newLeafNode(keys, values)
