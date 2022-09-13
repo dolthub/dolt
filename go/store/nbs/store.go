@@ -131,6 +131,28 @@ func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(hashes hash.HashSet) (map[
 func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
 	gr := toGetRecords(hashes)
 
+	forIndex := func(ti tableIndex, cur map[hash.Hash]Range) (map[hash.Hash]Range, error) {
+		if cur == nil {
+			cur = make(map[hash.Hash]Range)
+		}
+		var foundHashes []hash.Hash
+		for h := range hashes {
+			a := addr(h)
+			e, ok, err := ti.Lookup(&a)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				foundHashes = append(foundHashes, h)
+				cur[h] = Range{Offset: e.Offset(), Length: e.Length()}
+			}
+		}
+		for _, h := range foundHashes {
+			delete(hashes, h)
+		}
+		return cur, nil
+	}
+
 	ranges := make(map[hash.Hash]map[hash.Hash]Range)
 	f := func(css chunkSources) error {
 		for _, cs := range css {
@@ -161,37 +183,29 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 					ranges[hash.Hash(tr.h)] = y
 				}
 			case *chunkSourceAdapter:
-				y, ok := ranges[hash.Hash(tr.h)]
-
-				if !ok {
-					y = make(map[hash.Hash]Range)
-				}
-
 				tableIndex, err := tr.index()
-
 				if err != nil {
 					return err
 				}
-
-				var foundHashes []hash.Hash
-				for h := range hashes {
-					a := addr(h)
-					e, ok, err := tableIndex.Lookup(&a)
-					if err != nil {
-						return err
-					}
-					if ok {
-						foundHashes = append(foundHashes, h)
-						y[h] = Range{Offset: e.Offset(), Length: e.Length()}
-					}
+				found, err := forIndex(tableIndex, ranges[hash.Hash(tr.h)])
+				if err != nil {
+					return err
 				}
-
-				ranges[hash.Hash(tr.h)] = y
-
-				for _, h := range foundHashes {
-					delete(hashes, h)
+				ranges[hash.Hash(tr.h)] = found
+			case *persistingChunkSource:
+				tableIndex, err := tr.index()
+				if err != nil {
+					return err
 				}
-
+				h, err := tr.hash()
+				if err != nil {
+					return err
+				}
+				found, err := forIndex(tableIndex, ranges[hash.Hash(h)])
+				if err != nil {
+					return err
+				}
+				ranges[hash.Hash(h)] = found
 			default:
 				panic(reflect.TypeOf(cs))
 			}
