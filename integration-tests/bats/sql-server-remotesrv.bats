@@ -97,3 +97,19 @@ SQL
     run dolt push origin main:main
     [[ "$status" != 0 ]] || false
 }
+
+@test "sql-server-remotesrv: remotesapi listen error stops process" {
+    mkdir remote_one
+    mkdir remote_two
+    cd remote_one
+    dolt init
+    dolt sql-server --remotesapi-port 50051 &
+    srv_pid=$!
+
+    dolt clone http://localhost:50051/test-org/remote_one remote_one_cloned
+
+    cd ../remote_two
+    dolt init
+    run dolt sql-server --port 3307 --remotesapi-port 50051
+    [[ "$status" != 0 ]] || false
+}
