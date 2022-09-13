@@ -1156,7 +1156,7 @@ SQL
     [[ ! "$output" =~ " 0 " ]] || false
     run dolt sql -q "select * from one_pk order by pk limit 1,0"
     [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 0 ]
     [[ ! "$output" =~ " 0 " ]] || false
     run dolt sql -q "select * from one_pk order by pk desc limit 1"
     [ $status -eq 0 ]
@@ -1220,7 +1220,7 @@ SQL
     [[ "$output" =~ "2" ]] || false
     run dolt sql -q "select pk from one_pk where c1 in (11,21)"
     [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 0 ]
     run dolt sql -q "select pk from one_pk where c1 not in (10,20)"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]

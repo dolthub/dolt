@@ -1695,6 +1695,27 @@ s.close()
     [ "$status" -eq 1 ]
 }
 
+@test "sql-server: create a database when no current database is set" {
+    mkdir new_format && cd new_format
+    run dolt init --new-format
+    [ $status -eq 0 ]
+
+    let PORT="$$ % (65536-1024) + 1024"
+    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt &
+    SERVER_PID=$! # will get killed by teardown_common
+    sleep 5 # not using python wait so this works on windows
+
+    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<< "create database mydb1;"
+    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<< "exit;"
+    [ -d mydb1 ]
+
+    cd mydb1
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ ! $output =~ "OLD ( __LD_1__ )" ]] || false
+    [[ "$output" =~ "NEW ( __DOLT__ )" ]] || false
+}
+
 @test "sql-server: deleting database directory when a running server is using it does not panic" {
     skiponwindows "Missing dependencies"
 

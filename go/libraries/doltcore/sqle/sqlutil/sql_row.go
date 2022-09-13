@@ -309,7 +309,8 @@ func WriteEWKBPolyData(p sql.Polygon, buf []byte) {
 // destination. `utf8mb4` is the default character set for empty contexts, so we don't need to explicitly set it.
 var sqlColToStrContext = sql.NewEmptyContext()
 
-// SqlColToStr is a utility function for converting a sql column of type interface{} to a string
+// SqlColToStr is a utility function for converting a sql column of type interface{} to a string.
+// NULL values are treated as empty strings. Handle nil separately if you require other behavior.
 func SqlColToStr(sqlType sql.Type, col interface{}) (string, error) {
 	if col != nil {
 		switch typedCol := col.(type) {

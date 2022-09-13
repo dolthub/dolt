@@ -21,9 +21,7 @@ teardown() {
     teardown_common
 }
 
-# Create a single primary key table and do stuff
-@test "1pk5col-ints: create a table with a schema file and examine repo" {
-
+@test "1pk5col-ints: empty table" {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "test" ]] || false
@@ -33,7 +31,8 @@ teardown() {
 
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ pk[[:space:]]+\|[[:space:]]+c1[[:space:]]+\|[[:space:]]+c2[[:space:]]+\|[[:space:]]+c3[[:space:]]+\|[[:space:]]+c4[[:space:]]+\|[[:space:]]+c5 ]] || false
+    [ "${#lines[@]}" -eq 0 ]
+    [[ ! "$output" =~ 'pk' ]] || false
     run dolt diff
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "diff --dolt a/test b/test" ]
@@ -134,7 +133,7 @@ teardown() {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     run dolt sql -q "insert ignore into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6),(11,111,111,111,111,111)"
     [ "$status" -eq 0 ]
-    [[ "$output" = "Query OK, 1 row affected" ]] || false
+    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql -q "select * from test"
     [[ "$output" =~ "111" ]] || false
 }
@@ -192,7 +191,7 @@ teardown() {
     [[ "$output" =~ "column \"c10\" could not be found in any table in scope" ]] || false
     run dolt sql -q "select * from test where c2=147"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 0 ]
 }
 
 @test "1pk5col-ints: dolt sql select as" {

@@ -303,6 +303,22 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 		if ddb, ok := sess.GetDoltDB(ctx, curDB); ok {
 			newDbStorageFormat = ddb.ValueReadWriter().Format()
 		}
+	} else {
+		dbs := sess.GetDbStates()
+		var formats = make(map[*types.NomsBinFormat]int)
+		for dbName, _ := range dbs {
+			if ddb, ok := sess.GetDoltDB(ctx, dbName); ok {
+				formats[ddb.ValueReadWriter().Format()] += 1
+			}
+		}
+		if len(formats) > 1 {
+			return fmt.Errorf("multiple formats in the same server is not supported")
+		}
+		if len(formats) == 1 {
+			for f, _ := range formats {
+				newDbStorageFormat = f
+			}
+		}
 	}
 	err = newEnv.InitRepo(ctx, newDbStorageFormat, sess.Username(), sess.Email(), p.defaultBranch)
 	if err != nil {
