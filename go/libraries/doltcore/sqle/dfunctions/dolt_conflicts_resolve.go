@@ -99,7 +99,6 @@ func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.R
 			}
 
 			iter.Next(ctx)
-
 		}
 
 		// WORKS FOR OLD FORMAT
