@@ -190,10 +190,14 @@ type EphemeralPrinter struct {
 func NewEphemeralPrinter() *EphemeralPrinter {
 	var out io.Writer
 	// Bypass the colored writer.
-	if CliOut == colorOutput && ExecuteWithStdioRestored != nil {
-		ExecuteWithStdioRestored(func() {
+	if CliOut == colorOutput {
+		if ExecuteWithStdioRestored != nil {
+			ExecuteWithStdioRestored(func() {
+				out = os.Stdout
+			})
+		} else {
 			out = os.Stdout
-		})
+		}
 	} else {
 		out = CliOut
 	}
