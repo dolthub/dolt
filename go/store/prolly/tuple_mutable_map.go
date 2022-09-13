@@ -139,9 +139,9 @@ func (mut *MutableMap) Revert(context.Context) {
 }
 
 func (mut *MutableMap) flushPending(ctx context.Context) error {
+	stash := mut.stash
 	// if our in-memory edit set contains a stash, we
 	// must stash a copy of |mut.tuples| we can revert to.
-	var stash *tree.MutableMap[val.Tuple, val.Tuple, val.TupleDesc]
 	if mut.tuples.Edits.HasCheckpoint() {
 		cp := mut.tuples.Copy()
 		cp.Edits.Revert()
