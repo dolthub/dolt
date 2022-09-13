@@ -246,20 +246,12 @@ func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerC
 		return getCommandLineServerConfig(dEnv, apr)
 	}
 
-	// a user/pass word was specified in yamlCfg
-	if yamlCfg.UserConfig.Name != nil || yamlCfg.UserConfig.Password != nil {
-		return yamlCfg, nil
+	// if command line user argument was given, replace yaml's user and password
+	if user, hasUser := apr.GetValue(commands.UserFlag); hasUser {
+		pass, _ := apr.GetValue(passwordFlag)
+		yamlCfg.UserConfig.Name = &user
+		yamlCfg.UserConfig.Password = &pass
 	}
-
-	// take user/password from commandline
-	cmdCfg, err := getCommandLineServerConfig(dEnv, apr)
-	if err != nil {
-		return nil, err
-	}
-	user := cmdCfg.User()
-	pass := cmdCfg.Password()
-	yamlCfg.UserConfig.Name = &user
-	yamlCfg.UserConfig.Password = &pass
 
 	return yamlCfg, nil
 }

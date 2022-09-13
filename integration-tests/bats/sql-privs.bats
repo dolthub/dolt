@@ -115,7 +115,7 @@ behavior:
     server_query test_db 1 cmddolt "" "select user from mysql.user order by user" "User\ncmddolt"
 }
 
-@test "sql-privs: yaml with user is not replaced with command line user" {
+@test "sql-privs: yaml with user is also replaced with command line user" {
     make_test_repo
     touch server.yaml
     let PORT="$$ % (65536-1024) + 1024"
@@ -136,7 +136,7 @@ behavior:
     dolt sql-server --port=$PORT --config server.yaml --user cmddolt &
     SERVER_PID=$!
 
-    server_query test_db 1 yamldolt "" "select user from mysql.user order by user" "User\nyamldolt"
+    server_query test_db 1 cmddolt "" "select user from mysql.user order by user" "User\ncmddolt"
 }
 
 @test "sql-privs: yaml specifies doltcfg dir" {
