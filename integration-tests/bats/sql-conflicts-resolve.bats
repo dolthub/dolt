@@ -229,3 +229,44 @@ teardown() {
     dolt merge --abort
     dolt reset --hard
 }
+
+@test "sql-conflicts-resolve: conflicts table properly cleared on dolt conflicts resolve" {
+    dolt sql -q "create table test(pk int, c1 int, primary key(pk))"
+
+    run dolt conflicts cat test
+    [ $status -eq 0 ]
+    [ "$output" = "" ]
+    ! [[ "$output" =~ "pk" ]] || false
+
+    dolt add .
+    dolt commit -m "created table"
+    dolt branch branch1
+    dolt sql -q "insert into test values (0,0)"
+    dolt add .
+    dolt commit -m "inserted 0,0"
+    dolt checkout branch1
+    dolt sql -q "insert into test values (0,1)"
+    dolt add .
+    dolt commit -m "inserted 0,1"
+    dolt checkout main
+    dolt merge branch1 -m "merge"
+    run dolt sql -q "call dolt_conflicts_resolve('--ours', 'test')"
+    [ $status -eq 0 ]
+
+    run dolt conflicts cat test
+    [ $status -eq 0 ]
+    [ "$output" = "" ]
+    ! [[ "$output" =~ "pk" ]] || false
+
+    run dolt sql -q "update test set c1=1"
+    [ $status -eq 0 ]
+    ! [[ "$output" =~ "unresolved conflicts from the merge" ]] || false
+
+    dolt add .
+    dolt commit -m "Committing active merge"
+
+    run dolt conflicts cat test
+    [ $status -eq 0 ]
+    [ "$output" = "" ]
+    ! [[ "$output" =~ "pk" ]] || false
+}
