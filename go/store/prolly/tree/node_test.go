@@ -16,6 +16,7 @@ package tree
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"math"
 	"math/rand"
 	"testing"
@@ -84,13 +85,35 @@ func BenchmarkNodeGet(b *testing.B) {
 		vals[i] = Item(tuples[i][1])
 	}
 	nd := newLeafNode(keys, vals)
+
+	var pm serial.ProllyTreeNode
+	err := serial.InitProllyTreeNodeRoot(&pm, nd.msg, serial.MessagePrefixSz)
+	require.NoError(b, err)
 	b.ResetTimer()
 
-	var k Item
-	for i := 0; i < b.N; i++ {
-		k = nd.GetKey(i & mask)
-	}
-	assert.NotNil(b, k)
+	b.Run("ItemAccess Get", func(b *testing.B) {
+		var k Item
+		for i := 0; i < b.N; i++ {
+			k = nd.GetKey(i & mask)
+		}
+		assert.NotNil(b, k)
+	})
+	b.Run("Flatbuffers Get", func(b *testing.B) {
+		var k Item
+		for i := 0; i < b.N; i++ {
+			k = flatbuffersGetKey(i&mask, pm)
+		}
+		assert.NotNil(b, k)
+	})
+}
+
+// Node.Get() without cached offset metadata
+func flatbuffersGetKey(i int, pm serial.ProllyTreeNode) (key []byte) {
+	buf := pm.KeyItemsBytes()
+	start := pm.KeyOffsets(i)
+	stop := pm.KeyOffsets(i + 1)
+	key = buf[start:stop]
+	return
 }
 
 func TestNodeHashValueCompatibility(t *testing.T) {
