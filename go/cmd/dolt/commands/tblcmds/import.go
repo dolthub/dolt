@@ -508,17 +508,18 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 	// Set up the necessary data points for the import job
 	parsedRowChan := make(chan sql.Row)
 	var rowErr error
-	var printStarted bool
+	var printBadRowsStarted bool
 	var badCount int64
 
 	badRowCB := func(row sql.Row, err error) (quit bool) {
-		// record the first error encountered
-		if row != nil && rowErr == nil {
+		// record the first error encountered unless asked to ignore it
+		if row != nil && rowErr == nil && !options.contOnErr {
 			rowErr = fmt.Errorf("A bad row was encountered: %s: %w", sql.FormatRow(row), err)
 		}
 
 		atomic.AddInt64(&badCount, 1)
 
+		// only log info for the --continue option
 		if !options.contOnErr {
 			return true
 		}
@@ -528,9 +529,9 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 			return false
 		}
 
-		if !printStarted {
+		if !printBadRowsStarted {
 			cli.PrintErrln("The following rows were skipped:")
-			printStarted = true
+			printBadRowsStarted = true
 		}
 
 		cli.PrintErrln(sql.FormatRow(row))
