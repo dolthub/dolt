@@ -133,6 +133,10 @@ func skipRef(dec *typedBinaryNomsReader) ([]uint32, error) {
 }
 
 func maxChunkHeight(nbf *NomsBinFormat, v Value) (max uint64, err error) {
+	if _, ok := v.(SerialMessage); ok {
+		return SerialMessageRefHeight, nil
+	}
+
 	err = v.walkRefs(nbf, func(r Ref) error {
 		if height := r.Height(); height > max {
 			max = height
