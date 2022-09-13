@@ -235,10 +235,33 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 // GetServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
 // on command line. Server config variables not defined are set to default values.
 func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
+	var yamlCfg YAMLConfig
 	if cfgFile, ok := apr.GetValue(configFileFlag); ok {
-		return getYAMLServerConfig(dEnv.FS, cfgFile)
+		cfg, err := getYAMLServerConfig(dEnv.FS, cfgFile)
+		if err != nil {
+			return nil, err
+		}
+		yamlCfg = cfg.(YAMLConfig)
+	} else {
+		return getCommandLineServerConfig(dEnv, apr)
 	}
-	return getCommandLineServerConfig(dEnv, apr)
+
+	// a user/pass word was specified in yamlCfg
+	if yamlCfg.UserConfig.Name != nil || yamlCfg.UserConfig.Password != nil {
+		return yamlCfg, nil
+	}
+
+	// take user/password from commandline
+	cmdCfg, err := getCommandLineServerConfig(dEnv, apr)
+	if err != nil {
+		return nil, err
+	}
+	user := cmdCfg.User()
+	pass := cmdCfg.Password()
+	yamlCfg.UserConfig.Name = &user
+	yamlCfg.UserConfig.Password = &pass
+
+	return yamlCfg, nil
 }
 
 // SetupDoltConfig updates the given server config with where to create .doltcfg directory
