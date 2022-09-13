@@ -184,7 +184,6 @@ type EphemeralPrinter struct {
 	w           *cwriter.Writer
 	mu          sync.Mutex // protects the following
 	lines       int
-	wrote       bool
 	atLineStart bool
 }
 
@@ -224,7 +223,6 @@ func (e *EphemeralPrinter) Printf(format string, a ...interface{}) {
 		}
 
 		_, _ = e.w.Write([]byte(line))
-		e.wrote = true
 		if len(line) > 0 {
 			e.atLineStart = false
 		}
@@ -240,7 +238,7 @@ func (e *EphemeralPrinter) Display() {
 		return
 	}
 
-	if e.wrote && !e.atLineStart {
+	if !e.atLineStart {
 		// Cursor needs to be at the start of a line. This will ensure that the
 		// output is cleared properly.
 		_, _ = e.w.Write([]byte("\n"))
@@ -250,7 +248,6 @@ func (e *EphemeralPrinter) Display() {
 
 	_ = e.w.Flush(e.lines)
 	e.lines = 0
-	e.wrote = false
 }
 
 func outputIsClosed() bool {
