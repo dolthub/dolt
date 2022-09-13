@@ -557,8 +557,13 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 
 	err := g.Wait()
 	if err != nil && err != io.EOF {
+		// don't lose the rowErr if there is one
+		if rowErr != nil {
+			return badCount, fmt.Errorf("%w\n%s", err, rowErr.Error())
+		}
 		return badCount, err
 	}
+
 	if rowErr != nil {
 		return badCount, rowErr
 	}
