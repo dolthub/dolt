@@ -1719,17 +1719,23 @@ s.close()
 @test "sql-server: deleting database directory when a running server is using it does not panic" {
     skiponwindows "Missing dependencies"
 
-    cd repo1
-    start_sql_server repo1
+    mkdir nodb
+    cd nodb
+    start_sql_server >> server_log.txt 2>&1
 
-    server_query repo1 1 dolt "" "CREATE DATABASE mydb1"
-    server_query repo1 1 dolt "" "CREATE DATABASE mydb2"
+    server_query "" 1 dolt "" "CREATE DATABASE mydb1"
+    server_query "" 1 dolt "" "CREATE DATABASE mydb2"
 
     [ -d mydb1 ]
     [ -d mydb2 ]
 
     rm -rf mydb2
 
-    # TODO test the server log, it should not panic
-    server_query repo1 1 dolt "" "SHOW databases" "failed to access database 'mydb2': can no longer find a database on disk" 1
+    server_query "" 1 dolt "" "SHOW DATABASES" "" 1
+
+    run grep "panic" server_log.txt
+    [ "${#lines[@]}" -eq 0 ]
+
+    run grep "failed to access database: can no longer find .dolt dir on disk" server_log.txt
+    [ "${#lines[@]}" -eq 1 ]
 }
