@@ -143,6 +143,7 @@ var StandardCandidates = []string{
 	"LICENSE.md",
 	"COPYING",
 	"LICENSE-MIT",
+	"UNLICENSE",
 }
 
 func PrintPkgLicense(out io.Writer, pkg string, dir string) {
