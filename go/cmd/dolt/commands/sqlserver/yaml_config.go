@@ -113,6 +113,10 @@ type MetricsYAMLConfig struct {
 	Port   *int              `yaml:"port"`
 }
 
+type RemotesapiYAMLConfig struct {
+	Port *int `yaml:"port"`
+}
+
 type UserSessionVars struct {
 	Name string            `yaml:"name"`
 	Vars map[string]string `yaml:"vars"`
@@ -129,6 +133,7 @@ type YAMLConfig struct {
 	DataDirStr        *string               `yaml:"data_dir"`
 	CfgDirStr         *string               `yaml:"cfg_dir"`
 	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
+	RemotesapiConfig  RemotesapiYAMLConfig  `yaml:"remotesapi"`
 	PrivilegeFile     *string               `yaml:"privilege_file"`
 	Vars              []UserSessionVars     `yaml:"user_session_vars"`
 	Jwks              []engine.JwksConfig   `yaml:"jwks"`
@@ -332,6 +337,10 @@ func (cfg YAMLConfig) MetricsPort() int {
 	}
 
 	return *cfg.MetricsConfig.Port
+}
+
+func (cfg YAMLConfig) RemotesapiPort() *int {
+	return cfg.RemotesapiConfig.Port
 }
 
 // PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a

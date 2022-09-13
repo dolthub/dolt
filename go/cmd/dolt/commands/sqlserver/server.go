@@ -32,6 +32,8 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
@@ -201,6 +203,21 @@ func Serve(
 		}()
 	}
 
+	var remoteSrv *remotesrv.Server
+	if serverConfig.RemotesapiPort() != nil {
+		if remoteSrvSqlCtx, err := sqlEngine.NewContext(context.Background()); err == nil {
+			remoteSrv = sqle.NewRemoteSrvServer(remoteSrvSqlCtx, *serverConfig.RemotesapiPort())
+			go func() {
+				err := remoteSrv.Serve()
+				if err != nil {
+					lgr.Warnf("error starting remotesapi server on port %d: %v\n", *serverConfig.RemotesapiPort(), err)
+				}
+			}()
+		} else {
+			lgr.Warnf("error creating SQL engine context for remotesapi server; remotesapi will not be available: %v\n", err)
+		}
+	}
+
 	if ok, f := mrEnv.IsLocked(); ok {
 		startError = env.ErrActiveServerLock.New(f)
 		return
@@ -213,6 +230,9 @@ func Serve(
 	serverController.registerCloseFunction(startError, func() error {
 		if metSrv != nil {
 			metSrv.Close()
+		}
+		if remoteSrv != nil {
+			remoteSrv.GracefulStop()
 		}
 
 		return mySQLServer.Close()

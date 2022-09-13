@@ -92,12 +92,24 @@ func grpcMultiplexHandler(grpcSrv *grpc.Server, handler http.Handler) http.Handl
 func (s *Server) Serve() error {
 	httpListener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.httpPort))
 	if err != nil {
+		// Cleanup s.wg so that callers who have spawned Serve() in a
+		// goroutine can safely call GracefulStop() from outside of it.
+		s.wg.Done()
+		s.wg.Done()
+		if s.grpcPort != s.httpPort {
+			s.wg.Done()
+			s.wg.Done()
+		}
 		return err
 	}
 
 	if s.grpcPort != s.httpPort {
 		grpcListener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.grpcPort))
 		if err != nil {
+			s.wg.Done()
+			s.wg.Done()
+			s.wg.Done()
+			s.wg.Done()
 			httpListener.Close()
 			return err
 		}

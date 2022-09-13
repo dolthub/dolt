@@ -204,6 +204,7 @@ func TestYAMLConfigDefaults(t *testing.T) {
 	assert.Equal(t, defaultMetricsPort, cfg.MetricsPort())
 	assert.Nil(t, cfg.MetricsConfig.Labels)
 	assert.Equal(t, defaultAllowCleartextPasswords, cfg.AllowCleartextPasswords())
+	assert.Nil(t, cfg.RemotesapiPort())
 
 	c, err := LoadTLSConfig(cfg)
 	assert.NoError(t, err)
