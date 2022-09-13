@@ -108,26 +108,21 @@ func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.R
 			var k, v types.Value
 			if ours {
 				row = cnfMap["our"]
-				k, err = row.NomsMapKey(ourSch).Value(ctx)
-				if err != nil {
-					return err
-				}
-				v, err = row.NomsMapValue(ourSch).Value(ctx)
-				if err != nil {
-					return err
-				}
 			} else {
-				row := cnfMap["their"]
-				k, err = row.NomsMapKey(theirSch).Value(ctx)
-				if err != nil {
-					return err
-				}
-				v, err = row.NomsMapValue(theirSch).Value(ctx)
-				if err != nil {
-					return err
-				}
+				row = cnfMap["their"]
 			}
-			pkTuples = append(pkTuples, k, v)
+
+			if row != nil {
+				k, err = row.NomsMapKey(sch).Value(ctx)
+				if err != nil {
+					return err
+				}
+				v, err = row.NomsMapValue(sch).Value(ctx)
+				if err != nil {
+					return err
+				}
+				pkTuples = append(pkTuples, k, v)
+			}
 		}
 
 		newMap, err := types.NewMap(ctx, vrw, pkTuples...)
@@ -135,14 +130,16 @@ func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.R
 			return err
 		}
 
-		updatedTable, err := tbl.UpdateNomsRows(ctx, newMap)
+		newTbl, err := tbl.UpdateNomsRows(ctx, newMap)
 		if err != nil {
 			return err
 		}
-		_, _, newTbl, err := updatedTable.ResolveConflicts(ctx, pkTuples)
+
+		newTbl, err = newTbl.ClearConflicts(ctx)
 		if err != nil {
 			return err
 		}
+
 		newRoot, err = newRoot.PutTable(ctx, tblName, newTbl)
 		if err != nil {
 			return err
