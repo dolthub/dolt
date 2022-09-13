@@ -17,6 +17,7 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"io"
 	"strings"
 
@@ -85,6 +86,23 @@ func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.R
 			return ErrConfSchIncompatible
 		}
 
+		if tbl.Format() == types.Format_DOLT {
+			artifactIdx, err := tbl.GetArtifacts(ctx)
+			if err != nil {
+				return err
+			}
+
+			artifactMap := durable.ProllyMapFromArtifactIndex(artifactIdx)
+			iter, err := artifactMap.IterAllConflicts(ctx)
+			if err != nil {
+				return err
+			}
+
+			iter.Next(ctx)
+
+		}
+
+		// WORKS FOR OLD FORMAT
 		cnfReader, err := merge.NewConflictReader(ctx, tbl)
 		if err != nil {
 			return err
