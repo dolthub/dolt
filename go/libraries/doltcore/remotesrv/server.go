@@ -89,35 +89,33 @@ func grpcMultiplexHandler(grpcSrv *grpc.Server, handler http.Handler) http.Handl
 	return h2c.NewHandler(newHandler, h2s)
 }
 
-func (s *Server) Serve() error {
+type Listeners struct {
+	http net.Listener
+	grpc net.Listener
+}
+
+func (s *Server) Listeners() (Listeners, error) {
 	httpListener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.httpPort))
 	if err != nil {
-		// Cleanup s.wg so that callers who have spawned Serve() in a
-		// goroutine can safely call GracefulStop() from outside of it.
-		s.wg.Done()
-		s.wg.Done()
-		if s.grpcPort != s.httpPort {
-			s.wg.Done()
-			s.wg.Done()
-		}
-		return err
+		return Listeners{}, err
 	}
+	if s.httpPort == s.grpcPort {
+		return Listeners{http: httpListener}, nil
+	}
+	grpcListener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.grpcPort))
+	if err != nil {
+		httpListener.Close()
+		return Listeners{}, err
+	}
+	return Listeners{http: httpListener, grpc: grpcListener}, nil
+}
 
-	if s.grpcPort != s.httpPort {
-		grpcListener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.grpcPort))
-		if err != nil {
-			s.wg.Done()
-			s.wg.Done()
-			s.wg.Done()
-			s.wg.Done()
-			httpListener.Close()
-			return err
-		}
-
+func (s *Server) Serve(listeners Listeners) {
+	if listeners.grpc != nil {
 		go func() {
 			defer s.wg.Done()
 			log.Println("Starting grpc server on port", s.grpcPort)
-			err = s.grpcSrv.Serve(grpcListener)
+			err := s.grpcSrv.Serve(listeners.grpc)
 			log.Println("grpc server exited. error:", err)
 		}()
 		go func() {
@@ -130,7 +128,7 @@ func (s *Server) Serve() error {
 	go func() {
 		defer s.wg.Done()
 		log.Println("Starting http server on port ", s.httpPort)
-		err := s.httpSrv.Serve(httpListener)
+		err := s.httpSrv.Serve(listeners.http)
 		log.Println("http server exited. exit error:", err)
 	}()
 	go func() {
@@ -140,5 +138,4 @@ func (s *Server) Serve() error {
 	}()
 
 	s.wg.Wait()
-	return nil
 }

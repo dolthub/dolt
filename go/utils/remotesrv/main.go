@@ -81,11 +81,12 @@ func main() {
 	}
 
 	server := remotesrv.NewServer(*httpHostParam, *httpPortParam, *grpcPortParam, fs, dbCache, *readOnlyParam)
+	listeners, err := server.Listeners()
+	if err != nil {
+		log.Fatalf("error starting remotesrv Server listeners: %v\n", err)
+	}
 	go func() {
-		err := server.Serve()
-		if err != nil {
-			log.Fatalf("error starting remotesrv Server: %v\n", err)
-		}
+		server.Serve(listeners)
 	}()
 	waitForSignal()
 	server.GracefulStop()

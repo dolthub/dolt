@@ -207,12 +207,17 @@ func Serve(
 	if serverConfig.RemotesapiPort() != nil {
 		if remoteSrvSqlCtx, err := sqlEngine.NewContext(context.Background()); err == nil {
 			remoteSrv = sqle.NewRemoteSrvServer(remoteSrvSqlCtx, *serverConfig.RemotesapiPort())
-			go func() {
-				err := remoteSrv.Serve()
-				if err != nil {
-					lgr.Warnf("error starting remotesapi server on port %d: %v\n", *serverConfig.RemotesapiPort(), err)
-				}
-			}()
+			listeners, err := remoteSrv.Listeners()
+			if err != nil {
+				lgr.Warnf("error starting remotesapi server listeners on port %d; remotesapi will not be available: %v\n", *serverConfig.RemotesapiPort(), err)
+
+				// nil out remoteSrv so shutdown hook does not try to stop it.
+				remoteSrv = nil
+			} else {
+				go func() {
+					remoteSrv.Serve(listeners)
+				}()
+			}
 		} else {
 			lgr.Warnf("error creating SQL engine context for remotesapi server; remotesapi will not be available: %v\n", err)
 		}
