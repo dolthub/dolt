@@ -9,12 +9,6 @@ import (
 	"github.com/vbauerster/mpb/cwriter"
 )
 
-var (
-	cursorUp           = fmt.Sprintf("%c[%dA", cwriter.ESC, 1)
-	clearLine          = fmt.Sprintf("%c[2K\r", cwriter.ESC)
-	clearCursorAndLine = cursorUp + clearLine
-)
-
 func TestEphemeralPrinter(t *testing.T) {
 	t.Run("DisplayPutsCursorAtLineStart", func(t *testing.T) {
 		old := CliOut
@@ -31,7 +25,7 @@ func TestEphemeralPrinter(t *testing.T) {
 		assert.Equal(t, b.String(), "Hi!\n")
 
 		p.Display()
-		assert.Equal(t, "Hi!\n"+clearCursorAndLine, b.String())
+		assert.Equal(t, "Hi!\n"+clearLinesTxt(1), b.String())
 
 		p.Printf("Newline!\n")
 		p.Printf("And another one!")
@@ -40,7 +34,7 @@ func TestEphemeralPrinter(t *testing.T) {
 
 		assert.Equal(t,
 			"Hi!\n"+
-				clearCursorAndLine+
+				clearLinesTxt(1)+
 				"Newline!\n"+
 				"And another one!\n"+
 				"Something else\n", b.String())
@@ -48,12 +42,14 @@ func TestEphemeralPrinter(t *testing.T) {
 		p.Display()
 		assert.Equal(t,
 			"Hi!\n"+
-				clearCursorAndLine+
+				clearLinesTxt(1)+
 				"Newline!\n"+
 				"And another one!\n"+
 				"Something else\n"+
-				clearCursorAndLine+
-				clearCursorAndLine+
-				clearCursorAndLine, b.String())
+				clearLinesTxt(3), b.String())
 	})
+}
+
+func clearLinesTxt(n int) string {
+	return fmt.Sprintf("%c[%dA", cwriter.ESC, n) + fmt.Sprintf("%c[J", cwriter.ESC)
 }
