@@ -93,6 +93,52 @@ teardown() {
     [[ "$output" =~ "privileges.db" ]] || false
 }
 
+@test "sql-privs: yaml with no user is replaced with command line user" {
+    make_test_repo
+    touch server.yaml
+    let PORT="$$ % (65536-1024) + 1024"
+
+    echo "log_level: debug
+
+listener:
+    host: 0.0.0.0
+    port: $PORT
+    max_connections: 10
+
+behavior:
+    autocommit: false
+" > server.yaml
+
+    dolt sql-server --port=$PORT --config server.yaml --user cmddolt &
+    SERVER_PID=$!
+
+    server_query test_db 1 cmddolt "" "select user from mysql.user order by user" "User\ncmddolt"
+}
+
+@test "sql-privs: yaml with user is not replaced with command line user" {
+    make_test_repo
+    touch server.yaml
+    let PORT="$$ % (65536-1024) + 1024"
+
+    echo "log_level: debug
+user:
+  name: yamldolt
+
+listener:
+    host: 0.0.0.0
+    port: $PORT
+    max_connections: 10
+
+behavior:
+    autocommit: false
+" > server.yaml
+
+    dolt sql-server --port=$PORT --config server.yaml --user cmddolt &
+    SERVER_PID=$!
+
+    server_query test_db 1 yamldolt "" "select user from mysql.user order by user" "User\nyamldolt"
+}
+
 @test "sql-privs: yaml specifies doltcfg dir" {
     make_test_repo
     touch server.yaml
