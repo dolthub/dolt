@@ -1065,5 +1065,5 @@ EOF
 
     run dolt diff --summary
     [ $status -eq 0 ]
-    [[ "$output" =~ "No data changes." ]] || false
+    [[ ! "$output" =~ "1 Row Modified" ]] || false
 }
