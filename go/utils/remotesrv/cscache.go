@@ -19,9 +19,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
@@ -29,20 +28,9 @@ const (
 	defaultMemTableSize = 128 * 1024 * 1024
 )
 
-type store interface {
-	chunks.ChunkStore
-	nbs.TableFileStore
-
-	Path() (string, bool)
-	GetChunkLocationsWithPaths(hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, error)
-}
-
-var _ store = &nbs.NomsBlockStore{}
-var _ store = &nbs.GenerationalNBS{}
-
 type LocalCSCache struct {
 	mu  *sync.Mutex
-	dbs map[string]store
+	dbs map[string]remotesrv.RemoteSrvStore
 
 	fs filesys.Filesys
 }
@@ -50,16 +38,12 @@ type LocalCSCache struct {
 func NewLocalCSCache(filesys filesys.Filesys) *LocalCSCache {
 	return &LocalCSCache{
 		&sync.Mutex{},
-		make(map[string]store),
+		make(map[string]remotesrv.RemoteSrvStore),
 		filesys,
 	}
 }
 
-type DBCache interface {
-	Get(org, repo, nbfVerStr string) (store, error)
-}
-
-func (cache *LocalCSCache) Get(org, repo, nbfVerStr string) (store, error) {
+func (cache *LocalCSCache) Get(org, repo, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
 
@@ -93,9 +77,9 @@ func (cache *LocalCSCache) Get(org, repo, nbfVerStr string) (store, error) {
 }
 
 type SingletonCSCache struct {
-	s store
+	s remotesrv.RemoteSrvStore
 }
 
-func (cache SingletonCSCache) Get(org, repo, nbfVerStr string) (store, error) {
+func (cache SingletonCSCache) Get(org, repo, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
 	return cache.s, nil
 }
