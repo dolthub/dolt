@@ -206,7 +206,7 @@ func Serve(
 	var remoteSrv *remotesrv.Server
 	if serverConfig.RemotesapiPort() != nil {
 		if remoteSrvSqlCtx, err := sqlEngine.NewContext(context.Background()); err == nil {
-			remoteSrv = sqle.NewRemoteSrvServer(remoteSrvSqlCtx, *serverConfig.RemotesapiPort())
+			remoteSrv = sqle.NewRemoteSrvServer(logrus.NewEntry(lgr), remoteSrvSqlCtx, *serverConfig.RemotesapiPort())
 			listeners, err := remoteSrv.Listeners()
 			if err != nil {
 				lgr.Warnf("error starting remotesapi server listeners on port %d; remotesapi will not be available: %v\n", *serverConfig.RemotesapiPort(), err)

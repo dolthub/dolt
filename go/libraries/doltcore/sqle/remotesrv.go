@@ -18,6 +18,7 @@ import (
 	"errors"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
@@ -50,7 +51,7 @@ func (s remotesrvStore) Get(org, repo, nbfVerStr string) (remotesrv.RemoteSrvSto
 	return rss, nil
 }
 
-func NewRemoteSrvServer(ctx *sql.Context, port int) *remotesrv.Server {
+func NewRemoteSrvServer(lgr *logrus.Entry, ctx *sql.Context, port int) *remotesrv.Server {
 	sess := dsess.DSessFromSess(ctx.Session)
-	return remotesrv.NewServer("", port, port, sess.Provider().FileSystem(), remotesrvStore{ctx}, true)
+	return remotesrv.NewServer(lgr, "", port, port, sess.Provider().FileSystem(), remotesrvStore{ctx}, true)
 }
