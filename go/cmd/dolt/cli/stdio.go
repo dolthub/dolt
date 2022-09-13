@@ -25,12 +25,15 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/google/uuid"
+	"github.com/gosuri/uilive"
 	"github.com/vbauerster/mpb/cwriter"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
-var CliOut = color.Output
+var colorOutput = color.Output
+var colorFd = os.Stdout.Fd()
+var CliOut = colorOutput
 var CliErr = color.Error
 
 var outputClosed uint64
@@ -186,7 +189,15 @@ type EphemeralPrinter struct {
 
 // NewEphemeralPrinter creates a new EphemeralPrinter.
 func NewEphemeralPrinter() *EphemeralPrinter {
-	w := cwriter.New(CliOut)
+	var out io.Writer
+	// On Windows, color.Output is a *colorable.Writer which does not expose a
+	// file descriptor. We inject one here.
+	if CliOut == colorOutput {
+		out = fdProvider{CliOut, colorFd}
+	} else {
+		out = CliOut
+	}
+	w := cwriter.New(out)
 	e := &EphemeralPrinter{w: w, mu: sync.Mutex{}}
 	return e
 }
@@ -236,4 +247,15 @@ func (e *EphemeralPrinter) Display() {
 func outputIsClosed() bool {
 	isClosed := atomic.LoadUint64(&outputClosed)
 	return isClosed == 1
+}
+
+type fdProvider struct {
+	io.Writer
+	fd uintptr
+}
+
+var _ uilive.FdWriter = fdProvider{}
+
+func (p fdProvider) Fd() uintptr {
+	return p.fd
 }
