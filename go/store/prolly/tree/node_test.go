@@ -16,7 +16,6 @@ package tree
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"math"
 	"math/rand"
 	"testing"
@@ -25,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
