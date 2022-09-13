@@ -151,3 +151,81 @@ teardown() {
     [ $status -eq 0 ]
     [[ $output =~ "main" ]] || false
 }
+
+@test "sql-conflicts-resolve: two branches, one deletes rows, one modifies those same rows. merge. conflict" {
+    dolt sql -q 'CREATE TABLE foo (`pk` INT PRIMARY KEY, `col:1` INT);'
+    dolt sql -q "INSERT INTO foo VALUES (1, 1), (2, 1), (3, 1), (4, 1), (5, 1);"
+    dolt add foo
+    dolt commit -m 'initial commit.'
+
+    dolt checkout -b deleter
+    dolt sql -q 'delete from foo'
+    dolt add foo
+    dolt commit -m 'delete commit.'
+
+    dolt checkout -b modifier main
+    dolt sql -q 'update foo set `col:1` = `col:1` + 1 where pk in (1, 3, 5);'
+    dolt add foo
+    dolt commit -m 'modify commit.'
+
+    dolt checkout -b merge-into-modified modifier
+    run dolt merge deleter -m "merge"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+    dolt merge --abort
+
+    # Accept theirs deletes all rows.
+    dolt checkout main
+    dolt branch -d -f merge-into-modified
+    dolt checkout -b merge-into-modified modifier
+    dolt merge deleter -m "merge"
+
+    dolt sql -q "call dolt_conflicts_resolve('--theirs', 'foo')"
+    run dolt sql -q 'select count(*) from foo'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 0        |" ]] || false
+    dolt merge --abort
+    dolt reset --hard
+
+    # Accept ours deletes two rows.
+    dolt checkout main
+    dolt branch -d -f merge-into-modified
+    dolt checkout -b merge-into-modified modifier
+    dolt merge deleter -m "merge"
+    dolt sql -q "call dolt_conflicts_resolve('--ours', 'foo')"
+    run dolt sql -q 'select count(*) from foo'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 3        |" ]] || false
+    dolt merge --abort
+    dolt reset --hard
+
+    dolt checkout -b merge-into-deleter deleter
+    run dolt merge modifier -m "merge"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+    dolt merge --abort
+
+    # Accept ours deletes all rows.
+    dolt checkout main
+    dolt branch -d -f merge-into-deleter
+    dolt checkout -b merge-into-deleter deleter
+    dolt merge modifier -m "merge"
+    dolt sql -q "call dolt_conflicts_resolve('--ours', 'foo')"
+    run dolt sql -q 'select count(*) from foo'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 0        |" ]] || false
+    dolt merge --abort
+    dolt reset --hard
+
+    # Accept theirs adds modified.
+    dolt checkout main
+    dolt branch -d -f merge-into-deleter
+    dolt checkout -b merge-into-deleter deleter
+    dolt merge modifier -m "merge"
+    dolt sql -q "call dolt_conflicts_resolve('--theirs', 'foo')"
+    run dolt sql -q 'select count(*) from foo'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 3        |" ]] || false
+    dolt merge --abort
+    dolt reset --hard
+}
