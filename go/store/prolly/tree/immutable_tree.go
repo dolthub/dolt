@@ -268,17 +268,12 @@ func (t *ImmutableTree) load(ctx context.Context) error {
 		return err
 	}
 
-	WalkNodes(ctx, n, t.ns, func(ctx context.Context, n Node) error {
-		leaf, err := n.IsLeaf()
-		if err != nil {
-			return err
-		}
-		if leaf {
+	return WalkNodes(ctx, n, t.ns, func(ctx context.Context, n Node) error {
+		if n.IsLeaf() {
 			t.buf = append(t.buf, n.GetValue(0)...)
 		}
 		return nil
 	})
-	return nil
 }
 
 func (t *ImmutableTree) bytes(ctx context.Context) ([]byte, error) {

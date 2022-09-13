@@ -48,7 +48,7 @@ type NodeStore interface {
 
 type nodeStore struct {
 	store chunks.ChunkStore
-	cache chunkCache
+	cache nodeCache
 	bp    pool.BuffPool
 }
 
@@ -69,9 +69,9 @@ func NewNodeStore(cs chunks.ChunkStore) NodeStore {
 
 // Read implements NodeStore.
 func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
-	c, ok := ns.cache.get(ref)
+	n, ok := ns.cache.get(ref)
 	if ok {
-		return NodeFromBytes(c.Data())
+		return n, nil
 	}
 
 	c, err := ns.store.Get(ctx, ref)
@@ -80,44 +80,53 @@ func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 	}
 	assertTrue(c.Size() > 0, "empty chunk returned from ChunkStore")
 
-	ns.cache.insert(c)
+	n, err = NodeFromBytes(c.Data())
+	if err != nil {
+		return Node{}, err
+	}
+	ns.cache.insert(ref, n)
 
-	return NodeFromBytes(c.Data())
+	return n, nil
 }
 
 // ReadMany implements NodeStore.
-func (ns nodeStore) ReadMany(ctx context.Context, refs hash.HashSlice) ([]Node, error) {
-	found := make(map[hash.Hash]chunks.Chunk)
+func (ns nodeStore) ReadMany(ctx context.Context, addrs hash.HashSlice) ([]Node, error) {
+	found := make(map[hash.Hash]Node)
 	gets := hash.HashSet{}
 
-	for _, r := range refs {
-		c, ok := ns.cache.get(r)
+	for _, r := range addrs {
+		n, ok := ns.cache.get(r)
 		if ok {
-			found[r] = c
+			found[r] = n
 		} else {
 			gets.Insert(r)
 		}
 	}
 
+	var nerr error
 	mu := new(sync.Mutex)
 	err := ns.store.GetMany(ctx, gets, func(ctx context.Context, chunk *chunks.Chunk) {
+		n, err := NodeFromBytes(chunk.Data())
+		if err != nil {
+			nerr = err
+		}
 		mu.Lock()
-		found[chunk.Hash()] = *chunk
+		found[chunk.Hash()] = n
 		mu.Unlock()
-		ns.cache.insert(*chunk)
 	})
+	if err == nil {
+		err = nerr
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	nodes := make([]Node, len(refs))
-	for i, r := range refs {
-		c, ok := found[r]
+	var ok bool
+	nodes := make([]Node, len(addrs))
+	for i, addr := range addrs {
+		nodes[i], ok = found[addr]
 		if ok {
-			nodes[i], err = NodeFromBytes(c.Data())
-			if err != nil {
-				return nil, err
-			}
+			ns.cache.insert(addr, nodes[i])
 		}
 	}
 	return nodes, nil
@@ -131,7 +140,7 @@ func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 	if err := ns.store.Put(ctx, c); err != nil {
 		return hash.Hash{}, err
 	}
-	ns.cache.insert(c)
+	ns.cache.insert(c.Hash(), nd)
 	return c.Hash(), nil
 }
 

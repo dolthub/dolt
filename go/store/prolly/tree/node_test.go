@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
@@ -42,9 +43,7 @@ func TestRoundTripInts(t *testing.T) {
 	require.True(t, sumTupleSize(keys)+sumTupleSize(values) < message.MaxVectorOffset)
 
 	nd := NewTupleLeafNode(keys, values)
-	leaf, err := nd.IsLeaf()
-	require.NoError(t, err)
-	assert.True(t, leaf)
+	assert.True(t, nd.IsLeaf())
 	assert.Equal(t, len(keys), int(nd.count))
 	for i := range keys {
 		assert.Equal(t, keys[i], val.Tuple(nd.GetKey(i)))
@@ -58,9 +57,7 @@ func TestRoundTripNodeItems(t *testing.T) {
 		require.True(t, sumSize(keys)+sumSize(values) < message.MaxVectorOffset)
 
 		nd := newLeafNode(keys, values)
-		leaf, err := nd.IsLeaf()
-		require.NoError(t, err)
-		assert.True(t, leaf)
+		assert.True(t, nd.IsLeaf())
 		assert.Equal(t, len(keys), int(nd.count))
 		for i := range keys {
 			assert.Equal(t, keys[i], nd.GetKey(i))
@@ -71,7 +68,52 @@ func TestRoundTripNodeItems(t *testing.T) {
 
 func TestNodeSize(t *testing.T) {
 	sz := unsafe.Sizeof(Node{})
-	assert.Equal(t, 152, int(sz))
+	assert.Equal(t, 56, int(sz))
+}
+
+func BenchmarkNodeGet(b *testing.B) {
+	const (
+		count int = 128
+		mask  int = 0x7f
+	)
+	tuples, _ := AscendingUintTuples(count)
+	assert.Len(b, tuples, count)
+	keys := make([]Item, count)
+	vals := make([]Item, count)
+	for i := range tuples {
+		keys[i] = Item(tuples[i][0])
+		vals[i] = Item(tuples[i][1])
+	}
+	nd := newLeafNode(keys, vals)
+
+	var pm serial.ProllyTreeNode
+	err := serial.InitProllyTreeNodeRoot(&pm, nd.msg, serial.MessagePrefixSz)
+	require.NoError(b, err)
+	b.ResetTimer()
+
+	b.Run("ItemAccess Get", func(b *testing.B) {
+		var k Item
+		for i := 0; i < b.N; i++ {
+			k = nd.GetKey(i & mask)
+		}
+		assert.NotNil(b, k)
+	})
+	b.Run("Flatbuffers Get", func(b *testing.B) {
+		var k Item
+		for i := 0; i < b.N; i++ {
+			k = flatbuffersGetKey(i&mask, pm)
+		}
+		assert.NotNil(b, k)
+	})
+}
+
+// Node.Get() without cached offset metadata
+func flatbuffersGetKey(i int, pm serial.ProllyTreeNode) (key []byte) {
+	buf := pm.KeyItemsBytes()
+	start := pm.KeyOffsets(i)
+	stop := pm.KeyOffsets(i + 1)
+	key = buf[start:stop]
+	return
 }
 
 func TestNodeHashValueCompatibility(t *testing.T) {
