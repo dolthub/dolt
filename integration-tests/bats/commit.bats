@@ -10,7 +10,7 @@ teardown() {
     teardown_common
 }
 
-@test "commit: -ALL (-a) adds all tables including new ones to the staged set." {
+@test "commit: -ALL (-A) adds all tables including new ones to the staged set." {
     dolt sql -q "CREATE table t (pk int primary key);"
     dolt sql -q "INSERT INTO t VALUES (1);"
     dolt add t
