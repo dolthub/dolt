@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"io"
 	"strings"
 
@@ -87,6 +88,8 @@ func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.R
 		}
 
 		if tbl.Format() == types.Format_DOLT {
+			dtables.NewConflictsTable(ctx, tblName, root, nil)
+
 			artifactIdx, err := tbl.GetArtifacts(ctx)
 			if err != nil {
 				return err
@@ -98,7 +101,11 @@ func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.R
 				return err
 			}
 
-			iter.Next(ctx)
+			cnfArt, err := iter.Next(ctx)
+
+			doltdb.LoadRootValueFromRootIshAddr(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh)
+			cnfArt.Metadata.BaseRootIsh
+			cnfArt.TheirRootIsh
 		}
 
 		// WORKS FOR OLD FORMAT
