@@ -122,7 +122,7 @@ func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joine
 
 // Next returns the next row
 func (itr *diffRowItr) Next(ctx *sql.Context) (sql.Row, error) {
-	r, _, err := itr.diffSrc.NextDiff()
+	r, err := itr.diffSrc.NextDiff()
 
 	if err != nil {
 		return nil, err

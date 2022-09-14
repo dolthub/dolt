@@ -482,9 +482,11 @@ pk,v1,v2
 5,,5
 6,,6
 DELIM
+
     run dolt table import -u test bad-update.csv
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "Bad Row: [5,<nil>,5]" ]] || false
+    [[ "$output" =~ "bad row" ]] || false
+    [[ "$output" =~ "[5,<nil>,5]" ]] || false
     [[ "$output" =~ "column name 'v1' is non-nullable but attempted to set a value of null" ]] || false
 }
 

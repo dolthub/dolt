@@ -374,7 +374,7 @@ func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, impOpts 
 
 	defer rd.Close(ctx)
 
-	infCols, err := actions.InferColumnTypesFromTableReader(ctx, root, rd, impOpts)
+	infCols, err := actions.InferColumnTypesFromTableReader(ctx, rd, impOpts)
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: failed to infer schema").AddCause(err).Build()

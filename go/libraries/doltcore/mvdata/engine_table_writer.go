@@ -34,7 +34,6 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -184,7 +183,7 @@ func NewSqlEngineTableWriterWithEngine(ctx *sql.Context, eng *sqle.Engine, db ds
 	}, nil
 }
 
-func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowCb func(*pipeline.TransformRowFailure) bool) (err error) {
+func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowCb func(row sql.Row, err error) bool) (err error) {
 	err = s.forceDropTableIfNeeded()
 	if err != nil {
 		return err
@@ -275,10 +274,9 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 				offendingRow = n.OffendingRow
 			}
 
-			trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "write", Details: err.Error()}
-			quit := badRowCb(trf)
+			quit := badRowCb(offendingRow, err)
 			if quit {
-				return trf
+				return err
 			}
 		}
 	}
