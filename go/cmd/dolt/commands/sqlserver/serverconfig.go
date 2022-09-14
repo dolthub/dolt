@@ -141,6 +141,11 @@ type ServerConfig interface {
 	AllowCleartextPasswords() bool
 	// Socket is a path to the unix socket file
 	Socket() string
+	// RemotesapiPort is the port to use for serving a remotesapi interface with this sql-server instance.
+	// A remotesapi interface will allow this sql-server process to be used
+	// as a dolt remote for things like `clone`, `fetch` and read
+	// replication.
+	RemotesapiPort() *int
 }
 
 type commandLineServerConfig struct {
@@ -164,6 +169,7 @@ type commandLineServerConfig struct {
 	privilegeFilePath       string
 	allowCleartextPasswords bool
 	socket                  string
+	remotesapiPort          *int
 }
 
 var _ ServerConfig = (*commandLineServerConfig)(nil)
@@ -261,6 +267,10 @@ func (cfg *commandLineServerConfig) MetricsHost() string {
 
 func (cfg *commandLineServerConfig) MetricsPort() int {
 	return defaultMetricsPort
+}
+
+func (cfg *commandLineServerConfig) RemotesapiPort() *int {
+	return cfg.remotesapiPort
 }
 
 // PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
@@ -397,6 +407,12 @@ func (cfg *commandLineServerConfig) withAllowCleartextPasswords(allow bool) *com
 // WithSocket updates the path to the unix socket file
 func (cfg *commandLineServerConfig) WithSocket(sockFilePath string) *commandLineServerConfig {
 	cfg.socket = sockFilePath
+	return cfg
+}
+
+// WithRemotesapiPort sets the remotesapi port to use.
+func (cfg *commandLineServerConfig) WithRemotesapiPort(port *int) *commandLineServerConfig {
+	cfg.remotesapiPort = port
 	return cfg
 }
 
