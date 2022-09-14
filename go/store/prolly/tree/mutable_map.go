@@ -58,6 +58,13 @@ func (m MutableMap[K, V, O]) Has(ctx context.Context, key K) (present bool, err 
 	return m.StaticMap.Has(ctx, key)
 }
 
+func (m MutableMap[K, V, O]) Copy() MutableMap[K, V, O] {
+	return MutableMap[K, V, O]{
+		Edits:     m.Edits.Copy(),
+		StaticMap: m.StaticMap,
+	}
+}
+
 func (m MutableMap[K, V, O]) Mutations() MutationIter {
 	return orderedListIter[K, V]{iter: m.Edits.IterAtStart()}
 }

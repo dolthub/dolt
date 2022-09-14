@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/val"
@@ -158,16 +159,13 @@ func TestWriteImmutableTree(t *testing.T) {
 			byteCnt := 0
 			WalkNodes(ctx, root, ns, func(ctx context.Context, n Node) error {
 				var keyCnt int
-				leaf, err := n.IsLeaf()
-				if err != nil {
-					return err
-				}
+				leaf := n.IsLeaf()
 				if leaf {
-					byteCnt += len(n.values.Items)
+					byteCnt += len(getBlobValues(n.msg))
 					for _, i := range n.GetValue(0) {
 						sum += int(i)
 					}
-					keyCnt = len(n.values.Items)
+					keyCnt = len(getBlobValues(n.msg))
 					if keyCnt != tt.chunkSize {
 						unfilledCnt += 1
 					}
@@ -180,8 +178,7 @@ func TestWriteImmutableTree(t *testing.T) {
 				return nil
 			})
 
-			level, err := root.Level()
-			require.NoError(t, err)
+			level := root.Level()
 			assert.Equal(t, expLevel, level)
 			if tt.checkSum {
 				assert.Equal(t, expSum, sum)
@@ -393,4 +390,13 @@ func mustNewBlob(ctx context.Context, ns NodeStore, len, chunkSize int) *Immutab
 		panic(err)
 	}
 	return root
+}
+
+func getBlobValues(msg serial.Message) []byte {
+	var b serial.Blob
+	err := serial.InitBlobRoot(&b, msg, serial.MessagePrefixSz)
+	if err != nil {
+		panic(err)
+	}
+	return b.PayloadBytes()
 }

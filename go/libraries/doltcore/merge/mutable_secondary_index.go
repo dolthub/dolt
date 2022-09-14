@@ -48,7 +48,7 @@ func getMutableSecondaryIdxs(ctx context.Context, sch schema.Schema, indexes dur
 // used to modify the index based on a modification to corresponding primary row.
 type MutableSecondaryIdx struct {
 	Name     string
-	mut      prolly.MutableMap
+	mut      *prolly.MutableMap
 	keyMap   val.OrdinalMapping
 	pkLen    int
 	keyBld   *val.TupleBuilder

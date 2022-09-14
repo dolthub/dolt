@@ -1145,3 +1145,24 @@ EOF
 )
     [[ "$output" =~ "$EXPECTED_TABLE" ]]
 }
+
+# This test was added to prevent short tuples from causing an empty diff.
+@test "diff: add a column, then set and unset its value. Should not show a diff" {
+    dolt sql -q "CREATE table t (pk int primary key);"
+    dolt sql -q "Insert into t values (1), (2), (3);"
+    dolt sql -q "alter table t add column col1 int;"
+    dolt add .
+    dolt commit -am "setup"
+
+    # Turn a short tuple into a nominal one
+    dolt sql -q "UPDATE t set col1 = 1 where pk = 1;"
+    dolt sql -q "UPDATE t set col1 = null where pk = 1;"
+
+    run dolt diff
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "| 1" ]] || false
+
+    run dolt diff --summary
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "1 Row Modified" ]] || false
+}

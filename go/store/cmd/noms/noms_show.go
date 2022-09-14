@@ -187,12 +187,8 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 			if err != nil {
 				return err
 			}
-			l, err := node.Level()
-			if err != nil {
-				return err
-			}
 			fmt.Fprintf(w, "\tPrimary Index (rows %d, depth %d) %s {",
-				c, l+1, node.HashOf().String()[:8])
+				c, node.Level()+1, node.HashOf().String()[:8])
 			tree.OutputProllyNode(w, node)
 			fmt.Fprintf(w, "\t}\n")
 
@@ -205,12 +201,8 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 			if err != nil {
 				return err
 			}
-			l, err = node.Level()
-			if err != nil {
-				return err
-			}
 			fmt.Fprintf(w, "\tSecondary Indexes (indexes %d, depth %d) %s {",
-				c, l+1, node.HashOf().String()[:8])
+				c, node.Level()+1, node.HashOf().String()[:8])
 			err = tree.OutputAddressMapNode(w, node)
 			if err != nil {
 				return err

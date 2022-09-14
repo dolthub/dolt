@@ -113,6 +113,5 @@ teardown() {
     run	dolt sql -q "select c from t where c like '%o%'"
     [ $status -eq 0 ]
     [[ $output =~ "schon" ]] || false
-    skip "Regexes in collations not fully supported"
     [[ $output =~ "schön" ]] || false
 }

@@ -59,9 +59,7 @@ func TestCommitClosure(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 0, c)
 		assert.Equal(t, 0, cc.closure.Root.Count())
-		c, err = cc.Height()
-		require.NoError(t, err)
-		assert.Equal(t, 1, c)
+		assert.Equal(t, 1, cc.Height())
 
 		i, err := cc.IterAllReverse(ctx)
 		_, _, err = i.Next(ctx)

@@ -111,7 +111,7 @@ func (m ArtifactMap) Count() (int, error) {
 	return m.tuples.Count()
 }
 
-func (m ArtifactMap) Height() (int, error) {
+func (m ArtifactMap) Height() int {
 	return m.tuples.Height()
 }
 

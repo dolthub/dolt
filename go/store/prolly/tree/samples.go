@@ -74,16 +74,10 @@ func (s Samples) percentiles() (p50, p90, p99, p999, p100 int) {
 func PrintTreeSummaryByLevel(t *testing.T, nd Node, ns NodeStore) {
 	ctx := context.Background()
 
-	level, err := nd.Level()
-	require.NoError(t, err)
-
-	sizeByLevel := make([]Samples, level+1)
-	cardByLevel := make([]Samples, level+1)
-	err = WalkNodes(ctx, nd, ns, func(ctx context.Context, nd Node) error {
-		lvl, err := nd.Level()
-		if err != nil {
-			return err
-		}
+	sizeByLevel := make([]Samples, nd.Level()+1)
+	cardByLevel := make([]Samples, nd.Level()+1)
+	err := WalkNodes(ctx, nd, ns, func(ctx context.Context, nd Node) error {
+		lvl := nd.Level()
 		sizeByLevel[lvl] = append(sizeByLevel[lvl], nd.Size())
 		cardByLevel[lvl] = append(cardByLevel[lvl], int(nd.count))
 		return nil
@@ -92,9 +86,7 @@ func PrintTreeSummaryByLevel(t *testing.T, nd Node, ns NodeStore) {
 
 	fmt.Println("pre-edit map Summary: ")
 	fmt.Println("| Level | count | avg Size \t  p50 \t  p90 \t p100 | avg card \t  p50 \t  p90 \t p100 |")
-	level, err = nd.Level()
-	require.NoError(t, err)
-	for i := level; i >= 0; i-- {
+	for i := nd.Level(); i >= 0; i-- {
 		sizes, cards := sizeByLevel[i], cardByLevel[i]
 		sp50, _, sp90, _, sp100 := sizes.percentiles()
 		cp50, _, cp90, _, cp100 := cards.percentiles()

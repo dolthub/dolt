@@ -85,7 +85,7 @@ type primaryIndexErrBuilder interface {
 }
 
 type prollyIndexWriter struct {
-	mut prolly.MutableMap
+	mut *prolly.MutableMap
 
 	keyBld *val.TupleBuilder
 	keyMap val.OrdinalMapping
@@ -189,11 +189,11 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 }
 
 func (m prollyIndexWriter) Commit(ctx context.Context) error {
-	return m.mut.ApplyPending(ctx)
+	return m.mut.Checkpoint(ctx)
 }
 
 func (m prollyIndexWriter) Discard(ctx context.Context) error {
-	m.mut.DiscardPending(ctx)
+	m.mut.Revert(ctx)
 	return nil
 }
 
@@ -238,7 +238,7 @@ func (m prollyIndexWriter) uniqueKeyError(ctx context.Context, keyStr string, ke
 
 type prollySecondaryIndexWriter struct {
 	name   string
-	mut    prolly.MutableMap
+	mut    *prolly.MutableMap
 	unique bool
 
 	keyBld    *val.TupleBuilder
@@ -285,8 +285,8 @@ func (m prollySecondaryIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) 
 }
 
 func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, prefixKey val.Tuple) error {
-	for i := 0; i < prefixKey.Count(); i++ {
-		if prefixKey.FieldIsNull(i) {
+	for i := 0; i < m.prefixBld.Desc.Count(); i++ {
+		if m.prefixBld.Desc.IsNull(i, prefixKey) {
 			return nil
 		}
 	}
@@ -364,11 +364,11 @@ func (m prollySecondaryIndexWriter) Update(ctx context.Context, oldRow sql.Row, 
 }
 
 func (m prollySecondaryIndexWriter) Commit(ctx context.Context) error {
-	return m.mut.ApplyPending(ctx)
+	return m.mut.Checkpoint(ctx)
 }
 
 func (m prollySecondaryIndexWriter) Discard(ctx context.Context) error {
-	m.mut.DiscardPending(ctx)
+	m.mut.Revert(ctx)
 	return nil
 }
 

@@ -508,13 +508,18 @@ func ascendingIntMap(t *testing.T, count int) Map {
 }
 
 func ascendingIntMapWithStep(t *testing.T, count, step int) Map {
-	tuples := make([][2]val.Tuple, count)
-	for i := range tuples {
-		v := int64(i * step)
-		tuples[i][0], tuples[i][1] = makePut(v, v)
-	}
+	tuples := ascendingTuplesWithStepAndStart(count, step, 0)
 	pm := mustProllyMapFromTuples(t, mutKeyDesc, mutValDesc, tuples)
 	return pm
+}
+
+func ascendingTuplesWithStepAndStart(count, step, start int) [][2]val.Tuple {
+	tuples := make([][2]val.Tuple, count)
+	for i := range tuples {
+		v := int64((i * step) + start)
+		tuples[i][0], tuples[i][1] = makePut(v, v)
+	}
+	return tuples
 }
 
 var mutKeyDesc = val.NewTupleDescriptor(
@@ -542,11 +547,11 @@ func makeDelete(k int64) (key val.Tuple) {
 }
 
 // validates edit provider and materializes map
-func materializeMap(t *testing.T, mut MutableMap) Map {
+func materializeMap(t *testing.T, mut *MutableMap) Map {
 	ctx := context.Background()
 
 	// ensure Edits are provided in Order
-	err := mut.ApplyPending(ctx)
+	err := mut.Checkpoint(ctx)
 	require.NoError(t, err)
 	iter := mut.tuples.Mutations()
 	prev, _ := iter.NextMutation(ctx)

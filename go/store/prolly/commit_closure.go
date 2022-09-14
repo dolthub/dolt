@@ -70,7 +70,7 @@ func (c CommitClosure) Count() (int, error) {
 	return c.closure.Count()
 }
 
-func (c CommitClosure) Height() (int, error) {
+func (c CommitClosure) Height() int {
 	return c.closure.Height()
 }
 
