@@ -42,10 +42,10 @@ var (
 )
 
 type filehandler struct {
-	dbCache       DBCache
-	fs            filesys.Filesys
-	readOnly      bool
-	lgr           *logrus.Entry
+	dbCache  DBCache
+	fs       filesys.Filesys
+	readOnly bool
+	lgr      *logrus.Entry
 }
 
 func newFileHandler(lgr *logrus.Entry, dbCache DBCache, fs filesys.Filesys, readOnly bool) filehandler {
