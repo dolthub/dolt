@@ -193,7 +193,7 @@ CREATE TABLE employees (
 SQL
     run dolt table import -r employees `batshelper employees-tbl-bad.json`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "An error occurred moving data" ]] || false
+    [[ "$output" =~ "An error occurred while moving data" ]] || false
 }
 
 @test "import-replace-tables: replace table using xlsx file" {
