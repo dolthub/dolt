@@ -20,17 +20,17 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/fatih/color"
 	"github.com/google/uuid"
-	"github.com/gosuri/uilive"
+	"github.com/vbauerster/mpb/v8/cwriter"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
 var colorOutput = color.Output
-var colorFd = os.Stdout.Fd()
 var CliOut = colorOutput
 var CliErr = color.Error
 
@@ -180,33 +180,29 @@ func DeleteAndPrint(prevMsgLen int, msg string) int {
 // console. Each time Display is called, the output is reset, and you can begin
 // writing anew.
 type EphemeralPrinter struct {
-	outW         io.Writer
-	w            *uilive.Writer
-	wrote        bool
-	wroteNewline bool
-
-	started bool
+	w           *cwriter.Writer
+	mu          sync.Mutex // protects the following
+	lines       int
+	atLineStart bool
 }
 
 // NewEphemeralPrinter creates a new EphemeralPrinter.
 func NewEphemeralPrinter() *EphemeralPrinter {
-	w := uilive.New()
-	// How uilive needs to clear terminal output, depends on what StdOut is
-	// being used. It checks the running terminal by casting the provided writer
-	// to an internal interface that just defines a `Fd() uintptr` function. It
-	// uses the file descriptor returned by fd to check if the writer writes to
-	// a terminal.
-	//
-	// If we use |colorOutput|, the type cast will fail and uilive will fail to
-	// detect the output terminal even though colorOutput always points to
-	// StdOut. We provide the file descriptor by wrapping |colorOutput| in a
-	// struct.
+	var out io.Writer
+	// Bypass the colored writer.
 	if CliOut == colorOutput {
-		w.Out = fdProvider{CliOut, colorFd}
+		if ExecuteWithStdioRestored != nil {
+			ExecuteWithStdioRestored(func() {
+				out = os.Stdout
+			})
+		} else {
+			out = os.Stdout
+		}
 	} else {
-		w.Out = CliOut
+		out = CliOut
 	}
-	e := &EphemeralPrinter{outW: w, w: w}
+	w := cwriter.New(out)
+	e := &EphemeralPrinter{w: w, mu: sync.Mutex{}, atLineStart: true}
 	return e
 }
 
@@ -214,6 +210,9 @@ func NewEphemeralPrinter() *EphemeralPrinter {
 // provided, one will be added to ensure that the output can be cleared in the
 // future. You can print multiple lines.
 func (e *EphemeralPrinter) Printf(format string, a ...interface{}) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	if outputIsClosed() {
 		return
 	}
@@ -221,57 +220,41 @@ func (e *EphemeralPrinter) Printf(format string, a ...interface{}) {
 	str := fmt.Sprintf(format, a...)
 	lines := strings.Split(str, "\n")
 	for i, line := range lines {
-		if !e.started {
-			e.started = true
-			e.w.Start()
-		}
 		if i != 0 {
-			_, _ = e.outW.Write([]byte("\n"))
-			e.wroteNewline = true
+			_, _ = e.w.Write([]byte("\n"))
+			e.lines++
+			e.atLineStart = true
 		}
 
-		e.wrote = true
-		_, _ = e.outW.Write([]byte(line))
-		e.outW = e.w.Newline()
+		_, _ = e.w.Write([]byte(line))
+		if len(line) > 0 {
+			e.atLineStart = false
+		}
 	}
 }
 
 // Display clears the previous output and displays the new text.
 func (e *EphemeralPrinter) Display() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	if outputIsClosed() {
 		return
 	}
-	if !e.wrote {
-		// If nothing was written, write the null character in order to clear
-		// the display.
-		_, _ = e.w.Write([]byte("\x00"))
-	} else if !e.wroteNewline {
-		// If no newline was written, add it. This will ensure that the output
-		// is cleared properly.
+
+	if !e.atLineStart {
+		// Cursor needs to be at the start of a line. This will ensure that the
+		// output is cleared properly.
 		_, _ = e.w.Write([]byte("\n"))
-	}
-	if e.started {
-		e.started = false
-		e.w.Stop()
+		e.lines++
+		e.atLineStart = true
 	}
 
-	e.outW = e.w
-	e.wrote = false
-	e.wroteNewline = false
+	_ = e.w.Flush(e.lines)
+	e.lines = 0
 }
 
 func outputIsClosed() bool {
 	isClosed := atomic.LoadUint64(&outputClosed)
 	return isClosed == 1
-}
-
-type fdProvider struct {
-	io.Writer
-	fd uintptr
-}
-
-var _ uilive.FdWriter = fdProvider{}
-
-func (p fdProvider) Fd() uintptr {
-	return p.fd
 }
