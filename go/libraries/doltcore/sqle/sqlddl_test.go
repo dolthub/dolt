@@ -248,8 +248,8 @@ func TestCreateTable(t *testing.T) {
 				schemaNewColumnWDefVal(t, "iso_code_3", 8427, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 3), false, `''`),
 				schemaNewColumnWDefVal(t, "iso_country", 7151, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `''`, schema.NotNullConstraint{}),
 				schemaNewColumnWDefVal(t, "country", 879, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `''`, schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "lat", 3502, sql.Float32, false, "0", schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "lon", 9907, sql.Float32, false, "0", schema.NotNullConstraint{})),
+				schemaNewColumnWDefVal(t, "lat", 3502, sql.Float32, false, "0.0", schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "lon", 9907, sql.Float32, false, "0.0", schema.NotNullConstraint{})),
 		},
 	}
 
@@ -1032,8 +1032,8 @@ func TestParseCreateTableStatement(t *testing.T) {
 				schemaNewColumnWDefVal(t, "iso_code_3", 8427, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 3), false, `''`),
 				schemaNewColumnWDefVal(t, "iso_country", 7151, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `''`, schema.NotNullConstraint{}),
 				schemaNewColumnWDefVal(t, "country", 879, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `''`, schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "lat", 3502, sql.Float32, false, "0", schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "lon", 9907, sql.Float32, false, "0", schema.NotNullConstraint{})),
+				schemaNewColumnWDefVal(t, "lat", 3502, sql.Float32, false, "0.0", schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "lon", 9907, sql.Float32, false, "0.0", schema.NotNullConstraint{})),
 		},
 	}
 
