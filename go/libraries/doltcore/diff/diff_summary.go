@@ -33,7 +33,7 @@ import (
 )
 
 type DiffSummaryProgress struct {
-	Adds, Removes, Changes, CellChanges, NewSize, OldSize uint64
+	Adds, Removes, Changes, CellChanges, NewRowSize, OldRowSize, NewCellSize, OldCellSize uint64
 }
 
 type prollyReporter func(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD val.TupleDesc, change tree.Diff, ch chan<- DiffSummaryProgress) error
@@ -50,7 +50,7 @@ func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to durable.
 	if err != nil {
 		return err
 	}
-	ch <- DiffSummaryProgress{OldSize: fc, NewSize: tc}
+	ch <- DiffSummaryProgress{OldRowSize: fc, NewRowSize: tc}
 
 	fk, tk := schema.IsKeyless(fromSch), schema.IsKeyless(toSch)
 	var keyless bool
@@ -64,7 +64,7 @@ func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to durable.
 		return diffProllyTrees(ctx, ch, keyless, from, to, fromSch, toSch)
 	}
 
-	return diffNomsMaps(ctx, ch, keyless, from, to)
+	return diffNomsMaps(ctx, ch, keyless, from, to, fromSch, toSch)
 }
 
 // SummaryForTableDelta pushes diff summary progress messages for the table delta given to the channel given
@@ -91,7 +91,7 @@ func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td T
 	if types.IsFormat_DOLT(td.Format()) {
 		return diffProllyTrees(ctx, ch, keyless, fromRows, toRows, fromSch, toSch)
 	} else {
-		return diffNomsMaps(ctx, ch, keyless, fromRows, toRows)
+		return diffNomsMaps(ctx, ch, keyless, fromRows, toRows, fromSch, toSch)
 	}
 }
 
@@ -114,14 +114,18 @@ func diffProllyTrees(ctx context.Context, ch chan DiffSummaryProgress, keyless b
 		if err != nil {
 			return err
 		}
+		cfc := uint64(len(fromSch.GetAllCols().GetColumns())) * fc
 		tc, err := to.Count()
 		if err != nil {
 			return err
 		}
+		ctc := uint64(len(toSch.GetAllCols().GetColumns())) * tc
 		rpr = reportPkChanges
 		ch <- DiffSummaryProgress{
-			OldSize: fc,
-			NewSize: tc,
+			OldRowSize:  fc,
+			NewRowSize:  tc,
+			OldCellSize: cfc,
+			NewCellSize: ctc,
 		}
 	}
 
@@ -134,7 +138,7 @@ func diffProllyTrees(ctx context.Context, ch chan DiffSummaryProgress, keyless b
 	return nil
 }
 
-func diffNomsMaps(ctx context.Context, ch chan DiffSummaryProgress, keyless bool, fromRows durable.Index, toRows durable.Index) error {
+func diffNomsMaps(ctx context.Context, ch chan DiffSummaryProgress, keyless bool, fromRows durable.Index, toRows durable.Index, fromSch, toSch schema.Schema) error {
 	var rpr nomsReporter
 	if keyless {
 		rpr = reportNomsKeylessChanges
@@ -143,14 +147,18 @@ func diffNomsMaps(ctx context.Context, ch chan DiffSummaryProgress, keyless bool
 		if err != nil {
 			return err
 		}
+		cfc := uint64(len(fromSch.GetAllCols().GetColumns())) * fc
 		tc, err := toRows.Count()
 		if err != nil {
 			return err
 		}
+		ctc := uint64(len(toSch.GetAllCols().GetColumns())) * tc
 		rpr = reportNomsPkChanges
 		ch <- DiffSummaryProgress{
-			OldSize: fc,
-			NewSize: tc,
+			OldRowSize:  fc,
+			NewRowSize:  tc,
+			OldCellSize: cfc,
+			NewCellSize: ctc,
 		}
 	}
 

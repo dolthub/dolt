@@ -326,8 +326,10 @@ SQL
     [[ "$output" =~ "2 Rows Added (100.00%)" ]] || false
     [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
     [[ "$output" =~ "0 Rows Modified (0.00%)" ]] || false
+    [[ "$output" =~ "12 Cells Added (100.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
     [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
-    [[ "$output" =~ "(2 Entries vs 4 Entries)" ]] || false
+    [[ "$output" =~ "(2 Row Entries vs 4 Row Entries)" ]] || false
 
     dolt add test
     dolt commit -m "added two rows"
@@ -338,8 +340,10 @@ SQL
     [[ "$output" =~ "0 Rows Added (0.00%)" ]] || false
     [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
     [[ "$output" =~ "1 Row Modified (25.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Added (0.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
     [[ "$output" =~ "2 Cells Modified (8.33%)" ]] || false
-    [[ "$output" =~ "(4 Entries vs 4 Entries)" ]] || false
+    [[ "$output" =~ "(4 Row Entries vs 4 Row Entries)" ]] || false
 
     dolt add test
     dolt commit -m "modified first row"
@@ -350,8 +354,10 @@ SQL
     [[ "$output" =~ "0 Rows Added (0.00%)" ]] || false
     [[ "$output" =~ "1 Row Deleted (25.00%)" ]] || false
     [[ "$output" =~ "0 Rows Modified (0.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Added (0.00%)" ]] || false
+    [[ "$output" =~ "6 Cells Deleted (25.00%)" ]] || false
     [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
-    [[ "$output" =~ "(4 Entries vs 3 Entries)" ]] || false
+    [[ "$output" =~ "(4 Row Entries vs 3 Row Entries)" ]] || false
 }
 
 @test "diff: summary comparing row with a deleted cell and an added cell" {
@@ -367,8 +373,10 @@ SQL
     [[ "$output" =~ "0 Rows Added (0.00%)" ]] || false
     [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
     [[ "$output" =~ "1 Row Modified (100.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Added (0.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
     [[ "$output" =~ "1 Cell Modified (16.67%)" ]] || false
-    [[ "$output" =~ "(1 Entry vs 1 Entry)" ]] || false
+    [[ "$output" =~ "(1 Row Entry vs 1 Row Entry)" ]] || false
     dolt add test
     dolt commit -m "row modified"
     dolt sql -q "replace into test values (0, 1, 2, 3, 4, 5)"
@@ -378,8 +386,10 @@ SQL
     [[ "$output" =~ "0 Rows Added (0.00%)" ]] || false
     [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
     [[ "$output" =~ "1 Row Modified (100.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Added (0.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
     [[ "$output" =~ "1 Cell Modified (16.67%)" ]] || false
-    [[ "$output" =~ "(1 Entry vs 1 Entry)" ]] || false
+    [[ "$output" =~ "(1 Row Entry vs 1 Row Entry)" ]] || false
 }
 
 @test "diff: summary comparing two branches" {
@@ -397,8 +407,10 @@ SQL
     [[ "$output" =~ "1 Row Added (100.00%)" ]] || false
     [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
     [[ "$output" =~ "0 Rows Modified (0.00%)" ]] || false
+    [[ "$output" =~ "6 Cells Added (100.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
     [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
-    [[ "$output" =~ "(1 Entry vs 2 Entries)" ]] || false
+    [[ "$output" =~ "(1 Row Entry vs 2 Row Entries)" ]] || false
 }
 
 @test "diff: summary shows correct changes after schema change" {
@@ -423,8 +435,10 @@ DELIM
     [[ "$output" =~ "1 Row Added (33.33%)" ]] || false
     [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
     [[ "$output" =~ "0 Rows Modified (0.00%)" ]] || false
+    [[ "$output" =~ "10 Cells Added (55.56%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
     [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
-    [[ "$output" =~ "(3 Entries vs 4 Entries)" ]] || false
+    [[ "$output" =~ "(3 Row Entries vs 4 Row Entries)" ]] || false
 
     dolt sql -q "replace into employees values (0, 'tim', 'sehn', 'ceo', '2 years ago', '', 'Santa Monica')"
     
@@ -435,8 +449,10 @@ DELIM
     [[ "$output" =~ "1 Row Added (33.33%)" ]] || false
     [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
     [[ "$output" =~ "1 Row Modified (33.33%)" ]] || false
+    [[ "$output" =~ "10 Cells Added (55.56%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
     [[ "$output" =~ "2 Cells Modified (11.11%)" ]] || false
-    [[ "$output" =~ "(3 Entries vs 4 Entries)" ]] || false
+    [[ "$output" =~ "(3 Row Entries vs 4 Row Entries)" ]] || false
 }
 
 @test "diff: summary gets summaries for all tables with changes" {
