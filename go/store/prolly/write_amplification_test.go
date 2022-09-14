@@ -150,11 +150,7 @@ func testWriteAmplification(t *testing.T, before Map, method mutationProvider) {
 func collectMutations(t *testing.T, before Map, method mutationProvider) (muts []mutation) {
 	ctx := context.Background()
 	err := before.WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
-		leaf, err := nd.IsLeaf()
-		if err != nil {
-			return err
-		}
-		if leaf {
+		if nd.IsLeaf() {
 			mm, err := method.makeMutations(ctx, nd)
 			require.NoError(t, err)
 			muts = append(muts, mm...)

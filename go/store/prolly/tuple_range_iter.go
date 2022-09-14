@@ -110,7 +110,7 @@ func (it mutableMapIter[K, V, O]) compareKeys(memKey, proKey K) int {
 
 func memIterFromRange(list *skip.List, rng Range) *memRangeIter {
 	// use the lower bound of |rng| to construct a skip.ListIter
-	iter := list.GetIterFromSearchFn(skipSearchFromRange(rng))
+	iter := list.GetIterFromSeekFn(skipSearchFromRange(rng))
 
 	// enforce range start
 	var key val.Tuple

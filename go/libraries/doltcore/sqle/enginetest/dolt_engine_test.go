@@ -108,48 +108,55 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Nautobot FOREIGN KEY panic repro",
+			Name: "Insert throws unique key violations",
 			SetUpScript: []string{
-				"CREATE TABLE `auth_user` (" +
-					"	`password` varchar(128) NOT NULL," +
-					"	`last_login` datetime," +
-					"	`is_superuser` tinyint NOT NULL," +
-					"	`username` varchar(150) NOT NULL," +
-					"	`first_name` varchar(150) NOT NULL," +
-					"	`last_name` varchar(150) NOT NULL," +
-					"	`email` varchar(254) NOT NULL," +
-					"	`is_staff` tinyint NOT NULL," +
-					"	`is_active` tinyint NOT NULL," +
-					"	`date_joined` datetime NOT NULL," +
-					"	`id` char(32) NOT NULL," +
-					"	`config_data` json NOT NULL," +
-					"	PRIMARY KEY (`id`)," +
-					"	UNIQUE KEY `username` (`username`)" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
-				"CREATE TABLE `users_token` (" +
-					"	`id` char(32) NOT NULL," +
-					"	`created` datetime NOT NULL," +
-					"	`expires` datetime," +
-					"	`key` varchar(40) NOT NULL," +
-					"	`write_enabled` tinyint NOT NULL," +
-					"	`description` varchar(200) NOT NULL," +
-					"	`user_id` char(32) NOT NULL," +
-					"	PRIMARY KEY (`id`)," +
-					"	UNIQUE KEY `key` (`key`)," +
-					"	KEY `users_token_user_id_af964690` (`user_id`)," +
-					"	CONSTRAINT `users_token_user_id_af964690_fk_auth_user_id` FOREIGN KEY (`user_id`) REFERENCES `auth_user` (`id`)" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-				"INSERT INTO `auth_user` (`password`,`last_login`,`is_superuser`,`username`,`first_name`,`last_name`,`email`,`is_staff`,`is_active`,`date_joined`,`id`,`config_data`)" +
-					"VALUES ('pbkdf2_sha256$216000$KRpZeDPgwc5E$vl/2hwrmtnckaBT0A8pf63Ph+oYuCHYI7qozMTZihTo=',NULL,1,'admin','','','admin@example.com',1,1,'2022-08-30 18:27:21.810049','1056443cc03446c592fa4c06bb06a1a6','{}');",
+				"CREATE TABLE t (pk int PRIMARY key, col1 int UNIQUE);",
+				"CREATE TABLE t2 (pk int PRIMARY key, col1 int, col2 int, UNIQUE KEY (col1, col2));",
+				"INSERT into t VALUES (1, 1);",
+				"INSERT into t2 VALUES (1, 1, 1);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "INSERT INTO `users_token` (`id`, `user_id`, `created`, `expires`, `key`, `write_enabled`, `description`) " +
-						"VALUES ('acc2e157db2845a79221cc654b1dcecc', '1056443cc03446c592fa4c06bb06a1a6', '2022-08-30 18:27:21.948487', NULL, '0123456789abcdef0123456789abcdef01234567', 1, '');",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 0x1, InsertID: 0x0}}},
+					Query:       "INSERT INTO t VALUES (2, 2), (3, 1), (4, 4);",
+					ExpectedErr: sql.ErrUniqueKeyViolation,
+				},
+				{
+					Query:    "SELECT * from t;",
+					Expected: []sql.Row{{1, 1}},
+				},
+				{
+					Query:       "INSERT INTO t2 VALUES (2, 2, 2), (3, 1, 1), (4, 4, 4);",
+					ExpectedErr: sql.ErrUniqueKeyViolation,
+				},
+				{
+					Query:    "SELECT * from t2;",
+					Expected: []sql.Row{{1, 1, 1}},
+				},
+				{
+					Query:       "INSERT INTO t VALUES (5, 2), (6, 2);",
+					ExpectedErr: sql.ErrUniqueKeyViolation,
+				},
+				{
+					Query:    "SELECT * from t;",
+					Expected: []sql.Row{{1, 1}},
+				},
+				{
+					Query:       "INSERT INTO t2 VALUES (5, 2, 2), (6, 2, 2);",
+					ExpectedErr: sql.ErrUniqueKeyViolation,
+				},
+				{
+					Query:    "SELECT * from t2;",
+					Expected: []sql.Row{{1, 1, 1}},
+				},
+				{
+					Query:    "INSERT into t2 VALUES (5, NULL, 1), (6, NULL, 1), (7, 1, NULL), (8, 1, NULL), (9, NULL, NULL), (10, NULL, NULL)",
+					Expected: []sql.Row{{sql.NewOkResult(6)}},
+				},
+				{
+					Query:    "SELECT * from t2;",
+					Expected: []sql.Row{{1, 1, 1}, {5, nil, 1}, {6, nil, 1}, {7, 1, nil}, {8, 1, nil}, {9, nil, nil}, {10, nil, nil}},
 				},
 			},
 		},

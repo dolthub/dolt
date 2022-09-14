@@ -25,61 +25,42 @@ import (
 	"github.com/dolthub/dolt/go/store/pool"
 )
 
-var commitClosureKeyOffsets []byte
-var commitClosureValueOffsets []byte
-var commitClosureEmptyValueBytes []byte
+var commitClosureEmptyValueBytes = []byte{}
 
-func init() {
-	maxOffsets := (maxChunkSz / commitClosureKeyLength) + 1
-	commitClosureKeyOffsets = make([]byte, maxOffsets*uint16Size)
-	commitClosureValueOffsets = make([]byte, maxOffsets*uint16Size)
-	commitClosureEmptyValueBytes = make([]byte, 0)
+const (
+	commitClosureKeyItemBytesVOffset fb.VOffsetT = 4
+	commitClosureAddressArrayVOffset fb.VOffsetT = 6
+)
 
-	buf := commitClosureKeyOffsets
-	off := uint16(0)
-	for len(buf) > 0 {
-		binary.LittleEndian.PutUint16(buf, off)
-		buf = buf[uint16Size:]
-		off += uint16(commitClosureKeyLength)
-	}
-}
-
-// see offsetsForAddressArray()
-func offsetsForCommitClosureKeys(buf []byte) []byte {
-	cnt := (len(buf) / commitClosureKeyLength) + 1
-	return commitClosureKeyOffsets[:cnt*uint16Size]
-}
-
-func getCommitClosureKeys(msg serial.Message) (ItemArray, error) {
-	var ret ItemArray
+func getCommitClosureKeys(msg serial.Message) (ItemAccess, error) {
+	var ret ItemAccess
 	var m serial.CommitClosure
 	err := serial.InitCommitClosureRoot(&m, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return ret, err
 	}
-	ret.Items = m.KeyItemsBytes()
-	ret.Offs = offsetsForCommitClosureKeys(ret.Items)
+	ret.bufStart = lookupVectorOffset(commitClosureKeyItemBytesVOffset, m.Table())
+	ret.bufLen = uint16(m.KeyItemsLength())
+	ret.itemWidth = uint16(commitClosureKeyLength)
 	return ret, nil
 }
 
-func getCommitClosureValues(msg serial.Message) (ItemArray, error) {
-	var ret ItemArray
+func getCommitClosureValues(msg serial.Message) (ItemAccess, error) {
+	var ret ItemAccess
 	var m serial.CommitClosure
 	err := serial.InitCommitClosureRoot(&m, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return ret, err
 	}
 	if m.AddressArrayLength() == 0 {
-		ret.Items = commitClosureEmptyValueBytes
-		cnt, err := getCommitClosureCount(msg)
-		if err != nil {
-			return ret, nil
-		}
-		ret.Offs = commitClosureValueOffsets[:cnt*uint16Size]
-		return ret, nil
+		ret.bufStart = 0
+		ret.bufLen = 0
+		ret.itemWidth = 0
+	} else {
+		ret.bufStart = lookupVectorOffset(commitClosureAddressArrayVOffset, m.Table())
+		ret.bufLen = uint16(m.AddressArrayLength())
+		ret.itemWidth = hash.ByteLen
 	}
-	ret.Items = m.AddressArrayBytes()
-	ret.Offs = offsetsForAddressArray(ret.Items)
 	return ret, nil
 }
 
@@ -95,13 +76,13 @@ func getCommitClosureCount(msg serial.Message) (uint16, error) {
 	return uint16(m.KeyItemsLength() / commitClosureKeyLength), nil
 }
 
-func getCommitClosureTreeLevel(msg serial.Message) (int, error) {
+func getCommitClosureTreeLevel(msg serial.Message) (uint16, error) {
 	var m serial.CommitClosure
 	err := serial.InitCommitClosureRoot(&m, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return 0, err
 	}
-	return int(m.TreeLevel()), nil
+	return uint16(m.TreeLevel()), nil
 }
 
 func getCommitClosureTreeCount(msg serial.Message) (int, error) {

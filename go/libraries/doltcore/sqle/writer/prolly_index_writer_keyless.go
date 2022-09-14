@@ -27,7 +27,7 @@ import (
 
 type prollyKeylessWriter struct {
 	name string
-	mut  prolly.MutableMap
+	mut  *prolly.MutableMap
 
 	keyBld *val.TupleBuilder
 	valBld *val.TupleBuilder
@@ -108,11 +108,11 @@ func (k prollyKeylessWriter) Update(ctx context.Context, oldRow sql.Row, newRow 
 }
 
 func (k prollyKeylessWriter) Commit(ctx context.Context) error {
-	return k.mut.ApplyPending(ctx)
+	return k.mut.Checkpoint(ctx)
 }
 
 func (k prollyKeylessWriter) Discard(ctx context.Context) error {
-	k.mut.DiscardPending(ctx)
+	k.mut.Revert(ctx)
 	return nil
 }
 
@@ -140,10 +140,6 @@ func (k prollyKeylessWriter) tuplesFromRow(ctx context.Context, sqlRow sql.Row) 
 	value = k.valBld.Build(sharePool)
 	hashId = val.HashTupleFromValue(sharePool, value)
 	return
-}
-
-func (k prollyKeylessWriter) getMut() prolly.MutableMap {
-	return k.mut
 }
 
 func (k prollyKeylessWriter) errForSecondaryUniqueKeyError(ctx context.Context, err secondaryUniqueKeyError) error {
@@ -180,7 +176,7 @@ func (e secondaryUniqueKeyError) Error() string {
 
 type prollyKeylessSecondaryWriter struct {
 	name    string
-	mut     prolly.MutableMap
+	mut     *prolly.MutableMap
 	primary prollyKeylessWriter
 	unique  bool
 
@@ -237,8 +233,8 @@ func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sq
 }
 
 func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Context, prefixKey val.Tuple) error {
-	for i := 0; i < prefixKey.Count(); i++ {
-		if prefixKey.FieldIsNull(i) {
+	for i := 0; i < writer.prefixBld.Desc.Count(); i++ {
+		if writer.prefixBld.Desc.IsNull(i, prefixKey) {
 			return nil
 		}
 	}
@@ -308,12 +304,12 @@ func (writer prollyKeylessSecondaryWriter) Update(ctx context.Context, oldRow sq
 
 // Commit implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Commit(ctx context.Context) error {
-	return writer.mut.ApplyPending(ctx)
+	return writer.mut.Checkpoint(ctx)
 }
 
 // Discard implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Discard(ctx context.Context) error {
-	writer.mut.DiscardPending(ctx)
+	writer.mut.Revert(ctx)
 	return nil
 }
 

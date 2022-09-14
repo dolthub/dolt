@@ -126,7 +126,7 @@ func (wr *bboltWriter) Flush() error {
 }
 
 type doltWriter struct {
-	mut prolly.MutableMap
+	mut *prolly.MutableMap
 	cs  *nbs.NomsBlockStore
 }
 

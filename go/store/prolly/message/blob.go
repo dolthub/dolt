@@ -18,9 +18,16 @@ import (
 	"context"
 	"encoding/binary"
 
+	fb "github.com/google/flatbuffers/go"
+
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
+)
+
+const (
+	blobPayloadBytesVOffset fb.VOffsetT = 4
+	blobAddressArrayVOffset fb.VOffsetT = 6
 )
 
 var blobFileID = []byte(serial.BlobFileID)
@@ -59,46 +66,26 @@ func (s BlobSerializer) Serialize(keys, values [][]byte, subtrees []uint64, leve
 	return serial.FinishMessage(b, serial.BlobEnd(b), blobFileID)
 }
 
-func getBlobKeys(msg serial.Message) (ItemArray, error) {
-	cnt, err := getBlobCount(msg)
-	if err != nil {
-		return ItemArray{}, err
-	}
-	buf := make([]byte, cnt)
-	for i := range buf {
-		buf[i] = 0
-	}
-	offs := make([]byte, cnt*2)
-	for i := 0; i < int(cnt); i++ {
-		b := offs[i*2 : (i+1)*2]
-		binary.LittleEndian.PutUint16(b, uint16(i))
-	}
-	return ItemArray{
-		Items: buf,
-		Offs:  offs,
-	}, nil
+func getBlobKeys(msg serial.Message) (ItemAccess, error) {
+	return ItemAccess{}, nil
 }
 
-func getBlobValues(msg serial.Message) (ItemArray, error) {
+func getBlobValues(msg serial.Message) (values ItemAccess, err error) {
 	var b serial.Blob
-	err := serial.InitBlobRoot(&b, msg, serial.MessagePrefixSz)
+	err = serial.InitBlobRoot(&b, msg, serial.MessagePrefixSz)
 	if err != nil {
-		return ItemArray{}, err
+		return ItemAccess{}, err
 	}
 	if b.TreeLevel() > 0 {
-		arr := b.AddressArrayBytes()
-		off := offsetsForAddressArray(arr)
-		return ItemArray{
-			Items: arr,
-			Offs:  off,
-		}, nil
+		values.bufStart = lookupVectorOffset(blobAddressArrayVOffset, b.Table())
+		values.bufLen = uint16(b.AddressArrayLength() * uint16Size)
+		values.itemWidth = hash.ByteLen
+	} else {
+		values.bufStart = lookupVectorOffset(blobPayloadBytesVOffset, b.Table())
+		values.bufLen = uint16(b.PayloadLength())
+		values.itemWidth = uint16(b.PayloadLength())
 	}
-
-	buf := b.PayloadBytes()
-	offs := make([]byte, 4)
-	binary.LittleEndian.PutUint16(offs[2:], uint16(len(buf)))
-
-	return ItemArray{Items: buf, Offs: offs}, nil
+	return
 }
 
 func getBlobCount(msg serial.Message) (uint16, error) {
@@ -129,13 +116,13 @@ func walkBlobAddresses(ctx context.Context, msg serial.Message, cb func(ctx cont
 	return nil
 }
 
-func getBlobTreeLevel(msg serial.Message) (int, error) {
+func getBlobTreeLevel(msg serial.Message) (uint16, error) {
 	var b serial.Blob
 	err := serial.InitBlobRoot(&b, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return 0, err
 	}
-	return int(b.TreeLevel()), nil
+	return uint16(b.TreeLevel()), nil
 }
 
 func getBlobTreeCount(msg serial.Message) (int, error) {
