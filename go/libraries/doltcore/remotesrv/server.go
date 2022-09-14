@@ -50,18 +50,16 @@ func NewServer(lgr *logrus.Entry, httpHost string, httpPort, grpcPort int, fs fi
 	s := new(Server)
 	s.stopChan = make(chan struct{})
 
-	expectedFiles := newFileDetails()
-
 	s.wg.Add(2)
 	s.grpcPort = grpcPort
 	s.grpcSrv = grpc.NewServer(grpc.MaxRecvMsgSize(128 * 1024 * 1024))
-	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(lgr, httpHost, dbCache, expectedFiles, fs)
+	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(lgr, httpHost, dbCache, fs)
 	if readOnly {
 		chnkSt = ReadOnlyChunkStore{chnkSt}
 	}
 	remotesapi.RegisterChunkStoreServiceServer(s.grpcSrv, chnkSt)
 
-	var handler http.Handler = newFileHandler(lgr, dbCache, expectedFiles, fs, readOnly)
+	var handler http.Handler = newFileHandler(lgr, dbCache, fs, readOnly)
 	if httpPort == grpcPort {
 		handler = grpcMultiplexHandler(s.grpcSrv, handler)
 	} else {

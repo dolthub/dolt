@@ -16,8 +16,10 @@ package remotesrv
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -41,18 +43,16 @@ type RemoteChunkStore struct {
 	HttpHost      string
 	csCache       DBCache
 	bucket        string
-	expectedFiles fileDetails
 	fs            filesys.Filesys
 	lgr           *logrus.Entry
 	remotesapi.UnimplementedChunkStoreServiceServer
 }
 
-func NewHttpFSBackedChunkStore(lgr *logrus.Entry, httpHost string, csCache DBCache, expectedFiles fileDetails, fs filesys.Filesys) *RemoteChunkStore {
+func NewHttpFSBackedChunkStore(lgr *logrus.Entry, httpHost string, csCache DBCache, fs filesys.Filesys) *RemoteChunkStore {
 	return &RemoteChunkStore{
 		HttpHost:      httpHost,
 		csCache:       csCache,
 		bucket:        "",
-		expectedFiles: expectedFiles,
 		fs:            fs,
 		lgr: lgr.WithFields(logrus.Fields{
 			"service": "dolt.services.remotesapi.v1alpha1.ChunkStoreServiceServer",
@@ -226,7 +226,7 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 	}
 }
 
-func (rs *RemoteChunkStore) getDownloadUrl(logger *logrus.Entry, md metadata.MD, path string) (string, error) {
+func (rs *RemoteChunkStore) getHost(md metadata.MD) string {
 	host := rs.HttpHost
 	if strings.HasPrefix(rs.HttpHost, ":") && rs.HttpHost != ":80" {
 		hosts := md.Get(":authority")
@@ -239,8 +239,16 @@ func (rs *RemoteChunkStore) getDownloadUrl(logger *logrus.Entry, md metadata.MD,
 			host = hosts[0]
 		}
 	}
+	return host
+}
 
-	return fmt.Sprintf("http://%s/%s", host, path), nil
+func (rs *RemoteChunkStore) getDownloadUrl(logger *logrus.Entry, md metadata.MD, path string) (string, error) {
+	host := rs.getHost(md)
+	return (&url.URL{
+		Scheme: "http",
+		Host: host,
+		Path: path,
+	}).String(), nil
 }
 
 func parseTableFileDetails(req *remotesapi.GetUploadLocsRequest) []*remotesapi.TableFileDetails {
@@ -278,10 +286,12 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 	repoName := req.RepoId.RepoName
 	tfds := parseTableFileDetails(req)
 
+	md, _ := metadata.FromIncomingContext(ctx)
+
 	var locs []*remotesapi.UploadLoc
 	for _, tfd := range tfds {
 		h := hash.New(tfd.Id)
-		url, err := rs.getUploadUrl(logger, org, repoName, tfd)
+		url, err := rs.getUploadUrl(logger, md, org, repoName, tfd)
 
 		if err != nil {
 			return nil, status.Error(codes.Internal, "Failed to get upload Url.")
@@ -296,10 +306,18 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 	return &remotesapi.GetUploadLocsResponse{Locs: locs}, nil
 }
 
-func (rs *RemoteChunkStore) getUploadUrl(logger *logrus.Entry, org, repoName string, tfd *remotesapi.TableFileDetails) (string, error) {
+func (rs *RemoteChunkStore) getUploadUrl(logger *logrus.Entry, md metadata.MD, org, repoName string, tfd *remotesapi.TableFileDetails) (string, error) {
 	fileID := hash.New(tfd.Id).String()
-	rs.expectedFiles.Put(fileID, tfd)
-	return fmt.Sprintf("http://%s/%s/%s/%s", rs.HttpHost, org, repoName, fileID), nil
+	params := url.Values{}
+	params.Add("num_chunks", strconv.Itoa(int(tfd.NumChunks)))
+	params.Add("content_length", strconv.Itoa(int(tfd.ContentLength)))
+	params.Add("content_hash", base64.RawURLEncoding.EncodeToString(tfd.ContentHash))
+	return (&url.URL{
+		Scheme: "http",
+		Host:   rs.getHost(md),
+		Path:   fmt.Sprintf("%s/%s/%s", org, repoName, fileID),
+		RawQuery:  params.Encode(),
+	}).String(), nil
 }
 
 func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRequest) (*remotesapi.RebaseResponse, error) {
