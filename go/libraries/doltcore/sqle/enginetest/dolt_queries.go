@@ -2430,6 +2430,34 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "add multiple columns, then set and unset a value. No conflicts expected.",
+		SetUpScript: []string{
+			"CREATE table t (pk int primary key);",
+			"Insert into t values (1), (2);",
+			"alter table t add column col1 int;",
+			"alter table t add column col2 int;",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"update t set col1 = 1 where pk = 1;",
+			"update t set col1 = null where pk = 1;",
+			"CALL DOLT_COMMIT('--allow-empty', '-am', 'right cm');",
+			"CALL DOLT_CHECKOUT('main');",
+			"DELETE from t where pk = 1;",
+			"CALL DOLT_COMMIT('-am', 'left cm');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{2, nil, nil}},
+			},
+		},
+	},
 }
 
 var Dolt1MergeScripts = []queries.ScriptTest{
@@ -4798,6 +4826,26 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "select to_pk2a, to_pk2b, to_col1, from_pk1a, from_pk1b, from_col1, diff_type from dolt_diff('t2', 'HEAD~', 'HEAD');",
 				Expected: []sql.Row{{1, 1, 100, 1, 1, 1, "modified"}},
+			},
+		},
+	},
+	{
+		Name: "add multiple columns, then set and unset a value. Should not show a diff",
+		SetUpScript: []string{
+			"CREATE table t (pk int primary key);",
+			"Insert into t values (1);",
+			"alter table t add column col1 int;",
+			"alter table t add column col2 int;",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+			"UPDATE t set col1 = 1 where pk = 1;",
+			"UPDATE t set col1 = null where pk = 1;",
+			"CALL DOLT_COMMIT('--allow-empty', '-am', 'fix short tuple');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT to_pk, to_col1, from_pk, from_col1, diff_type from dolt_diff_t;",
+				Expected: []sql.Row{{1, nil, nil, nil, "added"}},
 			},
 		},
 	},

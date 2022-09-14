@@ -285,8 +285,8 @@ func (m prollySecondaryIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) 
 }
 
 func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, prefixKey val.Tuple) error {
-	for i := 0; i < prefixKey.Count(); i++ {
-		if prefixKey.FieldIsNull(i) {
+	for i := 0; i < m.prefixBld.Desc.Count(); i++ {
+		if m.prefixBld.Desc.IsNull(i, prefixKey) {
 			return nil
 		}
 	}

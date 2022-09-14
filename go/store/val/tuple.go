@@ -76,6 +76,8 @@ type Tuple []byte
 var EmptyTuple = Tuple([]byte{0, 0})
 
 func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
+	values = trimNullSuffix(values)
+
 	var count int
 	var pos ByteSize
 	for _, v := range values {
@@ -109,6 +111,17 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 	}
 
 	return tup
+}
+
+func trimNullSuffix(values [][]byte) [][]byte {
+	n := len(values)
+	for i := len(values) - 1; i >= 0; i-- {
+		if values[i] != nil {
+			break
+		}
+		n--
+	}
+	return values[:n]
 }
 
 func cloneTuple(pool pool.BuffPool, tup Tuple) Tuple {
