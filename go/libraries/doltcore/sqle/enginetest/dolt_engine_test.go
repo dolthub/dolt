@@ -1239,6 +1239,13 @@ func TestTypesOverWire(t *testing.T) {
 	enginetest.TestTypesOverWire(t, harness, newSessionBuilder(harness))
 }
 
+func TestDoltCommit(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, script := range DoltCommitTests {
+		enginetest.TestScript(t, harness, script)
+	}
+}
+
 func TestQueriesPrepared(t *testing.T) {
 	enginetest.TestQueriesPrepared(t, newDoltHarness(t))
 }
