@@ -396,8 +396,8 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 		// cheap enough that it would be possible to get back
 		// cache-locality in our flushes without ref heights.
 		if lvs.enforceCompleteness {
-			err := v.walkRefs(lvs.nbf, func(r Ref) error {
-				lvs.unresolvedRefs.Insert(r.TargetHash())
+			err := WalkAddrs(v, lvs.nbf, func(h hash.Hash, _ bool) error {
+				lvs.unresolvedRefs.Insert(h)
 				return nil
 			})
 			if err != nil {

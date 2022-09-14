@@ -247,7 +247,11 @@ func WalkAddrsForNBF(nbf *NomsBinFormat) func(chunks.Chunk, func(h hash.Hash, is
 }
 
 func WalkAddrs(v Value, nbf *NomsBinFormat, cb func(h hash.Hash, isleaf bool) error) error {
-	return v.walkRefs(nbf, func(r Ref) error {
-		return cb(r.TargetHash(), r.Height() == 1)
-	})
+	if sm, ok := v.(SerialMessage); ok {
+		return sm.walkAddrs(nbf, cb)
+	} else {
+		return v.walkRefs(nbf, func(r Ref) error {
+			return cb(r.TargetHash(), r.Height() == 1)
+		})
+	}
 }
