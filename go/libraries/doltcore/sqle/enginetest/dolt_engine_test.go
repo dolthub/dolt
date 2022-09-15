@@ -457,6 +457,16 @@ func TestJoinQueries(t *testing.T) {
 	enginetest.TestJoinQueries(t, newDoltHarness(t))
 }
 
+// TestJSONTableQueries runs the canonical test queries against a single threaded index enabled harness.
+func TestJSONTableQueries(t *testing.T) {
+	enginetest.TestJSONTableQueries(t, newDoltHarness(t))
+}
+
+// TestJSONTableScripts runs the canonical test queries against a single threaded index enabled harness.
+func TestJSONTableScripts(t *testing.T) {
+	enginetest.TestJSONTableScripts(t, newDoltHarness(t))
+}
+
 func TestUserPrivileges(t *testing.T) {
 	t.Skip("Need to add more collations")
 	enginetest.TestUserPrivileges(t, newDoltHarness(t))
