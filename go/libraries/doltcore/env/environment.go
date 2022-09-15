@@ -26,6 +26,7 @@ import (
 
 	ps "github.com/mitchellh/go-ps"
 	"google.golang.org/grpc"
+	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
@@ -39,7 +40,6 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
-	goerrors "gopkg.in/src-d/go-errors.v1"
 )
 
 const (
