@@ -1135,7 +1135,13 @@ func (dEnv *DoltEnv) TempTableFilesDir() (string, error) {
 	if doltDir == "" {
 		return "", ErrDoltRepositoryNotFound
 	}
-	return mustAbs(dEnv, doltDir, tempTablesDir), nil
+
+	absPath, err := dEnv.FS.Abs(filepath.Join(doltDir, tempTablesDir))
+	if err != nil {
+		return "", err
+	}
+
+	return absPath, nil
 }
 
 // GetGCKeepers returns the hashes of all the objects in the environment provided that should be perserved during GC.
