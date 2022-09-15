@@ -16,7 +16,6 @@ package sqlserver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -35,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
+	goerrors "gopkg.in/src-d/go-errors.v1"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -259,7 +259,7 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 
 		dsess, err := se.NewDoltSession(ctx, mysqlBaseSess)
 		if err != nil {
-			if errors.Is(err, env.ErrFailedToAccessDB) {
+			if goerrors.Is(err, env.ErrFailedToAccessDB) {
 				if server := sqlserver.GetRunningServer(); server != nil {
 					_ = server.Close()
 				}

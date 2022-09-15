@@ -39,6 +39,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+	goerrors "gopkg.in/src-d/go-errors.v1"
 )
 
 const (
@@ -77,7 +78,7 @@ var ErrFailedToDeleteRemote = errors.New("failed to delete remote")
 var ErrFailedToWriteRepoState = errors.New("failed to write repo state")
 var ErrRemoteAddressConflict = errors.New("address conflict with a remote")
 var ErrDoltRepositoryNotFound = errors.New("can no longer find .dolt dir on disk")
-var ErrFailedToAccessDB = errors.New("failed to access database: can no longer find .dolt dir on disk")
+var ErrFailedToAccessDB = goerrors.NewKind("failed to access '%s' database: can no longer find .dolt dir on disk")
 
 // DoltEnv holds the state of the current environment used by the cli.
 type DoltEnv struct {

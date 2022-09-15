@@ -1736,6 +1736,6 @@ s.close()
     run grep "panic" server_log.txt
     [ "${#lines[@]}" -eq 0 ]
 
-    run grep "failed to access database: can no longer find .dolt dir on disk" server_log.txt
+    run grep "failed to access 'mydb2' database: can no longer find .dolt dir on disk" server_log.txt
     [ "${#lines[@]}" -eq 1 ]
 }

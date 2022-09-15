@@ -908,7 +908,7 @@ func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	tmpDir, err := dbState.DbData.Rsw.TempTableFilesDir()
 	if err != nil {
 		if errors.Is(err, env.ErrDoltRepositoryNotFound) {
-			return env.ErrFailedToAccessDB
+			return env.ErrFailedToAccessDB.New(dbState.Db.Name())
 		}
 		return err
 	}
