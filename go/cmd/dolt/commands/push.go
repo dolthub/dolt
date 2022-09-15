@@ -187,6 +187,7 @@ func (ts *TextSpinner) next() string {
 
 func pullerProgFunc(ctx context.Context, statsCh chan pull.Stats, language progLanguage) {
 	p := cli.NewEphemeralPrinter()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -208,8 +209,8 @@ func pullerProgFunc(ctx context.Context, statsCh chan pull.Stats, language progL
 					humanize.SIWithDigits(stats.SendBytesPerSec, 2, "B"),
 				)
 			}
+			p.Display()
 		}
-		p.Display()
 	}
 }
 

@@ -17,12 +17,12 @@ package remotesrv
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
 
+	"github.com/sirupsen/logrus"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
@@ -46,22 +46,20 @@ func (s *Server) GracefulStop() {
 	s.wg.Wait()
 }
 
-func NewServer(httpHost string, httpPort, grpcPort int, fs filesys.Filesys, dbCache DBCache, readOnly bool) *Server {
+func NewServer(lgr *logrus.Entry, httpHost string, httpPort, grpcPort int, fs filesys.Filesys, dbCache DBCache, readOnly bool) *Server {
 	s := new(Server)
 	s.stopChan = make(chan struct{})
-
-	expectedFiles := newFileDetails()
 
 	s.wg.Add(2)
 	s.grpcPort = grpcPort
 	s.grpcSrv = grpc.NewServer(grpc.MaxRecvMsgSize(128 * 1024 * 1024))
-	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(httpHost, dbCache, expectedFiles, fs)
+	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(lgr, httpHost, dbCache, fs)
 	if readOnly {
 		chnkSt = ReadOnlyChunkStore{chnkSt}
 	}
 	remotesapi.RegisterChunkStoreServiceServer(s.grpcSrv, chnkSt)
 
-	var handler http.Handler = newFileHandler(dbCache, expectedFiles, fs, readOnly)
+	var handler http.Handler = newFileHandler(lgr, dbCache, fs, readOnly)
 	if httpPort == grpcPort {
 		handler = grpcMultiplexHandler(s.grpcSrv, handler)
 	} else {
@@ -89,24 +87,34 @@ func grpcMultiplexHandler(grpcSrv *grpc.Server, handler http.Handler) http.Handl
 	return h2c.NewHandler(newHandler, h2s)
 }
 
-func (s *Server) Serve() error {
+type Listeners struct {
+	http net.Listener
+	grpc net.Listener
+}
+
+func (s *Server) Listeners() (Listeners, error) {
 	httpListener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.httpPort))
 	if err != nil {
-		return err
+		return Listeners{}, err
 	}
+	if s.httpPort == s.grpcPort {
+		return Listeners{http: httpListener}, nil
+	}
+	grpcListener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.grpcPort))
+	if err != nil {
+		httpListener.Close()
+		return Listeners{}, err
+	}
+	return Listeners{http: httpListener, grpc: grpcListener}, nil
+}
 
-	if s.grpcPort != s.httpPort {
-		grpcListener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.grpcPort))
-		if err != nil {
-			httpListener.Close()
-			return err
-		}
-
+func (s *Server) Serve(listeners Listeners) {
+	if listeners.grpc != nil {
 		go func() {
 			defer s.wg.Done()
-			log.Println("Starting grpc server on port", s.grpcPort)
-			err = s.grpcSrv.Serve(grpcListener)
-			log.Println("grpc server exited. error:", err)
+			logrus.Println("Starting grpc server on port", s.grpcPort)
+			err := s.grpcSrv.Serve(listeners.grpc)
+			logrus.Println("grpc server exited. error:", err)
 		}()
 		go func() {
 			defer s.wg.Done()
@@ -117,9 +125,9 @@ func (s *Server) Serve() error {
 
 	go func() {
 		defer s.wg.Done()
-		log.Println("Starting http server on port ", s.httpPort)
-		err := s.httpSrv.Serve(httpListener)
-		log.Println("http server exited. exit error:", err)
+		logrus.Println("Starting http server on port", s.httpPort)
+		err := s.httpSrv.Serve(listeners.http)
+		logrus.Println("http server exited. exit error:", err)
 	}()
 	go func() {
 		defer s.wg.Done()
@@ -128,5 +136,4 @@ func (s *Server) Serve() error {
 	}()
 
 	s.wg.Wait()
-	return nil
 }

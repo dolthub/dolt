@@ -279,8 +279,9 @@ DELIM
     dolt sql < 1pk1col-char-sch.sql
     run dolt table import -u test 1pk1col-rpt-chars.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
-    [[ "$output" =~ "Bad Row: [1,123456]" ]] || false
+    [[ "$output" =~ "An error occurred while moving data" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
+    [[ "$output" =~ "[1,123456]" ]] || false    
     [[ "$output" =~ 'too large for column' ]] || false
 }
 
@@ -314,8 +315,7 @@ DELIM
     run dolt table import -u persons persons.csv
     [ "$status" -eq 1 ]
 
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
-    [[ "$output" =~ "Bad Row:" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "[2,little,doe,10]" ]] || false
 
     run dolt table import -u --continue persons persons.csv
@@ -381,7 +381,7 @@ DELIM
 
     run dolt table import -u test bad-updates.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "CSV reader expected 2 values, but saw 3" ]] || false
     [[ "$output" =~ "with the following values left over: '[\"\"]'" ]] || false
 
@@ -403,7 +403,7 @@ DELIM
 
     run dolt table import -u test bad-updates.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "[100]" ]] || false
 
     run dolt table import -u --continue test bad-updates.csv
@@ -805,8 +805,8 @@ DELIM
 
     run dolt table import -u objects objects-bad.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
-    [[ "$output" =~ "Bad Row: [6,bottle,gray]" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
+    [[ "$output" =~ "[6,bottle,gray]" ]] || false
     [[ "$output" =~ "cannot add or update a child row - Foreign key violation" ]] || false
 
     run dolt table import -u objects objects-bad.csv --continue
@@ -885,8 +885,8 @@ DELIM
 
     run dolt table import -u objects multi-key-bad.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
-    [[ "$output" =~ "Bad Row: [6,bottle,blue,steel]" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
+    [[ "$output" =~ "[6,bottle,blue,steel]" ]] || false
     [[ "$output" =~ "cannot add or update a child row - Foreign key violation" ]] || false
 
     run dolt table import -u objects multi-key-bad.csv --continue
@@ -964,7 +964,7 @@ DELIM
 
     run dolt table import -u colors colors-bad.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "cannot delete or update a parent row" ]] || false
 
     run dolt table import -u colors colors-bad.csv --continue
@@ -1007,7 +1007,7 @@ DELIM
 
     run dolt table import -u tbl circular-keys-bad.csv
     [ $status -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "cannot add or update a child row" ]] || false
 }
 
@@ -1192,7 +1192,7 @@ DELIM
 
     run dolt table import -u test bad-updates.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "CSV reader expected 3 values, but saw 2" ]] || false
     [[ "$output" =~ "row values:" ]]
     ! [[ "$output" =~ "with the following values left over: '[\"\"]'" ]] || false
@@ -1206,7 +1206,7 @@ DELIM
 
     run dolt table import -u test bad-updates.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "CSV reader expected 2 values, but saw 3" ]] || false
     [[ "$output" =~ "row values:" ]]
     [[ "$output" =~ '"pk": "5"' ]]
@@ -1235,7 +1235,7 @@ DELIM
 
     run dolt table import -u test bad-updates.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "CSV reader expected 3 values, but saw 4" ]] || false
     [[ "$output" =~ "row values:" ]] || false
     [[ "$output" =~ "with the following values left over: '[\"\"]'" ]] || false

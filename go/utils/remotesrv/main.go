@@ -22,6 +22,8 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
@@ -80,12 +82,13 @@ func main() {
 		dbCache = NewLocalCSCache(fs)
 	}
 
-	server := remotesrv.NewServer(*httpHostParam, *httpPortParam, *grpcPortParam, fs, dbCache, *readOnlyParam)
+	server := remotesrv.NewServer(logrus.NewEntry(logrus.StandardLogger()), *httpHostParam, *httpPortParam, *grpcPortParam, fs, dbCache, *readOnlyParam)
+	listeners, err := server.Listeners()
+	if err != nil {
+		log.Fatalf("error starting remotesrv Server listeners: %v\n", err)
+	}
 	go func() {
-		err := server.Serve()
-		if err != nil {
-			log.Fatalf("error starting remotesrv Server: %v\n", err)
-		}
+		server.Serve(listeners)
 	}()
 	waitForSignal()
 	server.GracefulStop()

@@ -47,6 +47,7 @@ const (
 	persistenceBehaviorFlag     = "persistence-behavior"
 	allowCleartextPasswordsFlag = "allow-cleartext-passwords"
 	socketFlag                  = "socket"
+	remotesapiPortFlag          = "remotesapi-port"
 )
 
 func indentLines(s string) string {
@@ -148,6 +149,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
 	ap.SupportsString(allowCleartextPasswordsFlag, "", "allow-cleartext-passwords", "Allows use of cleartext passwords. Defaults to false.")
 	ap.SupportsOptionalString(socketFlag, "", "socket file", "Path for the unix socket file. Defaults to '/tmp/mysql.sock'.")
+	ap.SupportsUint(remotesapiPortFlag, "", "remotesapi port", "Sets the port for a server which can expose the databases in this sql-server over remotesapi.")
 	return ap
 }
 
@@ -348,6 +350,10 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 
 	if password, ok := apr.GetValue(passwordFlag); ok {
 		serverConfig.withPassword(password)
+	}
+
+	if port, ok := apr.GetInt(remotesapiPortFlag); ok {
+		serverConfig.WithRemotesapiPort(&port)
 	}
 
 	if persistenceBehavior, ok := apr.GetValue(persistenceBehaviorFlag); ok {

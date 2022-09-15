@@ -129,7 +129,7 @@ type conflictRowIter struct {
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
 func (itr conflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	cnf, _, err := itr.rd.NextConflict(ctx)
+	cnf, err := itr.rd.NextConflict(ctx)
 
 	if err != nil {
 		return nil, err
