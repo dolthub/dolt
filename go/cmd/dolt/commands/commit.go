@@ -92,6 +92,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	allFlag := apr.Contains(cli.AllFlag)
+	upperCaseAllFlag := apr.Contains(cli.UpperCaseAllFlag)
 
 	if dEnv.IsLocked() {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
@@ -102,7 +103,12 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working root").AddCause(err).Build(), usage)
 	}
 
-	if allFlag {
+	if upperCaseAllFlag {
+		roots, err = actions.StageAllTables(ctx, roots)
+		if err != nil {
+			return handleCommitErr(ctx, dEnv, err, help)
+		}
+	} else if allFlag {
 		roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
 		if err != nil {
 			return handleCommitErr(ctx, dEnv, err, help)
