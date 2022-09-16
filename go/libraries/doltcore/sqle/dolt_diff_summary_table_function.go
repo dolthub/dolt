@@ -113,6 +113,10 @@ func (ds *DiffSummaryTableFunction) WithChildren(children ...sql.Node) (sql.Node
 
 func (ds *DiffSummaryTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
 	if ds.tableNameExpr != nil {
+		if !sql.IsText(ds.tableNameExpr.Type()) {
+			return false
+		}
+
 		tableNameVal, err := ds.tableNameExpr.Eval(ds.ctx, nil)
 		if err != nil {
 			return false
@@ -165,6 +169,21 @@ func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression
 		ds.tableNameExpr = expression[2]
 	}
 
+	// validate the expressions
+	if !sql.IsText(ds.fromCommitExpr.Type()) {
+		return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.fromCommitExpr.String())
+	}
+
+	if !sql.IsText(ds.toCommitExpr.Type()) {
+		return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.toCommitExpr.String())
+	}
+
+	if ds.tableNameExpr != nil {
+		if !sql.IsText(ds.tableNameExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.tableNameExpr.String())
+		}
+	}
+
 	return ds, nil
 }
 
@@ -195,8 +214,24 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		return nil, err
 	}
 
-	if tableName != "" {
+	if ds.tableNameExpr != nil {
 		delta := findMatchingDelta(deltas, tableName)
+		if delta.FromTable == nil && delta.ToTable == nil {
+			_, _, fromTableExists, err := fromRoot.GetTableInsensitive(ctx, tableName)
+			if err != nil {
+				return nil, err
+			}
+			_, _, toTableExists, err := toRoot.GetTableInsensitive(ctx, tableName)
+			if err != nil {
+				return nil, err
+			}
+			if !fromTableExists && !toTableExists {
+				return nil, sql.ErrTableNotFound.New(tableName)
+			}
+			//noDiff := diff.DiffSummaryProgress{Adds: 0, Removes: 0, Changes: 0, CellChanges: 0, NewRowSize: 0, OldRowSize: 0, NewCellSize: 0, OldCellSize: 0}
+
+			return NewDiffSummaryTableFunctionRowIter([]diffSummaryNode{}), nil
+		}
 		diffSum, err := getDiffSummaryFromDelta(ctx, delta, fromRoot, toRoot, tableName)
 		if err != nil {
 			return nil, err
@@ -231,36 +266,21 @@ func getDiffSummaryFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRoot, 
 // is not defined, it returns empty string.
 // It evaluates the argument expressions to turn them into values this DiffTableFunction
 // can use. Note that this method only evals the expressions, and doesn't validate the values.
-func (dtf *DiffSummaryTableFunction) evaluateArguments() (string, string, string, error) {
-	if !dtf.Resolved() {
-		return "", "", "", nil
-	}
-
-	if !sql.IsText(dtf.fromCommitExpr.Type()) {
-		return "", "", "", sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.fromCommitExpr.String())
-	}
-
-	if !sql.IsText(dtf.toCommitExpr.Type()) {
-		return "", "", "", sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.toCommitExpr.String())
-	}
-
+func (ds *DiffSummaryTableFunction) evaluateArguments() (string, string, string, error) {
 	var tableName string
-	if dtf.tableNameExpr != nil {
-		if !sql.IsText(dtf.tableNameExpr.Type()) {
-			return "", "", "", sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.tableNameExpr.String())
-		}
-		tableNameVal, err := dtf.tableNameExpr.Eval(dtf.ctx, nil)
+	if ds.tableNameExpr != nil {
+		tableNameVal, err := ds.tableNameExpr.Eval(ds.ctx, nil)
 		if err != nil {
 			return "", "", "", err
 		}
 		tn, ok := tableNameVal.(string)
 		if !ok {
-			return "", "", "", ErrInvalidTableName.New(dtf.tableNameExpr.String())
+			return "", "", "", ErrInvalidTableName.New(ds.tableNameExpr.String())
 		}
 		tableName = tn
 	}
 
-	fromCommitVal, err := dtf.fromCommitExpr.Eval(dtf.ctx, nil)
+	fromCommitVal, err := ds.fromCommitExpr.Eval(ds.ctx, nil)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -269,7 +289,7 @@ func (dtf *DiffSummaryTableFunction) evaluateArguments() (string, string, string
 		return "", "", "", fmt.Errorf("received '%v' when expecting commit hash string", fromCommitVal)
 	}
 
-	toCommitVal, err := dtf.toCommitExpr.Eval(dtf.ctx, nil)
+	toCommitVal, err := ds.toCommitExpr.Eval(ds.ctx, nil)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -357,6 +377,7 @@ func getDiffSummary(ctx *sql.Context, td diff.TableDelta) (diff.DiffSummaryProgr
 	}
 
 	if (acc.Adds + acc.Removes + acc.Changes + (acc.OldCellSize - acc.NewCellSize)) == 0 {
+		// TODO : should it error or return empty?
 		return diff.DiffSummaryProgress{}, fmt.Errorf("no data changes for '%s' table", td.ToName)
 	}
 
@@ -377,7 +398,7 @@ type diffSummaryTableFunctionRowIter struct {
 func (d *diffSummaryTableFunctionRowIter) incrementIndexes() {
 	d.diffIdx++
 	if d.diffIdx >= len(d.diffSums) {
-		d.diffIdx = -1
+		d.diffIdx = 0
 		d.diffSums = nil
 	}
 }
@@ -397,6 +418,10 @@ func NewDiffSummaryTableFunctionRowIter(ds []diffSummaryNode) sql.RowIter {
 
 func (d *diffSummaryTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	defer d.incrementIndexes()
+	if d.diffIdx >= len(d.diffSums) {
+		return nil, io.EOF
+	}
+
 	if d.diffSums == nil {
 		return nil, io.EOF
 	}
@@ -420,17 +445,17 @@ func getRowFromDiffSummary(tblName string, dsp diff.DiffSummaryProgress, colLen 
 		numCellDeletes = moreDeletes + float64(numCellInserts)
 	}
 	return sql.Row{
-		tblName,         // table_name
-		rowsModified,    // rows_unmodified
-		dsp.Adds,        // rows_added
-		dsp.Removes,     // rows_deleted
-		dsp.Changes,     // row_modified
-		numCellInserts,  // cells_added
-		numCellDeletes,  // cells_deleted
-		dsp.CellChanges, // cells_modified
-		dsp.OldRowSize,  // old_row_count
-		dsp.NewRowSize,  // new_row_count
-		dsp.OldCellSize, // old_cell_count
-		dsp.NewCellSize, // new_cell_count
+		tblName,                // table_name
+		int64(rowsModified),    // rows_unmodified
+		int64(dsp.Adds),        // rows_added
+		int64(dsp.Removes),     // rows_deleted
+		int64(dsp.Changes),     // row_modified
+		int64(numCellInserts),  // cells_added
+		int64(numCellDeletes),  // cells_deleted
+		int64(dsp.CellChanges), // cells_modified
+		int64(dsp.OldRowSize),  // old_row_count
+		int64(dsp.NewRowSize),  // new_row_count
+		int64(dsp.OldCellSize), // old_cell_count
+		int64(dsp.NewCellSize), // new_cell_count
 	}
 }
