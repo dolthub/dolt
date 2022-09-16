@@ -6244,3 +6244,73 @@ var BrokenAutoIncrementTests = []queries.ScriptTest{
 		},
 	},
 }
+
+var DoltCommitTests = []queries.ScriptTest{
+	{
+		Name: "CALL DOLT_COMMIT('-ALL') adds all tables (including new ones) to the commit.",
+		SetUpScript: []string{
+			"CREATE table t (pk int primary key);",
+			"INSERT INTO t VALUES (1);",
+			"CALL DOLT_ADD('t');",
+			"CALL DOLT_COMMIT('-m', 'add table t');",
+			"CALL DOLT_RESET('--hard');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from t;",
+				Expected: []sql.Row{{1}},
+			},
+			// update a table
+			{
+				Query:    "DELETE from t where pk = 1;",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-ALL', '-m', 'update table t');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_RESET('--hard');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * from t;",
+				Expected: []sql.Row{},
+			},
+			// delete a table
+			{
+				Query:    "DROP TABLE t;",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-Am', 'drop table t');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_RESET('--hard');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:       "SELECT * from t;",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			// create a table
+			{
+				Query:    "CREATE table t2 (pk int primary key);",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-Am', 'add table 2');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_RESET('--hard');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * from t2;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+}
