@@ -16,14 +16,15 @@ package sqle
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"io"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/atomicerr"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var _ sql.TableFunction = (*DiffSummaryTableFunction)(nil)

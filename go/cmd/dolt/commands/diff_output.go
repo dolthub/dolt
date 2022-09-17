@@ -17,7 +17,13 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
+
 	textdiff "github.com/andreyvit/diff"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dustin/go-humanize"
+	"github.com/fatih/color"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -30,10 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/atomicerr"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dustin/go-humanize"
-	"github.com/fatih/color"
-	"io"
 )
 
 // diffWriter is an interface that lets us write diffs in a variety of output formats
