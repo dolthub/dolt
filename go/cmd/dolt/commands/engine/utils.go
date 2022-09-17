@@ -99,9 +99,13 @@ func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv, useBulkEdi
 	if useBulkEditor {
 		deaf = dEnv.BulkDbEaFactory()
 	}
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return sqle.Database{}, err
+	}
 	opts := editor.Options{
 		Deaf:    deaf,
-		Tempdir: dEnv.TempTableFilesDir(),
+		Tempdir: tmpDir,
 	}
 	return sqle.NewDatabase(ctx, name, dEnv.DbData(), opts)
 }
@@ -110,9 +114,13 @@ func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv, useBulkEdi
 // skip errors related to database construction only and return a partially functional dsqle.ReadReplicaDatabase
 // that will log warnings when attempting to perform replica commands.
 func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEnv *env.DoltEnv) (sqle.ReadReplicaDatabase, error) {
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return sqle.ReadReplicaDatabase{}, err
+	}
 	opts := editor.Options{
 		Deaf:    dEnv.DbEaFactory(),
-		Tempdir: dEnv.TempTableFilesDir(),
+		Tempdir: tmpDir,
 	}
 
 	db, err := sqle.NewDatabase(ctx, name, dEnv.DbData(), opts)
@@ -159,7 +167,10 @@ func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.PushOnW
 	if err != nil {
 		return nil, err
 	}
-
-	pushHook := doltdb.NewPushOnWriteHook(ddb, dEnv.TempTableFilesDir())
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil, err
+	}
+	pushHook := doltdb.NewPushOnWriteHook(ddb, tmpDir)
 	return pushHook, nil
 }

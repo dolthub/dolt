@@ -72,10 +72,15 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		return EmptyReadReplica, err
 	}
 
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return EmptyReadReplica, err
+	}
+
 	return ReadReplicaDatabase{
 		Database: db,
 		remote:   remote,
-		tmpDir:   dEnv.TempTableFilesDir(),
+		tmpDir:   tmpDir,
 		srcDB:    srcDB,
 		limiter:  newLimiter(),
 	}, nil
@@ -229,9 +234,12 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string, 
 	}
 
 	_, err = rrd.limiter.Run(ctx, "___tags", func() (any, error) {
+		tmpDir, err := rrd.rsw.TempTableFilesDir()
+		if err != nil {
+			return nil, err
+		}
 		// TODO: Not sure about this; see comment about the captured ctx below.
-
-		return nil, actions.FetchFollowTags(ctx, rrd.rsw.TempTableFilesDir(), rrd.srcDB, rrd.ddb, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+		return nil, actions.FetchFollowTags(ctx, tmpDir, rrd.srcDB, rrd.ddb, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	})
 	if err != nil {
 		return err

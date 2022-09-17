@@ -146,8 +146,12 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 			}
 
 			rsSeen = true
+			tmpDir, err := dbData.Rsw.TempTableFilesDir()
+			if err != nil {
+				return noConflictsOrViolations, threeWayMerge, err
+			}
 			// todo: can we pass nil for either of the channels?
-			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), pullSpec.Remote, srcDB, dbData.Ddb, branchRef, runProgFuncs, stopProgFuncs)
+			srcDBCommit, err := actions.FetchRemoteBranch(ctx, tmpDir, pullSpec.Remote, srcDB, dbData.Ddb, branchRef, runProgFuncs, stopProgFuncs)
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
@@ -189,7 +193,11 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 		}
 	}
 
-	err = actions.FetchFollowTags(ctx, dbData.Rsw.TempTableFilesDir(), srcDB, dbData.Ddb, runProgFuncs, stopProgFuncs)
+	tmpDir, err := dbData.Rsw.TempTableFilesDir()
+	if err != nil {
+		return noConflictsOrViolations, threeWayMerge, err
+	}
+	err = actions.FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		return conflicts, fastForward, err
 	}

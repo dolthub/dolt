@@ -169,7 +169,6 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 
 func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB, srcRoot, destRoot *doltdb.RootValue, language progLanguage, tblName, commitStr string) (*doltdb.RootValue, errhand.VerboseError) {
 	tbl, ok, err := srcRoot.GetTable(ctx, tblName)
-
 	if !ok {
 		return nil, errhand.BuildDError("No table named '%s' at '%s'", tblName, commitStr).Build()
 	} else if err != nil {
@@ -177,23 +176,26 @@ func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB
 	}
 
 	tblHash, err := tbl.HashOf()
-
 	if err != nil {
 		return nil, errhand.BuildDError("Unable to read from remote database.").AddCause(err).Build()
+	}
+
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil, errhand.BuildDError("error: ").AddCause(err).Build()
 	}
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
 	cli.Println("Retrieving", tblName)
 	runProgFunc := buildProgStarter(language)
 	wg, progChan, pullerEventCh := runProgFunc(newCtx)
-	err = dEnv.DoltDB.PullChunks(ctx, dEnv.TempTableFilesDir(), srcDB, tblHash, progChan, pullerEventCh)
+	err = dEnv.DoltDB.PullChunks(ctx, tmpDir, srcDB, tblHash, progChan, pullerEventCh)
 	stopProgFuncs(cancelFunc, wg, progChan, pullerEventCh)
 	if err != nil {
 		return nil, errhand.BuildDError("Failed reading chunks for remote table '%s' at '%s'", tblName, commitStr).AddCause(err).Build()
 	}
 
 	destRoot, err = destRoot.SetTableHash(ctx, tblName, tblHash)
-
 	if err != nil {
 		return nil, errhand.BuildDError("Unable to write to local database.").AddCause(err).Build()
 	}

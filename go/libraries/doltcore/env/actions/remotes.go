@@ -376,7 +376,11 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB,
 
 			if remoteTrackRef != nil {
 				rsSeen = true
-				srcDBCommit, err := FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), remote, srcDB, dbData.Ddb, branchRef, progStarter, progStopper)
+				tmpDir, err := dbData.Rsw.TempTableFilesDir()
+				if err != nil {
+					return err
+				}
+				srcDBCommit, err := FetchRemoteBranch(ctx, tmpDir, remote, srcDB, dbData.Ddb, branchRef, progStarter, progStopper)
 				if err != nil {
 					return err
 				}
@@ -416,7 +420,11 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB,
 		}
 	}
 
-	err = FetchFollowTags(ctx, dbData.Rsw.TempTableFilesDir(), srcDB, dbData.Ddb, progStarter, progStopper)
+	tmpDir, err := dbData.Rsw.TempTableFilesDir()
+	if err != nil {
+		return err
+	}
+	err = FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, progStarter, progStopper)
 	if err != nil {
 		return err
 	}

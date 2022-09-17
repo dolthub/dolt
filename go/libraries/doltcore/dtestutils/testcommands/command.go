@@ -181,7 +181,9 @@ func (q Query) CommandString() string { return fmt.Sprintf("query %s", q.Query) 
 func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+	tmpDir, err := dEnv.TempTableFilesDir()
+	require.NoError(t, err)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 	sqlDb, err := dsqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
@@ -295,7 +297,9 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		err = dEnv.UpdateWorkingSet(context.Background(), workingSet.WithWorkingRoot(rv))
 		require.NoError(t, err)
 	} else {
-		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+		tmpDir, err := dEnv.TempTableFilesDir()
+		require.NoError(t, err)
+		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 		mergedRoot, tblToStats, err := merge.MergeCommits(context.Background(), cm1, cm2, opts)
 		require.NoError(t, err)
 		for _, stats := range tblToStats {
