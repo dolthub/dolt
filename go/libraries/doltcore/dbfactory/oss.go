@@ -2,6 +2,7 @@ package dbfactory
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
@@ -11,15 +12,36 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"io/ioutil"
 	"net/url"
 	"os"
+	"path/filepath"
 )
 
 const (
 	ossEndpointEnvKey        = "OSS_ENDPOINT"
 	ossAccessKeyIDEnvKey     = "OSS_ACCESS_KEY_ID"
 	ossAccessKeySecretEnvKey = "OSS_ACCESS_KEY_SECRET"
+
+	// OSSCredsFileParam is a creation parameter that can be used to specify a credential file to use.
+	OSSCredsFileParam = "oss-creds-file"
+
+	// OSSCredsProfile is a creation parameter that can be used to specify which AWS profile to use.
+	OSSCredsProfile = "oss-creds-profile"
 )
+
+var (
+	emptyOSSCredential = ossCredential{}
+)
+
+type ossParams map[string]interface{}
+type ossCredentials map[string]ossCredential
+
+type ossCredential struct {
+	Endpoint        string `json:"endpoint,omitempty"`
+	AccessKeyID     string `json:"accessKeyID,omitempty"`
+	AccessKeySecret string `json:"accessKeySecret,omitempty"`
+}
 
 // OSSFactory is a DBFactory implementation for creating GCS backed databases
 type OSSFactory struct {
@@ -43,7 +65,10 @@ func (fact OSSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinForm
 	// oss://[bucket]/[key]
 	bucket := urlObj.Hostname()
 	prefix := urlObj.Path
-	ossClient, err := getOSSClient()
+
+	opts := ossConfigFromParams(params)
+
+	ossClient, err := getOSSClient(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize oss err: %s", err)
 	}
@@ -55,20 +80,121 @@ func (fact OSSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinForm
 	return nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
 }
 
-func getOSSClient() (*oss.Client, error) {
-	var endpoint, accessKeyID, accessKeySecret string
-	if endpoint = os.Getenv(ossEndpointEnvKey); endpoint == "" {
-		return nil, fmt.Errorf("failed to find endpoint from env %s", ossEndpointEnvKey)
+func ossConfigFromParams(params map[string]interface{}) ossCredential {
+	// then we look for config from oss-creds-file
+	p := ossParams(params)
+	credFile, err := p.getCredFile()
+	if err != nil {
+		return emptyOSSCredential
 	}
-	if accessKeyID = os.Getenv(ossAccessKeyIDEnvKey); accessKeyID == "" {
-		return nil, fmt.Errorf("failed to find accessKeyID from env %s", ossAccessKeyIDEnvKey)
+	creds, err := readOSSCredentialsFromFile(credFile)
+	if err != nil {
+		return emptyOSSCredential
 	}
-	if accessKeySecret = os.Getenv(ossAccessKeySecretEnvKey); accessKeySecret == "" {
-		return nil, fmt.Errorf("failed to find accessKeySecret from env %s", ossAccessKeySecretEnvKey)
+	// if there is only 1 cred in the file, just use this cred regardless the profile is
+	if len(creds) == 1 {
+		return creds.First()
+	}
+	// otherwise, we try to get cred by profile from cred file
+	if res, ok := creds[p.getCredProfile()]; ok {
+		return res
+	}
+	return emptyOSSCredential
+}
+
+func getOSSClient(opts ossCredential) (*oss.Client, error) {
+	var (
+		endpoint, accessKeyID, accessKeySecret string
+		err                                    error
+	)
+	if endpoint, err = opts.getEndPoint(); err != nil {
+		return nil, err
+	}
+	if accessKeyID, err = opts.getAccessKeyID(); err != nil {
+		return nil, err
+	}
+	if accessKeySecret, err = opts.getAccessKeySecret(); err != nil {
+		return nil, err
 	}
 	return oss.New(
 		endpoint,
 		accessKeyID,
 		accessKeySecret,
 	)
+}
+
+func (opt ossCredential) getEndPoint() (string, error) {
+	if opt.Endpoint != "" {
+		return opt.Endpoint, nil
+	}
+	if v := os.Getenv(ossEndpointEnvKey); v != "" {
+		return v, nil
+	}
+	return "", fmt.Errorf("failed to find endpoint from cred file or env %s", ossEndpointEnvKey)
+}
+
+func (opt ossCredential) getAccessKeyID() (string, error) {
+	if opt.AccessKeyID != "" {
+		return opt.AccessKeyID, nil
+	}
+	if v := os.Getenv(ossAccessKeyIDEnvKey); v != "" {
+		return v, nil
+	}
+	return "", fmt.Errorf("failed to find accessKeyID from cred file or env %s", ossAccessKeyIDEnvKey)
+}
+
+func (opt ossCredential) getAccessKeySecret() (string, error) {
+	if opt.AccessKeySecret != "" {
+		return opt.AccessKeySecret, nil
+	}
+	if v := os.Getenv(ossAccessKeySecretEnvKey); v != "" {
+		return v, nil
+	}
+	return "", fmt.Errorf("failed to find accessKeySecret from cred file or env %s", ossAccessKeySecretEnvKey)
+}
+
+func readOSSCredentialsFromFile(credFile string) (ossCredentials, error) {
+	data, err := ioutil.ReadFile(credFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read oss cred file %s, err: %s", credFile, err)
+	}
+	var res map[string]ossCredential
+	if err = json.Unmarshal(data, &res); err != nil {
+		return nil, fmt.Errorf("invalid oss credential file %s, err: %s", credFile, err)
+	}
+	if len(res) == 0 {
+		return nil, errors.New("empty credential file is not allowed")
+	}
+	return res, nil
+}
+
+func (oc ossCredentials) First() ossCredential {
+	var res ossCredential
+	for _, c := range oc {
+		res = c
+		break
+	}
+	return res
+}
+
+func (p ossParams) getCredFile() (string, error) {
+	// then we look for config from oss-creds-file
+	credFile, ok := p[OSSCredsFileParam]
+	if !ok {
+		// if oss-creds-files is
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to find oss cred file from home dir, err: %s", err)
+		}
+		credFile = filepath.Join(homeDir, ".oss", "dolt_oss_credentials")
+	}
+	return credFile.(string), nil
+}
+
+func (p ossParams) getCredProfile() string {
+	credProfile, ok := p[OSSCredsProfile]
+	if !ok {
+		credProfile = "default"
+	}
+	return credProfile.(string)
 }
