@@ -26,7 +26,7 @@ const (
 	// OSSCredsFileParam is a creation parameter that can be used to specify a credential file to use.
 	OSSCredsFileParam = "oss-creds-file"
 
-	// OSSCredsProfile is a creation parameter that can be used to specify which AWS profile to use.
+	// OSSCredsProfile is a creation parameter that can be used to specify which OSS profile to use.
 	OSSCredsProfile = "oss-creds-profile"
 )
 
@@ -43,11 +43,11 @@ type ossCredential struct {
 	AccessKeySecret string `json:"accessKeySecret,omitempty"`
 }
 
-// OSSFactory is a DBFactory implementation for creating GCS backed databases
+// OSSFactory is a DBFactory implementation for creating OSS backed databases
 type OSSFactory struct {
 }
 
-// CreateDB creates an GCS backed database
+// CreateDB creates an OSS backed database
 func (fact OSSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	ossStore, err := fact.newChunkStore(ctx, nbf, urlObj, params)
 	if err != nil {

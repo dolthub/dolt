@@ -91,7 +91,10 @@ func (ob *OSSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key st
 	if err := ob.bucket.PutObject(ob.absKey(key), reader, options...); err != nil {
 		ossErr, ok := err.(oss.ServiceError)
 		if ok {
-			return "", CheckAndPutError{key, expectedVersion, fmt.Sprintf("unknown (OSS error code %d)", ossErr.StatusCode)}
+			return "", CheckAndPutError{
+				Key:             key,
+				ExpectedVersion: expectedVersion,
+				ActualVersion:   fmt.Sprintf("unknown (OSS error code %d)", ossErr.StatusCode)}
 		}
 		return "", err
 	}
