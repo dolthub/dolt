@@ -183,7 +183,11 @@ func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cherryStr, authorStr str
 // getCherryPickedRootValue returns updated RootValue for current HEAD after cherry-pick commit is merged successfully and
 // commit message of cherry-picked commit.
 func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoot *doltdb.RootValue, cherryStr string) (*doltdb.RootValue, string, error) {
-	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil, "", err
+	}
+	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: tmpDir}
 
 	cherrySpec, err := doltdb.NewCommitSpec(cherryStr)
 	if err != nil {

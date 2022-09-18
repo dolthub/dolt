@@ -162,7 +162,9 @@ func TestTableEditor(t *testing.T) {
 
 			ctx := sqle.NewTestSQLCtx(context.Background())
 			root, _ := dEnv.WorkingRoot(context.Background())
-			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+			tmpDir, err := dEnv.TempTableFilesDir()
+			require.NoError(t, err)
+			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 			db, err := sqle.NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 			require.NoError(t, err)
 

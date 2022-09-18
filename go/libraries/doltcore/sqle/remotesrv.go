@@ -53,5 +53,12 @@ func (s remotesrvStore) Get(org, repo, nbfVerStr string) (remotesrv.RemoteSrvSto
 
 func NewRemoteSrvServer(lgr *logrus.Entry, ctx *sql.Context, port int) *remotesrv.Server {
 	sess := dsess.DSessFromSess(ctx.Session)
-	return remotesrv.NewServer(lgr, "", port, port, sess.Provider().FileSystem(), remotesrvStore{ctx}, true)
+	return remotesrv.NewServer(remotesrv.ServerArgs{
+		Logger:   lgr,
+		HttpPort: port,
+		GrpcPort: port,
+		FS:       sess.Provider().FileSystem(),
+		DBCache:  remotesrvStore{ctx},
+		ReadOnly: true,
+	})
 }

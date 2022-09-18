@@ -64,7 +64,9 @@ func TestSqlBatchInserts(t *testing.T) {
 	CreateTestDatabase(dEnv, t)
 	root, _ := dEnv.WorkingRoot(ctx)
 
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+	tmpDir, err := dEnv.TempTableFilesDir()
+	require.NoError(t, err)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
@@ -156,7 +158,9 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	CreateTestDatabase(dEnv, t)
 	root, _ := dEnv.WorkingRoot(ctx)
 
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+	tmpDir, err := dEnv.TempTableFilesDir()
+	require.NoError(t, err)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
@@ -198,7 +202,9 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	CreateTestDatabase(dEnv, t)
 	root, _ := dEnv.WorkingRoot(ctx)
 
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+	tmpDir, err := dEnv.TempTableFilesDir()
+	require.NoError(t, err)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 

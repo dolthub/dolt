@@ -211,8 +211,8 @@ func (m MemoryRepoState) RemoveRemote(ctx context.Context, name string) error {
 	return fmt.Errorf("cannot delete a remote from a memory database")
 }
 
-func (m MemoryRepoState) TempTableFilesDir() string {
-	return os.TempDir()
+func (m MemoryRepoState) TempTableFilesDir() (string, error) {
+	return os.TempDir(), nil
 }
 
 func (m MemoryRepoState) GetBackups() (map[string]Remote, error) {

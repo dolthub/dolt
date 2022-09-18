@@ -87,7 +87,11 @@ func (cmd InspectCmd) Exec(ctx context.Context, commandStr string, args []string
 }
 
 func (cmd InspectCmd) measureChunkIndexDistribution(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseError {
-	newGen := filepath.Join(dEnv.GetDoltDir(), dbfactory.DataDir)
+	doltDir := dEnv.GetDoltDir()
+	if doltDir == "" {
+		return errhand.VerboseErrorFromError(fmt.Errorf("can no longer find a database on disk"))
+	}
+	newGen := filepath.Join(doltDir, dbfactory.DataDir)
 	oldGen := filepath.Join(newGen, "oldgen")
 
 	itr, err := NewTableFileIter([]string{newGen, oldGen}, dEnv.FS)

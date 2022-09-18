@@ -89,7 +89,11 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 	if !ok {
 		return HandleErr(errhand.BuildDError("The table `%s` does not exist.", tableName).Build(), nil)
 	}
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return HandleErr(errhand.BuildDError("error: ").AddCause(err).Build(), nil)
+	}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
 		return HandleErr(errhand.BuildDError("could not get table schema").AddCause(err).Build(), nil)
