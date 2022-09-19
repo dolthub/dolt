@@ -133,7 +133,11 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 			}
 
 			rsSeen = true
-			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dEnv.TempTableFilesDir(), pullSpec.Remote, srcDB, dEnv.DoltDB, branchRef, buildProgStarter(downloadLanguage), stopProgFuncs)
+			tmpDir, err := dEnv.TempTableFilesDir()
+			if err != nil {
+				return err
+			}
+			srcDBCommit, err := actions.FetchRemoteBranch(ctx, tmpDir, pullSpec.Remote, srcDB, dEnv.DoltDB, branchRef, buildProgStarter(downloadLanguage), stopProgFuncs)
 			if err != nil {
 				return err
 			}
@@ -206,8 +210,11 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 	if err != nil {
 		return err
 	}
-
-	err = actions.FetchFollowTags(ctx, dEnv.TempTableFilesDir(), srcDB, dEnv.DoltDB, buildProgStarter(downloadLanguage), stopProgFuncs)
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return err
+	}
+	err = actions.FetchFollowTags(ctx, tmpDir, srcDB, dEnv.DoltDB, buildProgStarter(downloadLanguage), stopProgFuncs)
 	if err != nil {
 		return err
 	}

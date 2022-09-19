@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -284,6 +285,11 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 
 		dsess, err := se.NewDoltSession(ctx, mysqlBaseSess)
 		if err != nil {
+			if goerrors.Is(err, env.ErrFailedToAccessDB) {
+				if server := sqlserver.GetRunningServer(); server != nil {
+					_ = server.Close()
+				}
+			}
 			return nil, err
 		}
 

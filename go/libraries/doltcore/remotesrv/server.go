@@ -46,31 +46,43 @@ func (s *Server) GracefulStop() {
 	s.wg.Wait()
 }
 
-func NewServer(lgr *logrus.Entry, httpHost string, httpPort, grpcPort int, fs filesys.Filesys, dbCache DBCache, readOnly bool) *Server {
+type ServerArgs struct {
+	Logger   *logrus.Entry
+	HttpHost string
+	HttpPort int
+	GrpcPort int
+	FS       filesys.Filesys
+	DBCache  DBCache
+	ReadOnly bool
+}
+
+func NewServer(args ServerArgs) *Server {
+	if args.Logger == nil {
+		args.Logger = logrus.NewEntry(logrus.StandardLogger())
+	}
+
 	s := new(Server)
 	s.stopChan = make(chan struct{})
 
-	expectedFiles := newFileDetails()
-
 	s.wg.Add(2)
-	s.grpcPort = grpcPort
+	s.grpcPort = args.GrpcPort
 	s.grpcSrv = grpc.NewServer(grpc.MaxRecvMsgSize(128 * 1024 * 1024))
-	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(lgr, httpHost, dbCache, expectedFiles, fs)
-	if readOnly {
+	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(args.Logger, args.HttpHost, args.DBCache, args.FS)
+	if args.ReadOnly {
 		chnkSt = ReadOnlyChunkStore{chnkSt}
 	}
 	remotesapi.RegisterChunkStoreServiceServer(s.grpcSrv, chnkSt)
 
-	var handler http.Handler = newFileHandler(lgr, dbCache, expectedFiles, fs, readOnly)
-	if httpPort == grpcPort {
+	var handler http.Handler = newFileHandler(args.Logger, args.DBCache, args.FS, args.ReadOnly)
+	if args.HttpPort == args.GrpcPort {
 		handler = grpcMultiplexHandler(s.grpcSrv, handler)
 	} else {
 		s.wg.Add(2)
 	}
 
-	s.httpPort = httpPort
+	s.httpPort = args.HttpPort
 	s.httpSrv = http.Server{
-		Addr:    fmt.Sprintf(":%d", httpPort),
+		Addr:    fmt.Sprintf(":%d", args.HttpPort),
 		Handler: handler,
 	}
 

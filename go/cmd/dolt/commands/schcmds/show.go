@@ -133,7 +133,11 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 			}
 		}
 
-		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+		tmpDir, err := dEnv.TempTableFilesDir()
+		if err != nil {
+			return errhand.BuildDError("error: ").AddCause(err).Build()
+		}
+		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 		sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(root, opts))
 
 		var notFound []string

@@ -65,7 +65,12 @@ func DoDoltCommit(ctx *sql.Context, args []string) (string, error) {
 		return "", fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	if apr.Contains(cli.AllFlag) {
+	if apr.Contains(cli.UpperCaseAllFlag) {
+		roots, err = actions.StageAllTables(ctx, roots)
+		if err != nil {
+			return "", fmt.Errorf(err.Error())
+		}
+	} else if apr.Contains(cli.AllFlag) {
 		roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
 		if err != nil {
 			return "", fmt.Errorf(err.Error())

@@ -905,7 +905,14 @@ func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
 	sessionState.dbData = dbState.DbData
-	sessionState.tmpFileDir = dbState.DbData.Rsw.TempTableFilesDir()
+	tmpDir, err := dbState.DbData.Rsw.TempTableFilesDir()
+	if err != nil {
+		if errors.Is(err, env.ErrDoltRepositoryNotFound) {
+			return env.ErrFailedToAccessDB.New(dbState.Db.Name())
+		}
+		return err
+	}
+	sessionState.tmpFileDir = tmpDir
 	adapter := NewSessionStateAdapter(d, db.Name(), dbState.Remotes, dbState.Branches, dbState.Backups)
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter

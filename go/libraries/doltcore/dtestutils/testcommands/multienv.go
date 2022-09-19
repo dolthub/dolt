@@ -328,7 +328,11 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 		mr.Errhand(fmt.Sprintf("Failed to get remote database: %s", err.Error()))
 	}
 
-	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, remoteDB, dEnv.TempTableFilesDir(), opts, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		mr.Errhand(fmt.Sprintf("Failed to access .dolt directory: %s", err.Error()))
+	}
+	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, remoteDB, tmpDir, opts, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}
