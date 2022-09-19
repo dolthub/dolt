@@ -766,14 +766,14 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				// With access to the db, but not the table, dolt_diff_summary should fail
 				User:        "tester",
 				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_diff('main~', 'main', 'test2');",
+				Query:       "SELECT * FROM dolt_diff_summary('main~', 'main', 'test2');",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
 				// With access to the db, dolt_diff_summary should fail for all tables if no access any of tables
 				User:        "tester",
 				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_diff('main~', 'main');",
+				Query:       "SELECT * FROM dolt_diff_summary('main~', 'main');",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
@@ -808,8 +808,8 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				// After granting access to the entire db, dolt_diff_summary should work
 				User:     "tester",
 				Host:     "localhost",
-				Query:    "SELECT COUNT(*) FROM dolt_diff('main~', 'main');",
-				Expected: []sql.Row{{1}},
+				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('main~', 'main');",
+				Expected: []sql.Row{{0}},
 			},
 			{
 				// Revoke multi-table access
@@ -829,7 +829,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				// After revoking access, dolt_diff_summary should fail
 				User:        "tester",
 				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_diff('main~', 'main', 'test');",
+				Query:       "SELECT * FROM dolt_diff_summary('main~', 'main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
@@ -4975,8 +4975,8 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// table is added, no data diff, result is empty
-				Query:          "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
-				ExpectedErrStr: "no data changes for 't' table",
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
@@ -5001,8 +5001,8 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"t", 0, 3, 0, 0, 9, 0, 0, 0, 3, 0, 9}},
 			},
 			{
-				Query:          "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
-				ExpectedErrStr: "table not found: t",
+				Query:       "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
+				ExpectedErr: sql.ErrTableNotFound,
 			},
 		},
 	},
@@ -5221,8 +5221,8 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"t", 0, 2, 0, 0, 6, 0, 0, 0, 2, 0, 6}},
 			},
 			{
-				Query:          "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
-				ExpectedErrStr: "no data changes for 't' table",
+				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",

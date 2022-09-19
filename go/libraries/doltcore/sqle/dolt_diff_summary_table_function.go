@@ -215,27 +215,15 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		return nil, err
 	}
 
+	// If tableNameExpr defined, return a single table diff summary result
 	if ds.tableNameExpr != nil {
 		delta := findMatchingDelta(deltas, tableName)
-		if delta.FromTable == nil && delta.ToTable == nil {
-			_, _, fromTableExists, err := fromRoot.GetTableInsensitive(ctx, tableName)
-			if err != nil {
-				return nil, err
-			}
-			_, _, toTableExists, err := toRoot.GetTableInsensitive(ctx, tableName)
-			if err != nil {
-				return nil, err
-			}
-			if !fromTableExists && !toTableExists {
-				return nil, sql.ErrTableNotFound.New(tableName)
-			}
-			//noDiff := diff.DiffSummaryProgress{Adds: 0, Removes: 0, Changes: 0, CellChanges: 0, NewRowSize: 0, OldRowSize: 0, NewCellSize: 0, OldCellSize: 0}
-
-			return NewDiffSummaryTableFunctionRowIter([]diffSummaryNode{}), nil
-		}
-		diffSum, err := getDiffSummaryFromDelta(ctx, delta, fromRoot, toRoot, tableName)
+		diffSum, hasDiff, err := getDiffSummaryFromDelta(ctx, delta, fromRoot, toRoot, tableName)
 		if err != nil {
 			return nil, err
+		}
+		if !hasDiff {
+			return NewDiffSummaryTableFunctionRowIter([]diffSummaryNode{}), nil
 		}
 		return NewDiffSummaryTableFunctionRowIter([]diffSummaryNode{diffSum}), nil
 	}
@@ -244,9 +232,12 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	for _, delta := range deltas {
 		// TODO should it be ToName or FromName??? if they are not the same name?
 		tblName := delta.ToName
-		diffSum, err := getDiffSummaryFromDelta(ctx, delta, fromRoot, toRoot, tblName)
+		diffSum, hasDiff, err := getDiffSummaryFromDelta(ctx, delta, fromRoot, toRoot, tblName)
 		if err != nil {
 			return nil, err
+		}
+		if !hasDiff {
+			return NewDiffSummaryTableFunctionRowIter([]diffSummaryNode{}), nil
 		}
 		diffSummaries = append(diffSummaries, diffSum)
 	}
@@ -254,17 +245,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	return NewDiffSummaryTableFunctionRowIter(diffSummaries), nil
 }
 
-func getDiffSummaryFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRoot, toRoot *doltdb.RootValue, tableName string) (diffSummaryNode, error) {
-	diffSum, err := getDiffSummary(ctx, delta)
-	if err != nil {
-		return diffSummaryNode{}, err
-	}
-	oldLen, newLen, err := getColumnLenghts(ctx, fromRoot, toRoot, tableName)
-	return diffSummaryNode{tableName, diffSum, oldLen, newLen}, nil
-}
-
-// evaluateArguments returns fromCommitValStr, toCommitValStr and tableName. If tableName
-// is not defined, it returns empty string.
+// evaluateArguments returns fromCommitValStr, toCommitValStr and tableName.
 // It evaluates the argument expressions to turn them into values this DiffTableFunction
 // can use. Note that this method only evals the expressions, and doesn't validate the values.
 func (ds *DiffSummaryTableFunction) evaluateArguments() (string, string, string, error) {
@@ -302,40 +283,54 @@ func (ds *DiffSummaryTableFunction) evaluateArguments() (string, string, string,
 	return fromCommitValStr, toCommitValStr, tableName, nil
 }
 
-func getColumnLenghts(ctx *sql.Context, fromRoot, toRoot *doltdb.RootValue, tableName string) (int, int, error) {
+func getDiffSummaryFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRoot, toRoot *doltdb.RootValue, tableName string) (diffSummaryNode, bool, error) {
 	var oldColLen int
 	var newColLen int
-
 	fromTable, _, fromTableExists, err := fromRoot.GetTableInsensitive(ctx, tableName)
 	if err != nil {
-		return 0, 0, err
+		return diffSummaryNode{}, false, err
 	}
 
 	if fromTableExists {
 		fromSch, err := fromTable.GetSchema(ctx)
 		if err != nil {
-			return 0, 0, err
+			return diffSummaryNode{}, false, err
 		}
 		oldColLen = len(fromSch.GetAllCols().GetColumns())
 	}
 
 	toTable, _, toTableExists, err := toRoot.GetTableInsensitive(ctx, tableName)
 	if err != nil {
-		return 0, 0, err
+		return diffSummaryNode{}, false, err
 	}
 
 	if toTableExists {
 		toSch, err := toTable.GetSchema(ctx)
 		if err != nil {
-			return 0, 0, err
+			return diffSummaryNode{}, false, err
 		}
 		newColLen = len(toSch.GetAllCols().GetColumns())
 	}
 
-	return oldColLen, newColLen, nil
+	if !fromTableExists && !toTableExists {
+		return diffSummaryNode{}, false, sql.ErrTableNotFound.New(tableName)
+	}
+
+	// no diff from tableDelta
+	if delta.FromTable == nil && delta.ToTable == nil {
+		return diffSummaryNode{}, false, nil
+	}
+
+	diffSum, hasDiff, err := getDiffSummary(ctx, delta)
+	if err != nil {
+		return diffSummaryNode{}, false, err
+	}
+
+	return diffSummaryNode{tableName, diffSum, oldColLen, newColLen}, hasDiff, nil
 }
 
-func getDiffSummary(ctx *sql.Context, td diff.TableDelta) (diff.DiffSummaryProgress, error) {
+func getDiffSummary(ctx *sql.Context, td diff.TableDelta) (diff.DiffSummaryProgress, bool, error) {
+	// got this method from diff_output.go
 	// todo: use errgroup.Group
 	ae := atomicerr.New()
 	ch := make(chan diff.DiffSummaryProgress)
@@ -369,20 +364,20 @@ func getDiffSummary(ctx *sql.Context, td diff.TableDelta) (diff.DiffSummaryProgr
 	pos = cli.DeleteAndPrint(pos, "")
 
 	if err := ae.Get(); err != nil {
-		return diff.DiffSummaryProgress{}, err
+		return diff.DiffSummaryProgress{}, false, err
 	}
 
 	_, err := td.IsKeyless(ctx)
 	if err != nil {
-		return diff.DiffSummaryProgress{}, nil
+		return diff.DiffSummaryProgress{}, false, nil
 	}
 
+	// no data diff
 	if (acc.Adds + acc.Removes + acc.Changes + (acc.OldCellSize - acc.NewCellSize)) == 0 {
-		// TODO : should it error or return empty?
-		return diff.DiffSummaryProgress{}, fmt.Errorf("no data changes for '%s' table", td.ToName)
+		return diff.DiffSummaryProgress{}, false, nil
 	}
 
-	return acc, nil
+	return acc, true, nil
 }
 
 //------------------------------------
