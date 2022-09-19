@@ -59,6 +59,7 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 	if err != nil {
 		return nil, err
 	}
+	pkDesc, _ := sch.GetMapDescriptors()
 
 	definitions := sch.Indexes().AllIndexes()
 	writers := make(map[string]indexWriter)
@@ -69,19 +70,23 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 		if err != nil {
 			return nil, err
 		}
-		m := durable.ProllyMapFromIndex(idxRows)
+		idxMap := durable.ProllyMapFromIndex(idxRows)
 
 		keyMap, _ := ordinalMappingsFromSchema(sqlSch, def.Schema())
-		keyDesc, _ := m.Descriptors()
+		keyDesc, _ := idxMap.Descriptors()
+
+		// mapping from secondary index key to primary key
+		pkMap := makeIndexToIndexMapping(def.Schema().GetPKCols(), sch.GetPKCols())
 
 		writers[defName] = prollySecondaryIndexWriter{
-			name:      defName,
-			mut:       m.Mutate(),
-			unique:    def.IsUnique(),
-			keyBld:    val.NewTupleBuilder(keyDesc),
-			prefixBld: val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count())),
-			suffixBld: val.NewTupleBuilder(keyDesc.SuffixDesc(keyDesc.Count() - def.Count())),
-			keyMap:    keyMap,
+			name:    defName,
+			mut:     idxMap.Mutate(),
+			unique:  def.IsUnique(),
+			idxCols: def.Count(),
+			keyMap:  keyMap,
+			keyBld:  val.NewTupleBuilder(keyDesc),
+			pkMap:   pkMap,
+			pkBld:   val.NewTupleBuilder(pkDesc),
 		}
 	}
 
@@ -359,6 +364,14 @@ func makeOrdinalMapping(from sql.Schema, to *schema.ColCollection) (m val.Ordina
 				m[i] = j
 			}
 		}
+	}
+	return
+}
+
+func makeIndexToIndexMapping(from, to *schema.ColCollection) (m val.OrdinalMapping) {
+	m = make(val.OrdinalMapping, len(to.GetColumns()))
+	for i, col := range to.GetColumns() {
+		m[i] = from.TagToIdx[col.Tag]
 	}
 	return
 }

@@ -102,11 +102,6 @@ func (td TupleDesc) PrefixDesc(n int) TupleDesc {
 	return NewTupleDescriptorWithComparator(td.cmp.Prefix(n), td.Types[:n]...)
 }
 
-// SuffixDesc returns a descriptor for the last n types.
-func (td TupleDesc) SuffixDesc(n int) TupleDesc {
-	return NewTupleDescriptorWithComparator(td.cmp.Suffix(n), td.Types[len(td.Types)-n:]...)
-}
-
 // GetField returns the ith field of |tup|.
 func (td TupleDesc) GetField(i int, tup Tuple) []byte {
 	if i < len(td.fast) {
