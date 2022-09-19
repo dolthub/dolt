@@ -5,6 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/url"
+	"os"
+	"path/filepath"
+
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -12,10 +17,6 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
-	"io/ioutil"
-	"net/url"
-	"os"
-	"path/filepath"
 )
 
 const (
@@ -45,6 +46,12 @@ type ossCredential struct {
 
 // OSSFactory is a DBFactory implementation for creating OSS backed databases
 type OSSFactory struct {
+}
+
+// PrepareDB prepares an OSS backed database
+func (fact OSSFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
+	// nothing to prepare
+	return nil
 }
 
 // CreateDB creates an OSS backed database
