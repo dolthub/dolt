@@ -86,6 +86,8 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.No
 	final, err := MergeMaps(ctx, left, right, base, panicOnConflict)
 	assert.NoError(t, err)
 
+	var adds, modifications, deletes int
+
 	for _, add := range leftEdits.adds {
 		ok, err := final.Has(ctx, add[0])
 		assert.NoError(t, err)
@@ -97,6 +99,7 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.No
 		assert.NoError(t, err)
 	}
 	for _, add := range rightEdits.adds {
+		adds++
 		ok, err := final.Has(ctx, add[0])
 		assert.NoError(t, err)
 		assert.True(t, ok)
@@ -113,6 +116,7 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.No
 		assert.False(t, ok)
 	}
 	for _, del := range rightEdits.deletes {
+		deletes++
 		ok, err := final.Has(ctx, del)
 		assert.NoError(t, err)
 		assert.False(t, ok)
@@ -123,21 +127,33 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.No
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		err = final.Get(ctx, up[0], func(key, value val.Tuple) error {
-			assert.Equal(t, value, up[1])
+			assert.Equal(t, value, up[2])
 			return nil
 		})
 		assert.NoError(t, err)
 	}
 	for _, up := range rightEdits.updates {
+		modifications++
 		ok, err := final.Has(ctx, up[0])
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		err = final.Get(ctx, up[0], func(key, value val.Tuple) error {
-			assert.Equal(t, value, up[1])
+			assert.Equal(t, value, up[2])
 			return nil
 		})
 		assert.NoError(t, err)
 	}
+
+	var finalStats MergeStats
+	scb := func(s MergeStats) {
+		finalStats = s
+	}
+
+	_, err = MergeMapsWithStats(ctx, left, right, base, panicOnConflict, scb)
+	require.NoError(t, err)
+	require.Equal(t, adds, finalStats.Adds)
+	require.Equal(t, modifications, finalStats.Modifications)
+	require.Equal(t, deletes, finalStats.Removes)
 }
 
 func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeStore) {
@@ -264,7 +280,7 @@ func applyMutationSet(t *testing.T, base Map, edits mutationSet) (m Map) {
 		require.NoError(t, err)
 	}
 	for _, up := range edits.updates {
-		err = mut.Put(ctx, up[0], up[1])
+		err = mut.Put(ctx, up[0], up[2])
 		require.NoError(t, err)
 	}
 

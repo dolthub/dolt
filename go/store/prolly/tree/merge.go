@@ -30,6 +30,10 @@ const patchBufferSize = 1024
 // of the tuples, or register a conflict if such a merge is not possible.
 type CollisionFn func(left, right Diff) (Diff, bool)
 
+// PatchListenerFn is a callback that receives any patches that are being
+// applied to the left.
+type PatchListenerFn func(right Diff)
+
 // ThreeWayMerge implements a three-way merge algorithm using |base| as the common ancestor, |right| as
 // the source branch, and |left| as the destination branch. Both |left| and |right| are diff'd against
 // |base| to compute merge patches, but rather than applying both sets of patches to |base|, patches from
@@ -41,6 +45,7 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 	ns NodeStore,
 	left, right, base Node,
 	collide CollisionFn,
+	listener PatchListenerFn,
 	order O,
 	serializer S,
 ) (final Node, err error) {
@@ -65,7 +70,7 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 				err = cerr
 			}
 		}()
-		err = sendPatches(ctx, ld, rd, patches, collide)
+		err = sendPatches(ctx, ld, rd, patches, collide, listener)
 		return
 	})
 
@@ -128,6 +133,7 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 	l, r Differ[K, O],
 	buf patchBuffer,
 	cb CollisionFn,
+	lcb PatchListenerFn,
 ) (err error) {
 	var (
 		left, right Diff
@@ -169,6 +175,7 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 			if err != nil {
 				return err
 			}
+			lcb(right)
 
 			right, err = r.Next(ctx)
 			if err == io.EOF {
@@ -182,6 +189,7 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 			resolved, ok := cb(left, right)
 			if ok {
 				err = buf.sendPatch(ctx, resolved)
+				lcb(right)
 			}
 			if err != nil {
 				return err
@@ -215,6 +223,7 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 		if err != nil {
 			return err
 		}
+		lcb(right)
 
 		right, err = r.Next(ctx)
 		if err == io.EOF {
