@@ -148,6 +148,13 @@ type ServerConfig interface {
 	RemotesapiPort() *int
 }
 
+type validatingServerConfig interface {
+	ServerConfig
+	// goldenMysqlConnectionString returns a connection string for a mysql
+	// instance that can be used to validate query results
+	goldenMysqlConnectionString() string
+}
+
 type commandLineServerConfig struct {
 	host                    string
 	port                    int
@@ -170,6 +177,7 @@ type commandLineServerConfig struct {
 	allowCleartextPasswords bool
 	socket                  string
 	remotesapiPort          *int
+	goldenMysqlConn         string
 }
 
 var _ ServerConfig = (*commandLineServerConfig)(nil)
@@ -413,6 +421,15 @@ func (cfg *commandLineServerConfig) WithSocket(sockFilePath string) *commandLine
 // WithRemotesapiPort sets the remotesapi port to use.
 func (cfg *commandLineServerConfig) WithRemotesapiPort(port *int) *commandLineServerConfig {
 	cfg.remotesapiPort = port
+	return cfg
+}
+
+func (cfg *commandLineServerConfig) goldenMysqlConnectionString() string {
+	return cfg.goldenMysqlConn
+}
+
+func (cfg *commandLineServerConfig) withGoldenMysqlConnectionString(cs string) *commandLineServerConfig {
+	cfg.goldenMysqlConn = cs
 	return cfg
 }
 
