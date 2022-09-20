@@ -161,6 +161,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 }
 
 type pullBehavior bool
+
 const pullBehavior_fastForward pullBehavior = false
 const pullBehavior_forcePull pullBehavior = true
 
