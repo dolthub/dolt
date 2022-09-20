@@ -17,7 +17,10 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
+<<<<<<< HEAD
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+=======
+>>>>>>> 174ac3c8a148b0ab1f20d079ef86616bd0e1cfd0
 	"io"
 	"strings"
 
@@ -25,10 +28,12 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
