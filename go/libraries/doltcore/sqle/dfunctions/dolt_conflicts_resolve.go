@@ -17,6 +17,9 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"io"
 	"strings"
 
@@ -54,6 +57,24 @@ func (d DoltConflictsCatFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, 
 	return DoDoltConflictsResolve(ctx, args)
 }
 
+func getProllyRowMaps(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeStore, hash hash.Hash, tblName string) (prolly.Map, error) {
+	rootVal, err := doltdb.LoadRootValueFromRootIshAddr(ctx, vrw, ns, hash)
+	tbl, ok, err := rootVal.GetTable(ctx, tblName)
+	if err != nil {
+		return prolly.Map{}, err
+	}
+	if !ok {
+		return prolly.Map{}, doltdb.ErrTableNotFound
+	}
+
+	idx, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return prolly.Map{}, err
+	}
+
+	return durable.ProllyMapFromIndex(idx), nil
+}
+
 func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
 	newRoot := root
 	for _, tblName := range tblNames {
@@ -86,74 +107,160 @@ func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.R
 			return ErrConfSchIncompatible
 		}
 
+		var newTbl *doltdb.Table
 		if tbl.Format() == types.Format_DOLT {
-			newTbl, err := tbl.ClearConflicts(ctx)
-
-			artifactIdx, err := tbl.GetArtifacts(ctx)
-			if err != nil {
-				return err
-			}
-
-			artifactMap := durable.ProllyMapFromArtifactIndex(artifactIdx)
-			iter, err := artifactMap.IterAllConflicts(ctx)
-			if err != nil {
-				return err
-			}
-
-			cnfArt, err := iter.Next(ctx)
-			doltdb.LoadRootValueFromRootIshAddr(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh)
-
-		}
-
-		// WORKS FOR OLD FORMAT
-		cnfReader, err := merge.NewConflictReader(ctx, tbl, tblName)
-		if err != nil {
-			return err
-		}
-
-		joiner := cnfReader.GetJoiner()
-
-		var pkTuples []types.Value
-		vrw := tbl.ValueReadWriter()
-		for {
-			cnfRow, err := cnfReader.NextConflict(ctx)
-			if err == io.EOF {
-				break
-			}
-			cnfMap, err := joiner.Split(cnfRow)
-			if err != nil {
-				return err
-			}
-
-			var row row.Row
-			var k, v types.Value
+			var idx durable.Index
 			if ours {
-				row = cnfMap["our"]
+				idx, err = tbl.GetRowData(ctx)
+				if err != nil {
+					return err
+				}
 			} else {
-				row = cnfMap["their"]
-			}
-
-			if row != nil {
-				k, err = row.NomsMapKey(sch).Value(ctx)
+				artifactIdx, err := tbl.GetArtifacts(ctx)
 				if err != nil {
 					return err
 				}
-				v, err = row.NomsMapValue(sch).Value(ctx)
+
+				artifactMap := durable.ProllyMapFromArtifactIndex(artifactIdx)
+				iter, err := artifactMap.IterAllConflicts(ctx)
 				if err != nil {
 					return err
 				}
-				pkTuples = append(pkTuples, k, v)
+
+				cnfArt, err := iter.Next(ctx)
+				if err == io.EOF {
+					break
+				}
+				theirRootVal, err := doltdb.LoadRootValueFromRootIshAddr(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh)
+				theirTbl, ok, err := theirRootVal.GetTable(ctx, tblName)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return doltdb.ErrTableNotFound
+				}
+
+				idx, err = theirTbl.GetRowData(ctx)
+				if err != nil {
+					return err
+				}
 			}
-		}
 
-		newMap, err := types.NewMap(ctx, vrw, pkTuples...)
-		if err != nil {
-			return err
-		}
+			newTbl, err = tbl.UpdateRows(ctx, idx)
+			if err != nil {
+				return err
+			}
+			// TODO: did I need any of this? delete after testing
+			//artifactIdx, err := tbl.GetArtifacts(ctx)
+			//if err != nil {
+			//	return err
+			//}
+			//
+			//artifactMap := durable.ProllyMapFromArtifactIndex(artifactIdx)
+			//iter, err := artifactMap.IterAllConflicts(ctx)
+			//if err != nil {
+			//	return err
+			//}
+			//
+			//for {
+			//	cnfArt, err := iter.Next(ctx)
+			//	if err == io.EOF {
+			//		break
+			//	}
+			//
+			//	baseRows, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh, tblName)
+			//	if err != nil {
+			//		return err
+			//	}
+			//
+			//	ourIdx, err := tbl.GetRowData(ctx)
+			//	if err != nil {
+			//		return err
+			//	}
+			//	ourRows := durable.ProllyMapFromIndex(ourIdx)
+			//
+			//	theirRows, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh, tblName)
+			//	if err != nil {
+			//		return err
+			//	}
+			//
+			//	var bRow val.Tuple
+			//	err = baseRows.Get(ctx, cnfArt.Key, func(k, v val.Tuple) error {
+			//		bRow = v
+			//		return nil
+			//	})
+			//
+			//	var oRow val.Tuple
+			//	err = ourRows.Get(ctx, cnfArt.Key, func(k, v val.Tuple) error {
+			//		oRow = v
+			//		return nil
+			//	})
+			//
+			//	var tRow val.Tuple
+			//	err = theirRows.Get(ctx, cnfArt.Key, func(k, v val.Tuple) error {
+			//		tRow = v
+			//		return nil
+			//	})
+			//
+			//	bRow.Count()
+			//	oRow.Count()
+			//	tRow.Count()
+			//
+			//	newTbl, err = tbl.UpdateRows(ctx, ourIdx)
+			//	if err != nil {
+			//		return err
+			//	}
+			//}
+		} else {
+			cnfReader, err := merge.NewConflictReader(ctx, tbl, tblName)
+			if err != nil {
+				return err
+			}
 
-		newTbl, err := tbl.UpdateNomsRows(ctx, newMap)
-		if err != nil {
-			return err
+			joiner := cnfReader.GetJoiner()
+
+			var pkTuples []types.Value
+			vrw := tbl.ValueReadWriter()
+			for {
+				cnfRow, err := cnfReader.NextConflict(ctx)
+				if err == io.EOF {
+					break
+				}
+				cnfMap, err := joiner.Split(cnfRow)
+				if err != nil {
+					return err
+				}
+
+				var row row.Row
+				var k, v types.Value
+				if ours {
+					row = cnfMap["our"]
+				} else {
+					row = cnfMap["their"]
+				}
+
+				if row != nil {
+					k, err = row.NomsMapKey(sch).Value(ctx)
+					if err != nil {
+						return err
+					}
+					v, err = row.NomsMapValue(sch).Value(ctx)
+					if err != nil {
+						return err
+					}
+					pkTuples = append(pkTuples, k, v)
+				}
+			}
+
+			newMap, err := types.NewMap(ctx, vrw, pkTuples...)
+			if err != nil {
+				return err
+			}
+
+			newTbl, err = tbl.UpdateNomsRows(ctx, newMap)
+			if err != nil {
+				return err
+			}
 		}
 
 		newTbl, err = newTbl.ClearConflicts(ctx)
