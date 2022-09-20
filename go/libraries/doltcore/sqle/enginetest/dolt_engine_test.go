@@ -110,53 +110,27 @@ func TestSingleQuery(t *testing.T) {
 func TestSingleScript(t *testing.T) {
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Insert throws unique key violations",
+			Name: "trigger before update, with indexed update",
 			SetUpScript: []string{
-				"CREATE TABLE t (pk int PRIMARY key, col1 int UNIQUE);",
-				"CREATE TABLE t2 (pk int PRIMARY key, col1 int, col2 int, UNIQUE KEY (col1, col2));",
-				"INSERT into t VALUES (1, 1);",
-				"INSERT into t2 VALUES (1, 1, 1);",
+				"create table a (x int primary key, y int, unique key (y))",
+				"create table b (z int primary key)",
+				"insert into a values (1,3), (10,20)",
+				"create trigger insert_b before update on a for each row insert into b values (old.x * 10)",
+				"update a set x = x + 1 where y = 20",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:       "INSERT INTO t VALUES (2, 2), (3, 1), (4, 4);",
-					ExpectedErr: sql.ErrUniqueKeyViolation,
+					Query: "select x, y from a order by 1",
+					Expected: []sql.Row{
+						{1, 3},
+						{11, 20},
+					},
 				},
 				{
-					Query:    "SELECT * from t;",
-					Expected: []sql.Row{{1, 1}},
-				},
-				{
-					Query:       "INSERT INTO t2 VALUES (2, 2, 2), (3, 1, 1), (4, 4, 4);",
-					ExpectedErr: sql.ErrUniqueKeyViolation,
-				},
-				{
-					Query:    "SELECT * from t2;",
-					Expected: []sql.Row{{1, 1, 1}},
-				},
-				{
-					Query:       "INSERT INTO t VALUES (5, 2), (6, 2);",
-					ExpectedErr: sql.ErrUniqueKeyViolation,
-				},
-				{
-					Query:    "SELECT * from t;",
-					Expected: []sql.Row{{1, 1}},
-				},
-				{
-					Query:       "INSERT INTO t2 VALUES (5, 2, 2), (6, 2, 2);",
-					ExpectedErr: sql.ErrUniqueKeyViolation,
-				},
-				{
-					Query:    "SELECT * from t2;",
-					Expected: []sql.Row{{1, 1, 1}},
-				},
-				{
-					Query:    "INSERT into t2 VALUES (5, NULL, 1), (6, NULL, 1), (7, 1, NULL), (8, 1, NULL), (9, NULL, NULL), (10, NULL, NULL)",
-					Expected: []sql.Row{{sql.NewOkResult(6)}},
-				},
-				{
-					Query:    "SELECT * from t2;",
-					Expected: []sql.Row{{1, 1, 1}, {5, nil, 1}, {6, nil, 1}, {7, 1, nil}, {8, 1, nil}, {9, nil, nil}, {10, nil, nil}},
+					Query: "select z from b",
+					Expected: []sql.Row{
+						{100},
+					},
 				},
 			},
 		},
