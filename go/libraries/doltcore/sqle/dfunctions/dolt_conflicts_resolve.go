@@ -1,4 +1,4 @@
-// Copyright 2020 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"io"
 	"strings"
 
@@ -88,7 +87,7 @@ func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.R
 		}
 
 		if tbl.Format() == types.Format_DOLT {
-			dtables.NewConflictsTable(ctx, tblName, root, nil)
+			newTbl, err := tbl.ClearConflicts(ctx)
 
 			artifactIdx, err := tbl.GetArtifacts(ctx)
 			if err != nil {
@@ -102,14 +101,12 @@ func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.R
 			}
 
 			cnfArt, err := iter.Next(ctx)
-
 			doltdb.LoadRootValueFromRootIshAddr(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh)
-			cnfArt.Metadata.BaseRootIsh
-			cnfArt.TheirRootIsh
+
 		}
 
 		// WORKS FOR OLD FORMAT
-		cnfReader, err := merge.NewConflictReader(ctx, tbl)
+		cnfReader, err := merge.NewConflictReader(ctx, tbl, tblName)
 		if err != nil {
 			return err
 		}
@@ -119,7 +116,7 @@ func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.R
 		var pkTuples []types.Value
 		vrw := tbl.ValueReadWriter()
 		for {
-			cnfRow, _, err := cnfReader.NextConflict(ctx)
+			cnfRow, err := cnfReader.NextConflict(ctx)
 			if err == io.EOF {
 				break
 			}
