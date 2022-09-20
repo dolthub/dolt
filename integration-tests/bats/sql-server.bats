@@ -1715,3 +1715,27 @@ s.close()
     [[ ! $output =~ "OLD ( __LD_1__ )" ]] || false
     [[ "$output" =~ "NEW ( __DOLT__ )" ]] || false
 }
+
+@test "sql-server: deleting database directory when a running server is using it does not panic" {
+    skiponwindows "Missing dependencies"
+
+    mkdir nodb
+    cd nodb
+    start_sql_server >> server_log.txt 2>&1
+
+    server_query "" 1 dolt "" "CREATE DATABASE mydb1"
+    server_query "" 1 dolt "" "CREATE DATABASE mydb2"
+
+    [ -d mydb1 ]
+    [ -d mydb2 ]
+
+    rm -rf mydb2
+
+    server_query "" 1 dolt "" "SHOW DATABASES" "" 1
+
+    run grep "panic" server_log.txt
+    [ "${#lines[@]}" -eq 0 ]
+
+    run grep "failed to access 'mydb2' database: can no longer find .dolt dir on disk" server_log.txt
+    [ "${#lines[@]}" -eq 1 ]
+}

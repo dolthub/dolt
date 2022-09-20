@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
@@ -62,18 +61,6 @@ type DataMoverOptions interface {
 	WritesToTable() bool
 	SrcName() string
 	DestName() string
-}
-
-type DataMoverCloser interface {
-	table.TableWriteCloser
-	Flush(context.Context) (*doltdb.RootValue, error)
-}
-
-type DataMover struct {
-	Rd         table.ReadCloser
-	Transforms *pipeline.TransformCollection
-	Wr         table.TableWriteCloser
-	ContOnErr  bool
 }
 
 type DataMoverCreationErrType string
@@ -124,7 +111,7 @@ func SchAndTableNameFromFile(ctx context.Context, path string, fs filesys.Readab
 func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.ReadCloser, tableName string, pks []string, args actions.InferenceArgs) (schema.Schema, error) {
 	var err error
 
-	infCols, err := actions.InferColumnTypesFromTableReader(ctx, root, rd, args)
+	infCols, err := actions.InferColumnTypesFromTableReader(ctx, rd, args)
 	if err != nil {
 		return nil, err
 	}

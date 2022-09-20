@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package remotesrv
 
 import (
 	"bytes"
 	"context"
 	"crypto/md5"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	gohash "hash"
@@ -27,9 +28,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 
-	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -41,40 +41,27 @@ var (
 		"offset since the read would exceed the size of the file")
 )
 
-type fileDetails struct {
-	details *sync.Map
-}
-
-func (fd fileDetails) Put(id string, tfd *remotesapi.TableFileDetails) {
-	fd.details.Store(id, tfd)
-}
-
-func (fd fileDetails) Get(id string) (*remotesapi.TableFileDetails, bool) {
-	v, ok := fd.details.Load(id)
-	if !ok {
-		return nil, false
-	}
-	return v.(*remotesapi.TableFileDetails), true
-}
-
-func newFileDetails() fileDetails {
-	return fileDetails{new(sync.Map)}
-}
-
 type filehandler struct {
-	dbCache       DBCache
-	expectedFiles fileDetails
-	fs            filesys.Filesys
-	readOnly      bool
+	dbCache  DBCache
+	fs       filesys.Filesys
+	readOnly bool
+	lgr      *logrus.Entry
 }
 
-func newFileHandler(dbCache DBCache, expectedFiles fileDetails, fs filesys.Filesys, readOnly bool) filehandler {
-	return filehandler{dbCache, expectedFiles, fs, readOnly}
+func newFileHandler(lgr *logrus.Entry, dbCache DBCache, fs filesys.Filesys, readOnly bool) filehandler {
+	return filehandler{
+		dbCache,
+		fs,
+		readOnly,
+		lgr.WithFields(logrus.Fields{
+			"service": "dolt.services.remotesapi.v1alpha1.HttpFileServer",
+		}),
+	}
 }
 
 func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
-	logger := getReqLogger("HTTP_"+req.Method, req.RequestURI)
-	defer func() { logger("finished") }()
+	logger := getReqLogger(fh.lgr, req.Method+"_"+req.RequestURI)
+	defer func() { logger.Println("finished") }()
 
 	path := strings.TrimLeft(req.URL.Path, "/")
 
@@ -83,25 +70,25 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	case http.MethodGet:
 		path = filepath.Clean(path)
 		if strings.HasPrefix(path, "../") || strings.Contains(path, "/../") || strings.HasSuffix(path, "/..") {
-			logger("bad request with .. for path " + path)
+			logger.Println("bad request with .. for path", path)
 			respWr.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		i := strings.LastIndex(path, "/")
 		if i == -1 {
-			logger("bad request with -1 LastIndex of '/' for path " + path)
+			logger.Println("bad request with -1 LastIndex of '/' for path ", path)
 			respWr.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		_, ok := hash.MaybeParse(path[i+1:])
 		if !ok {
-			logger("bad request with unparseable last path component " + path[i+1:])
+			logger.Println("bad request with unparseable last path component", path[i+1:])
 			respWr.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		abs, err := fh.fs.Abs(path)
 		if err != nil {
-			logger(fmt.Sprintf("could not get absolute path: %s", err.Error()))
+			logger.Printf("could not get absolute path: %s", err.Error())
 			respWr.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -115,7 +102,7 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 
 		tokens := strings.Split(path, "/")
 		if len(tokens) != 3 {
-			logger(fmt.Sprintf("response to: %v method: %v http response code: %v", req.RequestURI, req.Method, http.StatusNotFound))
+			logger.Printf("response to: %v method: %v http response code: %v", req.RequestURI, req.Method, http.StatusNotFound)
 			respWr.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -124,7 +111,45 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 		repo := tokens[1]
 		file := tokens[2]
 
-		statusCode = writeTableFile(req.Context(), logger, fh.dbCache, fh.expectedFiles, org, repo, file, req)
+		q := req.URL.Query()
+		ncs := q.Get("num_chunks")
+		if ncs == "" {
+			logger.Printf("response to: %v method: %v http response code: %v: num_chunks parameter not provided", req.RequestURI, req.Method, http.StatusBadRequest)
+			respWr.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		num_chunks, err := strconv.Atoi(ncs)
+		if err != nil {
+			logger.Printf("response to: %v method: %v http response code: %v: num_chunks parameter did not parse: %v", req.RequestURI, req.Method, http.StatusBadRequest, err)
+			respWr.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		cls := q.Get("content_length")
+		if cls == "" {
+			logger.Printf("response to: %v method: %v http response code: %v: content_length parameter not provided", req.RequestURI, req.Method, http.StatusBadRequest)
+			respWr.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		content_length, err := strconv.Atoi(cls)
+		if err != nil {
+			logger.Printf("response to: %v method: %v http response code: %v: content_length parameter did not parse: %v", req.RequestURI, req.Method, http.StatusBadRequest, err)
+			respWr.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		chs := q.Get("content_hash")
+		if chs == "" {
+			logger.Printf("response to: %v method: %v http response code: %v: content_hash parameter not provided", req.RequestURI, req.Method, http.StatusBadRequest)
+			respWr.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		content_hash, err := base64.RawURLEncoding.DecodeString(chs)
+		if err != nil {
+			logger.Printf("response to: %v method: %v http response code: %v: content_hash parameter did not parse: %v", req.RequestURI, req.Method, http.StatusBadRequest, err)
+			respWr.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		statusCode = writeTableFile(req.Context(), logger, fh.dbCache, org, repo, file, num_chunks, content_hash, uint64(content_length), req.Body)
 	}
 
 	if statusCode != -1 {
@@ -132,7 +157,7 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func readTableFile(logger func(string), path string, respWr http.ResponseWriter, req *http.Request) int {
+func readTableFile(logger *logrus.Entry, path string, respWr http.ResponseWriter, req *http.Request) int {
 	rangeStr := req.Header.Get("Range")
 
 	var r io.ReadCloser
@@ -140,21 +165,21 @@ func readTableFile(logger func(string), path string, respWr http.ResponseWriter,
 	var fileErr error
 	{
 		if rangeStr == "" {
-			logger("going to read entire file")
+			logger.Println("going to read entire file")
 			r, readSize, fileErr = getFileReader(path)
 		} else {
 			offset, length, err := offsetAndLenFromRange(rangeStr)
 			if err != nil {
-				logger(err.Error())
+				logger.Println(err.Error())
 				return http.StatusBadRequest
 			}
-			logger(fmt.Sprintf("going to read file at offset %d, length %d", offset, length))
+			logger.Printf("going to read file at offset %d, length %d", offset, length)
 			readSize = length
 			r, fileErr = getFileReaderAt(path, offset, length)
 		}
 	}
 	if fileErr != nil {
-		logger(fileErr.Error())
+		logger.Println(fileErr.Error())
 		if errors.Is(fileErr, os.ErrNotExist) {
 			return http.StatusNotFound
 		} else if errors.Is(fileErr, ErrReadOutOfBounds) {
@@ -166,24 +191,24 @@ func readTableFile(logger func(string), path string, respWr http.ResponseWriter,
 		err := r.Close()
 		if err != nil {
 			err = fmt.Errorf("failed to close file at path %s: %w", path, err)
-			logger(err.Error())
+			logger.Println(err.Error())
 		}
 	}()
 
-	logger(fmt.Sprintf("opened file at path %s, going to read %d bytes", path, readSize))
+	logger.Printf("opened file at path %s, going to read %d bytes", path, readSize)
 
 	n, err := io.Copy(respWr, r)
 	if err != nil {
 		err = fmt.Errorf("failed to write data to response writer: %w", err)
-		logger(err.Error())
+		logger.Println(err.Error())
 		return http.StatusInternalServerError
 	}
 	if n != readSize {
-		logger(fmt.Sprintf("wanted to write %d bytes from file (%s) but only wrote %d", readSize, path, n))
+		logger.Printf("wanted to write %d bytes from file (%s) but only wrote %d", readSize, path, n)
 		return http.StatusInternalServerError
 	}
 
-	logger(fmt.Sprintf("wrote %d bytes", n))
+	logger.Printf("wrote %d bytes", n)
 
 	return -1
 }
@@ -223,69 +248,47 @@ func (u *uploadreader) Close() error {
 	return nil
 }
 
-func writeTableFile(ctx context.Context, logger func(string), dbCache DBCache, expectedFiles fileDetails, org, repo, fileId string, request *http.Request) int {
+func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, org, repo, fileId string, numChunks int, contentHash []byte, contentLength uint64, body io.ReadCloser) int {
 	_, ok := hash.MaybeParse(fileId)
-
 	if !ok {
-		logger(fileId + " is not a valid hash")
+		logger.Println(fileId, "is not a valid hash")
 		return http.StatusBadRequest
 	}
 
-	tfd, ok := expectedFiles.Get(fileId)
-	if !ok {
-		logger("bad request for " + fileId + ": tfd not found")
-		return http.StatusBadRequest
-	}
-
-	logger(fileId + " is valid")
+	logger.Println(fileId, "is valid")
 
 	cs, err := dbCache.Get(org, repo, types.Format_Default.VersionString())
 	if err != nil {
-		logger("failed to get " + org + "/" + repo + " repository: " + err.Error())
+		logger.Println("failed to get", org+"/"+repo, "repository:", err.Error())
 		return http.StatusInternalServerError
 	}
 
-	err = cs.WriteTableFile(ctx, fileId, int(tfd.NumChunks), tfd.ContentHash, func() (io.ReadCloser, uint64, error) {
-		reader := request.Body
-		size := tfd.ContentLength
+	err = cs.WriteTableFile(ctx, fileId, numChunks, contentHash, func() (io.ReadCloser, uint64, error) {
+		reader := body
+		size := contentLength
 		return &uploadreader{
 			reader,
 			0,
-			tfd.ContentLength,
-			tfd.ContentHash,
+			contentLength,
+			contentHash,
 			md5.New(),
 		}, size, nil
 	})
 
 	if err != nil {
 		if errors.Is(err, errBodyLengthTFDMismatch) {
-			logger("bad write file request for " + fileId + ": body length mismatch")
+			logger.Println("bad write file request for", fileId, ": body length mismatch")
 			return http.StatusBadRequest
 		}
 		if errors.Is(err, errBodyHashTFDMismatch) {
-			logger("bad write file request for " + fileId + ": body hash mismatch")
+			logger.Println("bad write file request for", fileId, ": body hash mismatch")
 			return http.StatusBadRequest
 		}
-		logger("failed to read body " + err.Error())
+		logger.Println("failed to read body", err.Error())
 		return http.StatusInternalServerError
 	}
 
 	return http.StatusOK
-}
-
-func writeLocal(logger func(string), org, repo, fileId string, data []byte) error {
-	path := filepath.Join(org, repo, fileId)
-
-	err := os.WriteFile(path, data, os.ModePerm)
-
-	if err != nil {
-		logger(fmt.Sprintf("failed to write file %s", path))
-		return err
-	}
-
-	logger("Successfully wrote object to storage")
-
-	return nil
 }
 
 func offsetAndLenFromRange(rngStr string) (int64, int64, error) {

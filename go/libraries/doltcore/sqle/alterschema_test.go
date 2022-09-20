@@ -576,8 +576,9 @@ func TestDropPks(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
 			ctx := context.Background()
-
-			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+			tmpDir, err := dEnv.TempTableFilesDir()
+			require.NoError(t, err)
+			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 			db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 			require.NoError(t, err)
 
@@ -921,7 +922,9 @@ func TestModifyColumn(t *testing.T) {
 			tbl, _, err := root.GetTable(ctx, tableName)
 			assert.NoError(t, err)
 
-			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+			tmpDir, err := dEnv.TempTableFilesDir()
+			require.NoError(t, err)
+			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 			updatedTable, err := modifyColumn(ctx, tbl, tt.existingColumn, tt.newColumn, tt.order)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)

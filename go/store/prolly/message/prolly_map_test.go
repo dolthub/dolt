@@ -16,6 +16,7 @@ package message
 
 import (
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,15 +35,20 @@ func TestGetKeyValueOffsetsVectors(t *testing.T) {
 		msg := s.Serialize(keys, values, nil, 0)
 
 		// uses hard-coded vtable slot
-		keyBuf, valBuf, _, _ := getProllyMapKeysAndValues(msg)
+		keyBuf, valBuf, _, _, _ := getProllyMapKeysAndValues(msg)
 
 		for i := range keys {
-			assert.Equal(t, keys[i], keyBuf.GetItem(i))
+			assert.Equal(t, keys[i], keyBuf.GetItem(i, msg))
 		}
 		for i := range values {
-			assert.Equal(t, values[i], valBuf.GetItem(i))
+			assert.Equal(t, values[i], valBuf.GetItem(i, msg))
 		}
 	}
+}
+
+func TestItemAccessSize(t *testing.T) {
+	sz := unsafe.Sizeof(ItemAccess{})
+	assert.Equal(t, 10, int(sz))
 }
 
 func randomByteSlices(t *testing.T, count int) (keys, values [][]byte) {

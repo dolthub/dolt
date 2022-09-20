@@ -115,6 +115,7 @@ jobs:
         env:
           DOLT_FMT: ${{ matrix.dolt_fmt }}
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
+          BATS_TEST_RETRIES: "3"
         run: |
           if [ -n "$DOLT_FMT" ]; then export DOLT_DEFAULT_BIN_FORMAT="$DOLT_FMT"; fi
           bats --tap .

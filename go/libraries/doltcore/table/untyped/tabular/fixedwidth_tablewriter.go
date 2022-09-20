@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
@@ -46,7 +45,7 @@ type FixedWidthTableWriter struct {
 	// Max runes per column
 	maxRunes []int
 	// formatter knows how to format columns in the rows given
-	formatter *fwt.FixedWidthFormatter
+	formatter *FixedWidthFormatter
 	// Buffer of rows that have yet to be printed
 	rowBuffer []tableRow
 	// Schema for results
@@ -93,7 +92,7 @@ func NewFixedWidthTableWriter(schema sql.Schema, wr io.WriteCloser, numSamples i
 func (w *FixedWidthTableWriter) seedColumnWidthsWithColumnNames() {
 	for i := range w.schema {
 		colName := w.schema[i].Name
-		printWidth := fwt.StringWidth(colName)
+		printWidth := StringWidth(colName)
 		numRunes := len([]rune(colName))
 		w.printWidths[i] = printWidth
 		w.maxRunes[i] = numRunes
@@ -185,7 +184,7 @@ func (w *FixedWidthTableWriter) sampleRow(r sql.Row, colors []*color.Color) (tab
 			return row, err
 		}
 
-		printWidth := fwt.StringWidth(str)
+		printWidth := StringWidth(str)
 		numRunes := len([]rune(str))
 
 		if printWidth > w.printWidths[i] {
@@ -210,7 +209,7 @@ func (w *FixedWidthTableWriter) flushSampleBuffer() error {
 	if w.formatter == nil {
 		// TODO: a better behavior might be to re-sample after the initial buffer runs out, and just let each buffer range
 		//  have its own local set of fixed widths
-		formatter := fwt.NewFixedWidthFormatter(fwt.PrintAllWhenTooLong, w.printWidths, w.maxRunes)
+		formatter := NewFixedWidthFormatter(PrintAllWhenTooLong, w.printWidths, w.maxRunes)
 		w.formatter = &formatter
 	}
 
@@ -326,7 +325,7 @@ func (w *FixedWidthTableWriter) writeSeparator() error {
 	separator.WriteString("+")
 	for _, name := range formattedColNames {
 		separator.WriteString("-")
-		strLen := fwt.StringWidth(name)
+		strLen := StringWidth(name)
 		for i := 0; i < strLen; i++ {
 			separator.WriteString("-")
 		}

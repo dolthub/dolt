@@ -12,17 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package remotesrv
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
-	"log"
+	"net/url"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync/atomic"
 
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -35,35 +40,37 @@ import (
 )
 
 type RemoteChunkStore struct {
-	HttpHost      string
-	csCache       DBCache
-	bucket        string
-	expectedFiles fileDetails
-	fs            filesys.Filesys
+	HttpHost string
+	csCache  DBCache
+	bucket   string
+	fs       filesys.Filesys
+	lgr      *logrus.Entry
 	remotesapi.UnimplementedChunkStoreServiceServer
 }
 
-func NewHttpFSBackedChunkStore(httpHost string, csCache DBCache, expectedFiles fileDetails, fs filesys.Filesys) *RemoteChunkStore {
+func NewHttpFSBackedChunkStore(lgr *logrus.Entry, httpHost string, csCache DBCache, fs filesys.Filesys) *RemoteChunkStore {
 	return &RemoteChunkStore{
-		HttpHost:      httpHost,
-		csCache:       csCache,
-		bucket:        "",
-		expectedFiles: expectedFiles,
-		fs:            fs,
+		HttpHost: httpHost,
+		csCache:  csCache,
+		bucket:   "",
+		fs:       fs,
+		lgr: lgr.WithFields(logrus.Fields{
+			"service": "dolt.services.remotesapi.v1alpha1.ChunkStoreServiceServer",
+		}),
 	}
 }
 
 func (rs *RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasChunksRequest) (*remotesapi.HasChunksResponse, error) {
-	logger := getReqLogger("GRPC", "HasChunks")
-	defer func() { logger("finished") }()
+	logger := getReqLogger(rs.lgr, "HasChunks")
+	defer func() { logger.Println("finished") }()
 
-	cs := rs.getStore(req.RepoId, "HasChunks")
+	cs := rs.getStore(logger, req.RepoId)
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
 
-	logger(fmt.Sprintf("found repo %s/%s", req.RepoId.Org, req.RepoId.RepoName))
+	logger.Printf("found repo %s/%s", req.RepoId.Org, req.RepoId.RepoName)
 
 	hashes, hashToIndex := remotestorage.ParseByteSlices(req.Hashes)
 
@@ -90,7 +97,7 @@ func (rs *RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasCh
 	return resp, nil
 }
 
-func (rs *RemoteChunkStore) getRelativeStorePath(cs store) (string, error) {
+func (rs *RemoteChunkStore) getRelativeStorePath(cs RemoteSrvStore) (string, error) {
 	cspath, ok := cs.Path()
 	if !ok {
 		return "", status.Error(codes.Internal, "chunkstore misconfigured; cannot generate HTTP paths")
@@ -107,16 +114,16 @@ func (rs *RemoteChunkStore) getRelativeStorePath(cs store) (string, error) {
 }
 
 func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remotesapi.GetDownloadLocsRequest) (*remotesapi.GetDownloadLocsResponse, error) {
-	logger := getReqLogger("GRPC", "GetDownloadLocations")
-	defer func() { logger("finished") }()
+	logger := getReqLogger(rs.lgr, "GetDownloadLocations")
+	defer func() { logger.Println("finished") }()
 
-	cs := rs.getStore(req.RepoId, "GetDownloadLoctions")
+	cs := rs.getStore(logger, req.RepoId)
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
 
-	logger(fmt.Sprintf("found repo %s/%s", req.RepoId.Org, req.RepoId.RepoName))
+	logger.Printf("found repo %s/%s", req.RepoId.Org, req.RepoId.RepoName)
 
 	hashes, _ := remotestorage.ParseByteSlices(req.ChunkHashes)
 
@@ -130,6 +137,8 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 		return nil, err
 	}
 
+	md, _ := metadata.FromIncomingContext(ctx)
+
 	var locs []*remotesapi.DownloadLoc
 	for loc, hashToRange := range locations {
 		var ranges []*remotesapi.RangeChunk
@@ -138,13 +147,13 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 			ranges = append(ranges, &remotesapi.RangeChunk{Hash: hCpy[:], Offset: r.Offset, Length: r.Length})
 		}
 
-		url, err := rs.getDownloadUrl(logger, prefix+"/"+loc)
+		url, err := rs.getDownloadUrl(logger, md, prefix+"/"+loc)
 		if err != nil {
-			log.Println("Failed to sign request", err)
+			logger.Println("Failed to sign request", err)
 			return nil, err
 		}
 
-		logger("The URL is " + url)
+		logger.Println("The URL is", url)
 
 		getRange := &remotesapi.HttpGetRange{Url: url, Ranges: ranges}
 		locs = append(locs, &remotesapi.DownloadLoc{Location: &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: getRange}})
@@ -154,11 +163,13 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 }
 
 func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStoreService_StreamDownloadLocationsServer) error {
-	logger := getReqLogger("GRPC", "StreamDownloadLocations")
-	defer func() { logger("finished") }()
+	logger := getReqLogger(rs.lgr, "StreamDownloadLocations")
+	defer func() { logger.Println("finished") }()
+
+	md, _ := metadata.FromIncomingContext(stream.Context())
 
 	var repoID *remotesapi.RepoId
-	var cs store
+	var cs RemoteSrvStore
 	var prefix string
 	for {
 		req, err := stream.Recv()
@@ -171,11 +182,11 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 
 		if !proto.Equal(req.RepoId, repoID) {
 			repoID = req.RepoId
-			cs = rs.getStore(repoID, "StreamDownloadLoctions")
+			cs = rs.getStore(logger, repoID)
 			if cs == nil {
 				return status.Error(codes.Internal, "Could not get chunkstore")
 			}
-			logger(fmt.Sprintf("found repo %s/%s", repoID.Org, repoID.RepoName))
+			logger.Printf("found repo %s/%s", repoID.Org, repoID.RepoName)
 
 			prefix, err = rs.getRelativeStorePath(cs)
 			if err != nil {
@@ -197,13 +208,13 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 				ranges = append(ranges, &remotesapi.RangeChunk{Hash: hCpy[:], Offset: r.Offset, Length: r.Length})
 			}
 
-			url, err := rs.getDownloadUrl(logger, prefix+"/"+loc)
+			url, err := rs.getDownloadUrl(logger, md, prefix+"/"+loc)
 			if err != nil {
-				log.Println("Failed to sign request", err)
+				logger.Println("Failed to sign request", err)
 				return err
 			}
 
-			logger("The URL is " + url)
+			logger.Println("The URL is", url)
 
 			getRange := &remotesapi.HttpGetRange{Url: url, Ranges: ranges}
 			locs = append(locs, &remotesapi.DownloadLoc{Location: &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: getRange}})
@@ -215,8 +226,29 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 	}
 }
 
-func (rs *RemoteChunkStore) getDownloadUrl(logger func(string), path string) (string, error) {
-	return fmt.Sprintf("http://%s/%s", rs.HttpHost, path), nil
+func (rs *RemoteChunkStore) getHost(md metadata.MD) string {
+	host := rs.HttpHost
+	if strings.HasPrefix(rs.HttpHost, ":") && rs.HttpHost != ":80" {
+		hosts := md.Get(":authority")
+		if len(hosts) > 0 {
+			host = strings.Split(hosts[0], ":")[0] + rs.HttpHost
+		}
+	} else if rs.HttpHost == "" || rs.HttpHost == ":80" {
+		hosts := md.Get(":authority")
+		if len(hosts) > 0 {
+			host = hosts[0]
+		}
+	}
+	return host
+}
+
+func (rs *RemoteChunkStore) getDownloadUrl(logger *logrus.Entry, md metadata.MD, path string) (string, error) {
+	host := rs.getHost(md)
+	return (&url.URL{
+		Scheme: "http",
+		Host:   host,
+		Path:   path,
+	}).String(), nil
 }
 
 func parseTableFileDetails(req *remotesapi.GetUploadLocsRequest) []*remotesapi.TableFileDetails {
@@ -239,25 +271,27 @@ func parseTableFileDetails(req *remotesapi.GetUploadLocsRequest) []*remotesapi.T
 }
 
 func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotesapi.GetUploadLocsRequest) (*remotesapi.GetUploadLocsResponse, error) {
-	logger := getReqLogger("GRPC", "GetUploadLocations")
-	defer func() { logger("finished") }()
+	logger := getReqLogger(rs.lgr, "GetUploadLocations")
+	defer func() { logger.Println("finished") }()
 
-	cs := rs.getStore(req.RepoId, "GetWriteChunkUrls")
+	cs := rs.getStore(logger, req.RepoId)
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
 
-	logger(fmt.Sprintf("found repo %s/%s", req.RepoId.Org, req.RepoId.RepoName))
+	logger.Printf("found repo %s/%s", req.RepoId.Org, req.RepoId.RepoName)
 
 	org := req.RepoId.Org
 	repoName := req.RepoId.RepoName
 	tfds := parseTableFileDetails(req)
 
+	md, _ := metadata.FromIncomingContext(ctx)
+
 	var locs []*remotesapi.UploadLoc
 	for _, tfd := range tfds {
 		h := hash.New(tfd.Id)
-		url, err := rs.getUploadUrl(logger, org, repoName, tfd)
+		url, err := rs.getUploadUrl(logger, md, org, repoName, tfd)
 
 		if err != nil {
 			return nil, status.Error(codes.Internal, "Failed to get upload Url.")
@@ -266,34 +300,42 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 		loc := &remotesapi.UploadLoc_HttpPost{HttpPost: &remotesapi.HttpPostTableFile{Url: url}}
 		locs = append(locs, &remotesapi.UploadLoc{TableFileHash: h[:], Location: loc})
 
-		logger(fmt.Sprintf("sending upload location for chunk %s: %s", h.String(), url))
+		logger.Printf("sending upload location for chunk %s: %s", h.String(), url)
 	}
 
 	return &remotesapi.GetUploadLocsResponse{Locs: locs}, nil
 }
 
-func (rs *RemoteChunkStore) getUploadUrl(logger func(string), org, repoName string, tfd *remotesapi.TableFileDetails) (string, error) {
+func (rs *RemoteChunkStore) getUploadUrl(logger *logrus.Entry, md metadata.MD, org, repoName string, tfd *remotesapi.TableFileDetails) (string, error) {
 	fileID := hash.New(tfd.Id).String()
-	rs.expectedFiles.Put(fileID, tfd)
-	return fmt.Sprintf("http://%s/%s/%s/%s", rs.HttpHost, org, repoName, fileID), nil
+	params := url.Values{}
+	params.Add("num_chunks", strconv.Itoa(int(tfd.NumChunks)))
+	params.Add("content_length", strconv.Itoa(int(tfd.ContentLength)))
+	params.Add("content_hash", base64.RawURLEncoding.EncodeToString(tfd.ContentHash))
+	return (&url.URL{
+		Scheme:   "http",
+		Host:     rs.getHost(md),
+		Path:     fmt.Sprintf("%s/%s/%s", org, repoName, fileID),
+		RawQuery: params.Encode(),
+	}).String(), nil
 }
 
 func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRequest) (*remotesapi.RebaseResponse, error) {
-	logger := getReqLogger("GRPC", "Rebase")
-	defer func() { logger("finished") }()
+	logger := getReqLogger(rs.lgr, "Rebase")
+	defer func() { logger.Println("finished") }()
 
-	cs := rs.getStore(req.RepoId, "Rebase")
+	cs := rs.getStore(logger, req.RepoId)
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
 
-	logger(fmt.Sprintf("found %s/%s", req.RepoId.Org, req.RepoId.RepoName))
+	logger.Printf("found %s/%s", req.RepoId.Org, req.RepoId.RepoName)
 
 	err := cs.Rebase(ctx)
 
 	if err != nil {
-		logger(fmt.Sprintf("error occurred during processing of Rebace rpc of %s/%s details: %v", req.RepoId.Org, req.RepoId.RepoName, err))
+		logger.Printf("error occurred during processing of Rebace rpc of %s/%s details: %v", req.RepoId.Org, req.RepoId.RepoName, err)
 		return nil, status.Errorf(codes.Internal, "failed to rebase: %v", err)
 	}
 
@@ -301,10 +343,10 @@ func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRe
 }
 
 func (rs *RemoteChunkStore) Root(ctx context.Context, req *remotesapi.RootRequest) (*remotesapi.RootResponse, error) {
-	logger := getReqLogger("GRPC", "Root")
-	defer func() { logger("finished") }()
+	logger := getReqLogger(rs.lgr, "Root")
+	defer func() { logger.Println("finished") }()
 
-	cs := rs.getStore(req.RepoId, "Root")
+	cs := rs.getStore(logger, req.RepoId)
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
@@ -313,7 +355,7 @@ func (rs *RemoteChunkStore) Root(ctx context.Context, req *remotesapi.RootReques
 	h, err := cs.Root(ctx)
 
 	if err != nil {
-		logger(fmt.Sprintf("error occurred during processing of Root rpc of %s/%s details: %v", req.RepoId.Org, req.RepoId.RepoName, err))
+		logger.Printf("error occurred during processing of Root rpc of %s/%s details: %v", req.RepoId.Org, req.RepoId.RepoName, err)
 		return nil, status.Error(codes.Internal, "Failed to get root")
 	}
 
@@ -321,16 +363,16 @@ func (rs *RemoteChunkStore) Root(ctx context.Context, req *remotesapi.RootReques
 }
 
 func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRequest) (*remotesapi.CommitResponse, error) {
-	logger := getReqLogger("GRPC", "Commit")
-	defer func() { logger("finished") }()
+	logger := getReqLogger(rs.lgr, "Commit")
+	defer func() { logger.Println("finished") }()
 
-	cs := rs.getStore(req.RepoId, "Commit")
+	cs := rs.getStore(logger, req.RepoId)
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
 
-	logger(fmt.Sprintf("found %s/%s", req.RepoId.Org, req.RepoId.RepoName))
+	logger.Printf("found %s/%s", req.RepoId.Org, req.RepoId.RepoName)
 
 	//should validate
 	updates := make(map[string]int)
@@ -341,7 +383,7 @@ func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRe
 	err := cs.AddTableFilesToManifest(ctx, updates)
 
 	if err != nil {
-		logger(fmt.Sprintf("error occurred updating the manifest: %s", err.Error()))
+		logger.Printf("error occurred updating the manifest: %s", err.Error())
 		return nil, status.Errorf(codes.Internal, "manifest update error: %v", err)
 	}
 
@@ -352,19 +394,19 @@ func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRe
 	ok, err = cs.Commit(ctx, currHash, lastHash)
 
 	if err != nil {
-		logger(fmt.Sprintf("error occurred during processing of Commit of %s/%s last %s curr: %s details: %v", req.RepoId.Org, req.RepoId.RepoName, lastHash.String(), currHash.String(), err))
+		logger.Printf("error occurred during processing of Commit of %s/%s last %s curr: %s details: %v", req.RepoId.Org, req.RepoId.RepoName, lastHash.String(), currHash.String(), err)
 		return nil, status.Errorf(codes.Internal, "failed to commit: %v", err)
 	}
 
-	logger(fmt.Sprintf("committed %s/%s moved from %s -> %s", req.RepoId.Org, req.RepoId.RepoName, currHash.String(), lastHash.String()))
+	logger.Printf("committed %s/%s moved from %s -> %s", req.RepoId.Org, req.RepoId.RepoName, currHash.String(), lastHash.String())
 	return &remotesapi.CommitResponse{Success: ok}, nil
 }
 
 func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi.GetRepoMetadataRequest) (*remotesapi.GetRepoMetadataResponse, error) {
-	logger := getReqLogger("GRPC", "GetRepoMetadata")
-	defer func() { logger("finished") }()
+	logger := getReqLogger(rs.lgr, "GetRepoMetadata")
+	defer func() { logger.Println("finished") }()
 
-	cs := rs.getOrCreateStore(req.RepoId, "GetRepoMetadata", req.ClientRepoFormat.NbfVersion)
+	cs := rs.getOrCreateStore(logger, req.RepoId, req.ClientRepoFormat.NbfVersion)
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
@@ -387,16 +429,16 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 }
 
 func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.ListTableFilesRequest) (*remotesapi.ListTableFilesResponse, error) {
-	logger := getReqLogger("GRPC", "ListTableFiles")
-	defer func() { logger("finished") }()
+	logger := getReqLogger(rs.lgr, "ListTableFiles")
+	defer func() { logger.Println("finished") }()
 
-	cs := rs.getStore(req.RepoId, "ListTableFiles")
+	cs := rs.getStore(logger, req.RepoId)
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
 
-	logger(fmt.Sprintf("found repo %s/%s", req.RepoId.Org, req.RepoId.RepoName))
+	logger.Printf("found repo %s/%s", req.RepoId.Org, req.RepoId.RepoName)
 
 	root, tables, appendixTables, err := cs.Sources(ctx)
 
@@ -404,12 +446,14 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 		return nil, status.Error(codes.Internal, "failed to get sources")
 	}
 
-	tableFileInfo, err := getTableFileInfo(rs, logger, tables, req, cs)
+	md, _ := metadata.FromIncomingContext(ctx)
+
+	tableFileInfo, err := getTableFileInfo(logger, md, rs, tables, req, cs)
 	if err != nil {
 		return nil, err
 	}
 
-	appendixTableFileInfo, err := getTableFileInfo(rs, logger, appendixTables, req, cs)
+	appendixTableFileInfo, err := getTableFileInfo(logger, md, rs, appendixTables, req, cs)
 	if err != nil {
 		return nil, err
 	}
@@ -423,14 +467,21 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 	return resp, nil
 }
 
-func getTableFileInfo(rs *RemoteChunkStore, logger func(string), tableList []nbs.TableFile, req *remotesapi.ListTableFilesRequest, cs store) ([]*remotesapi.TableFileInfo, error) {
+func getTableFileInfo(
+	logger *logrus.Entry,
+	md metadata.MD,
+	rs *RemoteChunkStore,
+	tableList []nbs.TableFile,
+	req *remotesapi.ListTableFilesRequest,
+	cs RemoteSrvStore,
+) ([]*remotesapi.TableFileInfo, error) {
 	prefix, err := rs.getRelativeStorePath(cs)
 	if err != nil {
 		return nil, err
 	}
 	appendixTableFileInfo := make([]*remotesapi.TableFileInfo, 0)
 	for _, t := range tableList {
-		url, err := rs.getDownloadUrl(logger, prefix+"/"+t.FileID())
+		url, err := rs.getDownloadUrl(logger, md, prefix+"/"+t.FileID())
 		if err != nil {
 			return nil, status.Error(codes.Internal, "failed to get download url for "+t.FileID())
 		}
@@ -446,16 +497,16 @@ func getTableFileInfo(rs *RemoteChunkStore, logger func(string), tableList []nbs
 
 // AddTableFiles updates the remote manifest with new table files without modifying the root hash.
 func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.AddTableFilesRequest) (*remotesapi.AddTableFilesResponse, error) {
-	logger := getReqLogger("GRPC", "Commit")
-	defer func() { logger("finished") }()
+	logger := getReqLogger(rs.lgr, "AddTableFiles")
+	defer func() { logger.Println("finished") }()
 
-	cs := rs.getStore(req.RepoId, "Commit")
+	cs := rs.getStore(logger, req.RepoId)
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
 
-	logger(fmt.Sprintf("found %s/%s", req.RepoId.Org, req.RepoId.RepoName))
+	logger.Printf("found %s/%s", req.RepoId.Org, req.RepoId.RepoName)
 
 	// should validate
 	updates := make(map[string]int)
@@ -466,25 +517,25 @@ func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.A
 	err := cs.AddTableFilesToManifest(ctx, updates)
 
 	if err != nil {
-		logger(fmt.Sprintf("error occurred updating the manifest: %s", err.Error()))
+		logger.Printf("error occurred updating the manifest: %s", err.Error())
 		return nil, status.Error(codes.Internal, "manifest update error")
 	}
 
 	return &remotesapi.AddTableFilesResponse{Success: true}, nil
 }
 
-func (rs *RemoteChunkStore) getStore(repoId *remotesapi.RepoId, rpcName string) store {
-	return rs.getOrCreateStore(repoId, rpcName, types.Format_Default.VersionString())
+func (rs *RemoteChunkStore) getStore(logger *logrus.Entry, repoId *remotesapi.RepoId) RemoteSrvStore {
+	return rs.getOrCreateStore(logger, repoId, types.Format_Default.VersionString())
 }
 
-func (rs *RemoteChunkStore) getOrCreateStore(repoId *remotesapi.RepoId, rpcName, nbfVerStr string) store {
+func (rs *RemoteChunkStore) getOrCreateStore(logger *logrus.Entry, repoId *remotesapi.RepoId, nbfVerStr string) RemoteSrvStore {
 	org := repoId.Org
 	repoName := repoId.RepoName
 
 	cs, err := rs.csCache.Get(org, repoName, nbfVerStr)
 
 	if err != nil {
-		log.Printf("Failed to retrieve chunkstore for %s/%s\n", org, repoName)
+		logger.Printf("Failed to retrieve chunkstore for %s/%s\n", org, repoName)
 	}
 
 	return cs
@@ -492,17 +543,17 @@ func (rs *RemoteChunkStore) getOrCreateStore(repoId *remotesapi.RepoId, rpcName,
 
 var requestId int32
 
-func incReqId() int32 {
-	return atomic.AddInt32(&requestId, 1)
+func incReqId() int {
+	return int(atomic.AddInt32(&requestId, 1))
 }
 
-func getReqLogger(method, callName string) func(string) {
-	callId := fmt.Sprintf("%s(%05d)", method, incReqId())
-	log.Println(callId, "new request for:", callName)
-
-	return func(msg string) {
-		log.Println(callId, "-", msg)
-	}
+func getReqLogger(lgr *logrus.Entry, method string) *logrus.Entry {
+	lgr = lgr.WithFields(logrus.Fields{
+		"method":      method,
+		"request_num": strconv.Itoa(incReqId()),
+	})
+	lgr.Println("starting request")
+	return lgr
 }
 
 type ReadOnlyChunkStore struct {

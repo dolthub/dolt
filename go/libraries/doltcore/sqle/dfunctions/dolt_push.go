@@ -100,7 +100,11 @@ func DoDoltPush(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 
-	err = actions.DoPush(ctx, dbData.Rsr, dbData.Rsw, dbData.Ddb, remoteDB, dbData.Rsw.TempTableFilesDir(), opts, runProgFuncs, stopProgFuncs)
+	tmpDir, err := dbData.Rsw.TempTableFilesDir()
+	if err != nil {
+		return cmdFailure, err
+	}
+	err = actions.DoPush(ctx, dbData.Rsr, dbData.Rsw, dbData.Ddb, remoteDB, tmpDir, opts, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:

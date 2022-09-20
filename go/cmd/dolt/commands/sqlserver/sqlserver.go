@@ -47,6 +47,7 @@ const (
 	persistenceBehaviorFlag     = "persistence-behavior"
 	allowCleartextPasswordsFlag = "allow-cleartext-passwords"
 	socketFlag                  = "socket"
+	remotesapiPortFlag          = "remotesapi-port"
 )
 
 func indentLines(s string) string {
@@ -148,6 +149,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
 	ap.SupportsString(allowCleartextPasswordsFlag, "", "allow-cleartext-passwords", "Allows use of cleartext passwords. Defaults to false.")
 	ap.SupportsOptionalString(socketFlag, "", "socket file", "Path for the unix socket file. Defaults to '/tmp/mysql.sock'.")
+	ap.SupportsUint(remotesapiPortFlag, "", "remotesapi port", "Sets the port for a server which can expose the databases in this sql-server over remotesapi.")
 	return ap
 }
 
@@ -235,10 +237,25 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 // GetServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
 // on command line. Server config variables not defined are set to default values.
 func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
+	var yamlCfg YAMLConfig
 	if cfgFile, ok := apr.GetValue(configFileFlag); ok {
-		return getYAMLServerConfig(dEnv.FS, cfgFile)
+		cfg, err := getYAMLServerConfig(dEnv.FS, cfgFile)
+		if err != nil {
+			return nil, err
+		}
+		yamlCfg = cfg.(YAMLConfig)
+	} else {
+		return getCommandLineServerConfig(dEnv, apr)
 	}
-	return getCommandLineServerConfig(dEnv, apr)
+
+	// if command line user argument was given, replace yaml's user and password
+	if user, hasUser := apr.GetValue(commands.UserFlag); hasUser {
+		pass, _ := apr.GetValue(passwordFlag)
+		yamlCfg.UserConfig.Name = &user
+		yamlCfg.UserConfig.Password = &pass
+	}
+
+	return yamlCfg, nil
 }
 
 // SetupDoltConfig updates the given server config with where to create .doltcfg directory
@@ -333,6 +350,10 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 
 	if password, ok := apr.GetValue(passwordFlag); ok {
 		serverConfig.withPassword(password)
+	}
+
+	if port, ok := apr.GetInt(remotesapiPortFlag); ok {
+		serverConfig.WithRemotesapiPort(&port)
 	}
 
 	if persistenceBehavior, ok := apr.GetValue(persistenceBehaviorFlag); ok {

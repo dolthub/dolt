@@ -94,3 +94,18 @@ teardown() {
     run dolt push origin main:main
     [[ "$status" != 0 ]] || false
 }
+
+@test "remotesrv: can run grpc and http on same port" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table vals (i int);'
+    dolt add vals
+    dolt commit -m 'create vals table.'
+
+    remotesrv --grpc-port 1234 --http-port 1234 --repo-mode &
+    remotesrv_pid=$!
+
+    cd ../
+    dolt clone http://localhost:1234/test-org/test-repo repo1
+}

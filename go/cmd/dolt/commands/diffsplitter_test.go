@@ -127,7 +127,7 @@ func TestDiffSplitter(t *testing.T) {
 					old: rowDiff{
 						row:      sql.Row{5, 6, nil},
 						rowDiff:  diff.ModifiedOld,
-						colDiffs: []diff.ChangeType{diff.None, diff.None, diff.None},
+						colDiffs: []diff.ChangeType{diff.ModifiedOld, diff.None, diff.None},
 					},
 					new: rowDiff{
 						row:      sql.Row{nil, 6, 100},

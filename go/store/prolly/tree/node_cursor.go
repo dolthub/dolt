@@ -121,8 +121,7 @@ func NewCursorAtOrdinal(ctx context.Context, ns NodeStore, nd Node, ord uint64) 
 
 	distance := int64(ord)
 	return NewCursorFromSearchFn(ctx, ns, nd, func(nd Node) (idx int) {
-		leaf, _ := nd.IsLeaf()
-		if leaf {
+		if nd.IsLeaf() {
 			return int(distance)
 		}
 		nd, _ = nd.loadSubtrees()
@@ -300,16 +299,10 @@ func FetchLeafNodeSpan(ctx context.Context, ns NodeStore, root Node, start, stop
 }
 
 func fetchLeafNodeSpan(ctx context.Context, ns NodeStore, nodes []Node, start, stop uint64) ([]Node, uint64, error) {
-	ok, err := nodes[0].IsLeaf()
-	if err != nil {
-		return nil, 0, err
-	} else if ok {
+	if nodes[0].IsLeaf() {
 		// verify leaf homogeneity
 		for i := range nodes {
-			ok, err = nodes[i].IsLeaf()
-			if err != nil {
-				return nil, 0, err
-			} else if !ok {
+			if !nodes[i].IsLeaf() {
 				return nil, 0, errors.New("mixed leaf/non-leaf set")
 			}
 		}
@@ -319,6 +312,7 @@ func fetchLeafNodeSpan(ctx context.Context, ns NodeStore, nodes []Node, start, s
 	gets := make(hash.HashSlice, 0, len(nodes)*nodes[0].Count())
 	acc := uint64(0)
 
+	var err error
 	for _, nd := range nodes {
 		if nd, err = nd.loadSubtrees(); err != nil {
 			return nil, 0, err
@@ -352,8 +346,8 @@ func fetchLeafNodeSpan(ctx context.Context, ns NodeStore, nodes []Node, start, s
 }
 
 func CurrentCursorItems(cur *Cursor) (key, value Item) {
-	key = cur.nd.keys.GetItem(cur.idx)
-	value = cur.nd.values.GetItem(cur.idx)
+	key = cur.nd.keys.GetItem(cur.idx, cur.nd.msg)
+	value = cur.nd.values.GetItem(cur.idx, cur.nd.msg)
 	return
 }
 
@@ -471,11 +465,7 @@ func (cur *Cursor) isLeaf() (bool, error) {
 }
 
 func (cur *Cursor) level() (uint64, error) {
-	lvl, err := cur.nd.Level()
-	if err != nil {
-		return 0, err
-	}
-	return uint64(lvl), nil
+	return uint64(cur.nd.level), nil
 }
 
 // invalidateAtEnd sets the cursor's index to the node count.

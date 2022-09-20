@@ -46,7 +46,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 77
+const SkipPreparedsCount = 78
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -108,48 +108,29 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Nautobot FOREIGN KEY panic repro",
+			Name: "trigger before update, with indexed update",
 			SetUpScript: []string{
-				"CREATE TABLE `auth_user` (" +
-					"	`password` varchar(128) NOT NULL," +
-					"	`last_login` datetime," +
-					"	`is_superuser` tinyint NOT NULL," +
-					"	`username` varchar(150) NOT NULL," +
-					"	`first_name` varchar(150) NOT NULL," +
-					"	`last_name` varchar(150) NOT NULL," +
-					"	`email` varchar(254) NOT NULL," +
-					"	`is_staff` tinyint NOT NULL," +
-					"	`is_active` tinyint NOT NULL," +
-					"	`date_joined` datetime NOT NULL," +
-					"	`id` char(32) NOT NULL," +
-					"	`config_data` json NOT NULL," +
-					"	PRIMARY KEY (`id`)," +
-					"	UNIQUE KEY `username` (`username`)" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
-				"CREATE TABLE `users_token` (" +
-					"	`id` char(32) NOT NULL," +
-					"	`created` datetime NOT NULL," +
-					"	`expires` datetime," +
-					"	`key` varchar(40) NOT NULL," +
-					"	`write_enabled` tinyint NOT NULL," +
-					"	`description` varchar(200) NOT NULL," +
-					"	`user_id` char(32) NOT NULL," +
-					"	PRIMARY KEY (`id`)," +
-					"	UNIQUE KEY `key` (`key`)," +
-					"	KEY `users_token_user_id_af964690` (`user_id`)," +
-					"	CONSTRAINT `users_token_user_id_af964690_fk_auth_user_id` FOREIGN KEY (`user_id`) REFERENCES `auth_user` (`id`)" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-				"INSERT INTO `auth_user` (`password`,`last_login`,`is_superuser`,`username`,`first_name`,`last_name`,`email`,`is_staff`,`is_active`,`date_joined`,`id`,`config_data`)" +
-					"VALUES ('pbkdf2_sha256$216000$KRpZeDPgwc5E$vl/2hwrmtnckaBT0A8pf63Ph+oYuCHYI7qozMTZihTo=',NULL,1,'admin','','','admin@example.com',1,1,'2022-08-30 18:27:21.810049','1056443cc03446c592fa4c06bb06a1a6','{}');",
+				"create table a (x int primary key, y int, unique key (y))",
+				"create table b (z int primary key)",
+				"insert into a values (1,3), (10,20)",
+				"create trigger insert_b before update on a for each row insert into b values (old.x * 10)",
+				"update a set x = x + 1 where y = 20",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "INSERT INTO `users_token` (`id`, `user_id`, `created`, `expires`, `key`, `write_enabled`, `description`) " +
-						"VALUES ('acc2e157db2845a79221cc654b1dcecc', '1056443cc03446c592fa4c06bb06a1a6', '2022-08-30 18:27:21.948487', NULL, '0123456789abcdef0123456789abcdef01234567', 1, '');",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 0x1, InsertID: 0x0}}},
+					Query: "select x, y from a order by 1",
+					Expected: []sql.Row{
+						{1, 3},
+						{11, 20},
+					},
+				},
+				{
+					Query: "select z from b",
+					Expected: []sql.Row{
+						{100},
+					},
 				},
 			},
 		},
@@ -1230,6 +1211,13 @@ func TestPersist(t *testing.T) {
 func TestTypesOverWire(t *testing.T) {
 	harness := newDoltHarness(t)
 	enginetest.TestTypesOverWire(t, harness, newSessionBuilder(harness))
+}
+
+func TestDoltCommit(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, script := range DoltCommitTests {
+		enginetest.TestScript(t, harness, script)
+	}
 }
 
 func TestQueriesPrepared(t *testing.T) {

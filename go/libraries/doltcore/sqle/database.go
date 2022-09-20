@@ -1286,8 +1286,8 @@ func (n noopRepoStateWriter) RemoveBackup(ctx context.Context, name string) erro
 	return nil
 }
 
-func (n noopRepoStateWriter) TempTableFilesDir() string {
-	return ""
+func (n noopRepoStateWriter) TempTableFilesDir() (string, error) {
+	return "", nil
 }
 
 func (n noopRepoStateWriter) UpdateBranch(name string, new env.BranchConfig) error {

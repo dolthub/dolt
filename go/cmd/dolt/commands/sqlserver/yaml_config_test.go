@@ -150,6 +150,17 @@ jwks:
 	assert.Equal(t, expected, config)
 }
 
+func TestUnmarshallRemotesapiPort(t *testing.T) {
+	testStr := `
+remotesapi:
+  port: 8000
+`
+	config, err := NewYamlConfig([]byte(testStr))
+	require.NoError(t, err)
+	require.NotNil(t, config.RemotesapiPort())
+	require.Equal(t, 8000, *config.RemotesapiPort())
+}
+
 // Tests that a common YAML error (incorrect indentation) throws an error
 func TestUnmarshallError(t *testing.T) {
 	testStr := `
@@ -204,6 +215,7 @@ func TestYAMLConfigDefaults(t *testing.T) {
 	assert.Equal(t, defaultMetricsPort, cfg.MetricsPort())
 	assert.Nil(t, cfg.MetricsConfig.Labels)
 	assert.Equal(t, defaultAllowCleartextPasswords, cfg.AllowCleartextPasswords())
+	assert.Nil(t, cfg.RemotesapiPort())
 
 	c, err := LoadTLSConfig(cfg)
 	assert.NoError(t, err)

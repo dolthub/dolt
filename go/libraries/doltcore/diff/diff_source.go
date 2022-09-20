@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -69,17 +68,17 @@ func (rdRd *RowDiffSource) GetSchema() schema.Schema {
 
 // NextDiff reads a row from a table.  If there is a bad row the returned error will be non nil, and calling IsBadRow(err)
 // will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
-func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, error) {
+func (rdRd *RowDiffSource) NextDiff() (row.Row, error) {
 	diffs, hasMore, err := rdRd.ad.GetDiffs(1, time.Second)
 	if err != nil {
-		return nil, pipeline.ImmutableProperties{}, err
+		return nil, err
 	}
 
 	if len(diffs) == 0 {
 		if !hasMore {
-			return nil, pipeline.NoProps, io.EOF
+			return nil, io.EOF
 		}
-		return nil, pipeline.NoProps, errors.New("timeout")
+		return nil, errors.New("timeout")
 	}
 
 	if len(diffs) != 1 {
@@ -97,12 +96,12 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 		oldRow, err := row.FromNoms(sch, d.KeyValue.(types.Tuple), d.OldValue.(types.Tuple))
 
 		if err != nil {
-			return nil, pipeline.ImmutableProperties{}, err
+			return nil, err
 		}
 
 		rows[From], err = rdRd.oldRowConv.ConvertWithWarnings(oldRow, rdRd.warnFn)
 		if err != nil {
-			return nil, pipeline.NoProps, err
+			return nil, err
 		}
 	}
 
@@ -115,22 +114,22 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 		newRow, err := row.FromNoms(sch, d.KeyValue.(types.Tuple), d.NewValue.(types.Tuple))
 
 		if err != nil {
-			return nil, pipeline.ImmutableProperties{}, err
+			return nil, err
 		}
 
 		rows[To], err = rdRd.newRowConv.ConvertWithWarnings(newRow, rdRd.warnFn)
 		if err != nil {
-			return nil, pipeline.NoProps, err
+			return nil, err
 		}
 	}
 
 	joinedRow, err := rdRd.joiner.Join(rows)
 
 	if err != nil {
-		return nil, pipeline.ImmutableProperties{}, err
+		return nil, err
 	}
 
-	return joinedRow, pipeline.ImmutableProperties{}, nil
+	return joinedRow, nil
 }
 
 // Close should release resources being held

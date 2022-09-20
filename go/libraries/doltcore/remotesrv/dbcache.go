@@ -12,26 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fwt
+package remotesrv
 
 import (
-	"github.com/mattn/go-runewidth"
-	"github.com/rivo/uniseg"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/nbs"
 )
 
-// StringWidth returns the number of horizontal cells needed to print the given text. It splits the text into its
-// grapheme clusters, calculates each cluster's width, and adds them up to a total.
-func StringWidth(text string) (width int) {
-	g := uniseg.NewGraphemes(text)
-	for g.Next() {
-		var chWidth int
-		for _, r := range g.Runes() {
-			chWidth = runewidth.RuneWidth(r)
-			if chWidth > 0 {
-				break // Our best guess at this point is to use the width of the first non-zero-width rune.
-			}
-		}
-		width += chWidth
-	}
-	return
+type DBCache interface {
+	Get(org, repo, nbfVerStr string) (RemoteSrvStore, error)
 }
+
+type RemoteSrvStore interface {
+	chunks.ChunkStore
+	nbs.TableFileStore
+
+	Path() (string, bool)
+	GetChunkLocationsWithPaths(hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, error)
+}
+
+var _ RemoteSrvStore = &nbs.NomsBlockStore{}
+var _ RemoteSrvStore = &nbs.GenerationalNBS{}

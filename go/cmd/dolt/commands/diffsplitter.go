@@ -118,9 +118,14 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 			oldRow.row[ds.queryToTarget[i]] = row[i]
 
 			if diffTypeStr == "modified" {
-				if n, err := cmp(row[i], row[ds.fromTo[i]]); err != nil {
-					return rowDiff{}, rowDiff{}, err
-				} else if n != 0 {
+				fromToIndex, ok := ds.fromTo[i]
+				if ok {
+					if n, err := cmp(row[i], row[fromToIndex]); err != nil {
+						return rowDiff{}, rowDiff{}, err
+					} else if n != 0 {
+						oldRow.colDiffs[ds.queryToTarget[i]] = diff.ModifiedOld
+					}
+				} else {
 					oldRow.colDiffs[ds.queryToTarget[i]] = diff.ModifiedOld
 				}
 			} else {

@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/pool"
 )
@@ -53,7 +54,21 @@ func testTupleGetMany(t *testing.T) {
 		fields := randomByteFields(t)
 		tup := NewTuple(testPool, fields...)
 
+		// GetManyFields must not be called with indexes that are greater than
+		// or equal to the tuple count.
 		indexes := randomFieldIndexes(fields)
+		for i := len(indexes) - 1; i >= 0; i-- {
+			idx := indexes[i]
+			if idx < tup.Count() {
+				break
+			}
+			require.Equal(t, 0, len(fields[idx]))
+			indexes = indexes[:i]
+		}
+		if len(indexes) == 0 {
+			continue
+		}
+
 		actual := tup.GetManyFields(indexes, make([][]byte, len(indexes)))
 
 		for k, idx := range indexes {
