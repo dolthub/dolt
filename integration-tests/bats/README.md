@@ -26,7 +26,23 @@ npm install -g bats
 cd go/cmd/dolt && go install . && cd -
 cd go/store/cmd/noms && go install . && cd -
 ````
-3. Go to the directory with the bats tests and run: 
+3. Install other dependencies. `parquet` and `python3`
+
+I used Homebrew on Mac to install `parquet`. `python3` was there with the Developer Tools install.
+
+```
+brew install parquet-cli
+```
+
+4. `pip install mysql-connector-python`
+
+I also needed this specific version on the python mysql.connector. `pip install mysql.connector` mostly worked but caused some SSL errors.
+
+```
+pip3 install mysql-connector-python
+```
+
+5. Go to the directory with the bats tests and run: 
 ```
 bats . 
 ```

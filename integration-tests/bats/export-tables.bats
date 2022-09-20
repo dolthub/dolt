@@ -59,7 +59,7 @@ SQL
 0,1,2,3,4,5
 9,8,7,6,5,4
 '|dolt table import -u test_int
-    dolt table export --file-type=csv test_int|python -c '
+    dolt table export --file-type=csv test_int | python3 -c '
 import sys
 rows = []
 for line in sys.stdin:
