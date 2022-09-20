@@ -46,7 +46,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 78
+const SkipPreparedsCount = 80
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -429,6 +429,16 @@ func TestDoltUserPrivileges(t *testing.T) {
 
 func TestJoinQueries(t *testing.T) {
 	enginetest.TestJoinQueries(t, newDoltHarness(t))
+}
+
+// TestJSONTableQueries runs the canonical test queries against a single threaded index enabled harness.
+func TestJSONTableQueries(t *testing.T) {
+	enginetest.TestJSONTableQueries(t, newDoltHarness(t))
+}
+
+// TestJSONTableScripts runs the canonical test queries against a single threaded index enabled harness.
+func TestJSONTableScripts(t *testing.T) {
+	enginetest.TestJSONTableScripts(t, newDoltHarness(t))
 }
 
 func TestUserPrivileges(t *testing.T) {
