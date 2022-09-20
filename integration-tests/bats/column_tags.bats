@@ -290,3 +290,23 @@ DELIM
     [ $status -eq 0 ]
     [[ $output =~ "col1   | 10186" ]] || false
 }
+
+@test "column_tags: update-tag updates a columns tag" {
+    dolt sql -q "CREATE TABLE t (pk INT PRIMARY KEY, col1 int);"
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "pk     | 15476" ]] || false
+    [[ $output =~ "col1   | 10878" ]] || false
+
+    dolt schema update-tag t pk 5
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "pk     | 5" ]] || false
+    [[ $output =~ "col1   | 10878" ]] || false
+
+    dolt schema update-tag t col1 6
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "pk     | 5" ]] || false
+    [[ $output =~ "col1   | 6" ]] || false
+}
