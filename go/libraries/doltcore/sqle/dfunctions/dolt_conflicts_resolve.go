@@ -75,6 +75,59 @@ func getProllyRowMaps(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeS
 	return durable.ProllyMapFromIndex(idx), nil
 }
 
+func resolveOldFormatConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, ours bool) (*doltdb.Table, error) {
+	cnfReader, err := merge.NewConflictReader(ctx, tbl, tblName)
+	if err != nil {
+		return nil, err
+	}
+
+	joiner := cnfReader.GetJoiner()
+
+	var pkTuples []types.Value
+	vrw := tbl.ValueReadWriter()
+	for {
+		cnfRow, err := cnfReader.NextConflict(ctx)
+		if err == io.EOF {
+			break
+		}
+		cnfMap, err := joiner.Split(cnfRow)
+		if err != nil {
+			return nil, err
+		}
+
+		var row row.Row
+		var k, v types.Value
+		if ours {
+			row = cnfMap["our"]
+		} else {
+			row = cnfMap["their"]
+		}
+
+		if row != nil {
+			k, err = row.NomsMapKey(sch).Value(ctx)
+			if err != nil {
+				return nil, err
+			}
+			v, err = row.NomsMapValue(sch).Value(ctx)
+			if err != nil {
+				return nil, err
+			}
+			pkTuples = append(pkTuples, k, v)
+		}
+	}
+
+	newMap, err := types.NewMap(ctx, vrw, pkTuples...)
+	if err != nil {
+		return nil, err
+	}
+
+	newTbl, err := tbl.UpdateNomsRows(ctx, newMap)
+	if err != nil {
+		return nil, err
+	}
+	return newTbl, nil
+}
+
 func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
 	newRoot := root
 	for _, tblName := range tblNames {
@@ -212,55 +265,7 @@ func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.R
 			//	}
 			//}
 		} else {
-			cnfReader, err := merge.NewConflictReader(ctx, tbl, tblName)
-			if err != nil {
-				return err
-			}
-
-			joiner := cnfReader.GetJoiner()
-
-			var pkTuples []types.Value
-			vrw := tbl.ValueReadWriter()
-			for {
-				cnfRow, err := cnfReader.NextConflict(ctx)
-				if err == io.EOF {
-					break
-				}
-				cnfMap, err := joiner.Split(cnfRow)
-				if err != nil {
-					return err
-				}
-
-				var row row.Row
-				var k, v types.Value
-				if ours {
-					row = cnfMap["our"]
-				} else {
-					row = cnfMap["their"]
-				}
-
-				if row != nil {
-					k, err = row.NomsMapKey(sch).Value(ctx)
-					if err != nil {
-						return err
-					}
-					v, err = row.NomsMapValue(sch).Value(ctx)
-					if err != nil {
-						return err
-					}
-					pkTuples = append(pkTuples, k, v)
-				}
-			}
-
-			newMap, err := types.NewMap(ctx, vrw, pkTuples...)
-			if err != nil {
-				return err
-			}
-
-			newTbl, err = tbl.UpdateNomsRows(ctx, newMap)
-			if err != nil {
-				return err
-			}
+			newTbl, err = resolveOldFormatConflicts(ctx, tbl, tblName, sch, ours)
 		}
 
 		newTbl, err = newTbl.ClearConflicts(ctx)
