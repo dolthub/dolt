@@ -860,7 +860,7 @@ func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDa
 	}
 
 	// create workingSets/heads/branch and update the working set
-	err = pullBranches(ctx, db, []string{branch}, currentBranchRef)
+	err = pullBranches(ctx, db, []string{branch}, currentBranchRef, pullBehavior_fastForward)
 	if err != nil {
 		return err
 	}
