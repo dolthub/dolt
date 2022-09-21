@@ -608,6 +608,7 @@ func assertDatasetHash(
 
 // CommitWithWorkingSet updates two Datasets atomically: the working set, and its corresponding HEAD. Uses the same
 // global locking mechanism as UpdateWorkingSet.
+// The current dataset head will be filled in as the first parent of the new commit if not already present.
 func (db *database) CommitWithWorkingSet(
 	ctx context.Context,
 	commitDS, workingSetDS Dataset,
@@ -617,6 +618,17 @@ func (db *database) CommitWithWorkingSet(
 	wsAddr, wsValRef, err := newWorkingSet(ctx, db, workingSetSpec.Meta, workingSetSpec.WorkingRoot, workingSetSpec.StagedRoot, workingSetSpec.MergeState)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
+	}
+
+	// Prepend the current head hash to the list of parents if one was provided. This is only necessary if parents were
+	// provided because we fill it in automatically in buildNewCommit otherwise.
+	if len(opts.Parents) > 0 {
+		headHash, ok := commitDS.MaybeHeadAddr()
+		if ok {
+			if !hasParentHash(opts, headHash) {
+				opts.Parents = append(append([]hash.Hash{}, headHash), opts.Parents...)
+			}
+		}
 	}
 
 	commit, err := buildNewCommit(ctx, commitDS, val, opts)
@@ -859,7 +871,7 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 }
 
 func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error) {
-	if opts.Parents == nil || len(opts.Parents) == 0 {
+	if len(opts.Parents) == 0 {
 		headAddr, ok := ds.MaybeHeadAddr()
 		if ok {
 			opts.Parents = []hash.Hash{headAddr}
@@ -867,20 +879,24 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 	} else {
 		curr, ok := ds.MaybeHeadAddr()
 		if ok {
-			found := false
-			for _, h := range opts.Parents {
-				if h == curr {
-					found = true
-					break
-				}
-			}
-			if !found {
+			if !hasParentHash(opts, curr) {
 				return nil, ErrMergeNeeded
 			}
 		}
 	}
 
 	return newCommitForValue(ctx, ds.db.chunkStore(), ds.db, ds.db.nodeStore(), v, opts)
+}
+
+func hasParentHash(opts CommitOptions, curr hash.Hash) bool {
+	found := false
+	for _, h := range opts.Parents {
+		if h == curr {
+			found = true
+			break
+		}
+	}
+	return found
 }
 
 func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {

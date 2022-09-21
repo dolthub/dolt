@@ -194,5 +194,5 @@ func GetCommitStaged(
 		return nil, err
 	}
 
-	return ddb.NewPendingCommit(ctx, roots, rsr.CWBHeadRef(), mergeParents, meta)
+	return ddb.NewPendingCommit(ctx, roots, mergeParents, meta)
 }

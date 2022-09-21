@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -215,14 +214,13 @@ type PendingCommit struct {
 // |roots| are the current roots to include in the PendingCommit. roots.Staged is used as the new root to package in the
 // commit, once written.
 // |headRef| is the ref of the HEAD the commit will update
-// |parentCommits| are any additional merge parents for this commit. The current HEAD commit is always considered a
-// parent.
+// |mergeParentCommits| are any merge parents for this commit
 // |cm| is the metadata for the commit
+// The current branch head will be automatically filled in as the first parent at commit time.
 func (ddb *DoltDB) NewPendingCommit(
 	ctx context.Context,
 	roots Roots,
-	headRef ref.DoltRef,
-	parentCommits []*Commit,
+	mergeParentCommits []*Commit,
 	cm *datas.CommitMeta,
 ) (*PendingCommit, error) {
 	newstaged, val, err := ddb.writeRootValue(ctx, roots.Staged)
@@ -232,7 +230,7 @@ func (ddb *DoltDB) NewPendingCommit(
 	roots.Staged = newstaged
 
 	var parents []hash.Hash
-	for _, pc := range parentCommits {
+	for _, pc := range mergeParentCommits {
 		parents = append(parents, pc.dCommit.Addr())
 	}
 
