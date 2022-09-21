@@ -101,6 +101,7 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 		}
 
 		i := strings.LastIndex(path, "/")
+		// a table file name is currently 32 characters, plus the '/' is 33.
 		if i < 0 || len(path[i:]) != 33 {
 			logger.Printf("response to: %v method: %v http response code: %v", req.RequestURI, req.Method, http.StatusNotFound)
 			respWr.WriteHeader(http.StatusNotFound)
