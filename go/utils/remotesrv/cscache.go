@@ -43,32 +43,28 @@ func NewLocalCSCache(filesys filesys.Filesys) *LocalCSCache {
 	}
 }
 
-func (cache *LocalCSCache) Get(org, repo, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
+func (cache *LocalCSCache) Get(repopath, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
 
-	id := filepath.Join(org, repo)
+	id := filepath.FromSlash(repopath)
 
 	if cs, ok := cache.dbs[id]; ok {
 		return cs, nil
 	}
 
-	var newCS *nbs.NomsBlockStore
-	if cache.fs != nil {
-		err := cache.fs.MkDirs(id)
-		if err != nil {
-			return nil, err
-		}
-		path, err := cache.fs.Abs(id)
-		if err != nil {
-			return nil, err
-		}
+	err := cache.fs.MkDirs(id)
+	if err != nil {
+		return nil, err
+	}
+	path, err := cache.fs.Abs(id)
+	if err != nil {
+		return nil, err
+	}
 
-		newCS, err = nbs.NewLocalStore(context.TODO(), nbfVerStr, path, defaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
-
-		if err != nil {
-			return nil, err
-		}
+	newCS, err := nbs.NewLocalStore(context.TODO(), nbfVerStr, path, defaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
+	if err != nil {
+		return nil, err
 	}
 
 	cache.dbs[id] = newCS
@@ -80,6 +76,6 @@ type SingletonCSCache struct {
 	s remotesrv.RemoteSrvStore
 }
 
-func (cache SingletonCSCache) Get(org, repo, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
+func (cache SingletonCSCache) Get(path, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
 	return cache.s, nil
 }

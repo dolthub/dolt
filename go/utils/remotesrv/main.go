@@ -54,6 +54,7 @@ func main() {
 		*httpHostParam = fmt.Sprintf("%s:%d", *httpHostParam, *httpPortParam)
 	} else {
 		*httpPortParam = 80
+		*httpHostParam = ":80"
 		log.Println("'http-port' parameter not provided. Using default port 80")
 	}
 

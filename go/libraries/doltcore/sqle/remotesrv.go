@@ -32,9 +32,9 @@ type remotesrvStore struct {
 
 var _ remotesrv.DBCache = remotesrvStore{}
 
-func (s remotesrvStore) Get(org, repo, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
+func (s remotesrvStore) Get(path, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
 	sess := dsess.DSessFromSess(s.ctx.Session)
-	db, err := sess.Provider().Database(s.ctx, repo)
+	db, err := sess.Provider().Database(s.ctx, path)
 	if err != nil {
 		return nil, err
 	}
