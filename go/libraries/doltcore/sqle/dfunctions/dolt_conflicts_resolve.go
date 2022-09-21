@@ -77,69 +77,64 @@ func getProllyRowMaps(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeS
 }
 
 func resolveNewFormatConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, ours bool) (*doltdb.Table, error) {
-	var idx durable.Index
 	var err error
-	if ours {
-		// todo: need to actually look at artifacts...
-		idx, err = tbl.GetRowData(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-	} else {
-		artifactIdx, err := tbl.GetArtifacts(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		artifactMap := durable.ProllyMapFromArtifactIndex(artifactIdx)
-		iter, err := artifactMap.IterAllConflicts(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		// just get first conflict artifact
-		cnfArt, err := iter.Next(ctx)
-		if err != nil {
-			if err == io.EOF {
-				panic("no conflicts, should be impossible")
-			}
-			return nil, err
-		}
-
-		ourIdx, err := tbl.GetRowData(ctx)
-		if err != nil {
-			return nil, err
-		}
-		ourMap := durable.ProllyMapFromIndex(ourIdx)
-
-		baseMap, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh, tblName)
-		if err != nil {
-			return nil, err
-		}
-
-		theirMap, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh, tblName)
-		if err != nil {
-			return nil, err
-		}
-
-		merged, err := prolly.MergeMaps(ctx, ourMap, theirMap, baseMap, func(left, right tree.Diff) (tree.Diff, bool) {
-			// resolve conflicts with right
-			if left.From != nil && ((left.To == nil) != (right.To == nil)) {
-				return right, true
-			}
-			if bytes.Compare(left.To, right.To) == 0 {
-				return left, true
-			} else {
-				return right, true
-			}
-		})
-		if err != nil {
-			return nil, err
-		}
-		idx = durable.IndexFromProllyMap(merged)
+	artifactIdx, err := tbl.GetArtifacts(ctx)
+	if err != nil {
+		return nil, err
 	}
 
+	artifactMap := durable.ProllyMapFromArtifactIndex(artifactIdx)
+	iter, err := artifactMap.IterAllConflicts(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// just get first conflict artifact
+	cnfArt, err := iter.Next(ctx)
+	if err != nil {
+		if err == io.EOF {
+			panic("no conflicts, should be impossible")
+		}
+		return nil, err
+	}
+
+	ourIdx, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ourMap := durable.ProllyMapFromIndex(ourIdx)
+
+	baseMap, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh, tblName)
+	if err != nil {
+		return nil, err
+	}
+
+	theirMap, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh, tblName)
+	if err != nil {
+		return nil, err
+	}
+
+	// swap the maps when resolving with theirs
+	if !ours {
+		ourMap, theirMap = theirMap, ourMap
+	}
+
+	// resolve conflicts with left
+	merged, err := prolly.MergeMaps(ctx, ourMap, theirMap, baseMap, func(left, right tree.Diff) (tree.Diff, bool) {
+		if left.From != nil && ((left.To == nil) != (right.To == nil)) {
+			return left, true
+		}
+		if bytes.Compare(left.To, right.To) == 0 {
+			return right, true
+		} else {
+			return left, true
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	idx := durable.IndexFromProllyMap(merged)
 	newTbl, err := tbl.UpdateRows(ctx, idx)
 	if err != nil {
 		return nil, err
