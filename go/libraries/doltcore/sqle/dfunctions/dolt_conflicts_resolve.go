@@ -98,32 +98,12 @@ func resolveNewFormatConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName stri
 			return nil, err
 		}
 
+		// just get first conflict artifact
 		cnfArt, err := iter.Next(ctx)
-		if err == io.EOF {
-			// no conflicts, should be impossible
-			return nil, nil
-		}
-
-		baseRootVal, err := doltdb.LoadRootValueFromRootIshAddr(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh)
-		baseTbl, ok, err := baseRootVal.GetTable(ctx, tblName)
 		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, doltdb.ErrTableNotFound
-		}
-
-		theirRootVal, err := doltdb.LoadRootValueFromRootIshAddr(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh)
-		theirTbl, ok, err := theirRootVal.GetTable(ctx, tblName)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, doltdb.ErrTableNotFound
-		}
-
-		baseIdx, err := baseTbl.GetRowData(ctx)
-		if err != nil {
+			if err == io.EOF {
+				panic("no conflicts, should be impossible")
+			}
 			return nil, err
 		}
 
@@ -131,15 +111,18 @@ func resolveNewFormatConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName stri
 		if err != nil {
 			return nil, err
 		}
+		ourMap := durable.ProllyMapFromIndex(ourIdx)
 
-		theirIdx, err := theirTbl.GetRowData(ctx)
+		baseMap, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh, tblName)
 		if err != nil {
 			return nil, err
 		}
 
-		baseMap := durable.ProllyMapFromIndex(baseIdx)
-		ourMap := durable.ProllyMapFromIndex(ourIdx)
-		theirMap := durable.ProllyMapFromIndex(theirIdx)
+		theirMap, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh, tblName)
+		if err != nil {
+			return nil, err
+		}
+
 		merged, err := prolly.MergeMaps(ctx, ourMap, theirMap, baseMap, func(left, right tree.Diff) (tree.Diff, bool) {
 			// resolve conflicts with right
 			if left.From != nil && ((left.To == nil) != (right.To == nil)) {
