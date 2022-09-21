@@ -49,6 +49,7 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 
 	var (
 		finalRows durable.Index
+		stats     tree.MergeStats
 
 		leftIdxs  durable.IndexSet
 		rightIdxs durable.IndexSet
@@ -84,7 +85,7 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 	group.Go(func() (err error) {
 		defer close(indexEdits)
 		defer close(conflicts)
-		finalRows, err = mergeProllyRowData(gCtx, tm, finalSch, indexEdits, conflicts)
+		finalRows, stats, err = mergeProllyRowData(gCtx, tm, finalSch, indexEdits, conflicts)
 		return err
 	})
 
@@ -123,9 +124,13 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 		return nil, nil, err
 	}
 
-	// TODO (dhruv): populate Adds, Deletes, Modifications
-	stats := &MergeStats{Operation: TableModified}
-	return finalTbl, stats, nil
+	s := &MergeStats{
+		Operation:     TableModified,
+		Adds:          stats.Adds,
+		Deletes:       stats.Removes,
+		Modifications: stats.Modifications,
+	}
+	return finalTbl, s, nil
 }
 
 func mergeTableArtifacts(ctx context.Context, tm TableMerger, mergeTbl *doltdb.Table) (*doltdb.Table, error) {
@@ -177,30 +182,30 @@ func mergeProllyRowData(
 	finalSch schema.Schema,
 	indexEdits chan indexEdit,
 	conflicts chan confVals,
-) (durable.Index, error) {
+) (durable.Index, tree.MergeStats, error) {
 
 	lr, err := tm.leftTbl.GetRowData(ctx)
 	if err != nil {
-		return nil, err
+		return nil, tree.MergeStats{}, err
 	}
 	leftRows := durable.ProllyMapFromIndex(lr)
 
 	rr, err := tm.rightTbl.GetRowData(ctx)
 	if err != nil {
-		return nil, err
+		return nil, tree.MergeStats{}, err
 	}
 	rightRows := durable.ProllyMapFromIndex(rr)
 
 	ar, err := tm.ancTbl.GetRowData(ctx)
 	if err != nil {
-		return nil, err
+		return nil, tree.MergeStats{}, err
 	}
 	ancRows := durable.ProllyMapFromIndex(ar)
 
 	vMerger := newValueMerger(finalSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool())
 	keyless := schema.IsKeyless(finalSch)
 
-	mr, err := prolly.MergeMaps(ctx, leftRows, rightRows, ancRows, func(left, right tree.Diff) (tree.Diff, bool) {
+	mr, stats, err := prolly.MergeMaps(ctx, leftRows, rightRows, ancRows, func(left, right tree.Diff) (tree.Diff, bool) {
 		if left.Type == right.Type && bytes.Equal(left.To, right.To) {
 			if keyless {
 				// convergent edits are conflicts for keyless tables
@@ -233,10 +238,10 @@ func mergeProllyRowData(
 		return d, true
 	})
 	if err != nil {
-		return nil, err
+		return nil, tree.MergeStats{}, err
 	}
 
-	return durable.IndexFromProllyMap(mr), nil
+	return durable.IndexFromProllyMap(mr), stats, nil
 }
 
 func processConflict(ctx context.Context, confs chan confVals, edits chan indexEdit, left, right tree.Diff) (tree.Diff, bool, error) {
