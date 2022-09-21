@@ -27,7 +27,7 @@ cd go/cmd/dolt && go install . && cd -
 cd go/store/cmd/noms && go install . && cd -
 ````
 
-3. Make sure you have `python3 installed.
+3. Make sure you have `python3` installed.
 
 This came with my Mac Developer Tools and was on my PATH.
 
