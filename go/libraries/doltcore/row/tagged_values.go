@@ -277,6 +277,8 @@ func CountCellDiffs(from, to types.Tuple) (uint64, error) {
 
 	for i, v := range f {
 		ov, ok := t[i]
+		// TODO : if the to has nil value, it can be drop column, so should not be cell change?
+		// means it does not exist --> cell deleted or it's defined as NULL --> need to differentiate between these two cases
 		if !ok || !v.Equals(ov) {
 			changed++
 		}

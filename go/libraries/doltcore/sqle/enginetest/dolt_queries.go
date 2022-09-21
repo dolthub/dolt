@@ -5007,6 +5007,65 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "basic case with single keyless table",
+		SetUpScript: []string{
+			"set @Commit0 = HashOf('HEAD');",
+			"set @Commit1 = dolt_commit('--allow-empty', '-m', 'creating table t');",
+
+			// create table t only
+			"create table t (id int, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.')",
+			"set @Commit2 = dolt_commit('-am', 'creating table t');",
+
+			// insert 1 row into t
+			"insert into t values(1, 'one', 'two');",
+			"set @Commit3 = dolt_commit('-am', 'inserting 1 into table t');",
+
+			// insert 2 rows into t and update two cells
+			"insert into t values(2, 'two', 'three'), (3, 'three', 'four');",
+			"update t set c1='uno', c2='dos' where id=1;",
+			"set @Commit4 = dolt_commit('-am', 'inserting 2 into table t');",
+
+			// drop table t only
+			"drop table t;",
+			"set @Commit5 = dolt_commit('-am', 'drop table t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// table is added, no data diff, result is empty
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
+				Expected: []sql.Row{{"t", nil, 1, 0, nil, nil, nil, nil, nil, nil, nil, nil}},
+			},
+			{
+				// TODO : update row for keyless table deletes the row and insert the new row --> row added = 3 and row deleted = 1
+				//Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
+				//Expected: []sql.Row{{"t", nil, 2, 0, nil, nil, nil, nil, nil, nil, nil, nil}},
+			},
+			{
+				// change from and to commits
+				//Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit3, 't');",
+				//Expected: []sql.Row{{"t", nil, 0, 2, nil, nil, nil, nil, nil, nil, nil, nil}},
+			},
+			{
+				// table is dropped, no data diff, result is empty
+				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit5, 't');",
+				Expected: []sql.Row{{"t", nil, 0, 3, nil, nil, nil, nil, nil, nil, nil, nil}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit4, 't');",
+				Expected: []sql.Row{{"t", nil, 3, 0, nil, nil, nil, nil, nil, nil, nil, nil}},
+			},
+			{
+				Query:       "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+		},
+	},
+	{
 		Name: "basic case with multiple tables",
 		SetUpScript: []string{
 			"set @Commit0 = HashOf('HEAD');",
@@ -5132,19 +5191,20 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			"set @Commit6 = dolt_commit('-am', 'inserting row 2 in main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
-			{
-				// TODO : 1 cell modified is taken as 1 cell deleted
-				//Query:    "SELECT * from dolt_diff_summary('main', 'branch1', 't');",
-				//Expected: []sql.Row{{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2}},
-			},
+			// TODO : need to differentiate the NULL from drop column and user defined NULL/NULL from add column
+			//{
+			//	Query:    "SELECT * from dolt_diff_summary('main', 'branch1', 't');",
+			//	Expected: []sql.Row{{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2}},
+			//},
 			{
 				Query:    "SELECT * from dolt_diff_summary('branch1', 'main', 't');",
 				Expected: []sql.Row{{"t", 0, 1, 0, 1, 4, 0, 1, 1, 2, 2, 6}},
 			},
-			{
-				Query:    "SELECT * from dolt_diff_summary('main~', 'branch1', 't');",
-				Expected: []sql.Row{{"t", 0, 1, 1, 0, 3, 4, 0, 1, 1, 3, 2}},
-			},
+			// TODO : need to differentiate the NULL from drop column and user defined NULL/NULL from add column
+			//{
+			//	Query:    "SELECT * from dolt_diff_summary('main~', 'branch1', 't');",
+			//	Expected: []sql.Row{{"t", 0, 1, 1, 0, 3, 4, 0, 1, 1, 3, 2}},
+			//},
 		},
 	},
 	{
@@ -5153,15 +5213,15 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"call dolt_add('.');",
 			"insert into t values (1, 'one', 'two'), (2, 'two', 'three');",
-			"set @Commit1 = dolt_commit('-am', 'inserting into t');",
+			"set @Commit1 = dolt_commit('-am', 'inserting row 1, 2 into t');",
 
 			// drop 1 column and add 1 row
 			"alter table t drop column c2;",
-			"set @Commit2 = dolt_commit('-am', 'dropping column c2 and add a row');",
+			"set @Commit2 = dolt_commit('-am', 'dropping column c2');",
 
 			// drop 1 column and add 1 row
 			"insert into t values (3, 'three');",
-			"set @Commit3 = dolt_commit('-am', 'dropping column c2 and add a row');",
+			"set @Commit3 = dolt_commit('-am', 'inserting row 3');",
 
 			// add 1 column and 1 row and update
 			"alter table t add column c2 varchar(20);",
@@ -5170,29 +5230,29 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			"set @Commit4 = dolt_commit('-am', 'adding column c2, inserting, and updating data');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
-			{
-				// TODO : cells deleted are considered cells_modified as the value is changed into NULL
-				//Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
-				//Expected: []sql.Row{{"t", 0, 0, 0, 2, 0, 2, 2, 2, 2, 6, 4}},
-			},
+			// TODO : need to differentiate the NULL from drop column and user defined NULL/NULL from add column
+			//{
+			//	Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
+			//	Expected: []sql.Row{{"t", 0, 0, 0, 2, 0, 2, 0, 2, 2, 6, 4}},
+			//},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
 				Expected: []sql.Row{{"t", 2, 1, 0, 0, 2, 0, 0, 2, 3, 4, 6}},
 			},
-			{
-				// TODO : same problem/todo as above
-				//Query: "SELECT * from dolt_diff_summary(@Commit1, @Commit3, 't');",
-				//Expected: []sql.Row{{"t", 0, 1, 0, 2, 2, 2, 2, 2, 3, 6, 6}},
-			},
+			// TODO : need to differentiate the NULL from drop column and user defined NULL/NULL from add column
+			//{
+			//	Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit3, 't');",
+			//	Expected: []sql.Row{{"t", 0, 1, 0, 2, 2, 2, 0, 2, 3, 6, 6}},
+			//},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
 				Expected: []sql.Row{{"t", 2, 1, 0, 1, 6, 0, 1, 3, 4, 6, 12}},
 			},
-			{
-				//  TODO : verify 2 modified and 2 (added + modified = added) rows and cells??
-				//Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit4, 't');",
-				//Expected: []sql.Row{{"t", 0, 2, 0, 2, 6, 0, 2, 2, 4, 6, 12}},
-			},
+			// TODO : need to differentiate the NULL from drop column and user defined NULL/NULL from add column
+			//{
+			//	Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit4, 't');",
+			//	Expected: []sql.Row{{"t", 0, 2, 0, 2, 6, 0, 2, 2, 4, 6, 12}},
+			//},
 		},
 	},
 	{

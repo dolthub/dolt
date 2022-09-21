@@ -110,7 +110,7 @@ func printDiffSummary(ctx context.Context, td diff.TableDelta, colLen int) errha
 
 	keyless, err := td.IsKeyless(ctx)
 	if err != nil {
-		return nil
+		return errhand.BuildDError("").AddCause(err).Build()
 	}
 
 	if (acc.Adds + acc.Removes + acc.Changes + (acc.OldCellSize - acc.NewCellSize)) == 0 {
