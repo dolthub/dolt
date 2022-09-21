@@ -15,6 +15,7 @@
 package dfunctions
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -75,6 +76,94 @@ func getProllyRowMaps(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeS
 	return durable.ProllyMapFromIndex(idx), nil
 }
 
+func resolveNewFormatConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, ours bool) (*doltdb.Table, error) {
+	var idx durable.Index
+	var err error
+	if ours {
+		// todo: need to actually look at artifacts...
+		idx, err = tbl.GetRowData(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+	} else {
+		artifactIdx, err := tbl.GetArtifacts(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		artifactMap := durable.ProllyMapFromArtifactIndex(artifactIdx)
+		iter, err := artifactMap.IterAllConflicts(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		cnfArt, err := iter.Next(ctx)
+		if err == io.EOF {
+			// no conflicts, should be impossible
+			return nil, nil
+		}
+
+		baseRootVal, err := doltdb.LoadRootValueFromRootIshAddr(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh)
+		baseTbl, ok, err := baseRootVal.GetTable(ctx, tblName)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, doltdb.ErrTableNotFound
+		}
+
+		theirRootVal, err := doltdb.LoadRootValueFromRootIshAddr(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh)
+		theirTbl, ok, err := theirRootVal.GetTable(ctx, tblName)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, doltdb.ErrTableNotFound
+		}
+
+		baseIdx, err := baseTbl.GetRowData(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		ourIdx, err := tbl.GetRowData(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		theirIdx, err := theirTbl.GetRowData(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		baseMap := durable.ProllyMapFromIndex(baseIdx)
+		ourMap := durable.ProllyMapFromIndex(ourIdx)
+		theirMap := durable.ProllyMapFromIndex(theirIdx)
+		merged, err := prolly.MergeMaps(ctx, ourMap, theirMap, baseMap, func(left, right tree.Diff) (tree.Diff, bool) {
+			// resolve conflicts with right
+			if left.From != nil && ((left.To == nil) != (right.To == nil)) {
+				return right, true
+			}
+			if bytes.Compare(left.To, right.To) == 0 {
+				return left, true
+			} else {
+				return right, true
+			}
+		})
+		if err != nil {
+			return nil, err
+		}
+		idx = durable.IndexFromProllyMap(merged)
+	}
+
+	newTbl, err := tbl.UpdateRows(ctx, idx)
+	if err != nil {
+		return nil, err
+	}
+	return newTbl, nil
+}
+
 func resolveOldFormatConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, ours bool) (*doltdb.Table, error) {
 	cnfReader, err := merge.NewConflictReader(ctx, tbl, tblName)
 	if err != nil {
@@ -126,139 +215,6 @@ func resolveOldFormatConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName stri
 		return nil, err
 	}
 	return newTbl, nil
-}
-
-func resolveNewFormatConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, ours bool) (*doltdb.Table, error) {
-	var idx durable.Index
-	var err error
-	if ours {
-		idx, err = tbl.GetRowData(ctx)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		artifactIdx, err := tbl.GetArtifacts(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		artifactMap := durable.ProllyMapFromArtifactIndex(artifactIdx)
-		iter, err := artifactMap.IterAllConflicts(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		cnfArt, err := iter.Next(ctx)
-		if err == io.EOF {
-			// no conflicts, should be impossible
-			return nil, nil
-		}
-
-		baseRootVal, err := doltdb.LoadRootValueFromRootIshAddr(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh)
-		baseTbl, ok, err := baseRootVal.GetTable(ctx, tblName)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, doltdb.ErrTableNotFound
-		}
-
-		baseIdx, err := baseTbl.GetRowData(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		theirRootVal, err := doltdb.LoadRootValueFromRootIshAddr(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh)
-		theirTbl, ok, err := theirRootVal.GetTable(ctx, tblName)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, doltdb.ErrTableNotFound
-		}
-
-		theirIdx, err := theirTbl.GetRowData(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		baseMap := durable.ProllyMapFromIndex(baseIdx)
-		theirMap := durable.ProllyMapFromIndex(theirIdx)
-		merged, err := prolly.MergeMaps(ctx, baseMap, theirMap, baseMap, func(left, right tree.Diff) (tree.Diff, bool) {
-			return right, true
-		})
-		if err != nil {
-			return nil, err
-		}
-		idx = durable.IndexFromProllyMap(merged)
-	}
-
-	newTbl, err := tbl.UpdateRows(ctx, idx)
-	if err != nil {
-		return nil, err
-	}
-	return newTbl, nil
-	// TODO: did I need any of this? delete after testing
-	//artifactIdx, err := tbl.GetArtifacts(ctx)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//artifactMap := durable.ProllyMapFromArtifactIndex(artifactIdx)
-	//iter, err := artifactMap.IterAllConflicts(ctx)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//for {
-	//	cnfArt, err := iter.Next(ctx)
-	//	if err == io.EOF {
-	//		break
-	//	}
-	//
-	//	baseRows, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh, tblName)
-	//	if err != nil {
-	//		return err
-	//	}
-	//
-	//	ourIdx, err := tbl.GetRowData(ctx)
-	//	if err != nil {
-	//		return err
-	//	}
-	//	ourRows := durable.ProllyMapFromIndex(ourIdx)
-	//
-	//	theirRows, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh, tblName)
-	//	if err != nil {
-	//		return err
-	//	}
-	//
-	//	var bRow val.Tuple
-	//	err = baseRows.Get(ctx, cnfArt.Key, func(k, v val.Tuple) error {
-	//		bRow = v
-	//		return nil
-	//	})
-	//
-	//	var oRow val.Tuple
-	//	err = ourRows.Get(ctx, cnfArt.Key, func(k, v val.Tuple) error {
-	//		oRow = v
-	//		return nil
-	//	})
-	//
-	//	var tRow val.Tuple
-	//	err = theirRows.Get(ctx, cnfArt.Key, func(k, v val.Tuple) error {
-	//		tRow = v
-	//		return nil
-	//	})
-	//
-	//	bRow.Count()
-	//	oRow.Count()
-	//	tRow.Count()
-	//
-	//	newTbl, err = tbl.UpdateRows(ctx, ourIdx)
-	//	if err != nil {
-	//		return err
-	//	}
-	//}
 }
 
 func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
