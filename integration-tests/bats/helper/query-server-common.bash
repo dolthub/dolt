@@ -235,6 +235,14 @@ stop_sql_server() {
 #
 server_query() {
     let PORT="$$ % (65536-1024) + 1024"
+    server_query_with_port "$PORT" "$@"
+}
+
+# See server_query, but first parameter is the port sql-server is running on,
+# every other parameter is positionally one later.
+server_query_with_port() {
+    let PORT="$1"
+    shift
     PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
     echo Executing server_query
     python3 -u -c "$PYTHON_QUERY_SCRIPT" -- "$PYTEST_DIR" "$1" "$PORT" "$2" "$3" "$4" "$5" "$6" "$7"

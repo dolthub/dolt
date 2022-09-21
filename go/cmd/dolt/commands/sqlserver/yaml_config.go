@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 )
 
 func strPtr(s string) *string {
@@ -450,7 +451,7 @@ func (cfg YAMLConfig) Socket() string {
 	return *cfg.ListenerConfig.Socket
 }
 
-func (cfg YAMLConfig) ClusterConfig() ClusterConfig {
+func (cfg YAMLConfig) ClusterConfig() cluster.Config {
 	if cfg.ClusterCfg == nil {
 		return nil
 	}
@@ -477,8 +478,8 @@ func (c standbyRemoteYAMLConfig) RemoteURLTemplate() string {
 	return c.RemoteURLTemplate_field
 }
 
-func (c *ClusterYAMLConfig) StandbyRemotes() []StandbyRemoteConfig {
-	ret := make([]StandbyRemoteConfig, len(c.StandbyRemotes_field))
+func (c *ClusterYAMLConfig) StandbyRemotes() []cluster.StandbyRemoteConfig {
+	ret := make([]cluster.StandbyRemoteConfig, len(c.StandbyRemotes_field))
 	for i := range c.StandbyRemotes_field {
 		ret[i] = c.StandbyRemotes_field[i]
 	}
@@ -493,7 +494,7 @@ func (c *ClusterYAMLConfig) BootstrapEpoch() int {
 	return c.BootstrapEpoch_field
 }
 
-func (c *ClusterYAMLConfig) RemotesAPIConfig() RemotesAPIConfig {
+func (c *ClusterYAMLConfig) RemotesAPIConfig() cluster.RemotesAPIConfig {
 	return c.Remotesapi
 }
 

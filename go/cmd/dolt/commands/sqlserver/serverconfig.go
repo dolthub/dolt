@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 )
 
 // LogLevel defines the available levels of logging for the server.
@@ -149,23 +150,7 @@ type ServerConfig interface {
 	// replication.
 	RemotesapiPort() *int
 	// ClusterConfig is the configuration for clustering in this sql-server.
-	ClusterConfig() ClusterConfig
-}
-
-type ClusterConfig interface {
-	StandbyRemotes() []StandbyRemoteConfig
-	BootstrapRole() string
-	BootstrapEpoch() int
-	RemotesAPIConfig() RemotesAPIConfig
-}
-
-type RemotesAPIConfig interface {
-	Port() int
-}
-
-type StandbyRemoteConfig interface {
-	Name() string
-	RemoteURLTemplate() string
+	ClusterConfig() cluster.Config
 }
 
 type commandLineServerConfig struct {
@@ -293,7 +278,7 @@ func (cfg *commandLineServerConfig) RemotesapiPort() *int {
 	return cfg.remotesapiPort
 }
 
-func (cfg *commandLineServerConfig) ClusterConfig() ClusterConfig {
+func (cfg *commandLineServerConfig) ClusterConfig() cluster.Config {
 	return nil
 }
 
@@ -480,7 +465,7 @@ func ValidateConfig(config ServerConfig) error {
 	return ValidateClusterConfig(config.ClusterConfig())
 }
 
-func ValidateClusterConfig(config ClusterConfig) error {
+func ValidateClusterConfig(config cluster.Config) error {
 	if config == nil {
 		return nil
 	}
