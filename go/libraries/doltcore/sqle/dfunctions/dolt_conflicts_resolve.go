@@ -128,6 +128,139 @@ func resolveOldFormatConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName stri
 	return newTbl, nil
 }
 
+func resolveNewFormatConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, ours bool) (*doltdb.Table, error) {
+	var idx durable.Index
+	var err error
+	if ours {
+		idx, err = tbl.GetRowData(ctx)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		artifactIdx, err := tbl.GetArtifacts(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		artifactMap := durable.ProllyMapFromArtifactIndex(artifactIdx)
+		iter, err := artifactMap.IterAllConflicts(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		cnfArt, err := iter.Next(ctx)
+		if err == io.EOF {
+			// no conflicts, should be impossible
+			return nil, nil
+		}
+
+		baseRootVal, err := doltdb.LoadRootValueFromRootIshAddr(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh)
+		baseTbl, ok, err := baseRootVal.GetTable(ctx, tblName)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, doltdb.ErrTableNotFound
+		}
+
+		baseIdx, err := baseTbl.GetRowData(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		theirRootVal, err := doltdb.LoadRootValueFromRootIshAddr(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh)
+		theirTbl, ok, err := theirRootVal.GetTable(ctx, tblName)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, doltdb.ErrTableNotFound
+		}
+
+		theirIdx, err := theirTbl.GetRowData(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		baseMap := durable.ProllyMapFromIndex(baseIdx)
+		theirMap := durable.ProllyMapFromIndex(theirIdx)
+		merged, err := prolly.MergeMaps(ctx, baseMap, theirMap, baseMap, func(left, right tree.Diff) (tree.Diff, bool) {
+			return right, true
+		})
+		if err != nil {
+			return nil, err
+		}
+		idx = durable.IndexFromProllyMap(merged)
+	}
+
+	newTbl, err := tbl.UpdateRows(ctx, idx)
+	if err != nil {
+		return nil, err
+	}
+	return newTbl, nil
+	// TODO: did I need any of this? delete after testing
+	//artifactIdx, err := tbl.GetArtifacts(ctx)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//artifactMap := durable.ProllyMapFromArtifactIndex(artifactIdx)
+	//iter, err := artifactMap.IterAllConflicts(ctx)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//for {
+	//	cnfArt, err := iter.Next(ctx)
+	//	if err == io.EOF {
+	//		break
+	//	}
+	//
+	//	baseRows, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh, tblName)
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	ourIdx, err := tbl.GetRowData(ctx)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	ourRows := durable.ProllyMapFromIndex(ourIdx)
+	//
+	//	theirRows, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh, tblName)
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	var bRow val.Tuple
+	//	err = baseRows.Get(ctx, cnfArt.Key, func(k, v val.Tuple) error {
+	//		bRow = v
+	//		return nil
+	//	})
+	//
+	//	var oRow val.Tuple
+	//	err = ourRows.Get(ctx, cnfArt.Key, func(k, v val.Tuple) error {
+	//		oRow = v
+	//		return nil
+	//	})
+	//
+	//	var tRow val.Tuple
+	//	err = theirRows.Get(ctx, cnfArt.Key, func(k, v val.Tuple) error {
+	//		tRow = v
+	//		return nil
+	//	})
+	//
+	//	bRow.Count()
+	//	oRow.Count()
+	//	tRow.Count()
+	//
+	//	newTbl, err = tbl.UpdateRows(ctx, ourIdx)
+	//	if err != nil {
+	//		return err
+	//	}
+	//}
+}
+
 func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
 	newRoot := root
 	for _, tblName := range tblNames {
@@ -162,108 +295,7 @@ func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.R
 
 		var newTbl *doltdb.Table
 		if tbl.Format() == types.Format_DOLT {
-			var idx durable.Index
-			if ours {
-				idx, err = tbl.GetRowData(ctx)
-				if err != nil {
-					return err
-				}
-			} else {
-				artifactIdx, err := tbl.GetArtifacts(ctx)
-				if err != nil {
-					return err
-				}
-
-				artifactMap := durable.ProllyMapFromArtifactIndex(artifactIdx)
-				iter, err := artifactMap.IterAllConflicts(ctx)
-				if err != nil {
-					return err
-				}
-
-				cnfArt, err := iter.Next(ctx)
-				if err == io.EOF {
-					break
-				}
-				theirRootVal, err := doltdb.LoadRootValueFromRootIshAddr(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh)
-				theirTbl, ok, err := theirRootVal.GetTable(ctx, tblName)
-				if err != nil {
-					return err
-				}
-				if !ok {
-					return doltdb.ErrTableNotFound
-				}
-
-				idx, err = theirTbl.GetRowData(ctx)
-				if err != nil {
-					return err
-				}
-			}
-
-			newTbl, err = tbl.UpdateRows(ctx, idx)
-			if err != nil {
-				return err
-			}
-			// TODO: did I need any of this? delete after testing
-			//artifactIdx, err := tbl.GetArtifacts(ctx)
-			//if err != nil {
-			//	return err
-			//}
-			//
-			//artifactMap := durable.ProllyMapFromArtifactIndex(artifactIdx)
-			//iter, err := artifactMap.IterAllConflicts(ctx)
-			//if err != nil {
-			//	return err
-			//}
-			//
-			//for {
-			//	cnfArt, err := iter.Next(ctx)
-			//	if err == io.EOF {
-			//		break
-			//	}
-			//
-			//	baseRows, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh, tblName)
-			//	if err != nil {
-			//		return err
-			//	}
-			//
-			//	ourIdx, err := tbl.GetRowData(ctx)
-			//	if err != nil {
-			//		return err
-			//	}
-			//	ourRows := durable.ProllyMapFromIndex(ourIdx)
-			//
-			//	theirRows, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh, tblName)
-			//	if err != nil {
-			//		return err
-			//	}
-			//
-			//	var bRow val.Tuple
-			//	err = baseRows.Get(ctx, cnfArt.Key, func(k, v val.Tuple) error {
-			//		bRow = v
-			//		return nil
-			//	})
-			//
-			//	var oRow val.Tuple
-			//	err = ourRows.Get(ctx, cnfArt.Key, func(k, v val.Tuple) error {
-			//		oRow = v
-			//		return nil
-			//	})
-			//
-			//	var tRow val.Tuple
-			//	err = theirRows.Get(ctx, cnfArt.Key, func(k, v val.Tuple) error {
-			//		tRow = v
-			//		return nil
-			//	})
-			//
-			//	bRow.Count()
-			//	oRow.Count()
-			//	tRow.Count()
-			//
-			//	newTbl, err = tbl.UpdateRows(ctx, ourIdx)
-			//	if err != nil {
-			//		return err
-			//	}
-			//}
+			newTbl, err = resolveNewFormatConflicts(ctx, tbl, tblName, sch, ours)
 		} else {
 			newTbl, err = resolveOldFormatConflicts(ctx, tbl, tblName, sch, ours)
 		}
