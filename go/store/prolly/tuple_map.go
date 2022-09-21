@@ -173,55 +173,18 @@ func DiffMapsKeyRange(ctx context.Context, from, to Map, start, stop val.Tuple, 
 	return tree.DiffKeyRangeOrderedTrees(ctx, from.tuples, to.tuples, start, stop, cb)
 }
 
-func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
-	noopListen := func(right tree.Diff) {}
-
+func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, tree.MergeStats, error) {
 	serializer := message.NewProllyMapSerializer(left.valDesc, base.NodeStore().Pool())
-	tuples, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, noopListen, serializer)
+	tuples, stats, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
 	if err != nil {
-		return Map{}, err
+		return Map{}, tree.MergeStats{}, err
 	}
 
 	return Map{
 		tuples:  tuples,
 		keyDesc: base.keyDesc,
 		valDesc: base.valDesc,
-	}, nil
-}
-
-type MergeStats struct {
-	Adds          int
-	Modifications int
-	Removes       int
-}
-
-type StatFn func(stats MergeStats)
-
-func MergeMapsWithStats(ctx context.Context, left, right, base Map, cb tree.CollisionFn, scb StatFn) (Map, error) {
-	stats := MergeStats{}
-	listener := func(right tree.Diff) {
-		switch right.Type {
-		case tree.AddedDiff:
-			stats.Adds++
-		case tree.RemovedDiff:
-			stats.Removes++
-		case tree.ModifiedDiff:
-			stats.Modifications++
-		}
-		scb(stats)
-	}
-
-	serializer := message.NewProllyMapSerializer(left.valDesc, base.NodeStore().Pool())
-	tuples, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, listener, serializer)
-	if err != nil {
-		return Map{}, err
-	}
-
-	return Map{
-		tuples:  tuples,
-		keyDesc: base.keyDesc,
-		valDesc: base.valDesc,
-	}, nil
+	}, stats, nil
 }
 
 // NodeStore returns the map's NodeStore

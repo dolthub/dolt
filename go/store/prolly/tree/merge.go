@@ -30,9 +30,11 @@ const patchBufferSize = 1024
 // of the tuples, or register a conflict if such a merge is not possible.
 type CollisionFn func(left, right Diff) (Diff, bool)
 
-// PatchListenerFn is a callback that receives any patches that are being
-// applied to the left.
-type PatchListenerFn func(right Diff)
+type MergeStats struct {
+	Adds          int
+	Modifications int
+	Removes       int
+}
 
 // ThreeWayMerge implements a three-way merge algorithm using |base| as the common ancestor, |right| as
 // the source branch, and |left| as the destination branch. Both |left| and |right| are diff'd against
@@ -45,19 +47,18 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 	ns NodeStore,
 	left, right, base Node,
 	collide CollisionFn,
-	listener PatchListenerFn,
 	order O,
 	serializer S,
-) (final Node, err error) {
+) (final Node, stats MergeStats, err error) {
 
 	ld, err := DifferFromRoots[K](ctx, ns, ns, base, left, order)
 	if err != nil {
-		return Node{}, err
+		return Node{}, MergeStats{}, err
 	}
 
 	rd, err := DifferFromRoots[K](ctx, ns, ns, base, right, order)
 	if err != nil {
-		return Node{}, err
+		return Node{}, MergeStats{}, err
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -70,7 +71,7 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 				err = cerr
 			}
 		}()
-		err = sendPatches(ctx, ld, rd, patches, collide, listener)
+		stats, err = sendPatches(ctx, ld, rd, patches, collide)
 		return
 	})
 
@@ -81,10 +82,10 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 	})
 
 	if err = eg.Wait(); err != nil {
-		return Node{}, err
+		return Node{}, MergeStats{}, err
 	}
 
-	return final, nil
+	return final, stats, nil
 }
 
 // patchBuffer implements MutationIter. It consumes Diffs
@@ -133,8 +134,7 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 	l, r Differ[K, O],
 	buf patchBuffer,
 	cb CollisionFn,
-	lcb PatchListenerFn,
-) (err error) {
+) (stats MergeStats, err error) {
 	var (
 		left, right Diff
 		lok, rok    = true, true
@@ -145,7 +145,7 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 		err, lok = nil, false
 	}
 	if err != nil {
-		return err
+		return MergeStats{}, err
 	}
 
 	right, err = r.Next(ctx)
@@ -153,7 +153,7 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 		err, rok = nil, false
 	}
 	if err != nil {
-		return err
+		return MergeStats{}, err
 	}
 
 	for lok && rok {
@@ -167,32 +167,32 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 				err, lok = nil, false
 			}
 			if err != nil {
-				return err
+				return MergeStats{}, err
 			}
 
 		case cmp > 0:
 			err = buf.sendPatch(ctx, right)
 			if err != nil {
-				return err
+				return MergeStats{}, err
 			}
-			lcb(right)
+			updateStats(right, &stats)
 
 			right, err = r.Next(ctx)
 			if err == io.EOF {
 				err, rok = nil, false
 			}
 			if err != nil {
-				return err
+				return MergeStats{}, err
 			}
 
 		case cmp == 0:
 			resolved, ok := cb(left, right)
 			if ok {
 				err = buf.sendPatch(ctx, resolved)
-				lcb(right)
+				updateStats(right, &stats)
 			}
 			if err != nil {
-				return err
+				return MergeStats{}, err
 			}
 
 			left, err = l.Next(ctx)
@@ -200,7 +200,7 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 				err, lok = nil, false
 			}
 			if err != nil {
-				return err
+				return MergeStats{}, err
 			}
 
 			right, err = r.Next(ctx)
@@ -208,31 +208,42 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 				err, rok = nil, false
 			}
 			if err != nil {
-				return err
+				return MergeStats{}, err
 			}
 		}
 	}
 
 	if lok {
 		// already in left
-		return nil
+		return stats, nil
 	}
 
 	for rok {
 		err = buf.sendPatch(ctx, right)
 		if err != nil {
-			return err
+			return MergeStats{}, err
 		}
-		lcb(right)
+		updateStats(right, &stats)
 
 		right, err = r.Next(ctx)
 		if err == io.EOF {
 			err, rok = nil, false
 		}
 		if err != nil {
-			return err
+			return MergeStats{}, err
 		}
 	}
 
-	return nil
+	return stats, nil
+}
+
+func updateStats(right Diff, stats *MergeStats) {
+	switch right.Type {
+	case AddedDiff:
+		stats.Adds++
+	case RemovedDiff:
+		stats.Removes++
+	case ModifiedDiff:
+		stats.Modifications++
+	}
 }

@@ -296,10 +296,8 @@ func (m ArtifactMap) iterAllOfTypes(ctx context.Context, artTypes ...ArtifactTyp
 }
 
 func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tree.CollisionFn) (ArtifactMap, error) {
-	noopListen := func(right tree.Diff) {}
-
 	serializer := message.NewMergeArtifactSerializer(base.keyDesc, left.tuples.NodeStore.Pool())
-	tuples, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, noopListen, serializer)
+	tuples, _, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
 	if err != nil {
 		return ArtifactMap{}, err
 	}

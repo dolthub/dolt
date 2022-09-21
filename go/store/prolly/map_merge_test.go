@@ -69,7 +69,7 @@ func testEqualMapMerge(t *testing.T, sz int) {
 	om, _ := makeProllyMap(t, sz)
 	m := om.(Map)
 	ctx := context.Background()
-	mm, err := MergeMaps(ctx, m, m, m, panicOnConflict)
+	mm, _, err := MergeMaps(ctx, m, m, m, panicOnConflict)
 	require.NoError(t, err)
 	assert.NotNil(t, mm)
 	assert.Equal(t, m.HashOf(), mm.HashOf())
@@ -83,7 +83,7 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.No
 	right := applyMutationSet(t, base, rightEdits)
 
 	ctx := context.Background()
-	final, err := MergeMaps(ctx, left, right, base, panicOnConflict)
+	final, stats, err := MergeMaps(ctx, left, right, base, panicOnConflict)
 	assert.NoError(t, err)
 
 	var adds, modifications, deletes int
@@ -144,16 +144,9 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.No
 		assert.NoError(t, err)
 	}
 
-	var finalStats MergeStats
-	scb := func(s MergeStats) {
-		finalStats = s
-	}
-
-	_, err = MergeMapsWithStats(ctx, left, right, base, panicOnConflict, scb)
-	require.NoError(t, err)
-	require.Equal(t, adds, finalStats.Adds)
-	require.Equal(t, modifications, finalStats.Modifications)
-	require.Equal(t, deletes, finalStats.Removes)
+	require.Equal(t, adds, stats.Adds)
+	require.Equal(t, modifications, stats.Modifications)
+	require.Equal(t, deletes, stats.Removes)
 }
 
 func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeStore) {
@@ -187,7 +180,7 @@ func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeSt
 	require.NoError(t, err)
 
 	idx := 0
-	final, err := MergeMaps(ctx, leftMap, rightMap, base, func(l, r tree.Diff) (merged tree.Diff, ok bool) {
+	final, _, err := MergeMaps(ctx, leftMap, rightMap, base, func(l, r tree.Diff) (merged tree.Diff, ok bool) {
 		if l.Type == r.Type && bytes.Equal(l.To, r.To) {
 			// convergent edit
 			return l, true
