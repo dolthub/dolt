@@ -114,7 +114,11 @@ type MetricsYAMLConfig struct {
 }
 
 type RemotesapiYAMLConfig struct {
-	Port *int `yaml:"port"`
+	Port_field *int `yaml:"port"`
+}
+
+func (r RemotesapiYAMLConfig) Port() int {
+	return *r.Port_field
 }
 
 type UserSessionVars struct {
@@ -134,6 +138,7 @@ type YAMLConfig struct {
 	CfgDirStr         *string               `yaml:"cfg_dir"`
 	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
 	RemotesapiConfig  RemotesapiYAMLConfig  `yaml:"remotesapi"`
+	ClusterCfg        *ClusterYAMLConfig    `yaml:"cluster"`
 	PrivilegeFile     *string               `yaml:"privilege_file"`
 	Vars              []UserSessionVars     `yaml:"user_session_vars"`
 	Jwks              []engine.JwksConfig   `yaml:"jwks"`
@@ -340,7 +345,7 @@ func (cfg YAMLConfig) MetricsPort() int {
 }
 
 func (cfg YAMLConfig) RemotesapiPort() *int {
-	return cfg.RemotesapiConfig.Port
+	return cfg.RemotesapiConfig.Port_field
 }
 
 // PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
@@ -443,4 +448,59 @@ func (cfg YAMLConfig) Socket() string {
 		return defaultUnixSocketFilePath
 	}
 	return *cfg.ListenerConfig.Socket
+}
+
+func (cfg YAMLConfig) ClusterConfig() ClusterConfig {
+	if cfg.ClusterCfg == nil {
+		return nil
+	}
+	return cfg.ClusterCfg
+}
+
+type ClusterYAMLConfig struct {
+	StandbyRemotes_field []standbyRemoteYAMLConfig   `yaml:"standby_remotes"`
+	BootstrapRole_field  string                      `yaml:"bootstrap_role"`
+	BootstrapEpoch_field int                         `yaml:"bootstrap_epoch"`
+	Remotesapi           clusterRemotesAPIYAMLConfig `yaml:"remotesapi"`
+}
+
+type standbyRemoteYAMLConfig struct {
+	Name_field              string `yaml:"name"`
+	RemoteURLTemplate_field string `yaml:"remote_url_template"`
+}
+
+func (c standbyRemoteYAMLConfig) Name() string {
+	return c.Name_field
+}
+
+func (c standbyRemoteYAMLConfig) RemoteURLTemplate() string {
+	return c.RemoteURLTemplate_field
+}
+
+func (c *ClusterYAMLConfig) StandbyRemotes() []StandbyRemoteConfig {
+	ret := make([]StandbyRemoteConfig, len(c.StandbyRemotes_field))
+	for i := range c.StandbyRemotes_field {
+		ret[i] = c.StandbyRemotes_field[i]
+	}
+	return ret
+}
+
+func (c *ClusterYAMLConfig) BootstrapRole() string {
+	return c.BootstrapRole_field
+}
+
+func (c *ClusterYAMLConfig) BootstrapEpoch() int {
+	return c.BootstrapEpoch_field
+}
+
+func (c *ClusterYAMLConfig) RemotesAPIConfig() RemotesAPIConfig {
+	return c.Remotesapi
+}
+
+type clusterRemotesAPIYAMLConfig struct {
+	P int `yaml:"port"`
+}
+
+func (c clusterRemotesAPIYAMLConfig) Port() int {
+	return c.P
 }
