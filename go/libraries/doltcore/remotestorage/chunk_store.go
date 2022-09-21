@@ -120,7 +120,8 @@ type DoltChunkStore struct {
 func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, path, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
 	var repoId *remotesapi.RepoId
 
-	tokens := strings.Split(strings.Trim(path, "/"), "/")
+	path = strings.Trim(path, "/")
+	tokens := strings.Split(path, "/")
 	if len(tokens) == 2 {
 		org := tokens[0]
 		repoName := tokens[1]
@@ -1263,7 +1264,7 @@ func (dcs *DoltChunkStore) AddTableFilesToManifest(ctx context.Context, fileIdTo
 	}
 
 	id, token := dcs.getRepoId()
-	dcs.logf("Adding Table files to repo: %s/%s -\n%s", id.Org, id.RepoName, debugStr)
+	dcs.logf("Adding Table files to repo: %s -\n%s", dcs.repoPath, debugStr)
 	atReq := &remotesapi.AddTableFilesRequest{
 		RepoId:         id,
 		RepoToken:      token,

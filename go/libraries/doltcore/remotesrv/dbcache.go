@@ -21,7 +21,7 @@ import (
 )
 
 type DBCache interface {
-	Get(org, repo, nbfVerStr string) (RemoteSrvStore, error)
+	Get(path, nbfVerStr string) (RemoteSrvStore, error)
 }
 
 type RemoteSrvStore interface {
