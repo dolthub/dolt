@@ -120,7 +120,7 @@ func resolveNewFormatConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName stri
 	}
 
 	// resolve conflicts with left
-	merged, err := prolly.MergeMaps(ctx, ourMap, theirMap, baseMap, func(left, right tree.Diff) (tree.Diff, bool) {
+	merged, _, err := prolly.MergeMaps(ctx, ourMap, theirMap, baseMap, func(left, right tree.Diff) (tree.Diff, bool) {
 		if left.From != nil && ((left.To == nil) != (right.To == nil)) {
 			return left, true
 		}
