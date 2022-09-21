@@ -141,15 +141,29 @@ func doltCommit(ctx *sql.Context,
 	tx *DoltTransaction,
 	commit *doltdb.PendingCommit,
 	workingSet *doltdb.WorkingSet,
-	hash hash.Hash,
+	currHash hash.Hash,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	headRef, err := workingSet.Ref().ToHeadRef()
 	if err != nil {
 		return nil, nil, err
 	}
 
+	cm, err := tx.dbData.Ddb.ResolveCommitRef(ctx, headRef)
+	// TODO: branch not found?
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// TODO: dumb to resolve just to get a hash, wasted effort
+	headHash, err := cm.HashOf()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	commit.CommitOptions.Parents = append(append([]hash.Hash{}, headHash), commit.CommitOptions.Parents...)
+
 	workingSet = workingSet.ClearMerge()
-	newCommit, err := tx.dbData.Ddb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, commit, workingSet, hash, tx.getWorkingSetMeta(ctx))
+	newCommit, err := tx.dbData.Ddb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, commit, workingSet, currHash, tx.getWorkingSetMeta(ctx))
 	return workingSet, newCommit, err
 }
 

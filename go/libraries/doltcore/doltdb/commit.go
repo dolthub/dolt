@@ -231,21 +231,9 @@ func (ddb *DoltDB) NewPendingCommit(
 	}
 	roots.Staged = newstaged
 
-	ds, err := ddb.db.GetDataset(ctx, headRef.String())
-	if err != nil {
-		return nil, err
-	}
-
-	nomsHeadAddr, hasHead := ds.MaybeHeadAddr()
 	var parents []hash.Hash
-	if hasHead {
-		parents = append(parents, nomsHeadAddr)
-	}
-
 	for _, pc := range parentCommits {
-		if pc.dCommit.Addr() != nomsHeadAddr {
-			parents = append(parents, pc.dCommit.Addr())
-		}
+		parents = append(parents, pc.dCommit.Addr())
 	}
 
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
