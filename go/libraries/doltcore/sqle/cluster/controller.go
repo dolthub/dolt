@@ -70,6 +70,9 @@ func NewController(cfg Config, pCfg config.ReadWriteConfig) (*Controller, error)
 }
 
 func (c *Controller) ManageSystemVariables(variables sqlvars) {
+	if c == nil {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.systemVars = variables
@@ -77,7 +80,17 @@ func (c *Controller) ManageSystemVariables(variables sqlvars) {
 }
 
 func (c *Controller) RegisterStoredProcedures(store procedurestore) {
+	if c == nil {
+		return
+	}
 	store.Register(newAssumeRoleProcedure(c))
+}
+
+func (c *Controller) RemoteSrvPort() int {
+	if c == nil {
+		return -1
+	}
+	return c.cfg.RemotesAPIConfig().Port()
 }
 
 func (c *Controller) refreshSystemVars() {

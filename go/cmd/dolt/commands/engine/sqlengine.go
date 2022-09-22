@@ -99,10 +99,8 @@ func NewSqlEngine(
 	}
 	pro = pro.WithRemoteDialer(mrEnv.RemoteDialProvider())
 
-	if config.ClusterController != nil {
-		config.ClusterController.ManageSystemVariables(sql.SystemVariables)
-		config.ClusterController.RegisterStoredProcedures(pro)
-	}
+	config.ClusterController.ManageSystemVariables(sql.SystemVariables)
+	config.ClusterController.RegisterStoredProcedures(pro)
 
 	// Load in privileges from file, if it exists
 	persister := mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
