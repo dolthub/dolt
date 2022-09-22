@@ -1290,6 +1290,39 @@ SQL
     [[ "$output" =~ "violation" ]] || false
 }
 
+@test "foreign-keys: Resolve with stored catches violations" {
+    dolt sql <<SQL
+ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);
+INSERT INTO parent VALUES (0,0,0);
+INSERT INTO child VALUES (0,0,0);
+SQL
+    dolt add -A
+    dolt commit -m "added tables"
+    dolt branch other
+    dolt sql <<SQL
+INSERT INTO parent VALUES (1,1,1);
+INSERT INTO child VALUES (1,1,1);
+SQL
+    dolt add -A
+    dolt commit -m "added 1s"
+    dolt checkout other
+    dolt sql <<SQL
+INSERT INTO parent VALUES (1,2,2);
+INSERT INTO child VALUES (1,2,2);
+SQL
+    dolt add -A
+    dolt commit -m "added 2s"
+    dolt checkout main
+    dolt merge other -m "merge other"
+    # TODO: it does error and prevent the merge, but not in the same way
+    run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'parent')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "conflict detected" ]] || false
+    run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'child')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "conflict detected" ]] || false
+}
+
 @test "foreign-keys: FKs move with the working set on checkout" {
     dolt add . && dolt commit -m "added parent and child tables"
     dolt branch other

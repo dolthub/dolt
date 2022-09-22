@@ -435,6 +435,49 @@ teardown() {
     [[ "$output" =~ "Merge:" ]] || false
 }
 
+@test "1pk5col-ints: generate a merge conflict and resolve with ours using stored procedure" {
+    dolt add test
+    dolt commit -m "added test table"
+    dolt branch test-branch
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
+    dolt add test
+    dolt commit -m "added test row"
+    dolt checkout test-branch
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 6)"
+    dolt add test
+    dolt commit -m "added conflicting test row"
+    dolt checkout main
+    run dolt merge test-branch --no-commit
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CONFLICT (content)" ]]
+    run dolt conflicts cat test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]] ]] || false
+    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+theirs[[:space:]] ]] || false
+
+    EXPECTED=$(echo -e "table,num_conflicts\ntest,1")
+    run dolt sql -r csv -q 'SELECT * FROM dolt_conflicts'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    run dolt sql -q "call dolt_conflicts_resolve('--ours', 'test')"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "select * from test"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ \|[[:space:]]+5 ]] || false
+    [[ ! "$output" =~ \|[[:space:]]+6 ]] || false
+    run dolt conflicts cat test
+    [[ ! "$output" =~ "ours" ]] || false
+    [[ ! "$output" =~ "theirs" ]] || false
+    dolt add test
+    dolt commit -m "merged and resolved conflict"
+    run dolt log
+    [[ "$output" =~ "added test row" ]] || false
+    [[ "$output" =~ "added conflicting test row" ]] || false
+    [[ "$output" =~ "merged and resolved conflict" ]] || false
+    [[ "$output" =~ "Merge:" ]] || false
+}
+
 @test "1pk5col-ints: generate a merge conflict and try to roll back using dolt merge --abort" {
     dolt add test
     dolt commit -m "added test table"
@@ -482,6 +525,26 @@ teardown() {
     run dolt conflicts resolve --theirs test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+    run dolt sql -q "select * from test"
+    [[ "$output" =~ \|[[:space:]]+6 ]] || false
+    [[ ! "$output" =~ "|5" ]] || false
+}
+
+@test "1pk5col-ints: generate a merge conflict and resolve with theirs using stored procedure" {
+    dolt add test
+    dolt commit -m "added test table"
+    dolt branch test-branch
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
+    dolt add test
+    dolt commit -m "added test row"
+    dolt checkout test-branch
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 6)"
+    dolt add test
+    dolt commit -m "added conflicting test row"
+    dolt checkout main
+    dolt merge test-branch
+    run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'test')"
+    [ "$status" -eq 0 ]
     run dolt sql -q "select * from test"
     [[ "$output" =~ \|[[:space:]]+6 ]] || false
     [[ ! "$output" =~ "|5" ]] || false

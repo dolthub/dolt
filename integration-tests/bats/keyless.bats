@@ -425,6 +425,31 @@ SQL
     [[ "${lines[1]}" = "6,6" ]] || false
 }
 
+@test "keyless: merge duplicate deletes with stored procedure" {
+    make_dupe_table
+
+    dolt branch left
+    dolt checkout -b right
+
+    dolt sql -q "DELETE FROM dupe LIMIT 2;"
+    dolt commit -am "deleted two rows on right"
+
+    dolt checkout left
+    dolt sql -q "DELETE FROM dupe LIMIT 4;"
+    dolt commit -am "deleted four rows on left"
+
+    run dolt merge right -m "merge"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+
+    run dolt sql -q "call dolt_conflicts_resolve('--ours', 'dupe')"
+    [ $status -eq 0 ]
+    dolt commit -am "resolved"
+    run dolt sql -q "select sum(c0), sum(c1) from dupe" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "6,6" ]] || false
+}
+
 @test "keyless: diff duplicate updates" {
     make_dupe_table
 
@@ -466,6 +491,31 @@ SQL
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt conflicts resolve --theirs dupe
+    [ $status -eq 0 ]
+    dolt commit -am "resolved"
+    run dolt sql -q "select sum(c0), sum(c1) from dupe" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "10,12" ]] || false
+}
+
+@test "keyless: merge duplicate updates with stored procedure" {
+    make_dupe_table
+
+    dolt branch left
+    dolt checkout -b right
+
+    dolt sql -q "UPDATE dupe SET c1 = 2 LIMIT 2;"
+    dolt commit -am "updated two rows on right"
+
+    dolt checkout left
+    dolt sql -q "UPDATE dupe SET c1 = 2 LIMIT 4;"
+    dolt commit -am "updated four rows on left"
+
+    run dolt merge right -m "merge"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+
+    call dolt sql -q "call dolt_conflicts_resolve('--theirs', 'dupe')"
     [ $status -eq 0 ]
     dolt commit -am "resolved"
     run dolt sql -q "select sum(c0), sum(c1) from dupe" -r csv
