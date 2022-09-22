@@ -25,6 +25,7 @@ import (
 )
 
 type Role string
+
 const RolePrimary Role = "primary"
 const RoleStandby Role = "standby"
 
