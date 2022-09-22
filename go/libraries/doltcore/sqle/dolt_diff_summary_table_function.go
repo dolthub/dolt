@@ -37,8 +37,6 @@ type DiffSummaryTableFunction struct {
 	toCommitExpr   sql.Expression
 	tableNameExpr  sql.Expression
 	database       sql.Database
-
-	tableDelta diff.TableDelta
 }
 
 var diffSummaryTableSchema = sql.Schema{
@@ -46,7 +44,7 @@ var diffSummaryTableSchema = sql.Schema{
 	&sql.Column{Name: "rows_unmodified", Type: sql.Int64, Nullable: true},
 	&sql.Column{Name: "rows_added", Type: sql.Int64, Nullable: true},
 	&sql.Column{Name: "rows_deleted", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "row_modified", Type: sql.Int64, Nullable: true},
+	&sql.Column{Name: "rows_modified", Type: sql.Int64, Nullable: true},
 	&sql.Column{Name: "cells_added", Type: sql.Int64, Nullable: true},
 	&sql.Column{Name: "cells_deleted", Type: sql.Int64, Nullable: true},
 	&sql.Column{Name: "cells_modified", Type: sql.Int64, Nullable: true},
