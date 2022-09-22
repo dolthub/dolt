@@ -414,7 +414,7 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 		mergeParentCommits = []*doltdb.Commit{sessionState.WorkingSet.MergeState().Commit()}
 	}
 
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, sessionState.WorkingSet.MergeActive(), mergeParentCommits, sessionState.dbData, props)
+	pendingCommit, err := actions.GetCommitStaged(ctx, roots, sessionState.WorkingSet.MergeActive(), mergeParentCommits, sessionState.dbData.Ddb, props)
 	if _, ok := err.(actions.NothingStaged); err != nil && !ok {
 		return nil, err
 	}
