@@ -243,7 +243,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 
 	var diffSummaries []diffSummaryNode
 	for _, delta := range deltas {
-		// TODO should it be ToName or FromName??? if they are not the same name?
+		// renamed table will get the new name for returned result
 		tblName := delta.ToName
 		diffSum, hasDiff, err := getDiffSummaryNodeFromDelta(ctx, delta, fromRoot, toRoot, tblName)
 		if err != nil {

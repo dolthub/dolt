@@ -5041,14 +5041,16 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"t", nil, 1, 0, nil, nil, nil, nil, nil, nil, nil, nil}},
 			},
 			{
-				// TODO : update row for keyless table deletes the row and insert the new row --> row added = 3 and row deleted = 1
-				//Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
-				//Expected: []sql.Row{{"t", nil, 2, 0, nil, nil, nil, nil, nil, nil, nil, nil}},
+				// TODO : applies all skipped tests here, update row for keyless table deletes the row and insert the new row
+				// 		this causes row added = 3 and row deleted = 1
+				SkipResultsCheck: true,
+				Query:            "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
+				Expected:         []sql.Row{{"t", nil, 2, 0, nil, nil, nil, nil, nil, nil, nil, nil}},
 			},
 			{
-				// change from and to commits
-				//Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit3, 't');",
-				//Expected: []sql.Row{{"t", nil, 0, 2, nil, nil, nil, nil, nil, nil, nil, nil}},
+				SkipResultsCheck: true,
+				Query:            "SELECT * from dolt_diff_summary(@Commit4, @Commit3, 't');",
+				Expected:         []sql.Row{{"t", nil, 0, 2, nil, nil, nil, nil, nil, nil, nil, nil}},
 			},
 			{
 				// table is dropped
@@ -5191,20 +5193,22 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			"set @Commit6 = dolt_commit('-am', 'inserting row 2 in main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
-			// TODO : need to differentiate the NULL from drop column and user defined NULL/NULL from add column
-			//{
-			//	Query:    "SELECT * from dolt_diff_summary('main', 'branch1', 't');",
-			//	Expected: []sql.Row{{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2}},
-			//},
+			// TODO : applies to all skipped tests in this script
+			//       need to differentiate the NULL from drop column and user defined NULL/NULL from add column
+			{
+				SkipResultsCheck: true,
+				Query:            "SELECT * from dolt_diff_summary('main', 'branch1', 't');",
+				Expected:         []sql.Row{{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2}},
+			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('branch1', 'main', 't');",
 				Expected: []sql.Row{{"t", 0, 1, 0, 1, 4, 0, 1, 1, 2, 2, 6}},
 			},
-			// TODO : need to differentiate the NULL from drop column and user defined NULL/NULL from add column
-			//{
-			//	Query:    "SELECT * from dolt_diff_summary('main~', 'branch1', 't');",
-			//	Expected: []sql.Row{{"t", 0, 1, 1, 0, 3, 4, 0, 1, 1, 3, 2}},
-			//},
+			{
+				SkipResultsCheck: true,
+				Query:            "SELECT * from dolt_diff_summary('main~', 'branch1', 't');",
+				Expected:         []sql.Row{{"t", 0, 1, 1, 0, 3, 4, 0, 1, 1, 3, 2}},
+			},
 		},
 	},
 	{
@@ -5230,29 +5234,31 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			"set @Commit4 = dolt_commit('-am', 'adding column c2, inserting, and updating data');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
-			// TODO : need to differentiate the NULL from drop column and user defined NULL/NULL from add column
-			//{
-			//	Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
-			//	Expected: []sql.Row{{"t", 0, 0, 0, 2, 0, 2, 0, 2, 2, 6, 4}},
-			//},
+			// TODO : applies to all skipped tests in this script
+			//       need to differentiate the NULL from drop column and user defined NULL/NULL from add column
+			{
+				SkipResultsCheck: true,
+				Query:            "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
+				Expected:         []sql.Row{{"t", 0, 0, 0, 2, 0, 2, 0, 2, 2, 6, 4}},
+			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
 				Expected: []sql.Row{{"t", 2, 1, 0, 0, 2, 0, 0, 2, 3, 4, 6}},
 			},
-			// TODO : need to differentiate the NULL from drop column and user defined NULL/NULL from add column
-			//{
-			//	Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit3, 't');",
-			//	Expected: []sql.Row{{"t", 0, 1, 0, 2, 2, 2, 0, 2, 3, 6, 6}},
-			//},
+			{
+				SkipResultsCheck: true,
+				Query:            "SELECT * from dolt_diff_summary(@Commit1, @Commit3, 't');",
+				Expected:         []sql.Row{{"t", 0, 1, 0, 2, 2, 2, 0, 2, 3, 6, 6}},
+			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
 				Expected: []sql.Row{{"t", 2, 1, 0, 1, 6, 0, 1, 3, 4, 6, 12}},
 			},
-			// TODO : need to differentiate the NULL from drop column and user defined NULL/NULL from add column
-			//{
-			//	Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit4, 't');",
-			//	Expected: []sql.Row{{"t", 0, 2, 0, 2, 6, 0, 2, 2, 4, 6, 12}},
-			//},
+			{
+				SkipResultsCheck: true,
+				Query:            "SELECT * from dolt_diff_summary(@Commit1, @Commit4, 't');",
+				Expected:         []sql.Row{{"t", 0, 2, 0, 2, 6, 0, 2, 2, 4, 6, 12}},
+			},
 		},
 	},
 	{
@@ -5355,7 +5361,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"t2", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
 			},
 			{
-				// Maybe confusing? We match the old table name as well
+				// Old table name can be matched as well
 				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't1')",
 				Expected: []sql.Row{{"t1", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
 			},

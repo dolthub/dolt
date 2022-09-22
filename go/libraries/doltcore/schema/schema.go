@@ -238,7 +238,6 @@ func MapSchemaBasedOnTagAndName(inSch, outSch Schema) ([]int, []int, error) {
 		return keyMapping, valMapping, nil
 	}
 
-	// TODO (bug): The inSch is an invalid schema if table was dropped
 	err := inSch.GetPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
 		i := inSch.GetPKCols().TagToIdx[tag]
 		if col, ok := outSch.GetPKCols().GetByTag(tag); ok {
