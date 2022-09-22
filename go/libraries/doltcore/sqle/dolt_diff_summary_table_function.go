@@ -388,7 +388,7 @@ func getDiffSummary(ctx *sql.Context, td diff.TableDelta) (diff.DiffSummaryProgr
 		return diff.DiffSummaryProgress{}, false, keyless, err
 	}
 
-	if (acc.Adds + acc.Removes + acc.Changes + (acc.OldCellSize - acc.NewCellSize)) == 0 {
+	if (acc.Adds+acc.Removes+acc.Changes) == 0 && (acc.OldCellSize-acc.NewCellSize) == 0 {
 		return diff.DiffSummaryProgress{}, false, keyless, nil
 	}
 
