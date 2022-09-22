@@ -16,9 +16,10 @@ package sqle
 
 import (
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"math"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
