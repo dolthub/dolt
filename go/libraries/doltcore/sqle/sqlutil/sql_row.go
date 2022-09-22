@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -320,6 +321,13 @@ func SqlColToStr(sqlType sql.Type, col interface{}) (string, error) {
 			} else {
 				return "false", nil
 			}
+		case sql.Point, sql.LineString, sql.Polygon, sql.GeometryType:
+			res, err := sqlType.SQL(sqlColToStrContext, nil, col)
+			hexRes := fmt.Sprintf("0x%X", res.Raw())
+			if err != nil {
+				return "", err
+			}
+			return hexRes, nil
 		default:
 			res, err := sqlType.SQL(sqlColToStrContext, nil, col)
 			if err != nil {
