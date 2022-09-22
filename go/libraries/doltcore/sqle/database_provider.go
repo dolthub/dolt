@@ -759,6 +759,10 @@ func (p DoltDatabaseProvider) Function(_ *sql.Context, name string) (sql.Functio
 	return fn, nil
 }
 
+func (p DoltDatabaseProvider) Register(d sql.ExternalStoredProcedureDetails) {
+	p.externalProcedures.Register(d)
+}
+
 // ExternalStoredProcedure implements the sql.ExternalStoredProcedureProvider interface
 func (p DoltDatabaseProvider) ExternalStoredProcedure(_ *sql.Context, name string, numOfParams int) (*sql.ExternalStoredProcedureDetails, error) {
 	return p.externalProcedures.LookupByNameAndParamCount(name, numOfParams)

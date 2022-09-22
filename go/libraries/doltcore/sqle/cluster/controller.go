@@ -17,6 +17,7 @@ package cluster
 import (
 	"fmt"
 	"strconv"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -35,10 +36,15 @@ type Controller struct {
 	role          Role
 	epoch         int
 	systemVars    sqlvars
+	mu            sync.Mutex
 }
 
 type sqlvars interface {
 	AddSystemVariables(sysVars []sql.SystemVariable)
+}
+
+type procedurestore interface {
+	Register(sql.ExternalStoredProcedureDetails)
 }
 
 const (
@@ -63,17 +69,19 @@ func NewController(cfg Config, pCfg config.ReadWriteConfig) (*Controller, error)
 	}, nil
 }
 
-func (c *Controller) ClusterRole() (Role, int) {
-	return c.role, c.epoch
-}
-
 func (c *Controller) ManageSystemVariables(variables sqlvars) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.systemVars = variables
 	c.refreshSystemVars()
 }
 
+func (c *Controller) RegisterStoredProcedures(store procedurestore) {
+	store.Register(newAssumeRoleProcedure(c))
+}
+
 func (c *Controller) refreshSystemVars() {
-	role, epoch := c.ClusterRole()
+	role, epoch := string(c.role), c.epoch
 	vars := []sql.SystemVariable{
 		{
 			Name:    DoltClusterRoleVariable,
@@ -91,6 +99,13 @@ func (c *Controller) refreshSystemVars() {
 		},
 	}
 	c.systemVars.AddSystemVariables(vars)
+}
+
+func (c *Controller) persistVariables() error {
+	toset := make(map[string]string)
+	toset[DoltClusterRoleVariable] = string(c.role)
+	toset[DoltClusterRoleEpochVariable] = strconv.Itoa(c.epoch)
+	return c.persistentCfg.SetStrings(toset)
 }
 
 func applyBootstrapClusterConfig(cfg Config, pCfg config.ReadWriteConfig) (Role, int, error) {
@@ -123,4 +138,32 @@ func applyBootstrapClusterConfig(cfg Config, pCfg config.ReadWriteConfig) (Role,
 		}
 	}
 	return Role(persistentRole), epochi, nil
+}
+
+func (c *Controller) setRoleAndEpoch(role string, epoch int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if epoch == c.epoch && role == string(c.role) {
+		return nil
+	}
+	if epoch == c.epoch {
+		return fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d with different role, '%s'", role, epoch, c.epoch, c.role)
+	}
+	if epoch < c.epoch {
+		return fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d", role, epoch, c.epoch)
+	}
+	if role == string(c.role) {
+		c.epoch = epoch
+		c.refreshSystemVars()
+		return c.persistVariables()
+	}
+	if role != "primary" && role != "standby" {
+		return fmt.Errorf("error assuming role '%s'; valid roles are 'primary' and 'standby'", role)
+	}
+
+	// TODO: Role is transitioning...lots of stuff to do.
+	c.role = Role(role)
+	c.epoch = epoch
+	c.refreshSystemVars()
+	return c.persistVariables()
 }

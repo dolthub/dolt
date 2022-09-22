@@ -88,10 +88,6 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	if config.ClusterController != nil {
-		config.ClusterController.ManageSystemVariables(sql.SystemVariables)
-	}
-
 	infoDB := information_schema.NewInformationSchemaDatabase()
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 	locations = append(locations, nil)
@@ -102,6 +98,11 @@ func NewSqlEngine(
 		return nil, err
 	}
 	pro = pro.WithRemoteDialer(mrEnv.RemoteDialProvider())
+
+	if config.ClusterController != nil {
+		config.ClusterController.ManageSystemVariables(sql.SystemVariables)
+		config.ClusterController.RegisterStoredProcedures(pro)
+	}
 
 	// Load in privileges from file, if it exists
 	persister := mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
