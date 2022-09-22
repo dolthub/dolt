@@ -626,7 +626,7 @@ func (db *database) CommitWithWorkingSet(
 		headHash, ok := commitDS.MaybeHeadAddr()
 		if ok {
 			if !hasParentHash(opts, headHash) {
-				opts.Parents = append(append([]hash.Hash{}, headHash), opts.Parents...)
+				opts.Parents = append([]hash.Hash{headHash}, opts.Parents...)
 			}
 		}
 	}
