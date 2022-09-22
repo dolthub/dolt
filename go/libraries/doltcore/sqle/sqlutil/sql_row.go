@@ -321,7 +321,7 @@ func SqlColToStr(sqlType sql.Type, col interface{}) (string, error) {
 			} else {
 				return "false", nil
 			}
-		case sql.Point, sql.LineString, sql.Polygon, sql.GeometryType:
+		case sql.SpatialColumnType:
 			res, err := sqlType.SQL(sqlColToStrContext, nil, col)
 			hexRes := fmt.Sprintf("0x%X", res.Raw())
 			if err != nil {
