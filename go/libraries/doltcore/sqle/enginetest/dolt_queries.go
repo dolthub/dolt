@@ -4992,7 +4992,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"t", 0, 0, 2, 1, 0, 6, 2, 3, 1, 9, 3}},
 			},
 			{
-				// table is dropped, no data diff, result is empty
+				// table is dropped
 				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit5, 't');",
 				Expected: []sql.Row{{"t", 0, 0, 3, 0, 0, 9, 0, 3, 0, 9, 0}},
 			},
@@ -5051,7 +5051,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 				//Expected: []sql.Row{{"t", nil, 0, 2, nil, nil, nil, nil, nil, nil, nil, nil}},
 			},
 			{
-				// table is dropped, no data diff, result is empty
+				// table is dropped
 				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit5, 't');",
 				Expected: []sql.Row{{"t", nil, 0, 3, nil, nil, nil, nil, nil, nil, nil, nil}},
 			},

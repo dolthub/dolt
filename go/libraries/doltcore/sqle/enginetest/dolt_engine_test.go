@@ -1151,9 +1151,6 @@ func TestDiffTableFunctionPrepared(t *testing.T) {
 }
 
 func TestDiffSummaryTableFunction(t *testing.T) {
-	if types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip()
-	}
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSummaryTableFunctionScriptTests {
@@ -1165,9 +1162,6 @@ func TestDiffSummaryTableFunction(t *testing.T) {
 }
 
 func TestDiffSummaryTableFunctionPrepared(t *testing.T) {
-	if types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip()
-	}
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSummaryTableFunctionScriptTests {
