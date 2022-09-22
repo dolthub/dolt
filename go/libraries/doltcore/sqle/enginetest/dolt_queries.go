@@ -809,7 +809,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('main~', 'main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{1}},
 			},
 			{
 				// Revoke multi-table access
