@@ -1230,6 +1230,13 @@ func TestDoltCommit(t *testing.T) {
 	}
 }
 
+func TestDoltCommitPrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, script := range DoltCommitTests {
+		enginetest.TestScriptPrepared(t, harness, script)
+	}
+}
+
 func TestQueriesPrepared(t *testing.T) {
 	enginetest.TestQueriesPrepared(t, newDoltHarness(t))
 }

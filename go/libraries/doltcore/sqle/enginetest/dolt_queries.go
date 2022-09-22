@@ -6313,4 +6313,21 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "CALL DOLT_COMMIT('-ALL') adds all tables (including new ones) to the commit.",
+		SetUpScript: []string{
+			"CREATE table t (pk int primary key);",
+			"INSERT INTO t VALUES (1);",
+			"CALL DOLT_ADD('t');",
+			"CALL DOLT_COMMIT('-m', concat('author: ','somebody'));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT message from dolt_log LIMIT 1",
+				Expected: []sql.Row{
+					{"author: somebody"},
+				},
+			},
+		},
+	},
 }
