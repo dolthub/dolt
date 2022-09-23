@@ -37,7 +37,7 @@ type DiffSummaryProgress struct {
 }
 
 type prollyReporter func(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD val.TupleDesc, change tree.Diff, ch chan<- DiffSummaryProgress) error
-type nomsReporter func(ctx context.Context, change *diff.Difference, ch chan<- DiffSummaryProgress) error
+type nomsReporter func(ctx context.Context, change *diff.Difference, fromSch, toSch schema.Schema, ch chan<- DiffSummaryProgress) error
 
 // Summary reports a summary of diff changes between two values
 // todo: make package private once dolthub is migrated
@@ -162,10 +162,10 @@ func diffNomsMaps(ctx context.Context, ch chan DiffSummaryProgress, keyless bool
 		}
 	}
 
-	return summaryWithReporter(ctx, ch, durable.NomsMapFromIndex(fromRows), durable.NomsMapFromIndex(toRows), rpr)
+	return summaryWithReporter(ctx, ch, durable.NomsMapFromIndex(fromRows), durable.NomsMapFromIndex(toRows), rpr, fromSch, toSch)
 }
 
-func summaryWithReporter(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Map, rpr nomsReporter) (err error) {
+func summaryWithReporter(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Map, rpr nomsReporter, fromSch, toSch schema.Schema) (err error) {
 	ad := NewAsyncDiffer(1024)
 	ad.Start(ctx, from, to)
 	defer func() {
@@ -183,7 +183,7 @@ func summaryWithReporter(ctx context.Context, ch chan DiffSummaryProgress, from,
 		}
 
 		for _, df := range diffs {
-			err = rpr(ctx, df, ch)
+			err = rpr(ctx, df, fromSch, toSch, ch)
 			if err != nil {
 				return err
 			}
@@ -278,7 +278,7 @@ func prollyCountCellDiff(mapping val.OrdinalMapping, fromD, toD val.TupleDesc, f
 	return changed
 }
 
-func reportNomsPkChanges(ctx context.Context, change *diff.Difference, ch chan<- DiffSummaryProgress) error {
+func reportNomsPkChanges(ctx context.Context, change *diff.Difference, fromSch, toSch schema.Schema, ch chan<- DiffSummaryProgress) error {
 	var summary DiffSummaryProgress
 	switch change.ChangeType {
 	case types.DiffChangeAdded:
@@ -288,7 +288,7 @@ func reportNomsPkChanges(ctx context.Context, change *diff.Difference, ch chan<-
 	case types.DiffChangeModified:
 		oldTuple := change.OldValue.(types.Tuple)
 		newTuple := change.NewValue.(types.Tuple)
-		cellChanges, err := row.CountCellDiffs(oldTuple, newTuple)
+		cellChanges, err := row.CountCellDiffs(oldTuple, newTuple, fromSch, toSch)
 		if err != nil {
 			return err
 		}
@@ -304,7 +304,7 @@ func reportNomsPkChanges(ctx context.Context, change *diff.Difference, ch chan<-
 	}
 }
 
-func reportNomsKeylessChanges(ctx context.Context, change *diff.Difference, ch chan<- DiffSummaryProgress) error {
+func reportNomsKeylessChanges(ctx context.Context, change *diff.Difference, fromSch, toSch schema.Schema, ch chan<- DiffSummaryProgress) error {
 	var oldCard uint64
 	if change.OldValue != nil {
 		v, err := change.OldValue.(types.Tuple).Get(row.KeylessCardinalityValIdx)

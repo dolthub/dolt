@@ -5200,12 +5200,9 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			"set @Commit6 = dolt_commit('-am', 'inserting row 2 in main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
-			// TODO : applies to all skipped tests in this script (works in new format)
-			//       need to differentiate the NULL from drop column and user defined NULL/NULL from add column
 			{
-				SkipResultsCheck: true,
-				Query:            "SELECT * from dolt_diff_summary('main', 'branch1', 't');",
-				Expected:         []sql.Row{{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2}},
+				Query:    "SELECT * from dolt_diff_summary('main', 'branch1', 't');",
+				Expected: []sql.Row{{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('branch1', 'main', 't');",
@@ -5240,21 +5237,17 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			"set @Commit4 = dolt_commit('-am', 'adding column c2, inserting, and updating data');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
-			// TODO : applies to all skipped tests in this script (works in new format)
-			//       need to differentiate the NULL from drop column and user defined NULL/NULL from add column
 			{
-				SkipResultsCheck: true,
-				Query:            "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
-				Expected:         []sql.Row{{"t", 0, 0, 0, 2, 0, 2, 0, 2, 2, 6, 4}},
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
+				Expected: []sql.Row{{"t", 0, 0, 0, 2, 0, 2, 0, 2, 2, 6, 4}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
 				Expected: []sql.Row{{"t", 2, 1, 0, 0, 2, 0, 0, 2, 3, 4, 6}},
 			},
 			{
-				SkipResultsCheck: true,
-				Query:            "SELECT * from dolt_diff_summary(@Commit1, @Commit3, 't');",
-				Expected:         []sql.Row{{"t", 0, 1, 0, 2, 2, 2, 0, 2, 3, 6, 6}},
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit3, 't');",
+				Expected: []sql.Row{{"t", 0, 1, 0, 2, 2, 2, 0, 2, 3, 6, 6}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
