@@ -47,6 +47,7 @@ const (
 var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
 	"Rollback or commit changes before changing working sets.")
 var ErrSessionNotPeristable = errors.New("session is not persistable")
+var ErrCurrentBranchDeleted = errors.New("current branch has been force deleted. run 'USE <database>/<branch>' query to checkout different branch, or reconnect to the server")
 
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
@@ -205,17 +206,20 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, dbName string, tCharact
 	if err == doltdb.ErrWorkingSetNotFound {
 		ws, err = d.newWorkingSetForHead(ctx, wsRef, dbName)
 		// if the current head is not found, the branch was force deleted, so use nil working set.
-		if err != nil && !errors.Is(err, doltdb.ErrBranchNotFound) {
+		if errors.Is(err, doltdb.ErrBranchNotFound) {
+			return nil, ErrCurrentBranchDeleted
+		}
+		if err != nil {
 			return nil, err
 		}
 	} else if err != nil {
 		return nil, err
 	}
 
+	// logrus.Tracef("starting transaction with working root %s", ws.WorkingRoot().DebugString(ctx, true))
+
 	// TODO: this is going to do 2 resolves to get the head root, not ideal
-	if ws != nil {
-		err = d.SetWorkingSet(ctx, dbName, ws)
-	}
+	err = d.SetWorkingSet(ctx, dbName, ws)
 
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false

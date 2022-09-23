@@ -229,12 +229,20 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"main"}},
 			},
 			{
-				Query:    "/* client a */ select name from dolt_branches;",
-				Expected: []sql.Row{{"main"}},
+				Query:          "/* client a */ select name from dolt_branches;",
+				ExpectedErrStr: "Error 1105: current branch has been force deleted. run 'USE <database>/<branch>' query to checkout different branch, or reconnect to the server",
 			},
 			{
-				Query:    "/* client a */ CALL DOLT_CHECKOUT('main');",
-				Expected: []sql.Row{{0}},
+				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
+				ExpectedErrStr: "Error 1105: current branch has been force deleted. run 'USE <database>/<branch>' query to checkout different branch, or reconnect to the server",
+			},
+			{
+				Query:    "/* client a */ USE dolt/main;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select active_branch();",
+				Expected: []sql.Row{{"main"}},
 			},
 		},
 	},
