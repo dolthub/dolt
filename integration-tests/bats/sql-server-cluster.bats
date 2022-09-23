@@ -127,3 +127,29 @@ cluster:
 
     server_query_with_port 3309 repo1 1 dolt "" "select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch;" "@@GLOBAL.dolt_cluster_role,@@GLOBAL.dolt_cluster_role_epoch\nprimary,13"
 }
+
+@test "sql-server-cluster: create database makes a new remote" {
+    echo "
+user:
+  name: dolt
+listener:
+  host: 0.0.0.0
+  port: 3309
+behavior:
+  read_only: false
+  autocommit: true
+cluster:
+  standby_remotes:
+  - name: standby
+    remote_url_template: http://doltdb-1.doltdb:50051/{database}
+  bootstrap_role: primary
+  bootstrap_epoch: 10
+  remotesapi:
+    port: 50051" > server.yaml
+
+    dolt sql-server --config server.yaml &
+    SERVER_PID=$!
+    wait_for_connection 3309 5000
+
+    server_query_with_port 3309 repo1 1 dolt "" "create database a_new_database;use a_new_database;select name, url from dolt_remotes" ";;name,url\nstandby,http://doltdb-1.doltdb:50051/a_new_database"
+}

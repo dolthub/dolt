@@ -215,7 +215,7 @@ func Serve(
 	if serverConfig.RemotesapiPort() != nil {
 		if remoteSrvSqlCtx, err := sqlEngine.NewContext(context.Background()); err == nil {
 			remoteSrv = sqle.NewRemoteSrvServer(remoteSrvSqlCtx, remotesrv.ServerArgs{
-				Logger: logrus.NewEntry(lgr),
+				Logger:   logrus.NewEntry(lgr),
 				ReadOnly: true,
 				HttpPort: *serverConfig.RemotesapiPort(),
 				GrpcPort: *serverConfig.RemotesapiPort(),
@@ -241,7 +241,7 @@ func Serve(
 	if clusterController != nil {
 		if remoteSrvSqlCtx, err := sqlEngine.NewContext(context.Background()); err == nil {
 			clusterRemoteSrv = sqle.NewRemoteSrvServer(remoteSrvSqlCtx, remotesrv.ServerArgs{
-				Logger: logrus.NewEntry(lgr),
+				Logger:   logrus.NewEntry(lgr),
 				HttpPort: clusterController.RemoteSrvPort(),
 				GrpcPort: clusterController.RemoteSrvPort(),
 				Options:  clusterController.ServerOptions(),

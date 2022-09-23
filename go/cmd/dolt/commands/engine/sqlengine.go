@@ -33,8 +33,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
@@ -101,6 +101,7 @@ func NewSqlEngine(
 
 	config.ClusterController.ManageSystemVariables(sql.SystemVariables)
 	config.ClusterController.RegisterStoredProcedures(pro)
+	pro.InitDatabaseHook = cluster.NewInitDatabaseHook(config.ClusterController, pro.InitDatabaseHook)
 
 	// Load in privileges from file, if it exists
 	persister := mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)

@@ -47,6 +47,7 @@ type DoltDatabaseProvider struct {
 	databases          map[string]sql.Database
 	functions          map[string]sql.Function
 	externalProcedures sql.ExternalStoredProcedureRegistry
+	InitDatabaseHook   InitDatabaseHook
 	mu                 *sync.RWMutex
 
 	defaultBranch string
@@ -114,6 +115,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		fs:                 fs,
 		defaultBranch:      defaultBranch,
 		dbFactoryUrl:       doltdb.LocalDirDoltDB,
+		InitDatabaseHook:   ConfigureReplicationDatabaseHook,
 	}, nil
 }
 
@@ -347,8 +349,10 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 		return err
 	}
 
-	// If replication is configured, set it up for the new database as well
-	err = p.configureReplication(ctx, name, newEnv)
+	// If we have an initialization hook, invoke it.  By default, this will
+	// be ConfigureReplicationDatabaseHook, which will setup replication
+	// for the new database if a remote url template is set.
+	err = p.InitDatabaseHook(ctx, p, name, newEnv)
 	if err != nil {
 		return err
 	}
@@ -365,9 +369,11 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	return sess.AddDB(ctx, dbstate)
 }
 
+type InitDatabaseHook func(ctx *sql.Context, pro DoltDatabaseProvider, name string, env *env.DoltEnv) error
+
 // configureReplication sets up replication for a newly created database as necessary
 // TODO: consider the replication heads / all heads setting
-func (p DoltDatabaseProvider) configureReplication(ctx *sql.Context, name string, newEnv *env.DoltEnv) error {
+func ConfigureReplicationDatabaseHook(ctx *sql.Context, p DoltDatabaseProvider, name string, newEnv *env.DoltEnv) error {
 	_, replicationRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
 	if replicationRemoteName == "" {
 		return nil

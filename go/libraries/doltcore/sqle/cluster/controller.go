@@ -19,13 +19,14 @@ import (
 	"strconv"
 	"sync"
 
-	"google.golang.org/grpc"
 	"github.com/dolthub/go-mysql-server/sql"
+	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 type Role string
+
 const RolePrimary Role = "primary"
 const RoleStandby Role = "standby"
 

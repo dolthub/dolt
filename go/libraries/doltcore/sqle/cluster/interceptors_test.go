@@ -20,13 +20,13 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 type server struct {
@@ -40,7 +40,7 @@ func (s *server) Check(ctx context.Context, req *grpc_health_v1.HealthCheckReque
 
 func (s *server) Watch(req *grpc_health_v1.HealthCheckRequest, ss grpc_health_v1.Health_WatchServer) error {
 	s.md, _ = metadata.FromIncomingContext(ss.Context())
-        return status.Errorf(codes.Unimplemented, "method Watch not implemented")
+	return status.Errorf(codes.Unimplemented, "method Watch not implemented")
 }
 
 func withClient(t *testing.T, cb func(*testing.T, grpc_health_v1.HealthClient), serveropts []grpc.ServerOption, dialopts []grpc.DialOption) *server {
