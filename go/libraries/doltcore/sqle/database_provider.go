@@ -542,18 +542,37 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	// Get the DB's directory
 	exists, isDir := p.fs.Exists(db.Name())
 	if !exists {
-		// engine should already protect against this
-		return sql.ErrDatabaseNotFound.New(db.Name())
+		// is directory itself the database being dropped?
+		doltDirExists, _ := p.fs.Exists(dbfactory.DoltDir)
+		if doltDirExists {
+			// guess the database name for this directory
+			absPath, err := p.fs.Abs("")
+			if err != nil {
+				return err
+			}
+			var possibleDBName string
+			if s := strings.Split(absPath, "/"); len(s) > 0 {
+				possibleDBName = strings.Replace(s[len(s)-1], "-", "_", -1)
+			}
+			if possibleDBName == db.Name() {
+				err = p.fs.Delete(dbfactory.DoltDir, true)
+				if err != nil {
+					return err
+				}
+			} else {
+				return sql.ErrDatabaseNotFound.New(db.Name())
+			}
+		} else {
+			return sql.ErrDatabaseNotFound.New(db.Name())
+		}
 	} else if !isDir {
 		return fmt.Errorf("unexpected error: %s exists but is not a directory", dbKey)
+	} else {
+		err = p.fs.Delete(db.Name(), true)
+		if err != nil {
+			return err
+		}
 	}
-
-	err = p.fs.Delete(db.Name(), true)
-	if err != nil {
-		return err
-	}
-
-	// TODO: delete database in current dir
 
 	// We not only have to delete this database, but any derivative ones that we've stored as a result of USE or
 	// connection strings

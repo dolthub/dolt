@@ -1739,3 +1739,36 @@ s.close()
     run grep "failed to access 'mydb2' database: can no longer find .dolt dir on disk" server_log.txt
     [ "${#lines[@]}" -eq 1 ]
 }
+
+@test "sql-server: dropping database that the server is running in" {
+    skiponwindows "Missing dependencies"
+
+    mkdir mydb
+    cd mydb
+    dolt init
+
+    start_sql_server >> server_log.txt 2>&1
+
+    server_query "" 1 dolt "" "DROP DATABASE mydb"
+
+    run grep "database not found: mydb" server_log.txt
+    [ "${#lines[@]}" -eq 0 ]
+
+    [ ! -d .dolt ]
+}
+
+@test "sql-server: dropping database currently selected and that the server is running in" {
+    skiponwindows "Missing dependencies"
+
+    mkdir mydb
+    cd mydb
+    dolt init
+
+    start_sql_server >> server_log.txt 2>&1
+    server_query "mydb" 1 dolt "" "DROP DATABASE mydb;"
+
+    run grep "database not found: mydb" server_log.txt
+    [ "${#lines[@]}" -eq 0 ]
+
+    [ ! -d .dolt ]
+}
