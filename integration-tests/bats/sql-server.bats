@@ -1772,3 +1772,20 @@ s.close()
 
     [ ! -d .dolt ]
 }
+
+@test "sql-server: dropping database with '-' in it" {
+    skiponwindows "Missing dependencies"
+
+    mkdir my-db
+    cd my-db
+    dolt init
+    cd ..
+
+    start_sql_server >> server_log.txt 2>&1
+    server_query "" 1 dolt "" "DROP DATABASE my_db;"
+
+    run grep "database not found: my_db" server_log.txt
+    [ "${#lines[@]}" -eq 0 ]
+
+    [ ! -d my-db ]
+}

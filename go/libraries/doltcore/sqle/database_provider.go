@@ -539,39 +539,16 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
-	// Get the DB's directory
-	exists, isDir := p.fs.Exists(db.Name())
-	if !exists {
-		// is directory itself the database being dropped?
-		doltDirExists, _ := p.fs.Exists(dbfactory.DoltDir)
-		if doltDirExists {
-			// guess the database name for this directory
-			absPath, err := p.fs.Abs("")
-			if err != nil {
-				return err
-			}
-			var possibleDBName string
-			if s := strings.Split(absPath, "/"); len(s) > 0 {
-				possibleDBName = strings.Replace(s[len(s)-1], "-", "_", -1)
-			}
-			if possibleDBName == db.Name() {
-				err = p.fs.Delete(dbfactory.DoltDir, true)
-				if err != nil {
-					return err
-				}
-			} else {
-				return sql.ErrDatabaseNotFound.New(db.Name())
-			}
-		} else {
-			return sql.ErrDatabaseNotFound.New(db.Name())
-		}
-	} else if !isDir {
-		return fmt.Errorf("unexpected error: %s exists but is not a directory", dbKey)
-	} else {
-		err = p.fs.Delete(db.Name(), true)
-		if err != nil {
+	// try with user-defined database name, if not found try alternative name with '-' instead of '_'
+	found, err := p.findAndDeleteDatabaseDir(db.Name(), dbKey)
+	if !found {
+		altDBName := strings.Replace(db.Name(), "_", "-", -1)
+		found, err = p.findAndDeleteDatabaseDir(altDBName, dbKey)
+		if !found {
 			return err
 		}
+	} else if err != nil {
+		return err
 	}
 
 	// We not only have to delete this database, but any derivative ones that we've stored as a result of USE or
@@ -585,6 +562,49 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 
 	delete(p.databases, dbKey)
 	return nil
+}
+
+// findAndDeleteDatabaseDir tries to find database with given name whether the database is in the directory itself or
+// nested. This function returns whether the database was found and deleted successfully.
+func (p DoltDatabaseProvider) findAndDeleteDatabaseDir(dbName, dbKey string) (bool, error) {
+	// database directory is nested
+	exists, isDir := p.fs.Exists(dbName)
+	if exists {
+		if !isDir {
+			return false, fmt.Errorf("unexpected error: %s exists but is not a directory", dbKey)
+		}
+		err := p.fs.Delete(dbName, true)
+		if err != nil {
+			return true, err
+		}
+	}
+
+	// database is in the directory itself
+	doltDirExists, _ := p.fs.Exists(dbfactory.DoltDir)
+	if !doltDirExists {
+		return false, sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	// guess the database name for this directory
+	absPath, err := p.fs.Abs("")
+	if err != nil {
+		return false, err
+	}
+	var possibleDBName string
+	if s := strings.Split(absPath, "/"); len(s) > 0 {
+		possibleDBName = strings.Replace(s[len(s)-1], "-", "_", -1)
+	}
+
+	if possibleDBName != strings.Replace(dbName, "-", "_", -1) {
+		return false, sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	err = p.fs.Delete(dbfactory.DoltDir, true)
+	if err != nil {
+		return true, err
+	}
+
+	return true, nil
 }
 
 // TODO: databaseForRevision should call checkout on the given branch/commit, returning a non-mutable session
