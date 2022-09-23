@@ -257,6 +257,11 @@ func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerC
 		yamlCfg.UserConfig.Password = &pass
 	}
 
+	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
+		cli.Println(connStr)
+		yamlCfg.GoldenMysqlConn = &connStr
+	}
+
 	return yamlCfg, nil
 }
 
