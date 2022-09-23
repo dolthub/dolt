@@ -241,16 +241,17 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 
 	var diffSummaries []diffSummaryNode
 	for _, delta := range deltas {
-		// renamed table will get the new name for returned result
 		tblName := delta.ToName
+		if tblName == "" {
+			tblName = delta.FromName
+		}
 		diffSum, hasDiff, err := getDiffSummaryNodeFromDelta(ctx, delta, fromRoot, toRoot, tblName)
 		if err != nil {
 			return nil, err
 		}
-		if !hasDiff {
-			return NewDiffSummaryTableFunctionRowIter([]diffSummaryNode{}), nil
+		if hasDiff {
+			diffSummaries = append(diffSummaries, diffSum)
 		}
-		diffSummaries = append(diffSummaries, diffSum)
 	}
 
 	return NewDiffSummaryTableFunctionRowIter(diffSummaries), nil
@@ -455,7 +456,7 @@ func getRowFromDiffSummary(tblName string, dsp diff.DiffSummaryProgress, newColL
 			nil,                // rows_unmodified
 			int64(dsp.Adds),    // rows_added
 			int64(dsp.Removes), // rows_deleted
-			nil,                // row_modified
+			nil,                // rows_modified
 			nil,                // cells_added
 			nil,                // cells_deleted
 			nil,                // cells_modified
@@ -490,7 +491,7 @@ func getRowFromDiffSummary(tblName string, dsp diff.DiffSummaryProgress, newColL
 		int64(rowsModified),    // rows_unmodified
 		int64(dsp.Adds),        // rows_added
 		int64(dsp.Removes),     // rows_deleted
-		int64(dsp.Changes),     // row_modified
+		int64(dsp.Changes),     // rows_modified
 		int64(numCellInserts),  // cells_added
 		int64(numCellDeletes),  // cells_deleted
 		int64(dsp.CellChanges), // cells_modified

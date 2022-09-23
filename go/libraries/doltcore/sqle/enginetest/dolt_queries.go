@@ -5094,16 +5094,18 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			"delete from t where c2 = 'four';",
 			"update t2 set c2='zero' where pk=100;",
 			"set @Commit4 = dolt_commit('-am', 'inserting into table t');",
+
+			// create keyless table
+			"create table keyless (id int);",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit0, @Commit1, 't');",
+				Query:    "SELECT * from dolt_diff_summary(@Commit0, @Commit1);",
 				Expected: []sql.Row{{"t", 0, 1, 0, 0, 3, 0, 0, 0, 1, 0, 3}},
 			},
 			{
-				// no changes, so result is empty
-				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{},
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2);",
+				Expected: []sql.Row{{"t2", 0, 1, 0, 0, 3, 0, 0, 0, 1, 0, 3}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3);",
@@ -5114,8 +5116,12 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"t", 3, 0, 1, 0, 0, 3, 0, 4, 3, 12, 9}, {"t2", 1, 0, 0, 1, 0, 0, 1, 2, 2, 6, 6}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit2, 'T');",
-				Expected: []sql.Row{{"T", 0, 0, 2, 1, 0, 6, 2, 3, 1, 9, 3}},
+				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit2);",
+				Expected: []sql.Row{{"t", 0, 0, 2, 1, 0, 6, 2, 3, 1, 9, 3}, {"t2", 0, 0, 1, 1, 0, 3, 1, 2, 1, 6, 3}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit3, 'WORKING');",
+				Expected: []sql.Row{{"t", 3, 0, 1, 0, 0, 3, 0, 4, 3, 12, 9}, {"t2", 1, 0, 0, 1, 0, 0, 1, 2, 2, 6, 6}},
 			},
 		},
 	},
@@ -5309,9 +5315,20 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Name: "new table",
 		SetUpScript: []string{
 			"create table t1 (a int primary key, b int)",
-			"insert into t1 values (1,2)",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_diff_summary('HEAD', 'WORKING')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from dolt_diff_summary('WORKING', 'HEAD')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "insert into t1 values (1,2)",
+				SkipResultsCheck: true,
+			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD', 'WORKING', 't1')",
 				Expected: []sql.Row{{"t1", 0, 1, 0, 0, 2, 0, 0, 0, 1, 0, 2}},
