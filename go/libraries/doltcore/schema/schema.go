@@ -234,7 +234,7 @@ func MapSchemaBasedOnTagAndName(inSch, outSch Schema) ([]int, []int, error) {
 	valMapping := make([]int, inSch.GetNonPKCols().Size())
 
 	// if inSch or outSch is empty schema. This can be from added or dropped table.
-	if (len(inSch.GetPKCols().cols) == 0 && len(inSch.GetNonPKCols().cols) == 0) || (len(outSch.GetPKCols().cols) == 0 && len(outSch.GetNonPKCols().cols) == 0) {
+	if len(inSch.GetAllCols().cols) == 0 || len(outSch.GetAllCols().cols) == 0 {
 		return keyMapping, valMapping, nil
 	}
 

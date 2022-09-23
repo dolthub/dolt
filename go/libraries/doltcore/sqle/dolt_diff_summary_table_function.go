@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -54,7 +53,7 @@ var diffSummaryTableSchema = sql.Schema{
 	&sql.Column{Name: "new_cell_count", Type: sql.Int64, Nullable: true},
 }
 
-// NewInstance implements the TableFunction interface
+// NewInstance creates a new instance of TableFunction interface
 func (ds *DiffSummaryTableFunction) NewInstance(ctx *sql.Context, db sql.Database, expressions []sql.Expression) (sql.Node, error) {
 	newInstance := &DiffSummaryTableFunction{
 		ctx:      ctx,
@@ -114,7 +113,7 @@ func (ds *DiffSummaryTableFunction) Children() []sql.Node {
 // WithChildren implements the sql.Node interface.
 func (ds *DiffSummaryTableFunction) WithChildren(children ...sql.Node) (sql.Node, error) {
 	if len(children) != 0 {
-		panic("unexpected children")
+		return nil, fmt.Errorf("unexpected children")
 	}
 	return ds, nil
 }
@@ -207,7 +206,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 
 	sqledb, ok := ds.database.(Database)
 	if !ok {
-		panic(fmt.Sprintf("unexpected database type: %T", ds.database))
+		return nil, fmt.Errorf("unexpected database type: %T", ds.database)
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
@@ -358,7 +357,6 @@ func getDiffSummary(ctx *sql.Context, td diff.TableDelta) (diff.DiffSummaryProgr
 
 	acc := diff.DiffSummaryProgress{}
 	var count int64
-	var pos int
 	for p := range ch {
 		if ae.IsSet() {
 			break
@@ -375,8 +373,6 @@ func getDiffSummary(ctx *sql.Context, td diff.TableDelta) (diff.DiffSummaryProgr
 
 		count++
 	}
-
-	pos = cli.DeleteAndPrint(pos, "")
 
 	if err := ae.Get(); err != nil {
 		return diff.DiffSummaryProgress{}, false, false, err
@@ -467,28 +463,12 @@ func getRowFromDiffSummary(tblName string, dsp diff.DiffSummaryProgress, newColL
 		}
 	}
 
-	var numCellInserts, numCellDeletes float64
-	rowsModified := dsp.OldRowSize - dsp.Changes - dsp.Removes
-	rowToCellInserts := float64(dsp.Adds) * float64(newColLen)
-	rowToCellDeletes := float64(dsp.Removes) * float64(newColLen)
-	cellDiff := float64(dsp.NewCellSize) - float64(dsp.OldCellSize)
-	if cellDiff > 0 {
-		numCellInserts = cellDiff + float64(rowToCellDeletes)
-	} else if cellDiff < 0 {
-		numCellDeletes = math.Abs(cellDiff) + float64(rowToCellInserts)
-	} else {
-		if rowToCellInserts != rowToCellDeletes {
-			numCellDeletes = math.Max(rowToCellDeletes, rowToCellInserts)
-			numCellInserts = math.Max(rowToCellDeletes, rowToCellInserts)
-		} else {
-			numCellDeletes = rowToCellDeletes
-			numCellInserts = rowToCellInserts
-		}
-	}
+	numCellInserts, numCellDeletes := GetCellsAddedAndDeleted(dsp, newColLen)
+	rowsUnmodified := dsp.OldRowSize - dsp.Changes - dsp.Removes
 
 	return sql.Row{
 		tblName,                // table_name
-		int64(rowsModified),    // rows_unmodified
+		int64(rowsUnmodified),  // rows_unmodified
 		int64(dsp.Adds),        // rows_added
 		int64(dsp.Removes),     // rows_deleted
 		int64(dsp.Changes),     // rows_modified
@@ -500,4 +480,30 @@ func getRowFromDiffSummary(tblName string, dsp diff.DiffSummaryProgress, newColL
 		int64(dsp.OldCellSize), // old_cell_count
 		int64(dsp.NewCellSize), // new_cell_count
 	}
+}
+
+// GetCellsAddedAndDeleted calculates cells added and deleted given diff.DiffSummaryProgress and toCommit table
+// column length. We use rows added and deleted to calculate cells added and deleted, but it does not include
+// cells added and deleted from schema changes. Here we fill those in using total number of cells in each commit table.
+func GetCellsAddedAndDeleted(acc diff.DiffSummaryProgress, newColLen int) (uint64, uint64) {
+	var numCellInserts, numCellDeletes float64
+	rowToCellInserts := float64(acc.Adds) * float64(newColLen)
+	rowToCellDeletes := float64(acc.Removes) * float64(newColLen)
+	cellDiff := float64(acc.NewCellSize) - float64(acc.OldCellSize)
+	if cellDiff > 0 {
+		numCellInserts = cellDiff + rowToCellDeletes
+		numCellDeletes = rowToCellDeletes
+	} else if cellDiff < 0 {
+		numCellInserts = rowToCellInserts
+		numCellDeletes = math.Abs(cellDiff) + rowToCellInserts
+	} else {
+		if rowToCellInserts != rowToCellDeletes {
+			numCellDeletes = math.Max(rowToCellDeletes, rowToCellInserts)
+			numCellInserts = math.Max(rowToCellDeletes, rowToCellInserts)
+		} else {
+			numCellDeletes = rowToCellDeletes
+			numCellInserts = rowToCellInserts
+		}
+	}
+	return uint64(numCellInserts), uint64(numCellDeletes)
 }
