@@ -35,7 +35,7 @@ teardown() {
     srv_pid=$!
 
     cd ../
-    dolt clone http://localhost:50051/ignored_named/remote repo1
+    dolt clone http://localhost:50051/remote repo1
     cd repo1
     run dolt ls
     [[ "$output" =~ "vals" ]] || false
@@ -62,7 +62,7 @@ SQL
     cd ../
 
     # By cloning here, we have a near-at-hand way to wait for the server to be ready.
-    dolt clone http://localhost:50051/ignored_named/remote cloned_remote
+    dolt clone http://localhost:50051/remote cloned_remote
 
     dolt sql-client -u root <<SQL
 create database created;
@@ -73,7 +73,7 @@ call dolt_add('vals');
 call dolt_commit('-m', 'add some vals');
 SQL
 
-    dolt clone http://localhost:50051/ignored_named/created cloned_created
+    dolt clone http://localhost:50051/created cloned_created
     cd cloned_created
     run dolt ls
     [[ "$output" =~ "vals" ]] || false
@@ -93,7 +93,7 @@ SQL
     srv_pid=$!
     cd ../
 
-    dolt clone http://localhost:50051/test-org/remote remote_cloned
+    dolt clone http://localhost:50051/remote remote_cloned
 
     cd remote_cloned
     dolt sql -q 'insert into vals values (1), (2), (3), (4), (5);'
@@ -110,7 +110,7 @@ SQL
     dolt sql-server --remotesapi-port 50051 &
     srv_pid=$!
 
-    dolt clone http://localhost:50051/test-org/remote_one remote_one_cloned
+    dolt clone http://localhost:50051/remote_one remote_one_cloned
 
     cd ../remote_two
     dolt init
@@ -133,7 +133,7 @@ SQL
     cd ../../
     mkdir -p read_replica
     cd read_replica
-    dolt clone http://127.0.0.1:50051/test-org/db
+    dolt clone http://127.0.0.1:50051/db
     cd db
     dolt sql <<SQL
 set @@persist.dolt_read_replica_remote = 'origin';

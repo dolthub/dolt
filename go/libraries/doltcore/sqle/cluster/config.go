@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,25 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package remotesrv
+package cluster
 
-import (
-	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/nbs"
-)
-
-type DBCache interface {
-	Get(path, nbfVerStr string) (RemoteSrvStore, error)
+type Config interface {
+	StandbyRemotes() []StandbyRemoteConfig
+	BootstrapRole() string
+	BootstrapEpoch() int
+	RemotesAPIConfig() RemotesAPIConfig
 }
 
-type RemoteSrvStore interface {
-	chunks.ChunkStore
-	nbs.TableFileStore
-
-	Path() (string, bool)
-	GetChunkLocationsWithPaths(hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, error)
+type RemotesAPIConfig interface {
+	Port() int
 }
 
-var _ RemoteSrvStore = &nbs.NomsBlockStore{}
-var _ RemoteSrvStore = &nbs.GenerationalNBS{}
+type StandbyRemoteConfig interface {
+	Name() string
+	RemoteURLTemplate() string
+}

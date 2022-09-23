@@ -111,9 +111,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	remoteDB, err := opts.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
 	if err != nil {
-		if err == remotestorage.ErrInvalidDoltSpecPath {
-			err = actions.HandleInvalidDoltSpecPathErr(opts.Remote.Name, opts.Remote.Url, err)
-		}
+		err = actions.HandleInitRemoteStorageClientErr(opts.Remote.Name, opts.Remote.Url, err)
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 

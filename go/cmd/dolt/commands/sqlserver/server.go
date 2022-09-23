@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
@@ -123,6 +124,11 @@ func Serve(
 		}
 	}
 
+	clusterController, err := cluster.NewController(serverConfig.ClusterConfig(), mrEnv.Config())
+	if err != nil {
+		return err, nil
+	}
+
 	serverConf, sErr, cErr := getConfigFromServerConfig(serverConfig)
 	if cErr != nil {
 		return nil, cErr
@@ -132,15 +138,16 @@ func Serve(
 
 	// Create SQL Engine with users
 	config := &engine.SqlEngineConfig{
-		InitialDb:      "",
-		IsReadOnly:     serverConfig.ReadOnly(),
-		PrivFilePath:   serverConfig.PrivilegeFilePath(),
-		DoltCfgDirPath: serverConfig.CfgDir(),
-		ServerUser:     serverConfig.User(),
-		ServerPass:     serverConfig.Password(),
-		ServerHost:     serverConfig.Host(),
-		Autocommit:     serverConfig.AutoCommit(),
-		JwksConfig:     serverConfig.JwksConfig(),
+		InitialDb:         "",
+		IsReadOnly:        serverConfig.ReadOnly(),
+		PrivFilePath:      serverConfig.PrivilegeFilePath(),
+		DoltCfgDirPath:    serverConfig.CfgDir(),
+		ServerUser:        serverConfig.User(),
+		ServerPass:        serverConfig.Password(),
+		ServerHost:        serverConfig.Host(),
+		Autocommit:        serverConfig.AutoCommit(),
+		JwksConfig:        serverConfig.JwksConfig(),
+		ClusterController: clusterController,
 	}
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,

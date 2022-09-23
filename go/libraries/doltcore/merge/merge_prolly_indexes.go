@@ -167,7 +167,7 @@ func mergeProllySecondaryIndexes(
 			}
 
 			var collision = false
-			merged, err := prolly.MergeMaps(ctx, left, right, anc, func(left, right tree.Diff) (tree.Diff, bool) {
+			merged, _, err := prolly.MergeMaps(ctx, left, right, anc, func(left, right tree.Diff) (tree.Diff, bool) {
 				if left.Type == right.Type && bytes.Equal(left.To, right.To) {
 					// convergent edit
 					return left, true

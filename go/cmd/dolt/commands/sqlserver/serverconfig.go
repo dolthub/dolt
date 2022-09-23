@@ -16,12 +16,15 @@ package sqlserver
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"path/filepath"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 )
 
 // LogLevel defines the available levels of logging for the server.
@@ -146,6 +149,8 @@ type ServerConfig interface {
 	// as a dolt remote for things like `clone`, `fetch` and read
 	// replication.
 	RemotesapiPort() *int
+	// ClusterConfig is the configuration for clustering in this sql-server.
+	ClusterConfig() cluster.Config
 }
 
 type validatingServerConfig interface {
@@ -279,6 +284,10 @@ func (cfg *commandLineServerConfig) MetricsPort() int {
 
 func (cfg *commandLineServerConfig) RemotesapiPort() *int {
 	return cfg.remotesapiPort
+}
+
+func (cfg *commandLineServerConfig) ClusterConfig() cluster.Config {
+	return nil
 }
 
 // PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
@@ -469,6 +478,34 @@ func ValidateConfig(config ServerConfig) error {
 	}
 	if config.RequireSecureTransport() && config.TLSCert() == "" && config.TLSKey() == "" {
 		return fmt.Errorf("require_secure_transport can only be `true` when a tls_key and tls_cert are provided.")
+	}
+	return ValidateClusterConfig(config.ClusterConfig())
+}
+
+func ValidateClusterConfig(config cluster.Config) error {
+	if config == nil {
+		return nil
+	}
+	remotes := config.StandbyRemotes()
+	if len(remotes) == 0 {
+		return errors.New("cluster config: must supply standby_remotes when supplying cluster configuration.")
+	}
+	for i := range remotes {
+		if remotes[i].Name() == "" {
+			return fmt.Errorf("cluster: standby_remotes[%d]: name: Cannot be empty", i)
+		}
+		if strings.Index(remotes[i].RemoteURLTemplate(), "{database}") == -1 {
+			return fmt.Errorf("cluster: standby_remotes[%d]: remote_url_template: is \"%s\" but must include the {database} template parameter", i, remotes[i].RemoteURLTemplate())
+		}
+	}
+	if config.BootstrapRole() != "" && config.BootstrapRole() != "primary" && config.BootstrapRole() != "standby" {
+		return fmt.Errorf("cluster: boostrap_role: is \"%s\" but must be \"primary\" or \"standby\"", config.BootstrapRole())
+	}
+	if config.BootstrapEpoch() < 0 {
+		return fmt.Errorf("cluster: boostrap_epoch: is %d but must be >= 0", config.BootstrapEpoch())
+	}
+	if config.RemotesAPIConfig().Port() < 0 || config.RemotesAPIConfig().Port() > 65535 {
+		return fmt.Errorf("cluster: remotesapi: port: is not in range 0-65535: %d", config.RemotesAPIConfig().Port())
 	}
 	return nil
 }
