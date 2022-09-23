@@ -6314,7 +6314,7 @@ var DoltCommitTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "CALL DOLT_COMMIT('-ALL') adds all tables (including new ones) to the commit.",
+		Name: "dolt commit works with arguments",
 		SetUpScript: []string{
 			"CREATE table t (pk int primary key);",
 			"INSERT INTO t VALUES (1);",
@@ -6323,7 +6323,7 @@ var DoltCommitTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT message from dolt_log LIMIT 1",
+				Query: "SELECT message from dolt_log where message = 'author: somebody'",
 				Expected: []sql.Row{
 					{"author: somebody"},
 				},
