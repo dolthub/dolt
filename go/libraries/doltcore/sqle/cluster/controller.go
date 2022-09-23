@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"sync"
 
+	"google.golang.org/grpc"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -37,6 +38,8 @@ type Controller struct {
 	epoch         int
 	systemVars    sqlvars
 	mu            sync.Mutex
+	sinterceptor  serverinterceptor
+	cinterceptor  clientinterceptor
 }
 
 type sqlvars interface {
@@ -91,6 +94,14 @@ func (c *Controller) RemoteSrvPort() int {
 		return -1
 	}
 	return c.cfg.RemotesAPIConfig().Port()
+}
+
+func (c *Controller) ServerOptions() []grpc.ServerOption {
+	return c.sinterceptor.Options()
+}
+
+func (c *Controller) DialOptions() []grpc.DialOption {
+	return c.cinterceptor.Options()
 }
 
 func (c *Controller) refreshSystemVars() {
@@ -165,18 +176,22 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int) error {
 	if epoch < c.epoch {
 		return fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d", role, epoch, c.epoch)
 	}
-	if role == string(c.role) {
-		c.epoch = epoch
-		c.refreshSystemVars()
-		return c.persistVariables()
-	}
+
 	if role != "primary" && role != "standby" {
 		return fmt.Errorf("error assuming role '%s'; valid roles are 'primary' and 'standby'", role)
 	}
 
-	// TODO: Role is transitioning...lots of stuff to do.
+	changedrole := role != string(c.role)
+
 	c.role = Role(role)
 	c.epoch = epoch
+
+	if changedrole {
+		// TODO: Role is transitioning...lots of stuff to do.
+	}
+
 	c.refreshSystemVars()
+	c.cinterceptor.setRole(c.role, c.epoch)
+	c.sinterceptor.setRole(c.role, c.epoch)
 	return c.persistVariables()
 }

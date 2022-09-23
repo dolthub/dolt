@@ -244,6 +244,7 @@ func Serve(
 				Logger: logrus.NewEntry(lgr),
 				HttpPort: clusterController.RemoteSrvPort(),
 				GrpcPort: clusterController.RemoteSrvPort(),
+				Options:  clusterController.ServerOptions(),
 			})
 			listeners, err := clusterRemoteSrv.Listeners()
 			if err != nil {
