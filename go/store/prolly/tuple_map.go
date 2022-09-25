@@ -173,18 +173,18 @@ func DiffMapsKeyRange(ctx context.Context, from, to Map, start, stop val.Tuple, 
 	return tree.DiffKeyRangeOrderedTrees(ctx, from.tuples, to.tuples, start, stop, cb)
 }
 
-func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
+func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, tree.MergeStats, error) {
 	serializer := message.NewProllyMapSerializer(left.valDesc, base.NodeStore().Pool())
-	tuples, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
+	tuples, stats, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
 	if err != nil {
-		return Map{}, err
+		return Map{}, tree.MergeStats{}, err
 	}
 
 	return Map{
 		tuples:  tuples,
 		keyDesc: base.keyDesc,
 		valDesc: base.valDesc,
-	}, nil
+	}, stats, nil
 }
 
 // NodeStore returns the map's NodeStore

@@ -100,16 +100,16 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		tokens := strings.Split(path, "/")
-		if len(tokens) != 3 {
+		i := strings.LastIndex(path, "/")
+		// a table file name is currently 32 characters, plus the '/' is 33.
+		if i < 0 || len(path[i:]) != 33 {
 			logger.Printf("response to: %v method: %v http response code: %v", req.RequestURI, req.Method, http.StatusNotFound)
 			respWr.WriteHeader(http.StatusNotFound)
 			return
 		}
 
-		org := tokens[0]
-		repo := tokens[1]
-		file := tokens[2]
+		filepath := path[:i]
+		file := path[i+1:]
 
 		q := req.URL.Query()
 		ncs := q.Get("num_chunks")
@@ -149,7 +149,7 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		statusCode = writeTableFile(req.Context(), logger, fh.dbCache, org, repo, file, num_chunks, content_hash, uint64(content_length), req.Body)
+		statusCode = writeTableFile(req.Context(), logger, fh.dbCache, filepath, file, num_chunks, content_hash, uint64(content_length), req.Body)
 	}
 
 	if statusCode != -1 {
@@ -248,7 +248,7 @@ func (u *uploadreader) Close() error {
 	return nil
 }
 
-func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, org, repo, fileId string, numChunks int, contentHash []byte, contentLength uint64, body io.ReadCloser) int {
+func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, path, fileId string, numChunks int, contentHash []byte, contentLength uint64, body io.ReadCloser) int {
 	_, ok := hash.MaybeParse(fileId)
 	if !ok {
 		logger.Println(fileId, "is not a valid hash")
@@ -257,9 +257,9 @@ func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, 
 
 	logger.Println(fileId, "is valid")
 
-	cs, err := dbCache.Get(org, repo, types.Format_Default.VersionString())
+	cs, err := dbCache.Get(path, types.Format_Default.VersionString())
 	if err != nil {
-		logger.Println("failed to get", org+"/"+repo, "repository:", err.Error())
+		logger.Println("failed to get", path, "repository:", err.Error())
 		return http.StatusInternalServerError
 	}
 

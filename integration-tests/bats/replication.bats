@@ -504,6 +504,69 @@ SQL
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
 }
 
+@test "replication: non-fast-forward pull fails replication" {
+    dolt clone file://./rem1 clone1
+    cd clone1
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "insert into t1 values (1), (2), (3);"
+    dolt add .
+    dolt commit -am "new commit"
+    dolt push origin main
+
+    cd ../repo1
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+
+    cd ../clone1
+    dolt checkout -b new-main HEAD~
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "insert into t1 values (1), (2), (3);"
+    dolt add .
+    dolt commit -am "new commit"
+    dolt push -f origin new-main:main
+
+    cd ../repo1
+    run dolt sql -q "show tables"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "replication" ]] || false
+}
+
+@test "replication: non-fast-forward pull with force pull setting succeeds replication" {
+    dolt clone file://./rem1 clone1
+    cd clone1
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "insert into t1 values (1), (2), (3);"
+    dolt add .
+    dolt commit -am "new commit"
+    dolt push origin main
+
+    cd ../repo1
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+    dolt config --local --add sqlserver.global.dolt_read_replica_force_pull 1
+
+    run dolt sql -q "select sum(a) from t1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "6" ]] || false
+
+    cd ../clone1
+    dolt checkout -b new-main HEAD~
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "insert into t1 values (4), (5), (6);"
+    dolt add .
+    dolt commit -am "new commit"
+    dolt push -f origin new-main:main
+
+    cd ../repo1
+    run dolt sql -q "select sum(a) from t1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "15" ]] || false
+}
+
 @test "replication: pull bad remote quiet warning" {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_read_replica_remote unknown
