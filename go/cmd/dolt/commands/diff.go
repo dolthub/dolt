@@ -593,7 +593,7 @@ func diffRows(
 	}
 
 	columns := getColumnNamesString(td.FromSch, td.ToSch)
-	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", tableName, from, to)
+	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", from, to, tableName)
 
 	if len(dArgs.where) > 0 {
 		query += " where " + dArgs.where

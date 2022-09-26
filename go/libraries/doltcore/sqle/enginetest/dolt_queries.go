@@ -731,7 +731,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				// Without access to the database, dolt_diff should fail with a database access error
 				User:        "tester",
 				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_diff('test', 'main~', 'main');",
+				Query:       "SELECT * FROM dolt_diff('main~', 'main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
@@ -752,14 +752,14 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				// After granting access to mydb.test, dolt_diff should work
 				User:     "tester",
 				Host:     "localhost",
-				Query:    "SELECT COUNT(*) FROM dolt_diff('test', 'main~', 'main');",
+				Query:    "SELECT COUNT(*) FROM dolt_diff('main~', 'main', 'test');",
 				Expected: []sql.Row{{1}},
 			},
 			{
 				// With access to the db, but not the table, dolt_diff should fail
 				User:        "tester",
 				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_diff('test2', 'main~', 'main');",
+				Query:       "SELECT * FROM dolt_diff('main~', 'main', 'test2');",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
@@ -787,7 +787,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				// After revoking access, dolt_diff should fail
 				User:        "tester",
 				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_diff('test', 'main~', 'main');",
+				Query:       "SELECT * FROM dolt_diff('main~', 'main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
@@ -801,7 +801,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				// After granting access to the entire db, dolt_diff should work
 				User:     "tester",
 				Host:     "localhost",
-				Query:    "SELECT COUNT(*) FROM dolt_diff('test', 'main~', 'main');",
+				Query:    "SELECT COUNT(*) FROM dolt_diff('main~', 'main', 'test');",
 				Expected: []sql.Row{{1}},
 			},
 			{
@@ -822,7 +822,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				// After revoking access, dolt_diff should fail
 				User:        "tester",
 				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_diff('test', 'main~', 'main');",
+				Query:       "SELECT * FROM dolt_diff('main~', 'main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
@@ -843,7 +843,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				// After granting global access to *.*, dolt_diff should work
 				User:     "tester",
 				Host:     "localhost",
-				Query:    "SELECT COUNT(*) FROM dolt_diff('test', 'main~', 'main');",
+				Query:    "SELECT COUNT(*) FROM dolt_diff('main~', 'main', 'test');",
 				Expected: []sql.Row{{1}},
 			},
 			{
@@ -857,7 +857,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				// After revoking global access, dolt_diff should fail
 				User:        "tester",
 				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_diff('test', 'main~', 'main');",
+				Query:       "SELECT * FROM dolt_diff('main~', 'main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 		},
@@ -4310,6 +4310,26 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "add multiple columns, then set and unset a value. Should not show a diff",
+		SetUpScript: []string{
+			"CREATE table t (pk int primary key);",
+			"Insert into t values (1);",
+			"alter table t add column col1 int;",
+			"alter table t add column col2 int;",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+			"UPDATE t set col1 = 1 where pk = 1;",
+			"UPDATE t set col1 = null where pk = 1;",
+			"CALL DOLT_COMMIT('--allow-empty', '-am', 'fix short tuple');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT to_pk, to_col1, from_pk, from_col1, diff_type from dolt_diff_t;",
+				Expected: []sql.Row{{1, nil, nil, nil, "added"}},
+			},
+		},
+	},
 }
 
 var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
@@ -4353,11 +4373,11 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				ExpectedErr: sql.ErrInvalidArgumentNumber,
 			},
 			{
-				Query:       "SELECT * from dolt_diff('t', @Commit1);",
+				Query:       "SELECT * from dolt_diff(@Commit1, 't');",
 				ExpectedErr: sql.ErrInvalidArgumentNumber,
 			},
 			{
-				Query:       "SELECT * from dolt_diff('t', @Commit1, @Commit2, 'extra');",
+				Query:       "SELECT * from dolt_diff(@Commit1, @Commit2, 'extra', 't');",
 				ExpectedErr: sql.ErrInvalidArgumentNumber,
 			},
 			{
@@ -4365,39 +4385,39 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
-				Query:       "SELECT * from dolt_diff(123, @Commit1, @Commit2);",
+				Query:       "SELECT * from dolt_diff(@Commit1, @Commit2, 123);",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
-				Query:       "SELECT * from dolt_diff('t', 123, @Commit2);",
+				Query:       "SELECT * from dolt_diff(123, @Commit2, 't');",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
-				Query:       "SELECT * from dolt_diff('t', @Commit1, 123);",
+				Query:       "SELECT * from dolt_diff(@Commit1, 123, 't');",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
-				Query:       "SELECT * from dolt_diff('doesnotexist', @Commit1, @Commit2);",
+				Query:       "SELECT * from dolt_diff(@Commit1, @Commit2, 'doesnotexist');",
 				ExpectedErr: sql.ErrTableNotFound,
 			},
 			{
-				Query:          "SELECT * from dolt_diff('t', 'fakefakefakefakefakefakefakefake', @Commit2);",
+				Query:          "SELECT * from dolt_diff('fakefakefakefakefakefakefakefake', @Commit2, 't');",
 				ExpectedErrStr: "target commit not found",
 			},
 			{
-				Query:          "SELECT * from dolt_diff('t', @Commit1, 'fake-branch');",
+				Query:          "SELECT * from dolt_diff(@Commit1, 'fake-branch', 't');",
 				ExpectedErrStr: "branch not found: fake-branch",
 			},
 			{
-				Query:       "SELECT * from dolt_diff('t', @Commit1, concat('fake', '-', 'branch'));",
+				Query:       "SELECT * from dolt_diff(@Commit1, concat('fake', '-', 'branch'), 't');",
 				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
 			},
 			{
-				Query:       "SELECT * from dolt_diff('t', hashof('main'), @Commit2);",
+				Query:       "SELECT * from dolt_diff(hashof('main'), @Commit2, 't');",
 				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
 			},
 			{
-				Query:       "SELECT * from dolt_diff(LOWER('T'), hashof('main'), @Commit2);",
+				Query:       "SELECT * from dolt_diff(hashof('main'), @Commit2, LOWER('T'));",
 				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
 			},
 		},
@@ -4425,15 +4445,15 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
+				Query:    "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit2, 't');",
 				Expected: []sql.Row{{1, "one", "two", nil, nil, nil, "added"}},
 			},
 			{
-				Query:    "SELECT COUNT(*) from dolt_diff('t', @Commit2, @Commit3);",
+				Query:    "SELECT COUNT(*) from dolt_diff(@Commit2, @Commit3, 't');",
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit3, @Commit4);",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit3, @Commit4, 't');",
 				Expected: []sql.Row{
 					{1, "uno", "dos", 1, "one", "two", "modified"},
 					{2, "two", "three", nil, nil, nil, "added"},
@@ -4441,7 +4461,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit4, @Commit3);",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit4, @Commit3, 't');",
 				Expected: []sql.Row{
 					{1, "one", "two", 1, "uno", "dos", "modified"},
 					{nil, nil, nil, 2, "two", "three", "removed"},
@@ -4450,11 +4470,11 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				// Table t2 had no changes between Commit3 and Commit4, so results should be empty
-				Query:    "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff('T2', @Commit3, @Commit4);",
+				Query:    "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit3, @Commit4, 'T2');",
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff('t', @Commit1, @Commit4);",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit1, @Commit4, 't');",
 				Expected: []sql.Row{
 					{1, "uno", "dos", nil, nil, nil, "added"},
 					{2, "two", "three", nil, nil, nil, "added"},
@@ -4463,7 +4483,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				// Reverse the to/from commits to see the diff from the other direction
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff('T', @Commit4, @Commit1);",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit4, @Commit1, 'T');",
 				Expected: []sql.Row{
 					{nil, nil, nil, 1, "uno", "dos", "removed"},
 					{nil, nil, nil, 2, "two", "three", "removed"},
@@ -4488,7 +4508,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', @Commit1, 'WORKING') order by coalesce(from_pk, to_pk)",
+				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff(@Commit1, 'WORKING', 't') order by coalesce(from_pk, to_pk)",
 				Expected: []sql.Row{
 					{1, "one", "two", 1, "one", "100", "modified"},
 					{2, "three", "four", nil, nil, nil, "removed"},
@@ -4496,7 +4516,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'STAGED', 'WORKING') order by coalesce(from_pk, to_pk);",
+				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('STAGED', 'WORKING', 't') order by coalesce(from_pk, to_pk);",
 				Expected: []sql.Row{
 					{1, "one", "two", 1, "one", "100", "modified"},
 					{2, "three", "four", nil, nil, nil, "removed"},
@@ -4504,7 +4524,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'WORKING', 'STAGED') order by coalesce(from_pk, to_pk);",
+				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('WORKING', 'STAGED', 't') order by coalesce(from_pk, to_pk);",
 				Expected: []sql.Row{
 					{1, "one", "100", 1, "one", "two", "modified"},
 					{nil, nil, nil, 2, "three", "four", "added"},
@@ -4512,11 +4532,11 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'WORKING', 'WORKING') order by coalesce(from_pk, to_pk);",
+				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('WORKING', 'WORKING', 't') order by coalesce(from_pk, to_pk);",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'STAGED', 'STAGED') order by coalesce(from_pk, to_pk);",
+				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('STAGED', 'STAGED', 't') order by coalesce(from_pk, to_pk);",
 				Expected: []sql.Row{},
 			},
 			{
@@ -4524,11 +4544,11 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'WORKING', 'STAGED') order by coalesce(from_pk, to_pk);",
+				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('WORKING', 'STAGED', 't') order by coalesce(from_pk, to_pk);",
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'HEAD', 'STAGED') order by coalesce(from_pk, to_pk);",
+				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('HEAD', 'STAGED', 't') order by coalesce(from_pk, to_pk);",
 				Expected: []sql.Row{
 					{1, "one", "two", 1, "one", "100", "modified"},
 					{2, "three", "four", nil, nil, nil, "removed"},
@@ -4563,21 +4583,21 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', 'main', 'branch1');",
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('main', 'branch1', 't');",
 				Expected: []sql.Row{
 					{nil, nil, 1, "one", "two", "removed"},
 					{2, "two", 2, "two", "three", "modified"},
 				},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff('t', 'branch1', 'main');",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff('branch1', 'main', 't');",
 				Expected: []sql.Row{
 					{1, "one", "two", nil, nil, "added"},
 					{2, "two", "three", 2, "two", "modified"},
 				},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', 'main~', 'branch1');",
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('main~', 'branch1', 't');",
 				Expected: []sql.Row{
 					{nil, nil, 1, "one", "two", "removed"},
 					{2, "two", nil, nil, nil, "added"},
@@ -4605,25 +4625,25 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit2, 't');",
 				Expected: []sql.Row{
 					{1, "one", "two", nil, nil, nil, "added"},
 					{2, "two", "three", nil, nil, nil, "added"},
 				},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit2, @Commit3);",
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit2, @Commit3, 't');",
 				Expected: []sql.Row{
 					{1, "one", 1, "one", "two", "modified"},
 					{2, "two", 2, "two", "three", "modified"},
 				},
 			},
 			{
-				Query:       "SELECT to_c2 from dolt_diff('t', @Commit2, @Commit3);",
+				Query:       "SELECT to_c2 from dolt_diff(@Commit2, @Commit3, 't');",
 				ExpectedErr: sql.ErrColumnNotFound,
 			},
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff('t', @Commit3, @Commit4);",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff(@Commit3, @Commit4, 't');",
 				Expected: []sql.Row{
 					{1, "one", "foo", 1, "one", "modified"},
 					// This row doesn't show up as changed because adding a column doesn't touch the row data.
@@ -4632,11 +4652,11 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:       "SELECT from_c2 from dolt_diff('t', @Commit3, @Commit4);",
+				Query:       "SELECT from_c2 from dolt_diff(@Commit3, @Commit4, 't');",
 				ExpectedErr: sql.ErrColumnNotFound,
 			},
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit4);",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit4, 't');",
 				Expected: []sql.Row{
 					{1, "one", "foo", nil, nil, nil, "added"},
 					{2, "two", nil, nil, nil, nil, "added"},
@@ -4668,43 +4688,43 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit2, 't');",
 				Expected: []sql.Row{
 					{1, "one", -1, nil, nil, nil, "added"},
 					{2, "two", -2, nil, nil, nil, "added"},
 				},
 			},
 			{
-				Query:       "SELECT to_c2 from dolt_diff('t', @Commit2, @Commit3);",
+				Query:       "SELECT to_c2 from dolt_diff(@Commit2, @Commit3, 't');",
 				ExpectedErr: sql.ErrColumnNotFound,
 			},
 			{
-				Query:    "SELECT to_pk, to_c1, to_c3, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit2, @Commit3);",
+				Query:    "SELECT to_pk, to_c1, to_c3, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit2, @Commit3, 't');",
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, to_c3, from_pk, from_c1, from_c3, diff_type from dolt_diff('t', @Commit3, @Commit4);",
+				Query: "SELECT to_pk, to_c1, to_c3, from_pk, from_c1, from_c3, diff_type from dolt_diff(@Commit3, @Commit4, 't');",
 				Expected: []sql.Row{
 					{3, "three", -3, nil, nil, nil, "added"},
 					{1, "one", 1, 1, "one", -1, "modified"},
 				},
 			},
 			{
-				Query:       "SELECT from_c2 from dolt_diff('t', @Commit4, @Commit5);",
+				Query:       "SELECT from_c2 from dolt_diff(@Commit4, @Commit5, 't');",
 				ExpectedErr: sql.ErrColumnNotFound,
 			},
 			{
-				Query:       "SELECT to_c3 from dolt_diff('t', @Commit4, @Commit5);",
+				Query:       "SELECT to_c3 from dolt_diff(@Commit4, @Commit5, 't');",
 				ExpectedErr: sql.ErrColumnNotFound,
 			},
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c3, diff_type from dolt_diff('t', @Commit4, @Commit5);",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c3, diff_type from dolt_diff(@Commit4, @Commit5, 't');",
 				Expected: []sql.Row{
 					{4, "four", -4, nil, nil, nil, "added"},
 				},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit5);",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit5, 't');",
 				Expected: []sql.Row{
 					{1, "one", 1, nil, nil, nil, "added"},
 					{2, "two", -2, nil, nil, nil, "added"},
@@ -4737,34 +4757,34 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit2, 't');",
 				Expected: []sql.Row{
 					{1, "one", "asdf", nil, nil, nil, "added"},
 					{2, "two", "2", nil, nil, nil, "added"},
 				},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit2, @Commit3);",
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit2, @Commit3, 't');",
 				Expected: []sql.Row{
 					{1, "one", 1, "one", "asdf", "modified"},
 					{2, "two", 2, "two", "2", "modified"},
 				},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type from dolt_diff('t', @Commit3, @Commit4);",
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type from dolt_diff(@Commit3, @Commit4, 't');",
 				Expected: []sql.Row{
 					{3, "three", nil, nil, "added"},
 					{1, "fdsa", 1, "one", "modified"},
 				},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff('t', @Commit4, @Commit5);",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff(@Commit4, @Commit5, 't');",
 				Expected: []sql.Row{
 					{4, "four", -4, nil, nil, "added"},
 				},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit5);",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit5, 't');",
 				Expected: []sql.Row{
 					{1, "fdsa", nil, nil, nil, nil, "added"},
 					{2, "two", nil, nil, nil, nil, "added"},
@@ -4782,15 +4802,15 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD', 'WORKING')",
+				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('HEAD', 'WORKING', 't1')",
 				Expected: []sql.Row{{1, 2, "HEAD", "WORKING", "added"}},
 			},
 			{
-				Query:       "select to_a, from_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD', 'WORKING')",
+				Query:       "select to_a, from_b, from_commit, to_commit, diff_type from dolt_diff('HEAD', 'WORKING', 't1')",
 				ExpectedErr: sql.ErrColumnNotFound,
 			},
 			{
-				Query:    "select from_a, from_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'WORKING', 'HEAD')",
+				Query:    "select from_a, from_b, from_commit, to_commit, diff_type from dolt_diff('WORKING', 'HEAD', 't1')",
 				Expected: []sql.Row{{1, 2, "WORKING", "HEAD", "removed"}},
 			},
 		},
@@ -4807,7 +4827,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "select from_a, from_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD~', 'HEAD')",
+				Query:    "select from_a, from_b, from_commit, to_commit, diff_type from dolt_diff('HEAD~', 'HEAD', 't1')",
 				Expected: []sql.Row{{1, 2, "HEAD~", "HEAD", "removed"}},
 			},
 		},
@@ -4826,12 +4846,12 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('t2', 'HEAD~', 'HEAD')",
+				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('HEAD~', 'HEAD', 't2')",
 				Expected: []sql.Row{{3, 4, "HEAD~", "HEAD", "added"}},
 			},
 			{
 				// Maybe confusing? We match the old table name as well
-				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD~', 'HEAD')",
+				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('HEAD~', 'HEAD', 't1')",
 				Expected: []sql.Row{{3, 4, "HEAD~", "HEAD", "added"}},
 			},
 		},
@@ -4855,32 +4875,12 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "select to_pk2, to_col1, from_pk, from_col1, diff_type from dolt_diff('t1', 'HEAD~', 'HEAD')",
+				Query:    "select to_pk2, to_col1, from_pk, from_col1, diff_type from dolt_diff('HEAD~', 'HEAD', 't1')",
 				Expected: []sql.Row{{1, 100, 1, 1, "modified"}},
 			},
 			{
-				Query:    "select to_pk2a, to_pk2b, to_col1, from_pk1a, from_pk1b, from_col1, diff_type from dolt_diff('t2', 'HEAD~', 'HEAD');",
+				Query:    "select to_pk2a, to_pk2b, to_col1, from_pk1a, from_pk1b, from_col1, diff_type from dolt_diff('HEAD~', 'HEAD', 't2');",
 				Expected: []sql.Row{{1, 1, 100, 1, 1, 1, "modified"}},
-			},
-		},
-	},
-	{
-		Name: "add multiple columns, then set and unset a value. Should not show a diff",
-		SetUpScript: []string{
-			"CREATE table t (pk int primary key);",
-			"Insert into t values (1);",
-			"alter table t add column col1 int;",
-			"alter table t add column col2 int;",
-			"CALL DOLT_ADD('.');",
-			"CALL DOLT_COMMIT('-am', 'setup');",
-			"UPDATE t set col1 = 1 where pk = 1;",
-			"UPDATE t set col1 = null where pk = 1;",
-			"CALL DOLT_COMMIT('--allow-empty', '-am', 'fix short tuple');",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "SELECT to_pk, to_col1, from_pk, from_col1, diff_type from dolt_diff_t;",
-				Expected: []sql.Row{{1, nil, nil, nil, "added"}},
 			},
 		},
 	},
