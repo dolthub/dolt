@@ -539,12 +539,16 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
-	// try with user-defined database name, if not found try alternative name with '-' instead of '_'
+	// We create database with '-'s replaced with '_'s in its name, so when we drop that database,
+	// we try removing directory with both names, user-defined database name and
+	// if it's not found, try alternative name with '_' replaced with '_'.
+	// Both the tries are done against directory nested in the current directory.
 	found, err := p.findAndDeleteNestedDatabaseDir(db.Name(), dbKey)
 	if !found {
 		altDBName := strings.Replace(db.Name(), "_", "-", -1)
 		found, err = p.findAndDeleteNestedDatabaseDir(altDBName, dbKey)
 		if !found {
+			// If none of the above finds the nested directory, try the current directory itself.
 			return p.checkCurrentDirAndDeleteDir(db.Name())
 		} else if err != nil {
 			return err
@@ -580,7 +584,7 @@ func (p DoltDatabaseProvider) findAndDeleteNestedDatabaseDir(dbName, dbKey strin
 	return false, nil
 }
 
-// checkCurrentDirAndDeleteDir checks if the current directory is a database directory, if it finds valid and matching
+// checkCurrentDirAndDeleteDir checks if the current directory is a database directory, if it finds valid and name-matching
 // database, it will drop the database/remove '.dolt' directory.
 func (p DoltDatabaseProvider) checkCurrentDirAndDeleteDir(dbName string) error {
 	// database is in the directory itself
