@@ -161,6 +161,136 @@ remotesapi:
 	require.Equal(t, 8000, *config.RemotesapiPort())
 }
 
+func TestUnmarshallCluster(t *testing.T) {
+	testStr := `
+cluster:
+  standby_remotes:
+  - name: standby
+    remote_url_template: http://doltdb-1.doltdb:50051/{database}
+  bootstrap_role: primary
+  bootstrap_epoch: 0
+  remotesapi:
+    port: 50051
+`
+	config, err := NewYamlConfig([]byte(testStr))
+	require.NoError(t, err)
+	require.NotNil(t, config.ClusterConfig())
+	require.NotNil(t, config.ClusterConfig().RemotesAPIConfig())
+	require.Equal(t, 50051, config.ClusterConfig().RemotesAPIConfig().Port())
+	require.Len(t, config.ClusterConfig().StandbyRemotes(), 1)
+	require.Equal(t, "primary", config.ClusterConfig().BootstrapRole())
+	require.Equal(t, 0, config.ClusterConfig().BootstrapEpoch())
+	require.Equal(t, "standby", config.ClusterConfig().StandbyRemotes()[0].Name())
+	require.Equal(t, "http://doltdb-1.doltdb:50051/{database}", config.ClusterConfig().StandbyRemotes()[0].RemoteURLTemplate())
+}
+
+func TestValidateClusterConfig(t *testing.T) {
+	cases := []struct {
+		Name   string
+		Config string
+		Error  bool
+	}{
+		{
+			Name:   "no cluster: config",
+			Config: "",
+			Error:  false,
+		},
+		{
+			Name: "all fields valid",
+			Config: `
+cluster:
+  standby_remotes:
+  - name: standby
+    remote_url_template: http://localhost:50051/{database}
+  bootstrap_role: primary
+  bootstrap_epoch: 0
+  remotesapi:
+    port: 50051
+`,
+			Error: false,
+		},
+		{
+			Name: "bad bootstrap_role",
+			Config: `
+cluster:
+  standby_remotes:
+  - name: standby
+    remote_url_template: http://localhost:50051/{database}
+  bootstrap_role: backup
+  bootstrap_epoch: 0
+  remotesapi:
+    port: 50051
+`,
+			Error: true,
+		},
+		{
+			Name: "negative bootstrap_epoch",
+			Config: `
+cluster:
+  standby_remotes:
+  - name: standby
+    remote_url_template: http://localhost:50051/{database}
+  bootstrap_role: primary
+  bootstrap_epoch: -1
+  remotesapi:
+    port: 50051
+`,
+			Error: true,
+		},
+		{
+			Name: "negative remotesapi port",
+			Config: `
+cluster:
+  standby_remotes:
+  - name: standby
+    remote_url_template: http://localhost:50051/{database}
+  bootstrap_role: primary
+  bootstrap_epoch: 0
+  remotesapi:
+    port: -5
+`,
+			Error: true,
+		},
+		{
+			Name: "bad remote_url_template",
+			Config: `
+cluster:
+  standby_remotes:
+  - name: standby
+    remote_url_template: http://localhost:50051/{database
+  bootstrap_role: primary
+  bootstrap_epoch: 0
+  remotesapi:
+    port: 50051
+`,
+			Error: true,
+		},
+		{
+			Name: "no standby remotes",
+			Config: `
+cluster:
+  standby_remotes:
+  bootstrap_role: primary
+  bootstrap_epoch: 0
+  remotesapi:
+    port: 50051
+`,
+			Error: true,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			cfg, err := NewYamlConfig([]byte(c.Config))
+			require.NoError(t, err)
+			if c.Error {
+				require.Error(t, ValidateClusterConfig(cfg.ClusterConfig()))
+			} else {
+				require.NoError(t, ValidateClusterConfig(cfg.ClusterConfig()))
+			}
+		})
+	}
+}
+
 // Tests that a common YAML error (incorrect indentation) throws an error
 func TestUnmarshallError(t *testing.T) {
 	testStr := `

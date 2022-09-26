@@ -233,6 +233,11 @@ func MapSchemaBasedOnTagAndName(inSch, outSch Schema) ([]int, []int, error) {
 	keyMapping := make([]int, inSch.GetPKCols().Size())
 	valMapping := make([]int, inSch.GetNonPKCols().Size())
 
+	// if inSch or outSch is empty schema. This can be from added or dropped table.
+	if len(inSch.GetAllCols().cols) == 0 || len(outSch.GetAllCols().cols) == 0 {
+		return keyMapping, valMapping, nil
+	}
+
 	err := inSch.GetPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
 		i := inSch.GetPKCols().TagToIdx[tag]
 		if col, ok := outSch.GetPKCols().GetByTag(tag); ok {

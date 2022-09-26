@@ -471,13 +471,7 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 	return nil
 }
 
-func HandleInvalidDoltSpecPathErr(name, url string, err error) error {
-	urlObj, _ := earl.Parse(url)
-	path := urlObj.Path
-	if path[0] == '/' {
-		path = path[1:]
-	}
-
-	var detail = fmt.Sprintf("the remote: %s %s '%s' should be in the format 'organization/repo'", name, url, path)
+func HandleInitRemoteStorageClientErr(name, url string, err error) error {
+	var detail = fmt.Sprintf("the remote: %s '%s' could not be accessed", name, url)
 	return fmt.Errorf("%w; %s; %s", ErrFailedToGetRemoteDb, detail, err.Error())
 }

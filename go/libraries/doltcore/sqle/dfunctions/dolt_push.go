@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/datas"
 )
@@ -94,10 +93,7 @@ func DoDoltPush(ctx *sql.Context, args []string) (int, error) {
 	}
 	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb, opts.Remote, true)
 	if err != nil {
-		if err == remotestorage.ErrInvalidDoltSpecPath {
-			return 1, actions.HandleInvalidDoltSpecPathErr(opts.Remote.Name, opts.Remote.Url, err)
-		}
-		return 1, err
+		return 1, actions.HandleInitRemoteStorageClientErr(opts.Remote.Name, opts.Remote.Url, err)
 	}
 
 	tmpDir, err := dbData.Rsw.TempTableFilesDir()

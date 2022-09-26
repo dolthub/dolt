@@ -29,12 +29,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -513,15 +511,8 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 // TODO: this method only adds error handling. Remove?
 func getRemoteDb(ctx *sql.Context, r env.Remote, dialer dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {
 	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dialer)
-
 	if err != nil {
 		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
-
-		if err == remotestorage.ErrInvalidDoltSpecPath {
-			urlObj, _ := earl.Parse(r.Url)
-			bdr.AddDetails("'%s' should be in the format 'organization/repo'", urlObj.Path)
-		}
-
 		return nil, bdr.Build()
 	}
 
@@ -768,6 +759,10 @@ func (p DoltDatabaseProvider) Function(_ *sql.Context, name string) (sql.Functio
 	return fn, nil
 }
 
+func (p DoltDatabaseProvider) Register(d sql.ExternalStoredProcedureDetails) {
+	p.externalProcedures.Register(d)
+}
+
 // ExternalStoredProcedure implements the sql.ExternalStoredProcedureProvider interface
 func (p DoltDatabaseProvider) ExternalStoredProcedure(_ *sql.Context, name string, numOfParams int) (*sql.ExternalStoredProcedureDetails, error) {
 	return p.externalProcedures.LookupByNameAndParamCount(name, numOfParams)
@@ -782,8 +777,12 @@ func (p DoltDatabaseProvider) ExternalStoredProcedures(_ *sql.Context, name stri
 func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.TableFunction, error) {
 	// currently, only one table function is supported, if we extend this, we should clean this up
 	// and store table functions in a map, similar to regular functions.
-	if strings.ToLower(name) == "dolt_diff" {
+	switch strings.ToLower(name) {
+	case "dolt_diff":
 		dtf := &DiffTableFunction{}
+		return dtf, nil
+	case "dolt_diff_summary":
+		dtf := &DiffSummaryTableFunction{}
 		return dtf, nil
 	}
 
@@ -860,7 +859,7 @@ func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDa
 	}
 
 	// create workingSets/heads/branch and update the working set
-	err = pullBranches(ctx, db, []string{branch}, currentBranchRef)
+	err = pullBranches(ctx, db, []string{branch}, currentBranchRef, pullBehavior_fastForward)
 	if err != nil {
 		return err
 	}
