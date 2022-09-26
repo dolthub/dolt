@@ -39,6 +39,7 @@ type Controller struct {
 	epoch         int
 	systemVars    sqlvars
 	mu            sync.Mutex
+	commithooks   []*commithook
 	sinterceptor  serverinterceptor
 	cinterceptor  clientinterceptor
 }
@@ -70,6 +71,7 @@ func NewController(cfg Config, pCfg config.ReadWriteConfig) (*Controller, error)
 		persistentCfg: pCfg,
 		role:          role,
 		epoch:         epoch,
+		commithooks:   make([]*commithook, 0),
 	}, nil
 }
 
@@ -194,5 +196,20 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int) error {
 	c.refreshSystemVars()
 	c.cinterceptor.setRole(c.role, c.epoch)
 	c.sinterceptor.setRole(c.role, c.epoch)
+	for _, h := range c.commithooks {
+		h.setRole(c.role)
+	}
 	return c.persistVariables()
+}
+
+func (c *Controller) roleAndEpoch() (Role, int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.role, c.epoch
+}
+
+func (c *Controller) registerCommitHook(hook *commithook) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.commithooks = append(c.commithooks, hook)
 }

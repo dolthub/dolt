@@ -101,7 +101,9 @@ func NewSqlEngine(
 
 	config.ClusterController.ManageSystemVariables(sql.SystemVariables)
 	config.ClusterController.RegisterStoredProcedures(pro)
-	pro.InitDatabaseHook = cluster.NewInitDatabaseHook(config.ClusterController, pro.InitDatabaseHook)
+	pro.InitDatabaseHook = cluster.NewInitDatabaseHook(config.ClusterController, bThreads, pro.InitDatabaseHook)
+
+	// TODO: Apply cluster replication to |dbs|. See commithook, InitDatabaseHook, etc.
 
 	// Load in privileges from file, if it exists
 	persister := mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
