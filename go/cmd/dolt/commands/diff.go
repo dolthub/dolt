@@ -391,8 +391,7 @@ func diffUserTable(
 	}
 
 	if dArgs.diffParts&Summary != 0 {
-		numCols := fromSch.GetAllCols().Size()
-		return printDiffSummary(ctx, td, numCols)
+		return printDiffSummary(ctx, td, fromSch.GetAllCols().Size(), toSch.GetAllCols().Size())
 	}
 
 	if dArgs.diffParts&SchemaOnlyDiff != 0 {
