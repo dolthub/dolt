@@ -752,7 +752,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				// After granting access to mydb.test, dolt_diff should work
 				User:     "tester",
 				Host:     "localhost",
-				Query:    "SELECT COUNT(*) FROM dolt_diff('main~', 'main0, 'test');",
+				Query:    "SELECT COUNT(*) FROM dolt_diff('main~', 'main', 'test');",
 				Expected: []sql.Row{{1}},
 			},
 			{
