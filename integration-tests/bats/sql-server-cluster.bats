@@ -33,13 +33,15 @@ behavior:
   autocommit: true
 cluster:
   standby_remotes:
-  - name: doltdb-1
-    remote_url_template: http://doltdb-1.doltdb:50051/{database}
+  - name: standby
+    remote_url_template: http://localhost:50052/{database}
   bootstrap_role: standby
   bootstrap_epoch: 10
   remotesapi:
     port: 50051" > server.yaml
 
+    (cd repo1 && dolt remote add standby http://localhost:50052/repo1)
+    (cd repo2 && dolt remote add standby http://localhost:50052/repo2)
     dolt sql-server --config server.yaml &
     SERVER_PID=$!
     wait_for_connection 3309 5000
@@ -61,8 +63,8 @@ behavior:
   autocommit: true
 cluster:
   standby_remotes:
-  - name: doltdb-1
-    remote_url_template: http://doltdb-1.doltdb:50051/{database}
+  - name: standby
+    remote_url_template: http://localhost:50052/{database}
   bootstrap_role: primary
   bootstrap_epoch: 0
   remotesapi:
@@ -87,13 +89,15 @@ behavior:
   autocommit: true
 cluster:
   standby_remotes:
-  - name: doltdb-1
-    remote_url_template: http://doltdb-1.doltdb:50051/{database}
+  - name: standby
+    remote_url_template: http://localhost:50052/{database}
   bootstrap_role: standby
   bootstrap_epoch: 10
   remotesapi:
     port: 50051" > server.yaml
 
+    (cd repo1 && dolt remote add standby http://localhost:50052/repo1)
+    (cd repo2 && dolt remote add standby http://localhost:50052/repo2)
     dolt sql-server --config server.yaml &
     SERVER_PID=$!
     wait_for_connection 3309 5000
@@ -141,15 +145,17 @@ behavior:
 cluster:
   standby_remotes:
   - name: standby
-    remote_url_template: http://doltdb-1.doltdb:50051/{database}
+    remote_url_template: http://localhost:50052/{database}
   bootstrap_role: primary
   bootstrap_epoch: 10
   remotesapi:
     port: 50051" > server.yaml
 
+    (cd repo1 && dolt remote add standby http://localhost:50052/repo1)
+    (cd repo2 && dolt remote add standby http://localhost:50052/repo2)
     dolt sql-server --config server.yaml &
     SERVER_PID=$!
     wait_for_connection 3309 5000
 
-    server_query_with_port 3309 repo1 1 dolt "" "create database a_new_database;use a_new_database;select name, url from dolt_remotes" ";;name,url\nstandby,http://doltdb-1.doltdb:50051/a_new_database"
+    server_query_with_port 3309 repo1 1 dolt "" "create database a_new_database;use a_new_database;select name, url from dolt_remotes" ";;name,url\nstandby,http://localhost:50052/a_new_database"
 }

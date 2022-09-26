@@ -15,6 +15,7 @@
 package cluster
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"sync"
@@ -22,7 +23,11 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"google.golang.org/grpc"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type Role string
@@ -83,6 +88,53 @@ func (c *Controller) ManageSystemVariables(variables sqlvars) {
 	defer c.mu.Unlock()
 	c.systemVars = variables
 	c.refreshSystemVars()
+}
+
+func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, bt *sql.BackgroundThreads, mrEnv *env.MultiRepoEnv, dbs ...sqle.SqlDatabase) error {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, db := range dbs {
+		denv := mrEnv.GetEnv(db.Name())
+		if denv == nil {
+			continue
+		}
+		hooks, err := applyCommitHooks(ctx, db.Name(), bt, denv, c.cfg, c.role)
+		if err != nil {
+			return err
+		}
+		c.commithooks = append(c.commithooks, hooks...)
+	}
+	return nil
+}
+
+func applyCommitHooks(ctx context.Context, name string, bt *sql.BackgroundThreads, denv *env.DoltEnv, cfg Config, role Role) ([]*commithook, error) {
+	ttfdir, err := denv.TempTableFilesDir()
+	if err != nil {
+		return nil, err
+	}
+	remotes, err := denv.GetRemotes()
+	if err != nil {
+		return nil, err
+	}
+	var hooks []*commithook
+	for _, r := range cfg.StandbyRemotes() {
+		remote, ok := remotes[r.Name()]
+		if !ok {
+			return nil, fmt.Errorf("sqle: cluster: standby replication: destination remote %s does not exist on database %s", r.Name(), name)
+		}
+		commitHook := newCommitHook(r.Name(), name, role, func() (*doltdb.DoltDB, error) {
+			return remote.GetRemoteDB(ctx, types.Format_Default, denv)
+		}, denv.DoltDB, ttfdir)
+		denv.DoltDB.PrependCommitHook(ctx, commitHook)
+		if err := commitHook.Run(bt); err != nil {
+			return nil, err
+		}
+		hooks = append(hooks, commitHook)
+	}
+	return hooks, nil
 }
 
 func (c *Controller) RegisterStoredProcedures(store procedurestore) {

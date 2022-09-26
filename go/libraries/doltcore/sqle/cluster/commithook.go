@@ -21,10 +21,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var _ doltdb.CommitHook = (*commithook)(nil)
@@ -44,8 +45,12 @@ type commithook struct {
 	role Role
 
 	// The standby replica to which the new root gets replicated.
-	destDB *doltdb.DoltDB
-	// This database, which we are replicating from.
+	destDB  *doltdb.DoltDB
+	// When we first start replicating to the destination, we lazily
+	// instantiate the remote and we do not treat failures as terminal.
+	destDBF func() (*doltdb.DoltDB, error)
+	// This database, which we are replicating from. In our current
+	// configuration, it is local to this server process.
 	srcDB *doltdb.DoltDB
 
 	tempDir string
@@ -53,12 +58,12 @@ type commithook struct {
 
 var errDestDBRootHashMoved error = errors.New("sqle: cluster: standby replication: destination database root hash moved during our write, while it is assumed we are the only writer.")
 
-func newCommitHook(remotename, dbname string, role Role, destDB, srcDB *doltdb.DoltDB, tempDir string) *commithook {
+func newCommitHook(remotename, dbname string, role Role, destDBF func() (*doltdb.DoltDB, error), srcDB *doltdb.DoltDB, tempDir string) *commithook {
 	var ret commithook
 	ret.remotename = remotename
 	ret.dbname = dbname
 	ret.role = role
-	ret.destDB = destDB
+	ret.destDBF = destDBF
 	ret.srcDB = srcDB
 	ret.tempDir = tempDir
 	ret.cond = sync.NewCond(&ret.mu)
@@ -66,7 +71,7 @@ func newCommitHook(remotename, dbname string, role Role, destDB, srcDB *doltdb.D
 }
 
 func (h *commithook) Run(bt *sql.BackgroundThreads) error {
-	return bt.Add("Standby Replication - " + h.dbname + " to " + h.remotename, h.run)
+	return bt.Add("Standby Replication - "+h.dbname+" to "+h.remotename, h.run)
 }
 
 func (h *commithook) replicate(ctx context.Context) {
@@ -89,11 +94,25 @@ func (h *commithook) replicate(ctx context.Context) {
 			}
 		} else if h.role == RolePrimary && h.nextHead != h.lastPushedHead && (h.nextPushAttempt == (time.Time{}) || time.Now().After(h.nextPushAttempt)) {
 			toPush := h.nextHead
+			destDB := h.destDB
 			h.mu.Unlock()
 
-			err := h.destDB.PullChunks(ctx, h.tempDir, h.srcDB, toPush, nil, nil)
+			if destDB == nil {
+				var err error
+				destDB, err = h.destDBF()
+				if err != nil {
+					h.mu.Lock()
+					// TODO: Log this.
+					continue
+				}
+				h.mu.Lock()
+				h.destDB = destDB
+				h.mu.Unlock()
+			}
+
+			err := destDB.PullChunks(ctx, h.tempDir, h.srcDB, toPush, nil, nil)
 			if err == nil {
-				datasDB := doltdb.HackDatasDatabaseFromDoltDB(h.destDB)
+				datasDB := doltdb.HackDatasDatabaseFromDoltDB(destDB)
 				cs := datas.ChunkStoreFromDatabase(datasDB)
 				var curRootHash hash.Hash
 				if curRootHash, err = cs.Root(ctx); err == nil {

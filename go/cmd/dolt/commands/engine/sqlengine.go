@@ -102,6 +102,10 @@ func NewSqlEngine(
 	config.ClusterController.ManageSystemVariables(sql.SystemVariables)
 	config.ClusterController.RegisterStoredProcedures(pro)
 	pro.InitDatabaseHook = cluster.NewInitDatabaseHook(config.ClusterController, bThreads, pro.InitDatabaseHook)
+	err = config.ClusterController.ApplyStandbyReplicationConfig(ctx, bThreads, mrEnv, dbs...)
+	if err != nil {
+		return nil, err
+	}
 
 	// TODO: Apply cluster replication to |dbs|. See commithook, InitDatabaseHook, etc.
 

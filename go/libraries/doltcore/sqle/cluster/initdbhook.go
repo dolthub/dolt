@@ -19,9 +19,9 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -31,7 +31,7 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 		return orig
 	}
 	return func(ctx *sql.Context, pro sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv) error {
-		var remoteDBs []*doltdb.DoltDB
+		var remoteDBs []func() (*doltdb.DoltDB, error)
 		for _, r := range controller.cfg.StandbyRemotes() {
 			// TODO: url sanitize name
 			remoteUrl := strings.Replace(r.RemoteURLTemplate(), dsess.URLTemplateDatabasePlaceholder, name, -1)
@@ -44,14 +44,9 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 				return err
 			}
 
-			// TODO: I think this needs to be a thunk that we pass
-			// to newCommitHook so we can start the replication
-			// threads even when the remote is down.
-			db, err := r.GetRemoteDB(ctx, types.Format_Default, denv)
-			if err != nil {
-				return err
-			}
-			remoteDBs = append(remoteDBs, db)
+			remoteDBs = append(remoteDBs, func() (*doltdb.DoltDB, error) {
+				return r.GetRemoteDB(ctx, types.Format_Default, denv)
+			})
 		}
 
 		err := orig(ctx, pro, name, denv)
@@ -65,7 +60,7 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 			if err != nil {
 				return err
 			}
-			commitHook := newCommitHook(r.Name(), name, role, denv.DoltDB, remoteDBs[i], ttfdir)
+			commitHook := newCommitHook(r.Name(), name, role, remoteDBs[i], denv.DoltDB, ttfdir)
 			denv.DoltDB.PrependCommitHook(ctx, commitHook)
 			controller.registerCommitHook(commitHook)
 			if err := commitHook.Run(bt); err != nil {

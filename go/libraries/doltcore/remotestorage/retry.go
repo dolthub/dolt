@@ -50,6 +50,10 @@ func processGrpcErr(err error) error {
 		return nil
 	}
 
+	if errors.Is(err, context.Canceled) {
+		return backoff.Permanent(err)
+	}
+
 	st, ok := status.FromError(err)
 
 	if !ok {
