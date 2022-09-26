@@ -48,6 +48,8 @@ const (
 	// InMemBlobstore Scheme
 	LocalBSScheme = "localbs"
 
+	OSSScheme = "oss"
+
 	defaultScheme       = HTTPSScheme
 	defaultMemTableSize = 256 * 1024 * 1024
 )
@@ -65,6 +67,7 @@ type DBFactory interface {
 // from external packages.
 var DBFactories = map[string]DBFactory{
 	AWSScheme:     AWSFactory{},
+	OSSScheme:     OSSFactory{},
 	GSScheme:      GSFactory{},
 	FileScheme:    FileFactory{},
 	MemScheme:     MemFactory{},
