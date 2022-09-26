@@ -94,6 +94,8 @@ func (cmd RemoteCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
+	ap.SupportsString(dbfactory.OSSCredsFileParam, "", "file", "OSS credentials file")
+	ap.SupportsString(dbfactory.OSSCredsProfile, "", "profile", "OSS profile to use")
 	return ap
 }
 
@@ -191,12 +193,14 @@ func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (
 	params := map[string]string{}
 
 	var err error
-	if scheme == dbfactory.AWSScheme {
+	switch scheme {
+	case dbfactory.AWSScheme:
 		err = cli.AddAWSParams(remoteUrl, apr, params)
-	} else {
+	case dbfactory.OSSScheme:
+		err = cli.AddOSSParams(remoteUrl, apr, params)
+	default:
 		err = cli.VerifyNoAwsParams(apr)
 	}
-
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}
