@@ -18,6 +18,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"io"
 	"strings"
 
@@ -195,6 +198,84 @@ func resolveOldFormatConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName stri
 	return newTbl, nil
 }
 
+func resolveOldFormatConflicts2(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, ours bool) (*doltdb.Table, error) {
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "0.41.5")
+	if dEnv == nil {
+	}
+
+	cnfReader, err := merge.NewConflictReader(ctx, tbl, tblName)
+	if err != nil {
+		return nil, err
+	}
+
+	joiner := cnfReader.GetJoiner()
+	cnfSch := cnfReader.GetSchema()
+
+	// this matters because only keyless tables will have a cardinality
+	isKeyless := schema.IsKeyless(cnfSch)
+	if isKeyless {
+	}
+
+	// Create new table editor
+	edit, err := editor.NewTableEditor(ctx, tbl, sch, tblName, editor.Options{})
+	if err != nil {
+		return nil, err
+	}
+
+	// get relevant cardinality tags
+	tags := cnfSch.GetAllCols().SortedTags
+	ourCardinalityTag := tags[len(tags)-2]
+	theirCardinalityTag := tags[len(tags)-1]
+
+	for {
+		cnfRow, err := cnfReader.NextConflict(ctx)
+		if err == io.EOF {
+			break
+		}
+		cnfMap, err := joiner.Split(cnfRow)
+		if err != nil {
+			return nil, err
+		}
+
+		// get cardinality
+		var ourCardinality, theirCardinality uint64
+		if ourCardinalityVal, ok := cnfRow.GetColVal(ourCardinalityTag); ok {
+			ourCardinality = uint64(ourCardinalityVal.(types.Uint))
+		} else {
+			panic("huh")
+		}
+		if theirCardinalityVal, ok := cnfRow.GetColVal(theirCardinalityTag); ok {
+			theirCardinality = uint64(theirCardinalityVal.(types.Uint))
+		} else {
+			panic("huh")
+		}
+
+		rowDelta := 0
+		var row row.Row
+		if ours {
+			row = cnfMap["our"]
+		} else {
+			row = cnfMap["their"]
+			rowDelta = int(theirCardinality - ourCardinality)
+		}
+
+		if rowDelta > 0 {
+			for i := 0; i < rowDelta; i++ {
+				edit.InsertRow(ctx, row, func(newKeyString, indexName string, existingKey, existingVal types.Tuple, isPk bool) error {
+					return nil
+				})
+			}
+		} else {
+			rowDelta *= -1
+			for i := 0; i < rowDelta; i++ {
+				edit.DeleteRow(ctx, row)
+			}
+		}
+	}
+
+	return edit.Table(ctx)
+}
+
 func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
 	newRoot := root
 	for _, tblName := range tblNames {
@@ -231,7 +312,7 @@ func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.R
 		if tbl.Format() == types.Format_DOLT {
 			newTbl, err = resolveNewFormatConflicts(ctx, tbl, tblName, sch, ours)
 		} else {
-			newTbl, err = resolveOldFormatConflicts(ctx, tbl, tblName, sch, ours)
+			newTbl, err = resolveOldFormatConflicts2(ctx, tbl, tblName, sch, ours)
 		}
 
 		newTbl, err = newTbl.ClearConflicts(ctx)
