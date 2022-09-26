@@ -607,7 +607,7 @@ SQL
     ! [[ "$output" =~ "pk" ]] || false
 }
 
-@test "sql-conflicts-resolve: conflicts table properly cleared on dolt conflicts resolve with stored procedure" {
+@test "conflict-detection-2: conflicts table properly cleared on dolt conflicts resolve with stored procedure" {
     dolt sql -q "create table test(pk int, c1 int, primary key(pk))"
 
     run dolt conflicts cat test
