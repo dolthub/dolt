@@ -178,6 +178,27 @@ func (d *DoltSession) Flush(ctx *sql.Context, dbName string) error {
 	return d.SetRoot(ctx, dbName, ws.WorkingRoot())
 }
 
+func (d *DoltSession) ValidateWorkingSet(ctx *sql.Context, dbName string) error {
+	sessionState, _, err := d.LookupDbState(ctx, dbName)
+	if err != nil {
+		return err
+	}
+	wsRef := sessionState.WorkingSet.Ref()
+	_, err = sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
+	if err == doltdb.ErrWorkingSetNotFound {
+		_, err = d.newWorkingSetForHead(ctx, wsRef, dbName)
+		// if the current head is not found, the branch was force deleted, so use nil working set.
+		if errors.Is(err, doltdb.ErrBranchNotFound) {
+			return ErrCurrentBranchDeleted
+		} else if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+	return nil
+}
+
 // StartTransaction refreshes the state of this session and starts a new transaction.
 func (d *DoltSession) StartTransaction(ctx *sql.Context, dbName string, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
 	if TransactionsDisabled(ctx) {
@@ -205,10 +226,6 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, dbName string, tCharact
 	// TODO: every HEAD needs a working set created when it is. We can get rid of this in a 1.0 release when this is fixed
 	if err == doltdb.ErrWorkingSetNotFound {
 		ws, err = d.newWorkingSetForHead(ctx, wsRef, dbName)
-		// if the current head is not found, the branch was force deleted, so use nil working set.
-		if errors.Is(err, doltdb.ErrBranchNotFound) {
-			return nil, ErrCurrentBranchDeleted
-		}
 		if err != nil {
 			return nil, err
 		}
