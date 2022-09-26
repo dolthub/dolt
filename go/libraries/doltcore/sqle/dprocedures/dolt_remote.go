@@ -144,10 +144,12 @@ func remoteParams(apr *argparser.ArgParseResults, scheme, remoteUrl string) (map
 	params := map[string]string{}
 
 	var err error
-	if scheme == dbfactory.AWSScheme {
-		// TODO: get AWS params from session
+	switch scheme {
+	case dbfactory.AWSScheme:
 		err = cli.AddAWSParams(remoteUrl, apr, params)
-	} else {
+	case dbfactory.OSSScheme:
+		err = cli.AddOSSParams(remoteUrl, apr, params)
+	default:
 		err = cli.VerifyNoAwsParams(apr)
 	}
 
