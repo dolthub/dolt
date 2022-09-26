@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cnfcmds
+package dfunctions
 
 import (
 	"context"
@@ -40,8 +40,6 @@ const (
 	AutoResolveStrategyOurs AutoResolveStrategy = iota
 	AutoResolveStrategyTheirs
 )
-
-var ErrConfSchIncompatible = errors.New("the conflict schema's columns are not equal to the current schema's columns, please resolve manually")
 
 // AutoResolveAll resolves all conflicts in all tables according to the given
 // |strategy|.

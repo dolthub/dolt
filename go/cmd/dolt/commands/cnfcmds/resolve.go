@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -43,9 +44,9 @@ const (
 	theirsFlag = "theirs"
 )
 
-var autoResolveStrategies = map[string]AutoResolveStrategy{
-	oursFlag:   AutoResolveStrategyOurs,
-	theirsFlag: AutoResolveStrategyTheirs,
+var autoResolveStrategies = map[string]dfunctions.AutoResolveStrategy{
+	oursFlag:   dfunctions.AutoResolveStrategyOurs,
+	theirsFlag: dfunctions.AutoResolveStrategyTheirs,
 }
 
 var autoResolverParams []string
@@ -123,9 +124,9 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 	var err error
 	tbls := apr.Args
 	if len(tbls) == 1 && tbls[0] == "." {
-		err = AutoResolveAll(ctx, dEnv, autoResolveStrategy)
+		err = dfunctions.AutoResolveAll(ctx, dEnv, autoResolveStrategy)
 	} else {
-		err = AutoResolveTables(ctx, dEnv, autoResolveStrategy, tbls)
+		err = dfunctions.AutoResolveTables(ctx, dEnv, autoResolveStrategy, tbls)
 	}
 	if err != nil {
 		return errhand.BuildDError("error: failed to resolve").AddCause(err).Build()
