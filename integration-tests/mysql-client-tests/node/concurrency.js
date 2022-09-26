@@ -47,7 +47,7 @@ async function insertAuthor(name) {
     try {
         await conn.execute('start transaction');
         await conn.execute('INSERT INTO users (name) VALUES(?);', [name]);
-        await conn.execute(`call dolt_commit('-am', 'created author ?')`, [name]);
+        await conn.execute(`call dolt_commit('-am', concat('created author', ?))`, [name]);
     } catch (err) {
         console.error(`Error committing ${name}:`, err);
         process.exit(1)

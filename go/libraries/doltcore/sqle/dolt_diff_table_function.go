@@ -50,7 +50,7 @@ type DiffTableFunction struct {
 	toDate     *types.Timestamp
 }
 
-// NewInstance implements the TableFunction interface
+// NewInstance creates a new instance of TableFunction interface
 func (dtf *DiffTableFunction) NewInstance(ctx *sql.Context, database sql.Database, expressions []sql.Expression) (sql.Node, error) {
 	newInstance := &DiffTableFunction{
 		ctx:      ctx,
@@ -192,7 +192,7 @@ func loadDetailsForRef(
 // WithChildren implements the sql.Node interface
 func (dtf *DiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, error) {
 	if len(node) != 0 {
-		panic("unexpected children")
+		return nil, fmt.Errorf("unexpected children")
 	}
 	return dtf, nil
 }
@@ -257,7 +257,7 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, tableName string,
 
 	sqledb, ok := dtf.database.(Database)
 	if !ok {
-		panic(fmt.Sprintf("unexpected database type: %T", dtf.database))
+		return fmt.Errorf("unexpected database type: %T", dtf.database)
 	}
 
 	delta, err := dtf.cacheTableDelta(ctx, tableName, fromCommitVal, toCommitVal, sqledb)

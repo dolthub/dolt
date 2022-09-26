@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -48,17 +49,18 @@ type SqlEngine struct {
 }
 
 type SqlEngineConfig struct {
-	InitialDb      string
-	IsReadOnly     bool
-	IsServerLocked bool
-	DoltCfgDirPath string
-	PrivFilePath   string
-	ServerUser     string
-	ServerPass     string
-	ServerHost     string
-	Autocommit     bool
-	Bulk           bool
-	JwksConfig     []JwksConfig
+	InitialDb         string
+	IsReadOnly        bool
+	IsServerLocked    bool
+	DoltCfgDirPath    string
+	PrivFilePath      string
+	ServerUser        string
+	ServerPass        string
+	ServerHost        string
+	Autocommit        bool
+	Bulk              bool
+	JwksConfig        []JwksConfig
+	ClusterController *cluster.Controller
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -96,6 +98,11 @@ func NewSqlEngine(
 		return nil, err
 	}
 	pro = pro.WithRemoteDialer(mrEnv.RemoteDialProvider())
+
+	if config.ClusterController != nil {
+		config.ClusterController.ManageSystemVariables(sql.SystemVariables)
+		config.ClusterController.RegisterStoredProcedures(pro)
+	}
 
 	// Load in privileges from file, if it exists
 	persister := mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)

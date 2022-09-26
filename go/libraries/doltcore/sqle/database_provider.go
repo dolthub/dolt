@@ -759,6 +759,10 @@ func (p DoltDatabaseProvider) Function(_ *sql.Context, name string) (sql.Functio
 	return fn, nil
 }
 
+func (p DoltDatabaseProvider) Register(d sql.ExternalStoredProcedureDetails) {
+	p.externalProcedures.Register(d)
+}
+
 // ExternalStoredProcedure implements the sql.ExternalStoredProcedureProvider interface
 func (p DoltDatabaseProvider) ExternalStoredProcedure(_ *sql.Context, name string, numOfParams int) (*sql.ExternalStoredProcedureDetails, error) {
 	return p.externalProcedures.LookupByNameAndParamCount(name, numOfParams)
@@ -773,8 +777,12 @@ func (p DoltDatabaseProvider) ExternalStoredProcedures(_ *sql.Context, name stri
 func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.TableFunction, error) {
 	// currently, only one table function is supported, if we extend this, we should clean this up
 	// and store table functions in a map, similar to regular functions.
-	if strings.ToLower(name) == "dolt_diff" {
+	switch strings.ToLower(name) {
+	case "dolt_diff":
 		dtf := &DiffTableFunction{}
+		return dtf, nil
+	case "dolt_diff_summary":
+		dtf := &DiffSummaryTableFunction{}
 		return dtf, nil
 	}
 
