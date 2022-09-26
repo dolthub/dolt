@@ -183,6 +183,9 @@ func (d *DoltSession) ValidateWorkingSet(ctx *sql.Context, dbName string) error 
 	if err != nil {
 		return err
 	}
+	if sessionState.WorkingSet == nil {
+		return nil
+	}
 	wsRef := sessionState.WorkingSet.Ref()
 	_, err = sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
 	if err == doltdb.ErrWorkingSetNotFound {
