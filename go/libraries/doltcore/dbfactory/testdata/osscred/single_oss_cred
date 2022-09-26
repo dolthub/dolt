@@ -1,0 +1,7 @@
+{
+  "prod": {
+    "endpoint": "oss-cn-hangzhou.aliyuncs.com",
+    "accessKeyID": "testid",
+    "accessKeySecret": "test secret"
+  }
+}
