@@ -273,7 +273,7 @@ func resolveKeylessConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string
 		} else {
 			rowDelta *= -1
 			for i := 0; i < rowDelta; i++ {
-				tblEditor.DeleteRow(ctx, newRow)
+				tblEditor.DeleteRow(ctx, cnfMap["our"])
 			}
 		}
 	}

@@ -181,6 +181,24 @@ setup_merge() {
     [[ "${lines[3]}" =~ "2,12" ]] || false
 }
 
+@test "garbage_collection: leave merge commit with stored procedure" {
+    skip_nbf_dolt
+    setup_merge
+    dolt merge other -m "merge"
+
+    dolt gc
+
+    dolt sql -q "call dolt_conflicts_resolve('--ours', '.')"
+    dolt add .
+    dolt commit -am "resolved conflicts with ours"
+
+    run dolt sql -q "SELECT * FROM test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "0,10" ]] || false
+    [[ "${lines[2]}" =~ "1,11" ]] || false
+    [[ "${lines[3]}" =~ "2,12" ]] || false
+}
+
 @test "garbage_collection: leave working pre-merge" {
     setup_merge
 
