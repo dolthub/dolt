@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/val"
 	"io"
 	"strings"
 
@@ -109,10 +110,19 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 	}
 	ourMap := durable.ProllyMapFromIndex(ourIdx)
 
-	baseMap, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh, tblName)
+	baseRootVal, err := doltdb.LoadRootValueFromRootIshAddr(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh)
+	baseTbl, ok, err := baseRootVal.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
+	if !ok {
+		return nil, doltdb.ErrTableNotFound
+	}
+	baseIdx, err := baseTbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	baseMap := durable.ProllyMapFromIndex(baseIdx)
 
 	theirMap, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh, tblName)
 	if err != nil {
@@ -125,13 +135,17 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 	}
 
 	// resolve conflicts with left
+	var indexEdits []tree.Diff
 	merged, _, err := prolly.MergeMaps(ctx, ourMap, theirMap, baseMap, func(left, right tree.Diff) (tree.Diff, bool) {
 		if left.From != nil && ((left.To == nil) != (right.To == nil)) {
+			indexEdits = append(indexEdits, left)
 			return left, true
 		}
 		if bytes.Compare(left.To, right.To) == 0 {
+			indexEdits = append(indexEdits, right)
 			return right, true
 		} else {
+			indexEdits = append(indexEdits, left)
 			return left, true
 		}
 	})
@@ -144,6 +158,51 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 	if err != nil {
 		return nil, err
 	}
+
+	// TODO: need to either build from base or delete all the ones that aren't supposed to be there
+	idxSet, err := baseTbl.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	secondaryIdxs, err := merge.GetMutableSecondaryIdxs(ctx, sch, idxSet)
+	if err != nil {
+		return nil, err
+	}
+	for _, edit := range indexEdits {
+		for _, secIdx := range secondaryIdxs {
+			if len(edit.From) == 0 {
+				err := secIdx.InsertEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.To))
+				if err != nil {
+					return nil, err
+				}
+			} else if len(edit.To) == 0 {
+				err := secIdx.DeleteEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.From))
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				err := secIdx.UpdateEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.From), val.Tuple(edit.To))
+				if err != nil {
+					return nil, err
+				}
+			}
+			m, err := secIdx.Map(ctx)
+			if err != nil {
+				return nil, err
+			}
+			idxSet, err = idxSet.PutIndex(ctx, secIdx.Name, durable.IndexFromProllyMap(m))
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	newTbl, err = newTbl.SetIndexSet(ctx, idxSet)
+	if err != nil {
+		return nil, err
+	}
+
 	return newTbl, nil
 }
 

@@ -26,8 +26,8 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// getMutableSecondaryIdxs returns a MutableSecondaryIdx for each secondary index in |indexes|.
-func getMutableSecondaryIdxs(ctx context.Context, sch schema.Schema, indexes durable.IndexSet) ([]MutableSecondaryIdx, error) {
+// GetMutableSecondaryIdxs returns a MutableSecondaryIdx for each secondary index in |indexes|.
+func GetMutableSecondaryIdxs(ctx context.Context, sch schema.Schema, indexes durable.IndexSet) ([]MutableSecondaryIdx, error) {
 	mods := make([]MutableSecondaryIdx, sch.Indexes().Count())
 	for i, index := range sch.Indexes().AllIndexes() {
 		idx, err := indexes.GetIndex(ctx, sch, index.Name())
