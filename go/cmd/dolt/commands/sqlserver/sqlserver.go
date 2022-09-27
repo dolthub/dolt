@@ -48,6 +48,7 @@ const (
 	allowCleartextPasswordsFlag = "allow-cleartext-passwords"
 	socketFlag                  = "socket"
 	remotesapiPortFlag          = "remotesapi-port"
+	goldenMysqlConn             = "golden"
 )
 
 func indentLines(s string) string {
@@ -150,6 +151,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(allowCleartextPasswordsFlag, "", "allow-cleartext-passwords", "Allows use of cleartext passwords. Defaults to false.")
 	ap.SupportsOptionalString(socketFlag, "", "socket file", "Path for the unix socket file. Defaults to '/tmp/mysql.sock'.")
 	ap.SupportsUint(remotesapiPortFlag, "", "remotesapi port", "Sets the port for a server which can expose the databases in this sql-server over remotesapi.")
+	ap.SupportsString(goldenMysqlConn, "", "mysql connection string", "Provides a connection string to a MySQL instance to be user to validate query results")
 	return ap
 }
 
@@ -253,6 +255,11 @@ func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerC
 		pass, _ := apr.GetValue(passwordFlag)
 		yamlCfg.UserConfig.Name = &user
 		yamlCfg.UserConfig.Password = &pass
+	}
+
+	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
+		cli.Println(connStr)
+		yamlCfg.GoldenMysqlConn = &connStr
 	}
 
 	return yamlCfg, nil
@@ -421,6 +428,11 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 
 	serverConfig.autoCommit = !apr.Contains(noAutoCommitFlag)
 	serverConfig.allowCleartextPasswords = apr.Contains(allowCleartextPasswordsFlag)
+
+	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
+		cli.Println(connStr)
+		serverConfig.withGoldenMysqlConnectionString(connStr)
+	}
 
 	return serverConfig, nil
 }

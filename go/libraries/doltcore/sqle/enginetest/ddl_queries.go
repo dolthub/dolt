@@ -685,7 +685,7 @@ var BrokenDDLScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT to_pk, to_commit, from_pk, from_commit, diff_type from dolt_diff('t', @Commit1, @Commit2);",
+				Query:    "SELECT to_pk, to_commit, from_pk, from_commit, diff_type from dolt_diff(@Commit1, @Commit2, 't');",
 				Expected: []sql.Row{{1, "hi", nil, nil, "added"}},
 			},
 		},
