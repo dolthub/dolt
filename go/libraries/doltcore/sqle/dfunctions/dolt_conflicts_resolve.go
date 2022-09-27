@@ -81,7 +81,7 @@ func getProllyRowMaps(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeS
 	return durable.ProllyMapFromIndex(idx), nil
 }
 
-func resolveNewFormatConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, ours bool) (*doltdb.Table, error) {
+func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, ours bool) (*doltdb.Table, error) {
 	var err error
 	artifactIdx, err := tbl.GetArtifacts(ctx)
 	if err != nil {
@@ -334,7 +334,7 @@ func ResolveConflicts(ctx *sql.Context, dEnv *env.DoltEnv, dSess *dsess.DoltSess
 
 		var newTbl *doltdb.Table
 		if tbl.Format() == types.Format_DOLT {
-			newTbl, err = resolveNewFormatConflicts(ctx, tbl, tblName, sch, ours)
+			newTbl, err = resolveProllyConflicts(ctx, tbl, tblName, sch, ours)
 		} else {
 			newTbl, err = resolveNomsConflicts(ctx, dEnv, tbl, tblName, sch, ours)
 		}
