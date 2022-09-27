@@ -548,14 +548,14 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	if err != nil {
 		return err
 	}
-	currentDbLoc, err := p.fs.Abs("")
+	rootDbLoc, err := p.fs.Abs("")
 	if err != nil {
 		return err
 	}
 	dirToDelete := ""
 	// if the database is in the directory itself, we remove '.dolt' directory rather than
 	// the whole directory itself because it can have other databases that are nested.
-	if currentDbLoc == dropDbLoc {
+	if rootDbLoc == dropDbLoc {
 		doltDirExists, _ := p.fs.Exists(dbfactory.DoltDir)
 		if !doltDirExists {
 			return sql.ErrDatabaseNotFound.New(db.Name())

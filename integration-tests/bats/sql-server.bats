@@ -1740,7 +1740,7 @@ s.close()
     [ "${#lines[@]}" -eq 1 ]
 }
 
-@test "sql-server: dropping database that the server is running in" {
+@test "sql-server: dropping database that the server is running in should drop only the db itself not its nested dbs" {
     skiponwindows "Missing dependencies"
 
     mkdir mydb
@@ -1749,12 +1749,22 @@ s.close()
 
     start_sql_server >> server_log.txt 2>&1
 
-    server_query "" 1 dolt "" "DROP DATABASE mydb"
+    # 'doltdb' will be nested database inside 'mydb'
+    server_query "" 1 dolt "" "CREATE DATABASE doltdb"
+    run dolt sql -q "SHOW DATABASES"
+    [[ "$output" =~ "mydb" ]] || false
+    [[ "$output" =~ "doltdb" ]] || false
 
+    server_query "" 1 dolt "" "DROP DATABASE mydb"
     run grep "database not found: mydb" server_log.txt
     [ "${#lines[@]}" -eq 0 ]
 
     [ ! -d .dolt ]
+
+    # nested databases inside dropped database should still exist
+    run dolt sql -q "SHOW DATABASES"
+    [[ "$output" =~ "doltdb" ]] || false
+    [[ ! "$output" =~ "mydb" ]] || false
 }
 
 @test "sql-server: dropping database currently selected and that the server is running in" {
@@ -1764,6 +1774,9 @@ s.close()
     cd mydb
     dolt init
 
+    run dolt sql -q "SHOW DATABASES"
+    [[ "$output" =~ "mydb" ]] || false
+
     start_sql_server >> server_log.txt 2>&1
     server_query "mydb" 1 dolt "" "DROP DATABASE mydb;"
 
@@ -1771,6 +1784,9 @@ s.close()
     [ "${#lines[@]}" -eq 0 ]
 
     [ ! -d .dolt ]
+
+    run dolt sql -q "SHOW DATABASES"
+    [[ ! "$output" =~ "mydb" ]] || false
 }
 
 @test "sql-server: dropping database with '-' in it" {
