@@ -18,6 +18,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"io"
 	"strings"
 
@@ -32,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -145,83 +147,89 @@ func resolveNewFormatConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName stri
 	return newTbl, nil
 }
 
-func resolveOldFormatConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, ours bool) (*doltdb.Table, error) {
-	cnfReader, err := merge.NewConflictReader(ctx, tbl, tblName)
+func resolvePkConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, tblEditor editor.TableEditor, ours bool) (*doltdb.Table, error) {
+	// Get conflicts
+	_, cnfIdx, err := tbl.GetConflicts(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	joiner := cnfReader.GetJoiner()
-
-	var pkTuples []types.Value
-	vrw := tbl.ValueReadWriter()
-	for {
-		cnfRow, err := cnfReader.NextConflict(ctx)
-		if err == io.EOF {
-			break
-		}
-		cnfMap, err := joiner.Split(cnfRow)
+	// Iterate over conflicts, resolve by picking either ours or theirs
+	conflicts := durable.NomsMapFromConflictIndex(cnfIdx)
+	err = conflicts.Iter(ctx, func(key, val types.Value) (stop bool, err error) {
+		cnf, err := conflict.ConflictFromTuple(val.(types.Tuple))
 		if err != nil {
-			return nil, err
+			return true, err
 		}
 
-		var row row.Row
-		var k, v types.Value
+		k := key.(types.Tuple)
+		var newVal types.Value
 		if ours {
-			row = cnfMap["our"]
+			newVal = cnf.Value
 		} else {
-			row = cnfMap["their"]
+			newVal = cnf.MergeValue
 		}
 
-		if row != nil {
-			k, err = row.NomsMapKey(sch).Value(ctx)
+		// resolve by deleting row
+		if types.IsNull(newVal) {
+			baseRow, err := row.FromNoms(sch, k, cnf.Base.(types.Tuple))
 			if err != nil {
-				return nil, err
+				return true, err
 			}
-			v, err = row.NomsMapValue(sch).Value(ctx)
+			err = tblEditor.DeleteRow(ctx, baseRow)
 			if err != nil {
-				return nil, err
+				return true, err
 			}
-			pkTuples = append(pkTuples, k, v)
+			return false, nil
 		}
-	}
 
-	newMap, err := types.NewMap(ctx, vrw, pkTuples...)
+		newRow, err := row.FromNoms(sch, k, newVal.(types.Tuple))
+		if err != nil {
+			return true, err
+		}
+
+		if isValid, err := row.IsValid(newRow, sch); err != nil {
+			return true, err
+		} else if !isValid {
+			return true, table.NewBadRow(newRow, "error resolving conflicts", fmt.Sprintf("row with primary key %v in table %s does not match constraints or types of the table's schema.", key, tblName))
+		}
+
+		// resolve by inserting new row
+		if types.IsNull(cnf.Value) {
+			err = tblEditor.InsertRow(ctx, newRow, nil)
+			if err != nil {
+				return true, err
+			}
+			return false, nil
+		}
+
+		// resolve by updating existing row
+		oldRow, err := row.FromNoms(sch, k, cnf.Value.(types.Tuple))
+		if err != nil {
+			return true, err
+		}
+		err = tblEditor.UpdateRow(ctx, oldRow, newRow, nil)
+		if err != nil {
+			return true, err
+		}
+		return false, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	newTbl, err := tbl.UpdateNomsRows(ctx, newMap)
-	if err != nil {
-		return nil, err
-	}
-	return newTbl, nil
+	return tblEditor.Table(ctx)
 }
 
-func resolveOldFormatConflicts2(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, ours bool) (*doltdb.Table, error) {
-	// TODO: move this somewhere else
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "does this matter?")
+func resolveKeylessConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, tblEditor editor.TableEditor, ours bool) (*doltdb.Table, error) {
+	// Iterate over conflicts, resolve by picking either ours or theirs
 	cnfReader, err := merge.NewConflictReader(ctx, tbl, tblName)
 	if err != nil {
 		return nil, err
 	}
-
 	joiner := cnfReader.GetJoiner()
-	cnfSch := cnfReader.GetSchema()
-	isKeyless := schema.IsKeyless(sch)
-
-	// Create new table editor
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return nil, err
-	}
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-	edit, err := editor.NewTableEditor(ctx, tbl, sch, tblName, opts)
-	if err != nil {
-		return nil, err
-	}
 
 	// get relevant cardinality tags
+	cnfSch := cnfReader.GetSchema()
 	tags := cnfSch.GetAllCols().SortedTags
 	ourCardinalityTag := tags[len(tags)-2]
 	theirCardinalityTag := tags[len(tags)-1]
@@ -236,46 +244,63 @@ func resolveOldFormatConflicts2(ctx *sql.Context, tbl *doltdb.Table, tblName str
 			return nil, err
 		}
 
-		// get cardinality
+		// Get cardinality
 		var ourCardinality, theirCardinality uint64
-		if ourCardinalityVal, ok := cnfRow.GetColVal(ourCardinalityTag); ok && isKeyless {
+		if ourCardinalityVal, ok := cnfRow.GetColVal(ourCardinalityTag); ok {
 			ourCardinality = uint64(ourCardinalityVal.(types.Uint))
 		} else {
-			panic("wtf")
+			panic("shouldn't be possible")
 		}
-		if theirCardinalityVal, ok := cnfRow.GetColVal(theirCardinalityTag); ok && isKeyless {
+		if theirCardinalityVal, ok := cnfRow.GetColVal(theirCardinalityTag); ok {
 			theirCardinality = uint64(theirCardinalityVal.(types.Uint))
 		} else {
-			panic("wtf")
+			panic("shouldn't be possible")
 		}
 
 		rowDelta := 0
-		var row row.Row
+		var newRow row.Row
 		if ours {
-			row = cnfMap["our"]
+			newRow = cnfMap["our"]
 		} else {
-			row = cnfMap["their"]
+			newRow = cnfMap["their"]
 			rowDelta = int(theirCardinality - ourCardinality)
 		}
 
 		if rowDelta > 0 {
 			for i := 0; i < rowDelta; i++ {
-				edit.InsertRow(ctx, row, func(newKeyString, indexName string, existingKey, existingVal types.Tuple, isPk bool) error {
-					return nil
-				})
+				tblEditor.InsertRow(ctx, newRow, nil)
 			}
 		} else {
 			rowDelta *= -1
 			for i := 0; i < rowDelta; i++ {
-				edit.DeleteRow(ctx, row)
+				tblEditor.DeleteRow(ctx, newRow)
 			}
 		}
 	}
 
-	return edit.Table(ctx)
+	return tblEditor.Table(ctx)
 }
 
-func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
+func resolveNomsConflicts(ctx *sql.Context, dEnv *env.DoltEnv, tbl *doltdb.Table, tblName string, sch schema.Schema, ours bool) (*doltdb.Table, error) {
+	// Create new table editor
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil, err
+	}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
+	tblEditor, err := editor.NewTableEditor(ctx, tbl, sch, tblName, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	if schema.IsKeyless(sch) {
+		return resolveKeylessConflicts(ctx, tbl, tblName, sch, tblEditor, ours)
+	} else {
+		return resolvePkConflicts(ctx, tbl, tblName, sch, tblEditor, ours)
+	}
+}
+
+func ResolveConflicts(ctx *sql.Context, dEnv *env.DoltEnv, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
 	newRoot := root
 	for _, tblName := range tblNames {
 		tbl, ok, err := newRoot.GetTable(ctx, tblName)
@@ -311,7 +336,7 @@ func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.R
 		if tbl.Format() == types.Format_DOLT {
 			newTbl, err = resolveNewFormatConflicts(ctx, tbl, tblName, sch, ours)
 		} else {
-			newTbl, err = resolveOldFormatConflicts2(ctx, tbl, tblName, sch, ours)
+			newTbl, err = resolveNomsConflicts(ctx, dEnv, tbl, tblName, sch, ours)
 		}
 
 		newTbl, err = newTbl.ClearConflicts(ctx)
@@ -365,7 +390,8 @@ func DoDoltConflictsResolve(ctx *sql.Context, args []string) (int, error) {
 		}
 	}
 
-	err = ResolveConflicts(ctx, dSess, root, dbName, ours, tbls)
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "does this matter?")
+	err = ResolveConflicts(ctx, dEnv, dSess, root, dbName, ours, tbls)
 	if err != nil {
 		return 1, err
 	}
