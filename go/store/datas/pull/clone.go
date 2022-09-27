@@ -19,7 +19,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff/v4"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 

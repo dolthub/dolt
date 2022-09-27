@@ -10,7 +10,6 @@ require (
 	github.com/aws/aws-sdk-go v1.32.6
 	github.com/bcicen/jstream v1.0.0
 	github.com/boltdb/bolt v1.3.1
-	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.3
@@ -48,7 +47,7 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20220829200755-d48e67d00261
 	google.golang.org/api v0.32.0
-	google.golang.org/grpc v1.37.0
+	google.golang.org/grpc v1.49.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/square/go-jose.v2 v2.5.1
 	gopkg.in/src-d/go-errors.v1 v1.0.0
@@ -56,6 +55,7 @@ require (
 )
 
 require (
+	github.com/cenkalti/backoff/v4 v4.1.3
 	github.com/dolthub/go-mysql-server v0.12.1-0.20220920214908-aa94dc1d23d7
 	github.com/google/flatbuffers v2.0.6+incompatible
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
