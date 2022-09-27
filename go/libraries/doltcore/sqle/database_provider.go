@@ -540,7 +540,11 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	db := p.databases[dbKey]
 
 	// get location of database that's being dropped
-	dropDbLoc, err := p.dbLocations[db.Name()].Abs("")
+	dbLoc := p.dbLocations[dbKey]
+	if dbLoc == nil {
+		return sql.ErrDatabaseNotFound.New(db.Name())
+	}
+	dropDbLoc, err := dbLoc.Abs("")
 	if err != nil {
 		return err
 	}
