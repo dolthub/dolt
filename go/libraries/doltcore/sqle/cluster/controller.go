@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -47,6 +48,7 @@ type Controller struct {
 	commithooks   []*commithook
 	sinterceptor  serverinterceptor
 	cinterceptor  clientinterceptor
+	lgr           *logrus.Logger
 }
 
 type sqlvars interface {
@@ -62,7 +64,7 @@ const (
 	DoltClusterRoleEpochVariable = "dolt_cluster_role_epoch"
 )
 
-func NewController(cfg Config, pCfg config.ReadWriteConfig) (*Controller, error) {
+func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) (*Controller, error) {
 	if cfg == nil {
 		return nil, nil
 	}
@@ -77,6 +79,7 @@ func NewController(cfg Config, pCfg config.ReadWriteConfig) (*Controller, error)
 		role:          role,
 		epoch:         epoch,
 		commithooks:   make([]*commithook, 0),
+		lgr:           lgr,
 	}, nil
 }
 
@@ -101,7 +104,7 @@ func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, bt *sql.
 		if denv == nil {
 			continue
 		}
-		hooks, err := applyCommitHooks(ctx, db.Name(), bt, denv, c.cfg, c.role)
+		hooks, err := applyCommitHooks(ctx, c.lgr, db.Name(), bt, denv, c.cfg, c.role)
 		if err != nil {
 			return err
 		}
@@ -110,7 +113,7 @@ func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, bt *sql.
 	return nil
 }
 
-func applyCommitHooks(ctx context.Context, name string, bt *sql.BackgroundThreads, denv *env.DoltEnv, cfg Config, role Role) ([]*commithook, error) {
+func applyCommitHooks(ctx context.Context, lgr *logrus.Logger, name string, bt *sql.BackgroundThreads, denv *env.DoltEnv, cfg Config, role Role) ([]*commithook, error) {
 	ttfdir, err := denv.TempTableFilesDir()
 	if err != nil {
 		return nil, err
@@ -125,7 +128,7 @@ func applyCommitHooks(ctx context.Context, name string, bt *sql.BackgroundThread
 		if !ok {
 			return nil, fmt.Errorf("sqle: cluster: standby replication: destination remote %s does not exist on database %s", r.Name(), name)
 		}
-		commitHook := newCommitHook(r.Name(), name, role, func() (*doltdb.DoltDB, error) {
+		commitHook := newCommitHook(lgr, r.Name(), name, role, func(ctx context.Context) (*doltdb.DoltDB, error) {
 			return remote.GetRemoteDB(ctx, types.Format_Default, denv)
 		}, denv.DoltDB, ttfdir)
 		denv.DoltDB.PrependCommitHook(ctx, commitHook)

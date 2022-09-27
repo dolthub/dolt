@@ -15,6 +15,7 @@
 package cluster
 
 import (
+	"context"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -31,7 +32,7 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 		return orig
 	}
 	return func(ctx *sql.Context, pro sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv) error {
-		var remoteDBs []func() (*doltdb.DoltDB, error)
+		var remoteDBs []func(context.Context) (*doltdb.DoltDB, error)
 		for _, r := range controller.cfg.StandbyRemotes() {
 			// TODO: url sanitize name
 			remoteUrl := strings.Replace(r.RemoteURLTemplate(), dsess.URLTemplateDatabasePlaceholder, name, -1)
@@ -44,7 +45,7 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 				return err
 			}
 
-			remoteDBs = append(remoteDBs, func() (*doltdb.DoltDB, error) {
+			remoteDBs = append(remoteDBs, func(ctx context.Context) (*doltdb.DoltDB, error) {
 				return r.GetRemoteDB(ctx, types.Format_Default, denv)
 			})
 		}
@@ -60,7 +61,7 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 			if err != nil {
 				return err
 			}
-			commitHook := newCommitHook(r.Name(), name, role, remoteDBs[i], denv.DoltDB, ttfdir)
+			commitHook := newCommitHook(controller.lgr, r.Name(), name, role, remoteDBs[i], denv.DoltDB, ttfdir)
 			denv.DoltDB.PrependCommitHook(ctx, commitHook)
 			controller.registerCommitHook(commitHook)
 			if err := commitHook.Run(bt); err != nil {

@@ -124,7 +124,7 @@ func Serve(
 		}
 	}
 
-	clusterController, err := cluster.NewController(serverConfig.ClusterConfig(), mrEnv.Config())
+	clusterController, err := cluster.NewController(lgr, serverConfig.ClusterConfig(), mrEnv.Config())
 	if err != nil {
 		return err, nil
 	}

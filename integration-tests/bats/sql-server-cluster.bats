@@ -17,7 +17,7 @@ setup() {
 }
 
 teardown() {
-    stop_sql_server
+    stop_sql_server "1"
     teardown_common
 }
 
@@ -53,6 +53,7 @@ cluster:
     SERVER_PID=
 
     echo "
+log_level: trace
 user:
   name: dolt
 listener:
@@ -79,6 +80,7 @@ cluster:
 
 @test "sql-server-cluster: dolt_assume_cluster_role" {
     echo "
+log_level: trace
 user:
   name: dolt
 listener:
@@ -134,6 +136,7 @@ cluster:
 
 @test "sql-server-cluster: create database makes a new remote" {
     echo "
+log_level: trace
 user:
   name: dolt
 listener:
