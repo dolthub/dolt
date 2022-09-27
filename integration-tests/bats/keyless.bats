@@ -515,7 +515,7 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
-    call dolt sql -q "call dolt_conflicts_resolve('--theirs', 'dupe')"
+    run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'dupe')"
     [ $status -eq 0 ]
     dolt commit -am "resolved"
     run dolt sql -q "select sum(c0), sum(c1) from dupe" -r csv
