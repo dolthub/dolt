@@ -539,21 +539,38 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
-	// We create database with '-'s replaced with '_'s in its name, so when we drop that database,
-	// we try removing directory with both names, user-defined database name and
-	// if it's not found, try alternative name with '_' replaced with '_'.
-	// Both the tries are done against directory nested in the current directory.
-	found, err := p.findAndDeleteNestedDatabaseDir(db.Name(), dbKey)
-	if !found {
-		altDBName := strings.Replace(db.Name(), "_", "-", -1)
-		found, err = p.findAndDeleteNestedDatabaseDir(altDBName, dbKey)
-		if !found {
-			// If none of the above finds the nested directory, try the current directory itself.
-			return p.checkCurrentDirAndDeleteDir(db.Name())
-		} else if err != nil {
-			return err
+	// get location of database that's being dropped
+	dropDbLoc, err := p.dbLocations[db.Name()].Abs("")
+	if err != nil {
+		return err
+	}
+	currentDbLoc, err := p.fs.Abs("")
+	if err != nil {
+		return err
+	}
+	dirToDelete := ""
+	// if the database is in the directory itself, we remove '.dolt' directory rather than
+	// the whole directory itself because it can have other databases that are nested.
+	if currentDbLoc == dropDbLoc {
+		doltDirExists, _ := p.fs.Exists(dbfactory.DoltDir)
+		if !doltDirExists {
+			return sql.ErrDatabaseNotFound.New(db.Name())
 		}
-	} else if err != nil {
+		dirToDelete = dbfactory.DoltDir
+	} else {
+		exists, isDir := p.fs.Exists(dropDbLoc)
+		// Get the DB's directory
+		if !exists {
+			// engine should already protect against this
+			return sql.ErrDatabaseNotFound.New(db.Name())
+		} else if !isDir {
+			return fmt.Errorf("unexpected error: %s exists but is not a directory", dbKey)
+		}
+		dirToDelete = dropDbLoc
+	}
+
+	err = p.fs.Delete(dirToDelete, true)
+	if err != nil {
 		return err
 	}
 
@@ -568,46 +585,6 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 
 	delete(p.databases, dbKey)
 	return nil
-}
-
-// findAndDeleteNestedDatabaseDir tries to find matching database against nested database.
-// This function returns whether the database was found and deleted successfully.
-func (p DoltDatabaseProvider) findAndDeleteNestedDatabaseDir(dbName, dbKey string) (bool, error) {
-	// database directory is nested
-	exists, isDir := p.fs.Exists(dbName)
-	if exists {
-		if !isDir {
-			return false, fmt.Errorf("unexpected error: %s exists but is not a directory", dbKey)
-		}
-		return true, p.fs.Delete(dbName, true)
-	}
-	return false, nil
-}
-
-// checkCurrentDirAndDeleteDir checks if the current directory is a database directory, if it finds valid and name-matching
-// database, it will drop the database/remove '.dolt' directory.
-func (p DoltDatabaseProvider) checkCurrentDirAndDeleteDir(dbName string) error {
-	// database is in the directory itself
-	doltDirExists, _ := p.fs.Exists(dbfactory.DoltDir)
-	if !doltDirExists {
-		return sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	// guess the database name for this directory
-	absPath, err := p.fs.Abs("")
-	if err != nil {
-		return err
-	}
-	var possibleDBName string
-	if s := strings.Split(absPath, "/"); len(s) > 0 {
-		possibleDBName = strings.Replace(s[len(s)-1], "-", "_", -1)
-	}
-
-	if possibleDBName != strings.Replace(dbName, "-", "_", -1) {
-		return sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	return p.fs.Delete(dbfactory.DoltDir, true)
 }
 
 // TODO: databaseForRevision should call checkout on the given branch/commit, returning a non-mutable session
