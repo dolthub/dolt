@@ -178,9 +178,10 @@ func (d *DoltSession) Flush(ctx *sql.Context, dbName string) error {
 	return d.SetRoot(ctx, dbName, ws.WorkingRoot())
 }
 
-// ValidateWorkingSet attempts to validate working set for current sessionState, if there is no sessionState
-// or current working set defined, then no need for validation, so no error is returned.
-func (d *DoltSession) ValidateWorkingSet(ctx *sql.Context, dbName string) error {
+// ValidateSession validates a working set if there are a valid sessionState with non-nil working set.
+// If there is no sessionState or its current working set not defined, then no need for validation,
+// so no error is returned.
+func (d *DoltSession) ValidateSession(ctx *sql.Context, dbName string) error {
 	sessionState, ok, err := d.LookupDbState(ctx, dbName)
 	if !ok {
 		return nil
