@@ -403,11 +403,7 @@ func checkForUnixSocket(config ServerConfig) (string, bool, error) {
 		if runtime.GOOS == "windows" {
 			return "", false, fmt.Errorf("cannot define unix socket file on Windows")
 		}
-		s := config.Socket()
-		if s == "" {
-			s = defaultUnixSocketFilePath
-		}
-		return s, true, nil
+		return config.Socket(), true, nil
 	} else {
 		// if host is undefined or defined as "localhost" -> unix
 		if runtime.GOOS != "windows" && config.Host() == "localhost" {
