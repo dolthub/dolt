@@ -162,3 +162,29 @@ cluster:
 
     server_query_with_port 3309 repo1 1 dolt "" "create database a_new_database;use a_new_database;select name, url from dolt_remotes" ";;name,url\nstandby,http://localhost:50052/a_new_database"
 }
+
+@test "sql-server-cluster: sql-server fails to start if a configured remote is missing" {
+    echo "
+log_level: trace
+user:
+  name: dolt
+listener:
+  host: 0.0.0.0
+  port: 3309
+behavior:
+  read_only: false
+  autocommit: true
+cluster:
+  standby_remotes:
+  - name: standby
+    remote_url_template: http://localhost:50052/{database}
+  bootstrap_role: primary
+  bootstrap_epoch: 10
+  remotesapi:
+    port: 50051" > server.yaml
+
+    (cd repo1 && dolt remote add standby http://localhost:50052/repo1)
+    run dolt sql-server --config server.yaml
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "destination remote standby does not exist" ]] || false
+}
