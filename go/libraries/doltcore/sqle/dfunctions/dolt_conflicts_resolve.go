@@ -199,10 +199,8 @@ func resolveOldFormatConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName stri
 }
 
 func resolveOldFormatConflicts2(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, ours bool) (*doltdb.Table, error) {
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "0.41.5")
-	if dEnv == nil {
-	}
-
+	// TODO: move this somewhere else
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "does this matter?")
 	cnfReader, err := merge.NewConflictReader(ctx, tbl, tblName)
 	if err != nil {
 		return nil, err
@@ -210,14 +208,15 @@ func resolveOldFormatConflicts2(ctx *sql.Context, tbl *doltdb.Table, tblName str
 
 	joiner := cnfReader.GetJoiner()
 	cnfSch := cnfReader.GetSchema()
-
-	// this matters because only keyless tables will have a cardinality
-	isKeyless := schema.IsKeyless(cnfSch)
-	if isKeyless {
-	}
+	isKeyless := schema.IsKeyless(sch)
 
 	// Create new table editor
-	edit, err := editor.NewTableEditor(ctx, tbl, sch, tblName, editor.Options{})
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil, err
+	}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
+	edit, err := editor.NewTableEditor(ctx, tbl, sch, tblName, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -239,15 +238,15 @@ func resolveOldFormatConflicts2(ctx *sql.Context, tbl *doltdb.Table, tblName str
 
 		// get cardinality
 		var ourCardinality, theirCardinality uint64
-		if ourCardinalityVal, ok := cnfRow.GetColVal(ourCardinalityTag); ok {
+		if ourCardinalityVal, ok := cnfRow.GetColVal(ourCardinalityTag); ok && isKeyless {
 			ourCardinality = uint64(ourCardinalityVal.(types.Uint))
 		} else {
-			panic("huh")
+			panic("wtf")
 		}
-		if theirCardinalityVal, ok := cnfRow.GetColVal(theirCardinalityTag); ok {
+		if theirCardinalityVal, ok := cnfRow.GetColVal(theirCardinalityTag); ok && isKeyless {
 			theirCardinality = uint64(theirCardinalityVal.(types.Uint))
 		} else {
-			panic("huh")
+			panic("wtf")
 		}
 
 		rowDelta := 0
