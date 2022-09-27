@@ -202,7 +202,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "Test multi-session behavior for force deleting active branch",
+		Name: "Test multi-session behavior for force deleting active branch with autocommit on",
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=1;",
@@ -251,7 +251,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "Test multi-session behavior for force deleting active branch",
+		Name: "Test multi-session behavior for force deleting active branch with autocommit off",
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=0;",
