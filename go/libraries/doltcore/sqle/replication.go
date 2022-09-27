@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 func getPushOnWriteHook(ctx context.Context, bThreads *sql.BackgroundThreads, dEnv *env.DoltEnv, logger io.Writer) (doltdb.CommitHook, error) {
@@ -52,7 +51,7 @@ func getPushOnWriteHook(ctx context.Context, bThreads *sql.BackgroundThreads, dE
 		return nil, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
 
-	ddb, err := rem.GetRemoteDB(ctx, types.Format_Default, dEnv)
+	ddb, err := rem.GetRemoteDB(ctx, dEnv.DoltDB.Format(), dEnv)
 	if err != nil {
 		return nil, err
 	}

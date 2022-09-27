@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
@@ -163,7 +162,7 @@ func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.PushOnW
 		return nil, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
 
-	ddb, err := rem.GetRemoteDB(ctx, types.Format_Default, dEnv)
+	ddb, err := rem.GetRemoteDB(ctx, dEnv.DoltDB.Format(), dEnv)
 	if err != nil {
 		return nil, err
 	}

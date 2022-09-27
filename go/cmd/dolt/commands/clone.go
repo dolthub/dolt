@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var cloneDocs = cli.CommandDocumentationContent{
@@ -201,7 +200,7 @@ func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[
 	cli.Printf("cloning %s\n", remoteUrl)
 
 	r := env.NewRemote(remoteName, remoteUrl, params)
-	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dEnv)
+	ddb, err := r.GetRemoteDB(ctx, dEnv.DoltDB.Format(), dEnv)
 	if err != nil {
 		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
 		return env.NoRemote, nil, bdr.Build()

@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type ReadReplicaDatabase struct {
@@ -67,7 +66,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		return EmptyReadReplica, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
 
-	srcDB, err := remote.GetRemoteDB(ctx, types.Format_Default, dEnv)
+	srcDB, err := remote.GetRemoteDB(ctx, dEnv.DoltDB.Format(), dEnv)
 	if err != nil {
 		return EmptyReadReplica, err
 	}
