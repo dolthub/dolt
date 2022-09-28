@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -173,11 +174,11 @@ var typesTests = []struct {
 }
 
 var (
-	typesTableRow1 = sql.Row{int32(-3), uint64(1), forceParseTime("2020-05-14 12:00:00"), "-3.30000", uint16(2), -3.3, uint64(1), sql.Timespan(-183000000), "a", int16(1980)}
-	typesTableRow2 = sql.Row{int32(-1), uint64(2), forceParseTime("2020-05-14 12:00:01"), "-1.10000", uint16(3), -1.1, uint64(3), sql.Timespan(-61000000), "b", int16(1990)}
-	typesTableRow3 = sql.Row{int32(0), uint64(3), forceParseTime("2020-05-14 12:00:02"), "0.00000", uint16(4), 0.0, uint64(4), sql.Timespan(0), "c", int16(2000)}
-	typesTableRow4 = sql.Row{int32(1), uint64(4), forceParseTime("2020-05-14 12:00:03"), "1.10000", uint16(5), 1.1, uint64(5), sql.Timespan(61000000), "d", int16(2010)}
-	typesTableRow5 = sql.Row{int32(3), uint64(5), forceParseTime("2020-05-14 12:00:04"), "3.30000", uint16(6), 3.3, uint64(6), sql.Timespan(183000000), "e", int16(2020)}
+	typesTableRow1 = sql.Row{int32(-3), uint64(1), mustTime("2020-05-14 12:00:00"), mustDecimal("-3.30000"), uint16(2), -3.3, uint64(1), sql.Timespan(-183000000), "a", int16(1980)}
+	typesTableRow2 = sql.Row{int32(-1), uint64(2), mustTime("2020-05-14 12:00:01"), mustDecimal("-1.10000"), uint16(3), -1.1, uint64(3), sql.Timespan(-61000000), "b", int16(1990)}
+	typesTableRow3 = sql.Row{int32(0), uint64(3), mustTime("2020-05-14 12:00:02"), mustDecimal("0.00000"), uint16(4), 0.0, uint64(4), sql.Timespan(0), "c", int16(2000)}
+	typesTableRow4 = sql.Row{int32(1), uint64(4), mustTime("2020-05-14 12:00:03"), mustDecimal("1.10000"), uint16(5), 1.1, uint64(5), sql.Timespan(61000000), "d", int16(2010)}
+	typesTableRow5 = sql.Row{int32(3), uint64(5), mustTime("2020-05-14 12:00:04"), mustDecimal("3.30000"), uint16(6), 3.3, uint64(6), sql.Timespan(183000000), "e", int16(2020)}
 )
 
 func TestDoltIndexEqual(t *testing.T) {
@@ -1067,12 +1068,6 @@ func TestDoltIndexBetween(t *testing.T) {
 			indexIter, err := index.RowIterForIndexLookup(ctx, NoCacheTableable{dt}, indexLookup, pkSch, nil)
 			require.NoError(t, err)
 
-			// If this is a primary index assert that a covering index was used
-			if idx.ID() == "PRIMARY" {
-				_, ok := indexIter.(*index.CoveringIndexRowIterAdapter)
-				require.True(t, ok)
-			}
-
 			var readRows []sql.Row
 			var nextRow sql.Row
 			for nextRow, err = indexIter.Next(ctx); err == nil; nextRow, err = indexIter.Next(ctx) {
@@ -1080,7 +1075,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			}
 			require.Equal(t, io.EOF, err)
 
-			requireUnorderedRowsEqual(t, expectedRows, readRows)
+			requireUnorderedRowsEqual(t, pkSch.Schema, expectedRows, readRows)
 		})
 	}
 }
@@ -1185,6 +1180,19 @@ func (r *rowSlice) Less(i, j int) bool {
 	return false
 }
 
+func (r *rowSlice) equals(other *rowSlice, sch sql.Schema) bool {
+	if len(r.rows) != len(other.rows) {
+		return false
+	}
+	for i := range r.rows {
+		ok, err := r.rows[i].Equals(other.rows[i], sch)
+		if err != nil || !ok {
+			return false
+		}
+	}
+	return true
+}
+
 func signedCompare(n1 int64, c interface{}) (int, error) {
 	var n2 int64
 	switch typedVal := c.(type) {
@@ -1264,7 +1272,7 @@ func (r *rowSlice) Swap(i, j int) {
 	r.rows[i], r.rows[j] = r.rows[j], r.rows[i]
 }
 
-func requireUnorderedRowsEqual(t *testing.T, rows1, rows2 []sql.Row) {
+func requireUnorderedRowsEqual(t *testing.T, s sql.Schema, rows1, rows2 []sql.Row) {
 	slice1 := &rowSlice{rows: rows1}
 	sort.Stable(slice1)
 	require.NoError(t, slice1.sortErr)
@@ -1273,7 +1281,7 @@ func requireUnorderedRowsEqual(t *testing.T, rows1, rows2 []sql.Row) {
 	sort.Stable(slice2)
 	require.NoError(t, slice2.sortErr)
 
-	require.Equal(t, rows1, rows2)
+	assert.True(t, slice1.equals(slice2, s))
 }
 
 func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys []interface{}, expectedRows []sql.Row, idx index.DoltIndex, cmp indexComp) {
@@ -1317,7 +1325,7 @@ func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys 
 	}
 	require.Equal(t, io.EOF, err)
 
-	requireUnorderedRowsEqual(t, convertSqlRowToInt64(expectedRows), readRows)
+	requireUnorderedRowsEqual(t, pkSch.Schema, convertSqlRowToInt64(expectedRows), readRows)
 }
 
 func doltIndexSetup(t *testing.T) (*sql.Context, *doltdb.RootValue, map[string]index.DoltIndex) {
@@ -1406,9 +1414,20 @@ func NewTestSQLCtx(ctx context.Context) *sql.Context {
 	return sqlCtx
 }
 
-func forceParseTime(timeString string) time.Time {
-	tim, _ := time.Parse("2006-01-02 15:04:05", timeString)
-	return tim
+func mustTime(timeString string) time.Time {
+	t, err := time.Parse("2006-01-02 15:04:05", timeString)
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
+
+func mustDecimal(s string) decimal.Decimal {
+	d, err := decimal.NewFromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return d
 }
 
 func convertSqlRowToInt64(sqlRows []sql.Row) []sql.Row {
