@@ -196,7 +196,6 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 			return nil, err
 		}
 	}
-
 	newTbl, err = newTbl.SetIndexSet(ctx, idxSet)
 	if err != nil {
 		return nil, err
@@ -205,15 +204,18 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 	return newTbl, nil
 }
 
-func resolvePkConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, tblEditor editor.TableEditor) (*doltdb.Table, error) {
-	// Get conflicts
-	_, cnfIdx, err := tbl.GetConflicts(ctx)
+func resolvePkConflicts(ctx *sql.Context, dEnv *env.DoltEnv, tbl *doltdb.Table, tblName string, sch schema.Schema, conflicts types.Map) (*doltdb.Table, error) {
+	// Create table editor
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil, err
+	}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
+	tblEditor, err := editor.NewTableEditor(ctx, tbl, sch, tblName, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	// Iterate over conflicts, resolve with theirs
-	conflicts := durable.NomsMapFromConflictIndex(cnfIdx)
 	err = conflicts.Iter(ctx, func(key, val types.Value) (stop bool, err error) {
 		k := key.(types.Tuple)
 		cnf, err := conflict.ConflictFromTuple(val.(types.Tuple))
@@ -271,78 +273,57 @@ func resolvePkConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch
 	return tblEditor.Table(ctx)
 }
 
-func resolveKeylessConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, tblEditor editor.TableEditor) (*doltdb.Table, error) {
-	cnfReader, err := merge.NewConflictReader(ctx, tbl, tblName)
+func resolveKeylessConflicts(ctx *sql.Context, tbl *doltdb.Table, conflicts types.Map) (*doltdb.Table, error) {
+	rowData, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
-	joiner := cnfReader.GetJoiner()
 
-	// get relevant cardinality tags
-	cnfSch := cnfReader.GetSchema()
-	tags := cnfSch.GetAllCols().SortedTags
-	ourCardinalityTag := tags[len(tags)-2]
-	theirCardinalityTag := tags[len(tags)-1]
-
-	for {
-		cnfRow, err := cnfReader.NextConflict(ctx)
-		if err == io.EOF {
-			break
-		}
-		cnfMap, err := joiner.Split(cnfRow)
+	mapEditor := rowData.Edit()
+	err = conflicts.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+		cnf, err := conflict.ConflictFromTuple(value.(types.Tuple))
 		if err != nil {
-			return nil, err
+			return false, err
 		}
 
-		// Get cardinality
-		var ourCardinality, theirCardinality uint64
-		if ourCardinalityVal, ok := cnfRow.GetColVal(ourCardinalityTag); ok {
-			ourCardinality = uint64(ourCardinalityVal.(types.Uint))
-		} else {
-			panic("shouldn't be possible")
-		}
-		if theirCardinalityVal, ok := cnfRow.GetColVal(theirCardinalityTag); ok {
-			theirCardinality = uint64(theirCardinalityVal.(types.Uint))
-		} else {
-			panic("shouldn't be possible")
+		resolved := cnf.MergeValue
+		if err != nil {
+			return false, err
 		}
 
-		rowDelta := int(theirCardinality - ourCardinality)
-		newRow := cnfMap["their"]
-
-		if rowDelta > 0 {
-			for i := 0; i < rowDelta; i++ {
-				tblEditor.InsertRow(ctx, newRow, nil)
-			}
+		if types.IsNull(resolved) {
+			mapEditor.Remove(key)
 		} else {
-			rowDelta *= -1
-			for i := 0; i < rowDelta; i++ {
-				tblEditor.DeleteRow(ctx, cnfMap["our"])
-			}
+			mapEditor.Set(key, resolved)
 		}
+
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return tblEditor.Table(ctx)
+	rowData, err = mapEditor.Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return tbl.UpdateNomsRows(ctx, rowData)
 }
 
 func resolveNomsConflicts(ctx *sql.Context, dEnv *env.DoltEnv, tbl *doltdb.Table, tblName string, sch schema.Schema) (*doltdb.Table, error) {
-	// Create new table editor
-	tmpDir, err := dEnv.TempTableFilesDir()
+	// Get conflicts
+	_, confIdx, err := tbl.GetConflicts(ctx)
 	if err != nil {
 		return nil, err
 	}
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-	tblEditor, err := editor.NewTableEditor(ctx, tbl, sch, tblName, opts)
-	if err != nil {
-		return nil, err
+	conflicts := durable.NomsMapFromConflictIndex(confIdx)
+
+	if schema.IsKeyless(sch) {
+		return resolveKeylessConflicts(ctx, tbl, conflicts)
 	}
 
-	// TODO: just clear conflicts when resolving with ours; non-conflicting rows are already pulled into ours
-	if schema.IsKeyless(sch) {
-		return resolveKeylessConflicts(ctx, tbl, tblName, sch, tblEditor)
-	} else {
-		return resolvePkConflicts(ctx, tbl, tblName, sch, tblEditor)
-	}
+	return resolvePkConflicts(ctx, dEnv, tbl, tblName, sch, conflicts)
 }
 
 func clearTableAndUpdateRoot(ctx *sql.Context, root *doltdb.RootValue, tbl *doltdb.Table, tblName string) (*doltdb.RootValue, error) {
