@@ -384,21 +384,32 @@ func handleProtocolAndAddress(serverConfig ServerConfig) (server.Config, error) 
 	}
 	serverConf.Address = hostPort
 
-	// if socket is defined with or without value -> unix
-	if serverConfig.Socket() != "" {
-		if runtime.GOOS == "windows" {
-			return server.Config{}, fmt.Errorf("cannot define unix socket file on Windows")
-		}
-		serverConf.Socket = serverConfig.Socket()
+	sock, useSock, err := checkForUnixSocket(serverConfig)
+	if err != nil {
+		return server.Config{}, err
 	}
-	// TODO : making it an "opt in" feature (just to start) and requiring users to pass in the `--socket` flag
-	//  to turn them on instead of defaulting them on when host and port aren't set or host is set to `localhost`.
-	//} else {
-	//	// if host is undefined or defined as "localhost" -> unix
-	//	if shouldUseUnixSocket(serverConfig) {
-	//		serverConf.Socket = defaultUnixSocketFilePath
-	//	}
-	//}
+	if useSock {
+		serverConf.Socket = sock
+	}
 
 	return serverConf, nil
+}
+
+// checkForUnixSocket evaluates ServerConfig for whether the unix socket is to be used or not.
+// If user defined socket flag or host is 'localhost', it returns the unix socket file location
+// either user-defined or the default if it was not defined.
+func checkForUnixSocket(config ServerConfig) (string, bool, error) {
+	if config.Socket() != "" {
+		if runtime.GOOS == "windows" {
+			return "", false, fmt.Errorf("cannot define unix socket file on Windows")
+		}
+		return config.Socket(), true, nil
+	} else {
+		// if host is undefined or defined as "localhost" -> unix
+		if runtime.GOOS != "windows" && config.Host() == "localhost" {
+			return defaultUnixSocketFilePath, true, nil
+		}
+	}
+
+	return "", false, nil
 }
