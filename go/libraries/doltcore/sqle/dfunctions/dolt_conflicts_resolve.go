@@ -283,18 +283,13 @@ func resolveKeylessConflicts(ctx *sql.Context, tbl *doltdb.Table, conflicts type
 	err = conflicts.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
 		cnf, err := conflict.ConflictFromTuple(value.(types.Tuple))
 		if err != nil {
-			return false, err
+			return true, err
 		}
 
-		resolved := cnf.MergeValue
-		if err != nil {
-			return false, err
-		}
-
-		if types.IsNull(resolved) {
+		if types.IsNull(cnf.MergeValue) {
 			mapEditor.Remove(key)
 		} else {
-			mapEditor.Set(key, resolved)
+			mapEditor.Set(key, cnf.MergeValue)
 		}
 
 		return false, nil
