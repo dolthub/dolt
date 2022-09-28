@@ -1314,13 +1314,13 @@ SQL
     dolt commit -m "added 2s"
     dolt checkout main
     dolt merge other -m "merge other"
-    # TODO: it does error and prevent the merge, but not in the same way
+    dolt sql -q "set @@dolt_allow_commit_conflicts = 1"
     run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'parent')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "conflict detected" ]] || false
+    [[ "$output" =~ "violation" ]] || false
     run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'child')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "conflict detected" ]] || false
+    [[ "$output" =~ "violation" ]] || false
 }
 
 @test "foreign-keys: FKs move with the working set on checkout" {

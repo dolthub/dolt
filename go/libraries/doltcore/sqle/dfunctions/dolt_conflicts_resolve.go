@@ -17,6 +17,7 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"io"
 	"strings"
 
@@ -321,6 +322,24 @@ func resolveNomsConflicts(ctx *sql.Context, dEnv *env.DoltEnv, tbl *doltdb.Table
 	return resolvePkConflicts(ctx, dEnv, tbl, tblName, sch, conflicts)
 }
 
+func validateConstraintViolations(ctx *sql.Context, before, after *doltdb.RootValue, table string) error {
+	tables, err := after.GetTableNames(ctx)
+	if err != nil {
+		return err
+	}
+
+	// todo: this is an expensive way to compute this
+	_, violators, err := merge.AddForeignKeyViolations(ctx, after, before, set.NewStrSet(tables), hash.Of(nil))
+	if err != nil {
+		return err
+	}
+	if violators.Size() > 0 {
+		return fmt.Errorf("resolving conflicts for table %s created foreign key violations", table)
+	}
+
+	return nil
+}
+
 func clearTableAndUpdateRoot(ctx *sql.Context, root *doltdb.RootValue, tbl *doltdb.Table, tblName string) (*doltdb.RootValue, error) {
 	newTbl, err := tbl.ClearConflicts(ctx)
 	if err != nil {
@@ -334,9 +353,8 @@ func clearTableAndUpdateRoot(ctx *sql.Context, root *doltdb.RootValue, tbl *dolt
 }
 
 func ResolveConflicts(ctx *sql.Context, dEnv *env.DoltEnv, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
-	newRoot := root
 	for _, tblName := range tblNames {
-		tbl, ok, err := newRoot.GetTable(ctx, tblName)
+		tbl, ok, err := root.GetTable(ctx, tblName)
 		if err != nil {
 			return err
 		}
@@ -365,24 +383,30 @@ func ResolveConflicts(ctx *sql.Context, dEnv *env.DoltEnv, dSess *dsess.DoltSess
 			return ErrConfSchIncompatible
 		}
 
-		if ours {
-			newRoot, err = clearTableAndUpdateRoot(ctx, newRoot, tbl, tblName)
+		if !ours {
+			if tbl.Format() == types.Format_DOLT {
+				tbl, err = resolveProllyConflicts(ctx, tbl, tblName, sch)
+			} else {
+				tbl, err = resolveNomsConflicts(ctx, dEnv, tbl, tblName, sch)
+			}
 			if err != nil {
 				return err
 			}
-			continue
 		}
 
-		var newTbl *doltdb.Table
-		if tbl.Format() == types.Format_DOLT {
-			newTbl, err = resolveProllyConflicts(ctx, tbl, tblName, sch)
-		} else {
-			newTbl, err = resolveNomsConflicts(ctx, dEnv, tbl, tblName, sch)
+		newRoot, err := clearTableAndUpdateRoot(ctx, root, tbl, tblName)
+		if err != nil {
+			return err
 		}
 
-		newRoot, err = clearTableAndUpdateRoot(ctx, newRoot, newTbl, tblName)
+		err = validateConstraintViolations(ctx, root, newRoot, tblName)
+		if err != nil {
+			return err
+		}
+
+		root = newRoot
 	}
-	return dSess.SetRoot(ctx, dbName, newRoot)
+	return dSess.SetRoot(ctx, dbName, root)
 }
 
 func DoDoltConflictsResolve(ctx *sql.Context, args []string) (int, error) {
@@ -423,7 +447,7 @@ func DoDoltConflictsResolve(ctx *sql.Context, args []string) (int, error) {
 		}
 	}
 
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "does this matter?")
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "")
 	err = ResolveConflicts(ctx, dEnv, dSess, root, dbName, ours, tbls)
 	if err != nil {
 		return 1, err
