@@ -127,7 +127,7 @@ SQL
     dolt add vals
     dolt commit -m 'create initial vals table'
 
-    dolt sql-server --remotesapi-port 50051 &
+    dolt sql-server --host 127.0.0.1 --remotesapi-port 50051 &
     srv_pid=$!
 
     cd ../../
