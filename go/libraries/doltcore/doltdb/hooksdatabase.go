@@ -36,6 +36,8 @@ type CommitHook interface {
 	HandleError(ctx context.Context, err error) error
 	// SetLogger lets clients specify an output stream for HandleError
 	SetLogger(ctx context.Context, wr io.Writer) error
+
+	ExecuteForWorkingSets() bool
 }
 
 func (db hooksDatabase) SetCommitHooks(ctx context.Context, postHooks []CommitHook) hooksDatabase {
@@ -54,12 +56,14 @@ func (db hooksDatabase) PostCommitHooks() []CommitHook {
 	return db.postCommitHooks
 }
 
-func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset) {
+func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset, onlyWS bool) {
 	var err error
 	for _, hook := range db.postCommitHooks {
-		err = hook.Execute(ctx, ds, db)
-		if err != nil {
-			hook.HandleError(ctx, err)
+		if !onlyWS || hook.ExecuteForWorkingSets() {
+			err = hook.Execute(ctx, ds, db)
+			if err != nil {
+				hook.HandleError(ctx, err)
+			}
 		}
 	}
 }
@@ -79,7 +83,7 @@ func (db hooksDatabase) CommitWithWorkingSet(
 		prevWsHash,
 		opts)
 	if err == nil {
-		db.ExecuteCommitHooks(ctx, commitDS)
+		db.ExecuteCommitHooks(ctx, commitDS, false)
 	}
 	return commitDS, workingSetDS, err
 }
@@ -87,7 +91,7 @@ func (db hooksDatabase) CommitWithWorkingSet(
 func (db hooksDatabase) Commit(ctx context.Context, ds datas.Dataset, v types.Value, opts datas.CommitOptions) (datas.Dataset, error) {
 	ds, err := db.Database.Commit(ctx, ds, v, opts)
 	if err == nil {
-		db.ExecuteCommitHooks(ctx, ds)
+		db.ExecuteCommitHooks(ctx, ds, false)
 	}
 	return ds, err
 }
@@ -95,7 +99,7 @@ func (db hooksDatabase) Commit(ctx context.Context, ds datas.Dataset, v types.Va
 func (db hooksDatabase) SetHead(ctx context.Context, ds datas.Dataset, newHeadAddr hash.Hash) (datas.Dataset, error) {
 	ds, err := db.Database.SetHead(ctx, ds, newHeadAddr)
 	if err == nil {
-		db.ExecuteCommitHooks(ctx, ds)
+		db.ExecuteCommitHooks(ctx, ds, false)
 	}
 	return ds, err
 }
@@ -103,7 +107,7 @@ func (db hooksDatabase) SetHead(ctx context.Context, ds datas.Dataset, newHeadAd
 func (db hooksDatabase) FastForward(ctx context.Context, ds datas.Dataset, newHeadAddr hash.Hash) (datas.Dataset, error) {
 	ds, err := db.Database.FastForward(ctx, ds, newHeadAddr)
 	if err == nil {
-		db.ExecuteCommitHooks(ctx, ds)
+		db.ExecuteCommitHooks(ctx, ds, false)
 	}
 	return ds, err
 }
@@ -111,7 +115,15 @@ func (db hooksDatabase) FastForward(ctx context.Context, ds datas.Dataset, newHe
 func (db hooksDatabase) Delete(ctx context.Context, ds datas.Dataset) (datas.Dataset, error) {
 	ds, err := db.Database.Delete(ctx, ds)
 	if err == nil {
-		db.ExecuteCommitHooks(ctx, datas.NewHeadlessDataset(ds.Database(), ds.ID()))
+		db.ExecuteCommitHooks(ctx, datas.NewHeadlessDataset(ds.Database(), ds.ID()), false)
+	}
+	return ds, err
+}
+
+func (db hooksDatabase) UpdateWorkingSet(ctx context.Context, ds datas.Dataset, workingSet datas.WorkingSetSpec, prevHash hash.Hash) (datas.Dataset, error) {
+	ds, err := db.Database.UpdateWorkingSet(ctx, ds, workingSet, prevHash)
+	if err == nil {
+		db.ExecuteCommitHooks(ctx, ds, true)
 	}
 	return ds, err
 }

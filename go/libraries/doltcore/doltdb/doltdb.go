@@ -1286,7 +1286,7 @@ func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, datasetId string) err
 	if err != nil {
 		return err
 	}
-	ddb.db.ExecuteCommitHooks(ctx, ds)
+	ddb.db.ExecuteCommitHooks(ctx, ds, false)
 	return nil
 }
 

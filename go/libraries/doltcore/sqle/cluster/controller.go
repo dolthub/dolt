@@ -69,7 +69,7 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 		return nil, nil
 	}
 	pCfg = config.NewPrefixConfig(pCfg, PersistentConfigPrefix)
-	role, epoch, err := applyBootstrapClusterConfig(cfg, pCfg)
+	role, epoch, err := applyBootstrapClusterConfig(lgr, cfg, pCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -104,6 +104,7 @@ func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, bt *sql.
 		if denv == nil {
 			continue
 		}
+		c.lgr.Tracef("cluster/controller: applying commit hooks for %s with role %s", db.Name(), string(c.role))
 		hooks, err := applyCommitHooks(ctx, c.lgr, db.Name(), bt, denv, c.cfg, c.role)
 		if err != nil {
 			return err
@@ -190,21 +191,28 @@ func (c *Controller) persistVariables() error {
 	return c.persistentCfg.SetStrings(toset)
 }
 
-func applyBootstrapClusterConfig(cfg Config, pCfg config.ReadWriteConfig) (Role, int, error) {
+func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) (Role, int, error) {
 	toset := make(map[string]string)
 	persistentRole := pCfg.GetStringOrDefault(DoltClusterRoleVariable, "")
 	persistentEpoch := pCfg.GetStringOrDefault(DoltClusterRoleEpochVariable, "")
 	if persistentRole == "" {
 		if cfg.BootstrapRole() != "" {
+			lgr.Tracef("cluster/controller: persisted cluster role was empty, apply bootstrap_role %s", cfg.BootstrapRole())
 			persistentRole = cfg.BootstrapRole()
 		} else {
+			lgr.Trace("cluster/controller: persisted cluster role was empty, bootstrap_role was empty: defaulted to primary")
 			persistentRole = "primary"
 		}
 		toset[DoltClusterRoleVariable] = persistentRole
+	} else {
+		lgr.Tracef("cluster/controller: persisted cluster role is %s", persistentRole)
 	}
 	if persistentEpoch == "" {
 		persistentEpoch = strconv.Itoa(cfg.BootstrapEpoch())
+		lgr.Tracef("cluster/controller: persisted cluster role epoch is empty, took boostrap_epoch: %s", persistentEpoch)
 		toset[DoltClusterRoleEpochVariable] = persistentEpoch
+	} else {
+		lgr.Tracef("cluster/controller: persisted cluster role epoch is %d", persistentEpoch)
 	}
 	if persistentRole != string(RolePrimary) && persistentRole != string(RoleStandby) {
 		return "", 0, fmt.Errorf("persisted role %s.%s = %s must be \"primary\" or \"secondary\"", PersistentConfigPrefix, DoltClusterRoleVariable, persistentRole)
