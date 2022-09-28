@@ -47,6 +47,7 @@ const (
 var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
 	"Rollback or commit changes before changing working sets.")
 var ErrSessionNotPeristable = errors.New("session is not persistable")
+var ErrCurrentBranchDeleted = errors.New("current branch has been force deleted. run 'USE <database>/<branch>' to checkout a different branch, or reconnect to the server")
 
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
@@ -175,6 +176,36 @@ func (d *DoltSession) Flush(ctx *sql.Context, dbName string) error {
 	}
 
 	return d.SetRoot(ctx, dbName, ws.WorkingRoot())
+}
+
+// ValidateSession validates a working set if there are a valid sessionState with non-nil working set.
+// If there is no sessionState or its current working set not defined, then no need for validation,
+// so no error is returned.
+func (d *DoltSession) ValidateSession(ctx *sql.Context, dbName string) error {
+	sessionState, ok, err := d.LookupDbState(ctx, dbName)
+	if !ok {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if sessionState.WorkingSet == nil {
+		return nil
+	}
+	wsRef := sessionState.WorkingSet.Ref()
+	_, err = sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
+	if err == doltdb.ErrWorkingSetNotFound {
+		_, err = d.newWorkingSetForHead(ctx, wsRef, dbName)
+		// if the current head is not found, the branch was force deleted, so use nil working set.
+		if errors.Is(err, doltdb.ErrBranchNotFound) {
+			return ErrCurrentBranchDeleted
+		} else if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+	return nil
 }
 
 // StartTransaction refreshes the state of this session and starts a new transaction.
