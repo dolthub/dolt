@@ -24,6 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -73,14 +74,17 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 	if err != nil {
 		return nil, err
 	}
-	return &Controller{
+	ret := &Controller{
 		cfg:           cfg,
 		persistentCfg: pCfg,
 		role:          role,
 		epoch:         epoch,
 		commithooks:   make([]*commithook, 0),
 		lgr:           lgr,
-	}, nil
+	}
+	ret.sinterceptor.setRole(role, epoch)
+	ret.cinterceptor.setRole(role, epoch)
+	return ret, nil
 }
 
 func (c *Controller) ManageSystemVariables(variables sqlvars) {
@@ -105,7 +109,7 @@ func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, bt *sql.
 			continue
 		}
 		c.lgr.Tracef("cluster/controller: applying commit hooks for %s with role %s", db.Name(), string(c.role))
-		hooks, err := applyCommitHooks(ctx, c.lgr, db.Name(), bt, denv, c.cfg, c.role)
+		hooks, err := c.applyCommitHooks(ctx, db.Name(), bt, denv)
 		if err != nil {
 			return err
 		}
@@ -114,7 +118,7 @@ func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, bt *sql.
 	return nil
 }
 
-func applyCommitHooks(ctx context.Context, lgr *logrus.Logger, name string, bt *sql.BackgroundThreads, denv *env.DoltEnv, cfg Config, role Role) ([]*commithook, error) {
+func (c *Controller) applyCommitHooks(ctx context.Context, name string, bt *sql.BackgroundThreads, denv *env.DoltEnv) ([]*commithook, error) {
 	ttfdir, err := denv.TempTableFilesDir()
 	if err != nil {
 		return nil, err
@@ -123,14 +127,15 @@ func applyCommitHooks(ctx context.Context, lgr *logrus.Logger, name string, bt *
 	if err != nil {
 		return nil, err
 	}
+	dialprovider := c.gRPCDialProvider(denv)
 	var hooks []*commithook
-	for _, r := range cfg.StandbyRemotes() {
+	for _, r := range c.cfg.StandbyRemotes() {
 		remote, ok := remotes[r.Name()]
 		if !ok {
 			return nil, fmt.Errorf("sqle: cluster: standby replication: destination remote %s does not exist on database %s", r.Name(), name)
 		}
-		commitHook := newCommitHook(lgr, r.Name(), name, role, func(ctx context.Context) (*doltdb.DoltDB, error) {
-			return remote.GetRemoteDB(ctx, types.Format_Default, denv)
+		commitHook := newCommitHook(c.lgr, r.Name(), name, c.role, func(ctx context.Context) (*doltdb.DoltDB, error) {
+			return remote.GetRemoteDB(ctx, types.Format_Default, dialprovider)
 		}, denv.DoltDB, ttfdir)
 		denv.DoltDB.PrependCommitHook(ctx, commitHook)
 		if err := commitHook.Run(bt); err != nil {
@@ -139,6 +144,10 @@ func applyCommitHooks(ctx context.Context, lgr *logrus.Logger, name string, bt *
 		hooks = append(hooks, commitHook)
 	}
 	return hooks, nil
+}
+
+func (c *Controller) gRPCDialProvider(denv *env.DoltEnv) dbfactory.GRPCDialProvider {
+	return grpcDialProvider{env.NewGRPCDialProviderFromDoltEnv(denv), &c.cinterceptor}
 }
 
 func (c *Controller) RegisterStoredProcedures(store procedurestore) {
@@ -157,10 +166,6 @@ func (c *Controller) RemoteSrvPort() int {
 
 func (c *Controller) ServerOptions() []grpc.ServerOption {
 	return c.sinterceptor.Options()
-}
-
-func (c *Controller) DialOptions() []grpc.DialOption {
-	return c.cinterceptor.Options()
 }
 
 func (c *Controller) refreshSystemVars() {

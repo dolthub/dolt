@@ -32,6 +32,7 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 		return orig
 	}
 	return func(ctx *sql.Context, pro sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv) error {
+		dialprovider := controller.gRPCDialProvider(denv)
 		var remoteDBs []func(context.Context) (*doltdb.DoltDB, error)
 		for _, r := range controller.cfg.StandbyRemotes() {
 			// TODO: url sanitize name
@@ -46,7 +47,7 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 			}
 
 			remoteDBs = append(remoteDBs, func(ctx context.Context) (*doltdb.DoltDB, error) {
-				return r.GetRemoteDB(ctx, types.Format_Default, denv)
+				return r.GetRemoteDB(ctx, types.Format_Default, dialprovider)
 			})
 		}
 
