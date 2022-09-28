@@ -151,7 +151,7 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 		}
 
 		// update row data
-		if theirRow == nil {
+		if len(theirRow) == 0 {
 			err = mutMap.Delete(ctx, cnfArt.Key)
 		} else {
 			err = mutMap.Put(ctx, cnfArt.Key, theirRow)
