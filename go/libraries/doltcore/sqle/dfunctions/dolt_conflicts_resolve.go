@@ -82,7 +82,7 @@ func getProllyRowMaps(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeS
 	return durable.ProllyMapFromIndex(idx), nil
 }
 
-func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, ours bool) (*doltdb.Table, error) {
+func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema) (*doltdb.Table, error) {
 	var err error
 	artifactIdx, err := tbl.GetArtifacts(ctx)
 	if err != nil {
@@ -95,20 +95,43 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 		return nil, err
 	}
 
-	// just get first conflict artifact
-	cnfArt, err := iter.Next(ctx)
-	if err != nil {
-		if err == io.EOF {
-			panic("no conflicts, should be impossible")
-		}
-		return nil, err
-	}
-
 	ourIdx, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 	ourMap := durable.ProllyMapFromIndex(ourIdx)
+
+	// accumulate index edits
+	once := true
+	var theirMap prolly.Map
+	var indexEdits []tree.Diff
+	for {
+		cnfArt, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		if once {
+			theirMap, err = getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh, tblName)
+			if err != nil {
+				return nil, err
+			}
+			once = false
+		}
+
+		var theirRow val.Tuple
+		theirMap.Get(ctx, cnfArt.Key, func(_, v val.Tuple) error {
+			theirRow = v
+			return nil
+		})
+
+		// todo: update actual table row
+		// todo: accumulate index edits
+
+	}
 
 	baseRootVal, err := doltdb.LoadRootValueFromRootIshAddr(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.Metadata.BaseRootIsh)
 	baseTbl, ok, err := baseRootVal.GetTable(ctx, tblName)
@@ -124,18 +147,8 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 	}
 	baseMap := durable.ProllyMapFromIndex(baseIdx)
 
-	theirMap, err := getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh, tblName)
-	if err != nil {
-		return nil, err
-	}
-
-	// swap the maps when resolving with theirs
-	if !ours {
-		ourMap, theirMap = theirMap, ourMap
-	}
-
 	// resolve conflicts with left
-	var indexEdits []tree.Diff
+
 	merged, _, err := prolly.MergeMaps(ctx, ourMap, theirMap, baseMap, func(left, right tree.Diff) (tree.Diff, bool) {
 		if left.From != nil && ((left.To == nil) != (right.To == nil)) {
 			indexEdits = append(indexEdits, left)
@@ -206,31 +219,24 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 	return newTbl, nil
 }
 
-func resolvePkConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, tblEditor editor.TableEditor, ours bool) (*doltdb.Table, error) {
+func resolvePkConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, tblEditor editor.TableEditor) (*doltdb.Table, error) {
 	// Get conflicts
 	_, cnfIdx, err := tbl.GetConflicts(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Iterate over conflicts, resolve by picking either ours or theirs
+	// Iterate over conflicts, resolve with theirs
 	conflicts := durable.NomsMapFromConflictIndex(cnfIdx)
 	err = conflicts.Iter(ctx, func(key, val types.Value) (stop bool, err error) {
+		k := key.(types.Tuple)
 		cnf, err := conflict.ConflictFromTuple(val.(types.Tuple))
 		if err != nil {
 			return true, err
 		}
 
-		k := key.(types.Tuple)
-		var newVal types.Value
-		if ours {
-			newVal = cnf.Value
-		} else {
-			newVal = cnf.MergeValue
-		}
-
-		// resolve by deleting row
-		if types.IsNull(newVal) {
+		// row was removed
+		if types.IsNull(cnf.MergeValue) {
 			baseRow, err := row.FromNoms(sch, k, cnf.Base.(types.Tuple))
 			if err != nil {
 				return true, err
@@ -242,7 +248,7 @@ func resolvePkConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch
 			return false, nil
 		}
 
-		newRow, err := row.FromNoms(sch, k, newVal.(types.Tuple))
+		newRow, err := row.FromNoms(sch, k, cnf.MergeValue.(types.Tuple))
 		if err != nil {
 			return true, err
 		}
@@ -253,7 +259,7 @@ func resolvePkConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch
 			return true, table.NewBadRow(newRow, "error resolving conflicts", fmt.Sprintf("row with primary key %v in table %s does not match constraints or types of the table's schema.", key, tblName))
 		}
 
-		// resolve by inserting new row
+		// row was added
 		if types.IsNull(cnf.Value) {
 			err = tblEditor.InsertRow(ctx, newRow, nil)
 			if err != nil {
@@ -262,7 +268,7 @@ func resolvePkConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch
 			return false, nil
 		}
 
-		// resolve by updating existing row
+		// row was modified
 		oldRow, err := row.FromNoms(sch, k, cnf.Value.(types.Tuple))
 		if err != nil {
 			return true, err
@@ -279,8 +285,7 @@ func resolvePkConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch
 	return tblEditor.Table(ctx)
 }
 
-func resolveKeylessConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, tblEditor editor.TableEditor, ours bool) (*doltdb.Table, error) {
-	// Iterate over conflicts, resolve by picking either ours or theirs
+func resolveKeylessConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, sch schema.Schema, tblEditor editor.TableEditor) (*doltdb.Table, error) {
 	cnfReader, err := merge.NewConflictReader(ctx, tbl, tblName)
 	if err != nil {
 		return nil, err
@@ -316,14 +321,8 @@ func resolveKeylessConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string
 			panic("shouldn't be possible")
 		}
 
-		rowDelta := 0
-		var newRow row.Row
-		if ours {
-			newRow = cnfMap["our"]
-		} else {
-			newRow = cnfMap["their"]
-			rowDelta = int(theirCardinality - ourCardinality)
-		}
+		rowDelta := int(theirCardinality - ourCardinality)
+		newRow := cnfMap["their"]
 
 		if rowDelta > 0 {
 			for i := 0; i < rowDelta; i++ {
@@ -340,7 +339,7 @@ func resolveKeylessConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string
 	return tblEditor.Table(ctx)
 }
 
-func resolveNomsConflicts(ctx *sql.Context, dEnv *env.DoltEnv, tbl *doltdb.Table, tblName string, sch schema.Schema, ours bool) (*doltdb.Table, error) {
+func resolveNomsConflicts(ctx *sql.Context, dEnv *env.DoltEnv, tbl *doltdb.Table, tblName string, sch schema.Schema) (*doltdb.Table, error) {
 	// Create new table editor
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
@@ -352,11 +351,24 @@ func resolveNomsConflicts(ctx *sql.Context, dEnv *env.DoltEnv, tbl *doltdb.Table
 		return nil, err
 	}
 
+	// TODO: just clear conflicts when resolving with ours; non-conflicting rows are already pulled into ours
 	if schema.IsKeyless(sch) {
-		return resolveKeylessConflicts(ctx, tbl, tblName, sch, tblEditor, ours)
+		return resolveKeylessConflicts(ctx, tbl, tblName, sch, tblEditor)
 	} else {
-		return resolvePkConflicts(ctx, tbl, tblName, sch, tblEditor, ours)
+		return resolvePkConflicts(ctx, tbl, tblName, sch, tblEditor)
 	}
+}
+
+func clearTableAndUpdateRoot(ctx *sql.Context, root *doltdb.RootValue, tbl *doltdb.Table, tblName string) (*doltdb.RootValue, error) {
+	newTbl, err := tbl.ClearConflicts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	newRoot, err := root.PutTable(ctx, tblName, newTbl)
+	if err != nil {
+		return nil, err
+	}
+	return newRoot, nil
 }
 
 func ResolveConflicts(ctx *sql.Context, dEnv *env.DoltEnv, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
@@ -391,22 +403,21 @@ func ResolveConflicts(ctx *sql.Context, dEnv *env.DoltEnv, dSess *dsess.DoltSess
 			return ErrConfSchIncompatible
 		}
 
+		if ours {
+			newRoot, err = clearTableAndUpdateRoot(ctx, newRoot, tbl, tblName)
+			if err != nil {
+				return err
+			}
+		}
+
 		var newTbl *doltdb.Table
 		if tbl.Format() == types.Format_DOLT {
-			newTbl, err = resolveProllyConflicts(ctx, tbl, tblName, sch, ours)
+			newTbl, err = resolveProllyConflicts(ctx, tbl, tblName, sch)
 		} else {
-			newTbl, err = resolveNomsConflicts(ctx, dEnv, tbl, tblName, sch, ours)
+			newTbl, err = resolveNomsConflicts(ctx, dEnv, tbl, tblName, sch)
 		}
 
-		newTbl, err = newTbl.ClearConflicts(ctx)
-		if err != nil {
-			return err
-		}
-
-		newRoot, err = newRoot.PutTable(ctx, tblName, newTbl)
-		if err != nil {
-			return err
-		}
+		newRoot, err = clearTableAndUpdateRoot(ctx, newRoot, newTbl, tblName)
 	}
 	return dSess.SetRoot(ctx, dbName, newRoot)
 }
