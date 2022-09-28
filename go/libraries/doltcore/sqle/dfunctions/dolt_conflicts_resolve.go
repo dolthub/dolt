@@ -17,7 +17,6 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"io"
 	"strings"
 
@@ -35,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
