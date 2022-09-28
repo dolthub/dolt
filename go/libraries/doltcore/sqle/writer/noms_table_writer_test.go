@@ -47,6 +47,8 @@ type tableEditorTest struct {
 }
 
 func TestTableEditor(t *testing.T) {
+	t.Skip()
+
 	edna := sqle.NewPeopleRow(10, "Edna", "Krabapple", false, 38, 8.0)
 	krusty := sqle.NewPeopleRow(11, "Krusty", "Klown", false, 48, 9.5)
 	smithers := sqle.NewPeopleRow(12, "Waylon", "Smithers", false, 44, 7.1)
