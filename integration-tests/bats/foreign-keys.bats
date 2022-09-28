@@ -1290,7 +1290,7 @@ SQL
     [[ "$output" =~ "violation" ]] || false
 }
 
-@test "foreign-keys: Resolve with stored catches violations" {
+@test "foreign-keys: Resolve catches violations with stored procedure" {
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);
 INSERT INTO parent VALUES (0,0,0);
