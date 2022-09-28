@@ -1323,7 +1323,7 @@ SQL
     run dolt sql <<SQL
 set @@dolt_allow_commit_conflicts = 1;
 call dolt_conflicts_resolve('--theirs', 'child');
-    SQL
+SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "violation" ]] || false
 }
