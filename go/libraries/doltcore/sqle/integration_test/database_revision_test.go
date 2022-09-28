@@ -181,7 +181,7 @@ func TestDbRevision(t *testing.T) {
 
 func populateCommitHashes(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue) (cm1, cm2, cm3 hash.Hash) {
 	q := "SELECT commit_hash FROM dolt_log;"
-	rows, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, root, q)
+	rows, err := sqle.ExecuteSelect(t, dEnv, root, q)
 	require.NoError(t, err)
 	assert.Len(t, rows, 4)
 	cm3 = hash.Parse(rows[0][0].(string))
@@ -191,7 +191,7 @@ func populateCommitHashes(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValu
 }
 
 func makeTestAssertion(t *testing.T, a testAssert, dEnv *env.DoltEnv, root *doltdb.RootValue) {
-	actRows, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, root, a.query)
+	actRows, err := sqle.ExecuteSelect(t, dEnv, root, a.query)
 	require.NoError(t, err)
 
 	require.Equal(t, len(a.rows), len(actRows))

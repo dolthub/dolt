@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -176,10 +177,10 @@ func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) dsess.InitialD
 }
 
 // ExecuteSelect executes the select statement given and returns the resulting rows, or an error if one is encountered.
-func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *doltdb.RootValue, query string) ([]sql.Row, error) {
+func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) ([]sql.Row, error) {
 
 	dbData := env.DbData{
-		Ddb: ddb,
+		Ddb: dEnv.DoltDB,
 		Rsw: dEnv.RepoStateWriter(),
 		Rsr: dEnv.RepoStateReader(),
 	}
@@ -359,4 +360,30 @@ func drainIter(ctx *sql.Context, iter sql.RowIter) error {
 		}
 	}
 	return iter.Close(ctx)
+}
+
+func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
+	const seedData = `
+	CREATE TABLE people (
+	    id varchar(36) primary key,
+	    name varchar(40) not null,
+	    age int unsigned,
+	    is_married int,
+	    title varchar(40),
+	    INDEX idx_name (name)
+	);
+	INSERT INTO people VALUES
+		('00000000-0000-0000-0000-000000000000', 'Bill Billerson', 32, 1, 'Senior Dufus'),
+		('00000000-0000-0000-0000-000000000001', 'John Johnson', 25, 0, 'Dufus'),
+		('00000000-0000-0000-0000-000000000002', 'Rob Robertson', 21, 0, '');`
+
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnv()
+	root, err := dEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
+	root, err = ExecuteSql(t, dEnv, root, seedData)
+	require.NoError(t, err)
+	err = dEnv.UpdateWorkingRoot(ctx, root)
+	require.NoError(t, err)
+	return dEnv
 }

@@ -194,7 +194,7 @@ func TestTableEditor(t *testing.T) {
 
 			require.NoError(t, dEnv.UpdateWorkingRoot(context.Background(), root))
 
-			actualRows, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, root, test.selectQuery)
+			actualRows, err := sqle.ExecuteSelect(t, dEnv, root, test.selectQuery)
 			require.NoError(t, err)
 
 			assert.Equal(t, test.expectedRows, actualRows)
