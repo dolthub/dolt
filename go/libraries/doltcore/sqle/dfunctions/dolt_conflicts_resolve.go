@@ -102,10 +102,18 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 	ourMap := durable.ProllyMapFromIndex(ourIdx)
 	mutMap := ourMap.Mutate()
 
-	// accumulate index edits
-	once := true
+	// get mutable secondary indexes
+	idxSet, err := tbl.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mutIdxs, err := merge.GetMutableSecondaryIdxs(ctx, sch, idxSet)
+	if err != nil {
+		return nil, err
+	}
+
+	var theirRoot hash.Hash
 	var theirMap prolly.Map
-	var indexEdits []tree.Diff
 	for {
 		cnfArt, err := iter.Next(ctx)
 		if err == io.EOF {
@@ -115,14 +123,16 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 			return nil, err
 		}
 
-		if once {
+		// reload if their root hash changes
+		if theirRoot != cnfArt.TheirRootIsh {
 			theirMap, err = getProllyRowMaps(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), cnfArt.TheirRootIsh, tblName)
 			if err != nil {
 				return nil, err
 			}
-			once = false
+			theirRoot = cnfArt.TheirRootIsh
 		}
 
+		// get row data
 		var ourRow, theirRow val.Tuple
 		err = ourMap.Get(ctx, cnfArt.Key, func(_, v val.Tuple) error {
 			ourRow = v
@@ -139,13 +149,7 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 			return nil, err
 		}
 
-		edit := tree.Diff{
-			Key:  tree.Item(cnfArt.Key),
-			From: tree.Item(ourRow),
-			To:   tree.Item(theirRow),
-		}
-		indexEdits = append(indexEdits, edit)
-
+		// update row data
 		if theirRow == nil {
 			err = mutMap.Delete(ctx, cnfArt.Key)
 		} else {
@@ -153,6 +157,20 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 		}
 		if err != nil {
 			return nil, err
+		}
+
+		// update secondary indexes
+		for _, mutIdx := range mutIdxs {
+			if len(ourRow) == 0 {
+				err = mutIdx.InsertEntry(ctx, cnfArt.Key, theirRow)
+			} else if len(theirRow) == 0 {
+				err = mutIdx.DeleteEntry(ctx, cnfArt.Key, ourRow)
+			} else {
+				err = mutIdx.UpdateEntry(ctx, cnfArt.Key, ourRow, theirRow)
+			}
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -167,38 +185,15 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 		return nil, err
 	}
 
-	// get mutable secondary indexes
-	idxSet, err := tbl.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-	mutIdxs, err := merge.GetMutableSecondaryIdxs(ctx, sch, idxSet)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: could do this inside the loop while resolving row data
-	// Update secondary indexes
+	// Apply index set changes
 	for _, mutIdx := range mutIdxs {
-		for _, edit := range indexEdits {
-			if len(edit.From) == 0 {
-				err = mutIdx.InsertEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.To))
-			} else if len(edit.To) == 0 {
-				err = mutIdx.DeleteEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.From))
-			} else {
-				err = mutIdx.UpdateEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.From), val.Tuple(edit.To))
-			}
-			if err != nil {
-				return nil, err
-			}
-			m, err := mutIdx.Map(ctx)
-			if err != nil {
-				return nil, err
-			}
-			idxSet, err = idxSet.PutIndex(ctx, mutIdx.Name, durable.IndexFromProllyMap(m))
-			if err != nil {
-				return nil, err
-			}
+		m, err := mutIdx.Map(ctx)
+		if err != nil {
+			return nil, err
+		}
+		idxSet, err = idxSet.PutIndex(ctx, mutIdx.Name, durable.IndexFromProllyMap(m))
+		if err != nil {
+			return nil, err
 		}
 	}
 
