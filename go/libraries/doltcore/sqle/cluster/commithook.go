@@ -32,18 +32,19 @@ import (
 var _ doltdb.CommitHook = (*commithook)(nil)
 
 type commithook struct {
-	rootLgr           *logrus.Entry
-	lgr               *logrus.Entry
-	remotename        string
-	dbname            string
-	lout              io.Writer
-	mu                sync.Mutex
-	wg                sync.WaitGroup
-	cond              *sync.Cond
-	nextHead          hash.Hash
-	lastPushedHead    hash.Hash
-	lastPushedSuccess time.Time
-	nextPushAttempt   time.Time
+	rootLgr              *logrus.Entry
+	lgr                  *logrus.Entry
+	remotename           string
+	dbname               string
+	lout                 io.Writer
+	mu                   sync.Mutex
+	wg                   sync.WaitGroup
+	cond                 *sync.Cond
+	nextHead             hash.Hash
+	lastPushedHead       hash.Hash
+	lastPushedSuccess    time.Time
+	nextPushAttempt      time.Time
+	nextHeadIncomingTime time.Time
 
 	role Role
 
@@ -104,9 +105,13 @@ func (h *commithook) replicate(ctx context.Context) {
 			h.nextHead, err = cs.Root(ctx)
 			if err != nil {
 				// TODO: if err != nil, something is really wrong; should shutdown or backoff.
-				h.lgr.Warning("standby replication thread failed to load database root: %v", err)
+				h.lgr.Warningf("standby replication thread failed to load database root: %v", err)
 				h.nextHead = hash.Hash{}
 			}
+
+			// We do not know when this head was written, but we
+			// starting trying to replicate it now.
+			h.nextHeadIncomingTime = time.Now()
 		} else if h.shouldReplicate() {
 			h.attemptReplicate(ctx)
 		} else {
@@ -135,6 +140,7 @@ func (h *commithook) shouldReplicate() bool {
 // when this function returns, h.mu is locked.
 func (h *commithook) attemptReplicate(ctx context.Context) {
 	toPush := h.nextHead
+	incomingTime := h.nextHeadIncomingTime
 	destDB := h.destDB
 	h.mu.Unlock()
 
@@ -177,7 +183,7 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 	if err == nil {
 		h.lgr.Tracef("cluster/commithook: successfully Commited chunks on destDB")
 		h.lastPushedHead = toPush
-		h.lastPushedSuccess = time.Now()
+		h.lastPushedSuccess = incomingTime
 		h.nextPushAttempt = time.Time{}
 	} else {
 		h.lgr.Warnf("cluster/commithook: failed to commit chunks on destDB: %v", err)
@@ -187,6 +193,26 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 			h.nextPushAttempt = time.Now().Add(1 * time.Second)
 		}
 	}
+}
+
+func (h *commithook) replicationLag() time.Duration {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.role == RoleStandby {
+		return time.Duration(0)
+	}
+	if h.nextHead == h.lastPushedHead {
+		return time.Duration(0)
+	}
+	// We return the wallclock time between now and the last time we were
+	// successful. If h.nextHeadIncomingTime is significantly earlier than
+	// time.Now(), because the server has not received a write in a long
+	// time, then this metric may report a high number when the number of
+	// seconds of writes outstanding could actually be much smaller.
+	// Operationally, failure to replicate a write for a long time is a
+	// problem that merits investigation, regardless of how many pending
+	// writes are failing to replicate.
+	return time.Now().Sub(h.lastPushedSuccess)
 }
 
 // TODO: Would be more efficient to only tick when we have outstanding work...
@@ -247,6 +273,7 @@ func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db datas.Dat
 	defer h.mu.Unlock()
 	if root != h.nextHead {
 		h.lgr.Tracef("signaling replication thread to push new head: %v", root.String())
+		h.nextHeadIncomingTime = time.Now()
 		h.nextHead = root
 		h.nextPushAttempt = time.Time{}
 		h.cond.Signal()

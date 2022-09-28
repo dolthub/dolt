@@ -212,7 +212,7 @@ func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.Rea
 		lgr.Tracef("cluster/controller: persisted cluster role epoch is empty, took boostrap_epoch: %s", persistentEpoch)
 		toset[DoltClusterRoleEpochVariable] = persistentEpoch
 	} else {
-		lgr.Tracef("cluster/controller: persisted cluster role epoch is %d", persistentEpoch)
+		lgr.Tracef("cluster/controller: persisted cluster role epoch is %s", persistentEpoch)
 	}
 	if persistentRole != string(RolePrimary) && persistentRole != string(RoleStandby) {
 		return "", 0, fmt.Errorf("persisted role %s.%s = %s must be \"primary\" or \"secondary\"", PersistentConfigPrefix, DoltClusterRoleVariable, persistentRole)

@@ -68,7 +68,7 @@ func withClient(t *testing.T, cb func(*testing.T, grpc_health_v1.HealthClient), 
 		srvErr = srv.Serve(lis)
 	}()
 
-	cc, err := grpc.Dial("unix://test_grpc.socket", append([]grpc.DialOption{grpc.WithInsecure()}, dialopts...)...)
+	cc, err := grpc.Dial("unix:test_grpc.socket", append([]grpc.DialOption{grpc.WithInsecure()}, dialopts...)...)
 	require.NoError(t, err)
 	client := grpc_health_v1.NewHealthClient(cc)
 
