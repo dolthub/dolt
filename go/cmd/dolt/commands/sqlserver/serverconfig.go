@@ -532,12 +532,12 @@ func ConnectionString(config ServerConfig, database string) string {
 // ConfigInfo returns a summary of some of the config which contains some of the more important information
 func ConfigInfo(config ServerConfig) string {
 	socket := ""
-	if config.Socket() != "" {
-		s := config.Socket()
-		if s == "" {
-			s = defaultUnixSocketFilePath
-		}
-		socket = fmt.Sprintf(`|S="%v"`, s)
+	sock, useSock, err := checkForUnixSocket(config)
+	if err != nil {
+		panic(err)
+	}
+	if useSock {
+		socket = fmt.Sprintf(`|S="%v"`, sock)
 	}
 	return fmt.Sprintf(`HP="%v:%v"|T="%v"|R="%v"|L="%v"%s`, config.Host(), config.Port(),
 		config.ReadTimeout(), config.ReadOnly(), config.LogLevel(), socket)

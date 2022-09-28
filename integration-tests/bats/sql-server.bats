@@ -1542,6 +1542,30 @@ databases:
     [[ "$output" =~ "database is locked to writes" ]] || false
 }
 
+@test "sql-server: start server without socket flag should set default socket path" {
+    skiponwindows "unix socket is not available on Windows"
+    cd repo2
+    DEFAULT_DB="repo2"
+    let PORT="$$ % (65536-1024) + 1024"
+
+    dolt sql-server --port $PORT --user dolt >> log.txt 2>&1 &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+
+    server_query repo2 1 dolt "" "select 1 dolt ""as col1" "col1\n1"
+    run grep '\"/tmp/mysql.sock\"' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+
+    run dolt sql-client --user=dolt <<< "exit;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "# Welcome to the Dolt MySQL client." ]] || false
+
+    run dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<< "exit;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "# Welcome to the Dolt MySQL client." ]] || false
+}
+
 @test "sql-server: start server with socket option undefined should set default socket path" {
     skiponwindows "unix socket is not available on Windows"
     cd repo2
