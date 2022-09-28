@@ -1314,11 +1314,16 @@ SQL
     dolt commit -m "added 2s"
     dolt checkout main
     dolt merge other -m "merge other"
-    dolt sql -q "set @@dolt_allow_commit_conflicts = 1"
-    run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'parent')"
+    run dolt sql <<SQL
+set @@dolt_allow_commit_conflicts = 1;
+call dolt_conflicts_resolve('--theirs', 'parent');
+SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "violation" ]] || false
-    run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'child')"
+    run dolt sql <<SQL
+set @@dolt_allow_commit_conflicts = 1;
+call dolt_conflicts_resolve('--theirs', 'child');
+    SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "violation" ]] || false
 }
