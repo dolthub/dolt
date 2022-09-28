@@ -379,8 +379,27 @@ SQL
     run dolt merge other --no-commit
     log_status_eq 0
     [[ "$output" =~ "CONFLICT" ]] || false
-    dolt conflicts resolve --theirs dolt_schemas
     run dolt conflicts resolve --theirs dolt_schemas
+    log_status_eq 0
+    run dolt sql -q "select name from dolt_schemas" -r csv
+    log_status_eq 0
+    [[ "$output" =~ "c1c1" ]] || false
+}
+
+@test "merge: Add views on two branches, merge with stored procedure" {
+    dolt branch other
+    dolt sql -q "CREATE VIEW pkpk AS SELECT pk*pk FROM test1;"
+    dolt add . && dolt commit -m "added view on table test1"
+
+    dolt checkout other
+    dolt sql -q "CREATE VIEW c1c1 AS SELECT c1*c1 FROM test2;"
+    dolt add . && dolt commit -m "added view on table test2"
+
+    dolt checkout main
+    run dolt merge other --no-commit
+    log_status_eq 0
+    [[ "$output" =~ "CONFLICT" ]] || false
+    run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'dolt_schemas')"
     log_status_eq 0
     run dolt sql -q "select name from dolt_schemas" -r csv
     log_status_eq 0
