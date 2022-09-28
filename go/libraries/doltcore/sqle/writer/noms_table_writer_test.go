@@ -16,6 +16,7 @@ package writer_test
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/store/types"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -47,7 +48,9 @@ type tableEditorTest struct {
 }
 
 func TestTableEditor(t *testing.T) {
-	t.Skip()
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip()
+	}
 
 	edna := sqle.NewPeopleRow(10, "Edna", "Krabapple", false, 38, 8.0)
 	krusty := sqle.NewPeopleRow(11, "Krusty", "Klown", false, 48, 9.5)

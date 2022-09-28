@@ -36,7 +36,6 @@ import (
 )
 
 func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *env.DoltEnv, *doltdb.RootValue, dsqle.Database, []*indexTuple) {
-	t.Skip()
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
