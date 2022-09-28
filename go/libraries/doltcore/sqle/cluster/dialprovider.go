@@ -15,7 +15,10 @@
 package cluster
 
 import (
+	"time"
+
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
@@ -38,5 +41,14 @@ func (p grpcDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (string,
 		return "", nil, err
 	}
 	opts = append(opts, p.ci.Options()...)
+	opts = append(opts, grpc.WithConnectParams(grpc.ConnectParams{
+		Backoff: backoff.Config{
+			BaseDelay:  250 * time.Millisecond,
+			Multiplier: 1.6,
+			Jitter:     0.6,
+			MaxDelay:   10 * time.Second,
+		},
+		MinConnectTimeout: 250 * time.Millisecond,
+	}))
 	return endpoint, opts, nil
 }

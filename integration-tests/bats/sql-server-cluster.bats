@@ -56,14 +56,13 @@ cluster:
     SERVER_PID=$!
     wait_for_connection "${SERVERONE_MYSQL_PORT}" 5000
 
-    server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch" "@@GLOBAL.dolt_cluster_role,@@GLOBAL.dolt_cluster_role_epoch\nstandby,10"
+    server_query_with_port "${SERVERONE_MYSQL_PORT}" dolt_cluster 1 dolt "" "select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch;select "'`database`'", standby_remote, role, epoch from dolt_cluster_status order by "'`database`'" asc" "@@GLOBAL.dolt_cluster_role,@@GLOBAL.dolt_cluster_role_epoch\nstandby,10;database,standby_remote,role,epoch\nrepo1,standby,standby,10\nrepo2,standby,standby,10"
 
     kill $SERVER_PID
     wait $SERVER_PID
     SERVER_PID=
 
     echo "
-log_level: trace
 user:
   name: dolt
 listener:
@@ -92,7 +91,6 @@ cluster:
     cd serverone
 
     echo "
-log_level: trace
 user:
   name: dolt
 listener:
@@ -150,7 +148,6 @@ cluster:
     cd serverone
 
     echo "
-log_level: trace
 user:
   name: dolt
 listener:
@@ -181,7 +178,6 @@ cluster:
     cd serverone
 
     echo "
-log_level: trace
 user:
   name: dolt
 listener:
@@ -209,7 +205,6 @@ cluster:
     cd serverone
 
     echo "
-log_level: trace
 user:
   name: dolt
 listener:
@@ -222,7 +217,7 @@ cluster:
   standby_remotes:
   - name: standby
     remote_url_template: http://localhost:${SERVERTWO_GRPC_PORT}/{database}
-  bootstrap_role: primary
+  bootstrap_role: standby
   bootstrap_epoch: 10
   remotesapi:
     port: ${SERVERONE_GRPC_PORT}" > server.yaml
@@ -236,10 +231,11 @@ cluster:
     DOLT_ROOT_PATH=`pwd` dolt sql-server --config server.yaml &
     serverone_pid=$!
 
+    wait_for_connection "${SERVERONE_MYSQL_PORT}" 5000
+
     cd ../servertwo
 
     echo "
-log_level: trace
 user:
   name: dolt
 listener:
@@ -252,7 +248,7 @@ cluster:
   standby_remotes:
   - name: standby
     remote_url_template: http://localhost:${SERVERONE_GRPC_PORT}/{database}
-  bootstrap_role: standby
+  bootstrap_role: primary
   bootstrap_epoch: 10
   remotesapi:
     port: ${SERVERTWO_GRPC_PORT}" > server.yaml
@@ -267,14 +263,18 @@ cluster:
     servertwo_pid=$!
 
     wait_for_connection "${SERVERTWO_MYSQL_PORT}" 5000
-    wait_for_connection "${SERVERONE_MYSQL_PORT}" 5000
-    server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "create table vals (i int primary key);insert into vals values (1),(2),(3),(4),(5);"
+
+    server_query_with_port "${SERVERTWO_MYSQL_PORT}" repo1 1 dolt "" "create table vals (i int primary key);insert into vals values (1),(2),(3),(4),(5)"
+
+    server_query_with_port "${SERVERTWO_MYSQL_PORT}" dolt_cluster 1 dolt "" "select "'`database`'", standby_remote, role, epoch, replication_lag_millis, current_error from dolt_cluster_status order by "'`database`'" asc" "database,standby_remote,role,epoch,replication_lag_millis,current_error\nrepo1,standby,primary,10,0,None\nrepo2,standby,primary,10,0,None"
+
+    kill $servertwo_pid
+    wait $servertwo_pid
 
     kill $serverone_pid
     wait $serverone_pid
 
-    kill $servertwo_pid
-    wait $servertwo_pid
+    cd ../serverone
 
     run env DOLT_ROOT_PATH=`pwd` dolt sql -q 'select count(*) from vals'
     [ "$status" -eq 0 ]
