@@ -24,14 +24,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -198,13 +196,8 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 	return newTbl, nil
 }
 
-func resolvePkConflicts(ctx *sql.Context, dEnv *env.DoltEnv, tbl *doltdb.Table, tblName string, sch schema.Schema, conflicts types.Map) (*doltdb.Table, error) {
+func resolvePkConflicts(ctx *sql.Context, opts editor.Options, tbl *doltdb.Table, tblName string, sch schema.Schema, conflicts types.Map) (*doltdb.Table, error) {
 	// Create table editor
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return nil, err
-	}
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 	tblEditor, err := editor.NewTableEditor(ctx, tbl, sch, tblName, opts)
 	if err != nil {
 		return nil, err
@@ -300,7 +293,7 @@ func resolveKeylessConflicts(ctx *sql.Context, tbl *doltdb.Table, conflicts type
 	return tbl.UpdateNomsRows(ctx, rowData)
 }
 
-func resolveNomsConflicts(ctx *sql.Context, dEnv *env.DoltEnv, tbl *doltdb.Table, tblName string, sch schema.Schema) (*doltdb.Table, error) {
+func resolveNomsConflicts(ctx *sql.Context, opts editor.Options, tbl *doltdb.Table, tblName string, sch schema.Schema) (*doltdb.Table, error) {
 	// Get conflicts
 	_, confIdx, err := tbl.GetConflicts(ctx)
 	if err != nil {
@@ -312,7 +305,7 @@ func resolveNomsConflicts(ctx *sql.Context, dEnv *env.DoltEnv, tbl *doltdb.Table
 		return resolveKeylessConflicts(ctx, tbl, conflicts)
 	}
 
-	return resolvePkConflicts(ctx, dEnv, tbl, tblName, sch, conflicts)
+	return resolvePkConflicts(ctx, opts, tbl, tblName, sch, conflicts)
 }
 
 func validateConstraintViolations(ctx *sql.Context, before, after *doltdb.RootValue, table string) error {
@@ -345,7 +338,7 @@ func clearTableAndUpdateRoot(ctx *sql.Context, root *doltdb.RootValue, tbl *dolt
 	return newRoot, nil
 }
 
-func ResolveConflicts(ctx *sql.Context, dEnv *env.DoltEnv, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
+func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
 	for _, tblName := range tblNames {
 		tbl, ok, err := root.GetTable(ctx, tblName)
 		if err != nil {
@@ -380,7 +373,12 @@ func ResolveConflicts(ctx *sql.Context, dEnv *env.DoltEnv, dSess *dsess.DoltSess
 			if tbl.Format() == types.Format_DOLT {
 				tbl, err = resolveProllyConflicts(ctx, tbl, tblName, sch)
 			} else {
-				tbl, err = resolveNomsConflicts(ctx, dEnv, tbl, tblName, sch)
+				state, _, err := dSess.LookupDbState(ctx, dbName)
+				if err != nil {
+					return err
+				}
+				opts := state.WriteSession.GetOptions()
+				tbl, err = resolveNomsConflicts(ctx, opts, tbl, tblName, sch)
 			}
 			if err != nil {
 				return err
@@ -440,8 +438,7 @@ func DoDoltConflictsResolve(ctx *sql.Context, args []string) (int, error) {
 		}
 	}
 
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "")
-	err = ResolveConflicts(ctx, dEnv, dSess, root, dbName, ours, tbls)
+	err = ResolveConflicts(ctx, dSess, root, dbName, ours, tbls)
 	if err != nil {
 		return 1, err
 	}
