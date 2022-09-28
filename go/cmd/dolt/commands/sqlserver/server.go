@@ -182,12 +182,23 @@ func Serve(
 	}
 	defer listener.Close()
 
-	mySQLServer, startError = server.NewServer(
-		serverConf,
-		sqlEngine.GetUnderlyingEngine(),
-		newSessionBuilder(sqlEngine, serverConfig),
-		listener,
-	)
+	v, ok := serverConfig.(validatingServerConfig)
+	if ok && v.goldenMysqlConnectionString() != "" {
+		mySQLServer, startError = server.NewValidatingServer(
+			serverConf,
+			sqlEngine.GetUnderlyingEngine(),
+			newSessionBuilder(sqlEngine, serverConfig),
+			listener,
+			v.goldenMysqlConnectionString(),
+		)
+	} else {
+		mySQLServer, startError = server.NewServer(
+			serverConf,
+			sqlEngine.GetUnderlyingEngine(),
+			newSessionBuilder(sqlEngine, serverConfig),
+			listener,
+		)
+	}
 
 	if startError != nil {
 		cli.PrintErr(startError)

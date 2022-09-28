@@ -545,21 +545,44 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
-	// Get the DB's directory
-	exists, isDir := p.fs.Exists(db.Name())
-	if !exists {
-		// engine should already protect against this
+	// get location of database that's being dropped
+	dbLoc := p.dbLocations[dbKey]
+	if dbLoc == nil {
 		return sql.ErrDatabaseNotFound.New(db.Name())
-	} else if !isDir {
-		return fmt.Errorf("unexpected error: %s exists but is not a directory", dbKey)
 	}
-
-	err = p.fs.Delete(db.Name(), true)
+	dropDbLoc, err := dbLoc.Abs("")
 	if err != nil {
 		return err
 	}
+	rootDbLoc, err := p.fs.Abs("")
+	if err != nil {
+		return err
+	}
+	dirToDelete := ""
+	// if the database is in the directory itself, we remove '.dolt' directory rather than
+	// the whole directory itself because it can have other databases that are nested.
+	if rootDbLoc == dropDbLoc {
+		doltDirExists, _ := p.fs.Exists(dbfactory.DoltDir)
+		if !doltDirExists {
+			return sql.ErrDatabaseNotFound.New(db.Name())
+		}
+		dirToDelete = dbfactory.DoltDir
+	} else {
+		exists, isDir := p.fs.Exists(dropDbLoc)
+		// Get the DB's directory
+		if !exists {
+			// engine should already protect against this
+			return sql.ErrDatabaseNotFound.New(db.Name())
+		} else if !isDir {
+			return fmt.Errorf("unexpected error: %s exists but is not a directory", dbKey)
+		}
+		dirToDelete = dropDbLoc
+	}
 
-	// TODO: delete database in current dir
+	err = p.fs.Delete(dirToDelete, true)
+	if err != nil {
+		return err
+	}
 
 	// We not only have to delete this database, but any derivative ones that we've stored as a result of USE or
 	// connection strings
@@ -783,8 +806,12 @@ func (p DoltDatabaseProvider) ExternalStoredProcedures(_ *sql.Context, name stri
 func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.TableFunction, error) {
 	// currently, only one table function is supported, if we extend this, we should clean this up
 	// and store table functions in a map, similar to regular functions.
-	if strings.ToLower(name) == "dolt_diff" {
+	switch strings.ToLower(name) {
+	case "dolt_diff":
 		dtf := &DiffTableFunction{}
+		return dtf, nil
+	case "dolt_diff_summary":
+		dtf := &DiffSummaryTableFunction{}
 		return dtf, nil
 	}
 

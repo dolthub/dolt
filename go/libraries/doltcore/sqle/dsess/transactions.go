@@ -141,7 +141,7 @@ func doltCommit(ctx *sql.Context,
 	tx *DoltTransaction,
 	commit *doltdb.PendingCommit,
 	workingSet *doltdb.WorkingSet,
-	hash hash.Hash,
+	currHash hash.Hash,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	headRef, err := workingSet.Ref().ToHeadRef()
 	if err != nil {
@@ -149,7 +149,7 @@ func doltCommit(ctx *sql.Context,
 	}
 
 	workingSet = workingSet.ClearMerge()
-	newCommit, err := tx.dbData.Ddb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, commit, workingSet, hash, tx.getWorkingSetMeta(ctx))
+	newCommit, err := tx.dbData.Ddb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, commit, workingSet, currHash, tx.getWorkingSetMeta(ctx))
 	return workingSet, newCommit, err
 }
 

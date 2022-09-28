@@ -143,9 +143,11 @@ type YAMLConfig struct {
 	PrivilegeFile     *string               `yaml:"privilege_file"`
 	Vars              []UserSessionVars     `yaml:"user_session_vars"`
 	Jwks              []engine.JwksConfig   `yaml:"jwks"`
+	GoldenMysqlConn   *string               `yaml:"golden_mysql_conn"`
 }
 
 var _ ServerConfig = YAMLConfig{}
+var _ validatingServerConfig = YAMLConfig{}
 
 func NewYamlConfig(configFileData []byte) (YAMLConfig, error) {
 	var cfg YAMLConfig
@@ -449,6 +451,13 @@ func (cfg YAMLConfig) Socket() string {
 		return defaultUnixSocketFilePath
 	}
 	return *cfg.ListenerConfig.Socket
+}
+
+func (cfg YAMLConfig) goldenMysqlConnectionString() (s string) {
+	if cfg.GoldenMysqlConn != nil {
+		s = *cfg.GoldenMysqlConn
+	}
+	return
 }
 
 func (cfg YAMLConfig) ClusterConfig() cluster.Config {
