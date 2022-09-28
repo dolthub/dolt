@@ -17,7 +17,7 @@ require (
 	github.com/dolthub/ishell v0.0.0-20220112232610-14e753f0f371
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20220921212835-1df8e46181dc
+	github.com/dolthub/vitess v0.0.0-20220927165657-8eb73ed0ff24
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -57,7 +57,7 @@ require (
 
 require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.5+incompatible
-	github.com/dolthub/go-mysql-server v0.12.1-0.20220926185942-f0160ff7bf1a
+	github.com/dolthub/go-mysql-server v0.12.1-0.20220927222348-8b178aa50764
 	github.com/google/flatbuffers v2.0.6+incompatible
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/mitchellh/go-ps v1.0.0
