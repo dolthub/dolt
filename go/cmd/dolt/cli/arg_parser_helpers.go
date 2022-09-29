@@ -104,6 +104,8 @@ const (
 	CommitFlag       = "commit"
 	NoCommitFlag     = "no-commit"
 	NoEditFlag       = "no-edit"
+	OursFlag         = "ours"
+	TheirsFlag       = "theirs"
 )
 
 const (
@@ -131,6 +133,13 @@ func CreateCommitArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(AllFlag, "a", "Adds all existing, changed tables (but not new tables) in the working set to the staged set.")
 	ap.SupportsFlag(UpperCaseAllFlag, "A", "Adds all tables (including new tables) in the working set to the staged set.")
 	ap.SupportsFlag(AmendFlag, "", "Amend previous commit")
+	return ap
+}
+
+func CreateConflictsResolveArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(OursFlag, "", "For all conflicts, take the version from our branch and resolve the conflict")
+	ap.SupportsFlag(TheirsFlag, "", "For all conflicts, take the version from their branch and resolve the conflict")
 	return ap
 }
 

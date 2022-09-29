@@ -201,6 +201,104 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Test multi-session behavior for force deleting active branch with autocommit on",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ SET @@autocommit=1;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ CALL DOLT_CHECKOUT('-b', 'branch1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ select active_branch();",
+				Expected: []sql.Row{{"branch1"}},
+			},
+			{
+				Query:    "/* client b */ select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "/* client b */ select name from dolt_branches order by name;",
+				Expected: []sql.Row{{"branch1"}, {"main"}},
+			},
+			{
+				Query:    "/* client b */ CALL DOLT_BRANCH('-D', 'branch1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ select name from dolt_branches;",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:          "/* client a */ select name from dolt_branches;",
+				ExpectedErrStr: "Error 1105: current branch has been force deleted. run 'USE <database>/<branch>' to checkout a different branch, or reconnect to the server",
+			},
+			{
+				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
+				ExpectedErrStr: "Error 1105: current branch has been force deleted. run 'USE <database>/<branch>' to checkout a different branch, or reconnect to the server",
+			},
+			{
+				Query:    "/* client a */ USE dolt/main;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+		},
+	},
+	{
+		Name: "Test multi-session behavior for force deleting active branch with autocommit off",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ SET @@autocommit=0;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ CALL DOLT_CHECKOUT('-b', 'branch1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ select active_branch();",
+				Expected: []sql.Row{{"branch1"}},
+			},
+			{
+				Query:    "/* client b */ select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "/* client b */ select name from dolt_branches order by name;",
+				Expected: []sql.Row{{"branch1"}, {"main"}},
+			},
+			{
+				Query:    "/* client b */ CALL DOLT_BRANCH('-D', 'branch1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ select name from dolt_branches;",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:          "/* client a */ select name from dolt_branches;",
+				ExpectedErrStr: "Error 1105: current branch has been force deleted. run 'USE <database>/<branch>' to checkout a different branch, or reconnect to the server",
+			},
+			{
+				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
+				ExpectedErrStr: "Error 1105: current branch has been force deleted. run 'USE <database>/<branch>' to checkout a different branch, or reconnect to the server",
+			},
+			{
+				Query:    "/* client a */ USE dolt/main;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+		},
+	},
 }
 
 // TestDoltMultiSessionBehavior runs tests that exercise multi-session logic on a running SQL server. Statements

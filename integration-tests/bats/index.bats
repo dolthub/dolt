@@ -2277,6 +2277,33 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
 }
 
+@test "index: Merge resolving all OURS with stored procedure" {
+    dolt sql -q "CREATE INDEX idx_v1 ON onepk(v1);"
+    dolt add -A
+    dolt commit -m "baseline commit"
+    dolt checkout -b other
+    dolt checkout main
+    dolt sql -q "INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, -33, 33), (4, 44, 404)"
+    dolt add -A
+    dolt commit -m "main changes"
+    dolt checkout other
+    dolt sql -q "INSERT INTO onepk VALUES (1, -11, 11), (2, -22, 22), (3, -33, 33), (4, -44, 44), (5, -55, 55)"
+    dolt add -A
+    dolt commit -m "other changes"
+    dolt checkout main
+    dolt merge other -m "merge"
+    dolt sql -q "call dolt_conflicts_resolve('--ours', 'onepk')"
+    run dolt index cat onepk idx_v1 -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "v1,pk1" ]] || false
+    [[ "$output" =~ "-55,5" ]] || false
+    [[ "$output" =~ "-33,3" ]] || false
+    [[ "$output" =~ "11,1" ]] || false
+    [[ "$output" =~ "22,2" ]] || false
+    [[ "$output" =~ "44,4" ]] || false
+    [[ "${#lines[@]}" = "6" ]] || false
+}
+
 @test "index: Merge resolving all THEIRS" {
 
     dolt sql -q "CREATE INDEX idx_v1 ON onepk(v1);"
@@ -2294,6 +2321,33 @@ SQL
     dolt checkout main
     dolt merge other -m "merge"
     dolt conflicts resolve --theirs onepk
+    run dolt index cat onepk idx_v1 -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "v1,pk1" ]] || false
+    [[ "$output" =~ "-55,5" ]] || false
+    [[ "$output" =~ "-44,4" ]] || false
+    [[ "$output" =~ "-33,3" ]] || false
+    [[ "$output" =~ "-22,2" ]] || false
+    [[ "$output" =~ "-11,1" ]] || false
+    [[ "${#lines[@]}" = "6" ]] || false
+}
+
+@test "index: Merge resolving all THEIRS with stored procedure" {
+    dolt sql -q "CREATE INDEX idx_v1 ON onepk(v1);"
+    dolt add -A
+    dolt commit -m "baseline commit"
+    dolt checkout -b other
+    dolt checkout main
+    dolt sql -q "INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, -33, 33), (4, 44, 404)"
+    dolt add -A
+    dolt commit -m "main changes"
+    dolt checkout other
+    dolt sql -q "INSERT INTO onepk VALUES (1, -11, 11), (2, -22, 22), (3, -33, 33), (4, -44, 44), (5, -55, 55)"
+    dolt add -A
+    dolt commit -m "other changes"
+    dolt checkout main
+    dolt merge other -m "merge"
+    dolt sql -q "call dolt_conflicts_resolve('--theirs', 'onepk')"
     run dolt index cat onepk idx_v1 -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "v1,pk1" ]] || false

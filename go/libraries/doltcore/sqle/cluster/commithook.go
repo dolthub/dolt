@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -34,7 +35,7 @@ var _ doltdb.CommitHook = (*commithook)(nil)
 
 type commithook struct {
 	rootLgr              *logrus.Entry
-	lgr                  *logrus.Entry
+	lgr                  atomic.Value // *logrus.Entry
 	remotename           string
 	dbname               string
 	lout                 io.Writer
@@ -62,12 +63,15 @@ type commithook struct {
 	tempDir string
 }
 
-var errDestDBRootHashMoved error = errors.New("sqle: cluster: standby replication: destination database root hash moved during our write, while it is assumed we are the only writer.")
+var errDestDBRootHashMoved error = errors.New("cluster/commithook: standby replication: destination database root hash moved during our write, while it is assumed we are the only writer.")
+
+const logFieldThread = "thread"
+const logFieldRole = "role"
 
 func newCommitHook(lgr *logrus.Logger, remotename, dbname string, role Role, destDBF func(context.Context) (*doltdb.DoltDB, error), srcDB *doltdb.DoltDB, tempDir string) *commithook {
 	var ret commithook
-	ret.rootLgr = lgr.WithField("thread", "Standby Replication - "+dbname+" to "+remotename)
-	ret.lgr = ret.rootLgr.WithField("role", string(role))
+	ret.rootLgr = lgr.WithField(logFieldThread, "Standby Replication - "+dbname+" to "+remotename)
+	ret.lgr.Store(ret.rootLgr.WithField(logFieldRole, string(role)))
 	ret.remotename = remotename
 	ret.dbname = dbname
 	ret.role = role
@@ -82,15 +86,29 @@ func (h *commithook) Run(bt *sql.BackgroundThreads) error {
 	return bt.Add("Standby Replication - "+h.dbname+" to "+h.remotename, h.run)
 }
 
+func (h *commithook) run(ctx context.Context) {
+	// The hook comes up attempting to replicate the current head.
+	h.logger().Tracef("cluster/commithook: background thread: running.")
+	h.wg.Add(2)
+	go h.replicate(ctx)
+	go h.tick(ctx)
+	<-ctx.Done()
+	h.logger().Tracef("cluster/commithook: background thread: requested shutdown, signaling replication thread.")
+	h.cond.Signal()
+	h.wg.Wait()
+	h.logger().Tracef("cluster/commithook: background thread: completed.")
+}
+
 func (h *commithook) replicate(ctx context.Context) {
 	defer h.wg.Done()
-	defer h.lgr.Tracef("cluster/commithook: background thread: replicate: shutdown.")
+	defer h.logger().Tracef("cluster/commithook: background thread: replicate: shutdown.")
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for {
+		lgr := h.logger()
 		// Shutdown for context canceled.
 		if ctx.Err() != nil {
-			h.lgr.Tracef("cluster/commithook replicate thread exiting; saw ctx.Err(): %v", ctx.Err())
+			lgr.Tracef("cluster/commithook replicate thread exiting; saw ctx.Err(): %v", ctx.Err())
 			if h.shouldReplicate() {
 				// attempt a last true-up of our standby as we shutdown
 				// TODO: context.WithDeadline based on config / convention?
@@ -98,8 +116,8 @@ func (h *commithook) replicate(ctx context.Context) {
 			}
 			return
 		}
-		if h.role == RolePrimary && h.nextHead == (hash.Hash{}) {
-			h.lgr.Tracef("cluster/commithook: fetching current head.")
+		if h.primaryNeedsInit() {
+			lgr.Tracef("cluster/commithook: fetching current head.")
 			// When the replicate thread comes up, it attempts to replicate the current head.
 			datasDB := doltdb.HackDatasDatabaseFromDoltDB(h.srcDB)
 			cs := datas.ChunkStoreFromDatabase(datasDB)
@@ -107,19 +125,19 @@ func (h *commithook) replicate(ctx context.Context) {
 			h.nextHead, err = cs.Root(ctx)
 			if err != nil {
 				// TODO: if err != nil, something is really wrong; should shutdown or backoff.
-				h.lgr.Warningf("standby replication thread failed to load database root: %v", err)
+				lgr.Warningf("standby replication thread failed to load database root: %v", err)
 				h.nextHead = hash.Hash{}
 			}
 
 			// We do not know when this head was written, but we
-			// starting trying to replicate it now.
+			// are starting to try to replicate it now.
 			h.nextHeadIncomingTime = time.Now()
 		} else if h.shouldReplicate() {
 			h.attemptReplicate(ctx)
 		} else {
-			h.lgr.Tracef("cluster/commithook: background thread: waiting for signal.")
+			lgr.Tracef("cluster/commithook: background thread: waiting for signal.")
 			h.cond.Wait()
-			h.lgr.Tracef("cluster/commithook: background thread: woken up.")
+			lgr.Tracef("cluster/commithook: background thread: woken up.")
 		}
 	}
 }
@@ -135,25 +153,31 @@ func (h *commithook) shouldReplicate() bool {
 	return (h.nextPushAttempt == (time.Time{}) || time.Now().After(h.nextPushAttempt))
 }
 
+// called with h.mu locked.
+func (h *commithook) primaryNeedsInit() bool {
+	return h.role == RolePrimary && h.nextHead == (hash.Hash{})
+}
+
 // Called by the replicate thread to push the nextHead to the destDB and set
 // its root to the new value.
 //
 // preconditions: h.mu is locked and shouldReplicate() returned true.
 // when this function returns, h.mu is locked.
 func (h *commithook) attemptReplicate(ctx context.Context) {
+	lgr := h.logger()
 	toPush := h.nextHead
 	incomingTime := h.nextHeadIncomingTime
 	destDB := h.destDB
 	h.mu.Unlock()
 
 	if destDB == nil {
-		h.lgr.Tracef("cluster/commithook: attempting to fetch destDB.")
+		lgr.Tracef("cluster/commithook: attempting to fetch destDB.")
 		var err error
 		destDB, err = h.destDBF(ctx)
 		if err != nil {
 			h.currentError = new(string)
 			*h.currentError = fmt.Sprintf("could not replicate to standby: error fetching destDB: %v", err)
-			h.lgr.Warnf("cluster/commithook: could not replicate to standby: error fetching destDB: %v", err)
+			lgr.Warnf("cluster/commithook: could not replicate to standby: error fetching destDB: %v.", err)
 			h.mu.Lock()
 			// TODO: We could add some backoff here.
 			if toPush == h.nextHead {
@@ -161,16 +185,16 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 			}
 			return
 		}
-		h.lgr.Tracef("cluster/commithook: fetched destDB")
+		lgr.Tracef("cluster/commithook: fetched destDB")
 		h.mu.Lock()
 		h.destDB = destDB
 		h.mu.Unlock()
 	}
 
-	h.lgr.Tracef("cluster/commithook: pushing chunks for root hash %v to destDB", toPush.String())
+	lgr.Tracef("cluster/commithook: pushing chunks for root hash %v to destDB", toPush.String())
 	err := destDB.PullChunks(ctx, h.tempDir, h.srcDB, toPush, nil, nil)
 	if err == nil {
-		h.lgr.Tracef("cluster/commithook: successfully pushed chunks, setting root")
+		lgr.Tracef("cluster/commithook: successfully pushed chunks, setting root")
 		datasDB := doltdb.HackDatasDatabaseFromDoltDB(destDB)
 		cs := datas.ChunkStoreFromDatabase(datasDB)
 		var curRootHash hash.Hash
@@ -186,14 +210,14 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 	h.mu.Lock()
 	if err == nil {
 		h.currentError = nil
-		h.lgr.Tracef("cluster/commithook: successfully Commited chunks on destDB")
+		lgr.Tracef("cluster/commithook: successfully Commited chunks on destDB")
 		h.lastPushedHead = toPush
 		h.lastSuccess = incomingTime
 		h.nextPushAttempt = time.Time{}
 	} else {
 		h.currentError = new(string)
 		*h.currentError = fmt.Sprintf("failed to commit chunks on destDB: %v", err)
-		h.lgr.Warnf("cluster/commithook: failed to commit chunks on destDB: %v", err)
+		lgr.Warnf("cluster/commithook: failed to commit chunks on destDB: %v", err)
 		// add some delay if a new head didn't come in while we were pushing.
 		if toPush == h.nextHead {
 			// TODO: We could add some backoff here.
@@ -233,34 +257,23 @@ func (h *commithook) status() (replicationLag *time.Duration, lastUpdate *time.T
 	return
 }
 
+func (h *commithook) logger() *logrus.Entry {
+	return h.lgr.Load().(*logrus.Entry)
+}
+
 // TODO: Would be more efficient to only tick when we have outstanding work...
 func (h *commithook) tick(ctx context.Context) {
 	defer h.wg.Done()
-	defer h.lgr.Trace("tick thread returning")
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			time.Sleep(1 * time.Second)
 			return
 		case <-ticker.C:
 			h.cond.Signal()
 		}
 	}
-}
-
-func (h *commithook) run(ctx context.Context) {
-	// The hook comes up attempting to replicate the current head.
-	h.lgr.Tracef("cluster/commithook: background thread: running.")
-	h.wg.Add(2)
-	go h.replicate(ctx)
-	go h.tick(ctx)
-	<-ctx.Done()
-	h.lgr.Tracef("cluster/commithook: background thread: requested shutdown, signaling replication thread.")
-	h.cond.Signal()
-	h.wg.Wait()
-	h.lgr.Tracef("cluster/commithook: background thread: completed.")
 }
 
 func (h *commithook) recordSuccessfulRemoteSrvCommit() {
@@ -284,24 +297,25 @@ func (h *commithook) setRole(role Role) {
 	h.lastSuccess = time.Time{}
 	h.nextPushAttempt = time.Time{}
 	h.role = role
-	h.lgr = h.rootLgr.WithField("role", string(role))
+	h.lgr.Store(h.rootLgr.WithField(logFieldRole, string(role)))
 	h.cond.Signal()
 }
 
 // Execute on this commithook updates the target root hash we're attempting to
 // replicate and wakes the replication thread.
 func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
-	h.lgr.Warnf("cluster/commithook: Execute called post commit")
+	lgr := h.logger()
+	lgr.Warnf("cluster/commithook: Execute called post commit")
 	cs := datas.ChunkStoreFromDatabase(db)
 	root, err := cs.Root(ctx)
 	if err != nil {
-		h.lgr.Warnf("cluster/commithook: Execute: error retrieving local database root: %v", err)
+		lgr.Warnf("cluster/commithook: Execute: error retrieving local database root: %v", err)
 		return err
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if root != h.nextHead {
-		h.lgr.Tracef("signaling replication thread to push new head: %v", root.String())
+		lgr.Tracef("signaling replication thread to push new head: %v", root.String())
 		h.nextHeadIncomingTime = time.Now()
 		h.nextHead = root
 		h.nextPushAttempt = time.Time{}

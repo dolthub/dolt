@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/sirupsen/logrus"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -43,6 +45,7 @@ const clusterRoleEpochHeader = "x-dolt-cluster-role-epoch"
 // epoch than this server, this incterceptor coordinates with the Controller to
 // immediately transition to standby and to stop replicating to the standby.
 type clientinterceptor struct {
+	lgr   *logrus.Entry
 	role  Role
 	epoch int
 	mu    sync.Mutex
@@ -93,10 +96,14 @@ func (ci *clientinterceptor) handleResponseHeaders(header metadata.MD, role Role
 	epochs := header.Get(clusterRoleEpochHeader)
 	roles := header.Get(clusterRoleHeader)
 	if len(epochs) > 0 && len(roles) > 0 && roles[0] == string(RolePrimary) {
-		if retepoch, err := strconv.Atoi(epochs[0]); err == nil {
-			if retepoch > epoch {
+		if respepoch, err := strconv.Atoi(epochs[0]); err == nil {
+			if respepoch == epoch {
+				ci.lgr.Errorf("cluster: this server and the server replicating to it are both primary at the same epoch. force transitioning to standby.")
+				// TODO: Signal to controller that we are forced to become a standby at epoch |respepoch|...
+			} else if respepoch > epoch {
 				// The server we replicate to thinks it is the primary at a higher epoch than us...
-				// TODO: Signal to controller that we are forced to become a standby at epoch |retepoch|...
+				ci.lgr.Warnf("cluster: this server is primary at epoch %d. the server replicating to it is primary at epoch %d. force transitioning to standby.", epoch, respepoch)
+				// TODO: Signal to controller that we are forced to become a standby at epoch |respepoch|...
 			}
 		}
 	}
@@ -124,6 +131,7 @@ func (ci *clientinterceptor) Options() []grpc.DialOption {
 // than our current epoch, this interceptor coordinates with the Controller to
 // immediately transition to standby and allow replication requests through.
 type serverinterceptor struct {
+	lgr   *logrus.Entry
 	role  Role
 	epoch int
 	mu    sync.Mutex
@@ -172,8 +180,17 @@ func (si *serverinterceptor) handleRequestHeaders(header metadata.MD, role Role,
 	roles := header.Get(clusterRoleHeader)
 	if len(epochs) > 0 && len(roles) > 0 && roles[0] == string(RolePrimary) && role == RolePrimary {
 		if reqepoch, err := strconv.Atoi(epochs[0]); err == nil {
-			if reqepoch > epoch {
+			if reqepoch == epoch {
+				// Misconfiguration in the cluster means this
+				// server and its standby are marked as Primary
+				// at the same epoch. We will become standby
+				// and our peer will become standby. An
+				// operator will need to get involved.
+				si.lgr.Errorf("cluster: this server and its standby replica are both primary at the same epoch. force transitioning to standby.")
+				// TODO: Signal to controller that we are forced to become a standby at epoch |reqepoch|
+			} else if reqepoch > epoch {
 				// The client replicating to us thinks it is the primary at a higher epoch than us.
+				si.lgr.Warnf("cluster: this server is primary at epoch %d. the server replicating to it is primary at epoch %d. force transitioning to standby.", epoch, reqepoch)
 				// TODO: Signal to controller that we are forced to become a standby at epoch |reqepoch|
 			}
 		}
