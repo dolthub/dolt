@@ -253,7 +253,7 @@ func updateProllySecondaryIndexes(ctx context.Context, tm TableMerger, cellWiseE
 	if err != nil {
 		return nil, nil, err
 	}
-	lm, err := getMutableSecondaryIdxs(ctx, tm.leftSch, ls)
+	lm, err := GetMutableSecondaryIdxs(ctx, tm.leftSch, ls)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -262,7 +262,7 @@ func updateProllySecondaryIndexes(ctx context.Context, tm TableMerger, cellWiseE
 	if err != nil {
 		return nil, nil, err
 	}
-	rm, err := getMutableSecondaryIdxs(ctx, tm.rightSch, rs)
+	rm, err := GetMutableSecondaryIdxs(ctx, tm.rightSch, rs)
 	if err != nil {
 		return nil, nil, err
 	}
