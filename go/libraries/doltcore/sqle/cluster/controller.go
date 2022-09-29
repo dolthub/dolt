@@ -97,8 +97,10 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 	}
 	ret.sinterceptor.lgr = lgr.WithFields(logrus.Fields{})
 	ret.sinterceptor.setRole(role, epoch)
+	ret.sinterceptor.roleSetter = ret.setRoleAndEpoch
 	ret.cinterceptor.lgr = lgr.WithFields(logrus.Fields{})
 	ret.cinterceptor.setRole(role, epoch)
+	ret.cinterceptor.roleSetter = ret.setRoleAndEpoch
 	return ret, nil
 }
 
@@ -142,7 +144,7 @@ func (c *Controller) ManageDatabaseProvider(p dbProvider) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.provider = p
-	c.provider.SetIsStandby(c.role == RoleStandby)
+	c.setProviderIsStandby(c.role == RoleStandby)
 }
 
 func (c *Controller) ManageQueryConnections(iterSessions IterSessions, killQuery, killConnection func(uint32)) {
@@ -286,15 +288,21 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool) erro
 	if epoch == c.epoch && role == string(c.role) {
 		return nil
 	}
-	if epoch == c.epoch {
-		return fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d with different role, '%s'", role, epoch, c.epoch, c.role)
-	}
-	if epoch < c.epoch {
-		return fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d", role, epoch, c.epoch)
-	}
 
 	if role != "primary" && role != "standby" {
 		return fmt.Errorf("error assuming role '%s'; valid roles are 'primary' and 'standby'", role)
+	}
+
+	if epoch < c.epoch {
+		return fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d", role, epoch, c.epoch)
+	}
+	if epoch == c.epoch {
+		// This is allowed for non-graceful transitions to 'standby', which only occur from interceptors and
+		// other signals that the cluster is misconfigured.
+		isallowed := !graceful && role == "standby"
+		if !isallowed {
+			return fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d with different role, '%s'", role, epoch, c.epoch, c.role)
+		}
 	}
 
 	changedrole := role != string(c.role)
@@ -321,8 +329,10 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool) erro
 	c.refreshSystemVars()
 	c.cinterceptor.setRole(c.role, c.epoch)
 	c.sinterceptor.setRole(c.role, c.epoch)
-	for _, h := range c.commithooks {
-		h.setRole(c.role)
+	if changedrole {
+		for _, h := range c.commithooks {
+			h.setRole(c.role)
+		}
 	}
 	return c.persistVariables()
 }
