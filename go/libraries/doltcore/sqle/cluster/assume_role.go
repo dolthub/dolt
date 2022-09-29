@@ -29,7 +29,7 @@ func newAssumeRoleProcedure(controller *Controller) sql.ExternalStoredProcedureD
 			},
 		},
 		Function: func(ctx *sql.Context, role string, epoch int) (sql.RowIter, error) {
-			err := controller.setRoleAndEpoch(role, epoch)
+			err := controller.setRoleAndEpoch(role, epoch, true /* graceful */)
 			if err != nil {
 				return nil, err
 			}
