@@ -414,6 +414,9 @@ func TestReadReplica(t *testing.T) {
 	sc := NewServerController()
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15303)
 
+	// set socket to nil to force tcp
+	serverConfig = serverConfig.WithHost("127.0.0.1").WithSocket("")
+
 	func() {
 		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
 		go func() {
