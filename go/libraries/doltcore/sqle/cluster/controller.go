@@ -53,6 +53,7 @@ type Controller struct {
 	cinterceptor  clientinterceptor
 	lgr           *logrus.Logger
 
+	provider       dbProvider
 	iterSessions   IterSessions
 	killQuery      func(uint32)
 	killConnection func(uint32) error
@@ -60,6 +61,12 @@ type Controller struct {
 
 type sqlvars interface {
 	AddSystemVariables(sysVars []sql.SystemVariable)
+}
+
+// We can manage certain aspects of the exposed databases on the server through
+// this.
+type dbProvider interface {
+	SetIsStandby(bool)
 }
 
 type procedurestore interface {
@@ -128,7 +135,20 @@ func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, bt *sql.
 
 type IterSessions func(func(sql.Session) (bool, error)) error
 
+func (c *Controller) ManageDatabaseProvider(p dbProvider) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.provider = p
+	c.provider.SetIsStandby(c.role == RoleStandby)
+}
+
 func (c *Controller) ManageQueryConnections(iterSessions IterSessions, killQuery func(uint32), killConnection func(uint32) error) {
+	if c == nil {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.iterSessions = iterSessions
@@ -279,26 +299,24 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool) erro
 
 	changedrole := role != string(c.role)
 
-	c.role = Role(role)
-	c.epoch = epoch
-
 	if changedrole {
 		var err error
-		if c.role == RoleStandby {
+		if role == string(RoleStandby) {
 			if graceful {
 				err = c.gracefulTransitionToStandby()
+				if err != nil {
+					return err
+				}
 			} else {
-				err = c.immediateTransitionToStandby()
-				// TODO: this should not fail; if it does, we still prevent transition for now.
+				c.immediateTransitionToStandby()
 			}
 		} else {
-			err = c.transitionToPrimary()
-			// TODO: this should not fail; if it does, we still prevent transition for now.
-		}
-		if err != nil {
-			return err
+			c.transitionToPrimary()
 		}
 	}
+
+	c.role = Role(role)
+	c.epoch = epoch
 
 	c.refreshSystemVars()
 	c.cinterceptor.setRole(c.role, c.epoch)
@@ -374,7 +392,19 @@ func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.Server
 // * Replicate all databases to their standby remotes.
 //   * If success, return success.
 //   * If failure, set all databases in database_provider back to their original state. Return failure.
+//
+// called with c.mu held
 func (c *Controller) gracefulTransitionToStandby() error {
+	c.setProviderIsStandby(true)
+	c.killRunningQueries()
+	// TODO: this can block with c.mu held, although we are not too
+	// interested in the server proceeding gracefully while this is
+	// happening.
+	if err := c.waitForHooksToReplicate(); err != nil {
+		c.setProviderIsStandby(false)
+		c.killRunningQueries()
+		return err
+	}
 	return nil
 }
 
@@ -382,7 +412,11 @@ func (c *Controller) gracefulTransitionToStandby() error {
 // * Set all databases in database_provider to read-only.
 // * Kill all running queries in GMS.
 // * Return success. NOTE: we do not attempt to replicate to the standby.
+//
+// called with c.mu held
 func (c *Controller) immediateTransitionToStandby() error {
+	c.setProviderIsStandby(true)
+	c.killRunningQueries()
 	return nil
 }
 
@@ -390,20 +424,40 @@ func (c *Controller) immediateTransitionToStandby() error {
 // * Set all databases in database_provider back to their original mode: read-write or read only.
 // * Kill all running queries in GMS.
 // * Return success.
+//
+// called with c.mu held
 func (c *Controller) transitionToPrimary() error {
+	c.setProviderIsStandby(false)
+	c.killRunningQueries()
 	return nil
 }
 
 // Kills all running queries in the managed GMS engine.
+// called with c.mu held
 func (c *Controller) killRunningQueries() {
-	c.mu.Lock()
-	iterSessions, killQuery, killConnection := c.iterSessions, c.killQuery, c.killConnection
-	c.mu.Unlock()
 	if c.iterSessions != nil {
-		iterSessions(func(session sql.Session) (stop bool, err error) {
-			killQuery(session.ID())
-			killConnection(session.ID())
+		c.iterSessions(func(session sql.Session) (stop bool, err error) {
+			c.killQuery(session.ID())
+			c.killConnection(session.ID())
 			return
 		})
 	}
+}
+
+// called with c.mu held
+func (c *Controller) setProviderIsStandby(standby bool) {
+	if c.provider != nil {
+		c.provider.SetIsStandby(standby)
+	}
+}
+
+// Called during a graceful transition from primary to standby. Waits until all
+// commithooks report nextHead == lastPushedHead.
+//
+// TODO: Implement this.
+// TODO: Report errors from commit hooks or add a deadline here or something.
+//
+// called with c.mu held
+func (c *Controller) waitForHooksToReplicate() error {
+	return nil
 }
