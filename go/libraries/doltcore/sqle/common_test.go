@@ -180,35 +180,20 @@ func assertSchemasEqual(t *testing.T, expected, actual sql.Schema) {
 }
 
 // CreateTableFn returns a SetupFunc that creates a table with the rows given
+// todo(andy): replace with ExecuteSetupSQL
 func CreateTableFn(tableName string, tableSchema schema.Schema, initialRows ...row.Row) SetupFn {
 	return func(t *testing.T, dEnv *env.DoltEnv) {
-		if types.Format_Default != types.Format_LD_1 {
-			t.Skip() // todo: convert to enginetest
-		}
 		dtestutils.CreateTestTable(t, dEnv, tableName, tableSchema, initialRows...)
 	}
 }
 
-// CreateTableWithRowsFn returns a SetupFunc that creates a table with the rows given, creating the rows on the fly
-// from Value types conforming to the schema given.
-func CreateTableWithRowsFn(tableName string, tableSchema schema.Schema, initialRows ...[]types.Value) SetupFn {
+func ExecuteSetupSQL(ctx context.Context, queries string) SetupFn {
 	return func(t *testing.T, dEnv *env.DoltEnv) {
-		if types.Format_Default != types.Format_LD_1 {
-			t.Skip() // todo: convert to enginetest
-		}
-		rows := make([]row.Row, len(initialRows))
-		for i, r := range initialRows {
-			rows[i] = NewRowWithSchema(tableSchema, r...)
-		}
-		dtestutils.CreateTestTable(t, dEnv, tableName, tableSchema, rows...)
-	}
-}
-
-// Compose takes an arbitrary number of SetupFns and composes them into a single func which executes all funcs given.
-func Compose(fns ...SetupFn) SetupFn {
-	return func(t *testing.T, dEnv *env.DoltEnv) {
-		for _, f := range fns {
-			f(t, dEnv)
-		}
+		root, err := dEnv.WorkingRoot(ctx)
+		require.NoError(t, err)
+		root, err = ExecuteSql(t, dEnv, root, queries)
+		require.NoError(t, err)
+		err = dEnv.UpdateWorkingRoot(ctx, root)
+		require.NoError(t, err)
 	}
 }

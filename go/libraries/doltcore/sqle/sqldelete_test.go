@@ -180,6 +180,9 @@ func TestExecuteDelete(t *testing.T) {
 }
 
 func TestExecuteDeleteSystemTables(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: convert to enginetest
+	}
 	for _, test := range systemTableDeleteTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testDeleteQuery(t, test)

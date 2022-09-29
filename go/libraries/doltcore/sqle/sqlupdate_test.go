@@ -350,6 +350,9 @@ func TestExecuteUpdate(t *testing.T) {
 }
 
 func TestExecuteUpdateSystemTables(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: convert to enginetest
+	}
 	for _, test := range systemTableUpdateTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testUpdateQuery(t, test)

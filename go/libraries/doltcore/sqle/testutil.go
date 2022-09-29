@@ -280,15 +280,6 @@ func CompressSchemas(schs ...schema.Schema) schema.Schema {
 	return schema.UnkeyedSchemaFromCols(colCol)
 }
 
-// Compresses each of the rows given ala compressRow
-func CompressRows(sch schema.Schema, rs ...row.Row) []row.Row {
-	compressed := make([]row.Row, len(rs))
-	for i := range rs {
-		compressed[i] = CompressRow(sch, rs[i])
-	}
-	return compressed
-}
-
 // Rewrites the tag numbers for the row given to begin at zero and be contiguous, just like result set schemas. We don't
 // want to just use the field mappings in the result set schema used by sqlselect, since that would only demonstrate
 // that the code was consistent with itself, not actually correct.
