@@ -99,6 +99,12 @@ func NewSqlEngine(
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 	locations = append(locations, nil)
 
+	clusterDB := config.ClusterController.ClusterDatabase()
+	if clusterDB != nil {
+		all = append(all, clusterDB)
+		locations = append(locations, nil)
+	}
+
 	b := env.GetDefaultInitBranch(mrEnv.Config())
 	pro, err := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations)
 	if err != nil {

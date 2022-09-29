@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -159,6 +160,13 @@ func (c *Controller) RegisterStoredProcedures(store procedurestore) {
 	store.Register(newAssumeRoleProcedure(c))
 }
 
+func (c *Controller) ClusterDatabase() sql.Database {
+	if c == nil {
+		return nil
+	}
+	return clusterdb.NewClusterDatabase(c)
+}
+
 func (c *Controller) RemoteSrvPort() int {
 	if c == nil {
 		return -1
@@ -282,4 +290,29 @@ func (c *Controller) registerCommitHook(hook *commithook) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.commithooks = append(c.commithooks, hook)
+}
+
+func (c *Controller) GetClusterStatus() []clusterdb.ReplicaStatus {
+	if c == nil {
+		return []clusterdb.ReplicaStatus{}
+	}
+	c.mu.Lock()
+	epoch, role := c.epoch, c.role
+	commithooks := make([]*commithook, len(c.commithooks))
+	copy(commithooks, c.commithooks)
+	c.mu.Unlock()
+	ret := make([]clusterdb.ReplicaStatus, len(commithooks))
+	for i, c := range commithooks {
+		lag, lastUpdate, currentErrorStr := c.status()
+		ret[i] = clusterdb.ReplicaStatus{
+			Database:       c.dbname,
+			Remote:         c.remotename,
+			Role:           string(role),
+			Epoch:          epoch,
+			ReplicationLag: lag,
+			LastUpdate:     lastUpdate,
+			CurrentError:   currentErrorStr,
+		}
+	}
+	return ret
 }

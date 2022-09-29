@@ -17,6 +17,7 @@ package cluster
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -46,6 +47,7 @@ type commithook struct {
 	lastPushedSuccess    time.Time
 	nextPushAttempt      time.Time
 	nextHeadIncomingTime time.Time
+	currentError         *string
 
 	role Role
 
@@ -173,6 +175,8 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 		var err error
 		destDB, err = h.destDBF(ctx)
 		if err != nil {
+			h.currentError = new(string)
+			*h.currentError = fmt.Sprintf("could not replicate to standby: error fetching destDB: %v", err)
 			lgr.Warnf("cluster/commithook: could not replicate to standby: error fetching destDB: %v.", err)
 			h.mu.Lock()
 			// TODO: We could add some backoff here.
@@ -205,11 +209,14 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 
 	h.mu.Lock()
 	if err == nil {
+		h.currentError = nil
 		lgr.Tracef("cluster/commithook: successfully Commited chunks on destDB")
 		h.lastPushedHead = toPush
 		h.lastPushedSuccess = incomingTime
 		h.nextPushAttempt = time.Time{}
 	} else {
+		h.currentError = new(string)
+		*h.currentError = fmt.Sprintf("failed to commit chunks on destDB: %v", err)
 		lgr.Warnf("cluster/commithook: failed to commit chunks on destDB: %v", err)
 		// add some delay if a new head didn't come in while we were pushing.
 		if toPush == h.nextHead {
@@ -219,24 +226,36 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 	}
 }
 
-func (h *commithook) replicationLag() time.Duration {
+func (h *commithook) status() (replicationLag *time.Duration, lastUpdate *time.Time, currentErr *string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.role == RoleStandby {
-		return time.Duration(0)
+	if h.role == RolePrimary {
+		if h.lastPushedHead != (hash.Hash{}) {
+			replicationLag = new(time.Duration)
+			if h.nextHead != h.lastPushedHead {
+				// We return the wallclock time between now and the last time we were
+				// successful. If h.nextHeadIncomingTime is significantly earlier than
+				// time.Now(), because the server has not received a write in a long
+				// time, then this metric may report a high number when the number of
+				// seconds of writes outstanding could actually be much smaller.
+				// Operationally, failure to replicate a write for a long time is a
+				// problem that merits investigation, regardless of how many pending
+				// writes are failing to replicate.
+				*replicationLag = time.Now().Sub(h.lastPushedSuccess)
+			}
+		}
+
+		if h.lastPushedSuccess != (time.Time{}) {
+			lastUpdate := new(time.Time)
+			*lastUpdate = h.lastPushedSuccess
+		}
 	}
-	if h.nextHead == h.lastPushedHead {
-		return time.Duration(0)
-	}
-	// We return the wallclock time between now and the last time we were
-	// successful. If h.nextHeadIncomingTime is significantly earlier than
-	// time.Now(), because the server has not received a write in a long
-	// time, then this metric may report a high number when the number of
-	// seconds of writes outstanding could actually be much smaller.
-	// Operationally, failure to replicate a write for a long time is a
-	// problem that merits investigation, regardless of how many pending
-	// writes are failing to replicate.
-	return time.Now().Sub(h.lastPushedSuccess)
+
+	currentErr = h.currentError
+
+	// TODO: lastUpdate in Standby role.
+
+	return
 }
 
 func (h *commithook) logger() *logrus.Entry {
@@ -263,6 +282,7 @@ func (h *commithook) setRole(role Role) {
 	defer h.mu.Unlock()
 	// Reset head-to-push and timers here. When we transition into Primary,
 	// the replicate() loop will take these from the current chunk store.
+	h.currentError = nil
 	h.nextHead = hash.Hash{}
 	h.lastPushedHead = hash.Hash{}
 	h.lastPushedSuccess = time.Time{}

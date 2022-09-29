@@ -32,6 +32,12 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 		return orig
 	}
 	return func(ctx *sql.Context, pro sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv) error {
+		var err error
+		err = orig(ctx, pro, name, denv)
+		if err != nil {
+			return err
+		}
+
 		dialprovider := controller.gRPCDialProvider(denv)
 		var remoteDBs []func(context.Context) (*doltdb.DoltDB, error)
 		for _, r := range controller.cfg.StandbyRemotes() {
@@ -49,11 +55,6 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 			remoteDBs = append(remoteDBs, func(ctx context.Context) (*doltdb.DoltDB, error) {
 				return r.GetRemoteDB(ctx, types.Format_Default, dialprovider)
 			})
-		}
-
-		err := orig(ctx, pro, name, denv)
-		if err != nil {
-			return err
 		}
 
 		role, _ := controller.roleAndEpoch()
