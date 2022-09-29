@@ -672,6 +672,14 @@ func (di *doltIndex) Comment() string {
 	return di.comment
 }
 
+// PrefixLengths implements sql.Index
+func (di *doltIndex) PrefixLengths() []uint64 {
+	// TODO: implement me
+
+	di.tableSch.Indexes()
+	return nil
+}
+
 // IndexType implements sql.Index
 func (di *doltIndex) IndexType() string {
 	return "BTREE"

@@ -66,6 +66,7 @@ type indexImpl struct {
 	isUnique      bool
 	isUserDefined bool
 	comment       string
+	length        int // prefix length of this index, for blob and text only
 }
 
 func NewIndex(name string, tags, allTags []uint64, indexColl *indexCollectionImpl, props IndexProperties) Index {
