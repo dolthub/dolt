@@ -17,7 +17,6 @@ package sysbench_runner
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/types"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -25,6 +24,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/dolthub/dolt/go/store/types"
 
 	"golang.org/x/sync/errgroup"
 )

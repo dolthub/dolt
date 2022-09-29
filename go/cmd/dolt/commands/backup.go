@@ -19,6 +19,8 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/types"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -309,7 +311,7 @@ func restoreBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	}
 
 	r := env.NewRemote("", remoteUrl, params)
-	srcDb, err := r.GetRemoteDB(ctx, dEnv.DoltDB.Format(), dEnv)
+	srcDb, err := r.GetRemoteDB(ctx, types.Format_Default, dEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
