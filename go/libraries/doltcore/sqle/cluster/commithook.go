@@ -43,9 +43,9 @@ type commithook struct {
 	cond                 *sync.Cond
 	nextHead             hash.Hash
 	lastPushedHead       hash.Hash
-	lastPushedSuccess    time.Time
 	nextPushAttempt      time.Time
 	nextHeadIncomingTime time.Time
+	lastSuccess          time.Time
 	currentError         *string
 
 	role Role
@@ -188,7 +188,7 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 		h.currentError = nil
 		h.lgr.Tracef("cluster/commithook: successfully Commited chunks on destDB")
 		h.lastPushedHead = toPush
-		h.lastPushedSuccess = incomingTime
+		h.lastSuccess = incomingTime
 		h.nextPushAttempt = time.Time{}
 	} else {
 		h.currentError = new(string)
@@ -217,19 +217,18 @@ func (h *commithook) status() (replicationLag *time.Duration, lastUpdate *time.T
 				// Operationally, failure to replicate a write for a long time is a
 				// problem that merits investigation, regardless of how many pending
 				// writes are failing to replicate.
-				*replicationLag = time.Now().Sub(h.lastPushedSuccess)
+				*replicationLag = time.Now().Sub(h.lastSuccess)
 			}
 		}
 
-		if h.lastPushedSuccess != (time.Time{}) {
-			lastUpdate := new(time.Time)
-			*lastUpdate = h.lastPushedSuccess
-		}
+	}
+
+	if h.lastSuccess != (time.Time{}) {
+		lastUpdate = new(time.Time)
+		*lastUpdate = h.lastSuccess
 	}
 
 	currentErr = h.currentError
-
-	// TODO: lastUpdate in Standby role.
 
 	return
 }
@@ -264,6 +263,16 @@ func (h *commithook) run(ctx context.Context) {
 	h.lgr.Tracef("cluster/commithook: background thread: completed.")
 }
 
+func (h *commithook) recordSuccessfulRemoteSrvCommit() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.role == RolePrimary {
+		return
+	}
+	h.lastSuccess = time.Now()
+	h.currentError = nil
+}
+
 func (h *commithook) setRole(role Role) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -272,7 +281,7 @@ func (h *commithook) setRole(role Role) {
 	h.currentError = nil
 	h.nextHead = hash.Hash{}
 	h.lastPushedHead = hash.Hash{}
-	h.lastPushedSuccess = time.Time{}
+	h.lastSuccess = time.Time{}
 	h.nextPushAttempt = time.Time{}
 	h.role = role
 	h.lgr = h.rootLgr.WithField("role", string(role))
