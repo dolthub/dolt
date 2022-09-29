@@ -36,19 +36,20 @@ const clusterRoleEpochHeader = "x-dolt-cluster-role-epoch"
 // interceptor anytime it changes. In turn, this interceptor:
 // * adds the server's current role and epoch to the request headers for every
 // outbound request.
-// * fails all outgoing requests immediately with codes.Unavailable if the role
-// == RoleStandby, since this server should not be replicating when it believes
-// it is a standby.
+// * fails all outgoing requests immediately with codes.FailedPrecondition if
+// the role == RoleStandby, since this server should not be replicating when it
+// believes it is a standby.
 // * watches returned response headers for a situation which causes this server
 // to force downgrade from primary to standby. In particular, when a returned
 // response header asserts that the standby replica is a primary at a higher
 // epoch than this server, this incterceptor coordinates with the Controller to
 // immediately transition to standby and to stop replicating to the standby.
 type clientinterceptor struct {
-	lgr   *logrus.Entry
-	role  Role
-	epoch int
-	mu    sync.Mutex
+	lgr        *logrus.Entry
+	role       Role
+	epoch      int
+	mu         sync.Mutex
+	roleSetter func(role string, epoch int, graceful bool) error
 }
 
 func (ci *clientinterceptor) setRole(role Role, epoch int) {
@@ -67,8 +68,9 @@ func (ci *clientinterceptor) getRole() (Role, int) {
 func (ci *clientinterceptor) Stream() grpc.StreamClientInterceptor {
 	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 		role, epoch := ci.getRole()
+		ci.lgr.Tracef("cluster: clientinterceptor: processing request to %s, role %s", method, string(role))
 		if role == RoleStandby {
-			return nil, status.Error(codes.Unavailable, "this server is a standby and is not currently replicating to its standby")
+			return nil, status.Error(codes.FailedPrecondition, "this server is a standby and is not currently replicating to its standby")
 		}
 		ctx = metadata.AppendToOutgoingContext(ctx, clusterRoleHeader, string(role), clusterRoleEpochHeader, strconv.Itoa(epoch))
 		var header metadata.MD
@@ -81,8 +83,9 @@ func (ci *clientinterceptor) Stream() grpc.StreamClientInterceptor {
 func (ci *clientinterceptor) Unary() grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		role, epoch := ci.getRole()
+		ci.lgr.Tracef("cluster: clientinterceptor: processing request to %s, role %s", method, string(role))
 		if role == RoleStandby {
-			return status.Error(codes.Unavailable, "this server is a standby and is not currently replicating to its standby")
+			return status.Error(codes.FailedPrecondition, "this server is a standby and is not currently replicating to its standby")
 		}
 		ctx = metadata.AppendToOutgoingContext(ctx, clusterRoleHeader, string(role), clusterRoleEpochHeader, strconv.Itoa(epoch))
 		var header metadata.MD
@@ -95,18 +98,21 @@ func (ci *clientinterceptor) Unary() grpc.UnaryClientInterceptor {
 func (ci *clientinterceptor) handleResponseHeaders(header metadata.MD, role Role, epoch int) {
 	epochs := header.Get(clusterRoleEpochHeader)
 	roles := header.Get(clusterRoleHeader)
-	if len(epochs) > 0 && len(roles) > 0 && roles[0] == string(RolePrimary) {
+	if len(epochs) > 0 && len(roles) > 0 {
 		if respepoch, err := strconv.Atoi(epochs[0]); err == nil {
-			if respepoch == epoch {
-				ci.lgr.Errorf("cluster: this server and the server replicating to it are both primary at the same epoch. force transitioning to standby.")
-				// TODO: Signal to controller that we are forced to become a standby at epoch |respepoch|...
-			} else if respepoch > epoch {
-				// The server we replicate to thinks it is the primary at a higher epoch than us...
-				ci.lgr.Warnf("cluster: this server is primary at epoch %d. the server replicating to it is primary at epoch %d. force transitioning to standby.", epoch, respepoch)
-				// TODO: Signal to controller that we are forced to become a standby at epoch |respepoch|...
+			if roles[0] == string(RolePrimary) {
+				if respepoch == epoch {
+					ci.lgr.Errorf("cluster: clientinterceptor: this server and the server replicating to it are both primary at the same epoch. force transitioning to standby.")
+					ci.roleSetter(string(RoleStandby), respepoch, false)
+				} else if respepoch > epoch {
+					// The server we replicate to thinks it is the primary at a higher epoch than us...
+					ci.lgr.Warnf("cluster: clientinterceptor: this server is primary at epoch %d. the server replicating to it is primary at epoch %d. force transitioning to standby.", epoch, respepoch)
+					ci.roleSetter(string(RoleStandby), respepoch, false)
+				}
 			}
 		}
 	}
+	ci.lgr.Warnf("cluster: clientinterceptor: response was missing role and epoch metadata")
 }
 
 func (ci *clientinterceptor) Options() []grpc.DialOption {
@@ -122,7 +128,7 @@ func (ci *clientinterceptor) Options() []grpc.DialOption {
 // interceptor anytime it changes. In turn, this interceptor:
 // * adds the server's current role and epoch to the response headers for every
 // request.
-// * fails all incoming requests immediately with codes.Unavailable if the
+// * fails all incoming requests immediately with codes.FailedPrecondition if the
 // current role == RolePrimary, since nothing should be replicating to us in
 // that state.
 // * watches incoming request headers for a situation which causes this server
@@ -131,10 +137,11 @@ func (ci *clientinterceptor) Options() []grpc.DialOption {
 // than our current epoch, this interceptor coordinates with the Controller to
 // immediately transition to standby and allow replication requests through.
 type serverinterceptor struct {
-	lgr   *logrus.Entry
-	role  Role
-	epoch int
-	mu    sync.Mutex
+	lgr        *logrus.Entry
+	role       Role
+	epoch      int
+	mu         sync.Mutex
+	roleSetter func(role string, epoch int, graceful bool) error
 }
 
 func (si *serverinterceptor) Stream() grpc.StreamServerInterceptor {
@@ -150,7 +157,7 @@ func (si *serverinterceptor) Stream() grpc.StreamServerInterceptor {
 		}
 		if role == RolePrimary {
 			// As a primary, we do not accept replication requests.
-			return status.Error(codes.Unavailable, "this server is a primary and is not currently accepting replication")
+			return status.Error(codes.FailedPrecondition, "this server is a primary and is not currently accepting replication")
 		}
 		return handler(srv, ss)
 	}
@@ -169,7 +176,7 @@ func (si *serverinterceptor) Unary() grpc.UnaryServerInterceptor {
 		}
 		if role == RolePrimary {
 			// As a primary, we do not accept replication requests.
-			return nil, status.Error(codes.Unavailable, "this server is a primary and is not currently accepting replication")
+			return nil, status.Error(codes.FailedPrecondition, "this server is a primary and is not currently accepting replication")
 		}
 		return handler(ctx, req)
 	}
@@ -186,12 +193,12 @@ func (si *serverinterceptor) handleRequestHeaders(header metadata.MD, role Role,
 				// at the same epoch. We will become standby
 				// and our peer will become standby. An
 				// operator will need to get involved.
-				si.lgr.Errorf("cluster: this server and its standby replica are both primary at the same epoch. force transitioning to standby.")
-				// TODO: Signal to controller that we are forced to become a standby at epoch |reqepoch|
+				si.lgr.Errorf("cluster: serverinterceptor: this server and its standby replica are both primary at the same epoch. force transitioning to standby.")
+				si.roleSetter(string(RoleStandby), reqepoch, false)
 			} else if reqepoch > epoch {
 				// The client replicating to us thinks it is the primary at a higher epoch than us.
-				si.lgr.Warnf("cluster: this server is primary at epoch %d. the server replicating to it is primary at epoch %d. force transitioning to standby.", epoch, reqepoch)
-				// TODO: Signal to controller that we are forced to become a standby at epoch |reqepoch|
+				si.lgr.Warnf("cluster: serverinterceptor: this server is primary at epoch %d. the server replicating to it is primary at epoch %d. force transitioning to standby.", epoch, reqepoch)
+				si.roleSetter(string(RoleStandby), reqepoch, false)
 			}
 		}
 	}

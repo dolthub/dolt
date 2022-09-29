@@ -48,6 +48,7 @@ type commithook struct {
 	nextHeadIncomingTime time.Time
 	lastSuccess          time.Time
 	currentError         *string
+	cancelReplicate    func()
 
 	role Role
 
@@ -168,6 +169,13 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 	toPush := h.nextHead
 	incomingTime := h.nextHeadIncomingTime
 	destDB := h.destDB
+	ctx, h.cancelReplicate = context.WithCancel(ctx)
+	defer func() {
+		if h.cancelReplicate != nil {
+			h.cancelReplicate()
+		}
+		h.cancelReplicate = nil
+	}()
 	h.mu.Unlock()
 
 	if destDB == nil {
@@ -183,6 +191,7 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 			if toPush == h.nextHead {
 				h.nextPushAttempt = time.Now().Add(1 * time.Second)
 			}
+			h.cancelReplicate = nil
 			return
 		}
 		lgr.Tracef("cluster/commithook: fetched destDB")
@@ -208,20 +217,22 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 	}
 
 	h.mu.Lock()
-	if err == nil {
-		h.currentError = nil
-		lgr.Tracef("cluster/commithook: successfully Commited chunks on destDB")
-		h.lastPushedHead = toPush
-		h.lastSuccess = incomingTime
-		h.nextPushAttempt = time.Time{}
-	} else {
-		h.currentError = new(string)
-		*h.currentError = fmt.Sprintf("failed to commit chunks on destDB: %v", err)
-		lgr.Warnf("cluster/commithook: failed to commit chunks on destDB: %v", err)
-		// add some delay if a new head didn't come in while we were pushing.
-		if toPush == h.nextHead {
-			// TODO: We could add some backoff here.
-			h.nextPushAttempt = time.Now().Add(1 * time.Second)
+	if h.role == RolePrimary {
+		if err == nil {
+			h.currentError = nil
+			lgr.Tracef("cluster/commithook: successfully Commited chunks on destDB")
+			h.lastPushedHead = toPush
+			h.lastSuccess = incomingTime
+			h.nextPushAttempt = time.Time{}
+		} else {
+			h.currentError = new(string)
+			*h.currentError = fmt.Sprintf("failed to commit chunks on destDB: %v", err)
+			lgr.Warnf("cluster/commithook: failed to commit chunks on destDB: %v", err)
+			// add some delay if a new head didn't come in while we were pushing.
+			if toPush == h.nextHead {
+				// TODO: We could add some backoff here.
+				h.nextPushAttempt = time.Now().Add(1 * time.Second)
+			}
 		}
 	}
 }
@@ -298,6 +309,10 @@ func (h *commithook) setRole(role Role) {
 	h.nextPushAttempt = time.Time{}
 	h.role = role
 	h.lgr.Store(h.rootLgr.WithField(logFieldRole, string(role)))
+	if h.cancelReplicate != nil {
+		h.cancelReplicate()
+		h.cancelReplicate = nil
+	}
 	h.cond.Signal()
 }
 
