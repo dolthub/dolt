@@ -1269,6 +1269,11 @@ func (ddb *DoltDB) SetCommitHooks(ctx context.Context, postHooks []CommitHook) *
 	return ddb
 }
 
+func (ddb *DoltDB) PrependCommitHook(ctx context.Context, hook CommitHook) *DoltDB {
+	ddb.db = ddb.db.SetCommitHooks(ctx, append([]CommitHook{hook}, ddb.db.PostCommitHooks()...))
+	return ddb
+}
+
 func (ddb *DoltDB) SetCommitHookLogger(ctx context.Context, wr io.Writer) *DoltDB {
 	if ddb.db.Database != nil {
 		ddb.db = ddb.db.SetCommitHookLogger(ctx, wr)
@@ -1281,7 +1286,7 @@ func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, datasetId string) err
 	if err != nil {
 		return err
 	}
-	ddb.db.ExecuteCommitHooks(ctx, ds)
+	ddb.db.ExecuteCommitHooks(ctx, ds, false)
 	return nil
 }
 

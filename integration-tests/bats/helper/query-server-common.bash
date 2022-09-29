@@ -190,13 +190,12 @@ stop_sql_server() {
     wait=$1
     if [ ! -z "$SERVER_PID" ]; then
       kill $SERVER_PID
+      if [ $wait ]; then
+          while ps -p $SERVER_PID > /dev/null; do
+              sleep .1;
+          done
+      fi;
     fi
-    if [ $wait ]; then
-        while ps -p $SERVER_PID > /dev/null; do
-            sleep .1;
-        done
-    fi;
-   
     SERVER_PID=
 }
 

@@ -124,7 +124,7 @@ func Serve(
 		}
 	}
 
-	clusterController, err := cluster.NewController(serverConfig.ClusterConfig(), mrEnv.Config())
+	clusterController, err := cluster.NewController(lgr, serverConfig.ClusterConfig(), mrEnv.Config())
 	if err != nil {
 		return err, nil
 	}
@@ -225,7 +225,12 @@ func Serve(
 	var remoteSrv *remotesrv.Server
 	if serverConfig.RemotesapiPort() != nil {
 		if remoteSrvSqlCtx, err := sqlEngine.NewContext(context.Background()); err == nil {
-			remoteSrv = sqle.NewRemoteSrvServer(logrus.NewEntry(lgr), remoteSrvSqlCtx, *serverConfig.RemotesapiPort())
+			remoteSrv = sqle.NewRemoteSrvServer(remoteSrvSqlCtx, remotesrv.ServerArgs{
+				Logger:   logrus.NewEntry(lgr),
+				ReadOnly: true,
+				HttpPort: *serverConfig.RemotesapiPort(),
+				GrpcPort: *serverConfig.RemotesapiPort(),
+			})
 			listeners, err := remoteSrv.Listeners()
 			if err != nil {
 				lgr.Errorf("error starting remotesapi server listeners on port %d: %v", *serverConfig.RemotesapiPort(), err)
@@ -234,6 +239,32 @@ func Serve(
 			} else {
 				go func() {
 					remoteSrv.Serve(listeners)
+				}()
+			}
+		} else {
+			lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
+			startError = err
+			return
+		}
+	}
+
+	var clusterRemoteSrv *remotesrv.Server
+	if clusterController != nil {
+		if remoteSrvSqlCtx, err := sqlEngine.NewContext(context.Background()); err == nil {
+			clusterRemoteSrv = sqle.NewRemoteSrvServer(remoteSrvSqlCtx, remotesrv.ServerArgs{
+				Logger:   logrus.NewEntry(lgr),
+				HttpPort: clusterController.RemoteSrvPort(),
+				GrpcPort: clusterController.RemoteSrvPort(),
+				Options:  clusterController.ServerOptions(),
+			})
+			listeners, err := clusterRemoteSrv.Listeners()
+			if err != nil {
+				lgr.Errorf("error starting remotesapi server listeners for cluster config on port %d: %v", clusterController.RemoteSrvPort(), err)
+				startError = err
+				return
+			} else {
+				go func() {
+					clusterRemoteSrv.Serve(listeners)
 				}()
 			}
 		} else {
@@ -258,6 +289,9 @@ func Serve(
 		}
 		if remoteSrv != nil {
 			remoteSrv.GracefulStop()
+		}
+		if clusterRemoteSrv != nil {
+			clusterRemoteSrv.GracefulStop()
 		}
 
 		return mySQLServer.Close()
