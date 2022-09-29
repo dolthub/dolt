@@ -270,7 +270,7 @@ func Serve(
 			clusterController.ManageQueryConnections(
 				mySQLServer.SessionManager().Iter,
 				sqlEngine.GetUnderlyingEngine().ProcessList.Kill,
-				func(uint32) {},    // TODO: mySQLServer.SessionManager().KillConnection,
+				func(uint32) {}, // TODO: mySQLServer.SessionManager().KillConnection,
 			)
 		} else {
 			lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)

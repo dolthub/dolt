@@ -55,6 +55,7 @@ type DoltDatabaseProvider struct {
 	remoteDialer  dbfactory.GRPCDialProvider // TODO: why isn't this a method defined on the remote object
 
 	dbFactoryUrl string
+	isStandby    *bool
 }
 
 var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
@@ -116,6 +117,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		defaultBranch:      defaultBranch,
 		dbFactoryUrl:       doltdb.LocalDirDoltDB,
 		InitDatabaseHook:   ConfigureReplicationDatabaseHook,
+		isStandby:          new(bool),
 	}, nil
 }
 
@@ -148,6 +150,15 @@ func (p DoltDatabaseProvider) FileSystem() filesys.Filesys {
 	return p.fs
 }
 
+// If this DatabaseProvider is set to standby |true|, it returns every dolt
+// database as a read only database. Set back to |false| to get read-write
+// behavior from dolt databases again.
+func (p DoltDatabaseProvider) SetIsStandby(standby bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	*p.isStandby = standby
+}
+
 // FileSystemForDatabase returns a filesystem, with the working directory set to the root directory
 // of the requested database. If the requested database isn't found, a database not found error
 // is returned.
@@ -168,9 +179,10 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 	var ok bool
 	p.mu.RLock()
 	db, ok = p.databases[formatDbMapKeyName(name)]
+	standby := *p.isStandby
 	p.mu.RUnlock()
 	if ok {
-		return db, nil
+		return wrapForStandby(db, standby), nil
 	}
 
 	db, _, ok, err = p.databaseForRevision(ctx, name)
@@ -189,7 +201,21 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 	}
 
 	// Don't track revision databases, just instantiate them on demand
-	return db, nil
+	return wrapForStandby(db, standby), nil
+}
+
+func wrapForStandby(db sql.Database, standby bool) sql.Database {
+	if !standby {
+		return db
+	}
+	if _, ok := db.(ReadOnlyDatabase); ok {
+		return db
+	}
+	if db, ok := db.(Database); ok {
+		// :-/. Hopefully it's not too sliced.
+		return ReadOnlyDatabase{db}
+	}
+	return db
 }
 
 // attemptCloneReplica attempts to clone a database from the configured replication remote URL template, returning an error
