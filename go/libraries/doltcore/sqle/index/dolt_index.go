@@ -675,8 +675,9 @@ func (di *doltIndex) Comment() string {
 // PrefixLengths implements sql.Index
 func (di *doltIndex) PrefixLengths() []uint64 {
 	// TODO: implement me
-
-	di.tableSch.Indexes()
+	for _, idx := range di.tableSch.Indexes().AllIndexes() {
+		idx.Comment()
+	}
 	return nil
 }
 

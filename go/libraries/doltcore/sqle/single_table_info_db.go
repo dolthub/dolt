@@ -294,6 +294,11 @@ func (idx fmtIndex) Comment() string {
 	return idx.comment
 }
 
+// PrefixLengths implements sql.Index
+func (idx fmtIndex) PrefixLengths() []uint64 {
+	return nil
+}
+
 // IndexType implements sql.Index
 func (idx fmtIndex) IndexType() string {
 	return "BTREE"
