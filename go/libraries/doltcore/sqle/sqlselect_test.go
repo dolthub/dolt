@@ -85,10 +85,16 @@ func LoadedLocalLocation() *time.Location {
 
 // BasicSelectTests cover basic select statement features and error handling
 func BasicSelectTests() []SelectTest {
-	headCommitHash := "73hc2robs4v0kt9taoe3m5hd49dmrgun"
-	if types.Format_Default == types.Format_DOLT_DEV {
+	var headCommitHash string
+	switch types.Format_Default {
+	case types.Format_DOLT:
 		headCommitHash = "4ej7hfduufg4o2837g3gc4p5uolrlmv9"
+	case types.Format_DOLT_DEV:
+		headCommitHash = "4ej7hfduufg4o2837g3gc4p5uolrlmv9"
+	case types.Format_LD_1:
+		headCommitHash = "73hc2robs4v0kt9taoe3m5hd49dmrgun"
 	}
+
 	return []SelectTest{
 		{
 			Name:           "select * on primary key",
@@ -1452,6 +1458,9 @@ func TestSelect(t *testing.T) {
 }
 
 func TestDiffQueries(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip("") // todo: convert to enginetests
+	}
 	for _, test := range SelectDiffTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testSelectDiffQuery(t, test)
@@ -1460,6 +1469,9 @@ func TestDiffQueries(t *testing.T) {
 }
 
 func TestAsOfQueries(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip("") // todo: convert to enginetests
+	}
 	for _, test := range AsOfTests {
 		t.Run(test.Name, func(t *testing.T) {
 			// AS OF queries use the same history as the diff tests, so exercise the same test setup
@@ -1582,9 +1594,7 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 	cleanup := installTestCommitClock()
 	defer cleanup()
 
-	dEnv := dtestutils.CreateTestEnv()
-	CreateTestDatabase(dEnv, t)
-
+	dEnv := CreateTestDatabase(t)
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
@@ -1627,6 +1637,10 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 }
 
 func testSelectDiffQuery(t *testing.T, test SelectTest) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip("") // todo: convert to enginetests
+	}
+
 	validateTest(t, test)
 
 	ctx := context.Background()

@@ -78,6 +78,9 @@ CREATE TABLE child (
 }
 
 func TestTableEditorForeignKeyCascade(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: implement prolly row dump
+	}
 	tests := []struct {
 		name          string
 		sqlStatement  string
@@ -178,6 +181,9 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 }
 
 func TestTableEditorForeignKeySetNull(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: implement prolly row dump
+	}
 	tests := []struct {
 		sqlStatement string
 		expectedOne  []sql.Row
@@ -228,6 +234,9 @@ ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE SET NULL ON UP
 }
 
 func TestTableEditorForeignKeyRestrict(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: implement prolly row dump
+	}
 	for _, referenceOption := range []string{
 		"ON DELETE RESTRICT ON UPDATE RESTRICT",
 		"ON DELETE NO ACTION ON UPDATE NO ACTION",
@@ -314,6 +323,9 @@ func TestTableEditorForeignKeyRestrict(t *testing.T) {
 }
 
 func TestTableEditorForeignKeyViolations(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: implement prolly row dump
+	}
 	tests := []struct {
 		setup   string
 		trigger string
@@ -378,6 +390,9 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 }
 
 func TestTableEditorSelfReferentialForeignKeyRestrict(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: implement prolly row dump
+	}
 	dEnv, initialRoot := setupEditorFkTest(t)
 
 	ctx := context.Background()
@@ -448,6 +463,9 @@ func TestTableEditorSelfReferentialForeignKeyRestrict(t *testing.T) {
 }
 
 func TestTableEditorSelfReferentialForeignKeyCascade(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: implement prolly row dump
+	}
 	dEnv, initialRoot := setupEditorFkTest(t)
 
 	ctx := context.Background()
@@ -548,6 +566,9 @@ func TestTableEditorSelfReferentialForeignKeyCascade(t *testing.T) {
 }
 
 func TestTableEditorSelfReferentialForeignKeySetNull(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: implement prolly row dump
+	}
 	dEnv, initialRoot := setupEditorFkTest(t)
 
 	ctx := context.Background()
@@ -802,6 +823,9 @@ CREATE TABLE child (
 }
 
 func TestTableEditorKeylessFKCascade(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: implement prolly row dump
+	}
 	tests := []struct {
 		name          string
 		sqlStatement  string

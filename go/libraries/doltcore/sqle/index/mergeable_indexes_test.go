@@ -17,7 +17,6 @@ package index_test
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/types"
 	"testing"
 
 	sqle "github.com/dolthub/go-mysql-server"
@@ -31,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // This tests mergeable indexes by using the SQL engine and intercepting specific calls. This way, we can verify that

@@ -182,6 +182,9 @@ func assertSchemasEqual(t *testing.T, expected, actual sql.Schema) {
 // CreateTableFn returns a SetupFunc that creates a table with the rows given
 func CreateTableFn(tableName string, tableSchema schema.Schema, initialRows ...row.Row) SetupFn {
 	return func(t *testing.T, dEnv *env.DoltEnv) {
+		if types.Format_Default != types.Format_LD_1 {
+			t.Skip() // todo: convert to enginetest
+		}
 		dtestutils.CreateTestTable(t, dEnv, tableName, tableSchema, initialRows...)
 	}
 }
@@ -190,6 +193,9 @@ func CreateTableFn(tableName string, tableSchema schema.Schema, initialRows ...r
 // from Value types conforming to the schema given.
 func CreateTableWithRowsFn(tableName string, tableSchema schema.Schema, initialRows ...[]types.Value) SetupFn {
 	return func(t *testing.T, dEnv *env.DoltEnv) {
+		if types.Format_Default != types.Format_LD_1 {
+			t.Skip() // todo: convert to enginetest
+		}
 		rows := make([]row.Row, len(initialRows))
 		for i, r := range initialRows {
 			rows[i] = NewRowWithSchema(tableSchema, r...)

@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // This tests running queries against a modified subset of the stockmarket data set found here:
@@ -20144,6 +20145,9 @@ func TestCreateTables(t *testing.T) {
 }
 
 func TestInserts(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: convert to enginetests
+	}
 	sqle.SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
@@ -20170,6 +20174,9 @@ func TestInserts(t *testing.T) {
 }
 
 func TestInsertsWithIndexes(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: convert to enginetests
+	}
 	sqle.SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()

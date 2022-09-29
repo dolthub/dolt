@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/types"
@@ -304,8 +303,7 @@ func testReplaceQuery(t *testing.T, test ReplaceTest) {
 		t.Skip("Skipping tests until " + singleReplaceQueryTest)
 	}
 
-	dEnv := dtestutils.CreateTestEnv()
-	CreateEmptyTestDatabase(dEnv, t)
+	dEnv := CreateEmptyTestDatabase(t)
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)

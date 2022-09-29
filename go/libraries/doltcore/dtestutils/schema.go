@@ -98,6 +98,28 @@ var TimestampComparer = cmp.Comparer(func(x, y types.Timestamp) bool {
 	return x.Equals(y)
 })
 
+// CreateEmptyTestTable creates a new test table with the name, schema, and rows given.
+func CreateEmptyTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch schema.Schema) {
+	ctx := context.Background()
+	root, err := dEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
+
+	vrw := dEnv.DoltDB.ValueReadWriter()
+	ns := dEnv.DoltDB.NodeStore()
+
+	rows, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
+	require.NoError(t, err)
+	indexSet, err := durable.NewIndexSetWithEmptyIndexes(ctx, vrw, ns, sch)
+	require.NoError(t, err)
+
+	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, rows, indexSet, nil)
+	require.NoError(t, err)
+	newRoot, err := root.PutTable(ctx, tableName, tbl)
+	require.NoError(t, err)
+	err = dEnv.UpdateWorkingRoot(ctx, newRoot)
+	require.NoError(t, err)
+}
+
 // CreateTestTable creates a new test table with the name, schema, and rows given.
 func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch schema.Schema, rs ...row.Row) {
 	imt := table.NewInMemTable(sch)

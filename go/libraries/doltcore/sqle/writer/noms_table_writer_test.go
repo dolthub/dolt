@@ -16,14 +16,12 @@ package writer_test
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/types"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -32,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type tableEditorTest struct {
@@ -162,9 +161,7 @@ func TestTableEditor(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			expectedErr = nil
 
-			dEnv := dtestutils.CreateTestEnv()
-			sqle.CreateTestDatabase(dEnv, t)
-
+			dEnv := sqle.CreateTestDatabase(t)
 			ctx := sqle.NewTestSQLCtx(context.Background())
 			root, _ := dEnv.WorkingRoot(context.Background())
 			tmpDir, err := dEnv.TempTableFilesDir()
