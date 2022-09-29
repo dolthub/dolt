@@ -257,7 +257,7 @@ teardown() {
     # Default format is OLD (__LD_1__) when DOLT_DEFAULT_BIN_FORMAT is undefined
     if [ "$DOLT_DEFAULT_BIN_FORMAT" = "" ]
     then
-        orig_bin_format="__LD_1__"
+        orig_bin_format="__DOLT__"
     else
         orig_bin_format=$DOLT_DEFAULT_BIN_FORMAT
     fi
@@ -281,6 +281,7 @@ teardown() {
     [[ $output =~ "test" ]] || false
 
     cd test
+    dolt version
     run dolt version
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$orig_bin_format" ]] || false

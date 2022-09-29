@@ -17,6 +17,7 @@ package sysbench_runner
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/types"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -51,7 +52,7 @@ func BenchmarkDolt(ctx context.Context, config *Config, serverConfig *ServerConf
 		return nil, err
 	}
 
-	testRepo, err := initDoltRepo(ctx, serverConfig, config.InitBigRepo, config.NomsBinFormat)
+	testRepo, err := initDoltRepo(ctx, serverConfig, config.NomsBinFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -134,14 +135,14 @@ func DoltVersion(ctx context.Context, serverExec string) error {
 }
 
 // initDoltRepo initializes a dolt repo and returns the repo path
-func initDoltRepo(ctx context.Context, config *ServerConfig, initBigRepo bool, nbf string) (string, error) {
+func initDoltRepo(ctx context.Context, config *ServerConfig, nbf string) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
 
 	testRepo := filepath.Join(cwd, dbName)
-	if initBigRepo {
+	if nbf == types.Format_LD_1.VersionString() {
 		err := ExecCommand(ctx, config.ServerExec, "clone", bigEmptyRepo, dbName).Run()
 		if err != nil {
 			return "", err
