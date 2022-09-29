@@ -33,7 +33,7 @@ import (
 
 func TestSchemaTableRecreationOlder(t *testing.T) {
 	if types.Format_Default != types.Format_LD_1 {
-		t.Skip()
+		t.Skip() // schema table migrations predate NBF __DOLT__
 	}
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
@@ -91,7 +91,7 @@ func TestSchemaTableRecreationOlder(t *testing.T) {
 
 func TestSchemaTableRecreation(t *testing.T) {
 	if types.Format_Default != types.Format_LD_1 {
-		t.Skip()
+		t.Skip() // schema table migrations predate NBF __DOLT__
 	}
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()

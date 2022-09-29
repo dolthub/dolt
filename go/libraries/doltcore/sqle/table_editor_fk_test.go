@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"io"
 	"math"
 	"reflect"
 	"sort"
@@ -28,11 +29,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func setupEditorFkTest(t *testing.T) (*env.DoltEnv, *doltdb.RootValue) {
@@ -78,9 +83,6 @@ CREATE TABLE child (
 }
 
 func TestTableEditorForeignKeyCascade(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // todo: implement prolly row dump
-	}
 	tests := []struct {
 		name          string
 		sqlStatement  string
@@ -181,9 +183,6 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 }
 
 func TestTableEditorForeignKeySetNull(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // todo: implement prolly row dump
-	}
 	tests := []struct {
 		sqlStatement string
 		expectedOne  []sql.Row
@@ -234,9 +233,6 @@ ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE SET NULL ON UP
 }
 
 func TestTableEditorForeignKeyRestrict(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // todo: implement prolly row dump
-	}
 	for _, referenceOption := range []string{
 		"ON DELETE RESTRICT ON UPDATE RESTRICT",
 		"ON DELETE NO ACTION ON UPDATE NO ACTION",
@@ -323,9 +319,6 @@ func TestTableEditorForeignKeyRestrict(t *testing.T) {
 }
 
 func TestTableEditorForeignKeyViolations(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // todo: implement prolly row dump
-	}
 	tests := []struct {
 		setup   string
 		trigger string
@@ -390,9 +383,6 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 }
 
 func TestTableEditorSelfReferentialForeignKeyRestrict(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // todo: implement prolly row dump
-	}
 	dEnv, initialRoot := setupEditorFkTest(t)
 
 	ctx := context.Background()
@@ -463,9 +453,6 @@ func TestTableEditorSelfReferentialForeignKeyRestrict(t *testing.T) {
 }
 
 func TestTableEditorSelfReferentialForeignKeyCascade(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // todo: implement prolly row dump
-	}
 	dEnv, initialRoot := setupEditorFkTest(t)
 
 	ctx := context.Background()
@@ -566,9 +553,6 @@ func TestTableEditorSelfReferentialForeignKeyCascade(t *testing.T) {
 }
 
 func TestTableEditorSelfReferentialForeignKeySetNull(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // todo: implement prolly row dump
-	}
 	dEnv, initialRoot := setupEditorFkTest(t)
 
 	ctx := context.Background()
@@ -676,25 +660,22 @@ func assertTableEditorRows(t *testing.T, root *doltdb.RootValue, expected []sql.
 	sch, err := tbl.GetSchema(context.Background())
 	require.NoError(t, err)
 
-	rowData, err := tbl.GetNomsRowData(context.Background())
+	rows, err := tbl.GetRowData(context.Background())
 	require.NoError(t, err)
 
 	var sqlRows []sql.Row
 	if len(expected) > 0 {
-		_ = rowData.IterAll(context.Background(), func(key, value types.Value) error {
-			r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
-			assert.NoError(t, err)
-			sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
-			assert.NoError(t, err)
-			sqlRows = append(sqlRows, sqlRow)
-			return nil
-		})
-		assert.Equal(t, convertSqlRowToInt64(expected), sqlRows)
+		sqlRows = sqlRowsFromDurableIndex(t, rows, sch)
+		expected = sortInt64Rows(convertSqlRowToInt64(expected))
+		sqlRows = sortInt64Rows(convertSqlRowToInt64(sqlRows))
+		if !assert.Equal(t, expected, sqlRows) {
+			t.Fail()
+		}
 	}
 
 	// we can verify that each index also has the proper contents
 	for _, index := range sch.Indexes().AllIndexes() {
-		indexRowData, err := tbl.GetNomsIndexRowData(context.Background(), index.Name())
+		indexRowData, err := tbl.GetIndexRowData(context.Background(), index.Name())
 		require.NoError(t, err)
 		indexSch := index.Schema()
 
@@ -723,59 +704,40 @@ func assertTableEditorRows(t *testing.T, root *doltdb.RootValue, expected []sql.
 			expectedIndexRows[rowIndex] = expectedIndex
 		}
 		expectedIndexRows = convertSqlRowToInt64(expectedIndexRows)
-		sort.Slice(expectedIndexRows, func(leftIndex, rightIndex int) bool {
-			a := expectedIndexRows[leftIndex]
-			b := expectedIndexRows[rightIndex]
-			for i := range a {
-				aVal, aNotNil := a[i].(int64)
-				bVal, bNotNil := b[i].(int64)
-				if !aNotNil {
-					aVal = math.MaxInt64
-				}
-				if !bNotNil {
-					bVal = math.MaxInt64
-				}
-				if aVal < bVal {
-					return true
-				}
-			}
-			return false
-		})
+
+		expectedIndexRows = sortInt64Rows(expectedIndexRows)
 
 		if len(expectedIndexRows) > 0 {
-			var sqlRows []sql.Row
-			_ = indexRowData.IterAll(context.Background(), func(key, value types.Value) error {
-				r, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
-				assert.NoError(t, err)
-				sqlRow, err := sqlutil.DoltRowToSqlRow(r, indexSch)
-				assert.NoError(t, err)
-				sqlRows = append(sqlRows, sqlRow)
-				return nil
-			})
-
+			sqlRows = sqlRowsFromDurableIndex(t, indexRowData, indexSch)
+			expected = sortInt64Rows(convertSqlRowToInt64(expected))
+			sqlRows = sortInt64Rows(convertSqlRowToInt64(sqlRows))
 			if !reflect.DeepEqual(expectedIndexRows, sqlRows) {
-				sort.Slice(sqlRows, func(leftIndex, rightIndex int) bool {
-					a := sqlRows[leftIndex]
-					b := sqlRows[rightIndex]
-					for i := range a {
-						aVal, aNotNil := a[i].(int64)
-						bVal, bNotNil := b[i].(int64)
-						if !aNotNil {
-							aVal = math.MaxInt64
-						}
-						if !bNotNil {
-							bVal = math.MaxInt64
-						}
-						if aVal < bVal {
-							return true
-						}
-					}
-					return false
-				})
+				sqlRows = sortInt64Rows(sqlRows)
 			}
 			assert.Equal(t, expectedIndexRows, sqlRows)
 		}
 	}
+}
+
+func sortInt64Rows(rows []sql.Row) []sql.Row {
+	sort.Slice(rows, func(l, r int) bool {
+		a, b := rows[l], rows[r]
+		for i := range a {
+			aa, ok := a[i].(int64)
+			if !ok {
+				aa = math.MaxInt64
+			}
+			bb, ok := b[i].(int64)
+			if !ok {
+				bb = math.MaxInt64
+			}
+			if aa < bb {
+				return true
+			}
+		}
+		return false
+	})
+	return rows
 }
 
 func setupEditorKeylessFkTest(t *testing.T) (*env.DoltEnv, *doltdb.RootValue) {
@@ -823,9 +785,6 @@ CREATE TABLE child (
 }
 
 func TestTableEditorKeylessFKCascade(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // todo: implement prolly row dump
-	}
 	tests := []struct {
 		name          string
 		sqlStatement  string
@@ -923,4 +882,68 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 			assertTableEditorRows(t, root, test.expectedThree, "three")
 		})
 	}
+}
+
+func sqlRowsFromDurableIndex(t *testing.T, idx durable.Index, sch schema.Schema) []sql.Row {
+	ctx := context.Background()
+	var sqlRows []sql.Row
+	if types.Format_Default == types.Format_DOLT {
+		rowData := durable.ProllyMapFromIndex(idx)
+		kd, vd := rowData.Descriptors()
+		iter, err := rowData.IterAll(ctx)
+		require.NoError(t, err)
+		for {
+			var k, v val.Tuple
+			k, v, err = iter.Next(ctx)
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+			sqlRow, err := sqlRowFromTuples(sch, kd, vd, k, v)
+			require.NoError(t, err)
+			sqlRows = append(sqlRows, sqlRow)
+		}
+
+	} else {
+		// types.Format_LD_1 and types.Format_DOLT_DEV
+		rowData := durable.NomsMapFromIndex(idx)
+		_ = rowData.IterAll(ctx, func(key, value types.Value) error {
+			r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
+			assert.NoError(t, err)
+			sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
+			assert.NoError(t, err)
+			sqlRows = append(sqlRows, sqlRow)
+			return nil
+		})
+	}
+	return sqlRows
+}
+
+func sqlRowFromTuples(sch schema.Schema, kd, vd val.TupleDesc, k, v val.Tuple) (sql.Row, error) {
+	var err error
+	ctx := context.Background()
+	r := make(sql.Row, sch.GetAllCols().Size())
+	keyless := schema.IsKeyless(sch)
+
+	for i, col := range sch.GetAllCols().GetColumns() {
+		pos, ok := sch.GetPKCols().TagToIdx[col.Tag]
+		if ok {
+			r[i], err = index.GetField(ctx, kd, pos, k, nil)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		pos, ok = sch.GetNonPKCols().TagToIdx[col.Tag]
+		if keyless {
+			pos += 1 // compensate for cardinality field
+		}
+		if ok {
+			r[i], err = index.GetField(ctx, vd, pos, v, nil)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return r, nil
 }
