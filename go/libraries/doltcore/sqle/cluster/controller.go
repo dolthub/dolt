@@ -52,6 +52,10 @@ type Controller struct {
 	sinterceptor  serverinterceptor
 	cinterceptor  clientinterceptor
 	lgr           *logrus.Logger
+
+	iterSessions   IterSessions
+	killQuery      func(uint32)
+	killConnection func(uint32)
 }
 
 type sqlvars interface {
@@ -120,6 +124,16 @@ func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, bt *sql.
 		c.commithooks = append(c.commithooks, hooks...)
 	}
 	return nil
+}
+
+type IterSessions func(func(sql.Session) (bool, error)) error
+
+func (c *Controller) ManageQueryConnections(iterSessions IterSessions, killQuery, killConnection func(uint32)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.iterSessions = iterSessions
+	c.killQuery = killQuery
+	c.killConnection = killConnection
 }
 
 func (c *Controller) applyCommitHooks(ctx context.Context, name string, bt *sql.BackgroundThreads, denv *env.DoltEnv) ([]*commithook, error) {
@@ -246,7 +260,7 @@ func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.Rea
 	return Role(persistentRole), epochi, nil
 }
 
-func (c *Controller) setRoleAndEpoch(role string, epoch int) error {
+func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if epoch == c.epoch && role == string(c.role) {
@@ -269,7 +283,21 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int) error {
 	c.epoch = epoch
 
 	if changedrole {
-		// TODO: Role is transitioning...lots of stuff to do.
+		var err error
+		if c.role == RoleStandby {
+			if graceful {
+				err = c.gracefulTransitionToStandby()
+			} else {
+				err = c.immediateTransitionToStandby()
+				// TODO: this should not fail; if it does, we still prevent transition for now.
+			}
+		} else {
+			err = c.transitionToPrimary()
+			// TODO: this should not fail; if it does, we still prevent transition for now.
+		}
+		if err != nil {
+			return err
+		}
 	}
 
 	c.refreshSystemVars()
@@ -338,4 +366,44 @@ func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.Server
 	args = sqle.RemoteSrvServerArgs(ctx, args)
 	args.DBCache = remotesrvStoreCache{args.DBCache, c}
 	return args
+}
+
+// The order of operations is:
+// * Set all databases in database_provider to read-only.
+// * Kill all running queries in GMS.
+// * Replicate all databases to their standby remotes.
+//   * If success, return success.
+//   * If failure, set all databases in database_provider back to their original state. Return failure.
+func (c *Controller) gracefulTransitionToStandby() error {
+	return nil
+}
+
+// The order of operations is:
+// * Set all databases in database_provider to read-only.
+// * Kill all running queries in GMS.
+// * Return success. NOTE: we do not attempt to replicate to the standby.
+func (c *Controller) immediateTransitionToStandby() error {
+	return nil
+}
+
+// The order of operations is:
+// * Set all databases in database_provider back to their original mode: read-write or read only.
+// * Kill all running queries in GMS.
+// * Return success.
+func (c *Controller) transitionToPrimary() error {
+	return nil
+}
+
+// Kills all running queries in the managed GMS engine.
+func (c *Controller) killRunningQueries() {
+	c.mu.Lock()
+	iterSessions, killQuery, killConnection := c.iterSessions, c.killQuery, c.killConnection
+	c.mu.Unlock()
+	if c.iterSessions != nil {
+		iterSessions(func(session sql.Session) (stop bool, err error) {
+			killQuery(session.ID())
+			killConnection(session.ID())
+			return
+		})
+	}
 }
