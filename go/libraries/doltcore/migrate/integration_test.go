@@ -116,12 +116,10 @@ func TestMigration(t *testing.T) {
 			ctx := context.Background()
 			preEnv := setupMigrationTest(t, ctx, test)
 			postEnv := runMigration(t, ctx, preEnv)
-
-			ddb := postEnv.DoltDB
 			root, err := postEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 			for _, a := range test.asserts {
-				actual, err := sqle.ExecuteSelect(t, postEnv, ddb, root, a.query)
+				actual, err := sqle.ExecuteSelect(t, postEnv, root, a.query)
 				assert.NoError(t, err)
 				assert.Equal(t, a.expected, actual)
 			}

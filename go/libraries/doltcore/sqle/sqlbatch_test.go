@@ -33,6 +33,10 @@ import (
 )
 
 func TestSqlBatchInserts(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: convert to enginetests
+	}
+
 	insertStatements := []string{
 		`insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values
 					(7, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000007', 677)`,
@@ -58,11 +62,9 @@ func TestSqlBatchInserts(t *testing.T) {
 			insertStatements[i], insertStatements[j] = insertStatements[j], insertStatements[i]
 		})
 
-	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
-
-	CreateTestDatabase(dEnv, t)
-	root, _ := dEnv.WorkingRoot(ctx)
+	dEnv := CreateTestDatabase(t)
+	root, err := dEnv.WorkingRoot(ctx)
 
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
@@ -152,11 +154,10 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 					(2, "Milhouse", "VanHouten", false, 1, 5.1, '00000000-0000-0000-0000-000000000008', 677)`,
 	}
 
-	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
-
-	CreateTestDatabase(dEnv, t)
-	root, _ := dEnv.WorkingRoot(ctx)
+	dEnv := CreateTestDatabase(t)
+	root, err := dEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
 
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
@@ -196,11 +197,14 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 }
 
 func TestSqlBatchInsertErrors(t *testing.T) {
-	dEnv := dtestutils.CreateTestEnv()
-	ctx := context.Background()
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: convert to enginetests
+	}
 
-	CreateTestDatabase(dEnv, t)
-	root, _ := dEnv.WorkingRoot(ctx)
+	ctx := context.Background()
+	dEnv := CreateTestDatabase(t)
+	root, err := dEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
 
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)

@@ -138,7 +138,7 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 	working, err = dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 	// assert all out rows are present after gc
-	actual, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, working, test.query)
+	actual, err := sqle.ExecuteSelect(t, dEnv, working, test.query)
 	require.NoError(t, err)
 	assert.Equal(t, test.expected, actual)
 }

@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/types"
@@ -181,6 +180,9 @@ func TestExecuteDelete(t *testing.T) {
 }
 
 func TestExecuteDeleteSystemTables(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: convert to enginetest
+	}
 	for _, test := range systemTableDeleteTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testDeleteQuery(t, test)
@@ -232,9 +234,7 @@ func testDeleteQuery(t *testing.T, test DeleteTest) {
 		t.Skip("Skipping tests until " + singleDeleteQueryTest)
 	}
 
-	dEnv := dtestutils.CreateTestEnv()
-	CreateTestDatabase(dEnv, t)
-
+	dEnv := CreateTestDatabase(t)
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}

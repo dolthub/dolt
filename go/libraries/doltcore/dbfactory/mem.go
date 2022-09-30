@@ -37,7 +37,7 @@ func (fact MemFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, 
 func (fact MemFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	var db datas.Database
 	storage := &chunks.MemoryStorage{}
-	cs := storage.NewViewWithDefaultFormat()
+	cs := storage.NewViewWithFormat(nbf.VersionString())
 	vrw := types.NewValueStore(cs)
 	ns := tree.NewNodeStore(cs)
 	db = datas.NewTypesDatabase(vrw, ns)

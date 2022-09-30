@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -176,10 +177,10 @@ func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) dsess.InitialD
 }
 
 // ExecuteSelect executes the select statement given and returns the resulting rows, or an error if one is encountered.
-func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *doltdb.RootValue, query string) ([]sql.Row, error) {
+func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) ([]sql.Row, error) {
 
 	dbData := env.DbData{
-		Ddb: ddb,
+		Ddb: dEnv.DoltDB,
 		Rsw: dEnv.RepoStateWriter(),
 		Rsr: dEnv.RepoStateReader(),
 	}
@@ -279,15 +280,6 @@ func CompressSchemas(schs ...schema.Schema) schema.Schema {
 	return schema.UnkeyedSchemaFromCols(colCol)
 }
 
-// Compresses each of the rows given ala compressRow
-func CompressRows(sch schema.Schema, rs ...row.Row) []row.Row {
-	compressed := make([]row.Row, len(rs))
-	for i := range rs {
-		compressed[i] = CompressRow(sch, rs[i])
-	}
-	return compressed
-}
-
 // Rewrites the tag numbers for the row given to begin at zero and be contiguous, just like result set schemas. We don't
 // want to just use the field mappings in the result set schema used by sqlselect, since that would only demonstrate
 // that the code was consistent with itself, not actually correct.
@@ -359,4 +351,78 @@ func drainIter(ctx *sql.Context, iter sql.RowIter) error {
 		}
 	}
 	return iter.Close(ctx)
+}
+
+func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
+	const seedData = `
+	CREATE TABLE people (
+	    id varchar(36) primary key,
+	    name varchar(40) not null,
+	    age int unsigned,
+	    is_married int,
+	    title varchar(40),
+	    INDEX idx_name (name)
+	);
+	INSERT INTO people VALUES
+		('00000000-0000-0000-0000-000000000000', 'Bill Billerson', 32, 1, 'Senior Dufus'),
+		('00000000-0000-0000-0000-000000000001', 'John Johnson', 25, 0, 'Dufus'),
+		('00000000-0000-0000-0000-000000000002', 'Rob Robertson', 21, 0, '');`
+
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnv()
+	root, err := dEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
+	root, err = ExecuteSql(t, dEnv, root, seedData)
+	require.NoError(t, err)
+	err = dEnv.UpdateWorkingRoot(ctx, root)
+	require.NoError(t, err)
+	return dEnv
+}
+
+// CreateEmptyTestDatabase creates a test database without any data in it.
+func CreateEmptyTestDatabase(t *testing.T) *env.DoltEnv {
+	dEnv := dtestutils.CreateTestEnv()
+	dtestutils.CreateEmptyTestTable(t, dEnv, PeopleTableName, PeopleTestSchema)
+	dtestutils.CreateEmptyTestTable(t, dEnv, EpisodesTableName, EpisodesTestSchema)
+	dtestutils.CreateEmptyTestTable(t, dEnv, AppearancesTableName, AppearancesTestSchema)
+	return dEnv
+}
+
+// CreateTestDatabase creates a test database with the test data set in it.
+func CreateTestDatabase(t *testing.T) *env.DoltEnv {
+	ctx := context.Background()
+	dEnv := CreateEmptyTestDatabase(t)
+
+	const simpsonsRowData = `
+	INSERT INTO people VALUES
+		(0, "Homer", "Simpson", 1, 40, 8.5, NULL, NULL),
+		(1, "Marge", "Simpson", 1, 38, 8, "00000000-0000-0000-0000-000000000001", 111),
+		(2, "Bart", "Simpson", 0, 10, 9, "00000000-0000-0000-0000-000000000002", 222),
+		(3, "Lisa", "Simpson", 0, 8, 10, "00000000-0000-0000-0000-000000000003", 333),
+		(4, "Moe", "Szyslak", 0, 48, 6.5, "00000000-0000-0000-0000-000000000004", 444),
+		(5, "Barney", "Gumble", 0, 40, 4, "00000000-0000-0000-0000-000000000005", 555);
+	INSERT INTO episodes VALUES 
+		(1, "Simpsons Roasting On an Open Fire", "1989-12-18 03:00:00", 8.0),
+		(2, "Bart the Genius", "1990-01-15 03:00:00", 9.0),
+		(3, "Homer's Odyssey", "1990-01-22 03:00:00", 7.0),
+		(4, "There's No Disgrace Like Home", "1990-01-29 03:00:00", 8.5);
+	INSERT INTO appearances VALUES 
+		(0, 1, "Homer is great in this one"),
+		(1, 1, "Marge is here too"),
+		(0, 2, "Homer is great in this one too"),
+		(2, 2, "This episode is named after Bart"),
+		(3, 2, "Lisa is here too"),
+		(4, 2, "I think there's a prank call scene"),
+		(0, 3, "Homer is in every episode"),
+		(1, 3, "Marge shows up a lot too"),
+		(3, 3, "Lisa is the best Simpson"),
+		(5, 3, "I'm making this all up");`
+
+	root, err := dEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
+	root, err = ExecuteSql(t, dEnv, root, simpsonsRowData)
+	require.NoError(t, err)
+	err = dEnv.UpdateWorkingRoot(ctx, root)
+	require.NoError(t, err)
+	return dEnv
 }

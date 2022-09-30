@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -25,11 +26,8 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 //var UUIDS = []uuid.UUID{
@@ -46,7 +44,7 @@ var tableName = "people"
 // Smoke test: Console opens and exits
 func TestSqlConsole(t *testing.T) {
 	t.Run("SQL console opens and exits", func(t *testing.T) {
-		dEnv := dtestutils.CreateEnvWithSeedData(t)
+		dEnv := sqle.CreateEnvWithSeedData(t)
 		args := []string{}
 		commandStr := "dolt sql"
 
@@ -71,7 +69,7 @@ func TestSqlBatchMode(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			dEnv := dtestutils.CreateEnvWithSeedData(t)
+			dEnv := sqle.CreateEnvWithSeedData(t)
 
 			args := []string{"-b", "-q", test.query}
 
@@ -108,7 +106,7 @@ func TestSqlSelect(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			dEnv := dtestutils.CreateEnvWithSeedData(t)
+			dEnv := sqle.CreateEnvWithSeedData(t)
 
 			args := []string{"-q", test.query}
 
@@ -132,7 +130,7 @@ func TestSqlShow(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			dEnv := dtestutils.CreateEnvWithSeedData(t)
+			dEnv := sqle.CreateEnvWithSeedData(t)
 
 			args := []string{"-q", test.query}
 
@@ -203,7 +201,7 @@ func TestShowTables(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			dEnv := dtestutils.CreateEnvWithSeedData(t)
+			dEnv := sqle.CreateEnvWithSeedData(t)
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
@@ -232,7 +230,7 @@ func TestAlterTable(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			dEnv := dtestutils.CreateEnvWithSeedData(t)
+			dEnv := sqle.CreateEnvWithSeedData(t)
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
@@ -257,7 +255,7 @@ func TestDropTable(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			dEnv := dtestutils.CreateEnvWithSeedData(t)
+			dEnv := sqle.CreateEnvWithSeedData(t)
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
@@ -352,7 +350,7 @@ func TestInsert(t *testing.T) {
 		},
 		{
 			name: "missing required column",
-			query: `insert into people (id, name, age) values
+			query: `insert into people (id, title, age) values
 				('00000000-0000-0000-0000-000000000005', 'Frank Frankerson', 10)`,
 			expectedRes: 1,
 		},
@@ -373,7 +371,7 @@ func TestInsert(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			dEnv := dtestutils.CreateEnvWithSeedData(t)
+			dEnv := sqle.CreateEnvWithSeedData(t)
 
 			args := []string{"-q", test.query}
 
@@ -387,15 +385,10 @@ func TestInsert(t *testing.T) {
 
 				// Assert that all expected IDs exist after the insert
 				for _, expectedid := range test.expectedIds {
-					tbl, _, err := root.GetTable(ctx, tableName)
+					q := fmt.Sprintf("SELECT * FROM %s WHERE id = '%s'", tableName, expectedid.String())
+					rows, err := sqle.ExecuteSelect(t, dEnv, root, q)
 					assert.NoError(t, err)
-					taggedVals := row.TaggedValues{dtestutils.IdTag: types.String(expectedid.String())}
-					key := taggedVals.NomsTupleForPKCols(types.Format_Default, dtestutils.TypedSchema.GetPKCols())
-					kv, err := key.Value(ctx)
-					assert.NoError(t, err)
-					_, ok, err := table.GetRow(ctx, tbl, dtestutils.TypedSchema, kv.(types.Tuple))
-					assert.NoError(t, err)
-					assert.True(t, ok, "expected id not found")
+					assert.True(t, len(rows) > 0)
 				}
 			}
 		})
@@ -457,7 +450,7 @@ func TestUpdate(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			ctx := context.Background()
-			dEnv := dtestutils.CreateEnvWithSeedData(t)
+			dEnv := sqle.CreateEnvWithSeedData(t)
 
 			args := []string{"-q", test.query}
 
@@ -471,17 +464,11 @@ func TestUpdate(t *testing.T) {
 
 				// Assert that all rows have been updated
 				for i, expectedid := range test.expectedIds {
-					tbl, _, err := root.GetTable(ctx, tableName)
+					q := fmt.Sprintf("SELECT * FROM %s WHERE id = '%s'", tableName, expectedid.String())
+					rows, err := sqle.ExecuteSelect(t, dEnv, root, q)
 					assert.NoError(t, err)
-					taggedVals := row.TaggedValues{dtestutils.IdTag: types.String(expectedid.String())}
-					key := taggedVals.NomsTupleForPKCols(types.Format_Default, dtestutils.TypedSchema.GetPKCols())
-					kv, err := key.Value(ctx)
-					assert.NoError(t, err)
-					row, ok, err := table.GetRow(ctx, tbl, dtestutils.TypedSchema, kv.(types.Tuple))
-					assert.NoError(t, err)
-					assert.True(t, ok, "expected id not found")
-					ageVal, _ := row.GetColVal(dtestutils.AgeTag)
-					assert.Equal(t, test.expectedAges[i], uint(ageVal.(types.Uint)))
+					assert.True(t, len(rows) > 0)
+					assert.Equal(t, uint32(test.expectedAges[i]), rows[0][2])
 				}
 			}
 		})
@@ -535,7 +522,7 @@ func TestDelete(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			dEnv := dtestutils.CreateEnvWithSeedData(t)
+			dEnv := sqle.CreateEnvWithSeedData(t)
 			ctx := context.Background()
 
 			args := []string{"-q", test.query}
@@ -550,15 +537,10 @@ func TestDelete(t *testing.T) {
 
 				// Assert that all rows have been deleted
 				for _, expectedid := range test.deletedIds {
-					tbl, _, err := root.GetTable(ctx, tableName)
+					q := fmt.Sprintf("SELECT * FROM %s WHERE id = '%s'", tableName, expectedid.String())
+					rows, err := sqle.ExecuteSelect(t, dEnv, root, q)
 					assert.NoError(t, err)
-					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
-					key := taggedVals.NomsTupleForPKCols(types.Format_Default, dtestutils.TypedSchema.GetPKCols())
-					kv, err := key.Value(ctx)
-					assert.NoError(t, err)
-					_, ok, err := table.GetRow(ctx, tbl, dtestutils.TypedSchema, kv.(types.Tuple))
-					assert.NoError(t, err)
-					assert.False(t, ok, "row not deleted")
+					assert.True(t, len(rows) == 0)
 				}
 			}
 		})
@@ -566,7 +548,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestCommitHooksNoErrors(t *testing.T) {
-	dEnv := dtestutils.CreateEnvWithSeedData(t)
+	dEnv := sqle.CreateEnvWithSeedData(t)
 	sqle.AddDoltSystemVariables()
 	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
 	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemote, "unknown")
