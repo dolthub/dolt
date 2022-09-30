@@ -278,17 +278,6 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 			return err
 		}
 
-		addr = hash.New(msg.ViolationsBytes())
-		if !addr.IsEmpty() {
-			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
-			if err != nil {
-				return err
-			}
-			if err = cb(r); err != nil {
-				return err
-			}
-		}
-
 		confs := msg.Conflicts(nil)
 		addr = hash.New(confs.DataBytes())
 		if !addr.IsEmpty() {
@@ -324,6 +313,28 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 		}
 
 		addr = hash.New(confs.AncestorSchemaBytes())
+		if !addr.IsEmpty() {
+			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
+			if err = cb(r); err != nil {
+				return err
+			}
+		}
+
+		addr = hash.New(msg.ViolationsBytes())
+		if !addr.IsEmpty() {
+			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
+			if err = cb(r); err != nil {
+				return err
+			}
+		}
+
+		addr = hash.New(msg.ArtifactsBytes())
 		if !addr.IsEmpty() {
 			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 			if err != nil {

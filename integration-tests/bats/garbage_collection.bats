@@ -148,23 +148,71 @@ SQL
 }
 
 setup_merge() {
-    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY, c0 int);"
-    dolt sql -q "CREATE TABLE quiz (pk int PRIMARY KEY, c0 int);"
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY, c0 TEXT);"
+    dolt sql -q "CREATE TABLE quiz (pk int PRIMARY KEY, c0 TEXT);"
     dolt add . && dolt commit -m "created tables test & quiz"
     dolt branch other
 
-    dolt sql -q "INSERT INTO test VALUES (0,10),(1,11),(2,12);"
+    dolt sql -q "INSERT INTO test VALUES (0,'10'),(1,'11'),(2,'12');"
     dolt commit -am "added rows on main"
 
     dolt checkout other
-    dolt sql -q "INSERT INTO test VALUES (0,20),(1,21),(2,22);"
+    dolt sql -q "INSERT INTO test VALUES (0,'20'),(1,'21'),(2,'22');"
     dolt commit -am "added rows on other"
 
     dolt checkout main
 }
 
+setup_merge_with_cv() {
+     dolt sql -q "CREATE TABLE parent (pk int PRIMARY KEY);"
+     dolt sql -q "CREATE TABLE child (pk int PRIMARY KEY, fk int, FOREIGN KEY (fk) REFERENCES parent (pk));"
+     dolt sql -q "INSERT into parent VALUES (1);"
+     dolt commit -Am "create tables and add parent"
+
+     dolt checkout -b other
+     dolt sql -q "insert into child values (1, 1);"
+     dolt commit -am "add child"
+
+     dolt checkout main
+     dolt sql -q "delete from parent where pk = 1;"
+     dolt commit -am "remove parent"
+}
+
+@test "garbage_collection: leave conflicts" {
+    setup_merge
+    dolt merge other -m "merge"
+
+    run dolt sql -q "select base_pk, base_c0, our_pk, our_c0, their_pk, their_c0 from dolt_conflicts_test;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| NULL    | NULL    | 0      | 10     | 0        | 20" ]]
+    [[ "$output" =~ "| NULL    | NULL    | 1      | 11     | 1        | 21" ]]
+    [[ "$output" =~ "| NULL    | NULL    | 2      | 12     | 2        | 22" ]]
+
+    dolt gc
+
+    run dolt sql -q "select base_pk, base_c0, our_pk, our_c0, their_pk, their_c0 from dolt_conflicts_test;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| NULL    | NULL    | 0      | 10     | 0        | 20" ]]
+    [[ "$output" =~ "| NULL    | NULL    | 1      | 11     | 1        | 21" ]]
+    [[ "$output" =~ "| NULL    | NULL    | 2      | 12     | 2        | 22" ]]
+}
+
+@test "garbage_collection: leave constraint violations" {
+    setup_merge_with_cv
+    dolt merge other -m "merge"
+
+    run dolt sql -q "select pk, fk from dolt_constraint_violations_child;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| 1  | 1" ]]
+
+    dolt gc
+
+    run dolt sql -q "select pk, fk from dolt_constraint_violations_child;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| 1  | 1" ]]
+}
+
 @test "garbage_collection: leave merge commit" {
-    skip_nbf_dolt
     setup_merge
     dolt merge other -m "merge"
 
@@ -182,7 +230,6 @@ setup_merge() {
 }
 
 @test "garbage_collection: leave merge commit with stored procedure" {
-    skip_nbf_dolt
     setup_merge
     dolt merge other -m "merge"
 
