@@ -54,34 +54,59 @@ func TestSchemaTableRecreationOlder(t *testing.T) {
 		{Name: doltdb.SchemasTablesFragmentCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
 	}), sql.Collation_Default)
 	require.NoError(t, err)
-	root, err := db.GetRoot(ctx)
+	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	require.NoError(t, err)
-	err = dEnv.UpdateWorkingRoot(ctx, root)
+	require.True(t, found)
+	inserter := sqlTbl.(*WritableDoltTable).Inserter(ctx)
+	err = inserter.Insert(ctx, sql.Row{"view", "view1", "SELECT v1 FROM test;"})
+	require.NoError(t, err)
+	err = inserter.Insert(ctx, sql.Row{"view", "view2", "SELECT v2 FROM test;"})
+	require.NoError(t, err)
+	err = inserter.Close(ctx)
 	require.NoError(t, err)
 
-	expected := []sql.Row{
+	table, err := sqlTbl.(*WritableDoltTable).DoltTable.DoltTable(ctx)
+	require.NoError(t, err)
+
+	rowData, err := table.GetNomsRowData(ctx)
+	require.NoError(t, err)
+	expectedVals := []sql.Row{
 		{"view", "view1", "SELECT v1 FROM test;"},
 		{"view", "view2", "SELECT v2 FROM test;"},
 	}
-	actual, err := ExecuteSelect(t, dEnv, root, "SELECT * FROM "+doltdb.SchemasTableName)
-	require.NoError(t, err)
-	assert.Equal(t, expected, actual)
+	index := 0
+	_ = rowData.IterAll(ctx, func(keyTpl, valTpl types.Value) error {
+		dRow, err := row.FromNoms(sqlTbl.(*WritableDoltTable).sch, keyTpl.(types.Tuple), valTpl.(types.Tuple))
+		require.NoError(t, err)
+		sqlRow, err := sqlutil.DoltRowToSqlRow(dRow, sqlTbl.(*WritableDoltTable).sch)
+		require.NoError(t, err)
+		assert.Equal(t, expectedVals[index], sqlRow)
+		index++
+		return nil
+	})
 
-	// removes the old table and recreates it with the new schema
-	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
+	tbl, err := GetOrCreateDoltSchemasTable(ctx, db) // removes the old table and recreates it with the new schema
 	require.NoError(t, err)
 
-	root, err = db.GetRoot(ctx)
-	require.NoError(t, err)
-	err = dEnv.UpdateWorkingRoot(ctx, root)
+	table, err = tbl.DoltTable.DoltTable(ctx)
 	require.NoError(t, err)
 
-	expected = []sql.Row{
+	rowData, err = table.GetNomsRowData(ctx)
+	require.NoError(t, err)
+	expectedVals = []sql.Row{
 		{"view", "view1", "SELECT v1 FROM test;", int64(1), nil},
 		{"view", "view2", "SELECT v2 FROM test;", int64(2), nil},
 	}
-	actual, err = ExecuteSelect(t, dEnv, root, "SELECT * FROM "+doltdb.SchemasTableName)
-	require.NoError(t, err)
+	index = 0
+	_ = rowData.IterAll(ctx, func(keyTpl, valTpl types.Value) error {
+		dRow, err := row.FromNoms(tbl.sch, keyTpl.(types.Tuple), valTpl.(types.Tuple))
+		require.NoError(t, err)
+		sqlRow, err := sqlutil.DoltRowToSqlRow(dRow, tbl.sch)
+		require.NoError(t, err)
+		assert.Equal(t, expectedVals[index], sqlRow)
+		index++
+		return nil
+	})
 
 	indexes := tbl.sch.Indexes().AllIndexes()
 	require.Len(t, indexes, 1)
