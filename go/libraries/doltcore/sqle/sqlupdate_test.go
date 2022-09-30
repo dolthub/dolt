@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // Set to the name of a single test to run just that test, useful for debugging
@@ -350,9 +349,6 @@ func TestExecuteUpdate(t *testing.T) {
 }
 
 func TestExecuteUpdateSystemTables(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // todo: convert to enginetest
-	}
 	for _, test := range systemTableUpdateTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testUpdateQuery(t, test)
@@ -363,11 +359,8 @@ func TestExecuteUpdateSystemTables(t *testing.T) {
 var systemTableUpdateTests = []UpdateTest{
 	{
 		Name: "update dolt_docs",
-		AdditionalSetup: CreateTableFn("dolt_docs",
-			doltdb.DocsSchema,
-			NewRowWithSchema(doltdb.DocsSchema,
-				types.String("LICENSE.md"), types.String("A license"),
-			)),
+		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema,
+			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')"),
 		UpdateQuery:    "update dolt_docs set doc_text = 'Some text';",
 		SelectQuery:    "select * from dolt_docs",
 		ExpectedRows:   []sql.Row{{"LICENSE.md", "Some text"}},
@@ -375,37 +368,20 @@ var systemTableUpdateTests = []UpdateTest{
 	},
 	{
 		Name: "update dolt_query_catalog",
-		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
-			dtables.DoltQueryCatalogSchema,
-			NewRowWithSchema(dtables.DoltQueryCatalogSchema,
-				types.String("abc123"),
-				types.Uint(1),
-				types.String("example"),
-				types.String("select 2+2 from dual"),
-				types.String("description"),
-			)),
-		UpdateQuery: "update dolt_query_catalog set display_order = display_order + 1",
-		SelectQuery: "select * from dolt_query_catalog",
-		ExpectedRows: ToSqlRows(CompressSchema(dtables.DoltQueryCatalogSchema),
-			NewRow(types.String("abc123"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
+		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
+			"INSERT INTO dolt_query_catalog VALUES ('abc123', 1, 'example', 'select 2+2 from dual', 'description')"),
+		UpdateQuery:    "update dolt_query_catalog set display_order = display_order + 1",
+		SelectQuery:    "select * from dolt_query_catalog",
+		ExpectedRows:   []sql.Row{{"abc123", uint64(2), "example", "select 2+2 from dual", "description"}},
 		ExpectedSchema: CompressSchema(dtables.DoltQueryCatalogSchema),
 	},
 	{
 		Name: "update dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			SchemasTableSchema(),
-			NewRowWithSchema(SchemasTableSchema(),
-				types.String("view"),
-				types.String("name"),
-				types.String("select 2+2 from dual"),
-				types.Int(1),
-				CreateTestJSON(),
-			)),
-		UpdateQuery: "update dolt_schemas set type = 'not a view'",
-		SelectQuery: "select * from dolt_schemas",
-		ExpectedRows: ToSqlRows(CompressSchema(SchemasTableSchema()),
-			NewRow(types.String("not a view"), types.String("name"), types.String("select 2+2 from dual"), types.Int(1), CreateTestJSON()),
-		),
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemasTableSchema(),
+			`INSERT INTO dolt_schemas VALUES ('view', 'name', 'select 2+2 from dual', 1, '{"CreatedAt": 1}')`),
+		UpdateQuery:    "update dolt_schemas set type = 'not a view'",
+		SelectQuery:    "select * from dolt_schemas",
+		ExpectedRows:   []sql.Row{{"not a view", "name", "select 2+2 from dual", int64(1), sql.MustJSON(`{"CreatedAt": 1}`)}},
 		ExpectedSchema: CompressSchema(SchemasTableSchema()),
 	},
 }

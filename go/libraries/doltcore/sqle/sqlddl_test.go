@@ -782,9 +782,6 @@ func TestRenameTableStatements(t *testing.T) {
 }
 
 func TestAlterSystemTables(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip("") // todo: convert to enginetests
-	}
 	systemTableNames := []string{"dolt_log", "dolt_history_people", "dolt_diff_people", "dolt_commit_diff_people"} // "dolt_docs",
 	reservedTableNames := []string{"dolt_schemas", "dolt_query_catalog"}
 
@@ -794,15 +791,12 @@ func TestAlterSystemTables(t *testing.T) {
 		dtestutils.CreateEmptyTestTable(t, dEnv, "dolt_docs", doltdb.DocsSchema)
 		dtestutils.CreateEmptyTestTable(t, dEnv, doltdb.SchemasTableName, SchemasTableSchema())
 
-		dtestutils.CreateTestTable(t, dEnv, "dolt_docs",
-			doltdb.DocsSchema,
-			NewRow(types.String("LICENSE.md"), types.String("A license")))
-		dtestutils.CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName,
-			dtables.DoltQueryCatalogSchema,
-			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description")))
-		dtestutils.CreateTestTable(t, dEnv, doltdb.SchemasTableName,
-			SchemasTableSchema(),
-			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual")))
+		CreateTestTable(t, dEnv, "dolt_docs", doltdb.DocsSchema,
+			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')")
+		CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
+			"INSERT INTO dolt_query_catalog VALUES ('abc123', 1, 'example', 'select 2+2 from dual', 'description')")
+		CreateTestTable(t, dEnv, doltdb.SchemasTableName, SchemasTableSchema(),
+			"INSERT INTO dolt_schemas (type, name, fragment, id) VALUES ('view', 'name', 'select 2+2 from dual', 1)")
 	}
 
 	t.Run("Create", func(t *testing.T) {
