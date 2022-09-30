@@ -48,7 +48,7 @@ type commithook struct {
 	nextHeadIncomingTime time.Time
 	lastSuccess          time.Time
 	currentError         *string
-	cancelReplicate    func()
+	cancelReplicate      func()
 
 	role Role
 
@@ -290,7 +290,7 @@ func (h *commithook) tick(ctx context.Context) {
 func (h *commithook) recordSuccessfulRemoteSrvCommit() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.role == RolePrimary {
+	if h.role != RoleStandby {
 		return
 	}
 	h.lastSuccess = time.Now()
@@ -313,8 +313,13 @@ func (h *commithook) setRole(role Role) {
 		h.cancelReplicate()
 		h.cancelReplicate = nil
 	}
+	if role == RoleDetectedBrokenConfig {
+		h.currentError = &errDetectedBrokenConfigStr
+	}
 	h.cond.Signal()
 }
+
+var errDetectedBrokenConfigStr = "error: more than one server was configured as primary in the same epoch. this server has stopped accepting writes. choose a primary in the cluster and call dolt_assume_cluster_role() on servers in the cluster to start replication at a higher epoch"
 
 // Execute on this commithook updates the target root hash we're attempting to
 // replicate and wakes the replication thread.
