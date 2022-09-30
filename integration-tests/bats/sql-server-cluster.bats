@@ -131,8 +131,8 @@ cluster:
     # same role, new epoch
     server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "call dolt_assume_cluster_role('standby', '12'); select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch;" "status\n0;@@GLOBAL.dolt_cluster_role,@@GLOBAL.dolt_cluster_role_epoch\nstandby,12"
     # new role, new epoch
-    run server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "call dolt_assume_cluster_role('primary', '13');" "" 1
-    # we assert on a new connection, since the server may have killed the old one on the transition.
+    server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "call dolt_assume_cluster_role('primary', '13');" "status\n0"
+    # we assert on a new connection, since the server leaves the previous connection in an permanent error state.
     server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch;" "@@GLOBAL.dolt_cluster_role,@@GLOBAL.dolt_cluster_role_epoch\nprimary,13"
 
     # Server comes back up with latest assumed role.
@@ -412,7 +412,7 @@ cluster:
 
     run server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "insert into vals values (6),(7),(8),(9),(10)" "" 1
     [[ "$output" =~ "Database repo1 is read-only" ]] || false
-    run server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "call dolt_assume_cluster_role('primary', 11)" "" 1
+    server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "call dolt_assume_cluster_role('primary', 11)" "status\n0"
     server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "select count(*) from vals" "count(*)\n5"
     server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "insert into vals values (6),(7),(8),(9),(10)" "" 0
     server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "select count(*) from vals" "count(*)\n10"
@@ -744,4 +744,73 @@ cluster:
 
     kill $serverone_pid
     wait $serverone_pid
+}
+
+@test "sql-server-cluster: primary -> standby without the standby up fails" {
+    cd serverone
+
+    echo "
+log_level: trace
+user:
+  name: dolt
+listener:
+  host: 0.0.0.0
+  port: ${SERVERONE_MYSQL_PORT}
+behavior:
+  read_only: false
+  autocommit: true
+cluster:
+  standby_remotes:
+  - name: standby
+    remote_url_template: http://localhost:${SERVERTWO_GRPC_PORT}/{database}
+  bootstrap_role: primary
+  bootstrap_epoch: 10
+  remotesapi:
+    port: ${SERVERONE_GRPC_PORT}" > server.yaml
+
+    (cd repo1 && dolt remote add standby http://localhost:"${SERVERTWO_GRPC_PORT}"/repo1)
+    (cd repo2 && dolt remote add standby http://localhost:"${SERVERTWO_GRPC_PORT}"/repo2)
+    dolt sql-server --config server.yaml &
+    SERVER_PID=$!
+    wait_for_connection "${SERVERONE_MYSQL_PORT}" 5000
+
+    # when we do this, we become read only for a little bit...
+    run server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "call dolt_assume_cluster_role('standby', '11');" "" 1
+    [[ "$output" =~ "failed to transition from primary to standby gracefully" ]] || false
+
+    # after that fails, we should still be primary and we should accept writes.
+    server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "create table vals (i int primary key);insert into vals values (0);select i from vals" ";;i\n0"
+}
+
+@test "sql-server-cluster: standby -> primary leave connection used to transition in an error state" {
+    cd serverone
+
+    echo "
+log_level: trace
+user:
+  name: dolt
+listener:
+  host: 0.0.0.0
+  port: ${SERVERONE_MYSQL_PORT}
+behavior:
+  read_only: false
+  autocommit: true
+cluster:
+  standby_remotes:
+  - name: standby
+    remote_url_template: http://localhost:${SERVERTWO_GRPC_PORT}/{database}
+  bootstrap_role: standby
+  bootstrap_epoch: 10
+  remotesapi:
+    port: ${SERVERONE_GRPC_PORT}" > server.yaml
+
+    (cd repo1 && dolt remote add standby http://localhost:"${SERVERTWO_GRPC_PORT}"/repo1)
+    (cd repo2 && dolt remote add standby http://localhost:"${SERVERTWO_GRPC_PORT}"/repo2)
+    dolt sql-server --config server.yaml &
+    SERVER_PID=$!
+    wait_for_connection "${SERVERONE_MYSQL_PORT}" 5000
+
+    # when we do this, we become read only for a little bit...
+    run server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "call dolt_assume_cluster_role('primary', '11');select 2 from dual" "" 1
+    [[ "$output" =~ "this connection can no longer be used" ]] || false
 }

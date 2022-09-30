@@ -49,7 +49,7 @@ type clientinterceptor struct {
 	role       Role
 	epoch      int
 	mu         sync.Mutex
-	roleSetter func(role string, epoch int, graceful bool) error
+	roleSetter func(role string, epoch int)
 }
 
 func (ci *clientinterceptor) setRole(role Role, epoch int) {
@@ -109,15 +109,15 @@ func (ci *clientinterceptor) handleResponseHeaders(header metadata.MD, role Role
 			if roles[0] == string(RolePrimary) {
 				if respepoch == epoch {
 					ci.lgr.Errorf("cluster: clientinterceptor: this server and the server replicating to it are both primary at the same epoch. force transitioning to detected_broken_config.")
-					ci.roleSetter(string(RoleDetectedBrokenConfig), respepoch, false)
+					ci.roleSetter(string(RoleDetectedBrokenConfig), respepoch)
 				} else if respepoch > epoch {
 					// The server we replicate to thinks it is the primary at a higher epoch than us...
 					ci.lgr.Warnf("cluster: clientinterceptor: this server is primary at epoch %d. the server replicating to it is primary at epoch %d. force transitioning to standby.", epoch, respepoch)
-					ci.roleSetter(string(RoleStandby), respepoch, false)
+					ci.roleSetter(string(RoleStandby), respepoch)
 				}
 			} else if roles[0] == string(RoleDetectedBrokenConfig) && respepoch >= epoch {
 				ci.lgr.Errorf("cluster: clientinterceptor: this server learned from its standby that the standby is in detected_broken_config. force transitioning to detected_broken_config.")
-				ci.roleSetter(string(RoleDetectedBrokenConfig), respepoch, false)
+				ci.roleSetter(string(RoleDetectedBrokenConfig), respepoch)
 			}
 		}
 	}
@@ -150,7 +150,7 @@ type serverinterceptor struct {
 	role       Role
 	epoch      int
 	mu         sync.Mutex
-	roleSetter func(role string, epoch int, graceful bool) error
+	roleSetter func(role string, epoch int)
 }
 
 func (si *serverinterceptor) Stream() grpc.StreamServerInterceptor {
@@ -207,11 +207,11 @@ func (si *serverinterceptor) handleRequestHeaders(header metadata.MD, role Role,
 				// and our peer will become standby. An
 				// operator will need to get involved.
 				si.lgr.Errorf("cluster: serverinterceptor: this server and its standby replica are both primary at the same epoch. force transitioning to detected_broken_config.")
-				si.roleSetter(string(RoleDetectedBrokenConfig), reqepoch, false)
+				si.roleSetter(string(RoleDetectedBrokenConfig), reqepoch)
 			} else if reqepoch > epoch {
 				// The client replicating to us thinks it is the primary at a higher epoch than us.
 				si.lgr.Warnf("cluster: serverinterceptor: this server is primary at epoch %d. the server replicating to it is primary at epoch %d. force transitioning to standby.", epoch, reqepoch)
-				si.roleSetter(string(RoleStandby), reqepoch, false)
+				si.roleSetter(string(RoleStandby), reqepoch)
 			}
 		}
 	}
