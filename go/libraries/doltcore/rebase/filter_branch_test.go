@@ -227,7 +227,7 @@ func testFilterBranch(t *testing.T, test filterBranchTest) {
 		root, err := dEnv.WorkingRoot(ctx)
 		require.NoError(t, err)
 
-		actRows, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, root, a.query)
+		actRows, err := sqle.ExecuteSelect(t, dEnv, root, a.query)
 		require.NoError(t, err)
 
 		require.Equal(t, a.rows, actRows)

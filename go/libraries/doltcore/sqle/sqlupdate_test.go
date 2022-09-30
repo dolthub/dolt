@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
@@ -351,6 +350,9 @@ func TestExecuteUpdate(t *testing.T) {
 }
 
 func TestExecuteUpdateSystemTables(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: convert to enginetest
+	}
 	for _, test := range systemTableUpdateTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testUpdateQuery(t, test)
@@ -419,9 +421,7 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 		t.Skip("Skipping tests until " + singleUpdateQueryTest)
 	}
 
-	dEnv := dtestutils.CreateTestEnv()
-	CreateTestDatabase(dEnv, t)
-
+	dEnv := CreateTestDatabase(t)
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}

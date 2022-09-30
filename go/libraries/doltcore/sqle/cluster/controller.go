@@ -56,7 +56,7 @@ type Controller struct {
 	provider       dbProvider
 	iterSessions   IterSessions
 	killQuery      func(uint32)
-	killConnection func(uint32)
+	killConnection func(uint32) error
 }
 
 type sqlvars interface {
@@ -145,7 +145,7 @@ func (c *Controller) ManageDatabaseProvider(p dbProvider) {
 	c.provider.SetIsStandby(c.role == RoleStandby)
 }
 
-func (c *Controller) ManageQueryConnections(iterSessions IterSessions, killQuery, killConnection func(uint32)) {
+func (c *Controller) ManageQueryConnections(iterSessions IterSessions, killQuery func(uint32), killConnection func(uint32) error) {
 	if c == nil {
 		return
 	}
