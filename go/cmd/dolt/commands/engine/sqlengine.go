@@ -88,9 +88,22 @@ func NewSqlEngine(
 		return nil, err
 	}
 
+	config.ClusterController.ManageSystemVariables(sql.SystemVariables)
+
+	err = config.ClusterController.ApplyStandbyReplicationConfig(ctx, bThreads, mrEnv, dbs...)
+	if err != nil {
+		return nil, err
+	}
+
 	infoDB := information_schema.NewInformationSchemaDatabase()
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 	locations = append(locations, nil)
+
+	clusterDB := config.ClusterController.ClusterDatabase()
+	if clusterDB != nil {
+		all = append(all, clusterDB)
+		locations = append(locations, nil)
+	}
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
 	pro, err := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations)
@@ -99,10 +112,8 @@ func NewSqlEngine(
 	}
 	pro = pro.WithRemoteDialer(mrEnv.RemoteDialProvider())
 
-	if config.ClusterController != nil {
-		config.ClusterController.ManageSystemVariables(sql.SystemVariables)
-		config.ClusterController.RegisterStoredProcedures(pro)
-	}
+	config.ClusterController.RegisterStoredProcedures(pro)
+	pro.InitDatabaseHook = cluster.NewInitDatabaseHook(config.ClusterController, bThreads, pro.InitDatabaseHook)
 
 	// Load in privileges from file, if it exists
 	persister := mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)

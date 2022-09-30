@@ -15,13 +15,22 @@
 package cluster
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type Role string
@@ -38,6 +47,10 @@ type Controller struct {
 	epoch         int
 	systemVars    sqlvars
 	mu            sync.Mutex
+	commithooks   []*commithook
+	sinterceptor  serverinterceptor
+	cinterceptor  clientinterceptor
+	lgr           *logrus.Logger
 }
 
 type sqlvars interface {
@@ -53,32 +66,116 @@ const (
 	DoltClusterRoleEpochVariable = "dolt_cluster_role_epoch"
 )
 
-func NewController(cfg Config, pCfg config.ReadWriteConfig) (*Controller, error) {
+func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) (*Controller, error) {
 	if cfg == nil {
 		return nil, nil
 	}
 	pCfg = config.NewPrefixConfig(pCfg, PersistentConfigPrefix)
-	role, epoch, err := applyBootstrapClusterConfig(cfg, pCfg)
+	role, epoch, err := applyBootstrapClusterConfig(lgr, cfg, pCfg)
 	if err != nil {
 		return nil, err
 	}
-	return &Controller{
+	ret := &Controller{
 		cfg:           cfg,
 		persistentCfg: pCfg,
 		role:          role,
 		epoch:         epoch,
-	}, nil
+		commithooks:   make([]*commithook, 0),
+		lgr:           lgr,
+	}
+	ret.sinterceptor.lgr = lgr.WithFields(logrus.Fields{})
+	ret.sinterceptor.setRole(role, epoch)
+	ret.cinterceptor.lgr = lgr.WithFields(logrus.Fields{})
+	ret.cinterceptor.setRole(role, epoch)
+	return ret, nil
 }
 
 func (c *Controller) ManageSystemVariables(variables sqlvars) {
+	if c == nil {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.systemVars = variables
 	c.refreshSystemVars()
 }
 
+func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, bt *sql.BackgroundThreads, mrEnv *env.MultiRepoEnv, dbs ...sqle.SqlDatabase) error {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, db := range dbs {
+		denv := mrEnv.GetEnv(db.Name())
+		if denv == nil {
+			continue
+		}
+		c.lgr.Tracef("cluster/controller: applying commit hooks for %s with role %s", db.Name(), string(c.role))
+		hooks, err := c.applyCommitHooks(ctx, db.Name(), bt, denv)
+		if err != nil {
+			return err
+		}
+		c.commithooks = append(c.commithooks, hooks...)
+	}
+	return nil
+}
+
+func (c *Controller) applyCommitHooks(ctx context.Context, name string, bt *sql.BackgroundThreads, denv *env.DoltEnv) ([]*commithook, error) {
+	ttfdir, err := denv.TempTableFilesDir()
+	if err != nil {
+		return nil, err
+	}
+	remotes, err := denv.GetRemotes()
+	if err != nil {
+		return nil, err
+	}
+	dialprovider := c.gRPCDialProvider(denv)
+	var hooks []*commithook
+	for _, r := range c.cfg.StandbyRemotes() {
+		remote, ok := remotes[r.Name()]
+		if !ok {
+			return nil, fmt.Errorf("sqle: cluster: standby replication: destination remote %s does not exist on database %s", r.Name(), name)
+		}
+		commitHook := newCommitHook(c.lgr, r.Name(), name, c.role, func(ctx context.Context) (*doltdb.DoltDB, error) {
+			return remote.GetRemoteDB(ctx, types.Format_Default, dialprovider)
+		}, denv.DoltDB, ttfdir)
+		denv.DoltDB.PrependCommitHook(ctx, commitHook)
+		if err := commitHook.Run(bt); err != nil {
+			return nil, err
+		}
+		hooks = append(hooks, commitHook)
+	}
+	return hooks, nil
+}
+
+func (c *Controller) gRPCDialProvider(denv *env.DoltEnv) dbfactory.GRPCDialProvider {
+	return grpcDialProvider{env.NewGRPCDialProviderFromDoltEnv(denv), &c.cinterceptor}
+}
+
 func (c *Controller) RegisterStoredProcedures(store procedurestore) {
+	if c == nil {
+		return
+	}
 	store.Register(newAssumeRoleProcedure(c))
+}
+
+func (c *Controller) ClusterDatabase() sql.Database {
+	if c == nil {
+		return nil
+	}
+	return clusterdb.NewClusterDatabase(c)
+}
+
+func (c *Controller) RemoteSrvPort() int {
+	if c == nil {
+		return -1
+	}
+	return c.cfg.RemotesAPIConfig().Port()
+}
+
+func (c *Controller) ServerOptions() []grpc.ServerOption {
+	return c.sinterceptor.Options()
 }
 
 func (c *Controller) refreshSystemVars() {
@@ -109,21 +206,28 @@ func (c *Controller) persistVariables() error {
 	return c.persistentCfg.SetStrings(toset)
 }
 
-func applyBootstrapClusterConfig(cfg Config, pCfg config.ReadWriteConfig) (Role, int, error) {
+func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) (Role, int, error) {
 	toset := make(map[string]string)
 	persistentRole := pCfg.GetStringOrDefault(DoltClusterRoleVariable, "")
 	persistentEpoch := pCfg.GetStringOrDefault(DoltClusterRoleEpochVariable, "")
 	if persistentRole == "" {
 		if cfg.BootstrapRole() != "" {
+			lgr.Tracef("cluster/controller: persisted cluster role was empty, apply bootstrap_role %s", cfg.BootstrapRole())
 			persistentRole = cfg.BootstrapRole()
 		} else {
+			lgr.Trace("cluster/controller: persisted cluster role was empty, bootstrap_role was empty: defaulted to primary")
 			persistentRole = "primary"
 		}
 		toset[DoltClusterRoleVariable] = persistentRole
+	} else {
+		lgr.Tracef("cluster/controller: persisted cluster role is %s", persistentRole)
 	}
 	if persistentEpoch == "" {
 		persistentEpoch = strconv.Itoa(cfg.BootstrapEpoch())
+		lgr.Tracef("cluster/controller: persisted cluster role epoch is empty, took boostrap_epoch: %s", persistentEpoch)
 		toset[DoltClusterRoleEpochVariable] = persistentEpoch
+	} else {
+		lgr.Tracef("cluster/controller: persisted cluster role epoch is %s", persistentEpoch)
 	}
 	if persistentRole != string(RolePrimary) && persistentRole != string(RoleStandby) {
 		return "", 0, fmt.Errorf("persisted role %s.%s = %s must be \"primary\" or \"secondary\"", PersistentConfigPrefix, DoltClusterRoleVariable, persistentRole)
@@ -153,18 +257,62 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int) error {
 	if epoch < c.epoch {
 		return fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d", role, epoch, c.epoch)
 	}
-	if role == string(c.role) {
-		c.epoch = epoch
-		c.refreshSystemVars()
-		return c.persistVariables()
-	}
+
 	if role != "primary" && role != "standby" {
 		return fmt.Errorf("error assuming role '%s'; valid roles are 'primary' and 'standby'", role)
 	}
 
-	// TODO: Role is transitioning...lots of stuff to do.
+	changedrole := role != string(c.role)
+
 	c.role = Role(role)
 	c.epoch = epoch
+
+	if changedrole {
+		// TODO: Role is transitioning...lots of stuff to do.
+	}
+
 	c.refreshSystemVars()
+	c.cinterceptor.setRole(c.role, c.epoch)
+	c.sinterceptor.setRole(c.role, c.epoch)
+	for _, h := range c.commithooks {
+		h.setRole(c.role)
+	}
 	return c.persistVariables()
+}
+
+func (c *Controller) roleAndEpoch() (Role, int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.role, c.epoch
+}
+
+func (c *Controller) registerCommitHook(hook *commithook) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.commithooks = append(c.commithooks, hook)
+}
+
+func (c *Controller) GetClusterStatus() []clusterdb.ReplicaStatus {
+	if c == nil {
+		return []clusterdb.ReplicaStatus{}
+	}
+	c.mu.Lock()
+	epoch, role := c.epoch, c.role
+	commithooks := make([]*commithook, len(c.commithooks))
+	copy(commithooks, c.commithooks)
+	c.mu.Unlock()
+	ret := make([]clusterdb.ReplicaStatus, len(commithooks))
+	for i, c := range commithooks {
+		lag, lastUpdate, currentErrorStr := c.status()
+		ret[i] = clusterdb.ReplicaStatus{
+			Database:       c.dbname,
+			Remote:         c.remotename,
+			Role:           string(role),
+			Epoch:          epoch,
+			ReplicationLag: lag,
+			LastUpdate:     lastUpdate,
+			CurrentError:   currentErrorStr,
+		}
+	}
+	return ret
 }

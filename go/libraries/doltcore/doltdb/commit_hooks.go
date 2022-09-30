@@ -90,6 +90,10 @@ func (ph *PushOnWriteHook) HandleError(ctx context.Context, err error) error {
 	return nil
 }
 
+func (*PushOnWriteHook) ExecuteForWorkingSets() bool {
+	return false
+}
+
 // SetLogger implements CommitHook
 func (ph *PushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
 	ph.out = wr
@@ -124,6 +128,10 @@ func NewAsyncPushOnWriteHook(bThreads *sql.BackgroundThreads, destDB *DoltDB, tm
 		return nil, err
 	}
 	return &AsyncPushOnWriteHook{ch: ch}, nil
+}
+
+func (*AsyncPushOnWriteHook) ExecuteForWorkingSets() bool {
+	return false
 }
 
 // Execute implements CommitHook, replicates head updates to the destDb field
@@ -186,6 +194,10 @@ func (lh *LogHook) HandleError(ctx context.Context, err error) error {
 func (lh *LogHook) SetLogger(ctx context.Context, wr io.Writer) error {
 	lh.out = wr
 	return nil
+}
+
+func (*LogHook) ExecuteForWorkingSets() bool {
+	return false
 }
 
 func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ch chan PushArg, destDB *DoltDB, tmpDir string, logger io.Writer) error {

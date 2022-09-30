@@ -30,7 +30,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff/v4"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -80,13 +80,16 @@ const (
 
 var tracer = otel.Tracer("github.com/dolthub/dolt/go/libraries/doltcore/remotestorage")
 
-var uploadRetryParams = backoff.NewExponentialBackOff()
-var downRetryParams = backoff.NewExponentialBackOff()
+func downloadBackOff(ctx context.Context) backoff.BackOff {
+	ret := backoff.NewExponentialBackOff()
+	ret.MaxInterval = 5 * time.Second
+	return backoff.WithContext(backoff.WithMaxRetries(ret, downRetryCount), ctx)
+}
 
-func init() {
-	uploadRetryParams.MaxInterval = 5 * time.Second
-
-	downRetryParams.MaxInterval = 5 * time.Second
+func uploadBackOff(ctx context.Context) backoff.BackOff {
+	ret := backoff.NewExponentialBackOff()
+	ret.MaxInterval = 5 * time.Second
+	return backoff.WithContext(backoff.WithMaxRetries(ret, uploadRetryCount), ctx)
 }
 
 // Only hedge downloads of ranges < 4MB in length for now.
@@ -617,7 +620,7 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (d
 			}
 			return processGrpcErr(err)
 		}
-		return backoff.Retry(op, backoff.WithMaxRetries(csRetryParams, csClientRetries))
+		return backoff.Retry(op, grpcBackOff(ctx))
 	})
 
 	if err := eg.Wait(); err != nil {
@@ -1009,7 +1012,7 @@ func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, table
 		return nil
 	}
 
-	return backoff.Retry(op, backoff.WithMaxRetries(uploadRetryParams, uploadRetryCount))
+	return backoff.Retry(op, uploadBackOff(ctx))
 }
 
 type Sizer interface {
@@ -1213,7 +1216,7 @@ func rangeDownloadWithRetries(ctx context.Context, stats StatsRecorder, fetcher 
 	}
 
 	dstart := time.Now()
-	err := backoff.Retry(op, backoff.WithMaxRetries(downRetryParams, downRetryCount))
+	err := backoff.Retry(op, downloadBackOff(ctx))
 	if err != nil {
 		return nil, err
 	}
