@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/types"
@@ -208,18 +207,6 @@ var BasicReplaceTests = []ReplaceTest{
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
-		Name: "replace partial columns existing pk",
-		AdditionalSetup: CreateTableFn("temppeople",
-			NewSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind, "num", types.IntKind),
-			NewRow(types.Int(2), types.String("Bart"), types.String("Simpson"), types.Int(44))),
-		ReplaceQuery: "replace into temppeople (id, first_name, last_name, num) values (2, 'Bart', 'Simpson', 88)",
-		SelectQuery:  "select id, first_name, last_name, num from temppeople where id = 2 ORDER BY id",
-		ExpectedRows: ToSqlRows(
-			NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind, "num", types.IntKind),
-			NewResultSetRow(types.Int(2), types.String("Bart"), types.String("Simpson"), types.Int(88))),
-		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind, "num", types.IntKind),
-	},
-	{
 		Name: "replace partial columns multiple rows replace existing pk",
 		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, rating) values
 					(0, "Homer", "Simpson", true, 45, 100),
@@ -239,6 +226,18 @@ var BasicReplaceTests = []ReplaceTest{
 					(8, "Milhouse", "Van Houten", false, 8, 3.5),
 					(7, "Maggie", null, false, 1, 5.1)`,
 		ExpectedErr: "Constraint failed for column 'last_name': Not null",
+	},
+	{
+		Name: "replace partial columns existing pk",
+		AdditionalSetup: ExecuteSetupSQL(context.Background(), `
+			CREATE TABLE temppeople (id bigint primary key, first_name varchar(16383), last_name varchar(16383), num bigint);
+			INSERT INTO temppeople VALUES (2, 'Bart', 'Simpson', 44);`),
+		ReplaceQuery: "replace into temppeople (id, first_name, last_name, num) values (2, 'Bart', 'Simpson', 88)",
+		SelectQuery:  "select id, first_name, last_name, num from temppeople where id = 2 ORDER BY id",
+		ExpectedRows: ToSqlRows(
+			NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind, "num", types.IntKind),
+			NewResultSetRow(types.Int(2), types.String("Bart"), types.String("Simpson"), types.Int(88))),
+		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind, "num", types.IntKind),
 	},
 }
 
@@ -286,6 +285,9 @@ var systemTableReplaceTests = []ReplaceTest{
 }
 
 func TestReplaceIntoSystemTables(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: convert to enginetest
+	}
 	for _, test := range systemTableReplaceTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testReplaceQuery(t, test)
@@ -304,8 +306,7 @@ func testReplaceQuery(t *testing.T, test ReplaceTest) {
 		t.Skip("Skipping tests until " + singleReplaceQueryTest)
 	}
 
-	dEnv := dtestutils.CreateTestEnv()
-	CreateEmptyTestDatabase(dEnv, t)
+	dEnv := CreateEmptyTestDatabase(t)
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)

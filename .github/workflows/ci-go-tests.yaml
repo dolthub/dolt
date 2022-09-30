@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-22.04, windows-latest]
-        dolt_fmt: [ "" ]
+        dolt_fmt: [ "__DOLT__", "__LD_1__" ]
         include:
           - os: "ubuntu-22.04"
             dolt_fmt: "__DOLT_DEV__"
@@ -74,7 +74,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-22.04, windows-latest]
-        dolt_fmt: [ "" ]
+        dolt_fmt: [ "__DOLT__", "__LD_1__" ]
         include:
           - os: "ubuntu-22.04"
             dolt_fmt: "__DOLT_DEV__"

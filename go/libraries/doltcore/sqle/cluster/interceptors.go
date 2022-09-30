@@ -138,7 +138,7 @@ func (ci *clientinterceptor) Options() []grpc.DialOption {
 // * adds the server's current role and epoch to the response headers for every
 // request.
 // * fails all incoming requests immediately with codes.FailedPrecondition if the
-// current role == RolePrimary, since nothing should be replicating to us in
+// current role != RoleStandby, since nothing should be replicating to us in
 // that state.
 // * watches incoming request headers for a situation which causes this server
 // to force downgrade from primary to standby. In particular, when an incoming
@@ -170,7 +170,7 @@ func (si *serverinterceptor) Stream() grpc.StreamServerInterceptor {
 		}
 		if role == RoleDetectedBrokenConfig {
 			// As a primary, we do not accept replication requests.
-			return status.Error(codes.FailedPrecondition, "this server is current in detected_broken_config and is not currently accepting replication")
+			return status.Error(codes.FailedPrecondition, "this server is currently in detected_broken_config and is not currently accepting replication")
 		}
 		return handler(srv, ss)
 	}
@@ -190,6 +190,10 @@ func (si *serverinterceptor) Unary() grpc.UnaryServerInterceptor {
 		if role == RolePrimary {
 			// As a primary, we do not accept replication requests.
 			return nil, status.Error(codes.FailedPrecondition, "this server is a primary and is not currently accepting replication")
+		}
+		if role == RoleDetectedBrokenConfig {
+			// As a primary, we do not accept replication requests.
+			return nil, status.Error(codes.FailedPrecondition, "this server is currently in detected_broken_config and is not currently accepting replication")
 		}
 		return handler(ctx, req)
 	}

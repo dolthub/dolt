@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -492,7 +491,7 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 
 	// TODO: params for AWS, others that need them
 	r := env.NewRemote(remoteName, remoteUrl, nil)
-	srcDB, err := getRemoteDb(ctx, r, p.remoteDialer)
+	srcDB, err := r.GetRemoteDB(ctx, types.Format_Default, p.remoteDialer)
 	if err != nil {
 		return err
 	}
@@ -537,18 +536,6 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 	}
 
 	return sess.AddDB(ctx, dbstate)
-}
-
-// TODO: extract a shared library for this functionality
-// TODO: this method only adds error handling. Remove?
-func getRemoteDb(ctx *sql.Context, r env.Remote, dialer dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {
-	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dialer)
-	if err != nil {
-		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
-		return nil, bdr.Build()
-	}
-
-	return ddb, nil
 }
 
 // DropDatabase implements the sql.MutableDatabaseProvider interface

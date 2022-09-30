@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // This tests running queries against a modified subset of the stockmarket data set found here:
@@ -20144,6 +20145,9 @@ func TestCreateTables(t *testing.T) {
 }
 
 func TestInserts(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: convert to enginetests
+	}
 	sqle.SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
@@ -20170,6 +20174,9 @@ func TestInserts(t *testing.T) {
 }
 
 func TestInsertsWithIndexes(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: convert to enginetests
+	}
 	sqle.SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
@@ -20217,12 +20224,12 @@ func TestJoin(t *testing.T) {
 	root, err = sqle.ExecuteSql(t, dEnv, root, insertRows)
 	require.NoError(t, err)
 
-	rows, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, root, `select Type, d.Symbol, Country, TradingDate, Open, High, Low, Close, Volume, OpenInt, Name, Sector, IPOYear
+	rows, err := sqle.ExecuteSelect(t, dEnv, root, `select Type, d.Symbol, Country, TradingDate, Open, High, Low, Close, Volume, OpenInt, Name, Sector, IPOYear
 						from daily_summary d join symbols t on d.Symbol = t.Symbol order by d.Symbol, Country, TradingDate`)
 	require.NoError(t, err)
 	assert.Equal(t, 5210, len(rows))
 
-	expectedJoinRows, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, root, `select * from join_result order by symbol, country, TradingDate`)
+	expectedJoinRows, err := sqle.ExecuteSelect(t, dEnv, root, `select * from join_result order by symbol, country, TradingDate`)
 	require.NoError(t, err)
 	assertResultRowsEqual(t, expectedJoinRows, rows)
 }
@@ -20262,7 +20269,7 @@ func TestExplain(t *testing.T) {
 	root, err = sqle.ExecuteSql(t, dEnv, root, createTables)
 	require.NoError(t, err)
 
-	rows, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, root, "explain select * from daily_summary d join symbols t on d.Symbol = t.Symbol")
+	rows, err := sqle.ExecuteSelect(t, dEnv, root, "explain select * from daily_summary d join symbols t on d.Symbol = t.Symbol")
 	require.NoError(t, err)
 	rowStrings := make([]string, len(rows))
 	for i, row := range rows {
