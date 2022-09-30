@@ -28,8 +28,6 @@ func init() {
 	nbfVerStr := os.Getenv("DOLT_DEFAULT_BIN_FORMAT")
 	if nbfVerStr != "" {
 		FormatDefaultString = nbfVerStr
-	} else {
-		FormatDefaultString = FormatDefaultString
 	}
 }
 
