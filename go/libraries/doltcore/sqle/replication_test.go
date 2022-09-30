@@ -23,13 +23,12 @@ import (
 	"go.uber.org/zap/buffer"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 func TestCommitHooksNoErrors(t *testing.T) {
-	dEnv := dtestutils.CreateEnvWithSeedData(t)
+	dEnv := CreateEnvWithSeedData(t)
 	AddDoltSystemVariables()
 	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
 	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemote, "unknown")

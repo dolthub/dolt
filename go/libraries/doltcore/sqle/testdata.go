@@ -353,20 +353,6 @@ func GetAllRows(root *doltdb.RootValue, tableName string) ([]row.Row, error) {
 	return rows, nil
 }
 
-// Creates a test database with the test data set in it
-func CreateTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
-	dtestutils.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema, AllPeopleRows...)
-	dtestutils.CreateTestTable(t, dEnv, EpisodesTableName, EpisodesTestSchema, AllEpsRows...)
-	dtestutils.CreateTestTable(t, dEnv, AppearancesTableName, AppearancesTestSchema, AllAppsRows...)
-}
-
-// Creates a test database without any data in it
-func CreateEmptyTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
-	dtestutils.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema)
-	dtestutils.CreateTestTable(t, dEnv, EpisodesTableName, EpisodesTestSchema)
-	dtestutils.CreateTestTable(t, dEnv, AppearancesTableName, AppearancesTestSchema)
-}
-
 var idColTag0TypeUUID = schema.NewColumn("id", 0, types.IntKind, true)
 var firstColTag1TypeStr = schema.NewColumn("first_name", 1, types.StringKind, false)
 var lastColTag2TypeStr = schema.NewColumn("last_name", 2, types.StringKind, false)

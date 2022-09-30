@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/types"
@@ -238,9 +237,9 @@ var BasicInsertTests = []InsertTest{
 	},
 	{
 		Name: "insert partial columns existing pk",
-		AdditionalSetup: CreateTableWithRowsFn("temppeople",
-			NewSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
-			[]types.Value{types.Int(2), types.String("Bart"), types.String("Simpson")}),
+		AdditionalSetup: ExecuteSetupSQL(context.Background(), `
+			CREATE TABLE temppeople (id bigint primary key, first_name varchar(16383), last_name varchar(16383));
+			INSERT INTO temppeople VALUES (2, 'Bart', 'Simpson');`),
 		InsertQuery: "insert into temppeople (id, first_name, last_name) values (2, 'Bart', 'Simpson')",
 		ExpectedErr: "duplicate primary key",
 	},
@@ -415,6 +414,9 @@ var systemTableInsertTests = []InsertTest{
 }
 
 func TestInsertIntoSystemTables(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: convert to enginetest
+	}
 	for _, test := range systemTableInsertTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testInsertQuery(t, test)
@@ -437,8 +439,7 @@ func testInsertQuery(t *testing.T, test InsertTest) {
 		t.Skip("Skipping test broken on SQL engine")
 	}
 
-	dEnv := dtestutils.CreateTestEnv()
-	CreateEmptyTestDatabase(dEnv, t)
+	dEnv := CreateEmptyTestDatabase(t)
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)

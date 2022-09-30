@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-var emptyTpl = types.EmptyTuple(types.Format_Default)
+var emptyTpl = types.EmptyTuple(types.Format_LD_1)
 
 func newTestTEAF() *dbEaFactory {
 	dir := os.TempDir()
@@ -37,28 +37,28 @@ func newTestTEAF() *dbEaFactory {
 }
 
 func newTuple(t *testing.T, vals ...types.Value) types.Tuple {
-	tpl, err := types.NewTuple(types.Format_Default, vals...)
+	tpl, err := types.NewTuple(types.Format_LD_1, vals...)
 	require.NoError(t, err)
 
 	return tpl
 }
 
 func teaInsert(t *testing.T, tea TableEditAccumulator, key types.Tuple) {
-	h, err := key.Hash(types.Format_Default)
+	h, err := key.Hash(types.Format_LD_1)
 	require.NoError(t, err)
 
 	tea.Insert(h, key, emptyTpl)
 }
 
 func teaDelete(t *testing.T, tea TableEditAccumulator, key types.Tuple) {
-	h, err := key.Hash(types.Format_Default)
+	h, err := key.Hash(types.Format_LD_1)
 	require.NoError(t, err)
 
 	tea.Delete(h, key)
 }
 
 func requireGet(ctx context.Context, t *testing.T, tea TableEditAccumulator, key types.Tuple, expected bool) {
-	h, err := key.Hash(types.Format_Default)
+	h, err := key.Hash(types.Format_LD_1)
 	require.NoError(t, err)
 	_, has, err := tea.Get(ctx, h, key)
 	require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestIndexEditAccumulatorStableOrder(t *testing.T) {
 	indexFlushThreshold = 1
 
 	ctx := context.Background()
-	nbf := types.Format_Default
+	nbf := types.Format_LD_1
 	teaf := newTestTEAF()
 	m, err := types.NewMap(ctx, teaf.vrw)
 	require.NoError(t, err)
@@ -117,7 +117,7 @@ func TestTableEditAccumulatorStableOrder(t *testing.T) {
 	flushThreshold = 2
 
 	ctx := context.Background()
-	nbf := types.Format_Default
+	nbf := types.Format_LD_1
 	teaf := newTestTEAF()
 	m, err := types.NewMap(ctx, teaf.vrw)
 	require.NoError(t, err)
@@ -151,7 +151,7 @@ func TestTableEditAccumulatorStableOrder(t *testing.T) {
 
 func TestGet(t *testing.T) {
 	ctx := context.Background()
-	nbf := types.Format_Default
+	nbf := types.Format_LD_1
 	teaf := newTestTEAF()
 	m, err := types.NewMap(ctx, teaf.vrw)
 	require.NoError(t, err)
