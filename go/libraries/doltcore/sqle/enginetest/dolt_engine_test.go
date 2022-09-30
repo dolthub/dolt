@@ -258,6 +258,11 @@ func TestQueryPlans(t *testing.T) {
 	enginetest.TestQueryPlans(t, harness, queries.PlanTests)
 }
 
+func TestIntegrationQueryPlans(t *testing.T) {
+	harness := newDoltHarness(t).WithParallelism(1)
+	enginetest.TestIntegrationPlans(t, harness)
+}
+
 func TestDoltDiffQueryPlans(t *testing.T) {
 	harness := newDoltHarness(t).WithParallelism(2) // want Exchange nodes
 	harness.Setup(setup.SimpleSetup...)
