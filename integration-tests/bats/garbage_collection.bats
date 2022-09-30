@@ -182,34 +182,34 @@ setup_merge_with_cv() {
     setup_merge
     dolt merge other -m "merge"
 
-    run dolt sql -q "select base_pk, base_c0, our_pk, our_c0, their_pk, their_c0 from dolt_conflicts_test;"
+    run dolt sql -r csv -q "select base_pk, base_c0, our_pk, our_c0, their_pk, their_c0 from dolt_conflicts_test;"
     [ $status -eq 0 ]
-    [[ "$output" =~ "| NULL    | NULL    | 0      | 10     | 0        | 20" ]]
-    [[ "$output" =~ "| NULL    | NULL    | 1      | 11     | 1        | 21" ]]
-    [[ "$output" =~ "| NULL    | NULL    | 2      | 12     | 2        | 22" ]]
+    [[ "$output" =~ ",,0,10,0,20" ]]
+    [[ "$output" =~ ",,1,11,1,21" ]]
+    [[ "$output" =~ ",,2,12,2,22" ]]
 
     dolt gc
 
-    run dolt sql -q "select base_pk, base_c0, our_pk, our_c0, their_pk, their_c0 from dolt_conflicts_test;"
+    run dolt sql -r csv -q "select base_pk, base_c0, our_pk, our_c0, their_pk, their_c0 from dolt_conflicts_test;"
     [ $status -eq 0 ]
-    [[ "$output" =~ "| NULL    | NULL    | 0      | 10     | 0        | 20" ]]
-    [[ "$output" =~ "| NULL    | NULL    | 1      | 11     | 1        | 21" ]]
-    [[ "$output" =~ "| NULL    | NULL    | 2      | 12     | 2        | 22" ]]
+    [[ "$output" =~ ",,0,10,0,20" ]]
+    [[ "$output" =~ ",,1,11,1,21" ]]
+    [[ "$output" =~ ",,2,12,2,22" ]]
 }
 
 @test "garbage_collection: leave constraint violations" {
     setup_merge_with_cv
     dolt merge other -m "merge"
 
-    run dolt sql -q "select pk, fk from dolt_constraint_violations_child;"
+    run dolt sql -r csv -q "select pk, fk from dolt_constraint_violations_child;"
     [ $status -eq 0 ]
-    [[ "$output" =~ "| 1  | 1" ]]
+    [[ "$output" =~ "1,1" ]]
 
     dolt gc
 
-    run dolt sql -q "select pk, fk from dolt_constraint_violations_child;"
+    run dolt sql -r csv -q "select pk, fk from dolt_constraint_violations_child;"
     [ $status -eq 0 ]
-    [[ "$output" =~ "| 1  | 1" ]]
+    [[ "$output" =~ "1,1" ]]
 }
 
 @test "garbage_collection: leave merge commit" {
