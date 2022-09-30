@@ -372,8 +372,8 @@ func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.Server
 // * Set all databases in database_provider to read-only.
 // * Kill all running queries in GMS.
 // * Replicate all databases to their standby remotes.
-//   * If success, return success.
-//   * If failure, set all databases in database_provider back to their original state. Return failure.
+//   - If success, return success.
+//   - If failure, set all databases in database_provider back to their original state. Return failure.
 func (c *Controller) gracefulTransitionToStandby() error {
 	return nil
 }
