@@ -45,8 +45,7 @@ func (s *server) Watch(req *grpc_health_v1.HealthCheckRequest, ss grpc_health_v1
 	return status.Errorf(codes.Unimplemented, "method Watch not implemented")
 }
 
-func noopSetRole(string, int, bool) error {
-	return nil
+func noopSetRole(string, int) {
 }
 
 var lgr = logrus.StandardLogger().WithFields(logrus.Fields{})
