@@ -38,7 +38,6 @@ type commithook struct {
 	lgr                  atomic.Value // *logrus.Entry
 	remotename           string
 	dbname               string
-	lout                 io.Writer
 	mu                   sync.Mutex
 	wg                   sync.WaitGroup
 	cond                 *sync.Cond
@@ -360,6 +359,11 @@ func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db datas.Dat
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	lgr = h.logger()
+	if h.role != RolePrimary {
+		lgr.Warnf("cluster/commithook received commit callback for a commit on %s, but we are not role primary; not replicating the commit, which is likely to be lost.", ds.ID())
+		return nil
+	}
 	if root != h.nextHead {
 		lgr.Tracef("signaling replication thread to push new head: %v", root.String())
 		h.nextHeadIncomingTime = time.Now()
@@ -375,7 +379,6 @@ func (h *commithook) HandleError(ctx context.Context, err error) error {
 }
 
 func (h *commithook) SetLogger(ctx context.Context, wr io.Writer) error {
-	h.lout = wr
 	return nil
 }
 
