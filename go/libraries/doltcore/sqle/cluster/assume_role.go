@@ -15,6 +15,8 @@
 package cluster
 
 import (
+	"errors"
+
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
@@ -29,6 +31,9 @@ func newAssumeRoleProcedure(controller *Controller) sql.ExternalStoredProcedureD
 			},
 		},
 		Function: func(ctx *sql.Context, role string, epoch int) (sql.RowIter, error) {
+			if role == string(RoleDetectedBrokenConfig) {
+				return nil, errors.New("cannot set role to detected_broken_config; valid values are 'primary' and 'standby'")
+			}
 			err := controller.setRoleAndEpoch(role, epoch, true /* graceful */)
 			if err != nil {
 				return nil, err

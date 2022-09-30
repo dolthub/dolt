@@ -38,6 +38,7 @@ type Role string
 
 const RolePrimary Role = "primary"
 const RoleStandby Role = "standby"
+const RoleDetectedBrokenConfig Role = "detected_broken_config"
 
 const PersistentConfigPrefix = "sqlserver.cluster"
 
@@ -144,7 +145,7 @@ func (c *Controller) ManageDatabaseProvider(p dbProvider) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.provider = p
-	c.setProviderIsStandby(c.role == RoleStandby)
+	c.setProviderIsStandby(c.role != RolePrimary)
 }
 
 func (c *Controller) ManageQueryConnections(iterSessions IterSessions, killQuery, killConnection func(uint32)) {
@@ -246,6 +247,7 @@ func (c *Controller) persistVariables() error {
 func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) (Role, int, error) {
 	toset := make(map[string]string)
 	persistentRole := pCfg.GetStringOrDefault(DoltClusterRoleVariable, "")
+	var roleFromPersistentConfig bool
 	persistentEpoch := pCfg.GetStringOrDefault(DoltClusterRoleEpochVariable, "")
 	if persistentRole == "" {
 		if cfg.BootstrapRole() != "" {
@@ -257,6 +259,7 @@ func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.Rea
 		}
 		toset[DoltClusterRoleVariable] = persistentRole
 	} else {
+		roleFromPersistentConfig = true
 		lgr.Tracef("cluster/controller: persisted cluster role is %s", persistentRole)
 	}
 	if persistentEpoch == "" {
@@ -267,7 +270,10 @@ func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.Rea
 		lgr.Tracef("cluster/controller: persisted cluster role epoch is %s", persistentEpoch)
 	}
 	if persistentRole != string(RolePrimary) && persistentRole != string(RoleStandby) {
-		return "", 0, fmt.Errorf("persisted role %s.%s = %s must be \"primary\" or \"secondary\"", PersistentConfigPrefix, DoltClusterRoleVariable, persistentRole)
+		isallowed := persistentRole == string(RoleDetectedBrokenConfig) && roleFromPersistentConfig
+		if !isallowed {
+			return "", 0, fmt.Errorf("persisted role %s.%s = %s must be \"primary\" or \"secondary\"", PersistentConfigPrefix, DoltClusterRoleVariable, persistentRole)
+		}
 	}
 	epochi, err := strconv.Atoi(persistentEpoch)
 	if err != nil {
@@ -289,7 +295,7 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool) erro
 		return nil
 	}
 
-	if role != "primary" && role != "standby" {
+	if role != string(RolePrimary) && role != string(RoleStandby) && role != string(RoleDetectedBrokenConfig) {
 		return fmt.Errorf("error assuming role '%s'; valid roles are 'primary' and 'standby'", role)
 	}
 
@@ -299,7 +305,7 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool) erro
 	if epoch == c.epoch {
 		// This is allowed for non-graceful transitions to 'standby', which only occur from interceptors and
 		// other signals that the cluster is misconfigured.
-		isallowed := !graceful && role == "standby"
+		isallowed := !graceful && (role == string(RoleStandby) || role == string(RoleDetectedBrokenConfig))
 		if !isallowed {
 			return fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d with different role, '%s'", role, epoch, c.epoch, c.role)
 		}
@@ -318,6 +324,8 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool) erro
 			} else {
 				c.immediateTransitionToStandby()
 			}
+		} else if role == string(RoleDetectedBrokenConfig) {
+			c.immediateTransitionToStandby()
 		} else {
 			c.transitionToPrimary()
 		}
