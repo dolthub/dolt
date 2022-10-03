@@ -26,6 +26,8 @@ tests:
       args: ["-l", "trace"]
       log_matches:
       - "warning: persisted system variable unknown was not loaded since its definition does not exist."
+  connections:
+  - on: repo1
 - name: invalid persisted global variable value throws warning on server startup, but does not crash
   repos:
   - name: repo1
@@ -36,6 +38,8 @@ tests:
     server:
       log_matches:
       - "error: failed to load persisted global variables: key: 'max_connections'; strconv.ParseInt: parsing \"string\": invalid syntax"
+  connections:
+  - on: repo1
 - name: persisted global variable in server
   repos:
   - name: repo1

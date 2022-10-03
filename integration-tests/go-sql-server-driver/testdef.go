@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"database/sql"
-	"database/sql/driver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
@@ -232,7 +231,6 @@ func (test Test) Run(t *testing.T) {
 	require.NoError(t, err)
 
 	servers := make(map[string]*SqlServer)
-	dbs := make(map[string]*sql.DB)
 
 	for _, r := range test.Repos {
 		repo := MakeRepo(t, rs, r)
@@ -241,10 +239,6 @@ func (test Test) Run(t *testing.T) {
 		if server != nil {
 			server.DBName = r.Name
 			servers[r.Name] = server
-
-			db, err := server.DB()
-			require.NoError(t, err)
-			dbs[r.Name] = db
 		}
 	}
 	for _, mr := range test.MultiRepos {
@@ -263,41 +257,27 @@ func (test Test) Run(t *testing.T) {
 		server := MakeServer(t, rs, mr.Server)
 		if server != nil {
 			servers[mr.Name] = server
-
-			db, err := server.DB()
-			require.NoError(t, err)
-			dbs[mr.Name] = db
 		}
 	}
 
-	t.Cleanup(func() {
-		for _, db := range dbs {
-			db.Close()
-		}
-	})
-
 	for i, c := range test.Conns {
-		db := dbs[c.On]
-		require.NotNilf(t, db, "error in test spec: could not find database %s for connection %d", c.On, i)
-		conn, err := db.Conn(context.Background())
-		require.NoError(t, err)
+		server := servers[c.On]
+		require.NotNilf(t, server, "error in test spec: could not find server %s for connection %d", c.On, i)
 		func() {
-			// Do not return this connection to the connection pool.
-			defer conn.Raw(func(any) error {
-				return driver.ErrBadConn
-			})
+			db, err := server.DB()
+			require.NoError(t, err)
+			defer db.Close()
+
+			conn, err := db.Conn(context.Background())
+			require.NoError(t, err)
+			defer conn.Close()
+
 			for _, q := range c.Queries {
 				RunQuery(t, conn, q)
 			}
 		}()
 		if c.RestartServer != nil {
-			s := servers[c.On]
-			require.NotNilf(t, s, "error in test spec: could not find server %s for connection %d", c.On, i)
-			// Close the old map entry.
-			db.Close()
-			err := s.Restart(c.RestartServer.Args)
-			require.NoError(t, err)
-			dbs[c.On], err = s.DB()
+			err := server.Restart(c.RestartServer.Args)
 			require.NoError(t, err)
 		}
 	}
