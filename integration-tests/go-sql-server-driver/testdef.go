@@ -337,7 +337,7 @@ func RetryTestRun(t *testing.T, attempts int, test func(require.TestingT)) {
 	var rtt *retryTestingT
 	for i := 0; i < attempts; i++ {
 		if i != 0 {
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(RetrySleepDuration)
 		}
 		rtt = new(retryTestingT)
 		rtt.T = t

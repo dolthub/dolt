@@ -31,6 +31,12 @@ import (
 
 var DoltPath string
 
+const TestUserName = "Bats Tests"
+const TestEmailAddress = "bats@email.fake"
+
+const ConnectAttempts = 50
+const RetrySleepDuration = 10 * time.Millisecond
+
 func init() {
 	var err error
 	DoltPath, err = exec.LookPath("dolt")
@@ -64,11 +70,11 @@ func NewDoltUser() (DoltUser, error) {
 	if err != nil {
 		return DoltUser{}, err
 	}
-	err = res.DoltExec("config", "--global", "--add", "user.name", "Bats Tests")
+	err = res.DoltExec("config", "--global", "--add", "user.name", TestUserName)
 	if err != nil {
 		return DoltUser{}, err
 	}
-	err = res.DoltExec("config", "--global", "--add", "user.email", "bats@email.fake")
+	err = res.DoltExec("config", "--global", "--add", "user.email", TestEmailAddress)
 	if err != nil {
 		return DoltUser{}, err
 	}
@@ -286,12 +292,12 @@ func (s *SqlServer) DB() (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	for i := 0; i < 50; i++ {
+	for i := 0; i < ConnectAttempts; i++ {
 		err = db.Ping()
 		if err == nil {
 			return db, nil
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(RetrySleepDuration)
 	}
 	if err != nil {
 		return nil, err
