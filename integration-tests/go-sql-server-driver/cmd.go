@@ -126,16 +126,6 @@ func (rs RepoStore) DoltCmd(args ...string) *exec.Cmd {
 	return cmd
 }
 
-func (rs RepoStore) WriteFile(path string, contents string) error {
-	path = filepath.Join(rs.dir, path)
-	d := filepath.Dir(path)
-	err := os.MkdirAll(d, 0750)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(contents), 0550)
-}
-
 type Repo struct {
 	user DoltUser
 	dir  string
@@ -154,16 +144,6 @@ func (r Repo) DoltExec(args ...string) error {
 		return err
 	}
 	return cmd.Wait()
-}
-
-func (r Repo) WriteFile(path string, contents string) error {
-	path = filepath.Join(r.dir, path)
-	d := filepath.Dir(path)
-	err := os.MkdirAll(d, 0750)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(contents), 0550)
 }
 
 func (r Repo) CreateRemote(name, url string) error {

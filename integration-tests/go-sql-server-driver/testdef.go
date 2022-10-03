@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -41,7 +42,7 @@ type Test struct {
 	Conns      []Connection `yaml:"connections"`
 
 	// Skip the entire test with this reason.
-	Skip       string       `yaml:"skip"`
+	Skip string `yaml:"skip"`
 }
 
 // |Connection| represents a single connection to a sql-server instance defined
@@ -173,11 +174,21 @@ func ParseTestsFile(path string) (TestDef, error) {
 	return res, err
 }
 
+func (f WithFile) WriteAtDir(dir string) error {
+	path := filepath.Join(dir, f.Name)
+	d := filepath.Dir(path)
+	err := os.MkdirAll(d, 0750)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(f.Contents), 0550)
+}
+
 func MakeRepo(t *testing.T, rs RepoStore, r TestRepo) Repo {
 	repo, err := rs.MakeRepo(r.Name)
 	require.NoError(t, err)
 	for _, f := range r.WithFiles {
-		require.NoError(t, repo.WriteFile(f.Name, f.Contents))
+		require.NoError(t, f.WriteAtDir(repo.dir))
 	}
 	for _, remote := range r.WithRemotes {
 		require.NoError(t, repo.CreateRemote(remote.Name, remote.URL))
@@ -251,7 +262,7 @@ func (test Test) Run(t *testing.T) {
 			MakeRepo(t, rs, r)
 		}
 		for _, f := range mr.WithFiles {
-			require.NoError(t, rs.WriteFile(f.Name, f.Contents))
+			require.NoError(t, f.WriteAtDir(rs.dir))
 		}
 
 		server := MakeServer(t, rs, mr.Server)
@@ -336,7 +347,7 @@ func RetryTestRun(t *testing.T, attempts int, test func(require.TestingT)) {
 			return
 		}
 	}
-	for i := range(rtt.errorfStrings) {
+	for i := range rtt.errorfStrings {
 		t.Errorf(rtt.errorfStrings[i], rtt.errorfArgs[i]...)
 	}
 	if rtt.failNow {
