@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"io"
 
 	"database/sql"
 	"github.com/stretchr/testify/assert"
@@ -102,7 +103,13 @@ type WithRemote struct {
 // |MultiRepo| before the servers are started.
 type WithFile struct {
 	Name     string `yaml:"name"`
+
+	// The contents of the file, provided inline in the YAML.
 	Contents string `yaml:"contents"`
+
+	// A source file path to copy to |Name|. Mutually exclusive with
+	// Contents.
+	SourcePath string `yaml:"source_path"`
 }
 
 // |Server| defines a sql-server process to start. |Name| must match the
@@ -156,12 +163,13 @@ type Query struct {
 	RetryAttempts int `yaml:"retry_attempts"`
 }
 
-// |QueryResult| specifies assertions on the results of a |Query|. This must be
-// specified for a |Query| and the query results must fully match. All
-// assertions here are string equality.
+// |QueryResult| specifies assertions on the results of a |Query|. Columns must
+// be specified for a |Query| and the query results must fully match. If Rows
+// are ommited, anything is allowed as long as all rows are read successfully.
+// All assertions here are string equality.
 type QueryResult struct {
-	Columns []string   `yaml:"columns"`
-	Rows    [][]string `yaml:"rows"`
+	Columns []string    `yaml:"columns"`
+	Rows    *[][]string `yaml:"rows"`
 }
 
 func ParseTestsFile(path string) (TestDef, error) {
@@ -181,7 +189,21 @@ func (f WithFile) WriteAtDir(dir string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(f.Contents), 0550)
+	if f.SourcePath != "" {
+		source, err := os.Open(f.SourcePath)
+		if err != nil {
+			return err
+		}
+		defer source.Close()
+		dest, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0550)
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(dest, source)
+		return err
+	} else {
+		return os.WriteFile(path, []byte(f.Contents), 0550)
+	}
 }
 
 func MakeRepo(t *testing.T, rs RepoStore, r TestRepo) Repo {
@@ -384,7 +406,9 @@ func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q Query) {
 
 		rowstrings, err := RowsToStrings(len(cols), rows)
 		require.NoError(t, err)
-		require.Equal(t, q.Result.Rows, rowstrings)
+		if q.Result.Rows != nil {
+			require.Equal(t, *q.Result.Rows, rowstrings)
+		}
 	} else if q.Exec != "" {
 		_, err := conn.ExecContext(context.Background(), q.Exec, args...)
 		if q.ErrorMatch == "" {

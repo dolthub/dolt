@@ -29,3 +29,7 @@ func TestCluster(t *testing.T) {
 func TestOriginal(t *testing.T) {
 	RunTestsFile(t, "tests/sql-server-orig.yaml")
 }
+
+func TestTLS(t *testing.T) {
+	RunTestsFile(t, "tests/sql-server-tls.yaml")
+}

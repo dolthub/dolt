@@ -289,3 +289,23 @@ tests:
       result:
         columns: ["Tables_in_repo1/feature-branch"]
         rows: [["test"]]
+- name: auto increment for a table should reset between drops
+  repos:
+  - name: repo1
+    server: {}
+  connections:
+  - on: repo1
+    queries:
+    - exec: "CREATE TABLE t1(pk int auto_increment primary key, val int)"
+    - exec: "INSERT INTO t1 VALUES (0, 1),(0, 2)"
+    - query: "SELECT * FROM t1"
+      result:
+        columns: ["pk", "val"]
+        rows: [["1", "1"], ["2", "2"]]
+    - exec: "DROP TABLE t1"
+    - exec: "CREATE TABLE t1(pk int auto_increment primary key, val int)"
+    - exec: "INSERT INTO t1 VALUES (0, 1),(0, 2)"
+    - query: "SELECT * FROM t1"
+      result:
+        columns: ["pk", "val"]
+        rows: [["1", "1"], ["2", "2"]]
