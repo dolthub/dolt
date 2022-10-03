@@ -23,10 +23,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // Set to the name of a single test to run just that test, useful for debugging
@@ -191,9 +189,8 @@ func TestExecuteDeleteSystemTables(t *testing.T) {
 var systemTableDeleteTests = []DeleteTest{
 	{
 		Name: "delete dolt_docs",
-		AdditionalSetup: CreateTableFn("dolt_docs",
-			doltdb.DocsSchema,
-			NewRow(types.String("LICENSE.md"), types.String("A license"))),
+		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema,
+			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')"),
 		DeleteQuery:    "delete from dolt_docs where doc_name = 'LICENSE.md'",
 		SelectQuery:    "select * from dolt_docs",
 		ExpectedRows:   []sql.Row{},
@@ -201,9 +198,8 @@ var systemTableDeleteTests = []DeleteTest{
 	},
 	{
 		Name: "delete dolt_query_catalog",
-		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
-			dtables.DoltQueryCatalogSchema,
-			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
+		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
+			"INSERT INTO dolt_query_catalog VALUES ('abc123', 1, 'example', 'select 2+2 from dual', 'description')"),
 		DeleteQuery:    "delete from dolt_query_catalog",
 		SelectQuery:    "select * from dolt_query_catalog",
 		ExpectedRows:   ToSqlRows(dtables.DoltQueryCatalogSchema),
@@ -211,9 +207,8 @@ var systemTableDeleteTests = []DeleteTest{
 	},
 	{
 		Name: "delete dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			SchemasTableSchema(),
-			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemasTableSchema(),
+			"INSERT INTO dolt_schemas (type, name, fragment, id) VALUES ('view', 'name', 'select 2+2 from dual', 1)"),
 		DeleteQuery:    "delete from dolt_schemas",
 		SelectQuery:    "select * from dolt_schemas",
 		ExpectedRows:   ToSqlRows(dtables.DoltQueryCatalogSchema),
@@ -232,9 +227,7 @@ func testDeleteQuery(t *testing.T, test DeleteTest) {
 		t.Skip("Skipping tests until " + singleDeleteQueryTest)
 	}
 
-	dEnv := dtestutils.CreateTestEnv()
-	CreateTestDatabase(dEnv, t)
-
+	dEnv := CreateTestDatabase(t)
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}

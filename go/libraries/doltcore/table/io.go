@@ -19,28 +19,8 @@ import (
 	"errors"
 	"io"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/types"
 )
-
-// GetRow returns a row from |tbl| corresponding to |key| if it exists.
-func GetRow(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, key types.Tuple) (r row.Row, ok bool, err error) {
-	rowMap, err := tbl.GetNomsRowData(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-
-	var fields types.Value
-	fields, ok, err = rowMap.MaybeGet(ctx, key)
-	if err != nil || !ok {
-		return nil, ok, err
-	}
-
-	r, err = row.FromNoms(sch, key, fields.(types.Tuple))
-	return
-}
 
 // PipeRows will read a row from given TableReader and write it to the provided RowWriter.  It will do this
 // for every row until the TableReader's ReadRow method returns io.EOF or encounters an error in either reading

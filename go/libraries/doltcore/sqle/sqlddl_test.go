@@ -255,13 +255,12 @@ func TestCreateTable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			dtestutils.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema, AllPeopleRows...)
 			ctx := context.Background()
-			root, _ := dEnv.WorkingRoot(ctx)
+			dEnv := CreateEmptyTestDatabase(t)
+			root, err := dEnv.WorkingRoot(ctx)
+			require.NoError(t, err)
 
 			updatedRoot, err := ExecuteSql(t, dEnv, root, tt.query)
-
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
 			} else {
@@ -329,10 +328,10 @@ func TestDropTable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
 			ctx := context.Background()
-			root, _ := dEnv.WorkingRoot(ctx)
+			dEnv := CreateTestDatabase(t)
+			root, err := dEnv.WorkingRoot(ctx)
+			require.NoError(t, err)
 
 			updatedRoot, err := ExecuteSql(t, dEnv, root, tt.query)
 
@@ -502,8 +501,7 @@ func TestAddColumn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
+			dEnv := CreateTestDatabase(t)
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
@@ -524,6 +522,10 @@ func TestAddColumn(t *testing.T) {
 			sch, err := table.GetSchema(ctx)
 			assert.NoError(t, err)
 			equalSchemas(t, tt.expectedSchema, sch)
+
+			if types.Format_Default != types.Format_LD_1 {
+				return // todo: convert these to enginetests
+			}
 
 			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")
 			assert.NoError(t, err)
@@ -617,8 +619,7 @@ func TestRenameColumn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
+			dEnv := CreateTestDatabase(t)
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
@@ -638,6 +639,10 @@ func TestRenameColumn(t *testing.T) {
 			sch, err := table.GetSchema(ctx)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedSchema, sch)
+
+			if types.Format_Default != types.Format_LD_1 {
+				return // todo: convert these to enginetests
+			}
 
 			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")
 			assert.NoError(t, err)
@@ -727,8 +732,7 @@ func TestRenameTableStatements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
+			dEnv := CreateTestDatabase(t)
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
@@ -745,6 +749,7 @@ func TestRenameTableStatements(t *testing.T) {
 			has, err := updatedRoot.HasTable(ctx, tt.oldTableName)
 			require.NoError(t, err)
 			assert.False(t, has)
+
 			newTable, ok, err := updatedRoot.GetTable(ctx, tt.newTableName)
 			require.NoError(t, err)
 			require.True(t, ok)
@@ -752,6 +757,10 @@ func TestRenameTableStatements(t *testing.T) {
 			sch, err := newTable.GetSchema(ctx)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedSchema, sch)
+
+			if types.Format_Default != types.Format_LD_1 {
+				return // todo: convert these to enginetests
+			}
 
 			rowData, err := newTable.GetNomsRowData(ctx)
 			require.NoError(t, err)
@@ -778,18 +787,16 @@ func TestAlterSystemTables(t *testing.T) {
 
 	var dEnv *env.DoltEnv
 	setup := func() {
-		dEnv = dtestutils.CreateTestEnv()
-		CreateTestDatabase(dEnv, t)
+		dEnv = CreateTestDatabase(t)
+		dtestutils.CreateEmptyTestTable(t, dEnv, "dolt_docs", doltdb.DocsSchema)
+		dtestutils.CreateEmptyTestTable(t, dEnv, doltdb.SchemasTableName, SchemasTableSchema())
 
-		dtestutils.CreateTestTable(t, dEnv, "dolt_docs",
-			doltdb.DocsSchema,
-			NewRow(types.String("LICENSE.md"), types.String("A license")))
-		dtestutils.CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName,
-			dtables.DoltQueryCatalogSchema,
-			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description")))
-		dtestutils.CreateTestTable(t, dEnv, doltdb.SchemasTableName,
-			SchemasTableSchema(),
-			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual")))
+		CreateTestTable(t, dEnv, "dolt_docs", doltdb.DocsSchema,
+			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')")
+		CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
+			"INSERT INTO dolt_query_catalog VALUES ('abc123', 1, 'example', 'select 2+2 from dual', 'description')")
+		CreateTestTable(t, dEnv, doltdb.SchemasTableName, SchemasTableSchema(),
+			"INSERT INTO dolt_schemas (type, name, fragment, id) VALUES ('view', 'name', 'select 2+2 from dual', 1)")
 	}
 
 	t.Run("Create", func(t *testing.T) {

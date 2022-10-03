@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -70,8 +71,8 @@ func createTestSchema(t *testing.T) schema.Schema {
 	return sch
 }
 
-func CreateTestTable(vrw types.ValueReadWriter, ns tree.NodeStore, tSchema schema.Schema, rowData types.Map) (*Table, error) {
-	tbl, err := NewNomsTable(context.Background(), vrw, ns, tSchema, rowData, nil, nil)
+func CreateTestTable(vrw types.ValueReadWriter, ns tree.NodeStore, tSchema schema.Schema, rowData durable.Index) (*Table, error) {
+	tbl, err := NewTable(context.Background(), vrw, ns, tSchema, rowData, nil, nil)
 
 	if err != nil {
 		return nil, err
@@ -80,20 +81,20 @@ func CreateTestTable(vrw types.ValueReadWriter, ns tree.NodeStore, tSchema schem
 	return tbl, nil
 }
 
-func createTestRowData(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
-	return createTestRowDataFromTaggedValues(t, vrw, sch,
-		row.TaggedValues{
-			idTag: types.UUID(id0), firstTag: types.String("bill"), lastTag: types.String("billerson"), ageTag: types.Uint(53)},
-		row.TaggedValues{
-			idTag: types.UUID(id1), firstTag: types.String("eric"), lastTag: types.String("ericson"), isMarriedTag: types.Bool(true), ageTag: types.Uint(21)},
-		row.TaggedValues{
-			idTag: types.UUID(id2), firstTag: types.String("john"), lastTag: types.String("johnson"), isMarriedTag: types.Bool(false), ageTag: types.Uint(53)},
-		row.TaggedValues{
-			idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)},
-	)
-}
+func createTestRowData(t *testing.T, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) durable.Index {
+	if types.Format_Default == types.Format_DOLT {
+		idx, err := durable.NewEmptyIndex(context.Background(), vrw, ns, sch)
+		require.NoError(t, err)
+		return idx
+	}
 
-func createTestRowDataFromTaggedValues(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema, vals ...row.TaggedValues) (types.Map, []row.Row) {
+	vals := []row.TaggedValues{
+		{idTag: types.UUID(id0), firstTag: types.String("bill"), lastTag: types.String("billerson"), ageTag: types.Uint(53)},
+		{idTag: types.UUID(id1), firstTag: types.String("eric"), lastTag: types.String("ericson"), isMarriedTag: types.Bool(true), ageTag: types.Uint(21)},
+		{idTag: types.UUID(id2), firstTag: types.String("john"), lastTag: types.String("johnson"), isMarriedTag: types.Bool(false), ageTag: types.Uint(53)},
+		{idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)},
+	}
+
 	var err error
 	rows := make([]row.Row, len(vals))
 
@@ -110,8 +111,7 @@ func createTestRowDataFromTaggedValues(t *testing.T, vrw types.ValueReadWriter, 
 
 	m, err = ed.Map(context.Background())
 	assert.NoError(t, err)
-
-	return m, rows
+	return durable.IndexFromNomsMap(m, vrw, ns)
 }
 
 func TestIsValidTableName(t *testing.T) {
@@ -290,8 +290,9 @@ func TestLDNoms(t *testing.T) {
 			t.Fatal("There should be no tables in empty db")
 		}
 
+		ctx := context.Background()
 		tSchema := createTestSchema(t)
-		rowData, _ := createTestRowData(t, ddb.vrw, tSchema)
+		rowData, err := durable.NewEmptyIndex(ctx, ddb.vrw, ddb.ns, tSchema)
 		tbl, err = CreateTestTable(ddb.vrw, ddb.ns, tSchema, rowData)
 
 		if err != nil {

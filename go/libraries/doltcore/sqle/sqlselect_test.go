@@ -85,10 +85,16 @@ func LoadedLocalLocation() *time.Location {
 
 // BasicSelectTests cover basic select statement features and error handling
 func BasicSelectTests() []SelectTest {
-	headCommitHash := "73hc2robs4v0kt9taoe3m5hd49dmrgun"
-	if types.Format_Default == types.Format_DOLT_DEV {
+	var headCommitHash string
+	switch types.Format_Default {
+	case types.Format_DOLT:
 		headCommitHash = "4ej7hfduufg4o2837g3gc4p5uolrlmv9"
+	case types.Format_DOLT_DEV:
+		headCommitHash = "4ej7hfduufg4o2837g3gc4p5uolrlmv9"
+	case types.Format_LD_1:
+		headCommitHash = "73hc2robs4v0kt9taoe3m5hd49dmrgun"
 	}
+
 	return []SelectTest{
 		{
 			Name:           "select * on primary key",
@@ -969,216 +975,6 @@ var AsOfTests = []SelectTest{
 	},
 }
 
-// SQL is supposed to be case insensitive. These are tests of that promise.
-// Many of these are currently broken in go-myqsl-server. The queries return the correct results in all cases, but the
-// column names in the result schemas often have the wrong case. They sometimes use the case from the table, rather
-// than the case of the expression in the query (the correct behavior). This is a minor issue, but we should fix it
-// eventually.
-var CaseSensitivityTests = []SelectTest{
-	{
-		Name: "table name has mixed case, select lower case",
-		AdditionalSetup: CreateTableWithRowsFn("MiXeDcAsE",
-			NewSchema("test", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:          "select test from mixedcase",
-		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
-		ExpectedRows:   []sql.Row{{"1"}},
-	},
-	{
-		Name: "table name has mixed case, select upper case",
-		AdditionalSetup: CreateTableWithRowsFn("MiXeDcAsE",
-			NewSchema("test", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:          "select test from MIXEDCASE",
-		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
-		ExpectedRows:   []sql.Row{{"1"}},
-	},
-	{
-		Name: "qualified select *",
-		AdditionalSetup: CreateTableWithRowsFn("MiXeDcAsE",
-			NewSchema("test", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:          "select mixedcAse.* from MIXEDCASE",
-		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
-		ExpectedRows:   []sql.Row{{"1"}},
-	},
-	{
-		Name: "qualified select column",
-		AdditionalSetup: CreateTableWithRowsFn("MiXeDcAsE",
-			NewSchema("test", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:           "select mixedcAse.TeSt from MIXEDCASE",
-		ExpectedSchema:  NewResultSetSchema("TeSt", types.StringKind),
-		ExpectedRows:    []sql.Row{{"1"}},
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "table alias select *",
-		AdditionalSetup: CreateTableWithRowsFn("MiXeDcAsE",
-			NewSchema("test", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:          "select Mc.* from MIXEDCASE as mc",
-		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
-		ExpectedRows:   []sql.Row{{"1"}},
-	},
-	{
-		Name: "table alias select column",
-		AdditionalSetup: CreateTableWithRowsFn("MiXeDcAsE",
-			NewSchema("test", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:           "select mC.TeSt from MIXEDCASE as MC",
-		ExpectedSchema:  NewResultSetSchema("TeSt", types.StringKind),
-		ExpectedRows:    []sql.Row{{"1"}},
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "multiple tables with the same case-insensitive name, exact match",
-		AdditionalSetup: Compose(
-			// the table name passed to NewSchemaForTable isn't important, except to get unique tags
-			CreateTableWithRowsFn("tableName", NewSchemaForTable("tableName1", "test", types.StringKind), []types.Value{types.String("1")}),
-			CreateTableWithRowsFn("TABLENAME", NewSchemaForTable("TABLENAME2", "test", types.StringKind)),
-			CreateTableWithRowsFn("tablename", NewSchemaForTable("tablename3", "test", types.StringKind)),
-		),
-		Query:          "select test from tableName",
-		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
-		ExpectedRows:   []sql.Row{{"1"}},
-	},
-	{
-		Name: "alias with same name as table",
-		AdditionalSetup: Compose(
-			CreateTableWithRowsFn("tableName", NewSchema("test", types.StringKind)),
-			CreateTableWithRowsFn("other", NewSchema("othercol", types.StringKind)),
-		),
-		Query:       "select other.test from tablename as other, other",
-		ExpectedErr: "Non-unique table name / alias: 'other'",
-	},
-	{
-		Name: "two table aliases with same name",
-		AdditionalSetup: Compose(
-			CreateTableWithRowsFn("tableName", NewSchema("test", types.StringKind)),
-			CreateTableWithRowsFn("other", NewSchema("othercol", types.StringKind)),
-		),
-		Query:       "select bad.test from tablename as bad, other as bad",
-		ExpectedErr: "Non-unique table name / alias: 'bad'",
-	},
-	{
-		Name: "column name has mixed case, select lower case",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema("MiXeDcAsE", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:           "select mixedcase from test",
-		ExpectedSchema:  NewResultSetSchema("mixedcase", types.StringKind),
-		ExpectedRows:    []sql.Row{{"1"}},
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "column name has mixed case, select upper case",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema("MiXeDcAsE", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:           "select MIXEDCASE from test",
-		ExpectedSchema:  NewResultSetSchema("MIXEDCASE", types.StringKind),
-		ExpectedRows:    []sql.Row{{"1"}},
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "select with multiple matching columns, exact match",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
-			[]types.Value{types.String("1"), types.String("2")}),
-		Query:           "select mixedcase from test",
-		ExpectedSchema:  NewResultSetSchema("mixedcase", types.StringKind),
-		ExpectedRows:    []sql.Row{{"1"}},
-		SkipOnSqlEngine: true, // TODO: table should be illegal. field names cannot be the same case-insensitive
-	},
-	{
-		Name: "column is reserved word, select not backticked",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema(
-				"Timestamp", types.StringKind,
-				"and", types.StringKind,
-				"or", types.StringKind,
-				"select", types.StringKind),
-			[]types.Value{types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")}),
-		Query:          "select Timestamp from test",
-		ExpectedRows:   []sql.Row{{"1"}},
-		ExpectedSchema: NewResultSetSchema("Timestamp", types.StringKind),
-	},
-	{
-		Name: "column is reserved word, qualified with table alias",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema(
-				"Timestamp", types.StringKind,
-				"and", types.StringKind,
-				"or", types.StringKind,
-				"select", types.StringKind),
-			[]types.Value{types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")}),
-		Query:          "select t.Timestamp from test as t",
-		ExpectedRows:   []sql.Row{{"1"}},
-		ExpectedSchema: NewResultSetSchema("Timestamp", types.StringKind),
-	},
-	{
-		Name: "column is reserved word, select not backticked #2",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema("YeAr", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:           "select Year from test",
-		ExpectedSchema:  NewResultSetSchema("Year", types.StringKind),
-		ExpectedRows:    []sql.Row{{"1"}},
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "column is reserved word, select backticked",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema(
-				"Timestamp", types.StringKind,
-				"and", types.StringKind,
-				"or", types.StringKind,
-				"select", types.StringKind),
-			[]types.Value{types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")}),
-		Query:           "select `Timestamp` from test",
-		ExpectedRows:    []sql.Row{{"1"}},
-		ExpectedSchema:  NewResultSetSchema("Timestamp", types.StringKind),
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "column is reserved word, select backticked #2",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema(
-				"Year", types.StringKind,
-				"and", types.StringKind,
-				"or", types.StringKind,
-				"select", types.StringKind),
-			[]types.Value{types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")}),
-		Query: "select `Year`, `OR`, `SELect`, `anD` from test",
-		ExpectedSchema: NewResultSetSchema(
-			"Year", types.StringKind,
-			"OR", types.StringKind,
-			"SELect", types.StringKind,
-			"anD", types.StringKind),
-		ExpectedRows:    []sql.Row{{"1", "aaa", "create", "1.1"}},
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "column is reserved word, table qualified",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema(
-				"Year", types.StringKind,
-				"and", types.StringKind,
-				"or", types.StringKind,
-				"select", types.StringKind),
-			[]types.Value{types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")}),
-		Query: "select Year, t.OR, t.SELect, t.anD from test t",
-		ExpectedSchema: NewResultSetSchema(
-			"Year", types.StringKind,
-			"OR", types.StringKind,
-			"SELect", types.StringKind,
-			"anD", types.StringKind),
-		ExpectedRows:    []sql.Row{{"1", "aaa", "create", "1.1"}},
-		SkipOnSqlEngine: true,
-	},
-}
-
 // Tests of join functionality, basically any query involving more than one table should go here for now.
 var JoinTests = []SelectTest{
 	{
@@ -1452,6 +1248,9 @@ func TestSelect(t *testing.T) {
 }
 
 func TestDiffQueries(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip("") // todo: convert to enginetests
+	}
 	for _, test := range SelectDiffTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testSelectDiffQuery(t, test)
@@ -1460,6 +1259,9 @@ func TestDiffQueries(t *testing.T) {
 }
 
 func TestAsOfQueries(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip("") // todo: convert to enginetests
+	}
 	for _, test := range AsOfTests {
 		t.Run(test.Name, func(t *testing.T) {
 			// AS OF queries use the same history as the diff tests, so exercise the same test setup
@@ -1478,24 +1280,11 @@ func TestJoins(t *testing.T) {
 	}
 }
 
-// Tests of case sensitivity handling
-func TestCaseSensitivity(t *testing.T) {
-	for _, tt := range CaseSensitivityTests {
-		t.Run(tt.Name, func(t *testing.T) {
-			testSelectQuery(t, tt)
-		})
-	}
-}
-
 var systemTableSelectTests = []SelectTest{
 	{
 		Name: "select from dolt_docs",
-		AdditionalSetup: CreateTableFn("dolt_docs",
-			doltdb.DocsSchema,
-			NewRowWithSchema(doltdb.DocsSchema,
-				types.String("LICENSE.md"),
-				types.String("A license")),
-		),
+		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema,
+			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')"),
 		Query: "select * from dolt_docs",
 		ExpectedRows: ToSqlRows(CompressSchema(doltdb.DocsSchema),
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
@@ -1503,15 +1292,8 @@ var systemTableSelectTests = []SelectTest{
 	},
 	{
 		Name: "select from dolt_query_catalog",
-		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
-			dtables.DoltQueryCatalogSchema,
-			NewRowWithSchema(dtables.DoltQueryCatalogSchema,
-				types.String("existingEntry"),
-				types.Uint(2),
-				types.String("example"),
-				types.String("select 2+2 from dual"),
-				types.String("description")),
-		),
+		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
+			"INSERT INTO dolt_query_catalog VALUES ('existingEntry', 2, 'example', 'select 2+2 from dual', 'description')"),
 		Query: "select * from dolt_query_catalog",
 		ExpectedRows: ToSqlRows(CompressSchema(dtables.DoltQueryCatalogSchema),
 			NewRow(types.String("existingEntry"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description")),
@@ -1520,19 +1302,10 @@ var systemTableSelectTests = []SelectTest{
 	},
 	{
 		Name: "select from dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			SchemasTableSchema(),
-			NewRowWithSchema(SchemasTableSchema(),
-				types.String("view"),
-				types.String("name"),
-				types.String("select 2+2 from dual"),
-				types.Int(1),
-				CreateTestJSON(),
-			)),
-		Query: "select * from dolt_schemas",
-		ExpectedRows: ToSqlRows(CompressSchema(SchemasTableSchema()),
-			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual"), types.Int(1), CreateTestJSON()),
-		),
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemasTableSchema(),
+			`INSERT INTO dolt_schemas VALUES ('view', 'name', 'select 2+2 from dual', 1, NULL)`),
+		Query:          "select * from dolt_schemas",
+		ExpectedRows:   []sql.Row{{"view", "name", "select 2+2 from dual", int64(1), nil}},
 		ExpectedSchema: CompressSchema(SchemasTableSchema()),
 	},
 }
@@ -1582,9 +1355,7 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 	cleanup := installTestCommitClock()
 	defer cleanup()
 
-	dEnv := dtestutils.CreateTestEnv()
-	CreateTestDatabase(dEnv, t)
-
+	dEnv := CreateTestDatabase(t)
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
@@ -1628,12 +1399,9 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 
 func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	validateTest(t, test)
-
 	ctx := context.Background()
-
 	cleanup := installTestCommitClock()
 	defer cleanup()
-
 	dEnv := dtestutils.CreateTestEnv()
 	InitializeWithHistory(t, ctx, dEnv, CreateHistory(ctx, dEnv, t)...)
 	if test.AdditionalSetup != nil {

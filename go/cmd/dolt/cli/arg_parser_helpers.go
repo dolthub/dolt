@@ -100,7 +100,6 @@ const (
 	BranchParam      = "branch"
 	TrackFlag        = "track"
 	AmendFlag        = "amend"
-	NewFormatFlag    = "new-format"
 	CommitFlag       = "commit"
 	NoCommitFlag     = "no-commit"
 	NoEditFlag       = "no-edit"

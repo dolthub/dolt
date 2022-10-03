@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap/buffer"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
@@ -105,7 +106,7 @@ func TestPushOnWriteHook(t *testing.T) {
 	}
 
 	tSchema := createTestSchema(t)
-	rowData, _ := createTestRowData(t, ddb.vrw, tSchema)
+	rowData := createTestRowData(t, ddb.vrw, ddb.ns, tSchema)
 	tbl, err := CreateTestTable(ddb.vrw, ddb.ns, tSchema, rowData)
 
 	if err != nil {
@@ -243,8 +244,10 @@ func TestAsyncPushOnWrite(t *testing.T) {
 			assert.NoError(t, err)
 
 			tSchema := createTestSchema(t)
-			rowData, _ := createTestRowData(t, ddb.vrw, tSchema)
+			rowData, err := durable.NewEmptyIndex(ctx, ddb.vrw, ddb.ns, tSchema)
+			require.NoError(t, err)
 			tbl, err := CreateTestTable(ddb.vrw, ddb.ns, tSchema, rowData)
+			require.NoError(t, err)
 
 			if err != nil {
 				t.Fatal("Failed to create test table with data")
