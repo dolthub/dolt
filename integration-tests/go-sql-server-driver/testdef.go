@@ -39,6 +39,9 @@ type Test struct {
 	Repos      []TestRepo   `yaml:"repos"`
 	MultiRepos []MultiRepo  `yaml:"multi_repos"`
 	Conns      []Connection `yaml:"connections"`
+
+	// Skip the entire test with this reason.
+	Skip       string       `yaml:"skip"`
 }
 
 // |Connection| represents a single connection to a sql-server instance defined
@@ -213,6 +216,10 @@ func MakeServer(t *testing.T, dc DoltCmdable, s *Server) (*SqlServer, func()) {
 }
 
 func (test Test) Run(t *testing.T) {
+	if test.Skip != "" {
+		t.Skip(test.Skip)
+	}
+
 	u, err := NewDoltUser()
 	require.NoError(t, err)
 	rs, err := u.MakeRepoStore()
@@ -234,6 +241,10 @@ func (test Test) Run(t *testing.T) {
 			server.DBName = r.Name
 			servers[r.Name] = server
 			defer close()
+
+			db, err := server.DB()
+			require.NoError(t, err)
+			dbs[r.Name] = db
 		}
 	}
 	for _, mr := range test.MultiRepos {
@@ -253,13 +264,11 @@ func (test Test) Run(t *testing.T) {
 		if server != nil {
 			servers[mr.Name] = server
 			defer close()
-		}
-	}
 
-	for n, s := range servers {
-		db, err := s.DB()
-		require.NoError(t, err)
-		dbs[n] = db
+			db, err := server.DB()
+			require.NoError(t, err)
+			dbs[mr.Name] = db
+		}
 	}
 
 	for i, c := range test.Conns {

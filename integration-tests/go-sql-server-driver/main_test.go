@@ -25,3 +25,7 @@ func TestConfig(t *testing.T) {
 func TestCluster(t *testing.T) {
 	RunTestsFile(t, "tests/sql-server-cluster.yaml")
 }
+
+func TestOriginal(t *testing.T) {
+	RunTestsFile(t, "tests/sql-server-orig.yaml")
+}

@@ -140,131 +140,6 @@ SQL
 }
 
 
-@test "sql-server: port in use" {
-    cd repo1
-
-    let PORT="$$ % (65536-1024) + 1024"
-    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt &
-    SERVER_PID=$! # will get killed by teardown_common
-    sleep 5 # not using python wait so this works on windows
-
-    run dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "in use" ]] || false
-}
-
-@test "sql-server: test autocommit" {
-    skiponwindows "Missing dependencies"
-
-    cd repo1
-    start_sql_server repo1
-
-    # No tables at the start
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "No tables in working set" ]] || false
-
-    # create table with autocommit off and verify there are still no tables
-    server_query repo1 0 dolt "" "CREATE TABLE one_pk (
-        pk BIGINT NOT NULL COMMENT 'tag:0',
-        c1 BIGINT COMMENT 'tag:1',
-        c2 BIGINT COMMENT 'tag:2',
-        PRIMARY KEY (pk)
-    )" ""
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "No tables in working set" ]] || false
-
-    # create table with autocommit on and verify table creation
-    server_query repo1 1 dolt "" "CREATE TABLE one_pk (
-        pk BIGINT NOT NULL COMMENT 'tag:0',
-        c1 BIGINT COMMENT 'tag:1',
-        c2 BIGINT COMMENT 'tag:2',
-        PRIMARY KEY (pk)
-    )" ""
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "one_pk" ]] || false
-}
-
-@test "sql-server: read-only flag prevents modification" {
-    skiponwindows "Missing dependencies"
-
-    cd repo1
-
-    DEFAULT_DB="$1"
-    let PORT="$$ % (65536-1024) + 1024"
-    echo "
-  read_only: true" > server.yaml
-    start_sql_server_with_config repo1 server.yaml
-
-    # No tables at the start
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "No tables in working set" ]] || false
-
-    # attempt to create table (autocommit on), expect either some exception
-    server_query repo1 1 dolt "" "CREATE TABLE i_should_not_exist (
-            c0 INT
-        )" "" "database server is set to read only mode"
-
-    # Expect that there are still no tables
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "No tables in working set" ]] || false
-}
-
-@test "sql-server: read-only flag still allows select" {
-    skiponwindows "Missing dependencies"
-
-    cd repo1
-    dolt sql -q "create table t(c0 int)"
-    dolt sql -q "insert into t values (1)"
-
-    DEFAULT_DB="$1"
-    let PORT="$$ % (65536-1024) + 1024"
-    echo "
-  read_only: true" > server.yaml
-    start_sql_server_with_config repo1 server.yaml
-
-    # make a select query
-    server_query repo1 1 dolt "" "select * from t" "c0\n1"
-}
-
-@test "sql-server: read-only flag prevents dolt_commit" {
-    skiponwindows "Missing dependencies"
-
-    cd repo1
-
-    DEFAULT_DB="$1"
-    let PORT="$$ % (65536-1024) + 1024"
-    echo "
-  read_only: true" > server.yaml
-    start_sql_server_with_config repo1 server.yaml
-
-    # make a dolt_commit query
-    skip "read-only flag does not prevent dolt_commit"
-    server_query repo1 1 dolt "" "call dolt_commit('--allow-empty', '-m', 'msg')" "" "database server is set to read only mode: user does not have permission: write"
-}
-
-@test "sql-server: read-only flag prevents dolt_reset" {
-    skiponwindows "Missing dependencies"
-
-    cd repo1
-    run dolt commit --allow-empty -m 'empty test commit'
-
-    DEFAULT_DB="$1"
-    let PORT="$$ % (65536-1024) + 1024"
-    echo "
-  read_only: true" > server.yaml
-    start_sql_server_with_config repo1 server.yaml
-
-    # try to execute dolt_reset
-    skip "read-only flag does not prevent dolt_reset"
-    server_query repo1 1 dolt "" "call dolt_reset('--hard', 'HEAD~1')" "" "database server is set to read only mode: user does not have permission: write"
-}
-
-
 @test "sql-server: test command line modification" {
     skiponwindows "Missing dependencies"
 
@@ -359,47 +234,6 @@ SQL
     run dolt log
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit1" ]] || false
-}
-
-@test "sql-server: test basic querying via dolt sql-server" {
-    skiponwindows "Missing dependencies"
-
-    cd repo1
-    start_sql_server repo1
-
-    server_query repo1 1 dolt "" "SHOW tables" ""
-    server_query repo1 1 dolt "" "CREATE TABLE one_pk (
-        pk BIGINT NOT NULL COMMENT 'tag:0',
-        c1 BIGINT COMMENT 'tag:1',
-        c2 BIGINT COMMENT 'tag:2',
-        PRIMARY KEY (pk)
-    )" ""
-    server_query repo1 1 dolt "" "SHOW tables" "Tables_in_repo1\none_pk"
-    server_query repo1 1 dolt "" "INSERT INTO one_pk (pk) VALUES (0)"
-    server_query repo1 1 dolt "" "SELECT * FROM one_pk ORDER BY pk" "pk,c1,c2\n0,None,None"
-    server_query repo1 1 dolt "" "INSERT INTO one_pk (pk,c1) VALUES (1,1)"
-    server_query repo1 1 dolt "" "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
-    server_query repo1 1 dolt "" "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
-    server_query repo1 1 dolt "" "UPDATE one_pk SET c2=c1 WHERE c2 is NULL and c1 IS NOT NULL"
-}
-
-@test "sql-server: test multiple queries on the same connection" {
-    skiponwindows "Missing dependencies"
-
-    cd repo1
-    start_sql_server repo1
-
-    server_query repo1 1 dolt "" "CREATE TABLE one_pk (
-        pk BIGINT NOT NULL COMMENT 'tag:0',
-        c1 BIGINT COMMENT 'tag:1',
-        c2 BIGINT COMMENT 'tag:2',
-        PRIMARY KEY (pk)
-    );
-    INSERT INTO one_pk (pk) VALUES (0);
-    INSERT INTO one_pk (pk,c1) VALUES (1,1);
-    INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);"
-
-    server_query repo1 1 dolt "" "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
 }
 
 @test "sql-server: test reset_hard" {
@@ -553,24 +387,6 @@ SQL
     server_query repo1 1 dolt "" "SELECT * FROM repo2.r2_one_pk" "pk,c3,c4\n1,1,1\n2,2,2\n3,3,3"
 }
 
-@test "sql-server: test CREATE and DROP database via sql-server" {
-    skiponwindows "Missing dependencies"
-
-    cd repo1
-    start_sql_server repo1
-
-    server_query repo1 1 dolt "" "
-    CREATE DATABASE test;
-    USE test;
-    CREATE TABLE pk(pk int primary key);
-    INSERT INTO pk (pk) VALUES (0);
-    "
-
-    server_query repo1 1 dolt "" "SELECT * FROM test.pk ORDER BY pk" "pk\n0"
-    server_query repo1 1 dolt "" "DROP DATABASE test" ""
-    server_query repo1 1 dolt "" "SHOW DATABASES" "Database\ninformation_schema\nmysql\nrepo1"
-}
-
 @test "sql-server: DOLT_ADD, DOLT_COMMIT, DOLT_CHECKOUT, DOLT_MERGE work together in server mode" {
     skiponwindows "Missing dependencies"
 
@@ -648,21 +464,6 @@ SQL
      server_query repo1 1 dolt "" "SELECT COUNT(*) FROM dolt_log" "COUNT(*)\n3"
 }
 
-@test "sql-server: LOAD DATA LOCAL INFILE works" {
-     skiponwindows "Missing dependencies"
-
-     cd repo1
-     start_sql_server repo1
-
-     server_query repo1 1 dolt "" "
-     CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
-     SET GLOBAL local_infile = 1;
-     LOAD DATA LOCAL INFILE '$BATS_TEST_DIRNAME/helper/1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY ',' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
-     "
-
-     server_query repo1 1 dolt "" "SELECT * FROM test" "pk,c1,c2,c3,c4,c5\n0,1,2,3,4,5\n1,1,2,3,4,5"
-}
-
 @test "sql-server: Run queries on database without ever selecting it" {
      skiponwindows "Missing dependencies"
 
@@ -732,25 +533,6 @@ SQL
      run dolt sql --user=dolt -q "show tables"
      [ "$status" -eq 0 ]
      [[ "$output" =~ "test" ]] || false
-}
-
-@test "sql-server: JSON queries" {
-    skip_nbf_dolt
-    cd repo1
-    start_sql_server repo1
-
-    # create table with autocommit on and verify table creation
-    server_query repo1 1 dolt "" "CREATE TABLE js_test (
-        pk int NOT NULL,
-        js json,
-        PRIMARY KEY (pk)
-    )" ""
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "js_test" ]] || false
-
-    server_query repo1 1 dolt "" "INSERT INTO js_test VALUES (1, '{\"a\":1}');"
-    server_query repo1 1 dolt "" "SELECT * FROM js_test;" "pk,js\n1,{\"a\": 1}"
 }
 
 @test "sql-server: manual commit table can be dropped (validates superschema structure)" {
@@ -856,27 +638,6 @@ SQL
 
     # server should still be alive after an error
     server_query "repo1/$hash" 1 dolt "" "select count(*) from test" "count(*)\n3"
-}
-
-@test "sql-server: select a branch with the USE syntax" {
-    skiponwindows "Missing dependencies"
-
-    cd repo1
-    dolt checkout -b "feature-branch"
-    dolt checkout main
-    start_sql_server repo1
-
-    server_query repo1 1 dolt "" '
-    USE `repo1/feature-branch`;
-    CREATE TABLE test (
-        pk int,
-        c1 int,
-        PRIMARY KEY (pk)
-    )' ""
-
-    server_query repo1 1 dolt "" "SHOW tables" "" # no tables on main
-
-    server_query "repo1/feature-branch" 1 dolt "" "SHOW Tables" "Tables_in_repo1/feature-branch\ntest"
 }
 
 @test "sql-server: SET GLOBAL default branch as ref" {

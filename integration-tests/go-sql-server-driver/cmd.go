@@ -278,7 +278,11 @@ func (s *SqlServer) Restart(newargs *[]string) error {
 }
 
 func (s *SqlServer) DB() (*sql.DB, error) {
-	db, err := sql.Open("mysql", fmt.Sprintf("root@tcp(127.0.0.1:%d)/%s", s.Port, s.DBName))
+	authority := "root"
+	location := fmt.Sprintf("tcp(127.0.0.1:%d)", s.Port)
+	dbname := s.DBName
+	dsn := fmt.Sprintf("%s@%s/%s?allowAllFiles=true", authority, location, dbname)
+	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, err
 	}
