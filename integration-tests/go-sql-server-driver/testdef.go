@@ -212,90 +212,88 @@ func MakeServer(t *testing.T, dc DoltCmdable, s *Server) (*SqlServer, func()) {
 	}
 }
 
+func (test Test) Run(t *testing.T) {
+	u, err := NewDoltUser()
+	require.NoError(t, err)
+	rs, err := u.MakeRepoStore()
+	require.NoError(t, err)
+
+	servers := make(map[string]*SqlServer)
+	dbs := make(map[string]*sql.DB)
+	defer func() {
+		for _, db := range dbs {
+			db.Close()
+		}
+	}()
+
+	for _, r := range test.Repos {
+		repo := MakeRepo(t, rs, r)
+
+		server, close := MakeServer(t, repo, r.Server)
+		if server != nil {
+			server.DBName = r.Name
+			servers[r.Name] = server
+			defer close()
+		}
+	}
+	for _, mr := range test.MultiRepos {
+		// Each MultiRepo gets its own dolt config --global.
+		u, err := NewDoltUser()
+		require.NoError(t, err)
+		rs, err = u.MakeRepoStore()
+		require.NoError(t, err)
+		for _, r := range mr.Repos {
+			MakeRepo(t, rs, r)
+		}
+		for _, f := range mr.WithFiles {
+			require.NoError(t, rs.WriteFile(f.Name, f.Contents))
+		}
+
+		server, close := MakeServer(t, rs, mr.Server)
+		if server != nil {
+			servers[mr.Name] = server
+			defer close()
+		}
+	}
+
+	for n, s := range servers {
+		db, err := s.DB()
+		require.NoError(t, err)
+		dbs[n] = db
+	}
+
+	for i, c := range test.Conns {
+		db := dbs[c.On]
+		require.NotNilf(t, db, "error in test spec: could not find database %s for connection %d", c.On, i)
+		conn, err := db.Conn(context.Background())
+		require.NoError(t, err)
+		func() {
+			// Do not return this connection to the connection pool.
+			defer conn.Raw(func(any) error {
+				return driver.ErrBadConn
+			})
+			for _, q := range c.Queries {
+				RunQuery(t, conn, q)
+			}
+		}()
+		if c.RestartServer != nil {
+			s := servers[c.On]
+			require.NotNilf(t, s, "error in test spec: could not find server %s for connection %d", c.On, i)
+			// Close the old map entry.
+			db.Close()
+			err := s.Restart(c.RestartServer.Args)
+			require.NoError(t, err)
+			dbs[c.On], err = s.DB()
+			require.NoError(t, err)
+		}
+	}
+}
+
 func RunTestsFile(t *testing.T, path string) {
 	def, err := ParseTestsFile(path)
 	require.NoError(t, err)
 	for _, test := range def.Tests {
-		t.Run(test.Name, func(t *testing.T) {
-			u, err := NewDoltUser()
-			require.NoError(t, err)
-			rs, err := u.MakeRepoStore()
-			require.NoError(t, err)
-
-			doltlocs := make(map[string]DoltCmdable)
-			servers := make(map[string]*SqlServer)
-			for _, r := range test.Repos {
-				repo := MakeRepo(t, rs, r)
-				doltlocs[r.Name] = repo
-
-				server, close := MakeServer(t, repo, r.Server)
-				if server != nil {
-					server.DBName = r.Name
-					servers[r.Name] = server
-					defer close()
-				}
-			}
-			for _, mr := range test.MultiRepos {
-				// Each MultiRepo gets its own dolt config --global.
-				u, err := NewDoltUser()
-				require.NoError(t, err)
-				rs, err = u.MakeRepoStore()
-				require.NoError(t, err)
-				for _, r := range mr.Repos {
-					MakeRepo(t, rs, r)
-				}
-				for _, f := range mr.WithFiles {
-					require.NoError(t, rs.WriteFile(f.Name, f.Contents))
-				}
-				doltlocs[mr.Name] = rs
-
-				server, close := MakeServer(t, rs, mr.Server)
-				if server != nil {
-					servers[mr.Name] = server
-					defer close()
-				}
-			}
-
-			dbs := make(map[string]*sql.DB)
-			defer func() {
-				for _, db := range dbs {
-					db.Close()
-				}
-			}()
-			for n, s := range servers {
-				db, err := s.DB()
-				require.NoError(t, err)
-				dbs[n] = db
-			}
-
-			for i, c := range test.Conns {
-				db := dbs[c.On]
-				require.NotNilf(t, db, "error in test spec: could not find database %s for connection %d", c.On, i)
-				conn, err := db.Conn(context.Background())
-				require.NoError(t, err)
-				func() {
-					// Do not return this connection to the connection pool.
-					defer conn.Raw(func(any) error {
-						return driver.ErrBadConn
-					})
-					for _, q := range c.Queries {
-						RunQuery(t, conn, q)
-					}
-				}()
-				if c.RestartServer != nil {
-					olddb := dbs[c.On]
-					olddb.Close()
-					require.NotNilf(t, olddb, "error in test spec: could not find database %s for connection %d", c.On, i)
-					s := servers[c.On]
-					require.NotNilf(t, s, "error in test spec: could not find server %s for connection %d", c.On, i)
-					err := s.Restart(c.RestartServer.Args)
-					require.NoError(t, err)
-					db, err := s.DB()
-					require.NoError(t, err)
-					dbs[c.On] = db
-				}
-			}
-		})
+		t.Run(test.Name, test.Run)
 	}
 }
 
