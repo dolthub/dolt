@@ -287,13 +287,13 @@ tests:
   - on: server1
     queries:
     - exec: "use dolt_cluster"
-    - sleep_millis: 250
     - query: "select `database`, standby_remote, role, epoch, replication_lag_millis, current_error from dolt_cluster_status order by `database` asc"
       result:
         columns: ["database","standby_remote","role","epoch","replication_lag_millis","current_error"]
         rows:
         - ["repo1","standby","primary","10","0","NULL"]
         - ["repo2","standby","primary","10","0","NULL"]
+      retry_attempts: 10
   - on: server2
     queries:
     - exec: "use repo1"
