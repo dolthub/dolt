@@ -161,6 +161,7 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		isUnique:      props.IsUnique,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
+		length:        0,
 	}
 	ixc.indexes[indexName] = index
 	for _, tag := range tags {
