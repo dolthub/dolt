@@ -38,7 +38,6 @@ type commithook struct {
 	lgr                  atomic.Value // *logrus.Entry
 	remotename           string
 	dbname               string
-	lout                 io.Writer
 	mu                   sync.Mutex
 	wg                   sync.WaitGroup
 	cond                 *sync.Cond
@@ -49,6 +48,10 @@ type commithook struct {
 	lastSuccess          time.Time
 	currentError         *string
 	cancelReplicate      func()
+
+	// waitNotify is set by controller when it needs to track whether the
+	// commithooks are caught up with replicating to the standby.
+	waitNotify func()
 
 	role Role
 
@@ -137,6 +140,9 @@ func (h *commithook) replicate(ctx context.Context) {
 			h.attemptReplicate(ctx)
 		} else {
 			lgr.Tracef("cluster/commithook: background thread: waiting for signal.")
+			if h.waitNotify != nil {
+				h.waitNotify()
+			}
 			h.cond.Wait()
 			lgr.Tracef("cluster/commithook: background thread: woken up.")
 		}
@@ -145,13 +151,26 @@ func (h *commithook) replicate(ctx context.Context) {
 
 // called with h.mu locked.
 func (h *commithook) shouldReplicate() bool {
-	if h.role != RolePrimary {
-		return false
-	}
-	if h.nextHead == h.lastPushedHead {
+	if h.isCaughtUp() {
 		return false
 	}
 	return (h.nextPushAttempt == (time.Time{}) || time.Now().After(h.nextPushAttempt))
+}
+
+// called with h.mu locked. Returns true if the standby is true-d up, false
+// otherwise. Different from shouldReplicate() in that it does not care about
+// nextPushAttempt, for example. Used in Controller.waitForReplicate.
+func (h *commithook) isCaughtUp() bool {
+	if h.role != RolePrimary {
+		return true
+	}
+	return h.nextHead == h.lastPushedHead
+}
+
+func (h *commithook) isCaughtUpLocking() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.isCaughtUp()
 }
 
 // called with h.mu locked.
@@ -319,6 +338,12 @@ func (h *commithook) setRole(role Role) {
 	h.cond.Signal()
 }
 
+func (h *commithook) setWaitNotify(f func()) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.waitNotify = f
+}
+
 var errDetectedBrokenConfigStr = "error: more than one server was configured as primary in the same epoch. this server has stopped accepting writes. choose a primary in the cluster and call dolt_assume_cluster_role() on servers in the cluster to start replication at a higher epoch"
 
 // Execute on this commithook updates the target root hash we're attempting to
@@ -334,6 +359,11 @@ func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db datas.Dat
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	lgr = h.logger()
+	if h.role != RolePrimary {
+		lgr.Warnf("cluster/commithook received commit callback for a commit on %s, but we are not role primary; not replicating the commit, which is likely to be lost.", ds.ID())
+		return nil
+	}
 	if root != h.nextHead {
 		lgr.Tracef("signaling replication thread to push new head: %v", root.String())
 		h.nextHeadIncomingTime = time.Now()
@@ -349,7 +379,6 @@ func (h *commithook) HandleError(ctx context.Context, err error) error {
 }
 
 func (h *commithook) SetLogger(ctx context.Context, wr io.Writer) error {
-	h.lout = wr
 	return nil
 }
 

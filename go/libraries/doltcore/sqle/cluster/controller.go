@@ -16,9 +16,11 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
@@ -96,12 +98,15 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 		commithooks:   make([]*commithook, 0),
 		lgr:           lgr,
 	}
+	roleSetter := func(role string, epoch int) {
+		ret.setRoleAndEpoch(role, epoch, false /* graceful */, -1 /* saveConnID */)
+	}
 	ret.sinterceptor.lgr = lgr.WithFields(logrus.Fields{})
 	ret.sinterceptor.setRole(role, epoch)
-	ret.sinterceptor.roleSetter = ret.setRoleAndEpoch
+	ret.sinterceptor.roleSetter = roleSetter
 	ret.cinterceptor.lgr = lgr.WithFields(logrus.Fields{})
 	ret.cinterceptor.setRole(role, epoch)
-	ret.cinterceptor.roleSetter = ret.setRoleAndEpoch
+	ret.cinterceptor.roleSetter = roleSetter
 	return ret, nil
 }
 
@@ -288,7 +293,7 @@ func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.Rea
 	return Role(persistentRole), epochi, nil
 }
 
-func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool) error {
+func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool, saveConnID int) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if epoch == c.epoch && role == string(c.role) {
@@ -317,7 +322,7 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool) erro
 		var err error
 		if role == string(RoleStandby) {
 			if graceful {
-				err = c.gracefulTransitionToStandby()
+				err = c.gracefulTransitionToStandby(saveConnID)
 				if err != nil {
 					return err
 				}
@@ -327,7 +332,7 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool) erro
 		} else if role == string(RoleDetectedBrokenConfig) {
 			c.immediateTransitionToStandby()
 		} else {
-			c.transitionToPrimary()
+			c.transitionToPrimary(saveConnID)
 		}
 	}
 
@@ -411,16 +416,21 @@ func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.Server
 //   * If success, return success.
 //   * If failure, set all databases in database_provider back to their original state. Return failure.
 //
+// saveConnID is potentially a connID of the caller to
+// dolt_assume_cluster_role(), which should not be killed with the other
+// connections. That connection will be transitioned to a terminal error state
+// after returning the results of dolt_assume_cluster_role().
+//
 // called with c.mu held
-func (c *Controller) gracefulTransitionToStandby() error {
+func (c *Controller) gracefulTransitionToStandby(saveConnID int) error {
 	c.setProviderIsStandby(true)
-	c.killRunningQueries()
+	c.killRunningQueries(saveConnID)
 	// TODO: this can block with c.mu held, although we are not too
 	// interested in the server proceeding gracefully while this is
 	// happening.
 	if err := c.waitForHooksToReplicate(); err != nil {
 		c.setProviderIsStandby(false)
-		c.killRunningQueries()
+		c.killRunningQueries(saveConnID)
 		return err
 	}
 	return nil
@@ -434,7 +444,7 @@ func (c *Controller) gracefulTransitionToStandby() error {
 // called with c.mu held
 func (c *Controller) immediateTransitionToStandby() error {
 	c.setProviderIsStandby(true)
-	c.killRunningQueries()
+	c.killRunningQueries(-1)
 	return nil
 }
 
@@ -443,20 +453,25 @@ func (c *Controller) immediateTransitionToStandby() error {
 // * Kill all running queries in GMS.
 // * Return success.
 //
+// saveConnID is potentially the connID of the caller to
+// dolt_assume_cluster_role().
+//
 // called with c.mu held
-func (c *Controller) transitionToPrimary() error {
+func (c *Controller) transitionToPrimary(saveConnID int) error {
 	c.setProviderIsStandby(false)
-	c.killRunningQueries()
+	c.killRunningQueries(saveConnID)
 	return nil
 }
 
 // Kills all running queries in the managed GMS engine.
 // called with c.mu held
-func (c *Controller) killRunningQueries() {
+func (c *Controller) killRunningQueries(saveConnID int) {
 	if c.iterSessions != nil {
 		c.iterSessions(func(session sql.Session) (stop bool, err error) {
-			c.killQuery(session.ID())
-			c.killConnection(session.ID())
+			if int(session.ID()) != saveConnID {
+				c.killQuery(session.ID())
+				c.killConnection(session.ID())
+			}
 			return
 		})
 	}
@@ -469,13 +484,60 @@ func (c *Controller) setProviderIsStandby(standby bool) {
 	}
 }
 
+const waitForHooksToReplicateTimeout = 10 * time.Second
+
 // Called during a graceful transition from primary to standby. Waits until all
 // commithooks report nextHead == lastPushedHead.
 //
-// TODO: Implement this.
-// TODO: Report errors from commit hooks or add a deadline here or something.
+// TODO: make the deadline here configurable or something.
 //
 // called with c.mu held
 func (c *Controller) waitForHooksToReplicate() error {
-	return nil
+	caughtup := make([]bool, len(c.commithooks))
+	var wg sync.WaitGroup
+	wg.Add(len(c.commithooks))
+	for li, lch := range c.commithooks {
+		i := li
+		ch := lch
+		if ch.isCaughtUpLocking() {
+			caughtup[i] = true
+			wg.Done()
+		} else {
+			ch.setWaitNotify(func() {
+				// called with ch.mu locked.
+				if !caughtup[i] && ch.isCaughtUp() {
+					caughtup[i] = true
+					wg.Done()
+				}
+			})
+		}
+	}
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	var success bool
+	select {
+	case <-done:
+		success = true
+	case <-time.After(waitForHooksToReplicateTimeout):
+		success = false
+	}
+	for _, ch := range c.commithooks {
+		ch.setWaitNotify(nil)
+	}
+	// make certain we don't leak the wg.Wait goroutine in the failure case.
+	for _, b := range caughtup {
+		if !b {
+			wg.Done()
+		}
+	}
+	if success {
+		c.lgr.Tracef("cluster/controller: successfully replicated all databases to all standbys; transitioning to standby.")
+		return nil
+	} else {
+		c.lgr.Warnf("cluster/controller: failed to replicate all databases to all standbys; not transitioning to standby.")
+		return errors.New("cluster/controller: failed to transition from primary to standby gracefully; could not replicate databases to standby in a timely manner.")
+	}
 }
