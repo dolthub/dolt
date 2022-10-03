@@ -814,3 +814,79 @@ cluster:
     run server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "call dolt_assume_cluster_role('primary', '11');select 2 from dual" "" 1
     [[ "$output" =~ "this connection can no longer be used" ]] || false
 }
+
+@test "sql-server-cluster: primary replicates to standby, fails over, new primary replicates to standby, fails over, new primary has all writes" {
+    cd serverone
+
+    echo "
+log_level: trace
+user:
+  name: dolt
+listener:
+  host: 0.0.0.0
+  port: ${SERVERONE_MYSQL_PORT}
+behavior:
+  read_only: false
+  autocommit: true
+cluster:
+  standby_remotes:
+  - name: standby
+    remote_url_template: http://localhost:${SERVERTWO_GRPC_PORT}/{database}
+  bootstrap_role: standby
+  bootstrap_epoch: 1
+  remotesapi:
+    port: ${SERVERONE_GRPC_PORT}" > server.yaml
+
+    DOLT_ROOT_PATH=`pwd` dolt config --global --add user.email bats@email.fake
+    DOLT_ROOT_PATH=`pwd` dolt config --global --add user.name "Bats Tests"
+    DOLT_ROOT_PATH=`pwd` dolt config --global --add metrics.disabled true
+
+    (cd repo1 && dolt remote add standby http://localhost:${SERVERTWO_GRPC_PORT}/repo1)
+    (cd repo2 && dolt remote add standby http://localhost:${SERVERTWO_GRPC_PORT}/repo2)
+    DOLT_ROOT_PATH=`pwd` dolt sql-server --config server.yaml &
+    serverone_pid=$!
+
+    wait_for_connection "${SERVERONE_MYSQL_PORT}" 5000
+
+    cd ../servertwo
+
+    echo "
+log_level: trace
+user:
+  name: dolt
+listener:
+  host: 0.0.0.0
+  port: ${SERVERTWO_MYSQL_PORT}
+behavior:
+  read_only: false
+  autocommit: true
+cluster:
+  standby_remotes:
+  - name: standby
+    remote_url_template: http://localhost:${SERVERONE_GRPC_PORT}/{database}
+  bootstrap_role: primary
+  bootstrap_epoch: 1
+  remotesapi:
+    port: ${SERVERTWO_GRPC_PORT}" > server.yaml
+
+    DOLT_ROOT_PATH=`pwd` dolt config --global --add user.email bats@email.fake
+    DOLT_ROOT_PATH=`pwd` dolt config --global --add user.name "Bats Tests"
+    DOLT_ROOT_PATH=`pwd` dolt config --global --add metrics.disabled true
+
+    (cd repo1 && dolt remote add standby http://localhost:${SERVERONE_GRPC_PORT}/repo1)
+    (cd repo2 && dolt remote add standby http://localhost:${SERVERONE_GRPC_PORT}/repo2)
+    DOLT_ROOT_PATH=`pwd` dolt sql-server --config server.yaml &
+    servertwo_pid=$!
+
+    wait_for_connection "${SERVERTWO_MYSQL_PORT}" 5000
+    server_query_with_port "${SERVERTWO_MYSQL_PORT}" repo1 1 dolt "" "create table vals (i int primary key);insert into vals values (0),(1),(2),(3),(4);call dolt_assume_cluster_role('standby', 2);" ";;status\n0"
+    server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "select count(*) from vals;call dolt_assume_cluster_role('primary', 2)" "count(*)\n5;status\n0"
+    server_query_with_port "${SERVERONE_MYSQL_PORT}" repo1 1 dolt "" "insert into vals values (5),(6),(7),(8),(9);call dolt_assume_cluster_role('standby', 3)" ";status\n0"
+    server_query_with_port "${SERVERTWO_MYSQL_PORT}" repo1 1 dolt "" "select count(*) from vals;call dolt_assume_cluster_role('primary', 3)" "count(*)\n10;status\n0"
+
+    kill $servertwo_pid
+    wait $servertwo_pid
+
+    kill $serverone_pid
+    wait $serverone_pid
+}
