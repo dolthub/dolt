@@ -1283,12 +1283,8 @@ func TestJoins(t *testing.T) {
 var systemTableSelectTests = []SelectTest{
 	{
 		Name: "select from dolt_docs",
-		AdditionalSetup: CreateTableFn("dolt_docs",
-			doltdb.DocsSchema,
-			NewRowWithSchema(doltdb.DocsSchema,
-				types.String("LICENSE.md"),
-				types.String("A license")),
-		),
+		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema,
+			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')"),
 		Query: "select * from dolt_docs",
 		ExpectedRows: ToSqlRows(CompressSchema(doltdb.DocsSchema),
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
@@ -1296,15 +1292,8 @@ var systemTableSelectTests = []SelectTest{
 	},
 	{
 		Name: "select from dolt_query_catalog",
-		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
-			dtables.DoltQueryCatalogSchema,
-			NewRowWithSchema(dtables.DoltQueryCatalogSchema,
-				types.String("existingEntry"),
-				types.Uint(2),
-				types.String("example"),
-				types.String("select 2+2 from dual"),
-				types.String("description")),
-		),
+		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
+			"INSERT INTO dolt_query_catalog VALUES ('existingEntry', 2, 'example', 'select 2+2 from dual', 'description')"),
 		Query: "select * from dolt_query_catalog",
 		ExpectedRows: ToSqlRows(CompressSchema(dtables.DoltQueryCatalogSchema),
 			NewRow(types.String("existingEntry"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description")),
@@ -1313,19 +1302,10 @@ var systemTableSelectTests = []SelectTest{
 	},
 	{
 		Name: "select from dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			SchemasTableSchema(),
-			NewRowWithSchema(SchemasTableSchema(),
-				types.String("view"),
-				types.String("name"),
-				types.String("select 2+2 from dual"),
-				types.Int(1),
-				CreateTestJSON(),
-			)),
-		Query: "select * from dolt_schemas",
-		ExpectedRows: ToSqlRows(CompressSchema(SchemasTableSchema()),
-			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual"), types.Int(1), CreateTestJSON()),
-		),
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemasTableSchema(),
+			`INSERT INTO dolt_schemas VALUES ('view', 'name', 'select 2+2 from dual', 1, NULL)`),
+		Query:          "select * from dolt_schemas",
+		ExpectedRows:   []sql.Row{{"view", "name", "select 2+2 from dual", int64(1), nil}},
 		ExpectedSchema: CompressSchema(SchemasTableSchema()),
 	},
 }
@@ -1338,9 +1318,6 @@ func CreateTestJSON() types.JSON {
 }
 
 func TestSelectSystemTables(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // todo: convert to enginetest
-	}
 	for _, test := range systemTableSelectTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testSelectQuery(t, test)
@@ -1421,17 +1398,10 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 }
 
 func testSelectDiffQuery(t *testing.T, test SelectTest) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip("") // todo: convert to enginetests
-	}
-
 	validateTest(t, test)
-
 	ctx := context.Background()
-
 	cleanup := installTestCommitClock()
 	defer cleanup()
-
 	dEnv := dtestutils.CreateTestEnv()
 	InitializeWithHistory(t, ctx, dEnv, CreateHistory(ctx, dEnv, t)...)
 	if test.AdditionalSetup != nil {

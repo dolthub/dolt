@@ -377,7 +377,7 @@ func TestExecuteInsert(t *testing.T) {
 var systemTableInsertTests = []InsertTest{
 	{
 		Name:            "insert into dolt_docs",
-		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema),
+		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema, ""),
 		InsertQuery:     "insert into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
 		SelectQuery:     "select * from dolt_docs",
 		ExpectedRows:    []sql.Row{{"README.md", "Some text"}},
@@ -385,14 +385,8 @@ var systemTableInsertTests = []InsertTest{
 	},
 	{
 		Name: "insert into dolt_query_catalog",
-		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
-			dtables.DoltQueryCatalogSchema,
-			NewRowWithSchema(dtables.DoltQueryCatalogSchema,
-				types.String("existingEntry"),
-				types.Uint(2),
-				types.String("example"),
-				types.String("select 2+2 from dual"),
-				types.String("description"))),
+		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
+			"INSERT INTO dolt_query_catalog VALUES ('existingEntry', 2, 'example', 'select 2+2 from dual', 'description')"),
 		InsertQuery: "insert into dolt_query_catalog (id, display_order, name, query, description) values ('abc123', 1, 'example', 'select 1+1 from dual', 'description')",
 		SelectQuery: "select * from dolt_query_catalog ORDER BY id",
 		ExpectedRows: ToSqlRows(CompressSchema(dtables.DoltQueryCatalogSchema),
@@ -403,7 +397,7 @@ var systemTableInsertTests = []InsertTest{
 	},
 	{
 		Name:            "insert into dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemasTableSchema()),
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemasTableSchema(), ""),
 		InsertQuery:     "insert into dolt_schemas (id, type, name, fragment) values (1, 'view', 'name', 'select 2+2 from dual')",
 		SelectQuery:     "select * from dolt_schemas ORDER BY id",
 		ExpectedRows: ToSqlRows(CompressSchema(SchemasTableSchema()),
@@ -414,9 +408,6 @@ var systemTableInsertTests = []InsertTest{
 }
 
 func TestInsertIntoSystemTables(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // todo: convert to enginetest
-	}
 	for _, test := range systemTableInsertTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testInsertQuery(t, test)
