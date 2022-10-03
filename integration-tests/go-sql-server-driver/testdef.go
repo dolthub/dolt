@@ -31,13 +31,13 @@ type TestDef struct {
 	Tests []Test `yaml:"tests"`
 }
 
-// Test is a single test to run, with steup in the form of |Repos|,
-// |MultiRepos| and |Servers|, and assertions in the form of |Conns|.
+// Test is a single test to run. The Repos and MultiRepos will be created, and
+// any Servers defined within them will be started. The interactions and
+// assertions defined in Conns will be run.
 type Test struct {
 	Name       string       `yaml:"name"`
 	Repos      []TestRepo   `yaml:"repos"`
 	MultiRepos []MultiRepo  `yaml:"multi_repos"`
-	Servers    []Server     `yaml:"servers"`
 	Conns      []Connection `yaml:"connections"`
 }
 
@@ -67,6 +67,11 @@ type TestRepo struct {
 	Name        string       `yaml:"name"`
 	WithFiles   []WithFile   `yaml:"with_files"`
 	WithRemotes []WithRemote `yaml:"with_remotes"`
+
+	// Only valid on Test.Repos, not in Test.MultiRepos.Repos. If set, a
+	// sql-server process will be run against this TestRepo. It will be
+	// available as TestRepo.Name.
+	Server *Server `yaml:"server"`
 }
 
 // |MultiRepo| is a subdirectory where many |TestRepo|s can be defined. You can
@@ -76,6 +81,10 @@ type MultiRepo struct {
 	Name      string     `yaml:"name"`
 	Repos     []TestRepo `yaml:"repos"`
 	WithFiles []WithFile `yaml:"with_files"`
+
+	// If set, a sql-server process will be run against this TestRepo. It
+	// will be available as MultiRepo.Name.
+	Server *Server `yaml:"server"`
 }
 
 // |WithRemote| defines remotes which should be defined on the repository
@@ -173,6 +182,36 @@ func MakeRepo(t *testing.T, rs RepoStore, r TestRepo) Repo {
 	return repo
 }
 
+func MakeServer(t *testing.T, dc DoltCmdable, s *Server) (*SqlServer, func()) {
+	if s == nil {
+		return nil, nil
+	}
+	opts := []SqlServerOpt{WithArgs(s.Args...)}
+	if s.Port != 0 {
+		opts = append(opts, WithPort(s.Port))
+	}
+	server, err := StartSqlServer(dc, opts...)
+	require.NoError(t, err)
+	if len(s.ErrorMatches) > 0 {
+		err := server.ErrorStop()
+		require.Error(t, err)
+		output := string(server.Output.Bytes())
+		for _, a := range s.ErrorMatches {
+			require.Regexp(t, a, output)
+		}
+		return nil, nil
+	} else {
+		return server, func() {
+			err := server.GracefulStop()
+			require.NoError(t, err)
+			output := string(server.Output.Bytes())
+			for _, a := range s.LogMatches {
+				require.Regexp(t, a, output)
+			}
+		}
+	}
+}
+
 func RunTestsFile(t *testing.T, path string) {
 	def, err := ParseTestsFile(path)
 	require.NoError(t, err)
@@ -182,9 +221,19 @@ func RunTestsFile(t *testing.T, path string) {
 			require.NoError(t, err)
 			rs, err := u.MakeRepoStore()
 			require.NoError(t, err)
+
 			doltlocs := make(map[string]DoltCmdable)
+			servers := make(map[string]*SqlServer)
 			for _, r := range test.Repos {
-				doltlocs[r.Name] = MakeRepo(t, rs, r)
+				repo := MakeRepo(t, rs, r)
+				doltlocs[r.Name] = repo
+
+				server, close := MakeServer(t, repo, r.Server)
+				if server != nil {
+					server.DBName = r.Name
+					servers[r.Name] = server
+					defer close()
+				}
 			}
 			for _, mr := range test.MultiRepos {
 				// Each MultiRepo gets its own dolt config --global.
@@ -199,53 +248,26 @@ func RunTestsFile(t *testing.T, path string) {
 					require.NoError(t, rs.WriteFile(f.Name, f.Contents))
 				}
 				doltlocs[mr.Name] = rs
-			}
-			servers := make(map[string]*SqlServer)
-			for _, sl := range test.Servers {
-				s := sl
-				var server *SqlServer
-				opts := []SqlServerOpt{WithArgs(s.Args...)}
-				if sl.Port != 0 {
-					opts = append(opts, WithPort(sl.Port))
-				}
-				server, err = StartSqlServer(doltlocs[s.Name], opts...)
-				require.NoError(t, err)
-				if len(s.ErrorMatches) > 0 {
-					err := server.ErrorStop()
-					require.Error(t, err)
-					output := string(server.Output.Bytes())
-					for _, a := range s.ErrorMatches {
-						require.Regexp(t, a, output)
-					}
-				} else {
-					servers[s.Name] = server
-					defer func() {
-						err := server.GracefulStop()
-						require.NoError(t, err)
-						output := string(server.Output.Bytes())
-						for _, a := range s.LogMatches {
-							require.Regexp(t, a, output)
-						}
-					}()
+
+				server, close := MakeServer(t, rs, mr.Server)
+				if server != nil {
+					servers[mr.Name] = server
+					defer close()
 				}
 			}
+
 			dbs := make(map[string]*sql.DB)
 			defer func() {
 				for _, db := range dbs {
 					db.Close()
 				}
 			}()
-			for nl, s := range servers {
-				n := nl
-				dbname := n
-				_, ismultirepo := doltlocs[n].(RepoStore)
-				if ismultirepo {
-					dbname = ""
-				}
-				db, err := s.DB(dbname)
+			for n, s := range servers {
+				db, err := s.DB()
 				require.NoError(t, err)
 				dbs[n] = db
 			}
+
 			for i, c := range test.Conns {
 				db := dbs[c.On]
 				require.NotNilf(t, db, "error in test spec: could not find database %s for connection %d", c.On, i)
@@ -268,12 +290,7 @@ func RunTestsFile(t *testing.T, path string) {
 					require.NotNilf(t, s, "error in test spec: could not find server %s for connection %d", c.On, i)
 					err := s.Restart(c.RestartServer.Args)
 					require.NoError(t, err)
-					dbname := c.On
-					_, ismultirepo := doltlocs[c.On].(RepoStore)
-					if ismultirepo {
-						dbname = ""
-					}
-					db, err := s.DB(dbname)
+					db, err := s.DB()
 					require.NoError(t, err)
 					dbs[c.On] = db
 				}

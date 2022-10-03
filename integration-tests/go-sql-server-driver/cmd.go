@@ -170,6 +170,7 @@ type SqlServer struct {
 	Cmd         *exec.Cmd
 	Port        int
 	Output      *bytes.Buffer
+	DBName      string
 	RecreateCmd func(args ...string) *exec.Cmd
 }
 
@@ -276,8 +277,8 @@ func (s *SqlServer) Restart(newargs *[]string) error {
 	return s.Cmd.Start()
 }
 
-func (s *SqlServer) DB(dbname string) (*sql.DB, error) {
-	db, err := sql.Open("mysql", fmt.Sprintf("root@tcp(127.0.0.1:%d)/%s", s.Port, dbname))
+func (s *SqlServer) DB() (*sql.DB, error) {
+	db, err := sql.Open("mysql", fmt.Sprintf("root@tcp(127.0.0.1:%d)/%s", s.Port, s.DBName))
 	if err != nil {
 		return nil, err
 	}

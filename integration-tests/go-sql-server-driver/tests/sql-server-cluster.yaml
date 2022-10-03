@@ -40,10 +40,9 @@ tests:
           bootstrap_epoch: 15
           remotesapi:
             port: 50051
-  servers:
-  - name: server1
-    args: ["--config", "standby_server.yaml"]
-    port: 3309
+    server:
+      args: ["--config", "standby_server.yaml"]
+      port: 3309
   connections:
   - on: server1
     queries:
@@ -95,10 +94,9 @@ tests:
           bootstrap_epoch: 10
           remotesapi:
             port: 50051
-  servers:
-  - name: server1
-    args: ["--config", "server.yaml"]
-    port: 3309
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
   connections:
   - on: server1
     queries:
@@ -173,10 +171,9 @@ tests:
           bootstrap_epoch: 10
           remotesapi:
             port: 50051
-  servers:
-  - name: server1
-    args: ["--config", "server.yaml"]
-    port: 3309
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
   connections:
   - on: server1
     queries:
@@ -211,12 +208,11 @@ tests:
           bootstrap_epoch: 10
           remotesapi:
             port: 50051
-  servers:
-  - name: server1
-    args: ["--config", "server.yaml"]
-    port: 3309
-    error_matches:
-    - destination remote standby does not exist
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+      error_matches:
+      - destination remote standby does not exist
 - name: primary comes up and replicates to standby
   multi_repos:
   - name: server1
@@ -244,6 +240,9 @@ tests:
           bootstrap_epoch: 10
           remotesapi:
             port: 50051
+    server:
+      args: ["--port", "3309"]
+      port: 3309
   - name: server2
     repos:
     - name: repo1
@@ -269,13 +268,9 @@ tests:
           bootstrap_epoch: 10
           remotesapi:
             port: 50052
-  servers:
-  - name: server1
-    args: ["--port", "3309"]
-    port: 3309
-  - name: server2
-    args: ["--config", "server.yaml"]
-    port: 3310
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
   connections:
   - on: server1
     queries:
