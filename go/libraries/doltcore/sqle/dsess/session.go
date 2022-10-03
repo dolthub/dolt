@@ -60,6 +60,10 @@ type DoltSession struct {
 	tempTables  map[string][]sql.Table
 	globalsConf config.ReadWriteConfig
 	mu          *sync.Mutex
+
+	// If non-nil, this will be returned from ValidateSession.
+	// Used by sqle/cluster to put a session into a terminal err state.
+	validateErr error
 }
 
 var _ sql.Session = (*DoltSession)(nil)
@@ -178,10 +182,22 @@ func (d *DoltSession) Flush(ctx *sql.Context, dbName string) error {
 	return d.SetRoot(ctx, dbName, ws.WorkingRoot())
 }
 
+// SetValidateErr sets an error on this session to be returned from every call
+// to ValidateSession. This is effectively a way to disable a session.
+//
+// Used by sql/cluster logic to make sessions on a server which has
+// transitioned roles termainlly error.
+func (d *DoltSession) SetValidateErr(err error) {
+	d.validateErr = err
+}
+
 // ValidateSession validates a working set if there are a valid sessionState with non-nil working set.
 // If there is no sessionState or its current working set not defined, then no need for validation,
 // so no error is returned.
 func (d *DoltSession) ValidateSession(ctx *sql.Context, dbName string) error {
+	if d.validateErr != nil {
+		return d.validateErr
+	}
 	sessionState, ok, err := d.LookupDbState(ctx, dbName)
 	if !ok {
 		return nil
