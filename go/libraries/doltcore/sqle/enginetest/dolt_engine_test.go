@@ -46,7 +46,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 79
+const SkipPreparedsCount = 80
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -256,6 +256,11 @@ func TestQueryPlans(t *testing.T) {
 	// TODO: exchange nodes should really only be part of the explain plan under certain debug settings
 	harness := newDoltHarness(t).WithParallelism(1).WithSkippedQueries(skipped)
 	enginetest.TestQueryPlans(t, harness, queries.PlanTests)
+}
+
+func TestIntegrationQueryPlans(t *testing.T) {
+	harness := newDoltHarness(t).WithParallelism(1)
+	enginetest.TestIntegrationPlans(t, harness)
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
