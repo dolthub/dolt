@@ -84,11 +84,7 @@ func (u DoltUser) DoltCmd(args ...string) *exec.Cmd {
 
 func (u DoltUser) DoltExec(args ...string) error {
 	cmd := u.DoltCmd(args...)
-	err := cmd.Start()
-	if err != nil {
-		return err
-	}
-	return cmd.Wait()
+	return cmd.Run()
 }
 
 func (u DoltUser) MakeRepoStore() (RepoStore, error) {
@@ -116,6 +112,22 @@ func (rs RepoStore) MakeRepo(name string) (Repo, error) {
 		return Repo{}, err
 	}
 	return ret, nil
+}
+
+func (rs RepoStore) DoltCmd(args ...string) *exec.Cmd {
+	cmd := rs.user.DoltCmd(args...)
+	cmd.Dir = rs.dir
+	return cmd
+}
+
+func (rs RepoStore) WriteFile(path string, contents string) error {
+	path = filepath.Join(rs.dir, path)
+	d := filepath.Dir(path)
+	err := os.MkdirAll(d, 0750)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(contents), 0550)
 }
 
 type Repo struct {
@@ -148,16 +160,39 @@ func (r Repo) WriteFile(path string, contents string) error {
 	return os.WriteFile(path, []byte(contents), 0550)
 }
 
-type SqlServer struct {
-	Done   chan struct{}
-	Cmd    *exec.Cmd
-	Port   int
-	Output *bytes.Buffer
-	Repo   Repo
+func (r Repo) CreateRemote(name, url string) error {
+	cmd := r.DoltCmd("remote", "add", name, url)
+	return cmd.Run()
 }
 
-func (r Repo) StartSqlServer(args ...string) (*SqlServer, error) {
-	cmd := r.DoltCmd(append([]string{"sql-server"}, args...)...)
+type SqlServer struct {
+	Done        chan struct{}
+	Cmd         *exec.Cmd
+	Port        int
+	Output      *bytes.Buffer
+	RecreateCmd func(args ...string) *exec.Cmd
+}
+
+type SqlServerOpt func(s *SqlServer)
+
+func WithArgs(args ...string) SqlServerOpt {
+	return func(s *SqlServer) {
+		s.Cmd.Args = append(s.Cmd.Args, args...)
+	}
+}
+
+func WithPort(port int) SqlServerOpt {
+	return func(s *SqlServer) {
+		s.Port = port
+	}
+}
+
+type DoltCmdable interface {
+	DoltCmd(...string) *exec.Cmd
+}
+
+func StartSqlServer(dc DoltCmdable, opts ...SqlServerOpt) (*SqlServer, error) {
+	cmd := dc.DoltCmd("sql-server")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -175,17 +210,32 @@ func (r Repo) StartSqlServer(args ...string) (*SqlServer, error) {
 		wg.Wait()
 		close(done)
 	}()
-	err = cmd.Start()
-	if err != nil {
-		return nil, err
-	}
-	return &SqlServer{
+	ret := &SqlServer{
 		Done:   done,
 		Cmd:    cmd,
 		Port:   3306,
 		Output: output,
-		Repo:   r,
-	}, nil
+		RecreateCmd: func(args ...string) *exec.Cmd {
+			return dc.DoltCmd(args...)
+		},
+	}
+	for _, o := range opts {
+		o(ret)
+	}
+	err = ret.Cmd.Start()
+	if err != nil {
+		return nil, err
+	}
+	return ret, nil
+}
+
+func (r Repo) StartSqlServer(opts ...SqlServerOpt) (*SqlServer, error) {
+	return StartSqlServer(r, opts...)
+}
+
+func (s *SqlServer) ErrorStop() error {
+	<-s.Done
+	return s.Cmd.Wait()
 }
 
 func (s *SqlServer) GracefulStop() error {
@@ -197,12 +247,16 @@ func (s *SqlServer) GracefulStop() error {
 	return s.Cmd.Wait()
 }
 
-func (s *SqlServer) Restart() error {
+func (s *SqlServer) Restart(newargs *[]string) error {
 	err := s.GracefulStop()
 	if err != nil {
 		return err
 	}
-	s.Cmd = s.Repo.DoltCmd(s.Cmd.Args[1:]...)
+	args := s.Cmd.Args[1:]
+	if newargs != nil {
+		args = append([]string{"sql-server"}, (*newargs)...)
+	}
+	s.Cmd = s.RecreateCmd(args...)
 	stdout, err := s.Cmd.StdoutPipe()
 	if err != nil {
 		return err

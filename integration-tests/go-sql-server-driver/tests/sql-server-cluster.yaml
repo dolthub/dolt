@@ -1,0 +1,303 @@
+tests:
+- name: persisted role and epoch take precedence over bootstrap values
+  multi_repos:
+  - name: server1
+    repos:
+    - name: repo1
+      with_remotes:
+      - name: standby
+        url: http://localhost:50052/repo1
+    - name: repo2
+      with_remotes:
+      - name: standby
+        url: http://localhost:50052/repo2
+    with_files:
+    - name: standby_server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:50052/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 10
+          remotesapi:
+            port: 50051
+    - name: primary_server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:50052/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 15
+          remotesapi:
+            port: 50051
+  servers:
+  - name: server1
+    args: ["--config", "standby_server.yaml"]
+    port: 3309
+  connections:
+  - on: server1
+    queries:
+    - exec: "use dolt_cluster"
+    - query: "select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch"
+      result:
+        columns: ["@@GLOBAL.dolt_cluster_role","@@GLOBAL.dolt_cluster_role_epoch"]
+        rows: [["standby","10"]]
+    - query: |
+        select `database`, standby_remote, role, epoch from dolt_cluster_status order by `database` asc
+      result:
+        columns: ["database","standby_remote","role","epoch"]
+        rows:
+        - ["repo1","standby","standby","10"]
+        - ["repo2","standby","standby","10"]
+    restart_server:
+      args: ["--config", "primary_server.yaml"]
+  - on: server1
+    queries:
+    - exec: "use dolt_cluster"
+    - query: "select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch"
+      result:
+        columns: ["@@GLOBAL.dolt_cluster_role","@@GLOBAL.dolt_cluster_role_epoch"]
+        rows: [["standby","10"]]
+- name: dolt_assume_cluster_role
+  multi_repos:
+  - name: server1
+    repos:
+    - name: repo1
+      with_remotes:
+      - name: standby
+        url: http://localhost:50052/repo1
+    - name: repo2
+      with_remotes:
+      - name: standby
+        url: http://localhost:50052/repo2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:50052/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 10
+          remotesapi:
+            port: 50051
+  servers:
+  - name: server1
+    args: ["--config", "server.yaml"]
+    port: 3309
+  connections:
+  - on: server1
+    queries:
+    - exec: "use repo1"
+    - query: "call dolt_assume_cluster_role('standby', '9')"
+      error_match: "error assuming role"
+    - query: "call dolt_assume_cluster_role('primary', '10')"
+      error_match: "error assuming role"
+    - query: "call dolt_assume_cluster_role('backup', '11')"
+      error_match: "error assuming role"
+    - query: "call dolt_assume_cluster_role('standby', '10')"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+      # XXX: TODO: This should not break the connection since the role did not change.
+  - on: server1
+    queries:
+    - query: "call dolt_assume_cluster_role('standby', '12')"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+    - query: "select 2 from dual"
+      error_match: "no longer be used"
+  - on: server1
+    queries:
+    - query: "select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch"
+      result:
+        columns: ["@@GLOBAL.dolt_cluster_role","@@GLOBAL.dolt_cluster_role_epoch"]
+        rows: [["standby","12"]]
+    - query: "call dolt_assume_cluster_role('primary', '13')"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+  - on: server1
+    queries:
+    - query: "select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch"
+      result:
+        columns: ["@@GLOBAL.dolt_cluster_role","@@GLOBAL.dolt_cluster_role_epoch"]
+        rows: [["primary","13"]]
+    restart_server: {}
+  # Assert that it comes back up with newly assumed role.
+  - on: server1
+    queries:
+    - query: "select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch"
+      result:
+        columns: ["@@GLOBAL.dolt_cluster_role","@@GLOBAL.dolt_cluster_role_epoch"]
+        rows: [["primary","13"]]
+- name: create database makes a new remote
+  multi_repos:
+  - name: server1
+    repos:
+    - name: repo1
+      with_remotes:
+      - name: standby
+        url: http://localhost:50052/repo1
+    - name: repo2
+      with_remotes:
+      - name: standby
+        url: http://localhost:50052/repo2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:50052/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 10
+          remotesapi:
+            port: 50051
+  servers:
+  - name: server1
+    args: ["--config", "server.yaml"]
+    port: 3309
+  connections:
+  - on: server1
+    queries:
+    - exec: "create database a_new_database"
+    - exec: "use a_new_database"
+    - query: "select name, url from dolt_remotes"
+      result:
+        columns: ["name","url"]
+        rows: [["standby","http://localhost:50052/a_new_database"]]
+- name: fails to start if a configured remote is missing
+  multi_repos:
+  - name: server1
+    repos:
+    - name: repo1
+      with_remotes:
+      - name: standby
+        url: http://localhost:50052/repo1
+    - name: repo2
+      with_remotes:
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:50052/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 10
+          remotesapi:
+            port: 50051
+  servers:
+  - name: server1
+    args: ["--config", "server.yaml"]
+    port: 3309
+    error_matches:
+    - destination remote standby does not exist
+- name: primary comes up and replicates to standby
+  multi_repos:
+  - name: server1
+    repos:
+    - name: repo1
+      with_remotes:
+      - name: standby
+        url: http://localhost:50052/repo1
+    - name: repo2
+      with_remotes:
+      - name: standby
+        url: http://localhost:50052/repo2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:50052/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 10
+          remotesapi:
+            port: 50051
+  - name: server2
+    repos:
+    - name: repo1
+      with_remotes:
+      - name: standby
+        url: http://localhost:50051/repo1
+    - name: repo2
+      with_remotes:
+      - name: standby
+        url: http://localhost:50051/repo2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:50051/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 10
+          remotesapi:
+            port: 50052
+  servers:
+  - name: server1
+    args: ["--port", "3309"]
+    port: 3309
+  - name: server2
+    args: ["--config", "server.yaml"]
+    port: 3310
+  connections:
+  - on: server1
+    queries:
+    - exec: "use repo1"
+    - exec: "create table vals (i int primary key)"
+    - exec: "insert into vals values (1),(2),(3),(4),(5)"
+    restart_server:
+      args: ["--config", "server.yaml"]
+  - on: server1
+    queries:
+    - exec: "use dolt_cluster"
+    - sleep_millis: 250
+    - query: "select `database`, standby_remote, role, epoch, replication_lag_millis, current_error from dolt_cluster_status order by `database` asc"
+      result:
+        columns: ["database","standby_remote","role","epoch","replication_lag_millis","current_error"]
+        rows:
+        - ["repo1","standby","primary","10","0","NULL"]
+        - ["repo2","standby","primary","10","0","NULL"]
+  - on: server2
+    queries:
+    - exec: "use repo1"
+    - query: "select count(*) from vals"
+      result:
+        columns: ["count(*)"]
+        rows: [["5"]]

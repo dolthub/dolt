@@ -21,3 +21,7 @@ import (
 func TestConfig(t *testing.T) {
 	RunTestsFile(t, "tests/sql-server-config.yaml")
 }
+
+func TestCluster(t *testing.T) {
+	RunTestsFile(t, "tests/sql-server-cluster.yaml")
+}

@@ -18,6 +18,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"database/sql"
 	"database/sql/driver"
@@ -30,21 +31,38 @@ type TestDef struct {
 }
 
 type Test struct {
-	Name    string       `yaml:"name"`
-	Repos   []TestRepo   `yaml:"repos"`
-	Servers []Server     `yaml:"servers"`
-	Conns   []Connection `yaml:"connections"`
+	Name       string       `yaml:"name"`
+	Repos      []TestRepo   `yaml:"repos"`
+	Servers    []Server     `yaml:"servers"`
+	Conns      []Connection `yaml:"connections"`
+	MultiRepos []MultiRepo  `yaml:"multi_repos"`
 }
 
 type Connection struct {
-	On            string  `yaml:"on"`
-	Queries       []Query `yaml:"queries"`
-	RestartServer bool    `yaml:"restart_server"`
+	On            string       `yaml:"on"`
+	Queries       []Query      `yaml:"queries"`
+	RestartServer *RestartArgs `yaml:"restart_server"`
+}
+
+type RestartArgs struct {
+	Args *[]string `yaml:"args"`
+}
+
+type MultiRepo struct {
+	Name      string     `yaml:"name"`
+	Repos     []TestRepo `yaml:"repos"`
+	WithFiles []WithFile `yaml:"with_files"`
 }
 
 type TestRepo struct {
-	Name      string     `yaml:"name"`
-	WithFiles []WithFile `yaml:"with_files"`
+	Name        string       `yaml:"name"`
+	WithFiles   []WithFile   `yaml:"with_files"`
+	WithRemotes []WithRemote `yaml:"with_remotes"`
+}
+
+type WithRemote struct {
+	Name string `yaml:"name"`
+	URL  string `yaml:"url"`
 }
 
 type WithFile struct {
@@ -53,17 +71,20 @@ type WithFile struct {
 }
 
 type Server struct {
-	Name       string   `yaml:"name"`
-	Args       []string `yaml:"args"`
-	LogMatches []string `yaml:"log_matches"`
+	Name         string   `yaml:"name"`
+	Args         []string `yaml:"args"`
+	Port         int      `yaml:"port"`
+	LogMatches   []string `yaml:"log_matches"`
+	ErrorMatches []string `yaml:"error_matches"`
 }
 
 type Query struct {
-	Query      string      `yaml:"query"`
-	Exec       string      `yaml:"exec"`
-	Args       []string    `yaml:"args"`
-	Result     QueryResult `yaml:"result"`
-	ErrorMatch string      `yaml:"error_match"`
+	Query       string      `yaml:"query"`
+	Exec        string      `yaml:"exec"`
+	Args        []string    `yaml:"args"`
+	Result      QueryResult `yaml:"result"`
+	ErrorMatch  string      `yaml:"error_match"`
+	SleepMillis int         `yaml:"sleep_millis"`
 }
 
 type QueryResult struct {
@@ -77,7 +98,7 @@ func ParseTestsFile(path string) (TestDef, error) {
 		return TestDef{}, err
 	}
 	var res TestDef
-	err = yaml.Unmarshal(contents, &res)
+	err = yaml.UnmarshalStrict(contents, &res)
 	return res, err
 }
 
@@ -90,36 +111,78 @@ func RunTestsFile(t *testing.T, path string) {
 			require.NoError(t, err)
 			rs, err := u.MakeRepoStore()
 			require.NoError(t, err)
-			repos := make(map[string]Repo)
+			doltlocs := make(map[string]DoltCmdable)
 			for _, r := range test.Repos {
 				var repo Repo
 				repo, err = rs.MakeRepo(r.Name)
 				require.NoError(t, err)
-				repos[r.Name] = repo
+				doltlocs[r.Name] = repo
 				for _, f := range r.WithFiles {
 					require.NoError(t, repo.WriteFile(f.Name, f.Contents))
 				}
+				for _, remote := range r.WithRemotes {
+					require.NoError(t, repo.CreateRemote(remote.Name, remote.URL))
+				}
+			}
+			for _, mr := range test.MultiRepos {
+				u, err := NewDoltUser()
+				require.NoError(t, err)
+				rs, err = u.MakeRepoStore()
+				require.NoError(t, err)
+				for _, r := range mr.Repos {
+					var repo Repo
+					doltlocs[r.Name] = repo
+					repo, err = rs.MakeRepo(r.Name)
+					for _, f := range r.WithFiles {
+						require.NoError(t, repo.WriteFile(f.Name, f.Contents))
+					}
+					for _, remote := range r.WithRemotes {
+						require.NoError(t, repo.CreateRemote(remote.Name, remote.URL))
+					}
+				}
+				for _, f := range mr.WithFiles {
+					require.NoError(t, rs.WriteFile(f.Name, f.Contents))
+				}
+				doltlocs[mr.Name] = rs
 			}
 			servers := make(map[string]*SqlServer)
 			for _, sl := range test.Servers {
 				s := sl
 				var server *SqlServer
-				server, err = repos[s.Name].StartSqlServer(s.Args...)
+				opts := []SqlServerOpt{WithArgs(s.Args...)}
+				if sl.Port != 0 {
+					opts = append(opts, WithPort(sl.Port))
+				}
+				server, err = StartSqlServer(doltlocs[s.Name], opts...)
 				require.NoError(t, err)
-				servers[s.Name] = server
-				defer func() {
-					err := server.GracefulStop()
-					require.NoError(t, err)
+				if len(s.ErrorMatches) > 0 {
+					err := server.ErrorStop()
+					require.Error(t, err)
 					output := string(server.Output.Bytes())
-					for _, a := range s.LogMatches {
+					for _, a := range s.ErrorMatches {
 						require.Regexp(t, a, output)
 					}
-				}()
+				} else {
+					servers[s.Name] = server
+					defer func() {
+						err := server.GracefulStop()
+						require.NoError(t, err)
+						output := string(server.Output.Bytes())
+						for _, a := range s.LogMatches {
+							require.Regexp(t, a, output)
+						}
+					}()
+				}
 			}
 			dbs := make(map[string]*sql.DB)
 			for nl, s := range servers {
 				n := nl
-				db, err := s.DB(n)
+				dbname := n
+				_, ismultirepo := doltlocs[n].(RepoStore)
+				if ismultirepo {
+					dbname = ""
+				}
+				db, err := s.DB(dbname)
 				require.NoError(t, err)
 				dbs[n] = db
 				defer func() {
@@ -141,11 +204,15 @@ func RunTestsFile(t *testing.T, path string) {
 						for i := range q.Args {
 							args[i] = q.Args[i]
 						}
+						if q.SleepMillis > 0 {
+							time.Sleep(time.Duration(q.SleepMillis) * time.Millisecond)
+						}
 						if q.Query != "" {
 							rows, err := conn.QueryContext(context.Background(), q.Query, args...)
 							if q.ErrorMatch != "" {
 								require.Error(t, err)
 								require.Regexp(t, q.ErrorMatch, err.Error())
+								continue
 							}
 							require.NoError(t, err)
 							defer rows.Close()
@@ -156,23 +223,23 @@ func RunTestsFile(t *testing.T, path string) {
 								require.True(t, rows.Next())
 								scanned := make([]any, len(r))
 								for j := range scanned {
-									scanned[j] = new(string)
+									scanned[j] = new(sql.NullString)
 								}
 								require.NoError(t, rows.Scan(scanned...))
 								printed := make([]string, len(r))
 								for j := range scanned {
-									s := scanned[j].(*string)
-									if s == nil {
+									s := scanned[j].(*sql.NullString)
+									if !s.Valid {
 										printed[j] = "NULL"
 									} else {
-										printed[j] = *s
+										printed[j] = s.String
 									}
 								}
 								require.Equal(t, r, printed)
 							}
 							require.False(t, rows.Next())
 							require.NoError(t, rows.Err())
-						} else {
+						} else if q.Exec != "" {
 							_, err := conn.ExecContext(context.Background(), q.Exec, args...)
 							if q.ErrorMatch == "" {
 								require.NoError(t, err)
@@ -183,15 +250,20 @@ func RunTestsFile(t *testing.T, path string) {
 						}
 					}
 				}()
-				if c.RestartServer {
+				if c.RestartServer != nil {
 					olddb := dbs[c.On]
 					olddb.Close()
 					require.NotNilf(t, olddb, "error in test spec: could not find database %s for connection %d", c.On, i)
 					s := servers[c.On]
 					require.NotNilf(t, s, "error in test spec: could not find server %s for connection %d", c.On, i)
-					err := s.Restart()
+					err := s.Restart(c.RestartServer.Args)
 					require.NoError(t, err)
-					db, err := s.DB(c.On)
+					dbname := c.On
+					_, ismultirepo := doltlocs[c.On].(RepoStore)
+					if ismultirepo {
+						dbname = ""
+					}
+					db, err := s.DB(dbname)
 					require.NoError(t, err)
 					dbs[c.On] = db
 				}

@@ -53,7 +53,7 @@ tests:
       result:
         columns: ["@@GLOBAL.max_connections"]
         rows: [["1000"]]
-    restart_server: true
+    restart_server: {}
   - on: repo1
     queries:
     - query: "select @@GLOBAL.max_connections"
@@ -171,7 +171,7 @@ tests:
       result:
         columns: ["@@GLOBAL.max_connections"]
         rows: [["1000"]]
-    restart_server: true
+    restart_server: {}
   - on: repo1
     queries:
     - query: "select @@GLOBAL.max_connections"
