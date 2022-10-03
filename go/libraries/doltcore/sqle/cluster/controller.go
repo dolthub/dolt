@@ -16,9 +16,11 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
@@ -38,6 +40,7 @@ type Role string
 
 const RolePrimary Role = "primary"
 const RoleStandby Role = "standby"
+const RoleDetectedBrokenConfig Role = "detected_broken_config"
 
 const PersistentConfigPrefix = "sqlserver.cluster"
 
@@ -53,6 +56,7 @@ type Controller struct {
 	cinterceptor  clientinterceptor
 	lgr           *logrus.Logger
 
+	provider       dbProvider
 	iterSessions   IterSessions
 	killQuery      func(uint32)
 	killConnection func(uint32) error
@@ -60,6 +64,12 @@ type Controller struct {
 
 type sqlvars interface {
 	AddSystemVariables(sysVars []sql.SystemVariable)
+}
+
+// We can manage certain aspects of the exposed databases on the server through
+// this.
+type dbProvider interface {
+	SetIsStandby(bool)
 }
 
 type procedurestore interface {
@@ -88,10 +98,15 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 		commithooks:   make([]*commithook, 0),
 		lgr:           lgr,
 	}
+	roleSetter := func(role string, epoch int) {
+		ret.setRoleAndEpoch(role, epoch, false /* graceful */, -1 /* saveConnID */)
+	}
 	ret.sinterceptor.lgr = lgr.WithFields(logrus.Fields{})
 	ret.sinterceptor.setRole(role, epoch)
+	ret.sinterceptor.roleSetter = roleSetter
 	ret.cinterceptor.lgr = lgr.WithFields(logrus.Fields{})
 	ret.cinterceptor.setRole(role, epoch)
+	ret.cinterceptor.roleSetter = roleSetter
 	return ret, nil
 }
 
@@ -128,7 +143,20 @@ func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, bt *sql.
 
 type IterSessions func(func(sql.Session) (bool, error)) error
 
+func (c *Controller) ManageDatabaseProvider(p dbProvider) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.provider = p
+	c.setProviderIsStandby(c.role != RolePrimary)
+}
+
 func (c *Controller) ManageQueryConnections(iterSessions IterSessions, killQuery func(uint32), killConnection func(uint32) error) {
+	if c == nil {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.iterSessions = iterSessions
@@ -224,6 +252,7 @@ func (c *Controller) persistVariables() error {
 func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) (Role, int, error) {
 	toset := make(map[string]string)
 	persistentRole := pCfg.GetStringOrDefault(DoltClusterRoleVariable, "")
+	var roleFromPersistentConfig bool
 	persistentEpoch := pCfg.GetStringOrDefault(DoltClusterRoleEpochVariable, "")
 	if persistentRole == "" {
 		if cfg.BootstrapRole() != "" {
@@ -235,6 +264,7 @@ func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.Rea
 		}
 		toset[DoltClusterRoleVariable] = persistentRole
 	} else {
+		roleFromPersistentConfig = true
 		lgr.Tracef("cluster/controller: persisted cluster role is %s", persistentRole)
 	}
 	if persistentEpoch == "" {
@@ -245,7 +275,10 @@ func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.Rea
 		lgr.Tracef("cluster/controller: persisted cluster role epoch is %s", persistentEpoch)
 	}
 	if persistentRole != string(RolePrimary) && persistentRole != string(RoleStandby) {
-		return "", 0, fmt.Errorf("persisted role %s.%s = %s must be \"primary\" or \"secondary\"", PersistentConfigPrefix, DoltClusterRoleVariable, persistentRole)
+		isallowed := persistentRole == string(RoleDetectedBrokenConfig) && roleFromPersistentConfig
+		if !isallowed {
+			return "", 0, fmt.Errorf("persisted role %s.%s = %s must be \"primary\" or \"secondary\"", PersistentConfigPrefix, DoltClusterRoleVariable, persistentRole)
+		}
 	}
 	epochi, err := strconv.Atoi(persistentEpoch)
 	if err != nil {
@@ -260,51 +293,59 @@ func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.Rea
 	return Role(persistentRole), epochi, nil
 }
 
-func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool) error {
+func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool, saveConnID int) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if epoch == c.epoch && role == string(c.role) {
 		return nil
 	}
-	if epoch == c.epoch {
-		return fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d with different role, '%s'", role, epoch, c.epoch, c.role)
+
+	if role != string(RolePrimary) && role != string(RoleStandby) && role != string(RoleDetectedBrokenConfig) {
+		return fmt.Errorf("error assuming role '%s'; valid roles are 'primary' and 'standby'", role)
 	}
+
 	if epoch < c.epoch {
 		return fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d", role, epoch, c.epoch)
 	}
-
-	if role != "primary" && role != "standby" {
-		return fmt.Errorf("error assuming role '%s'; valid roles are 'primary' and 'standby'", role)
+	if epoch == c.epoch {
+		// This is allowed for non-graceful transitions to 'standby', which only occur from interceptors and
+		// other signals that the cluster is misconfigured.
+		isallowed := !graceful && (role == string(RoleStandby) || role == string(RoleDetectedBrokenConfig))
+		if !isallowed {
+			return fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d with different role, '%s'", role, epoch, c.epoch, c.role)
+		}
 	}
 
 	changedrole := role != string(c.role)
 
-	c.role = Role(role)
-	c.epoch = epoch
-
 	if changedrole {
 		var err error
-		if c.role == RoleStandby {
+		if role == string(RoleStandby) {
 			if graceful {
-				err = c.gracefulTransitionToStandby()
+				err = c.gracefulTransitionToStandby(saveConnID)
+				if err != nil {
+					return err
+				}
 			} else {
-				err = c.immediateTransitionToStandby()
-				// TODO: this should not fail; if it does, we still prevent transition for now.
+				c.immediateTransitionToStandby()
 			}
+		} else if role == string(RoleDetectedBrokenConfig) {
+			c.immediateTransitionToStandby()
 		} else {
-			err = c.transitionToPrimary()
-			// TODO: this should not fail; if it does, we still prevent transition for now.
-		}
-		if err != nil {
-			return err
+			c.transitionToPrimary(saveConnID)
 		}
 	}
+
+	c.role = Role(role)
+	c.epoch = epoch
 
 	c.refreshSystemVars()
 	c.cinterceptor.setRole(c.role, c.epoch)
 	c.sinterceptor.setRole(c.role, c.epoch)
-	for _, h := range c.commithooks {
-		h.setRole(c.role)
+	if changedrole {
+		for _, h := range c.commithooks {
+			h.setRole(c.role)
+		}
 	}
 	return c.persistVariables()
 }
@@ -372,9 +413,26 @@ func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.Server
 // * Set all databases in database_provider to read-only.
 // * Kill all running queries in GMS.
 // * Replicate all databases to their standby remotes.
-//   - If success, return success.
-//   - If failure, set all databases in database_provider back to their original state. Return failure.
-func (c *Controller) gracefulTransitionToStandby() error {
+//   * If success, return success.
+//   * If failure, set all databases in database_provider back to their original state. Return failure.
+//
+// saveConnID is potentially a connID of the caller to
+// dolt_assume_cluster_role(), which should not be killed with the other
+// connections. That connection will be transitioned to a terminal error state
+// after returning the results of dolt_assume_cluster_role().
+//
+// called with c.mu held
+func (c *Controller) gracefulTransitionToStandby(saveConnID int) error {
+	c.setProviderIsStandby(true)
+	c.killRunningQueries(saveConnID)
+	// TODO: this can block with c.mu held, although we are not too
+	// interested in the server proceeding gracefully while this is
+	// happening.
+	if err := c.waitForHooksToReplicate(); err != nil {
+		c.setProviderIsStandby(false)
+		c.killRunningQueries(saveConnID)
+		return err
+	}
 	return nil
 }
 
@@ -382,7 +440,11 @@ func (c *Controller) gracefulTransitionToStandby() error {
 // * Set all databases in database_provider to read-only.
 // * Kill all running queries in GMS.
 // * Return success. NOTE: we do not attempt to replicate to the standby.
+//
+// called with c.mu held
 func (c *Controller) immediateTransitionToStandby() error {
+	c.setProviderIsStandby(true)
+	c.killRunningQueries(-1)
 	return nil
 }
 
@@ -390,20 +452,92 @@ func (c *Controller) immediateTransitionToStandby() error {
 // * Set all databases in database_provider back to their original mode: read-write or read only.
 // * Kill all running queries in GMS.
 // * Return success.
-func (c *Controller) transitionToPrimary() error {
+//
+// saveConnID is potentially the connID of the caller to
+// dolt_assume_cluster_role().
+//
+// called with c.mu held
+func (c *Controller) transitionToPrimary(saveConnID int) error {
+	c.setProviderIsStandby(false)
+	c.killRunningQueries(saveConnID)
 	return nil
 }
 
 // Kills all running queries in the managed GMS engine.
-func (c *Controller) killRunningQueries() {
-	c.mu.Lock()
-	iterSessions, killQuery, killConnection := c.iterSessions, c.killQuery, c.killConnection
-	c.mu.Unlock()
+// called with c.mu held
+func (c *Controller) killRunningQueries(saveConnID int) {
 	if c.iterSessions != nil {
-		iterSessions(func(session sql.Session) (stop bool, err error) {
-			killQuery(session.ID())
-			killConnection(session.ID())
+		c.iterSessions(func(session sql.Session) (stop bool, err error) {
+			if int(session.ID()) != saveConnID {
+				c.killQuery(session.ID())
+				c.killConnection(session.ID())
+			}
 			return
 		})
+	}
+}
+
+// called with c.mu held
+func (c *Controller) setProviderIsStandby(standby bool) {
+	if c.provider != nil {
+		c.provider.SetIsStandby(standby)
+	}
+}
+
+const waitForHooksToReplicateTimeout = 10 * time.Second
+
+// Called during a graceful transition from primary to standby. Waits until all
+// commithooks report nextHead == lastPushedHead.
+//
+// TODO: make the deadline here configurable or something.
+//
+// called with c.mu held
+func (c *Controller) waitForHooksToReplicate() error {
+	caughtup := make([]bool, len(c.commithooks))
+	var wg sync.WaitGroup
+	wg.Add(len(c.commithooks))
+	for li, lch := range c.commithooks {
+		i := li
+		ch := lch
+		if ch.isCaughtUpLocking() {
+			caughtup[i] = true
+			wg.Done()
+		} else {
+			ch.setWaitNotify(func() {
+				// called with ch.mu locked.
+				if !caughtup[i] && ch.isCaughtUp() {
+					caughtup[i] = true
+					wg.Done()
+				}
+			})
+		}
+	}
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	var success bool
+	select {
+	case <-done:
+		success = true
+	case <-time.After(waitForHooksToReplicateTimeout):
+		success = false
+	}
+	for _, ch := range c.commithooks {
+		ch.setWaitNotify(nil)
+	}
+	// make certain we don't leak the wg.Wait goroutine in the failure case.
+	for _, b := range caughtup {
+		if !b {
+			wg.Done()
+		}
+	}
+	if success {
+		c.lgr.Tracef("cluster/controller: successfully replicated all databases to all standbys; transitioning to standby.")
+		return nil
+	} else {
+		c.lgr.Warnf("cluster/controller: failed to replicate all databases to all standbys; not transitioning to standby.")
+		return errors.New("cluster/controller: failed to transition from primary to standby gracefully; could not replicate databases to standby in a timely manner.")
 	}
 }
