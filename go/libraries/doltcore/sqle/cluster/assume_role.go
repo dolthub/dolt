@@ -38,14 +38,16 @@ func newAssumeRoleProcedure(controller *Controller) sql.ExternalStoredProcedureD
 			if role == string(RoleDetectedBrokenConfig) {
 				return nil, errors.New("cannot set role to detected_broken_config; valid values are 'primary' and 'standby'")
 			}
-			err := controller.setRoleAndEpoch(role, epoch, true /* graceful */, int(ctx.Session.ID()))
+			changerole, err := controller.setRoleAndEpoch(role, epoch, true /* graceful */, int(ctx.Session.ID()))
 			if err != nil {
 				// We did not transition, no need to set our session to read-only, etc.
 				return nil, err
 			}
-			// We transitioned, make sure we do not run anymore queries on this session.
-			ctx.Session.SetTransaction(nil)
-			dsess.DSessFromSess(ctx.Session).SetValidateErr(ErrServerTransitionedRolesErr)
+			if changerole {
+				// We transitioned, make sure we do not run anymore queries on this session.
+				ctx.Session.SetTransaction(nil)
+				dsess.DSessFromSess(ctx.Session).SetValidateErr(ErrServerTransitionedRolesErr)
+			}
 			return sql.RowsToRowIter(sql.Row{0}), nil
 		},
 	}

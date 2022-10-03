@@ -293,26 +293,26 @@ func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.Rea
 	return Role(persistentRole), epochi, nil
 }
 
-func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool, saveConnID int) error {
+func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool, saveConnID int) (bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if epoch == c.epoch && role == string(c.role) {
-		return nil
+		return false, nil
 	}
 
 	if role != string(RolePrimary) && role != string(RoleStandby) && role != string(RoleDetectedBrokenConfig) {
-		return fmt.Errorf("error assuming role '%s'; valid roles are 'primary' and 'standby'", role)
+		return false, fmt.Errorf("error assuming role '%s'; valid roles are 'primary' and 'standby'", role)
 	}
 
 	if epoch < c.epoch {
-		return fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d", role, epoch, c.epoch)
+		return false, fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d", role, epoch, c.epoch)
 	}
 	if epoch == c.epoch {
 		// This is allowed for non-graceful transitions to 'standby', which only occur from interceptors and
 		// other signals that the cluster is misconfigured.
 		isallowed := !graceful && (role == string(RoleStandby) || role == string(RoleDetectedBrokenConfig))
 		if !isallowed {
-			return fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d with different role, '%s'", role, epoch, c.epoch, c.role)
+			return false, fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d with different role, '%s'", role, epoch, c.epoch, c.role)
 		}
 	}
 
@@ -324,7 +324,7 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool, save
 			if graceful {
 				err = c.gracefulTransitionToStandby(saveConnID)
 				if err != nil {
-					return err
+					return false, err
 				}
 			} else {
 				c.immediateTransitionToStandby()
@@ -347,7 +347,7 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool, save
 			h.setRole(c.role)
 		}
 	}
-	return c.persistVariables()
+	return changedrole, c.persistVariables()
 }
 
 func (c *Controller) roleAndEpoch() (Role, int) {
