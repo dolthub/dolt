@@ -122,6 +122,9 @@ func (ie *IndexEditor) InsertRowWithDupCb(ctx context.Context, key, partialKey t
 		return err
 	}
 
+	// TODO: might be able to reach index lengths from here
+	ie.tblSch.Indexes()
+
 	ie.writeMutex.Lock()
 	defer ie.writeMutex.Unlock()
 
