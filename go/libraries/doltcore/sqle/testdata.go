@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
@@ -314,43 +315,24 @@ func MutateRow(sch schema.Schema, r row.Row, tagsAndVals ...interface{}) row.Row
 	return mutated
 }
 
-func GetAllRows(root *doltdb.RootValue, tableName string) ([]row.Row, error) {
+func GetAllRows(root *doltdb.RootValue, tableName string) ([]sql.Row, error) {
 	ctx := context.Background()
 	table, _, err := root.GetTable(ctx, tableName)
-
 	if err != nil {
 		return nil, err
 	}
 
-	rowData, err := table.GetNomsRowData(ctx)
-
+	rowIdx, err := table.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	sch, err := table.GetSchema(ctx)
-
 	if err != nil {
 		return nil, err
 	}
 
-	var rows []row.Row
-	err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-		r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
-
-		if err != nil {
-			return false, err
-		}
-
-		rows = append(rows, r)
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return rows, nil
+	return SqlRowsFromDurableIndex(rowIdx, sch)
 }
 
 var idColTag0TypeUUID = schema.NewColumn("id", 0, types.IntKind, true)
