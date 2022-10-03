@@ -111,17 +111,18 @@ tests:
       result:
         columns: ["status"]
         rows: [["0"]]
-      # XXX: TODO: This should not break the connection since the role did not change.
-  - on: server1
-    queries:
+    - query: "select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch"
+      result:
+        columns: ["@@GLOBAL.dolt_cluster_role","@@GLOBAL.dolt_cluster_role_epoch"]
+        rows: [["standby","10"]]
     - query: "call dolt_assume_cluster_role('standby', '12')"
       result:
         columns: ["status"]
         rows: [["0"]]
     - query: "select 2 from dual"
-      error_match: "no longer be used"
-  - on: server1
-    queries:
+      result:
+        columns: ["2"]
+        rows: [["2"]]
     - query: "select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch"
       result:
         columns: ["@@GLOBAL.dolt_cluster_role","@@GLOBAL.dolt_cluster_role_epoch"]
@@ -130,6 +131,9 @@ tests:
       result:
         columns: ["status"]
         rows: [["0"]]
+    # Connection should be broken now.
+    - query: "select 2 from dual"
+      error_match: "no longer be used"
   - on: server1
     queries:
     - query: "select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch"
