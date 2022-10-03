@@ -266,11 +266,18 @@ func Serve(
 					clusterRemoteSrv.Serve(listeners)
 				}()
 			}
+
+			clusterController.ManageQueryConnections(
+				mySQLServer.SessionManager().Iter,
+				sqlEngine.GetUnderlyingEngine().ProcessList.Kill,
+				mySQLServer.SessionManager().KillConnection,
+			)
 		} else {
 			lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
 			startError = err
 			return
 		}
+
 	}
 
 	if ok, f := mrEnv.IsLocked(); ok {

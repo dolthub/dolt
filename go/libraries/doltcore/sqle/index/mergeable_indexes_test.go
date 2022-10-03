@@ -39,7 +39,7 @@ import (
 // that the final output is as expected.
 func TestMergeableIndexes(t *testing.T) {
 	if types.Format_Default != types.Format_LD_1 {
-		t.Skip()
+		t.Skip() // this test is specific to Noms ranges
 	}
 
 	engine, denv, root, db, indexTuples := setupIndexes(t, "test", `INSERT INTO test VALUES
@@ -1379,7 +1379,7 @@ func TestMergeableIndexes(t *testing.T) {
 // TODO: disassociate NULL ranges from value ranges and fix the intermediate ranges (finalRanges).
 func TestMergeableIndexesNulls(t *testing.T) {
 	if types.Format_Default != types.Format_LD_1 {
-		t.Skip()
+		t.Skip() // this test is specific to Noms ranges
 	}
 
 	engine, denv, root, db, indexTuples := setupIndexes(t, "test", `INSERT INTO test VALUES

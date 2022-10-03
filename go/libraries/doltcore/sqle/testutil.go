@@ -29,15 +29,18 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	config2 "github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
@@ -425,4 +428,77 @@ func CreateTestDatabase(t *testing.T) *env.DoltEnv {
 	err = dEnv.UpdateWorkingRoot(ctx, root)
 	require.NoError(t, err)
 	return dEnv
+}
+
+func SqlRowsFromDurableIndex(idx durable.Index, sch schema.Schema) ([]sql.Row, error) {
+	ctx := context.Background()
+	var sqlRows []sql.Row
+	if types.Format_Default == types.Format_DOLT {
+		rowData := durable.ProllyMapFromIndex(idx)
+		kd, vd := rowData.Descriptors()
+		iter, err := rowData.IterAll(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for {
+			var k, v val.Tuple
+			k, v, err = iter.Next(ctx)
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return nil, err
+			}
+			sqlRow, err := sqlRowFromTuples(sch, kd, vd, k, v)
+			if err != nil {
+				return nil, err
+			}
+			sqlRows = append(sqlRows, sqlRow)
+		}
+
+	} else {
+		// types.Format_LD_1 and types.Format_DOLT_DEV
+		rowData := durable.NomsMapFromIndex(idx)
+		_ = rowData.IterAll(ctx, func(key, value types.Value) error {
+			r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
+			if err != nil {
+				return err
+			}
+			sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
+			if err != nil {
+				return err
+			}
+			sqlRows = append(sqlRows, sqlRow)
+			return nil
+		})
+	}
+	return sqlRows, nil
+}
+
+func sqlRowFromTuples(sch schema.Schema, kd, vd val.TupleDesc, k, v val.Tuple) (sql.Row, error) {
+	var err error
+	ctx := context.Background()
+	r := make(sql.Row, sch.GetAllCols().Size())
+	keyless := schema.IsKeyless(sch)
+
+	for i, col := range sch.GetAllCols().GetColumns() {
+		pos, ok := sch.GetPKCols().TagToIdx[col.Tag]
+		if ok {
+			r[i], err = index.GetField(ctx, kd, pos, k, nil)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		pos, ok = sch.GetNonPKCols().TagToIdx[col.Tag]
+		if keyless {
+			pos += 1 // compensate for cardinality field
+		}
+		if ok {
+			r[i], err = index.GetField(ctx, vd, pos, v, nil)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return r, nil
 }
