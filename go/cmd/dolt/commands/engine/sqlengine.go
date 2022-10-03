@@ -114,6 +114,7 @@ func NewSqlEngine(
 
 	config.ClusterController.RegisterStoredProcedures(pro)
 	pro.InitDatabaseHook = cluster.NewInitDatabaseHook(config.ClusterController, bThreads, pro.InitDatabaseHook)
+	config.ClusterController.ManageDatabaseProvider(pro)
 
 	// Load in privileges from file, if it exists
 	persister := mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)

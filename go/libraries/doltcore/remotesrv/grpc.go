@@ -17,6 +17,7 @@ package remotesrv
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -37,6 +38,8 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+var ErrUnimplemented = errors.New("unimplemented")
 
 type RemoteChunkStore struct {
 	HttpHost string
@@ -79,7 +82,10 @@ func (rs *RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasCh
 	defer func() { logger.Println("finished") }()
 
 	repoPath := getRepoPath(req)
-	cs := rs.getStore(logger, repoPath)
+	cs, err := rs.getStore(logger, repoPath)
+	if err != nil {
+		return nil, err
+	}
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
@@ -133,7 +139,10 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 	defer func() { logger.Println("finished") }()
 
 	repoPath := getRepoPath(req)
-	cs := rs.getStore(logger, repoPath)
+	cs, err := rs.getStore(logger, repoPath)
+	if err != nil {
+		return nil, err
+	}
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
@@ -199,7 +208,10 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 		nextPath := getRepoPath(req)
 		if nextPath != repoPath {
 			repoPath = nextPath
-			cs = rs.getStore(logger, repoPath)
+			cs, err = rs.getStore(logger, repoPath)
+			if err != nil {
+				return err
+			}
 			if cs == nil {
 				return status.Error(codes.Internal, "Could not get chunkstore")
 			}
@@ -292,7 +304,10 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 	defer func() { logger.Println("finished") }()
 
 	repoPath := getRepoPath(req)
-	cs := rs.getStore(logger, repoPath)
+	cs, err := rs.getStore(logger, repoPath)
+	if err != nil {
+		return nil, err
+	}
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
@@ -341,7 +356,10 @@ func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRe
 	defer func() { logger.Println("finished") }()
 
 	repoPath := getRepoPath(req)
-	cs := rs.getStore(logger, repoPath)
+	cs, err := rs.getStore(logger, repoPath)
+	if err != nil {
+		return nil, err
+	}
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
@@ -349,7 +367,7 @@ func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRe
 
 	logger.Printf("found %s", repoPath)
 
-	err := cs.Rebase(ctx)
+	err = cs.Rebase(ctx)
 
 	if err != nil {
 		logger.Printf("error occurred during processing of Rebace rpc of %s details: %v", repoPath, err)
@@ -364,7 +382,10 @@ func (rs *RemoteChunkStore) Root(ctx context.Context, req *remotesapi.RootReques
 	defer func() { logger.Println("finished") }()
 
 	repoPath := getRepoPath(req)
-	cs := rs.getStore(logger, repoPath)
+	cs, err := rs.getStore(logger, repoPath)
+	if err != nil {
+		return nil, err
+	}
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
@@ -385,7 +406,10 @@ func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRe
 	defer func() { logger.Println("finished") }()
 
 	repoPath := getRepoPath(req)
-	cs := rs.getStore(logger, repoPath)
+	cs, err := rs.getStore(logger, repoPath)
+	if err != nil {
+		return nil, err
+	}
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
@@ -399,7 +423,7 @@ func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRe
 		updates[hash.New(cti.Hash).String()] = int(cti.ChunkCount)
 	}
 
-	err := cs.AddTableFilesToManifest(ctx, updates)
+	err = cs.AddTableFilesToManifest(ctx, updates)
 
 	if err != nil {
 		logger.Printf("error occurred updating the manifest: %s", err.Error())
@@ -426,12 +450,15 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 	defer func() { logger.Println("finished") }()
 
 	repoPath := getRepoPath(req)
-	cs := rs.getOrCreateStore(logger, repoPath, req.ClientRepoFormat.NbfVersion)
+	cs, err := rs.getOrCreateStore(logger, repoPath, req.ClientRepoFormat.NbfVersion)
+	if err != nil {
+		return nil, err
+	}
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
 
-	err := cs.Rebase(ctx)
+	err = cs.Rebase(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -453,7 +480,10 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 	defer func() { logger.Println("finished") }()
 
 	repoPath := getRepoPath(req)
-	cs := rs.getStore(logger, repoPath)
+	cs, err := rs.getStore(logger, repoPath)
+	if err != nil {
+		return nil, err
+	}
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
@@ -522,7 +552,10 @@ func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.A
 	defer func() { logger.Println("finished") }()
 
 	repoPath := getRepoPath(req)
-	cs := rs.getStore(logger, repoPath)
+	cs, err := rs.getStore(logger, repoPath)
+	if err != nil {
+		return nil, err
+	}
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
@@ -536,7 +569,7 @@ func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.A
 		updates[hash.New(cti.Hash).String()] = int(cti.ChunkCount)
 	}
 
-	err := cs.AddTableFilesToManifest(ctx, updates)
+	err = cs.AddTableFilesToManifest(ctx, updates)
 
 	if err != nil {
 		logger.Printf("error occurred updating the manifest: %s", err.Error())
@@ -546,18 +579,20 @@ func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.A
 	return &remotesapi.AddTableFilesResponse{Success: true}, nil
 }
 
-func (rs *RemoteChunkStore) getStore(logger *logrus.Entry, repoPath string) RemoteSrvStore {
+func (rs *RemoteChunkStore) getStore(logger *logrus.Entry, repoPath string) (RemoteSrvStore, error) {
 	return rs.getOrCreateStore(logger, repoPath, types.Format_Default.VersionString())
 }
 
-func (rs *RemoteChunkStore) getOrCreateStore(logger *logrus.Entry, repoPath, nbfVerStr string) RemoteSrvStore {
+func (rs *RemoteChunkStore) getOrCreateStore(logger *logrus.Entry, repoPath, nbfVerStr string) (RemoteSrvStore, error) {
 	cs, err := rs.csCache.Get(repoPath, nbfVerStr)
-
 	if err != nil {
 		logger.Printf("Failed to retrieve chunkstore for %s\n", repoPath)
+		if errors.Is(err, ErrUnimplemented) {
+			return nil, status.Error(codes.Unimplemented, err.Error())
+		}
+		return nil, err
 	}
-
-	return cs
+	return cs, nil
 }
 
 var requestId int32
