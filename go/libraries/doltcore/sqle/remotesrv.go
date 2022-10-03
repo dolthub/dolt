@@ -50,9 +50,9 @@ func (s remotesrvStore) Get(path, nbfVerStr string) (remotesrv.RemoteSrvStore, e
 	return rss, nil
 }
 
-func NewRemoteSrvServer(ctx *sql.Context, args remotesrv.ServerArgs) *remotesrv.Server {
+func RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.ServerArgs) remotesrv.ServerArgs {
 	sess := dsess.DSessFromSess(ctx.Session)
 	args.FS = sess.Provider().FileSystem()
 	args.DBCache = remotesrvStore{ctx}
-	return remotesrv.NewServer(args)
+	return args
 }

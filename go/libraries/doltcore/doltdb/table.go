@@ -78,6 +78,7 @@ type Table struct {
 }
 
 // NewNomsTable creates a noms Struct which stores row data, index data, and schema.
+// Deprecated: use NewTable instead.
 func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, rows types.Map, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
 	dt, err := durable.NewNomsTable(ctx, vrw, ns, sch, rows, indexes, autoIncVal)
 	if err != nil {
@@ -401,7 +402,7 @@ func (t *Table) SetConstraintViolations(ctx context.Context, violationsMap types
 	return &Table{table: table}, nil
 }
 
-// GetSchema will retrieve the schema being referenced from the table in noms and unmarshal it.
+// GetSchema returns the schema.Schema for this Table.
 func (t *Table) GetSchema(ctx context.Context) (schema.Schema, error) {
 	return t.table.GetSchema(ctx)
 }
@@ -431,6 +432,7 @@ func (t *Table) HashOf() (hash.Hash, error) {
 // UpdateNomsRows replaces the current row data and returns and updated Table.
 // Calls to UpdateNomsRows will not be written to the database.  The root must
 // be updated with the updated table, and the root must be committed or written.
+// Deprecated: use Table.UpdateRows() instead.
 func (t *Table) UpdateNomsRows(ctx context.Context, updatedRows types.Map) (*Table, error) {
 	table, err := t.table.SetTableRows(ctx, durable.IndexFromNomsMap(updatedRows, t.ValueReadWriter(), t.NodeStore()))
 	if err != nil {
@@ -451,6 +453,7 @@ func (t *Table) UpdateRows(ctx context.Context, updatedRows durable.Index) (*Tab
 }
 
 // GetNomsRowData retrieves the underlying map which is a map from a primary key to a list of field values.
+// Deprecated: use Table.GetRowData() instead.
 func (t *Table) GetNomsRowData(ctx context.Context) (types.Map, error) {
 	idx, err := t.table.GetTableRows(ctx)
 	if err != nil {
@@ -531,6 +534,7 @@ func (t *Table) SetIndexSet(ctx context.Context, indexes durable.IndexSet) (*Tab
 }
 
 // GetNomsIndexRowData retrieves the underlying map of an index, in which the primary key consists of all indexed columns.
+// Deprecated: use Table.GetIndexRowData() instead.
 func (t *Table) GetNomsIndexRowData(ctx context.Context, indexName string) (types.Map, error) {
 	sch, err := t.GetSchema(ctx)
 	if err != nil {
@@ -581,6 +585,7 @@ func (t *Table) SetIndexRows(ctx context.Context, indexName string, idx durable.
 }
 
 // SetNomsIndexRows replaces the current row data for the given index and returns an updated Table.
+// Deprecated: use Table.SetIndexRows() instead.
 func (t *Table) SetNomsIndexRows(ctx context.Context, indexName string, idx types.Map) (*Table, error) {
 	indexes, err := t.GetIndexSet(ctx)
 	if err != nil {

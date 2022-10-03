@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -315,4 +316,26 @@ func (c *Controller) GetClusterStatus() []clusterdb.ReplicaStatus {
 		}
 	}
 	return ret
+}
+
+func (c *Controller) recordSuccessfulRemoteSrvCommit(name string) {
+	c.lgr.Tracef("standby replica received push and updated database %s", name)
+	c.mu.Lock()
+	commithooks := make([]*commithook, len(c.commithooks))
+	copy(commithooks, c.commithooks)
+	c.mu.Unlock()
+	for _, c := range commithooks {
+		if c.dbname == name {
+			c.recordSuccessfulRemoteSrvCommit()
+		}
+	}
+}
+
+func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.ServerArgs) remotesrv.ServerArgs {
+	args.HttpPort = c.RemoteSrvPort()
+	args.GrpcPort = c.RemoteSrvPort()
+	args.Options = c.ServerOptions()
+	args = sqle.RemoteSrvServerArgs(ctx, args)
+	args.DBCache = remotesrvStoreCache{args.DBCache, c}
+	return args
 }

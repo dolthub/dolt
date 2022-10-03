@@ -64,7 +64,9 @@ assert_feature_version() {
 }
 
 skip_nbf_dolt() {
-  if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT__" ]; then
+  if [ ! "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ] &&
+    [ ! "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT_DEV__" ];
+  then
     skip "skipping test for nomsBinFormat __DOLT__"
   fi
 }
