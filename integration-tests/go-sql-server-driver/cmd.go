@@ -23,7 +23,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -226,15 +225,6 @@ func (r Repo) StartSqlServer(opts ...SqlServerOpt) (*SqlServer, error) {
 }
 
 func (s *SqlServer) ErrorStop() error {
-	<-s.Done
-	return s.Cmd.Wait()
-}
-
-func (s *SqlServer) GracefulStop() error {
-	err := s.Cmd.Process.Signal(syscall.SIGTERM)
-	if err != nil {
-		return err
-	}
 	<-s.Done
 	return s.Cmd.Wait()
 }
