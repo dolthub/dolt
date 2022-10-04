@@ -35,7 +35,7 @@ const TestUserName = "Bats Tests"
 const TestEmailAddress = "bats@email.fake"
 
 const ConnectAttempts = 50
-const RetrySleepDuration = 10 * time.Millisecond
+const RetrySleepDuration = 50 * time.Millisecond
 
 func init() {
 	var err error
