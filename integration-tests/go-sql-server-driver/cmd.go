@@ -38,8 +38,13 @@ const ConnectAttempts = 50
 const RetrySleepDuration = 50 * time.Millisecond
 
 func init() {
+	path := os.Getenv("DOLT_BIN_PATH")
+	if path == "" {
+		path = "dolt"
+	}
+	path = filepath.Clean(path)
 	var err error
-	DoltPath, err = exec.LookPath("dolt")
+	DoltPath, err = exec.LookPath(path)
 	if err != nil {
 		panic(fmt.Sprintf("did not find dolt binary: %v", err.Error()))
 	}
