@@ -37,11 +37,11 @@ func (s *SqlServer) GracefulStop() error {
 		return err
 	}
 
-	f, err = dll.FindProc("SetConsoleCtrlHandler")
+	set, err = dll.FindProc("SetConsoleCtrlHandler")
 	if err != nil {
 		return err
 	}
-	r1, _, err = f.Call(0, 1)
+	r1, _, err = set.Call(0, 1)
 	if r1 == 0 {
 		return err
 	}
@@ -54,6 +54,21 @@ func (s *SqlServer) GracefulStop() error {
 		return err
 	}
 
+	f, err = dll.FindProc("FreeConsole")
+	if err != nil {
+		return err
+	}
+	_, _, err := f.Call()
+	if err != nil {
+		return err
+	}
+
 	<-s.Done
+
+	r1, _, err = set.Call(0, 0)
+	if r1 == 0 {
+		return err
+	}
+
 	return s.Cmd.Wait()
 }

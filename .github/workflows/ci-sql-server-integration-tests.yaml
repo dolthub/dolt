@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os:  [ windows-latest ] # [ ubuntu-22.04, macos-latest, windows-latest ]
+        os:  [ ubuntu-22.04, macos-latest ] # [ ubuntu-22.04, macos-latest, windows-latest ]
         dolt_fmt: [ "__DOLT__", "__LD_1__" ]
         exclude:
           - os: "macos-latest"
@@ -41,14 +41,12 @@ jobs:
       - name: Install Dolt
         working-directory: ./go
         run: |
-          go build -mod=readonly -o ../.ci_bin/dolt.exe ./cmd/dolt/
+          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/
       - name: Test all
         env:
           DOLT_FMT: ${{ matrix.dolt_fmt }}
         run: |
           if [ -n "$DOLT_FMT" ]; then export DOLT_DEFAULT_BIN_FORMAT="$DOLT_FMT"; fi
-          export DOLT_BIN_PATH="$(pwd)/../../.ci_bin/dolt.exe"
-          echo "$DOLT_BIN_PATH"
-          ls -l "$DOLT_BIN_PATH"
+          export DOLT_BIN_PATH="$(pwd)/../../.ci_bin/dolt"
           go test .
         working-directory: ./integration-tests/go-sql-server-driver
