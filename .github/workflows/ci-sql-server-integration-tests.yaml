@@ -47,5 +47,7 @@ jobs:
           DOLT_FMT: ${{ matrix.dolt_fmt }}
         run: |
           if [ -n "$DOLT_FMT" ]; then export DOLT_DEFAULT_BIN_FORMAT="$DOLT_FMT"; fi
-          DOLT_BIN_PATH="$(pwd)/../../.ci_bin/dolt" go test .
+          export DOLT_BIN_PATH="$(pwd)/../../.ci_bin/dolt"
+          echo "$DOLT_BIN_PATH"
+          go test .
         working-directory: ./integration-tests/go-sql-server-driver
