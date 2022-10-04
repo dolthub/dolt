@@ -234,7 +234,7 @@ teardown() {
 
     run dolt sql -q "show create procedure p1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE PROCEDURE `p1` (in x int) select x from dual' ]] || false
+    [[ "$output" =~ 'CREATE PROCEDURE `p1` (in x int) select x' ]] || false
 }
 
 @test "dump: SQL type - with keyless tables" {
