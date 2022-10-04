@@ -263,7 +263,11 @@ tests:
     - query: "SELECT * FROM js_test"
       result:
         columns: ["pk","js"]
-        rows: [["1", '{"a":1}']]
+        rows:
+          # XXX: __LD_1__ and __DOLT__ serialize this differently.
+          or:
+          - [["1", '{"a": 1}']]
+          - [["1", '{"a":1}']]
 - name: select a branch with the USE syntax
   repos:
   - name: repo1

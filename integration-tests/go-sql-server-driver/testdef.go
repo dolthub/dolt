@@ -15,17 +15,18 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
-	"io"
 
 	"database/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // TestDef is the top-level definition of tests to run.
@@ -61,7 +62,7 @@ type Connection struct {
 	// interactions and only if the sql-server is prone to tear down the
 	// connection based on things that are happening, such as cluster role
 	// transitions.
-	RetryAttempts int          `yaml:"retry_attempts"`
+	RetryAttempts int `yaml:"retry_attempts"`
 }
 
 // |RestartArgs| are possible arguments, to change the arguments which are
@@ -109,7 +110,7 @@ type WithRemote struct {
 // |WithFile| defines a file and its contents to be created in a |Repo| or
 // |MultiRepo| before the servers are started.
 type WithFile struct {
-	Name     string `yaml:"name"`
+	Name string `yaml:"name"`
 
 	// The contents of the file, provided inline in the YAML.
 	Contents string `yaml:"contents"`
@@ -175,8 +176,29 @@ type Query struct {
 // are ommited, anything is allowed as long as all rows are read successfully.
 // All assertions here are string equality.
 type QueryResult struct {
-	Columns []string    `yaml:"columns"`
-	Rows    *[][]string `yaml:"rows"`
+	Columns []string   `yaml:"columns"`
+	Rows    ResultRows `yaml:"rows"`
+}
+
+type ResultRows struct {
+	Or *[][][]string
+}
+
+func (r *ResultRows) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.SequenceNode {
+		res := make([][][]string, 1)
+		r.Or = &res
+		return value.Decode(&(*r.Or)[0])
+	}
+	var or struct {
+		Or *[][][]string `yaml:"or"`
+	}
+	err := value.Decode(&or)
+	if err != nil {
+		return err
+	}
+	r.Or = or.Or
+	return nil
 }
 
 func ParseTestsFile(path string) (TestDef, error) {
@@ -184,8 +206,10 @@ func ParseTestsFile(path string) (TestDef, error) {
 	if err != nil {
 		return TestDef{}, err
 	}
+	dec := yaml.NewDecoder(bytes.NewReader(contents))
+	dec.KnownFields(true)
 	var res TestDef
-	err = yaml.UnmarshalStrict(contents, &res)
+	err = dec.Decode(&res)
 	return res, err
 }
 
@@ -434,8 +458,8 @@ func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q Query) {
 
 		rowstrings, err := RowsToStrings(len(cols), rows)
 		require.NoError(t, err)
-		if q.Result.Rows != nil {
-			require.Equal(t, *q.Result.Rows, rowstrings)
+		if q.Result.Rows.Or != nil {
+			require.Contains(t, *q.Result.Rows.Or, rowstrings)
 		}
 	} else if q.Exec != "" {
 		_, err := conn.ExecContext(context.Background(), q.Exec, args...)

@@ -288,7 +288,7 @@ tests:
         rows:
         - ["repo1","standby","primary","10","0","NULL"]
         - ["repo2","standby","primary","10","0","NULL"]
-      retry_attempts: 10
+      retry_attempts: 100
   - on: server2
     queries:
     - exec: "use repo1"
@@ -552,7 +552,7 @@ tests:
       port: 3310
   connections:
   - on: server1
-    retry_attempts: 10
+    retry_attempts: 100
     queries:
     - query: "SELECT @@GLOBAL.dolt_cluster_role,@@GLOBAL.dolt_cluster_role_epoch"
       result:
