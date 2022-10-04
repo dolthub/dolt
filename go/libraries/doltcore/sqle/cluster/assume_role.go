@@ -15,8 +15,14 @@
 package cluster
 
 import (
+	"errors"
+
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
+
+var ErrServerTransitionedRolesErr = errors.New("this server transitioned cluster roles. this connection can no longer be used. please reconnect.")
 
 func newAssumeRoleProcedure(controller *Controller) sql.ExternalStoredProcedureDetails {
 	return sql.ExternalStoredProcedureDetails{
@@ -29,9 +35,18 @@ func newAssumeRoleProcedure(controller *Controller) sql.ExternalStoredProcedureD
 			},
 		},
 		Function: func(ctx *sql.Context, role string, epoch int) (sql.RowIter, error) {
-			err := controller.setRoleAndEpoch(role, epoch)
+			if role == string(RoleDetectedBrokenConfig) {
+				return nil, errors.New("cannot set role to detected_broken_config; valid values are 'primary' and 'standby'")
+			}
+			changerole, err := controller.setRoleAndEpoch(role, epoch, true /* graceful */, int(ctx.Session.ID()))
 			if err != nil {
+				// We did not transition, no need to set our session to read-only, etc.
 				return nil, err
+			}
+			if changerole {
+				// We transitioned, make sure we do not run anymore queries on this session.
+				ctx.Session.SetTransaction(nil)
+				dsess.DSessFromSess(ctx.Session).SetValidateErr(ErrServerTransitionedRolesErr)
 			}
 			return sql.RowsToRowIter(sql.Row{0}), nil
 		},

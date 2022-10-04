@@ -20279,10 +20279,10 @@ func TestExplain(t *testing.T) {
 	expectedExplain := "IndexedJoin(d.Symbol = t.Symbol)\n" +
 		" ├─ TableAlias(d)\n" +
 		" │   └─ Table(daily_summary)\n" +
-		" │       └─ columns: [Type Symbol Country TradingDate Open High Low Close Volume OpenInt]\n" +
+		" │       └─ columns: [type symbol country tradingdate open high low close volume openint]\n" +
 		" └─ TableAlias(t)\n" +
 		"     └─ IndexedTableAccess(symbols)\n" +
 		"         ├─ index: [symbols.Symbol]\n" +
-		"         └─ columns: [Symbol Name Sector IPOYear]"
+		"         └─ columns: [symbol name sector ipoyear]"
 	assert.Equal(t, expectedExplain, strings.Join(rowStrings, "\n"))
 }

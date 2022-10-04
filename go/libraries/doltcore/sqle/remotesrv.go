@@ -15,8 +15,6 @@
 package sqle
 
 import (
-	"errors"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -37,15 +35,15 @@ func (s remotesrvStore) Get(path, nbfVerStr string) (remotesrv.RemoteSrvStore, e
 	if err != nil {
 		return nil, err
 	}
-	ddb, ok := db.(Database)
+	sdb, ok := db.(SqlDatabase)
 	if !ok {
-		return nil, errors.New("unimplemented")
+		return nil, remotesrv.ErrUnimplemented
 	}
-	datasdb := doltdb.HackDatasDatabaseFromDoltDB(ddb.DbData().Ddb)
+	datasdb := doltdb.HackDatasDatabaseFromDoltDB(sdb.DbData().Ddb)
 	cs := datas.ChunkStoreFromDatabase(datasdb)
 	rss, ok := cs.(remotesrv.RemoteSrvStore)
 	if !ok {
-		return nil, errors.New("unimplemented")
+		return nil, remotesrv.ErrUnimplemented
 	}
 	return rss, nil
 }
