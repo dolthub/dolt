@@ -123,7 +123,8 @@ func (ie *IndexEditor) InsertRowWithDupCb(ctx context.Context, key, partialKey t
 	}
 
 	// TODO: might be able to reach index lengths from here
-	ie.tblSch.Indexes()
+	idxCol := ie.tblSch.Indexes()
+	idxCol.Count()
 
 	ie.writeMutex.Lock()
 	defer ie.writeMutex.Unlock()
