@@ -38,6 +38,7 @@ jobs:
         run: |
           mkdir -p ./.ci_bin
           echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
+      - uses: actions/checkout@v2
       - name: Install Dolt
         working-directory: ./go
         run: |
