@@ -55,6 +55,13 @@ type Connection struct {
 	On            string       `yaml:"on"`
 	Queries       []Query      `yaml:"queries"`
 	RestartServer *RestartArgs `yaml:"restart_server"`
+
+	// Rarely needed, allows the entire connection assertion to be retried
+	// on an assertion failure. Use this is only for idempotent connection
+	// interactions and only if the sql-server is prone to tear down the
+	// connection based on things that are happening, such as cluster role
+	// transitions.
+	RetryAttempts int          `yaml:"retry_attempts"`
 }
 
 // |RestartArgs| are possible arguments, to change the arguments which are
@@ -296,19 +303,35 @@ func (test Test) Run(t *testing.T) {
 	for i, c := range test.Conns {
 		server := servers[c.On]
 		require.NotNilf(t, server, "error in test spec: could not find server %s for connection %d", c.On, i)
-		func() {
-			db, err := server.DB()
-			require.NoError(t, err)
-			defer db.Close()
+		if c.RetryAttempts > 1 {
+			RetryTestRun(t, c.RetryAttempts, func(t require.TestingT) {
+				db, err := server.DB()
+				require.NoError(t, err)
+				defer db.Close()
 
-			conn, err := db.Conn(context.Background())
-			require.NoError(t, err)
-			defer conn.Close()
+				conn, err := db.Conn(context.Background())
+				require.NoError(t, err)
+				defer conn.Close()
 
-			for _, q := range c.Queries {
-				RunQuery(t, conn, q)
-			}
-		}()
+				for _, q := range c.Queries {
+					RunQueryAttempt(t, conn, q)
+				}
+			})
+		} else {
+			func() {
+				db, err := server.DB()
+				require.NoError(t, err)
+				defer db.Close()
+
+				conn, err := db.Conn(context.Background())
+				require.NoError(t, err)
+				defer conn.Close()
+
+				for _, q := range c.Queries {
+					RunQuery(t, conn, q)
+				}
+			}()
+		}
 		if c.RestartServer != nil {
 			err := server.Restart(c.RestartServer.Args)
 			require.NoError(t, err)
@@ -343,17 +366,14 @@ func (r *retryTestingT) FailNow() {
 	panic(r)
 }
 
-func RetryTestRun(t *testing.T, attempts int, test func(require.TestingT)) {
-	if attempts == 0 {
-		attempts = 1
-	}
-	var rtt *retryTestingT
+func (r *retryTestingT) try(attempts int, test func(require.TestingT)) {
 	for i := 0; i < attempts; i++ {
+		r.errorfStrings = nil
+		r.errorfArgs = nil
+		r.failNow = false
 		if i != 0 {
 			time.Sleep(RetrySleepDuration)
 		}
-		rtt = new(retryTestingT)
-		rtt.T = t
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -363,18 +383,26 @@ func RetryTestRun(t *testing.T, attempts int, test func(require.TestingT)) {
 					}
 				}
 			}()
-			test(rtt)
+			test(r)
 		}()
-		if !rtt.failNow && len(rtt.errorfStrings) == 0 {
+		if !r.failNow && len(r.errorfStrings) == 0 {
 			return
 		}
 	}
-	for i := range rtt.errorfStrings {
-		t.Errorf(rtt.errorfStrings[i], rtt.errorfArgs[i]...)
+	for i := range r.errorfStrings {
+		r.T.Errorf(r.errorfStrings[i], r.errorfArgs[i]...)
 	}
-	if rtt.failNow {
-		t.FailNow()
+	if r.failNow {
+		r.T.FailNow()
 	}
+}
+
+func RetryTestRun(t *testing.T, attempts int, test func(require.TestingT)) {
+	if attempts == 0 {
+		attempts = 1
+	}
+	rtt := &retryTestingT{T: t}
+	rtt.try(attempts, test)
 }
 
 func RunQuery(t *testing.T, conn *sql.Conn, q Query) {
