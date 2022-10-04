@@ -37,15 +37,11 @@ jobs:
       - name: Create CI Bin
         run: |
           mkdir -p ./.ci_bin
-          echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
       - uses: actions/checkout@v2
       - name: Install Dolt
         working-directory: ./go
         run: |
           go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
-
-          go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
-          go build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.
       - name: Setup Dolt Config
         run: |
           dolt config --global --add user.name 'Dolthub Actions'
@@ -55,6 +51,5 @@ jobs:
           DOLT_FMT: ${{ matrix.dolt_fmt }}
         run: |
           if [ -n "$DOLT_FMT" ]; then export DOLT_DEFAULT_BIN_FORMAT="$DOLT_FMT"; fi
-          echo "$PATH"
-          go test .
+          DOLT_BIN="$(pwd)/../../.ci_bin/dolt" go test .
         working-directory: ./integration-tests/go-sql-server-driver
