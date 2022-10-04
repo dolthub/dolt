@@ -2188,3 +2188,87 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test_table" ]] || false
 }
+
+create_one_remote_two_client_repos() {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+
+    dolt remote add origin 'file://../remote'
+    dolt push origin main
+
+    # Make a copy of repo2
+    cd ../
+    cp -r repo1 repo2
+    cd repo1
+
+    dolt branch branch1
+    dolt branch branch2
+
+    dolt checkout branch1
+    dolt sql -q "create table t1 (pk int PRIMARY KEY);"
+    dolt commit -Am "create table t1"
+
+    dolt checkout branch2
+    dolt sql -q "create table t2 (pk int PRIMARY KEY);"
+    dolt commit -Am "create table t2"
+}
+
+@test "remotes: dolt push --all pushes all branches without tracking" {
+    create_one_remote_two_client_repos
+
+    # Push branch1 and branch2 to origin
+    run dolt push --all
+    [ $status -eq 0 ]
+
+    # Verify that branch1 and branch2 were pushed by checking them out in separate repo
+    cd ../repo2
+    dolt fetch
+    run dolt checkout branch1
+    [ $status -eq 0 ]
+    run dolt sql -q "select * from t1;"
+    [ $status -eq 0 ]
+    run dolt checkout branch2
+    [ $status -eq 0 ]
+    run dolt sql -q "select * from t2;"
+    [ $status -eq 0 ]
+
+    # Verify that branch2 is not tracked
+    cd ../repo1
+    run dolt pull
+    [ $status -ne 0 ]
+    [[ "$output" =~ "There is no tracking information for the current branch." ]] || false
+}
+
+@test "remotes: dolt push --all -u pushes all branches and sets upstream" {
+    create_one_remote_two_client_repos
+
+    # Push branch1 and branch2 to origin
+    run dolt push --all -u
+    [ $status -eq 0 ]
+
+    # Verify that branch1 and branch2 were pushed by checking them out in separate repo
+    cd ../repo2
+    dolt fetch
+    run dolt checkout branch1
+    [ $status -eq 0 ]
+    run dolt sql -q "select * from t1;"
+    [ $status -eq 0 ]
+    run dolt checkout branch2
+    [ $status -eq 0 ]
+    run dolt sql -q "select * from t2;"
+    [ $status -eq 0 ]
+
+    dolt sql -q "insert into t2 VALUES (9001);"
+    dolt commit -am "add a row"
+    dolt push origin branch2
+
+    # Verify that branch2 is tracked
+    cd ../repo1
+    dolt pull
+    run dolt sql -q "select * from t2;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "9001" ]] || false
+}

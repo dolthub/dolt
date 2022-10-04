@@ -74,6 +74,7 @@ func (cmd PushCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(cli.SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} and other commands.")
 	ap.SupportsFlag(cli.ForceFlag, "f", "Update the remote with local history, overwriting any conflicting history in the remote.")
+	ap.SupportsFlag(cli.AllFlag, "a", "Pushes all local branches. Equivalent to calling {{.EmphasisLeft}}dolt push <branch_name>{{.EmphasisRight}} for all branches. -u can also be specified to track the remote branches.")
 	return ap
 }
 
@@ -88,6 +89,53 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, pushDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	if apr.Contains(cli.AllFlag) {
+		return cmd.pushAllBranches(ctx, apr, dEnv, usage)
+	}
+
+	return cmd.doPush(ctx, apr, dEnv, usage)
+}
+
+func (cmd PushCmd) pushAllBranches(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, usage cli.UsagePrinter) int {
+	branches, err := dEnv.DoltDB.GetBranches(ctx)
+	if err != nil {
+		verr := errhand.BuildDError("failed to fetch branches").AddCause(err).Build()
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	if len(apr.Args) > 1 {
+		verr := errhand.BuildDError("only <remote> may be specified with --all").SetPrintUsage().Build()
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	remoteName := "origin"
+	if len(apr.Args) == 1 {
+		remoteName = apr.Args[0]
+	}
+
+	for _, b := range branches {
+		cli.Printf("Pushing %s\n", b.String())
+
+		args := []string{remoteName, b.String()}
+		if apr.Contains(cli.SetUpstreamFlag) {
+			args = append(args, "-"+cli.SetUpstreamFlag)
+		}
+
+		apr2, err := cmd.ArgParser().Parse(args)
+		if err != nil {
+			verr := errhand.BuildDError("failed to build args for push").AddCause(err).Build()
+			return HandleVErrAndExitCode(verr, usage)
+		}
+
+		if code := cmd.doPush(ctx, apr2, dEnv, usage); code != 0 {
+			return code
+		}
+	}
+
+	return 0
+}
+
+func (cmd PushCmd) doPush(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, usage cli.UsagePrinter) int {
 	opts, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
 	if err != nil {
 		var verr errhand.VerboseError
