@@ -24,7 +24,8 @@ import (
 )
 
 type remotesrvStore struct {
-	ctx *sql.Context
+	ctx      *sql.Context
+	readonly bool
 }
 
 var _ remotesrv.DBCache = remotesrvStore{}
@@ -33,7 +34,7 @@ func (s remotesrvStore) Get(path, nbfVerStr string) (remotesrv.RemoteSrvStore, e
 	sess := dsess.DSessFromSess(s.ctx.Session)
 	db, err := sess.Provider().Database(s.ctx, path)
 	if err != nil {
-		if sql.ErrDatabaseNotFound.Is(err) {
+		if !s.readonly && sql.ErrDatabaseNotFound.Is(err) {
 			err = sess.Provider().CreateDatabase(s.ctx, path)
 			if err != nil {
 				return nil, err
@@ -62,6 +63,6 @@ func (s remotesrvStore) Get(path, nbfVerStr string) (remotesrv.RemoteSrvStore, e
 func RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.ServerArgs) remotesrv.ServerArgs {
 	sess := dsess.DSessFromSess(ctx.Session)
 	args.FS = sess.Provider().FileSystem()
-	args.DBCache = remotesrvStore{ctx}
+	args.DBCache = remotesrvStore{ctx, args.ReadOnly}
 	return args
 }
