@@ -223,6 +223,13 @@ func emitStats(s *stats, ch chan Stats) (cancel func()) {
 					smoothedFetchBPS = curFetchedBPS + weight*(newFetchedBPS-curFetchedBPS)
 				}
 
+				if smoothedSendBPS < 1 {
+					smoothedSendBPS = 0
+				}
+				if smoothedFetchBPS < 1 {
+					smoothedFetchBPS = 0
+				}
+
 				atomic.StoreUint64(&s.sendBytesPerSec, math.Float64bits(smoothedSendBPS))
 				atomic.StoreUint64(&s.fetchedSourceBytesPerSec, math.Float64bits(smoothedFetchBPS))
 
