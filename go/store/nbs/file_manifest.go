@@ -425,6 +425,10 @@ func updateWithChecker(_ context.Context, dir string, validate manifestChecker, 
 			return "", ferr
 		}
 
+		if ferr = temp.Sync(); ferr != nil {
+			return "", ferr
+		}
+
 		return temp.Name(), nil
 	}()
 
@@ -511,6 +515,15 @@ func updateWithChecker(_ context.Context, dir string, validate manifestChecker, 
 
 	err = file.Rename(tempManifestPath, manifestPath)
 	if err != nil {
+		return manifestContents{}, err
+	}
+	
+	// fsync() the directory
+	var d *os.File
+	if d, err = os.Open(dir); err != nil {
+		return manifestContents{}, err
+	}
+	if err = d.Sync(); err != nil {
 		return manifestContents{}, err
 	}
 

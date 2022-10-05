@@ -89,6 +89,11 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 			return "", ferr
 		}
 
+		// fsync() the new table file
+		if ferr = temp.Sync(); ferr != nil {
+			return "", ferr
+		}
+
 		return temp.Name(), nil
 	}()
 
@@ -106,6 +111,15 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 	err = file.Rename(tempName, newName)
 
 	if err != nil {
+		return nil, err
+	}
+
+	// fsync() the directory
+	var dir *os.File
+	if dir, err = os.Open(ftp.dir); err != nil {
+		return nil, err
+	}
+	if err = dir.Sync(); err != nil {
 		return nil, err
 	}
 
@@ -165,6 +179,11 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 			return "", ferr
 		}
 
+		// fsync() the new conjoined table file
+		if ferr = temp.Sync(); ferr != nil {
+			return "", ferr
+		}
+
 		return temp.Name(), nil
 	}()
 
@@ -175,6 +194,15 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	err = file.Rename(tempName, filepath.Join(ftp.dir, name.String()))
 
 	if err != nil {
+		return nil, err
+	}
+
+	// fsync() the directory
+	var dir *os.File
+	if dir, err = os.Open(ftp.dir); err != nil {
+		return nil, err
+	}
+	if err = dir.Sync(); err != nil {
 		return nil, err
 	}
 
