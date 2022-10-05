@@ -33,7 +33,18 @@ func (s remotesrvStore) Get(path, nbfVerStr string) (remotesrv.RemoteSrvStore, e
 	sess := dsess.DSessFromSess(s.ctx.Session)
 	db, err := sess.Provider().Database(s.ctx, path)
 	if err != nil {
-		return nil, err
+		if sql.ErrDatabaseNotFound.Is(err) {
+			err = sess.Provider().CreateDatabase(s.ctx, path)
+			if err != nil {
+				return nil, err
+			}
+			db, err = sess.Provider().Database(s.ctx, path)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
 	}
 	sdb, ok := db.(SqlDatabase)
 	if !ok {
