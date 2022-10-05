@@ -517,7 +517,7 @@ func updateWithChecker(_ context.Context, dir string, validate manifestChecker, 
 	if err != nil {
 		return manifestContents{}, err
 	}
-	
+
 	// fsync() the directory
 	var d *os.File
 	if d, err = os.Open(dir); err != nil {
