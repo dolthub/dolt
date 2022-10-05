@@ -265,3 +265,19 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "error executing query on line 2: unsupported geospatial type: MultiPoint from value: 0x0" ]] || false
 }
+
+@test "sql-spatial-types: round trip dolt dump with spatial type data" {
+    run dolt sql << SQL
+CREATE TABLE t1 (i int primary key, g GEOMETRY, p POINT, l LINESTRING, po POLYGON);
+INSERT INTO t1 values (0, point(1,2), point(2,1), LINESTRING(POINT(0,0),POINT(1,2)), polygon(linestring(point(1,2),point(3,4),point(5,6),point(1,2))));
+SQL
+    [ "$status" -eq 0 ]
+
+    dolt dump
+
+    run dolt sql < doltdump.sql
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT ST_AsText(g), ST_AsText(p), ST_AsText(l), ST_AsText(po) from t1;"
+    [[ "$output" =~ "POINT(1 2)   | POINT(2 1)   | LINESTRING(0 0,1 2) | POLYGON((1 2,3 4,5 6,1 2))" ]] || false
+}
