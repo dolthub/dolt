@@ -113,22 +113,34 @@ func DeserializeWKBHeader(buf []byte) (bool, uint32, error) {
 }
 
 func DeserializePoint(buf []byte, isBig bool, srid uint32) sql.Point {
-	p, _ := sql.DeserializePoint(buf, isBig, srid)
+	p, err := sql.DeserializePoint(buf, isBig, srid)
+	if err != nil {
+		panic(err)
+	}
 	return p
 }
 
 func DeserializeLine(buf []byte, isBig bool, srid uint32) sql.LineString {
-	l, _ := sql.DeserializeLine(buf, isBig, srid)
+	l, err := sql.DeserializeLine(buf, isBig, srid)
+	if err != nil {
+		panic(err)
+	}
 	return l
 }
 
 func DeserializePoly(buf []byte, isBig bool, srid uint32) sql.Polygon {
-	p, _ := sql.DeserializePoly(buf, isBig, srid)
+	p, err := sql.DeserializePoly(buf, isBig, srid)
+	if err != nil {
+		panic(err)
+	}
 	return p
 }
 
 func DeserializeMPoint(buf []byte, isBig bool, srid uint32) sql.MultiPoint {
-	p, _ := sql.DeserializeMPoint(buf, isBig, srid)
+	p, err := sql.DeserializeMPoint(buf, isBig, srid)
+	if err != nil {
+		panic(err)
+	}
 	return p
 }
 

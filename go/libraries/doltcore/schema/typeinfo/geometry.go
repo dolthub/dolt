@@ -136,6 +136,8 @@ func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
 		return LineStringType.FormatValue(val)
 	case types.Polygon:
 		return PolygonType.FormatValue(val)
+	case types.MultiPoint:
+		return MultiPointType.FormatValue(val)
 	case types.Geometry:
 		switch inner := val.Inner.(type) {
 		case types.Point:
@@ -144,6 +146,8 @@ func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
 			return LineStringType.FormatValue(inner)
 		case types.Polygon:
 			return PolygonType.FormatValue(inner)
+		case types.MultiPoint:
+			return MultiPointType.FormatValue(inner)
 		default:
 			return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
 		}
