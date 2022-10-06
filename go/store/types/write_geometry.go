@@ -27,7 +27,7 @@ const (
 	SRIDSize       = sql.SRIDSize
 	EndianSize     = sql.EndianSize
 	TypeSize       = sql.TypeSize
-	EWKBHeaderSize = sql.EndianSize
+	EWKBHeaderSize = sql.EWKBHeaderSize
 
 	PointSize = sql.PointSize
 	CountSize = sql.CountSize
