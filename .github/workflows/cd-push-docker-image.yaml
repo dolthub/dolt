@@ -29,10 +29,3 @@ jobs:
           tags: ${{ secrets.DOCKER_HUB_USERNAME }}/dolt:latest
           build-args: |
             DOLT_VERSION=0.50.1
-      - name: Sync
-        uses: ms-jpq/sync-dockerhub-readme@v1
-        with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-          repository: ${{ secrets.DOCKER_HUB_USERNAME }}/dolt
-          readme: ./README.md
