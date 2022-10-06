@@ -18,6 +18,7 @@ import (
 	"context"
 	"io"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -199,7 +200,12 @@ func (gcs *GenerationalNBS) Stats() interface{} {
 // this ChunkStore. It must return "Unsupported" if this operation is not
 // supported.
 func (gcs *GenerationalNBS) StatsSummary() string {
-	return ""
+	var sb strings.Builder
+	sb.WriteString("New Gen: \n\t")
+	sb.WriteString(gcs.newGen.StatsSummary())
+	sb.WriteString("\nOld Gen: \n\t")
+	sb.WriteString(gcs.oldGen.StatsSummary())
+	return sb.String()
 }
 
 // Close tears down any resources in use by the implementation. After // Close(), the ChunkStore may not be used again. It is NOT SAFE to call
