@@ -65,8 +65,6 @@ const (
 	LineStringKind
 	PolygonKind
 	MultiPointKind
-	MultiLineStringKind
-	MultiPolygonKind
 
 	SerialMessageKind
 
@@ -100,6 +98,7 @@ func init() {
 	KindToType[PointKind] = Point{}
 	KindToType[LineStringKind] = LineString{}
 	KindToType[PolygonKind] = Polygon{}
+	KindToType[MultiPointKind] = MultiPoint{}
 	KindToType[SerialMessageKind] = SerialMessage{}
 
 	SupportedKinds[BlobKind] = true
