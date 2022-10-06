@@ -24,6 +24,6 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: .
-          file: ./Dockerfile
+          file: ./docker/Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_HUB_USERNAME }}/dolt-sql-server:latest
