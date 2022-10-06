@@ -14,9 +14,9 @@ ENV DATA_DIR="/doltdbs/$DOLT_USER/$DATABASE_NAME"
 EXPOSE 3306
 VOLUME [ "/doltdbs" ]
 
-COPY docker/docker-entrypoint.sh /usr/local/bin/
+COPY docker/docker-entrypoint.sh /usr/local/bin/docker/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker/docker-entrypoint.sh
-ENTRYPOINT [ "/docker/docker-entrypoint.sh" ]
+ENTRYPOINT [ "/usr/local/bin/docker/docker-entrypoint.sh" ]
 
 WORKDIR "/doltdbs/$DOLTHUB_USER"
 CMD [ "dolt", "sql-server", "-l=trace", "--host=0.0.0.0", "--port=3306"]
