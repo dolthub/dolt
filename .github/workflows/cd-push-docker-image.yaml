@@ -28,5 +28,5 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_HUB_USERNAME }}/dolt-sql-server:latest
           build-args: |
-            DOLT_VERSION="${{ github.event.inputs.version }}"
+            DOLT_VERSION=${{ github.event.inputs.version }}
 
