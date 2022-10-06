@@ -1,0 +1,73 @@
+tests:
+- name: require_secure_transport no key or cert
+  repos:
+  - name: repo1
+    with_files:
+    - name: server.yaml
+      contents: |
+        listener:
+          require_secure_transport: true
+    server:
+      args: ["--config", "server.yaml"]
+      error_matches:
+      - "require_secure_transport can only be `true` when a tls_key and tls_cert are provided."
+- name: tls_key non-existant
+  repos:
+  - name: repo1
+    with_files:
+    - name: chain_key.pem
+      source_path: testdata/chain_key.pem
+    - name: chain_cert.pem
+      source_path: testdata/chain_cert.pem
+    - name: server.yaml
+      contents: |
+        listener:
+          tls_key: doesnotexist_key.pem
+          tls_cert: chain_cert.pem
+    server:
+      args: ["--config", "server.yaml"]
+      error_matches:
+      - "no such file or directory"
+- name: tls_cert non-existant
+  repos:
+  - name: repo1
+    with_files:
+    - name: chain_key.pem
+      source_path: testdata/chain_key.pem
+    - name: chain_cert.pem
+      source_path: testdata/chain_cert.pem
+    - name: server.yaml
+      contents: |
+        listener:
+          tls_key: chain_key.pem
+          tls_cert: doesnotexist_key.pem
+    server:
+      args: ["--config", "server.yaml"]
+      error_matches:
+      - "no such file or directory"
+
+# XXX: It would be nice to assert on the TLS use here using show status or something.
+# It would be nice to assert on failing to connect using tls=no.
+- name: tls only server
+  repos:
+  - name: repo1
+    with_files:
+    - name: chain_key.pem
+      source_path: testdata/chain_key.pem
+    - name: chain_cert.pem
+      source_path: testdata/chain_cert.pem
+    - name: server.yaml
+      contents: |
+        listener:
+          tls_key: chain_key.pem
+          tls_cert: chain_cert.pem
+          require_secure_transport: true
+    server:
+      args: ["--config", "server.yaml"]
+  connections:
+  - on: repo1
+    queries:
+    - query: "show tables"
+      result:
+        columns: ["Tables_in_repo1"]
+        rows: []
