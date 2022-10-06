@@ -60,6 +60,8 @@ func SerializePoint(p sql.Point) (buf []byte) {
 }
 
 func SerializeLineString(l sql.LineString) (buf []byte) {
+	return sql.SerializeLineString(l)
+
 	buf = allocateBuffer(len(l.Points), 1)
 	WriteEWKBHeader(buf[:EWKBHeaderSize], l.SRID, LineStringType)
 	writePointSlice(buf[EWKBHeaderSize:], l.Points)

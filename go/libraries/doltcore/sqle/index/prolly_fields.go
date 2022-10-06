@@ -291,12 +291,8 @@ func deserializeGeometry(buf []byte) (v interface{}) {
 
 func serializeGeometry(v interface{}) []byte {
 	switch t := v.(type) {
-	case sql.Point:
-		return geo.SerializePoint(t)
-	case sql.LineString:
-		return geo.SerializeLineString(t)
-	case sql.Polygon:
-		return geo.SerializePolygon(t)
+	case sql.GeometryValue:
+		return t.Serialize()
 	default:
 		panic(fmt.Sprintf("unknown geometry %v", v))
 	}

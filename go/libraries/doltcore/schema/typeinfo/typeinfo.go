@@ -164,7 +164,6 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	case sqltypes.Year:
 		return YearType, nil
 	case sqltypes.Geometry:
-		// TODO: bad, but working way to determine which specific geometry type
 		switch sqlType.String() {
 		case sql.PointType{}.String():
 			return &pointType{sqlType.(sql.PointType)}, nil
@@ -172,6 +171,8 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 			return &linestringType{sqlType.(sql.LineStringType)}, nil
 		case sql.PolygonType{}.String():
 			return &polygonType{sqlType.(sql.PolygonType)}, nil
+		case sql.MultiPointType{}.String():
+			return &multipointType{}, nil
 		case sql.GeometryType{}.String():
 			return &geometryType{sqlGeometryType: sqlType.(sql.GeometryType)}, nil
 		default:
