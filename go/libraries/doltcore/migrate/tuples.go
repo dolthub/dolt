@@ -160,7 +160,7 @@ func translateNomsField(ctx context.Context, ns tree.NodeStore, value types.Valu
 		v := value.(types.Geometry).Inner
 		translateGeometryField(v, idx, b)
 
-	case types.PointKind, types.LineStringKind, types.PolygonKind:
+	case types.PointKind, types.LineStringKind, types.PolygonKind, types.MultiPointKind:
 		translateGeometryField(value, idx, b)
 
 	case types.JSONKind:

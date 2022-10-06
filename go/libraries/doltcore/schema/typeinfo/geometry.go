@@ -75,6 +75,10 @@ func (ti *geometryType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecRea
 		if val, err = reader.ReadPolygon(); err != nil {
 			return nil, err
 		}
+	case types.MultiPointKind:
+		if val, err = reader.ReadMultiPoint(); err != nil {
+			return nil, err
+		}
 	case types.GeometryKind:
 		// Note: GeometryKind is no longer written
 		// included here for backward compatibility

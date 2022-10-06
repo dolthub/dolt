@@ -50,6 +50,7 @@ type CodecReader interface {
 	ReadPoint() (Point, error)
 	ReadLineString() (LineString, error)
 	ReadPolygon() (Polygon, error)
+	ReadMultiPoint() (MultiPoint, error)
 	ReadBlob() (Blob, error)
 	ReadJSON() (JSON, error)
 }
@@ -98,6 +99,10 @@ func (r *valueDecoder) ReadLineString() (LineString, error) {
 
 func (r *valueDecoder) ReadPolygon() (Polygon, error) {
 	return readPolygon(nil, r)
+}
+
+func (r *valueDecoder) ReadMultiPoint() (MultiPoint, error) {
+	return readMultiPoint(nil, r)
 }
 
 func (r *valueDecoder) ReadJSON() (JSON, error) {
@@ -498,6 +503,9 @@ func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
 		r.skipKind()
 		r.skipString()
 	case PolygonKind:
+		r.skipKind()
+		r.skipString()
+	case MultiPointKind:
 		r.skipKind()
 		r.skipString()
 	case ListKind:
