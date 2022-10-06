@@ -39,7 +39,7 @@ _create_dir() {
 # create required directories
 create_directories() {
   echo "Creating Directories..."
-  _create_dir "/doltdbs/vinai"
+  _create_dir "/doltdbs/${DOLTHUB_USER}"
 }
 
 configure_dolt_server() {
@@ -77,7 +77,7 @@ init_database() {
   echo "Initializing..."
     (
       local wd=$(pwd)
-      cd "/doltdbs/$DOLT_USER"
+      cd "/doltdbs/$DOLTHUB_USER"
       mkdir $DATABASE_NAME
       cd "$DATABASE_NAME"
       dolt init
