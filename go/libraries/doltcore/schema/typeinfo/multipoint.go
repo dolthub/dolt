@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/store/geometry"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -35,15 +34,6 @@ var _ TypeInfo = (*multipointType)(nil)
 
 var MultiPointType = &multipointType{sql.MultiPointType{}}
 
-// ConvertTypesMultiPointToSQLMultiPoint basically makes a deep copy of sql.MultiPoint
-func ConvertTypesMultiPointToSQLMultiPoint(p types.MultiPoint) sql.MultiPoint {
-	points := make([]sql.Point, len(p.Points))
-	for i, point := range p.Points {
-		points[i] = ConvertTypesPointToSQLPoint(point)
-	}
-	return sql.MultiPoint{SRID: p.SRID, Points: points}
-}
-
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *multipointType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	// Check for null
@@ -52,7 +42,7 @@ func (ti *multipointType) ConvertNomsValueToValue(v types.Value) (interface{}, e
 	}
 	// Expect a types.LineString, return a sql.LineString
 	if val, ok := v.(types.MultiPoint); ok {
-		return ConvertTypesMultiPointToSQLMultiPoint(val), nil
+		return types.ConvertTypesMultiPointToSQLMultiPoint(val), nil
 	}
 
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
@@ -75,14 +65,6 @@ func (ti *multipointType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecR
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 }
 
-func ConvertSQLMultiPointToTypesMultiPoint(p sql.MultiPoint) types.MultiPoint {
-	points := make([]types.Point, len(p.Points))
-	for i, point := range p.Points {
-		points[i] = ConvertSQLPointToTypesPoint(point)
-	}
-	return types.MultiPoint{SRID: l.SRID, Points: points}
-}
-
 // ConvertValueToNomsValue implements TypeInfo interface.
 func (ti *multipointType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	// Check for null
@@ -96,7 +78,7 @@ func (ti *multipointType) ConvertValueToNomsValue(ctx context.Context, vrw types
 		return nil, err
 	}
 
-	return ConvertSQLMultiPointToTypesMultiPoint(multipoint.(sql.MultiPoint)), nil
+	return types.ConvertSQLMultiPointToTypesMultiPoint(multipoint.(sql.MultiPoint)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -113,11 +95,8 @@ func (ti *multipointType) Equals(other TypeInfo) bool {
 
 // FormatValue implements TypeInfo interface.
 func (ti *multipointType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.LineString); ok {
-		buf := make([]byte, geometry.EWKBHeaderSize+types.LengthSize+geometry.PointSize*len(val.Points))
-		types.WriteEWKBHeader(val, buf[:geometry.EWKBHeaderSize])
-		types.WriteEWKBLineData(val, buf[geometry.EWKBHeaderSize:])
-		resStr := string(buf)
+	if val, ok := v.(types.MultiPoint); ok {
+		resStr := string(types.SerializeMultiPoint(val))
 		return &resStr, nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -140,7 +119,7 @@ func (ti *multipointType) GetTypeParams() map[string]string {
 
 // IsValid implements TypeInfo interface.
 func (ti *multipointType) IsValid(v types.Value) bool {
-	if _, ok := v.(types.MultiPointType); ok {
+	if _, ok := v.(types.MultiPoint); ok {
 		return true
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -241,5 +220,5 @@ func CreateMultiPointTypeFromParams(params map[string]string) (TypeInfo, error) 
 			return nil, err
 		}
 	}
-	return &multipointType{sqlMultiPointType: sql.MultiPoint{SRID: uint32(sridVal), DefinedSRID: def}}, nil
+	return &multipointType{sqlMultiPointType: sql.MultiPointType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

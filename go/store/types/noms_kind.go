@@ -64,6 +64,9 @@ const (
 	PointKind
 	LineStringKind
 	PolygonKind
+	MultiPointKind
+	MultiLineStringKind
+	MultiPolygonKind
 
 	SerialMessageKind
 

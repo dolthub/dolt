@@ -21,8 +21,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dolthub/dolt/go/store/geometry"
-
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -111,34 +109,32 @@ func (v MultiPoint) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	if err != nil {
 		return err
 	}
-	buf := geometry.AllocateBuffer(len(v.Points), 1, len(v.Points))
-	geometry.SerializeEWKBHeader(buf, v.SRID, geometry.WKBMPointID)
-	geometry.WriteM
-
-	// Write header and data to buffer
-	WriteEWKBHeader(v, buf)
-	WriteEWKBLineData(v, buf[geometry.EWKBHeaderSize:])
-
-	w.writeString(string(buf))
+	w.writeString(string(SerializeMultiPoint(v)))
 	return nil
 }
 
 func readMultiPoint(nbf *NomsBinFormat, b *valueDecoder) (MultiPoint, error) {
 	buf := []byte(b.ReadString())
-	srid, _, geomType := geometry.ParseEWKBHeader(buf)
-	if geomType != geometry.LineStringType {
+	srid, _, geomType, err := DeserializeEWKBHeader(buf)
+	if err != nil {
+		return MultiPoint{}, nil
+	}
+	if geomType != WKBLineID {
 		return MultiPoint{}, errors.New("not a linestring")
 	}
-	return ParseEWKBMPoint(buf[geometry.EWKBHeaderSize:], srid), nil
+	return DeserializeTypesMPoint(buf, false, srid), nil
 }
 
 func (v MultiPoint) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
-	srid, _, geomType := geometry.ParseEWKBHeader(buf)
-	if geomType != geometry.LineStringType {
-		return nil, errors.New("not a linestring")
+	srid, _, geomType, err := DeserializeEWKBHeader(buf)
+	if err != nil {
+		return MultiPoint{}, nil
 	}
-	return ParseEWKBLine(buf[geometry.EWKBHeaderSize:], srid), nil
+	if geomType != WKBLineID {
+		return MultiPoint{}, errors.New("not a linestring")
+	}
+	return DeserializeTypesMPoint(buf, false, srid), nil
 }
 
 func (v MultiPoint) skip(nbf *NomsBinFormat, b *binaryNomsReader) {

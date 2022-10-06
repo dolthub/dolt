@@ -34,20 +34,6 @@ var _ TypeInfo = (*geometryType)(nil)
 
 var GeometryType = &geometryType{sql.GeometryType{}}
 
-// ConvertTypesGeometryToSQLGeometry basically makes a deep copy of sql.Geometry
-func ConvertTypesGeometryToSQLGeometry(g types.Geometry) interface{} {
-	switch inner := g.Inner.(type) {
-	case types.Point:
-		return ConvertTypesPointToSQLPoint(inner)
-	case types.LineString:
-		return ConvertTypesLineStringToSQLLineString(inner)
-	case types.Polygon:
-		return ConvertTypesPolygonToSQLPolygon(inner)
-	default:
-		panic("used an invalid type types.Geometry.Inner")
-	}
-}
-
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	// Check for null
@@ -58,13 +44,13 @@ func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 	// Expect a Geometry type, return a sql.Geometry
 	switch val := v.(type) {
 	case types.Geometry:
-		return ConvertTypesGeometryToSQLGeometry(val), nil
+		return types.ConvertTypesGeometryToSQLGeometry(val), nil
 	case types.Point:
-		return ConvertTypesPointToSQLPoint(val), nil
+		return types.ConvertTypesPointToSQLPoint(val), nil
 	case types.LineString:
-		return ConvertTypesLineStringToSQLLineString(val), nil
+		return types.ConvertTypesLineStringToSQLLineString(val), nil
 	case types.Polygon:
-		return ConvertTypesPolygonToSQLPolygon(val), nil
+		return types.ConvertTypesPolygonToSQLPolygon(val), nil
 	default:
 		return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 	}
@@ -104,20 +90,6 @@ func (ti *geometryType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecRea
 	return ti.ConvertNomsValueToValue(val)
 }
 
-func ConvertSQLGeometryToTypesGeometry(p interface{}) types.Value {
-	switch inner := p.(type) {
-	case sql.Point:
-		return ConvertSQLPointToTypesPoint(inner)
-	case sql.LineString:
-		return ConvertSQLLineStringToTypesLineString(inner)
-	case sql.Polygon:
-		return ConvertSQLPolygonToTypesPolygon(inner)
-	default:
-		panic("used an invalid type sql.Geometry.Inner")
-	}
-
-}
-
 // ConvertValueToNomsValue implements TypeInfo interface.
 func (ti *geometryType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	// Check for null
@@ -130,7 +102,7 @@ func (ti *geometryType) ConvertValueToNomsValue(ctx context.Context, vrw types.V
 	if err != nil {
 		return nil, err
 	}
-	return ConvertSQLGeometryToTypesGeometry(geom), nil
+	return types.ConvertSQLGeometryToTypesGeometry(geom), nil
 }
 
 // Equals implements TypeInfo interface.

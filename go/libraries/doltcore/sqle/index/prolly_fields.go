@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/shopspring/decimal"
 
-	geo "github.com/dolthub/dolt/go/store/geometry"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -274,15 +273,17 @@ func convUint(v interface{}) uint {
 }
 
 func deserializeGeometry(buf []byte) (v interface{}) {
-	srid, _, typ := geo.ParseEWKBHeader(buf)
-	buf = buf[geo.EWKBHeaderSize:]
+	srid, _, typ, _ := sql.DeserializeEWKBHeader(buf)
+	buf = buf[sql.EWKBHeaderSize:]
 	switch typ {
-	case geo.PointType:
-		v = geo.DeserializePoint(buf, srid)
-	case geo.LineStringType:
-		v = geo.DeserializeLineString(buf, srid)
-	case geo.PolygonType:
-		v = geo.DeserializePolygon(srid, buf)
+	case sql.WKBPointID:
+		v, _ = sql.DeserializePoint(buf, false, srid)
+	case sql.WKBLineID:
+		v, _ = sql.DeserializeLine(buf, false, srid)
+	case sql.WKBPolyID:
+		v, _ = sql.DeserializePoly(buf, false, srid)
+	case sql.WKBMPointID:
+		v, _ = sql.DeserializeMPoint(buf, false, srid)
 	default:
 		panic(fmt.Sprintf("unknown geometry type %d", typ))
 	}

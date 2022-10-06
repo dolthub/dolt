@@ -142,11 +142,11 @@ func wrapConvertValueToNomsValue(
 				return nil, err
 			}
 		case types.LineString:
-			vInt = ConvertTypesLineStringToSQLLineString(val)
+			vInt = types.ConvertTypesLineStringToSQLLineString(val)
 		case types.Point:
-			vInt = ConvertTypesPointToSQLPoint(val)
+			vInt = types.ConvertTypesPointToSQLPoint(val)
 		case types.Polygon:
-			vInt = ConvertTypesPolygonToSQLPolygon(val)
+			vInt = types.ConvertTypesPolygonToSQLPolygon(val)
 		case types.String:
 			vInt = string(val)
 		case types.Timestamp:
