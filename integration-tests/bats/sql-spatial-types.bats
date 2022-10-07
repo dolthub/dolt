@@ -241,7 +241,7 @@ SQL
 
     run dolt sql -q "ALTER TABLE table1 MODIFY COLUMN p LINESTRING SRID 4326"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Cannot get geometry object from data you send to the GEOMETRY field" ]] || false
+    [[ "$output" =~ "Cannot get geometry object from data you sent to the GEOMETRY field" ]] || false
 
     dolt sql -q "DELETE FROM table1 WHERE i = 1"
     run dolt sql -q "SELECT ST_ASWKT(p) FROM pt"
