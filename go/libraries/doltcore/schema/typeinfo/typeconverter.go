@@ -75,6 +75,8 @@ func GetTypeConverter(ctx context.Context, srcTi TypeInfo, destTi TypeInfo) (tc 
 		return jsonTypeConverter(ctx, src, destTi)
 	case *linestringType:
 		return linestringTypeConverter(ctx, src, destTi)
+	case *multipointType:
+		return multipointTypeConverter(ctx, src, destTi)
 	case *pointType:
 		return pointTypeConverter(ctx, src, destTi)
 	case *polygonType:

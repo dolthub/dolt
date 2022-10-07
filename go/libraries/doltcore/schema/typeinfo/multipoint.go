@@ -53,11 +53,11 @@ func (ti *multipointType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecR
 	k := reader.ReadKind()
 	switch k {
 	case types.MultiPointKind:
-		l, err := reader.ReadMultiPoint()
+		p, err := reader.ReadMultiPoint()
 		if err != nil {
 			return nil, err
 		}
-		return ti.ConvertNomsValueToValue(l)
+		return ti.ConvertNomsValueToValue(p)
 	case types.NullKind:
 		return nil, nil
 	}
