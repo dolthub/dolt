@@ -251,10 +251,9 @@ teardown() {
 }
 
 @test "init: create a database when current working directory does not have a database yet" {
-    # it creates old format even though there is new format db exists in the current directory.
     set_dolt_user "baz", "baz@bash.com"
 
-    # Default format is OLD (__LD_1__) when DOLT_DEFAULT_BIN_FORMAT is undefined
+    # Default format is NEW (__DOLT__) when DOLT_DEFAULT_BIN_FORMAT is undefined
     if [ "$DOLT_DEFAULT_BIN_FORMAT" = "" ]
     then
         orig_bin_format="__DOLT__"
@@ -281,10 +280,9 @@ teardown() {
     [[ $output =~ "test" ]] || false
 
     cd test
-    dolt version
     run dolt version
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "$orig_bin_format" ]] || false
+    [[ "$output" =~ "__DOLT__" ]] || false
 }
 
 assert_valid_repository () {
