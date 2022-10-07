@@ -77,7 +77,7 @@ func (v MultiLineString) Less(nbf *NomsBinFormat, other LesserValuable) (bool, e
 	} else {
 		n = len2
 	}
-	// Compare each point until there is one that is less
+	// Compare each line until there is one that is less
 	for i := 0; i < n; i++ {
 		if !v.Lines[i].Equals(v2.Lines[i]) {
 			return v.Lines[i].Less(nbf, v2.Lines[i])
@@ -128,7 +128,7 @@ func readMultiLineString(nbf *NomsBinFormat, b *valueDecoder) (MultiLineString, 
 		return MultiLineString{}, err
 	}
 	if geomType != WKBMLineID {
-		return MultiLineString{}, errors.New("not a polygon")
+		return MultiLineString{}, errors.New("not a multilinestring")
 	}
 	buf = buf[EWKBHeaderSize:]
 	return DeserializeTypesMLine(buf, false, srid), nil
