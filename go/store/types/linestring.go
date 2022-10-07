@@ -138,6 +138,7 @@ func readLineString(nbf *NomsBinFormat, b *valueDecoder) (LineString, error) {
 	if geomType != WKBLineID {
 		return LineString{}, errors.New("not a linestring")
 	}
+	buf = buf[EWKBHeaderSize:]
 	return DeserializeTypesLine(buf, false, srid), nil
 }
 
@@ -150,6 +151,7 @@ func (v LineString) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, er
 	if geomType != WKBLineID {
 		return LineString{}, errors.New("not a linestring")
 	}
+	buf = buf[EWKBHeaderSize:]
 	return DeserializeTypesLine(buf, false, srid), nil
 }
 

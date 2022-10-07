@@ -130,6 +130,7 @@ func readPolygon(nbf *NomsBinFormat, b *valueDecoder) (Polygon, error) {
 	if geomType != WKBPolyID {
 		return Polygon{}, errors.New("not a polygon")
 	}
+	buf = buf[EWKBHeaderSize:]
 	return DeserializeTypesPoly(buf, false, srid), nil
 }
 
@@ -142,6 +143,7 @@ func (v Polygon) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error
 	if geomType != WKBPolyID {
 		return Polygon{}, errors.New("not a polygon")
 	}
+	buf = buf[EWKBHeaderSize:]
 	return DeserializeTypesPoly(buf, false, srid), nil
 }
 

@@ -388,15 +388,16 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		if err != nil {
 			return nil, err
 		}
+		buf = buf[EWKBHeaderSize:]
 		switch geomType {
 		case WKBPointID:
-			return DeserializeTypesPoint(buf[EWKBHeaderSize:], false, srid), nil
+			return DeserializeTypesPoint(buf, false, srid), nil
 		case WKBLineID:
-			return DeserializeTypesLine(buf[EWKBHeaderSize:], false, srid), nil
+			return DeserializeTypesLine(buf, false, srid), nil
 		case WKBPolyID:
-			return DeserializeTypesPoly(buf[EWKBHeaderSize:], false, srid), nil
+			return DeserializeTypesPoly(buf, false, srid), nil
 		case WKBMPolyID:
-			return DeserializeTypesPoly(buf[EWKBHeaderSize:], false, srid), nil
+			return DeserializeTypesPoly(buf, false, srid), nil
 		default:
 			return nil, ErrUnknownType
 		}
@@ -410,7 +411,8 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		if geomType != WKBPointID {
 			return nil, ErrUnknownType
 		}
-		return DeserializeTypesPoint(buf[EWKBHeaderSize:], false, srid), nil
+		buf = buf[EWKBHeaderSize:]
+		return DeserializeTypesPoint(buf, false, srid), nil
 	case LineStringKind:
 		r.skipKind()
 		buf := []byte(r.ReadString())
@@ -421,7 +423,8 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		if geomType != WKBLineID {
 			return nil, ErrUnknownType
 		}
-		return DeserializeTypesLine(buf[EWKBHeaderSize:], false, srid), nil
+		buf = buf[EWKBHeaderSize:]
+		return DeserializeTypesLine(buf, false, srid), nil
 	case PolygonKind:
 		r.skipKind()
 		buf := []byte(r.ReadString())
@@ -432,7 +435,8 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		if geomType != WKBPolyID {
 			return nil, ErrUnknownType
 		}
-		return DeserializeTypesPoly(buf[EWKBHeaderSize:], false, srid), nil
+		buf = buf[EWKBHeaderSize:]
+		return DeserializeTypesPoly(buf, false, srid), nil
 	case MultiPointKind:
 		r.skipKind()
 		buf := []byte(r.ReadString())
@@ -443,7 +447,8 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		if geomType != WKBPolyID {
 			return nil, ErrUnknownType
 		}
-		return DeserializeTypesMPoint(buf[EWKBHeaderSize:], false, srid), nil
+		buf = buf[EWKBHeaderSize:]
+		return DeserializeTypesMPoint(buf, false, srid), nil
 	case TypeKind:
 		r.skipKind()
 		return r.readType()

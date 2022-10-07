@@ -104,7 +104,8 @@ func (v Point) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) 
 	if geomType != WKBPointID {
 		return Point{}, errors.New("not a point")
 	}
-	return DeserializeTypesPoint(buf[EWKBHeaderSize:], false, srid), nil
+	buf = buf[EWKBHeaderSize:]
+	return DeserializeTypesPoint(buf, false, srid), nil
 }
 
 func (v Point) skip(nbf *NomsBinFormat, b *binaryNomsReader) {

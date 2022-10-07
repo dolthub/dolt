@@ -102,16 +102,17 @@ func readGeometry(nbf *NomsBinFormat, b *valueDecoder) (Geometry, error) {
 	if err != nil {
 		return Geometry{}, err
 	}
+	buf = buf[EWKBHeaderSize:]
 	var inner Value
 	switch geomType {
 	case WKBPointID:
-		inner = DeserializeTypesPoint(buf[EWKBHeaderSize:], false, srid)
+		inner = DeserializeTypesPoint(buf, false, srid)
 	case WKBLineID:
-		inner = DeserializeTypesLine(buf[EWKBHeaderSize:], false, srid)
+		inner = DeserializeTypesLine(buf, false, srid)
 	case WKBPolyID:
-		inner = DeserializeTypesPoly(buf[EWKBHeaderSize:], false, srid)
+		inner = DeserializeTypesPoly(buf, false, srid)
 	case WKBMPolyID:
-		inner = DeserializeTypesPoly(buf[EWKBHeaderSize:], false, srid)
+		inner = DeserializeTypesPoly(buf, false, srid)
 	default:
 		return Geometry{}, errors.New("not a geometry")
 	}
@@ -124,16 +125,17 @@ func (v Geometry) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, erro
 	if err != nil {
 		return Geometry{}, err
 	}
+	buf = buf[EWKBHeaderSize:]
 	var inner Value
 	switch geomType {
 	case WKBPointID:
-		inner = DeserializeTypesPoint(buf[EWKBHeaderSize:], false, srid)
+		inner = DeserializeTypesPoint(buf, false, srid)
 	case WKBLineID:
-		inner = DeserializeTypesLine(buf[EWKBHeaderSize:], false, srid)
+		inner = DeserializeTypesLine(buf, false, srid)
 	case WKBPolyID:
-		inner = DeserializeTypesPoly(buf[EWKBHeaderSize:], false, srid)
+		inner = DeserializeTypesPoly(buf, false, srid)
 	case WKBMPolyID:
-		inner = DeserializeTypesPoly(buf[EWKBHeaderSize:], false, srid)
+		inner = DeserializeTypesPoly(buf, false, srid)
 	default:
 		return Geometry{}, errors.New("not a geometry")
 	}
