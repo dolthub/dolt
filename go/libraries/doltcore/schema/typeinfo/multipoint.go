@@ -40,7 +40,7 @@ func (ti *multipointType) ConvertNomsValueToValue(v types.Value) (interface{}, e
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
-	// Expect a types.LineString, return a sql.LineString
+	// Expect a types.MultiPoint, return a sql.MultiPoint
 	if val, ok := v.(types.MultiPoint); ok {
 		return types.ConvertTypesMultiPointToSQLMultiPoint(val), nil
 	}
@@ -53,7 +53,7 @@ func (ti *multipointType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecR
 	k := reader.ReadKind()
 	switch k {
 	case types.MultiPointKind:
-		l, err := reader.ReadLineString()
+		l, err := reader.ReadMultiPoint()
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +108,7 @@ func (ti *multipointType) FormatValue(v types.Value) (*string, error) {
 
 // GetTypeIdentifier implements TypeInfo interface.
 func (ti *multipointType) GetTypeIdentifier() Identifier {
-	return LineStringTypeIdentifier
+	return MultiPointTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
