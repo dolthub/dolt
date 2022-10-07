@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.3-labs
-FROM ubuntu:22.04
+FROM --platform=linux/amd64 ubuntu:22.04
 
 ARG DOLT_VERSION
 
