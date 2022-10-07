@@ -130,12 +130,12 @@ func (ti *multipointType) IsValid(v types.Value) bool {
 
 // NomsKind implements TypeInfo interface.
 func (ti *multipointType) NomsKind() types.NomsKind {
-	return types.LineStringKind
+	return types.MultiPointKind
 }
 
 // Promote implements TypeInfo interface.
 func (ti *multipointType) Promote() TypeInfo {
-	return &linestringType{ti.sqlMultiPointType.Promote().(sql.LineStringType)}
+	return &multipointType{ti.sqlMultiPointType.Promote().(sql.MultiPointType)}
 }
 
 // String implements TypeInfo interface.
@@ -149,7 +149,7 @@ func (ti *multipointType) ToSqlType() sql.Type {
 }
 
 // multipointTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
-func multipointTypeConverter(ctx context.Context, src *linestringType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+func multipointTypeConverter(ctx context.Context, src *multipointType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
 		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {

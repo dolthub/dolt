@@ -119,8 +119,8 @@ func readMultiPoint(nbf *NomsBinFormat, b *valueDecoder) (MultiPoint, error) {
 	if err != nil {
 		return MultiPoint{}, nil
 	}
-	if geomType != WKBLineID {
-		return MultiPoint{}, errors.New("not a linestring")
+	if geomType != WKBMPointID {
+		return MultiPoint{}, errors.New("not a multipoint")
 	}
 	return DeserializeTypesMPoint(buf, false, srid), nil
 }
@@ -131,8 +131,8 @@ func (v MultiPoint) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, er
 	if err != nil {
 		return MultiPoint{}, nil
 	}
-	if geomType != WKBLineID {
-		return MultiPoint{}, errors.New("not a linestring")
+	if geomType != WKBMPointID {
+		return MultiPoint{}, errors.New("not a multipoint")
 	}
 	return DeserializeTypesMPoint(buf, false, srid), nil
 }
@@ -146,6 +146,6 @@ func (v MultiPoint) HumanReadableString() string {
 	for i, p := range v.Points {
 		points[i] = p.HumanReadableString()
 	}
-	s := fmt.Sprintf("SRID: %d LINESTRING(%s)", v.SRID, strings.Join(points, ","))
+	s := fmt.Sprintf("SRID: %d MULTIPOINT(%s)", v.SRID, strings.Join(points, ","))
 	return strconv.Quote(s)
 }
