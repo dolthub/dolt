@@ -10,21 +10,7 @@ on:
     types: [ push-docker-image ]
 
 jobs:
-  get-version:
-    name: Get Version
-    runs-on: ubuntu-22.04
-    outputs:
-      version: ${{ steps.get_version.outputs.version }}
-    steps:
-      - name: Get version
-        id: get_version
-        run: |
-          version="${{ github.event.inputs.version || github.event.client_payload.version }}"
-
-          echo "::set-output name=version::$version"
-
   docker-image-push:
-    needs: [ get-version ]
     name: Push Docker Image
     runs-on: ubuntu-22.04
     steps:
@@ -43,6 +29,6 @@ jobs:
           context: .
           file: ./docker/Dockerfile
           push: true
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/dolt:${{ needs.get-version.outputs.version }} , ${{ secrets.DOCKER_HUB_USERNAME }}/dolt:latest
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/dolt:${{ github.event.inputs.version || github.event.client_payload.version }} , ${{ secrets.DOCKER_HUB_USERNAME }}/dolt:latest
           build-args: |
-            DOLT_VERSION=${{ needs.get-version.outputs.version }}
+            DOLT_VERSION=${{ github.event.inputs.version || github.event.client_payload.version }}
