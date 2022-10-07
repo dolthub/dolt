@@ -303,6 +303,7 @@ func MultiEnvForDirectory(
 	var ok bool
 	if dEnv, ok = envSet[dbName]; ok {
 		mrEnv.AddEnv(dbName, dEnv)
+		delete(envSet, dbName)
 	}
 	for dbName, dEnv = range envSet {
 		mrEnv.AddEnv(dbName, dEnv)
