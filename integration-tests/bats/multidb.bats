@@ -102,7 +102,8 @@ make__DOLT__db() {
     make__DOLT__db new1
     make__LD_1__db old1
 
-    DOLT_DEFAULT_BIN_FORMAT="__DOLT__" dolt init
+    export DOLT_DEFAULT_BIN_FORMAT="__DOLT__"
+    dolt init
     run dolt sql -q "SHOW DATABASES;"
     [ $status -eq 0 ]
     [[ "$output" =~ "incompatible format for database 'old1'; expected '__DOLT__', found '__LD_1__'" ]] || false
@@ -111,7 +112,8 @@ make__DOLT__db() {
     [[ ! "$output" =~ "| old1" ]] || false
 
     rm -r .dolt
-    DOLT_DEFAULT_BIN_FORMAT="__LD_1__" dolt init
+    export DOLT_DEFAULT_BIN_FORMAT="__LD_1__"
+    dolt init
     run dolt sql -q "SHOW DATABASES;"
     [ $status -eq 0 ]
     [[ "$output" =~ "incompatible format for database 'new1'; expected '__LD_1__', found '__DOLT__'" ]] || false
