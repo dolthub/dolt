@@ -51,6 +51,8 @@ func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 		return types.ConvertTypesLineStringToSQLLineString(val), nil
 	case types.Polygon:
 		return types.ConvertTypesPolygonToSQLPolygon(val), nil
+	case types.MultiPoint:
+		return types.ConvertTypesMultiPointToSQLMultiPoint(val), nil
 	default:
 		return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 	}
@@ -231,9 +233,9 @@ func geometryTypeConverter(ctx context.Context, src *geometryType, destTi TypeIn
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *jsonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *multipointType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *linestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *pointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)

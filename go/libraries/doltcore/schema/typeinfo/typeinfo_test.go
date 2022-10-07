@@ -201,7 +201,7 @@ func testTypeInfoForeignKindHandling(t *testing.T, tiArrays [][]TypeInfo, vaArra
 					for _, vaArray := range vaArrays {
 						for _, val := range vaArray {
 							t.Run(fmt.Sprintf(`types.%v(%v)`, val.Kind().String(), humanReadableString(val)), func(t *testing.T) {
-								// Should be able to convert Point, LineString, and Polygon to Geometry columns
+								// Should be able to convert all Geometry columns
 								if ti.NomsKind() == types.GeometryKind {
 									if types.IsGeometryKind(val.Kind()) {
 										_, err := ti.ConvertNomsValueToValue(val)
@@ -355,6 +355,7 @@ func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 			{Int8Type, Int16Type, Int24Type, Int32Type, Int64Type},
 			{JSONType},
 			{LineStringType},
+			{MultiPointType},
 			{PointType},
 			{PolygonType},
 			{GeometryType},
@@ -391,6 +392,7 @@ func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 			{json.MustTypesJSON(`null`), json.MustTypesJSON(`[]`), json.MustTypesJSON(`"lorem ipsum"`), json.MustTypesJSON(`2.71`),
 				json.MustTypesJSON(`false`), json.MustTypesJSON(`{"a": 1, "b": []}`)}, //JSON
 			{types.LineString{SRID: 0, Points: []types.Point{{SRID: 0, X: 1, Y: 2}, {SRID: 0, X: 3, Y: 4}}}}, // LineString
+			{types.MultiPoint{SRID: 0, Points: []types.Point{{SRID: 0, X: 1, Y: 2}, {SRID: 0, X: 3, Y: 4}}}}, // MultiPoint
 			{types.Point{SRID: 0, X: 1, Y: 2}}, // Point
 			{types.Polygon{SRID: 0, Lines: []types.LineString{{SRID: 0, Points: []types.Point{{SRID: 0, X: 0, Y: 0}, {SRID: 0, X: 0, Y: 1}, {SRID: 0, X: 1, Y: 1}, {SRID: 0, X: 0, Y: 0}}}}}}, // Polygon
 			{types.Geometry{Inner: types.Point{SRID: 0, X: 1, Y: 2}}},                                                                                                                      // Geometry holding a Point

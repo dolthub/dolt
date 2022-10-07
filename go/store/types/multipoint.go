@@ -122,6 +122,7 @@ func readMultiPoint(nbf *NomsBinFormat, b *valueDecoder) (MultiPoint, error) {
 	if geomType != WKBMPointID {
 		return MultiPoint{}, errors.New("not a multipoint")
 	}
+	buf = buf[EWKBHeaderSize:]
 	return DeserializeTypesMPoint(buf, false, srid), nil
 }
 
