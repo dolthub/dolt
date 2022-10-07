@@ -274,12 +274,10 @@ func MultiEnvForDirectory(
 	if dEnv.Valid() {
 		binFormat = dEnv.DoltDB.Format()
 		mrEnv.AddEnv(dbName, dEnv)
-	} else {
-		binFormat = types.Format_Default
 	}
 
 	// If there are other directories in the directory, try to load them as additional databases
-	fs.Iter(".", false, func(path string, size int64, isDir bool) (stop bool) {
+	err := fs.Iter(".", false, func(path string, size int64, isDir bool) (stop bool) {
 		if !isDir {
 			return false
 		}
@@ -304,6 +302,10 @@ func MultiEnvForDirectory(
 
 		return false
 	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	return mrEnv, nil
 }
