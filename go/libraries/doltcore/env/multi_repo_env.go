@@ -273,11 +273,11 @@ func MultiEnvForDirectory(
 
 	envSet := map[string]*DoltEnv{}
 	if dEnv.Valid() {
-		mrEnv.AddEnv(dbName, dEnv)
+		envSet[dbName] = dEnv
 	}
 
 	// If there are other directories in the directory, try to load them as additional databases
-	err := fs.Iter(".", false, func(path string, size int64, isDir bool) (stop bool) {
+	fs.Iter(".", false, func(path string, size int64, isDir bool) (stop bool) {
 		if !isDir {
 			return false
 		}
@@ -295,9 +295,6 @@ func MultiEnvForDirectory(
 		}
 		return false
 	})
-	if err != nil {
-		return nil, err
-	}
 
 	enforceSingleFormat(envSet)
 	for dbName, dEnv = range envSet {
