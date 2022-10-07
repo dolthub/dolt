@@ -43,6 +43,6 @@ jobs:
           context: .
           file: ./docker/Dockerfile
           push: true
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/dolt:latest
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/dolt:${{ needs.get-version.outputs.version }} , ${{ secrets.DOCKER_HUB_USERNAME }}/dolt:latest
           build-args: |
             DOLT_VERSION=${{ needs.get-version.outputs.version }}
