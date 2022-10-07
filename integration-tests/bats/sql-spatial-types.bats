@@ -255,17 +255,6 @@ SQL
     [[ "$output" =~ "The SRID of the geometry does not match the SRID of the column 'p'. The SRID of the geometry is 4326, but the SRID of the column is 0. Consider changing the SRID of the geometry or the SRID property of the column." ]] || false
 }
 
-@test "sql-spatial-types: multistatement exec with unsupported spatial types" {
-    dolt sql -q "CREATE TABLE t1 (i int primary key, g GEOMETRY NOT NULL);"
-
-    run dolt sql << SQL
-INSERT INTO t1 values (0, point(1,2));
-INSERT INTO t1 VALUES (1,0x000000000104000000030000000101000000000000000000F03F000000000000F03F010100000000000000000000400000000000000040010100000000000000000008400000000000000840);
-SQL
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "error executing query on line 2: unsupported geospatial type: MultiPoint from value: 0x0" ]] || false
-}
-
 @test "sql-spatial-types: round trip dolt dump with spatial type data" {
     run dolt sql << SQL
 CREATE TABLE t1 (i int primary key, g GEOMETRY, p POINT, l LINESTRING, po POLYGON);
