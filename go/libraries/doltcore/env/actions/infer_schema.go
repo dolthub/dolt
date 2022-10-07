@@ -82,9 +82,12 @@ OUTER:
 	}
 
 	// always process last row
-	if err := i.processRow(prev); err != nil {
-		return nil, err
+	if prev != nil {
+		if err := i.processRow(prev); err != nil {
+			return nil, err
+		}
 	}
+
 	return i.inferColumnTypes()
 }
 
