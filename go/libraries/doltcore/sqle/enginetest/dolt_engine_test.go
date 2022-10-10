@@ -366,7 +366,6 @@ func TestScripts(t *testing.T) {
 		skipped = append(skipped, newFormatSkippedScripts...)
 	}
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
-
 	enginetest.TestScript(t, newDoltHarness(t), queries.ScriptTest{
 		Name: "add unique constraint on keyless table",
 		SetUpScript: []string{
