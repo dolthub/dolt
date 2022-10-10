@@ -15,6 +15,7 @@
 package dsess
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -30,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -68,6 +70,7 @@ type DoltSession struct {
 
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
+var _ branch_control.Context = (*DoltSession)(nil)
 
 // DefaultSession creates a DoltSession with default values
 func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
@@ -1190,6 +1193,31 @@ func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
 		return nil, err
 	}
 	return sysVars, nil
+}
+
+// GetBranch implements the interface branch_control.Context.
+func (d *DoltSession) GetBranch() (string, error) {
+	branchRef, err := d.CWBHeadRef(sql.NewContext(context.Background(), sql.WithSession(d)), d.Session.GetCurrentDatabase())
+	if err != nil {
+		return "", err
+	}
+	return branchRef.GetPath(), nil
+}
+
+// GetUser implements the interface branch_control.Context.
+func (d *DoltSession) GetUser() string {
+	return d.Session.Client().User
+}
+
+// GetHost implements the interface branch_control.Context.
+func (d *DoltSession) GetHost() string {
+	return d.Session.Client().Address
+}
+
+// GetController implements the interface branch_control.Context.
+func (d *DoltSession) GetController() *branch_control.Controller {
+	//TODO implement me
+	panic("implement me")
 }
 
 // validatePersistedSysVar checks whether a system variable exists and is dynamic

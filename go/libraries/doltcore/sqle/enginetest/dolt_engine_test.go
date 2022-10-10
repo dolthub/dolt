@@ -447,12 +447,11 @@ func TestJSONTableScripts(t *testing.T) {
 }
 
 func TestUserPrivileges(t *testing.T) {
-	t.Skip("Need to add more collations")
 	enginetest.TestUserPrivileges(t, newDoltHarness(t))
 }
 
 func TestUserAuthentication(t *testing.T) {
-	t.Skip("Need to add more collations")
+	t.Skip("Unexpected panic, need to fix")
 	enginetest.TestUserAuthentication(t, newDoltHarness(t))
 }
 
