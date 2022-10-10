@@ -38,9 +38,9 @@ const (
 	WKBPointID          = sql.WKBPointID
 	WKBLineID           = sql.WKBLineID
 	WKBPolyID           = sql.WKBPolyID
-	WKBMPointID         = sql.WKBMultiPointID
-	WKBMLineID          = sql.WKBMultiLineID
-	WKBMPolyID          = sql.WKBMultiPolyID
+	WKBMultiPointID     = sql.WKBMultiPointID
+	WKBMultiLineID      = sql.WKBMultiLineID
+	WKBMultiPolyID      = sql.WKBMultiPolyID
 	WKBGeomCollectionID = sql.WKBGeomCollectionID
 )
 

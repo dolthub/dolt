@@ -396,8 +396,8 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 			return DeserializeTypesLine(buf, false, srid), nil
 		case WKBPolyID:
 			return DeserializeTypesPoly(buf, false, srid), nil
-		case WKBMPolyID:
-			return DeserializeTypesPoly(buf, false, srid), nil
+		case WKBMultiPointID:
+			return DeserializeTypesMPoint(buf, false, srid), nil
 		default:
 			return nil, ErrUnknownType
 		}
