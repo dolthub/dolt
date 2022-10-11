@@ -70,12 +70,14 @@ func (pp *PrintProgress) Close() {
 }
 
 func (pp *PrintProgress) SetReadBytes(b int64) {
-	pp.bytesRead = b
+	pp.bytesRead = pp.printed + b
 }
 
 func (pp *PrintProgress) Print() {
-	if (pp.bytesRead - pp.printed) > 100000 {
-		pp.printed = pp.bytesRead
+	pp.printed = pp.bytesRead
+	if pp.totalBytes > 1000 {
+		fmt.Fprintf(pp.writer, "Reading.. (%v/%v)kBs\n", pp.bytesRead/1000, pp.totalBytes/1000)
+	} else {
 		fmt.Fprintf(pp.writer, "Reading.. (%v/%v)Bs\n", pp.bytesRead, pp.totalBytes)
 	}
 }

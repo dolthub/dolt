@@ -331,7 +331,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else if runInBatchMode {
-			verr := execBatch(ctx, continueOnError, mrEnv, input, format, config)
+			verr := execBatch(ctx, continueOnError, mrEnv, input, format, config, pp)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
@@ -428,7 +428,7 @@ func queryMode(
 		}
 	} else if batchMode {
 		batchInput := strings.NewReader(query)
-		verr := execBatch(ctx, continueOnError, mrEnv, batchInput, format, config)
+		verr := execBatch(ctx, continueOnError, mrEnv, batchInput, format, config, nil)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
@@ -497,6 +497,7 @@ func execBatch(
 	batchInput io.Reader,
 	format engine.PrintResultFormat,
 	config *engine.SqlEngineConfig,
+	pp *engine.PrintProgress,
 ) errhand.VerboseError {
 	se, err := engine.NewSqlEngine(
 		ctx,
@@ -524,7 +525,7 @@ func execBatch(
 
 	// In batch mode, we need to set a couple flags on the session to prevent constant flushes to disk
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
-	err = runBatchMode(sqlCtx, se, batchInput, continueOnErr)
+	err = runBatchMode(sqlCtx, se, batchInput, continueOnErr, pp)
 	if err != nil {
 		// If we encounter an error, attempt to flush what we have so far to disk before exiting
 		flushErr := flushBatchedEdits(sqlCtx, se)
@@ -785,14 +786,12 @@ func saveQuery(ctx context.Context, root *doltdb.RootValue, query string, name s
 
 // runMultiStatementMode allows for the execution of more than one query, but it doesn't attempt any batch optimizations
 func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, continueOnErr bool, pp *engine.PrintProgress) error {
-	l := int64(0)
 	scanner := NewSqlStatementScanner(input)
 	var query string
 	for scanner.Scan() {
 		if pp != nil {
-			pp.SetReadBytes(l)
-			l += int64(len(scanner.Bytes()))
 			pp.Print()
+			pp.SetReadBytes(int64(len(scanner.Bytes())))
 		}
 		query += scanner.Text()
 		if len(query) == 0 || query == "\n" {
@@ -834,11 +833,15 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 }
 
 // runBatchMode processes queries until EOF. The Root of the sqlEngine may be updated.
-func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, continueOnErr bool) error {
+func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, continueOnErr bool, pp *engine.PrintProgress) error {
 	scanner := NewSqlStatementScanner(input)
 
 	var query string
 	for scanner.Scan() {
+		if pp != nil {
+			pp.Print()
+			pp.SetReadBytes(int64(len(scanner.Bytes())))
+		}
 		query += scanner.Text()
 		if len(query) == 0 || query == "\n" {
 			continue

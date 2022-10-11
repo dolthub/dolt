@@ -2567,6 +2567,14 @@ SQL
     run dolt sql -q "select * from test" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1,1" ]] || false
+    
+    run dolt sql --batch --file script.sql
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Done reading.." ]] || false
+
+    run dolt sql -q "select * from test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false
 
     run dolt sql --file not-exists.sql
     [ "$status" -eq 1 ]
