@@ -22,7 +22,7 @@ import (
 )
 
 func init() {
-	nbf, err := GetFormatForVersionString(constants.FormatDefaultString)
+	nbf, err := GetFormatForVersionString(constants.FormatLD1String)
 	if err != nil {
 		panic("unrecognized value for DOLT_DEFAULT_BIN_FORMAT " + constants.FormatDefaultString)
 	}
