@@ -177,6 +177,8 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 			return &polygonType{sqlType.(sql.PolygonType)}, nil
 		case sql.MultiPointType{}.String():
 			return &multipointType{}, nil
+		case sql.MultiLineStringType{}.String():
+			return &multilinestringType{}, nil
 		case sql.GeometryType{}.String():
 			return &geometryType{sqlGeometryType: sqlType.(sql.GeometryType)}, nil
 		default:
