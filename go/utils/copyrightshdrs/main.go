@@ -274,6 +274,7 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/types/map_test.go", NomsPath: "go/types/map_test.go", HadCopyrightNotice: true},
 	{Path: "store/types/meta_sequence.go", NomsPath: "go/types/meta_sequence.go", HadCopyrightNotice: true},
 	{Path: "store/types/noms_kind.go", NomsPath: "go/types/noms_kind.go", HadCopyrightNotice: true},
+	{Path: "store/types/noms_kind_test.go", NomsPath: "go/types/noms_kind_test.go", HadCopyrightNotice: true},
 	{Path: "store/types/ordered_sequences.go", NomsPath: "go/types/ordered_sequences.go", HadCopyrightNotice: true},
 	{Path: "store/types/ordered_sequences_diff.go", NomsPath: "go/types/ordered_sequences_diff.go", HadCopyrightNotice: true},
 	{Path: "store/types/ordered_sequences_diff_test.go", NomsPath: "go/types/ordered_sequences_diff_test.go", HadCopyrightNotice: true},
