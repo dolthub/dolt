@@ -366,6 +366,9 @@ func TestScripts(t *testing.T) {
 		skipped = append(skipped, newFormatSkippedScripts...)
 	}
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("not fixing unique index on keyless tables for old format")
+	}
 	enginetest.TestScript(t, newDoltHarness(t), queries.ScriptTest{
 		Name: "add unique constraint on keyless table",
 		SetUpScript: []string{
