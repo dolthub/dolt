@@ -718,6 +718,22 @@ var DoltScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "unique key violation prevents insert",
+		SetUpScript: []string{
+			"CREATE TABLE auniquetable (pk int primary key, uk int unique key, i int);",
+			"INSERT INTO auniquetable VALUES(0,0,0);",
+			"INSERT INTO auniquetable (pk,uk) VALUES(1,0) on duplicate key update i = 99;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT pk, uk, i from auniquetable",
+				Expected: []sql.Row{
+					{0, 0, 99},
+				},
+			},
+		},
+	},
 }
 
 func makeLargeInsert(sz int) string {
