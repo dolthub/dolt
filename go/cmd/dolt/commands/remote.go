@@ -18,14 +18,23 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+
+	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"github.com/dolthub/dolt/go/store/nbs"
 )
 
 var ErrInvalidPort = errors.New("invalid port")
@@ -65,6 +74,7 @@ const (
 	addRemoteId         = "add"
 	removeRemoteId      = "remove"
 	removeRemoteShortId = "rm"
+	pingRemoteId        = "ping"
 )
 
 type RemoteCmd struct{}
@@ -121,6 +131,8 @@ func (cmd RemoteCmd) Exec(ctx context.Context, commandStr string, args []string,
 		verr = removeRemote(ctx, dEnv, apr)
 	case apr.Arg(0) == removeRemoteShortId:
 		verr = removeRemote(ctx, dEnv, apr)
+	case apr.Arg(0) == pingRemoteId:
+		verr = pingRemote(ctx, dEnv, apr)
 	default:
 		verr = errhand.BuildDError("").SetPrintUsage().Build()
 	}
@@ -229,4 +241,82 @@ func printRemotes(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ver
 	}
 
 	return nil
+}
+
+func pingRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
+	if apr.NArg() != 2 {
+		return errhand.BuildDError("").SetPrintUsage().Build()
+	}
+
+	name := strings.TrimSpace(apr.Arg(1))
+	remote, ok := dEnv.RepoState.Remotes[name]
+	if !ok {
+		return errhand.BuildDError("error: unknown remote: '%s' ", name).Build()
+	}
+
+	meta, err := getRemoteMetadata(ctx, dEnv, remote)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	} else if meta == nil {
+		cli.PrintErrln("failed to get metadata for %s", remote.Name)
+	}
+
+	cli.Printf("%s (%s)\n", remote.Name, remote.Url)
+	cli.Printf("\tNbfVersion:  '%s'\n", meta.NbfVersion)
+	cli.Printf("\tNbsVersion:  '%s'\n", meta.NbsVersion)
+	cli.Printf("\tStorageSize: %d\n", meta.StorageSize)
+	return nil
+}
+
+func getRemoteMetadata(ctx context.Context, dEnv *env.DoltEnv, remote env.Remote) (*remotesapi.GetRepoMetadataResponse, error) {
+	url, err := earl.Parse(remote.Url)
+	if err != nil {
+		return nil, err
+	}
+	switch url.Scheme {
+	case dbfactory.HTTPScheme, dbfactory.HTTPSScheme:
+		break
+	default:
+		// TODO(andy): implement `dolt remote ping` queries for all remote types.
+		return nil, fmt.Errorf("cannot ping remote with URL scheme %s (%s)", url.Scheme, remote.Url)
+	}
+
+	endpoint, opts, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
+		Endpoint:     url.Host,
+		WithEnvCreds: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	opts = append(opts, grpc.WithChainUnaryInterceptor(remotestorage.EventsUnaryClientInterceptor(events.GlobalCollector)))
+	opts = append(opts, grpc.WithChainUnaryInterceptor(remotestorage.RetryingUnaryClientInterceptor))
+	conn, err := grpc.Dial(endpoint, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	csClient := remotesapi.NewChunkStoreServiceClient(conn)
+
+	var repoId *remotesapi.RepoId
+	path := url.Path
+	path = strings.Trim(path, "/")
+	tokens := strings.Split(path, "/")
+	if len(tokens) == 2 {
+		org := tokens[0]
+		repoName := tokens[1]
+		repoId = &remotesapi.RepoId{
+			Org:      org,
+			RepoName: repoName,
+		}
+	}
+
+	return csClient.GetRepoMetadata(ctx, &remotesapi.GetRepoMetadataRequest{
+		RepoId:   repoId,
+		RepoPath: path,
+		ClientRepoFormat: &remotesapi.ClientRepoFormat{
+			NbfVersion: dEnv.DoltDB.Format().VersionString(),
+			NbsVersion: nbs.StorageVersion,
+		},
+	})
 }
