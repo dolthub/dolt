@@ -181,8 +181,6 @@ func multilinestringTypeConverter(ctx context.Context, src *multilinestringType,
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *multipointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *multilinestringType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *pointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *polygonType:
