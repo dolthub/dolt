@@ -32,7 +32,7 @@ type multilinestringType struct {
 
 var _ TypeInfo = (*multilinestringType)(nil)
 
-var MultiLineStringtype = &multilinestringType{sql.MultiLineStringType{}}
+var MultiLineStringType = &multilinestringType{sql.MultiLineStringType{}}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *multilinestringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
