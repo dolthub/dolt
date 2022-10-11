@@ -2562,6 +2562,7 @@ SQL
     
     run dolt sql --file script.sql
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "Done reading.." ]] || false
 
     run dolt sql -q "select * from test" -r csv
     [ "$status" -eq 0 ]

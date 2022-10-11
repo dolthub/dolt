@@ -17,6 +17,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"github.com/gosuri/uilive"
 	"io"
 	"time"
 
@@ -49,17 +50,47 @@ const (
 	PrintRowCountAndTiming                      = 1
 )
 
+type PrintProgress struct {
+	writer     *uilive.Writer
+	bytesRead  int64
+	totalBytes int64
+	printed    int64
+}
+
+func NewPrintProgress(total int64) *PrintProgress {
+	writer := uilive.New()
+	// start listening for updates and render
+	writer.Start()
+	return &PrintProgress{writer: writer, bytesRead: 0, totalBytes: total, printed: 0}
+}
+
+func (pp *PrintProgress) Close() {
+	fmt.Fprintf(pp.writer, "Done reading.. (%v/%v)Bs\n", pp.totalBytes, pp.totalBytes)
+	pp.writer.Stop()
+}
+
+func (pp *PrintProgress) SetReadBytes(b int64) {
+	pp.bytesRead = b
+}
+
+func (pp *PrintProgress) Print() {
+	if (pp.bytesRead - pp.printed) > 100000 {
+		pp.printed = pp.bytesRead
+		fmt.Fprintf(pp.writer, "Reading.. (%v/%v)Bs\n", pp.bytesRead, pp.totalBytes)
+	}
+}
+
 // PrettyPrintResults prints the result of a query in the format provided
-func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
-	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintNoSummary)
+func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, printResult bool) (rerr error) {
+	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintNoSummary, printResult)
 }
 
 // PrettyPrintResultsExtended prints the result of a query in the format provided, including row count and timing info
 func PrettyPrintResultsExtended(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
-	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintRowCountAndTiming)
+	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintRowCountAndTiming, true)
 }
 
-func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, summary PrintSummaryBehavior) (rerr error) {
+func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, summary PrintSummaryBehavior, printResult bool) (rerr error) {
 	defer func() {
 		closeErr := rowIter.Close(ctx)
 		if rerr == nil && closeErr != nil {
@@ -71,7 +102,7 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 
 	// TODO: this isn't appropriate for JSON, CSV, other structured result formats
 	if isOkResult(sqlSch) {
-		return printOKResult(ctx, rowIter, start)
+		return printOKResult(ctx, rowIter, start, printResult)
 	}
 
 	var wr table.SqlRowWriter
@@ -196,13 +227,13 @@ func printEmptySetResult(start time.Time) {
 	cli.Printf("Empty set (%.2f sec)\n", seconds)
 }
 
-func printOKResult(ctx *sql.Context, iter sql.RowIter, start time.Time) error {
+func printOKResult(ctx *sql.Context, iter sql.RowIter, start time.Time, printResult bool) error {
 	row, err := iter.Next(ctx)
 	if err != nil {
 		return err
 	}
 
-	if okResult, ok := row[0].(sql.OkResult); ok {
+	if okResult, ok := row[0].(sql.OkResult); ok && printResult {
 		rowNoun := "row"
 		if okResult.RowsAffected != 1 {
 			rowNoun = "rows"

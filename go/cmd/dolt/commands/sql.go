@@ -155,7 +155,7 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(MultiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory. This is deprecated, you should use `--data-dir` instead")
 	ap.SupportsString(CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change that affect configuration settings.")
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
-	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given.")
+	ap.SupportsString(fileInputFlag, "f", "input file", "Execute statements from the file given.")
 	ap.SupportsString(PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
 	ap.SupportsString(UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", DefaultUser))
 	return ap
@@ -310,12 +310,19 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		_, continueOnError := apr.GetValue(continueFlag)
 
 		input := os.Stdin
+		var pp *engine.PrintProgress
 		if fileInput, ok := apr.GetValue(fileInputFlag); ok {
 			isTty = false
 			input, err = os.OpenFile(fileInput, os.O_RDONLY, os.ModePerm)
 			if err != nil {
 				return HandleVErrAndExitCode(errhand.BuildDError("couldn't open file %s", fileInput).Build(), usage)
 			}
+			info, err := os.Stat(fileInput)
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.BuildDError("couldn't get file size %s", fileInput).Build(), usage)
+			}
+			pp = engine.NewPrintProgress(info.Size())
+			defer pp.Close()
 		}
 
 		if isTty {
@@ -329,7 +336,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else {
-			verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, config)
+			verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, config, pp)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
@@ -427,7 +434,7 @@ func queryMode(
 		}
 	} else {
 		input := strings.NewReader(query)
-		verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, config)
+		verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, config, nil)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
@@ -538,6 +545,7 @@ func execMultiStatements(
 	batchInput io.Reader,
 	format engine.PrintResultFormat,
 	config *engine.SqlEngineConfig,
+	pp *engine.PrintProgress,
 ) errhand.VerboseError {
 	se, err := engine.NewSqlEngine(
 		ctx,
@@ -563,7 +571,7 @@ func execMultiStatements(
 	// Set client to specified user
 	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
-	err = runMultiStatementMode(sqlCtx, se, batchInput, continueOnErr)
+	err = runMultiStatementMode(sqlCtx, se, batchInput, continueOnErr, pp)
 	return errhand.VerboseErrorFromError(err)
 }
 
@@ -604,7 +612,7 @@ func execQuery(
 	}
 
 	if rowIter != nil {
-		err = engine.PrettyPrintResults(sqlCtx, se.GetResultFormat(), sqlSch, rowIter)
+		err = engine.PrettyPrintResults(sqlCtx, se.GetResultFormat(), sqlSch, rowIter, true)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -776,11 +784,16 @@ func saveQuery(ctx context.Context, root *doltdb.RootValue, query string, name s
 }
 
 // runMultiStatementMode allows for the execution of more than one query, but it doesn't attempt any batch optimizations
-func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, continueOnErr bool) error {
+func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, continueOnErr bool, pp *engine.PrintProgress) error {
+	l := int64(0)
 	scanner := NewSqlStatementScanner(input)
-
 	var query string
 	for scanner.Scan() {
+		if pp != nil {
+			pp.SetReadBytes(l)
+			l += int64(len(scanner.Bytes()))
+			pp.Print()
+		}
 		query += scanner.Text()
 		if len(query) == 0 || query == "\n" {
 			continue
@@ -803,7 +816,7 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 			}
 
 			if rowIter != nil {
-				err = engine.PrettyPrintResults(ctx, se.GetResultFormat(), sqlSch, rowIter)
+				err = engine.PrettyPrintResults(ctx, se.GetResultFormat(), sqlSch, rowIter, pp == nil)
 				if err != nil {
 					err = fmt.Errorf("error executing query on line %d: %v", scanner.statementStartLine, err)
 					return errhand.VerboseErrorFromError(err)
@@ -993,7 +1006,7 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 				case engine.FormatTabular, engine.FormatVertical:
 					err = engine.PrettyPrintResultsExtended(sqlCtx, resultFormat, sqlSch, rowIter)
 				default:
-					err = engine.PrettyPrintResults(sqlCtx, resultFormat, sqlSch, rowIter)
+					err = engine.PrettyPrintResults(sqlCtx, resultFormat, sqlSch, rowIter, true)
 				}
 
 				if err != nil {
@@ -1315,7 +1328,7 @@ func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query stri
 				cli.Print("\n")
 				displayStrLen = 0
 			}
-			err = engine.PrettyPrintResults(ctx, se.GetResultFormat(), sqlSch, rowIter)
+			err = engine.PrettyPrintResults(ctx, se.GetResultFormat(), sqlSch, rowIter, true)
 			if err != nil {
 				return err
 			}
