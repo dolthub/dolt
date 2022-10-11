@@ -127,7 +127,7 @@ func readMultiLineString(nbf *NomsBinFormat, b *valueDecoder) (MultiLineString, 
 	if err != nil {
 		return MultiLineString{}, err
 	}
-	if geomType != WKBMLineID {
+	if geomType != WKBMultiLineID {
 		return MultiLineString{}, errors.New("not a multilinestring")
 	}
 	buf = buf[EWKBHeaderSize:]
@@ -140,7 +140,7 @@ func (v MultiLineString) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Valu
 	if err != nil {
 		return MultiLineString{}, err
 	}
-	if geomType != WKBMLineID {
+	if geomType != WKBMultiLineID {
 		return MultiLineString{}, errors.New("not a multilinestring")
 	}
 	buf = buf[EWKBHeaderSize:]
