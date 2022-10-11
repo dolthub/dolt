@@ -31,8 +31,7 @@ type jsonType struct {
 var _ TypeInfo = (*jsonType)(nil)
 var JSONType = &jsonType{sql.JSON}
 
-// ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *jsonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+// ConvertNomsValueToValue implements TypeInfo interface.func (ti *jsonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.JSON); ok {
 		return json.NomsJSON(val), nil
 	}
@@ -176,6 +175,8 @@ func jsonTypeConverter(ctx context.Context, src *jsonType, destTi TypeInfo) (tc 
 	case *jsonType:
 		return wrapIsValid(dest.IsValid, src, dest)
 	case *linestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multilinestringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *multipointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)

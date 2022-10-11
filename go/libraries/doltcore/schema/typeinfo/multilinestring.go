@@ -149,7 +149,7 @@ func (ti *multilinestringType) ToSqlType() sql.Type {
 }
 
 // polygonTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
-func multilinestringTypeConverter(ctx context.Context, src *polygonType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+func multilinestringTypeConverter(ctx context.Context, src *multilinestringType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
 		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
@@ -176,6 +176,8 @@ func multilinestringTypeConverter(ctx context.Context, src *polygonType, destTi 
 	case *jsonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *linestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multilinestringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *multipointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
