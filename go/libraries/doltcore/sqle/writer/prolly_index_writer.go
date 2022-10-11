@@ -71,6 +71,7 @@ func getPrimaryKeylessProllyWriter(ctx context.Context, t *doltdb.Table, sqlSch 
 type indexWriter interface {
 	Name() string
 	Map(ctx context.Context) (prolly.Map, error)
+	ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error
 	Insert(ctx context.Context, sqlRow sql.Row) error
 	Delete(ctx context.Context, sqlRow sql.Row) error
 	Update(ctx context.Context, oldRow sql.Row, newRow sql.Row) error
@@ -106,7 +107,7 @@ func (m prollyIndexWriter) Map(ctx context.Context) (prolly.Map, error) {
 	return m.mut.Map(ctx)
 }
 
-func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
+func (m prollyIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
 		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
@@ -122,10 +123,21 @@ func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 		keyStr := FormatKeyForUniqKeyErr(k, m.keyBld.Desc)
 		return m.uniqueKeyError(ctx, keyStr, k, true)
 	}
+	return nil
+}
+
+func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
+	for to := range m.keyMap {
+		from := m.keyMap.MapOrdinal(to)
+		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
+			return err
+		}
+	}
+	k := m.keyBld.Build(sharePool)
 
 	for to := range m.valMap {
 		from := m.valMap.MapOrdinal(to)
-		if err = index.PutField(ctx, m.mut.NodeStore(), m.valBld, to, sqlRow[from]); err != nil {
+		if err := index.PutField(ctx, m.mut.NodeStore(), m.valBld, to, sqlRow[from]); err != nil {
 			return err
 		}
 	}
@@ -267,13 +279,16 @@ func (m prollySecondaryIndexWriter) Map(ctx context.Context) (prolly.Map, error)
 	return m.mut.Map(ctx)
 }
 
-func (m prollySecondaryIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
+func (m prollySecondaryIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
 	if m.unique {
 		if err := m.checkForUniqueKeyErr(ctx, sqlRow); err != nil {
 			return err
 		}
 	}
+	return nil
+}
 
+func (m prollySecondaryIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
 		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
