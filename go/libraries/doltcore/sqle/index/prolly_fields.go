@@ -282,7 +282,7 @@ func deserializeGeometry(buf []byte) (v interface{}) {
 		v, _ = sql.DeserializeLine(buf, false, srid)
 	case sql.WKBPolyID:
 		v, _ = sql.DeserializePoly(buf, false, srid)
-	case sql.WKBMPointID:
+	case sql.WKBMultiPointID:
 		v, _ = sql.DeserializeMPoint(buf, false, srid)
 	default:
 		panic(fmt.Sprintf("unknown geometry type %d", typ))

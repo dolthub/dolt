@@ -111,8 +111,8 @@ func readGeometry(nbf *NomsBinFormat, b *valueDecoder) (Geometry, error) {
 		inner = DeserializeTypesLine(buf, false, srid)
 	case WKBPolyID:
 		inner = DeserializeTypesPoly(buf, false, srid)
-	case WKBMPolyID:
-		inner = DeserializeTypesPoly(buf, false, srid)
+	case WKBMultiPointID:
+		inner = DeserializeTypesMPoint(buf, false, srid)
 	default:
 		return Geometry{}, errors.New("not a geometry")
 	}
@@ -134,8 +134,8 @@ func (v Geometry) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, erro
 		inner = DeserializeTypesLine(buf, false, srid)
 	case WKBPolyID:
 		inner = DeserializeTypesPoly(buf, false, srid)
-	case WKBMPolyID:
-		inner = DeserializeTypesPoly(buf, false, srid)
+	case WKBMultiPointID:
+		inner = DeserializeTypesMPoint(buf, false, srid)
 	default:
 		return Geometry{}, errors.New("not a geometry")
 	}
