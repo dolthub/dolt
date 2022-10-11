@@ -259,6 +259,8 @@ func floatTypeConverter(ctx context.Context, src *floatType, destTi TypeInfo) (t
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *linestringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *pointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *polygonType:
