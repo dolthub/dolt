@@ -366,22 +366,6 @@ func TestScripts(t *testing.T) {
 		skipped = append(skipped, newFormatSkippedScripts...)
 	}
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip("not fixing unique index on keyless tables for old format")
-	}
-	enginetest.TestScript(t, newDoltHarness(t), queries.ScriptTest{
-		Name: "add unique constraint on keyless table",
-		SetUpScript: []string{
-			"CREATE TABLE test (uk int);",
-			"insert into test values (0), (0)",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:       "create unique index m on test (uk);",
-				ExpectedErr: sql.ErrUniqueKeyViolation,
-			},
-		},
-	})
 }
 
 // TestDoltUserPrivileges tests Dolt-specific code that needs to handle user privilege checking
@@ -847,6 +831,14 @@ func TestDoltDdlScripts(t *testing.T) {
 	}
 
 	for _, script := range DropColumnScripts {
+		e, err := harness.NewEngine(t)
+		require.NoError(t, err)
+		enginetest.TestScriptWithEngine(t, e, harness, script)
+	}
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("not fixing unique index on keyless tables for old format")
+	}
+	for _, script := range AddIndexScripts {
 		e, err := harness.NewEngine(t)
 		require.NoError(t, err)
 		enginetest.TestScriptWithEngine(t, e, harness, script)
