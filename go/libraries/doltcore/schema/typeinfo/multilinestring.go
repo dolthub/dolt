@@ -108,7 +108,7 @@ func (ti *multilinestringType) FormatValue(v types.Value) (*string, error) {
 
 // GetTypeIdentifier implements TypeInfo interface.
 func (ti *multilinestringType) GetTypeIdentifier() Identifier {
-	return PolygonTypeIdentifier
+	return MultiLineStringTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
