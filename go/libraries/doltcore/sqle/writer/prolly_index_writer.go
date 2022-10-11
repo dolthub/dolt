@@ -151,7 +151,6 @@ func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 }
 
 func (m prollyIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
-	k := m.keyBld.Build(sharePool)
 	k, err := m.keyFromRow(ctx, sqlRow)
 	if err != nil {
 		return err
