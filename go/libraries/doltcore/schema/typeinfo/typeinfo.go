@@ -28,57 +28,59 @@ import (
 type Identifier string
 
 const (
-	UnknownTypeIdentifier    Identifier = "unknown"
-	BitTypeIdentifier        Identifier = "bit"
-	BlobStringTypeIdentifier Identifier = "blobstring"
-	BoolTypeIdentifier       Identifier = "bool"
-	DatetimeTypeIdentifier   Identifier = "datetime"
-	DecimalTypeIdentifier    Identifier = "decimal"
-	EnumTypeIdentifier       Identifier = "enum"
-	FloatTypeIdentifier      Identifier = "float"
-	JSONTypeIdentifier       Identifier = "json"
-	InlineBlobTypeIdentifier Identifier = "inlineblob"
-	IntTypeIdentifier        Identifier = "int"
-	SetTypeIdentifier        Identifier = "set"
-	TimeTypeIdentifier       Identifier = "time"
-	TupleTypeIdentifier      Identifier = "tuple"
-	UintTypeIdentifier       Identifier = "uint"
-	UuidTypeIdentifier       Identifier = "uuid"
-	VarBinaryTypeIdentifier  Identifier = "varbinary"
-	VarStringTypeIdentifier  Identifier = "varstring"
-	YearTypeIdentifier       Identifier = "year"
-	GeometryTypeIdentifier   Identifier = "geometry"
-	PointTypeIdentifier      Identifier = "point"
-	LineStringTypeIdentifier Identifier = "linestring"
-	PolygonTypeIdentifier    Identifier = "polygon"
-	MultiPointTypeIdentifier Identifier = "multipoint"
+	UnknownTypeIdentifier         Identifier = "unknown"
+	BitTypeIdentifier             Identifier = "bit"
+	BlobStringTypeIdentifier      Identifier = "blobstring"
+	BoolTypeIdentifier            Identifier = "bool"
+	DatetimeTypeIdentifier        Identifier = "datetime"
+	DecimalTypeIdentifier         Identifier = "decimal"
+	EnumTypeIdentifier            Identifier = "enum"
+	FloatTypeIdentifier           Identifier = "float"
+	JSONTypeIdentifier            Identifier = "json"
+	InlineBlobTypeIdentifier      Identifier = "inlineblob"
+	IntTypeIdentifier             Identifier = "int"
+	SetTypeIdentifier             Identifier = "set"
+	TimeTypeIdentifier            Identifier = "time"
+	TupleTypeIdentifier           Identifier = "tuple"
+	UintTypeIdentifier            Identifier = "uint"
+	UuidTypeIdentifier            Identifier = "uuid"
+	VarBinaryTypeIdentifier       Identifier = "varbinary"
+	VarStringTypeIdentifier       Identifier = "varstring"
+	YearTypeIdentifier            Identifier = "year"
+	GeometryTypeIdentifier        Identifier = "geometry"
+	PointTypeIdentifier           Identifier = "point"
+	LineStringTypeIdentifier      Identifier = "linestring"
+	PolygonTypeIdentifier         Identifier = "polygon"
+	MultiPointTypeIdentifier      Identifier = "multipoint"
+	MultiLineStringTypeIdentifier Identifier = "multilinestring"
 )
 
 var Identifiers = map[Identifier]struct{}{
-	UnknownTypeIdentifier:    {},
-	BitTypeIdentifier:        {},
-	BlobStringTypeIdentifier: {},
-	BoolTypeIdentifier:       {},
-	DatetimeTypeIdentifier:   {},
-	DecimalTypeIdentifier:    {},
-	EnumTypeIdentifier:       {},
-	FloatTypeIdentifier:      {},
-	JSONTypeIdentifier:       {},
-	InlineBlobTypeIdentifier: {},
-	IntTypeIdentifier:        {},
-	SetTypeIdentifier:        {},
-	TimeTypeIdentifier:       {},
-	TupleTypeIdentifier:      {},
-	UintTypeIdentifier:       {},
-	UuidTypeIdentifier:       {},
-	VarBinaryTypeIdentifier:  {},
-	VarStringTypeIdentifier:  {},
-	YearTypeIdentifier:       {},
-	GeometryTypeIdentifier:   {},
-	PointTypeIdentifier:      {},
-	LineStringTypeIdentifier: {},
-	PolygonTypeIdentifier:    {},
-	MultiPointTypeIdentifier: {},
+	UnknownTypeIdentifier:         {},
+	BitTypeIdentifier:             {},
+	BlobStringTypeIdentifier:      {},
+	BoolTypeIdentifier:            {},
+	DatetimeTypeIdentifier:        {},
+	DecimalTypeIdentifier:         {},
+	EnumTypeIdentifier:            {},
+	FloatTypeIdentifier:           {},
+	JSONTypeIdentifier:            {},
+	InlineBlobTypeIdentifier:      {},
+	IntTypeIdentifier:             {},
+	SetTypeIdentifier:             {},
+	TimeTypeIdentifier:            {},
+	TupleTypeIdentifier:           {},
+	UintTypeIdentifier:            {},
+	UuidTypeIdentifier:            {},
+	VarBinaryTypeIdentifier:       {},
+	VarStringTypeIdentifier:       {},
+	YearTypeIdentifier:            {},
+	GeometryTypeIdentifier:        {},
+	PointTypeIdentifier:           {},
+	LineStringTypeIdentifier:      {},
+	PolygonTypeIdentifier:         {},
+	MultiPointTypeIdentifier:      {},
+	MultiLineStringTypeIdentifier: {},
 }
 
 // TypeInfo is an interface used for encoding type information.
@@ -284,6 +286,8 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 		return CreatePolygonTypeFromParams(params)
 	case MultiPointTypeIdentifier:
 		return CreateMultiPointTypeFromParams(params)
+	case MultiLineStringTypeIdentifier:
+		return CreateMultiLineStringTypeFromParams(params)
 	case SetTypeIdentifier:
 		return CreateSetTypeFromParams(params)
 	case TimeTypeIdentifier:
