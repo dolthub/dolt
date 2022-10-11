@@ -59,12 +59,12 @@ func ConvertTypesMultiPointToSQLMultiPoint(p MultiPoint) sql.MultiPoint {
 	return sql.MultiPoint{SRID: p.SRID, Points: points}
 }
 
-func ConvertTypesMultiLineStringToSQLMultiLineString(p MultiLineString) sql.MultiLineString {
-	lines := make([]sql.LineString, len(p.Lines))
-	for i, l := range p.Lines {
+func ConvertTypesMultiLineStringToSQLMultiLineString(l MultiLineString) sql.MultiLineString {
+	lines := make([]sql.LineString, len(l.Lines))
+	for i, l := range l.Lines {
 		lines[i] = ConvertTypesLineStringToSQLLineString(l)
 	}
-	return sql.MultiLineString{SRID: p.SRID, Lines: lines}
+	return sql.MultiLineString{SRID: l.SRID, Lines: lines}
 }
 
 func ConvertSQLGeometryToTypesGeometry(p interface{}) Value {

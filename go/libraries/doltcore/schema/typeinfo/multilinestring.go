@@ -40,9 +40,9 @@ func (ti *multilinestringType) ConvertNomsValueToValue(v types.Value) (interface
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
-	// Expect a types.Polygon, return a sql.Polygon
-	if val, ok := v.(types.Polygon); ok {
-		return types.ConvertTypesPolygonToSQLPolygon(val), nil
+	// Expect a types.MultiLineString, return a sql.MultiLineString
+	if val, ok := v.(types.MultiLineString); ok {
+		return types.ConvertTypesMultiLineStringToSQLMultiLineString(val), nil
 	}
 
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
@@ -52,8 +52,8 @@ func (ti *multilinestringType) ConvertNomsValueToValue(v types.Value) (interface
 func (ti *multilinestringType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
 	k := reader.ReadKind()
 	switch k {
-	case types.PolygonKind:
-		p, err := reader.ReadPolygon()
+	case types.MultiLineStringKind:
+		p, err := reader.ReadMultiLineString()
 		if err != nil {
 			return nil, err
 		}
@@ -72,13 +72,13 @@ func (ti *multilinestringType) ConvertValueToNomsValue(ctx context.Context, vrw 
 		return types.NullValue, nil
 	}
 
-	// Convert to sql.PolygonType
-	poly, err := ti.sqlMultiLineStringType.Convert(v)
+	// Convert to sql.MultiLineString
+	mline, err := ti.sqlMultiLineStringType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
 
-	return types.ConvertSQLPolygonToTypesPolygon(poly.(sql.Polygon)), nil
+	return types.ConvertSQLMultiLineStringToTypesMultiLineString(mline.(sql.MultiLineString)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -86,17 +86,17 @@ func (ti *multilinestringType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	if o, ok := other.(*polygonType); ok {
+	if o, ok := other.(*multilinestringType); ok {
 		// if either ti or other has defined SRID, then check SRID value; otherwise,
-		return (!ti.sqlMultiLineStringType.DefinedSRID && !o.sqlPolygonType.DefinedSRID) || ti.sqlMultiLineStringType.SRID == o.sqlPolygonType.SRID
+		return (!ti.sqlMultiLineStringType.DefinedSRID && !o.sqlMultiLineStringType.DefinedSRID) || ti.sqlMultiLineStringType.SRID == o.sqlMultiLineStringType.SRID
 	}
 	return false
 }
 
 // FormatValue implements TypeInfo interface.
 func (ti *multilinestringType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.Polygon); ok {
-		resStr := string(types.SerializePolygon(val))
+	if val, ok := v.(types.MultiLineString); ok {
+		resStr := string(types.SerializeMultiLineString(val))
 		return &resStr, nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -119,7 +119,7 @@ func (ti *multilinestringType) GetTypeParams() map[string]string {
 
 // IsValid implements TypeInfo interface.
 func (ti *multilinestringType) IsValid(v types.Value) bool {
-	if _, ok := v.(types.Polygon); ok {
+	if _, ok := v.(types.MultiLineString); ok {
 		return true
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -130,7 +130,7 @@ func (ti *multilinestringType) IsValid(v types.Value) bool {
 
 // NomsKind implements TypeInfo interface.
 func (ti *multilinestringType) NomsKind() types.NomsKind {
-	return types.PolygonKind
+	return types.MultiLineStringKind
 }
 
 // Promote implements TypeInfo interface.
@@ -140,7 +140,7 @@ func (ti *multilinestringType) Promote() TypeInfo {
 
 // String implements TypeInfo interface.
 func (ti *multilinestringType) String() string {
-	return "Polygon"
+	return "MultiLineString"
 }
 
 // ToSqlType implements TypeInfo interface.
@@ -148,7 +148,7 @@ func (ti *multilinestringType) ToSqlType() sql.Type {
 	return ti.sqlMultiLineStringType
 }
 
-// polygonTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+// multilinestringTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
 func multilinestringTypeConverter(ctx context.Context, src *multilinestringType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
@@ -223,5 +223,5 @@ func CreateMultiLineStringTypeFromParams(params map[string]string) (TypeInfo, er
 		}
 	}
 
-	return &polygonType{sqlPolygonType: sql.PolygonType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
+	return &multilinestringType{sqlMultiLineStringType: sql.MultiLineStringType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }
