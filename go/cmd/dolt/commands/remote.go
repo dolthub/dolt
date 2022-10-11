@@ -258,7 +258,7 @@ func pingRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	} else if meta == nil {
-		cli.PrintErrln("failed to get metadata for %s", remote.Name)
+		cli.PrintErrf("failed to get metadata for %s\n", remote.Name)
 	}
 
 	cli.Printf("%s (%s)\n", remote.Name, remote.Url)
