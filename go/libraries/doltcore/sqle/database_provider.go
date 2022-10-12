@@ -1025,6 +1025,21 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 		}
 	}
 
+	remotes, err := static.GetRemotes()
+	if err != nil {
+		return nil, dsess.InitialDbState{}, err
+	}
+
+	branches, err := static.GetBranches()
+	if err != nil {
+		return nil, dsess.InitialDbState{}, err
+	}
+
+	backups, err := static.GetBackups()
+	if err != nil {
+		return nil, dsess.InitialDbState{}, err
+	}
+
 	init := dsess.InitialDbState{
 		Db:         db,
 		HeadCommit: cm,
@@ -1034,6 +1049,10 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			Rsw: static,
 			Rsr: static,
 		},
+		Remotes:  remotes,
+		Branches: branches,
+		Backups:  backups,
+		//ReadReplica: //todo
 	}
 
 	return db, init, nil
@@ -1065,6 +1084,11 @@ func dbRevisionForTag(ctx context.Context, srcDb Database, revSpec string) (Read
 			Rsw: srcDb.DbData().Rsw,
 			Rsr: srcDb.DbData().Rsr,
 		},
+		// todo: should we initialize
+		//  - Remotes
+		//  - Branches
+		//  - Backups
+		//  - ReadReplicas
 	}
 
 	return db, init, nil
@@ -1099,6 +1123,11 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 			Rsw: srcDb.DbData().Rsw,
 			Rsr: srcDb.DbData().Rsr,
 		},
+		// todo: should we initialize
+		//  - Remotes
+		//  - Branches
+		//  - Backups
+		//  - ReadReplicas
 	}
 
 	return db, init, nil
