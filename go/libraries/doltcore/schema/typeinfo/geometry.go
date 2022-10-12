@@ -83,6 +83,10 @@ func (ti *geometryType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecRea
 		if val, err = reader.ReadMultiPoint(); err != nil {
 			return nil, err
 		}
+	case types.MultiLineStringKind:
+		if val, err = reader.ReadMultiLineString(); err != nil {
+			return nil, err
+		}
 	case types.GeometryKind:
 		// Note: GeometryKind is no longer written
 		// included here for backward compatibility
@@ -142,6 +146,8 @@ func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
 		return PolygonType.FormatValue(val)
 	case types.MultiPoint:
 		return MultiPointType.FormatValue(val)
+	case types.MultiLineString:
+		return MultiLineStringType.FormatValue(val)
 	case types.Geometry:
 		switch inner := val.Inner.(type) {
 		case types.Point:
@@ -152,6 +158,8 @@ func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
 			return PolygonType.FormatValue(inner)
 		case types.MultiPoint:
 			return MultiPointType.FormatValue(inner)
+		case types.MultiLineString:
+			return MultiLineStringType.FormatValue(inner)
 		default:
 			return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
 		}
