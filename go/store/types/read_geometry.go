@@ -77,6 +77,8 @@ func ConvertSQLGeometryToTypesGeometry(p interface{}) Value {
 		return ConvertSQLPolygonToTypesPolygon(inner)
 	case sql.MultiPoint:
 		return ConvertSQLMultiPointToTypesMultiPoint(inner)
+	case sql.MultiLineString:
+		return ConvertSQLMultiLineStringToTypesMultiLineString(inner)
 	default:
 		panic("used an invalid type sql.Geometry.Inner")
 	}
