@@ -43,7 +43,7 @@ type Controller struct {
 	Namespace *Namespace
 }
 
-//TODO: delete me
+// TODO: delete me
 var StaticController = &Controller{}
 var enabled = false
 
