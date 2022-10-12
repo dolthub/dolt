@@ -17,11 +17,11 @@ jobs:
     outputs:
       files: ${{ steps.get_file_list.outputs.files }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         if: ${{ github.event_name == 'repository_dispatch' }}
         with:
           ref: ${{ github.event.client_payload.ref }}
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         if: ${{ github.event_name == 'workflow_dispatch' }}
       - name: Get file list
         id: get_file_list
@@ -45,7 +45,7 @@ jobs:
     steps:
       - name: Format
         id: format_files
-        uses: actions/github-script@v4
+        uses: actions/github-script@v6
         env:
           FILES: ${{ needs.get-files.outputs.files }}
         with:
@@ -93,23 +93,23 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           role-duration-seconds: 3600
       - name: Setup Go 1.x
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ^1.19
         id: go
       - name: Setup Python 3.x
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ^3.6
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         if: ${{ github.event_name == 'repository_dispatch' }}
         with:
           ref: ${{ github.event.client_payload.ref }}
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         if: ${{ github.event_name == 'workflow_dispatch' }}
-      - uses: actions/setup-node@v1
+      - uses: actions/setup-node@v3
         with:
-          node-version: ^12
+          node-version: ^16
       - name: Create CI Bin
         run: |
           mkdir -p ./.ci_bin
@@ -157,7 +157,7 @@ jobs:
     runs-on: ubuntu-22.04
     if: always() && (needs.test-per-file.result == 'failure')
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
