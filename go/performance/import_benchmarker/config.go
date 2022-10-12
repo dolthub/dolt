@@ -241,7 +241,7 @@ func generateTestFile(job *ImportBenchmarkJob) (string, string) {
 	return pathToImportFile, sch.FileFormatExt
 }
 
-func RunBenchmarkTests(config *ImportBenchmarkConfig, workingDir string) []result {
+func RunBenchmarkTests(config *ImportBenchmarkConfig, workingDir string) ([]result, error) {
 	config = generateTestFilesIfNeeded(config)
 
 	// Split into the two jobs because we want
@@ -264,10 +264,19 @@ func RunBenchmarkTests(config *ImportBenchmarkConfig, workingDir string) []resul
 
 	results := make([]result, 0)
 	for _, doltJob := range doltJobs {
-		results = append(results, BenchmarkDoltImportJob(doltJob, workingDir, config.NbfVersion))
+		r, err := BenchmarkDoltImportJob(doltJob, workingDir, config.NbfVersion)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, r)
 	}
 
-	results = append(results, BenchmarkMySQLImportJobs(mySQLJobs, getMysqlConfigFromConfig(config))...)
+	r, err := BenchmarkMySQLImportJobs(mySQLJobs, getMysqlConfigFromConfig(config))
+	if err != nil {
+		return nil, err
+	}
 
-	return results
+	results = append(results, r...)
+
+	return results, nil
 }

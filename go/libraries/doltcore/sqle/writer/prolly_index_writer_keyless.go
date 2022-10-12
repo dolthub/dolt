@@ -45,6 +45,11 @@ func (k prollyKeylessWriter) Map(ctx context.Context) (prolly.Map, error) {
 	return k.mut.Map(ctx)
 }
 
+// ValidateKeyViolations returns nil for keyless writers, because there are no keys, so violations are possible
+func (k prollyKeylessWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
+	return nil
+}
+
 func (k prollyKeylessWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 	hashId, value, err := k.tuplesFromRow(ctx, sqlRow)
 	if err != nil {
@@ -196,6 +201,11 @@ func (writer prollyKeylessSecondaryWriter) Name() string {
 // Map implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Map(ctx context.Context) (prolly.Map, error) {
 	return writer.mut.Map(ctx)
+}
+
+// ValidateKeyViolations implements the interface indexWriter.
+func (writer prollyKeylessSecondaryWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
+	return nil
 }
 
 // Insert implements the interface indexWriter.
