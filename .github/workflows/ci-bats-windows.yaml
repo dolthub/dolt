@@ -109,7 +109,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' }}
       - uses: actions/setup-node@v3
         with:
-          node-version: ^12
+          node-version: ^16
       - name: Create CI Bin
         run: |
           mkdir -p ./.ci_bin
