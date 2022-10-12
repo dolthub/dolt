@@ -198,7 +198,10 @@ func IsGeometryKind(k NomsKind) bool {
 		LineStringKind,
 		PolygonKind,
 		MultiPointKind,
-		GeometryKind:
+		MultiLineStringKind,
+		MultiPolygonKind,
+		GeometryKind,
+		GeometryCollectionKind:
 		return true
 	default:
 		return false

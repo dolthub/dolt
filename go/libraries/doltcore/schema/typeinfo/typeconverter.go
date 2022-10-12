@@ -151,6 +151,10 @@ func wrapConvertValueToNomsValue(
 			vInt = types.ConvertTypesPointToSQLPoint(val)
 		case types.Polygon:
 			vInt = types.ConvertTypesPolygonToSQLPolygon(val)
+		case types.MultiPoint:
+			vInt = types.ConvertTypesMultiPointToSQLMultiPoint(val)
+		case types.MultiLineString:
+			vInt = types.ConvertTypesMultiLineStringToSQLMultiLineString(val)
 		case types.String:
 			vInt = string(val)
 		case types.Timestamp:
