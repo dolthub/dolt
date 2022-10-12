@@ -145,17 +145,6 @@ func (ntm nomsTableMap) Iter(ctx context.Context, cb func(name string, addr hash
 	})
 }
 
-func (r nomsRvStorage) GetSuperSchemaMap(context.Context, types.ValueReader) (types.Map, bool, error) {
-	v, found, err := r.valueSt.MaybeGet(superSchemasKey)
-	if err != nil {
-		return types.Map{}, false, err
-	}
-	if !found {
-		return types.Map{}, false, nil
-	}
-	return v.(types.Map), true, nil
-}
-
 func (r nomsRvStorage) GetForeignKeys(context.Context, types.ValueReader) (types.Value, bool, error) {
 	v, found, err := r.valueSt.MaybeGet(foreignKeyKey)
 	if err != nil {
@@ -165,14 +154,6 @@ func (r nomsRvStorage) GetForeignKeys(context.Context, types.ValueReader) (types
 		return types.Map{}, false, err
 	}
 	return v.(types.Map), true, nil
-}
-
-func (r nomsRvStorage) SetSuperSchemaMap(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (rvStorage, error) {
-	st, err := r.valueSt.Set(superSchemasKey, m)
-	if err != nil {
-		return nomsRvStorage{}, err
-	}
-	return nomsRvStorage{st}, nil
 }
 
 func (r nomsRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error) {
