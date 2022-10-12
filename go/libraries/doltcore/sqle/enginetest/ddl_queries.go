@@ -691,3 +691,19 @@ var BrokenDDLScripts = []queries.ScriptTest{
 		},
 	},
 }
+
+var AddIndexScripts = []queries.ScriptTest{
+	{
+		Name: "add unique constraint on keyless table",
+		SetUpScript: []string{
+			"CREATE TABLE test (uk int);",
+			"insert into test values (0), (0)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "create unique index m on test (uk);",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+		},
+	},
+}
