@@ -55,7 +55,7 @@ jobs:
             const path = require('path')
             try {
               const body = fs.readFileSync(path.join(process.env.WORKSPACE, "changelog.txt"),  { encoding: "utf8" })
-              const res = await github.repos.updateRelease({
+              const res = await github.rest.repos.updateRelease({
                 owner: "dolthub",
                 repo: "dolt",
                 release_id: parseInt(process.env.RELEASE_ID, 10),

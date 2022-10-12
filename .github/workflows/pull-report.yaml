@@ -37,7 +37,7 @@ jobs:
               if (err) {
                 return console.log(err);
               }
-              return github.issues.createComment({
+              return github.rest.issues.createComment({
                 issue_number,
                 owner,
                 repo,
