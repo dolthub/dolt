@@ -40,9 +40,24 @@ var cfgDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Get and set repository or global options`,
 	LongDesc: `You can query/set/replace/unset options with this command.
 		
-	When reading, the values are read from the global and repository local configuration files, and options {{.LessThan}}--global{{.GreaterThan}}, and {{.LessThan}}--local{{.GreaterThan}} can be used to tell the command to read from only that location.
-	
-	When writing, the new value is written to the repository local configuration file by default, and options {{.LessThan}}--global{{.GreaterThan}}, can be used to tell the command to write to that location (you can say {{.LessThan}}--local{{.GreaterThan}} but that is the default).
+When reading, the values are read from the global and repository local configuration files, and options {{.LessThan}}--global{{.GreaterThan}}, and {{.LessThan}}--local{{.GreaterThan}} can be used to tell the command to read from only that location.
+
+When writing, the new value is written to the repository local configuration file by default, and options {{.LessThan}}--global{{.GreaterThan}}, can be used to tell the command to write to that location (you can say {{.LessThan}}--local{{.GreaterThan}} but that is the default).
+
+Valid configuration variables:
+	- core.editor
+	- creds.add_url
+	- doltlab.insecure
+	- init.defaultbranch
+	- metrics.disabled
+	- metrics.host
+	- metrics.insecure
+	- metrics.port
+	- user.creds
+	- user.email
+	- user.name
+	- remotes.default_host
+	- remotes.default_port
 `,
 
 	Synopsis: []string{
