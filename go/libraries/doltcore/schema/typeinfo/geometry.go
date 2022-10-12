@@ -53,6 +53,8 @@ func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 		return types.ConvertTypesPolygonToSQLPolygon(val), nil
 	case types.MultiPoint:
 		return types.ConvertTypesMultiPointToSQLMultiPoint(val), nil
+	case types.MultiLineString:
+		return types.ConvertTypesMultiLineStringToSQLMultiLineString(val), nil
 	default:
 		return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 	}
