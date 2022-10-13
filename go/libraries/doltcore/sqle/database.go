@@ -1101,7 +1101,19 @@ func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 // it can exist in a sql session later. Returns sql.ErrExistingView if a view
 // with that name already exists.
 func (db Database) CreateView(ctx *sql.Context, name string, definition string) error {
-	err := sql.ErrExistingView.New(db.name, name)
+	ws, err := db.GetWorkingSet(ctx)
+	if err != nil {
+		return err
+	}
+	root := ws.WorkingRoot()
+
+	if exists, err := root.HasTable(ctx, name); err != nil {
+		return err
+	} else if exists {
+		//return sql.ErrTableAlreadyExists.New(name)
+	}
+	err = sql.ErrExistingView.New(db.name, name)
+
 	return db.addFragToSchemasTable(ctx, "view", name, definition, time.Unix(0, 0).UTC(), err)
 }
 
