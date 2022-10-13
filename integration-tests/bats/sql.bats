@@ -2569,12 +2569,22 @@ SQL
 
 @test "sql: --file param" {
     cat > script.sql <<SQL
+    drop table if exists test;
     create table test (a int primary key, b int);
     insert into test values (1,1), (2,2);
 SQL
     
     run dolt sql --file script.sql
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "Processed 100.0% of the file" ]] || false
+
+    run dolt sql -q "select * from test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false
+    
+    run dolt sql --batch --file script.sql
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Processed 100.0% of the file" ]] || false
 
     run dolt sql -q "select * from test" -r csv
     [ "$status" -eq 0 ]

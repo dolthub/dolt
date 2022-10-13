@@ -53,6 +53,8 @@ func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 		return types.ConvertTypesPolygonToSQLPolygon(val), nil
 	case types.MultiPoint:
 		return types.ConvertTypesMultiPointToSQLMultiPoint(val), nil
+	case types.MultiLineString:
+		return types.ConvertTypesMultiLineStringToSQLMultiLineString(val), nil
 	default:
 		return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 	}
@@ -79,6 +81,10 @@ func (ti *geometryType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecRea
 		}
 	case types.MultiPointKind:
 		if val, err = reader.ReadMultiPoint(); err != nil {
+			return nil, err
+		}
+	case types.MultiLineStringKind:
+		if val, err = reader.ReadMultiLineString(); err != nil {
 			return nil, err
 		}
 	case types.GeometryKind:
@@ -140,6 +146,8 @@ func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
 		return PolygonType.FormatValue(val)
 	case types.MultiPoint:
 		return MultiPointType.FormatValue(val)
+	case types.MultiLineString:
+		return MultiLineStringType.FormatValue(val)
 	case types.Geometry:
 		switch inner := val.Inner.(type) {
 		case types.Point:
@@ -150,6 +158,8 @@ func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
 			return PolygonType.FormatValue(inner)
 		case types.MultiPoint:
 			return MultiPointType.FormatValue(inner)
+		case types.MultiLineString:
+			return MultiLineStringType.FormatValue(inner)
 		default:
 			return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
 		}
@@ -234,6 +244,8 @@ func geometryTypeConverter(ctx context.Context, src *geometryType, destTi TypeIn
 	case *jsonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *linestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multilinestringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *multipointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
