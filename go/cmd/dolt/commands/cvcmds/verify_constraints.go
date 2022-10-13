@@ -173,7 +173,7 @@ func printViolationsForTable(ctx context.Context, tblName string, tbl *doltdb.Ta
 
 	limitItr := &sqlLimitIter{itr: sqlItr, limit: 50}
 
-	err = engine.PrettyPrintResults(sCtx, engine.FormatTabular, sqlSch, limitItr, true)
+	err = engine.PrettyPrintResults(sCtx, engine.FormatTabular, sqlSch, limitItr)
 	if err != nil {
 		return errhand.BuildDError("Error outputting rows").AddCause(err).Build()
 	}
