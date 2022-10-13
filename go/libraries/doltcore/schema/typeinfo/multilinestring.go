@@ -17,40 +17,47 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// This is a dolt implementation of the MySQL type Time, thus most of the functionality
+// This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
-type timeType struct {
-	sqlTimeType sql.TimeType
+type multilinestringType struct {
+	sqlMultiLineStringType sql.MultiLineStringType
 }
 
-var _ TypeInfo = (*timeType)(nil)
+var _ TypeInfo = (*multilinestringType)(nil)
 
-var TimeType = &timeType{sql.Time}
+var MultiLineStringType = &multilinestringType{sql.MultiLineStringType{}}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *timeType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	if val, ok := v.(types.Int); ok {
-		return ti.sqlTimeType.Convert(sql.Timespan(val))
-	}
+func (ti *multilinestringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
+	// Expect a types.MultiLineString, return a sql.MultiLineString
+	if val, ok := v.(types.MultiLineString); ok {
+		return types.ConvertTypesMultiLineStringToSQLMultiLineString(val), nil
+	}
+
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
-func (ti *timeType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+func (ti *multilinestringType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
 	k := reader.ReadKind()
 	switch k {
-	case types.IntKind:
-		val := reader.ReadInt()
-		return ti.sqlTimeType.Convert(sql.Timespan(val))
+	case types.MultiLineStringKind:
+		p, err := reader.ReadMultiLineString()
+		if err != nil {
+			return nil, err
+		}
+		return ti.ConvertNomsValueToValue(p)
 	case types.NullKind:
 		return nil, nil
 	}
@@ -59,52 +66,60 @@ func (ti *timeType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *timeType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
+func (ti *multilinestringType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
+	// Check for null
 	if v == nil {
 		return types.NullValue, nil
 	}
-	val, err := ti.sqlTimeType.Convert(v)
+
+	// Convert to sql.MultiLineString
+	mline, err := ti.sqlMultiLineStringType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
-	return types.Int(val.(sql.Timespan)), nil
+
+	return types.ConvertSQLMultiLineStringToTypesMultiLineString(mline.(sql.MultiLineString)), nil
 }
 
 // Equals implements TypeInfo interface.
-func (ti *timeType) Equals(other TypeInfo) bool {
+func (ti *multilinestringType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*timeType)
-	return ok
+	if o, ok := other.(*multilinestringType); ok {
+		// if either ti or other has defined SRID, then check SRID value; otherwise,
+		return (!ti.sqlMultiLineStringType.DefinedSRID && !o.sqlMultiLineStringType.DefinedSRID) || ti.sqlMultiLineStringType.SRID == o.sqlMultiLineStringType.SRID
+	}
+	return false
 }
 
 // FormatValue implements TypeInfo interface.
-func (ti *timeType) FormatValue(v types.Value) (*string, error) {
+func (ti *multilinestringType) FormatValue(v types.Value) (*string, error) {
+	if val, ok := v.(types.MultiLineString); ok {
+		resStr := string(types.SerializeMultiLineString(val))
+		return &resStr, nil
+	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
-	convVal, err := ti.ConvertNomsValueToValue(v)
-	if err != nil {
-		return nil, err
-	}
-	val := convVal.(sql.Timespan).String()
-	return &val, nil
+
+	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
 }
 
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *timeType) GetTypeIdentifier() Identifier {
-	return TimeTypeIdentifier
+func (ti *multilinestringType) GetTypeIdentifier() Identifier {
+	return MultiLineStringTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *timeType) GetTypeParams() map[string]string {
-	return nil
+func (ti *multilinestringType) GetTypeParams() map[string]string {
+	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlMultiLineStringType.SRID), 10),
+		"DefinedSRID": strconv.FormatBool(ti.sqlMultiLineStringType.DefinedSRID)}
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *timeType) IsValid(v types.Value) bool {
-	if _, ok := v.(types.Int); ok {
+func (ti *multilinestringType) IsValid(v types.Value) bool {
+	if _, ok := v.(types.MultiLineString); ok {
 		return true
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -114,30 +129,32 @@ func (ti *timeType) IsValid(v types.Value) bool {
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *timeType) NomsKind() types.NomsKind {
-	return types.IntKind
+func (ti *multilinestringType) NomsKind() types.NomsKind {
+	return types.MultiLineStringKind
 }
 
 // Promote implements TypeInfo interface.
-func (ti *timeType) Promote() TypeInfo {
-	return &timeType{ti.sqlTimeType.Promote().(sql.TimeType)}
+func (ti *multilinestringType) Promote() TypeInfo {
+	return &multilinestringType{ti.sqlMultiLineStringType.Promote().(sql.MultiLineStringType)}
 }
 
 // String implements TypeInfo interface.
-func (ti *timeType) String() string {
-	return "Time"
+func (ti *multilinestringType) String() string {
+	return "MultiLineString"
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *timeType) ToSqlType() sql.Type {
-	return ti.sqlTimeType
+func (ti *multilinestringType) ToSqlType() sql.Type {
+	return ti.sqlMultiLineStringType
 }
 
-// timeTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
-func timeTypeConverter(ctx context.Context, src *timeType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+// multilinestringTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func multilinestringTypeConverter(ctx context.Context, src *multilinestringType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			return types.Uint(0), nil
+		}, true, nil
 	case *blobStringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *boolType:
@@ -171,7 +188,7 @@ func timeTypeConverter(ctx context.Context, src *timeType, destTi TypeInfo) (tc 
 	case *setType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *timeType:
-		return identityTypeConverter, false, nil
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *uintType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *uuidType:
@@ -185,4 +202,26 @@ func timeTypeConverter(ctx context.Context, src *timeType, destTi TypeInfo) (tc 
 	default:
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}
+}
+
+func CreateMultiLineStringTypeFromParams(params map[string]string) (TypeInfo, error) {
+	var (
+		err     error
+		sridVal uint64
+		def     bool
+	)
+	if s, ok := params["SRID"]; ok {
+		sridVal, err = strconv.ParseUint(s, 10, 32)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if d, ok := params["DefinedSRID"]; ok {
+		def, err = strconv.ParseBool(d)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &multilinestringType{sqlMultiLineStringType: sql.MultiLineStringType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

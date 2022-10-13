@@ -59,6 +59,14 @@ func ConvertTypesMultiPointToSQLMultiPoint(p MultiPoint) sql.MultiPoint {
 	return sql.MultiPoint{SRID: p.SRID, Points: points}
 }
 
+func ConvertTypesMultiLineStringToSQLMultiLineString(l MultiLineString) sql.MultiLineString {
+	lines := make([]sql.LineString, len(l.Lines))
+	for i, l := range l.Lines {
+		lines[i] = ConvertTypesLineStringToSQLLineString(l)
+	}
+	return sql.MultiLineString{SRID: l.SRID, Lines: lines}
+}
+
 func ConvertSQLGeometryToTypesGeometry(p interface{}) Value {
 	switch inner := p.(type) {
 	case sql.Point:
@@ -69,6 +77,8 @@ func ConvertSQLGeometryToTypesGeometry(p interface{}) Value {
 		return ConvertSQLPolygonToTypesPolygon(inner)
 	case sql.MultiPoint:
 		return ConvertSQLMultiPointToTypesMultiPoint(inner)
+	case sql.MultiLineString:
+		return ConvertSQLMultiLineStringToTypesMultiLineString(inner)
 	default:
 		panic("used an invalid type sql.Geometry.Inner")
 	}
@@ -100,6 +110,14 @@ func ConvertSQLMultiPointToTypesMultiPoint(p sql.MultiPoint) MultiPoint {
 		points[i] = ConvertSQLPointToTypesPoint(point)
 	}
 	return MultiPoint{SRID: p.SRID, Points: points}
+}
+
+func ConvertSQLMultiLineStringToTypesMultiLineString(p sql.MultiLineString) MultiLineString {
+	lines := make([]LineString, len(p.Lines))
+	for i, l := range p.Lines {
+		lines[i] = ConvertSQLLineStringToTypesLineString(l)
+	}
+	return MultiLineString{SRID: p.SRID, Lines: lines}
 }
 
 // TODO: all methods here just defer to their SQL equivalents, and assume we always receive good data
@@ -144,6 +162,14 @@ func DeserializeMPoint(buf []byte, isBig bool, srid uint32) sql.MultiPoint {
 	return p
 }
 
+func DeserializeMLine(buf []byte, isBig bool, srid uint32) sql.MultiLineString {
+	p, err := sql.DeserializeMLine(buf, isBig, srid)
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
+
 // TODO: noms needs results to be in types
 
 func DeserializeTypesPoint(buf []byte, isBig bool, srid uint32) Point {
@@ -160,4 +186,8 @@ func DeserializeTypesPoly(buf []byte, isBig bool, srid uint32) Polygon {
 
 func DeserializeTypesMPoint(buf []byte, isBig bool, srid uint32) MultiPoint {
 	return ConvertSQLMultiPointToTypesMultiPoint(DeserializeMPoint(buf, isBig, srid))
+}
+
+func DeserializeTypesMLine(buf []byte, isBig bool, srid uint32) MultiLineString {
+	return ConvertSQLMultiLineStringToTypesMultiLineString(DeserializeMLine(buf, isBig, srid))
 }

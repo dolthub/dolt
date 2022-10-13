@@ -300,6 +300,8 @@ func varStringTypeConverter(ctx context.Context, src *varStringType, destTi Type
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *linestringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multilinestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *multipointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *pointType:
