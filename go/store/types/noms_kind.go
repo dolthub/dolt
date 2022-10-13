@@ -67,6 +67,11 @@ const (
 
 	SerialMessageKind
 
+	MultiPointKind
+	MultiLineStringKind
+	MultiPolygonKind
+	GeometryCollectionKind
+
 	UnknownKind NomsKind = 255
 )
 
@@ -97,6 +102,7 @@ func init() {
 	KindToType[PointKind] = Point{}
 	KindToType[LineStringKind] = LineString{}
 	KindToType[PolygonKind] = Polygon{}
+	KindToType[MultiPointKind] = MultiPoint{}
 	KindToType[SerialMessageKind] = SerialMessage{}
 
 	SupportedKinds[BlobKind] = true
@@ -125,6 +131,7 @@ func init() {
 	SupportedKinds[PointKind] = true
 	SupportedKinds[LineStringKind] = true
 	SupportedKinds[PolygonKind] = true
+	SupportedKinds[MultiPointKind] = true
 	SupportedKinds[SerialMessageKind] = true
 
 	if serial.MessageTypesKind != int(SerialMessageKind) {
@@ -162,6 +169,7 @@ var KindToString = map[NomsKind]string{
 	PointKind:         "Point",
 	LineStringKind:    "LineString",
 	PolygonKind:       "Polygon",
+	MultiPointKind:    "MultiPoint",
 	SerialMessageKind: "SerialMessage",
 }
 
@@ -186,6 +194,7 @@ func IsGeometryKind(k NomsKind) bool {
 	case PointKind,
 		LineStringKind,
 		PolygonKind,
+		MultiPointKind,
 		GeometryKind:
 		return true
 	default:

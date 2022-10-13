@@ -534,6 +534,8 @@ func interfaceValueAsSqlString(ti typeinfo.TypeInfo, value interface{}) (string,
 			return "", fmt.Errorf("typeinfo.VarStringTypeIdentifier is not types.String")
 		}
 		return quoteAndEscapeString(string(s)), nil
+	case typeinfo.GeometryTypeIdentifier, typeinfo.PointTypeIdentifier, typeinfo.LineStringTypeIdentifier, typeinfo.PolygonTypeIdentifier, typeinfo.MultiPointTypeIdentifier:
+		return singleQuote + str + singleQuote, nil
 	default:
 		return str, nil
 	}

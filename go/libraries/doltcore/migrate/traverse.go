@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -25,13 +26,29 @@ import (
 )
 
 // TraverseDAG traverses |old|, migrating values to |new|.
-func TraverseDAG(ctx context.Context, old, new *doltdb.DoltDB) error {
-	heads, err := old.GetHeadRefs(ctx)
+func TraverseDAG(ctx context.Context, old, new *doltdb.DoltDB) (err error) {
+	var heads []ref.DoltRef
+	var prog Progress
+
+	heads, err = old.GetHeadRefs(ctx)
 	if err != nil {
 		return err
 	}
 
-	prog := newProgress()
+	datasdb := doltdb.HackDatasDatabaseFromDoltDB(new)
+	cs := datas.ChunkStoreFromDatabase(datasdb)
+
+	prog, err = newProgress(ctx, cs)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		cerr := prog.Close(ctx)
+		if err == nil {
+			err = cerr
+		}
+	}()
+
 	for i := range heads {
 		if err = traverseRefHistory(ctx, heads[i], old, new, prog); err != nil {
 			return err

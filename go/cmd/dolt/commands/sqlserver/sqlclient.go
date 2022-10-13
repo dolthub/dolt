@@ -55,7 +55,9 @@ Similar to {{.EmphasisLeft}}dolt sql-server{{.EmphasisRight}}, this command may 
 	},
 }
 
-type SqlClientCmd struct{}
+type SqlClientCmd struct {
+	VersionStr string
+}
 
 var _ cli.Command = SqlClientCmd{}
 
@@ -126,7 +128,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 
 		serverController = NewServerController()
 		go func() {
-			_, _ = Serve(ctx, SqlServerCmd{}.VersionStr, serverConfig, serverController, dEnv)
+			_, _ = Serve(ctx, cmd.VersionStr, serverConfig, serverController, dEnv)
 		}()
 		err = serverController.WaitForStart()
 		if err != nil {

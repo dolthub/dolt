@@ -16,13 +16,10 @@ package types
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/dolthub/dolt/go/store/geometry"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -121,64 +118,41 @@ func (v LineString) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-// WriteEWKBLineData converts a Line into a byte array in EWKB format
-func WriteEWKBLineData(l LineString, buf []byte) {
-	// Write length of linestring
-	binary.LittleEndian.PutUint32(buf[:LengthSize], uint32(len(l.Points)))
-	// Append each point
-	for i, p := range l.Points {
-		WriteEWKBPointData(p, buf[LengthSize+geometry.PointSize*i:LengthSize+geometry.PointSize*(i+1)])
-	}
-}
-
 func (v LineString) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	err := LineStringKind.writeTo(w, nbf)
 	if err != nil {
 		return err
 	}
 
-	// Allocate buffer for linestring
-	buf := make([]byte, geometry.EWKBHeaderSize+LengthSize+geometry.PointSize*len(v.Points))
-
-	// Write header and data to buffer
-	WriteEWKBHeader(v, buf)
-	WriteEWKBLineData(v, buf[geometry.EWKBHeaderSize:])
-
+	buf := SerializeLineString(v)
 	w.writeString(string(buf))
 	return nil
 }
 
-// ParseEWKBLine converts the data portion of a WKB point to LineString
-// Very similar logic to the function in GMS
-func ParseEWKBLine(buf []byte, srid uint32) LineString {
-	// Read length of linestring
-	numPoints := binary.LittleEndian.Uint32(buf[:4])
-
-	// Parse points
-	points := make([]Point, numPoints)
-	for i := uint32(0); i < numPoints; i++ {
-		points[i] = ParseEWKBPoint(buf[LengthSize+geometry.PointSize*i:LengthSize+geometry.PointSize*(i+1)], srid)
-	}
-
-	return LineString{SRID: srid, Points: points}
-}
-
 func readLineString(nbf *NomsBinFormat, b *valueDecoder) (LineString, error) {
 	buf := []byte(b.ReadString())
-	srid, _, geomType := geometry.ParseEWKBHeader(buf)
-	if geomType != geometry.LineStringType {
+	srid, _, geomType, err := DeserializeEWKBHeader(buf)
+	if err != nil {
+		return LineString{}, err
+	}
+	if geomType != WKBLineID {
 		return LineString{}, errors.New("not a linestring")
 	}
-	return ParseEWKBLine(buf[geometry.EWKBHeaderSize:], srid), nil
+	buf = buf[EWKBHeaderSize:]
+	return DeserializeTypesLine(buf, false, srid), nil
 }
 
 func (v LineString) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
-	srid, _, geomType := geometry.ParseEWKBHeader(buf)
-	if geomType != geometry.LineStringType {
-		return nil, errors.New("not a linestring")
+	srid, _, geomType, err := DeserializeEWKBHeader(buf)
+	if err != nil {
+		return LineString{}, err
 	}
-	return ParseEWKBLine(buf[geometry.EWKBHeaderSize:], srid), nil
+	if geomType != WKBLineID {
+		return LineString{}, errors.New("not a linestring")
+	}
+	buf = buf[EWKBHeaderSize:]
+	return DeserializeTypesLine(buf, false, srid), nil
 }
 
 func (v LineString) skip(nbf *NomsBinFormat, b *binaryNomsReader) {

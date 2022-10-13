@@ -259,7 +259,7 @@ func TestQueryPlans(t *testing.T) {
 }
 
 func TestIntegrationQueryPlans(t *testing.T) {
-	harness := newDoltHarness(t).WithParallelism(1)
+	harness := newDoltHarness(t).WithParallelism(2)
 	enginetest.TestIntegrationPlans(t, harness)
 }
 
@@ -447,12 +447,11 @@ func TestJSONTableScripts(t *testing.T) {
 }
 
 func TestUserPrivileges(t *testing.T) {
-	t.Skip("Need to add more collations")
 	enginetest.TestUserPrivileges(t, newDoltHarness(t))
 }
 
 func TestUserAuthentication(t *testing.T) {
-	t.Skip("Need to add more collations")
+	t.Skip("Unexpected panic, need to fix")
 	enginetest.TestUserAuthentication(t, newDoltHarness(t))
 }
 
@@ -835,6 +834,14 @@ func TestDoltDdlScripts(t *testing.T) {
 		require.NoError(t, err)
 		enginetest.TestScriptWithEngine(t, e, harness, script)
 	}
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("not fixing unique index on keyless tables for old format")
+	}
+	for _, script := range AddIndexScripts {
+		e, err := harness.NewEngine(t)
+		require.NoError(t, err)
+		enginetest.TestScriptWithEngine(t, e, harness, script)
+	}
 }
 
 func TestBrokenDdlScripts(t *testing.T) {
@@ -1068,7 +1075,7 @@ func TestBrokenSystemTableQueries(t *testing.T) {
 }
 
 func TestHistorySystemTable(t *testing.T) {
-	harness := newDoltHarness(t)
+	harness := newDoltHarness(t).WithParallelism(2)
 	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
 		harness.engine = nil
@@ -1079,7 +1086,7 @@ func TestHistorySystemTable(t *testing.T) {
 }
 
 func TestHistorySystemTablePrepared(t *testing.T) {
-	harness := newDoltHarness(t)
+	harness := newDoltHarness(t).WithParallelism(2)
 	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
 		harness.engine = nil

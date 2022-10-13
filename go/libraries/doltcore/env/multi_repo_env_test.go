@@ -145,32 +145,14 @@ func TestMultiEnvForDirectoryWithMultipleRepos(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, mrEnv.envs, 3)
 
-	type envCmp struct {
-		name    string
-		doltDir string
-	}
+	expected := make(map[string]string)
+	expected["test_name_123"] = dEnv.GetDoltDir()
+	expected["abc"] = subEnv1.GetDoltDir()
+	expected["def"] = subEnv2.GetDoltDir()
 
-	expected := []envCmp{
-		{
-			name:    "test_name_123",
-			doltDir: dEnv.GetDoltDir(),
-		},
-		{
-			name:    "abc",
-			doltDir: subEnv1.GetDoltDir(),
-		},
-		{
-			name:    "def",
-			doltDir: subEnv2.GetDoltDir(),
-		},
-	}
-
-	var actual []envCmp
+	actual := make(map[string]string)
 	for _, env := range mrEnv.envs {
-		actual = append(actual, envCmp{
-			name:    env.name,
-			doltDir: env.env.GetDoltDir(),
-		})
+		actual[env.name] = env.env.GetDoltDir()
 	}
 
 	assert.Equal(t, expected, actual)

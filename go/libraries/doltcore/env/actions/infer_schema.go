@@ -55,19 +55,35 @@ type InferenceArgs interface {
 
 // InferColumnTypesFromTableReader will infer a data types from a table reader.
 func InferColumnTypesFromTableReader(ctx context.Context, rd table.ReadCloser, args InferenceArgs) (*schema.ColCollection, error) {
+	// for large imports, we want to sample a subset of the rows.
+	// skip through the file in an exponential manner
+	const exp = 1.02
+
+	var curr, prev row.Row
 	i := newInferrer(rd.GetSchema(), args)
 
-	for {
-		r, err := rd.ReadRow(ctx)
-		if err == io.EOF {
-			break
+OUTER:
+	for j := 0; true; j++ {
+		var err error
+
+		next := int(math.Pow(exp, float64(j)))
+		for n := 0; n < next; n++ {
+			curr, err = rd.ReadRow(ctx)
+			if err == io.EOF {
+				break OUTER
+			} else if err != nil {
+				return nil, err
+			}
+			prev = curr
 		}
-		if err != nil {
+		if err = i.processRow(curr); err != nil {
 			return nil, err
 		}
+	}
 
-		err = i.processRow(r)
-		if err != nil {
+	// always process last row
+	if prev != nil {
+		if err := i.processRow(prev); err != nil {
 			return nil, err
 		}
 	}

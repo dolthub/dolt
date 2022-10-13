@@ -18,12 +18,14 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -43,9 +45,9 @@ const (
 	dbName        = "test"
 )
 
-func BenchmarkMySQLImportJobs(jobs []*ImportBenchmarkJob, mConfig sysbench_runner.MysqlConfig) []result {
+func BenchmarkMySQLImportJobs(jobs []*ImportBenchmarkJob, mConfig sysbench_runner.MysqlConfig) ([]result, error) {
 	if len(jobs) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	ctx := context.Background()
@@ -62,21 +64,22 @@ func BenchmarkMySQLImportJobs(jobs []*ImportBenchmarkJob, mConfig sysbench_runne
 	gServer.Go(func() error {
 		err := server.Run()
 		if err != nil {
-			log.Fatal(serverErr.String())
 			return err
 		}
-
+		if len(strings.TrimSpace(serverErr.String())) > 0 {
+			return errors.New(fmt.Sprintf("server produced stderr output: %s", serverErr.String()))
+		}
 		return nil
 	})
 
 	// sleep to allow the server to start
 	time.Sleep(5 * time.Second)
 
-	// setup the relevant testing database and permissions
+	// set up the relevant testing database and permissions
 	err := sysbench_runner.SetupDB(ctx, mConfig, dbName)
 	if err != nil {
 		cancel()
-		log.Fatal(err.Error())
+		return nil, err
 	}
 
 	log.Println("successfully setup the database")
@@ -97,9 +100,13 @@ func BenchmarkMySQLImportJobs(jobs []*ImportBenchmarkJob, mConfig sysbench_runne
 
 	for i, job := range jobs {
 		// benchmark the actual job
+		var err error
 		br := testing.Benchmark(func(b *testing.B) {
-			benchmarkLoadData(ctx, b, mConfig, job)
+			err = benchmarkLoadData(ctx, b, mConfig, job)
 		})
+		if err != nil {
+			return nil, err
+		}
 
 		results[i] = result{
 			name:        job.Name,
@@ -113,18 +120,20 @@ func BenchmarkMySQLImportJobs(jobs []*ImportBenchmarkJob, mConfig sysbench_runne
 		}
 	}
 
-	return results
+	return results, nil
 }
 
-func benchmarkLoadData(ctx context.Context, b *testing.B, mConfig sysbench_runner.MysqlConfig, job *ImportBenchmarkJob) {
-	dsn, err := sysbench_runner.FormatDsn(mConfig)
+func benchmarkLoadData(ctx context.Context, b *testing.B, mConfig sysbench_runner.MysqlConfig, job *ImportBenchmarkJob) (err error) {
+	var dsn string
+	dsn, err = sysbench_runner.FormatDsn(mConfig)
 	if err != nil {
-		log.Fatal(err)
+		return
 	}
 
-	db, err := sql.Open("mysql", dsn)
+	var db *sql.DB
+	db, err = sql.Open("mysql", dsn)
 	if err != nil {
-		log.Fatal(err)
+		return
 	}
 	defer func() {
 		rerr := db.Close()
@@ -135,18 +144,19 @@ func benchmarkLoadData(ctx context.Context, b *testing.B, mConfig sysbench_runne
 
 	err = db.Ping()
 	if err != nil {
-		log.Fatal(err)
+		return
 	}
 
 	_, err = db.ExecContext(ctx, fmt.Sprintf("USE %s", dbName))
 	if err != nil {
-		log.Fatal(err)
+		return
 	}
 
 	// Load the schema for the test table. This assumes the table has the same name as testTable
-	data, err := ioutil.ReadFile(job.SchemaPath)
+	var data []byte
+	data, err = ioutil.ReadFile(job.SchemaPath)
 	if err != nil {
-		log.Fatal(err)
+		return
 	}
 
 	// Register the local file as per https://github.com/go-sql-driver/mysql#load-data-local-infile-support
@@ -158,27 +168,29 @@ func benchmarkLoadData(ctx context.Context, b *testing.B, mConfig sysbench_runne
 		// Since dolt also creates the table on import we'll add dropping and creating the table to the benchmark
 		_, err = db.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", testTable))
 		if err != nil {
-			log.Fatal(err)
+			return
 		}
 
 		// Run the CREATE TABLE command stored in the schema file
 		// TODO: This schema file must have the same name as testTable.
 		_, err = db.ExecContext(ctx, string(data))
 		if err != nil {
-			log.Fatal(err)
+			return
 		}
 
 		// Run LOAD DATA on the csv file
 		_, err = db.ExecContext(ctx, fmt.Sprintf(`LOAD DATA LOCAL INFILE '%s' REPLACE INTO TABLE %s FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' IGNORE 1 LINES`, job.Filepath, testTable))
 		if err != nil {
-			log.Fatal(err)
+			return
 		}
 
 		log.Printf("MySQL server loaded file %s \n", job.Filepath)
 	}
+
+	return
 }
 
-// getServerArgs returns the arguments that run the mysql servier
+// getServerArgs returns the arguments that run the mysql server
 func getServersArgs() []string {
 	return []string{"--user=mysql", fmt.Sprintf("--port=%d", defaultPort), "--local-infile=ON"}
 }
