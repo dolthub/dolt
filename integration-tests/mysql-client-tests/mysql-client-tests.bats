@@ -167,3 +167,14 @@ EOF" -m "postgres"
 @test "R RMariaDB client" {
     Rscript $BATS_TEST_DIRNAME/r/rmariadb-test.r $USER $PORT $REPO_NAME
 }
+
+definePORT() {
+  getPORT=""
+  let getPORT="$$ % (65536-1024) + 1024"
+  portinuse=$(lsof -i -P -n | grep LISTEN | grep $attemptedPORT | wc -l)
+  if [ $portinuse -gt 0 ]
+  then
+    let getPORT="($$ + 1) % (65536-1024) + 1024"
+  fi
+  echo "$getPORT"
+}
