@@ -1267,7 +1267,7 @@ func (s *stats) shouldFlush() bool {
 	return s.unflushedEdits >= maxBatchSize
 }
 
-//printNewLineIfNeeded prints a new line when there are outputs printed other than its output line of batch read progress.
+// printNewLineIfNeeded prints a new line when there are outputs printed other than its output line of batch read progress.
 func (s *stats) printNewLineIfNeeded() {
 	if s.displayStrLen > 0 {
 		cli.Print("\n")
@@ -1287,7 +1287,7 @@ func (f *fileReadProgress) setReadBytes(b int64) {
 	f.bytesRead = f.printed + b
 }
 
-//printNewLineIfNeeded prints a new line when there are outputs printed other than its output line of file read progress.
+// printNewLineIfNeeded prints a new line when there are outputs printed other than its output line of file read progress.
 func (f *fileReadProgress) printNewLineIfNeeded() {
 	if f.displayStrLen > 0 {
 		cli.Print("\n")
