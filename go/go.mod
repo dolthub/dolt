@@ -57,7 +57,7 @@ require (
 require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.5+incompatible
 	github.com/cenkalti/backoff/v4 v4.1.3
-	github.com/dolthub/go-mysql-server v0.12.1-0.20221012045247-2eb37b2d80e0
+	github.com/dolthub/go-mysql-server v0.12.1-0.20221012234900-959225d12a05
 	github.com/google/flatbuffers v2.0.6+incompatible
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/mitchellh/go-ps v1.0.0
@@ -140,8 +140,6 @@ replace (
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 	github.com/google/flatbuffers => github.com/dolthub/flatbuffers v1.13.0-dh.1
 	github.com/oliveagle/jsonpath => github.com/dolthub/jsonpath v0.0.0-20210609232853-d49537a30474
-	github.com/dolthub/go-mysql-server => ../../go-mysql-server
-	github.com/dolthub/vitess => ../../vitess
 )
 
 go 1.19
