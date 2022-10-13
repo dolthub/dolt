@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -120,6 +121,12 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 	if oldBranchName == "" || newBranchName == "" {
 		return EmptyBranchNameErr
 	}
+	if err := branch_control.CanDeleteBranch(ctx, oldBranchName); err != nil {
+		return err
+	}
+	if err := branch_control.CanCreateBranch(ctx, newBranchName); err != nil {
+		return err
+	}
 	force := apr.Contains(cli.ForceFlag)
 
 	if !force {
@@ -165,6 +172,13 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 		if repoState, err := env.LoadRepoState(fs); err == nil {
 			rs = repoState
 			headOnCLI = repoState.Head.Ref.GetPath()
+		}
+	}
+
+	// Verify that we can delete all branches before continuing
+	for _, branchName := range apr.Args {
+		if err = branch_control.CanDeleteBranch(ctx, branchName); err != nil {
+			return err
 		}
 	}
 
@@ -278,6 +292,9 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgPars
 		return EmptyBranchNameErr
 	}
 
+	if err := branch_control.CanCreateBranch(ctx, branchName); err != nil {
+		return err
+	}
 	return actions.CreateBranchWithStartPt(ctx, dbData, branchName, startPt, apr.Contains(cli.ForceFlag))
 }
 
@@ -301,6 +318,9 @@ func copyBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResu
 }
 
 func copyABranch(ctx *sql.Context, dbData env.DbData, srcBr string, destBr string, force bool) error {
+	if err := branch_control.CanCreateBranch(ctx, destBr); err != nil {
+		return err
+	}
 	err := actions.CopyBranchOnDB(ctx, dbData.Ddb, srcBr, destBr, force)
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {
