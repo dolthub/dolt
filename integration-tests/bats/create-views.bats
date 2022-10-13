@@ -21,6 +21,13 @@ SQL
     [[ "${lines[3]}" =~ ' 4 ' ]] || false
 }
 
+@test "create-views: create view with same name as table" {
+    dolt sql -q "create table t (i int)"
+    run dolt sql -q "create view t as select 1 from dual"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'already exists' ]] || false
+}
+
 @test "create-views: drop a single view" {
     run dolt sql <<SQL
 create view four as select 2+2 as res from dual;

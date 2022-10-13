@@ -1110,7 +1110,7 @@ func (db Database) CreateView(ctx *sql.Context, name string, definition string) 
 	if exists, err := root.HasTable(ctx, name); err != nil {
 		return err
 	} else if exists {
-		//return sql.ErrTableAlreadyExists.New(name)
+		return sql.ErrTableAlreadyExists.New(name)
 	}
 	err = sql.ErrExistingView.New(db.name, name)
 
