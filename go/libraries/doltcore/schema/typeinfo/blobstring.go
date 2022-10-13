@@ -252,6 +252,8 @@ func blobStringTypeConverter(ctx context.Context, src *blobStringType, destTi Ty
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *multipointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipolygonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *pointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *polygonType:
