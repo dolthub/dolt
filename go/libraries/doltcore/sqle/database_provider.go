@@ -430,7 +430,7 @@ func ConfigureReplicationDatabaseHook(ctx *sql.Context, p DoltDatabaseProvider, 
 	}
 
 	err = newEnv.AddRemote(r)
-	if err != env.ErrRemoteAlreadyExists &&  err != nil {
+	if err != env.ErrRemoteAlreadyExists && err != nil {
 		return err
 	}
 
@@ -449,9 +449,9 @@ func ConfigureReplicationDatabaseHook(ctx *sql.Context, p DoltDatabaseProvider, 
 
 // CloneDatabaseFromRemote implements DoltDatabaseProvider interface
 func (p DoltDatabaseProvider) CloneDatabaseFromRemote(
-		ctx *sql.Context,
-		dbName, branch, remoteName, remoteUrl string,
-		remoteParams map[string]string,
+	ctx *sql.Context,
+	dbName, branch, remoteName, remoteUrl string,
+	remoteParams map[string]string,
 ) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
