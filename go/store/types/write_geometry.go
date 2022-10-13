@@ -34,14 +34,14 @@ const (
 )
 
 const (
-	WKBUnknown          = sql.WKBUnknown
-	WKBPointID          = sql.WKBPointID
-	WKBLineID           = sql.WKBLineID
-	WKBPolyID           = sql.WKBPolyID
-	WKBMultiPointID     = sql.WKBMultiPointID
-	WKBMultiLineID      = sql.WKBMultiLineID
-	WKBMultiPolyID      = sql.WKBMultiPolyID
-	WKBGeomCollectionID = sql.WKBGeomCollectionID
+	WKBUnknown      = sql.WKBUnknown
+	WKBPointID      = sql.WKBPointID
+	WKBLineID       = sql.WKBLineID
+	WKBPolyID       = sql.WKBPolyID
+	WKBMultiPointID = sql.WKBMultiPointID
+	WKBMultiLineID  = sql.WKBMultiLineID
+	WKBMultiPolyID  = sql.WKBMultiPolyID
+	WKBGeomCollID   = sql.WKBGeomCollID
 )
 
 // TODO: all methods here just defer to their SQL equivalents, and assume we always receive good data

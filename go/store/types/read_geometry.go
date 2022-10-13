@@ -149,7 +149,7 @@ func DeserializeWKBHeader(buf []byte) (bool, uint32, error) {
 }
 
 func DeserializePoint(buf []byte, isBig bool, srid uint32) sql.Point {
-	p, err := sql.DeserializePoint(buf, isBig, srid)
+	p, _, err := sql.DeserializePoint(buf, isBig, srid)
 	if err != nil {
 		panic(err)
 	}
@@ -157,7 +157,7 @@ func DeserializePoint(buf []byte, isBig bool, srid uint32) sql.Point {
 }
 
 func DeserializeLine(buf []byte, isBig bool, srid uint32) sql.LineString {
-	l, err := sql.DeserializeLine(buf, isBig, srid)
+	l, _, err := sql.DeserializeLine(buf, isBig, srid)
 	if err != nil {
 		panic(err)
 	}
@@ -165,7 +165,7 @@ func DeserializeLine(buf []byte, isBig bool, srid uint32) sql.LineString {
 }
 
 func DeserializePoly(buf []byte, isBig bool, srid uint32) sql.Polygon {
-	p, err := sql.DeserializePoly(buf, isBig, srid)
+	p, _, err := sql.DeserializePoly(buf, isBig, srid)
 	if err != nil {
 		panic(err)
 	}
@@ -173,7 +173,7 @@ func DeserializePoly(buf []byte, isBig bool, srid uint32) sql.Polygon {
 }
 
 func DeserializeMPoint(buf []byte, isBig bool, srid uint32) sql.MultiPoint {
-	p, err := sql.DeserializeMPoint(buf, isBig, srid)
+	p, _, err := sql.DeserializeMPoint(buf, isBig, srid)
 	if err != nil {
 		panic(err)
 	}
@@ -181,7 +181,7 @@ func DeserializeMPoint(buf []byte, isBig bool, srid uint32) sql.MultiPoint {
 }
 
 func DeserializeMLine(buf []byte, isBig bool, srid uint32) sql.MultiLineString {
-	p, err := sql.DeserializeMLine(buf, isBig, srid)
+	p, _, err := sql.DeserializeMLine(buf, isBig, srid)
 	if err != nil {
 		panic(err)
 	}
@@ -189,7 +189,7 @@ func DeserializeMLine(buf []byte, isBig bool, srid uint32) sql.MultiLineString {
 }
 
 func DeserializeMPoly(buf []byte, isBig bool, srid uint32) sql.MultiPolygon {
-	p, err := sql.DeserializeMPoly(buf, isBig, srid)
+	p, _, err := sql.DeserializeMPoly(buf, isBig, srid)
 	if err != nil {
 		panic(err)
 	}
