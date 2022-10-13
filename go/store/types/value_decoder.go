@@ -544,7 +544,13 @@ func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
 	case PolygonKind:
 		r.skipKind()
 		r.skipString()
+	case MultiLineStringKind:
+		r.skipKind()
+		r.skipString()
 	case MultiPointKind:
+		r.skipKind()
+		r.skipString()
+	case MultiPolygonKind:
 		r.skipKind()
 		r.skipString()
 	case ListKind:
