@@ -69,12 +69,15 @@ func (dt *UnscopedDiffTable) Filters() []sql.Expression {
 
 // HandledFilters returns the list of filters that will be handled by the table itself
 func (dt *UnscopedDiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	dt.partitionFilters = FilterFilters(filters, ColumnPredicate(filterColumnNameSet))
-	return dt.partitionFilters
+	// There will be no handled filters, since we only get commit strings used in filters
+	// to direct access those commits without iterating over the commit tree.
+	// All filters will be applied on the rows returned from direct accessing the commits and working set iter.
+	return nil
 }
 
 // WithFilters returns a new sql.Table instance with the filters applied
 func (dt *UnscopedDiffTable) WithFilters(ctx *sql.Context, filters []sql.Expression) sql.Table {
+	// We get filters that only have `commit_hash` column equals or inTuple filters.
 	dt.partitionFilters = FilterFilters(filters, ColumnPredicate(filterColumnNameSet))
 
 	if len(dt.partitionFilters) > 0 {
