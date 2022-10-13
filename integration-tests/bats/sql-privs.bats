@@ -55,7 +55,7 @@ teardown() {
 
 @test "sql-privs: default user is root. create new user destroys default user." {
     make_test_repo
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     dolt sql-server --host 0.0.0.0 --port=$PORT &
     SERVER_PID=$! # will get killed by teardown_common
     sleep 5 # not using python wait so this works on windows
@@ -68,7 +68,7 @@ teardown() {
     rm -f .dolt/sql-server.lock
 
     # restarting server
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     dolt sql-server --host 0.0.0.0 --port=$PORT &
     SERVER_PID=$! # will get killed by teardown_common
     sleep 5 # not using python wait so this works on windows
@@ -96,7 +96,7 @@ teardown() {
 @test "sql-privs: yaml with no user is replaced with command line user" {
     make_test_repo
     touch server.yaml
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
 
     echo "log_level: debug
 
@@ -118,7 +118,7 @@ behavior:
 @test "sql-privs: yaml with user is also replaced with command line user" {
     make_test_repo
     touch server.yaml
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
 
     echo "log_level: debug
 user:

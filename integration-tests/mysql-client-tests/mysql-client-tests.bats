@@ -19,7 +19,7 @@ setup() {
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext)"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
 
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     USER="dolt"
     dolt sql-server --host 0.0.0.0 --port=$PORT --user=$USER --loglevel=trace &
     SERVER_PID=$!
