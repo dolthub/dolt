@@ -57,7 +57,7 @@ require (
 require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.5+incompatible
 	github.com/cenkalti/backoff/v4 v4.1.3
-	github.com/dolthub/go-mysql-server v0.12.1-0.20221014051913-cafab36d6df4
+	github.com/dolthub/go-mysql-server v0.12.1-0.20221014214651-c2bf09248ff9
 	github.com/google/flatbuffers v2.0.6+incompatible
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/mitchellh/go-ps v1.0.0
