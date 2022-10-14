@@ -1420,6 +1420,11 @@ s.close()
 
     run grep "failed to access 'mydb2' database: can no longer find .dolt dir on disk" server_log.txt
     [ "${#lines[@]}" -eq 1 ]
+
+    # this tests fails sometimes as the server is stopped from the above error
+    # but stop_sql_server in teardown tries to kill process that is not running anymore,
+    # so start the server again, and it will be stopped in teardown
+    start_sql_server
 }
 
 @test "sql-server: dropping database that the server is running in should drop only the db itself not its nested dbs" {
