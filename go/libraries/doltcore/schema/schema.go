@@ -209,8 +209,8 @@ func ArePrimaryKeySetsDiffable(format *types.NomsBinFormat, fromSch, toSch Schem
 	}
 
 	for i := 0; i < cc1.Size(); i++ {
-		c1 := cc1.GetAtIndex(i)
-		c2 := cc2.GetAtIndex(i)
+		c1 := cc1.GetByIndex(i)
+		c2 := cc2.GetByIndex(i)
 		if (c1.Tag != c2.Tag) || (c1.IsPartOfPK != c2.IsPartOfPK) {
 			return false
 		}
