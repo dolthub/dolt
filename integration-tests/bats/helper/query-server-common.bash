@@ -249,11 +249,14 @@ server_query_with_port() {
 
 definePORT() {
   getPORT=""
-  let getPORT="$$ % (65536-1024) + 1024"
-  portinuse=$(lsof -i -P -n | grep LISTEN | grep $attemptedPORT | wc -l)
-  if [ $portinuse -gt 0 ]
-  then
-    let getPORT="($$ + 1) % (65536-1024) + 1024"
-  fi
-  echo "$getPORT"
+  for i in {0..9}
+  do
+    let getPORT="($$ + $i) % (65536-1024) + 1024"
+    portinuse=$(lsof -i -P -n | grep LISTEN | grep $attemptedPORT | wc -l)
+      if [ $portinuse -eq 0 ]
+      then
+        echo "$getPORT"
+        break
+      fi
+  done
 }
