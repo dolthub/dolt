@@ -29,6 +29,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 )
 
@@ -69,10 +70,8 @@ func (dt *UnscopedDiffTable) Filters() []sql.Expression {
 
 // HandledFilters returns the list of filters that will be handled by the table itself
 func (dt *UnscopedDiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	// There will be no handled filters, since we only get commit strings used in filters
-	// to direct access those commits without iterating over the commit tree.
-	// All filters will be applied on the rows returned from direct accessing the commits and working set iter.
-	return nil
+	dt.partitionFilters = FilterFilters(filters, ColumnPredicate(filterColumnNameSet))
+	return dt.partitionFilters
 }
 
 // WithFilters returns a new sql.Table instance with the filters applied
@@ -156,10 +155,17 @@ func (dt *UnscopedDiffTable) newWorkingSetRowItr(ctx *sql.Context) (sql.RowIter,
 		return nil, err
 	}
 
-	return &doltDiffWorkingSetRowItr{
+	var ri sql.RowIter
+	ri = &doltDiffWorkingSetRowItr{
 		stagedTableDeltas:   staged,
 		unstagedTableDeltas: unstaged,
-	}, nil
+	}
+
+	for _, filter := range dt.partitionFilters {
+		ri = plan.NewFilterIter(filter, ri)
+	}
+
+	return ri, nil
 }
 
 var _ sql.RowIter = &doltDiffWorkingSetRowItr{}
