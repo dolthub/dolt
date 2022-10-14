@@ -155,7 +155,7 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(MultiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory. This is deprecated, you should use `--data-dir` instead")
 	ap.SupportsString(CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change that affect configuration settings.")
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
-	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given.")
+	ap.SupportsString(fileInputFlag, "f", "input file", "Execute statements from the file given.")
 	ap.SupportsString(PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
 	ap.SupportsString(UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", DefaultUser))
 	return ap
@@ -316,6 +316,14 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			if err != nil {
 				return HandleVErrAndExitCode(errhand.BuildDError("couldn't open file %s", fileInput).Build(), usage)
 			}
+			info, err := os.Stat(fileInput)
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.BuildDError("couldn't get file size %s", fileInput).Build(), usage)
+			}
+
+			// initialize fileReadProg global variable if there is a file to process queries from
+			fileReadProg = &fileReadProgress{bytesRead: 0, totalBytes: info.Size(), printed: 0, displayStrLen: 0}
+			defer fileReadProg.close()
 		}
 
 		if isTty {
@@ -598,7 +606,7 @@ func execQuery(
 	// Set client to specified user
 	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
-	sqlSch, rowIter, err := ProcessQuery(sqlCtx, query, se)
+	sqlSch, rowIter, err := processQuery(sqlCtx, query, se)
 	if err != nil {
 		return formatQueryError("", err)
 	}
@@ -778,9 +786,12 @@ func saveQuery(ctx context.Context, root *doltdb.RootValue, query string, name s
 // runMultiStatementMode allows for the execution of more than one query, but it doesn't attempt any batch optimizations
 func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, continueOnErr bool) error {
 	scanner := NewSqlStatementScanner(input)
-
 	var query string
 	for scanner.Scan() {
+		if fileReadProg != nil {
+			updateFileReadProgressOutput()
+			fileReadProg.setReadBytes(int64(len(scanner.Bytes())))
+		}
 		query += scanner.Text()
 		if len(query) == 0 || query == "\n" {
 			continue
@@ -792,10 +803,20 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 			shouldProcessQuery = false
 		}
 		if shouldProcessQuery {
-			sqlSch, rowIter, err := ProcessQuery(ctx, query, se)
+			sqlStatement, err := sqlparser.Parse(query)
+			if err == sqlparser.ErrEmpty {
+				continue
+			} else if err != nil {
+				handleError(scanner.statementStartLine, query, err)
+				// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
+				if !continueOnErr {
+					return err
+				}
+			}
+
+			sqlSch, rowIter, err := processParsedQuery(ctx, query, se, sqlStatement)
 			if err != nil {
-				verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
-				cli.PrintErrln(verr.Verbose())
+				handleError(scanner.statementStartLine, query, err)
 				// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
 				if !continueOnErr {
 					return err
@@ -803,10 +824,18 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 			}
 
 			if rowIter != nil {
+				switch sqlStatement.(type) {
+				case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete,
+					*sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
+					// For any statement that prints out result, print a newline to put the regular output on its own line
+					if fileReadProg != nil {
+						fileReadProg.printNewLineIfNeeded()
+					}
+				}
 				err = engine.PrettyPrintResults(ctx, se.GetResultFormat(), sqlSch, rowIter)
 				if err != nil {
-					err = fmt.Errorf("error executing query on line %d: %v", scanner.statementStartLine, err)
-					return errhand.VerboseErrorFromError(err)
+					handleError(scanner.statementStartLine, query, err)
+					return err
 				}
 			}
 		}
@@ -820,12 +849,21 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 	return nil
 }
 
+func handleError(stmtStartLine int, query string, err error) {
+	verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", stmtStartLine, query), err)
+	cli.PrintErrln(verr.Verbose())
+}
+
 // runBatchMode processes queries until EOF. The Root of the sqlEngine may be updated.
 func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, continueOnErr bool) error {
 	scanner := NewSqlStatementScanner(input)
 
 	var query string
 	for scanner.Scan() {
+		if fileReadProg != nil {
+			updateFileReadProgressOutput()
+			fileReadProg.setReadBytes(int64(len(scanner.Bytes())))
+		}
 		query += scanner.Text()
 		if len(query) == 0 || query == "\n" {
 			continue
@@ -985,7 +1023,7 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 				return false
 			}
 
-			if sqlSch, rowIter, err = ProcessQuery(sqlCtx, query, se); err != nil {
+			if sqlSch, rowIter, err = processQuery(sqlCtx, query, se); err != nil {
 				verr := formatQueryError("", err)
 				shell.Println(verr.Verbose())
 			} else if rowIter != nil {
@@ -1134,9 +1172,9 @@ func prepend(s string, ss []string) []string {
 	return newSs
 }
 
-// ProcessQuery processes a single query. The Root of the sqlEngine will be updated if necessary.
+// processQuery processes a single query. The Root of the sqlEngine will be updated if necessary.
 // Returns the schema and the row iterator for the results, which may be nil, and an error if one occurs.
-func ProcessQuery(ctx *sql.Context, query string, se *engine.SqlEngine) (sql.Schema, sql.RowIter, error) {
+func processQuery(ctx *sql.Context, query string, se *engine.SqlEngine) (sql.Schema, sql.RowIter, error) {
 	sqlStatement, err := sqlparser.Parse(query)
 	if err == sqlparser.ErrEmpty {
 		// silently skip empty statements
@@ -1144,7 +1182,13 @@ func ProcessQuery(ctx *sql.Context, query string, se *engine.SqlEngine) (sql.Sch
 	} else if err != nil {
 		return nil, nil, err
 	}
+	return processParsedQuery(ctx, query, se, sqlStatement)
+}
 
+// processParsedQuery processes a single query with the parsed statement provided. The Root of the sqlEngine
+// will be updated if necessary. Returns the schema and the row iterator for the results, which may be nil,
+// and an error if one occurs.
+func processParsedQuery(ctx *sql.Context, query string, se *engine.SqlEngine, sqlStatement sqlparser.Statement) (sql.Schema, sql.RowIter, error) {
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Use:
 		sch, ri, err := se.Query(ctx, query)
@@ -1195,10 +1239,18 @@ type stats struct {
 	rowsDeleted    int
 	unflushedEdits int
 	unprintedEdits int
+	displayStrLen  int
+}
+
+type fileReadProgress struct {
+	bytesRead     int64
+	totalBytes    int64
+	printed       int64
+	displayStrLen int
 }
 
 var batchEditStats = &stats{}
-var displayStrLen int
+var fileReadProg *fileReadProgress
 
 const maxBatchSize = 200000
 const updateInterval = 1000
@@ -1213,6 +1265,34 @@ func (s *stats) shouldUpdateBatchModeOutput() bool {
 
 func (s *stats) shouldFlush() bool {
 	return s.unflushedEdits >= maxBatchSize
+}
+
+// printNewLineIfNeeded prints a new line when there are outputs printed other than its output line of batch read progress.
+func (s *stats) printNewLineIfNeeded() {
+	if s.displayStrLen > 0 {
+		cli.Print("\n")
+		s.displayStrLen = 0
+	}
+}
+
+// close will print last updated line of processed 100.0% and a new line
+func (f *fileReadProgress) close() {
+	f.bytesRead = f.totalBytes
+	updateFileReadProgressOutput()
+	cli.Println() // need a newline after all updates are executed
+}
+
+// setReadBytes updates number of bytes that are read so far from the file
+func (f *fileReadProgress) setReadBytes(b int64) {
+	f.bytesRead = f.printed + b
+}
+
+// printNewLineIfNeeded prints a new line when there are outputs printed other than its output line of file read progress.
+func (f *fileReadProgress) printNewLineIfNeeded() {
+	if f.displayStrLen > 0 {
+		cli.Print("\n")
+		f.displayStrLen = 0
+	}
 }
 
 func flushBatchedEdits(ctx *sql.Context, se *engine.SqlEngine) error {
@@ -1296,7 +1376,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *engine.SqlEngine) err
 }
 
 func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query string, sqlStatement sqlparser.Statement) (returnErr error) {
-	sqlSch, rowIter, err := ProcessQuery(ctx, query, se)
+	sqlSch, rowIter, err := processParsedQuery(ctx, query, se, sqlStatement)
 	if err != nil {
 		return err
 	}
@@ -1310,10 +1390,10 @@ func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query stri
 		// Some statement types should print results, even in batch mode.
 		switch sqlStatement.(type) {
 		case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
-			if displayStrLen > 0 {
-				// If we've been printing in batch mode, print a newline to put the regular output on its own line
-				cli.Print("\n")
-				displayStrLen = 0
+			// For any statement that prints out result, print a newline to put the regular output on its own line
+			batchEditStats.printNewLineIfNeeded()
+			if fileReadProg != nil {
+				fileReadProg.printNewLineIfNeeded()
 			}
 			err = engine.PrettyPrintResults(ctx, se.GetResultFormat(), sqlSch, rowIter)
 			if err != nil {
@@ -1467,11 +1547,33 @@ func insertsIntoAutoIncrementCol(ctx *sql.Context, se *engine.SqlEngine, query s
 	return isAutoInc, nil
 }
 
+// updateBatchEditOutput will delete the line it printed before, and print the updated line.
+// If there were other functions printed result, it will print update line on a new line.
+// This function is used for only batch reads into dolt sql.
 func updateBatchEditOutput() {
+	if fileReadProg != nil {
+		fileReadProg.printNewLineIfNeeded()
+	}
 	displayStr := fmt.Sprintf("Rows inserted: %d Rows updated: %d Rows deleted: %d",
 		batchEditStats.rowsInserted, batchEditStats.rowsUpdated, batchEditStats.rowsDeleted)
-	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
+	batchEditStats.displayStrLen = cli.DeleteAndPrint(batchEditStats.displayStrLen, displayStr)
 	batchEditStats.unprintedEdits = 0
+}
+
+// updateFileReadProgressOutput will delete the line it printed before, and print the updated line.
+// If there were other functions printed result, it will print update line on a new line.
+// This function is used for only file reads for dolt sql when `--file` flag is used.
+func updateFileReadProgressOutput() {
+	if fileReadProg == nil {
+		// this should not happen, but sanity check
+		cli.Println("No file is being processed.")
+	}
+	// batch can be writing to the line, so print new line.
+	batchEditStats.printNewLineIfNeeded()
+	percent := float64(fileReadProg.bytesRead) / float64(fileReadProg.totalBytes) * 100
+	fileReadProg.printed = fileReadProg.bytesRead
+	displayStr := fmt.Sprintf("Processed %.1f%% of the file", percent)
+	fileReadProg.displayStrLen = cli.DeleteAndPrint(fileReadProg.displayStrLen, displayStr)
 }
 
 // Updates the batch insert stats with the results of an INSERT, UPDATE, or DELETE statement.
