@@ -24,4 +24,4 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-import
-          client-payload: '{"to_server": "dolt", "to_version": "${{ github.sha }}", "from_server": "mysql", "from_version": "8.0.28", "mode": "nightly", "actor": "${{ github.actor }}", "actor_email": "vinai@dolthub.com", "template_script": "./.github/scripts/import-benchmarking/get-mysql-dolt-job-json.sh"}'
+          client-payload: '{"to_server": "dolt", "to_version": "${{ github.sha }}", "from_server": "mysql", "from_version": "8.0.28", "mode": "nightly", "actor": "${{ github.actor }}", "template_script": "./.github/scripts/import-benchmarking/get-mysql-dolt-job-json.sh"}'

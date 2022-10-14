@@ -26,9 +26,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
-	geo "github.com/dolthub/dolt/go/store/geometry"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -162,7 +160,7 @@ func translateNomsField(ctx context.Context, ns tree.NodeStore, value types.Valu
 		v := value.(types.Geometry).Inner
 		translateGeometryField(v, idx, b)
 
-	case types.PointKind, types.LineStringKind, types.PolygonKind:
+	case types.PointKind, types.LineStringKind, types.PolygonKind, types.MultiPointKind:
 		translateGeometryField(value, idx, b)
 
 	case types.JSONKind:
@@ -267,16 +265,24 @@ func translateGeometryField(value types.Value, idx int, b *val.TupleBuilder) {
 	nk := value.Kind()
 	switch nk {
 	case types.PointKind:
-		p := typeinfo.ConvertTypesPointToSQLPoint(value.(types.Point))
-		b.PutGeometry(idx, geo.SerializePoint(p))
+		p := types.ConvertTypesPointToSQLPoint(value.(types.Point))
+		b.PutGeometry(idx, p.Serialize())
 
 	case types.LineStringKind:
-		l := typeinfo.ConvertTypesLineStringToSQLLineString(value.(types.LineString))
-		b.PutGeometry(idx, geo.SerializeLineString(l))
+		l := types.ConvertTypesLineStringToSQLLineString(value.(types.LineString))
+		b.PutGeometry(idx, l.Serialize())
 
 	case types.PolygonKind:
-		p := typeinfo.ConvertTypesPolygonToSQLPolygon(value.(types.Polygon))
-		b.PutGeometry(idx, geo.SerializePolygon(p))
+		p := types.ConvertTypesPolygonToSQLPolygon(value.(types.Polygon))
+		b.PutGeometry(idx, p.Serialize())
+
+	case types.MultiPointKind:
+		p := types.ConvertTypesMultiPointToSQLMultiPoint(value.(types.MultiPoint))
+		b.PutGeometry(idx, p.Serialize())
+
+	case types.MultiLineStringKind:
+		l := types.ConvertTypesMultiLineStringToSQLMultiLineString(value.(types.MultiLineString))
+		b.PutGeometry(idx, l.Serialize())
 
 	default:
 		panic(fmt.Sprintf("unexpected NomsKind for geometry (%d)", nk))

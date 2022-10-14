@@ -835,18 +835,9 @@ tests:
       error_match: failed to transition from primary to standby gracefully
     - exec: "create table vals (i int primary key)"
     - exec: "insert into vals values (0)"
-- name: primary replicates to standby, fails over, new primary replicates to standby, fails over, new primary has all writes
+- name: create new database, primary replicates to standby, fails over, new primary replicates to standby, fails over, new primary has all writes
   multi_repos:
   - name: server1
-    repos:
-    - name: repo1
-      with_remotes:
-      - name: standby
-        url: http://localhost:50052/repo1
-    - name: repo2
-      with_remotes:
-      - name: standby
-        url: http://localhost:50052/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -866,15 +857,6 @@ tests:
       args: ["--config", "server.yaml"]
       port: 3309
   - name: server2
-    repos:
-    - name: repo1
-      with_remotes:
-      - name: standby
-        url: http://localhost:50051/repo1
-    - name: repo2
-      with_remotes:
-      - name: standby
-        url: http://localhost:50051/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -896,6 +878,7 @@ tests:
   connections:
   - on: server1
     queries:
+    - exec: 'create database repo1'
     - exec: 'use repo1'
     - exec: 'create table vals (i int primary key)'
     - exec: 'insert into vals values (0),(1),(2),(3),(4)'
