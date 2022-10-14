@@ -334,7 +334,7 @@ func SqlRowAsTupleString(r sql.Row, tableSch schema.Schema) (string, error) {
 		if seenOne {
 			b.WriteRune(',')
 		}
-		col := tableSch.GetAllCols().GetAtIndex(i)
+		col := tableSch.GetAllCols().GetByIndex(i)
 		str := "NULL"
 		if val != nil {
 			str, err = interfaceValueAsSqlString(col.TypeInfo, val)

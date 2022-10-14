@@ -19,7 +19,7 @@ setup() {
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext)"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
 
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     USER="dolt"
     dolt sql-server --host 0.0.0.0 --port=$PORT --user=$USER --loglevel=trace &
     SERVER_PID=$!
@@ -166,4 +166,18 @@ EOF" -m "postgres"
 
 @test "R RMariaDB client" {
     Rscript $BATS_TEST_DIRNAME/r/rmariadb-test.r $USER $PORT $REPO_NAME
+}
+
+definePORT() {
+  getPORT=""
+  for i in {0..9}
+  do
+    let getPORT="($$ + $i) % (65536-1024) + 1024"
+    portinuse=$(lsof -i -P -n | grep LISTEN | grep $attemptedPORT | wc -l)
+      if [ $portinuse -eq 0 ]
+      then
+        echo "$getPORT"
+        break
+      fi
+  done
 }
