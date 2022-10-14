@@ -105,6 +105,7 @@ func init() {
 	KindToType[SerialMessageKind] = SerialMessage{}
 	KindToType[MultiPointKind] = MultiPoint{}
 	KindToType[MultiLineStringKind] = MultiLineString{}
+	KindToType[MultiPolygonKind] = MultiPolygon{}
 
 	SupportedKinds[BlobKind] = true
 	SupportedKinds[BoolKind] = true
@@ -135,6 +136,7 @@ func init() {
 	SupportedKinds[SerialMessageKind] = true
 	SupportedKinds[MultiPointKind] = true
 	SupportedKinds[MultiLineStringKind] = true
+	SupportedKinds[MultiPolygonKind] = true
 
 	if serial.MessageTypesKind != int(SerialMessageKind) {
 		panic("internal error: serial.MessageTypesKind != SerialMessageKind")
@@ -174,6 +176,7 @@ var KindToString = map[NomsKind]string{
 	SerialMessageKind:   "SerialMessage",
 	MultiPointKind:      "MultiPoint",
 	MultiLineStringKind: "MultiLineString",
+	MultiPolygonKind:    "MultiPolygon",
 }
 
 // String returns the name of the kind.

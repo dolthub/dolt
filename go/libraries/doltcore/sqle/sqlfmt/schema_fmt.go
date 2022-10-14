@@ -223,9 +223,9 @@ func AlterTableAddPrimaryKeys(tableName string, pks *schema.ColCollection) strin
 
 	for i := 0; i < pks.Size(); i++ {
 		if i == 0 {
-			b.WriteString(pks.GetAtIndex(i).Name)
+			b.WriteString(pks.GetByIndex(i).Name)
 		} else {
-			b.WriteString("," + pks.GetAtIndex(i).Name)
+			b.WriteString("," + pks.GetByIndex(i).Name)
 		}
 	}
 	b.WriteRune(')')

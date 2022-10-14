@@ -240,7 +240,7 @@ func ordinalMappingsForSecondaryIndex(sch schema.Schema, def schema.Index) (ord 
 	ord = make(val.OrdinalMapping, secondary.Size())
 
 	for i := range ord {
-		name := secondary.GetAtIndex(i).Name
+		name := secondary.GetByIndex(i).Name
 		ord[i] = -1
 
 		pks := sch.GetPKCols().GetColumns()

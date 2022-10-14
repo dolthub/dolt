@@ -142,7 +142,7 @@ func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter,
 	}
 
 	for i := 0; i < numCols; i++ {
-		schCol := allCols.GetAtIndex(i)
+		schCol := allCols.GetByIndex(i)
 		val := r[i]
 		if val == nil {
 			continue

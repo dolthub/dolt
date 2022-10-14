@@ -24,34 +24,40 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// This is a dolt implementation of the MySQL type Year, thus most of the functionality
+// This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
-type yearType struct {
-	sqlYearType sql.YearType
+type multipolygonType struct {
+	sqlMultiPolygonType sql.MultiPolygonType
 }
 
-var _ TypeInfo = (*yearType)(nil)
+var _ TypeInfo = (*multipolygonType)(nil)
 
-var YearType = &yearType{sql.Year}
+var MultiPolygonType = &multipolygonType{sql.MultiPolygonType{}}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *yearType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	if val, ok := v.(types.Int); ok {
-		return int16(val), nil
-	}
+func (ti *multipolygonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
+	// Expect a types.MultiPolygon, return a sql.MultiPolygon
+	if val, ok := v.(types.MultiPolygon); ok {
+		return types.ConvertTypesMultiPolygonToSQLMultiPolygon(val), nil
+	}
+
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
-func (ti *yearType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+func (ti *multipolygonType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
 	k := reader.ReadKind()
 	switch k {
-	case types.IntKind:
-		val := reader.ReadInt()
-		return int16(val), nil
+	case types.MultiPolygonKind:
+		p, err := reader.ReadMultiPolygon()
+		if err != nil {
+			return nil, err
+		}
+		return ti.ConvertNomsValueToValue(p)
 	case types.NullKind:
 		return nil, nil
 	}
@@ -60,67 +66,60 @@ func (ti *yearType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *yearType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
+func (ti *multipolygonType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
+	// Check for null
 	if v == nil {
 		return types.NullValue, nil
 	}
-	intVal, err := ti.sqlYearType.Convert(v)
+
+	// Convert to sql.MultiPolygon
+	mpoly, err := ti.sqlMultiPolygonType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
-	val, ok := intVal.(int16)
-	if ok {
-		return types.Int(val), nil
-	}
-	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
+
+	return types.ConvertSQLMultiPolygonToTypesMultiPolygon(mpoly.(sql.MultiPolygon)), nil
 }
 
 // Equals implements TypeInfo interface.
-func (ti *yearType) Equals(other TypeInfo) bool {
+func (ti *multipolygonType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*yearType)
-	return ok
+	if o, ok := other.(*multipolygonType); ok {
+		// if either ti or other has defined SRID, then check SRID value; otherwise,
+		return (!ti.sqlMultiPolygonType.DefinedSRID && !o.sqlMultiPolygonType.DefinedSRID) || ti.sqlMultiPolygonType.SRID == o.sqlMultiPolygonType.SRID
+	}
+	return false
 }
 
 // FormatValue implements TypeInfo interface.
-func (ti *yearType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.Int); ok {
-		convVal, err := ti.ConvertNomsValueToValue(val)
-		if err != nil {
-			return nil, err
-		}
-		val, ok := convVal.(int16)
-		if !ok {
-			return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
-		}
-		res := strconv.FormatInt(int64(val), 10)
-		return &res, nil
+func (ti *multipolygonType) FormatValue(v types.Value) (*string, error) {
+	if val, ok := v.(types.MultiPolygon); ok {
+		resStr := string(types.SerializeMultiPolygon(val))
+		return &resStr, nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
+
+	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
 }
 
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *yearType) GetTypeIdentifier() Identifier {
-	return YearTypeIdentifier
+func (ti *multipolygonType) GetTypeIdentifier() Identifier {
+	return MultiPolygonTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *yearType) GetTypeParams() map[string]string {
-	return nil
+func (ti *multipolygonType) GetTypeParams() map[string]string {
+	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlMultiPolygonType.SRID), 10),
+		"DefinedSRID": strconv.FormatBool(ti.sqlMultiPolygonType.DefinedSRID)}
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *yearType) IsValid(v types.Value) bool {
-	if val, ok := v.(types.Int); ok {
-		_, err := ti.sqlYearType.Convert(int64(val))
-		if err != nil {
-			return false
-		}
+func (ti *multipolygonType) IsValid(v types.Value) bool {
+	if _, ok := v.(types.MultiPolygon); ok {
 		return true
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -130,30 +129,32 @@ func (ti *yearType) IsValid(v types.Value) bool {
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *yearType) NomsKind() types.NomsKind {
-	return types.IntKind
+func (ti *multipolygonType) NomsKind() types.NomsKind {
+	return types.MultiPolygonKind
 }
 
 // Promote implements TypeInfo interface.
-func (ti *yearType) Promote() TypeInfo {
-	return &yearType{ti.sqlYearType.Promote().(sql.YearType)}
+func (ti *multipolygonType) Promote() TypeInfo {
+	return &multipolygonType{ti.sqlMultiPolygonType.Promote().(sql.MultiPolygonType)}
 }
 
 // String implements TypeInfo interface.
-func (ti *yearType) String() string {
-	return "Year"
+func (ti *multipolygonType) String() string {
+	return "MultiPolygon"
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *yearType) ToSqlType() sql.Type {
-	return ti.sqlYearType
+func (ti *multipolygonType) ToSqlType() sql.Type {
+	return ti.sqlMultiPolygonType
 }
 
-// yearTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
-func yearTypeConverter(ctx context.Context, src *yearType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+// multipolygonTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func multipolygonTypeConverter(ctx context.Context, src *multipolygonType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			return types.Uint(0), nil
+		}, true, nil
 	case *blobStringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *boolType:
@@ -199,8 +200,30 @@ func yearTypeConverter(ctx context.Context, src *yearType, destTi TypeInfo) (tc 
 	case *varStringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *yearType:
-		return identityTypeConverter, false, nil
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	default:
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}
+}
+
+func CreateMultiPolygonTypeFromParams(params map[string]string) (TypeInfo, error) {
+	var (
+		err     error
+		sridVal uint64
+		def     bool
+	)
+	if s, ok := params["SRID"]; ok {
+		sridVal, err = strconv.ParseUint(s, 10, 32)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if d, ok := params["DefinedSRID"]; ok {
+		def, err = strconv.ParseBool(d)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &multipolygonType{sqlMultiPolygonType: sql.MultiPolygonType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }
