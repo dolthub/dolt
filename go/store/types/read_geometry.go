@@ -67,6 +67,14 @@ func ConvertTypesMultiLineStringToSQLMultiLineString(l MultiLineString) sql.Mult
 	return sql.MultiLineString{SRID: l.SRID, Lines: lines}
 }
 
+func ConvertTypesMultiPolygonToSQLMultiPolygon(p MultiPolygon) sql.MultiPolygon {
+	polys := make([]sql.Polygon, len(p.Polygons))
+	for i, p := range p.Polygons {
+		polys[i] = ConvertTypesPolygonToSQLPolygon(p)
+	}
+	return sql.MultiPolygon{SRID: p.SRID, Polygons: polys}
+}
+
 func ConvertSQLGeometryToTypesGeometry(p interface{}) Value {
 	switch inner := p.(type) {
 	case sql.Point:
@@ -79,6 +87,8 @@ func ConvertSQLGeometryToTypesGeometry(p interface{}) Value {
 		return ConvertSQLMultiPointToTypesMultiPoint(inner)
 	case sql.MultiLineString:
 		return ConvertSQLMultiLineStringToTypesMultiLineString(inner)
+	case sql.MultiPolygon:
+		return ConvertSQLMultiPolygonToTypesMultiPolygon(inner)
 	default:
 		panic("used an invalid type sql.Geometry.Inner")
 	}
@@ -118,6 +128,14 @@ func ConvertSQLMultiLineStringToTypesMultiLineString(p sql.MultiLineString) Mult
 		lines[i] = ConvertSQLLineStringToTypesLineString(l)
 	}
 	return MultiLineString{SRID: p.SRID, Lines: lines}
+}
+
+func ConvertSQLMultiPolygonToTypesMultiPolygon(p sql.MultiPolygon) MultiPolygon {
+	polys := make([]Polygon, len(p.Polygons))
+	for i, p := range p.Polygons {
+		polys[i] = ConvertSQLPolygonToTypesPolygon(p)
+	}
+	return MultiPolygon{SRID: p.SRID, Polygons: polys}
 }
 
 // TODO: all methods here just defer to their SQL equivalents, and assume we always receive good data
@@ -170,6 +188,14 @@ func DeserializeMLine(buf []byte, isBig bool, srid uint32) sql.MultiLineString {
 	return p
 }
 
+func DeserializeMPoly(buf []byte, isBig bool, srid uint32) sql.MultiPolygon {
+	p, err := sql.DeserializeMPoly(buf, isBig, srid)
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
+
 // TODO: noms needs results to be in types
 
 func DeserializeTypesPoint(buf []byte, isBig bool, srid uint32) Point {
@@ -190,4 +216,8 @@ func DeserializeTypesMPoint(buf []byte, isBig bool, srid uint32) MultiPoint {
 
 func DeserializeTypesMLine(buf []byte, isBig bool, srid uint32) MultiLineString {
 	return ConvertSQLMultiLineStringToTypesMultiLineString(DeserializeMLine(buf, isBig, srid))
+}
+
+func DeserializeTypesMPoly(buf []byte, isBig bool, srid uint32) MultiPolygon {
+	return ConvertSQLMultiPolygonToTypesMultiPolygon(DeserializeMPoly(buf, isBig, srid))
 }
