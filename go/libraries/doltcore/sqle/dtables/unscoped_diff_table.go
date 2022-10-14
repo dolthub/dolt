@@ -76,7 +76,6 @@ func (dt *UnscopedDiffTable) HandledFilters(filters []sql.Expression) []sql.Expr
 
 // WithFilters returns a new sql.Table instance with the filters applied
 func (dt *UnscopedDiffTable) WithFilters(ctx *sql.Context, filters []sql.Expression) sql.Table {
-	// We get filters that only have `commit_hash` column equals or inTuple filters.
 	dt.partitionFilters = FilterFilters(filters, ColumnPredicate(filterColumnNameSet))
 
 	if len(dt.partitionFilters) > 0 {
