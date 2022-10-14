@@ -368,7 +368,7 @@ func ordinalMappingsFromSchema(from sql.Schema, to schema.Schema) (km, vm val.Or
 func makeOrdinalMapping(from sql.Schema, to *schema.ColCollection) (m val.OrdinalMapping) {
 	m = make(val.OrdinalMapping, len(to.GetColumns()))
 	for i := range m {
-		name := to.GetAtIndex(i).Name
+		name := to.GetByIndex(i).Name
 		for j, col := range from {
 			if col.Name == name {
 				m[i] = j
