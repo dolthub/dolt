@@ -186,15 +186,19 @@ start_multi_db_server() {
 # stop_sql_server stops the SQL server. For cases where it's important
 # to wait for the process to exit after the kill signal (e.g. waiting
 # for an async replication push), pass 1.
+# kill the process if it's still running
 stop_sql_server() {
     wait=$1
     if [ ! -z "$SERVER_PID" ]; then
-      kill $SERVER_PID
-      if [ $wait ]; then
-          while ps -p $SERVER_PID > /dev/null; do
-              sleep .1;
-          done
-      fi;
+      serverpidinuse=$(lsof -i -P -n | grep LISTEN | grep $SERVER_PID | wc -l)
+      if [ $serverpidinuse -gt 0 ]; then
+        kill $SERVER_PID
+        if [ $wait ]; then
+            while ps -p $SERVER_PID > /dev/null; do
+                sleep .1;
+            done
+        fi;
+      fi
     fi
     SERVER_PID=
 }
@@ -253,10 +257,9 @@ definePORT() {
   do
     let getPORT="($$ + $i) % (65536-1024) + 1024"
     portinuse=$(lsof -i -P -n | grep LISTEN | grep $attemptedPORT | wc -l)
-      if [ $portinuse -eq 0 ]
-      then
-        echo "$getPORT"
-        break
-      fi
+    if [ $portinuse -eq 0 ]; then
+      echo "$getPORT"
+      break
+    fi
   done
 }
