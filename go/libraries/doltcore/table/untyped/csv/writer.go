@@ -95,7 +95,7 @@ func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 		if val == nil {
 			colValStrs[i] = nil
 		} else {
-			v, err := sqlutil.SqlColToStr(csvw.sch.GetAllCols().GetAtIndex(i).TypeInfo.ToSqlType(), val)
+			v, err := sqlutil.SqlColToStr(csvw.sch.GetAllCols().GetByIndex(i).TypeInfo.ToSqlType(), val)
 			if err != nil {
 				return err
 			}
@@ -114,7 +114,7 @@ func (csvw *CSVWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 		} else {
 			var v string
 			var err error
-			colType := csvw.sch.GetAllCols().GetAtIndex(i).TypeInfo.ToSqlType()
+			colType := csvw.sch.GetAllCols().GetByIndex(i).TypeInfo.ToSqlType()
 			// Due to BIT's unique output, we special-case writing the integer specifically for CSV
 			if _, ok := colType.(sql.BitType); ok {
 				v = strconv.FormatUint(val.(uint64), 10)

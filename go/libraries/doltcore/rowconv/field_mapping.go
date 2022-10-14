@@ -29,9 +29,6 @@ import (
 // ErrMappingFileRead is an error returned when a mapping file cannot be read
 var ErrMappingFileRead = errors.New("error reading mapping file")
 
-// ErrUnmarshallingMapping is an error used when a mapping file cannot be converted from json
-var ErrUnmarshallingMapping = errors.New("error unmarshalling mapping")
-
 // ErrEmptyMapping is an error returned when the mapping is empty (No src columns, no destination columns)
 var ErrEmptyMapping = errors.New("empty mapping error")
 
@@ -276,8 +273,8 @@ func TagMappingByTagAndName(srcSch, destSch schema.Schema) (*FieldMapping, error
 		if j == -1 {
 			continue
 		}
-		srcTag := srcSch.GetPKCols().GetAtIndex(i).Tag
-		dstTag := destSch.GetPKCols().GetAtIndex(j).Tag
+		srcTag := srcSch.GetPKCols().GetByIndex(i).Tag
+		dstTag := destSch.GetPKCols().GetByIndex(j).Tag
 		srcToDest[srcTag] = dstTag
 		successes++
 	}
@@ -285,8 +282,8 @@ func TagMappingByTagAndName(srcSch, destSch schema.Schema) (*FieldMapping, error
 		if j == -1 {
 			continue
 		}
-		srcTag := srcSch.GetNonPKCols().GetAtIndex(i).Tag
-		dstTag := destSch.GetNonPKCols().GetAtIndex(j).Tag
+		srcTag := srcSch.GetNonPKCols().GetByIndex(i).Tag
+		dstTag := destSch.GetNonPKCols().GetByIndex(j).Tag
 		srcToDest[srcTag] = dstTag
 		successes++
 	}

@@ -119,14 +119,61 @@ SQL
     dolt clone "file://./rem1/newdb" "dbs2/newdb"
 
     # this is a hack: we have to change our persisted global server
-    # vars for the sql command to work on the replica TODO: fix this
-    # mess
+    # vars for the sql command to work on the replica
+    # TODO: fix this mess
     dolt config --global --unset sqlserver.global.dolt_replicate_to_remote
     
     run dolt sql --data-dir=dbs2 -q "use newdb; show tables" -r csv
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "new_table" ]] || false
+}
+
+@test "replication-multidb: push newly cloned database" {
+    pushd .
+
+    mkdir -p "${TMPDIRS}/rem2"
+    # push all the dbs to remote1
+    for i in {1..3}; do
+        cd "${TMPDIRS}/dbs1/repo${i}"
+        dolt push remote1 main
+        # also create a new remote2 for each DB but don't push to it
+        dolt remote add remote2 "file://../../rem2/repo${i}"
+    done
+
+    popd
+
+    dolt config --global --add sqlserver.global.dolt_replicate_to_remote remote2
+    dolt sql -q "set @@persist.dolt_replication_remote_url_template = 'file://$TMPDIRS/rem2/{database}'"
+
+    mkdir -p "${TMPDIRS}/dbs2"
+    dolt sql --data-dir=dbs2 <<SQL
+call dolt_clone('file://${TMPDIRS}/rem1/repo1', 'repo1');
+use repo1;
+create table new_table (b int primary key);
+call dolt_commit('-Am', 'new table');
+call dolt_clone('file://${TMPDIRS}/rem1/repo2', 'repo2');
+SQL
+
+    mkdir -p "${TMPDIRS}/dbs3"
+    cd $TMPDIRS
+    dolt clone "file://./rem2/repo1" "dbs3/repo1"
+    dolt clone "file://./rem2/repo2" "dbs3/repo2"
+
+    # this is a hack: we have to change our persisted global server
+    # vars for the sql command to work on the replica
+    # TODO: fix this mess
+    dolt config --global --unset sqlserver.global.dolt_replicate_to_remote
+    
+    run dolt sql --data-dir=dbs3 -q "use repo1; show tables" -r csv
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "new_table" ]] || false
+
+    run dolt sql --data-dir=dbs3 -q "use repo2; show tables" -r csv
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ ! "$output" =~ "new_table" ]] || false
 }
 
 @test "replication-multidb: push newly created database with no commits" {

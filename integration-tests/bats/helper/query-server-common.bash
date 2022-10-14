@@ -113,7 +113,7 @@ wait_for_connection(port=int(port_str), timeout_ms=int(timeout_ms), database=dat
 
 start_sql_server() {
     DEFAULT_DB="$1"
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt &
     SERVER_PID=$!
     wait_for_connection $PORT 5000
@@ -124,7 +124,7 @@ start_sql_server() {
 # this func)
 start_sql_server_with_args() {
     DEFAULT_DB=""
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     dolt sql-server "$@" --port=$PORT &
     SERVER_PID=$!
     wait_for_connection $PORT 5000
@@ -132,7 +132,7 @@ start_sql_server_with_args() {
 
 start_sql_server_with_config() {
     DEFAULT_DB="$1"
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     echo "
 log_level: debug
 
@@ -155,7 +155,7 @@ behavior:
 
 start_sql_multi_user_server() {
     DEFAULT_DB="$1"
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     echo "
 log_level: debug
 
@@ -177,7 +177,7 @@ behavior:
 
 start_multi_db_server() {
     DEFAULT_DB="$1"
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --data-dir ./ &
     SERVER_PID=$!
     wait_for_connection $PORT 5000
@@ -186,15 +186,19 @@ start_multi_db_server() {
 # stop_sql_server stops the SQL server. For cases where it's important
 # to wait for the process to exit after the kill signal (e.g. waiting
 # for an async replication push), pass 1.
+# kill the process if it's still running
 stop_sql_server() {
     wait=$1
     if [ ! -z "$SERVER_PID" ]; then
-      kill $SERVER_PID
-      if [ $wait ]; then
-          while ps -p $SERVER_PID > /dev/null; do
-              sleep .1;
-          done
-      fi;
+      serverpidinuse=$(lsof -i -P -n | grep LISTEN | grep $SERVER_PID | wc -l)
+      if [ $serverpidinuse -gt 0 ]; then
+        kill $SERVER_PID
+        if [ $wait ]; then
+            while ps -p $SERVER_PID > /dev/null; do
+                sleep .1;
+            done
+        fi;
+      fi
     fi
     SERVER_PID=
 }
@@ -233,7 +237,7 @@ stop_sql_server() {
 #  * param7: Expected exception value of 1. Mutually exclusive with param6.
 #
 server_query() {
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     server_query_with_port "$PORT" "$@"
 }
 
@@ -245,4 +249,17 @@ server_query_with_port() {
     PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
     echo Executing server_query
     python3 -u -c "$PYTHON_QUERY_SCRIPT" -- "$PYTEST_DIR" "$1" "$PORT" "$2" "$3" "$4" "$5" "$6" "$7"
+}
+
+definePORT() {
+  getPORT=""
+  for i in {0..9}
+  do
+    let getPORT="($$ + $i) % (65536-1024) + 1024"
+    portinuse=$(lsof -i -P -n | grep LISTEN | grep $attemptedPORT | wc -l)
+    if [ $portinuse -eq 0 ]; then
+      echo "$getPORT"
+      break
+    fi
+  done
 }

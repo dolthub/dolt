@@ -7,7 +7,7 @@ setup() {
 
   dolt init
 
-  let PORT="$$ % (65536-1024) + 1024"
+  PORT=$( definePORT )
   USER="dolt"
   dolt sql-server --host 0.0.0.0 --port=$PORT --user=$USER --loglevel=trace &
   SERVER_PID=$!
