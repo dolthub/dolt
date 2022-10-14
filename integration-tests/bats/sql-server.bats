@@ -53,7 +53,7 @@ teardown() {
     cd repo1
     dolt sql -q "create user dolt@'%' identified by '123'"
 
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     dolt sql-server --port=$PORT --user dolt > log.txt 2>&1 &
     SERVER_PID=$!
     sleep 5
@@ -684,7 +684,7 @@ SQL
     skiponwindows "Missing dependencies"
     cd repo1
     dolt sql -q 'create table test (id int primary key)'
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     cat >config.yml <<EOF
 log_level: debug
 behavior:
@@ -731,7 +731,7 @@ END""")
     skiponwindows "Missing dependencies"
     cd repo1
     dolt sql -q 'create table test (id int primary key)'
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     cat >config.yml <<EOF
 log_level: debug
 user:
@@ -1156,7 +1156,7 @@ databases:
 @test "sql-server: sql-server locks database" {
     cd repo1
     start_sql_server
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     run dolt sql-server -P $PORT
     [ "$status" -eq 1 ]
 }
@@ -1164,7 +1164,7 @@ databases:
 @test "sql-server: multi dir sql-server locks out childen" {
     start_sql_server
     cd repo2
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     run dolt sql-server -P $PORT
     [ "$status" -eq 1 ]
 }
@@ -1173,7 +1173,7 @@ databases:
     cd repo2
     start_sql_server
     cd ..
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     run dolt sql-server -P $PORT
     [ "$status" -eq 1 ]
 }
@@ -1183,7 +1183,7 @@ databases:
     start_sql_server
     server_query repo1 1 dolt "" "create database newdb" ""
     cd newdb
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     run dolt sql-server -P $PORT
     [ "$status" -eq 1 ]
 }
@@ -1204,7 +1204,7 @@ databases:
     skiponwindows "unix socket is not available on Windows"
     cd repo2
     DEFAULT_DB="repo2"
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
 
     dolt sql-server --port $PORT --user dolt >> log.txt 2>&1 &
     SERVER_PID=$!
@@ -1228,7 +1228,7 @@ databases:
     skiponwindows "unix socket is not available on Windows"
     cd repo2
     DEFAULT_DB="repo2"
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
 
     dolt sql-server --port $PORT --user dolt --socket > log.txt 2>&1 &
     SERVER_PID=$!
@@ -1249,7 +1249,7 @@ databases:
     run pwd
     REPO_NAME=$output
 
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     dolt sql-server --port=$PORT --socket="$REPO_NAME/mysql.sock" --user dolt > log.txt 2>&1 &
     SERVER_PID=$!
     run wait_for_connection $PORT 5000
@@ -1264,7 +1264,7 @@ databases:
     skiponwindows "unix socket is not available on Windows"
     cd repo2
     DEFAULT_DB="repo2"
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
 
     echo "
 log_level: debug
@@ -1382,7 +1382,7 @@ s.close()
     run dolt init --new-format
     [ $status -eq 0 ]
 
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt &
     SERVER_PID=$! # will get killed by teardown_common
     sleep 5 # not using python wait so this works on windows
@@ -1420,6 +1420,11 @@ s.close()
 
     run grep "failed to access 'mydb2' database: can no longer find .dolt dir on disk" server_log.txt
     [ "${#lines[@]}" -eq 1 ]
+
+    # this tests fails sometimes as the server is stopped from the above error
+    # but stop_sql_server in teardown tries to kill process that is not running anymore,
+    # so start the server again, and it will be stopped in teardown
+    start_sql_server
 }
 
 @test "sql-server: dropping database that the server is running in should drop only the db itself not its nested dbs" {
