@@ -178,7 +178,7 @@ func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 			nillableBoolPtr(cfg.AllowCleartextPasswords()),
 			nillableStrPtr(cfg.Socket()),
 		},
-		DatabaseConfig:    nil,
+		DatabaseConfig: nil,
 	}
 }
 
