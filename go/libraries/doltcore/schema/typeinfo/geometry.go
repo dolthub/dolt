@@ -93,6 +93,10 @@ func (ti *geometryType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecRea
 		if val, err = reader.ReadMultiPolygon(); err != nil {
 			return nil, err
 		}
+	case types.GeometryCollectionKind:
+		if val, err = reader.ReadGeomColl(); err != nil {
+			return nil, err
+		}
 	case types.GeometryKind:
 		// Note: GeometryKind is no longer written
 		// included here for backward compatibility
