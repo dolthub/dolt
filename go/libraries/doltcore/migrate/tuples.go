@@ -284,6 +284,10 @@ func translateGeometryField(value types.Value, idx int, b *val.TupleBuilder) {
 		l := types.ConvertTypesMultiLineStringToSQLMultiLineString(value.(types.MultiLineString))
 		b.PutGeometry(idx, l.Serialize())
 
+	case types.MultiPolygonKind:
+		p := types.ConvertTypesMultiPolygonToSQLMultiPolygon(value.(types.MultiPolygon))
+		b.PutGeometry(idx, p.Serialize())
+
 	default:
 		panic(fmt.Sprintf("unexpected NomsKind for geometry (%d)", nk))
 	}

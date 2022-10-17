@@ -2110,7 +2110,7 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 			//TODO: use the primary key as-is
 			var refPkTags []uint64
 			for _, i := range refSch.GetPkOrdinals() {
-				refPkTags = append(refPkTags, refSch.GetAllCols().GetAtIndex(i).Tag)
+				refPkTags = append(refPkTags, refSch.GetAllCols().GetByIndex(i).Tag)
 			}
 
 			var colNames []string
@@ -2328,7 +2328,7 @@ func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, s
 			//TODO: use the primary key as-is
 			var refPkTags []uint64
 			for _, i := range refSch.GetPkOrdinals() {
-				refPkTags = append(refPkTags, refSch.GetAllCols().GetAtIndex(i).Tag)
+				refPkTags = append(refPkTags, refSch.GetAllCols().GetByIndex(i).Tag)
 			}
 
 			var colNames []string

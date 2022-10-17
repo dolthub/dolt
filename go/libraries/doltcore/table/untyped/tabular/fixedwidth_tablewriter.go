@@ -25,7 +25,6 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -166,10 +165,6 @@ func (w *FixedWidthTableWriter) WriteColoredRow(ctx context.Context, r sql.Row, 
 	}
 
 	return nil
-}
-
-func (w *FixedWidthTableWriter) WriteRow(ctx context.Context, r row.Row) error {
-	panic("unimplemented")
 }
 
 func (w *FixedWidthTableWriter) sampleRow(r sql.Row, colors []*color.Color) (tableRow, error) {

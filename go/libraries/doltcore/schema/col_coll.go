@@ -118,10 +118,6 @@ func (cc *ColCollection) GetColumns() []Column {
 	return colsCopy
 }
 
-func (cc *ColCollection) GetAtIndex(i int) Column {
-	return cc.cols[i]
-}
-
 // GetColumnNames returns a list of names of the columns.
 func (cc *ColCollection) GetColumnNames() []string {
 	names := make([]string, len(cc.cols))
@@ -177,7 +173,7 @@ func (cc *ColCollection) Iter(cb func(tag uint64, col Column) (stop bool, err er
 	return nil
 }
 
-// IterInSortOrder iterates over all the columns from lowest tag to highest tag.
+// IterInSortedOrder iterates over all the columns from lowest tag to highest tag.
 func (cc *ColCollection) IterInSortedOrder(cb func(tag uint64, col Column) (stop bool)) {
 	for _, tag := range cc.SortedTags {
 		val := cc.TagToCol[tag]
@@ -199,7 +195,7 @@ func (cc *ColCollection) GetByName(name string) (Column, bool) {
 	return InvalidCol, false
 }
 
-// GetByNameCaseInensitive takes the name of a column and returns the column and true if there is a column with that
+// GetByNameCaseInsensitive takes the name of a column and returns the column and true if there is a column with that
 // name ignoring case. Otherwise InvalidCol and false are returned. If multiple columns have the same case-insensitive
 // name, the first declared one is returned.
 func (cc *ColCollection) GetByNameCaseInsensitive(name string) (Column, bool) {
@@ -245,37 +241,13 @@ func ColCollsAreEqual(cc1, cc2 *ColCollection) bool {
 	if cc1.Size() != cc2.Size() {
 		return false
 	}
-
 	// Pks Cols need to be in the same order and equivalent.
 	for i := 0; i < cc1.Size(); i++ {
-		if !cc1.GetAtIndex(i).Equals(cc2.GetAtIndex(i)) {
+		if !cc1.cols[i].Equals(cc2.cols[i]) {
 			return false
 		}
 	}
-
 	return true
-}
-
-// ColCollsAreCompatible determines whether two ColCollections are compatible with each other. Compatible columns have
-// the same tags and storage types, but may have different names, constraints or SQL type parameters.
-func ColCollsAreCompatible(cc1, cc2 *ColCollection) bool {
-	if cc1.Size() != cc2.Size() {
-		return false
-	}
-
-	areCompatible := true
-	_ = cc1.Iter(func(tag uint64, col1 Column) (stop bool, err error) {
-		col2, ok := cc2.GetByTag(tag)
-
-		if !ok || !col1.Compatible(col2) {
-			areCompatible = false
-			return true, nil
-		}
-
-		return false, nil
-	})
-
-	return areCompatible
 }
 
 // MapColCollection applies a function to each column in a ColCollection and creates a new ColCollection from the results.

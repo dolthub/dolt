@@ -53,6 +53,7 @@ const (
 	PolygonTypeIdentifier         Identifier = "polygon"
 	MultiPointTypeIdentifier      Identifier = "multipoint"
 	MultiLineStringTypeIdentifier Identifier = "multilinestring"
+	MultiPolygonTypeIdentifier    Identifier = "multipolygon"
 )
 
 var Identifiers = map[Identifier]struct{}{
@@ -81,6 +82,7 @@ var Identifiers = map[Identifier]struct{}{
 	PolygonTypeIdentifier:         {},
 	MultiPointTypeIdentifier:      {},
 	MultiLineStringTypeIdentifier: {},
+	MultiPolygonTypeIdentifier:    {},
 }
 
 // TypeInfo is an interface used for encoding type information.
@@ -179,6 +181,8 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 			return &multipointType{}, nil
 		case sql.MultiLineStringType{}.String():
 			return &multilinestringType{}, nil
+		case sql.MultiPolygonType{}.String():
+			return &multipolygonType{}, nil
 		case sql.GeometryType{}.String():
 			return &geometryType{sqlGeometryType: sqlType.(sql.GeometryType)}, nil
 		default:
@@ -290,6 +294,8 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 		return CreateMultiPointTypeFromParams(params)
 	case MultiLineStringTypeIdentifier:
 		return CreateMultiLineStringTypeFromParams(params)
+	case MultiPolygonTypeIdentifier:
+		return CreateMultiPolygonTypeFromParams(params)
 	case SetTypeIdentifier:
 		return CreateSetTypeFromParams(params)
 	case TimeTypeIdentifier:
