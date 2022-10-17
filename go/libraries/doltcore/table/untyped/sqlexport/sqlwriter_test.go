@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/uuid"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -40,9 +40,7 @@ func (*StringBuilderCloser) Close() error {
 }
 
 func TestEndToEnd(t *testing.T) {
-	id := uuid.MustParse("00000000-0000-0000-0000-000000000000")
 	tableName := "people"
-
 	dropCreateStatement := sqlfmt.DropTableIfExistsStmt(tableName) + "\n" +
 		"CREATE TABLE `people` (\n" +
 		"  `id` varchar(16383) NOT NULL,\n" +
@@ -57,7 +55,7 @@ func TestEndToEnd(t *testing.T) {
 
 	type test struct {
 		name           string
-		rows           []row.Row
+		rows           []sql.Row
 		sch            schema.Schema
 		expectedOutput string
 	}
@@ -65,9 +63,10 @@ func TestEndToEnd(t *testing.T) {
 	tests := []test{
 		{
 			name: "two rows",
-			rows: rs(
-				dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie")),
-				dtestutils.NewTypedRow(id, "guy personson", 0, true, strPointer("officially a person"))),
+			rows: []sql.Row{
+				{"00000000-0000-0000-0000-000000000000", "some guy", 100, 0, "normie"},
+				{"00000000-0000-0000-0000-000000000000", "guy personson", 0, 1, "officially a person"},
+			},
 			sch: dtestutils.TypedSchema,
 			expectedOutput: dropCreateStatement + "\n" +
 				"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
@@ -112,7 +111,7 @@ func TestEndToEnd(t *testing.T) {
 			}
 
 			for _, r := range tt.rows {
-				assert.NoError(t, w.WriteRow(ctx, r))
+				assert.NoError(t, w.WriteSqlRow(ctx, r))
 			}
 
 			assert.NoError(t, w.Close(ctx))

@@ -24,12 +24,10 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const jsonHeader = `{"rows": [`
@@ -70,77 +68,6 @@ func NewJSONWriterWithHeader(wr io.WriteCloser, outSch schema.Schema, header, fo
 
 func (j *RowWriter) GetSchema() schema.Schema {
 	return j.sch
-}
-
-// WriteRow encodes the row given into JSON format and writes it, returning any error
-func (j *RowWriter) WriteRow(ctx context.Context, r row.Row) error {
-	if j.rowsWritten == 0 {
-		err := iohelp.WriteAll(j.bWr, []byte(j.header))
-		if err != nil {
-			return err
-		}
-	}
-
-	allCols := j.sch.GetAllCols()
-	colValMap := make(map[string]interface{}, allCols.Size())
-	if err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		val, ok := r.GetColVal(tag)
-		if !ok || types.IsNull(val) {
-			return false, nil
-		}
-
-		switch col.TypeInfo.GetTypeIdentifier() {
-		case typeinfo.DatetimeTypeIdentifier,
-			typeinfo.DecimalTypeIdentifier,
-			typeinfo.EnumTypeIdentifier,
-			typeinfo.InlineBlobTypeIdentifier,
-			typeinfo.SetTypeIdentifier,
-			typeinfo.TimeTypeIdentifier,
-			typeinfo.TupleTypeIdentifier,
-			typeinfo.UuidTypeIdentifier,
-			typeinfo.VarBinaryTypeIdentifier,
-			typeinfo.YearTypeIdentifier:
-			v, err := col.TypeInfo.FormatValue(val)
-			if err != nil {
-				return true, err
-			}
-			val = types.String(*v)
-
-		case typeinfo.BitTypeIdentifier,
-			typeinfo.BoolTypeIdentifier,
-			typeinfo.VarStringTypeIdentifier,
-			typeinfo.UintTypeIdentifier,
-			typeinfo.IntTypeIdentifier,
-			typeinfo.FloatTypeIdentifier:
-			// use primitive type
-		}
-
-		colValMap[col.Name] = val
-
-		return false, nil
-	}); err != nil {
-		return err
-	}
-
-	data, err := marshalToJson(colValMap)
-	if err != nil {
-		return errors.New("marshaling did not work")
-	}
-
-	if j.rowsWritten != 0 {
-		_, err := j.bWr.WriteString(j.separator)
-		if err != nil {
-			return err
-		}
-	}
-
-	newErr := iohelp.WriteAll(j.bWr, data)
-	if newErr != nil {
-		return newErr
-	}
-	j.rowsWritten++
-
-	return nil
 }
 
 func (j *RowWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {

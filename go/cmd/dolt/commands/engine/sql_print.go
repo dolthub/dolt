@@ -187,9 +187,8 @@ func secondsSince(start time.Time) float64 {
 // nullWriter is a no-op SqlRowWriter implementation
 type nullWriter struct{}
 
-func (n nullWriter) WriteRow(ctx context.Context, r row.Row) error    { return nil }
-func (n nullWriter) Close(ctx context.Context) error                  { return nil }
 func (n nullWriter) WriteSqlRow(ctx context.Context, r sql.Row) error { return nil }
+func (n nullWriter) Close(ctx context.Context) error                  { return nil }
 
 func printEmptySetResult(start time.Time) {
 	seconds := secondsSince(start)
