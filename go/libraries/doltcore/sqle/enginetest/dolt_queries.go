@@ -749,7 +749,7 @@ func makeLargeInsert(sz int) string {
 // DoltUserPrivTests are tests for Dolt-specific functionality that includes privilege checking logic.
 var DoltUserPrivTests = []queries.UserPrivilegeTest{
 	{
-		Name: "dolt_diff table function privilege checking",
+		Name: "table function privilege checking",
 		SetUpScript: []string{
 			"CREATE TABLE mydb.test (pk BIGINT PRIMARY KEY);",
 			"CREATE TABLE mydb.test2 (pk BIGINT PRIMARY KEY);",
@@ -772,6 +772,13 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff_summary('main~', 'main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// Without access to the database, dolt_log should fail with a database access error
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_log('main');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
@@ -845,6 +852,13 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
+				// After granting access to the entire db, dolt_log should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_log('main');",
+				Expected: []sql.Row{{4}},
+			},
+			{
 				// Revoke multi-table access
 				User:     "root",
 				Host:     "localhost",
@@ -863,6 +877,13 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff_summary('main~', 'main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// After revoking access, dolt_log should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_log('main');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
@@ -4914,6 +4935,92 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "select to_pk2a, to_pk2b, to_col1, from_pk1a, from_pk1b, from_col1, diff_type from dolt_diff('HEAD~', 'HEAD', 't2');",
 				Expected: []sql.Row{{1, 1, 100, 1, 1, 1, "modified"}},
+			},
+		},
+	},
+}
+
+var LogTableFunctionScriptTests = []queries.ScriptTest{
+	{
+		Name: "invalid arguments",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.')",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
+			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "SELECT * from dolt_log(@Commit1, 't');",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_log(null);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log(123);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:          "SELECT * from dolt_log('fake-branch');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:       "SELECT * from dolt_log(concat('fake', '-', 'branch'));",
+				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT * from dolt_log(hashof('main'));",
+				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT * from dolt_log(LOWER(@Commit2));",
+				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+			},
+		},
+	},
+	{
+		Name: "basic case with single table",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.')",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
+			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+
+			"call dolt_checkout('-b', 'new-branch')",
+			"insert into t values (3, 'three', 'four');",
+			"set @Commit3 = dolt_commit('-am', 'inserting into t again');",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT count(*) from dolt_log();",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main');",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log(@Commit1);",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log(@Commit2);",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log(@Commit3);",
+				Expected: []sql.Row{{5}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('new-branch');",
+				Expected: []sql.Row{{5}},
 			},
 		},
 	},
