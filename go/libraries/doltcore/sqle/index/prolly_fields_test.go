@@ -201,7 +201,7 @@ func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 
 func mustParseGeometryType(t *testing.T, s string) (v interface{}) {
 	// Determine type, and get data
-	geomType, data, err := function.ParseWKTHeader(s)
+	geomType, data, _, err := function.ParseWKTHeader(s)
 	require.NoError(t, err)
 
 	srid, order := uint32(0), false
