@@ -18,23 +18,9 @@ import (
 	"context"
 
 	"github.com/dolthub/go-mysql-server/sql"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 )
 
-// RowWriter knows how to write table rows to some destination
-type RowWriter interface {
-	// WriteRow writes a row to the destination of this writer
-	WriteRow(ctx context.Context, r row.Row) error
-}
-
-// TableWriteCloser is an interface for writing rows to a table, that can be closed
-type TableWriteCloser interface {
-	RowWriter
-	Closer
-}
-
 type SqlRowWriter interface {
-	TableWriteCloser
+	Closer
 	WriteSqlRow(ctx context.Context, r sql.Row) error
 }

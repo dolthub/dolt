@@ -23,7 +23,6 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
@@ -79,64 +78,6 @@ func OpenBatchedSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *do
 // GetSchema returns the schema of this TableWriter.
 func (w *BatchSqlExportWriter) GetSchema() schema.Schema {
 	return w.sch
-}
-
-// WriteRow will write a row to a table
-func (w *BatchSqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
-	if err := w.maybeWriteDropCreate(ctx); err != nil {
-		return err
-	}
-
-	// Previous write was last insert
-	if w.numInserts > 0 && r == nil {
-		return iohelp.WriteLine(w.wr, ";")
-	}
-
-	// Reached max number of inserts on one line
-	if w.numInserts == batchSize {
-		// Reset count
-		w.numInserts = 0
-
-		// End line
-		err := iohelp.WriteLine(w.wr, ";")
-		if err != nil {
-			return err
-		}
-	}
-
-	// Append insert values as tuples
-	var stmt string
-	if w.numInserts == 0 {
-		// Get insert prefix string
-		prefix, err := sqlfmt.InsertStatementPrefix(w.tableName, w.sch)
-		if err != nil {
-			return nil
-		}
-		// Write prefix
-		err = iohelp.WriteWithoutNewLine(w.wr, prefix)
-		if err != nil {
-			return nil
-		}
-	} else {
-		stmt = ", "
-	}
-
-	// Get insert tuple string
-	tuple, err := sqlfmt.RowAsTupleString(r, w.sch)
-	if err != nil {
-		return err
-	}
-
-	// Write insert tuple
-	err = iohelp.WriteWithoutNewLine(w.wr, stmt+tuple)
-	if err != nil {
-		return nil
-	}
-
-	// Increase count of inserts written on this line
-	w.numInserts++
-
-	return err
 }
 
 func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {

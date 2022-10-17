@@ -29,10 +29,10 @@ import (
 //
 // Returns a tuple: (number of rows written, number of errors ignored, error). In the case that err is non-nil, the
 // row counter fields in the tuple will be set to -1.
-func PipeRows(ctx context.Context, rd Reader, wr RowWriter, contOnBadRow bool) (int, int, error) {
+func PipeRows(ctx context.Context, rd SqlRowReader, wr SqlRowWriter, contOnBadRow bool) (int, int, error) {
 	var numBad, numGood int
 	for {
-		r, err := rd.ReadRow(ctx)
+		r, err := rd.ReadSqlRow(ctx)
 
 		if err != nil && err != io.EOF {
 			if IsBadRow(err) && contOnBadRow {
@@ -48,7 +48,7 @@ func PipeRows(ctx context.Context, rd Reader, wr RowWriter, contOnBadRow bool) (
 			return -1, -1, errors.New("reader returned nil row with err==nil")
 		}
 
-		err = wr.WriteRow(ctx, r)
+		err = wr.WriteSqlRow(ctx, r)
 
 		if err != nil {
 			return -1, -1, err
