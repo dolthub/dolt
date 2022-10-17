@@ -300,6 +300,8 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 		return CreateMultiLineStringTypeFromParams(params)
 	case MultiPolygonTypeIdentifier:
 		return CreateMultiPolygonTypeFromParams(params)
+	case GeometryCollectionTypeIdentifier:
+		return CreateGeomCollTypeFromParams(params)
 	case SetTypeIdentifier:
 		return CreateSetTypeFromParams(params)
 	case TimeTypeIdentifier:
