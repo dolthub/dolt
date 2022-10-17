@@ -73,3 +73,7 @@ func SerializeMultiLineString(p MultiLineString) []byte {
 func SerializeMultiPolygon(p MultiPolygon) []byte {
 	return ConvertTypesMultiPolygonToSQLMultiPolygon(p).Serialize()
 }
+
+func SerializeGeomColl(g GeomColl) []byte {
+	return ConvertTypesGeomCollToSQLGeomColl(g).Serialize()
+}
