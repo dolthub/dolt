@@ -17,12 +17,7 @@ package rowconv
 import (
 	"context"
 	"testing"
-	"time"
 
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -38,52 +33,6 @@ var srcCols = schema.NewColCollection(
 )
 
 var srcSch = schema.MustSchemaFromCols(srcCols)
-
-func TestRowConverter(t *testing.T) {
-	mapping, err := TypedToUntypedMapping(srcSch)
-
-	require.NoError(t, err)
-
-	vrw := types.NewMemoryValueStore()
-	rConv, err := NewRowConverter(context.Background(), vrw, mapping)
-
-	if err != nil {
-		t.Fatal("Error creating row converter")
-	}
-
-	id, _ := uuid.NewRandom()
-	tt := types.Timestamp(time.Now())
-	inRow, err := row.New(vrw.Format(), srcSch, row.TaggedValues{
-		0: types.UUID(id),
-		1: types.Float(1.25),
-		2: types.Uint(12345678),
-		3: types.Bool(true),
-		4: types.Int(-1234),
-		5: types.String("string string string"),
-		6: tt,
-	})
-
-	require.NoError(t, err)
-	outData, err := rConv.Convert(inRow)
-	require.NoError(t, err)
-
-	destSch := mapping.DestSch
-	expected, err := row.New(vrw.Format(), destSch, row.TaggedValues{
-		0: types.String(id.String()),
-		1: types.String("1.25"),
-		2: types.String("12345678"),
-		3: types.String("1"),
-		4: types.String("-1234"),
-		5: types.String("string string string"),
-		6: types.String(tt.String()),
-	})
-
-	require.NoError(t, err)
-
-	if !row.AreEqual(outData, expected, destSch) {
-		t.Error("\n", row.Fmt(context.Background(), expected, destSch), "!=\n", row.Fmt(context.Background(), outData, destSch))
-	}
-}
 
 func TestUnneccessaryConversion(t *testing.T) {
 	mapping, err := TagMapping(srcSch, srcSch)
