@@ -40,9 +40,9 @@ jobs:
         run: |
           changes=$(git status --porcelain)
           if [ ! -z "$changes" ]; then
-             echo "::set-output name=has-changes::true"
+             echo "has-changes=true" >> $GITHUB_OUTPUT
           fi
-      - uses: EndBug/add-and-commit@v7
+      - uses: EndBug/add-and-commit@v9.1.1
         if: ${{ steps.detect-changes.outputs.has-changes == 'true' }}
         with:
           message: "[ga-format-pr] Run go/utils/repofmt/format_repo.sh and go/Godeps/update.sh"

@@ -21,7 +21,7 @@ jobs:
           then
             version="${version:1}"
           fi
-          echo "::set-output name=version::$version"
+          echo "version=$version" >> $GITHUB_OUTPUT
 
   create-release:
     needs: format-version
@@ -42,7 +42,7 @@ jobs:
         env:
           FILE: ${{ format('{0}/docker/Dockerfile', github.workspace) }}
           NEW_VERSION: ${{ needs.format-version.outputs.version }}
-      - uses: EndBug/add-and-commit@v7
+      - uses: EndBug/add-and-commit@v9.1.1
         with:
           message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', needs.format-version.outputs.version) }}
           add: ${{ format('[{0}/go/cmd/dolt/dolt.go, {0}/docker/Dockerfile]', github.workspace) }}
@@ -51,7 +51,7 @@ jobs:
         id: build_binaries
         run: |
           latest=$(git rev-parse HEAD)
-          echo "::set-output name=commitish::$latest"
+          echo "commitish=$latest" >> $GITHUB_OUTPUT
           GO_BUILD_VERSION=1.19 go/utils/publishrelease/buildbinaries.sh
       - name: Create Release
         id: create_release
@@ -130,7 +130,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Upload MSI
-        uses: peter-evans/repository-dispatch@v1
+        uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: upload-msi
@@ -142,7 +142,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Release Notes
-        uses: peter-evans/repository-dispatch@v1
+        uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: release-notes
@@ -153,7 +153,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Bump Homebrew
-        uses: peter-evans/repository-dispatch@v1
+        uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: bump-homebrew
@@ -164,7 +164,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Performance Benchmarks
-        uses: peter-evans/repository-dispatch@v1
+        uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: release-dolt

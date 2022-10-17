@@ -40,7 +40,7 @@ jobs:
           fi
       - name: Configure AWS Credentials
         if: ${{ env.use_credentials == 'true' }}
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v1-node16
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -108,7 +108,7 @@ jobs:
           cd parquet-mr/parquet-cli
           mvn clean install -DskipTests
           runtime_jar="$(pwd)"/target/parquet-cli-1.13.0-SNAPSHOT-runtime.jar
-          echo "::set-output name=runtime_jar::$runtime_jar"
+          echo "runtime_jar=$runtime_jar" >> $GITHUB_OUTPUT
       - name: Check expect
         run: expect -v
       - name: Test all Unix

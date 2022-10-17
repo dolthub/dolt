@@ -18,7 +18,7 @@ jobs:
         run: |
           if [ "$REPO" == "go-mysql-server" ]
           then
-            echo "::set-output name=label::gms-bump"
+            echo "label=gms-bump" >> $GITHUB_OUTPUT
           else
             echo "$REPO is unsupported"
             exit 1
@@ -109,16 +109,16 @@ jobs:
         run: |
           if [ "${{ github.event.client_payload.assignee }}" == "zachmu" ]
           then
-            echo "::set-output name=reviewer::Hydrocharged"
+            echo "reviewer=Hydrocharged" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=reviewer::zachmu"
+            echo "reviewer=zachmu" >> $GITHUB_OUTPUT
           fi
       - name: Get short hash
         id: short-sha
         run: |
           commit=${{ github.event.client_payload.head_commit_sha }}
           short=${commit:0:8}
-          echo "::set-output name=short::$short"
+          echo "short=$short" >> $GITHUB_OUTPUT
       - name: Create and Push new branch
         run: |
           git config --global --add user.name "${{ github.event.client_payload.assignee }}"

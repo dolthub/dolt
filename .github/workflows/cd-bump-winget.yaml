@@ -28,7 +28,7 @@ jobs:
             version="${{ github.event.inputs.version }}"
           fi
 
-          echo "::set-output name=version::$version"
+          echo "version=$version" >> $GITHUB_OUTPUT
 
   winget-bump:
     needs: get-version
