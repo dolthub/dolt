@@ -50,49 +50,89 @@ type BinlogOverlay struct {
 	rows         []BinlogRow
 }
 
-// Serialize returns the Binlog as a byte slice. All encoded integers are big-endian.
-func (binlog *Binlog) Serialize() []byte {
+// NewAccessBinlog returns a new Binlog that represents the construction of the given Access values. May be used to
+// truncate the Binlog's history.
+func NewAccessBinlog(vals []AccessValue) *Binlog {
+	rows := make([]BinlogRow, len(vals))
+	for i, val := range vals {
+		rows[i] = BinlogRow{
+			IsInsert:    true,
+			Branch:      val.Branch,
+			User:        val.User,
+			Host:        val.Host,
+			Permissions: uint64(val.Permissions),
+		}
+	}
+	return &Binlog{
+		rows:    rows,
+		RWMutex: &sync.RWMutex{},
+	}
+}
+
+// NewNamespaceBinlog returns a new Binlog that represents the construction of the given Namespace values. May be used
+// to truncate the Binlog's history.
+func NewNamespaceBinlog(vals []NamespaceValue) *Binlog {
+	rows := make([]BinlogRow, len(vals))
+	for i, val := range vals {
+		rows[i] = BinlogRow{
+			IsInsert:    true,
+			Branch:      val.Branch,
+			User:        val.User,
+			Host:        val.Host,
+			Permissions: 0,
+		}
+	}
+	return &Binlog{
+		rows:    rows,
+		RWMutex: &sync.RWMutex{},
+	}
+}
+
+// Serialize returns the Binlog as a byte slice. Writes to the given buffer if one is provided, else allocates a
+// temporary buffer. All encoded integers are big-endian.
+func (binlog *Binlog) Serialize(buffer *bytes.Buffer) []byte {
 	binlog.RWMutex.RLock()
 	defer binlog.RWMutex.RUnlock()
 
-	buffer := bytes.Buffer{}
+	if buffer == nil {
+		buffer = &bytes.Buffer{}
+	}
 	// Write the version bytes
-	writeUint16(&buffer, currentBinlogVersion)
+	writeUint16(buffer, currentBinlogVersion)
 	// Write the number of entries
 	binlogSize := uint64(len(binlog.rows))
-	writeUint64(&buffer, binlogSize)
+	writeUint64(buffer, binlogSize)
 
 	// Write the rows
 	for _, binlogRow := range binlog.rows {
-		binlogRow.Serialize(&buffer)
+		binlogRow.Serialize(buffer)
 	}
 	return buffer.Bytes()
 }
 
 // Deserialize populates the binlog with the given data. Returns an error if the data cannot be deserialized, or if the
 // Binlog has already been written to. Deserialize must be called on an empty Binlog.
-func (binlog *Binlog) Deserialize(data []byte) error {
+func (binlog *Binlog) Deserialize(data []byte, position *uint64) error {
 	binlog.RWMutex.Lock()
 	defer binlog.RWMutex.Unlock()
 
 	if len(binlog.rows) != 0 {
 		return fmt.Errorf("cannot deserialize to a non-empty binlog")
 	}
-	position := uint64(0)
 	// Read the version
-	version := binary.BigEndian.Uint16(data)
-	position += 2
+	version := binary.BigEndian.Uint16(data[*position:])
+	*position += 2
 	if version != currentBinlogVersion {
 		// If we ever increment the binlog version, this will instead handle the conversion from previous versions
 		return fmt.Errorf(`cannot deserialize a binlog with version "%d"`, version)
 	}
 	// Read the number of entries
-	binlogSize := binary.BigEndian.Uint64(data[position:])
-	position += 8
+	binlogSize := binary.BigEndian.Uint64(data[*position:])
+	*position += 8
 	// Read the rows
 	binlog.rows = make([]BinlogRow, binlogSize)
 	for i := uint64(0); i < binlogSize; i++ {
-		binlog.rows[i], position = deserializeBinlogRow(data, position)
+		binlog.rows[i] = deserializeBinlogRow(data, position)
 	}
 	return nil
 }
@@ -152,6 +192,11 @@ func (binlog *Binlog) Delete(branch string, user string, host string, permission
 	})
 }
 
+// Rows returns the underlying rows.
+func (binlog *Binlog) Rows() []BinlogRow {
+	return binlog.rows
+}
+
 // Serialize writes the row to the given buffer. All encoded integers are big-endian.
 func (row *BinlogRow) Serialize(buffer *bytes.Buffer) {
 	// Write whether this was an insertion or deletion
@@ -176,36 +221,36 @@ func (row *BinlogRow) Serialize(buffer *bytes.Buffer) {
 	writeUint64(buffer, row.Permissions)
 }
 
-// deserializeBinlogRow returns a BinlogRow from the data at the given position. Also returns the new position. Assumes
-// that the given data's encoded integers are big-endian.
-func deserializeBinlogRow(data []byte, position uint64) (BinlogRow, uint64) {
+// deserializeBinlogRow returns a BinlogRow from the data at the given position. Assumes that the given data's encoded
+// integers are big-endian.
+func deserializeBinlogRow(data []byte, position *uint64) BinlogRow {
 	binlogRow := BinlogRow{}
 	// Read whether this was an insert or write
-	if data[position] == 1 {
+	if data[*position] == 1 {
 		binlogRow.IsInsert = true
 	} else {
 		binlogRow.IsInsert = false
 	}
-	position += 1
+	*position += 1
 	// Read the branch
-	branchLen := uint64(binary.BigEndian.Uint16(data[position:]))
-	position += 2
-	binlogRow.Branch = string(data[position : position+branchLen])
-	position += branchLen
+	branchLen := uint64(binary.BigEndian.Uint16(data[*position:]))
+	*position += 2
+	binlogRow.Branch = string(data[*position : *position+branchLen])
+	*position += branchLen
 	// Read the user
-	userLen := uint64(binary.BigEndian.Uint16(data[position:]))
-	position += 2
-	binlogRow.User = string(data[position : position+userLen])
-	position += userLen
+	userLen := uint64(binary.BigEndian.Uint16(data[*position:]))
+	*position += 2
+	binlogRow.User = string(data[*position : *position+userLen])
+	*position += userLen
 	// Read the host
-	hostLen := uint64(binary.BigEndian.Uint16(data[position:]))
-	position += 2
-	binlogRow.Host = string(data[position : position+hostLen])
-	position += hostLen
+	hostLen := uint64(binary.BigEndian.Uint16(data[*position:]))
+	*position += 2
+	binlogRow.Host = string(data[*position : *position+hostLen])
+	*position += hostLen
 	// Read the permissions
-	binlogRow.Permissions = binary.BigEndian.Uint64(data[position:])
-	position += 8
-	return binlogRow, position
+	binlogRow.Permissions = binary.BigEndian.Uint64(data[*position:])
+	*position += 8
+	return binlogRow
 }
 
 // Insert adds an insert entry to the BinlogOverlay.
@@ -236,6 +281,14 @@ func writeUint64(buffer *bytes.Buffer, val uint64) {
 	buffer.WriteByte(byte(val >> 48))
 	buffer.WriteByte(byte(val >> 40))
 	buffer.WriteByte(byte(val >> 32))
+	buffer.WriteByte(byte(val >> 24))
+	buffer.WriteByte(byte(val >> 16))
+	buffer.WriteByte(byte(val >> 8))
+	buffer.WriteByte(byte(val))
+}
+
+// writeUint32 writes an uint32 into the buffer.
+func writeUint32(buffer *bytes.Buffer, val uint32) {
 	buffer.WriteByte(byte(val >> 24))
 	buffer.WriteByte(byte(val >> 16))
 	buffer.WriteByte(byte(val >> 8))

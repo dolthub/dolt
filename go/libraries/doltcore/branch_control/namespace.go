@@ -15,9 +15,16 @@
 package branch_control
 
 import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
+)
+
+const (
+	currentNamespaceVersion = uint16(1)
 )
 
 // Namespace contains all of the expressions that comprise the "dolt_branch_namespace_control" table, which controls
@@ -46,6 +53,7 @@ type NamespaceValue struct {
 // newNamespace returns a new Namespace.
 func newNamespace(accessTbl *Access, superUser string, superHost string) *Namespace {
 	return &Namespace{
+		binlog:    NewNamespaceBinlog(nil),
 		access:    accessTbl,
 		Branches:  nil,
 		Users:     nil,
@@ -117,6 +125,64 @@ func (tbl *Namespace) Access() *Access {
 	return tbl.access
 }
 
+// Serialize writes the table to the given buffer. All encoded integers are big-endian.
+func (tbl *Namespace) Serialize(buffer *bytes.Buffer) {
+	tbl.RWMutex.RLock()
+	defer tbl.RWMutex.RUnlock()
+
+	// Write the version bytes
+	writeUint16(buffer, currentNamespaceVersion)
+	// Write the number of entries
+	numOfEntries := uint32(len(tbl.Values))
+	writeUint32(buffer, numOfEntries)
+
+	// Write the rows
+	for _, matchExpr := range tbl.Branches {
+		matchExpr.Serialize(buffer)
+	}
+	for _, matchExpr := range tbl.Users {
+		matchExpr.Serialize(buffer)
+	}
+	for _, matchExpr := range tbl.Hosts {
+		matchExpr.Serialize(buffer)
+	}
+	for _, val := range tbl.Values {
+		val.Serialize(buffer)
+	}
+	// Write the binlog
+	_ = tbl.binlog.Serialize(buffer)
+}
+
+// Deserialize populates the table with the given data. Returns an error if the data cannot be deserialized, or if the
+// table has already been written to. Deserialize must be called on an empty table.
+func (tbl *Namespace) Deserialize(data []byte, position *uint64) error {
+	tbl.RWMutex.Lock()
+	defer tbl.RWMutex.Unlock()
+
+	if len(tbl.Values) != 0 {
+		return fmt.Errorf("cannot deserialize to a non-empty namespace table")
+	}
+	// Read the version
+	version := binary.BigEndian.Uint16(data[*position:])
+	*position += 2
+	if version != currentNamespaceVersion {
+		// If we ever increment the namespace version, this will instead handle the conversion from previous versions
+		return fmt.Errorf(`cannot deserialize an namespace table with version "%d"`, version)
+	}
+	// Read the number of entries
+	numOfEntries := binary.BigEndian.Uint32(data[*position:])
+	*position += 4
+	// Read the rows
+	tbl.Branches = deserializeMatchExpressions(numOfEntries, data, position)
+	tbl.Users = deserializeMatchExpressions(numOfEntries, data, position)
+	tbl.Hosts = deserializeMatchExpressions(numOfEntries, data, position)
+	tbl.Values = make([]NamespaceValue, numOfEntries)
+	for i := uint32(0); i < numOfEntries; i++ {
+		tbl.Values[i] = deserializeNamespaceValue(data, position)
+	}
+	return tbl.binlog.Deserialize(data, position)
+}
+
 // filterBranches returns all branches that match the given collection indexes.
 func (tbl *Namespace) filterBranches(filters []uint32) []MatchExpression {
 	if len(filters) == 0 {
@@ -151,4 +217,42 @@ func (tbl *Namespace) filterHosts(filters []uint32) []MatchExpression {
 		matchExprs = append(matchExprs, tbl.Hosts[filter])
 	}
 	return matchExprs
+}
+
+// Serialize writes the value to the given buffer. All encoded integers are big-endian.
+func (val *NamespaceValue) Serialize(buffer *bytes.Buffer) {
+	// Write the branch
+	branchLen := uint16(len(val.Branch))
+	writeUint16(buffer, branchLen)
+	buffer.WriteString(val.Branch)
+	// Write the user
+	userLen := uint16(len(val.User))
+	writeUint16(buffer, userLen)
+	buffer.WriteString(val.User)
+	// Write the host
+	hostLen := uint16(len(val.Host))
+	writeUint16(buffer, hostLen)
+	buffer.WriteString(val.Host)
+}
+
+// deserializeNamespaceValue returns a NamespaceValue from the data at the given position. Also returns the new
+// position. Assumes that the given data's encoded integers are big-endian.
+func deserializeNamespaceValue(data []byte, position *uint64) NamespaceValue {
+	val := NamespaceValue{}
+	// Read the branch
+	branchLen := uint64(binary.BigEndian.Uint16(data[*position:]))
+	*position += 2
+	val.Branch = string(data[*position : *position+branchLen])
+	*position += branchLen
+	// Read the user
+	userLen := uint64(binary.BigEndian.Uint16(data[*position:]))
+	*position += 2
+	val.User = string(data[*position : *position+userLen])
+	*position += userLen
+	// Read the host
+	hostLen := uint64(binary.BigEndian.Uint16(data[*position:]))
+	*position += 2
+	val.Host = string(data[*position : *position+hostLen])
+	*position += hostLen
+	return val
 }

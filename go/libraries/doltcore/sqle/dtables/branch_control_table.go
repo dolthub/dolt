@@ -56,7 +56,7 @@ var accessSchema = sql.Schema{
 		PrimaryKey: true,
 	},
 	&sql.Column{
-		Name:       "branch_control.Permissions",
+		Name:       "permissions",
 		Type:       sql.MustCreateSetType(PermissionsStrings, sql.Collation_utf8mb4_0900_ai_ci),
 		Source:     AccessTableName,
 		PrimaryKey: false,
@@ -175,7 +175,7 @@ func (tbl BranchControlTable) Insert(ctx *sql.Context, row sql.Row) error {
 
 	// Verify that the lengths of each expression fit within an uint16
 	if len(branch) > math.MaxUint16 || len(user) > math.MaxUint16 || len(host) > math.MaxUint16 {
-		return fmt.Errorf("expressions are too long [%q, %q, %q]", branch, user, host)
+		return branch_control.ErrExpressionsTooLong.New(branch, user, host)
 	}
 
 	// A nil session means we're not in the SQL context, so we allow the insertion in such a case
@@ -187,9 +187,20 @@ func (tbl BranchControlTable) Insert(ctx *sql.Context, row sql.Row) error {
 		_, modPerms := tbl.Match(branch, insertUser, insertHost)
 		if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
 			permStr, _ := accessSchema[3].Type.(sql.SetType).BitsToString(uint64(perms))
-			return fmt.Errorf("`%s`@`%s` cannot add the row [%q, %q, %q, %q]",
-				insertUser, insertHost, branch, user, host, permStr)
+			return branch_control.ErrInsertingRow.New(insertUser, insertHost, branch, user, host, permStr)
 		}
+	}
+
+	// We check if we're inserting a subset of an already-existing row. If we are, we deny the insertion as the existing
+	// row will already match against ALL possible values for this row.
+	_, modPerms := tbl.Match(branch, user, host)
+	if modPerms&branch_control.Permissions_Admin == branch_control.Permissions_Admin {
+		permBits := uint64(modPerms)
+		permStr, _ := accessSchema[3].Type.(sql.SetType).BitsToString(permBits)
+		return sql.NewUniqueKeyErr(
+			fmt.Sprintf(`[%q, %q, %q, %q]`, branch, user, host, permStr),
+			true,
+			sql.Row{branch, user, host, permBits})
 	}
 
 	return tbl.insert(ctx, branch, user, host, perms)
@@ -211,7 +222,7 @@ func (tbl BranchControlTable) Update(ctx *sql.Context, old sql.Row, new sql.Row)
 
 	// Verify that the lengths of each expression fit within an uint16
 	if len(newBranch) > math.MaxUint16 || len(newUser) > math.MaxUint16 || len(newHost) > math.MaxUint16 {
-		return fmt.Errorf("expressions are too long [%q, %q, %q]", newBranch, newUser, newHost)
+		return branch_control.ErrExpressionsTooLong.New(newBranch, newUser, newHost)
 	}
 
 	// If we're not updating the same row, then we pre-emptively check for a row violation
@@ -234,15 +245,25 @@ func (tbl BranchControlTable) Update(ctx *sql.Context, old sql.Row, new sql.Row)
 		// determine if the user attempting the update has permission to perform the update on the old branch name.
 		_, modPerms := tbl.Match(oldBranch, insertUser, insertHost)
 		if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
-			return fmt.Errorf("`%s`@`%s` cannot update the row [%q, %q, %q]",
-				insertUser, insertHost, oldBranch, oldUser, oldHost)
+			return branch_control.ErrUpdatingRow.New(insertUser, insertHost, oldBranch, oldUser, oldHost)
 		}
 		// Now we check if the user has permission use the new branch name
 		_, modPerms = tbl.Match(newBranch, insertUser, insertHost)
 		if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
-			return fmt.Errorf("`%s`@`%s` cannot update the row [%q, %q, %q] to the new branch expression %q",
-				insertUser, insertHost, oldBranch, oldUser, oldHost, newBranch)
+			return branch_control.ErrUpdatingToRow.New(insertUser, insertHost, oldBranch, oldUser, oldHost, newBranch)
 		}
+	}
+
+	// We check if we're updating to a subset of an already-existing row. If we are, we deny the update as the existing
+	// row will already match against ALL possible values for this updated row.
+	_, modPerms := tbl.Match(newBranch, newUser, newHost)
+	if modPerms&branch_control.Permissions_Admin == branch_control.Permissions_Admin {
+		permBits := uint64(modPerms)
+		permStr, _ := accessSchema[3].Type.(sql.SetType).BitsToString(permBits)
+		return sql.NewUniqueKeyErr(
+			fmt.Sprintf(`[%q, %q, %q, %q]`, newBranch, newUser, newHost, permStr),
+			true,
+			sql.Row{newBranch, newUser, newHost, permBits})
 	}
 
 	if tblIndex := tbl.GetIndex(oldBranch, oldUser, oldHost); tblIndex != -1 {
@@ -263,11 +284,6 @@ func (tbl BranchControlTable) Delete(ctx *sql.Context, row sql.Row) error {
 	user := branch_control.FoldExpression(row[1].(string))
 	host := strings.ToLower(branch_control.FoldExpression(row[2].(string)))
 
-	// Verify that the lengths of each expression fit within an uint16
-	if len(branch) > math.MaxUint16 || len(user) > math.MaxUint16 || len(host) > math.MaxUint16 {
-		return fmt.Errorf("expressions are too long [%q, %q, %q]", branch, user, host)
-	}
-
 	// A nil session means we're not in the SQL context, so we allow the deletion in such a case
 	if branchAwareSession := branch_control.GetBranchAwareSession(ctx); branchAwareSession != nil {
 		insertUser := branchAwareSession.GetUser()
@@ -276,8 +292,7 @@ func (tbl BranchControlTable) Delete(ctx *sql.Context, row sql.Row) error {
 		// determine if the user attempting the deletion has permission to perform the deletion.
 		_, modPerms := tbl.Match(branch, insertUser, insertHost)
 		if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
-			return fmt.Errorf("`%s`@`%s` cannot delete the row [%q, %q, %q]",
-				insertUser, insertHost, branch, user, host)
+			return branch_control.ErrDeletingRow.New(insertUser, insertHost, branch, user, host)
 		}
 	}
 
@@ -286,8 +301,7 @@ func (tbl BranchControlTable) Delete(ctx *sql.Context, row sql.Row) error {
 
 // Close implements the interface sql.Closer.
 func (tbl BranchControlTable) Close(context *sql.Context) error {
-	//TODO: write the binlog
-	return nil
+	return branch_control.SaveData(context)
 }
 
 // insert adds the given branch, user, and host expression strings to the table. Assumes that the expressions have
