@@ -40,6 +40,84 @@ teardown() {
     [[ ! "$output" =~ "BRANCH1" ]] || false
 }
 
+@test "log: two dot log" {
+    dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "commit 1 MAIN"
+    dolt commit	--allow-empty -m "commit 2 MAIN"
+    dolt checkout -b branch1
+    dolt commit	--allow-empty -m "commit 1 BRANCH1"
+    dolt commit --allow-empty -m "commit 2 BRANCH1"
+    dolt commit --allow-empty -m "commit 3 BRANCH1"
+
+    run dolt log branch1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+    run dolt log main 
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "BRANCH1" ]] || false
+    dolt checkout main
+    dolt commit	--allow-empty -m "commit 3 AFTER"
+    
+    # Valid two dot
+    run dolt log main..branch1
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+    run dolt log ^main branch1
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+    run dolt log branch1 ^main
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+    run dolt log branch1 --not main
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+    run dolt log branch1..main
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ ! "$output" =~ "BRANCH1" ]] || false
+    run dolt log main..main
+    [ $status -eq 0 ]
+
+    # Invalid two dot
+    run dolt log main..branch1 testtable
+    [ $status -eq 1 ]
+    run dolt log testtable main..branch1 
+    [ $status -eq 1 ]
+    run dolt log ^main branch1 testtable
+    [ $status -eq 1 ]
+    run dolt log branch1 testtable --not main
+    [ $status -eq 1 ]
+    run dolt log main..branch1 main
+    [ $status -eq 1 ]
+     run dolt log main main..branch1
+    [ $status -eq 1 ]
+    run dolt log ^main ^branch1
+    [ $status -eq 1 ]
+    run dolt log main branch1
+    [ $status -eq 1 ]
+    run dolt log ^main testtable
+    [ $status -eq 1 ]
+    run dolt log ^branch1 --not main
+    [ $status -eq 1 ]
+    run dolt log main..branch1 --not main
+    [ $status -eq 1 ]
+
+    run dolt log main...branch1
+    [ $status -eq 1 ]
+}
+
 @test "log: with -n specified" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test

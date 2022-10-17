@@ -159,7 +159,7 @@ func newQueue() *q {
 //
 // Roughly mimics `git log main..feature`.
 func GetDotDotRevisions(ctx context.Context, includedDB *doltdb.DoltDB, includedHead hash.Hash, excludedDB *doltdb.DoltDB, excludedHead hash.Hash, num int) ([]*doltdb.Commit, error) {
-	commitList := make([]*doltdb.Commit, 0, num)
+	commitList := make([]*doltdb.Commit, 0)
 	q := newQueue()
 	if err := q.SetInvisible(ctx, excludedDB, excludedHead); err != nil {
 		return nil, err
