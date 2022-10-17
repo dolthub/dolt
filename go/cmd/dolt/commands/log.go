@@ -359,10 +359,6 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 	var commits []*doltdb.Commit
 	if opts.excludingCommitSpec == nil {
 		commits, err = commitwalk.GetTopNTopoOrderedCommitsMatching(ctx, dEnv.DoltDB, h, opts.numLines, matchFunc)
-		if err != nil {
-			cli.PrintErrln("Error retrieving commit.")
-			return 1
-		}
 	} else {
 		excludingCommit, err := dEnv.DoltDB.Resolve(ctx, opts.excludingCommitSpec, dEnv.RepoStateReader().CWBHeadRef())
 		if err != nil {
@@ -378,10 +374,11 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 		}
 
 		commits, err = commitwalk.GetDotDotRevisions(ctx, dEnv.DoltDB, h, dEnv.DoltDB, excludingHash, opts.numLines)
-		if err != nil {
-			cli.PrintErrln("Error retrieving commit.")
-			return 1
-		}
+	}
+
+	if err != nil {
+		cli.PrintErrln("Error retrieving commit.")
+		return 1
 	}
 
 	var commitsInfo []logNode
