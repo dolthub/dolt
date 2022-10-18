@@ -4983,7 +4983,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "basic case with single table",
+		Name: "basic case with one revision",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"call dolt_add('.')",
@@ -5021,6 +5021,45 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT count(*) from dolt_log('new-branch');",
 				Expected: []sql.Row{{5}},
+			},
+		},
+	},
+	{
+		Name: "basic case with one revision, row content",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.')",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
+			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+
+			"call dolt_checkout('-b', 'new-branch')",
+			"insert into t values (3, 'three', 'four');",
+			"set @Commit3 = dolt_commit('-am', 'inserting into t again', '--author', 'John Doe <johndoe@example.com>');",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT commit_hash = @Commit2, commit_hash = @Commit1, committer, email, message from dolt_log();",
+				Expected: []sql.Row{
+					{true, false, "billy bob", "bigbillieb@fake.horse", "inserting into t"},
+					{false, true, "billy bob", "bigbillieb@fake.horse", "creating table t"},
+					{false, false, "billy bob", "bigbillieb@fake.horse", "checkpoint enginetest database mydb"},
+					{false, false, "billy bob", "bigbillieb@fake.horse", "Initialize data repository"},
+				},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit2, committer, email, message from dolt_log('main') limit 1;",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t"}},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log('new-branch') limit 1;",
+				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "inserting into t again"}},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit1, committer, email, message from dolt_log(@Commit1) limit 1;",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "creating table t"}},
 			},
 		},
 	},
