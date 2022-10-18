@@ -778,6 +778,9 @@ func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
 
 // AutoIncrementSetter implements sql.AutoIncrementTable
 func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrementSetter {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return sqlutil.NewStaticErrorEditor(err)
+	}
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
 		return sqlutil.NewStaticErrorEditor(err)

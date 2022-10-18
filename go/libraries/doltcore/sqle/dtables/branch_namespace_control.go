@@ -164,7 +164,7 @@ func (tbl BranchNamespaceControlTable) Insert(ctx *sql.Context, row sql.Row) err
 
 	// Verify that the lengths of each expression fit within an uint16
 	if len(branch) > math.MaxUint16 || len(user) > math.MaxUint16 || len(host) > math.MaxUint16 {
-		return fmt.Errorf("expressions are too long [%q, %q, %q]", branch, user, host)
+		return branch_control.ErrExpressionsTooLong.New(branch, user, host)
 	}
 
 	// A nil session means we're not in the SQL context, so we allow the insertion in such a case
@@ -179,8 +179,7 @@ func (tbl BranchNamespaceControlTable) Insert(ctx *sql.Context, row sql.Row) err
 		// determine if the user attempting the insertion has permission to perform the insertion.
 		_, modPerms := tbl.Access().Match(branch, insertUser, insertHost)
 		if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
-			return fmt.Errorf("`%s`@`%s` cannot add the row [%q, %q, %q]",
-				insertUser, insertHost, branch, user, host)
+			return branch_control.ErrInsertingRow.New(insertUser, insertHost, branch, user, host)
 		}
 	}
 
@@ -202,7 +201,7 @@ func (tbl BranchNamespaceControlTable) Update(ctx *sql.Context, old sql.Row, new
 
 	// Verify that the lengths of each expression fit within an uint16
 	if len(newBranch) > math.MaxUint16 || len(newUser) > math.MaxUint16 || len(newHost) > math.MaxUint16 {
-		return fmt.Errorf("expressions are too long [%q, %q, %q]", newBranch, newUser, newHost)
+		return branch_control.ErrExpressionsTooLong.New(newBranch, newUser, newHost)
 	}
 
 	// If we're not updating the same row, then we pre-emptively check for a row violation
@@ -227,14 +226,12 @@ func (tbl BranchNamespaceControlTable) Update(ctx *sql.Context, old sql.Row, new
 		// determine if the user attempting the update has permission to perform the update on the old branch name.
 		_, modPerms := tbl.Access().Match(oldBranch, insertUser, insertHost)
 		if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
-			return fmt.Errorf("`%s`@`%s` cannot update the row [%q, %q, %q]",
-				insertUser, insertHost, oldBranch, oldUser, oldHost)
+			return branch_control.ErrUpdatingRow.New(insertUser, insertHost, oldBranch, oldUser, oldHost)
 		}
 		// Now we check if the user has permission use the new branch name
 		_, modPerms = tbl.Access().Match(newBranch, insertUser, insertHost)
 		if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
-			return fmt.Errorf("`%s`@`%s` cannot update the row [%q, %q, %q] to the new branch expression %q",
-				insertUser, insertHost, oldBranch, oldUser, oldHost, newBranch)
+			return branch_control.ErrUpdatingToRow.New(insertUser, insertHost, oldBranch, oldUser, oldHost, newBranch)
 		}
 	}
 
@@ -256,11 +253,6 @@ func (tbl BranchNamespaceControlTable) Delete(ctx *sql.Context, row sql.Row) err
 	user := branch_control.FoldExpression(row[1].(string))
 	host := strings.ToLower(branch_control.FoldExpression(row[2].(string)))
 
-	// Verify that the lengths of each expression fit within an uint16
-	if len(branch) > math.MaxUint16 || len(user) > math.MaxUint16 || len(host) > math.MaxUint16 {
-		return fmt.Errorf("expressions are too long [%q, %q, %q]", branch, user, host)
-	}
-
 	// A nil session means we're not in the SQL context, so we allow the deletion in such a case
 	if branchAwareSession := branch_control.GetBranchAwareSession(ctx); branchAwareSession != nil {
 		// Need to acquire a read lock on the Access table since we have to read from it
@@ -273,8 +265,7 @@ func (tbl BranchNamespaceControlTable) Delete(ctx *sql.Context, row sql.Row) err
 		// determine if the user attempting the deletion has permission to perform the deletion.
 		_, modPerms := tbl.Access().Match(branch, insertUser, insertHost)
 		if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
-			return fmt.Errorf("`%s`@`%s` cannot delete the row [%q, %q, %q]",
-				insertUser, insertHost, branch, user, host)
+			return branch_control.ErrDeletingRow.New(insertUser, insertHost, branch, user, host)
 		}
 	}
 
@@ -283,8 +274,7 @@ func (tbl BranchNamespaceControlTable) Delete(ctx *sql.Context, row sql.Row) err
 
 // Close implements the interface sql.Closer.
 func (tbl BranchNamespaceControlTable) Close(context *sql.Context) error {
-	//TODO: write the binlog
-	return nil
+	return branch_control.SaveData(context)
 }
 
 // insert adds the given branch, user, and host expression strings to the table. Assumes that the expressions have
@@ -306,6 +296,11 @@ func (tbl BranchNamespaceControlTable) insert(ctx context.Context, branch string
 	tbl.Branches = append(tbl.Branches, branch_control.MatchExpression{CollectionIndex: nextIdx, SortOrders: branchExpr})
 	tbl.Users = append(tbl.Users, branch_control.MatchExpression{CollectionIndex: nextIdx, SortOrders: userExpr})
 	tbl.Hosts = append(tbl.Hosts, branch_control.MatchExpression{CollectionIndex: nextIdx, SortOrders: hostExpr})
+	tbl.Values = append(tbl.Values, branch_control.NamespaceValue{
+		Branch: branch,
+		User:   user,
+		Host:   host,
+	})
 	return nil
 }
 

@@ -148,6 +148,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server. Defaults to `%d`.", serverConfig.MaxConnections()))
 	ap.SupportsString(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables. Defaults to `%s`.", serverConfig.PersistenceBehavior()))
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
+	ap.SupportsString(commands.BranchCtrlPathFlag, "", "branch control file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will only be created if there is a change to branch control permissions.")
 	ap.SupportsString(allowCleartextPasswordsFlag, "", "allow-cleartext-passwords", "Allows use of cleartext passwords. Defaults to false.")
 	ap.SupportsOptionalString(socketFlag, "", "socket file", "Path for the unix socket file. Defaults to '/tmp/mysql.sock'.")
 	ap.SupportsUint(remotesapiPortFlag, "", "remotesapi port", "Sets the port for a server which can expose the databases in this sql-server over remotesapi.")
@@ -325,6 +326,16 @@ func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config S
 			return err
 		}
 		serverConfig.withPrivilegeFilePath(path)
+	}
+
+	if branchControlFilePath, ok := apr.GetValue(commands.BranchCtrlPathFlag); ok {
+		serverConfig.withBranchControlFilePath(branchControlFilePath)
+	} else {
+		path, err := dEnv.FS.Abs(filepath.Join(cfgDirPath, commands.DefaultBranchCtrlName))
+		if err != nil {
+			return err
+		}
+		serverConfig.withBranchControlFilePath(path)
 	}
 
 	return nil
