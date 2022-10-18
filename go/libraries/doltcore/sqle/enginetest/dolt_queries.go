@@ -5472,6 +5472,7 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table droppedTable (a int primary key, b int, c int);",
 			"create table renamedEmptyTable (a int primary key, b int, c int);",
 			"call dolt_add('.')",
+			"insert into regularTable values (1, 2, 3), (2, 3, 4);",
 			"insert into droppedTable values (1, 2, 3), (2, 3, 4);",
 			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'));",
 
@@ -5484,12 +5485,40 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 			// changeSet: WORKING; data change: false; schema change: true
 			"rename table renamedEmptyTable to newRenamedEmptyTable",
 			// changeSet: WORKING; data change: true; schema change: false
-			"insert into regularTable values (1, 2, 3);",
+			"insert into regularTable values (3, 4, 5);",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF;",
 				Expected: []sql.Row{{7}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF WHERE commit_hash = @Commit1;",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT * FROM DOLT_DIFF WHERE commit_hash = @Commit1 AND committer <> 'billy bob';",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT commit_hash, committer FROM DOLT_DIFF WHERE commit_hash <> @Commit1 AND committer = 'billy bob' AND commit_hash NOT IN ('WORKING','STAGED');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash <> @Commit1 AND commit_hash NOT IN ('STAGED') ORDER BY table_name;",
+				Expected: []sql.Row{
+					{"WORKING", "newRenamedEmptyTable"},
+					{"WORKING", "regularTable"},
+				},
+			},
+			{
+				Query: "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash <> @Commit1 OR committer <> 'billy bob' ORDER BY table_name;",
+				Expected: []sql.Row{
+					{"STAGED", "addedTable"},
+					{"STAGED", "droppedTable"},
+					{"WORKING", "newRenamedEmptyTable"},
+					{"WORKING", "regularTable"},
+				},
 			},
 			{
 				Query: "SELECT * FROM DOLT_DIFF WHERE COMMIT_HASH in ('WORKING', 'STAGED') ORDER BY table_name;",
