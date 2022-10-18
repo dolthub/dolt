@@ -835,6 +835,9 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 	case "dolt_diff_summary":
 		dtf := &DiffSummaryTableFunction{}
 		return dtf, nil
+	case "dolt_log":
+		dtf := &LogTableFunction{}
+		return dtf, nil
 	}
 
 	return nil, sql.ErrTableFunctionNotFound.New(name)
