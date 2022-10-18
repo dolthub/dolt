@@ -15,7 +15,9 @@
 package branch_control
 
 import (
+	"bytes"
 	"context"
+	goerrors "errors"
 	"os"
 
 	"gopkg.in/src-d/go-errors.v1"
@@ -27,6 +29,11 @@ var (
 	ErrIncorrectPermissions = errors.NewKind("`%s`@`%s` does not have the correct permissions on branch `%s`")
 	ErrCannotCreateBranch   = errors.NewKind("`%s`@`%s` cannot create a branch named `%s`")
 	ErrCannotDeleteBranch   = errors.NewKind("`%s`@`%s` cannot delete the branch `%s`")
+	ErrExpressionsTooLong   = errors.NewKind("expressions are too long [%q, %q, %q]")
+	ErrInsertingRow         = errors.NewKind("`%s`@`%s` cannot add the row [%q, %q, %q, %q]")
+	ErrUpdatingRow          = errors.NewKind("`%s`@`%s` cannot update the row [%q, %q, %q]")
+	ErrUpdatingToRow        = errors.NewKind("`%s`@`%s` cannot update the row [%q, %q, %q] to the new branch expression %q")
+	ErrDeletingRow          = errors.NewKind("`%s`@`%s` cannot delete the row [%q, %q, %q]")
 )
 
 // Context represents the interface that must be inherited from the context.
@@ -41,6 +48,9 @@ type Context interface {
 type Controller struct {
 	Access    *Access
 	Namespace *Namespace
+
+	branchControlFilePath string
+	doltConfigDirPath     string
 }
 
 // TODO: delete me
@@ -56,20 +66,84 @@ func init() {
 
 // CreateController returns an empty *Controller.
 func CreateController(ctx context.Context) *Controller {
-	accessTbl := newAccess("", "")
-	return &Controller{
-		Access:    accessTbl,
-		Namespace: newNamespace(accessTbl, "", ""),
-	}
+	return CreateControllerWithSuperUser(ctx, "", "")
 }
 
 // CreateControllerWithSuperUser returns a controller with the given user and host set as an immutable super user.
 func CreateControllerWithSuperUser(ctx context.Context, superUser string, superHost string) *Controller {
+	//TODO: put in the context
 	accessTbl := newAccess(superUser, superHost)
 	return &Controller{
 		Access:    accessTbl,
 		Namespace: newNamespace(accessTbl, superUser, superHost),
 	}
+}
+
+// LoadData loads the data from the given location into the controller.
+func LoadData(ctx context.Context, branchControlFilePath string, doltConfigDirPath string) error {
+	//TODO: load into the context's controller
+	if !enabled {
+		return nil
+	}
+
+	// Do not attempt to load from an empty file path
+	if len(branchControlFilePath) == 0 {
+		return nil
+	}
+
+	StaticController.branchControlFilePath = branchControlFilePath
+	StaticController.doltConfigDirPath = doltConfigDirPath
+	data, err := os.ReadFile(branchControlFilePath)
+	if err != nil && !goerrors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	// Nothing to load so we can return
+	if len(data) == 0 {
+		return nil
+	}
+	position := uint64(0)
+	// The Deserialize functions acquire write locks, so we don't acquire them here
+	if err = StaticController.Access.Deserialize(data, &position); err != nil {
+		return err
+	}
+	if err = StaticController.Namespace.Deserialize(data, &position); err != nil {
+		return err
+	}
+	return nil
+}
+
+// SaveData saves the data from the context's controller to the location pointed by it.
+func SaveData(ctx context.Context) error {
+	//TODO: load from the context's controller
+	if !enabled {
+		return nil
+	}
+
+	// If we never set a save location then we just return
+	if len(StaticController.branchControlFilePath) == 0 {
+		return nil
+	}
+	// Create the doltcfg directory if it doesn't exist
+	if len(StaticController.doltConfigDirPath) != 0 {
+		if _, err := os.Stat(StaticController.doltConfigDirPath); os.IsNotExist(err) {
+			if mkErr := os.Mkdir(StaticController.doltConfigDirPath, 0777); mkErr != nil {
+				return mkErr
+			}
+		} else if err != nil {
+			return err
+		}
+	}
+	buffer := bytes.Buffer{}
+	// The Serialize functions acquire read locks, so we don't acquire them here
+	StaticController.Access.Serialize(&buffer)
+	StaticController.Namespace.Serialize(&buffer)
+	return os.WriteFile(StaticController.branchControlFilePath, buffer.Bytes(), 0777)
+}
+
+// Reset is a temporary function just for testing. Once the controller is in the context, this will be unnecessary.
+func Reset() {
+	//TODO: remove this once the controller is in the context
+	StaticController = CreateControllerWithSuperUser(context.Background(), StaticController.Access.SuperUser, StaticController.Access.SuperHost)
 }
 
 // CheckAccess returns whether the given context has the correct permissions on its selected branch. In general, SQL
@@ -91,10 +165,6 @@ func CheckAccess(ctx context.Context, flags Permissions) error {
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
-	// Check if the user is the super user, which has access to all operations
-	if user == StaticController.Access.SuperUser && host == StaticController.Access.SuperHost {
-		return nil
-	}
 	branch, err := branchAwareSession.GetBranch()
 	if err != nil {
 		return err
@@ -149,10 +219,6 @@ func CanDeleteBranch(ctx context.Context, branchName string) error {
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
-	// Check if the user is the super user, which is always able to delete branches
-	if user == StaticController.Access.SuperUser && host == StaticController.Access.SuperHost {
-		return nil
-	}
 	// Get the permissions for the branch, user, and host combination
 	_, perms := StaticController.Access.Match(branchName, user, host)
 	// If the user has the write or admin flags, then we allow access

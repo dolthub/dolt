@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -49,18 +50,19 @@ type SqlEngine struct {
 }
 
 type SqlEngineConfig struct {
-	InitialDb         string
-	IsReadOnly        bool
-	IsServerLocked    bool
-	DoltCfgDirPath    string
-	PrivFilePath      string
-	ServerUser        string
-	ServerPass        string
-	ServerHost        string
-	Autocommit        bool
-	Bulk              bool
-	JwksConfig        []JwksConfig
-	ClusterController *cluster.Controller
+	InitialDb          string
+	IsReadOnly         bool
+	IsServerLocked     bool
+	DoltCfgDirPath     string
+	PrivFilePath       string
+	BranchCtrlFilePath string
+	ServerUser         string
+	ServerPass         string
+	ServerHost         string
+	Autocommit         bool
+	Bulk               bool
+	JwksConfig         []JwksConfig
+	ClusterController  *cluster.Controller
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -120,6 +122,11 @@ func NewSqlEngine(
 	persister := mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
 	data, err := persister.LoadData()
 	if err != nil {
+		return nil, err
+	}
+
+	// Load the branch control permissions, if they exist
+	if err = branch_control.LoadData(sql.NewEmptyContext(), config.BranchCtrlFilePath, config.DoltCfgDirPath); err != nil {
 		return nil, err
 	}
 
