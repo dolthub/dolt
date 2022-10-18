@@ -4965,11 +4965,23 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
+				Query:       "SELECT * from dolt_log(null, '--not', null);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log(@Commit1, '--not', null);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
 				Query:       "SELECT * from dolt_log(123, @Commit1);",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
 				Query:       "SELECT * from dolt_log(@Commit1, 123);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log(@Commit1, '--not', 123);",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
@@ -4982,6 +4994,26 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:       "SELECT * from dolt_log(@Commit1, 'main..branch1');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('main..branch1', '--not', @Commit1);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('^main', '--not', @Commit1);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('main', '--not', '^branch1');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('main', '--not', 'main..branch1');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('^main', @Commit2, '--not', @Commit1);",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
@@ -5013,11 +5045,19 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				ExpectedErrStr: "branch not found: fake-branch",
 			},
 			{
+				Query:          "SELECT * from dolt_log('main', '--not', 'fake-branch');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
 				Query:       "SELECT * from dolt_log(concat('fake', '-', 'branch'));",
 				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
 			},
 			{
 				Query:       "SELECT * from dolt_log(hashof('main'));",
+				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT * from dolt_log(@Commit3, '--not', hashof('main'));",
 				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
 			},
 			{
@@ -5098,6 +5138,10 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{2}},
 			},
 			{
+				Query:    "SELECT count(*) from dolt_log('new-branch', '--not', 'main');",
+				Expected: []sql.Row{{2}},
+			},
+			{
 				Query:    "SELECT count(*) from dolt_log('new-branch', '^main');",
 				Expected: []sql.Row{{2}},
 			},
@@ -5106,7 +5150,19 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
+				Query:    "SELECT count(*) from dolt_log('main', '--not', 'new-branch');",
+				Expected: []sql.Row{{1}},
+			},
+			{
 				Query:    "SELECT count(*) from dolt_log('^main', 'main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main..main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main', '--not', 'main');",
 				Expected: []sql.Row{{0}},
 			},
 			{
@@ -5120,6 +5176,14 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT count(*) from dolt_log('^new-branch', @Commit5);",
 				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log(@Commit3, '--not', @Commit2);",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log(@Commit4, '--not', @Commit2);",
+				Expected: []sql.Row{{2}},
 			},
 		},
 	},
@@ -5198,6 +5262,13 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
+				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('new-branch', '--not', 'main');",
+				Expected: []sql.Row{
+					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
+					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
+				},
+			},
+			{
 				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('new-branch', '^main');",
 				Expected: []sql.Row{
 					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
@@ -5217,11 +5288,23 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"}},
 			},
 			{
+				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log( 'main', '--not', 'main~');",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"}},
+			},
+			{
 				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log('^main', @Commit3);",
 				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "inserting into t 3"}},
 			},
 			{
+				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log(@Commit3, '--not', @Commit2);",
+				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "inserting into t 3"}},
+			},
+			{
 				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log('^new-branch', @Commit5);",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"}},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log(@Commit5, '--not', @Commit4);",
 				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"}},
 			},
 		},
