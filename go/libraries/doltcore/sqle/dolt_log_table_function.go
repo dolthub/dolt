@@ -179,13 +179,15 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		}
 
 		commit, err = sqledb.GetDoltDB().Resolve(ctx, cs, nil)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		// If commitExpr not defined, use session head
 		commit, err = sess.GetHeadCommit(ctx, sqledb.name)
-	}
-
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return NewLogTableFunctionRowIter(ctx, sqledb.GetDoltDB(), commit)
