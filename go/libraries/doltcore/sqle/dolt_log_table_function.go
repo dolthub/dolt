@@ -29,8 +29,8 @@ var _ sql.TableFunction = (*LogTableFunction)(nil)
 type LogTableFunction struct {
 	ctx *sql.Context
 
-	commitExpr sql.Expression
-	database   sql.Database
+	revisionExpr sql.Expression
+	database     sql.Database
 }
 
 var logTableSchema = sql.Schema{
@@ -74,16 +74,16 @@ func (ltf *LogTableFunction) FunctionName() string {
 
 // Resolved implements the sql.Resolvable interface
 func (ltf *LogTableFunction) Resolved() bool {
-	if ltf.commitExpr != nil {
-		return ltf.commitExpr.Resolved()
+	if ltf.revisionExpr != nil {
+		return ltf.revisionExpr.Resolved()
 	}
 	return true
 }
 
 // String implements the Stringer interface
 func (ltf *LogTableFunction) String() string {
-	if ltf.commitExpr != nil {
-		return fmt.Sprintf("DOLT_LOG(%s)", ltf.commitExpr.String())
+	if ltf.revisionExpr != nil {
+		return fmt.Sprintf("DOLT_LOG(%s)", ltf.revisionExpr.String())
 	}
 	return "DOLT_LOG()"
 }
@@ -124,8 +124,8 @@ func (ltf *LogTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.Pri
 // Expressions implements the sql.Expressioner interface.
 func (ltf *LogTableFunction) Expressions() []sql.Expression {
 	exprs := []sql.Expression{}
-	if ltf.commitExpr != nil {
-		exprs = append(exprs, ltf.commitExpr)
+	if ltf.revisionExpr != nil {
+		exprs = append(exprs, ltf.revisionExpr)
 	}
 	return exprs
 }
@@ -144,13 +144,13 @@ func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.
 
 	exLen := len(expression)
 	if exLen == 1 {
-		ltf.commitExpr = expression[0]
+		ltf.revisionExpr = expression[0]
 	}
 
 	// validate the expressions
-	if ltf.commitExpr != nil {
-		if !sql.IsText(ltf.commitExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.commitExpr.String())
+	if ltf.revisionExpr != nil {
+		if !sql.IsText(ltf.revisionExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr.String())
 		}
 	}
 
@@ -159,7 +159,7 @@ func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.
 
 // RowIter implements the sql.Node interface
 func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
-	commitVal, err := ltf.evaluateArguments()
+	revisionVal, err := ltf.evaluateArguments()
 	if err != nil {
 		return nil, err
 	}
@@ -172,8 +172,8 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 	sess := dsess.DSessFromSess(ctx.Session)
 	var commit *doltdb.Commit
 
-	if ltf.commitExpr != nil {
-		cs, err := doltdb.NewCommitSpec(commitVal)
+	if ltf.revisionExpr != nil {
+		cs, err := doltdb.NewCommitSpec(revisionVal)
 		if err != nil {
 			return nil, err
 		}
@@ -183,7 +183,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 			return nil, err
 		}
 	} else {
-		// If commitExpr not defined, use session head
+		// If revisionExpr not defined, use session head
 		commit, err = sess.GetHeadCommit(ctx, sqledb.name)
 		if err != nil {
 			return nil, err
@@ -193,22 +193,22 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 	return NewLogTableFunctionRowIter(ctx, sqledb.GetDoltDB(), commit)
 }
 
-// evaluateArguments returns commitValStr.
+// evaluateArguments returns revisionValStr.
 // It evaluates the argument expressions to turn them into values this LogTableFunction
 // can use. Note that this method only evals the expressions, and doesn't validate the values.
 func (ltf *LogTableFunction) evaluateArguments() (string, error) {
-	if ltf.commitExpr != nil {
-		commitVal, err := ltf.commitExpr.Eval(ltf.ctx, nil)
+	if ltf.revisionExpr != nil {
+		revisionVal, err := ltf.revisionExpr.Eval(ltf.ctx, nil)
 		if err != nil {
 			return "", err
 		}
 
-		commitValStr, ok := commitVal.(string)
+		revisionValStr, ok := revisionVal.(string)
 		if !ok {
-			return "", fmt.Errorf("received '%v' when expecting commit hash string", commitVal)
+			return "", fmt.Errorf("received '%v' when expecting revision string", revisionVal)
 		}
 
-		return commitValStr, nil
+		return revisionValStr, nil
 	}
 
 	return "", nil
