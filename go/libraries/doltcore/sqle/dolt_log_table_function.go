@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
@@ -143,7 +144,7 @@ func (ltf *LogTableFunction) Expressions() []sql.Expression {
 
 // WithExpressions implements the sql.Expressioner interface.
 func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
-	if len(expression) < 0 || len(expression) > 2 {
+	if len(expression) > 2 {
 		return nil, sql.ErrInvalidArgumentNumber.New(ltf.FunctionName(), "0 to 2", len(expression))
 	}
 
@@ -168,35 +169,41 @@ func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.
 	return ltf, nil
 }
 
+func (ltf *LogTableFunction) invalidArgDetailsErr(expr sql.Expression, reason string) *errors.Error {
+	return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), fmt.Sprintf("%s - %s", expr.String(), reason))
+}
+
 func (ltf *LogTableFunction) validateRevisionExpressions() error {
 	if ltf.revisionExpr != nil {
 		if !sql.IsText(ltf.revisionExpr.Type()) {
 			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr.String())
 		}
-		// Second revision must exist if first revision contains '^'
 		if ltf.secondRevisionExpr == nil && strings.Contains(ltf.revisionExpr.String(), "^") {
-			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr.String())
+			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "second revision must exist if first revision contains '^'")
+		}
+		if strings.Contains(ltf.revisionExpr.String(), "..") && strings.Contains(ltf.revisionExpr.String(), "^") {
+			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "revision cannot contain both '..' and '^'")
 		}
 	}
 
 	if ltf.secondRevisionExpr != nil {
-		// Neither revision expression can contain '..' if two revisions provided
-		if !sql.IsText(ltf.secondRevisionExpr.Type()) || strings.Contains(ltf.secondRevisionExpr.String(), "..") {
+		if !sql.IsText(ltf.secondRevisionExpr.Type()) {
 			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.secondRevisionExpr.String())
 		}
+		if strings.Contains(ltf.secondRevisionExpr.String(), "..") {
+			return ltf.invalidArgDetailsErr(ltf.secondRevisionExpr, "second revision cannot contain '..'")
+		}
 		if strings.Contains(ltf.revisionExpr.String(), "..") {
-			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr)
+			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "revision cannot contain '..' if second revision exists")
 		}
 	}
 
 	if ltf.revisionExpr != nil && ltf.secondRevisionExpr != nil {
-		// Both revisions cannot contain '^'
 		if strings.Contains(ltf.revisionExpr.String(), "^") && strings.Contains(ltf.secondRevisionExpr.String(), "^") {
-			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr)
+			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "both revisions cannot contain '^'")
 		}
-		// One revision must contain '^'
 		if !strings.Contains(ltf.revisionExpr.String(), "^") && !strings.Contains(ltf.secondRevisionExpr.String(), "^") {
-			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr)
+			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "one revision must contain '^' if two revisions provided")
 		}
 	}
 
