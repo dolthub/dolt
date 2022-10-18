@@ -27,7 +27,7 @@ import (
 // GeomColl is a Noms Value wrapper around a string.
 type GeomColl struct {
 	SRID       uint32
-	Geometries []Value // not sure if worth replacing with types version of sql.GeometryValue
+	Geometries []Value
 }
 
 // Value interface
