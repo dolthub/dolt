@@ -4972,24 +4972,40 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Query:       "SELECT * from dolt_log(@Commit1, 123);",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
-			// {
-			// 	Query:       "SELECT * from dolt_log(@Commit1..@Commit2, @Commit1);",
-			// 	ExpectedErr: sql.ErrInvalidArgumentDetails,
-			// },
-			// {
-			// 	Query:       "SELECT * from dolt_log(@Commit1, @Commit1..@Commit2);",
-			// 	ExpectedErr: sql.ErrInvalidArgumentDetails,
-			// },
+			{
+				Query:       "SELECT * from dolt_log('main..branch1', @Commit1);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log(@Commit1, 'main..branch1');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
 			{
 				Query:       "SELECT * from dolt_log(@Commit1, @Commit2);",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
-			// {
-			// 	Query:       "SELECT * from dolt_log(^@Commit1, ^@Commit2);",
-			// 	ExpectedErr: sql.ErrInvalidArgumentDetails,
-			// },
+			{
+				Query:       "SELECT * from dolt_log('^main', '^branch1');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('^main');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
 			{
 				Query:          "SELECT * from dolt_log('fake-branch');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:          "SELECT * from dolt_log('^fake-branch', 'main');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:          "SELECT * from dolt_log('fake-branch', '^main');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:          "SELECT * from dolt_log('main..fake-branch');",
 				ExpectedErrStr: "branch not found: fake-branch",
 			},
 			{
@@ -5046,9 +5062,64 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Query:    "SELECT count(*) from dolt_log('new-branch');",
 				Expected: []sql.Row{{5}},
 			},
+		},
+	},
+	{
+		Name: "basic case with more than one revision or revision range",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.');",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
+			"set @Commit2 = dolt_commit('-am', 'inserting into t 2');",
+
+			"call dolt_checkout('-b', 'new-branch');",
+			"insert into t values (3, 'three', 'four');",
+			"set @Commit3 = dolt_commit('-am', 'inserting into t 3');",
+			"insert into t values (4, 'four', 'five');",
+			"set @Commit4 = dolt_commit('-am', 'inserting into t 4');",
+
+			"call dolt_checkout('main');",
+			"insert into t values (5, 'five', 'six');",
+			"set @Commit5 = dolt_commit('-am', 'inserting into t 5');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT count(*) from dolt_log('^main', 'new-branch');",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main..new-branch');",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('new-branch', '^main');",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('^new-branch', 'main');",
 				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('^main', 'main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('^main~', 'main');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('^main', @Commit3);",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('^new-branch', @Commit5);",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main..new-branch');",
+				Expected: []sql.Row{{2}},
 			},
 		},
 	},

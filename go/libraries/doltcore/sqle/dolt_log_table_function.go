@@ -161,35 +161,46 @@ func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.
 		ltf.secondRevisionExpr = expression[1]
 	}
 
-	// validate the expressions
+	if err := ltf.validateRevisionExpressions(); err != nil {
+		return nil, err
+	}
+
+	return ltf, nil
+}
+
+func (ltf *LogTableFunction) validateRevisionExpressions() error {
 	if ltf.revisionExpr != nil {
 		if !sql.IsText(ltf.revisionExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr.String())
+			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr.String())
+		}
+		// Second revision must exist if first revision contains '^'
+		if ltf.secondRevisionExpr == nil && strings.Contains(ltf.revisionExpr.String(), "^") {
+			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr.String())
 		}
 	}
 
 	if ltf.secondRevisionExpr != nil {
 		// Neither revision expression can contain '..' if two revisions provided
 		if !sql.IsText(ltf.secondRevisionExpr.Type()) || strings.Contains(ltf.secondRevisionExpr.String(), "..") {
-			return nil, sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.secondRevisionExpr.String())
+			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.secondRevisionExpr.String())
 		}
 		if strings.Contains(ltf.revisionExpr.String(), "..") {
-			return nil, sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr)
+			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr)
 		}
 	}
 
 	if ltf.revisionExpr != nil && ltf.secondRevisionExpr != nil {
 		// Both revisions cannot contain '^'
 		if strings.Contains(ltf.revisionExpr.String(), "^") && strings.Contains(ltf.secondRevisionExpr.String(), "^") {
-			return nil, sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr)
+			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr)
 		}
 		// One revision must contain '^'
 		if !strings.Contains(ltf.revisionExpr.String(), "^") && !strings.Contains(ltf.secondRevisionExpr.String(), "^") {
-			return nil, sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr)
+			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr)
 		}
 	}
 
-	return ltf, nil
+	return nil
 }
 
 // RowIter implements the sql.Node interface
@@ -275,26 +286,26 @@ func (ltf *LogTableFunction) evaluateArguments() (string, string, error) {
 
 // Gets revisionName and/or excludingRevisionName from sql expression
 func getRevisionsFromExpr(ctx *sql.Context, expr sql.Expression, canDot bool) (string, string, error) {
-	commitVal, err := expr.Eval(ctx, nil)
+	revisionVal, err := expr.Eval(ctx, nil)
 	if err != nil {
 		return "", "", err
 	}
 
-	commitValStr, ok := commitVal.(string)
+	revisionValStr, ok := revisionVal.(string)
 	if !ok {
-		return "", "", fmt.Errorf("received '%v' when expecting revision string", commitVal)
+		return "", "", fmt.Errorf("received '%v' when expecting revision string", revisionVal)
 	}
 
-	if canDot && strings.Contains(commitValStr, "..") {
-		refs := strings.Split(commitValStr, "..")
+	if canDot && strings.Contains(revisionValStr, "..") {
+		refs := strings.Split(revisionValStr, "..")
 		return refs[1], refs[0], nil
 	}
 
-	if strings.Contains(commitValStr, "^") {
-		return "", strings.TrimPrefix(commitValStr, "^"), nil
+	if strings.Contains(revisionValStr, "^") {
+		return "", strings.TrimPrefix(revisionValStr, "^"), nil
 	}
 
-	return commitValStr, "", nil
+	return revisionValStr, "", nil
 }
 
 //------------------------------------
@@ -348,7 +359,7 @@ func NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, comm
 		return nil, err
 	}
 
-	exHash, err := commit.HashOf()
+	exHash, err := excludingCommit.HashOf()
 	if err != nil {
 		return nil, err
 	}

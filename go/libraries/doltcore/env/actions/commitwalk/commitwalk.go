@@ -346,9 +346,11 @@ func (i *dotDotCommiterator) Next(ctx context.Context) (hash.Hash, *doltdb.Commi
 			}
 		}
 
+		// If not invisible, return commit. Otherwise get next commit
 		if !nextC.invisible {
 			return nextC.hash, nextC.commit, nil
 		}
+		return i.Next(ctx)
 	}
 
 	return hash.Hash{}, nil, io.EOF
