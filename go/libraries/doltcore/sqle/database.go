@@ -508,7 +508,7 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 		return nil, nil, err
 	}
 
-	cmItr, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash)
+	cmItr, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash, nil)
 	if err != nil {
 		return nil, nil, err
 	}

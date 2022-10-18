@@ -4973,6 +4973,14 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
+				Query:       "SELECT * from dolt_log(@Commit1, '--min-parents', null);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log(@Commit1, '--min-parents', 123);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
 				Query:       "SELECT * from dolt_log(123, @Commit1);",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
@@ -5306,6 +5314,61 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log(@Commit5, '--not', @Commit4);",
 				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"}},
+			},
+		},
+	},
+	{
+		Name: "min parents",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int);",
+			"call dolt_add('.')",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"call dolt_checkout('-b', 'branch1')",
+			"insert into t values(0,0);",
+			"set @Commit2 = dolt_commit('-am', 'inserting 0,0');",
+
+			"call dolt_checkout('main')",
+			"call dolt_checkout('-b', 'branch2')",
+			"insert into t values(1,1);",
+			"set @Commit3 = dolt_commit('-am', 'inserting 1,1');",
+
+			"call dolt_checkout('main')",
+			"call dolt_merge('branch1')",               // fast-forward merge
+			"set @MergeCommit = dolt_merge('branch2')", // actual merge with commit
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT commit_hash = @MergeCommit, committer, email, message from dolt_log('--merges');",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "Merge branch 'branch2' into main"}},
+			},
+			{
+				Query:    "SELECT commit_hash = @MergeCommit, committer, email, message from dolt_log('--min-parents', '2');",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "Merge branch 'branch2' into main"}},
+			},
+			{
+				Query:    "SELECT commit_hash = @MergeCommit, committer, email, message from dolt_log('main', '--min-parents', '2');",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "Merge branch 'branch2' into main"}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main');",
+				Expected: []sql.Row{{6}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main', '--min-parents', '1');", // Should show everything except first commit
+				Expected: []sql.Row{{5}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main', '--min-parents', '1', '--merges');", // --merges overrides --min-parents
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT commit_hash = @MergeCommit, committer, email, message from dolt_log('branch1..main', '--min-parents', '2');",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "Merge branch 'branch2' into main"}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('--min-parents', '5');",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},

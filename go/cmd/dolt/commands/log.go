@@ -460,7 +460,11 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) erro
 		return err
 	}
 
-	itr, err := commitwalk.GetTopologicalOrderIterator(ctx, dEnv.DoltDB, h)
+	matchFunc := func(commit *doltdb.Commit) (bool, error) {
+		return commit.NumParents() >= opts.minParents, nil
+	}
+
+	itr, err := commitwalk.GetTopologicalOrderIterator(ctx, dEnv.DoltDB, h, matchFunc)
 	if err != nil && err != io.EOF {
 		return err
 	}

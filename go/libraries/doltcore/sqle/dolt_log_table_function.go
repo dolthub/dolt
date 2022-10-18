@@ -36,6 +36,7 @@ type LogTableFunction struct {
 	secondRevisionExpr sql.Expression
 
 	notRevision string
+	minParents  int
 
 	database sql.Database
 }
@@ -107,6 +108,10 @@ func (ltf *LogTableFunction) getOptionsString() string {
 
 	if len(ltf.notRevision) > 0 {
 		options = append(options, fmt.Sprintf("--not %s", ltf.notRevision))
+	}
+
+	if ltf.minParents > 0 {
+		options = append(options, fmt.Sprintf("--min-parents %d", ltf.minParents))
 	}
 
 	if len(options) > 0 {
@@ -208,6 +213,12 @@ func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.
 	if notRevisionStr, ok := apr.GetValue(cli.NotFlag); ok {
 		ltf.notRevision = notRevisionStr
 	}
+
+	minParents := apr.GetIntOrDefault(cli.MinParentsFlag, 0)
+	if apr.Contains(cli.MergesFlag) {
+		minParents = 2
+	}
+	ltf.minParents = minParents
 
 	// Gets revisions, excluding any flag-related expression
 	var filteredExpressions []sql.Expression
@@ -328,6 +339,10 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		}
 	}
 
+	matchFunc := func(commit *doltdb.Commit) (bool, error) {
+		return commit.NumParents() >= ltf.minParents, nil
+	}
+
 	// Two dot log
 	if len(excludingRevisionVal) > 0 {
 		exCs, err := doltdb.NewCommitSpec(excludingRevisionVal)
@@ -339,10 +354,10 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		if err != nil {
 			return nil, err
 		}
-		return NewDotDotLogTableFunctionRowIter(ctx, sqledb.ddb, commit, excludingCommit)
+		return NewDotDotLogTableFunctionRowIter(ctx, sqledb.ddb, commit, excludingCommit, matchFunc)
 	}
 
-	return NewLogTableFunctionRowIter(ctx, sqledb.ddb, commit)
+	return NewLogTableFunctionRowIter(ctx, sqledb.ddb, commit, matchFunc)
 }
 
 // evaluateArguments returns revisionValStr and excludingRevisionValStr.
@@ -415,13 +430,13 @@ type logTableFunctionRowIter struct {
 	child doltdb.CommitItr
 }
 
-func NewLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit) (*logTableFunctionRowIter, error) {
+func NewLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error)) (*logTableFunctionRowIter, error) {
 	hash, err := commit.HashOf()
 	if err != nil {
 		return nil, err
 	}
 
-	child, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash)
+	child, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash, matchFn)
 	if err != nil {
 		return nil, err
 	}
@@ -449,7 +464,7 @@ func (itr *logTableFunctionRowIter) Close(_ *sql.Context) error {
 	return nil
 }
 
-func NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit, excludingCommit *doltdb.Commit) (*logTableFunctionRowIter, error) {
+func NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit, excludingCommit *doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error)) (*logTableFunctionRowIter, error) {
 	hash, err := commit.HashOf()
 	if err != nil {
 		return nil, err
@@ -460,7 +475,7 @@ func NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, comm
 		return nil, err
 	}
 
-	child, err := commitwalk.GetDotDotRevisionsIterator(ctx, ddb, hash, exHash)
+	child, err := commitwalk.GetDotDotRevisionsIterator(ctx, ddb, hash, exHash, matchFn)
 	if err != nil {
 		return nil, err
 	}
