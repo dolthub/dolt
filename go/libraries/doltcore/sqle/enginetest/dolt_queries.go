@@ -4953,7 +4953,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "SELECT * from dolt_log(@Commit1, 't');",
+				Query:       "SELECT * from dolt_log(@Commit1, @Commit2, 't');",
 				ExpectedErr: sql.ErrInvalidArgumentNumber,
 			},
 			{
@@ -4961,9 +4961,33 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
-				Query:       "SELECT * from dolt_log(123);",
+				Query:       "SELECT * from dolt_log(null, null);",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
+			{
+				Query:       "SELECT * from dolt_log(123, @Commit1);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log(@Commit1, 123);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			// {
+			// 	Query:       "SELECT * from dolt_log(@Commit1..@Commit2, @Commit1);",
+			// 	ExpectedErr: sql.ErrInvalidArgumentDetails,
+			// },
+			// {
+			// 	Query:       "SELECT * from dolt_log(@Commit1, @Commit1..@Commit2);",
+			// 	ExpectedErr: sql.ErrInvalidArgumentDetails,
+			// },
+			{
+				Query:       "SELECT * from dolt_log(@Commit1, @Commit2);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			// {
+			// 	Query:       "SELECT * from dolt_log(^@Commit1, ^@Commit2);",
+			// 	ExpectedErr: sql.ErrInvalidArgumentDetails,
+			// },
 			{
 				Query:          "SELECT * from dolt_log('fake-branch');",
 				ExpectedErrStr: "branch not found: fake-branch",
@@ -4977,7 +5001,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
 			},
 			{
-				Query:       "SELECT * from dolt_log(LOWER(@Commit2));",
+				Query:       "SELECT * from dolt_log(@Commit1, LOWER(@Commit2));",
 				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
 			},
 		},
@@ -5021,6 +5045,10 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT count(*) from dolt_log('new-branch');",
 				Expected: []sql.Row{{5}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('^main', 'new-branch');",
+				Expected: []sql.Row{{1}},
 			},
 		},
 	},
