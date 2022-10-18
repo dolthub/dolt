@@ -82,7 +82,7 @@ The command takes options to control what is shown and how.
 {{.EmphasisLeft}}dolt log <revisionB>..<revisionA>{{.EmphasisRight}}
 {{.EmphasisLeft}}dolt log <revisionA> --not <revisionB>{{.EmphasisRight}}
 {{.EmphasisLeft}}dolt log ^<revisionB> <revisionA>{{.EmphasisRight}}
-  Different ways to list two dot logs. These will list commit logs for revisionA, while excluding commits from revisionB.`,
+  Different ways to list two dot logs. These will list commit logs for revisionA, while excluding commits from revisionB. The table option is not supported for two dot log.`,
 	Synopsis: []string{
 		`[-n {{.LessThan}}num_commits{{.GreaterThan}}] [{{.LessThan}}revision-range{{.GreaterThan}}] [[--] {{.LessThan}}table{{.GreaterThan}}]`,
 	},
