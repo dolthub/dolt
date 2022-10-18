@@ -68,7 +68,21 @@ var logDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Show commit logs`,
 	LongDesc: `Shows the commit logs
 
-The command takes options to control what is shown and how.`,
+The command takes options to control what is shown and how. 
+
+{{.EmphasisLeft}}dolt log{{.EmphasisRight}}
+  Lists commit logs from current HEAD when no options provided.
+	
+{{.EmphasisLeft}}dolt log <revision>{{.EmphasisRight}}
+  Lists commit logs starting from revision.
+	
+{{.EmphasisLeft}}dolt log <revision> <table>{{.EmphasisRight}}
+  Lists commit logs starting from revision, only including commits with changes to table.
+	
+{{.EmphasisLeft}}dolt log <revisionB>..<revisionA>{{.EmphasisRight}}
+{{.EmphasisLeft}}dolt log <revisionA> --not <revisionB>{{.EmphasisRight}}
+{{.EmphasisLeft}}dolt log ^<revisionB> <revisionA>{{.EmphasisRight}}
+  Different ways to list two dot logs. These will list commit logs for revisionA, while excluding commits from revisionB.`,
 	Synopsis: []string{
 		`[-n {{.LessThan}}num_commits{{.GreaterThan}}] [{{.LessThan}}revision-range{{.GreaterThan}}] [[--] {{.LessThan}}table{{.GreaterThan}}]`,
 	},
@@ -104,7 +118,7 @@ func (cmd LogCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(parentsParam, "", "Shows all parents of each commit in the log.")
 	ap.SupportsString(decorateParam, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
 	ap.SupportsFlag(oneLineParam, "", "Shows logs in a compact format.")
-	ap.SupportsString(notParam, "", "revision", "Reverses the meaning of the ^ prefix (or lack thereof) for all following revision specifiers, up to the next --not.")
+	ap.SupportsString(notParam, "", "revision", "Excludes commits from revision.")
 	return ap
 }
 
@@ -208,11 +222,26 @@ func parseRefsAndTable(ctx context.Context, apr *argparser.ArgParseResults, dEnv
 			if firstExNotCs != nil {
 				return nil, nil, "", fmt.Errorf("Providing tableName for two dot log not yet supported")
 			}
-			// dolt log <ref> table
+			// dolt log <ref> <table>
 			return firstCs, nil, tableName, nil
 		}
 
 		if firstCs != nil && secondCs != nil {
+			commit, err := dEnv.DoltDB.Resolve(ctx, firstCs, dEnv.RepoStateReader().CWBHeadRef())
+			if err != nil {
+				return nil, nil, "", err
+			}
+
+			// Handles table name matching branch name (dolt log <ref> <table>)
+			exists, err := tableExists(ctx, commit, apr.Arg(1))
+			if err != nil {
+				return nil, nil, "", err
+			}
+
+			if exists {
+				return firstCs, nil, apr.Arg(1), nil
+			}
+
 			return nil, nil, "", fmt.Errorf("Cannot provide two commit refs") // dolt log <ref> <ref>
 		}
 		if firstExNotCs != nil && secondExNotCs != nil {

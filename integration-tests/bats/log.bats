@@ -113,8 +113,39 @@ teardown() {
     [ $status -eq 1 ]
     run dolt log main..branch1 --not main
     [ $status -eq 1 ]
+    run dolt log branch1 --not main branch1
+    [ $status -eq 1 ]
+        run dolt log branch1 --not main --not branch1
+    [ $status -eq 1 ]
 
     run dolt log main...branch1
+    [ $status -eq 1 ]
+}
+
+@test "log: branch name and table name are the same" {
+    dolt commit --allow-empty -m "commit 1 MAIN"
+    dolt commit	--allow-empty -m "commit 2 MAIN"
+    dolt checkout -b myname
+    dolt sql -q "create table myname (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "commit 1 BRANCH1"
+    dolt commit --allow-empty -m "commit 2 BRANCH1"
+    dolt commit --allow-empty -m "commit 3 BRANCH1"
+
+    # Should default to branch name if one argument provided
+    run dolt log myname
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+
+    # Should default to first argument as branch name, second argument as table name (if table exists) if two arguments provided
+    run dolt log myname myname 
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+
+    # Table main does not exist
+    run dolt log main main
     [ $status -eq 1 ]
 }
 
