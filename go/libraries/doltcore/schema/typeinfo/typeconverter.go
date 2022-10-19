@@ -65,6 +65,8 @@ func GetTypeConverter(ctx context.Context, srcTi TypeInfo, destTi TypeInfo) (tc 
 		return enumTypeConverter(ctx, src, destTi)
 	case *floatType:
 		return floatTypeConverter(ctx, src, destTi)
+	case *geomcollType:
+		return geomcollTypeConverter(ctx, src, destTi)
 	case *geometryType:
 		return geometryTypeConverter(ctx, src, destTi)
 	case *inlineBlobType:

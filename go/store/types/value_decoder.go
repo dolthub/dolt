@@ -53,6 +53,7 @@ type CodecReader interface {
 	ReadMultiPoint() (MultiPoint, error)
 	ReadMultiLineString() (MultiLineString, error)
 	ReadMultiPolygon() (MultiPolygon, error)
+	ReadGeomColl() (GeomColl, error)
 	ReadBlob() (Blob, error)
 	ReadJSON() (JSON, error)
 }
@@ -113,6 +114,10 @@ func (r *valueDecoder) ReadMultiLineString() (MultiLineString, error) {
 
 func (r *valueDecoder) ReadMultiPolygon() (MultiPolygon, error) {
 	return readMultiPolygon(nil, r)
+}
+
+func (r *valueDecoder) ReadGeomColl() (GeomColl, error) {
+	return readGeomColl(nil, r)
 }
 
 func (r *valueDecoder) ReadJSON() (JSON, error) {
