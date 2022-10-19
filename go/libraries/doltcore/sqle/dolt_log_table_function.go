@@ -93,32 +93,29 @@ func (ltf *LogTableFunction) Resolved() bool {
 
 // String implements the Stringer interface
 func (ltf *LogTableFunction) String() string {
-	optionsStr := ltf.getOptionsString()
-	if ltf.revisionExpr != nil && ltf.secondRevisionExpr != nil {
-		return fmt.Sprintf("DOLT_LOG(%s, %s%s)", ltf.revisionExpr.String(), ltf.secondRevisionExpr.String(), optionsStr)
-	}
-	if ltf.revisionExpr != nil {
-		return fmt.Sprintf("DOLT_LOG(%s%s)", ltf.revisionExpr.String(), optionsStr)
-	}
-	return "DOLT_LOG()"
+	return fmt.Sprintf("DOLT_LOG(%s)", ltf.getOptionsString())
 }
 
 func (ltf *LogTableFunction) getOptionsString() string {
 	var options []string
 
+	if ltf.revisionExpr != nil {
+		options = append(options, ltf.revisionExpr.String())
+	}
+
+	if ltf.secondRevisionExpr != nil {
+		options = append(options, ltf.secondRevisionExpr.String())
+	}
+
 	if len(ltf.notRevision) > 0 {
-		options = append(options, fmt.Sprintf("--not %s", ltf.notRevision))
+		options = append(options, fmt.Sprintf("--%s %s", cli.NotFlag, ltf.notRevision))
 	}
 
 	if ltf.minParents > 0 {
-		options = append(options, fmt.Sprintf("--min-parents %d", ltf.minParents))
+		options = append(options, fmt.Sprintf("--%s %d", cli.MinParentsFlag, ltf.minParents))
 	}
 
-	if len(options) > 0 {
-		return ", " + strings.Join(options, ", ")
-	}
-
-	return ""
+	return strings.Join(options, ", ")
 }
 
 // Schema implements the sql.Node interface.
