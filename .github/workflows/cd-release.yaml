@@ -38,14 +38,15 @@ jobs:
           FILE: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
           NEW_VERSION: ${{ needs.format-version.outputs.version }}
       - name: Update Dockerfile
-        run: sed -i -e 's/ARG DOLT_VERSION=.*/ARG DOLT_VERSION='"$NEW_VERSION"'/' "$FILE"
+        run: sed -i -e 's/ARG DOLT_VERSION=.*/ARG DOLT_VERSION='"$NEW_VERSION"'/' "$AMD64" "$ARM64"
         env:
-          FILE: ${{ format('{0}/docker/Dockerfile', github.workspace) }}
+          AMD64: ${{ format('{0}/docker/Dockerfile', github.workspace) }}
+          ARM64: ${{ format('{0}/docker/Dockerfile.arm64', github.workspace) }}
           NEW_VERSION: ${{ needs.format-version.outputs.version }}
       - uses: EndBug/add-and-commit@v7
         with:
           message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', needs.format-version.outputs.version) }}
-          add: ${{ format('[{0}/go/cmd/dolt/dolt.go, {0}/docker/Dockerfile]', github.workspace) }}
+          add: ${{ format('[{0}/go/cmd/dolt/dolt.go,{0}/docker/Dockerfile,{0}/docker/Dockerfile.arm64]', github.workspace) }}
           cwd: "."
       - name: Build Binaries
         id: build_binaries

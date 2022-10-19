@@ -8,4 +8,4 @@ RUN tar zxvf dolt-linux-amd64.tar.gz && \
     cp dolt-linux-amd64/bin/dolt /usr/local/bin && \
     rm -rf dolt-linux-amd64 dolt-linux-amd64.tar.gz
 
-CMD ["/usr/local/bin/dolt"]
+ENTRYPOINT ["/usr/local/bin/dolt"]

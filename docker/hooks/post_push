@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Use docker cli v20.10.9 to use experimental manifest feature
+curl -SL "https://download.docker.com/linux/static/stable/x86_64/docker-20.10.9.tgz" | tar xzv docker/docker --transform='s/.*/docker-cli/'
+mkdir ~/.docker
+# Add auths and experimental to docker-cli config
+echo '{"auths": '$DOCKERCFG',"experimental":"enabled"}' > ~/.docker/config.json
+# Check if all arch images are in dockerhub
+VIRTUAL_IMAGE=$(echo "${IMAGE_NAME}" | rev | cut -d- -f2- | rev )
+
+AMD64_IMAGE="$VIRTUAL_IMAGE-amd64"
+ARM64_IMAGE="$VIRTUAL_IMAGE-arm64"
+
+echo "checking if ${AMD64_IMAGE} Manifest exists"
+if ! ./docker-cli manifest inspect ${AMD64_IMAGE}; then AMD64_IMAGE='' ; fi
+echo "checking if ${ARM64_IMAGE} Manifest exists"
+if ! ./docker-cli manifest inspect ${ARM64_IMAGE}; then ARM64_IMAGE='' ; fi
+
+echo "Creating multiarch manifest"
+./docker-cli manifest create $VIRTUAL_IMAGE $AMD64_IMAGE $ARM64_IMAGE
+if [ -n "${ARM64_IMAGE}" ]; then
+./docker-cli manifest annotate $VIRTUAL_IMAGE $ARM64_IMAGE --os linux --arch arm64
+fi
+./docker-cli manifest push $VIRTUAL_IMAGE
+
+rm -r docker-cli ~/.docker
