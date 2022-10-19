@@ -804,7 +804,7 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 			CheckExpression: chk.Expression(),
 			Enforced:        chk.Enforced(),
 		}
-		colNames, err := sqle.ColumnsFromCheckDefinition(nil, &chkDef)
+		colNames, err := sqle.ColumnsFromCheckDefinition(sql.NewEmptyContext(), &chkDef)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -826,7 +826,7 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 			CheckExpression: ourChk.Expression(),
 			Enforced:        ourChk.Enforced(),
 		}
-		colNames, err := sqle.ColumnsFromCheckDefinition(nil, &chkDef)
+		colNames, err := sqle.ColumnsFromCheckDefinition(sql.NewEmptyContext(), &chkDef)
 		if err != nil {
 			return nil, nil, err
 		}
