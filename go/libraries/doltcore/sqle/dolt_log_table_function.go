@@ -37,6 +37,7 @@ type LogTableFunction struct {
 
 	notRevision string
 	minParents  int
+	showParents bool
 
 	database sql.Database
 }
@@ -115,11 +116,20 @@ func (ltf *LogTableFunction) getOptionsString() string {
 		options = append(options, fmt.Sprintf("--%s %d", cli.MinParentsFlag, ltf.minParents))
 	}
 
+	if ltf.showParents {
+		options = append(options, fmt.Sprintf("--%s", cli.ParentsFlag))
+	}
+
 	return strings.Join(options, ", ")
 }
 
 // Schema implements the sql.Node interface.
 func (ltf *LogTableFunction) Schema() sql.Schema {
+	if ltf.showParents {
+		logTableSchemaWithParents := append(logTableSchema, &sql.Column{Name: "parents", Type: sql.Text})
+		return logTableSchemaWithParents
+	}
+
 	return logTableSchema
 }
 
@@ -189,22 +199,15 @@ func (ltf *LogTableFunction) getDoltArgs(ctx *sql.Context, expressions []sql.Exp
 	return args, nil
 }
 
-// WithExpressions implements the sql.Expressioner interface.
-func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
-	for _, expr := range expression {
-		if !expr.Resolved() {
-			return nil, ErrInvalidNonLiteralArgument.New(ltf.FunctionName(), expr.String())
-		}
-	}
-
+func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
 	args, err := ltf.getDoltArgs(ltf.ctx, expression)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	apr, err := cli.CreateLogArgParser().Parse(args)
 	if err != nil {
-		return nil, sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), err.Error())
+		return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), err.Error())
 	}
 
 	if notRevisionStr, ok := apr.GetValue(cli.NotFlag); ok {
@@ -215,7 +218,24 @@ func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.
 	if apr.Contains(cli.MergesFlag) {
 		minParents = 2
 	}
+
 	ltf.minParents = minParents
+	ltf.showParents = apr.Contains(cli.ParentsFlag)
+
+	return nil
+}
+
+// WithExpressions implements the sql.Expressioner interface.
+func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
+	for _, expr := range expression {
+		if !expr.Resolved() {
+			return nil, ErrInvalidNonLiteralArgument.New(ltf.FunctionName(), expr.String())
+		}
+	}
+
+	if err := ltf.addOptions(expression); err != nil {
+		return nil, err
+	}
 
 	// Gets revisions, excluding any flag-related expression
 	var filteredExpressions []sql.Expression
@@ -351,10 +371,10 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		if err != nil {
 			return nil, err
 		}
-		return NewDotDotLogTableFunctionRowIter(ctx, sqledb.ddb, commit, excludingCommit, matchFunc)
+		return NewDotDotLogTableFunctionRowIter(ctx, sqledb.ddb, commit, excludingCommit, matchFunc, ltf.showParents)
 	}
 
-	return NewLogTableFunctionRowIter(ctx, sqledb.ddb, commit, matchFunc)
+	return NewLogTableFunctionRowIter(ctx, sqledb.ddb, commit, matchFunc, ltf.showParents)
 }
 
 // evaluateArguments returns revisionValStr and excludingRevisionValStr.
@@ -424,10 +444,11 @@ var _ sql.RowIter = (*logTableFunctionRowIter)(nil)
 
 // logTableFunctionRowIter is a sql.RowIter implementation which iterates over each commit as if it's a row in the table.
 type logTableFunctionRowIter struct {
-	child doltdb.CommitItr
+	child       doltdb.CommitItr
+	showParents bool
 }
 
-func NewLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error)) (*logTableFunctionRowIter, error) {
+func NewLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error), showParents bool) (*logTableFunctionRowIter, error) {
 	hash, err := commit.HashOf()
 	if err != nil {
 		return nil, err
@@ -438,7 +459,7 @@ func NewLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit *do
 		return nil, err
 	}
 
-	return &logTableFunctionRowIter{child}, nil
+	return &logTableFunctionRowIter{child, showParents}, nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
@@ -454,14 +475,24 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	return sql.NewRow(h.String(), meta.Name, meta.Email, meta.Time(), meta.Description), nil
+	row := sql.NewRow(h.String(), meta.Name, meta.Email, meta.Time(), meta.Description)
+
+	if itr.showParents {
+		prStr, err := getParentsString(ctx, cm)
+		if err != nil {
+			return nil, err
+		}
+		row = row.Append(sql.NewRow(prStr))
+	}
+
+	return row, nil
 }
 
 func (itr *logTableFunctionRowIter) Close(_ *sql.Context) error {
 	return nil
 }
 
-func NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit, excludingCommit *doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error)) (*logTableFunctionRowIter, error) {
+func NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit, excludingCommit *doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error), showParents bool) (*logTableFunctionRowIter, error) {
 	hash, err := commit.HashOf()
 	if err != nil {
 		return nil, err
@@ -477,5 +508,22 @@ func NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, comm
 		return nil, err
 	}
 
-	return &logTableFunctionRowIter{child}, nil
+	return &logTableFunctionRowIter{child, showParents}, nil
+}
+
+func getParentsString(ctx *sql.Context, cm *doltdb.Commit) (string, error) {
+	parents, err := cm.ParentHashes(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	var prStr string
+	for i, h := range parents {
+		prStr += h.String()
+		if i < len(parents)-1 {
+			prStr += ", "
+		}
+	}
+
+	return prStr, nil
 }
