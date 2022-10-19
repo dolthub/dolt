@@ -16,8 +16,10 @@ package sqle
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
@@ -29,8 +31,9 @@ var _ sql.TableFunction = (*LogTableFunction)(nil)
 type LogTableFunction struct {
 	ctx *sql.Context
 
-	revisionExpr sql.Expression
-	database     sql.Database
+	revisionExpr       sql.Expression
+	secondRevisionExpr sql.Expression
+	database           sql.Database
 }
 
 var logTableSchema = sql.Schema{
@@ -74,6 +77,9 @@ func (ltf *LogTableFunction) FunctionName() string {
 
 // Resolved implements the sql.Resolvable interface
 func (ltf *LogTableFunction) Resolved() bool {
+	if ltf.revisionExpr != nil && ltf.secondRevisionExpr != nil {
+		return ltf.revisionExpr.Resolved() && ltf.secondRevisionExpr.Resolved()
+	}
 	if ltf.revisionExpr != nil {
 		return ltf.revisionExpr.Resolved()
 	}
@@ -82,6 +88,9 @@ func (ltf *LogTableFunction) Resolved() bool {
 
 // String implements the Stringer interface
 func (ltf *LogTableFunction) String() string {
+	if ltf.revisionExpr != nil && ltf.secondRevisionExpr != nil {
+		return fmt.Sprintf("DOLT_LOG(%s, %s)", ltf.revisionExpr.String(), ltf.secondRevisionExpr.String())
+	}
 	if ltf.revisionExpr != nil {
 		return fmt.Sprintf("DOLT_LOG(%s)", ltf.revisionExpr.String())
 	}
@@ -127,13 +136,16 @@ func (ltf *LogTableFunction) Expressions() []sql.Expression {
 	if ltf.revisionExpr != nil {
 		exprs = append(exprs, ltf.revisionExpr)
 	}
+	if ltf.secondRevisionExpr != nil {
+		exprs = append(exprs, ltf.secondRevisionExpr)
+	}
 	return exprs
 }
 
 // WithExpressions implements the sql.Expressioner interface.
 func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
-	if len(expression) < 0 || len(expression) > 1 {
-		return nil, sql.ErrInvalidArgumentNumber.New(ltf.FunctionName(), "0 or 1", len(expression))
+	if len(expression) > 2 {
+		return nil, sql.ErrInvalidArgumentNumber.New(ltf.FunctionName(), "0 to 2", len(expression))
 	}
 
 	for _, expr := range expression {
@@ -143,23 +155,64 @@ func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.
 	}
 
 	exLen := len(expression)
-	if exLen == 1 {
+	if exLen > 0 {
 		ltf.revisionExpr = expression[0]
 	}
+	if exLen == 2 {
+		ltf.secondRevisionExpr = expression[1]
+	}
 
-	// validate the expressions
-	if ltf.revisionExpr != nil {
-		if !sql.IsText(ltf.revisionExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr.String())
-		}
+	if err := ltf.validateRevisionExpressions(); err != nil {
+		return nil, err
 	}
 
 	return ltf, nil
 }
 
+func (ltf *LogTableFunction) invalidArgDetailsErr(expr sql.Expression, reason string) *errors.Error {
+	return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), fmt.Sprintf("%s - %s", expr.String(), reason))
+}
+
+func (ltf *LogTableFunction) validateRevisionExpressions() error {
+	if ltf.revisionExpr != nil {
+		if !sql.IsText(ltf.revisionExpr.Type()) {
+			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr.String())
+		}
+		if ltf.secondRevisionExpr == nil && strings.Contains(ltf.revisionExpr.String(), "^") {
+			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "second revision must exist if first revision contains '^'")
+		}
+		if strings.Contains(ltf.revisionExpr.String(), "..") && strings.Contains(ltf.revisionExpr.String(), "^") {
+			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "revision cannot contain both '..' and '^'")
+		}
+	}
+
+	if ltf.secondRevisionExpr != nil {
+		if !sql.IsText(ltf.secondRevisionExpr.Type()) {
+			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.secondRevisionExpr.String())
+		}
+		if strings.Contains(ltf.secondRevisionExpr.String(), "..") {
+			return ltf.invalidArgDetailsErr(ltf.secondRevisionExpr, "second revision cannot contain '..'")
+		}
+		if strings.Contains(ltf.revisionExpr.String(), "..") {
+			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "revision cannot contain '..' if second revision exists")
+		}
+	}
+
+	if ltf.revisionExpr != nil && ltf.secondRevisionExpr != nil {
+		if strings.Contains(ltf.revisionExpr.String(), "^") && strings.Contains(ltf.secondRevisionExpr.String(), "^") {
+			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "both revisions cannot contain '^'")
+		}
+		if !strings.Contains(ltf.revisionExpr.String(), "^") && !strings.Contains(ltf.secondRevisionExpr.String(), "^") {
+			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "one revision must contain '^' if two revisions provided")
+		}
+	}
+
+	return nil
+}
+
 // RowIter implements the sql.Node interface
 func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
-	revisionVal, err := ltf.evaluateArguments()
+	revisionVal, excludingRevisionVal, err := ltf.evaluateArguments()
 	if err != nil {
 		return nil, err
 	}
@@ -172,13 +225,13 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 	sess := dsess.DSessFromSess(ctx.Session)
 	var commit *doltdb.Commit
 
-	if ltf.revisionExpr != nil {
+	if len(revisionVal) > 0 {
 		cs, err := doltdb.NewCommitSpec(revisionVal)
 		if err != nil {
 			return nil, err
 		}
 
-		commit, err = sqledb.GetDoltDB().Resolve(ctx, cs, nil)
+		commit, err = sqledb.ddb.Resolve(ctx, cs, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -190,28 +243,76 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		}
 	}
 
-	return NewLogTableFunctionRowIter(ctx, sqledb.GetDoltDB(), commit)
-}
-
-// evaluateArguments returns revisionValStr.
-// It evaluates the argument expressions to turn them into values this LogTableFunction
-// can use. Note that this method only evals the expressions, and doesn't validate the values.
-func (ltf *LogTableFunction) evaluateArguments() (string, error) {
-	if ltf.revisionExpr != nil {
-		revisionVal, err := ltf.revisionExpr.Eval(ltf.ctx, nil)
+	// Two dot log
+	if len(excludingRevisionVal) > 0 {
+		exCs, err := doltdb.NewCommitSpec(excludingRevisionVal)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
-		revisionValStr, ok := revisionVal.(string)
-		if !ok {
-			return "", fmt.Errorf("received '%v' when expecting revision string", revisionVal)
+		excludingCommit, err := sqledb.ddb.Resolve(ctx, exCs, nil)
+		if err != nil {
+			return nil, err
 		}
-
-		return revisionValStr, nil
+		return NewDotDotLogTableFunctionRowIter(ctx, sqledb.ddb, commit, excludingCommit)
 	}
 
-	return "", nil
+	return NewLogTableFunctionRowIter(ctx, sqledb.ddb, commit)
+}
+
+// evaluateArguments returns revisionValStr and excludingRevisionValStr.
+// It evaluates the argument expressions to turn them into values this LogTableFunction
+// can use. Note that this method only evals the expressions, and doesn't validate the values.
+func (ltf *LogTableFunction) evaluateArguments() (string, string, error) {
+	var revisionValStr string
+	var excludingRevisionValStr string
+	var err error
+
+	if ltf.revisionExpr != nil {
+		revisionValStr, excludingRevisionValStr, err = getRevisionsFromExpr(ltf.ctx, ltf.revisionExpr, true)
+		if err != nil {
+			return "", "", err
+		}
+	}
+
+	if ltf.secondRevisionExpr != nil {
+		rvs, ervs, err := getRevisionsFromExpr(ltf.ctx, ltf.secondRevisionExpr, false)
+		if err != nil {
+			return "", "", err
+		}
+		if len(rvs) > 0 {
+			revisionValStr = rvs
+		}
+		if len(ervs) > 0 {
+			excludingRevisionValStr = ervs
+		}
+	}
+
+	return revisionValStr, excludingRevisionValStr, nil
+}
+
+// Gets revisionName and/or excludingRevisionName from sql expression
+func getRevisionsFromExpr(ctx *sql.Context, expr sql.Expression, canDot bool) (string, string, error) {
+	revisionVal, err := expr.Eval(ctx, nil)
+	if err != nil {
+		return "", "", err
+	}
+
+	revisionValStr, ok := revisionVal.(string)
+	if !ok {
+		return "", "", fmt.Errorf("received '%v' when expecting revision string", revisionVal)
+	}
+
+	if canDot && strings.Contains(revisionValStr, "..") {
+		refs := strings.Split(revisionValStr, "..")
+		return refs[1], refs[0], nil
+	}
+
+	if strings.Contains(revisionValStr, "^") {
+		return "", strings.TrimPrefix(revisionValStr, "^"), nil
+	}
+
+	return revisionValStr, "", nil
 }
 
 //------------------------------------
@@ -257,4 +358,23 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 func (itr *logTableFunctionRowIter) Close(_ *sql.Context) error {
 	return nil
+}
+
+func NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit, excludingCommit *doltdb.Commit) (*logTableFunctionRowIter, error) {
+	hash, err := commit.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	exHash, err := excludingCommit.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	child, err := commitwalk.GetDotDotRevisionsIterator(ctx, ddb, hash, exHash)
+	if err != nil {
+		return nil, err
+	}
+
+	return &logTableFunctionRowIter{child}, nil
 }
