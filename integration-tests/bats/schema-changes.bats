@@ -393,5 +393,5 @@ EOF
 
     run dolt sql -q "show create table t;"
     [ $status -eq 0 ]
-    [[ $output =~ "CHECK (col1 = 'valid')" ]]
+    [[ $output =~ "CHECK ((\`col1\` = 'valid'))" ]] || false
 }
