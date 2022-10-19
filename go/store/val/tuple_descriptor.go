@@ -17,6 +17,7 @@ package val
 import (
 	"encoding/hex"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +26,16 @@ import (
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
+
+func init() {
+	if v := os.Getenv("DOLT_DISABLE_FIXED_ACCESS"); v != "" {
+		disableFixedAccess = true
+	}
+}
+
+// disableFixedAccess disables fast-access optimizations for
+// not-null, fixed-width tuple values. See |makeFixedAccess|.
+var disableFixedAccess = false
 
 // TupleDesc describes a Tuple set.
 // Data structures that contain Tuples and algorithms that process Tuples
@@ -73,6 +84,10 @@ func IterAddressFields(td TupleDesc, cb func(int, Type)) {
 type FixedAccess [][2]ByteSize
 
 func makeFixedAccess(types []Type) (acc FixedAccess) {
+	if disableFixedAccess {
+		return nil
+	}
+
 	acc = make(FixedAccess, 0, len(types))
 
 	off := ByteSize(0)
