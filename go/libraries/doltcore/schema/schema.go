@@ -41,6 +41,9 @@ type Schema interface {
 	// Indexes returns a collection of all indexes on the table that this schema belongs to.
 	Indexes() IndexCollection
 
+	// PkIndex returns the primary key indexes on this table.
+	PkIndex() Index
+
 	// Checks returns a collection of all check constraints on the table that this schema belongs to.
 	Checks() CheckCollection
 

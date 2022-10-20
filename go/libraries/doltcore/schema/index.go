@@ -245,3 +245,185 @@ func (ix *indexImpl) copy() *indexImpl {
 	_ = copy(newIx.allTags, ix.allTags)
 	return &newIx
 }
+
+// Primary key as an index
+type pkIndexImpl struct {
+	tags      []uint64
+	indexColl *indexCollectionImpl
+}
+
+func NewPkIndex(tags []uint64, indexColl *indexCollectionImpl) Index {
+	return &pkIndexImpl{
+		tags:      tags,
+		indexColl: indexColl,
+	}
+}
+
+// AllTags implements Index.
+func (ix *pkIndexImpl) AllTags() []uint64 {
+	return ix.tags
+}
+
+// ColumnNames implements Index.
+func (ix *pkIndexImpl) ColumnNames() []string {
+	colNames := make([]string, len(ix.tags))
+	for i, tag := range ix.tags {
+		colNames[i] = ix.indexColl.colColl.TagToCol[tag].Name
+	}
+	return colNames
+}
+
+// Comment implements Index.
+func (ix *pkIndexImpl) Comment() string {
+	return "placeholder comment for primary key implementation of schema.Index"
+}
+
+// Count implements Index.
+func (ix *pkIndexImpl) Count() int {
+	return len(ix.tags)
+}
+
+// Equals implements Index.
+func (ix *pkIndexImpl) Equals(other Index) bool {
+	if ix.Count() != other.Count() {
+		return false
+	}
+
+	if _, ok := other.(*pkIndexImpl); !ok {
+		return false
+	}
+
+	tt := ix.IndexedColumnTags()
+	ot := other.IndexedColumnTags()
+	for i := range tt {
+		if tt[i] != ot[i] {
+			return false
+		}
+	}
+
+	return ix.IsUnique() == other.IsUnique() &&
+		ix.Comment() == other.Comment() &&
+		ix.Name() == other.Name()
+}
+
+// DeepEquals implements Index.
+func (ix *pkIndexImpl) DeepEquals(other Index) bool {
+	if ix.Count() != other.Count() {
+		return false
+	}
+
+	// we're only interested in columns the index is defined over, not the table's primary keys
+	tt := ix.AllTags()
+	ot := other.AllTags()
+	for i := range tt {
+		if tt[i] != ot[i] {
+			return false
+		}
+	}
+
+	return ix.IsUnique() == other.IsUnique() &&
+		ix.Comment() == other.Comment() &&
+		ix.Name() == other.Name()
+}
+
+// GetColumn implements Index.
+func (ix *pkIndexImpl) GetColumn(tag uint64) (Column, bool) {
+	return ix.indexColl.colColl.GetByTag(tag)
+}
+
+// IndexedColumnTags implements Index.
+func (ix *pkIndexImpl) IndexedColumnTags() []uint64 {
+	return ix.tags
+}
+
+// IsUnique implements Index.
+func (ix *pkIndexImpl) IsUnique() bool {
+	return true
+}
+
+// IsUserDefined implements Index.
+func (ix *pkIndexImpl) IsUserDefined() bool {
+	return false
+}
+
+// Name implements Index.
+func (ix *pkIndexImpl) Name() string {
+	return "PRIMARY"
+}
+
+// PrimaryKeyTags implements Index.
+func (ix *pkIndexImpl) PrimaryKeyTags() []uint64 {
+	return ix.tags
+}
+
+// Schema implements Index.
+func (ix *pkIndexImpl) Schema() Schema {
+	cols := make([]Column, len(ix.tags))
+	for i, tag := range ix.tags {
+		col := ix.indexColl.colColl.TagToCol[tag]
+		cols[i] = Column{
+			Name:        col.Name,
+			Tag:         tag,
+			Kind:        col.Kind,
+			IsPartOfPK:  true,
+			TypeInfo:    col.TypeInfo,
+			Constraints: nil,
+		}
+	}
+	allCols := NewColCollection(cols...)
+	nonPkCols := NewColCollection()
+	return &schemaImpl{
+		pkCols:          allCols,
+		nonPKCols:       nonPkCols,
+		allCols:         allCols,
+		indexCollection: NewIndexCollection(nil, nil),
+		checkCollection: NewCheckCollection(),
+	}
+}
+
+// ToTableTuple implements Index.
+func (ix *pkIndexImpl) ToTableTuple(ctx context.Context, fullKey types.Tuple, format *types.NomsBinFormat) (types.Tuple, error) {
+	pkTags := make(map[uint64]int)
+	for i, tag := range ix.indexColl.pks {
+		pkTags[tag] = i
+	}
+	tplItr, err := fullKey.Iterator()
+	if err != nil {
+		return types.Tuple{}, err
+	}
+	resVals := make([]types.Value, len(pkTags)*2)
+	for {
+		_, tag, err := tplItr.NextUint64()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return types.Tuple{}, err
+		}
+		idx, inPK := pkTags[tag]
+		if inPK {
+			_, valVal, err := tplItr.Next()
+			if err != nil {
+				return types.Tuple{}, err
+			}
+			resVals[idx*2] = types.Uint(tag)
+			resVals[idx*2+1] = valVal
+		} else {
+			err := tplItr.Skip()
+			if err != nil {
+				return types.Tuple{}, err
+			}
+		}
+	}
+	return types.NewTuple(format, resVals...)
+}
+
+// copy returns an exact copy of the calling index.
+func (ix *pkIndexImpl) copy() *pkIndexImpl {
+	newIx := *ix
+	newIx.tags = make([]uint64, len(ix.tags))
+	_ = copy(newIx.tags, ix.tags)
+	newIx.tags = make([]uint64, len(ix.tags))
+	_ = copy(newIx.tags, ix.tags)
+	return &newIx
+}
