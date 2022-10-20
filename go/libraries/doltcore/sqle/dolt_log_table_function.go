@@ -183,7 +183,9 @@ func (ltf *LogTableFunction) Expressions() []sql.Expression {
 	return exprs
 }
 
-func (ltf *LogTableFunction) getDoltArgs(ctx *sql.Context, expressions []sql.Expression) ([]string, error) {
+// getDoltArgs builds an argument string from sql expressions so that we can
+// later parse the arguments with the same util as the CLI
+func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, functionName string) ([]string, error) {
 	var args []string
 
 	for _, expr := range expressions {
@@ -193,7 +195,7 @@ func (ltf *LogTableFunction) getDoltArgs(ctx *sql.Context, expressions []sql.Exp
 		}
 
 		if !sql.IsText(expr.Type()) {
-			return args, sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), expr.String())
+			return args, sql.ErrInvalidArgumentDetails.New(functionName, expr.String())
 		}
 
 		text, err := sql.Text.Convert(childVal)
@@ -210,7 +212,7 @@ func (ltf *LogTableFunction) getDoltArgs(ctx *sql.Context, expressions []sql.Exp
 }
 
 func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
-	args, err := ltf.getDoltArgs(ltf.ctx, expression)
+	args, err := getDoltArgs(ltf.ctx, expression, ltf.FunctionName())
 	if err != nil {
 		return err
 	}
