@@ -15,14 +15,16 @@
 package branch_control
 
 import (
-	"bytes"
 	"context"
 	goerrors "errors"
+	"fmt"
 	"os"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	flatbuffers "github.com/google/flatbuffers/go"
 	"gopkg.in/src-d/go-errors.v1"
 
-	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 )
 
 var (
@@ -101,12 +103,27 @@ func LoadData(ctx context.Context, branchControlFilePath string, doltConfigDirPa
 	if len(data) == 0 {
 		return nil
 	}
-	position := uint64(0)
-	// The Deserialize functions acquire write locks, so we don't acquire them here
-	if err = StaticController.Access.Deserialize(data, &position); err != nil {
+	// Load the tables
+	if serial.GetFileID(data) != serial.BranchControlFileID {
+		return fmt.Errorf("unable to deserialize branch controller, unknown file ID `%s`", serial.GetFileID(data))
+	}
+	bc, err := serial.TryGetRootAsBranchControl(data, serial.MessagePrefixSz)
+	if err != nil {
 		return err
 	}
-	if err = StaticController.Namespace.Deserialize(data, &position); err != nil {
+	access, err := bc.TryAccessTbl(nil)
+	if err != nil {
+		return err
+	}
+	namespace, err := bc.TryNamespaceTbl(nil)
+	if err != nil {
+		return err
+	}
+	// The Deserialize functions acquire write locks, so we don't acquire them here
+	if err = StaticController.Access.Deserialize(access); err != nil {
+		return err
+	}
+	if err = StaticController.Namespace.Deserialize(namespace); err != nil {
 		return err
 	}
 	return nil
@@ -133,11 +150,16 @@ func SaveData(ctx context.Context) error {
 			return err
 		}
 	}
-	buffer := bytes.Buffer{}
+	b := flatbuffers.NewBuilder(1024)
 	// The Serialize functions acquire read locks, so we don't acquire them here
-	StaticController.Access.Serialize(&buffer)
-	StaticController.Namespace.Serialize(&buffer)
-	return os.WriteFile(StaticController.branchControlFilePath, buffer.Bytes(), 0777)
+	accessOffset := StaticController.Access.Serialize(b)
+	namespaceOffset := StaticController.Namespace.Serialize(b)
+	serial.BranchControlStart(b)
+	serial.BranchControlAddAccessTbl(b, accessOffset)
+	serial.BranchControlAddNamespaceTbl(b, namespaceOffset)
+	root := serial.BranchControlEnd(b)
+	data := serial.FinishMessage(b, root, []byte(serial.BranchControlFileID))
+	return os.WriteFile(StaticController.branchControlFilePath, data, 0777)
 }
 
 // Reset is a temporary function just for testing. Once the controller is in the context, this will be unnecessary.

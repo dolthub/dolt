@@ -2,7 +2,7 @@
 FROM --platform=linux/arm64 ubuntu:22.04
 COPY docker/qemu-aarch64-static /usr/bin/
 
-ARG DOLT_VERSION=0.50.5
+ARG DOLT_VERSION=0.50.6
 
 ADD https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/dolt-linux-arm64.tar.gz dolt-linux-arm64.tar.gz
 RUN tar zxvf dolt-linux-arm64.tar.gz && \
