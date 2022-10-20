@@ -45,6 +45,7 @@ teardown() {
     [ ${lines[1]} = "%,root,localhost,admin" ]
     [ ${lines[2]} = "test,test,%,write" ]
 
+    # Is it weird that the dolt_branch_control can see the dolt user when logged in as test?
     start_sql_server
     server_query "dolt_repo_$$" 1 test "" "select * from dolt_branch_control" "branch,user,host,permissions\n%,dolt,0.0.0.0,{'admin'}\ntest,test,%,{'write'}"
 
