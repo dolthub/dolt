@@ -26,7 +26,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
@@ -81,31 +80,6 @@ func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*
 	return csvw, nil
 }
 
-// WriteRow will write a row to a table
-func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
-	allCols := csvw.sch.GetAllCols()
-	colValStrs := make([]*string, allCols.Size())
-
-	sqlRow, err := sqlutil.DoltRowToSqlRow(r, csvw.sch)
-	if err != nil {
-		return err
-	}
-
-	for i, val := range sqlRow {
-		if val == nil {
-			colValStrs[i] = nil
-		} else {
-			v, err := sqlutil.SqlColToStr(csvw.sch.GetAllCols().GetAtIndex(i).TypeInfo.ToSqlType(), val)
-			if err != nil {
-				return err
-			}
-			colValStrs[i] = &v
-		}
-	}
-
-	return csvw.write(colValStrs)
-}
-
 func (csvw *CSVWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 	colValStrs := make([]*string, csvw.sch.GetAllCols().Size())
 	for i, val := range r {
@@ -114,7 +88,7 @@ func (csvw *CSVWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 		} else {
 			var v string
 			var err error
-			colType := csvw.sch.GetAllCols().GetAtIndex(i).TypeInfo.ToSqlType()
+			colType := csvw.sch.GetAllCols().GetByIndex(i).TypeInfo.ToSqlType()
 			// Due to BIT's unique output, we special-case writing the integer specifically for CSV
 			if _, ok := colType.(sql.BitType); ok {
 				v = strconv.FormatUint(val.(uint64), 10)

@@ -31,16 +31,22 @@ jobs:
       release_id: ${{ steps.create_release.outputs.id }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Update dolt version command
         run: sed -i -e 's/	Version = ".*"/	Version = "'"$NEW_VERSION"'"/' "$FILE"
         env:
           FILE: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
           NEW_VERSION: ${{ needs.format-version.outputs.version }}
+      - name: Update Dockerfile
+        run: sed -i -e 's/ARG DOLT_VERSION=.*/ARG DOLT_VERSION='"$NEW_VERSION"'/' "$AMD64" "$ARM64"
+        env:
+          AMD64: ${{ format('{0}/docker/Dockerfile', github.workspace) }}
+          ARM64: ${{ format('{0}/docker/Dockerfile.arm64', github.workspace) }}
+          NEW_VERSION: ${{ needs.format-version.outputs.version }}
       - uses: EndBug/add-and-commit@v7
         with:
           message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', needs.format-version.outputs.version) }}
-          add: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
+          add: ${{ format('[{0}/go/cmd/dolt/dolt.go,{0}/docker/Dockerfile,{0}/docker/Dockerfile.arm64]', github.workspace) }}
           cwd: "."
       - name: Build Binaries
         id: build_binaries
@@ -50,7 +56,7 @@ jobs:
           GO_BUILD_VERSION=1.19 go/utils/publishrelease/buildbinaries.sh
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
+        uses: dolthub/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -61,7 +67,7 @@ jobs:
           commitish: ${{ steps.build_binaries.outputs.commitish }}
       - name: Upload Linux AMD64 Distro
         id: upload-linux-amd64-distro
-        uses: actions/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -71,7 +77,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Linux ARM64 Distro
         id: upload-linux-arm64-distro
-        uses: actions/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -81,7 +87,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload OSX AMD64 Distro
         id: upload-osx-amd64-distro
-        uses: actions/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -91,7 +97,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload OSX ARM64 Distro
         id: upload-osx-arm64-distro
-        uses: actions/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -101,7 +107,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Windows Distro
         id: upload-windows-distro
-        uses: actions/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -111,7 +117,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Install Script
         id: upload-install-script
-        uses: actions/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -164,14 +170,3 @@ jobs:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: release-dolt
           client-payload: '{"version": "${{ needs.format-version.outputs.version }}", "actor": "${{ github.actor }}"}'
-
-  docker-image-push:
-    needs: [ format-version, create-release ]
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Trigger Push Docker Image
-        uses: peter-evans/repository-dispatch@v1
-        with:
-          token: ${{ secrets.REPO_ACCESS_TOKEN }}
-          event-type: push-docker-image
-          client-payload: '{"version": "${{ needs.format-version.outputs.version }}"}'

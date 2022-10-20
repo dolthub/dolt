@@ -289,10 +289,6 @@ func createCVsForPartialKeyMatches(
 	return createdViolation, nil
 }
 
-func makePartialDescriptor(desc val.TupleDesc, n int) val.TupleDesc {
-	return val.NewTupleDescriptor(desc.Types[:n]...)
-}
-
 func makePartialKey(kb *val.TupleBuilder, idxSch schema.Index, tblSch schema.Schema, k, v val.Tuple, pool pool.BuffPool) (val.Tuple, bool) {
 	for i, tag := range idxSch.IndexedColumnTags() {
 		if j, ok := tblSch.GetPKCols().TagToIdx[tag]; ok {

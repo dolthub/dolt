@@ -31,7 +31,8 @@ func TestGeneratedConfigCanBeImported(t *testing.T) {
 
 	wd := GetWorkingDir()
 
-	results := RunBenchmarkTests(config, wd)
+	results, err := RunBenchmarkTests(config, wd)
+	assert.NoError(t, err)
 
 	assert.Equal(t, 1, len(results))
 	assert.Equal(t, "dolt_import_small", results[0].name)
@@ -52,7 +53,8 @@ func TestNewStorageFormat(t *testing.T) {
 	assert.NoError(t, err)
 
 	wd := GetWorkingDir()
-	results := RunBenchmarkTests(config, wd)
+	results, err := RunBenchmarkTests(config, wd)
+	assert.NoError(t, err)
 
 	assert.Equal(t, 1, len(results))
 	assert.Equal(t, "dolt_import_small", results[0].name)

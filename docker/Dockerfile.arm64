@@ -1,0 +1,12 @@
+# syntax=docker/dockerfile:1.3-labs
+FROM --platform=linux/arm64 ubuntu:22.04
+COPY docker/qemu-aarch64-static /usr/bin/
+
+ARG DOLT_VERSION=0.50.6
+
+ADD https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/dolt-linux-arm64.tar.gz dolt-linux-arm64.tar.gz
+RUN tar zxvf dolt-linux-arm64.tar.gz && \
+    cp dolt-linux-arm64/bin/dolt /usr/local/bin && \
+    rm -rf dolt-linux-arm64 dolt-linux-arm64.tar.gz
+
+ENTRYPOINT ["/usr/local/bin/dolt"]

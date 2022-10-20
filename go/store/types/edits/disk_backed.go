@@ -16,7 +16,6 @@ package edits
 
 import (
 	"context"
-	"os"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -110,11 +109,4 @@ func (dbea *DiskBackedEditAcc) Close(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// best effort deletion ignores errors
-func tryDeleteFiles(paths []string) {
-	for _, path := range paths {
-		_ = os.Remove(path)
-	}
 }

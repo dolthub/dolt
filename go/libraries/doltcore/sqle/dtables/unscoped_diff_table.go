@@ -29,6 +29,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 )
 
@@ -153,10 +154,17 @@ func (dt *UnscopedDiffTable) newWorkingSetRowItr(ctx *sql.Context) (sql.RowIter,
 		return nil, err
 	}
 
-	return &doltDiffWorkingSetRowItr{
+	var ri sql.RowIter
+	ri = &doltDiffWorkingSetRowItr{
 		stagedTableDeltas:   staged,
 		unstagedTableDeltas: unstaged,
-	}, nil
+	}
+
+	for _, filter := range dt.partitionFilters {
+		ri = plan.NewFilterIter(filter, ri)
+	}
+
+	return ri, nil
 }
 
 var _ sql.RowIter = &doltDiffWorkingSetRowItr{}

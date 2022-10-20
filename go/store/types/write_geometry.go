@@ -34,14 +34,14 @@ const (
 )
 
 const (
-	WKBUnknown          = sql.WKBUnknown
-	WKBPointID          = sql.WKBPointID
-	WKBLineID           = sql.WKBLineID
-	WKBPolyID           = sql.WKBPolyID
-	WKBMultiPointID     = sql.WKBMultiPointID
-	WKBMultiLineID      = sql.WKBMultiLineID
-	WKBMultiPolyID      = sql.WKBMultiPolyID
-	WKBGeomCollectionID = sql.WKBGeomCollectionID
+	WKBUnknown      = sql.WKBUnknown
+	WKBPointID      = sql.WKBPointID
+	WKBLineID       = sql.WKBLineID
+	WKBPolyID       = sql.WKBPolyID
+	WKBMultiPointID = sql.WKBMultiPointID
+	WKBMultiLineID  = sql.WKBMultiLineID
+	WKBMultiPolyID  = sql.WKBMultiPolyID
+	WKBGeomCollID   = sql.WKBGeomCollID
 )
 
 // TODO: all methods here just defer to their SQL equivalents, and assume we always receive good data
@@ -64,4 +64,16 @@ func SerializePolygon(p Polygon) []byte {
 
 func SerializeMultiPoint(p MultiPoint) []byte {
 	return ConvertTypesMultiPointToSQLMultiPoint(p).Serialize()
+}
+
+func SerializeMultiLineString(p MultiLineString) []byte {
+	return ConvertTypesMultiLineStringToSQLMultiLineString(p).Serialize()
+}
+
+func SerializeMultiPolygon(p MultiPolygon) []byte {
+	return ConvertTypesMultiPolygonToSQLMultiPolygon(p).Serialize()
+}
+
+func SerializeGeomColl(g GeomColl) []byte {
+	return ConvertTypesGeomCollToSQLGeomColl(g).Serialize()
 }

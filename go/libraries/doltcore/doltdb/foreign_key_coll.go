@@ -20,12 +20,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"sort"
 	"strings"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -674,130 +670,6 @@ func (refOp ForeignKeyReferentialAction) ReducedString() string {
 		return "SET NULL"
 	default:
 		return "INVALID"
-	}
-}
-
-// ValidateData ensures that the foreign key is valid by comparing the index data from the given table
-// against the index data from the referenced table. Returns an error for each violation.
-func (fk ForeignKey) ValidateData(
-	ctx context.Context,
-	childSch schema.Schema,
-	childRowData, childIdxData, parentIdxData types.Map,
-	childDef, parentDef schema.Index,
-	vrw types.ValueReadWriter,
-) error {
-	// Any unresolved foreign key does not yet reference any indexes, therefore there's no need to error here.
-	// Data will be validated whenever the foreign key is resolved.
-	if !fk.IsResolved() {
-		return nil
-	}
-	if fk.ReferencedTableIndex != parentDef.Name() {
-		return fmt.Errorf("cannot validate data as wrong referenced index was given: expected `%s` but received `%s`",
-			fk.ReferencedTableIndex, parentDef.Name())
-	}
-
-	tagMap := make(map[uint64]uint64, len(fk.TableColumns))
-	for i, childTag := range fk.TableColumns {
-		tagMap[childTag] = fk.ReferencedTableColumns[i]
-	}
-
-	// FieldMappings ignore columns not in the tagMap
-	fm, err := rowconv.NewFieldMapping(childDef.Schema(), parentDef.Schema(), tagMap)
-	if err != nil {
-		return err
-	}
-
-	rc, err := rowconv.NewRowConverter(ctx, vrw, fm)
-	if err != nil {
-		return err
-	}
-
-	rdr, err := noms.NewNomsMapReader(ctx, childIdxData, childDef.Schema())
-	if err != nil {
-		return err
-	}
-
-	var violatingRows []row.Row
-	for {
-		childIdxRow, err := rdr.ReadRow(ctx)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-
-		// Check if there are any NULL values, as they should be skipped
-		hasNulls := false
-		_, err = childIdxRow.IterSchema(childDef.Schema(), func(tag uint64, val types.Value) (stop bool, err error) {
-			if types.IsNull(val) {
-				hasNulls = true
-				return true, nil
-			}
-			return false, nil
-		})
-		if err != nil {
-			return err
-		}
-		if hasNulls {
-			continue
-		}
-
-		parentIdxRow, err := rc.Convert(childIdxRow)
-		if err != nil {
-			return err
-		}
-		if row.IsEmpty(parentIdxRow) {
-			continue
-		}
-
-		partial, err := row.ReduceToIndexPartialKey(parentDef, parentIdxRow)
-		if err != nil {
-			return err
-		}
-
-		indexIter := noms.NewNomsRangeReader(parentDef.Schema(), parentIdxData,
-			[]*noms.ReadRange{{Start: partial, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(partial)}},
-		)
-
-		switch _, err = indexIter.ReadRow(ctx); err {
-		case nil:
-			continue // parent table contains child key
-		case io.EOF:
-			childFullKey, err := childIdxRow.NomsMapKey(childDef.Schema()).Value(ctx)
-			if err != nil {
-				return err
-			}
-			childKey, err := childDef.ToTableTuple(ctx, childFullKey.(types.Tuple), childIdxRow.Format())
-			if err != nil {
-				return err
-			}
-			childVal, ok, err := childRowData.MaybeGetTuple(ctx, childKey)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				childKeyStr, _ := types.EncodedValue(ctx, childKey)
-				return fmt.Errorf("could not find row value for key %s on table `%s`", childKeyStr, fk.TableName)
-			}
-			childRow, err := row.FromNoms(childSch, childKey, childVal)
-			if err != nil {
-				return err
-			}
-			violatingRows = append(violatingRows, childRow)
-		default:
-			return err
-		}
-	}
-
-	if len(violatingRows) == 0 {
-		return nil
-	} else {
-		return &ForeignKeyViolationError{
-			ForeignKey:    fk,
-			Schema:        childSch,
-			ViolationRows: violatingRows,
-		}
 	}
 }
 

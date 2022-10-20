@@ -65,6 +65,8 @@ func GetTypeConverter(ctx context.Context, srcTi TypeInfo, destTi TypeInfo) (tc 
 		return enumTypeConverter(ctx, src, destTi)
 	case *floatType:
 		return floatTypeConverter(ctx, src, destTi)
+	case *geomcollType:
+		return geomcollTypeConverter(ctx, src, destTi)
 	case *geometryType:
 		return geometryTypeConverter(ctx, src, destTi)
 	case *inlineBlobType:
@@ -75,8 +77,12 @@ func GetTypeConverter(ctx context.Context, srcTi TypeInfo, destTi TypeInfo) (tc 
 		return jsonTypeConverter(ctx, src, destTi)
 	case *linestringType:
 		return linestringTypeConverter(ctx, src, destTi)
+	case *multilinestringType:
+		return multilinestringTypeConverter(ctx, src, destTi)
 	case *multipointType:
 		return multipointTypeConverter(ctx, src, destTi)
+	case *multipolygonType:
+		return multipolygonTypeConverter(ctx, src, destTi)
 	case *pointType:
 		return pointTypeConverter(ctx, src, destTi)
 	case *polygonType:
@@ -149,6 +155,10 @@ func wrapConvertValueToNomsValue(
 			vInt = types.ConvertTypesPointToSQLPoint(val)
 		case types.Polygon:
 			vInt = types.ConvertTypesPolygonToSQLPolygon(val)
+		case types.MultiPoint:
+			vInt = types.ConvertTypesMultiPointToSQLMultiPoint(val)
+		case types.MultiLineString:
+			vInt = types.ConvertTypesMultiLineStringToSQLMultiLineString(val)
 		case types.String:
 			vInt = string(val)
 		case types.Timestamp:

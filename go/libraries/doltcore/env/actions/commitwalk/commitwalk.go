@@ -159,7 +159,7 @@ func newQueue() *q {
 //
 // Roughly mimics `git log main..feature`.
 func GetDotDotRevisions(ctx context.Context, includedDB *doltdb.DoltDB, includedHead hash.Hash, excludedDB *doltdb.DoltDB, excludedHead hash.Hash, num int) ([]*doltdb.Commit, error) {
-	commitList := make([]*doltdb.Commit, 0, num)
+	var commitList []*doltdb.Commit
 	q := newQueue()
 	if err := q.SetInvisible(ctx, excludedDB, excludedHead); err != nil {
 		return nil, err
@@ -294,4 +294,79 @@ func GetTopNTopoOrderedCommitsMatching(ctx context.Context, ddb *doltdb.DoltDB, 
 	}
 
 	return commitList, nil
+}
+
+// GetDotDotRevisionsIterator returns an iterator for commits generated with the same semantics as
+// GetDotDotRevisions
+func GetDotDotRevisionsIterator(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash, excludingCommitHash hash.Hash) (doltdb.CommitItr, error) {
+	return newDotDotCommiterator(ctx, ddb, startCommitHash, excludingCommitHash)
+}
+
+type dotDotCommiterator struct {
+	ddb                 *doltdb.DoltDB
+	startCommitHash     hash.Hash
+	excludingCommitHash hash.Hash
+	q                   *q
+}
+
+var _ doltdb.CommitItr = (*dotDotCommiterator)(nil)
+
+func newDotDotCommiterator(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash, excludingCommitHash hash.Hash) (*dotDotCommiterator, error) {
+	itr := &dotDotCommiterator{
+		ddb:                 ddb,
+		startCommitHash:     startCommitHash,
+		excludingCommitHash: excludingCommitHash,
+	}
+
+	err := itr.Reset(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return itr, nil
+}
+
+// Next implements doltdb.CommitItr
+func (i *dotDotCommiterator) Next(ctx context.Context) (hash.Hash, *doltdb.Commit, error) {
+	if i.q.NumVisiblePending() > 0 {
+		nextC := i.q.PopPending()
+		parents, err := nextC.commit.ParentHashes(ctx)
+		if err != nil {
+			return hash.Hash{}, nil, err
+		}
+
+		for _, parentID := range parents {
+			if nextC.invisible {
+				if err := i.q.SetInvisible(ctx, nextC.ddb, parentID); err != nil {
+					return hash.Hash{}, nil, err
+				}
+			}
+			if err := i.q.AddPendingIfUnseen(ctx, nextC.ddb, parentID); err != nil {
+				return hash.Hash{}, nil, err
+			}
+		}
+
+		// If not invisible, return commit. Otherwise get next commit
+		if !nextC.invisible {
+			return nextC.hash, nextC.commit, nil
+		}
+		return i.Next(ctx)
+	}
+
+	return hash.Hash{}, nil, io.EOF
+}
+
+// Reset implements doltdb.CommitItr
+func (i *dotDotCommiterator) Reset(ctx context.Context) error {
+	i.q = newQueue()
+	if err := i.q.SetInvisible(ctx, i.ddb, i.excludingCommitHash); err != nil {
+		return err
+	}
+	if err := i.q.AddPendingIfUnseen(ctx, i.ddb, i.excludingCommitHash); err != nil {
+		return err
+	}
+	if err := i.q.AddPendingIfUnseen(ctx, i.ddb, i.startCommitHash); err != nil {
+		return err
+	}
+	return nil
 }

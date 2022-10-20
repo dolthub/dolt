@@ -24,7 +24,6 @@ import (
 	"github.com/xitongsys/parquet-go/source"
 	"github.com/xitongsys/parquet-go/writer"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -94,15 +93,6 @@ func NewParquetWriter(outSch schema.Schema, destName string) (*ParquetWriter, er
 
 func (pwr *ParquetWriter) GetSchema() schema.Schema {
 	return pwr.sch
-}
-
-// WriteRow will write a row to a table
-func (pwr *ParquetWriter) WriteRow(ctx context.Context, r row.Row) error {
-	sqlRow, err := sqlutil.DoltRowToSqlRow(r, pwr.GetSchema())
-	if err != nil {
-		return err
-	}
-	return pwr.WriteSqlRow(ctx, sqlRow)
 }
 
 func (pwr *ParquetWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {

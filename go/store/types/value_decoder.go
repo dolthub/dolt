@@ -51,6 +51,9 @@ type CodecReader interface {
 	ReadLineString() (LineString, error)
 	ReadPolygon() (Polygon, error)
 	ReadMultiPoint() (MultiPoint, error)
+	ReadMultiLineString() (MultiLineString, error)
+	ReadMultiPolygon() (MultiPolygon, error)
+	ReadGeomColl() (GeomColl, error)
 	ReadBlob() (Blob, error)
 	ReadJSON() (JSON, error)
 }
@@ -103,6 +106,18 @@ func (r *valueDecoder) ReadPolygon() (Polygon, error) {
 
 func (r *valueDecoder) ReadMultiPoint() (MultiPoint, error) {
 	return readMultiPoint(nil, r)
+}
+
+func (r *valueDecoder) ReadMultiLineString() (MultiLineString, error) {
+	return readMultiLineString(nil, r)
+}
+
+func (r *valueDecoder) ReadMultiPolygon() (MultiPolygon, error) {
+	return readMultiPolygon(nil, r)
+}
+
+func (r *valueDecoder) ReadGeomColl() (GeomColl, error) {
+	return readGeomColl(nil, r)
 }
 
 func (r *valueDecoder) ReadJSON() (JSON, error) {
@@ -444,11 +459,35 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		if err != nil {
 			return nil, err
 		}
-		if geomType != WKBPolyID {
+		if geomType != WKBMultiPointID {
 			return nil, ErrUnknownType
 		}
 		buf = buf[EWKBHeaderSize:]
 		return DeserializeTypesMPoint(buf, false, srid), nil
+	case MultiLineStringKind:
+		r.skipKind()
+		buf := []byte(r.ReadString())
+		srid, _, geomType, err := DeserializeEWKBHeader(buf)
+		if err != nil {
+			return nil, err
+		}
+		if geomType != WKBMultiLineID {
+			return nil, ErrUnknownType
+		}
+		buf = buf[EWKBHeaderSize:]
+		return DeserializeTypesMLine(buf, false, srid), nil
+	case MultiPolygonKind:
+		r.skipKind()
+		buf := []byte(r.ReadString())
+		srid, _, geomType, err := DeserializeEWKBHeader(buf)
+		if err != nil {
+			return nil, err
+		}
+		if geomType != WKBMultiPolyID {
+			return nil, ErrUnknownType
+		}
+		buf = buf[EWKBHeaderSize:]
+		return DeserializeTypesMPoly(buf, false, srid), nil
 	case TypeKind:
 		r.skipKind()
 		return r.readType()
@@ -510,7 +549,13 @@ func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
 	case PolygonKind:
 		r.skipKind()
 		r.skipString()
+	case MultiLineStringKind:
+		r.skipKind()
+		r.skipString()
 	case MultiPointKind:
+		r.skipKind()
+		r.skipString()
+	case MultiPolygonKind:
 		r.skipKind()
 		r.skipString()
 	case ListKind:

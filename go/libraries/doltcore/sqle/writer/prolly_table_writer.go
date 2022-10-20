@@ -131,6 +131,16 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 
 // Insert implements TableWriter.
 func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
+	if err := w.primary.ValidateKeyViolations(ctx, sqlRow); err != nil {
+		return err
+	}
+	for _, wr := range w.secondary {
+		if err := wr.ValidateKeyViolations(ctx, sqlRow); err != nil {
+			if uke, ok := err.(secondaryUniqueKeyError); ok {
+				return w.primary.(primaryIndexErrBuilder).errForSecondaryUniqueKeyError(ctx, uke)
+			}
+		}
+	}
 	if err := w.primary.Insert(ctx, sqlRow); err != nil {
 		return err
 	}
@@ -358,7 +368,7 @@ func ordinalMappingsFromSchema(from sql.Schema, to schema.Schema) (km, vm val.Or
 func makeOrdinalMapping(from sql.Schema, to *schema.ColCollection) (m val.OrdinalMapping) {
 	m = make(val.OrdinalMapping, len(to.GetColumns()))
 	for i := range m {
-		name := to.GetAtIndex(i).Name
+		name := to.GetByIndex(i).Name
 		for j, col := range from {
 			if col.Name == name {
 				m[i] = j

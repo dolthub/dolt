@@ -61,7 +61,6 @@ func testIterator(t *testing.T, iter RowIter, expected []sql.Row) {
 	require.Equal(t, io.EOF, err)
 }
 
-var colSqlType = sch.GetAllCols().GetAtIndex(0).TypeInfo.ToSqlType()
 var sch = schema.MustSchemaFromCols(schema.NewColCollection(
 	schema.NewColumn("pk", 0, types.UintKind, true),
 	schema.NewColumn("col1", 1, types.UintKind, false)))

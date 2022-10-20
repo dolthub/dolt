@@ -10,10 +10,10 @@ jobs:
     name: Benchmark Performance
     strategy:
       matrix:
-        dolt_fmt: [ "__LD_1__"]
+        dolt_fmt: ["__LD_1__", "__DOLT__"]
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - uses: azure/setup-kubectl@v2.0
         with:
           version: 'v1.23.6'

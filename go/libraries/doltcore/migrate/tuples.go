@@ -160,7 +160,13 @@ func translateNomsField(ctx context.Context, ns tree.NodeStore, value types.Valu
 		v := value.(types.Geometry).Inner
 		translateGeometryField(v, idx, b)
 
-	case types.PointKind, types.LineStringKind, types.PolygonKind, types.MultiPointKind:
+	case types.PointKind,
+		types.LineStringKind,
+		types.PolygonKind,
+		types.MultiPointKind,
+		types.MultiLineStringKind,
+		types.MultiPolygonKind,
+		types.GeometryCollectionKind:
 		translateGeometryField(value, idx, b)
 
 	case types.JSONKind:
@@ -278,6 +284,18 @@ func translateGeometryField(value types.Value, idx int, b *val.TupleBuilder) {
 
 	case types.MultiPointKind:
 		p := types.ConvertTypesMultiPointToSQLMultiPoint(value.(types.MultiPoint))
+		b.PutGeometry(idx, p.Serialize())
+
+	case types.MultiLineStringKind:
+		l := types.ConvertTypesMultiLineStringToSQLMultiLineString(value.(types.MultiLineString))
+		b.PutGeometry(idx, l.Serialize())
+
+	case types.MultiPolygonKind:
+		p := types.ConvertTypesMultiPolygonToSQLMultiPolygon(value.(types.MultiPolygon))
+		b.PutGeometry(idx, p.Serialize())
+
+	case types.GeometryCollectionKind:
+		p := types.ConvertTypesGeomCollToSQLGeomColl(value.(types.GeomColl))
 		b.PutGeometry(idx, p.Serialize())
 
 	default:

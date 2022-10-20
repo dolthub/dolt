@@ -45,7 +45,10 @@ func main() {
 	wd := import_benchmarker.GetWorkingDir()
 
 	// Generate the tests and the benchmarker.
-	results := import_benchmarker.RunBenchmarkTests(config, wd)
+	results, err := import_benchmarker.RunBenchmarkTests(config, wd)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	import_benchmarker.SerializeResults(results, wd, resultsTableName, "csv")
 

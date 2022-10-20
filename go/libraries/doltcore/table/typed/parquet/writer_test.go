@@ -21,11 +21,11 @@ import (
 	"os"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/reader"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
@@ -54,41 +54,21 @@ type Person struct {
 	Title string `parquet:"name=title, type=BYTE_ARRAY, convertedtype=UTF8, repetitiontype=OPTIONAL"`
 }
 
-func mustRow(r row.Row, err error) row.Row {
-	if err != nil {
-		panic(err)
-	}
-
-	return r
-}
-
-func getSampleRows() (rows []row.Row) {
-	return []row.Row{
-		mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
-			nameColTag:  types.String("Bill Billerson"),
-			ageColTag:   types.Uint(32),
-			titleColTag: types.String("Senior Dufus")})),
-		mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
-			nameColTag:  types.String("Rob Robertson"),
-			ageColTag:   types.Uint(25),
-			titleColTag: types.String("Dufus")})),
-		mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
-			nameColTag:  types.String("John Johnson"),
-			ageColTag:   types.Uint(21),
-			titleColTag: types.String("")})),
-		mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
-			nameColTag: types.String("Andy Anderson"),
-			ageColTag:  types.Uint(27),
-			/* title = NULL */})),
+func getSampleRows() []sql.Row {
+	return []sql.Row{
+		{"Bill Billerson", 32, "Senior Dufus"},
+		{"Rob Robertson", 25, "Dufus"},
+		{"John Johnson", 21, ""},
+		{"Andy Anderson", 27, nil},
 	}
 }
 
-func writeToParquet(pWr *ParquetWriter, rows []row.Row, t *testing.T) {
+func writeToParquet(pWr *ParquetWriter, rows []sql.Row, t *testing.T) {
 	func() {
 		defer pWr.Close(context.Background())
 
 		for _, row := range rows {
-			err := pWr.WriteRow(context.Background(), row)
+			err := pWr.WriteSqlRow(context.Background(), row)
 			if err != nil {
 				t.Fatal("Failed to write row")
 			}

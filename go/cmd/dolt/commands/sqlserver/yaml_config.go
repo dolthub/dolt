@@ -141,6 +141,7 @@ type YAMLConfig struct {
 	RemotesapiConfig  RemotesapiYAMLConfig  `yaml:"remotesapi"`
 	ClusterCfg        *ClusterYAMLConfig    `yaml:"cluster"`
 	PrivilegeFile     *string               `yaml:"privilege_file"`
+	BranchControlFile *string               `yaml:"branch_control_file"`
 	Vars              []UserSessionVars     `yaml:"user_session_vars"`
 	Jwks              []engine.JwksConfig   `yaml:"jwks"`
 	GoldenMysqlConn   *string               `yaml:"golden_mysql_conn"`
@@ -358,6 +359,14 @@ func (cfg YAMLConfig) PrivilegeFilePath() string {
 		return *cfg.PrivilegeFile
 	}
 	return filepath.Join(cfg.CfgDir(), defaultPrivilegeFilePath)
+}
+
+// BranchControlFilePath returns the path to the file which contains the branch control permissions.
+func (cfg YAMLConfig) BranchControlFilePath() string {
+	if cfg.BranchControlFile != nil {
+		return *cfg.BranchControlFile
+	}
+	return filepath.Join(cfg.CfgDir(), defaultBranchControlFilePath)
 }
 
 // UserVars is an array containing user specific session variables
