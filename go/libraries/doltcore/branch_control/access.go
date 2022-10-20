@@ -16,6 +16,8 @@ package branch_control
 
 import (
 	"fmt"
+	"math"
+	"strings"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -37,13 +39,11 @@ const (
 type Access struct {
 	binlog *Binlog
 
-	Branches  []MatchExpression
-	Users     []MatchExpression
-	Hosts     []MatchExpression
-	Values    []AccessValue
-	SuperUser string
-	SuperHost string
-	RWMutex   *sync.RWMutex
+	Branches []MatchExpression
+	Users    []MatchExpression
+	Hosts    []MatchExpression
+	Values   []AccessValue
+	RWMutex  *sync.RWMutex
 }
 
 // AccessValue contains the user-facing values of a particular row, along with the permissions for a row.
@@ -55,23 +55,21 @@ type AccessValue struct {
 }
 
 // newAccess returns a new Access.
-func newAccess(superUser string, superHost string) *Access {
+func newAccess() *Access {
 	return &Access{
-		binlog:    NewAccessBinlog(nil),
-		Branches:  nil,
-		Users:     nil,
-		Hosts:     nil,
-		Values:    nil,
-		SuperUser: superUser,
-		SuperHost: superHost,
-		RWMutex:   &sync.RWMutex{},
+		binlog:   NewAccessBinlog(nil),
+		Branches: nil,
+		Users:    nil,
+		Hosts:    nil,
+		Values:   nil,
+		RWMutex:  &sync.RWMutex{},
 	}
 }
 
 // Match returns whether any entries match the given branch, user, and host, along with their permissions. Requires
 // external synchronization handling, therefore manually manage the RWMutex.
 func (tbl *Access) Match(branch string, user string, host string) (bool, Permissions) {
-	if tbl.SuperUser == user && tbl.SuperHost == host {
+	if IsSuperUser(user, host) {
 		return true, Permissions_Admin
 	}
 
@@ -102,6 +100,21 @@ func (tbl *Access) GetIndex(branchExpr string, userExpr string, hostExpr string)
 		}
 	}
 	return -1
+}
+
+// GetBinlog returns the table's binlog.
+func (tbl *Access) GetBinlog() *Binlog {
+	return tbl.binlog
+}
+
+// GetSuperUser returns the server-level super user. Intended for display purposes only.
+func (tbl *Access) GetSuperUser() string {
+	return superUser
+}
+
+// GetSuperHost returns the server-level super user's host. Intended for display purposes only.
+func (tbl *Access) GetSuperHost() string {
+	return superHost
 }
 
 // Serialize returns the offset for the Access table written to the given builder.
@@ -261,6 +274,58 @@ func (tbl *Access) gatherPermissions(collectionIndexes []uint32) Permissions {
 		perms |= tbl.Values[collectionIndex].Permissions
 	}
 	return perms
+}
+
+// insertDefaultRow adds a row that allows all users to access and modify all branches, but does not allow them to
+// modify any branch control tables. This was the default behavior of Dolt before the introduction of branch permissions.
+func (tbl *Access) insertDefaultRow() {
+	// Check if the appropriate row already exists
+	for _, value := range tbl.Values {
+		if value.Branch == "%" && value.User == "%" && value.Host == "%" {
+			// Getting to this state will be disallowed in the future, but if the row exists without any perms, then add
+			// the Write perm
+			if uint64(value.Permissions) == 0 {
+				value.Permissions = Permissions_Write
+			}
+			return
+		}
+	}
+	tbl.insert("%", "%", "%", Permissions_Write)
+}
+
+// insert adds the given expressions to the table. This does not perform any sort of validation whatsoever, so it is
+// important to ensure that the expressions are valid before insertion.
+func (tbl *Access) insert(branch string, user string, host string, perms Permissions) {
+	// Branch and Host are case-insensitive, while user is case-sensitive
+	branch = strings.ToLower(FoldExpression(branch))
+	user = FoldExpression(user)
+	host = strings.ToLower(FoldExpression(host))
+	// Each expression is capped at 2¹⁶-1 values, so we truncate to 2¹⁶-2 and add the any-match character at the end if it's over
+	if len(branch) > math.MaxUint16 {
+		branch = string(append([]byte(branch[:math.MaxUint16-1]), byte('%')))
+	}
+	if len(user) > math.MaxUint16 {
+		user = string(append([]byte(user[:math.MaxUint16-1]), byte('%')))
+	}
+	if len(host) > math.MaxUint16 {
+		host = string(append([]byte(host[:math.MaxUint16-1]), byte('%')))
+	}
+	// Add the expression strings to the binlog
+	tbl.binlog.Insert(branch, user, host, uint64(perms))
+	// Parse and insert the expressions
+	branchExpr := ParseExpression(branch, sql.Collation_utf8mb4_0900_ai_ci)
+	userExpr := ParseExpression(user, sql.Collation_utf8mb4_0900_bin)
+	hostExpr := ParseExpression(host, sql.Collation_utf8mb4_0900_ai_ci)
+	nextIdx := uint32(len(tbl.Values))
+	tbl.Branches = append(tbl.Branches, MatchExpression{CollectionIndex: nextIdx, SortOrders: branchExpr})
+	tbl.Users = append(tbl.Users, MatchExpression{CollectionIndex: nextIdx, SortOrders: userExpr})
+	tbl.Hosts = append(tbl.Hosts, MatchExpression{CollectionIndex: nextIdx, SortOrders: hostExpr})
+	tbl.Values = append(tbl.Values, AccessValue{
+		Branch:      branch,
+		User:        user,
+		Host:        host,
+		Permissions: perms,
+	})
 }
 
 // Serialize returns the offset for the AccessValue written to the given builder.

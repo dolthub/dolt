@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -197,6 +199,10 @@ func CreateBranchWithStartPt(ctx context.Context, dbData env.DbData, newBranch, 
 		} else {
 			return fmt.Errorf("fatal: Unexpected error creating branch '%s' : %v", newBranch, err)
 		}
+	}
+	err = branch_control.AddAccessEntryForContext(ctx, newBranch)
+	if err != nil {
+		return err
 	}
 
 	return nil

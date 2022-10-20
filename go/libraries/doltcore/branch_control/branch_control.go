@@ -18,6 +18,7 @@ import (
 	"context"
 	goerrors "errors"
 	"fmt"
+	"net"
 	"os"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -36,6 +37,7 @@ var (
 	ErrUpdatingRow          = errors.NewKind("`%s`@`%s` cannot update the row [%q, %q, %q]")
 	ErrUpdatingToRow        = errors.NewKind("`%s`@`%s` cannot update the row [%q, %q, %q] to the new branch expression %q")
 	ErrDeletingRow          = errors.NewKind("`%s`@`%s` cannot delete the row [%q, %q, %q]")
+	ErrMissingController    = errors.NewKind("a context has a non-nil session but is missing its branch controller")
 )
 
 // Context represents the interface that must be inherited from the context.
@@ -55,95 +57,122 @@ type Controller struct {
 	doltConfigDirPath     string
 }
 
-// TODO: delete me
-var StaticController = &Controller{}
-var enabled = false
+var (
+	// superUser is the server-wide user that has full, irrevocable permission to do whatever they want to any branch and table
+	superUser string
+	// superHost is the host counterpart of the superUser
+	superHost string
+	// superHostIsLoopback states whether the superHost is a loopback address
+	superHostIsLoopback bool
+)
 
-func init() {
-	if os.Getenv("DOLT_ENABLE_BRANCH_CONTROL") != "" {
-		enabled = true
-	}
-	StaticController = CreateControllerWithSuperUser(context.Background(), "root", "localhost")
-}
-
-// CreateController returns an empty *Controller.
-func CreateController(ctx context.Context) *Controller {
-	return CreateControllerWithSuperUser(ctx, "", "")
-}
-
-// CreateControllerWithSuperUser returns a controller with the given user and host set as an immutable super user.
-func CreateControllerWithSuperUser(ctx context.Context, superUser string, superHost string) *Controller {
-	//TODO: put in the context
-	accessTbl := newAccess(superUser, superHost)
-	return &Controller{
-		Access:    accessTbl,
-		Namespace: newNamespace(accessTbl, superUser, superHost),
+// SetSuperUser sets the server-wide super user to the given user and host combination. The super user has full,
+// irrevocable permission to do whatever they want to any branch and table.
+func SetSuperUser(user string, host string) {
+	superUser = user
+	// Check if superHost is a loopback
+	if host == "localhost" || net.ParseIP(host).IsLoopback() {
+		superHost = "localhost"
+		superHostIsLoopback = true
+	} else {
+		superHost = host
+		superHostIsLoopback = false
 	}
 }
 
-// LoadData loads the data from the given location into the controller.
-func LoadData(ctx context.Context, branchControlFilePath string, doltConfigDirPath string) error {
-	//TODO: load into the context's controller
-	if !enabled {
-		return nil
+// IsSuperUser returns whether the given user and host combination is the super user.
+func IsSuperUser(user string, host string) bool {
+	if user == superUser && ((host == superHost) || (superHostIsLoopback && net.ParseIP(host).IsLoopback())) {
+		return true
+	}
+	return false
+}
+
+// CreateDefaultController returns a default controller, which only has a single entry allowing all users to have write
+// permissions on all branches (only the super user has admin, if a super user has been set). This is equivalent to
+// passing empty strings to LoadData.
+func CreateDefaultController() *Controller {
+	controller, err := LoadData("", "")
+	if err != nil {
+		panic(err) // should never happen
+	}
+	return controller
+}
+
+// LoadData loads the data from the given location and returns a controller. Returns the default controller if the
+// `branchControlFilePath` is empty.
+func LoadData(branchControlFilePath string, doltConfigDirPath string) (*Controller, error) {
+	accessTbl := newAccess()
+	controller := &Controller{
+		Access:                accessTbl,
+		Namespace:             newNamespace(accessTbl),
+		branchControlFilePath: branchControlFilePath,
+		doltConfigDirPath:     doltConfigDirPath,
 	}
 
 	// Do not attempt to load from an empty file path
 	if len(branchControlFilePath) == 0 {
-		return nil
+		// If the path is empty, then we should populate the controller with the default row to ensure normal (expected) operation
+		controller.Access.insertDefaultRow()
+		return controller, nil
 	}
 
-	StaticController.branchControlFilePath = branchControlFilePath
-	StaticController.doltConfigDirPath = doltConfigDirPath
 	data, err := os.ReadFile(branchControlFilePath)
 	if err != nil && !goerrors.Is(err, os.ErrNotExist) {
-		return err
+		return nil, err
 	}
 	// Nothing to load so we can return
 	if len(data) == 0 {
-		return nil
+		// As there is nothing to load, we should populate the controller with the default row to ensure normal (expected) operation
+		controller.Access.insertDefaultRow()
+		return controller, nil
 	}
 	// Load the tables
 	if serial.GetFileID(data) != serial.BranchControlFileID {
-		return fmt.Errorf("unable to deserialize branch controller, unknown file ID `%s`", serial.GetFileID(data))
+		return nil, fmt.Errorf("unable to deserialize branch controller, unknown file ID `%s`", serial.GetFileID(data))
 	}
 	bc, err := serial.TryGetRootAsBranchControl(data, serial.MessagePrefixSz)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	access, err := bc.TryAccessTbl(nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	namespace, err := bc.TryNamespaceTbl(nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// The Deserialize functions acquire write locks, so we don't acquire them here
-	if err = StaticController.Access.Deserialize(access); err != nil {
-		return err
+	if err = controller.Access.Deserialize(access); err != nil {
+		return nil, err
 	}
-	if err = StaticController.Namespace.Deserialize(namespace); err != nil {
-		return err
+	if err = controller.Namespace.Deserialize(namespace); err != nil {
+		return nil, err
 	}
-	return nil
+	return controller, nil
 }
 
 // SaveData saves the data from the context's controller to the location pointed by it.
 func SaveData(ctx context.Context) error {
-	//TODO: load from the context's controller
-	if !enabled {
+	branchAwareSession := GetBranchAwareSession(ctx)
+	// A nil session means we're not in the SQL context, so we've got nothing to serialize
+	if branchAwareSession == nil {
 		return nil
 	}
-
+	controller := branchAwareSession.GetController()
+	// If there is no controller in the context, then we have nothing to serialize
+	if controller == nil {
+		return nil
+	}
 	// If we never set a save location then we just return
-	if len(StaticController.branchControlFilePath) == 0 {
+	if len(controller.branchControlFilePath) == 0 {
 		return nil
 	}
 	// Create the doltcfg directory if it doesn't exist
-	if len(StaticController.doltConfigDirPath) != 0 {
-		if _, err := os.Stat(StaticController.doltConfigDirPath); os.IsNotExist(err) {
-			if mkErr := os.Mkdir(StaticController.doltConfigDirPath, 0777); mkErr != nil {
+	if len(controller.doltConfigDirPath) != 0 {
+		if _, err := os.Stat(controller.doltConfigDirPath); os.IsNotExist(err) {
+			if mkErr := os.Mkdir(controller.doltConfigDirPath, 0777); mkErr != nil {
 				return mkErr
 			}
 		} else if err != nil {
@@ -152,20 +181,14 @@ func SaveData(ctx context.Context) error {
 	}
 	b := flatbuffers.NewBuilder(1024)
 	// The Serialize functions acquire read locks, so we don't acquire them here
-	accessOffset := StaticController.Access.Serialize(b)
-	namespaceOffset := StaticController.Namespace.Serialize(b)
+	accessOffset := controller.Access.Serialize(b)
+	namespaceOffset := controller.Namespace.Serialize(b)
 	serial.BranchControlStart(b)
 	serial.BranchControlAddAccessTbl(b, accessOffset)
 	serial.BranchControlAddNamespaceTbl(b, namespaceOffset)
 	root := serial.BranchControlEnd(b)
 	data := serial.FinishMessage(b, root, []byte(serial.BranchControlFileID))
-	return os.WriteFile(StaticController.branchControlFilePath, data, 0777)
-}
-
-// Reset is a temporary function just for testing. Once the controller is in the context, this will be unnecessary.
-func Reset() {
-	//TODO: remove this once the controller is in the context
-	StaticController = CreateControllerWithSuperUser(context.Background(), StaticController.Access.SuperUser, StaticController.Access.SuperHost)
+	return os.WriteFile(controller.branchControlFilePath, data, 0777)
 }
 
 // CheckAccess returns whether the given context has the correct permissions on its selected branch. In general, SQL
@@ -174,16 +197,18 @@ func Reset() {
 // the context. In these cases, CheckAccess will pass as we want to allow all local commands to ignore branch
 // permissions.
 func CheckAccess(ctx context.Context, flags Permissions) error {
-	if !enabled {
-		return nil
-	}
 	branchAwareSession := GetBranchAwareSession(ctx)
 	// A nil session means we're not in the SQL context, so we allow all operations
 	if branchAwareSession == nil {
 		return nil
 	}
-	StaticController.Access.RWMutex.RLock()
-	defer StaticController.Access.RWMutex.RUnlock()
+	controller := branchAwareSession.GetController()
+	// Any context that has a non-nil session should always have a non-nil controller, so this is an error
+	if controller == nil {
+		return ErrMissingController.New()
+	}
+	controller.Access.RWMutex.RLock()
+	defer controller.Access.RWMutex.RUnlock()
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
@@ -192,7 +217,7 @@ func CheckAccess(ctx context.Context, flags Permissions) error {
 		return err
 	}
 	// Get the permissions for the branch, user, and host combination
-	_, perms := StaticController.Access.Match(branch, user, host)
+	_, perms := controller.Access.Match(branch, user, host)
 	// If either the flags match or the user is an admin for this branch, then we allow access
 	if (perms&flags == flags) || (perms&Permissions_Admin == Permissions_Admin) {
 		return nil
@@ -205,19 +230,22 @@ func CheckAccess(ctx context.Context, flags Permissions) error {
 // However, not all CLI commands use *sql.Context, and therefore will not have any user associated with the context. In
 // these cases, CanCreateBranch will pass as we want to allow all local commands to freely create branches.
 func CanCreateBranch(ctx context.Context, branchName string) error {
-	if !enabled {
-		return nil
-	}
 	branchAwareSession := GetBranchAwareSession(ctx)
+	// A nil session means we're not in the SQL context, so we allow the create operation
 	if branchAwareSession == nil {
 		return nil
 	}
-	StaticController.Namespace.RWMutex.RLock()
-	defer StaticController.Namespace.RWMutex.RUnlock()
+	controller := branchAwareSession.GetController()
+	// Any context that has a non-nil session should always have a non-nil controller, so this is an error
+	if controller == nil {
+		return ErrMissingController.New()
+	}
+	controller.Namespace.RWMutex.RLock()
+	defer controller.Namespace.RWMutex.RUnlock()
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
-	if StaticController.Namespace.CanCreate(branchName, user, host) {
+	if controller.Namespace.CanCreate(branchName, user, host) {
 		return nil
 	}
 	return ErrCannotCreateBranch.New(user, host, branchName)
@@ -228,26 +256,56 @@ func CanCreateBranch(ctx context.Context, branchName string) error {
 // However, not all CLI commands use *sql.Context, and therefore will not have any user associated with the context. In
 // these cases, CanDeleteBranch will pass as we want to allow all local commands to freely delete branches.
 func CanDeleteBranch(ctx context.Context, branchName string) error {
-	if !enabled {
-		return nil
-	}
 	branchAwareSession := GetBranchAwareSession(ctx)
 	// A nil session means we're not in the SQL context, so we allow the delete operation
 	if branchAwareSession == nil {
 		return nil
 	}
-	StaticController.Access.RWMutex.RLock()
-	defer StaticController.Access.RWMutex.RUnlock()
+	controller := branchAwareSession.GetController()
+	// Any context that has a non-nil session should always have a non-nil controller, so this is an error
+	if controller == nil {
+		return ErrMissingController.New()
+	}
+	controller.Access.RWMutex.RLock()
+	defer controller.Access.RWMutex.RUnlock()
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
 	// Get the permissions for the branch, user, and host combination
-	_, perms := StaticController.Access.Match(branchName, user, host)
+	_, perms := controller.Access.Match(branchName, user, host)
 	// If the user has the write or admin flags, then we allow access
 	if (perms&Permissions_Write == Permissions_Write) || (perms&Permissions_Admin == Permissions_Admin) {
 		return nil
 	}
 	return ErrCannotDeleteBranch.New(user, host, branchName)
+}
+
+// AddAccessEntryForContext adds an entry in the access table for the user represented by the given context. If the
+// context is missing some functionality that is needed to perform the addition, such as a user or the Controller, then
+// this simply returns.
+func AddAccessEntryForContext(ctx context.Context, branchName string) error {
+	branchAwareSession := GetBranchAwareSession(ctx)
+	if branchAwareSession == nil {
+		return nil
+	}
+	controller := branchAwareSession.GetController()
+	if controller == nil {
+		return nil
+	}
+
+	user := branchAwareSession.GetUser()
+	host := branchAwareSession.GetHost()
+	// Check if we already have admin permissions for the given branch, as there's no need to do another insertion if so
+	controller.Access.RWMutex.RLock()
+	_, modPerms := controller.Access.Match(branchName, user, host)
+	controller.Access.RWMutex.RUnlock()
+	if modPerms&Permissions_Admin == Permissions_Admin {
+		return nil
+	}
+	controller.Access.RWMutex.Lock()
+	controller.Access.insert(branchName, user, host, Permissions_Admin)
+	controller.Access.RWMutex.Unlock()
+	return SaveData(ctx)
 }
 
 // GetBranchAwareSession returns the session contained within the context. If the context does NOT contain a session,

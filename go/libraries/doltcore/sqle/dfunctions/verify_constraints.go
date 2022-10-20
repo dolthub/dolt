@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -55,6 +56,9 @@ func (vc *ConstraintsVerifyFunc) Eval(ctx *sql.Context, row sql.Row) (interface{
 }
 
 func DoDoltConstraintsVerify(ctx *sql.Context, args []string) (int, error) {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return 1, err
+	}
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 	workingSet, err := dSess.WorkingSet(ctx, dbName)
