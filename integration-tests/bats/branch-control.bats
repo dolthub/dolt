@@ -27,7 +27,6 @@ teardown() {
 @test "branch-control: fresh database. branch control tables exist through server interface" {
     start_sql_server
 
-    # Should I be able to see all users if I only have write perms?
     server_query "dolt_repo_$$" 1 dolt "" "select * from dolt_branch_control" "branch,user,host,permissions\n%,dolt,0.0.0.0,{'admin'}\n%,%,%,{'write'}"
 
     server_query "dolt_repo_$$" 1 dolt "" "select * from dolt_branch_namespace_control" ""
@@ -48,6 +47,19 @@ teardown() {
     # Is it weird that the dolt_branch_control can see the dolt user when logged in as test?
     start_sql_server
     server_query "dolt_repo_$$" 1 test "" "select * from dolt_branch_control" "branch,user,host,permissions\n%,dolt,0.0.0.0,{'admin'}\ntest,test,%,{'write'}"
-
     
 }
+
+@test "branch-control: default user root works as expected" {
+    # I can't figure out how to get a dolt sql-server started as root.
+    # So, I'm copying the pattern from sql-privs.bats and starting it
+    # manually.
+    PORT=$( definePORT )
+    dolt sql-server --host 0.0.0.0 --port=$PORT &
+    SERVER_PID=$! # will get killed by teardown_common
+    sleep 5 # not using python wait so this works on windows
+
+    skip "This does not return branch permissions for the root user even though I'm connected as root"
+    server_query "dolt_repo_$$" 1 root "" "select * from dolt_branch_control" "branch,user,host,permissions\n%,root,localhost,{'admin'}\n%,%,%,{'write'}"
+}
+
