@@ -5142,6 +5142,10 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Query:    "SELECT count(*) from dolt_log('new-branch');",
 				Expected: []sql.Row{{5}},
 			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main^');",
+				Expected: []sql.Row{{3}},
+			},
 		},
 	},
 	{
@@ -5204,6 +5208,14 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT count(*) from dolt_log('^main~', 'main');",
 				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('^main^', 'main');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('^main', 'main^');",
+				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('^main', @Commit3);",
