@@ -707,3 +707,28 @@ var AddIndexScripts = []queries.ScriptTest{
 		},
 	},
 }
+
+var AddPrimaryKeyScripts = []queries.ScriptTest{
+	{
+		// it's keyless, so the rows could have any number as pk
+		Name: "ALTER TABLE add primary key to keyless table",
+		SetUpScript: []string{
+			"CREATE TABLE test (i int, j int);",
+			"insert into test values (1,1), (2,2), (3,3)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table test add column pk int primary key auto_increment;",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query: "select pk from test;",
+				Expected: []sql.Row{
+					{1},
+					{2},
+					{3},
+				},
+			},
+		},
+	},
+}
