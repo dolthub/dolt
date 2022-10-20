@@ -2082,10 +2082,6 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 			return err
 		}
 		if !ok {
-			// The engine matched on a primary key, and Dolt does not yet support using the primary key within the
-			// schema.Index interface (which is used internally to represent indexes across the codebase). In the
-			// meantime, we must generate a duplicate key over the primary key.
-			//TODO: use the primary key as-is
 			idxReturn, err := creation.CreateIndex(ctx, tbl, "", sqlFk.Columns, false, false, "", editor.Options{
 				ForeignKeyChecksDisabled: true,
 				Deaf:                     t.opts.Deaf,
@@ -2102,16 +2098,11 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 			}
 		}
 
-		// TODO: weirdly, it does find the primary key from the parent and it seems to use it just fine????
 		refTableIndex, ok, err := findIndexWithPrefix(refSch, sqlFk.ParentColumns)
 		if err != nil {
 			return err
 		}
 		if !ok {
-			// The engine matched on a primary key, and Dolt does not yet support using the primary key within the
-			// schema.Index interface (which is used internally to represent indexes across the codebase). In the
-			// meantime, we must generate a duplicate key over the primary key.
-			//TODO: use the primary key as-is
 			var refPkTags []uint64
 			for _, i := range refSch.GetPkOrdinals() {
 				refPkTags = append(refPkTags, refSch.GetAllCols().GetByIndex(i).Tag)
@@ -2830,7 +2821,6 @@ func findIndexWithPrefix(sch schema.Schema, prefixCols []string) (schema.Index, 
 
 	prefixCols = lowercaseSlice(prefixCols)
 	indexes := sch.Indexes().AllIndexes()
-	// TODO: get primary key as indexes here
 	indexes = append(indexes, sch.PkIndex())
 	colLen := len(prefixCols)
 	var indexesWithLen []idxWithLen
