@@ -561,6 +561,12 @@ func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (durable.
 		return nil, err
 	}
 
+	// TODO: convert schema.Index to durable.Index
+	if indexName == "PRIMARY" {
+		sch.PkIndex()
+
+	}
+
 	indexes, err := t.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
