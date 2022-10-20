@@ -5072,6 +5072,34 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Query:       "SELECT * from dolt_log(@Commit1, LOWER(@Commit2));",
 				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
 			},
+			{
+				Query:          "SELECT parents from dolt_log();",
+				ExpectedErrStr: `column "parents" could not be found in any table in scope`,
+			},
+			{
+				Query:       "SELECT * from dolt_log('--decorate', 'invalid');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('--decorate', 123);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('--decorate', null);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:          "SELECT refs from dolt_log();",
+				ExpectedErrStr: `column "refs" could not be found in any table in scope`,
+			},
+			{
+				Query:          "SELECT refs from dolt_log('--decorate', 'auto');",
+				ExpectedErrStr: `column "refs" could not be found in any table in scope`,
+			},
+			{
+				Query:          "SELECT refs from dolt_log('--decorate', 'no');",
+				ExpectedErrStr: `column "refs" could not be found in any table in scope`,
+			},
 		},
 	},
 	{
@@ -5318,7 +5346,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "min parents",
+		Name: "min parents, merges, show parents, decorate",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int);",
 			"call dolt_add('.')",
@@ -5336,6 +5364,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			"call dolt_checkout('main')",
 			"call dolt_merge('branch1')",               // fast-forward merge
 			"set @MergeCommit = dolt_merge('branch2')", // actual merge with commit
+			"call dolt_tag('v1')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -5369,6 +5398,34 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT count(*) from dolt_log('--min-parents', '5');",
 				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT commit_hash = @MergeCommit, SUBSTRING_INDEX(parents, ', ', 1) = @Commit2, SUBSTRING_INDEX(parents, ', ', -1) = @Commit3 from dolt_log('main', '--parents', '--merges');",
+				Expected: []sql.Row{{true, true, true}}, // shows two parents for merge commit
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit3, parents = @Commit1 from dolt_log('branch2', '--parents') LIMIT 1;", // shows one parent for non-merge commit
+				Expected: []sql.Row{{true, true}},
+			},
+			{
+				Query:    "SELECT commit_hash = @MergeCommit, SUBSTRING_INDEX(parents, ', ', 1) = @Commit2, SUBSTRING_INDEX(parents, ', ', -1) = @Commit3 from dolt_log('branch1..main', '--parents', '--merges') LIMIT 1;",
+				Expected: []sql.Row{{true, true, true}},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit2, parents = @Commit1 from dolt_log('branch2..branch1', '--parents') LIMIT 1;",
+				Expected: []sql.Row{{true, true}},
+			},
+			{
+				Query:    "SELECT refs from dolt_log('--decorate', 'short') LIMIT 1;",
+				Expected: []sql.Row{{"HEAD -> main, tag: v1"}},
+			},
+			{
+				Query:    "SELECT refs from dolt_log('--decorate', 'full') LIMIT 1;",
+				Expected: []sql.Row{{"HEAD -> refs/heads/main, tag: refs/tags/v1"}},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit2, parents = @Commit1, refs from dolt_log('branch2..branch1', '--parents', '--decorate', 'short') LIMIT 1;",
+				Expected: []sql.Row{{true, true, "HEAD -> branch1"}},
 			},
 		},
 	},
