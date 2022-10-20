@@ -108,6 +108,7 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
+	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
 			Name: "trigger before update, with indexed update",
@@ -259,7 +260,7 @@ func TestQueryPlans(t *testing.T) {
 }
 
 func TestIntegrationQueryPlans(t *testing.T) {
-	harness := newDoltHarness(t).WithParallelism(2)
+	harness := newDoltHarness(t).WithParallelism(1)
 	enginetest.TestIntegrationPlans(t, harness)
 }
 
