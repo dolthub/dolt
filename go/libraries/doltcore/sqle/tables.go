@@ -525,16 +525,6 @@ func (t *DoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 	return t.sqlSchema()
 }
 
-type emptyRowIterator struct{}
-
-func (itr emptyRowIterator) Next(*sql.Context) (sql.Row, error) {
-	return nil, io.EOF
-}
-
-func (itr emptyRowIterator) Close(*sql.Context) error {
-	return nil
-}
-
 // PartitionRows returns the table rows for the partition given
 func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
 	table, err := t.DoltTable(ctx)
@@ -1117,36 +1107,6 @@ func (p doltTablePartition) IteratorForPartition(ctx context.Context, idx durabl
 	return m.RangeIterator(ctx, p.start, p.end)
 }
 
-type partitionIter struct {
-	pos  uint64
-	end  uint64
-	iter types.MapIterator
-}
-
-func newPartitionIter(ctx context.Context, m types.Map, start, end uint64) (*partitionIter, error) {
-	iter, err := m.BufferedIteratorAt(ctx, start)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &partitionIter{
-		start,
-		end,
-		iter,
-	}, nil
-}
-
-func (p *partitionIter) Next(ctx context.Context) (k, v types.Value, err error) {
-	if p.pos >= p.end {
-		// types package does not use io.EOF
-		return nil, nil, nil
-	}
-
-	p.pos++
-	return p.iter.Next(ctx)
-}
-
 // AlterableDoltTable allows altering the schema of the table. It implements sql.AlterableTable.
 type AlterableDoltTable struct {
 	WritableDoltTable
@@ -1579,61 +1539,8 @@ func (t *AlterableDoltTable) adjustForeignKeysForDroppedPk(ctx *sql.Context, roo
 }
 
 // DropColumn implements sql.AlterableTable
-func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) error {
-	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
-		return err
-	}
-	if types.IsFormat_DOLT(t.nbf) {
-		return nil
-	}
-
-	root, err := t.getRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	updatedTable, _, err := root.GetTable(ctx, t.tableName)
-	if err != nil {
-		return err
-	}
-
-	sch, err := updatedTable.GetSchema(ctx)
-	if err != nil {
-		return err
-	}
-
-	for _, index := range sch.Indexes().IndexesWithColumn(columnName) {
-		_, err = sch.Indexes().RemoveIndex(index.Name())
-		if err != nil {
-			return err
-		}
-		updatedTable, err = updatedTable.DeleteIndexRowData(ctx, index.Name())
-		if err != nil {
-			return err
-		}
-	}
-
-	updatedTable, err = dropColumn(ctx, updatedTable, columnName)
-	if err != nil {
-		return err
-	}
-
-	updatedTable, err = t.dropColumnData(ctx, updatedTable, sch, columnName)
-	if err != nil {
-		return err
-	}
-
-	newRoot, err := root.PutTable(ctx, t.tableName, updatedTable)
-	if err != nil {
-		return err
-	}
-
-	err = t.setRoot(ctx, newRoot)
-	if err != nil {
-		return err
-	}
-
-	return t.updateFromRoot(ctx, newRoot)
+func (t *AlterableDoltTable) DropColumn(*sql.Context, string) error {
+	return fmt.Errorf("not implemented: AlterableDoltTable.DropColumn()")
 }
 
 // dropColumnData drops values for the specified column from the underlying storage layer
@@ -1839,19 +1746,6 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 	seq++
 
 	return seq, nil
-}
-
-func increment(val types.Value) types.Value {
-	switch val := val.(type) {
-	case types.Int:
-		return val + 1
-	case types.Float:
-		return val + 1
-	case types.Uint:
-		return val + 1
-	default:
-		panic(fmt.Sprintf("unexpected auto inc column type %T", val))
-	}
 }
 
 // CreateIndex implements sql.IndexAlterableTable
@@ -2722,103 +2616,12 @@ func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string)
 	return false, nil
 }
 
-func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.IndexColumn) error {
-	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
-		return err
-	}
-	if types.IsFormat_DOLT(t.nbf) {
-		return nil
-	}
-
-	table, err := t.DoltTable.DoltTable(ctx)
-	if err != nil {
-		return err
-	}
-
-	table, err = addPrimaryKeyToTable(ctx, table, t.tableName, t.nbf, columns, t.opts)
-	if err != nil {
-		return err
-	}
-
-	root, err := t.getRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Update the root with the new table
-	newRoot, err := root.PutTable(ctx, t.tableName, table)
-	if err != nil {
-		return err
-	}
-
-	err = t.setRoot(ctx, newRoot)
-	if err != nil {
-		return err
-	}
-
-	return t.updateFromRoot(ctx, newRoot)
+func (t *AlterableDoltTable) CreatePrimaryKey(*sql.Context, []sql.IndexColumn) error {
+	return fmt.Errorf("not implemented: AlterableDoltTable.CreatePrimaryKey()")
 }
 
 func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
-	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
-		return err
-	}
-	if types.IsFormat_DOLT(t.nbf) {
-		return nil
-	}
-
-	// Ensure that no auto increment requirements exist on this table
-	if t.autoIncCol.AutoIncrement {
-		return sql.ErrWrongAutoKey.New()
-	}
-
-	root, err := t.getRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	fkc, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return err
-	}
-
-	fkcUpdates, err := backupFkcIndexesForPkDrop(ctx, t.sch, fkc)
-	if err != nil {
-		return err
-	}
-
-	err = fkc.UpdateIndexes(ctx, t.sch, fkcUpdates)
-	if err != nil {
-		return err
-	}
-
-	newRoot, err := root.PutForeignKeyCollection(ctx, fkc)
-	if err != nil {
-		return err
-	}
-
-	table, err := t.DoltTable.DoltTable(ctx)
-	if err != nil {
-		return err
-	}
-
-	table, err = dropPrimaryKeyFromTable(ctx, table, t.nbf, t.opts)
-	if err != nil {
-		return err
-	}
-
-	// Update the root with the new table
-	newRoot, err = newRoot.PutTable(ctx, t.tableName, table)
-	if err != nil {
-		return err
-	}
-
-	err = t.setRoot(ctx, newRoot)
-	if err != nil {
-		return err
-	}
-
-	return t.updateFromRoot(ctx, newRoot)
+	return fmt.Errorf("not implemented: AlterableDoltTable.DropPrimaryKey()")
 }
 
 func findIndexWithPrefix(sch schema.Schema, prefixCols []string) (schema.Index, bool, error) {
