@@ -15,13 +15,14 @@
 package branch_control
 
 import (
-	"bytes"
-	"encoding/binary"
 	"math"
 	"sync"
 	"unicode/utf8"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	flatbuffers "github.com/google/flatbuffers/go"
+
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 )
 
 const (
@@ -254,43 +255,28 @@ func (matchExpr MatchExpression) IsAtEnd() bool {
 	return len(matchExpr.SortOrders) == 0 || (len(matchExpr.SortOrders) == 1 && matchExpr.SortOrders[0] == anyMatch)
 }
 
-// Serialize writes the MatchExpression to the given buffer. All encoded integers are big-endian.
-func (matchExpr MatchExpression) Serialize(buffer *bytes.Buffer) {
-	// Write the length
-	sortOrderLen := uint16(len(matchExpr.SortOrders))
-	writeUint16(buffer, sortOrderLen)
-	// Write the sort orders
-	for _, sortOrder := range matchExpr.SortOrders {
-		// We can convert to an uint32 on write and convert back to an int32 on read
-		writeUint32(buffer, uint32(sortOrder))
+// Serialize returns the offset for the MatchExpression written to the given builder.
+func (matchExpr MatchExpression) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
+	_ = serial.BranchControlMatchExpressionStartSortOrdersVector(b, len(matchExpr.SortOrders))
+	for i := len(matchExpr.SortOrders) - 1; i >= 0; i-- {
+		b.PrependInt32(matchExpr.SortOrders[i])
 	}
+	sortOrdersOffset := b.EndVector(len(matchExpr.SortOrders))
+
+	serial.BranchControlMatchExpressionStart(b)
+	serial.BranchControlMatchExpressionAddIndex(b, matchExpr.CollectionIndex)
+	serial.BranchControlMatchExpressionAddSortOrders(b, sortOrdersOffset)
+	return serial.BranchControlMatchExpressionEnd(b)
 }
 
-// deserializeMatchExpression returns a MatchExpression from the data at the given position. Assumes that the given
-// data's encoded integers are big-endian.
-func deserializeMatchExpression(collectionIndex uint32, data []byte, position *uint64) MatchExpression {
-	matchExpr := MatchExpression{CollectionIndex: collectionIndex}
-	// Read the length
-	sortOrderLen := binary.BigEndian.Uint16(data[*position:])
-	*position += 2
-	// Create the sort order slice
-	matchExpr.SortOrders = make([]int32, sortOrderLen)
-	// Read the sort orders
-	for i := uint16(0); i < sortOrderLen; i++ {
-		matchExpr.SortOrders[i] = int32(binary.BigEndian.Uint32(data[*position:]))
-		*position += 4
+// deserializeMatchExpression populates the MatchExpression with the data from the flatbuffers representation.
+func deserializeMatchExpression(fb *serial.BranchControlMatchExpression) MatchExpression {
+	matchExpr := MatchExpression{
+		CollectionIndex: fb.Index(),
+		SortOrders:      make([]int32, fb.SortOrdersLength()),
+	}
+	for i := 0; i < fb.SortOrdersLength(); i++ {
+		matchExpr.SortOrders[i] = fb.SortOrders(i)
 	}
 	return matchExpr
-}
-
-// deserializeMatchExpressions returns a []MatchExpression from the data at the given position. Assumes that the given
-// data's encoded integers are big-endian.
-func deserializeMatchExpressions(matchExprsLen uint32, data []byte, position *uint64) []MatchExpression {
-	// Create the slice
-	matchExprs := make([]MatchExpression, matchExprsLen)
-	// Read each match expression
-	for i := uint32(0); i < matchExprsLen; i++ {
-		matchExprs[i] = deserializeMatchExpression(i, data, position)
-	}
-	return matchExprs
 }

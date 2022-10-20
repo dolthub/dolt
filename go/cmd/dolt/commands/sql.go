@@ -259,7 +259,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	// If no privilege filepath specified, default to doltcfg directory
+	// If no branch control file path is specified, default to doltcfg directory
 	branchControlFilePath, hasBCFilePath := apr.GetValue(BranchCtrlPathFlag)
 	if !hasBCFilePath {
 		branchControlFilePath, err = dEnv.FS.Abs(filepath.Join(cfgDirPath, DefaultBranchCtrlName))
