@@ -729,6 +729,39 @@ var AddPrimaryKeyScripts = []queries.ScriptTest{
 					{3},
 				},
 			},
+			{
+				Query: "show create table test;",
+				Expected: []sql.Row{
+					{"test", "CREATE TABLE `test` (\n  `i` int,\n  `j` int,\n  `pk` int NOT NULL AUTO_INCREMENT,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+				},
+			},
+		},
+	},
+	{
+		Name: "ALTER TABLE add primary key to keyless table",
+		SetUpScript: []string{
+			"CREATE TABLE test (i int, j int);",
+			"insert into test values (1,1), (2,2), (3,3)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table test add column pk int primary key auto_increment first;",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query: "select pk from test;",
+				Expected: []sql.Row{
+					{1},
+					{2},
+					{3},
+				},
+			},
+			{
+				Query: "show create table test;",
+				Expected: []sql.Row{
+					{"test", "CREATE TABLE `test` (\n  `pk` int NOT NULL AUTO_INCREMENT,\n  `i` int,\n  `j` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+				},
+			},
 		},
 	},
 }
