@@ -33,11 +33,17 @@ teardown() {
     server_query "dolt_repo_$$" 1 dolt "" "select * from dolt_branch_namespace_control" ""
 }
 
-@test "branch-control: give user write permissions on a branch" {
+@test "branch-control: modify dolt_branch_control from dolt sql then make sure changes are reflected" {
     dolt sql -q "create user test"
     dolt sql -q "grant all on *.* to test"
     dolt sql -q "delete from dolt_branch_control where user='%'"
     dolt sql -q "insert into dolt_branch_control values ('test', 'test', '%', 'write')"
+
+    run dolt sql -r csv -q "select * from dolt_branch_control"
+    [ $status -eq 0 ]
+    [ ${lines[0]} = "branch,user,host,permissions" ]
+    [ ${lines[1]} = "%,root,localhost,admin" ]
+    [ ${lines[2]} = "test,test,%,write" ]
 
     start_sql_server
     server_query "dolt_repo_$$" 1 test "" "select * from dolt_branch_control" "branch,user,host,permissions\n%,dolt,0.0.0.0,{'admin'}\ntest,test,%,{'write'}"
