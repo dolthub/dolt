@@ -32,5 +32,18 @@ For example, we support `linux/amd64` and `linux/arm64`, so we need build for ta
 `0.50.4-arm64`,
 if the current release version is '0.50.4'.
 
--- `COPY docker/qemu-aarch64-static /usr/bin/` is required for building (non x86 architecture image) in x86 host 
+-- `COPY docker/qemu-aarch64-static /usr/bin/` is required for building (non x86 architecture image) in x86 host
 before any RUN commands.
+
+
+--- WHY WE HAVE FIXED HOST=0.0.0.0 AND PORT=3306 ---
+
+Setting the localhost to either `localhost` or `127.0.0.1` does not allow connection from outside the container.
+
+According to MySQL ( https://dev.mysql.com/blog-archive/the-bind-address-option-now-supports-multiple-addresses/ ),
+`Wildcard address values here means one of the following string values: '*', '::' and '0.0.0.0'`
+
+The default bind-address is `::` which Dolt does not support currently. It is the same as host `0.0.0.0`, which Dolt
+supports. This means that any host remote connections will be allowed to connect to the server in the container.
+User needs to use port-mapping to expose a certain port from the container using `-p 3307:3306`, which means port 3306
+in the container is mapped to port 3307 in host system.
