@@ -556,7 +556,7 @@ SQL
     );
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
     CALL DOLT_ADD('.');
-    SELECT commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');"
+    CALL dolt_commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');"
 
     server_query repo1 1 dolt "" "call dolt_add('.')" "status\n0"
     run dolt ls
