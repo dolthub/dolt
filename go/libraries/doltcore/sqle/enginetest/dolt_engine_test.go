@@ -1254,6 +1254,10 @@ func TestAddDropPks(t *testing.T) {
 	enginetest.TestAddDropPks(t, newDoltHarness(t))
 }
 
+func TestAddAutoIncrementColumn(t *testing.T) {
+	enginetest.TestAddAutoIncrementColumn(t, newDoltHarness(t))
+}
+
 func TestNullRanges(t *testing.T) {
 	enginetest.TestNullRanges(t, newDoltHarness(t))
 }
