@@ -977,6 +977,9 @@ func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootV
 func GetAllTagsForRoots(ctx context.Context, roots ...*RootValue) (tags schema.TagMapping, err error) {
 	tags = make(schema.TagMapping)
 	for _, root := range roots {
+		if root == nil {
+			continue
+		}
 		err = root.IterTables(ctx, func(tblName string, _ *Table, sch schema.Schema) (stop bool, err error) {
 			for _, t := range sch.GetAllCols().Tags {
 				tags.Add(t, tblName)
