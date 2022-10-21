@@ -348,7 +348,7 @@ func (ix *pkIndexImpl) IsUserDefined() bool {
 
 // Name implements Index.
 func (ix *pkIndexImpl) Name() string {
-	return "PRIMARY"
+	return ""
 }
 
 // PrimaryKeyTags implements Index.

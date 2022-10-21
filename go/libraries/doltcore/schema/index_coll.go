@@ -201,19 +201,6 @@ func (ixc *indexCollectionImpl) AllIndexes() []Index {
 		indexes[i] = index
 		i++
 	}
-	// TODO: make primary key index
-	if len(ixc.pks) > 0 {
-		pkIndex := &indexImpl{
-			indexColl:     ixc,
-			name:          "PRIMARY",
-			tags:          ixc.pks,
-			allTags:       ixc.pks,
-			isUnique:      true,
-			isUserDefined: false,
-			comment:       "placeholder comment",
-		}
-		indexes = append(indexes, pkIndex)
-	}
 	sort.Slice(indexes, func(i, j int) bool {
 		return indexes[i].Name() < indexes[j].Name()
 	})
@@ -226,11 +213,7 @@ func (ixc *indexCollectionImpl) Contains(indexName string) bool {
 }
 
 func (ixc *indexCollectionImpl) Count() int {
-	count := len(ixc.indexes)
-	if len(ixc.pks) > 0 {
-		count++
-	}
-	return count
+	return len(ixc.indexes)
 }
 
 func (ixc *indexCollectionImpl) Equals(other IndexCollection) bool {
