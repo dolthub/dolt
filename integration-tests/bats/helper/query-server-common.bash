@@ -74,7 +74,7 @@ for i in range(len(queries)):
                 print('expected exception: ', expected_exception, '\n  got: ', str(e))
                 sys.exit(1)
         else:
-            sys.exit(0)
+            sys.exit(1)
 
     if expected[i] is not None and expected[i] != '':
         print('Raw Expected: ', expected[i])
