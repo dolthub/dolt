@@ -561,8 +561,6 @@ func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (durable.
 		return nil, err
 	}
 
-	// TODO: convert schema.Index to durable.Index
-	// TODO: how to get the underlying prolly map
 	if indexName == "PRIMARY" {
 		return t.GetRowData(ctx)
 	}
