@@ -41,7 +41,7 @@ teardown() {
     # start the server and ensure there are no databases yet
     cd $tempDir/empty_server
     start_sql_server
-    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql"
+    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql"
 
     # verify that dolt_clone works
     # TODO: Once dolt_clone can be called without a selected database, this can be removed
@@ -172,7 +172,7 @@ SQL
     echo '2,2,2' >> import.csv
     run dolt table import -u one_pk import.csv
     [ "$status" -eq 1 ]
-    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" ""
+    server_query repo1 1 dolt "" "SELECT * FROM one_pk ORDER by pk" ""
 }
 
 @test "sql-server: test dolt sql interface works properly with autocommit" {
@@ -198,7 +198,8 @@ SQL
     [[ "$output" =~ "No tables in working set" ]] || false
 
     # check that dolt_commit throws an error when there are no changes to commit
-    server_query repo1 0 dolt "" "CALL DOLT_COMMIT('-a', '-m', 'Commit1')" 1
+    run server_query repo1 0 dolt "" "CALL DOLT_COMMIT('-a', '-m', 'Commit1')" "" 1
+    [[ "$output" =~ "nothing to commit" ]] || false 
 
     run dolt ls
     [ "$status" -eq 0 ]
@@ -403,7 +404,7 @@ SQL
      SELECT DOLT_CHECKOUT('-b', 'feature-branch');
      "
 
-     server_query repo1 1 dolt "" "SELECT * FROM testorder by pk" "pk\n0\n1\n2"
+     server_query repo1 1 dolt "" "SELECT * FROM test order by pk" "pk\n0\n1\n2"
 
      server_query repo1 1 dolt "" "
      SELECT DOLT_CHECKOUT('feature-branch');
@@ -546,7 +547,7 @@ SQL
 
     # make some changes to main and commit to branch test_branch
     server_query repo1 1 dolt "" "
-    SET @@repo1_head_ref='main';
+    CALL DOLT_CHECKOUT('main');
     CREATE TABLE one_pk (
         pk BIGINT NOT NULL,
         c1 BIGINT,
@@ -555,8 +556,7 @@ SQL
     );
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
     CALL DOLT_ADD('.');
-    SELECT commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');
-    CALL DOLT_BRANCH('main', @@repo1_head);"
+    SELECT commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');"
 
     server_query repo1 1 dolt "" "call dolt_add('.')" "status\n0"
     run dolt ls
@@ -1114,7 +1114,7 @@ databases:
 
     start_sql_server_with_config repo1 server.yaml
 
-    server_query repo1 1 dolt "" "call dolt_fetch() as f" "f\n1"
+    server_query repo1 1 dolt "" "call dolt_fetch()" ""
 }
 
 @test "sql-server: run mysql from shell" {
@@ -1210,7 +1210,7 @@ databases:
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 
-    server_query repo2 1 dolt "" "select 1 dolt ""as col1" "col1\n1"
+    server_query repo2 1 dolt "" "select 1 as col1" "col1\n1"
     run grep '\"/tmp/mysql.sock\"' log.txt
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
@@ -1234,7 +1234,7 @@ databases:
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 
-    server_query repo2 1 dolt "" "select 1 dolt ""as col1" "col1\n1"
+    server_query repo2 1 dolt "" "select 1 as col1" "col1\n1"
 
     run grep '\"/tmp/mysql.sock\"' log.txt
     [ "$status" -eq 0 ]
@@ -1285,7 +1285,7 @@ behavior:
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 
-    server_query repo2 1 dolt "" "select 1 dolt ""as col1" "col1\n1"
+    server_query repo2 1 dolt "" "select 1 as col1" "col1\n1"
 
     run grep '\"/tmp/mysql.sock\"' log.txt
     [ "$status" -eq 0 ]
