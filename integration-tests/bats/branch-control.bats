@@ -48,7 +48,8 @@ setup_test_user() {
     [ ${lines[1]} = "%,root,localhost,admin" ]
     [ ${lines[2]} = "test-branch,test,%,write" ]
 
-    # Is it weird that the dolt_branch_control can see the dolt user when logged in as test?
+    # Is it weird that the dolt_branch_control can see the dolt user when
+    # logged in as test?
     start_sql_server
     server_query "dolt_repo_$$" 1 test "" "select * from dolt_branch_control" "branch,user,host,permissions\n%,dolt,0.0.0.0,{'admin'}\ntest-branch,test,%,{'write'}"
     
@@ -64,9 +65,9 @@ setup_test_user() {
     sleep 5 # not using python wait so this works on windows
 
     skip "This does not return branch permissions for the root user even though I'm connected as root"
-    # server_query "dolt_repo_$$" 1 root "" "select * from dolt_branch_control" "branch,user,host,permissions\n%,root,localhost,{'admin'}\n%,%,%,{'write'}"
+    server_query "dolt_repo_$$" 1 root "" "select * from dolt_branch_control" "branch,user,host,permissions\n%,root,localhost,{'admin'}\n%,%,%,{'write'}"
 
-    skip "this delete query fails even thouygh I have permissions"
+    skip "this delete query fails even though I have permissions"
     run server_query "dolt_repo_$$" 1 root "" "delete from dolt_branch_control where user='%'" "" 1
     ! [[ $output =~ "cannot delete the row" ]] || false
 
@@ -74,7 +75,7 @@ setup_test_user() {
     server_query "dolt_repo_$$" 1 root "" "select * from dolt_branch_control" "branch,user,host,permissions\n%,root,localhost,{'admin'}"
 }
 
-@test "branch-control: test branch write permissions" {
+@test "branch-control: test basic branch write permissions" {
     setup_test_user
 
     dolt sql -q "insert into dolt_branch_control values ('test-branch', 'test', '%', 'write')"
@@ -87,5 +88,37 @@ setup_test_user() {
 
     server_query "dolt_repo_$$" 1 test "" "call dolt_checkout('test-branch'); create table t (c1 int)" 
 
+    # I should also have branch permissions on branches I create
+    server_query "dolt_repo_$$" 1 test "" "call dolt_checkout('-b', 'test-branch-2'); create table t (c1 int)"
+
+    # Now back to main. Still locked out.
+    run server_query "dolt_repo_$$" 1 test "" "create table t (c1 int)" "" 1
+    [[ $output =~ "does not have the correct permissions" ]] || false
 }
 
+@test "branch-control: test admin permissions" {
+    setup_test_user
+
+    dolt sql -q "create user test2"
+    dolt sql -q "grant all on *.* to test2"
+
+    dolt sql -q "insert into dolt_branch_control values ('test-branch', 'test','%', 'admin')"
+    dolt branch test-branch
+
+    start_sql_server
+    
+    # Admin has no write permission to branch not an admin on
+    run server_query "dolt_repo_$$" 1 test "" "create table t (c1 int)" "" 1
+    [[ $output =~ "does not have the correct permissions" ]] || false
+    
+    # Admin can write
+    server_query "dolt_repo_$$" 1 test "" "call dolt_checkout('test-branch'); create table t (c1 int)"
+
+    server_query "dolt_repo_$$" 1 test "" "insert into dolt_branch_control values ('test-branch', 'test2', '%', 'write')"
+    server_query "dolt_repo_$$" 1 test "" "select * from dolt_branch_control" "branch,user,host,permissions\n%,dolt,0.0.0.0,{'admin'}\ntest-branch,test,%,{'admin'}\ntest-branch,test2,%,{'write'}"
+    server_query "dolt_repo_$$" 1 test2 "" "select * from dolt_branch_control" "branch,user,host,permissions\n%,dolt,0.0.0.0,{'admin'}\ntest-branch,test,%,{'admin'}\ntest-branch,test2,%,{'write'}"
+    
+    
+    server_query "dolt_repo_$$" 1 test "" "delete from dolt_branch_control where user='test2'"
+    server_query "dolt_repo_$$" 1 test "" "select * from dolt_branch_control" "branch,user,host,permissions\n%,dolt,0.0.0.0,{'admin'}\ntest-branch,test,%,{'admin'}"
+}
