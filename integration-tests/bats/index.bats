@@ -1701,9 +1701,6 @@ SQL
     [[ "$output" =~ "4,44,444,4,4,333,55" ]] || false
     [[ "$output" =~ "5,55,555,5,95,222,11" ]] || false
     [[ "${#lines[@]}" = "6" ]] || false
-    run dolt sql -q "EXPLAIN SELECT * FROM onepk JOIN twopk ON onepk.pk1 = twopk.pk1;"
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "IndexedJoin(onepk.pk1 = twopk.pk1)" ]] || false
 }
 
 @test "index: ALTER TABLE ADD COLUMN" {
