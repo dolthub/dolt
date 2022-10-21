@@ -105,6 +105,13 @@ const (
 	NoEditFlag       = "no-edit"
 	OursFlag         = "ours"
 	TheirsFlag       = "theirs"
+	NumberFlag       = "number"
+	NotFlag          = "not"
+	MergesFlag       = "merges"
+	ParentsFlag      = "parents"
+	MinParentsFlag   = "min-parents"
+	DecorateFlag     = "decorate"
+	OneLineFlag      = "oneline"
 )
 
 const (
@@ -284,6 +291,18 @@ func CreateVerifyConstraintsArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(AllFlag, "a", "Verifies that all rows in the database do not violate constraints instead of just rows modified or inserted in the working set.")
 	ap.SupportsFlag(OutputOnlyFlag, "o", "Disables writing violated constraints to the constraint violations table.")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table(s) to check constraints on. If omitted, checks all tables."})
+	return ap
+}
+
+func CreateLogArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsInt(NumberFlag, "n", "num_commits", "Limit the number of commits to output.")
+	ap.SupportsInt(MinParentsFlag, "", "parent_count", "The minimum number of parents a commit must have to be included in the log.")
+	ap.SupportsFlag(MergesFlag, "", "Equivalent to min-parents == 2, this will limit the log to commits with 2 or more parents.")
+	ap.SupportsFlag(ParentsFlag, "", "Shows all parents of each commit in the log.")
+	ap.SupportsString(DecorateFlag, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
+	ap.SupportsFlag(OneLineFlag, "", "Shows logs in a compact format.")
+	ap.SupportsString(NotFlag, "", "revision", "Excludes commits from revision.")
 	return ap
 }
 

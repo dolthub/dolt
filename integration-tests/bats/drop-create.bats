@@ -397,3 +397,18 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "table not found: test" ]] || false
 }
+
+@test "drop-create: regression test for 0 value tags" {
+    dolt sql -q "CREATE TABLE clan_home_level (level INTEGER NOT NULL, price_teleport JSON NOT NULL);"
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "clan_home_level | price_teleport | 0" ]] || false
+
+    dolt commit -Am "add table"
+
+    dolt sql -q "DROP TABLE clan_home_level;"
+    dolt sql -q "CREATE TABLE clan_home_level (level INTEGER NOT NULL, price_teleport JSON NOT NULL);"
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "clan_home_level | price_teleport | 0" ]] || false
+}
