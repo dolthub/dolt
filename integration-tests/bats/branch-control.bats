@@ -117,7 +117,9 @@ setup_test_user() {
     server_query "dolt_repo_$$" 1 test "" "insert into dolt_branch_control values ('test-branch', 'test2', '%', 'write')"
     server_query "dolt_repo_$$" 1 test "" "select * from dolt_branch_control" "branch,user,host,permissions\n%,dolt,0.0.0.0,{'admin'}\ntest-branch,test,%,{'admin'}\ntest-branch,test2,%,{'write'}"
     server_query "dolt_repo_$$" 1 test2 "" "select * from dolt_branch_control" "branch,user,host,permissions\n%,dolt,0.0.0.0,{'admin'}\ntest-branch,test,%,{'admin'}\ntest-branch,test2,%,{'write'}"
-    
+
+    # test2 now has write permissions on test-branch
+    server_query "dolt_repo_$$" 1 test2 "" "call dolt_checkout('test-branch'); insert into t values(0)"
     
     server_query "dolt_repo_$$" 1 test "" "delete from dolt_branch_control where user='test2'"
     server_query "dolt_repo_$$" 1 test "" "select * from dolt_branch_control" "branch,user,host,permissions\n%,dolt,0.0.0.0,{'admin'}\ntest-branch,test,%,{'admin'}"
