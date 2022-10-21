@@ -2821,7 +2821,7 @@ func findIndexWithPrefix(sch schema.Schema, prefixCols []string) (schema.Index, 
 
 	prefixCols = lowercaseSlice(prefixCols)
 	indexes := sch.Indexes().AllIndexes()
-	indexes = append(indexes, sch.PkIndex())
+	//indexes = append(indexes, sch.PkIndex())
 	colLen := len(prefixCols)
 	var indexesWithLen []idxWithLen
 	for _, idx := range indexes {
