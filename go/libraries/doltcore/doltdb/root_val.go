@@ -437,7 +437,7 @@ func (root *RootValue) GenerateTagsForNewColumns(
 		existingColKinds = append(existingColKinds, col.Kind)
 	}
 
-	existingTags, err := GetAllTagsForRoot(ctx, root)
+	existingTags, err := GetAllTagsForRoots(ctx, headRoot, root)
 	if err != nil {
 		return nil, err
 	}
@@ -462,7 +462,8 @@ func getExistingColumns(
 	root, headRoot *RootValue,
 	tableName string,
 	newColNames []string,
-	newColKinds []types.NomsKind) ([]schema.Column, error) {
+	newColKinds []types.NomsKind,
+) ([]schema.Column, error) {
 
 	var existingCols []schema.Column
 	tbl, found, err := root.GetTable(ctx, tableName)
@@ -972,15 +973,23 @@ func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootV
 	return root.PutForeignKeyCollection(ctx, fkCollection)
 }
 
-// GetAllTagsForRoot gets all tags for root
-func GetAllTagsForRoot(ctx context.Context, root *RootValue) (tags schema.TagMapping, err error) {
+// GetAllTagsForRoots gets all tags for |roots|.
+func GetAllTagsForRoots(ctx context.Context, roots ...*RootValue) (tags schema.TagMapping, err error) {
 	tags = make(schema.TagMapping)
-	err = root.IterTables(ctx, func(tblName string, _ *Table, sch schema.Schema) (stop bool, err error) {
-		for _, t := range sch.GetAllCols().Tags {
-			tags.Add(t, tblName)
+	for _, root := range roots {
+		if root == nil {
+			continue
 		}
-		return
-	})
+		err = root.IterTables(ctx, func(tblName string, _ *Table, sch schema.Schema) (stop bool, err error) {
+			for _, t := range sch.GetAllCols().Tags {
+				tags.Add(t, tblName)
+			}
+			return
+		})
+		if err != nil {
+			break
+		}
+	}
 	return
 }
 
@@ -1033,7 +1042,7 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 		return err
 	}
 
-	existing, err := GetAllTagsForRoot(ctx, root)
+	existing, err := GetAllTagsForRoots(ctx, root)
 	if err != nil {
 		return err
 	}
