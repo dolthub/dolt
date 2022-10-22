@@ -10,12 +10,13 @@ RUN tar zxvf dolt-linux-arm64.tar.gz && \
     rm -rf dolt-linux-arm64 dolt-linux-arm64.tar.gz
 
 
-FROM builder
+FROM --platform=linux/arm64 builder
 
 RUN mkdir /docker-entrypoint-initdb.d
 VOLUME /var/lib/dolt
 
 COPY docker/docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["docker-entrypoint.sh"]
 
 EXPOSE 3306 33060

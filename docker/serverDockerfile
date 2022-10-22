@@ -15,6 +15,7 @@ RUN mkdir /docker-entrypoint-initdb.d
 VOLUME /var/lib/dolt
 
 COPY docker/docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["docker-entrypoint.sh"]
 
 EXPOSE 3306 33060
