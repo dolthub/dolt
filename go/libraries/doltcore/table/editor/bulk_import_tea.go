@@ -105,6 +105,10 @@ func (tea *BulkImportTEA) Get(ctx context.Context, keyHash hash.Hash, key types.
 	return &doltKVP{k: key, v: v}, true, nil
 }
 
+func (tea *BulkImportTEA) HasPartial(ctx context.Context, idxSch schema.Schema, partialKeyHash hash.Hash, partialKey types.Tuple) ([]hashedTuple, error) {
+	panic("not sure what the implementation for this should be yet")
+}
+
 // Commit is the default behavior and does nothing
 func (tea *BulkImportTEA) Commit(ctx context.Context, nbf *types.NomsBinFormat) error {
 	return nil
