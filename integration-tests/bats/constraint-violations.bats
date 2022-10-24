@@ -2788,7 +2788,7 @@ SQL
     run dolt sql -q "SELECT * FROM dolt_constraint_violations_test" -r=csv
     log_status_eq "0"
     [[ "$output" =~ "violation_type,pk,v1,violation_info" ]] || false
-    [[ "$output" =~ 'foreign key,4,3,"{""Columns"": [""v1""], ""ForeignKey"": ""fk_name"", ""Index"": ""v1"", ""OnDelete"": ""CASCADE"", ""OnUpdate"": ""CASCADE"", ""ReferencedColumns"": [""pk""], ""ReferencedIndex"": """", ""ReferencedTable"": ""test"", ""Table"": ""test""}"' ]] || false
+    [[ "$output" =~ 'foreign key,4,3,"{""Columns"": [""v1""], ""ForeignKey"": ""fk_name"", ""Index"": ""v1"", ""OnDelete"": ""CASCADE"", ""OnUpdate"": ""CASCADE"", ""ReferencedColumns"": [""pk""], ""ReferencedIndex"": ""PRIMARY"", ""ReferencedTable"": ""test"", ""Table"": ""test""}"' ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
     run dolt sql -q "SELECT * FROM test" -r=csv
     log_status_eq "0"
@@ -2825,7 +2825,7 @@ SQL
     run dolt sql -q "SELECT * FROM dolt_constraint_violations_test" -r=csv
     log_status_eq "0"
     [[ "$output" =~ "violation_type,pk,v1,violation_info" ]] || false
-    [[ "$output" =~ 'foreign key,4,3,"{""Columns"": [""v1""], ""ForeignKey"": ""fk_name"", ""Index"": ""v1"", ""OnDelete"": ""CASCADE"", ""OnUpdate"": ""CASCADE"", ""ReferencedColumns"": [""pk""], ""ReferencedIndex"": """", ""ReferencedTable"": ""test"", ""Table"": ""test""}"' ]] || false
+    [[ "$output" =~ 'foreign key,4,3,"{""Columns"": [""v1""], ""ForeignKey"": ""fk_name"", ""Index"": ""v1"", ""OnDelete"": ""CASCADE"", ""OnUpdate"": ""CASCADE"", ""ReferencedColumns"": [""pk""], ""ReferencedIndex"": ""PRIMARY"", ""ReferencedTable"": ""test"", ""Table"": ""test""}"' ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
     run dolt sql -q "SELECT * FROM test" -r=csv
     log_status_eq "0"

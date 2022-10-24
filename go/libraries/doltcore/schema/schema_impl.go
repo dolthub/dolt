@@ -295,9 +295,9 @@ func (si *schemaImpl) PkIndex() Index {
 	pkProps := IndexProperties{
 		IsUnique:      true,
 		IsUserDefined: false,
-		Comment:       "PRIMARY",
+		Comment:       "",
 	}
-	return NewIndex("", si.pkCols.Tags, si.pkCols.Tags, pkIdxColl.(*indexCollectionImpl), pkProps)
+	return NewIndex("PRIMARY", si.pkCols.Tags, si.pkCols.Tags, pkIdxColl.(*indexCollectionImpl), pkProps)
 }
 
 func (si *schemaImpl) Checks() CheckCollection {

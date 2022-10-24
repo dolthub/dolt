@@ -183,7 +183,7 @@ func (fk ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
 				fk.Name, fk.ReferencedTableName)
 		}
 	}
-	if !sch.Indexes().Contains(fk.ReferencedTableIndex) && fk.ReferencedTableIndex == "" && sch.GetPKCols().Size() == 0 {
+	if !sch.Indexes().Contains(fk.ReferencedTableIndex) && fk.ReferencedTableIndex == "PRIMARY" && sch.GetPKCols().Size() == 0 {
 		return fmt.Errorf("foreign key `%s` has entered an invalid state, referenced table `%s` is missing the index `%s`",
 			fk.Name, fk.ReferencedTableName, fk.ReferencedTableIndex)
 	}

@@ -498,7 +498,7 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName st
 	}
 
 	// using primary key as index
-	if idxName == "" {
+	if idxName == "PRIMARY" {
 		idx := sch.PkIndex()
 		return &constraintViolationsLoadedTable{
 			TableName:   trueTblName,
