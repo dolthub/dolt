@@ -15,16 +15,13 @@
 package branch_control
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
-)
+	flatbuffers "github.com/google/flatbuffers/go"
 
-const (
-	currentNamespaceVersion = uint16(1)
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 )
 
 // Namespace contains all of the expressions that comprise the "dolt_branch_namespace_control" table, which controls
@@ -125,62 +122,117 @@ func (tbl *Namespace) Access() *Access {
 	return tbl.access
 }
 
-// Serialize writes the table to the given buffer. All encoded integers are big-endian.
-func (tbl *Namespace) Serialize(buffer *bytes.Buffer) {
+// Serialize returns the offset for the Namespace table written to the given builder.
+func (tbl *Namespace) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 	tbl.RWMutex.RLock()
 	defer tbl.RWMutex.RUnlock()
 
-	// Write the version bytes
-	writeUint16(buffer, currentNamespaceVersion)
-	// Write the number of entries
-	numOfEntries := uint32(len(tbl.Values))
-	writeUint32(buffer, numOfEntries)
-
-	// Write the rows
-	for _, matchExpr := range tbl.Branches {
-		matchExpr.Serialize(buffer)
+	// Serialize the binlog
+	binlog := tbl.binlog.Serialize(b)
+	// Initialize field offset slices
+	branchOffsets := make([]flatbuffers.UOffsetT, len(tbl.Branches))
+	userOffsets := make([]flatbuffers.UOffsetT, len(tbl.Users))
+	hostOffsets := make([]flatbuffers.UOffsetT, len(tbl.Hosts))
+	valueOffsets := make([]flatbuffers.UOffsetT, len(tbl.Values))
+	// Get field offsets
+	for i, matchExpr := range tbl.Branches {
+		branchOffsets[i] = matchExpr.Serialize(b)
 	}
-	for _, matchExpr := range tbl.Users {
-		matchExpr.Serialize(buffer)
+	for i, matchExpr := range tbl.Users {
+		userOffsets[i] = matchExpr.Serialize(b)
 	}
-	for _, matchExpr := range tbl.Hosts {
-		matchExpr.Serialize(buffer)
+	for i, matchExpr := range tbl.Hosts {
+		hostOffsets[i] = matchExpr.Serialize(b)
 	}
-	for _, val := range tbl.Values {
-		val.Serialize(buffer)
+	for i, val := range tbl.Values {
+		valueOffsets[i] = val.Serialize(b)
 	}
-	// Write the binlog
-	_ = tbl.binlog.Serialize(buffer)
+	// Get the field vectors
+	serial.BranchControlNamespaceStartBranchesVector(b, len(branchOffsets))
+	for i := len(branchOffsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(branchOffsets[i])
+	}
+	branches := b.EndVector(len(branchOffsets))
+	serial.BranchControlNamespaceStartUsersVector(b, len(userOffsets))
+	for i := len(userOffsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(userOffsets[i])
+	}
+	users := b.EndVector(len(userOffsets))
+	serial.BranchControlNamespaceStartHostsVector(b, len(hostOffsets))
+	for i := len(hostOffsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(hostOffsets[i])
+	}
+	hosts := b.EndVector(len(hostOffsets))
+	serial.BranchControlNamespaceStartValuesVector(b, len(valueOffsets))
+	for i := len(valueOffsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(valueOffsets[i])
+	}
+	values := b.EndVector(len(valueOffsets))
+	// Write the table
+	serial.BranchControlNamespaceStart(b)
+	serial.BranchControlNamespaceAddBinlog(b, binlog)
+	serial.BranchControlNamespaceAddBranches(b, branches)
+	serial.BranchControlNamespaceAddUsers(b, users)
+	serial.BranchControlNamespaceAddHosts(b, hosts)
+	serial.BranchControlNamespaceAddValues(b, values)
+	return serial.BranchControlNamespaceEnd(b)
 }
 
-// Deserialize populates the table with the given data. Returns an error if the data cannot be deserialized, or if the
-// table has already been written to. Deserialize must be called on an empty table.
-func (tbl *Namespace) Deserialize(data []byte, position *uint64) error {
+// Deserialize populates the table with the data from the flatbuffers representation.
+func (tbl *Namespace) Deserialize(fb *serial.BranchControlNamespace) error {
 	tbl.RWMutex.Lock()
 	defer tbl.RWMutex.Unlock()
 
+	// Verify that the table is empty
 	if len(tbl.Values) != 0 {
 		return fmt.Errorf("cannot deserialize to a non-empty namespace table")
 	}
-	// Read the version
-	version := binary.BigEndian.Uint16(data[*position:])
-	*position += 2
-	if version != currentNamespaceVersion {
-		// If we ever increment the namespace version, this will instead handle the conversion from previous versions
-		return fmt.Errorf(`cannot deserialize an namespace table with version "%d"`, version)
+	// Verify that all fields have the same length
+	if fb.BranchesLength() != fb.UsersLength() || fb.UsersLength() != fb.HostsLength() || fb.HostsLength() != fb.ValuesLength() {
+		return fmt.Errorf("cannot deserialize a namespace table with differing field lengths")
 	}
-	// Read the number of entries
-	numOfEntries := binary.BigEndian.Uint32(data[*position:])
-	*position += 4
-	// Read the rows
-	tbl.Branches = deserializeMatchExpressions(numOfEntries, data, position)
-	tbl.Users = deserializeMatchExpressions(numOfEntries, data, position)
-	tbl.Hosts = deserializeMatchExpressions(numOfEntries, data, position)
-	tbl.Values = make([]NamespaceValue, numOfEntries)
-	for i := uint32(0); i < numOfEntries; i++ {
-		tbl.Values[i] = deserializeNamespaceValue(data, position)
+	// Read the binlog
+	binlog, err := fb.TryBinlog(nil)
+	if err != nil {
+		return err
 	}
-	return tbl.binlog.Deserialize(data, position)
+	if err = tbl.binlog.Deserialize(binlog); err != nil {
+		return err
+	}
+	// Initialize every slice
+	tbl.Branches = make([]MatchExpression, fb.BranchesLength())
+	tbl.Users = make([]MatchExpression, fb.UsersLength())
+	tbl.Hosts = make([]MatchExpression, fb.HostsLength())
+	tbl.Values = make([]NamespaceValue, fb.ValuesLength())
+	// Read the branches
+	for i := 0; i < fb.BranchesLength(); i++ {
+		serialMatchExpr := &serial.BranchControlMatchExpression{}
+		fb.Branches(serialMatchExpr, i)
+		tbl.Branches[i] = deserializeMatchExpression(serialMatchExpr)
+	}
+	// Read the users
+	for i := 0; i < fb.UsersLength(); i++ {
+		serialMatchExpr := &serial.BranchControlMatchExpression{}
+		fb.Users(serialMatchExpr, i)
+		tbl.Users[i] = deserializeMatchExpression(serialMatchExpr)
+	}
+	// Read the hosts
+	for i := 0; i < fb.HostsLength(); i++ {
+		serialMatchExpr := &serial.BranchControlMatchExpression{}
+		fb.Hosts(serialMatchExpr, i)
+		tbl.Hosts[i] = deserializeMatchExpression(serialMatchExpr)
+	}
+	// Read the values
+	for i := 0; i < fb.ValuesLength(); i++ {
+		serialNamespaceValue := &serial.BranchControlNamespaceValue{}
+		fb.Values(serialNamespaceValue, i)
+		tbl.Values[i] = NamespaceValue{
+			Branch: string(serialNamespaceValue.Branch()),
+			User:   string(serialNamespaceValue.User()),
+			Host:   string(serialNamespaceValue.Host()),
+		}
+	}
+	return nil
 }
 
 // filterBranches returns all branches that match the given collection indexes.
@@ -219,40 +271,15 @@ func (tbl *Namespace) filterHosts(filters []uint32) []MatchExpression {
 	return matchExprs
 }
 
-// Serialize writes the value to the given buffer. All encoded integers are big-endian.
-func (val *NamespaceValue) Serialize(buffer *bytes.Buffer) {
-	// Write the branch
-	branchLen := uint16(len(val.Branch))
-	writeUint16(buffer, branchLen)
-	buffer.WriteString(val.Branch)
-	// Write the user
-	userLen := uint16(len(val.User))
-	writeUint16(buffer, userLen)
-	buffer.WriteString(val.User)
-	// Write the host
-	hostLen := uint16(len(val.Host))
-	writeUint16(buffer, hostLen)
-	buffer.WriteString(val.Host)
-}
+// Serialize returns the offset for the NamespaceValue written to the given builder.
+func (val *NamespaceValue) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
+	branch := b.CreateString(val.Branch)
+	user := b.CreateString(val.User)
+	host := b.CreateString(val.Host)
 
-// deserializeNamespaceValue returns a NamespaceValue from the data at the given position. Also returns the new
-// position. Assumes that the given data's encoded integers are big-endian.
-func deserializeNamespaceValue(data []byte, position *uint64) NamespaceValue {
-	val := NamespaceValue{}
-	// Read the branch
-	branchLen := uint64(binary.BigEndian.Uint16(data[*position:]))
-	*position += 2
-	val.Branch = string(data[*position : *position+branchLen])
-	*position += branchLen
-	// Read the user
-	userLen := uint64(binary.BigEndian.Uint16(data[*position:]))
-	*position += 2
-	val.User = string(data[*position : *position+userLen])
-	*position += userLen
-	// Read the host
-	hostLen := uint64(binary.BigEndian.Uint16(data[*position:]))
-	*position += 2
-	val.Host = string(data[*position : *position+hostLen])
-	*position += hostLen
-	return val
+	serial.BranchControlNamespaceValueStart(b)
+	serial.BranchControlNamespaceValueAddBranch(b, branch)
+	serial.BranchControlNamespaceValueAddUser(b, user)
+	serial.BranchControlNamespaceValueAddHost(b, host)
+	return serial.BranchControlNamespaceValueEnd(b)
 }

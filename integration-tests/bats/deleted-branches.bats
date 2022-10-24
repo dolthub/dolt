@@ -112,7 +112,8 @@ make_it() {
     server_query "dolt_repo_$$/main" 1 dolt "" "SELECT * FROM test;"
 
     # Trying to checkout a new branch throws an error, but doesn't panic
-    server_query "dolt_repo_$$/main" 1 dolt "" "SELECT DOLT_CHECKOUT('to_keep');" "" "Could not load database dolt_repo_$$"
+    run server_query "dolt_repo_$$/main" 1 dolt "" "CALL DOLT_CHECKOUT('to_keep');" "" 1
+    [[ "$output" =~ "branch not found" ]] || false
 }
 
 @test "deleted-branches: calling DOLT_CHECKOUT on SQL connection with existing branch revision specifier set to existing branch when default branch is deleted does not panic" {
@@ -128,7 +129,9 @@ make_it() {
     server_query "dolt_repo_$$/to_keep" 1 dolt "" "SELECT * FROM test;"
 
     # Trying to checkout a new branch throws an error, but doesn't panic
-    server_query "dolt_repo_$$/to_keep" 1 dolt "" "SELECT DOLT_CHECKOUT('to_checkout');" "" "Could not load database dolt_repo_$$"
+    run server_query "dolt_repo_$$/to_keep" 1 dolt "" "CALL DOLT_CHECKOUT('to_checkout');" "" 1
+
+    [[ "$output" =~ "branch not found" ]] || false
 }
 
 @test "deleted-branches: can DOLT_CHECKOUT on SQL connection with dolt_default_branch set to existing branch when checked out branch is deleted" {
@@ -144,5 +147,5 @@ make_it() {
 
     server_query "dolt_repo_$$" 1 dolt "" "SELECT * FROM test" ""
     
-    server_query "dolt_repo_$$" 1 dolt "" "DOLT_CHECKOUT('to_checkout');" ""
+    server_query "dolt_repo_$$" 1 dolt "" "CALL DOLT_CHECKOUT('to_checkout');" ""
 }

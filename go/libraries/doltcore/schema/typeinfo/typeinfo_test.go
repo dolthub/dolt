@@ -30,6 +30,7 @@ import (
 )
 
 func TestTypeInfoSuite(t *testing.T) {
+	t.Skip()
 	typeInfoArrays, validTypeValues := generateTypeInfoArrays(t)
 	t.Run("VerifyArray", func(t *testing.T) {
 		verifyTypeInfoArrays(t, typeInfoArrays, validTypeValues)
