@@ -30,6 +30,6 @@ jobs:
           context: .
           file: ./docker/Dockerfile
           push: true
-          tags: dolthub/dolt-image:${{ github.event.inputs.version || github.event.client_payload.version }} , dolthub/dolt-image:latest
+          tags: dolthub/dolt-image:0.50.8, dolthub/dolt-image:latest
           build-args: |
             DOLT_VERSION=0.50.8
