@@ -35,16 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 )
 
-const (
-	numLinesParam   = "number"
-	mergesParam     = "merges"
-	minParentsParam = "min-parents"
-	parentsParam    = "parents"
-	decorateParam   = "decorate"
-	oneLineParam    = "oneline"
-	notParam        = "not"
-)
-
 type logOpts struct {
 	numLines            int
 	showParents         bool
@@ -111,15 +101,7 @@ func (cmd LogCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd LogCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsInt(numLinesParam, "n", "num_commits", "Limit the number of commits to output.")
-	ap.SupportsInt(minParentsParam, "", "parent_count", "The minimum number of parents a commit must have to be included in the log.")
-	ap.SupportsFlag(mergesParam, "", "Equivalent to min-parents == 2, this will limit the log to commits with 2 or more parents.")
-	ap.SupportsFlag(parentsParam, "", "Shows all parents of each commit in the log.")
-	ap.SupportsString(decorateParam, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
-	ap.SupportsFlag(oneLineParam, "", "Shows logs in a compact format.")
-	ap.SupportsString(notParam, "", "revision", "Excludes commits from revision.")
-	return ap
+	return cli.CreateLogArgParser()
 }
 
 // Exec executes the command
@@ -151,12 +133,12 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 }
 
 func parseLogArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*logOpts, error) {
-	minParents := apr.GetIntOrDefault(minParentsParam, 0)
-	if apr.Contains(mergesParam) {
+	minParents := apr.GetIntOrDefault(cli.MinParentsFlag, 0)
+	if apr.Contains(cli.MergesFlag) {
 		minParents = 2
 	}
 
-	decorateOption := apr.GetValueOrDefault(decorateParam, "auto")
+	decorateOption := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
 	switch decorateOption {
 	case "short", "full", "auto", "no":
 	default:
@@ -164,10 +146,10 @@ func parseLogArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	}
 
 	opts := &logOpts{
-		numLines:    apr.GetIntOrDefault(numLinesParam, -1),
-		showParents: apr.Contains(parentsParam),
+		numLines:    apr.GetIntOrDefault(cli.NumberFlag, -1),
+		showParents: apr.Contains(cli.ParentsFlag),
 		minParents:  minParents,
-		oneLine:     apr.Contains(oneLineParam),
+		oneLine:     apr.Contains(cli.OneLineFlag),
 		decoration:  decorateOption,
 	}
 	cs, notCs, tableName, err := parseRefsAndTable(ctx, apr, dEnv)
@@ -178,7 +160,7 @@ func parseLogArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	opts.excludingCommitSpec = notCs
 	opts.tableName = tableName
 
-	excludingRef, ok := apr.GetValue(notParam)
+	excludingRef, ok := apr.GetValue(cli.NotFlag)
 	if ok {
 		if opts.excludingCommitSpec != nil {
 			return nil, fmt.Errorf("cannot use --not argument with two dots or ref with ^")
@@ -347,7 +329,7 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 	// Get all remote branches
 	remotes, err := dEnv.DoltDB.GetRemotesWithHashes(ctx)
 	if err != nil {
-		cli.PrintErrln(color.HiRedString("Fatal error: cannot get Branch information."))
+		cli.PrintErrln(color.HiRedString("Fatal error: cannot get Remotes information."))
 		return 1
 	}
 	for _, r := range remotes {
@@ -478,7 +460,11 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) erro
 		return err
 	}
 
-	itr, err := commitwalk.GetTopologicalOrderIterator(ctx, dEnv.DoltDB, h)
+	matchFunc := func(commit *doltdb.Commit) (bool, error) {
+		return commit.NumParents() >= opts.minParents, nil
+	}
+
+	itr, err := commitwalk.GetTopologicalOrderIterator(ctx, dEnv.DoltDB, h, matchFunc)
 	if err != nil && err != io.EOF {
 		return err
 	}

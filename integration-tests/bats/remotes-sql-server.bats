@@ -45,13 +45,13 @@ teardown() {
     dolt checkout -b other
     start_sql_server repo1
 
-    run server_query repo1 1 dolt "" "select dolt_push() as p" "p\n0" "" 1
+    run server_query repo1 1 dolt "" "call dolt_push()" "" "" 1
     [[ "$output" =~ "the current branch has no upstream branch" ]] || false
     
-    server_query repo1 1 "select dolt_push('--set-upstream', 'origin', 'other') as p" "p\n1"
+    server_query repo1 1 dolt "" "call dolt_push('--set-upstream', 'origin', 'other') " ""
 
     skip "In-memory branch doesn't track upstream"
-    server_query repo1 1 dolt "" "select dolt_push() as p" "p\n1"
+    server_query repo1 1 dolt "" "call dolt_push()" ""
 }
 
 @test "remotes-sql-server: push on sql-session commit" {

@@ -375,8 +375,8 @@ EOF
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
 
-# We passed nil where a sql ctx was expected in merge. When we added collations,
-# the sql ctx became required and merge started to panic.
+# We passed nil where a sql ctx was expected in merge. When we added
+# collations, the sql ctx became required and merge started to panic.
 @test "schema-changes: regression test for merging check constraints with TEXT type panicking due to a nil sql ctx" {
     dolt sql -q "create table t (pk int primary key, col1 text);"
     dolt commit -Am "initial"
