@@ -11,6 +11,8 @@ name: Push Docker Image to DockerHub
 on:
   pull_request:
     branches: [ main ]
+    paths:
+      - 'docker/**'
 
 jobs:
   docker-image-push:
