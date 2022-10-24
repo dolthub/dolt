@@ -29,8 +29,15 @@ jobs:
         with:
           platforms: linux/amd64,linux/arm64
           context: .
-          file: ./docker/Dockerfile
+          file: ./docker/serverDockerfile
           push: true
-          tags: dolthub/dolt-image:0.50.8, dolthub/dolt-image:latest
+          tags: dolthub/dolt-server:0.50.8, dolthub/dolt-server:latest
           build-args: |
             DOLT_VERSION=0.50.8
+      - name: Docker Hub Description
+        uses: peter-evans/dockerhub-description@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          repository: dolthub/dolt-server
+          readme-filepath: ./docker/README.md
