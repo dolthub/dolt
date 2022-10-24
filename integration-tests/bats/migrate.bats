@@ -203,3 +203,29 @@ SQL
     run checksum_table keyless head~1
     [[ "$output" =~ "$PREV" ]] || false
 }
+
+@test "migrate: fixup key collations to match index order" {
+    dolt sql <<SQL
+CREATE TABLE t (
+    a varchar(20) primary key COLLATE utf8mb4_0900_ai_ci NOT NULL,
+    b varchar(20) COLLATE utf8mb4_0900_ai_ci NOT NULL,
+    INDEX(b));
+INSERT INTO t VALUES ('h/a', 'a'), ('h&a', 'B');
+SQL
+
+    run dolt schema show t
+    [[ "$output" =~ "utf8mb4_0900_ai_ci" ]] || false
+    [[ ! "$output" =~ "utf8mb4_0900_bin," ]] || false
+
+    dolt migrate
+    [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
+
+    # utf8mb4_0900_ai_ci is converted to utf8mb4_0900_bin to match index order
+    dolt schema show t
+    run dolt schema show t
+    [[ "$output" =~ "utf8mb4_0900_bin" ]] || false
+    [[ ! "$output" =~ "utf8mb4_0900_ai_ci" ]] || false
+
+    run dolt sql -q "SELECT * FROM t ORDER BY a LIMIT 1" -r csv
+    [[ "$output" =~ "h&a,B" ]] || false
+}
