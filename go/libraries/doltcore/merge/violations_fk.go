@@ -496,13 +496,22 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName st
 	if err != nil {
 		return nil, false, err
 	}
-	var idx schema.Index
-	if idxName == "PRIMARY" {
-		idx = sch.PkIndex()
-		ok = true
-	} else {
-		idx, ok = sch.Indexes().GetByNameCaseInsensitive(idxName)
+
+	// using primary key as index
+	if idxName == "" {
+		idx := sch.PkIndex()
+		return &constraintViolationsLoadedTable{
+			TableName:   trueTblName,
+			Table:       tbl,
+			Schema:      sch,
+			RowData:     rowData,
+			Index:       idx,
+			IndexSchema: idx.Schema(),
+			IndexData:   rowData,
+		}, true, nil
 	}
+
+	idx, ok := sch.Indexes().GetByNameCaseInsensitive(idxName)
 	if !ok {
 		return &constraintViolationsLoadedTable{
 			TableName: trueTblName,
@@ -511,13 +520,7 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName st
 			RowData:   rowData,
 		}, false, nil
 	}
-	var indexData durable.Index
-	if idx.Name() == "PRIMARY" {
-		indexData, err = tbl.GetIndexRowData(ctx, idx.Name())
-	} else {
-		indexData, err = tbl.GetIndexRowData(ctx, idx.Name())
-	}
-
+	indexData, err := tbl.GetIndexRowData(ctx, idx.Name())
 	if err != nil {
 		return nil, false, err
 	}

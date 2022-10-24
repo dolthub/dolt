@@ -561,7 +561,8 @@ func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (durable.
 		return nil, err
 	}
 
-	if indexName == "PRIMARY" {
+	// TODO: necessary?
+	if indexName == "" {
 		return t.GetRowData(ctx)
 	}
 
