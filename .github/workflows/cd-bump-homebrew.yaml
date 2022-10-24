@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Create Homebrew PR
-        uses: mislav/bump-homebrew-formula-action@v1
+        uses: mislav/bump-homebrew-formula-action@v2.1
         if: ${{ github.event_name == 'repository_dispatch' }}
         with:
           formula-name: dolt
@@ -30,7 +30,7 @@ jobs:
         env:
           COMMITTER_TOKEN: ${{secrets.REPO_ACCESS_TOKEN}}
       - name: Create Homebrew PR
-        uses: mislav/bump-homebrew-formula-action@v1
+        uses: mislav/bump-homebrew-formula-action@v2.1
         if: ${{ github.event_name == 'workflow_dispatch' }}
         with:
           formula-name: dolt

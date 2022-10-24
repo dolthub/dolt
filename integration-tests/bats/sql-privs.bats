@@ -73,7 +73,7 @@ teardown() {
     SERVER_PID=$! # will get killed by teardown_common
     sleep 5 # not using python wait so this works on windows
 
-    server_query test_db 1 root "select user from mysql.user order by user" "" 1
+    server_query test_db 1 root "" "select user from mysql.user order by user" "" 1
 }
 
 @test "sql-privs: starting server with empty config works" {

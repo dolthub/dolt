@@ -25,8 +25,8 @@ jobs:
       - name: Set variables
         id: set-vars
         run: |
-          echo "::set-output name=version::$VERSION"
-          echo "::set-output name=actor::$ACTOR"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "actor=$ACTOR" >> $GITHUB_OUTPUT
         env:
           VERSION: ${{ github.event.inputs.version || github.event.client_payload.version }}
           ACTOR: ${{ github.event.client_payload.actor || github.actor }}
@@ -36,7 +36,7 @@ jobs:
     needs: set-version-actor
     name: Trigger SQL Correctness K8s Workflow
     steps:
-      - uses: peter-evans/repository-dispatch@v1
+      - uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: sql-correctness
