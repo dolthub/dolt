@@ -1,13 +1,5 @@
 name: Push Docker Image to DockerHub
 
-#on:
-#  workflow_dispatch:
-#    inputs:
-#      version:
-#        description: 'SemVer format release tag, i.e. 0.24.5'
-#        required: true
-#  repository_dispatch:
-#    types: [ push-docker-image ]
 on:
   pull_request:
     branches: [ main ]
@@ -40,5 +32,4 @@ jobs:
           push: true
           tags: dolthub/dolt-image:${{ github.event.inputs.version || github.event.client_payload.version }} , dolthub/dolt-image:latest
           build-args: |
-#            DOLT_VERSION=${{ github.event.inputs.version || github.event.client_payload.version }}
             DOLT_VERSION=0.50.8
