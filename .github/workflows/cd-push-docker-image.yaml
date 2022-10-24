@@ -1,10 +1,13 @@
 name: Push Docker Image to DockerHub
 
 on:
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'docker/**'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'SemVer format release tag, i.e. 0.24.5'
+        required: true
+  repository_dispatch:
+    types: [ push-docker-image ]
 
 jobs:
   docker-image-push:
