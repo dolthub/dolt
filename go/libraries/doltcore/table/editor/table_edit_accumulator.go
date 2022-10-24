@@ -211,6 +211,19 @@ func (tea *tableEditAccumulatorImpl) HasPartial(ctx context.Context, idxSch sche
 		return nil, err
 	}
 
+	orderedMods := []*inMemModifications{tea.committed, tea.uncommitted}
+	for _, mods := range orderedMods {
+		for i := len(matches) - 1; i >= 0; i-- {
+			if _, ok := mods.adds[matches[i].hash]; ok {
+				matches[i] = matches[len(matches)-1]
+				matches = matches[:len(matches)-1]
+			}
+		}
+		if added, ok := mods.adds[partialKeyHash]; ok {
+			matches = append(matches, hashedTuple{key: added.k, value: added.v})
+		}
+	}
+
 	return matches, nil
 }
 
