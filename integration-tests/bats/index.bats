@@ -1674,35 +1674,6 @@ SQL
     [[ "${#lines[@]}" = "1" ]] || false
 }
 
-@test "index: EXPLAIN SELECT = IndexedJoin" {
-    dolt sql <<SQL
-CREATE INDEX idx_v1 ON onepk(v1);
-CREATE INDEX idx_v ON twopk(v2, v1);
-INSERT INTO onepk VALUES (1, 11, 111), (2, 22, 222), (3, 33, 333), (4, 44, 444), (5, 55, 555);
-INSERT INTO twopk VALUES (5, 95, 222, 11), (4, 4, 333, 55), (3, 93, 444, 33), (2, 92, 111, 22), (1, 91, 555, 44);
-SQL
-    run dolt sql -q "SELECT * FROM onepk JOIN twopk ON onepk.v1 = twopk.v2;" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk1,v1,v2,pk1,pk2,v1,v2" ]] || false
-    [[ "$output" =~ "1,11,111,5,95,222,11" ]] || false
-    [[ "$output" =~ "2,22,222,2,92,111,22" ]] || false
-    [[ "$output" =~ "3,33,333,3,93,444,33" ]] || false
-    [[ "$output" =~ "4,44,444,1,91,555,44" ]] || false
-    [[ "$output" =~ "5,55,555,4,4,333,55" ]] || false
-    [[ "${#lines[@]}" = "6" ]] || false
-    run dolt sql -q "EXPLAIN SELECT * FROM onepk JOIN twopk ON onepk.v1 = twopk.v2;"
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "IndexedJoin(onepk.v1 = twopk.v2)" ]] || false
-    run dolt sql -q "SELECT * FROM onepk JOIN twopk ON onepk.pk1 = twopk.pk1;" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "1,11,111,1,91,555,44" ]] || false
-    [[ "$output" =~ "2,22,222,2,92,111,22" ]] || false
-    [[ "$output" =~ "3,33,333,3,93,444,33" ]] || false
-    [[ "$output" =~ "4,44,444,4,4,333,55" ]] || false
-    [[ "$output" =~ "5,55,555,5,95,222,11" ]] || false
-    [[ "${#lines[@]}" = "6" ]] || false
-}
-
 @test "index: ALTER TABLE ADD COLUMN" {
     dolt sql <<SQL
 CREATE INDEX idx_v1 ON onepk(v1);
