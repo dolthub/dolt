@@ -120,7 +120,7 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 		return nil, nil, errors.New(fmt.Sprintf("schema changes not supported: %s table schema does not match in current HEAD and cherry-pick commit.", tblName))
 	}
 
-	mergeSch, schConflicts, err := SchemaMerge(tm.vrw.Format(), tm.leftSch, tm.rightSch, tm.ancSch, tblName)
+	mergeSch, schConflicts, err := SchemaMerge(ctx, tm.vrw.Format(), tm.leftSch, tm.rightSch, tm.ancSch, tblName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -377,32 +377,6 @@ func setConflicts(ctx context.Context, cons durable.ConflictIndex, tbl, mergeTbl
 	}
 
 	return tableToUpdate, nil
-}
-
-func getTableInfoFromRoot(ctx context.Context, tblName string, root *doltdb.RootValue) (
-	ok bool,
-	table *doltdb.Table,
-	sch schema.Schema,
-	h hash.Hash,
-	err error,
-) {
-	table, ok, err = root.GetTable(ctx, tblName)
-	if err != nil {
-		return false, nil, nil, hash.Hash{}, err
-	}
-
-	if ok {
-		h, err = table.HashOf()
-		if err != nil {
-			return false, nil, nil, hash.Hash{}, err
-		}
-		sch, err = table.GetSchema(ctx)
-		if err != nil {
-			return false, nil, nil, hash.Hash{}, err
-		}
-	}
-
-	return ok, table, sch, h, nil
 }
 
 func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltdb.Table) (MergeStats, error) {

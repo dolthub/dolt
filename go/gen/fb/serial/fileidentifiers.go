@@ -36,6 +36,7 @@ const TableSchemaFileID = "DSCH"
 const ForeignKeyCollectionFileID = "DFKC"
 const MergeArtifactsFileID = "ARTM"
 const BlobFileID = "BLOB"
+const BranchControlFileID = "BRCL"
 
 const MessageTypesKind int = 27
 

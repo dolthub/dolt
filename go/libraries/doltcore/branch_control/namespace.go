@@ -15,9 +15,13 @@
 package branch_control
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	flatbuffers "github.com/google/flatbuffers/go"
+
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 )
 
 // Namespace contains all of the expressions that comprise the "dolt_branch_namespace_control" table, which controls
@@ -46,6 +50,7 @@ type NamespaceValue struct {
 // newNamespace returns a new Namespace.
 func newNamespace(accessTbl *Access, superUser string, superHost string) *Namespace {
 	return &Namespace{
+		binlog:    NewNamespaceBinlog(nil),
 		access:    accessTbl,
 		Branches:  nil,
 		Users:     nil,
@@ -117,6 +122,119 @@ func (tbl *Namespace) Access() *Access {
 	return tbl.access
 }
 
+// Serialize returns the offset for the Namespace table written to the given builder.
+func (tbl *Namespace) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
+	tbl.RWMutex.RLock()
+	defer tbl.RWMutex.RUnlock()
+
+	// Serialize the binlog
+	binlog := tbl.binlog.Serialize(b)
+	// Initialize field offset slices
+	branchOffsets := make([]flatbuffers.UOffsetT, len(tbl.Branches))
+	userOffsets := make([]flatbuffers.UOffsetT, len(tbl.Users))
+	hostOffsets := make([]flatbuffers.UOffsetT, len(tbl.Hosts))
+	valueOffsets := make([]flatbuffers.UOffsetT, len(tbl.Values))
+	// Get field offsets
+	for i, matchExpr := range tbl.Branches {
+		branchOffsets[i] = matchExpr.Serialize(b)
+	}
+	for i, matchExpr := range tbl.Users {
+		userOffsets[i] = matchExpr.Serialize(b)
+	}
+	for i, matchExpr := range tbl.Hosts {
+		hostOffsets[i] = matchExpr.Serialize(b)
+	}
+	for i, val := range tbl.Values {
+		valueOffsets[i] = val.Serialize(b)
+	}
+	// Get the field vectors
+	serial.BranchControlNamespaceStartBranchesVector(b, len(branchOffsets))
+	for i := len(branchOffsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(branchOffsets[i])
+	}
+	branches := b.EndVector(len(branchOffsets))
+	serial.BranchControlNamespaceStartUsersVector(b, len(userOffsets))
+	for i := len(userOffsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(userOffsets[i])
+	}
+	users := b.EndVector(len(userOffsets))
+	serial.BranchControlNamespaceStartHostsVector(b, len(hostOffsets))
+	for i := len(hostOffsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(hostOffsets[i])
+	}
+	hosts := b.EndVector(len(hostOffsets))
+	serial.BranchControlNamespaceStartValuesVector(b, len(valueOffsets))
+	for i := len(valueOffsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(valueOffsets[i])
+	}
+	values := b.EndVector(len(valueOffsets))
+	// Write the table
+	serial.BranchControlNamespaceStart(b)
+	serial.BranchControlNamespaceAddBinlog(b, binlog)
+	serial.BranchControlNamespaceAddBranches(b, branches)
+	serial.BranchControlNamespaceAddUsers(b, users)
+	serial.BranchControlNamespaceAddHosts(b, hosts)
+	serial.BranchControlNamespaceAddValues(b, values)
+	return serial.BranchControlNamespaceEnd(b)
+}
+
+// Deserialize populates the table with the data from the flatbuffers representation.
+func (tbl *Namespace) Deserialize(fb *serial.BranchControlNamespace) error {
+	tbl.RWMutex.Lock()
+	defer tbl.RWMutex.Unlock()
+
+	// Verify that the table is empty
+	if len(tbl.Values) != 0 {
+		return fmt.Errorf("cannot deserialize to a non-empty namespace table")
+	}
+	// Verify that all fields have the same length
+	if fb.BranchesLength() != fb.UsersLength() || fb.UsersLength() != fb.HostsLength() || fb.HostsLength() != fb.ValuesLength() {
+		return fmt.Errorf("cannot deserialize a namespace table with differing field lengths")
+	}
+	// Read the binlog
+	binlog, err := fb.TryBinlog(nil)
+	if err != nil {
+		return err
+	}
+	if err = tbl.binlog.Deserialize(binlog); err != nil {
+		return err
+	}
+	// Initialize every slice
+	tbl.Branches = make([]MatchExpression, fb.BranchesLength())
+	tbl.Users = make([]MatchExpression, fb.UsersLength())
+	tbl.Hosts = make([]MatchExpression, fb.HostsLength())
+	tbl.Values = make([]NamespaceValue, fb.ValuesLength())
+	// Read the branches
+	for i := 0; i < fb.BranchesLength(); i++ {
+		serialMatchExpr := &serial.BranchControlMatchExpression{}
+		fb.Branches(serialMatchExpr, i)
+		tbl.Branches[i] = deserializeMatchExpression(serialMatchExpr)
+	}
+	// Read the users
+	for i := 0; i < fb.UsersLength(); i++ {
+		serialMatchExpr := &serial.BranchControlMatchExpression{}
+		fb.Users(serialMatchExpr, i)
+		tbl.Users[i] = deserializeMatchExpression(serialMatchExpr)
+	}
+	// Read the hosts
+	for i := 0; i < fb.HostsLength(); i++ {
+		serialMatchExpr := &serial.BranchControlMatchExpression{}
+		fb.Hosts(serialMatchExpr, i)
+		tbl.Hosts[i] = deserializeMatchExpression(serialMatchExpr)
+	}
+	// Read the values
+	for i := 0; i < fb.ValuesLength(); i++ {
+		serialNamespaceValue := &serial.BranchControlNamespaceValue{}
+		fb.Values(serialNamespaceValue, i)
+		tbl.Values[i] = NamespaceValue{
+			Branch: string(serialNamespaceValue.Branch()),
+			User:   string(serialNamespaceValue.User()),
+			Host:   string(serialNamespaceValue.Host()),
+		}
+	}
+	return nil
+}
+
 // filterBranches returns all branches that match the given collection indexes.
 func (tbl *Namespace) filterBranches(filters []uint32) []MatchExpression {
 	if len(filters) == 0 {
@@ -151,4 +269,17 @@ func (tbl *Namespace) filterHosts(filters []uint32) []MatchExpression {
 		matchExprs = append(matchExprs, tbl.Hosts[filter])
 	}
 	return matchExprs
+}
+
+// Serialize returns the offset for the NamespaceValue written to the given builder.
+func (val *NamespaceValue) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
+	branch := b.CreateString(val.Branch)
+	user := b.CreateString(val.User)
+	host := b.CreateString(val.Host)
+
+	serial.BranchControlNamespaceValueStart(b)
+	serial.BranchControlNamespaceValueAddBranch(b, branch)
+	serial.BranchControlNamespaceValueAddUser(b, user)
+	serial.BranchControlNamespaceValueAddHost(b, host)
+	return serial.BranchControlNamespaceValueEnd(b)
 }

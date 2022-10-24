@@ -46,7 +46,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 80
+const SkipPreparedsCount = 81
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -1168,6 +1168,28 @@ func TestDiffSummaryTableFunctionPrepared(t *testing.T) {
 	}
 }
 
+func TestLogTableFunction(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range LogTableFunctionScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func TestLogTableFunctionPrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range LogTableFunctionScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
 func TestCommitDiffSystemTable(t *testing.T) {
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
@@ -1230,6 +1252,10 @@ func TestTestReadOnlyDatabases(t *testing.T) {
 
 func TestAddDropPks(t *testing.T) {
 	enginetest.TestAddDropPks(t, newDoltHarness(t))
+}
+
+func TestAddAutoIncrementColumn(t *testing.T) {
+	enginetest.TestAddAutoIncrementColumn(t, newDoltHarness(t))
 }
 
 func TestNullRanges(t *testing.T) {

@@ -105,10 +105,6 @@ func TestFieldMapping(t *testing.T) {
 			if !reflect.DeepEqual(mapping.SrcToDest, test.expected) {
 				t.Error("Mapping does not match expected.  Expected:", test.expected, "Actual:", mapping.SrcToDest)
 			}
-
-			//if test.identity != mapping.IsIdentityMapping() {
-			//	t.Error("identity expected", test.identity, "actual:", !test.identity)
-			//}
 		}
 	}
 }

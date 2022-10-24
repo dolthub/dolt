@@ -749,7 +749,7 @@ func makeLargeInsert(sz int) string {
 // DoltUserPrivTests are tests for Dolt-specific functionality that includes privilege checking logic.
 var DoltUserPrivTests = []queries.UserPrivilegeTest{
 	{
-		Name: "dolt_diff table function privilege checking",
+		Name: "table function privilege checking",
 		SetUpScript: []string{
 			"CREATE TABLE mydb.test (pk BIGINT PRIMARY KEY);",
 			"CREATE TABLE mydb.test2 (pk BIGINT PRIMARY KEY);",
@@ -772,6 +772,13 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff_summary('main~', 'main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// Without access to the database, dolt_log should fail with a database access error
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_log('main');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
@@ -845,6 +852,13 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
+				// After granting access to the entire db, dolt_log should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_log('main');",
+				Expected: []sql.Row{{4}},
+			},
+			{
 				// Revoke multi-table access
 				User:     "root",
 				Host:     "localhost",
@@ -863,6 +877,13 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff_summary('main~', 'main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// After revoking access, dolt_log should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_log('main');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
@@ -4919,6 +4940,497 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 	},
 }
 
+var LogTableFunctionScriptTests = []queries.ScriptTest{
+	{
+		Name: "invalid arguments",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.')",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
+			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "SELECT * from dolt_log(@Commit1, @Commit2, 't');",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_log(null);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log(null, null);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log(null, '--not', null);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log(@Commit1, '--not', null);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log(@Commit1, '--min-parents', null);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log(@Commit1, '--min-parents', 123);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log(123, @Commit1);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log(@Commit1, 123);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log(@Commit1, '--not', 123);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('main..branch1', @Commit1);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('^main..branch1');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log(@Commit1, 'main..branch1');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('main..branch1', '--not', @Commit1);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('^main', '--not', @Commit1);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('main', '--not', '^branch1');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('main', '--not', 'main..branch1');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('^main', @Commit2, '--not', @Commit1);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log(@Commit1, @Commit2);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('^main', '^branch1');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('^main');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:          "SELECT * from dolt_log('fake-branch');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:          "SELECT * from dolt_log('^fake-branch', 'main');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:          "SELECT * from dolt_log('fake-branch', '^main');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:          "SELECT * from dolt_log('main..fake-branch');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:          "SELECT * from dolt_log('main', '--not', 'fake-branch');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:       "SELECT * from dolt_log(concat('fake', '-', 'branch'));",
+				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT * from dolt_log(hashof('main'));",
+				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT * from dolt_log(@Commit3, '--not', hashof('main'));",
+				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT * from dolt_log(@Commit1, LOWER(@Commit2));",
+				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:          "SELECT parents from dolt_log();",
+				ExpectedErrStr: `column "parents" could not be found in any table in scope`,
+			},
+			{
+				Query:       "SELECT * from dolt_log('--decorate', 'invalid');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('--decorate', 123);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('--decorate', null);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:          "SELECT refs from dolt_log();",
+				ExpectedErrStr: `column "refs" could not be found in any table in scope`,
+			},
+			{
+				Query:          "SELECT refs from dolt_log('--decorate', 'auto');",
+				ExpectedErrStr: `column "refs" could not be found in any table in scope`,
+			},
+			{
+				Query:          "SELECT refs from dolt_log('--decorate', 'no');",
+				ExpectedErrStr: `column "refs" could not be found in any table in scope`,
+			},
+		},
+	},
+	{
+		Name: "basic case with one revision",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.')",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
+			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+
+			"call dolt_checkout('-b', 'new-branch')",
+			"insert into t values (3, 'three', 'four');",
+			"set @Commit3 = dolt_commit('-am', 'inserting into t again');",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT count(*) from dolt_log();",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main');",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log(@Commit1);",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log(@Commit2);",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log(@Commit3);",
+				Expected: []sql.Row{{5}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('new-branch');",
+				Expected: []sql.Row{{5}},
+			},
+		},
+	},
+	{
+		Name: "basic case with more than one revision or revision range",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.');",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
+			"set @Commit2 = dolt_commit('-am', 'inserting into t 2');",
+
+			"call dolt_checkout('-b', 'new-branch');",
+			"insert into t values (3, 'three', 'four');",
+			"set @Commit3 = dolt_commit('-am', 'inserting into t 3');",
+			"insert into t values (4, 'four', 'five');",
+			"set @Commit4 = dolt_commit('-am', 'inserting into t 4');",
+
+			"call dolt_checkout('main');",
+			"insert into t values (5, 'five', 'six');",
+			"set @Commit5 = dolt_commit('-am', 'inserting into t 5');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT count(*) from dolt_log('^main', 'new-branch');",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main..new-branch');",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('new-branch', '--not', 'main');",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('new-branch', '^main');",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('^new-branch', 'main');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main', '--not', 'new-branch');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('^main', 'main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main..main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main', '--not', 'main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('^main~', 'main');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('^main', @Commit3);",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('^new-branch', @Commit5);",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log(@Commit3, '--not', @Commit2);",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log(@Commit4, '--not', @Commit2);",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
+		Name: "basic case with one revision, row content",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.')",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
+			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+
+			"call dolt_checkout('-b', 'new-branch')",
+			"insert into t values (3, 'three', 'four');",
+			"set @Commit3 = dolt_commit('-am', 'inserting into t again', '--author', 'John Doe <johndoe@example.com>');",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT commit_hash = @Commit2, commit_hash = @Commit1, committer, email, message from dolt_log();",
+				Expected: []sql.Row{
+					{true, false, "billy bob", "bigbillieb@fake.horse", "inserting into t"},
+					{false, true, "billy bob", "bigbillieb@fake.horse", "creating table t"},
+					{false, false, "billy bob", "bigbillieb@fake.horse", "checkpoint enginetest database mydb"},
+					{false, false, "billy bob", "bigbillieb@fake.horse", "Initialize data repository"},
+				},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit2, committer, email, message from dolt_log('main') limit 1;",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t"}},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log('new-branch') limit 1;",
+				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "inserting into t again"}},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit1, committer, email, message from dolt_log(@Commit1) limit 1;",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "creating table t"}},
+			},
+		},
+	},
+	{
+		Name: "basic case with more than one revision or revision range, row content",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.');",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
+			"set @Commit2 = dolt_commit('-am', 'inserting into t 2');",
+
+			"call dolt_checkout('-b', 'new-branch');",
+			"insert into t values (3, 'three', 'four');",
+			"set @Commit3 = dolt_commit('-am', 'inserting into t 3', '--author', 'John Doe <johndoe@example.com>');",
+			"insert into t values (4, 'four', 'five');",
+			"set @Commit4 = dolt_commit('-am', 'inserting into t 4', '--author', 'John Doe <johndoe@example.com>');",
+
+			"call dolt_checkout('main');",
+			"insert into t values (5, 'five', 'six');",
+			"set @Commit5 = dolt_commit('-am', 'inserting into t 5');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('^main', 'new-branch');",
+				Expected: []sql.Row{
+					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
+					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
+				},
+			},
+			{
+				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('main..new-branch');",
+				Expected: []sql.Row{
+					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
+					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
+				},
+			},
+			{
+				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('new-branch', '--not', 'main');",
+				Expected: []sql.Row{
+					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
+					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
+				},
+			},
+			{
+				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('new-branch', '^main');",
+				Expected: []sql.Row{
+					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
+					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
+				},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log('^new-branch', 'main');",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"}},
+			},
+			{
+				Query:    "SELECT * from dolt_log('^main', 'main');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log('^main~', 'main');",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"}},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log( 'main', '--not', 'main~');",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"}},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log('^main', @Commit3);",
+				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "inserting into t 3"}},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log(@Commit3, '--not', @Commit2);",
+				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "inserting into t 3"}},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log('^new-branch', @Commit5);",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"}},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log(@Commit5, '--not', @Commit4);",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"}},
+			},
+		},
+	},
+	{
+		Name: "min parents, merges, show parents, decorate",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int);",
+			"call dolt_add('.')",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"call dolt_checkout('-b', 'branch1')",
+			"insert into t values(0,0);",
+			"set @Commit2 = dolt_commit('-am', 'inserting 0,0');",
+
+			"call dolt_checkout('main')",
+			"call dolt_checkout('-b', 'branch2')",
+			"insert into t values(1,1);",
+			"set @Commit3 = dolt_commit('-am', 'inserting 1,1');",
+
+			"call dolt_checkout('main')",
+			"call dolt_merge('branch1')",               // fast-forward merge
+			"set @MergeCommit = dolt_merge('branch2')", // actual merge with commit
+			"call dolt_tag('v1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT commit_hash = @MergeCommit, committer, email, message from dolt_log('--merges');",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "Merge branch 'branch2' into main"}},
+			},
+			{
+				Query:    "SELECT commit_hash = @MergeCommit, committer, email, message from dolt_log('--min-parents', '2');",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "Merge branch 'branch2' into main"}},
+			},
+			{
+				Query:    "SELECT commit_hash = @MergeCommit, committer, email, message from dolt_log('main', '--min-parents', '2');",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "Merge branch 'branch2' into main"}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main');",
+				Expected: []sql.Row{{6}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main', '--min-parents', '1');", // Should show everything except first commit
+				Expected: []sql.Row{{5}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main', '--min-parents', '1', '--merges');", // --merges overrides --min-parents
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT commit_hash = @MergeCommit, committer, email, message from dolt_log('branch1..main', '--min-parents', '2');",
+				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "Merge branch 'branch2' into main"}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('--min-parents', '5');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT commit_hash = @MergeCommit, SUBSTRING_INDEX(parents, ', ', 1) = @Commit2, SUBSTRING_INDEX(parents, ', ', -1) = @Commit3 from dolt_log('main', '--parents', '--merges');",
+				Expected: []sql.Row{{true, true, true}}, // shows two parents for merge commit
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit3, parents = @Commit1 from dolt_log('branch2', '--parents') LIMIT 1;", // shows one parent for non-merge commit
+				Expected: []sql.Row{{true, true}},
+			},
+			{
+				Query:    "SELECT commit_hash = @MergeCommit, SUBSTRING_INDEX(parents, ', ', 1) = @Commit2, SUBSTRING_INDEX(parents, ', ', -1) = @Commit3 from dolt_log('branch1..main', '--parents', '--merges') LIMIT 1;",
+				Expected: []sql.Row{{true, true, true}},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit2, parents = @Commit1 from dolt_log('branch2..branch1', '--parents') LIMIT 1;",
+				Expected: []sql.Row{{true, true}},
+			},
+			{
+				Query:    "SELECT refs from dolt_log('--decorate', 'short') LIMIT 1;",
+				Expected: []sql.Row{{"HEAD -> main, tag: v1"}},
+			},
+			{
+				Query:    "SELECT refs from dolt_log('--decorate', 'full') LIMIT 1;",
+				Expected: []sql.Row{{"HEAD -> refs/heads/main, tag: refs/tags/v1"}},
+			},
+			{
+				Query:    "SELECT commit_hash = @Commit2, parents = @Commit1, refs from dolt_log('branch2..branch1', '--parents', '--decorate', 'short') LIMIT 1;",
+				Expected: []sql.Row{{true, true, "HEAD -> branch1"}},
+			},
+		},
+	},
+}
+
 var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 	{
 		Name: "invalid arguments",
@@ -5472,6 +5984,7 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table droppedTable (a int primary key, b int, c int);",
 			"create table renamedEmptyTable (a int primary key, b int, c int);",
 			"call dolt_add('.')",
+			"insert into regularTable values (1, 2, 3), (2, 3, 4);",
 			"insert into droppedTable values (1, 2, 3), (2, 3, 4);",
 			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'));",
 
@@ -5484,12 +5997,40 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 			// changeSet: WORKING; data change: false; schema change: true
 			"rename table renamedEmptyTable to newRenamedEmptyTable",
 			// changeSet: WORKING; data change: true; schema change: false
-			"insert into regularTable values (1, 2, 3);",
+			"insert into regularTable values (3, 4, 5);",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF;",
 				Expected: []sql.Row{{7}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF WHERE commit_hash = @Commit1;",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT * FROM DOLT_DIFF WHERE commit_hash = @Commit1 AND committer <> 'billy bob';",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT commit_hash, committer FROM DOLT_DIFF WHERE commit_hash <> @Commit1 AND committer = 'billy bob' AND commit_hash NOT IN ('WORKING','STAGED');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash <> @Commit1 AND commit_hash NOT IN ('STAGED') ORDER BY table_name;",
+				Expected: []sql.Row{
+					{"WORKING", "newRenamedEmptyTable"},
+					{"WORKING", "regularTable"},
+				},
+			},
+			{
+				Query: "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash <> @Commit1 OR committer <> 'billy bob' ORDER BY table_name;",
+				Expected: []sql.Row{
+					{"STAGED", "addedTable"},
+					{"STAGED", "droppedTable"},
+					{"WORKING", "newRenamedEmptyTable"},
+					{"WORKING", "regularTable"},
+				},
 			},
 			{
 				Query: "SELECT * FROM DOLT_DIFF WHERE COMMIT_HASH in ('WORKING', 'STAGED') ORDER BY table_name;",

@@ -41,7 +41,7 @@ teardown() {
     # start the server and ensure there are no databases yet
     cd $tempDir/empty_server
     start_sql_server
-    server_query "" 1 "show databases" "Database\ninformation_schema\nmysql"
+    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql"
 
     # verify that dolt_clone works
     # TODO: Once dolt_clone can be called without a selected database, this can be removed
@@ -53,7 +53,7 @@ teardown() {
     cd repo1
     dolt sql -q "create user dolt@'%' identified by '123'"
 
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     dolt sql-server --port=$PORT --user dolt > log.txt 2>&1 &
     SERVER_PID=$!
     sleep 5
@@ -172,7 +172,7 @@ SQL
     echo '2,2,2' >> import.csv
     run dolt table import -u one_pk import.csv
     [ "$status" -eq 1 ]
-    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" ""
+    server_query repo1 1 dolt "" "SELECT * FROM one_pk ORDER by pk" ""
 }
 
 @test "sql-server: test dolt sql interface works properly with autocommit" {
@@ -198,7 +198,8 @@ SQL
     [[ "$output" =~ "No tables in working set" ]] || false
 
     # check that dolt_commit throws an error when there are no changes to commit
-    server_query repo1 0 dolt "" "CALL DOLT_COMMIT('-a', '-m', 'Commit1')" 1
+    run server_query repo1 0 dolt "" "CALL DOLT_COMMIT('-a', '-m', 'Commit1')" "" 1
+    [[ "$output" =~ "nothing to commit" ]] || false 
 
     run dolt ls
     [ "$status" -eq 0 ]
@@ -403,7 +404,7 @@ SQL
      SELECT DOLT_CHECKOUT('-b', 'feature-branch');
      "
 
-     server_query repo1 1 dolt "" "SELECT * FROM testorder by pk" "pk\n0\n1\n2"
+     server_query repo1 1 dolt "" "SELECT * FROM test order by pk" "pk\n0\n1\n2"
 
      server_query repo1 1 dolt "" "
      SELECT DOLT_CHECKOUT('feature-branch');
@@ -546,7 +547,7 @@ SQL
 
     # make some changes to main and commit to branch test_branch
     server_query repo1 1 dolt "" "
-    SET @@repo1_head_ref='main';
+    CALL DOLT_CHECKOUT('main');
     CREATE TABLE one_pk (
         pk BIGINT NOT NULL,
         c1 BIGINT,
@@ -555,8 +556,7 @@ SQL
     );
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
     CALL DOLT_ADD('.');
-    SELECT commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');
-    CALL DOLT_BRANCH('main', @@repo1_head);"
+    CALL dolt_commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');"
 
     server_query repo1 1 dolt "" "call dolt_add('.')" "status\n0"
     run dolt ls
@@ -684,7 +684,7 @@ SQL
     skiponwindows "Missing dependencies"
     cd repo1
     dolt sql -q 'create table test (id int primary key)'
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     cat >config.yml <<EOF
 log_level: debug
 behavior:
@@ -731,7 +731,7 @@ END""")
     skiponwindows "Missing dependencies"
     cd repo1
     dolt sql -q 'create table test (id int primary key)'
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     cat >config.yml <<EOF
 log_level: debug
 user:
@@ -1114,7 +1114,7 @@ databases:
 
     start_sql_server_with_config repo1 server.yaml
 
-    server_query repo1 1 dolt "" "call dolt_fetch() as f" "f\n1"
+    server_query repo1 1 dolt "" "call dolt_fetch()" ""
 }
 
 @test "sql-server: run mysql from shell" {
@@ -1156,7 +1156,7 @@ databases:
 @test "sql-server: sql-server locks database" {
     cd repo1
     start_sql_server
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     run dolt sql-server -P $PORT
     [ "$status" -eq 1 ]
 }
@@ -1164,7 +1164,7 @@ databases:
 @test "sql-server: multi dir sql-server locks out childen" {
     start_sql_server
     cd repo2
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     run dolt sql-server -P $PORT
     [ "$status" -eq 1 ]
 }
@@ -1173,7 +1173,7 @@ databases:
     cd repo2
     start_sql_server
     cd ..
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     run dolt sql-server -P $PORT
     [ "$status" -eq 1 ]
 }
@@ -1183,7 +1183,7 @@ databases:
     start_sql_server
     server_query repo1 1 dolt "" "create database newdb" ""
     cd newdb
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     run dolt sql-server -P $PORT
     [ "$status" -eq 1 ]
 }
@@ -1204,13 +1204,13 @@ databases:
     skiponwindows "unix socket is not available on Windows"
     cd repo2
     DEFAULT_DB="repo2"
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
 
     dolt sql-server --port $PORT --user dolt >> log.txt 2>&1 &
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 
-    server_query repo2 1 dolt "" "select 1 dolt ""as col1" "col1\n1"
+    server_query repo2 1 dolt "" "select 1 as col1" "col1\n1"
     run grep '\"/tmp/mysql.sock\"' log.txt
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
@@ -1228,13 +1228,13 @@ databases:
     skiponwindows "unix socket is not available on Windows"
     cd repo2
     DEFAULT_DB="repo2"
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
 
     dolt sql-server --port $PORT --user dolt --socket > log.txt 2>&1 &
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 
-    server_query repo2 1 dolt "" "select 1 dolt ""as col1" "col1\n1"
+    server_query repo2 1 dolt "" "select 1 as col1" "col1\n1"
 
     run grep '\"/tmp/mysql.sock\"' log.txt
     [ "$status" -eq 0 ]
@@ -1249,7 +1249,7 @@ databases:
     run pwd
     REPO_NAME=$output
 
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     dolt sql-server --port=$PORT --socket="$REPO_NAME/mysql.sock" --user dolt > log.txt 2>&1 &
     SERVER_PID=$!
     run wait_for_connection $PORT 5000
@@ -1264,7 +1264,7 @@ databases:
     skiponwindows "unix socket is not available on Windows"
     cd repo2
     DEFAULT_DB="repo2"
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
 
     echo "
 log_level: debug
@@ -1285,7 +1285,7 @@ behavior:
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 
-    server_query repo2 1 dolt "" "select 1 dolt ""as col1" "col1\n1"
+    server_query repo2 1 dolt "" "select 1 as col1" "col1\n1"
 
     run grep '\"/tmp/mysql.sock\"' log.txt
     [ "$status" -eq 0 ]
@@ -1382,7 +1382,7 @@ s.close()
     run dolt init --new-format
     [ $status -eq 0 ]
 
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt &
     SERVER_PID=$! # will get killed by teardown_common
     sleep 5 # not using python wait so this works on windows
@@ -1420,6 +1420,11 @@ s.close()
 
     run grep "failed to access 'mydb2' database: can no longer find .dolt dir on disk" server_log.txt
     [ "${#lines[@]}" -eq 1 ]
+
+    # this tests fails sometimes as the server is stopped from the above error
+    # but stop_sql_server in teardown tries to kill process that is not running anymore,
+    # so start the server again, and it will be stopped in teardown
+    start_sql_server
 }
 
 @test "sql-server: dropping database that the server is running in should drop only the db itself not its nested dbs" {

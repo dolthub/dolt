@@ -1,0 +1,9 @@
+#!/bin/bash
+
+BUILD_ARCH=$(echo "${DOCKERFILE_PATH}" | cut -d '.' -f 2)
+
+# For amd64 filename is Dockerfile (DOCKERFILE_PATH is 'docker/Dockerfile')
+[ "${BUILD_ARCH}" == "docker/Dockerfile" ] && \
+    { echo 'qemu-user-static: Registration not required for current arch'; exit 0; }
+
+docker run --rm --privileged multiarch/qemu-user-static:register --reset

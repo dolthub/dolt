@@ -44,8 +44,8 @@ jobs:
           go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
       - name: Setup Dolt Config
         run: |
-          dolt config --global --add user.name 'Liquidata Actions'
-          dolt config --global --add user.email 'actions@liquidata.co'
+          dolt config --global --add user.name 'DoltHub Actions'
+          dolt config --global --add user.email 'actions@dolthub.com'
       - name: Test all
         run: ./runner.sh
         working-directory: ./integration-tests/compatibility

@@ -15,14 +15,12 @@
 package branch_control
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"sync"
-)
 
-const (
-	currentBinlogVersion = uint16(1)
+	flatbuffers "github.com/google/flatbuffers/go"
+
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 )
 
 //TODO: add stored procedure functions for modifying the binlog
@@ -50,49 +48,89 @@ type BinlogOverlay struct {
 	rows         []BinlogRow
 }
 
-// Serialize returns the Binlog as a byte slice. All encoded integers are big-endian.
-func (binlog *Binlog) Serialize() []byte {
+// NewAccessBinlog returns a new Binlog that represents the construction of the given Access values. May be used to
+// truncate the Binlog's history.
+func NewAccessBinlog(vals []AccessValue) *Binlog {
+	rows := make([]BinlogRow, len(vals))
+	for i, val := range vals {
+		rows[i] = BinlogRow{
+			IsInsert:    true,
+			Branch:      val.Branch,
+			User:        val.User,
+			Host:        val.Host,
+			Permissions: uint64(val.Permissions),
+		}
+	}
+	return &Binlog{
+		rows:    rows,
+		RWMutex: &sync.RWMutex{},
+	}
+}
+
+// NewNamespaceBinlog returns a new Binlog that represents the construction of the given Namespace values. May be used
+// to truncate the Binlog's history.
+func NewNamespaceBinlog(vals []NamespaceValue) *Binlog {
+	rows := make([]BinlogRow, len(vals))
+	for i, val := range vals {
+		rows[i] = BinlogRow{
+			IsInsert:    true,
+			Branch:      val.Branch,
+			User:        val.User,
+			Host:        val.Host,
+			Permissions: 0,
+		}
+	}
+	return &Binlog{
+		rows:    rows,
+		RWMutex: &sync.RWMutex{},
+	}
+}
+
+// Serialize returns the offset for the Binlog written to the given builder.
+func (binlog *Binlog) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 	binlog.RWMutex.RLock()
 	defer binlog.RWMutex.RUnlock()
 
-	buffer := bytes.Buffer{}
-	// Write the version bytes
-	writeUint16(&buffer, currentBinlogVersion)
-	// Write the number of entries
-	binlogSize := uint64(len(binlog.rows))
-	writeUint64(&buffer, binlogSize)
-
-	// Write the rows
-	for _, binlogRow := range binlog.rows {
-		binlogRow.Serialize(&buffer)
+	// Initialize row offset slice
+	rowOffsets := make([]flatbuffers.UOffsetT, len(binlog.rows))
+	// Get each row's offset
+	for i, row := range binlog.rows {
+		rowOffsets[i] = row.Serialize(b)
 	}
-	return buffer.Bytes()
+	// Get the row vector
+	serial.BranchControlBinlogStartRowsVector(b, len(binlog.rows))
+	for i := len(rowOffsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(rowOffsets[i])
+	}
+	rows := b.EndVector(len(binlog.rows))
+	// Write the binlog
+	serial.BranchControlBinlogStart(b)
+	serial.BranchControlBinlogAddRows(b, rows)
+	return serial.BranchControlBinlogEnd(b)
 }
 
-// Deserialize populates the binlog with the given data. Returns an error if the data cannot be deserialized, or if the
-// Binlog has already been written to. Deserialize must be called on an empty Binlog.
-func (binlog *Binlog) Deserialize(data []byte) error {
+// Deserialize populates the binlog with the data from the flatbuffers representation.
+func (binlog *Binlog) Deserialize(fb *serial.BranchControlBinlog) error {
 	binlog.RWMutex.Lock()
 	defer binlog.RWMutex.Unlock()
 
+	// Verify that the binlog is empty
 	if len(binlog.rows) != 0 {
 		return fmt.Errorf("cannot deserialize to a non-empty binlog")
 	}
-	position := uint64(0)
-	// Read the version
-	version := binary.BigEndian.Uint16(data)
-	position += 2
-	if version != currentBinlogVersion {
-		// If we ever increment the binlog version, this will instead handle the conversion from previous versions
-		return fmt.Errorf(`cannot deserialize a binlog with version "%d"`, version)
-	}
-	// Read the number of entries
-	binlogSize := binary.BigEndian.Uint64(data[position:])
-	position += 8
+	// Initialize the rows
+	binlog.rows = make([]BinlogRow, fb.RowsLength())
 	// Read the rows
-	binlog.rows = make([]BinlogRow, binlogSize)
-	for i := uint64(0); i < binlogSize; i++ {
-		binlog.rows[i], position = deserializeBinlogRow(data, position)
+	for i := 0; i < fb.RowsLength(); i++ {
+		serialBinlogRow := &serial.BranchControlBinlogRow{}
+		fb.Rows(serialBinlogRow, i)
+		binlog.rows[i] = BinlogRow{
+			IsInsert:    serialBinlogRow.IsInsert(),
+			Branch:      string(serialBinlogRow.Branch()),
+			User:        string(serialBinlogRow.User()),
+			Host:        string(serialBinlogRow.Host()),
+			Permissions: serialBinlogRow.Permissions(),
+		}
 	}
 	return nil
 }
@@ -152,60 +190,24 @@ func (binlog *Binlog) Delete(branch string, user string, host string, permission
 	})
 }
 
-// Serialize writes the row to the given buffer. All encoded integers are big-endian.
-func (row *BinlogRow) Serialize(buffer *bytes.Buffer) {
-	// Write whether this was an insertion or deletion
-	if row.IsInsert {
-		buffer.WriteByte(1)
-	} else {
-		buffer.WriteByte(0)
-	}
-	// Write the branch
-	branchLen := uint16(len(row.Branch))
-	writeUint16(buffer, branchLen)
-	buffer.WriteString(row.Branch)
-	// Write the user
-	userLen := uint16(len(row.User))
-	writeUint16(buffer, userLen)
-	buffer.WriteString(row.User)
-	// Write the host
-	hostLen := uint16(len(row.Host))
-	writeUint16(buffer, hostLen)
-	buffer.WriteString(row.Host)
-	// Write the permissions
-	writeUint64(buffer, row.Permissions)
+// Rows returns the underlying rows.
+func (binlog *Binlog) Rows() []BinlogRow {
+	return binlog.rows
 }
 
-// deserializeBinlogRow returns a BinlogRow from the data at the given position. Also returns the new position. Assumes
-// that the given data's encoded integers are big-endian.
-func deserializeBinlogRow(data []byte, position uint64) (BinlogRow, uint64) {
-	binlogRow := BinlogRow{}
-	// Read whether this was an insert or write
-	if data[position] == 1 {
-		binlogRow.IsInsert = true
-	} else {
-		binlogRow.IsInsert = false
-	}
-	position += 1
-	// Read the branch
-	branchLen := uint64(binary.BigEndian.Uint16(data[position:]))
-	position += 2
-	binlogRow.Branch = string(data[position : position+branchLen])
-	position += branchLen
-	// Read the user
-	userLen := uint64(binary.BigEndian.Uint16(data[position:]))
-	position += 2
-	binlogRow.User = string(data[position : position+userLen])
-	position += userLen
-	// Read the host
-	hostLen := uint64(binary.BigEndian.Uint16(data[position:]))
-	position += 2
-	binlogRow.Host = string(data[position : position+hostLen])
-	position += hostLen
-	// Read the permissions
-	binlogRow.Permissions = binary.BigEndian.Uint64(data[position:])
-	position += 8
-	return binlogRow, position
+// Serialize returns the offset for the BinlogRow written to the given builder.
+func (row *BinlogRow) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
+	branch := b.CreateString(row.Branch)
+	user := b.CreateString(row.User)
+	host := b.CreateString(row.Host)
+
+	serial.BranchControlBinlogRowStart(b)
+	serial.BranchControlBinlogRowAddIsInsert(b, row.IsInsert)
+	serial.BranchControlBinlogRowAddBranch(b, branch)
+	serial.BranchControlBinlogRowAddUser(b, user)
+	serial.BranchControlBinlogRowAddHost(b, host)
+	serial.BranchControlBinlogRowAddPermissions(b, row.Permissions)
+	return serial.BranchControlBinlogRowEnd(b)
 }
 
 // Insert adds an insert entry to the BinlogOverlay.
@@ -228,22 +230,4 @@ func (overlay *BinlogOverlay) Delete(branch string, user string, host string, pe
 		Host:        host,
 		Permissions: permissions,
 	})
-}
-
-// writeUint64 writes an uint64 into the buffer.
-func writeUint64(buffer *bytes.Buffer, val uint64) {
-	buffer.WriteByte(byte(val >> 56))
-	buffer.WriteByte(byte(val >> 48))
-	buffer.WriteByte(byte(val >> 40))
-	buffer.WriteByte(byte(val >> 32))
-	buffer.WriteByte(byte(val >> 24))
-	buffer.WriteByte(byte(val >> 16))
-	buffer.WriteByte(byte(val >> 8))
-	buffer.WriteByte(byte(val))
-}
-
-// writeUint16 writes an uint16 into the buffer.
-func writeUint16(buffer *bytes.Buffer, val uint16) {
-	buffer.WriteByte(byte(val >> 8))
-	buffer.WriteByte(byte(val))
 }

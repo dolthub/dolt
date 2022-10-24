@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# Get architecture from Dockerfile.arch filename
+BUILD_ARCH=$(echo "${DOCKERFILE_PATH}" | cut -d '.' -f 2)
+
+# For amd64 filename is Dockerfile (DOCKERFILE_PATH is 'docker/Dockerfile')
+[ "${BUILD_ARCH}" == "docker/Dockerfile" ] && \
+    { echo 'qemu-user-static: Download not required for current arch'; exit 0; }
+
+case ${BUILD_ARCH} in
+    amd64 ) QEMU_ARCH="x86_64" ;;
+    arm64 ) QEMU_ARCH="aarch64" ;
+ esac
+
+echo "QEMU architecture for '${BUILD_ARCH}' architecture is '${QEMU_ARCH}'"
+QEMU_USER_STATIC_DOWNLOAD_URL="https://github.com/multiarch/qemu-user-static/releases/download"
+QEMU_USER_STATIC_LATEST_TAG=$(curl -s https://api.github.com/repos/multiarch/qemu-user-static/tags \
+    | grep 'name.*v[0-9]' \
+    | head -n 1 \
+    | cut -d '"' -f 4)
+
+curl -SL "${QEMU_USER_STATIC_DOWNLOAD_URL}/${QEMU_USER_STATIC_LATEST_TAG}/x86_64_qemu-${QEMU_ARCH}-static.tar.gz" \
+    | tar xzv

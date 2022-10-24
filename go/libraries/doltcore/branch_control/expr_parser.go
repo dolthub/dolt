@@ -20,6 +20,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	flatbuffers "github.com/google/flatbuffers/go"
+
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 )
 
 const (
@@ -250,4 +253,30 @@ func (matchExpr MatchExpression) IsValid() bool {
 // character is '%', it is considered to be at the end.
 func (matchExpr MatchExpression) IsAtEnd() bool {
 	return len(matchExpr.SortOrders) == 0 || (len(matchExpr.SortOrders) == 1 && matchExpr.SortOrders[0] == anyMatch)
+}
+
+// Serialize returns the offset for the MatchExpression written to the given builder.
+func (matchExpr MatchExpression) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
+	_ = serial.BranchControlMatchExpressionStartSortOrdersVector(b, len(matchExpr.SortOrders))
+	for i := len(matchExpr.SortOrders) - 1; i >= 0; i-- {
+		b.PrependInt32(matchExpr.SortOrders[i])
+	}
+	sortOrdersOffset := b.EndVector(len(matchExpr.SortOrders))
+
+	serial.BranchControlMatchExpressionStart(b)
+	serial.BranchControlMatchExpressionAddIndex(b, matchExpr.CollectionIndex)
+	serial.BranchControlMatchExpressionAddSortOrders(b, sortOrdersOffset)
+	return serial.BranchControlMatchExpressionEnd(b)
+}
+
+// deserializeMatchExpression populates the MatchExpression with the data from the flatbuffers representation.
+func deserializeMatchExpression(fb *serial.BranchControlMatchExpression) MatchExpression {
+	matchExpr := MatchExpression{
+		CollectionIndex: fb.Index(),
+		SortOrders:      make([]int32, fb.SortOrdersLength()),
+	}
+	for i := 0; i < fb.SortOrdersLength(); i++ {
+		matchExpr.SortOrders[i] = fb.SortOrders(i)
+	}
+	return matchExpr
 }

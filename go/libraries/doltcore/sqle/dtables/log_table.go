@@ -86,7 +86,7 @@ func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*LogI
 		return nil, err
 	}
 
-	child, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash)
+	child, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash, nil)
 	if err != nil {
 		return nil, err
 	}

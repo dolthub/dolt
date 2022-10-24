@@ -145,17 +145,6 @@ func (ntm nomsTableMap) Iter(ctx context.Context, cb func(name string, addr hash
 	})
 }
 
-func (r nomsRvStorage) GetSuperSchemaMap(context.Context, types.ValueReader) (types.Map, bool, error) {
-	v, found, err := r.valueSt.MaybeGet(superSchemasKey)
-	if err != nil {
-		return types.Map{}, false, err
-	}
-	if !found {
-		return types.Map{}, false, nil
-	}
-	return v.(types.Map), true, nil
-}
-
 func (r nomsRvStorage) GetForeignKeys(context.Context, types.ValueReader) (types.Value, bool, error) {
 	v, found, err := r.valueSt.MaybeGet(foreignKeyKey)
 	if err != nil {
@@ -165,14 +154,6 @@ func (r nomsRvStorage) GetForeignKeys(context.Context, types.ValueReader) (types
 		return types.Map{}, false, err
 	}
 	return v.(types.Map), true, nil
-}
-
-func (r nomsRvStorage) SetSuperSchemaMap(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (rvStorage, error) {
-	st, err := r.valueSt.Set(superSchemasKey, m)
-	if err != nil {
-		return nomsRvStorage{}, err
-	}
-	return nomsRvStorage{st}, nil
 }
 
 func (r nomsRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error) {
@@ -427,7 +408,7 @@ func (root *RootValue) GenerateTagsForNewColumns(
 		return nil, fmt.Errorf("error generating tags, newColNames and newColKinds must be of equal length")
 	}
 
-	newTags := make([]uint64, len(newColNames))
+	newTags := make([]*uint64, len(newColNames))
 
 	// Get existing columns from the current root, or the head root if the table doesn't exist in the current root. The
 	// latter case is to support reusing table tags in the case of drop / create in the same session, which is common
@@ -439,12 +420,13 @@ func (root *RootValue) GenerateTagsForNewColumns(
 
 	// If we found any existing columns set them in the newTags list.
 	for _, col := range existingCols {
+		col := col
 		for i := range newColNames {
 			// Only re-use tags if the noms kind didn't change
 			// TODO: revisit this when new storage format is further along
 			if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) &&
 				newColKinds[i] == col.TypeInfo.NomsKind() {
-				newTags[i] = col.Tag
+				newTags[i] = &col.Tag
 				break
 			}
 		}
@@ -455,22 +437,24 @@ func (root *RootValue) GenerateTagsForNewColumns(
 		existingColKinds = append(existingColKinds, col.Kind)
 	}
 
-	existingTags, err := GetAllTagsForRoot(ctx, root)
+	existingTags, err := GetAllTagsForRoots(ctx, headRoot, root)
 	if err != nil {
 		return nil, err
 	}
 
+	outputTags := make([]uint64, len(newTags))
 	for i := range newTags {
-		if newTags[i] > 0 {
+		if newTags[i] != nil {
+			outputTags[i] = *newTags[i]
 			continue
 		}
 
-		newTags[i] = schema.AutoGenerateTag(existingTags, tableName, existingColKinds, newColNames[i], newColKinds[i])
+		outputTags[i] = schema.AutoGenerateTag(existingTags, tableName, existingColKinds, newColNames[i], newColKinds[i])
 		existingColKinds = append(existingColKinds, newColKinds[i])
-		existingTags.Add(newTags[i], tableName)
+		existingTags.Add(outputTags[i], tableName)
 	}
 
-	return newTags, nil
+	return outputTags, nil
 }
 
 func getExistingColumns(
@@ -478,7 +462,8 @@ func getExistingColumns(
 	root, headRoot *RootValue,
 	tableName string,
 	newColNames []string,
-	newColKinds []types.NomsKind) ([]schema.Column, error) {
+	newColKinds []types.NomsKind,
+) ([]schema.Column, error) {
 
 	var existingCols []schema.Column
 	tbl, found, err := root.GetTable(ctx, tableName)
@@ -988,15 +973,23 @@ func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootV
 	return root.PutForeignKeyCollection(ctx, fkCollection)
 }
 
-// GetAllTagsForRoot gets all tags for root
-func GetAllTagsForRoot(ctx context.Context, root *RootValue) (tags schema.TagMapping, err error) {
+// GetAllTagsForRoots gets all tags for |roots|.
+func GetAllTagsForRoots(ctx context.Context, roots ...*RootValue) (tags schema.TagMapping, err error) {
 	tags = make(schema.TagMapping)
-	err = root.IterTables(ctx, func(tblName string, _ *Table, sch schema.Schema) (stop bool, err error) {
-		for _, t := range sch.GetAllCols().Tags {
-			tags.Add(t, tblName)
+	for _, root := range roots {
+		if root == nil {
+			continue
 		}
-		return
-	})
+		err = root.IterTables(ctx, func(tblName string, _ *Table, sch schema.Schema) (stop bool, err error) {
+			for _, t := range sch.GetAllCols().Tags {
+				tags.Add(t, tblName)
+			}
+			return
+		})
+		if err != nil {
+			break
+		}
+	}
 	return
 }
 
@@ -1049,7 +1042,7 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 		return err
 	}
 
-	existing, err := GetAllTagsForRoot(ctx, root)
+	existing, err := GetAllTagsForRoots(ctx, root)
 	if err != nil {
 		return err
 	}

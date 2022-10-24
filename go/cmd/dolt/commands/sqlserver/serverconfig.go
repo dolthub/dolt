@@ -54,6 +54,7 @@ const (
 	defaultDataDir                 = "."
 	defaultCfgDir                  = ".doltcfg"
 	defaultPrivilegeFilePath       = "privileges.db"
+	defaultBranchControlFilePath   = "branch_control.db"
 	defaultMetricsHost             = ""
 	defaultMetricsPort             = -1
 	defaultAllowCleartextPasswords = false
@@ -136,6 +137,8 @@ type ServerConfig interface {
 	// PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
 	// JSON string.
 	PrivilegeFilePath() string
+	// BranchControlFilePath returns the path to the file which contains the branch control permissions.
+	BranchControlFilePath() string
 	// UserVars is an array containing user specific session variables
 	UserVars() []UserSessionVars
 	// JwksConfig is an array containing jwks config
@@ -179,6 +182,7 @@ type commandLineServerConfig struct {
 	requireSecureTransport  bool
 	persistenceBehavior     string
 	privilegeFilePath       string
+	branchControlFilePath   string
 	allowCleartextPasswords bool
 	socket                  string
 	remotesapiPort          *int
@@ -294,6 +298,11 @@ func (cfg *commandLineServerConfig) ClusterConfig() cluster.Config {
 // JSON string.
 func (cfg *commandLineServerConfig) PrivilegeFilePath() string {
 	return cfg.privilegeFilePath
+}
+
+// BranchControlFilePath returns the path to the file which contains the branch control permissions.
+func (cfg *commandLineServerConfig) BranchControlFilePath() string {
+	return cfg.branchControlFilePath
 }
 
 // UserVars is an array containing user specific session variables.
@@ -416,6 +425,12 @@ func (cfg *commandLineServerConfig) withPrivilegeFilePath(privFilePath string) *
 	return cfg
 }
 
+// withBranchControlFilePath updates the path to the file which contains the branch control permissions
+func (cfg *commandLineServerConfig) withBranchControlFilePath(branchControlFilePath string) *commandLineServerConfig {
+	cfg.branchControlFilePath = branchControlFilePath
+	return cfg
+}
+
 func (cfg *commandLineServerConfig) withAllowCleartextPasswords(allow bool) *commandLineServerConfig {
 	cfg.allowCleartextPasswords = allow
 	return cfg
@@ -458,6 +473,7 @@ func DefaultServerConfig() *commandLineServerConfig {
 		dataDir:                 defaultDataDir,
 		cfgDir:                  filepath.Join(defaultDataDir, defaultCfgDir),
 		privilegeFilePath:       filepath.Join(defaultDataDir, defaultCfgDir, defaultPrivilegeFilePath),
+		branchControlFilePath:   filepath.Join(defaultDataDir, defaultCfgDir, defaultBranchControlFilePath),
 		allowCleartextPasswords: defaultAllowCleartextPasswords,
 	}
 }

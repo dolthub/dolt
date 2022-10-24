@@ -85,24 +85,26 @@ By default this command uses the dolt database in the current working directory,
 var ErrMultipleDoltCfgDirs = errors.NewKind("multiple .doltcfg directories detected: '%s' and '%s'; pass one of the directories using option --doltcfg-dir")
 
 const (
-	QueryFlag         = "query"
-	FormatFlag        = "result-format"
-	saveFlag          = "save"
-	executeFlag       = "execute"
-	listSavedFlag     = "list-saved"
-	messageFlag       = "message"
-	BatchFlag         = "batch"
-	DataDirFlag       = "data-dir"
-	MultiDBDirFlag    = "multi-db-dir"
-	CfgDirFlag        = "doltcfg-dir"
-	DefaultCfgDirName = ".doltcfg"
-	PrivsFilePathFlag = "privilege-file"
-	DefaultPrivsName  = "privileges.db"
-	continueFlag      = "continue"
-	fileInputFlag     = "file"
-	UserFlag          = "user"
-	DefaultUser       = "root"
-	DefaultHost       = "localhost"
+	QueryFlag             = "query"
+	FormatFlag            = "result-format"
+	saveFlag              = "save"
+	executeFlag           = "execute"
+	listSavedFlag         = "list-saved"
+	messageFlag           = "message"
+	BatchFlag             = "batch"
+	DataDirFlag           = "data-dir"
+	MultiDBDirFlag        = "multi-db-dir"
+	CfgDirFlag            = "doltcfg-dir"
+	DefaultCfgDirName     = ".doltcfg"
+	PrivsFilePathFlag     = "privilege-file"
+	BranchCtrlPathFlag    = "branch-control-file"
+	DefaultPrivsName      = "privileges.db"
+	DefaultBranchCtrlName = "branch_control.db"
+	continueFlag          = "continue"
+	fileInputFlag         = "file"
+	UserFlag              = "user"
+	DefaultUser           = "root"
+	DefaultHost           = "localhost"
 
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
@@ -157,6 +159,7 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
 	ap.SupportsString(fileInputFlag, "f", "input file", "Execute statements from the file given.")
 	ap.SupportsString(PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
+	ap.SupportsString(BranchCtrlPathFlag, "", "branch control file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will only be created if there is a change to branch control permissions.")
 	ap.SupportsString(UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", DefaultUser))
 	return ap
 }
@@ -256,6 +259,15 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
+	// If no branch control file path is specified, default to doltcfg directory
+	branchControlFilePath, hasBCFilePath := apr.GetValue(BranchCtrlPathFlag)
+	if !hasBCFilePath {
+		branchControlFilePath, err = dEnv.FS.Abs(filepath.Join(cfgDirPath, DefaultBranchCtrlName))
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+	}
+
 	initialRoots, err := mrEnv.GetWorkingRoots(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -278,13 +290,14 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	config := &engine.SqlEngineConfig{
-		InitialDb:      currentDb,
-		IsReadOnly:     false,
-		DoltCfgDirPath: cfgDirPath,
-		PrivFilePath:   privsFp,
-		ServerUser:     username,
-		ServerHost:     DefaultHost,
-		Autocommit:     true,
+		InitialDb:          currentDb,
+		IsReadOnly:         false,
+		DoltCfgDirPath:     cfgDirPath,
+		PrivFilePath:       privsFp,
+		BranchCtrlFilePath: branchControlFilePath,
+		ServerUser:         username,
+		ServerHost:         DefaultHost,
+		Autocommit:         true,
 	}
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
