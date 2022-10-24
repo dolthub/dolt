@@ -271,7 +271,7 @@ func getCommitOrTableFromString(ctx context.Context, str string, dEnv *env.DoltE
 	}
 
 	// ^<ref>
-	if strings.Contains(str, "^") {
+	if strings.HasPrefix(str, "^") {
 		commit := strings.TrimPrefix(str, "^")
 		notCs, err := getCommitSpec(commit)
 		if err != nil {
