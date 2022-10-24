@@ -24,6 +24,7 @@ package types
 import (
 	"bytes"
 	"context"
+
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
