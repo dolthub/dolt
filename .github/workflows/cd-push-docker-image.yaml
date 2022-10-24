@@ -24,20 +24,37 @@ jobs:
         uses: docker/setup-buildx-action@v2
         with:
           platforms: linux/amd64,linux/arm64
-      - name: Build and push
+      - name: Build and push dolt image
+        uses: docker/build-push-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: ./docker/Dockerfile
+          push: true
+          tags: dolthub/dolt:${{ github.event.inputs.version || github.event.client_payload.version }} , dolthub/dolt:latest
+          build-args: |
+            DOLT_VERSION=${{ github.event.inputs.version || github.event.client_payload.version }}
+      - name: Build and push dolt-sql-server image
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/serverDockerfile
           push: true
-          tags: dolthub/dolt-server:0.50.8, dolthub/dolt-server:latest
+          tags: dolthub/dolt-sql-server:${{ github.event.inputs.version || github.event.client_payload.version }} , dolthub/dolt-sql-server:latest
           build-args: |
-            DOLT_VERSION=0.50.8
-      - name: Docker Hub Description
+            DOLT_VERSION=${{ github.event.inputs.version || github.event.client_payload.version }}
+      - name: Update Docker Hub Readme for dolt image
         uses: peter-evans/dockerhub-description@v3
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-          repository: dolthub/dolt-server
+          repository: dolthub/dolt
           readme-filepath: ./docker/README.md
+      - name: Update Docker Hub Readme for dolt-sql-server image
+        uses: peter-evans/dockerhub-description@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+          repository: dolthub/dolt-sql-server
+          readme-filepath: ./docker/serverREADME.md
