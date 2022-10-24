@@ -48,6 +48,7 @@ jobs:
           message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', needs.format-version.outputs.version) }}
           add: ${{ format('[{0}/go/cmd/dolt/dolt.go,{0}/docker/Dockerfile,{0}/docker/Dockerfile.arm64]', github.workspace) }}
           cwd: "."
+          pull: "--ff"
       - name: Build Binaries
         id: build_binaries
         run: |

@@ -48,3 +48,4 @@ jobs:
           message: "[ga-format-pr] Run go/utils/repofmt/format_repo.sh and go/Godeps/update.sh"
           add: "."
           cwd: "."
+          pull: "--ff"
