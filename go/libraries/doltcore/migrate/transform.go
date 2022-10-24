@@ -458,7 +458,12 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 		patched = true
 
 		var err error
-		st, err = sql.CreateString(st.Type(), st.Length(), sql.Collation_utf8mb4_0900_bin)
+		switch st.Type() {
+		case query.Type_CHAR, query.Type_VARCHAR, query.Type_TEXT:
+			st, err = sql.CreateString(st.Type(), st.Length(), sql.Collation_utf8mb4_0900_bin)
+		case query.Type_BINARY, query.Type_VARBINARY, query.Type_BLOB:
+			st, err = sql.CreateString(st.Type(), st.Length(), sql.Collation_binary)
+		}
 		if err != nil {
 			return nil, err
 		}
