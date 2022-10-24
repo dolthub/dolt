@@ -32,23 +32,10 @@ _create_dir() {
 }
 
 check_for_dolt() {
-    echo "Verifying dolt executable..."
+    mysql_log "Verifying dolt executable..."
     local dolt_bin=$(which dolt)
     if [ ! -x "$dolt_bin" ]; then
         mysql_error "dolt binary executable not found"
-    fi
-}
-
-# To make /var/lib/dolt/ a fixed directory to start the server in and store the data in,
-# set data_dir to null as default in yaml file
-check_for_data_dir_definition() {
-    dd_found=(`grep $1 -e "data_dir" | wc -l`)
-    if [ $dd_found -gt 0 ]; then
-        mysql_warn "Data directory cannot be defined in docker container. It is set to '/var/lib/dolt' directory and can be mounted with local directory on host."
-        sed -i -e 's/data_dir.*/data_dir: null/' $1
-        rm "$1-e"
-    else
-        echo "data_dir: null" > /default_config.yaml
     fi
 }
 
@@ -73,14 +60,14 @@ get_config_file_path_if_exists() {
     CONFIG_DIR=$1
     FILE_TYPE=$2
     if [ -d "$CONFIG_DIR" ]; then
-        echo "Checking for config provided in $CONFIG_DIR"
-        files_found=( `ls $CONFIG_DIR/*$FILE_TYPE` )
+        mysql_log "Checking for config provided in $CONFIG_DIR"
         number_of_files_found=( `find .$CONFIG_DIR -type f -name "*.$FILE_TYPE" | wc -l` )
         if [ $number_of_files_found -gt 1 ]; then
             CONFIG_PROVIDED=
             mysql_warn "multiple config file found in $CONFIG_DIR, using default config"
         elif [ $number_of_files_found -eq 1 ]; then
-            echo "$files_found file is found"
+            files_found=( `ls $CONFIG_DIR/*$FILE_TYPE` )
+            mysql_log "$files_found file is found"
             CONFIG_PROVIDED=$files_found
         else
             CONFIG_PROVIDED=
@@ -123,7 +110,7 @@ docker_process_init_files() {
 start_server() {
     # start the server in fixed data directory at /var/lib/dolt
     cd $CONTAINER_DATA_DIR
-    "$@" $1
+    "$@"
 }
 
 # if there is config file provided through /etc/dolt/doltcfg.d,
@@ -135,20 +122,6 @@ set_dolt_config_if_defined() {
     fi
 }
 
-# if there is config yaml file provided through /etc/dolt/servercfg.d
-# we use it as configuration to start the server with; otherwise,
-# the server will start with default configuration and what's defined
-# in the commandline argument
-get_server_config_if_defined() {
-    get_config_file_path_if_exists "$SERVER_CONFIG_DIR" "yaml"
-    if [ ! -z $CONFIG_PROVIDED ]; then
-        check_for_data_dir_definition $CONFIG_PROVIDED
-        echo "--config=$CONFIG_PROVIDED"
-    else
-        echo "--config=/default_config.yaml"
-    fi
-}
-
 _main() {
     # check for dolt binary executable
     check_for_dolt
@@ -157,9 +130,6 @@ _main() {
         # if there is any command line argument defined we use
         # them with default command `dolt sql-server --host=0.0.0.0 --port=3306`
         # why we use fixed host=0.0.0.0 and port=3306 in README
-        commandline_arg=( `echo $@ | sed 's/h//'` )
-        echo "THIS IS COMMANDLINE ARG : $@"
-
         set -- dolt sql-server --host=0.0.0.0 --port=3306 "$@"
     fi
 
@@ -175,7 +145,11 @@ _main() {
 
         # if there is a single yaml provided in /etc/dolt/servercfg.d directory,
         # it will be used to start the server with --config flag
-        start_server set_server_config_if_defined
+        get_config_file_path_if_exists "$SERVER_CONFIG_DIR" "yaml"
+        if [ ! -z $CONFIG_PROVIDED ]; then
+            set -- "$@" --config=$CONFIG_PROVIDED
+        fi
+        start_server
 
         # run any file provided in /docker-entrypoint-initdb.d directory after the server starts
         docker_process_init_files /docker-entrypoint-initdb.d/*
