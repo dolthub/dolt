@@ -19,11 +19,11 @@ jobs:
           if [ "$EVENT_NAME" == "workflow_dispatch" ]
           then
             release_id=$(curl -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/dolthub/dolt/releases/tags/v${{ github.event.inputs.version }} | jq '.id')
-            echo "::set-output name=version::${{ github.event.inputs.version }}"
-            echo "::set-output name=release_id::$release_id"
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "release_id=$release_id" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=version::${{ github.event.client_payload.version }}"
-            echo "::set-output name=release_id::${{ github.event.client_payload.release_id }}"
+            echo "version=${{ github.event.client_payload.version }}" >> $GITHUB_OUTPUT
+            echo "release_id=${{ github.event.client_payload.release_id }}" >> $GITHUB_OUTPUT
           fi
         env:
           EVENT_NAME: ${{ github.event_name }}
