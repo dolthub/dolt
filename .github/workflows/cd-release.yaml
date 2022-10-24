@@ -173,3 +173,14 @@ jobs:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: release-dolt
           client-payload: '{"version": "${{ needs.format-version.outputs.version }}", "actor": "${{ github.actor }}"}'
+
+  docker-image-push:
+    needs: [ format-version, create-release ]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Trigger Push Docker Image
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: push-docker-image
+          client-payload: '{"version": "${{ needs.format-version.outputs.version }}"}'
