@@ -39,7 +39,7 @@ jobs:
         if: ${{ steps.check.outputs.triggered == 'true' }}
         id: set_benchmark
         run: |
-          echo "::set-output name=benchmark::true"
+          echo "benchmark=true" >> $GITHUB_OUTPUT
 
   performance:
     runs-on: ubuntu-22.04
@@ -47,7 +47,7 @@ jobs:
     if: ${{ needs.check-comments.outputs.benchmark == 'true' }}
     name: Trigger Benchmark Latency K8s Workflow
     steps:
-      - uses: xt0rted/pull-request-comment-branch@v1
+      - uses: dolthub/pull-request-comment-branch@v3
         id: comment-branch
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
@@ -57,7 +57,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: core.setOutput("pull_number", JSON.stringify(context.issue.number));
-      - uses: peter-evans/repository-dispatch@v1
+      - uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-latency
