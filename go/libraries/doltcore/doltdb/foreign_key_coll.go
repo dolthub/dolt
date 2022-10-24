@@ -203,7 +203,7 @@ func (fk ForeignKey) ValidateTableSchema(sch schema.Schema) error {
 			return fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` has unexpected schema", fk.Name, fk.TableName)
 		}
 	}
-	if !sch.Indexes().Contains(fk.TableIndex) {
+	if !sch.Indexes().Contains(fk.TableIndex) && fk.ReferencedTableIndex == "PRIMARY" && sch.GetPKCols().Size() == 0 {
 		return fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` is missing the index `%s`",
 			fk.Name, fk.TableName, fk.TableIndex)
 	}
