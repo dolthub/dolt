@@ -64,7 +64,7 @@ func NewSingleSymmetricKeySealer() Sealer {
 
 func (s singleSymmetricKeySealer) Seal(u *url.URL) *url.URL {
 	requestURI := (&url.URL{
-		Path: u.EscapedPath(),
+		Path:     u.EscapedPath(),
 		RawQuery: u.RawQuery,
 	}).String()
 	nbf := time.Now().Add(-10 * time.Second)
