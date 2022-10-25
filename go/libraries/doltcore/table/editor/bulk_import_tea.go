@@ -140,11 +140,6 @@ func (tea *BulkImportTEA) HasPartial(ctx context.Context, idxSch schema.Schema, 
 			matches = matches[:len(matches)-1]
 		}
 	}
-	// TODO: do I bother with these?
-	//match, ok := tea.adds[partialKeyHash]
-	//if ok {
-	//	matches = append(matches, match)
-	//}
 	return matches, nil
 }
 

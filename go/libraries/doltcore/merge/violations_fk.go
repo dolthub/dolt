@@ -362,8 +362,6 @@ func nomsChildFkConstraintViolations(
 	preChildRowData types.Map,
 ) (*doltdb.Table, bool, error) {
 	foundViolations := false
-	// TODO: need to change these to use the partial tags in the foreign key for Post(Child/Parent)Tags
-	// Condition is based off of if Index.Name() == "PRIMARY"
 	var postParentIndexTags, postChildIndexTags []uint64
 	if postParent.Index.Name() == "PRIMARY" {
 		postParentIndexTags = foreignKey.ReferencedTableColumns
@@ -427,7 +425,6 @@ func nomsChildFkConstraintViolations(
 			if err != nil {
 				return nil, false, err
 			}
-			// TODO: this shouldn't use the full key if it's primary
 			for i := 0; i < len(postParentIndexTags); i++ {
 				postChildIndexPartialKeySlice[2*i] = types.Uint(postParentIndexTags[i])
 			}
