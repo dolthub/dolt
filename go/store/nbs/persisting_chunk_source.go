@@ -240,20 +240,6 @@ func (ccs *persistingChunkSource) size() (uint64, error) {
 	return ccs.cs.size()
 }
 
-func (ccs *persistingChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error) {
-	err = ccs.wait()
-
-	if err != nil {
-		return 0, false, err
-	}
-
-	if ccs.cs == nil {
-		return 0, false, ErrNoChunkSource
-	}
-
-	return ccs.cs.calcReads(reqs, blockSize)
-}
-
 func (ccs *persistingChunkSource) extract(ctx context.Context, chunks chan<- extractRecord) error {
 	err := ccs.wait()
 
