@@ -81,7 +81,7 @@ func main() {
 		dbCache = NewLocalCSCache(fs)
 	}
 
-	server := remotesrv.NewServer(remotesrv.ServerArgs{
+	server, err := remotesrv.NewServer(remotesrv.ServerArgs{
 		HttpHost: *httpHostParam,
 		HttpPort: *httpPortParam,
 		GrpcPort: *grpcPortParam,
@@ -89,6 +89,9 @@ func main() {
 		DBCache:  dbCache,
 		ReadOnly: *readOnlyParam,
 	})
+	if err != nil {
+		log.Fatalf("error creating remotesrv Server: %v\n", err)
+	}
 	listeners, err := server.Listeners()
 	if err != nil {
 		log.Fatalf("error starting remotesrv Server listeners: %v\n", err)
