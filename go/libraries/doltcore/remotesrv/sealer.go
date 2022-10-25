@@ -30,15 +30,17 @@ import (
 // Interface to seal requests to the HTTP server so that they cannot be forged.
 // The gRPC server seals URLs and the HTTP server unseals them.
 type Sealer interface {
-	Seal(*url.URL) *url.URL
+	Seal(*url.URL) (*url.URL, error)
 	Unseal(*url.URL) (*url.URL, error)
 }
+
+var _ Sealer = identitySealer{}
 
 type identitySealer struct {
 }
 
-func (identitySealer) Seal(u *url.URL) *url.URL {
-	return u
+func (identitySealer) Seal(u *url.URL) (*url.URL, error) {
+	return u, nil
 }
 
 func (identitySealer) Unseal(u *url.URL) (*url.URL, error) {
@@ -53,16 +55,16 @@ type singleSymmetricKeySealer struct {
 	privateKeyBytes []byte
 }
 
-func NewSingleSymmetricKeySealer() Sealer {
+func NewSingleSymmetricKeySealer() (Sealer, error) {
 	var key [32]byte
 	_, err := rand.Read(key[:])
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return singleSymmetricKeySealer{privateKeyBytes: key[:]}
+	return singleSymmetricKeySealer{privateKeyBytes: key[:]}, nil
 }
 
-func (s singleSymmetricKeySealer) Seal(u *url.URL) *url.URL {
+func (s singleSymmetricKeySealer) Seal(u *url.URL) (*url.URL, error) {
 	requestURI := (&url.URL{
 		Path:     u.EscapedPath(),
 		RawQuery: u.RawQuery,
@@ -74,17 +76,17 @@ func (s singleSymmetricKeySealer) Seal(u *url.URL) *url.URL {
 	var nonceBytes [12]byte
 	_, err := rand.Read(nonceBytes[:])
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	nonceStr := base64.RawURLEncoding.EncodeToString(nonceBytes[:])
 
 	block, err := aes.NewCipher(s.privateKeyBytes)
 	if err != nil {
-		panic(fmt.Errorf("internal error: error making aes cipher with key: %w", err))
+		return nil, fmt.Errorf("internal error: error making aes cipher with key: %w", err)
 	}
 	aesgcm, err := cipher.NewGCM(block)
 	if err != nil {
-		panic(fmt.Errorf("internal error: error making gcm mode opener with key: %w", err))
+		return nil, fmt.Errorf("internal error: error making gcm mode opener with key: %w", err)
 	}
 
 	reqBytes := aesgcm.Seal(nil, nonceBytes[:], []byte(requestURI), []byte(nbfStr+":"+expStr))
@@ -98,7 +100,7 @@ func (s singleSymmetricKeySealer) Seal(u *url.URL) *url.URL {
 		"exp":   []string{strconv.FormatInt(exp.UnixMilli(), 10)},
 		"nonce": []string{nonceStr},
 	}).Encode()
-	return &ret
+	return &ret, nil
 }
 
 func (s singleSymmetricKeySealer) Unseal(u *url.URL) (*url.URL, error) {

@@ -26,7 +26,8 @@ import (
 )
 
 func TestSingleSymmetricKeySealer(t *testing.T) {
-	s := NewSingleSymmetricKeySealer()
+	s, err := NewSingleSymmetricKeySealer()
+	assert.NoError(t, err)
 	assert.NotNil(t, s)
 
 	u := &url.URL{
@@ -34,7 +35,8 @@ func TestSingleSymmetricKeySealer(t *testing.T) {
 		Host:   "remotesapi.dolthub.com:443",
 		Path:   "somedatabasename/sometablefilename",
 	}
-	sealed := s.Seal(u)
+	sealed, err := s.Seal(u)
+	assert.NoError(t, err)
 	unsealed, err := s.Unseal(sealed)
 	assert.NoError(t, err)
 	assert.Equal(t, u, unsealed)

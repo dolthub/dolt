@@ -57,7 +57,7 @@ type ServerArgs struct {
 	Options  []grpc.ServerOption
 }
 
-func NewServer(args ServerArgs) *Server {
+func NewServer(args ServerArgs) (*Server, error) {
 	if args.Logger == nil {
 		args.Logger = logrus.NewEntry(logrus.StandardLogger())
 	}
@@ -65,7 +65,10 @@ func NewServer(args ServerArgs) *Server {
 	s := new(Server)
 	s.stopChan = make(chan struct{})
 
-	sealer := NewSingleSymmetricKeySealer()
+	sealer, err := NewSingleSymmetricKeySealer()
+	if err != nil {
+		return nil, err
+	}
 
 	s.wg.Add(2)
 	s.grpcPort = args.GrpcPort
@@ -89,7 +92,7 @@ func NewServer(args ServerArgs) *Server {
 		Handler: handler,
 	}
 
-	return s
+	return s, nil
 }
 
 func grpcMultiplexHandler(grpcSrv *grpc.Server, handler http.Handler) http.Handler {
