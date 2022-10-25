@@ -134,9 +134,17 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 		if err != nil {
 			return err
 		}
+	} else if err := branch_control.CanDeleteBranch(ctx, newBranchName); err != nil {
+		// If force is enabled, we can overwrite the destination branch, so we require a permission check here, even if the
+		// destination branch doesn't exist. An unauthorized user could simply rerun the command without the force flag.
+		return err
 	}
 
 	err := actions.RenameBranch(ctx, dbData, loadConfig(ctx), oldBranchName, newBranchName, force)
+	if err != nil {
+		return err
+	}
+	err = branch_control.AddAdminForContext(ctx, newBranchName)
 	if err != nil {
 		return err
 	}
@@ -321,6 +329,13 @@ func copyABranch(ctx *sql.Context, dbData env.DbData, srcBr string, destBr strin
 	if err := branch_control.CanCreateBranch(ctx, destBr); err != nil {
 		return err
 	}
+	// If force is enabled, we can overwrite the destination branch, so we require a permission check here, even if the
+	// destination branch doesn't exist. An unauthorized user could simply rerun the command without the force flag.
+	if force {
+		if err := branch_control.CanDeleteBranch(ctx, destBr); err != nil {
+			return err
+		}
+	}
 	err := actions.CopyBranchOnDB(ctx, dbData.Ddb, srcBr, destBr, force)
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {
@@ -332,6 +347,10 @@ func copyABranch(ctx *sql.Context, dbData env.DbData, srcBr string, destBr strin
 		} else {
 			return errors.New(fmt.Sprintf("fatal: Unexpected error copying branch from '%s' to '%s'", srcBr, destBr))
 		}
+	}
+	err = branch_control.AddAdminForContext(ctx, destBr)
+	if err != nil {
+		return err
 	}
 
 	return nil

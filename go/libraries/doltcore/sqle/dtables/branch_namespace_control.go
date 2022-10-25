@@ -288,6 +288,8 @@ func (tbl BranchNamespaceControlTable) insert(ctx context.Context, branch string
 			sql.Row{branch, user, host})
 	}
 
+	// Add an entry to the binlog
+	tbl.GetBinlog().Insert(branch, user, host, 0)
 	// Add the expressions to their respective slices
 	branchExpr := branch_control.ParseExpression(branch, sql.Collation_utf8mb4_0900_ai_ci)
 	userExpr := branch_control.ParseExpression(user, sql.Collation_utf8mb4_0900_bin)
@@ -314,6 +316,8 @@ func (tbl BranchNamespaceControlTable) delete(ctx context.Context, branch string
 	}
 
 	endIndex := len(tbl.Values) - 1
+	// Add an entry to the binlog
+	tbl.GetBinlog().Delete(branch, user, host, 0)
 	// Remove the matching row from all slices by first swapping with the last element
 	tbl.Branches[tblIndex], tbl.Branches[endIndex] = tbl.Branches[endIndex], tbl.Branches[tblIndex]
 	tbl.Users[tblIndex], tbl.Users[endIndex] = tbl.Users[endIndex], tbl.Users[tblIndex]
@@ -324,5 +328,11 @@ func (tbl BranchNamespaceControlTable) delete(ctx context.Context, branch string
 	tbl.Users = tbl.Users[:endIndex]
 	tbl.Hosts = tbl.Hosts[:endIndex]
 	tbl.Values = tbl.Values[:endIndex]
+	// Then we update the index for the match expressions
+	if tblIndex != endIndex {
+		tbl.Branches[tblIndex].CollectionIndex = uint32(tblIndex)
+		tbl.Users[tblIndex].CollectionIndex = uint32(tblIndex)
+		tbl.Hosts[tblIndex].CollectionIndex = uint32(tblIndex)
+	}
 	return nil
 }
