@@ -22,6 +22,11 @@ teardown() {
     dolt commit -am "cm"
 }
 
+@test "foreign-keys-invert-pk: no secondary indexes made" {
+    run dolt index ls
+    [[ $output = "No indexes in the working set" ]] || false
+}
+
 @test "foreign-keys-invert-pk: check referential integrity on merge" {
     dolt commit -am "main"
     dolt checkout -b feat
