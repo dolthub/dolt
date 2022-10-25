@@ -503,16 +503,23 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName st
 		return nil, false, err
 	}
 
-	// using primary key as index
+	// Create Primary Key Index
 	if idxName == "PRIMARY" {
-		idx := sch.PkIndex()
+		pkCols := sch.GetPKCols()
+		pkIdxColl := schema.NewIndexCollection(pkCols, pkCols)
+		pkIdxProps := schema.IndexProperties{
+			IsUnique:      true,
+			IsUserDefined: false,
+			Comment:       "",
+		}
+		pkIdx := schema.NewIndex("PRIMARY", pkCols.SortedTags, pkCols.SortedTags, pkIdxColl, pkIdxProps)
 		return &constraintViolationsLoadedTable{
 			TableName:   trueTblName,
 			Table:       tbl,
 			Schema:      sch,
 			RowData:     rowData,
-			Index:       idx,
-			IndexSchema: idx.Schema(),
+			Index:       pkIdx,
+			IndexSchema: pkIdx.Schema(),
 			IndexData:   rowData,
 		}, true, nil
 	}

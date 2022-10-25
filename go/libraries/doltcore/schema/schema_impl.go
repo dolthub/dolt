@@ -289,17 +289,6 @@ func (si *schemaImpl) Indexes() IndexCollection {
 	return si.indexCollection
 }
 
-// PkIndex creates a primary key index from the schema
-func (si *schemaImpl) PkIndex() Index {
-	pkIdxColl := NewIndexCollection(si.pkCols, si.pkCols)
-	pkProps := IndexProperties{
-		IsUnique:      true,
-		IsUserDefined: false,
-		Comment:       "",
-	}
-	return NewIndex("PRIMARY", si.pkCols.Tags, si.pkCols.Tags, pkIdxColl.(*indexCollectionImpl), pkProps)
-}
-
 func (si *schemaImpl) Checks() CheckCollection {
 	return si.checkCollection
 }
