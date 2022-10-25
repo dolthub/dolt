@@ -67,8 +67,6 @@ const (
 
 	defaultManifestCacheSize = 1 << 23 // 8MB
 	preflushChunkCount       = 8
-
-	copyTableFileBufferSize = 128 * 1024 * 1024
 )
 
 var (

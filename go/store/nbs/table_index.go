@@ -154,12 +154,12 @@ func removeFooter(p []byte, chunkCount uint32) (out []byte, err error) {
 // Useful to create an onHeapTableIndex without retaining the entire underlying array of data.
 func parseTableIndexByCopy(buff []byte, q MemoryQuotaProvider) (onHeapTableIndex, error) {
 	r := bytes.NewReader(buff)
-	return ReadTableIndexByCopy(r, q)
+	return readTableIndexByCopy(r, q)
 }
 
-// ReadTableIndexByCopy loads an index into memory from an io.ReadSeeker
+// readTableIndexByCopy loads an index into memory from an io.ReadSeeker
 // Caution: Allocates new memory for entire index
-func ReadTableIndexByCopy(rd io.ReadSeeker, q MemoryQuotaProvider) (onHeapTableIndex, error) {
+func readTableIndexByCopy(rd io.ReadSeeker, q MemoryQuotaProvider) (onHeapTableIndex, error) {
 	chunkCount, totalUncompressedData, err := ReadTableFooter(rd)
 	if err != nil {
 		return onHeapTableIndex{}, err
