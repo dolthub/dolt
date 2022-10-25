@@ -193,7 +193,7 @@ func (c *Controller) applyCommitHooks(ctx context.Context, name string, bt *sql.
 }
 
 func (c *Controller) gRPCDialProvider(denv *env.DoltEnv) dbfactory.GRPCDialProvider {
-	return grpcDialProvider{env.NewGRPCDialProviderFromDoltEnv(denv), &c.cinterceptor}
+	return grpcDialProvider{env.NewGRPCDialProviderFromDoltEnv(denv), &c.cinterceptor, c.cfg.RemotesAPIConfig().TLSCA()}
 }
 
 func (c *Controller) RegisterStoredProcedures(store procedurestore) {

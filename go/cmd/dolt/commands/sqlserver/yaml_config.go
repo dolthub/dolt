@@ -517,9 +517,24 @@ func (c *ClusterYAMLConfig) RemotesAPIConfig() cluster.RemotesAPIConfig {
 }
 
 type clusterRemotesAPIYAMLConfig struct {
-	P int `yaml:"port"`
+	Port_    int    `yaml:"port"`
+	TLSKey_  string `yaml:"tls_key"`
+	TLSCert_ string `yaml:"tls_cert"`
+	TLSCA_   string `yaml:"tls_ca"`
 }
 
 func (c clusterRemotesAPIYAMLConfig) Port() int {
-	return c.P
+	return c.Port_
+}
+
+func (c clusterRemotesAPIYAMLConfig) TLSKey() string {
+	return c.TLSKey_
+}
+
+func (c clusterRemotesAPIYAMLConfig) TLSCert() string {
+	return c.TLSCert_
+}
+
+func (c clusterRemotesAPIYAMLConfig) TLSCA() string {
+	return c.TLSCA_
 }

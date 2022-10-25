@@ -238,7 +238,7 @@ func openBrowserForCredsAdd(dc creds.DoltCreds, loginUrl string) {
 }
 
 func getCredentialsClient(dEnv *env.DoltEnv, dc creds.DoltCreds, authEndpoint string, insecure bool) (remotesapi.CredentialsServiceClient, errhand.VerboseError) {
-	endpoint, opts, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
+	endpoint, opts, _, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: authEndpoint,
 		Creds:    dc,
 		Insecure: insecure,

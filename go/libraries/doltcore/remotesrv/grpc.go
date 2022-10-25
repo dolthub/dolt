@@ -45,11 +45,11 @@ type RemoteChunkStore struct {
 	HttpHost   string
 	httpScheme string
 
-	csCache  DBCache
-	bucket   string
-	fs       filesys.Filesys
-	lgr      *logrus.Entry
-	sealer   Sealer
+	csCache DBCache
+	bucket  string
+	fs      filesys.Filesys
+	lgr     *logrus.Entry
+	sealer  Sealer
 	remotesapi.UnimplementedChunkStoreServiceServer
 }
 

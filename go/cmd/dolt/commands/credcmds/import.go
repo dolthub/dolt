@@ -161,7 +161,7 @@ func updateProfileWithCredentials(ctx context.Context, dEnv *env.DoltEnv, c cred
 	host := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
 	port := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
 	hostAndPort := fmt.Sprintf("%s:%s", host, port)
-	endpoint, opts, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
+	endpoint, opts, _, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: hostAndPort,
 		Creds:    c,
 	})

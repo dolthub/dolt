@@ -36,7 +36,7 @@ var GRPCDialProviderParam = "__DOLT__grpc_dial_provider"
 
 // GRPCDialProvider is an interface for getting a *grpc.ClientConn.
 type GRPCDialProvider interface {
-	GetGRPCDialParams(grpcendpoint.Config) (string, []grpc.DialOption, error)
+	GetGRPCDialParams(grpcendpoint.Config) (string, []grpc.DialOption, grpcendpoint.HTTPFetcher, error)
 }
 
 // DoldRemoteFactory is a DBFactory implementation for creating databases backed by a remote server that implements the
@@ -84,7 +84,7 @@ func (fact DoltRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFo
 var NoCachingParameter = "__dolt__NO_CACHING"
 
 func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}, dp GRPCDialProvider) (chunks.ChunkStore, error) {
-	endpoint, opts, err := dp.GetGRPCDialParams(grpcendpoint.Config{
+	endpoint, opts, httpfetcher, err := dp.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint:     urlObj.Host,
 		Insecure:     fact.insecure,
 		WithEnvCreds: true,
@@ -106,6 +106,7 @@ func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.Noms
 	if err != nil {
 		return nil, fmt.Errorf("could not access dolt url '%s': %w", urlObj.String(), err)
 	}
+	cs = cs.WithHTTPFetcher(httpfetcher)
 
 	if _, ok := params[NoCachingParameter]; ok {
 		cs = cs.WithNoopChunkCache()

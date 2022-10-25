@@ -136,7 +136,7 @@ func loadCred(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (creds.DoltCred
 }
 
 func checkCredAndPrintSuccess(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, endpoint string) errhand.VerboseError {
-	endpoint, opts, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
+	endpoint, opts, _, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: endpoint,
 		Creds:    dc,
 	})

@@ -151,7 +151,7 @@ func getGRPCEmitter(dEnv *env.DoltEnv) *events.GrpcEmitter {
 	}
 
 	hostAndPort := fmt.Sprintf("%s:%d", host, port)
-	endpoint, opts, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
+	endpoint, opts, _, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: hostAndPort,
 		Insecure: insecure,
 	})
