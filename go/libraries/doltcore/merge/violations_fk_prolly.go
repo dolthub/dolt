@@ -64,7 +64,7 @@ func prollyParentFkConstraintViolations(
 	err = prolly.DiffMaps(ctx, preParentRowData, postParentRowData, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.RemovedDiff, tree.ModifiedDiff:
-			partialKey, hadNulls := makePartialKey(partialKB, postParent.Index, postParent.Schema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentRowData.Pool())
+			partialKey, hadNulls := makePartialKey(partialKB, foreignKey.ReferencedTableColumns, postParent.Index, postParent.Schema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentRowData.Pool())
 			if hadNulls {
 				// row had some nulls previously, so it couldn't have been a parent
 				return nil
@@ -147,7 +147,7 @@ func prollyChildFkConstraintViolations(
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
 			k, v := val.Tuple(diff.Key), val.Tuple(diff.To)
-			partialKey, hasNulls := makePartialKey(partialKB, postChild.Index, postChild.Schema, k, v, preChildRowData.Pool())
+			partialKey, hasNulls := makePartialKey(partialKB, foreignKey.TableColumns, postChild.Index, postChild.Schema, k, v, preChildRowData.Pool())
 			if hasNulls {
 				return nil
 			}
@@ -289,8 +289,11 @@ func createCVsForPartialKeyMatches(
 	return createdViolation, nil
 }
 
-func makePartialKey(kb *val.TupleBuilder, idxSch schema.Index, tblSch schema.Schema, k, v val.Tuple, pool pool.BuffPool) (val.Tuple, bool) {
-	for i, tag := range idxSch.IndexedColumnTags() {
+func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tblSch schema.Schema, k, v val.Tuple, pool pool.BuffPool) (val.Tuple, bool) {
+	if idxSch.Name() != "PRIMARY" {
+		tags = idxSch.IndexedColumnTags()
+	}
+	for i, tag := range tags {
 		if j, ok := tblSch.GetPKCols().TagToIdx[tag]; ok {
 			if k.FieldIsNull(j) {
 				return nil, true
