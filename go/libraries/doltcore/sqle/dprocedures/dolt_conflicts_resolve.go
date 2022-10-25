@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -402,6 +403,9 @@ func ResolveConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.R
 }
 
 func DoDoltConflictsResolve(ctx *sql.Context, args []string) (int, error) {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return 1, err
+	}
 	dbName := ctx.GetCurrentDatabase()
 	fmt.Printf("database name: %s", dbName)
 

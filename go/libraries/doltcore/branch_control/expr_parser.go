@@ -156,10 +156,6 @@ func ParseExpression(str string, collation sql.CollationID) []int32 {
 // This is true even when the match expressions are pooled. The reason is unknown, but as we only need the collection
 // indexes anyway, we discard the match expressions and return only their indexes.
 func Match(matchExprCollection []MatchExpression, str string, collation sql.CollationID) []uint32 {
-	if len(str) == 0 {
-		return nil
-	}
-
 	sortFunc := collation.Sorter()
 	// Grab the first rune and also remove it from the string
 	r, rSize := utf8.DecodeRuneInString(str)

@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -118,6 +119,7 @@ func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvid
 		sql.NewBaseSession(),
 		pro,
 		config2.NewMapConfig(make(map[string]string)),
+		branch_control.CreateDefaultController(),
 	)
 	if err != nil {
 		panic(err)
