@@ -114,7 +114,7 @@ wait_for_connection(port=int(port_str), timeout_ms=int(timeout_ms), database=dat
 start_sql_server() {
     DEFAULT_DB="$1"
     PORT=$( definePORT )
-    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt &
+    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 }
@@ -125,7 +125,7 @@ start_sql_server() {
 start_sql_server_with_args() {
     DEFAULT_DB=""
     PORT=$( definePORT )
-    dolt sql-server "$@" --port=$PORT &
+    dolt sql-server "$@" --port=$PORT --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 }
@@ -148,7 +148,7 @@ behavior:
   autocommit: false
 " > .cliconfig.yaml
     cat "$2" >> .cliconfig.yaml
-    dolt sql-server --config .cliconfig.yaml &
+    dolt sql-server --config .cliconfig.yaml --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 }
@@ -170,7 +170,7 @@ listener:
 behavior:
   autocommit: false
 " > .cliconfig.yaml
-    dolt sql-server --config .cliconfig.yaml &
+    dolt sql-server --config .cliconfig.yaml --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 }
@@ -178,7 +178,7 @@ behavior:
 start_multi_db_server() {
     DEFAULT_DB="$1"
     PORT=$( definePORT )
-    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --data-dir ./ &
+    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --data-dir ./ --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 }
@@ -188,6 +188,9 @@ start_multi_db_server() {
 # for an async replication push), pass 1.
 # kill the process if it's still running
 stop_sql_server() {
+    # Clean up any mysql.sock file in the default, global location
+    rm -f /tmp/mysql.sock
+
     wait=$1
     if [ ! -z "$SERVER_PID" ]; then
       serverpidinuse=$(lsof -i -P -n | grep LISTEN | grep $SERVER_PID | wc -l)
