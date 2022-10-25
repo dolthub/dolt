@@ -280,6 +280,7 @@ func (te *pkTableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, in
 		if err != nil {
 			return nil, err
 		}
+
 		pkKeys, err := te.tea.HasPartial(ctx, te.tSch, keyHash, key)
 		if err != nil {
 			return nil, err
