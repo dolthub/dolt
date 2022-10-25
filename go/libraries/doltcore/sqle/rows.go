@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -271,7 +270,7 @@ func DoltTablePartitionToRowIter(ctx *sql.Context, name string, table *doltdb.Ta
 		return nil, nil, err
 	}
 
-	iter := &limitingMapIterator{iter: iterAt, limit: end - start}
+	iter := types.NewLimitingMapIterator(iterAt, end-start)
 
 	var rowIter sql.RowIter
 	if schema.IsKeyless(sch) {
@@ -287,37 +286,4 @@ func DoltTablePartitionToRowIter(ctx *sql.Context, name string, table *doltdb.Ta
 	}
 
 	return pkSch.Schema, rowIter, nil
-}
-
-type limitingMapIterator struct {
-	limit uint64
-	cnt   uint64
-	iter  types.MapIterator
-}
-
-func (l *limitingMapIterator) Next(ctx context.Context) (k, v types.Value, err error) {
-	if l.cnt == l.limit {
-		return nil, nil, nil
-	}
-	k, v, err = l.iter.Next(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	if k == nil {
-		return nil, nil, nil
-	}
-	l.cnt++
-	return
-}
-
-func (l *limitingMapIterator) NextTuple(ctx context.Context) (k, v types.Tuple, err error) {
-	if l.cnt == l.limit {
-		return types.Tuple{}, types.Tuple{}, io.EOF
-	}
-	k, v, err = l.iter.NextTuple(ctx)
-	if err != nil {
-		return types.Tuple{}, types.Tuple{}, err
-	}
-	l.cnt++
-	return
 }
