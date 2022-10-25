@@ -329,7 +329,7 @@ func (ti onHeapTableIndex) findPrefix(prefix uint64) (idx uint32) {
 		h := idx + (j-idx)/2 // avoid overflow when computing h
 		// i ≤ h < j
 		o := int64(prefixTupleSize * h)
-		if bytes.Compare(ti.tupleB[o:o+addrPrefixSize], query) < 1 {
+		if bytes.Compare(ti.tupleB[o:o+addrPrefixSize], query) < 0 {
 			idx = h + 1 // preserves f(i-1) == false
 		} else {
 			j = h // preserves f(j) == true
