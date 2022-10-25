@@ -50,6 +50,53 @@ func TestParseTableIndex(t *testing.T) {
 	}
 }
 
+func BenchmarkFindPrefix(b *testing.B) {
+	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
+	require.NoError(b, err)
+	defer f.Close()
+	bs, err := io.ReadAll(f)
+	require.NoError(b, err)
+	idx, err := parseTableIndexByCopy(bs, &noopQuotaProvider{})
+	require.NoError(b, err)
+	defer idx.Close()
+	assert.Equal(b, uint32(596), idx.ChunkCount())
+
+	prefixes, err := idx.Prefixes()
+	require.NoError(b, err)
+
+	b.Run("benchmark prefixIdx()", func(b *testing.B) {
+		var ord uint32
+		for i := 0; i < b.N; i++ {
+			ord = prefixIdx(idx, prefixes[uint(i)&uint(512)])
+		}
+		assert.True(b, ord < 596)
+	})
+	b.Run("benchmark findPrefix", func(b *testing.B) {
+		var ord uint32
+		for i := 0; i < b.N; i++ {
+			ord = idx.findPrefix(prefixes[uint(i)&uint(512)])
+		}
+		assert.True(b, ord < 596)
+	})
+}
+
+// previous implementation for findIndex().
+func prefixIdx(ti onHeapTableIndex, prefix uint64) (idx uint32) {
+	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
+	// an extremely tight loop and inlining the code was a significant perf improvement.
+	idx, j := 0, ti.chunkCount
+	for idx < j {
+		h := idx + (j-idx)/2 // avoid overflow when computing h
+		// i ≤ h < j
+		if ti.prefixAt(h) < prefix {
+			idx = h + 1 // preserves f(i-1) == false
+		} else {
+			j = h // preserves f(j) == true
+		}
+	}
+	return
+}
+
 func TestMMapIndex(t *testing.T) {
 	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
 	require.NoError(t, err)
