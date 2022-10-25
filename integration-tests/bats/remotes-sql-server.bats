@@ -62,7 +62,7 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
     start_sql_server repo1
 
-    server_query repo1 1 dolt "" "CALL DOLT_COMMIT('-am', 'Step 1');"
+    dolt sql-client --use-db repo1 -P $PORT -u dolt -q "CALL DOLT_COMMIT('-am', 'Step 1');"
 
     cd ../repo2
     dolt pull remote1
@@ -82,7 +82,7 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_async_replication 1
     start_sql_server repo1
 
-    server_query repo1 1 dolt "" "CALL DOLT_COMMIT('-am', 'Step 1');"
+    dolt sql-client --use-db repo1 -P $PORT -u dolt -q "CALL DOLT_COMMIT('-am', 'Step 1');"
 
     # wait for the process to exit after we stop it
     stop_sql_server 1
@@ -109,7 +109,10 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_heads main
     start_sql_server repo2
 
-    server_query repo2 1 dolt "" "show tables" "Tables_in_repo2\ntest"
+    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "show tables" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Tables_in_repo2" ]] || false
+    [[ "$output" =~ "test" ]] || false
 }
 
 @test "remotes-sql-server: pull remote not found error" {
@@ -134,7 +137,9 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_heads main
     start_sql_server repo1
 
-    run server_query repo1 1 dolt "" "show tables" "Table\n"
+    run dolt sql-client --use-db repo1 -P $PORT -u dolt -q "show tables"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Table" ]] || false
 }
 
 @test "remotes-sql-server: push remote not found error" {
@@ -157,7 +162,10 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote unknown
     start_sql_server repo1
 
-    server_query repo1 1 dolt "" "show tables" "Tables_in_repo1\ntest"
+    run dolt sql-client --use-db repo1 -P $PORT -u dolt -q "show tables"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Tables_in_repo1" ]] || false
+    [[ "$output" =~ "test" ]] || false
 }
 
 @test "remotes-sql-server: pull multiple heads" {
@@ -173,8 +181,16 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_feature
     start_sql_server repo2
 
-    server_query repo2 1 dolt "" "select dolt_checkout('new_feature') as b" "b\n0"
-    server_query repo2 1 dolt "" "select name from dolt_branches order by name" "name\nmain\nnew_feature"
+    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "select dolt_checkout('new_feature') as b" "b\n0"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "b" ]] || false
+    [[ "$output" =~ "0" ]] || false
+    
+    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "select name from dolt_branches order by name" "name\nmain\nnew_feature"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "name" ]] || false
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "new_feature" ]] || false
 }
 
 @test "remotes-sql-server: connect to remote head" {
