@@ -221,7 +221,7 @@ func (dt *DiffTable) IndexedAccess(index sql.Index) sql.IndexedTable {
 }
 
 func (dt *DiffTable) ShouldParallelizeAccess() bool {
-	return true
+	return false
 }
 
 // tableData returns the map of primary key to values for the specified table (or an empty map if the tbl is null)

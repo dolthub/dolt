@@ -1915,19 +1915,6 @@ SQL
     [[ "$output" =~ "table not found: poop" ]] || false
 }
 
-@test "sql: explain simple select query" {
-    run dolt sql -q "explain select * from one_pk"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "plan" ]] || false
-    [[ "$output" =~ "one_pk" ]] || false
-}
-
-@test "sql: explain simple join" {
-    run dolt sql -q "explain select op.pk,pk1,pk2 from one_pk,two_pk join one_pk as op on op.pk=pk1"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "IndexedJoin" ]] || false
-}
-
 @test "sql: replace count" {
     skip "right now we always count a replace as a delete and insert when we shouldn't"
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v BIGINT);"
