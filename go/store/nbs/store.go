@@ -777,29 +777,6 @@ func toGetRecords(hashes hash.HashSet) []getRecord {
 	return reqs
 }
 
-func (nbs *NomsBlockStore) CalcReads(hashes hash.HashSet, blockSize uint64) (reads int, split bool, err error) {
-	reqs := toGetRecords(hashes)
-	tables := func() (tables tableSet) {
-		nbs.mu.RLock()
-		defer nbs.mu.RUnlock()
-		tables = nbs.tables
-
-		return
-	}()
-
-	reads, split, remaining, err := tables.calcReads(reqs, blockSize)
-
-	if err != nil {
-		return 0, false, err
-	}
-
-	if remaining {
-		return 0, false, errors.New("failed to find all chunks")
-	}
-
-	return
-}
-
 func (nbs *NomsBlockStore) Count() (uint32, error) {
 	count, tables, err := func() (count uint32, tables chunkReader, err error) {
 		nbs.mu.RLock()
@@ -1680,4 +1657,28 @@ func (nbs *NomsBlockStore) SetRootChunk(ctx context.Context, root, previous hash
 		// Same behavior as Commit
 		// I guess this thing infinitely retries without backoff in the case off errOptimisticLockFailedTables
 	}
+}
+
+// CalcReads computes the number of IO operations necessary to fetch |hashes|.
+func CalcReads(nbs *NomsBlockStore, hashes hash.HashSet, blockSize uint64) (reads int, split bool, err error) {
+	reqs := toGetRecords(hashes)
+	tables := func() (tables tableSet) {
+		nbs.mu.RLock()
+		defer nbs.mu.RUnlock()
+		tables = nbs.tables
+
+		return
+	}()
+
+	reads, split, remaining, err := tableSetCalcReads(tables, reqs, blockSize)
+
+	if err != nil {
+		return 0, false, err
+	}
+
+	if remaining {
+		return 0, false, errors.New("failed to find all chunks")
+	}
+
+	return
 }
