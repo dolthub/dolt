@@ -137,20 +137,6 @@ func (ts tableSet) get(ctx context.Context, h addr, stats *Stats) ([]byte, error
 func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (remaining bool, err error) {
 	f := func(css chunkSources) bool {
 		for _, haver := range css {
-			if rp, ok := haver.(chunkReadPlanner); ok {
-				offsets, remaining, err := rp.findOffsets(reqs)
-				if err != nil {
-					return true
-				}
-				err = rp.getManyAtOffsets(ctx, eg, offsets, found, stats)
-				if err != nil {
-					return true
-				}
-				if !remaining {
-					return false
-				}
-				continue
-			}
 			remaining, err = haver.getMany(ctx, eg, reqs, found, stats)
 			if err != nil {
 				return true
@@ -168,25 +154,6 @@ func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRe
 func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (remaining bool, err error) {
 	f := func(css chunkSources) bool {
 		for _, haver := range css {
-			if rp, ok := haver.(chunkReadPlanner); ok {
-				offsets, remaining, err := rp.findOffsets(reqs)
-				if err != nil {
-					return true
-				}
-				if len(offsets) > 0 {
-					err = rp.getManyCompressedAtOffsets(ctx, eg, offsets, found, stats)
-					if err != nil {
-						return true
-					}
-				}
-
-				if !remaining {
-					return false
-				}
-
-				continue
-			}
-
 			remaining, err = haver.getManyCompressed(ctx, eg, reqs, found, stats)
 			if err != nil {
 				return true

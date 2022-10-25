@@ -277,7 +277,6 @@ func (hs offsetRecSlice) Len() int           { return len(hs) }
 func (hs offsetRecSlice) Less(i, j int) bool { return hs[i].offset < hs[j].offset }
 func (hs offsetRecSlice) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 
-var _ chunkReadPlanner = tableReader{}
 var _ chunkReader = tableReader{}
 
 func (tr tableReader) readCompressedAtOffsets(

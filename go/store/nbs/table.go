@@ -238,24 +238,6 @@ type chunkReader interface {
 	Close() error
 }
 
-type chunkReadPlanner interface {
-	findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool, err error)
-	getManyAtOffsets(
-		ctx context.Context,
-		eg *errgroup.Group,
-		offsetRecords offsetRecSlice,
-		found func(context.Context, *chunks.Chunk),
-		stats *Stats,
-	) error
-	getManyCompressedAtOffsets(
-		ctx context.Context,
-		eg *errgroup.Group,
-		offsetRecords offsetRecSlice,
-		found func(context.Context, CompressedChunk),
-		stats *Stats,
-	) error
-}
-
 type chunkSource interface {
 	chunkReader
 
