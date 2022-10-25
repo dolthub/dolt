@@ -65,16 +65,18 @@ func NewServer(args ServerArgs) *Server {
 	s := new(Server)
 	s.stopChan = make(chan struct{})
 
+	sealer := NewSingleSymmetricKeySealer()
+
 	s.wg.Add(2)
 	s.grpcPort = args.GrpcPort
 	s.grpcSrv = grpc.NewServer(append([]grpc.ServerOption{grpc.MaxRecvMsgSize(128 * 1024 * 1024)}, args.Options...)...)
-	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(args.Logger, args.HttpHost, args.DBCache, args.FS)
+	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(args.Logger, args.HttpHost, args.DBCache, args.FS, sealer)
 	if args.ReadOnly {
 		chnkSt = ReadOnlyChunkStore{chnkSt}
 	}
 	remotesapi.RegisterChunkStoreServiceServer(s.grpcSrv, chnkSt)
 
-	var handler http.Handler = newFileHandler(args.Logger, args.DBCache, args.FS, args.ReadOnly)
+	var handler http.Handler = newFileHandler(args.Logger, args.DBCache, args.FS, args.ReadOnly, sealer)
 	if args.HttpPort == args.GrpcPort {
 		handler = grpcMultiplexHandler(s.grpcSrv, handler)
 	} else {
