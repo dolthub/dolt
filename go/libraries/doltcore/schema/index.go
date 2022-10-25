@@ -69,6 +69,18 @@ type indexImpl struct {
 }
 
 func NewIndex(name string, tags, allTags []uint64, indexColl IndexCollection, props IndexProperties) Index {
+	if indexColl == nil {
+		return &indexImpl{
+			name:          name,
+			tags:          tags,
+			allTags:       allTags,
+			indexColl:     nil,
+			isUnique:      props.IsUnique,
+			isUserDefined: props.IsUserDefined,
+			comment:       props.Comment,
+		}
+	}
+
 	return &indexImpl{
 		name:          name,
 		tags:          tags,
