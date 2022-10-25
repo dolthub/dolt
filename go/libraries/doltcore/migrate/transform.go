@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"golang.org/x/sync/errgroup"
 
@@ -446,6 +447,40 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 			}
 		}
 	}
+
+	// String types are sorted using a binary collation in __LD_1__
+	// force-set collation to utf8mb4_0900_bin to match the order
+	for i, c := range cols {
+		st, ok := c.TypeInfo.ToSqlType().(sql.StringType)
+		if !ok {
+			continue
+		}
+		patched = true
+
+		var err error
+		switch st.Type() {
+		case query.Type_CHAR, query.Type_VARCHAR, query.Type_TEXT:
+			st, err = sql.CreateString(st.Type(), st.Length(), sql.Collation_utf8mb4_0900_bin)
+		case query.Type_BINARY, query.Type_VARBINARY, query.Type_BLOB:
+			st, err = sql.CreateString(st.Type(), st.Length(), sql.Collation_binary)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		info, err := typeinfo.FromSqlType(st)
+		if err != nil {
+			return nil, err
+		}
+
+		cols[i], err = schema.NewColumnWithTypeInfo(
+			c.Name, c.Tag, info, c.IsPartOfPK, c.Default,
+			c.AutoIncrement, c.Comment, c.Constraints...)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if patched {
 		return schema.SchemaFromCols(schema.NewColCollection(cols...))
 	}
