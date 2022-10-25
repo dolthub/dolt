@@ -39,10 +39,10 @@ teardown() {
 @test "sql-charsets-collations: define charset and collation on a database" {
     start_sql_server
 
-    server_query "" 1 dolt "" "CREATE DATABASE test CHARACTER SET latin1 COLLATE latin1_swedish_ci;"
+    dolt sql-client -u -p -h -q "" 1 dolt "" "CREATE DATABASE test CHARACTER SET latin1 COLLATE latin1_swedish_ci;"
     skip "Defining charsets and collations on a database not supported"
-    server_query "test" 1 dolt "" "use test; SELECT @@character_set_database" ";@@SESSION.character_set_database\nlatin1"
-    server_query "test" 1 dolt "" "use test; SELECT @@character_set_database" ";@@SESSION.collation_database\nlatin1_swedish_ci"
+    dolt sql-client -u -p -h -q "test" 1 dolt "" "use test; SELECT @@character_set_database" ";@@SESSION.character_set_database\nlatin1"
+    dolt sql-client -u -p -h -q "test" 1 dolt "" "use test; SELECT @@character_set_database" ";@@SESSION.collation_database\nlatin1_swedish_ci"
 }
 
 @test "sql-charsets-collations: define and use a collation and charset" {

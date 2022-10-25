@@ -60,9 +60,9 @@ teardown() {
     SERVER_PID=$! # will get killed by teardown_common
     sleep 5 # not using python wait so this works on windows
 
-    server_query test_db 1 root "" "select user from mysql.user order by user" "User\nroot"
-    server_query test_db 1 root "" "create user new_user" ""
-    server_query test_db 1 root "" "select user from mysql.user order by user" "User\nnew_user\nroot"
+    dolt sql-client -u -p -h -q test_db 1 root "" "select user from mysql.user order by user" "User\nroot"
+    dolt sql-client -u -p -h -q test_db 1 root "" "create user new_user" ""
+    dolt sql-client -u -p -h -q test_db 1 root "" "select user from mysql.user order by user" "User\nnew_user\nroot"
 
     stop_sql_server
     rm -f .dolt/sql-server.lock
@@ -73,7 +73,7 @@ teardown() {
     SERVER_PID=$! # will get killed by teardown_common
     sleep 5 # not using python wait so this works on windows
 
-    server_query test_db 1 root "" "select user from mysql.user order by user" "" 1
+    dolt sql-client -u -p -h -q test_db 1 root "" "select user from mysql.user order by user" "" 1
 }
 
 @test "sql-privs: starting server with empty config works" {
@@ -82,9 +82,9 @@ teardown() {
 
     start_sql_server_with_config test_db server.yaml
 
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
-    server_query test_db 1 dolt "" "create user new_user" ""
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "create user new_user" ""
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
     run ls -a
     [[ "$output" =~ ".doltcfg" ]] || false
@@ -112,7 +112,7 @@ behavior:
     dolt sql-server --port=$PORT --config server.yaml --user cmddolt &
     SERVER_PID=$!
 
-    server_query test_db 1 cmddolt "" "select user from mysql.user order by user" "User\ncmddolt"
+    dolt sql-client -u -p -h -q test_db 1 cmddolt "" "select user from mysql.user order by user" "User\ncmddolt"
 }
 
 @test "sql-privs: yaml with user is also replaced with command line user" {
@@ -136,7 +136,7 @@ behavior:
     dolt sql-server --port=$PORT --config server.yaml --user cmddolt &
     SERVER_PID=$!
 
-    server_query test_db 1 cmddolt "" "select user from mysql.user order by user" "User\ncmddolt"
+    dolt sql-client -u -p -h -q test_db 1 cmddolt "" "select user from mysql.user order by user" "User\ncmddolt"
 }
 
 @test "sql-privs: yaml specifies doltcfg dir" {
@@ -146,9 +146,9 @@ behavior:
 
     start_sql_server_with_config test_db server.yaml
 
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
-    server_query test_db 1 dolt "" "create user new_user" ""
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "create user new_user" ""
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
@@ -165,9 +165,9 @@ behavior:
 
     start_sql_server_with_config test_db server.yaml
 
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
-    server_query test_db 1 dolt "" "create user new_user" ""
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "create user new_user" ""
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
     run ls -a
     [[ "$output" =~ ".doltcfg" ]] || false
@@ -184,9 +184,9 @@ behavior:
 
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.json
 
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nprivs_user"
-    server_query test_db 1 dolt "" "create user new_user" ""
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user\nprivs_user"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nprivs_user"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "create user new_user" ""
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user\nprivs_user"
 
     # Test that privs.json file is not in json format
     run cat privs.json
@@ -196,7 +196,7 @@ behavior:
     rm -f ./.dolt/sql-server.lock
     stop_sql_server
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.json
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user\nprivs_user"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user\nprivs_user"
 }
 
 @test "sql-privs: errors instead of panic when reading badly formatted privilege file" {
@@ -217,9 +217,9 @@ behavior:
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
 
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
-    server_query test_db 1 dolt "" "create user new_user" ""
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "create user new_user" ""
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
     run ls -a
     [[ "$output" =~ ".doltcfg" ]] || false
@@ -232,7 +232,7 @@ behavior:
     make_test_repo
 
     start_sql_server_with_args --host 127.0.0.1 --user=dolt
-    server_query test_db 1 dolt "" "select user, host from mysql.user order by user" "User,Host\ndolt,%"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user, host from mysql.user order by user" "User,Host\ndolt,%"
 }
 
 @test "sql-privs: multiple doltcfg directories causes error" {
@@ -267,10 +267,10 @@ behavior:
     ! [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
-    server_query db1 1 dolt "" "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema\nmysql"
-    server_query db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
-    server_query db1 1 dolt "" "create user new_user" ""
-    server_query db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
+    dolt sql-client -u -p -h -q db1 1 dolt "" "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema\nmysql"
+    dolt sql-client -u -p -h -q db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
+    dolt sql-client -u -p -h -q db1 1 dolt "" "create user new_user" ""
+    dolt sql-client -u -p -h -q db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
@@ -293,9 +293,9 @@ behavior:
     ! [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "doltcfgdir" ]] || false
 
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
-    server_query test_db 1 dolt "" "create user new_user" ""
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "create user new_user" ""
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
@@ -314,9 +314,9 @@ behavior:
     ! [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
 
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
-    server_query test_db 1 dolt "" "create user new_user" ""
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "create user new_user" ""
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
     run ls -a
     [[ "$output" =~ ".doltcfg" ]] || false
@@ -337,10 +337,10 @@ behavior:
     ! [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
-    server_query db1 1 dolt "" "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema\nmysql"
-    server_query db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
-    server_query db1 1 dolt "" "create user new_user" ""
-    server_query db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
+    dolt sql-client -u -p -h -q db1 1 dolt "" "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema\nmysql"
+    dolt sql-client -u -p -h -q db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
+    dolt sql-client -u -p -h -q db1 1 dolt "" "create user new_user" ""
+    dolt sql-client -u -p -h -q db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
@@ -368,10 +368,10 @@ behavior:
     ! [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
 
-    server_query db1 1 dolt "" "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema\nmysql"
-    server_query db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
-    server_query db1 1 dolt "" "create user new_user" ""
-    server_query db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
+    dolt sql-client -u -p -h -q db1 1 dolt "" "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema\nmysql"
+    dolt sql-client -u -p -h -q db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
+    dolt sql-client -u -p -h -q db1 1 dolt "" "create user new_user" ""
+    dolt sql-client -u -p -h -q db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
@@ -395,9 +395,9 @@ behavior:
     ! [[ "$output" =~ "doltcfgdir" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
 
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
-    server_query test_db 1 dolt "" "create user new_user" ""
-    server_query test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "create user new_user" ""
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
@@ -420,10 +420,10 @@ behavior:
     ! [[ "$output" =~ "privileges.db" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
 
-    server_query db1 1 dolt "" "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema\nmysql"
-    server_query db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
-    server_query db1 1 dolt "" "create user new_user" ""
-    server_query db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
+    dolt sql-client -u -p -h -q db1 1 dolt "" "show databases" "Database\ndb1\ndb2\ndb3\ninformation_schema\nmysql"
+    dolt sql-client -u -p -h -q db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt"
+    dolt sql-client -u -p -h -q db1 1 dolt "" "create user new_user" ""
+    dolt sql-client -u -p -h -q db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
@@ -447,7 +447,7 @@ behavior:
     dolt init
     start_sql_server_with_args --host 0.0.0.0 --user=dolt
 
-    server_query test_db 1 dolt "" "create user new_user" ""
+    dolt sql-client -u -p -h -q test_db 1 dolt "" "create user new_user" ""
     stop_sql_server
     sleep 1
     run ls -a
@@ -457,65 +457,65 @@ behavior:
 
     cd db_dir
     start_sql_server_with_args --host 0.0.0.0 --user=dolt
-    server_query db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
+    dolt sql-client -u -p -h -q db1 1 dolt "" "select user from mysql.user order by user" "User\ndolt\nnew_user"
 }
 
 @test "sql-privs: basic lack of privileges tests" {
      make_test_repo
      start_sql_server
 
-     server_query test_db 1 dolt "" "create table t1(c1 int)"
-     server_query test_db 1 dolt "" "create user test"
-     server_query test_db 1 dolt "" "grant select on test_db.* to test"
+     dolt sql-client -u -p -h -q test_db 1 dolt "" "create table t1(c1 int)"
+     dolt sql-client -u -p -h -q test_db 1 dolt "" "create user test"
+     dolt sql-client -u -p -h -q test_db 1 dolt "" "grant select on test_db.* to test"
 
      # Should only see test_db database
-     server_query "" 1 test "" "show databases" "Database\ntest_db"
-     server_query test_db 1 test "" "show tables" "Tables_in_test_db\nt1"
+     dolt sql-client -u -p -h -q "" 1 test "" "show databases" "Database\ntest_db"
+     dolt sql-client -u -p -h -q test_db 1 test "" "show tables" "Tables_in_test_db\nt1"
      
      # Revoke works as expected
-     server_query test_db 1 dolt "" "revoke select on test_db.* from test"
-     server_query test_db 1 test "" "show tables" "" 1
+     dolt sql-client -u -p -h -q test_db 1 dolt "" "revoke select on test_db.* from test"
+     dolt sql-client -u -p -h -q test_db 1 test "" "show tables" "" 1
 
      # Host in privileges is respected
-     server_query test_db 1 dolt "" "drop user test"
-     server_query test_db 1 dolt "" "create user test@'127.0.0.1'"
-     server_query test_db 1 dolt "" "grant select on test_db.* to test@'127.0.0.1'"
-     server_query test_db 1 test "" "show tables" "Tables_in_test_db\nt1"
-     server_query test_db 1 dolt "" "drop user test@'127.0.0.1'"
-     server_query test_db 1 dolt "" "create user test@'10.10.10.10'"
-     server_query test_db 1 dolt "" "grant select on test_db.* to test@'10.10.10.10'"
-     server_query test_db 1 test "" "show tables" "" 1
+     dolt sql-client -u -p -h -q test_db 1 dolt "" "drop user test"
+     dolt sql-client -u -p -h -q test_db 1 dolt "" "create user test@'127.0.0.1'"
+     dolt sql-client -u -p -h -q test_db 1 dolt "" "grant select on test_db.* to test@'127.0.0.1'"
+     dolt sql-client -u -p -h -q test_db 1 test "" "show tables" "Tables_in_test_db\nt1"
+     dolt sql-client -u -p -h -q test_db 1 dolt "" "drop user test@'127.0.0.1'"
+     dolt sql-client -u -p -h -q test_db 1 dolt "" "create user test@'10.10.10.10'"
+     dolt sql-client -u -p -h -q test_db 1 dolt "" "grant select on test_db.* to test@'10.10.10.10'"
+     dolt sql-client -u -p -h -q test_db 1 test "" "show tables" "" 1
 }
 
 @test "sql-privs: creating user identified by password" {
      make_test_repo
      start_sql_server
 
-     server_query test_db 1 dolt "" "create user test identified by 'test'" ""
-     server_query test_db 1 dolt "" "grant select on mysql.user to test" ""
+     dolt sql-client -u -p -h -q test_db 1 dolt "" "create user test identified by 'test'" ""
+     dolt sql-client -u -p -h -q test_db 1 dolt "" "grant select on mysql.user to test" ""
 
      # Should not be able to connect to test_db
-     server_query test_db 1 test test "select user from mysql.user order by user" "" 1
+     dolt sql-client -u -p -h -q test_db 1 test test "select user from mysql.user order by user" "" 1
 
-     server_query "" 1 test test "select user from mysql.user order by user" "User\ndolt\ntest"
+     dolt sql-client -u -p -h -q "" 1 test test "select user from mysql.user order by user" "User\ndolt\ntest"
 
      # Bad password can't connect
-     server_query "" 1 test bad "select user from mysql.user order by user" "" 1
+     dolt sql-client -u -p -h -q "" 1 test bad "select user from mysql.user order by user" "" 1
      
      # Should only see mysql database
-     server_query "" 1 test test "show databases" "Database\nmysql"
+     dolt sql-client -u -p -h -q "" 1 test test "show databases" "Database\nmysql"
 }
 
 @test "sql-privs: deleting user prevents access by that user" {
      make_test_repo
      start_sql_server
 
-     server_query test_db 1 dolt "" "create user test"
-     server_query test_db 1 dolt "" "grant select on test_db.* to test" ""
+     dolt sql-client -u -p -h -q test_db 1 dolt "" "create user test"
+     dolt sql-client -u -p -h -q test_db 1 dolt "" "grant select on test_db.* to test" ""
 
-     server_query test_db 1 test "" "show tables" ""
+     dolt sql-client -u -p -h -q test_db 1 test "" "show tables" ""
 
-     server_query test_db 1 dolt "" "drop user test"
+     dolt sql-client -u -p -h -q test_db 1 dolt "" "drop user test"
 
-     server_query test_db 1 test "" "show tables" "" 1
+     dolt sql-client -u -p -h -q test_db 1 test "" "show tables" "" 1
 }
