@@ -129,7 +129,7 @@ func DoltProceduresGetAll(ctx *sql.Context, db Database) ([]sql.StoredProcedureD
 	}
 	nameExpr := idx.Expressions()[0]
 
-	lookup, err := sql.NewIndexBuilder(ctx, idx).IsNotNull(ctx, nameExpr).Build(ctx)
+	lookup, err := sql.NewIndexBuilder(idx).IsNotNull(ctx, nameExpr).Build(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +253,7 @@ func DoltProceduresGetDetails(ctx *sql.Context, tbl *WritableDoltTable, name str
 			doltdb.SchemasTableName)
 	}
 
-	indexLookup, err := sql.NewIndexBuilder(ctx, fragNameIndex).Equals(ctx, fragNameIndex.Expressions()[0], name).Build(ctx)
+	indexLookup, err := sql.NewIndexBuilder(fragNameIndex).Equals(ctx, fragNameIndex.Expressions()[0], name).Build(ctx)
 	if err != nil {
 		return sql.StoredProcedureDetails{}, false, err
 	}
