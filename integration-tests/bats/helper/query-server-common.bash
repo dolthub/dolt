@@ -256,7 +256,7 @@ definePORT() {
   for i in {0..9}
   do
     let getPORT="($$ + $i) % (65536-1024) + 1024"
-    portinuse=$(lsof -i -P -n | grep LISTEN | grep $attemptedPORT | wc -l)
+    portinuse=$(lsof -i -P -n | grep LISTEN | grep $getPORT | wc -l)
     if [ $portinuse -eq 0 ]; then
       echo "$getPORT"
       break
