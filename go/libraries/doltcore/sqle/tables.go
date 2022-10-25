@@ -2010,6 +2010,8 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 				}
 				tableIndexName = tableIndex.Name()
 			}
+		} else {
+			tableIndexName = tableIndex.Name()
 		}
 
 		refTableIndex, ok, err := findIndexWithPrefix(refSch, sqlFk.ParentColumns)
@@ -2050,6 +2052,8 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 				}
 				refTableIndexName = refTableIndex.Name()
 			}
+		} else {
+			refTableIndexName = refTableIndex.Name()
 		}
 		doltFk = doltdb.ForeignKey{
 			Name:                   sqlFk.Name,
