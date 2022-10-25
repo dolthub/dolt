@@ -292,6 +292,9 @@ func (te *pkTableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, in
 		rows := make([]row.Row, len(pkKeys))
 		for i, pkKey := range pkKeys {
 			pkKeyHash, err := pkKey.key.Hash(pkKey.key.Format())
+			if err != nil {
+				return nil, err
+			}
 			kvp, ok, err := te.tea.Get(ctx, pkKeyHash, pkKey.key)
 			if err != nil {
 				return nil, err
