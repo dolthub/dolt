@@ -42,7 +42,9 @@ import (
 var ErrUnimplemented = errors.New("unimplemented")
 
 type RemoteChunkStore struct {
-	HttpHost string
+	HttpHost   string
+	httpScheme string
+
 	csCache  DBCache
 	bucket   string
 	fs       filesys.Filesys
@@ -51,12 +53,13 @@ type RemoteChunkStore struct {
 	remotesapi.UnimplementedChunkStoreServiceServer
 }
 
-func NewHttpFSBackedChunkStore(lgr *logrus.Entry, httpHost string, csCache DBCache, fs filesys.Filesys, sealer Sealer) *RemoteChunkStore {
+func NewHttpFSBackedChunkStore(lgr *logrus.Entry, httpHost string, csCache DBCache, fs filesys.Filesys, scheme string, sealer Sealer) *RemoteChunkStore {
 	return &RemoteChunkStore{
-		HttpHost: httpHost,
-		csCache:  csCache,
-		bucket:   "",
-		fs:       fs,
+		HttpHost:   httpHost,
+		httpScheme: scheme,
+		csCache:    csCache,
+		bucket:     "",
+		fs:         fs,
 		lgr: lgr.WithFields(logrus.Fields{
 			"service": "dolt.services.remotesapi.v1alpha1.ChunkStoreServiceServer",
 		}),
@@ -286,7 +289,7 @@ func (rs *RemoteChunkStore) getHost(md metadata.MD) string {
 func (rs *RemoteChunkStore) getDownloadUrl(logger *logrus.Entry, md metadata.MD, path string) (*url.URL, error) {
 	host := rs.getHost(md)
 	return &url.URL{
-		Scheme: "http",
+		Scheme: rs.httpScheme,
 		Host:   host,
 		Path:   path,
 	}, nil
@@ -359,7 +362,7 @@ func (rs *RemoteChunkStore) getUploadUrl(logger *logrus.Entry, md metadata.MD, r
 	params.Add("content_length", strconv.Itoa(int(tfd.ContentLength)))
 	params.Add("content_hash", base64.RawURLEncoding.EncodeToString(tfd.ContentHash))
 	return &url.URL{
-		Scheme:   "http",
+		Scheme:   rs.httpScheme,
 		Host:     rs.getHost(md),
 		Path:     fmt.Sprintf("%s/%s", repoPath, fileID),
 		RawQuery: params.Encode(),
