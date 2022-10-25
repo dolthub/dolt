@@ -237,7 +237,6 @@ stop_sql_server() {
 #  * param7: Expected exception value of 1. Mutually exclusive with param6.
 #
 server_query() {
-    PORT=$( definePORT )
     server_query_with_port "$PORT" "$@"
 }
 
