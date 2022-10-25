@@ -106,7 +106,46 @@ func (tea *BulkImportTEA) Get(ctx context.Context, keyHash hash.Hash, key types.
 }
 
 func (tea *BulkImportTEA) HasPartial(ctx context.Context, idxSch schema.Schema, partialKeyHash hash.Hash, partialKey types.Tuple) ([]hashedTuple, error) {
-	panic("not sure what the implementation for this should be yet")
+	var err error
+	var matches []hashedTuple
+	var mapIter table.ReadCloser = noms.NewNomsRangeReader(idxSch, tea.rowData, []*noms.ReadRange{
+		{Start: partialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(partialKey)}})
+	defer mapIter.Close(ctx)
+	var r row.Row
+	for r, err = mapIter.ReadRow(ctx); err == nil; r, err = mapIter.ReadRow(ctx) {
+		tplKeyVal, err := r.NomsMapKey(idxSch).Value(ctx)
+		if err != nil {
+			return nil, err
+		}
+		key := tplKeyVal.(types.Tuple)
+		tplValVal, err := r.NomsMapValue(idxSch).Value(ctx)
+		if err != nil {
+			return nil, err
+		}
+		val := tplValVal.(types.Tuple)
+		keyHash, err := key.Hash(key.Format())
+		if err != nil {
+			return nil, err
+		}
+		matches = append(matches, hashedTuple{key, val, keyHash})
+	}
+
+	if err != io.EOF {
+		return nil, err
+	}
+
+	for i := len(matches) - 1; i >= 0; i-- {
+		if _, ok := tea.deletes[matches[i].hash]; ok {
+			matches[i] = matches[len(matches)-1]
+			matches = matches[:len(matches)-1]
+		}
+	}
+	// TODO: do I bother with these?
+	//match, ok := tea.adds[partialKeyHash]
+	//if ok {
+	//	matches = append(matches, match)
+	//}
+	return matches, nil
 }
 
 // Commit is the default behavior and does nothing
