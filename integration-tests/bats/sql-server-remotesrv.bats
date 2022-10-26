@@ -49,6 +49,7 @@ call dolt_commit('-am', 'add some vals');
 SQL
 
     dolt pull
+
     run dolt sql -q 'select count(*) from vals;'
     [[ "$output" =~ "10" ]] || false
 }
