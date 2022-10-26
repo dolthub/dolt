@@ -7401,8 +7401,23 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-ALL', '-m', 'update table t');",
+				Query:            "CALL DOLT_COMMIT('-ALL', '-m', 'update table terminator');",
 				SkipResultsCheck: true,
+			},
+			// check initial commit
+			{
+				Query:    "select message from dolt_log limit 1",
+				Expected: []sql.Row{{"update table terminator"}},
+			},
+			// amend the commit
+			{
+				Query:            "CALL DOLT_COMMIT('-amend', '-m', 'update table t');",
+				SkipResultsCheck: true,
+			},
+			// check amended commit
+			{
+				Query:    "select message from dolt_log limit 1",
+				Expected: []sql.Row{{"update table t"}},
 			},
 			{
 				Query:    "CALL DOLT_RESET('--hard');",

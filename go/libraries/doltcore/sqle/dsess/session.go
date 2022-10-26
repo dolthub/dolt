@@ -468,14 +468,39 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 		return nil, err
 	}
 
+	headCommit := sessionState.headCommit
+	headHash, _ := headCommit.HashOf()
+
 	var mergeParentCommits []*doltdb.Commit
 	if sessionState.WorkingSet.MergeActive() {
 		mergeParentCommits = []*doltdb.Commit{sessionState.WorkingSet.MergeState().Commit()}
+	} else if props.Amend {
+		var parentsHeadForAmend []*doltdb.Commit
+		numParentsHeadForAmend := headCommit.NumParents()
+		for i := 0; i < numParentsHeadForAmend; i++ {
+			parentCommit, err := headCommit.GetParent(ctx, i)
+			if err == nil {
+				parentsHeadForAmend = append(parentsHeadForAmend, parentCommit)
+			}
+		}
+
+		err = actions.ResetSoftToRef(ctx, sessionState.dbData, "HEAD~1")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	pendingCommit, err := actions.GetCommitStaged(ctx, roots, sessionState.WorkingSet.MergeActive(), mergeParentCommits, sessionState.dbData.Ddb, props)
-	if _, ok := err.(actions.NothingStaged); err != nil && !ok {
-		return nil, err
+	if err != nil {
+		if props.Amend {
+			err = actions.ResetSoftToRef(ctx, sessionState.dbData, headHash.String())
+			if err != nil {
+				return nil, err
+			}
+		}
+		if _, ok := err.(actions.NothingStaged); err != nil && !ok {
+			return nil, err
+		}
 	}
 
 	return pendingCommit, nil
