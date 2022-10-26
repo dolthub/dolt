@@ -567,7 +567,7 @@ DELIM
     [[ "$output" =~ "CREATE TABLE \`test\`" ]]
     [[ "$output" =~ "\`pk\` int" ]]
     [[ "$output" =~ "\`str\` varchar(16383)" ]]
-    [[ "$output" =~ "\`int\` int unsigned" ]]
+    [[ "$output" =~ "\`int\` int" ]]
     [[ "$output" =~ "\`bool\` tinyint" ]]
     [[ "$output" =~ "\`float\` float" ]]
     [[ "$output" =~ "\`date\` date" ]]
