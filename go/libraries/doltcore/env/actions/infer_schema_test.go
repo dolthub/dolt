@@ -500,7 +500,7 @@ func TestInferSchema(t *testing.T) {
 
 			err = allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 				idx := schema.IndexOfConstraint(col.Constraints, schema.NotNullConstraintType)
-				assert.True(t, idx == -1 == test.nullableCols.Contains(col.Name), "%s unexpected nullability", col.Name)
+				assert.True(t, idx == -1, "%s unexpected not null constraint", col.Name)
 				return false, nil
 			})
 			require.NoError(t, err)
