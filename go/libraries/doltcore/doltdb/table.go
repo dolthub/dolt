@@ -561,10 +561,6 @@ func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (durable.
 		return nil, err
 	}
 
-	if indexName == "PRIMARY" {
-		return t.GetRowData(ctx)
-	}
-
 	indexes, err := t.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
