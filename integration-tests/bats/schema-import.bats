@@ -259,9 +259,9 @@ DELIM
 
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '+  `x` varchar(16383) NOT NULL,' ]] || false
-    [[ "$output" =~ '+  `y` float NOT NULL,' ]] || false
-    [[ "$output" =~ '+  `z` int NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `x` varchar(16383),' ]] || false
+    [[ "$output" =~ '+  `y` float,' ]] || false
+    [[ "$output" =~ '+  `z` int,' ]] || false
     # assert no columns were deleted/replaced
     [[ ! "$output" = "-    \`" ]] || false
 
@@ -282,9 +282,9 @@ DELIM
 
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '+  `x` varchar(16383) NOT NULL,' ]] || false
-    [[ "$output" =~ '+  `y` float NOT NULL,' ]] || false
-    [[ "$output" =~ '+  `z` int NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `x` varchar(16383),' ]] || false
+    [[ "$output" =~ '+  `y` float,' ]] || false
+    [[ "$output" =~ '+  `z` int,' ]] || false
     # assert no columns were deleted/replaced
     [[ ! "$output" = "-    \`" ]] || false
 
@@ -308,9 +308,9 @@ DELIM
 
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '-  `a` varchar(16383) NOT NULL,' ]] || false
-    [[ "$output" =~ '-  `b` float NOT NULL,' ]] || false
-    [[ "$output" =~ '-  `c` tinyint NOT NULL,' ]] || false
+    [[ "$output" =~ '-  `a` varchar(16383),' ]] || false
+    [[ "$output" =~ '-  `b` float,' ]] || false
+    [[ "$output" =~ '-  `c` tinyint,' ]] || false
     # assert no columns were added
     [[ ! "$output" = "+    \`" ]] || false
 }
