@@ -307,22 +307,10 @@ func (crg chunkReaderGroup) uncompressedLen() (data uint64, err error) {
 	return
 }
 
-func (crg chunkReaderGroup) extract(ctx context.Context, chunks chan<- extractRecord) error {
-	for _, haver := range crg {
-		err := haver.extract(ctx, chunks)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (crg chunkReaderGroup) Close() error {
+func (crg chunkReaderGroup) close() error {
 	var firstErr error
 	for _, c := range crg {
-		err := c.Close()
+		err := c.close()
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}
