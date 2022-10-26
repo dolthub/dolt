@@ -159,7 +159,7 @@ func newQueue() *q {
 //
 // Roughly mimics `git log main..feature`.
 func GetDotDotRevisions(ctx context.Context, includedDB *doltdb.DoltDB, includedHead hash.Hash, excludedDB *doltdb.DoltDB, excludedHead hash.Hash, num int) ([]*doltdb.Commit, error) {
-	commitList := make([]*doltdb.Commit, 0, num)
+	var commitList []*doltdb.Commit
 	q := newQueue()
 	if err := q.SetInvisible(ctx, excludedDB, excludedHead); err != nil {
 		return nil, err
@@ -205,22 +205,24 @@ func GetTopologicalOrderCommits(ctx context.Context, ddb *doltdb.DoltDB, startCo
 
 // GetTopologicalOrderCommitIterator returns an iterator for commits generated with the same semantics as
 // GetTopologicalOrderCommits
-func GetTopologicalOrderIterator(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash hash.Hash) (doltdb.CommitItr, error) {
-	return newCommiterator(ctx, ddb, startCommitHash)
+func GetTopologicalOrderIterator(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash hash.Hash, matchFn func(*doltdb.Commit) (bool, error)) (doltdb.CommitItr, error) {
+	return newCommiterator(ctx, ddb, startCommitHash, matchFn)
 }
 
 type commiterator struct {
 	ddb             *doltdb.DoltDB
 	startCommitHash hash.Hash
+	matchFn         func(*doltdb.Commit) (bool, error)
 	q               *q
 }
 
 var _ doltdb.CommitItr = (*commiterator)(nil)
 
-func newCommiterator(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash hash.Hash) (*commiterator, error) {
+func newCommiterator(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash hash.Hash, matchFn func(*doltdb.Commit) (bool, error)) (*commiterator, error) {
 	itr := &commiterator{
 		ddb:             ddb,
 		startCommitHash: startCommitHash,
+		matchFn:         matchFn,
 	}
 
 	err := itr.Reset(ctx)
@@ -246,7 +248,20 @@ func (i *commiterator) Next(ctx context.Context) (hash.Hash, *doltdb.Commit, err
 			}
 		}
 
-		return nextC.hash, nextC.commit, nil
+		matches := true
+		if i.matchFn != nil {
+			matches, err = i.matchFn(nextC.commit)
+
+			if err != nil {
+				return hash.Hash{}, nil, err
+			}
+		}
+
+		if matches {
+			return nextC.hash, nextC.commit, nil
+		}
+
+		return i.Next(ctx)
 	}
 
 	return hash.Hash{}, nil, io.EOF
@@ -265,7 +280,7 @@ func (i *commiterator) Reset(ctx context.Context) error {
 // `startCommitHash` in reverse topological order, with tiebreaking done by the height of the commit graph -- higher
 // commits appear first. Remaining ties are broken by timestamp; newer commits appear first.
 func GetTopNTopoOrderedCommitsMatching(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash hash.Hash, n int, matchFn func(*doltdb.Commit) (bool, error)) ([]*doltdb.Commit, error) {
-	itr, err := GetTopologicalOrderIterator(ctx, ddb, startCommitHash)
+	itr, err := GetTopologicalOrderIterator(ctx, ddb, startCommitHash, matchFn)
 	if err != nil {
 		return nil, err
 	}
@@ -279,19 +294,93 @@ func GetTopNTopoOrderedCommitsMatching(ctx context.Context, ddb *doltdb.DoltDB, 
 			return nil, err
 		}
 
-		matches := true
-		if matchFn != nil {
-			matches, err = matchFn(commit)
-
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if matches {
-			commitList = append(commitList, commit)
-		}
+		commitList = append(commitList, commit)
 	}
 
 	return commitList, nil
+}
+
+// GetDotDotRevisionsIterator returns an iterator for commits generated with the same semantics as
+// GetDotDotRevisions
+func GetDotDotRevisionsIterator(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash, excludingCommitHash hash.Hash, matchFn func(*doltdb.Commit) (bool, error)) (doltdb.CommitItr, error) {
+	return newDotDotCommiterator(ctx, ddb, startCommitHash, excludingCommitHash, matchFn)
+}
+
+type dotDotCommiterator struct {
+	ddb                 *doltdb.DoltDB
+	startCommitHash     hash.Hash
+	excludingCommitHash hash.Hash
+	matchFn             func(*doltdb.Commit) (bool, error)
+	q                   *q
+}
+
+var _ doltdb.CommitItr = (*dotDotCommiterator)(nil)
+
+func newDotDotCommiterator(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash, excludingCommitHash hash.Hash, matchFn func(*doltdb.Commit) (bool, error)) (*dotDotCommiterator, error) {
+	itr := &dotDotCommiterator{
+		ddb:                 ddb,
+		startCommitHash:     startCommitHash,
+		excludingCommitHash: excludingCommitHash,
+		matchFn:             matchFn,
+	}
+
+	err := itr.Reset(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return itr, nil
+}
+
+// Next implements doltdb.CommitItr
+func (i *dotDotCommiterator) Next(ctx context.Context) (hash.Hash, *doltdb.Commit, error) {
+	if i.q.NumVisiblePending() > 0 {
+		nextC := i.q.PopPending()
+		parents, err := nextC.commit.ParentHashes(ctx)
+		if err != nil {
+			return hash.Hash{}, nil, err
+		}
+
+		for _, parentID := range parents {
+			if nextC.invisible {
+				if err := i.q.SetInvisible(ctx, nextC.ddb, parentID); err != nil {
+					return hash.Hash{}, nil, err
+				}
+			}
+			if err := i.q.AddPendingIfUnseen(ctx, nextC.ddb, parentID); err != nil {
+				return hash.Hash{}, nil, err
+			}
+		}
+
+		matches := true
+		if i.matchFn != nil {
+			matches, err = i.matchFn(nextC.commit)
+			if err != nil {
+				return hash.Hash{}, nil, err
+			}
+		}
+
+		// If not invisible, return commit. Otherwise get next commit
+		if !nextC.invisible && matches {
+			return nextC.hash, nextC.commit, nil
+		}
+		return i.Next(ctx)
+	}
+
+	return hash.Hash{}, nil, io.EOF
+}
+
+// Reset implements doltdb.CommitItr
+func (i *dotDotCommiterator) Reset(ctx context.Context) error {
+	i.q = newQueue()
+	if err := i.q.SetInvisible(ctx, i.ddb, i.excludingCommitHash); err != nil {
+		return err
+	}
+	if err := i.q.AddPendingIfUnseen(ctx, i.ddb, i.excludingCommitHash); err != nil {
+		return err
+	}
+	if err := i.q.AddPendingIfUnseen(ctx, i.ddb, i.startCommitHash); err != nil {
+		return err
+	}
+	return nil
 }

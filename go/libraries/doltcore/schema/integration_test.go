@@ -64,6 +64,52 @@ func TestSqlIntegration(t *testing.T) {
 	}
 }
 
+func TestSchemaOrdering(t *testing.T) {
+	tests := []struct {
+		name      string
+		query     string
+		pkCols    []string
+		otherCols []string
+		allCols   []string
+		ordinals  []int
+	}{
+		{
+			name:      "primary key",
+			query:     "CREATE TABLE t (a int, b int, pk2 int, c int, pk1 int, PRIMARY KEY (pk1, pk2));",
+			pkCols:    []string{"pk1", "pk2"},
+			otherCols: []string{"a", "b", "c"},
+			allCols:   []string{"a", "b", "pk2", "c", "pk1"},
+			ordinals:  []int{4, 2},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			root := runTestSql(t, ctx, []string{test.query})
+
+			tbl, ok, err := root.GetTable(ctx, "t")
+			require.NoError(t, err)
+			require.True(t, ok)
+			sch, err := tbl.GetSchema(ctx)
+			require.NoError(t, err)
+
+			for i, col := range sch.GetPKCols().GetColumns() {
+				assert.Equal(t, test.pkCols[i], col.Name)
+			}
+			for i, col := range sch.GetNonPKCols().GetColumns() {
+				assert.Equal(t, test.otherCols[i], col.Name)
+			}
+			for i, col := range sch.GetAllCols().GetColumns() {
+				assert.Equal(t, test.allCols[i], col.Name)
+			}
+			for i, ord := range sch.GetPkOrdinals() {
+				assert.Equal(t, test.ordinals[i], ord)
+			}
+		})
+	}
+}
+
 func TestGetKeyTags(t *testing.T) {
 	const tblName = "test"
 	tests := []struct {

@@ -19,7 +19,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -43,33 +44,21 @@ var inCols = []schema.Column{
 var colColl = schema.NewColCollection(inCols...)
 var rowSch = schema.MustSchemaFromCols(colColl)
 
-func getSampleRows() (rows []row.Row) {
-	return []row.Row{
-		mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
-			nameColTag:  types.String("Bill Billerson"),
-			ageColTag:   types.Uint(32),
-			titleColTag: types.String("Senior Dufus")})),
-		mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
-			nameColTag:  types.String("Rob Robertson"),
-			ageColTag:   types.Uint(25),
-			titleColTag: types.String("Dufus")})),
-		mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
-			nameColTag:  types.String("John Johnson"),
-			ageColTag:   types.Uint(21),
-			titleColTag: types.String("")})),
-		mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
-			nameColTag: types.String("Andy Anderson"),
-			ageColTag:  types.Uint(27),
-			/* title = NULL */})),
+func getSampleRows() []sql.Row {
+	return []sql.Row{
+		{"Bill Billerson", 32, "Senior Dufus"},
+		{"Rob Robertson", 25, "Dufus"},
+		{"John Johnson", 21, ""},
+		{"Andy Anderson", 27, nil},
 	}
 }
 
-func writeToCSV(csvWr *CSVWriter, rows []row.Row, t *testing.T) {
+func writeToCSV(csvWr *CSVWriter, rows []sql.Row, t *testing.T) {
 	func() {
 		defer csvWr.Close(context.Background())
 
-		for _, row := range rows {
-			err := csvWr.WriteRow(context.Background(), row)
+		for _, r := range rows {
+			err := csvWr.WriteSqlRow(context.Background(), r)
 
 			if err != nil {
 				t.Fatal("Failed to write row")

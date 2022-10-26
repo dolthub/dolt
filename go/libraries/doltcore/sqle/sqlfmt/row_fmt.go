@@ -334,7 +334,7 @@ func SqlRowAsTupleString(r sql.Row, tableSch schema.Schema) (string, error) {
 		if seenOne {
 			b.WriteRune(',')
 		}
-		col := tableSch.GetAllCols().GetAtIndex(i)
+		col := tableSch.GetAllCols().GetByIndex(i)
 		str := "NULL"
 		if val != nil {
 			str, err = interfaceValueAsSqlString(col.TypeInfo, val)
@@ -534,6 +534,15 @@ func interfaceValueAsSqlString(ti typeinfo.TypeInfo, value interface{}) (string,
 			return "", fmt.Errorf("typeinfo.VarStringTypeIdentifier is not types.String")
 		}
 		return quoteAndEscapeString(string(s)), nil
+	case typeinfo.GeometryTypeIdentifier,
+		typeinfo.PointTypeIdentifier,
+		typeinfo.LineStringTypeIdentifier,
+		typeinfo.PolygonTypeIdentifier,
+		typeinfo.MultiPointTypeIdentifier,
+		typeinfo.MultiLineStringTypeIdentifier,
+		typeinfo.MultiPolygonTypeIdentifier,
+		typeinfo.GeometryCollectionTypeIdentifier:
+		return singleQuote + str + singleQuote, nil
 	default:
 		return str, nil
 	}

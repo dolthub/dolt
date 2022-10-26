@@ -21,6 +21,7 @@ fi
 "$FLATC" -o $GEN_DIR --gen-onefile --filename-suffix "" --gen-mutable --go-namespace "serial" --go \
   addressmap.fbs \
   blob.fbs \
+  branchcontrol.fbs \
   collation.fbs \
   commit.fbs \
   commitclosure.fbs \

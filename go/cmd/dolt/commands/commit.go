@@ -306,15 +306,26 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggeste
 	}
 
 	backupEd := "vim"
+	// try getting default editor on the user system
 	if ed, edSet := os.LookupEnv("EDITOR"); edSet {
 		backupEd = ed
 	}
+	// try getting Dolt config core.editor
 	editorStr := dEnv.Config.GetStringOrDefault(env.DoltEditor, backupEd)
 
 	cli.ExecuteWithStdioRestored(func() {
-		commitMsg, _ := editor.OpenCommitEditor(editorStr, initialMsg)
+		commitMsg, cErr := editor.OpenCommitEditor(editorStr, initialMsg)
+		if cErr != nil {
+			err = cErr
+		}
 		finalMsg = parseCommitMessage(commitMsg)
 	})
+
+	// if editor could not be opened or the message received is empty, use auto-generated/suggested msg.
+	if err != nil || finalMsg == "" {
+		return suggestedMsg, nil
+	}
+
 	return finalMsg, nil
 }
 

@@ -15,10 +15,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Setup Go 1.x
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ^1.19
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
           token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
@@ -40,11 +40,12 @@ jobs:
         run: |
           changes=$(git status --porcelain)
           if [ ! -z "$changes" ]; then
-             echo "::set-output name=has-changes::true"
+             echo "has-changes=true" >> $GITHUB_OUTPUT
           fi
-      - uses: EndBug/add-and-commit@v7
+      - uses: EndBug/add-and-commit@v9.1.1
         if: ${{ steps.detect-changes.outputs.has-changes == 'true' }}
         with:
           message: "[ga-format-pr] Run go/utils/repofmt/format_repo.sh and go/Godeps/update.sh"
           add: "."
           cwd: "."
+          pull: "--ff"

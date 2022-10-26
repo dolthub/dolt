@@ -105,10 +105,6 @@ type chunkSourcesByDescendingDataSize struct {
 	err error
 }
 
-func newChunkSourcesByDescendingDataSize(sws []sourceWithSize) chunkSourcesByDescendingDataSize {
-	return chunkSourcesByDescendingDataSize{sws, nil}
-}
-
 func (csbds chunkSourcesByDescendingDataSize) Len() int { return len(csbds.sws) }
 func (csbds chunkSourcesByDescendingDataSize) Less(i, j int) bool {
 	swsI, swsJ := csbds.sws[i], csbds.sws[j]

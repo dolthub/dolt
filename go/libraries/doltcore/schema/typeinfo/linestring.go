@@ -19,10 +19,9 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
-	"github.com/dolthub/dolt/go/store/geometry"
 	"github.com/dolthub/dolt/go/store/types"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
@@ -35,15 +34,6 @@ var _ TypeInfo = (*linestringType)(nil)
 
 var LineStringType = &linestringType{sql.LineStringType{}}
 
-// ConvertTypesLineStringToSQLLineString basically makes a deep copy of sql.LineString
-func ConvertTypesLineStringToSQLLineString(l types.LineString) sql.LineString {
-	points := make([]sql.Point, len(l.Points))
-	for i, p := range l.Points {
-		points[i] = ConvertTypesPointToSQLPoint(p)
-	}
-	return sql.LineString{SRID: l.SRID, Points: points}
-}
-
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *linestringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	// Check for null
@@ -52,7 +42,7 @@ func (ti *linestringType) ConvertNomsValueToValue(v types.Value) (interface{}, e
 	}
 	// Expect a types.LineString, return a sql.LineString
 	if val, ok := v.(types.LineString); ok {
-		return ConvertTypesLineStringToSQLLineString(val), nil
+		return types.ConvertTypesLineStringToSQLLineString(val), nil
 	}
 
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
@@ -75,14 +65,6 @@ func (ti *linestringType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecR
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 }
 
-func ConvertSQLLineStringToTypesLineString(l sql.LineString) types.LineString {
-	points := make([]types.Point, len(l.Points))
-	for i, p := range l.Points {
-		points[i] = ConvertSQLPointToTypesPoint(p)
-	}
-	return types.LineString{SRID: l.SRID, Points: points}
-}
-
 // ConvertValueToNomsValue implements TypeInfo interface.
 func (ti *linestringType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	// Check for null
@@ -96,7 +78,7 @@ func (ti *linestringType) ConvertValueToNomsValue(ctx context.Context, vrw types
 		return nil, err
 	}
 
-	return ConvertSQLLineStringToTypesLineString(line.(sql.LineString)), nil
+	return types.ConvertSQLLineStringToTypesLineString(line.(sql.LineString)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -105,7 +87,7 @@ func (ti *linestringType) Equals(other TypeInfo) bool {
 		return false
 	}
 	if o, ok := other.(*linestringType); ok {
-		// if either ti or other has defined SRID, then check SRID value; otherwise,
+		// if either ti or other has defined SRID, then check SRID value; otherwise, return false
 		return (!ti.sqlLineStringType.DefinedSRID && !o.sqlLineStringType.DefinedSRID) || ti.sqlLineStringType.SRID == o.sqlLineStringType.SRID
 	}
 	return false
@@ -114,10 +96,7 @@ func (ti *linestringType) Equals(other TypeInfo) bool {
 // FormatValue implements TypeInfo interface.
 func (ti *linestringType) FormatValue(v types.Value) (*string, error) {
 	if val, ok := v.(types.LineString); ok {
-		buf := make([]byte, geometry.EWKBHeaderSize+types.LengthSize+geometry.PointSize*len(val.Points))
-		types.WriteEWKBHeader(val, buf[:geometry.EWKBHeaderSize])
-		types.WriteEWKBLineData(val, buf[geometry.EWKBHeaderSize:])
-		resStr := string(buf)
+		resStr := string(types.SerializeLineString(val))
 		return &resStr, nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -188,6 +167,8 @@ func linestringTypeConverter(ctx context.Context, src *linestringType, destTi Ty
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geomcollType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *geometryType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
@@ -197,6 +178,12 @@ func linestringTypeConverter(ctx context.Context, src *linestringType, destTi Ty
 	case *jsonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *linestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multilinestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipolygonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *pointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)

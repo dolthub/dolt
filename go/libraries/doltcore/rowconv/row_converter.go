@@ -100,12 +100,6 @@ func (rc *RowConverter) ConvertWithWarnings(inRow row.Row, warnFn WarnFunction) 
 	return rc.convert(inRow, warnFn)
 }
 
-// Convert takes an input row, maps its columns to destination columns, and performs any type conversion needed to
-// create a row of the expected destination schema.
-func (rc *RowConverter) Convert(inRow row.Row) (row.Row, error) {
-	return rc.convert(inRow, nil)
-}
-
 // convert takes a row and maps its columns to their destination columns, automatically performing any type conversion
 // needed, and using the optional WarnFunction to let callers log warnings on any type conversion errors.
 func (rc *RowConverter) convert(inRow row.Row, warnFn WarnFunction) (row.Row, error) {

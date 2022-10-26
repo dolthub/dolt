@@ -66,16 +66,6 @@ func NewRowFromStrings(nbf *types.NomsBinFormat, sch schema.Schema, valStrs []st
 	return row.New(nbf, sch, taggedVals)
 }
 
-// NewRowFromTaggedStrings takes an untyped schema and a map of column tag to string value and returns a row
-func NewRowFromTaggedStrings(nbf *types.NomsBinFormat, sch schema.Schema, taggedStrs map[uint64]string) (row.Row, error) {
-	taggedVals := make(row.TaggedValues)
-	for tag, valStr := range taggedStrs {
-		taggedVals[tag] = types.String(valStr)
-	}
-
-	return row.New(nbf, sch, taggedVals)
-}
-
 // UntypeSchema takes a schema and returns a schema with the same columns, but with the types of each of those columns
 // as types.StringKind
 func UntypeSchema(sch schema.Schema) (schema.Schema, error) {
@@ -100,48 +90,6 @@ func UntypeSchema(sch schema.Schema) (schema.Schema, error) {
 	}
 	newSch.SetCollation(sch.GetCollation())
 	return newSch, nil
-}
-
-// UnkeySchema takes a schema and returns a schema with the same columns and types, but stripped of constraints and
-// primary keys. Meant for use in result sets.
-func UnkeySchema(sch schema.Schema) (schema.Schema, error) {
-	var cols []schema.Column
-	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		col.IsPartOfPK = false
-		col.Constraints = nil
-		cols = append(cols, col)
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	colColl := schema.NewColCollection(cols...)
-
-	return schema.UnkeyedSchemaFromCols(colColl), nil
-}
-
-// UntypeUnkeySchema takes a schema and returns a schema with the same columns, but stripped of constraints and primary
-// keys and using only string types. Meant for displaying output and tests.
-func UntypeUnkeySchema(sch schema.Schema) (schema.Schema, error) {
-	var cols []schema.Column
-	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		col.Kind = types.StringKind
-		col.IsPartOfPK = false
-		col.Constraints = nil
-		col.TypeInfo = typeinfo.StringDefaultType
-		cols = append(cols, col)
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	colColl := schema.NewColCollection(cols...)
-
-	return schema.UnkeyedSchemaFromCols(colColl), nil
 }
 
 // UntypedSchemaUnion takes an arbitrary number of schemas and provides the union of all of their key and non-key columns.

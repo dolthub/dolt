@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -49,18 +50,19 @@ type SqlEngine struct {
 }
 
 type SqlEngineConfig struct {
-	InitialDb         string
-	IsReadOnly        bool
-	IsServerLocked    bool
-	DoltCfgDirPath    string
-	PrivFilePath      string
-	ServerUser        string
-	ServerPass        string
-	ServerHost        string
-	Autocommit        bool
-	Bulk              bool
-	JwksConfig        []JwksConfig
-	ClusterController *cluster.Controller
+	InitialDb          string
+	IsReadOnly         bool
+	IsServerLocked     bool
+	DoltCfgDirPath     string
+	PrivFilePath       string
+	BranchCtrlFilePath string
+	ServerUser         string
+	ServerPass         string
+	ServerHost         string
+	Autocommit         bool
+	Bulk               bool
+	JwksConfig         []JwksConfig
+	ClusterController  *cluster.Controller
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -123,6 +125,14 @@ func NewSqlEngine(
 		return nil, err
 	}
 
+	// Load the branch control permissions, if they exist
+	var bcController *branch_control.Controller
+	if bcController, err = branch_control.LoadData(config.BranchCtrlFilePath, config.DoltCfgDirPath); err != nil {
+		return nil, err
+	}
+	// Set the server's super user
+	branch_control.SetSuperUser(config.ServerUser, config.ServerHost)
+
 	// Set up engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
 		IsReadOnly:     config.IsReadOnly,
@@ -159,7 +169,7 @@ func NewSqlEngine(
 		dbStates = append(dbStates, dbState)
 	}
 
-	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, mrEnv.Config(), dbStates...)
+	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, mrEnv.Config(), bcController, dbStates...)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +188,7 @@ func NewSqlEngine(
 	return &SqlEngine{
 		dbs:            nameToDB,
 		contextFactory: newSqlContext(sess, config.InitialDb),
-		dsessFactory:   newDoltSession(pro, mrEnv.Config(), config.Autocommit),
+		dsessFactory:   newDoltSession(pro, mrEnv.Config(), config.Autocommit, bcController),
 		engine:         engine,
 		resultFormat:   format,
 	}, nil
@@ -311,7 +321,6 @@ func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.C
 		if sessionDB := sess.GetCurrentDatabase(); sessionDB != "" {
 			sqlCtx.SetCurrentDatabase(sessionDB)
 		} else {
-
 			sqlCtx.SetCurrentDatabase(initialDb)
 		}
 
@@ -319,7 +328,8 @@ func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.C
 	}
 }
 
-func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig, autocommit bool) func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
+func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig,
+	autocommit bool, bc *branch_control.Controller) func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
 	return func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
 		ddbs := dsqle.DbsAsDSQLDBs(dbs)
 		states, err := getDbStates(ctx, ddbs)
@@ -327,7 +337,7 @@ func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfi
 			return nil, err
 		}
 
-		dsess, err := dsess.NewDoltSession(sql.NewEmptyContext(), mysqlSess, pro, config, states...)
+		dsess, err := dsess.NewDoltSession(sql.NewEmptyContext(), mysqlSess, pro, config, bc, states...)
 		if err != nil {
 			return nil, err
 		}

@@ -430,7 +430,7 @@ func ConfigureReplicationDatabaseHook(ctx *sql.Context, p DoltDatabaseProvider, 
 	}
 
 	err = newEnv.AddRemote(r)
-	if err != nil {
+	if err != env.ErrRemoteAlreadyExists && err != nil {
 		return err
 	}
 
@@ -448,7 +448,11 @@ func ConfigureReplicationDatabaseHook(ctx *sql.Context, p DoltDatabaseProvider, 
 }
 
 // CloneDatabaseFromRemote implements DoltDatabaseProvider interface
-func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error {
+func (p DoltDatabaseProvider) CloneDatabaseFromRemote(
+	ctx *sql.Context,
+	dbName, branch, remoteName, remoteUrl string,
+	remoteParams map[string]string,
+) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -459,7 +463,7 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 		return fmt.Errorf("cannot create DB, file exists at %s", dbName)
 	}
 
-	err := p.cloneDatabaseFromRemote(ctx, dbName, remoteName, branch, remoteUrl, remoteParams)
+	dEnv, err := p.cloneDatabaseFromRemote(ctx, dbName, remoteName, branch, remoteUrl, remoteParams)
 	if err != nil {
 		// Make a best effort to clean up any artifacts on disk from a failed clone
 		// before we return the error
@@ -473,7 +477,7 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 		return err
 	}
 
-	return nil
+	return ConfigureReplicationDatabaseHook(ctx, p, dbName, dEnv)
 }
 
 // cloneDatabaseFromRemote encapsulates the inner logic for cloning a database so that if any error
@@ -484,26 +488,26 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 	ctx *sql.Context,
 	dbName, remoteName, branch, remoteUrl string,
 	remoteParams map[string]string,
-) error {
+) (*env.DoltEnv, error) {
 	if p.remoteDialer == nil {
-		return fmt.Errorf("unable to clone remote database; no remote dialer configured")
+		return nil, fmt.Errorf("unable to clone remote database; no remote dialer configured")
 	}
 
 	// TODO: params for AWS, others that need them
 	r := env.NewRemote(remoteName, remoteUrl, nil)
 	srcDB, err := r.GetRemoteDB(ctx, types.Format_Default, p.remoteDialer)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	dEnv, err := actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dbName, p.fs, "VERSION", env.GetCurrentUserHomeDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, dEnv)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = dEnv.RepoStateWriter().UpdateBranch(dEnv.RepoState.CWBHeadRef().GetPath(), env.BranchConfig{
@@ -514,7 +518,7 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 	sess := dsess.DSessFromSess(ctx.Session)
 	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	opts := editor.Options{
@@ -525,17 +529,22 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 
 	db, err := NewDatabase(ctx, dbName, dEnv.DbData(), opts)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	p.databases[formatDbMapKeyName(db.Name())] = db
 
 	dbstate, err := GetInitialDBState(ctx, db)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return sess.AddDB(ctx, dbstate)
+	err = sess.AddDB(ctx, dbstate)
+	if err != nil {
+		return nil, err
+	}
+
+	return dEnv, nil
 }
 
 // DropDatabase implements the sql.MutableDatabaseProvider interface
@@ -826,6 +835,9 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 	case "dolt_diff_summary":
 		dtf := &DiffSummaryTableFunction{}
 		return dtf, nil
+	case "dolt_log":
+		dtf := &LogTableFunction{}
+		return dtf, nil
 	}
 
 	return nil, sql.ErrTableFunctionNotFound.New(name)
@@ -1025,6 +1037,21 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 		}
 	}
 
+	remotes, err := static.GetRemotes()
+	if err != nil {
+		return nil, dsess.InitialDbState{}, err
+	}
+
+	branches, err := static.GetBranches()
+	if err != nil {
+		return nil, dsess.InitialDbState{}, err
+	}
+
+	backups, err := static.GetBackups()
+	if err != nil {
+		return nil, dsess.InitialDbState{}, err
+	}
+
 	init := dsess.InitialDbState{
 		Db:         db,
 		HeadCommit: cm,
@@ -1034,6 +1061,10 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			Rsw: static,
 			Rsr: static,
 		},
+		Remotes:  remotes,
+		Branches: branches,
+		Backups:  backups,
+		//ReadReplica: //todo
 	}
 
 	return db, init, nil
@@ -1065,6 +1096,11 @@ func dbRevisionForTag(ctx context.Context, srcDb Database, revSpec string) (Read
 			Rsw: srcDb.DbData().Rsw,
 			Rsr: srcDb.DbData().Rsr,
 		},
+		// todo: should we initialize
+		//  - Remotes
+		//  - Branches
+		//  - Backups
+		//  - ReadReplicas
 	}
 
 	return db, init, nil
@@ -1099,6 +1135,11 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 			Rsw: srcDb.DbData().Rsw,
 			Rsr: srcDb.DbData().Rsr,
 		},
+		// todo: should we initialize
+		//  - Remotes
+		//  - Branches
+		//  - Backups
+		//  - ReadReplicas
 	}
 
 	return db, init, nil

@@ -23,7 +23,6 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
@@ -75,21 +74,6 @@ func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.Ro
 // GetSchema returns the schema of this TableWriter.
 func (w *SqlExportWriter) GetSchema() schema.Schema {
 	return w.sch
-}
-
-// WriteRow will write a row to a table
-func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
-	if err := w.maybeWriteDropCreate(ctx); err != nil {
-		return err
-	}
-
-	stmt, err := sqlfmt.RowAsInsertStmt(r, w.tableName, w.sch)
-
-	if err != nil {
-		return err
-	}
-
-	return iohelp.WriteLine(w.wr, stmt)
 }
 
 func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {

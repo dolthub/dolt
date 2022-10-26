@@ -315,6 +315,6 @@ func (idx fmtIndex) IndexedAccess(index sql.IndexLookup) (sql.IndexedTable, erro
 }
 
 // ColumnExpressionTypes implements sql.Index
-func (idx fmtIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
+func (idx fmtIndex) ColumnExpressionTypes() []sql.ColumnExpressionType {
 	panic("unimplemented")
 }

@@ -90,9 +90,8 @@ type DoltEnv struct {
 	RepoState *RepoState
 	RSLoadErr error
 
-	DoltDB        *doltdb.DoltDB
-	DBLoadError   error
-	DbFormatError error
+	DoltDB      *doltdb.DoltDB
+	DBLoadError error
 
 	FS     filesys.Filesys
 	urlStr string
@@ -103,18 +102,14 @@ type DoltEnv struct {
 
 // Load loads the DoltEnv for the .dolt directory determined by resolving the specified urlStr with the specified Filesys.
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
-	return loadWithFormat(ctx, hdp, fs, urlStr, version, nil)
-}
-
-func loadWithFormat(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, version string, binFormat *types.NomsBinFormat) *DoltEnv {
-	config, cfgErr := LoadDoltCliConfig(hdp, fs)
+	cfg, cfgErr := LoadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
 
 	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr, fs)
 
 	dEnv := &DoltEnv{
 		Version:     version,
-		Config:      config,
+		Config:      cfg,
 		CfgLoadErr:  cfgErr,
 		RepoState:   repoState,
 		RSLoadErr:   rsErr,
@@ -171,15 +166,7 @@ func loadWithFormat(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys
 		}
 	}
 
-	var dbFormatErr error
 	if rsErr == nil && dbLoadErr == nil {
-		if binFormat != nil && dEnv.DoltDB.Format() != binFormat {
-			dbFormatErr = fmt.Errorf("database with incompatible DOLT_DEFAULT_BIN_FORMAT")
-			dEnv.DbFormatError = dbFormatErr
-		}
-	}
-
-	if rsErr == nil && dbLoadErr == nil && dbFormatErr == nil {
 		// If the working set isn't present in the DB, create it from the repo state. This step can be removed post 1.0.
 		_, err := dEnv.WorkingSet(ctx)
 		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
@@ -199,7 +186,7 @@ func GetDefaultInitBranch(cfg config.ReadableConfig) string {
 // Valid returns whether this environment has been properly initialized. This is useful because although every command
 // gets a DoltEnv, not all of them require it, and we allow invalid dolt envs to be passed around for this reason.
 func (dEnv *DoltEnv) Valid() bool {
-	return dEnv.CfgLoadErr == nil && dEnv.DBLoadError == nil && dEnv.DbFormatError == nil && dEnv.HasDoltDir() && dEnv.HasDoltDataDir()
+	return dEnv.CfgLoadErr == nil && dEnv.DBLoadError == nil && dEnv.HasDoltDir() && dEnv.HasDoltDataDir()
 }
 
 // initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.

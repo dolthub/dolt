@@ -288,7 +288,7 @@ func (s *durableIndexState) coversAllColumns(i *doltIndex) bool {
 	}
 	covers := true
 	for i := 0; i < cols.Size(); i++ {
-		col := cols.GetAtIndex(i)
+		col := cols.GetByIndex(i)
 		if _, ok := idxCols.GetByNameCaseInsensitive(col.Name); !ok {
 			covers = false
 			break
@@ -396,7 +396,7 @@ func (di *doltIndex) CanSupport(...sql.Range) bool {
 }
 
 // ColumnExpressionTypes implements the interface sql.Index.
-func (di *doltIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
+func (di *doltIndex) ColumnExpressionTypes() []sql.ColumnExpressionType {
 	cets := make([]sql.ColumnExpressionType, len(di.columns))
 	for i, col := range di.columns {
 		cets[i] = sql.ColumnExpressionType{

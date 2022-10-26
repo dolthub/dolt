@@ -67,6 +67,11 @@ const (
 
 	SerialMessageKind
 
+	MultiPointKind
+	MultiLineStringKind
+	MultiPolygonKind
+	GeometryCollectionKind
+
 	UnknownKind NomsKind = 255
 )
 
@@ -98,6 +103,10 @@ func init() {
 	KindToType[LineStringKind] = LineString{}
 	KindToType[PolygonKind] = Polygon{}
 	KindToType[SerialMessageKind] = SerialMessage{}
+	KindToType[MultiPointKind] = MultiPoint{}
+	KindToType[MultiLineStringKind] = MultiLineString{}
+	KindToType[MultiPolygonKind] = MultiPolygon{}
+	KindToType[GeometryCollectionKind] = GeomColl{}
 
 	SupportedKinds[BlobKind] = true
 	SupportedKinds[BoolKind] = true
@@ -126,6 +135,10 @@ func init() {
 	SupportedKinds[LineStringKind] = true
 	SupportedKinds[PolygonKind] = true
 	SupportedKinds[SerialMessageKind] = true
+	SupportedKinds[MultiPointKind] = true
+	SupportedKinds[MultiLineStringKind] = true
+	SupportedKinds[MultiPolygonKind] = true
+	SupportedKinds[GeometryCollectionKind] = true
 
 	if serial.MessageTypesKind != int(SerialMessageKind) {
 		panic("internal error: serial.MessageTypesKind != SerialMessageKind")
@@ -135,34 +148,38 @@ func init() {
 var KindToTypeSlice []Value
 
 var KindToString = map[NomsKind]string{
-	UnknownKind:       "unknown",
-	BlobKind:          "Blob",
-	BoolKind:          "Bool",
-	CycleKind:         "Cycle",
-	ListKind:          "List",
-	MapKind:           "Map",
-	FloatKind:         "Float",
-	RefKind:           "Ref",
-	SetKind:           "Set",
-	StructKind:        "Struct",
-	StringKind:        "String",
-	TypeKind:          "Type",
-	UnionKind:         "Union",
-	ValueKind:         "Value",
-	UUIDKind:          "UUID",
-	IntKind:           "Int",
-	UintKind:          "Uint",
-	NullKind:          "Null",
-	TupleKind:         "Tuple",
-	InlineBlobKind:    "InlineBlob",
-	TimestampKind:     "Timestamp",
-	DecimalKind:       "Decimal",
-	JSONKind:          "JSON",
-	GeometryKind:      "Geometry",
-	PointKind:         "Point",
-	LineStringKind:    "LineString",
-	PolygonKind:       "Polygon",
-	SerialMessageKind: "SerialMessage",
+	UnknownKind:            "unknown",
+	BlobKind:               "Blob",
+	BoolKind:               "Bool",
+	CycleKind:              "Cycle",
+	ListKind:               "List",
+	MapKind:                "Map",
+	FloatKind:              "Float",
+	RefKind:                "Ref",
+	SetKind:                "Set",
+	StructKind:             "Struct",
+	StringKind:             "String",
+	TypeKind:               "Type",
+	UnionKind:              "Union",
+	ValueKind:              "Value",
+	UUIDKind:               "UUID",
+	IntKind:                "Int",
+	UintKind:               "Uint",
+	NullKind:               "Null",
+	TupleKind:              "Tuple",
+	InlineBlobKind:         "InlineBlob",
+	TimestampKind:          "Timestamp",
+	DecimalKind:            "Decimal",
+	JSONKind:               "JSON",
+	GeometryKind:           "Geometry",
+	PointKind:              "Point",
+	LineStringKind:         "LineString",
+	PolygonKind:            "Polygon",
+	SerialMessageKind:      "SerialMessage",
+	MultiPointKind:         "MultiPoint",
+	MultiLineStringKind:    "MultiLineString",
+	MultiPolygonKind:       "MultiPolygon",
+	GeometryCollectionKind: "GeometryCollection",
 }
 
 // String returns the name of the kind.
@@ -186,7 +203,11 @@ func IsGeometryKind(k NomsKind) bool {
 	case PointKind,
 		LineStringKind,
 		PolygonKind,
-		GeometryKind:
+		MultiPointKind,
+		MultiLineStringKind,
+		MultiPolygonKind,
+		GeometryKind,
+		GeometryCollectionKind:
 		return true
 	default:
 		return false

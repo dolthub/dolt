@@ -15,6 +15,7 @@
 package dsess
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -26,6 +27,7 @@ import (
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -52,14 +54,15 @@ var ErrCurrentBranchDeleted = errors.New("current branch has been force deleted.
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
 	sql.Session
-	batchMode   batchMode
-	username    string
-	email       string
-	dbStates    map[string]*DatabaseSessionState
-	provider    DoltDatabaseProvider
-	tempTables  map[string][]sql.Table
-	globalsConf config.ReadWriteConfig
-	mu          *sync.Mutex
+	batchMode        batchMode
+	username         string
+	email            string
+	dbStates         map[string]*DatabaseSessionState
+	provider         DoltDatabaseProvider
+	tempTables       map[string][]sql.Table
+	globalsConf      config.ReadWriteConfig
+	branchController *branch_control.Controller
+	mu               *sync.Mutex
 
 	// If non-nil, this will be returned from ValidateSession.
 	// Used by sqle/cluster to put a session into a terminal err state.
@@ -68,36 +71,45 @@ type DoltSession struct {
 
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
+var _ branch_control.Context = (*DoltSession)(nil)
 
 // DefaultSession creates a DoltSession with default values
 func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
 	return &DoltSession{
-		Session:     sql.NewBaseSession(),
-		username:    "",
-		email:       "",
-		dbStates:    make(map[string]*DatabaseSessionState),
-		provider:    pro,
-		tempTables:  make(map[string][]sql.Table),
-		globalsConf: config.NewMapConfig(make(map[string]string)),
-		mu:          &sync.Mutex{},
+		Session:          sql.NewBaseSession(),
+		username:         "",
+		email:            "",
+		dbStates:         make(map[string]*DatabaseSessionState),
+		provider:         pro,
+		tempTables:       make(map[string][]sql.Table),
+		globalsConf:      config.NewMapConfig(make(map[string]string)),
+		branchController: branch_control.CreateDefaultController(), // Default sessions are fine with the default controller
+		mu:               &sync.Mutex{},
 	}
 }
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
-func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro DoltDatabaseProvider, conf config.ReadWriteConfig, dbs ...InitialDbState) (*DoltSession, error) {
+func NewDoltSession(
+	ctx *sql.Context,
+	sqlSess *sql.BaseSession,
+	pro DoltDatabaseProvider,
+	conf config.ReadWriteConfig,
+	branchController *branch_control.Controller,
+	dbs ...InitialDbState) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")
 	globals := config.NewPrefixConfig(conf, env.SqlServerGlobalsPrefix)
 
 	sess := &DoltSession{
-		Session:     sqlSess,
-		username:    username,
-		email:       email,
-		dbStates:    make(map[string]*DatabaseSessionState),
-		provider:    pro,
-		tempTables:  make(map[string][]sql.Table),
-		globalsConf: globals,
-		mu:          &sync.Mutex{},
+		Session:          sqlSess,
+		username:         username,
+		email:            email,
+		dbStates:         make(map[string]*DatabaseSessionState),
+		provider:         pro,
+		tempTables:       make(map[string][]sql.Table),
+		globalsConf:      globals,
+		branchController: branchController,
+		mu:               &sync.Mutex{},
 	}
 
 	for _, db := range dbs {
@@ -1190,6 +1202,44 @@ func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
 		return nil, err
 	}
 	return sysVars, nil
+}
+
+// GetBranch implements the interface branch_control.Context.
+func (d *DoltSession) GetBranch() (string, error) {
+	ctx := sql.NewContext(context.Background(), sql.WithSession(d))
+	currentDb := d.Session.GetCurrentDatabase()
+	dbState, _, err := d.LookupDbState(ctx, currentDb)
+	if err != nil {
+		if len(currentDb) == 0 && sql.ErrDatabaseNotFound.Is(err) {
+			// Some operations return an empty database (namely tests), so we return an empty branch in such cases
+			return "", nil
+		}
+		return "", err
+	}
+	if dbState.WorkingSet != nil {
+		branchRef, err := dbState.WorkingSet.Ref().ToHeadRef()
+		if err != nil {
+			return "", err
+		}
+		return branchRef.GetPath(), nil
+	}
+	// A nil working set probably means that we're not on a branch (like we may be on a commit), so we return an empty string
+	return "", nil
+}
+
+// GetUser implements the interface branch_control.Context.
+func (d *DoltSession) GetUser() string {
+	return d.Session.Client().User
+}
+
+// GetHost implements the interface branch_control.Context.
+func (d *DoltSession) GetHost() string {
+	return d.Session.Client().Address
+}
+
+// GetController implements the interface branch_control.Context.
+func (d *DoltSession) GetController() *branch_control.Controller {
+	return d.branchController
 }
 
 // validatePersistedSysVar checks whether a system variable exists and is dynamic

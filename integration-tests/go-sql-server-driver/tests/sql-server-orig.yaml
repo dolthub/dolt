@@ -1,0 +1,315 @@
+tests:
+- name: read-only flag prevents modification
+  repos:
+  - name: repo1
+    server:
+      args: ["--config", "readonly.yaml"]
+    with_files:
+    - name: readonly.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          read_only: true
+  connections:
+  - on: repo1
+    queries:
+    - query: "show tables"
+      result:
+        columns: ["Tables_in_repo1"]
+        rows: []
+    - exec: "create table i_should_not_exist (c0 INT)"
+      error_match: "database server is set to read only mode"
+    - query: "show tables"
+      result:
+        columns: ["Tables_in_repo1"]
+        rows: []
+- name: read-only flag still allows select
+  repos:
+  - name: repo1
+    server: {}
+    with_files:
+    - name: readonly.yaml
+      contents: |
+        behavior:
+          read_only: true
+  connections:
+  - on: repo1
+    queries:
+    - exec: "create table t(c0 int)"
+    - exec: "insert into t values (1)"
+    restart_server:
+      args: ["--config", "readonly.yaml"]
+  - on: repo1
+    queries:
+    - query: "select * from t"
+      result:
+        columns: ["c0"]
+        rows: [["1"]]
+- name: read-only flag prevents dolt_commit
+  skip: read-only flag does not prevent dolt_commit
+  repos:
+  - name: repo1
+    server:
+      args: ["--config", "readonly.yaml"]
+    with_files:
+    - name: readonly.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          read_only: true
+  connections:
+  - on: repo1
+    queries:
+    - exec: "call dolt_commit('--allow-empty', '-m', 'msg')"
+      error_match: "database server is set to read only mode: user does not have permission: write"
+- name: read-only flag prevents dolt_reset
+  skip: read-only flag does not prevent dolt_reset
+  repos:
+  - name: repo1
+    server: {}
+    with_files:
+    - name: readonly.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          read_only: true
+  connections:
+  - on: repo1
+    queries:
+    - exec: "call dolt_commit('--allow-empty', '-m', 'msg')"
+    restart_server:
+      args: ["--config", "readonly.yaml"]
+  - on: repo1
+    queries:
+    - exec: "call dolt_reset('--hard', 'HEAD~1')"
+      error_match: "database server is set to read only mode: user does not have permission: write"
+- name: port in use
+  repos:
+  - name: repo1
+    server: {}
+  - name: repo2
+    server:
+      error_matches:
+      - "already in use"
+- name: test autocommit
+  repos:
+  - name: repo1
+    server: {}
+  connections:
+  - on: repo1
+    queries:
+    - exec: 'set autocommit=0'
+    - exec: 'create table t(c0 int)'
+  - on: repo1
+    queries:
+    - query: 'show tables'
+      result:
+        columns: ["Tables_in_repo1"]
+        rows: []
+  - on: repo1
+    queries:
+    - exec: 'create table t(c0 int)'
+  - on: repo1
+    queries:
+    - query: 'show tables'
+      result:
+        columns: ["Tables_in_repo1"]
+        rows: [["t"]]
+- name: test basic querying via dolt sql-server
+  repos:
+  - name: repo1
+    server: {}
+  connections:
+  - on: repo1
+    queries:
+    - query: 'show tables'
+      result:
+        columns: ["Tables_in_repo1"]
+        rows: []
+  - on: repo1
+    queries:
+    - exec: |
+        CREATE TABLE one_pk (
+            pk BIGINT NOT NULL COMMENT 'tag:0',
+            c1 BIGINT COMMENT 'tag:1',
+            c2 BIGINT COMMENT 'tag:2',
+            PRIMARY KEY (pk)
+        )
+  - on: repo1
+    queries:
+    - query: 'show tables'
+      result:
+        columns: ["Tables_in_repo1"]
+        rows: [["one_pk"]]
+  - on: repo1
+    queries:
+    - exec: "INSERT INTO one_pk (pk) VALUES (0)"
+  - on: repo1
+    queries:
+    - query: "SELECT * FROM one_pk ORDER BY pk"
+      result:
+        columns: ["pk","c1","c2"]
+        rows: [["0","NULL","NULL"]]
+  - on: repo1
+    queries:
+    - exec: "INSERT INTO one_pk (pk,c1) VALUES (1,1)"
+  - on: repo1
+    queries:
+    - exec: "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
+  - on: repo1
+    queries:
+    - query: "SELECT * FROM one_pk ORDER BY pk"
+      result:
+        columns: ["pk","c1","c2"]
+        rows:
+        - ["0","NULL","NULL"]
+        - ["1","1","NULL"]
+        - ["2","2","2"]
+        - ["3","3","3"]
+  - on: repo1
+    queries:
+    - exec: "UPDATE one_pk SET c2=c1 WHERE c2 is NULL and c1 IS NOT NULL"
+- name: test multiple queries on same connection
+  repos:
+  - name: repo1
+    server: {}
+  connections:
+  - on: repo1
+    queries:
+    - exec: |
+        CREATE TABLE one_pk (
+            pk BIGINT NOT NULL COMMENT 'tag:0',
+            c1 BIGINT COMMENT 'tag:1',
+            c2 BIGINT COMMENT 'tag:2',
+            PRIMARY KEY (pk)
+        )
+    - exec: "INSERT INTO one_pk (pk) VALUES (0)"
+    - exec: "INSERT INTO one_pk (pk,c1) VALUES (1,1)"
+    - exec: "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
+    - query: "SELECT * FROM one_pk ORDER BY pk"
+      result:
+        columns: ["pk","c1","c2"]
+        rows:
+        - ["0","NULL","NULL"]
+        - ["1","1","NULL"]
+        - ["2","2","2"]
+        - ["3","3","3"]
+  - on: repo1
+    queries:
+    - query: "SELECT * FROM one_pk ORDER BY pk"
+      result:
+        columns: ["pk","c1","c2"]
+        rows:
+        - ["0","NULL","NULL"]
+        - ["1","1","NULL"]
+        - ["2","2","2"]
+        - ["3","3","3"]
+- name: test CREATE and DROP database via sql-server
+  repos:
+  - name: repo1
+    server: {}
+  connections:
+  - on: repo1
+    queries:
+    - exec: "CREATE DATABASE test"
+    - exec: "USE test"
+    - exec: "CREATE TABLE pk(pk int primary key)"
+    - exec: "INSERT INTO pk (pk) VALUES (0)"
+  - on: repo1
+    queries:
+    - query: "SELECT * FROM test.pk ORDER BY pk"
+      result:
+        columns: ["pk"]
+        rows: [["0"]]
+    - exec: "drop database test"
+    - query: "show databases"
+      result:
+        columns: ["Database"]
+        rows:
+        - ["information_schema"]
+        - ["mysql"]
+        - ["repo1"]
+- name: LOAD DATA LOCAL INFILE works
+  repos:
+  - name: repo1
+    server: {}
+  connections:
+  - on: repo1
+    queries:
+    - exec: "CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int)"
+    - exec: "SET GLOBAL local_infile = 1"
+    - exec: "LOAD DATA LOCAL INFILE 'testdata/1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY ',' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES"
+    - query: "SELECT * FROM test"
+      result:
+        columns: ["pk","c1","c2","c3","c4","c5"]
+        rows:
+        - ["0","1","2","3","4","5"]
+        - ["1","1","2","3","4","5"]
+- name: JSON queries
+  repos:
+  - name: repo1
+    server: {}
+  connections:
+  - on: repo1
+    queries:
+    - exec: |
+        CREATE TABLE js_test (
+            pk int NOT NULL,
+            js json,
+            PRIMARY KEY (pk)
+        )
+    - exec: |
+        INSERT INTO js_test VALUES (1, '{"a":1}')
+    - query: "SELECT * FROM js_test"
+      result:
+        columns: ["pk","js"]
+        rows:
+          # XXX: __LD_1__ and __DOLT__ serialize this differently.
+          or:
+          - [["1", '{"a": 1}']]
+          - [["1", '{"a":1}']]
+- name: select a branch with the USE syntax
+  repos:
+  - name: repo1
+    server: {}
+  connections:
+  - on: repo1
+    queries:
+    - exec: "call dolt_branch('feature-branch')"
+    - exec: "use `repo1/feature-branch`"
+    - exec: |
+        CREATE TABLE test (
+            pk int,
+            c1 int,
+            PRIMARY KEY (pk)
+        )
+  - on: repo1
+    queries:
+    - query: "show tables"
+      result:
+        columns: ["Tables_in_repo1"]
+        rows: []
+    - exec: "use `repo1/feature-branch`"
+      result:
+        columns: ["Tables_in_repo1/feature-branch"]
+        rows: [["test"]]
+- name: auto increment for a table should reset between drops
+  repos:
+  - name: repo1
+    server: {}
+  connections:
+  - on: repo1
+    queries:
+    - exec: "CREATE TABLE t1(pk int auto_increment primary key, val int)"
+    - exec: "INSERT INTO t1 VALUES (0, 1),(0, 2)"
+    - query: "SELECT * FROM t1"
+      result:
+        columns: ["pk", "val"]
+        rows: [["1", "1"], ["2", "2"]]
+    - exec: "DROP TABLE t1"
+    - exec: "CREATE TABLE t1(pk int auto_increment primary key, val int)"
+    - exec: "INSERT INTO t1 VALUES (0, 1),(0, 2)"
+    - query: "SELECT * FROM t1"
+      result:
+        columns: ["pk", "val"]
+        rows: [["1", "1"], ["2", "2"]]

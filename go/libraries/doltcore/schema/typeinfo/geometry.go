@@ -34,20 +34,6 @@ var _ TypeInfo = (*geometryType)(nil)
 
 var GeometryType = &geometryType{sql.GeometryType{}}
 
-// ConvertTypesGeometryToSQLGeometry basically makes a deep copy of sql.Geometry
-func ConvertTypesGeometryToSQLGeometry(g types.Geometry) interface{} {
-	switch inner := g.Inner.(type) {
-	case types.Point:
-		return ConvertTypesPointToSQLPoint(inner)
-	case types.LineString:
-		return ConvertTypesLineStringToSQLLineString(inner)
-	case types.Polygon:
-		return ConvertTypesPolygonToSQLPolygon(inner)
-	default:
-		panic("used an invalid type types.Geometry.Inner")
-	}
-}
-
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	// Check for null
@@ -58,13 +44,21 @@ func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 	// Expect a Geometry type, return a sql.Geometry
 	switch val := v.(type) {
 	case types.Geometry:
-		return ConvertTypesGeometryToSQLGeometry(val), nil
+		return types.ConvertTypesGeometryToSQLGeometry(val), nil
 	case types.Point:
-		return ConvertTypesPointToSQLPoint(val), nil
+		return types.ConvertTypesPointToSQLPoint(val), nil
 	case types.LineString:
-		return ConvertTypesLineStringToSQLLineString(val), nil
+		return types.ConvertTypesLineStringToSQLLineString(val), nil
 	case types.Polygon:
-		return ConvertTypesPolygonToSQLPolygon(val), nil
+		return types.ConvertTypesPolygonToSQLPolygon(val), nil
+	case types.MultiPoint:
+		return types.ConvertTypesMultiPointToSQLMultiPoint(val), nil
+	case types.MultiLineString:
+		return types.ConvertTypesMultiLineStringToSQLMultiLineString(val), nil
+	case types.MultiPolygon:
+		return types.ConvertTypesMultiPolygonToSQLMultiPolygon(val), nil
+	case types.GeomColl:
+		return types.ConvertTypesGeomCollToSQLGeomColl(val), nil
 	default:
 		return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 	}
@@ -89,6 +83,22 @@ func (ti *geometryType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecRea
 		if val, err = reader.ReadPolygon(); err != nil {
 			return nil, err
 		}
+	case types.MultiPointKind:
+		if val, err = reader.ReadMultiPoint(); err != nil {
+			return nil, err
+		}
+	case types.MultiLineStringKind:
+		if val, err = reader.ReadMultiLineString(); err != nil {
+			return nil, err
+		}
+	case types.MultiPolygonKind:
+		if val, err = reader.ReadMultiPolygon(); err != nil {
+			return nil, err
+		}
+	case types.GeometryCollectionKind:
+		if val, err = reader.ReadGeomColl(); err != nil {
+			return nil, err
+		}
 	case types.GeometryKind:
 		// Note: GeometryKind is no longer written
 		// included here for backward compatibility
@@ -104,20 +114,6 @@ func (ti *geometryType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecRea
 	return ti.ConvertNomsValueToValue(val)
 }
 
-func ConvertSQLGeometryToTypesGeometry(p interface{}) types.Value {
-	switch inner := p.(type) {
-	case sql.Point:
-		return ConvertSQLPointToTypesPoint(inner)
-	case sql.LineString:
-		return ConvertSQLLineStringToTypesLineString(inner)
-	case sql.Polygon:
-		return ConvertSQLPolygonToTypesPolygon(inner)
-	default:
-		panic("used an invalid type sql.Geometry.Inner")
-	}
-
-}
-
 // ConvertValueToNomsValue implements TypeInfo interface.
 func (ti *geometryType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	// Check for null
@@ -130,7 +126,7 @@ func (ti *geometryType) ConvertValueToNomsValue(ctx context.Context, vrw types.V
 	if err != nil {
 		return nil, err
 	}
-	return ConvertSQLGeometryToTypesGeometry(geom), nil
+	return types.ConvertSQLGeometryToTypesGeometry(geom), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -160,6 +156,14 @@ func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
 		return LineStringType.FormatValue(val)
 	case types.Polygon:
 		return PolygonType.FormatValue(val)
+	case types.MultiPoint:
+		return MultiPointType.FormatValue(val)
+	case types.MultiLineString:
+		return MultiLineStringType.FormatValue(val)
+	case types.MultiPolygon:
+		return MultiPolygonType.FormatValue(val)
+	case types.GeomColl:
+		return GeomCollType.FormatValue(val)
 	case types.Geometry:
 		switch inner := val.Inner.(type) {
 		case types.Point:
@@ -168,6 +172,14 @@ func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
 			return LineStringType.FormatValue(inner)
 		case types.Polygon:
 			return PolygonType.FormatValue(inner)
+		case types.MultiPoint:
+			return MultiPointType.FormatValue(inner)
+		case types.MultiLineString:
+			return MultiLineStringType.FormatValue(inner)
+		case types.MultiPolygon:
+			return MultiPolygonType.FormatValue(val)
+		case types.GeomColl:
+			return GeomCollType.FormatValue(val)
 		default:
 			return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
 		}
@@ -197,7 +209,10 @@ func (ti *geometryType) IsValid(v types.Value) bool {
 	case types.Geometry,
 		types.Point,
 		types.LineString,
-		types.Polygon:
+		types.Polygon,
+		types.MultiPoint,
+		types.MultiLineString,
+		types.MultiPolygon:
 		return true
 	default:
 		return false
@@ -243,6 +258,8 @@ func geometryTypeConverter(ctx context.Context, src *geometryType, destTi TypeIn
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geomcollType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *geometryType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
@@ -252,6 +269,12 @@ func geometryTypeConverter(ctx context.Context, src *geometryType, destTi TypeIn
 	case *jsonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *linestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multilinestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipolygonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *pointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)

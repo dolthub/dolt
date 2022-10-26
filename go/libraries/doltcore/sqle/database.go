@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"gopkg.in/src-d/go-errors.v1"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
@@ -361,6 +362,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if head == nil {
 			var err error
 			head, err = ds.GetHeadCommit(ctx, db.Name())
+
 			if err != nil {
 				return nil, false, err
 			}
@@ -465,6 +467,20 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		dt, found = dtables.NewMergeStatusTable(db.name), true
 	case doltdb.TagsTableName:
 		dt, found = dtables.NewTagsTable(ctx, db.ddb), true
+	case dtables.AccessTableName:
+		basCtx := branch_control.GetBranchAwareSession(ctx)
+		if basCtx != nil {
+			if controller := basCtx.GetController(); controller != nil {
+				dt, found = dtables.NewBranchControlTable(controller.Access), true
+			}
+		}
+	case dtables.NamespaceTableName:
+		basCtx := branch_control.GetBranchAwareSession(ctx)
+		if basCtx != nil {
+			if controller := basCtx.GetController(); controller != nil {
+				dt, found = dtables.NewBranchNamespaceControlTable(controller.Namespace), true
+			}
+		}
 	}
 	if found {
 		return dt, found, nil
@@ -502,7 +518,7 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 		return nil, nil, err
 	}
 
-	cmItr, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash)
+	cmItr, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -728,6 +744,9 @@ func (db Database) GetHeadRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 // DropTable drops the table with the name given.
 // The planner returns the correct case sensitive name in tableName
 func (db Database) DropTable(ctx *sql.Context, tableName string) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		return ErrSystemTableAlter.New(tableName)
 	}
@@ -827,6 +846,9 @@ func (db Database) removeTableFromAutoIncrementTracker(
 
 // CreateTable creates a table with the name and schema given.
 func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, collation sql.CollationID) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	if strings.ToLower(tableName) == doltdb.DocTableName {
 		// validate correct schema
 		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) {
@@ -938,6 +960,9 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 
 // RenameTable implements sql.TableRenamer
 func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	root, err := db.GetRoot(ctx)
 
 	if err != nil {
@@ -1152,15 +1177,24 @@ func (db Database) GetStoredProcedures(ctx *sql.Context) ([]sql.StoredProcedureD
 
 // SaveStoredProcedure implements sql.StoredProcedureDatabase.
 func (db Database) SaveStoredProcedure(ctx *sql.Context, spd sql.StoredProcedureDetails) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	return DoltProceduresAddProcedure(ctx, db, spd)
 }
 
 // DropStoredProcedure implements sql.StoredProcedureDatabase.
 func (db Database) DropStoredProcedure(ctx *sql.Context, name string) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	return DoltProceduresDropProcedure(ctx, db, name)
 }
 
 func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, definition string, created time.Time, existingErr error) (err error) {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
 	if err != nil {
 		return err
@@ -1212,6 +1246,9 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	stbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return err

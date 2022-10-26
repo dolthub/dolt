@@ -19,6 +19,7 @@ import (
 	mysql "database/sql"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -39,7 +40,10 @@ import (
 )
 
 const (
-	sqlClientDualFlag = "dual"
+	sqlClientDualFlag     = "dual"
+	sqlClientQueryFlag    = "query"
+	sqlClientUseDbFlag    = "use-db"
+	sqlClientResultFormat = "result-format"
 )
 
 var sqlClientDocs = cli.CommandDocumentationContent{
@@ -52,10 +56,13 @@ Similar to {{.EmphasisLeft}}dolt sql-server{{.EmphasisRight}}, this command may 
 	Synopsis: []string{
 		"[-d] --config {{.LessThan}}file{{.GreaterThan}}",
 		"[-d] [-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--data-dir {{.LessThan}}directory{{.GreaterThan}}] [--query-parallelism {{.LessThan}}num-go-routines{{.GreaterThan}}] [-r]",
+		"-q {{.LessThan}}string{{.GreaterThan}} [--use-db {{.LessThan}}db_name{{.GreaterThan}}] [--result-format {{.LessThan}}format{{.GreaterThan}}] [-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}]",
 	},
 }
 
-type SqlClientCmd struct{}
+type SqlClientCmd struct {
+	VersionStr string
+}
 
 var _ cli.Command = SqlClientCmd{}
 
@@ -75,6 +82,10 @@ func (cmd SqlClientCmd) Docs() *cli.CommandDocumentation {
 func (cmd SqlClientCmd) ArgParser() *argparser.ArgParser {
 	ap := SqlServerCmd{}.ArgParser()
 	ap.SupportsFlag(sqlClientDualFlag, "d", "Causes this command to spawn a dolt server that is automatically connected to.")
+	ap.SupportsString(sqlClientQueryFlag, "q", "string", "Sends the given query to the server and immediately exits.")
+	ap.SupportsString(sqlClientUseDbFlag, "", "db_name", fmt.Sprintf("Selects the given database before executing a query. "+
+		"By default, uses the current folder's name. Must be used with the --%s flag.", sqlClientQueryFlag))
+	ap.SupportsString(sqlClientResultFormat, "", "format", fmt.Sprintf("Returns the results in the given format. Must be used with the --%s flag.", sqlClientQueryFlag))
 	return ap
 }
 
@@ -110,6 +121,18 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			cli.PrintErrln(err.Error())
 			return 1
 		}
+		if apr.Contains(sqlClientQueryFlag) {
+			cli.PrintErrln(color.RedString(fmt.Sprintf("--%s flag may not be used with --%s", sqlClientDualFlag, sqlClientQueryFlag)))
+			return 1
+		}
+		if apr.Contains(sqlClientUseDbFlag) {
+			cli.PrintErrln(color.RedString(fmt.Sprintf("--%s flag may not be used with --%s", sqlClientDualFlag, sqlClientUseDbFlag)))
+			return 1
+		}
+		if apr.Contains(sqlClientResultFormat) {
+			cli.PrintErrln(color.RedString(fmt.Sprintf("--%s flag may not be used with --%s", sqlClientDualFlag, sqlClientResultFormat)))
+			return 1
+		}
 
 		serverConfig, err = GetServerConfig(dEnv, apr)
 		if err != nil {
@@ -126,7 +149,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 
 		serverController = NewServerController()
 		go func() {
-			_, _ = Serve(ctx, SqlServerCmd{}.VersionStr, serverConfig, serverController, dEnv)
+			_, _ = Serve(ctx, cmd.VersionStr, serverConfig, serverController, dEnv)
 		}()
 		err = serverController.WaitForStart()
 		if err != nil {
@@ -142,7 +165,44 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 		}
 	}
 
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig, ""), nil)
+	query, hasQuery := apr.GetValue(sqlClientQueryFlag)
+	dbToUse, hasUseDb := apr.GetValue(sqlClientUseDbFlag)
+	resultFormat, hasResultFormat := apr.GetValue(sqlClientResultFormat)
+	if !hasQuery && hasUseDb {
+		cli.PrintErrln(color.RedString(fmt.Sprintf("--%s may only be used with --%s", sqlClientUseDbFlag, sqlClientQueryFlag)))
+		return 1
+	} else if !hasQuery && hasResultFormat {
+		cli.PrintErrln(color.RedString(fmt.Sprintf("--%s may only be used with --%s", sqlClientUseDbFlag, sqlClientResultFormat)))
+		return 1
+	}
+	if !hasUseDb && hasQuery {
+		directory, err := os.Getwd()
+		if err != nil {
+			cli.PrintErrln(color.RedString(err.Error()))
+			return 1
+		}
+		dbToUse = filepath.Base(directory)
+	}
+	format := engine.FormatTabular
+	if hasResultFormat {
+		switch strings.ToLower(resultFormat) {
+		case "tabular":
+			format = engine.FormatTabular
+		case "csv":
+			format = engine.FormatCsv
+		case "json":
+			format = engine.FormatJson
+		case "null":
+			format = engine.FormatNull
+		case "vertical":
+			format = engine.FormatVertical
+		default:
+			cli.PrintErrln(color.RedString(fmt.Sprintf("unknown --%s value: %s", sqlClientResultFormat, resultFormat)))
+			return 1
+		}
+	}
+
+	conn, err := dbr.Open("mysql", ConnectionString(serverConfig, dbToUse), nil)
 	if err != nil {
 		cli.PrintErrln(err.Error())
 		serverController.StopServer()
@@ -153,6 +213,34 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return 1
 	}
 	_ = conn.Ping()
+
+	if hasQuery {
+		defer conn.Close()
+		rows, err := conn.Query(query)
+		if err != nil {
+			cli.PrintErrln(err.Error())
+			return 1
+		}
+		if rows != nil {
+			sqlCtx := sql.NewContext(ctx)
+			wrapper, err := NewMysqlRowWrapper(rows)
+			if err != nil {
+				cli.PrintErrln(err.Error())
+				return 1
+			}
+			defer wrapper.Close(sqlCtx)
+			if wrapper.HasMoreRows() {
+				err = engine.PrettyPrintResults(sqlCtx, format, wrapper.Schema(), wrapper)
+				if err != nil {
+					cli.PrintErrln(err.Error())
+					return 1
+				}
+			}
+		}
+
+		return 0
+	}
+
 	ticker := time.NewTicker(time.Second * 10)
 	go func() {
 		for range ticker.C {

@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -60,6 +61,9 @@ func DoDoltRevert(ctx *sql.Context, row sql.Row, args []string) (int, error) {
 	ddb, ok := dSess.GetDoltDB(ctx, dbName)
 	if !ok {
 		return 1, fmt.Errorf("dolt database could not be found")
+	}
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return 1, err
 	}
 	workingSet, err := dSess.WorkingSet(ctx, dbName)
 	if err != nil {

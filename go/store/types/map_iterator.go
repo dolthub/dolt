@@ -136,3 +136,49 @@ func (m Map) RangeIterator(ctx context.Context, startIdx, endIdx uint64) (MapTup
 
 	return &mapRangeIter{collItr: collItr}, nil
 }
+
+// LimitingMapIterator iterates |iter| only returning up to |limit| results.
+type LimitingMapIterator struct {
+	limit uint64
+	cnt   uint64
+	iter  MapIterator
+}
+
+var _ MapIterator = (*LimitingMapIterator)(nil)
+
+// NewLimitingMapIterator returns a *LimitingMapIterator.
+func NewLimitingMapIterator(iter MapIterator, limit uint64) *LimitingMapIterator {
+	return &LimitingMapIterator{
+		iter:  iter,
+		limit: limit,
+	}
+}
+
+// Next implements MapIterator.
+func (l *LimitingMapIterator) Next(ctx context.Context) (k, v Value, err error) {
+	if l.cnt == l.limit {
+		return nil, nil, nil
+	}
+	k, v, err = l.iter.Next(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	if k == nil {
+		return nil, nil, nil
+	}
+	l.cnt++
+	return
+}
+
+// NextTuple implements MapIterator.
+func (l *LimitingMapIterator) NextTuple(ctx context.Context) (k, v Tuple, err error) {
+	if l.cnt == l.limit {
+		return Tuple{}, Tuple{}, io.EOF
+	}
+	k, v, err = l.iter.NextTuple(ctx)
+	if err != nil {
+		return Tuple{}, Tuple{}, err
+	}
+	l.cnt++
+	return
+}

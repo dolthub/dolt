@@ -1,0 +1,52 @@
+name: sql-server Integration Tests
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'go/**'
+      - 'integration-tests/go-sql-server-driver/**'
+
+concurrency:
+  group: ci-sql-server-integration-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: sql-server Integration Tests
+    defaults:
+      run:
+        shell: bash
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os:  [ ubuntu-22.04, macos-latest ] # [ ubuntu-22.04, macos-latest, windows-latest ]
+        dolt_fmt: [ "__DOLT__", "__LD_1__" ]
+        exclude:
+          - os: "macos-latest"
+            dolt_fmt: ["__LD_1__" ]
+          - os: "windows-latest"
+            dolt_fmt: ["__LD_1__" ]
+    steps:
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v3
+        with:
+          go-version: ^1.19
+        id: go
+      - name: Create CI Bin
+        run: |
+          mkdir -p ./.ci_bin
+      - uses: actions/checkout@v3
+      - name: Install Dolt
+        working-directory: ./go
+        run: |
+          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/
+      - name: Test all
+        env:
+          DOLT_FMT: ${{ matrix.dolt_fmt }}
+        run: |
+          if [ -n "$DOLT_FMT" ]; then export DOLT_DEFAULT_BIN_FORMAT="$DOLT_FMT"; fi
+          export DOLT_BIN_PATH="$(pwd)/../../.ci_bin/dolt"
+          go test .
+        working-directory: ./integration-tests/go-sql-server-driver

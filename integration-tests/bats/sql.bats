@@ -1915,19 +1915,6 @@ SQL
     [[ "$output" =~ "table not found: poop" ]] || false
 }
 
-@test "sql: explain simple select query" {
-    run dolt sql -q "explain select * from one_pk"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "plan" ]] || false
-    [[ "$output" =~ "one_pk" ]] || false
-}
-
-@test "sql: explain simple join" {
-    run dolt sql -q "explain select op.pk,pk1,pk2 from one_pk,two_pk join one_pk as op on op.pk=pk1"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "IndexedJoin" ]] || false
-}
-
 @test "sql: replace count" {
     skip "right now we always count a replace as a delete and insert when we shouldn't"
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v BIGINT);"
@@ -2192,6 +2179,19 @@ SQL
     run dolt sql -r csv -q "SELECT * from test where col_a = 'd'"
     [ $status -eq 0 ]
     [[ "$output" =~ "d,1,1" ]] || false
+}
+
+@test "sql: duplicate key inserts on table with primary and secondary indexes" {
+    dolt sql -q "CREATE TABLE test (pk int primary key, uk int unique key, i int);"
+    dolt sql -q "INSERT INTO test VALUES(0,0,0);"
+    run dolt sql -r csv -q "SELECT * from test"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0,0" ]] || false
+    run dolt sql -q "INSERT INTO test (pk,uk) VALUES(1,0) on duplicate key update i = 99;"
+    [ $status -eq 0 ]
+    run dolt sql -r csv -q "SELECT * from test"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0,99" ]] || false
 }
 
 @test "sql: at commit" {
@@ -2556,12 +2556,22 @@ SQL
 
 @test "sql: --file param" {
     cat > script.sql <<SQL
+    drop table if exists test;
     create table test (a int primary key, b int);
     insert into test values (1,1), (2,2);
 SQL
     
     run dolt sql --file script.sql
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "Processed 100.0% of the file" ]] || false
+
+    run dolt sql -q "select * from test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false
+    
+    run dolt sql --batch --file script.sql
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Processed 100.0% of the file" ]] || false
 
     run dolt sql -q "select * from test" -r csv
     [ "$status" -eq 0 ]
