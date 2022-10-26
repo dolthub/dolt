@@ -1,6 +1,6 @@
 # Dolt is Git for Data!
 
-Dolt is a SQL database that you can fork, clone, branch, merge, push
+[Dolt](https://doltdb.com) is a SQL database that you can fork, clone, branch, merge, push
 and pull just like a Git repository. Connect to Dolt just like any
 MySQL database to run queries or update the data using SQL
 commands. Use the command line interface to import CSV files, commit
