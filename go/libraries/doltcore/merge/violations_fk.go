@@ -363,7 +363,7 @@ func nomsChildFkConstraintViolations(
 ) (*doltdb.Table, bool, error) {
 	foundViolations := false
 	var postParentIndexTags, postChildIndexTags []uint64
-	if postParent.Index.Name() == "PRIMARY" {
+	if postParent.Index.Name() == "" {
 		postParentIndexTags = foreignKey.ReferencedTableColumns
 		postChildIndexTags = foreignKey.TableColumns
 	} else {
@@ -504,7 +504,7 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName st
 	}
 
 	// Create Primary Key Index
-	if idxName == "PRIMARY" {
+	if idxName == "" {
 		pkCols := sch.GetPKCols()
 		pkIdxColl := schema.NewIndexCollection(pkCols, pkCols)
 		pkIdxProps := schema.IndexProperties{
@@ -512,7 +512,7 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName st
 			IsUserDefined: false,
 			Comment:       "",
 		}
-		pkIdx := schema.NewIndex("PRIMARY", pkCols.SortedTags, pkCols.SortedTags, pkIdxColl, pkIdxProps)
+		pkIdx := schema.NewIndex("", pkCols.SortedTags, pkCols.SortedTags, pkIdxColl, pkIdxProps)
 		return &constraintViolationsLoadedTable{
 			TableName:   trueTblName,
 			Table:       tbl,

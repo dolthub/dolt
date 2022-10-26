@@ -1989,11 +1989,9 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 		if err != nil {
 			return err
 		}
+		// check if foreign key is prefix of primary key
 		if !ok {
-			// check if foreign key is prefix of primary key
-			if isPkPrefix(sqlFk.Columns, t.sch.GetPKCols().GetColumns()) {
-				tableIndexName = "PRIMARY"
-			} else {
+			if !isPkPrefix(sqlFk.Columns, t.sch.GetPKCols().GetColumns()) {
 				idxReturn, err := creation.CreateIndex(ctx, tbl, "", sqlFk.Columns, false, false, "", editor.Options{
 					ForeignKeyChecksDisabled: true,
 					Deaf:                     t.opts.Deaf,
@@ -2018,11 +2016,9 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 		if err != nil {
 			return err
 		}
+		// check if foreign key is prefix of primary key
 		if !ok {
-			// check if foreign key is prefix of primary key
-			if isPkPrefix(sqlFk.ParentColumns, refSch.GetPKCols().GetColumns()) {
-				refTableIndexName = "PRIMARY"
-			} else {
+			if !isPkPrefix(sqlFk.ParentColumns, refSch.GetPKCols().GetColumns()) {
 				var refPkTags []uint64
 				for _, i := range refSch.GetPkOrdinals() {
 					refPkTags = append(refPkTags, refSch.GetAllCols().GetByIndex(i).Tag)
