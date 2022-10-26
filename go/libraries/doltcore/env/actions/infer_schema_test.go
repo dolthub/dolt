@@ -49,14 +49,14 @@ func TestLeastPermissiveType(t *testing.T) {
 		{"lower bool", "true", 0.0, typeinfo.BoolType},
 		{"upper bool", "FALSE", 0.0, typeinfo.BoolType},
 		{"yes", "yes", 0.0, typeinfo.StringDefaultType},
-		{"one", "1", 0.0, typeinfo.Uint32Type},
+		{"one", "1", 0.0, typeinfo.Int32Type},
 		{"negative one", "-1", 0.0, typeinfo.Int32Type},
 		{"negative one point 0", "-1.0", 0.0, typeinfo.Float32Type},
 		{"negative one point 0 with FT of 0.1", "-1.0", 0.1, typeinfo.Int32Type},
 		{"negative one point one with FT of 0.1", "-1.1", 0.1, typeinfo.Float32Type},
 		{"negative one point 999 with FT of 1.0", "-1.999", 1.0, typeinfo.Int32Type},
 		{"zero point zero zero zero zero", "0.0000", 0.0, typeinfo.Float32Type},
-		{"max int", strconv.FormatUint(math.MaxInt64, 10), 0.0, typeinfo.Uint64Type},
+		{"max int", strconv.FormatUint(math.MaxInt64, 10), 0.0, typeinfo.Int64Type},
 		{"bigger than max int", strconv.FormatUint(math.MaxUint64, 10) + "0", 0.0, typeinfo.StringDefaultType},
 	}
 

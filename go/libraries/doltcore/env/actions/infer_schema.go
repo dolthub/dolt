@@ -215,32 +215,15 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 		return ti
 	}
 
-	if strings.Contains(strVal, "-") {
-		i, err := strconv.ParseInt(strVal, 10, 64)
-		if err != nil {
-			return typeinfo.UnknownType
-		}
-		if i >= math.MinInt32 && i <= math.MaxInt32 {
-			return typeinfo.Int32Type
-		} else {
-			return typeinfo.Int64Type
-		}
+	// always parse as signed int
+	i, err := strconv.ParseInt(strVal, 10, 64)
+	if err != nil {
+		return typeinfo.UnknownType
+	}
+	if i >= math.MinInt32 && i <= math.MaxInt32 {
+		return typeinfo.Int32Type
 	} else {
-		ui, err := strconv.ParseUint(strVal, 10, 64)
-		if err != nil {
-			return typeinfo.UnknownType
-		}
-
-		// handle leading zero case
-		if len(strVal) > 1 && strVal[0] == '0' {
-			return typeinfo.StringDefaultType
-		}
-
-		if ui <= math.MaxUint32 {
-			return typeinfo.Uint32Type
-		} else {
-			return typeinfo.Uint64Type
-		}
+		return typeinfo.Int64Type
 	}
 }
 
@@ -283,14 +266,13 @@ func chronoTypes() []typeinfo.TypeInfo {
 func numericTypes() []typeinfo.TypeInfo {
 	// prefer:
 	//   ints over floats
-	//   unsigned over signed
 	//   smaller over larger
 	return []typeinfo.TypeInfo{
 		//typeinfo.Uint8Type,
 		//typeinfo.Uint16Type,
 		//typeinfo.Uint24Type,
-		typeinfo.Uint32Type,
-		typeinfo.Uint64Type,
+		//typeinfo.Uint32Type,
+		//typeinfo.Uint64Type,
 
 		//typeinfo.Int8Type,
 		//typeinfo.Int16Type,
@@ -395,12 +377,6 @@ func findCommonNumericType(nums typeInfoSet) typeinfo.TypeInfo {
 		typeinfo.Int24Type,
 		typeinfo.Int16Type,
 		typeinfo.Int8Type,
-
-		typeinfo.Uint64Type,
-		typeinfo.Uint32Type,
-		typeinfo.Uint24Type,
-		typeinfo.Uint16Type,
-		typeinfo.Uint8Type,
 	}
 	for _, numType := range mostToLeast {
 		if setHasType(nums, numType) {

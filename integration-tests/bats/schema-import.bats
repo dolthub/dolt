@@ -82,7 +82,7 @@ teardown() {
     [[ "$output" =~ "\`string\` varchar(16383)" ]] || false
     [[ "$output" =~ "\`boolean\` tinyint" ]] || false
     [[ "$output" =~ "\`float\` float" ]] || false
-    [[ "$output" =~ "\`uint\` int unsigned" ]] || false
+    [[ "$output" =~ "\`uint\` int" ]] || false
     [[ "$output" =~ "\`uuid\` char(36) CHARACTER SET ascii COLLATE ascii_bin" ]] || false
 }
 
