@@ -275,10 +275,43 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 		return nil, nil
 	}
 
+	// `dolt diff from_commit..to_commit ...tables`
+	if strings.Contains(args[0], "..") {
+		refs := strings.Split(args[0], "..")
+		var fromRoot *doltdb.RootValue
+		var toRoot *doltdb.RootValue
+		ok := true
+
+		if len(refs[0]) > 0 {
+			if fromRoot, ok = maybeResolve(ctx, dEnv, refs[0]); !ok {
+				return nil, fmt.Errorf("from ref in two dot diff must be valid ref: %s", refs[0])
+			}
+		}
+
+		if len(refs[1]) > 0 {
+			if toRoot, ok = maybeResolve(ctx, dEnv, refs[1]); !ok {
+				return nil, fmt.Errorf("to ref in two dot diff must be valid ref: %s", refs[1])
+			}
+		}
+
+		if fromRoot != nil {
+			dArgs.fromRoot = fromRoot
+			dArgs.fromRef = refs[0]
+		}
+
+		if toRoot != nil {
+			dArgs.toRoot = toRoot
+			dArgs.toRef = refs[1]
+		}
+
+		return args[1:], nil
+	}
+
 	// treat the first arg as a ref spec
 	fromRoot, ok := maybeResolve(ctx, dEnv, args[0])
 
 	// if it doesn't resolve, treat it as a table name
+	// `dolt diff table`
 	if !ok {
 		return args, nil
 	}
