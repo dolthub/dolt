@@ -73,3 +73,67 @@ Valid commands for dolt are
 ```
 
 Learn more about Dolt use cases, configuration and guides to use dolt on our [documentation page](https://docs.dolthub.com/introduction/what-is-dolt).
+
+# How to use this image
+
+This image is for Dolt SQL Server, which is similar to MySQL Docker Image. Running this image without any arguments 
+is equivalent to running `dolt sql-server --host 0.0.0.0 --port 3306` command locally. The reason for persisted host
+and port is that it allows user to connect to the server inside the container from the local host system through
+port-mapping.
+
+To check out supported options for `dolt sql-server`, you can run the image with `--help` flag.
+
+```shell
+$ docker run dolthub/dolt-sql-server:latest --help
+```
+
+### Connect to the server in the container from the host system
+
+To be able to connect to the server running in the container, we need to set up a port to connect to locally that
+maps to the port in the container. The host is set to `0.0.0.0` for accepting connections to any available network 
+interface.
+
+```shell
+$ docker run -p 3307:3306 dolthub/dolt-sql-server:latest
+```
+
+Now, you have a running server in the container, and we can connect to it by specifying our host, 3307 for the port, and root for the user, 
+since that's the default user and we didn't provide any configuration when running the server.
+
+For example, you can run mysql client to connect to the server like this:
+```shell
+$ mysql --host 0.0.0.0 -P 3307 -u root
+```
+
+### Define configuration for the server
+
+You can either define server configuration as commandline arguments, or you can use yaml configuration file.
+For the commandline argument definition you can simply define arguments after whole docker command. 
+
+```shell
+$ docker run -p 3307:3306 dolthub/dolt-sql-server:latest -l debug --no-auto-commit
+```
+
+Or, we can mount a local directory to specific directories in the container.
+The special directory for server configuration is `/etc/dolt/servercfg.d/`. You can only have one `.yaml` configuration
+file in this directory. If there are multiple, the default configuration will be used. If the location of
+configuration file was `/Users/jennifer/docker/server/config.yaml`, this is how to use `-v` flag which mounts
+`/Users/jennifer/docker/server/` local directory to `/etc/dolt/servercfg.d/` directory in the container.
+
+```shell
+$ docker run -p 3307:3306 -v /Users/jennifer/docker/server/:/etc/dolt/servercfg.d/ dolthub/dolt-sql-server:latest
+```
+
+The Dolt configuration and data directories can be configured similarly: 
+
+- The dolt configuration directory is `/etc/dolt/doltcfg.d/`
+There should be one `.json` dolt configuration file. It will replace the global dolt configuration file in the 
+container.
+
+- We set the location of where data to be stored to default location at `/var/lib/dolt/` in the container. 
+The data directory does not need to be defined in server configuration for container, but to store the data 
+on the host system, it can also be mounted to this default location.
+
+```shell
+$ docker run -p 3307:3306 -v /Users/jennifer/docker/databases/:/var/lib/dolt/ dolthub/dolt-sql-server:latest
+```
