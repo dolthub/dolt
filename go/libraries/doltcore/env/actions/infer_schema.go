@@ -218,10 +218,12 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 
 	// always parse as signed int
 	i, err := strconv.ParseInt(strVal, 10, 64)
+
 	// use string for out of range
 	if errors.Is(err, strconv.ErrRange) {
 		return typeinfo.StringDefaultType
 	}
+
 	if err != nil {
 		return typeinfo.UnknownType
 	}

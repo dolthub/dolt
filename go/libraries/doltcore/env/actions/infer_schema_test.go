@@ -143,14 +143,6 @@ func testFindCommonType(t *testing.T) {
 			expType: typeinfo.Int64Type,
 		},
 		{
-			name: "all unsigned ints",
-			inferSet: typeInfoSet{
-				typeinfo.Uint32Type: {},
-				typeinfo.Uint64Type: {},
-			},
-			expType: typeinfo.Uint64Type,
-		},
-		{
 			name: "all floats",
 			inferSet: typeInfoSet{
 				typeinfo.Float32Type: {},
@@ -159,35 +151,31 @@ func testFindCommonType(t *testing.T) {
 			expType: typeinfo.Float64Type,
 		},
 		{
-			name: "32 bit ints and uints",
+			name: "32 bit ints",
 			inferSet: typeInfoSet{
-				typeinfo.Int32Type:  {},
-				typeinfo.Uint32Type: {},
+				typeinfo.Int32Type: {},
 			},
 			expType: typeinfo.Int32Type,
 		},
 		{
-			name: "64 bit ints and uints",
+			name: "64 bit ints",
 			inferSet: typeInfoSet{
-				typeinfo.Int64Type:  {},
-				typeinfo.Uint64Type: {},
+				typeinfo.Int64Type: {},
 			},
 			expType: typeinfo.Int64Type,
 		},
 		{
-			name: "32 bit ints, uints, and floats",
+			name: "32 bit ints and floats",
 			inferSet: typeInfoSet{
 				typeinfo.Int32Type:   {},
-				typeinfo.Uint32Type:  {},
 				typeinfo.Float32Type: {},
 			},
 			expType: typeinfo.Float32Type,
 		},
 		{
-			name: "64 bit ints, uints, and floats",
+			name: "64 bit ints and floats",
 			inferSet: typeInfoSet{
 				typeinfo.Int64Type:   {},
-				typeinfo.Uint64Type:  {},
 				typeinfo.Float64Type: {},
 			},
 			expType: typeinfo.Float64Type,
@@ -228,11 +216,6 @@ func testFindCommonType(t *testing.T) {
 
 func testFindCommonTypeFromSingleType(t *testing.T) {
 	allTypes := []typeinfo.TypeInfo{
-		typeinfo.Uint8Type,
-		typeinfo.Uint16Type,
-		typeinfo.Uint24Type,
-		typeinfo.Uint32Type,
-		typeinfo.Uint64Type,
 		typeinfo.Int8Type,
 		typeinfo.Int16Type,
 		typeinfo.Int24Type,
