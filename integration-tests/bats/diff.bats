@@ -147,7 +147,22 @@ teardown() {
     [[ ! "$output" =~ "- | 1" ]] || false
     [[ "$output" =~ "+ | 2" ]] || false
 
+    run dolt diff $(dolt merge-base branch1 HEAD)
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff --merge-base branch1 
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
     run dolt diff branch1...main
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff --merge-base branch1 main
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "- | 1" ]] || false
     [[ "$output" =~ "+ | 2" ]] || false
@@ -157,7 +172,12 @@ teardown() {
     [[ "$output" =~ "+ | 1" ]] || false
     [[ ! "$output" =~ "- | 2" ]] || false
 
-    run dolt diff main...branch1 test
+    run dolt diff --merge-base main branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ ! "$output" =~ "- | 2" ]] || false
+
+    run dolt diff --merge-base main branch1 test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "+ | 1" ]] || false
     [[ ! "$output" =~ "- | 2" ]] || false

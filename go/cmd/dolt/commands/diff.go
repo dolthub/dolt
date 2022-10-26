@@ -61,6 +61,7 @@ const (
 	SQLFlag     = "sql"
 	CachedFlag  = "cached"
 	SkinnyFlag  = "skinny"
+	MergeBase   = "merge-base"
 )
 
 var diffDocs = cli.CommandDocumentationContent{
@@ -132,6 +133,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
 	ap.SupportsFlag(CachedFlag, "c", "Show only the unstaged data changes.")
 	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
+	ap.SupportsFlag(MergeBase, "", "Uses merge base of <from_commit> and <to_commit> (or HEAD if not supplied) as <from_commit>")
 	return ap
 }
 
@@ -202,7 +204,7 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	dArgs.limit, _ = apr.GetInt(limitParam)
 	dArgs.where = apr.GetValueOrDefault(whereParam, "")
 
-	tableNames, err := dArgs.applyDiffRoots(ctx, dEnv, apr.Args, apr.Contains(CachedFlag))
+	tableNames, err := dArgs.applyDiffRoots(ctx, dEnv, apr.Args, apr.Contains(CachedFlag), apr.Contains(MergeBase))
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +245,7 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 
 // applyDiffRoots applies the appropriate |from| and |to| root values to the receiver and returns the table names
 // (if any) given to the command.
-func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCached bool) ([]string, error) {
+func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCached, useMergeBase bool) ([]string, error) {
 	headRoot, err := dEnv.HeadRoot(ctx)
 	if err != nil {
 		return nil, err
@@ -271,14 +273,98 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 	}
 
 	if len(args) == 0 {
+		if useMergeBase {
+			return nil, fmt.Errorf("Must supply at least one revision when using --merge-base flag")
+		}
 		// `dolt diff`
 		return nil, nil
 	}
 
+	if strings.Contains(args[0], "..") {
+		if useMergeBase {
+			return nil, fmt.Errorf("Cannot use `..` or `...` with --merge-base flag")
+		}
+		err = dArgs.applyDotRevisions(ctx, dEnv, args)
+		if err != nil {
+			return nil, err
+		}
+		return args[1:], err
+	}
+
+	// treat the first arg as a ref spec
+	fromRoot, ok := maybeResolve(ctx, dEnv, args[0])
+
+	// if it doesn't resolve, treat it as a table name
+	if !ok {
+		// `dolt diff table`
+		if useMergeBase {
+			return nil, fmt.Errorf("Must supply at least one revision when using --merge-base flag")
+		}
+		return args, nil
+	}
+
+	dArgs.fromRoot = fromRoot
+	dArgs.fromRef = args[0]
+
+	if len(args) == 1 {
+		// `dolt diff from_commit`
+		if useMergeBase {
+			err := dArgs.applyMergeBase(ctx, dEnv, args[0], "HEAD")
+			if err != nil {
+				return nil, err
+			}
+		}
+		return nil, nil
+	}
+
+	toRoot, ok := maybeResolve(ctx, dEnv, args[1])
+
+	if !ok {
+		// `dolt diff from_commit ...tables`
+		if useMergeBase {
+			err := dArgs.applyMergeBase(ctx, dEnv, args[0], "HEAD")
+			if err != nil {
+				return nil, err
+			}
+		}
+		return args[1:], nil
+	}
+
+	dArgs.toRoot = toRoot
+	dArgs.toRef = args[1]
+
+	if useMergeBase {
+		err := dArgs.applyMergeBase(ctx, dEnv, args[0], args[1])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// `dolt diff from_commit to_commit ...tables`
+	return args[2:], nil
+}
+
+func (dArgs *diffArgs) applyMergeBase(ctx context.Context, dEnv *env.DoltEnv, leftStr, rightStr string) error {
+	mergeBaseStr, err := getMergeBaseFromStrings(ctx, dEnv, leftStr, rightStr)
+	if err != nil {
+		return err
+	}
+
+	fromRoot, ok := maybeResolve(ctx, dEnv, mergeBaseStr)
+	if !ok {
+		return fmt.Errorf("merge base invalid %s", mergeBaseStr)
+	}
+
+	dArgs.fromRoot = fromRoot
+	dArgs.fromRef = mergeBaseStr
+
+	return nil
+}
+
+func (dArgs *diffArgs) applyDotRevisions(ctx context.Context, dEnv *env.DoltEnv, args []string) error {
 	// `dolt diff from_commit...to_commit ...tables`
 	if strings.Contains(args[0], "...") {
 		refs := strings.Split(args[0], "...")
-		var fromRoot *doltdb.RootValue
 		var toRoot *doltdb.RootValue
 		ok := true
 
@@ -289,28 +375,21 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 				right = "HEAD"
 			}
 
-			mergeBaseStr, verr := getMergeBaseFromStrings(ctx, dEnv, refs[0], right)
-			if verr != nil {
-				return nil, verr
+			err := dArgs.applyMergeBase(ctx, dEnv, refs[0], right)
+			if err != nil {
+				return err
 			}
-
-			if fromRoot, ok = maybeResolve(ctx, dEnv, mergeBaseStr); !ok {
-				return nil, fmt.Errorf("merge base invalid %s", mergeBaseStr)
-			}
-
-			dArgs.fromRoot = fromRoot
-			dArgs.fromRef = mergeBaseStr
 		}
 
 		if len(refs[1]) > 0 {
 			if toRoot, ok = maybeResolve(ctx, dEnv, refs[1]); !ok {
-				return nil, fmt.Errorf("to ref in two dot diff must be valid ref: %s", refs[1])
+				return fmt.Errorf("to ref in two dot diff must be valid ref: %s", refs[1])
 			}
 			dArgs.toRoot = toRoot
 			dArgs.toRef = refs[1]
 		}
 
-		return args[1:], nil
+		return nil
 	}
 
 	// `dolt diff from_commit..to_commit ...tables`
@@ -322,7 +401,7 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 
 		if len(refs[0]) > 0 {
 			if fromRoot, ok = maybeResolve(ctx, dEnv, refs[0]); !ok {
-				return nil, fmt.Errorf("from ref in two dot diff must be valid ref: %s", refs[0])
+				return fmt.Errorf("from ref in two dot diff must be valid ref: %s", refs[0])
 			}
 			dArgs.fromRoot = fromRoot
 			dArgs.fromRef = refs[0]
@@ -330,44 +409,16 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 
 		if len(refs[1]) > 0 {
 			if toRoot, ok = maybeResolve(ctx, dEnv, refs[1]); !ok {
-				return nil, fmt.Errorf("to ref in two dot diff must be valid ref: %s", refs[1])
+				return fmt.Errorf("to ref in two dot diff must be valid ref: %s", refs[1])
 			}
 			dArgs.toRoot = toRoot
 			dArgs.toRef = refs[1]
 		}
 
-		return args[1:], nil
+		return nil
 	}
 
-	// treat the first arg as a ref spec
-	fromRoot, ok := maybeResolve(ctx, dEnv, args[0])
-
-	// if it doesn't resolve, treat it as a table name
-	// `dolt diff table`
-	if !ok {
-		return args, nil
-	}
-
-	dArgs.fromRoot = fromRoot
-	dArgs.fromRef = args[0]
-
-	if len(args) == 1 {
-		// `dolt diff from_commit`
-		return nil, nil
-	}
-
-	toRoot, ok := maybeResolve(ctx, dEnv, args[1])
-
-	if !ok {
-		// `dolt diff from_commit ...tables`
-		return args[1:], nil
-	}
-
-	dArgs.toRoot = toRoot
-	dArgs.toRef = args[1]
-
-	// `dolt diff from_commit to_commit ...tables`
-	return args[2:], nil
+	return nil
 }
 
 // todo: distinguish between non-existent CommitSpec and other errors, don't assume non-existent
