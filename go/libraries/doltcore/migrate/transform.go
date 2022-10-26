@@ -481,10 +481,19 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 		}
 	}
 
-	if patched {
-		return schema.SchemaFromCols(schema.NewColCollection(cols...))
+	if !patched {
+		return existing, nil
 	}
-	return existing, nil
+
+	sch, err := schema.SchemaFromCols(schema.NewColCollection(cols...))
+	if err != nil {
+		return nil, err
+	}
+
+	if err = sch.SetPkOrdinals(existing.GetPkOrdinals()); err != nil {
+		return nil, err
+	}
+	return sch, nil
 }
 
 func migrateIndexSet(
