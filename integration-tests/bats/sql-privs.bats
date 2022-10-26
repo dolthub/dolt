@@ -613,49 +613,67 @@ behavior:
      [[ $output =~ t1 ]] || false
      
      # Revoke works as expected
-     server_query test_db 1 dolt "" "revoke select on test_db.* from test"
-     server_query test_db 1 test "" "show tables" "" 1
+     dolt sql-client -P $PORT -u dolt --use-db test_db -q "revoke select on test_db.* from test"
+     run dolt sql-client -P $PORT -u test --use-db test_db -q "show tables"
+     [ $status -ne 0 ]
 
      # Host in privileges is respected
-     server_query test_db 1 dolt "" "drop user test"
-     server_query test_db 1 dolt "" "create user test@'127.0.0.1'"
-     server_query test_db 1 dolt "" "grant select on test_db.* to test@'127.0.0.1'"
-     server_query test_db 1 test "" "show tables" "Tables_in_test_db\nt1"
-     server_query test_db 1 dolt "" "drop user test@'127.0.0.1'"
-     server_query test_db 1 dolt "" "create user test@'10.10.10.10'"
-     server_query test_db 1 dolt "" "grant select on test_db.* to test@'10.10.10.10'"
-     server_query test_db 1 test "" "show tables" "" 1
+     dolt sql-client -P $PORT -u dolt --use-db test_db -q "drop user test"
+     dolt sql-client -P $PORT -u dolt --use-db test_db -q "create user test@'127.0.0.1'"
+     dolt sql-client -P $PORT -u dolt --use-db test_db -q "grant select on test_db.* to test@'127.0.0.1'"
+     run dolt sql-client -P $PORT -u test -H 127.0.0.1 --use-db test_db -q "show tables"
+     [ $status -eq 0 ]
+     [[ $output =~ t1 ]] || false
+
+     
+     dolt sql-client -P $PORT -u dolt --use-db test_db -q "drop user test@'127.0.0.1'"
+     dolt sql-client -P $PORT -u dolt --use-db test_db -q "create user test@'10.10.10.10'"
+     dolt sql-client -P $PORT -u dolt --use-db test_db -q "grant select on test_db.* to test@'10.10.10.10'"
+     run dolt sql-client -P $PORT -u test --use-db test_db -q "show tables"
+     [ $status -ne 0 ]
 }
 
 @test "sql-privs: creating user identified by password" {
      make_test_repo
      start_sql_server
 
-     server_query test_db 1 dolt "" "create user test identified by 'test'" ""
-     server_query test_db 1 dolt "" "grant select on mysql.user to test" ""
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "create user test identified by 'test'"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "grant select on mysql.user to test"
 
      # Should not be able to connect to test_db
-     server_query test_db 1 test test "select user from mysql.user order by user" "" 1
+     run dolt sql-client -P $PORT -u test -p test --use-db test_db -q "select user from mysql.user order by user"
+     [ $status -ne 0 ]
 
-     server_query "" 1 test test "select user from mysql.user order by user" "User\ndolt\ntest"
+     run dolt sql-client -P $PORT -u test -p test --use-db '' -q "select user from mysql.user"
+     [ $status -eq 0 ]
+     [[ $output =~ dolt ]] || false
+     [[ $output =~ test ]] || false
 
      # Bad password can't connect
-     server_query "" 1 test bad "select user from mysql.user order by user" "" 1
+     run dolt sql-client -P $PORT -u test -p bad --use-db '' -q "select user from mysql.user order by user"
+     [ $status -ne 0 ]
      
      # Should only see mysql database
-     server_query "" 1 test test "show databases" "Database\nmysql"
+     run dolt sql-client -P $PORT -u test -p test --use-db '' -q "show databases"
+     [ $status -eq 0 ]	
+     [[ $output =~ mysql ]] || false
+     ! [[ $output =~ test_db ]] || false
 }
 
 @test "sql-privs: deleting user prevents access by that user" {
      make_test_repo
      start_sql_server
 
-     server_query test_db 1 dolt "" "create user test"
-     server_query test_db 1 dolt "" "grant select on test_db.* to test" ""
+     dolt sql-client -P $PORT -u dolt --use-db test_db -q "create table t1(c1 int)"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "create user test"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "grant select on test_db.* to test"
+     run dolt sql-client -P $PORT -u test --use-db test_db -q "show tables"
+     [ $status -eq 0 ]
+     echo $output
+     [[ $output =~ t1 ]] || false
 
-     server_query test_db 1 test "" "show tables" ""
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "drop user test"
 
-     server_query test_db 1 dolt "" "drop user test"
-
-     server_query test_db 1 test "" "show tables" "" 1
+     run dolt sql-client -P $PORT -u test --use-db test_db -q "show tables"
+     [ $status -ne 0 ]
 }
