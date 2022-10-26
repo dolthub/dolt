@@ -97,8 +97,8 @@ interface.
 $ docker run -p 3307:3306 dolthub/dolt-sql-server:latest
 ```
 
-Now, you have running server in the container, and we can connect it by specifying any host, port as 3307 and user 
-as root since it is set to default because we did not define configurations when running the server.
+Now, you have a running server in the container, and we can connect to it by specifying our host, 3307 for the port, and root for the user, 
+since that's the default user and we didn't provide any configuration when running the server.
 
 For example, you can run mysql client to connect to the server like this:
 ```shell
@@ -124,7 +124,7 @@ configuration file was `/Users/jennifer/docker/server/config.yaml`, this is how 
 $ docker run -p 3307:3306 -v /Users/jennifer/docker/server/:/etc/dolt/servercfg.d/ dolthub/dolt-sql-server:latest
 ```
 
-Similar cases for dolt configuration and data directory. 
+The Dolt configuration and data directories can be configured similarly: 
 
 - The dolt configuration directory is `/etc/dolt/doltcfg.d/`
 There should be one `.json` dolt configuration file. It will replace the global dolt configuration file in the 
