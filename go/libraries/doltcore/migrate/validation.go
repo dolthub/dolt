@@ -52,7 +52,7 @@ func validateBranchMapping(ctx context.Context, old, new *doltdb.DoltDB) error {
 	return nil
 }
 
-func validateRootValue(ctx context.Context, old, new *doltdb.RootValue) error {
+func validateRootValue(ctx context.Context, oldParent, old, new *doltdb.RootValue) error {
 	names, err := old.GetTableNames(ctx)
 	if err != nil {
 		return err
@@ -65,6 +65,25 @@ func validateRootValue(ctx context.Context, old, new *doltdb.RootValue) error {
 		if !ok {
 			h, _ := old.HashOf()
 			return fmt.Errorf("expected to find table %s in root value (%s)", name, h.String())
+		}
+
+		// Skip tables that haven't changed
+		op, ok, err := oldParent.GetTable(ctx, name)
+		if err != nil {
+			return err
+		}
+		if ok {
+			oldHash, err := o.HashOf()
+			if err != nil {
+				return err
+			}
+			oldParentHash, err := op.HashOf()
+			if err != nil {
+				return err
+			}
+			if oldHash.Equal(oldParentHash) {
+				continue
+			}
 		}
 
 		n, ok, err := new.GetTable(ctx, name)
