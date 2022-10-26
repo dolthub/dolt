@@ -91,6 +91,112 @@ teardown() {
     [[ "$output" =~ "+ | 0" ]] || false
 }
 
+@test "diff: two and three dot diff" {
+    dolt checkout main
+    dolt sql -q 'insert into test values (0,0,0,0,0,0)'
+    dolt add .
+    dolt commit -m table
+    dolt checkout -b branch1
+    dolt sql -q 'insert into test values (1,1,1,1,1,1)'
+    dolt add .
+    dolt commit -m row
+    dolt checkout main
+    dolt sql -q 'insert into test values (2,2,2,2,2,2)'
+    dolt add .
+    dolt commit -m newrow
+
+    # Two dot shows all changes between branches
+    run dolt diff branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff branch1..
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff branch1..main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff branch1 main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff ..branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ "$output" =~ "- | 2" ]] || false
+
+    run dolt diff main..branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ "$output" =~ "- | 2" ]] || false
+
+    run dolt diff main branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ "$output" =~ "- | 2" ]] || false
+
+    # Three dot shows changes between common ancestor and branch
+    run dolt diff branch1...
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff branch1...main
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff main...branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ ! "$output" =~ "- | 2" ]] || false
+
+    run dolt diff main...branch1 test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ ! "$output" =~ "- | 2" ]] || false
+
+    run dolt diff $(dolt merge-base branch1 main) main
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff $(dolt merge-base main branch1) branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ ! "$output" =~ "- | 2" ]] || false
+
+    # Dots work with --summary
+    run dolt diff main..branch1 --summary
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1 Row Unmodified (50.00%)" ]] || false
+    [[ "$output" =~ "1 Row Added (50.00%)" ]] || false
+    [[ "$output" =~ "1 Row Deleted (50.00%)" ]] || false
+    [[ "$output" =~ "0 Rows Modified (0.00%)" ]] || false
+    [[ "$output" =~ "6 Cells Added (50.00%)" ]] || false
+    [[ "$output" =~ "6 Cells Deleted (50.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
+    [[ "$output" =~ "(2 Row Entries vs 2 Row Entries)" ]] || false
+
+    run dolt diff main...branch1 --summary
+    echo $output
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1 Row Unmodified (100.00%)" ]] || false
+    [[ "$output" =~ "1 Row Added (100.00%)" ]] || false
+    [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
+    [[ "$output" =~ "0 Rows Modified (0.00%)" ]] || false
+    [[ "$output" =~ "6 Cells Added (100.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
+    [[ "$output" =~ "(1 Row Entry vs 2 Row Entries)" ]] || false
+}
+
 @test "diff: data and schema changes" {
     dolt sql <<SQL
 drop table test;
@@ -283,6 +389,7 @@ EOF
     [ "$status" -ne 0 ]
     [[ "$output" =~ "table fake does not exist in either revision" ]] || false
 }
+
 
 @test "diff: with table and branch of the same name" {
     dolt sql -q 'create table dolomite (pk int not null primary key)'

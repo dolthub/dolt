@@ -275,6 +275,44 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 		return nil, nil
 	}
 
+	// `dolt diff from_commit...to_commit ...tables`
+	if strings.Contains(args[0], "...") {
+		refs := strings.Split(args[0], "...")
+		var fromRoot *doltdb.RootValue
+		var toRoot *doltdb.RootValue
+		ok := true
+
+		if len(refs[0]) > 0 {
+			right := refs[1]
+			// Use current HEAD if right side of `...` does not exist
+			if len(refs[1]) == 0 {
+				right = "HEAD"
+			}
+
+			mergeBaseStr, verr := getMergeBaseFromStrings(ctx, dEnv, refs[0], right)
+			if verr != nil {
+				return nil, verr
+			}
+
+			if fromRoot, ok = maybeResolve(ctx, dEnv, mergeBaseStr); !ok {
+				return nil, fmt.Errorf("merge base invalid %s", mergeBaseStr)
+			}
+
+			dArgs.fromRoot = fromRoot
+			dArgs.fromRef = mergeBaseStr
+		}
+
+		if len(refs[1]) > 0 {
+			if toRoot, ok = maybeResolve(ctx, dEnv, refs[1]); !ok {
+				return nil, fmt.Errorf("to ref in two dot diff must be valid ref: %s", refs[1])
+			}
+			dArgs.toRoot = toRoot
+			dArgs.toRef = refs[1]
+		}
+
+		return args[1:], nil
+	}
+
 	// `dolt diff from_commit..to_commit ...tables`
 	if strings.Contains(args[0], "..") {
 		refs := strings.Split(args[0], "..")
@@ -286,20 +324,14 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 			if fromRoot, ok = maybeResolve(ctx, dEnv, refs[0]); !ok {
 				return nil, fmt.Errorf("from ref in two dot diff must be valid ref: %s", refs[0])
 			}
+			dArgs.fromRoot = fromRoot
+			dArgs.fromRef = refs[0]
 		}
 
 		if len(refs[1]) > 0 {
 			if toRoot, ok = maybeResolve(ctx, dEnv, refs[1]); !ok {
 				return nil, fmt.Errorf("to ref in two dot diff must be valid ref: %s", refs[1])
 			}
-		}
-
-		if fromRoot != nil {
-			dArgs.fromRoot = fromRoot
-			dArgs.fromRef = refs[0]
-		}
-
-		if toRoot != nil {
 			dArgs.toRoot = toRoot
 			dArgs.toRef = refs[1]
 		}
