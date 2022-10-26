@@ -61,7 +61,6 @@ func InferColumnTypesFromTableReader(ctx context.Context, rd table.ReadCloser, a
 
 	var curr, prev row.Row
 	i := newInferrer(rd.GetSchema(), args)
-
 OUTER:
 	for j := 0; true; j++ {
 		var err error
@@ -130,10 +129,8 @@ func (inf *inferrer) inferColumnTypes() (*schema.ColCollection, error) {
 		col.TypeInfo = inferredTypes[tag]
 		col.Tag = schema.ReservedTagMin + tag
 
-		col.Constraints = []schema.ColConstraint{schema.NotNullConstraint{}}
-		if inf.nullable.Contains(tag) {
-			col.Constraints = []schema.ColConstraint(nil)
-		}
+		// for large imports, it is possible to miss all the null values, so we cannot accurately add not null constraint
+		col.Constraints = []schema.ColConstraint(nil)
 
 		cols = append(cols, col)
 		return false, nil
