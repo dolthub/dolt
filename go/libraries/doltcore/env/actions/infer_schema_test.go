@@ -371,7 +371,7 @@ func TestInferSchema(t *testing.T) {
 			},
 			map[string]typeinfo.TypeInfo{
 				"int":    typeinfo.Int32Type,
-				"uint":   typeinfo.Uint64Type,
+				"uint":   typeinfo.StringDefaultType,
 				"uuid":   typeinfo.UuidType,
 				"float":  typeinfo.Float32Type,
 				"bool":   typeinfo.BoolType,
@@ -387,7 +387,7 @@ func TestInferSchema(t *testing.T) {
 				floatThreshold: 0,
 			},
 			map[string]typeinfo.TypeInfo{
-				"mix":  typeinfo.Uint64Type,
+				"mix":  typeinfo.StringDefaultType,
 				"uuid": typeinfo.UuidType,
 			},
 			nil,
