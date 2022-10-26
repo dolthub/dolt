@@ -22,8 +22,10 @@ setup() {
 
 teardown() {
     stop_sql_server
+    # Added this sleep because it was leaving garbage without it.
+    sleep 1
+    rm -rf $BATS_TMPDIR/sql-server-test$$
     teardown_common
-    rm -r $DOLT_ROOT_PATH
 }
 
 @test "sql-server: server with no dbs yet should be able to clone" {
