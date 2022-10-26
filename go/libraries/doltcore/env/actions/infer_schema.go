@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+	"errors"
 	"io"
 	"math"
 	"strconv"
@@ -217,9 +218,19 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 
 	// always parse as signed int
 	i, err := strconv.ParseInt(strVal, 10, 64)
+	// use string for out of range
+	if errors.Is(err, strconv.ErrRange) {
+		return typeinfo.StringDefaultType
+	}
 	if err != nil {
 		return typeinfo.UnknownType
 	}
+
+	// handle leading zero case
+	if len(strVal) > 1 && strVal[0] == '0' {
+		return typeinfo.StringDefaultType
+	}
+
 	if i >= math.MinInt32 && i <= math.MaxInt32 {
 		return typeinfo.Int32Type
 	} else {

@@ -75,7 +75,7 @@ func TestLeastPermissiveNumericType(t *testing.T) {
 		floatThreshold float64
 		expType        typeinfo.TypeInfo
 	}{
-		{"zero", "0", 0.0, typeinfo.Uint32Type},
+		{"zero", "0", 0.0, typeinfo.Int32Type},
 		{"zero float", "0.0", 0.0, typeinfo.Float32Type},
 		{"zero float with floatThreshold of 0.1", "0.0", 0.1, typeinfo.Int32Type},
 		{"negative float", "-1.3451234", 0.0, typeinfo.Float32Type},
@@ -85,8 +85,8 @@ func TestLeastPermissiveNumericType(t *testing.T) {
 		{"all zeroes", "0000", 0.0, typeinfo.StringDefaultType},
 		{"leading zeroes", "01", 0.0, typeinfo.StringDefaultType},
 		{"negative int", "-1234", 0.0, typeinfo.Int32Type},
-		{"fits in uint64 but not int64", strconv.FormatUint(math.MaxUint64, 10), 0.0, typeinfo.Uint64Type},
-		{"negative less than math.MinInt64", "-" + strconv.FormatUint(math.MaxUint64, 10), 0.0, typeinfo.UnknownType},
+		{"fits in uint64 but not int64", strconv.FormatUint(math.MaxUint64, 10), 0.0, typeinfo.StringDefaultType},
+		{"negative less than math.MinInt64", "-" + strconv.FormatUint(math.MaxUint64, 10), 0.0, typeinfo.StringDefaultType},
 		{"math.MinInt64", strconv.FormatInt(math.MinInt64, 10), 0.0, typeinfo.Int64Type},
 	}
 
