@@ -21,7 +21,7 @@ teardown() {
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
-    [[ ! "$output" =~ "8e1og3l23515k2ag57rcurqt6btusl6h" ]] || false
+    [[ ! "$output" =~ "hc7v93mjpbfassljk9kdk48b1fntsn6a" ]] || false
 
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
@@ -29,7 +29,7 @@ teardown() {
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "8e1og3l23515k2ag57rcurqt6btusl6h" ]] || false
+    [[ "$output" =~ "hc7v93mjpbfassljk9kdk48b1fntsn6a" ]] || false
     [[ ! "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
 
     # validate TEXT migration
@@ -47,7 +47,7 @@ teardown() {
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
-    [[ ! "$output" =~ "8e1og3l23515k2ag57rcurqt6btusl6h" ]] || false
+    [[ ! "$output" =~ "hc7v93mjpbfassljk9kdk48b1fntsn6a" ]] || false
 
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
@@ -55,7 +55,7 @@ teardown() {
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "8e1og3l23515k2ag57rcurqt6btusl6h" ]] || false
+    [[ "$output" =~ "hc7v93mjpbfassljk9kdk48b1fntsn6a" ]] || false
     [[ ! "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
 
     # validate TEXT migration
@@ -72,7 +72,7 @@ teardown() {
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "u8s83gapv7ghnbmrtpm8q5es0dbl7lpd" ]] || false
-    [[ ! "$output" =~ "mebtqve3n7hgn565lp0gru3k82qoei67" ]] || false
+    [[ ! "$output" =~ "i3f3orlfmbjgqnst90c8r96jps7tdtv9" ]] || false
 
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
@@ -80,6 +80,6 @@ teardown() {
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "mebtqve3n7hgn565lp0gru3k82qoei67" ]] || false
+    [[ "$output" =~ "i3f3orlfmbjgqnst90c8r96jps7tdtv9" ]] || false
     [[ ! "$output" =~ "u8s83gapv7ghnbmrtpm8q5es0dbl7lpd" ]] || false
 }

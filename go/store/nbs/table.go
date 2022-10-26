@@ -238,33 +238,19 @@ type chunkReader interface {
 	Close() error
 }
 
-type chunkReadPlanner interface {
-	findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool, err error)
-	getManyAtOffsets(
-		ctx context.Context,
-		eg *errgroup.Group,
-		offsetRecords offsetRecSlice,
-		found func(context.Context, *chunks.Chunk),
-		stats *Stats,
-	) error
-	getManyCompressedAtOffsets(
-		ctx context.Context,
-		eg *errgroup.Group,
-		offsetRecords offsetRecSlice,
-		found func(context.Context, CompressedChunk),
-		stats *Stats,
-	) error
-}
-
 type chunkSource interface {
 	chunkReader
+
+	// hash returns the hash address of this chunkSource.
 	hash() (addr, error)
-	calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error)
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
 	reader(context.Context) (io.Reader, error)
+
 	// size returns the total size of the chunkSource: chunks, index, and footer
 	size() (uint64, error)
+
+	// index returns the tableIndex of this chunkSource.
 	index() (tableIndex, error)
 
 	// Clone returns a |chunkSource| with the same contents as the

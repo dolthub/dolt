@@ -289,35 +289,42 @@ func (ltf *LogTableFunction) invalidArgDetailsErr(expr sql.Expression, reason st
 }
 
 func (ltf *LogTableFunction) validateRevisionExpressions() error {
+	// We must convert the expressions to strings before making string comparisons
+	// For dolt_log('^main'), ltf.revisionExpr.String() = "'^main'"" and revisionStr = "^main"
+	revisionStr := ""
+	secondRevisionStr := ""
+
 	if ltf.revisionExpr != nil {
+		revisionStr = mustExpressionToString(ltf.ctx, ltf.revisionExpr)
 		if !sql.IsText(ltf.revisionExpr.Type()) {
 			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr.String())
 		}
-		if ltf.secondRevisionExpr == nil && strings.Contains(ltf.revisionExpr.String(), "^") {
+		if ltf.secondRevisionExpr == nil && strings.HasPrefix(revisionStr, "^") {
 			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "second revision must exist if first revision contains '^'")
 		}
-		if strings.Contains(ltf.revisionExpr.String(), "..") && strings.Contains(ltf.revisionExpr.String(), "^") {
+		if strings.Contains(revisionStr, "..") && strings.HasPrefix(revisionStr, "^") {
 			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "revision cannot contain both '..' and '^'")
 		}
 	}
 
 	if ltf.secondRevisionExpr != nil {
+		secondRevisionStr = mustExpressionToString(ltf.ctx, ltf.secondRevisionExpr)
 		if !sql.IsText(ltf.secondRevisionExpr.Type()) {
 			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.secondRevisionExpr.String())
 		}
-		if strings.Contains(ltf.secondRevisionExpr.String(), "..") {
+		if strings.Contains(secondRevisionStr, "..") {
 			return ltf.invalidArgDetailsErr(ltf.secondRevisionExpr, "second revision cannot contain '..'")
 		}
-		if strings.Contains(ltf.revisionExpr.String(), "..") {
+		if strings.Contains(revisionStr, "..") {
 			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "revision cannot contain '..' if second revision exists")
 		}
 	}
 
 	if ltf.revisionExpr != nil && ltf.secondRevisionExpr != nil {
-		if strings.Contains(ltf.revisionExpr.String(), "^") && strings.Contains(ltf.secondRevisionExpr.String(), "^") {
+		if strings.HasPrefix(revisionStr, "^") && strings.HasPrefix(secondRevisionStr, "^") {
 			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "both revisions cannot contain '^'")
 		}
-		if !strings.Contains(ltf.revisionExpr.String(), "^") && !strings.Contains(ltf.secondRevisionExpr.String(), "^") {
+		if !strings.HasPrefix(revisionStr, "^") && !strings.HasPrefix(secondRevisionStr, "^") {
 			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "one revision must contain '^' if two revisions provided")
 		}
 	}
@@ -326,16 +333,16 @@ func (ltf *LogTableFunction) validateRevisionExpressions() error {
 		if ltf.revisionExpr == nil && ltf.secondRevisionExpr == nil {
 			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "must have revision in order to use --not")
 		}
-		if ltf.revisionExpr != nil && (strings.Contains(ltf.revisionExpr.String(), "..") || strings.Contains(ltf.revisionExpr.String(), "^")) {
+		if ltf.revisionExpr != nil && (strings.Contains(revisionStr, "..") || strings.HasPrefix(revisionStr, "^")) {
 			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "cannot use --not if '..' or '^' present in revision")
 		}
-		if ltf.secondRevisionExpr != nil && strings.Contains(ltf.secondRevisionExpr.String(), "^") {
+		if ltf.secondRevisionExpr != nil && strings.HasPrefix(secondRevisionStr, "^") {
 			return ltf.invalidArgDetailsErr(ltf.secondRevisionExpr, "cannot use --not if '^' present in second revision")
 		}
 		if strings.Contains(ltf.notRevision, "..") {
 			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), fmt.Sprintf("%s - %s", ltf.notRevision, "--not revision cannot contain '..'"))
 		}
-		if strings.Contains(ltf.notRevision, "^") {
+		if strings.HasPrefix(ltf.notRevision, "^") {
 			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), fmt.Sprintf("%s - %s", ltf.notRevision, "--not revision cannot contain '^'"))
 		}
 	}
@@ -483,16 +490,33 @@ func (ltf *LogTableFunction) evaluateArguments() (string, string, error) {
 	return revisionValStr, excludingRevisionValStr, nil
 }
 
-// Gets revisionName and/or excludingRevisionName from sql expression
-func getRevisionsFromExpr(ctx *sql.Context, expr sql.Expression, canDot bool) (string, string, error) {
-	revisionVal, err := expr.Eval(ctx, nil)
+func mustExpressionToString(ctx *sql.Context, expr sql.Expression) string {
+	str, err := expressionToString(ctx, expr)
 	if err != nil {
-		return "", "", err
+		return ""
+	}
+	return str
+}
+
+func expressionToString(ctx *sql.Context, expr sql.Expression) (string, error) {
+	val, err := expr.Eval(ctx, nil)
+	if err != nil {
+		return "", err
 	}
 
-	revisionValStr, ok := revisionVal.(string)
+	valStr, ok := val.(string)
 	if !ok {
-		return "", "", fmt.Errorf("received '%v' when expecting revision string", revisionVal)
+		return "", fmt.Errorf("received '%v' when expecting string", val)
+	}
+
+	return valStr, nil
+}
+
+// Gets revisionName and/or excludingRevisionName from sql expression
+func getRevisionsFromExpr(ctx *sql.Context, expr sql.Expression, canDot bool) (string, string, error) {
+	revisionValStr, err := expressionToString(ctx, expr)
+	if err != nil {
+		return "", "", err
 	}
 
 	if canDot && strings.Contains(revisionValStr, "..") {
@@ -500,7 +524,7 @@ func getRevisionsFromExpr(ctx *sql.Context, expr sql.Expression, canDot bool) (s
 		return refs[1], refs[0], nil
 	}
 
-	if strings.Contains(revisionValStr, "^") {
+	if strings.HasPrefix(revisionValStr, "^") {
 		return "", strings.TrimPrefix(revisionValStr, "^"), nil
 	}
 

@@ -290,6 +290,78 @@ var BranchControlBlockTests = []BranchControlBlockTest{
 		Query:       "DROP PROCEDURE testabc;",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
 	},
+	// Dolt Procedures
+	{
+		Name: "DOLT_ADD",
+		SetUpScript: []string{
+			"INSERT INTO test VALUES (2, 2);",
+		},
+		Query:       "CALL DOLT_ADD('-A');",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{ // Normal DOLT_BRANCH is tested in BranchControlTests
+		Name:        "DOLT_BRANCH Force Copy",
+		Query:       "CALL DOLT_BRANCH('-f', '-c', 'main', 'other');",
+		ExpectedErr: branch_control.ErrCannotDeleteBranch,
+	},
+	{
+		Name: "DOLT_BRANCH Force Move",
+		SetUpScript: []string{
+			"INSERT INTO dolt_branch_control VALUES ('newother', 'testuser', 'localhost', 'write');",
+		},
+		Query:       "CALL DOLT_BRANCH('-f', '-m', 'other', 'newother');",
+		ExpectedErr: branch_control.ErrCannotDeleteBranch,
+	},
+	{
+		Name:        "DOLT_BRANCH Delete",
+		Query:       "CALL DOLT_BRANCH('-d', 'other');",
+		ExpectedErr: branch_control.ErrCannotDeleteBranch,
+	},
+	{
+		Name:        "DOLT_CLEAN",
+		Query:       "CALL DOLT_CLEAN();",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name: "DOLT_COMMIT",
+		SetUpScript: []string{
+			"INSERT INTO test VALUES (2, 2);",
+			"CALL DOLT_ADD('-A');",
+		},
+		Query:       "CALL DOLT_COMMIT('-m', 'message');",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "DOLT_CONFLICTS_RESOLVE",
+		Query:       "CALL DOLT_CONFLICTS_RESOLVE('--ours', '.');",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name: "DOLT_MERGE",
+		SetUpScript: []string{
+			"INSERT INTO test VALUES (2, 2);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'message');",
+			"CALL DOLT_CHECKOUT('other');",
+		},
+		Query:       "CALL DOLT_MERGE('main');",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "DOLT_RESET",
+		Query:       "CALL DOLT_RESET();",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "DOLT_REVERT",
+		Query:       "CALL DOLT_REVERT();",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "DOLT_VERIFY_CONSTRAINTS",
+		Query:       "CALL DOLT_VERIFY_CONSTRAINTS('-a');",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
 }
 
 var BranchControlTests = []BranchControlTest{
@@ -545,6 +617,43 @@ var BranchControlTests = []BranchControlTest{
 		},
 	},
 	{
+		Name: "Deleting middle entries works",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY);",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"INSERT INTO dolt_branch_control VALUES ('%', 'testuser', 'localhost_1', 'write');",
+			"INSERT INTO dolt_branch_control VALUES ('%', 'testuser', 'localhost_2', 'write');",
+			"INSERT INTO dolt_branch_control VALUES ('%', 'testuser', 'localhost', 'write');",
+			"INSERT INTO dolt_branch_control VALUES ('%', 'testuser', 'localhost_3', 'write');",
+			"INSERT INTO dolt_branch_control VALUES ('%', 'testuser', 'localhost_4', 'write');",
+			"INSERT INTO dolt_branch_control VALUES ('%', 'testuser', 'localhost_5', 'write');",
+			"DELETE FROM dolt_branch_control WHERE host IN ('localhost_2', 'localhost_3');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:  "testuser",
+				Host:  "localhost",
+				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
+				Expected: []sql.Row{
+					{"%", "testuser", "localhost_1", uint64(2)},
+					{"%", "testuser", "localhost", uint64(2)},
+					{"%", "testuser", "localhost_4", uint64(2)},
+					{"%", "testuser", "localhost_5", uint64(2)},
+				},
+			},
+			{
+				User:  "testuser",
+				Host:  "localhost",
+				Query: "INSERT INTO test VALUES (1);",
+				Expected: []sql.Row{
+					{sql.NewOkResult(1)},
+				},
+			},
+		},
+	},
+	{
 		Name: "Subset entries count as duplicates",
 		SetUpScript: []string{
 			"DELETE FROM dolt_branch_control WHERE user = '%';",
@@ -561,8 +670,7 @@ var BranchControlTests = []BranchControlTest{
 			},
 		},
 	},
-	//TODO: need to add this logic
-	/*{
+	{
 		Name: "Creating branch creates new entry",
 		SetUpScript: []string{
 			"DELETE FROM dolt_branch_control WHERE user = '%';",
@@ -571,35 +679,112 @@ var BranchControlTests = []BranchControlTest{
 		},
 		Assertions: []BranchControlTestAssertion{
 			{
-				User: "testuser",
-				Host: "localhost",
-				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
 				Expected: []sql.Row{},
 			},
 			{
-				User: "testuser",
-				Host: "localhost",
-				Query: "CALL DOLT_BRANCH('otherbranch');",
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_BRANCH('otherbranch');",
 				Expected: []sql.Row{{0}},
 			},
 			{
-				User: "testuser",
-				Host: "localhost",
+				User:  "testuser",
+				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
 				Expected: []sql.Row{
 					{"otherbranch", "testuser", "localhost", uint64(1)},
 				},
 			},
 		},
-	},*/
+	},
+	{
+		Name: "Renaming branch creates new entry",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"CALL DOLT_BRANCH('otherbranch');",
+			"INSERT INTO dolt_branch_control VALUES ('otherbranch', 'testuser', 'localhost', 'write');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:  "testuser",
+				Host:  "localhost",
+				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
+				Expected: []sql.Row{
+					{"otherbranch", "testuser", "localhost", uint64(2)},
+				},
+			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_BRANCH('-f', '-m', 'otherbranch', 'newbranch');",
+				ExpectedErr: branch_control.ErrCannotDeleteBranch,
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_BRANCH('-m', 'otherbranch', 'newbranch');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				User:  "testuser",
+				Host:  "localhost",
+				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
+				Expected: []sql.Row{
+					{"otherbranch", "testuser", "localhost", uint64(2)},
+					{"newbranch", "testuser", "localhost", uint64(1)},
+				},
+			},
+		},
+	},
+	{
+		Name: "Copying branch creates new entry",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"CALL DOLT_BRANCH('otherbranch');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
+				Expected: []sql.Row{},
+			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_BRANCH('-f', '-c', 'otherbranch', 'newbranch');",
+				ExpectedErr: branch_control.ErrCannotDeleteBranch,
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_BRANCH('-c', 'otherbranch', 'newbranch');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				User:  "testuser",
+				Host:  "localhost",
+				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
+				Expected: []sql.Row{
+					{"newbranch", "testuser", "localhost", uint64(1)},
+				},
+			},
+		},
+	},
 }
 
 func TestBranchControl(t *testing.T) {
-	t.Skip("Branch control isn't globally enabled yet, so tests would fail")
+	branch_control.SetEnabled(true)
 	for _, test := range BranchControlTests {
 		harness := newDoltHarness(t)
 		t.Run(test.Name, func(t *testing.T) {
-			branch_control.Reset()
 			engine, err := harness.NewEngine(t)
 			require.NoError(t, err)
 			defer engine.Close()
@@ -648,11 +833,10 @@ func TestBranchControl(t *testing.T) {
 }
 
 func TestBranchControlBlocks(t *testing.T) {
-	t.Skip("Branch control isn't globally enabled yet, so tests would fail")
+	branch_control.SetEnabled(true)
 	for _, test := range BranchControlBlockTests {
 		harness := newDoltHarness(t)
 		t.Run(test.Name, func(t *testing.T) {
-			branch_control.Reset()
 			engine, err := harness.NewEngine(t)
 			require.NoError(t, err)
 			defer engine.Close()
@@ -674,8 +858,8 @@ func TestBranchControlBlocks(t *testing.T) {
 				Address: "localhost",
 			})
 			enginetest.AssertErrWithCtx(t, engine, harness, userCtx, test.Query, test.ExpectedErr)
-			addUserQuery := "INSERT INTO dolt_branch_control VALUES ('main', 'testuser', 'localhost', 'write');"
-			addUserQueryResults := []sql.Row{{sql.NewOkResult(1)}}
+			addUserQuery := "INSERT INTO dolt_branch_control VALUES ('main', 'testuser', 'localhost', 'write'), ('other', 'testuser', 'localhost', 'write');"
+			addUserQueryResults := []sql.Row{{sql.NewOkResult(2)}}
 			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
 			sch, iter, err := engine.Query(userCtx, test.Query)
 			if err == nil {

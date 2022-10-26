@@ -24,6 +24,7 @@ package nbs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -136,20 +137,6 @@ func (ts tableSet) get(ctx context.Context, h addr, stats *Stats) ([]byte, error
 func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (remaining bool, err error) {
 	f := func(css chunkSources) bool {
 		for _, haver := range css {
-			if rp, ok := haver.(chunkReadPlanner); ok {
-				offsets, remaining, err := rp.findOffsets(reqs)
-				if err != nil {
-					return true
-				}
-				err = rp.getManyAtOffsets(ctx, eg, offsets, found, stats)
-				if err != nil {
-					return true
-				}
-				if !remaining {
-					return false
-				}
-				continue
-			}
 			remaining, err = haver.getMany(ctx, eg, reqs, found, stats)
 			if err != nil {
 				return true
@@ -167,25 +154,6 @@ func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRe
 func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (remaining bool, err error) {
 	f := func(css chunkSources) bool {
 		for _, haver := range css {
-			if rp, ok := haver.(chunkReadPlanner); ok {
-				offsets, remaining, err := rp.findOffsets(reqs)
-				if err != nil {
-					return true
-				}
-				if len(offsets) > 0 {
-					err = rp.getManyCompressedAtOffsets(ctx, eg, offsets, found, stats)
-					if err != nil {
-						return true
-					}
-				}
-
-				if !remaining {
-					return false
-				}
-
-				continue
-			}
-
 			remaining, err = haver.getManyCompressed(ctx, eg, reqs, found, stats)
 			if err != nil {
 				return true
@@ -199,44 +167,6 @@ func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, re
 	}
 
 	return f(ts.novel) && err == nil && f(ts.upstream), err
-}
-
-func (ts tableSet) calcReads(reqs []getRecord, blockSize uint64) (reads int, split, remaining bool, err error) {
-	f := func(css chunkSources) (int, bool, bool, error) {
-		reads, split := 0, false
-		for _, haver := range css {
-			rds, rmn, err := haver.calcReads(reqs, blockSize)
-
-			if err != nil {
-				return 0, false, false, err
-			}
-
-			reads += rds
-			if !rmn {
-				return reads, split, false, nil
-			}
-			split = true
-		}
-		return reads, split, true, nil
-	}
-	reads, split, remaining, err = f(ts.novel)
-
-	if err != nil {
-		return 0, false, false, err
-	}
-
-	if remaining {
-		var rds int
-		rds, split, remaining, err = f(ts.upstream)
-
-		if err != nil {
-			return 0, false, false, err
-		}
-
-		reads += rds
-	}
-
-	return reads, split, remaining, nil
 }
 
 func (ts tableSet) count() (uint32, error) {
@@ -575,4 +505,30 @@ func (ts tableSet) ToSpecs() ([]tableSpec, error) {
 		tableSpecs = append(tableSpecs, tableSpec{h, cnt})
 	}
 	return tableSpecs, nil
+}
+
+func tableSetCalcReads(ts tableSet, reqs []getRecord, blockSize uint64) (reads int, split, remaining bool, err error) {
+	all := append(ts.novel, ts.upstream...)
+	for _, tbl := range all {
+		rdr, ok := tbl.(*fileTableReader)
+		if !ok {
+			h, _ := tbl.hash()
+			err = fmt.Errorf("chunkSource %s is not a fileTableReader", h.String())
+			return
+		}
+
+		var n int
+		var more bool
+		n, more, err = rdr.calcReads(reqs, blockSize)
+		if err != nil {
+			return 0, false, false, err
+		}
+
+		reads += n
+		if !more {
+			break
+		}
+		split = true
+	}
+	return
 }

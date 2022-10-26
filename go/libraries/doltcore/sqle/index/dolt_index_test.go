@@ -1051,7 +1051,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			expectedRows := convertSqlRowToInt64(test.expectedRows)
 
 			exprs := idx.Expressions()
-			sqlIndex := sql.NewIndexBuilder(ctx, idx)
+			sqlIndex := sql.NewIndexBuilder(idx)
 			for i := range test.greaterThanOrEqual {
 				sqlIndex = sqlIndex.GreaterOrEqual(ctx, exprs[i], test.greaterThanOrEqual[i]).LessOrEqual(ctx, exprs[i], test.lessThanOrEqual[i])
 			}
@@ -1286,7 +1286,7 @@ func requireUnorderedRowsEqual(t *testing.T, s sql.Schema, rows1, rows2 []sql.Ro
 
 func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys []interface{}, expectedRows []sql.Row, idx index.DoltIndex, cmp indexComp) {
 	exprs := idx.Expressions()
-	builder := sql.NewIndexBuilder(sql.NewEmptyContext(), idx)
+	builder := sql.NewIndexBuilder(idx)
 	for i, key := range keys {
 		switch cmp {
 		case indexComp_Eq:
