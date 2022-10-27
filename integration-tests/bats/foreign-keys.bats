@@ -1971,7 +1971,7 @@ SQL
     # the prefix key should not be unique
     run dolt sql -q "show create table parent"
     [ $status -eq 0 ]
-    [[ $output =~ "KEY \`b\` (\`b\`)" ]] || false
+    [[ ! $output =~ "KEY \`b\` (\`b\`)" ]] || false
     [[ ! $output =~ "UNIQUE" ]] || false
 
     run dolt sql -q "show create table child"
