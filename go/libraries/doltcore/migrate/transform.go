@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"golang.org/x/sync/errgroup"
@@ -28,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
