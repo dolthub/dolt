@@ -72,11 +72,17 @@ Show changes between the working and staged tables, changes between the working 
 {{.EmphasisLeft}}dolt diff [--options] [<tables>...]{{.EmphasisRight}}
    This form is to view the changes you made relative to the staging area for the next commit. In other words, the differences are what you could tell Dolt to further add but you still haven't. You can stage these changes by using dolt add.
 
-{{.EmphasisLeft}}dolt diff [--options] <commit> [<tables>...]{{.EmphasisRight}}
-   This form is to view the changes you have in your working tables relative to the named {{.LessThan}}commit{{.GreaterThan}}. You can use HEAD to compare it with the latest commit, or a branch name to compare with the tip of a different branch.
+{{.EmphasisLeft}}dolt diff [--options] [--merge-base] <commit> [<tables>...]{{.EmphasisRight}}
+   This form is to view the changes you have in your working tables relative to the named {{.LessThan}}commit{{.GreaterThan}}. You can use HEAD to compare it with the latest commit, or a branch name to compare with the tip of a different branch. If {{.EmphasisLeft}}--merge-base{{.EmphasisRight}} is given, instead of using {{.LessThan}}commit{{.GreaterThan}}, use the merge base of {{.LessThan}}commit{{.GreaterThan}} and HEAD. {{.EmphasisLeft}}dolt diff --merge-base A{{.EmphasisRight}} is equivalent to {{.EmphasisLeft}}dolt diff $(dolt merge-base A HEAD){{.EmphasisRight}}.
 
-{{.EmphasisLeft}}dolt diff [--options] <commit> <commit> [<tables>...]{{.EmphasisRight}}
-   This is to view the changes between two arbitrary {{.EmphasisLeft}}commit{{.EmphasisRight}}.
+{{.EmphasisLeft}}dolt diff [--options] [--merge-base] <commit> <commit> [<tables>...]{{.EmphasisRight}}
+   This is to view the changes between two arbitrary {{.EmphasisLeft}}commit{{.EmphasisRight}}. If {{.EmphasisLeft}}--merge-base{{.EmphasisRight} is given, use the merge base of the two commits for the "before" side. {{.EmphasisLeft}}dolt diff --merge-base A B{{.EmphasisRight}} is equivalent to {{.EmphasisLeft}}dolt diff $(dolt merge-base A B) B{{.EmphasisRight}}.
+
+{{.EmphasisLeft}}dolt diff [--options] <commit>..<commit> [<tables>...]{{.EmphasisRight}}
+   This is synonymous to the above form (without the ..) to view the changes between two arbitrary {{.EmphasisLeft}}commit{{.EmphasisRight}}.
+
+{{.EmphasisLeft}}dolt diff [--options] <commit>...<commit> [<tables>...]{{.EmphasisRight}}
+   This is to view the changes on the branch containing and up to the second {{.LessThan}}commit{{.GreaterThan}}, starting at a common ancestor of both {{.LessThan}}commit{{.GreaterThan}}. {{.EmphasisLeft}}dolt diff A...B{{.EmphasisRight}} is equivalent to {{.EmphasisLeft}}dolt diff $(dolt merge-base A B) B{{.EmphasisRight}} and {{.EmphasisLeft}}dolt diff --merge-base A B{{.EmphasisRight}. You can omit any one of {{.LessThan}}commit{{.GreaterThan}}, which has the same effect as using HEAD instead.
 
 The diffs displayed can be limited to show the first N by providing the parameter {{.EmphasisLeft}}--limit N{{.EmphasisRight}} where {{.EmphasisLeft}}N{{.EmphasisRight}} is the number of diffs to display.
 
@@ -133,7 +139,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
 	ap.SupportsFlag(CachedFlag, "c", "Show only the unstaged data changes.")
 	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
-	ap.SupportsFlag(MergeBase, "", "Uses merge base of <from_commit> and <to_commit> (or HEAD if not supplied) as <from_commit>")
+	ap.SupportsFlag(MergeBase, "", "Uses merge base of {{.LessThan}}from_commit{{.GreaterThan}} and {{.LessThan}}to_commit{{.GreaterThan}} (or HEAD if not supplied) as {{.LessThan}}from_commit{{.GreaterThan}}")
 	return ap
 }
 
@@ -320,7 +326,7 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 	toRoot, ok := maybeResolve(ctx, dEnv, args[1])
 
 	if !ok {
-		// `dolt diff from_commit ...tables`
+		// `dolt diff from_commit [...tables]`
 		if useMergeBase {
 			err := dArgs.applyMergeBase(ctx, dEnv, args[0], "HEAD")
 			if err != nil {
@@ -340,10 +346,12 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 		}
 	}
 
-	// `dolt diff from_commit to_commit ...tables`
+	// `dolt diff from_commit to_commit [...tables]`
 	return args[2:], nil
 }
 
+// applyMergeBase applies the merge base of two revisions to the |from| root
+// values.
 func (dArgs *diffArgs) applyMergeBase(ctx context.Context, dEnv *env.DoltEnv, leftStr, rightStr string) error {
 	mergeBaseStr, err := getMergeBaseFromStrings(ctx, dEnv, leftStr, rightStr)
 	if err != nil {
@@ -361,8 +369,10 @@ func (dArgs *diffArgs) applyMergeBase(ctx context.Context, dEnv *env.DoltEnv, le
 	return nil
 }
 
+// applyDotRevisions applies the appropriate |from| and |to| root values to the
+// receiver for arguments containing `..` or `...`
 func (dArgs *diffArgs) applyDotRevisions(ctx context.Context, dEnv *env.DoltEnv, args []string) error {
-	// `dolt diff from_commit...to_commit ...tables`
+	// `dolt diff from_commit...to_commit [...tables]`
 	if strings.Contains(args[0], "...") {
 		refs := strings.Split(args[0], "...")
 		var toRoot *doltdb.RootValue
@@ -392,7 +402,7 @@ func (dArgs *diffArgs) applyDotRevisions(ctx context.Context, dEnv *env.DoltEnv,
 		return nil
 	}
 
-	// `dolt diff from_commit..to_commit ...tables`
+	// `dolt diff from_commit..to_commit [...tables]`
 	if strings.Contains(args[0], "..") {
 		refs := strings.Split(args[0], "..")
 		var fromRoot *doltdb.RootValue

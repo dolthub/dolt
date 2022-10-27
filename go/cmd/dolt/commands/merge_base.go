@@ -89,6 +89,8 @@ func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []stri
 	return 0
 }
 
+// getMergeBaseFromStrings resolves two revisions and returns the merge base
+// commit hash string
 func getMergeBaseFromStrings(ctx context.Context, dEnv *env.DoltEnv, leftStr, rightStr string) (string, errhand.VerboseError) {
 	left, verr := ResolveCommitWithVErr(dEnv, leftStr)
 	if verr != nil {
