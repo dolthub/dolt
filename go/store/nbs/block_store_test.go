@@ -194,7 +194,7 @@ func (suite *BlockStoreSuite) TestChunkStorePutMoreThanMemTable() {
 	if suite.putCountFn != nil {
 		suite.Equal(2, suite.putCountFn())
 	}
-	specs, err := suite.store.tables.ToSpecs()
+	specs, err := suite.store.tables.toSpecs()
 	suite.NoError(err)
 	suite.Len(specs, 2)
 }
@@ -415,22 +415,15 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 
 func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	stats := &Stats{}
-	assertContainAll := func(t *testing.T, store chunks.ChunkStore, srcs ...chunkSource) {
-		rdrs := make(chunkReaderGroup, len(srcs))
-		for i, src := range srcs {
-			c, err := src.Clone()
+	assertContainAll := func(t *testing.T, store chunks.ChunkStore, sources ...chunkSource) {
+		ctx := context.Background()
+		for _, src := range sources {
+			err := extractAllChunks(ctx, src, func(rec extractRecord) {
+				ok, err := store.Has(context.Background(), hash.Hash(rec.a))
+				require.NoError(t, err)
+				assert.True(t, ok)
+			})
 			require.NoError(t, err)
-			rdrs[i] = c
-		}
-		chunkChan := make(chan extractRecord, mustUint32(rdrs.count()))
-		err := rdrs.extract(context.Background(), chunkChan)
-		require.NoError(t, err)
-		close(chunkChan)
-
-		for rec := range chunkChan {
-			ok, err := store.Has(context.Background(), hash.Hash(rec.a))
-			require.NoError(t, err)
-			assert.True(t, ok)
 		}
 	}
 
@@ -509,7 +502,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		assert.True(t, ok)
 		assertContainAll(t, smallTableStore, srcs...)
 		for _, src := range srcs {
-			err := src.Close()
+			err := src.close()
 			require.NoError(t, err)
 		}
 	})
@@ -546,7 +539,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		assert.True(t, ok)
 		assertContainAll(t, smallTableStore, srcs...)
 		for _, src := range srcs {
-			err := src.Close()
+			err := src.close()
 			require.NoError(t, err)
 		}
 	})

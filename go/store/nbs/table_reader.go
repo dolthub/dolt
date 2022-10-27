@@ -654,11 +654,11 @@ func (tr tableReader) size() (uint64, error) {
 	return i.TableFileSize(), nil
 }
 
-func (tr tableReader) Close() error {
+func (tr tableReader) close() error {
 	return tr.tableIndex.Close()
 }
 
-func (tr tableReader) Clone() (tableReader, error) {
+func (tr tableReader) clone() (tableReader, error) {
 	ti, err := tr.tableIndex.Clone()
 	if err != nil {
 		return tableReader{}, err
