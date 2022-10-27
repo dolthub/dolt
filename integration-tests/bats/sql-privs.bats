@@ -111,6 +111,7 @@ behavior:
 
     dolt sql-server --port=$PORT --config server.yaml --user cmddolt &
     SERVER_PID=$!
+    sleep 1
 
     server_query test_db 1 cmddolt "" "select user from mysql.user order by user" "User\ncmddolt"
 }
@@ -135,6 +136,7 @@ behavior:
 
     dolt sql-server --port=$PORT --config server.yaml --user cmddolt &
     SERVER_PID=$!
+    sleep 1
 
     server_query test_db 1 cmddolt "" "select user from mysql.user order by user" "User\ncmddolt"
 }
