@@ -1897,19 +1897,6 @@ func (t *AlterableDoltTable) RenameIndex(ctx *sql.Context, fromIndexName string,
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-func isPkPrefix(fkColNames []string, pkCols []schema.Column) bool {
-	// can't be a prefix if it's longer
-	if len(fkColNames) > len(pkCols) {
-		return false
-	}
-	for i, fkColName := range fkColNames {
-		if strings.ToLower(fkColName) != strings.ToLower(pkCols[i].Name) {
-			return false
-		}
-	}
-	return true
-}
-
 // AddForeignKey implements sql.ForeignKeyTable
 func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKeyConstraint) error {
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
@@ -1989,66 +1976,16 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 		if err != nil {
 			return err
 		}
-		// check if foreign key is prefix of primary key
-		if !ok {
-			if !isPkPrefix(sqlFk.Columns, t.sch.GetPKCols().GetColumns()) {
-				idxReturn, err := creation.CreateIndex(ctx, tbl, "", sqlFk.Columns, false, false, "", editor.Options{
-					ForeignKeyChecksDisabled: true,
-					Deaf:                     t.opts.Deaf,
-					Tempdir:                  t.opts.Tempdir,
-				})
-				if err != nil {
-					return err
-				}
-				tableIndex = idxReturn.NewIndex
-				tbl = idxReturn.NewTable
-				root, err = root.PutTable(ctx, t.tableName, idxReturn.NewTable)
-				if sqlFk.IsSelfReferential() {
-					refTbl = idxReturn.NewTable
-				}
-				tableIndexName = tableIndex.Name()
-			}
-		} else {
+		// Use secondary index if found; otherwise it will use  empty string, indicating primary key
+		if ok {
 			tableIndexName = tableIndex.Name()
 		}
-
 		refTableIndex, ok, err := findIndexWithPrefix(refSch, sqlFk.ParentColumns)
 		if err != nil {
 			return err
 		}
-		// check if foreign key is prefix of primary key
-		if !ok {
-			if !isPkPrefix(sqlFk.ParentColumns, refSch.GetPKCols().GetColumns()) {
-				var refPkTags []uint64
-				for _, i := range refSch.GetPkOrdinals() {
-					refPkTags = append(refPkTags, refSch.GetAllCols().GetByIndex(i).Tag)
-				}
-
-				var colNames []string
-				for _, t := range refColTags {
-					c, _ := refSch.GetAllCols().GetByTag(t)
-					colNames = append(colNames, c.Name)
-				}
-
-				// Our duplicate index is only unique if it's the entire primary key (which is by definition unique)
-				unique := len(refPkTags) == len(refColTags)
-				idxReturn, err := creation.CreateIndex(ctx, refTbl, "", colNames, unique, false, "", editor.Options{
-					ForeignKeyChecksDisabled: true,
-					Deaf:                     t.opts.Deaf,
-					Tempdir:                  t.opts.Tempdir,
-				})
-				if err != nil {
-					return err
-				}
-				refTbl = idxReturn.NewTable
-				refTableIndex = idxReturn.NewIndex
-				root, err = root.PutTable(ctx, sqlFk.ParentTable, idxReturn.NewTable)
-				if err != nil {
-					return err
-				}
-				refTableIndexName = refTableIndex.Name()
-			}
-		} else {
+		// Use secondary index if found; otherwise it will use  empty string, indicating primary key
+		if ok {
 			refTableIndexName = refTableIndex.Name()
 		}
 		doltFk = doltdb.ForeignKey{
