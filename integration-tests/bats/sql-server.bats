@@ -564,9 +564,18 @@ SQL
      SELECT DOLT_MERGE('feature-branch');
      "
 
-     server_query repo1 1 dolt "" "SELECT * FROM test ORDER BY pk" "pk\n1\n2\n3\n1000"
+     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT * FROM test"
+     [ $status -eq 0 ]
+     echo $output
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
+     [[ $output =~ " 3 " ]] || false
+     [[ $output =~ " 1000 " ]] || false
+     ! [[ $output =~ " 0 " ]] || false
 
-     server_query repo1 1 dolt "" "SELECT COUNT(*) FROM dolt_log" "COUNT(*)\n3"
+     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT COUNT(*) FROM dolt_log"
+     [ $status -eq 0 ]
+     [[ $output =~ " 3 " ]] || false
 }
 
 @test "sql-server: Run queries on database without ever selecting it" {
@@ -575,42 +584,70 @@ SQL
      start_multi_db_server repo1
 
      # create table with autocommit on and verify table creation
-     server_query "" 1 dolt "" "CREATE TABLE repo2.one_pk (
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE TABLE repo2.one_pk (
         pk int,
-        PRIMARY KEY (pk)
-      )"
+        PRIMARY KEY (pk))"
 
-     server_query "" 1 dolt "" "INSERT INTO repo2.one_pk VALUES (0), (1), (2)"
-     server_query "" 1 dolt "" "SELECT * FROM repo2.one_pk" "pk\n0\n1\n2"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "INSERT INTO repo2.one_pk VALUES (0), (1), (2)"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM repo2.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
 
-     server_query "" 1 dolt "" "UPDATE repo2.one_pk SET pk=3 WHERE pk=2"
-     server_query "" 1 dolt "" "SELECT * FROM repo2.one_pk" "pk\n0\n1\n3"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "UPDATE repo2.one_pk SET pk=3 WHERE pk=2"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM repo2.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 3 " ]] || false
+     ! [[ $output =~ " 2 " ]] || false
 
-     server_query "" 1 dolt "" "DELETE FROM repo2.one_pk WHERE pk=3"
-     server_query "" 1 dolt "" "SELECT * FROM repo2.one_pk" "pk\n0\n1"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "DELETE FROM repo2.one_pk WHERE pk=3"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM repo2.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     ! [[ $output =~ " 3 " ]] || false
 
      # Empty commit statements should not error
-     server_query "" 1 dolt "" "commit"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "commit"
 
      # create a new database and table and rerun
-     server_query "" 1 dolt "" "CREATE DATABASE testdb" ""
-     server_query "" 1 dolt "" "CREATE TABLE testdb.one_pk (
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE testdb"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE TABLE testdb.one_pk (
         pk int,
-        PRIMARY KEY (pk)
-      )" ""
+        PRIMARY KEY (pk))"
 
-     server_query "" 1 dolt "" "INSERT INTO testdb.one_pk VALUES (0), (1), (2)"
-     server_query "" 1 dolt "" "SELECT * FROM testdb.one_pk" "pk\n0\n1\n2"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "INSERT INTO testdb.one_pk VALUES (0), (1), (2)"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM testdb.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
 
-     server_query "" 1 dolt "" "UPDATE testdb.one_pk SET pk=3 WHERE pk=2"
-     server_query "" 1 dolt "" "SELECT * FROM testdb.one_pk" "pk\n0\n1\n3"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "UPDATE testdb.one_pk SET pk=3 WHERE pk=2"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM testdb.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 3 " ]] || false
+     ! [[ $output =~ " 2 " ]] || false
 
-     server_query "" 1 dolt "" "DELETE FROM testdb.one_pk WHERE pk=3"
-     server_query "" 1 dolt "" "SELECT * FROM testdb.one_pk" "pk\n0\n1"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "DELETE FROM testdb.one_pk WHERE pk=3"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM testdb.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     ! [[ $output =~ " 3 " ]] || false
 
      # one last query on insert db.
-     server_query "" 1 dolt "" "INSERT INTO repo2.one_pk VALUES (4)"
-     server_query "" 1 dolt "" "SELECT * FROM repo2.one_pk" "pk\n0\n1\n4"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "INSERT INTO repo2.one_pk VALUES (4)"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM repo2.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 4 " ]] || false
 
      # verify changes outside the session
      cd repo2
@@ -620,9 +657,9 @@ SQL
 
      run dolt sql --user=dolt -q "select * from one_pk"
      [ "$status" -eq 0 ]
-     [[ "$output" =~ "0" ]] || false
-     [[ "$output" =~ "1" ]] || false
-     [[ "$output" =~ "4" ]] || false
+     [[ "$output" =~ " 0 " ]] || false
+     [[ "$output" =~ " 1 " ]] || false
+     [[ "$output" =~ " 4 " ]] || false
 }
 
 @test "sql-server: create database without USE" {
