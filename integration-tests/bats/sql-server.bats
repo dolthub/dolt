@@ -341,7 +341,7 @@ SQL
     [[ $output =~ "2,2,2" ]] || false
     [[ $output =~ "3,3,3" ]] || false
 
-    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
     [ $status -eq 0 ]
     [[ $output =~ "0,," ]] || false
     [[ $output =~ "1,1," ]] || false
@@ -360,7 +360,7 @@ SQL
     [[ $output =~ "2,2,2" ]] || false
     [[ $output =~ "3,3,3" ]] || false
 
-    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
     [ $status -eq 0 ]
     ! [[ $output =~ "0,," ]] || false
     [[ $output =~ "1,1," ]] || false
@@ -381,7 +381,7 @@ SQL
     [[ $output =~ "2,2,2" ]] || false
     [[ $output =~ "3,3,3" ]] || false
 
-    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
     [ $status -eq 0 ]
     ! [[ $output =~ "0,," ]] || false
     ! [[ $output =~ "1,1, " ]] || false
@@ -483,20 +483,22 @@ SQL
      cd repo1
      start_sql_server repo1
 
-     server_query repo1 1 dolt "" "
-     CREATE TABLE test (
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE test (
          pk int primary key
-     );
-     INSERT INTO test VALUES (0),(1),(2);
-     SELECT DOLT_ADD('.');
-     SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
-     SELECT DOLT_CHECKOUT('-b', 'feature-branch');
-     "
+     )"
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO test VALUES (0),(1),(2)"
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CALL DOLT_ADD('test')"
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CALL DOLT_COMMIT('-a', '-m', 'Step 1')"
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CALL DOLT_CHECKOUT('-b', 'feature-branch')"
 
-     server_query repo1 1 dolt "" "SELECT * FROM test order by pk" "pk\n0\n1\n2"
+     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT * FROM test"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
 
      server_query repo1 1 dolt "" "
-     SELECT DOLT_CHECKOUT('feature-branch');
+     CALL DOLT_CHECKOUT('feature-branch');
      INSERT INTO test VALUES (3);
      INSERT INTO test VALUES (4);
      INSERT INTO test VALUES (21232);
@@ -504,11 +506,17 @@ SQL
      UPDATE test SET pk=21 WHERE pk=21232;
      "
 
-     server_query repo1 1 dolt "" "SELECT * FROM test" "pk\n0\n1\n2"
+     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT * FROM test"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
+     ! [[ $output =~ " 3 " ]] || false
+     ! [[ $output =~ " 21 " ]] || false
 
      server_query repo1 1 dolt "" "
-     SELECT DOLT_CHECKOUT('feature-branch');
-     SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
+     CALL DOLT_CHECKOUT('feature-branch');
+     CALL DOLT_COMMIT('-a', '-m', 'Insert 3');
      "
 
      server_query repo1 1 dolt "" "
@@ -516,12 +524,19 @@ SQL
      INSERT INTO test VALUES (500001);
      DELETE FROM test WHERE pk=500001;
      UPDATE test SET pk=60 WHERE pk=500000;
-     SELECT DOLT_ADD('.');
-     SELECT DOLT_COMMIT('-m', 'Insert 60');
-     SELECT DOLT_MERGE('feature-branch','-m','merge feature-branch');
+     CALL DOLT_ADD('.');
+     CALL DOLT_COMMIT('-m', 'Insert 60');
+     CALL DOLT_MERGE('feature-branch','-m','merge feature-branch');
      "
 
-     server_query repo1 1 dolt "" "SELECT * FROM test order by pk" "pk\n0\n1\n2\n3\n21\n60"
+     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT * FROM test"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
+     [[ $output =~ " 3 " ]] || false
+     [[ $output =~ " 21 " ]] || false
+     [[ $output =~ " 60 " ]] || false
 
      run dolt status
      [ $status -eq 0 ]
