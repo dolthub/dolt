@@ -94,6 +94,10 @@ func (dtf *DiffTableFunction) Expressions() []sql.Expression {
 
 // WithExpressions implements the sql.Expressioner interface
 func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
+	if len(expression) < 2 {
+		return nil, sql.ErrInvalidArgumentNumber.New(dtf.FunctionName(), "2 to 3", len(expression))
+	}
+
 	// TODO: For now, we will only support literal / fully-resolved arguments to the
 	//       DiffTableFunction to avoid issues where the schema is needed in the analyzer
 	//       before the arguments could be resolved.
