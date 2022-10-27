@@ -16,7 +16,12 @@ package editor
 
 import (
 	"context"
+	"io"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -42,6 +47,9 @@ type TableEditAccumulator interface {
 	// Get returns a *doltKVP if the current TableEditAccumulator contains the given key, or it exists in the row data.
 	// This assumes that the given hash is for the given key.
 	Get(ctx context.Context, keyHash hash.Hash, key types.Tuple) (*doltKVP, bool, error)
+
+	// HasPartial returns true if the current TableEditAccumulator contains the given partialKey
+	HasPartial(ctx context.Context, idxSch schema.Schema, partialKeyHash hash.Hash, partialKey types.Tuple) ([]hashedTuple, error)
 
 	// Commit applies the in memory edits to the list of committed in memory edits
 	Commit(ctx context.Context, nbf *types.NomsBinFormat) error
@@ -172,6 +180,51 @@ func (tea *tableEditAccumulatorImpl) Get(ctx context.Context, keyHash hash.Hash,
 	}
 
 	return &doltKVP{k: key, v: v}, true, err
+}
+
+func (tea *tableEditAccumulatorImpl) HasPartial(ctx context.Context, idxSch schema.Schema, partialKeyHash hash.Hash, partialKey types.Tuple) ([]hashedTuple, error) {
+	var err error
+	var matches []hashedTuple
+	var mapIter table.ReadCloser = noms.NewNomsRangeReader(idxSch, tea.rowData, []*noms.ReadRange{
+		{Start: partialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(partialKey)}})
+	defer mapIter.Close(ctx)
+	var r row.Row
+	for r, err = mapIter.ReadRow(ctx); err == nil; r, err = mapIter.ReadRow(ctx) {
+		tplKeyVal, err := r.NomsMapKey(idxSch).Value(ctx)
+		if err != nil {
+			return nil, err
+		}
+		key := tplKeyVal.(types.Tuple)
+		tplValVal, err := r.NomsMapValue(idxSch).Value(ctx)
+		if err != nil {
+			return nil, err
+		}
+		val := tplValVal.(types.Tuple)
+		keyHash, err := key.Hash(key.Format())
+		if err != nil {
+			return nil, err
+		}
+		matches = append(matches, hashedTuple{key, val, keyHash})
+	}
+
+	if err != io.EOF {
+		return nil, err
+	}
+
+	orderedMods := []*inMemModifications{tea.committed, tea.uncommitted}
+	for _, mods := range orderedMods {
+		for i := len(matches) - 1; i >= 0; i-- {
+			if _, ok := mods.adds[matches[i].hash]; ok {
+				matches[i] = matches[len(matches)-1]
+				matches = matches[:len(matches)-1]
+			}
+		}
+		if added, ok := mods.adds[partialKeyHash]; ok {
+			matches = append(matches, hashedTuple{key: added.k, value: added.v})
+		}
+	}
+
+	return matches, nil
 }
 
 func (tea *tableEditAccumulatorImpl) flushUncommitted() {
