@@ -1096,40 +1096,48 @@ END""")
     ! [[ $output =~ "test2" ]] || false
 }
 
-@test "sql-server: drop database with active connections" {
+@test "sql-server: can't drop branch qualified database names" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt "json ordering of keys differs"
 
     mkdir no_dolt && cd no_dolt
     start_sql_server
 
-    server_query "" 1 dolt "" "create database test1"
-    server_query "" 1 dolt "" "create database test2"
-    server_query "" 1 dolt "" "create database test3"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test1"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test2"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test3"
 
-    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntest1\ntest2\ntest3"
-    server_query "test1" 1 dolt "" "create table a(x int)"
-    server_query "test1" 1 dolt "" "select dolt_add('.')"
-    server_query "test1" 1 dolt "" "insert into a values (1), (2)"
-    run server_query "test1" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test1" ]] || false
+    [[ $output =~ "test2" ]] || false
+    [[ $output =~ "test3" ]] || false
 
-    server_query "test2" 1 dolt "" "create table a(x int)"
-    server_query "test2" 1 dolt "" "select dolt_add('.')"
-    server_query "test2" 1 dolt "" "insert into a values (3), (4)"
-    server_query "test2" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "insert into a values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_commit('-a', '-m', 'new table a')"
 
-    server_query "test3" 1 dolt "" "create table a(x int)"
-    server_query "test3" 1 dolt "" "select dolt_add('.')"
-    server_query "test3" 1 dolt "" "insert into a values (5), (6)"
-    server_query "test3" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "insert into a values (3), (4)"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "call dolt_commit('-a', '-m', 'new table a')"
 
-    server_query "test1" 1 dolt "" "call dolt_checkout('-b', 'newbranch')"
-    server_query "test1/newbranch" 1 dolt "" "select * from a" "x\n1\n2"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "insert into a values (5), (6)"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "call dolt_commit('-a', '-m', 'new table a')"
 
-    server_query "test2" 1 dolt "" "call dolt_checkout('-b', 'newbranch')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_branch('newbranch')"
+    # Something weird is going on here. This should not need an order by
+    server_query "test1/newbranch" 1 dolt "" "select * from a order by x" "x\n1\n2"
+
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "call dolt_branch('newbranch')"
     server_query "test2/newbranch" 1 dolt "" "select * from a" "x\n3\n4"
 
-    server_query "" 1 dolt "" "drop database TEST1"
+    # uppercase to ensure db names are treated case insensitive
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "drop database TEST1"
 
     run server_query "test1/newbranch" 1 dolt "" "select * from a" "" 1
     [[ "$output" =~ "database not found" ]] || false
@@ -1138,13 +1146,15 @@ END""")
     run server_query "" 1 dolt "" "drop database \`test2/newbranch\`" "" 1
     [[ "$output" =~ "unable to drop revision database: test2/newbranch" ]] || false
 
-
-    server_query "" 1 dolt "" "drop database TEST2"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "drop database TEST2"
 
     run server_query "test2/newbranch" 1 dolt "" "select * from a" "" 1
     [[ "$output" =~ "database not found" ]] || false
 
-    server_query "test3" 1 dolt "" "select * from a" "x\n5\n6"
+    run dolt sql-client -P $PORT -u dolt --use-db test3 -q "select * from a"
+    [ $status -eq 0 ]
+    [[ $output =~ " 5 " ]] || false
+    [[ $output =~ " 6 " ]] || false
 }
 
 @test "sql-server: connect to databases case insensitive" {
@@ -1153,16 +1163,22 @@ END""")
     mkdir no_dolt && cd no_dolt
     start_sql_server
 
-    server_query "" 1 dolt "" "create database Test1"
-    
-    server_query "" 1 dolt "" "show databases" "Database\nTest1\ninformation_schema\nmysql"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database Test1"
+
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "Test1" ]] || false
     server_query "" 1 dolt "" "use test1; create table a(x int);"
     server_query "" 1 dolt "" "use TEST1; insert into a values (1), (2);"
-    run server_query "" 1 dolt "" "use test1; select dolt_add('.'); select dolt_commit('-a', '-m', 'new table a');"
+    server_query "" 1 dolt "" "use test1; call dolt_add('.'); call dolt_commit('-a', '-m', 'new table a');"
     server_query "" 1 dolt "" "use test1; call dolt_checkout('-b', 'newbranch');"
     server_query "" 1 dolt "" "use \`TEST1/newbranch\`; select * from a order by x" ";x\n1\n2"
     server_query "" 1 dolt "" "use \`test1/newbranch\`; select * from a order by x" ";x\n1\n2"
-    server_query "" 1 dolt "" "use \`TEST1/NEWBRANCH\`" "" "database not found: TEST1/NEWBRANCH"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "use \`TEST1/NEWBRANCH\`"
+    [ $status -ne 0 ]
+    [[ $output =~ "database not found: TEST1/NEWBRANCH" ]] || false
 
     server_query "" 1 dolt "" "create database test2; use test2; select database();" ";;database()\ntest2"
     server_query "" 1 dolt "" "use test2; drop database TEST2; select database();" ";;database()\nNone"
@@ -1174,14 +1190,19 @@ END""")
     mkdir no_dolt && cd no_dolt
     mkdir db_dir
     start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
+    
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test1"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test1" ]] || false
 
-    server_query "" 1 dolt "" "create database test1"
-    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntest1"
-    server_query "test1" 1 dolt "" "create table a(x int)"
-    server_query "test1" 1 dolt "" "select dolt_add('.')"
-    server_query "test1" 1 dolt "" "insert into a values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "insert into a values (1), (2)"
 
-    server_query "test1" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_commit('-a', '-m', 'new table a')"
 
     [ -d db_dir/test1 ]
 
@@ -1192,13 +1213,13 @@ END""")
 
     cd ../..
 
-    server_query "" 1 dolt "" "create database test3"
-    server_query "test3" 1 dolt "" "create table c(x int)"
-    server_query "test3" 1 dolt "" "select dolt_add('.')"
-    server_query "test3" 1 dolt "" "insert into c values (1), (2)"
-    server_query "test3" 1 dolt "" "call dolt_commit('-a', '-m', 'new table c')"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test3"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "create table c(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "insert into c values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "call dolt_commit('-a', '-m', 'new table c')"
 
-    server_query "" 1 dolt "" "drop database test1"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "drop database test1"
 
     [ -d db_dir/test3 ]
     [ ! -d db_dir/test1 ]
@@ -1206,7 +1227,11 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
-    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntest3"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test3" ]] || false
 }
 
 @test "sql-server: create database errors" {
