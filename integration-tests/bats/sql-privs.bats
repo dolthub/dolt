@@ -126,6 +126,7 @@ behavior:
     SERVER_PID=$!
     sleep 5
 
+
     run dolt sql-client -P $PORT -u cmddolt --use-db test_db -q "select user from mysql.user"
     [ $status -eq 0 ]
     [[ $output =~ "cmddolt" ]] || false
