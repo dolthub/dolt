@@ -167,7 +167,8 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 	return NewDiffTableFunctionRowIterForSinglePartition(*dp, ddb, dtf.joiner), nil
 }
 
-// findMatchingDelta returns the best matching table delta for the table name given, taking renames into account
+// findMatchingDelta returns the best matching table delta for the table name
+// given, taking renames into account
 func findMatchingDelta(deltas []diff.TableDelta, tableName string) diff.TableDelta {
 	tableName = strings.ToLower(tableName)
 	for _, d := range deltas {
@@ -192,14 +193,35 @@ type refDetails struct {
 	commitTime *types.Timestamp
 }
 
-func interfaceToString(r interface{}) (string, error) {
-	str, ok := r.(string)
-	if !ok {
-		return "", fmt.Errorf("received '%v' when expecting commit hash string", str)
+// loadDetailsForRef loads the root, hash, and timestamp for the specified from
+// and to ref values
+func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db Database) (*refDetails, *refDetails, error) {
+	fromCommitStr, toCommitStr, err := loadCommitStrings(ctx, fromRef, toRef, dotRef, db)
+	if err != nil {
+		return nil, nil, err
 	}
-	return str, nil
+
+	if len(fromCommitStr) == 0 || len(toCommitStr) == 0 {
+		return nil, nil, fmt.Errorf("must have valid from and to refs: %s, %s", fromCommitStr, toCommitStr)
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+
+	fromDetails, err := resolveRoot(ctx, sess, db.Name(), fromCommitStr)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	toDetails, err := resolveRoot(ctx, sess, db.Name(), toCommitStr)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return fromDetails, toDetails, nil
 }
 
+// loadCommitStrings gets the to and from commit strings, using the common
+// ancestor as the from commit string for three dot diff
 func loadCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db Database) (string, string, error) {
 	if dotRef != nil {
 		dotStr, err := interfaceToString(dotRef)
@@ -252,30 +274,13 @@ func loadCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db 
 	return fromStr, toStr, nil
 }
 
-// loadDetailsForRef loads the root, hash, and timestamp for the specified from and to ref values
-func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db Database) (*refDetails, *refDetails, error) {
-	sess := dsess.DSessFromSess(ctx.Session)
-
-	fromHash, toHash, err := loadCommitStrings(ctx, fromRef, toRef, dotRef, db)
-	if err != nil {
-		return nil, nil, err
+// interfaceToString converts an interface to a string
+func interfaceToString(r interface{}) (string, error) {
+	str, ok := r.(string)
+	if !ok {
+		return "", fmt.Errorf("received '%v' when expecting commit hash string", str)
 	}
-
-	if len(fromHash) == 0 || len(toHash) == 0 {
-		return nil, nil, fmt.Errorf("must have valid from and to refs: %s, %s", fromHash, toHash)
-	}
-
-	fromDetails, err := resolveRoot(ctx, sess, db.Name(), fromHash)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	toDetails, err := resolveRoot(ctx, sess, db.Name(), toHash)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return fromDetails, toDetails, nil
+	return str, nil
 }
 
 func resolveRoot(ctx *sql.Context, sess *dsess.DoltSession, dbName, hashStr string) (*refDetails, error) {
