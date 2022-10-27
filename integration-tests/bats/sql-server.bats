@@ -574,27 +574,6 @@ SQL
     ! [[ "$output" =~ "one_pk" ]] || false
 }
 
-# TODO: Need to update testing logic allow queries for a multiple session.
-@test "sql-server: Create a temporary table and validate that it doesn't persist after a session closes" {
-    skiponwindows "Missing dependencies"
-
-    cd repo1
-    start_sql_server repo1
-
-    # check no tables on main
-    server_query repo1 1 dolt "" "SHOW Tables" ""
-
-    # Create a temporary table with some indexes
-    server_query repo1 1 dolt "" "CREATE TEMPORARY TABLE one_pk (
-        pk int,
-        c1 int,
-        c2 int,
-        PRIMARY KEY (pk),
-        INDEX idx_v1 (c1, c2) COMMENT 'hello there'
-    )" ""
-    server_query repo1 1 dolt "" "SHOW tables" "" # validate that it does have show tables
-}
-
 @test "sql-server: connect to another branch with connection string" {
     skiponwindows "Missing dependencies"
 
