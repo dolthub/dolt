@@ -26,6 +26,8 @@ type RemotesAPIConfig interface {
 	TLSKey() string
 	TLSCert() string
 	TLSCA() string
+	ServerNameURLMatches() []string
+	ServerNameDNSMatches() []string
 }
 
 type StandbyRemoteConfig interface {
