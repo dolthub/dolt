@@ -1242,14 +1242,21 @@ END""")
     touch file_exists
     start_sql_server
 
-    server_query "" 1 dolt "" "create database test1"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test1"
 
     # Error on creation, already exists
-    server_query "" 1 dolt "" "create database test1" "" "exists"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test1"
+    [ $status -ne 0 ]
+    [[ $output =~ exists ]] || false
 
     # Files / dirs in the way
-    server_query "" 1 dolt "" "create database dir_exists" "" "exists"
-    server_query "" 1 dolt "" "create database file_exists" "" "exists"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "create database dir_exists"
+    [ $status -ne 0 ]
+    [[ $output =~ exists ]] || false
+    
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q	"create database file_exists"
+    [ $status -ne 0 ]
+    [[ $output =~ exists ]] || false
 }
 
 @test "sql-server: create database with existing repo" {
@@ -1258,21 +1265,25 @@ END""")
     cd repo1
     start_sql_server
 
-    server_query "" 1 dolt "" "create database test1"
-    server_query "repo1" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\nrepo1\ntest1"
-    server_query "test1" 1 dolt "" "create table a(x int)"
-    server_query "test1" 1 dolt "" "select dolt_add('.')"
-    server_query "test1" 1 dolt "" "insert into a values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "create database test1"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test1" ]] || false
+    [[ $output =~ "repo1" ]] || false
 
-    # not bothering to check the results of the commit here
-    server_query "test1" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "insert into a values (1), (2)"
 
-    server_query "" 1 dolt "" "create database test2"
-    server_query "test2" 1 dolt "" "create table b(x int)"
-    server_query "test2" 1 dolt "" "select dolt_add('.')"
-    server_query "test2" 1 dolt "" "insert into b values (1), (2)"
-    # not bothering to check the results of the commit here
-    server_query "test2" 1 dolt "" "call dolt_commit('-a', '-m', 'new table b')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_commit('-a', '-m', 'new table a')"
+
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "create database test2"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "create table b(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "insert into b values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "call dolt_commit('-a', '-m', 'new table b')"
 
     cd test1
     run dolt log
@@ -1296,7 +1307,13 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server
-    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\nrepo1\ntest1\ntest2"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test1" ]] || false
+    [[ $output =~ "repo1" ]] || false
+    [[ $output =~ "test2" ]] || false
 }
 
 @test "sql-server: fetch uses database tempdir from different working directory" {
@@ -1331,7 +1348,7 @@ databases:
 
     start_sql_server_with_config repo1 server.yaml
 
-    server_query repo1 1 dolt "" "call dolt_fetch()" ""
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_fetch()"
 }
 
 @test "sql-server: run mysql from shell" {
@@ -1398,7 +1415,7 @@ databases:
 @test "sql-server: sql-server lock for new databases" {
     cd repo1
     start_sql_server
-    server_query repo1 1 dolt "" "create database newdb" ""
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database newdb"
     cd newdb
     PORT=$( definePORT )
     run dolt sql-server -P $PORT --socket "dolt.$PORT.sock"
@@ -1427,7 +1444,11 @@ databases:
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 
-    server_query repo2 1 dolt "" "select 1 as col1" "col1\n1"
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
+    [ $status -eq 0 ]
+    [[ $output =~ col1 ]] || false
+    [[ $output =~ " 1 " ]] || false
+
     run grep '\"/tmp/mysql.sock\"' log.txt
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
@@ -1453,7 +1474,10 @@ databases:
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 
-    server_query repo2 1 dolt "" "select 1 as col1" "col1\n1"
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
+    [ $status -eq 0 ]
+    [[ $output =~ col1 ]] || false
+    [[ $output =~ " 1 " ]] || false
 
     run grep '\"/tmp/mysql.sock\"' log.txt
     [ "$status" -eq 0 ]
@@ -1506,7 +1530,10 @@ behavior:
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 
-    server_query repo2 1 dolt "" "select 1 as col1" "col1\n1"
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
+    [ $status -eq 0 ]
+    [[ $output =~ col1 ]] || false
+    [[ $output =~ " 1 " ]] || false
 
     run grep "dolt.$PORT.sock" log.txt
     [ "$status" -eq 0 ]
@@ -1561,8 +1588,6 @@ s.close()
 }
 
 @test "sql-server: sigterm running server and restarting works correctly" {
-    skip "Skipping while we debug why this test hangs for hours in CI"
-
     start_sql_server
     run ls repo1/.dolt
     [[ "$output" =~ "sql-server.lock" ]] || false
@@ -1578,8 +1603,12 @@ s.close()
     run ls repo2/.dolt
     [[ "$output" =~ "sql-server.lock" ]] || false
 
+    skip "this now fails because of the socket file not being cleaned up"
     start_sql_server
-    server_query repo1 1 dolt "" "SELECT 1" "1\n1"
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
+    [ $status -eq 0 ]
+    [[ $output =~ col1 ]] || false
+    [[ $output =~ " 1 " ]] || false
     stop_sql_server
 
     # Try adding fake pid numbers. Could happen via debugger or something
@@ -1587,7 +1616,10 @@ s.close()
     echo "4123423" > repo2/.dolt/sql-server.lock
 
     start_sql_server
-    server_query repo1 1 dolt "" "SELECT 1" "1\n1"
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
+    [ $status -eq 0 ]
+    [[ $output =~ col1 ]] || false
+    [[ $output =~ " 1 " ]] || false
     stop_sql_server
 
     # Add malicious text to lockfile and expect to fail
@@ -1596,6 +1628,14 @@ s.close()
     run start_sql_server
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
     [ "$status" -eq 1 ]
+
+    rm repo1/.dolt/sql-server.lock
+
+    # this test was hanging as the server is stopped from the above error
+    # but stop_sql_server in teardown tries to kill process that is not
+    # running anymore, so start the server again, and it will be stopped in
+    # teardown
+    start_sql_server
 }
 
 @test "sql-server: create a database when no current database is set" {
@@ -1626,15 +1666,16 @@ s.close()
     cd nodb
     start_sql_server >> server_log.txt 2>&1
 
-    server_query "" 1 dolt "" "CREATE DATABASE mydb1"
-    server_query "" 1 dolt "" "CREATE DATABASE mydb2"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE mydb1"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE mydb2"
 
     [ -d mydb1 ]
     [ -d mydb2 ]
 
     rm -rf mydb2
 
-    server_query "" 1 dolt "" "SHOW DATABASES" "" 1
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "SHOW DATABASES"
+    [ $status -ne 0 ]
 
     run grep "panic" server_log.txt
     [ "${#lines[@]}" -eq 0 ]
@@ -1643,8 +1684,9 @@ s.close()
     [ "${#lines[@]}" -eq 1 ]
 
     # this tests fails sometimes as the server is stopped from the above error
-    # but stop_sql_server in teardown tries to kill process that is not running anymore,
-    # so start the server again, and it will be stopped in teardown
+    # but stop_sql_server in teardown tries to kill process that is not
+    # running anymore, so start the server again, and it will be stopped in
+    # teardown
     start_sql_server
 }
 
@@ -1658,12 +1700,12 @@ s.close()
     start_sql_server >> server_log.txt 2>&1
 
     # 'doltdb' will be nested database inside 'mydb'
-    server_query "" 1 dolt "" "CREATE DATABASE doltdb"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE doltdb"
     run dolt sql -q "SHOW DATABASES"
     [[ "$output" =~ "mydb" ]] || false
     [[ "$output" =~ "doltdb" ]] || false
 
-    server_query "" 1 dolt "" "DROP DATABASE mydb"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "DROP DATABASE mydb"
     run grep "database not found: mydb" server_log.txt
     [ "${#lines[@]}" -eq 0 ]
 
@@ -1686,7 +1728,7 @@ s.close()
     [[ "$output" =~ "mydb" ]] || false
 
     start_sql_server >> server_log.txt 2>&1
-    server_query "mydb" 1 dolt "" "DROP DATABASE mydb;"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "DROP DATABASE mydb;"
 
     run grep "database not found: mydb" server_log.txt
     [ "${#lines[@]}" -eq 0 ]
@@ -1706,7 +1748,7 @@ s.close()
     cd ..
 
     start_sql_server >> server_log.txt 2>&1
-    server_query "" 1 dolt "" "DROP DATABASE my_db;"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "DROP DATABASE my_db;"
 
     run grep "database not found: my_db" server_log.txt
     [ "${#lines[@]}" -eq 0 ]
