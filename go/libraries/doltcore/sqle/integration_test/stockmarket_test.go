@@ -20276,13 +20276,14 @@ func TestExplain(t *testing.T) {
 		rowStrings[i] = row[0].(string)
 	}
 
-	expectedExplain := "IndexedJoin(d.Symbol = t.Symbol)\n" +
+	expectedExplain := "HashJoin(d.Symbol = t.Symbol)\n" +
 		" ├─ TableAlias(d)\n" +
 		" │   └─ Table(daily_summary)\n" +
 		" │       └─ columns: [type symbol country tradingdate open high low close volume openint]\n" +
-		" └─ TableAlias(t)\n" +
-		"     └─ IndexedTableAccess(symbols)\n" +
-		"         ├─ index: [symbols.Symbol]\n" +
-		"         └─ columns: [symbol name sector ipoyear]"
+		" └─ HashLookup(child: (t.Symbol), lookup: (d.Symbol))\n" +
+		"     └─ CachedResults\n" +
+		"         └─ TableAlias(t)\n" +
+		"             └─ Table(symbols)\n" +
+		"                 └─ columns: [symbol name sector ipoyear]"
 	assert.Equal(t, expectedExplain, strings.Join(rowStrings, "\n"))
 }

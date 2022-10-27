@@ -32,7 +32,6 @@ _create_dir() {
 }
 
 check_for_dolt() {
-    mysql_log "Verifying dolt executable..."
     local dolt_bin=$(which dolt)
     if [ ! -x "$dolt_bin" ]; then
         mysql_error "dolt binary executable not found"
@@ -60,14 +59,14 @@ get_config_file_path_if_exists() {
     CONFIG_DIR=$1
     FILE_TYPE=$2
     if [ -d "$CONFIG_DIR" ]; then
-        mysql_log "Checking for config provided in $CONFIG_DIR"
+        mysql_note "Checking for config provided in $CONFIG_DIR"
         number_of_files_found=( `find .$CONFIG_DIR -type f -name "*.$FILE_TYPE" | wc -l` )
         if [ $number_of_files_found -gt 1 ]; then
             CONFIG_PROVIDED=
             mysql_warn "multiple config file found in $CONFIG_DIR, using default config"
         elif [ $number_of_files_found -eq 1 ]; then
             files_found=( `ls $CONFIG_DIR/*$FILE_TYPE` )
-            mysql_log "$files_found file is found"
+            mysql_note "$files_found file is found"
             CONFIG_PROVIDED=$files_found
         else
             CONFIG_PROVIDED=

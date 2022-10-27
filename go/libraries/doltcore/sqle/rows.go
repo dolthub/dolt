@@ -79,19 +79,20 @@ func newRowIterator(ctx context.Context, tbl *doltdb.Table, sqlSch sql.Schema, p
 		return ProllyRowIterFromPartition(ctx, sch, sqlSch, projCols, partition)
 	}
 
-	if schema.IsKeyless(sch) {
-		// would be more optimal to project columns into keyless tables also
-		return newKeylessRowIterator(ctx, tbl, projCols, partition)
-	} else {
-		return newKeyedRowIter(ctx, tbl, projCols, partition)
-	}
-}
-
-func newKeylessRowIterator(ctx context.Context, tbl *doltdb.Table, projectedCols []uint64, partition doltTablePartition) (sql.RowIter, error) {
 	mapIter, err := iterForPartition(ctx, partition)
 	if err != nil {
 		return nil, err
 	}
+
+	if schema.IsKeyless(sch) {
+		// would be more optimal to project columns into keyless tables also
+		return newKeylessRowIterator(ctx, tbl, projCols, mapIter)
+	} else {
+		return newKeyedRowIter(ctx, tbl, projCols, mapIter)
+	}
+}
+
+func newKeylessRowIterator(ctx context.Context, tbl *doltdb.Table, projectedCols []uint64, mapIter types.MapTupleIterator) (sql.RowIter, error) {
 
 	cols, tagToSqlColIdx, err := getTagToResColIdx(ctx, tbl, projectedCols)
 	if err != nil {
@@ -118,11 +119,7 @@ func newKeylessRowIterator(ctx context.Context, tbl *doltdb.Table, projectedCols
 	}, nil
 }
 
-func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []uint64, partition doltTablePartition) (sql.RowIter, error) {
-	mapIter, err := iterForPartition(ctx, partition)
-	if err != nil {
-		return nil, err
-	}
+func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []uint64, mapIter types.MapTupleIterator) (sql.RowIter, error) {
 
 	cols, tagToSqlColIdx, err := getTagToResColIdx(ctx, tbl, projectedCols)
 	if err != nil {
@@ -247,15 +244,46 @@ func DoltTablePartitionToRowIter(ctx *sql.Context, name string, table *doltdb.Ta
 		return nil, nil, err
 	}
 
-	p := doltTablePartition{
-		start:   start,
-		end:     end,
-		rowData: data,
+	if types.IsFormat_DOLT(data.Format()) {
+		idx := durable.ProllyMapFromIndex(data)
+		c, err := idx.Count()
+		if err != nil {
+			return nil, nil, err
+		}
+		if end > uint64(c) {
+			end = uint64(c)
+		}
+		iter, err := idx.IterOrdinalRange(ctx, start, end)
+		if err != nil {
+			return nil, nil, err
+		}
+		rowIter, err := index.NewProllyRowIter(sch, pkSch.Schema, idx, iter, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		return pkSch.Schema, rowIter, nil
 	}
 
-	iter, err := newRowIterator(ctx, table, pkSch.Schema, nil, p)
+	idx := durable.NomsMapFromIndex(data)
+	iterAt, err := idx.IteratorAt(ctx, start)
 	if err != nil {
 		return nil, nil, err
 	}
-	return pkSch.Schema, iter, nil
+
+	iter := types.NewLimitingMapIterator(iterAt, end-start)
+
+	var rowIter sql.RowIter
+	if schema.IsKeyless(sch) {
+		rowIter, err = newKeylessRowIterator(ctx, table, nil, iter)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		rowIter, err = newKeyedRowIter(ctx, table, nil, iter)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return pkSch.Schema, rowIter, nil
 }

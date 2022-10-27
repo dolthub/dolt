@@ -468,9 +468,19 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	case doltdb.TagsTableName:
 		dt, found = dtables.NewTagsTable(ctx, db.ddb), true
 	case dtables.AccessTableName:
-		dt, found = dtables.NewBranchControlTable(branch_control.StaticController.Access), true
+		basCtx := branch_control.GetBranchAwareSession(ctx)
+		if basCtx != nil {
+			if controller := basCtx.GetController(); controller != nil {
+				dt, found = dtables.NewBranchControlTable(controller.Access), true
+			}
+		}
 	case dtables.NamespaceTableName:
-		dt, found = dtables.NewBranchNamespaceControlTable(branch_control.StaticController.Namespace), true
+		basCtx := branch_control.GetBranchAwareSession(ctx)
+		if basCtx != nil {
+			if controller := basCtx.GetController(); controller != nil {
+				dt, found = dtables.NewBranchNamespaceControlTable(controller.Namespace), true
+			}
+		}
 	}
 	if found {
 		return dt, found, nil

@@ -579,18 +579,20 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 	tw := newTableWriter(buff, nil)
 	errString := ""
 
+	ctx := context.Background()
 	for _, src := range sources {
-		chunks := make(chan extractRecord)
+		ch := make(chan extractRecord)
 		go func() {
-			defer close(chunks)
-			err := src.extract(context.Background(), chunks)
-
+			defer close(ch)
+			err = extractAllChunks(ctx, src, func(rec extractRecord) {
+				ch <- rec
+			})
 			if err != nil {
-				chunks <- extractRecord{a: mustAddr(src.hash()), err: err}
+				ch <- extractRecord{a: mustAddr(src.hash()), err: err}
 			}
 		}()
 
-		for rec := range chunks {
+		for rec := range ch {
 			if rec.err != nil {
 				errString += fmt.Sprintf("Failed to extract %s:\n %v\n******\n\n", rec.a, rec.err)
 				continue
@@ -624,4 +626,26 @@ func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount ui
 
 func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ manifestContents) error {
 	return chunks.ErrUnsupportedOperation
+}
+
+func extractAllChunks(ctx context.Context, src chunkSource, cb func(rec extractRecord)) (err error) {
+	var index tableIndex
+	if index, err = src.index(); err != nil {
+		return err
+	}
+
+	var a addr
+	for i := uint32(0); i < index.ChunkCount(); i++ {
+		_, err = index.IndexEntry(i, &a)
+		if err != nil {
+			return err
+		}
+
+		data, err := src.get(ctx, a, nil)
+		if err != nil {
+			return err
+		}
+		cb(extractRecord{a: a, data: data})
+	}
+	return
 }

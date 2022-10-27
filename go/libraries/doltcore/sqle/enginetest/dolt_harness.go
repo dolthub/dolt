@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -39,16 +40,12 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	user  = "test"
-	email = "email@test.com"
-)
-
 type DoltHarness struct {
 	t              *testing.T
 	multiRepoEnv   *env.MultiRepoEnv
 	createdEnvs    map[string]*env.DoltEnv
 	session        *dsess.DoltSession
+	branchControl  *branch_control.Controller
 	databases      []sqle.Database
 	hashes         []string
 	parallelism    int
@@ -80,14 +77,18 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
 	localConfig := dEnv.Config.WriteableConfig()
-	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, localConfig)
+	branchControl := branch_control.CreateDefaultController()
+	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro,
+		localConfig, branchControl)
 	require.NoError(t, err)
+	branch_control.SetSuperUser("root", "localhost")
 	dh := &DoltHarness{
 		t:              t,
 		session:        session,
 		skippedQueries: defaultSkippedQueries,
 		multiRepoEnv:   mrEnv,
 		createdEnvs:    make(map[string]*env.DoltEnv),
+		branchControl:  branchControl,
 	}
 
 	return dh
@@ -177,12 +178,15 @@ func commitScripts(dbs []string) []setup.SetupScript {
 // engine for reuse.
 func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 	if d.engine == nil {
+		d.branchControl = branch_control.CreateDefaultController()
+
 		pro := d.NewDatabaseProvider(information_schema.NewInformationSchemaDatabase())
 		doltProvider, ok := pro.(sqle.DoltDatabaseProvider)
 		require.True(t, ok)
 
 		var err error
-		d.session, err = dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), doltProvider, d.multiRepoEnv.Config())
+		d.session, err = dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), doltProvider,
+			d.multiRepoEnv.Config(), d.branchControl)
 		require.NoError(t, err)
 
 		e, err := enginetest.NewEngineWithProviderSetup(t, d, pro, d.setupData)
@@ -288,6 +292,7 @@ func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession
 		sql.NewBaseSessionWithClientServer("address", client, 1),
 		pro.(dsess.DoltDatabaseProvider),
 		localConfig,
+		d.branchControl,
 		states...,
 	)
 	require.NoError(d.t, err)

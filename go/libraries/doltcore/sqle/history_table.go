@@ -69,7 +69,7 @@ type HistoryTable struct {
 }
 
 func (ht *HistoryTable) ShouldParallelizeAccess() bool {
-	return true
+	return false
 }
 
 func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {

@@ -154,12 +154,12 @@ func removeFooter(p []byte, chunkCount uint32) (out []byte, err error) {
 // Useful to create an onHeapTableIndex without retaining the entire underlying array of data.
 func parseTableIndexByCopy(buff []byte, q MemoryQuotaProvider) (onHeapTableIndex, error) {
 	r := bytes.NewReader(buff)
-	return ReadTableIndexByCopy(r, q)
+	return readTableIndexByCopy(r, q)
 }
 
-// ReadTableIndexByCopy loads an index into memory from an io.ReadSeeker
+// readTableIndexByCopy loads an index into memory from an io.ReadSeeker
 // Caution: Allocates new memory for entire index
-func ReadTableIndexByCopy(rd io.ReadSeeker, q MemoryQuotaProvider) (onHeapTableIndex, error) {
+func readTableIndexByCopy(rd io.ReadSeeker, q MemoryQuotaProvider) (onHeapTableIndex, error) {
 	chunkCount, totalUncompressedData, err := ReadTableFooter(rd)
 	if err != nil {
 		return onHeapTableIndex{}, err
@@ -304,7 +304,7 @@ func (ti onHeapTableIndex) Lookup(h *addr) (indexEntry, bool, error) {
 func (ti onHeapTableIndex) lookupOrdinal(h *addr) (uint32, error) {
 	prefix := h.Prefix()
 
-	for idx := ti.prefixIdx(prefix); idx < ti.chunkCount && ti.prefixAt(idx) == prefix; idx++ {
+	for idx := ti.findPrefix(prefix); idx < ti.chunkCount && ti.prefixAt(idx) == prefix; idx++ {
 		m, err := ti.EntrySuffixMatches(idx, h)
 		if err != nil {
 			return ti.chunkCount, err
@@ -317,22 +317,24 @@ func (ti onHeapTableIndex) lookupOrdinal(h *addr) (uint32, error) {
 	return ti.chunkCount, nil
 }
 
-// prefixIdx returns the first position in |tr.prefixes| whose value ==
-// |prefix|. Returns |tr.chunkCount| if absent
-func (ti onHeapTableIndex) prefixIdx(prefix uint64) (idx uint32) {
+// findPrefix returns the first position in |tr.prefixes| whose value == |prefix|.
+// Returns |tr.chunkCount| if absent
+func (ti onHeapTableIndex) findPrefix(prefix uint64) (idx uint32) {
+	query := make([]byte, addrPrefixSize)
+	binary.BigEndian.PutUint64(query, prefix)
 	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
 	// an extremely tight loop and inlining the code was a significant perf improvement.
 	idx, j := 0, ti.chunkCount
 	for idx < j {
 		h := idx + (j-idx)/2 // avoid overflow when computing h
 		// i ≤ h < j
-		if ti.prefixAt(h) < prefix {
+		o := int64(prefixTupleSize * h)
+		if bytes.Compare(ti.tupleB[o:o+addrPrefixSize], query) < 0 {
 			idx = h + 1 // preserves f(i-1) == false
 		} else {
 			j = h // preserves f(j) == true
 		}
 	}
-
 	return
 }
 
@@ -475,7 +477,7 @@ func (ti onHeapTableIndex) ResolveShortHash(short []byte) ([]string, error) {
 		sPrefix := ti.padStringAndDecode(shortHash, "0")
 
 		// Binary Search for prefix
-		pIdxL = ti.prefixIdx(sPrefix)
+		pIdxL = ti.findPrefix(sPrefix)
 
 		// Prefix doesn't exist
 		if pIdxL == ti.chunkCount {

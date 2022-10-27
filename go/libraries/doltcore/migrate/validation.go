@@ -52,7 +52,7 @@ func validateBranchMapping(ctx context.Context, old, new *doltdb.DoltDB) error {
 	return nil
 }
 
-func validateRootValue(ctx context.Context, old, new *doltdb.RootValue) error {
+func validateRootValue(ctx context.Context, oldParent, old, new *doltdb.RootValue) error {
 	names, err := old.GetTableNames(ctx)
 	if err != nil {
 		return err
@@ -65,6 +65,25 @@ func validateRootValue(ctx context.Context, old, new *doltdb.RootValue) error {
 		if !ok {
 			h, _ := old.HashOf()
 			return fmt.Errorf("expected to find table %s in root value (%s)", name, h.String())
+		}
+
+		// Skip tables that haven't changed
+		op, ok, err := oldParent.GetTable(ctx, name)
+		if err != nil {
+			return err
+		}
+		if ok {
+			oldHash, err := o.HashOf()
+			if err != nil {
+				return err
+			}
+			oldParentHash, err := op.HashOf()
+			if err != nil {
+				return err
+			}
+			if oldHash.Equal(oldParentHash) {
+				continue
+			}
 		}
 
 		n, ok, err := new.GetTable(ctx, name)
@@ -197,11 +216,17 @@ func validateSchema(existing schema.Schema) error {
 
 func nomsKindsFromQueryTypes(qt query.Type) []types.NomsKind {
 	switch qt {
-	case query.Type_UINT8, query.Type_UINT16, query.Type_UINT24,
+	case query.Type_UINT8:
+		return []types.NomsKind{types.UintKind, types.BoolKind}
+
+	case query.Type_UINT16, query.Type_UINT24,
 		query.Type_UINT32, query.Type_UINT64:
 		return []types.NomsKind{types.UintKind}
 
-	case query.Type_INT8, query.Type_INT16, query.Type_INT24,
+	case query.Type_INT8:
+		return []types.NomsKind{types.IntKind, types.BoolKind}
+
+	case query.Type_INT16, query.Type_INT24,
 		query.Type_INT32, query.Type_INT64:
 		return []types.NomsKind{types.IntKind}
 

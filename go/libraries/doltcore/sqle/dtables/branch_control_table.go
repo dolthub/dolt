@@ -113,7 +113,10 @@ func (tbl BranchControlTable) PartitionRows(context *sql.Context, partition sql.
 	tbl.RWMutex.RLock()
 	defer tbl.RWMutex.RUnlock()
 
-	rows := []sql.Row{{"%", tbl.SuperUser, tbl.SuperHost, uint64(branch_control.Permissions_Admin)}}
+	var rows []sql.Row
+	if superUser := tbl.GetSuperUser(); len(superUser) > 0 {
+		rows = append(rows, sql.Row{"%", superUser, tbl.GetSuperHost(), uint64(branch_control.Permissions_Admin)})
+	}
 	for _, value := range tbl.Values {
 		rows = append(rows, sql.Row{
 			value.Branch,
@@ -317,6 +320,8 @@ func (tbl BranchControlTable) insert(ctx context.Context, branch string, user st
 			sql.Row{branch, user, host, permBits})
 	}
 
+	// Add an entry to the binlog
+	tbl.GetBinlog().Insert(branch, user, host, uint64(perms))
 	// Add the expressions to their respective slices
 	branchExpr := branch_control.ParseExpression(branch, sql.Collation_utf8mb4_0900_ai_ci)
 	userExpr := branch_control.ParseExpression(user, sql.Collation_utf8mb4_0900_bin)
@@ -344,6 +349,8 @@ func (tbl BranchControlTable) delete(ctx context.Context, branch string, user st
 	}
 
 	endIndex := len(tbl.Values) - 1
+	// Add an entry to the binlog
+	tbl.GetBinlog().Delete(branch, user, host, uint64(tbl.Values[endIndex].Permissions))
 	// Remove the matching row from all slices by first swapping with the last element
 	tbl.Branches[tblIndex], tbl.Branches[endIndex] = tbl.Branches[endIndex], tbl.Branches[tblIndex]
 	tbl.Users[tblIndex], tbl.Users[endIndex] = tbl.Users[endIndex], tbl.Users[tblIndex]
@@ -354,5 +361,11 @@ func (tbl BranchControlTable) delete(ctx context.Context, branch string, user st
 	tbl.Users = tbl.Users[:endIndex]
 	tbl.Hosts = tbl.Hosts[:endIndex]
 	tbl.Values = tbl.Values[:endIndex]
+	// Then we update the index for the match expressions
+	if tblIndex != endIndex {
+		tbl.Branches[tblIndex].CollectionIndex = uint32(tblIndex)
+		tbl.Users[tblIndex].CollectionIndex = uint32(tblIndex)
+		tbl.Hosts[tblIndex].CollectionIndex = uint32(tblIndex)
+	}
 	return nil
 }

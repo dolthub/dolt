@@ -47,10 +47,11 @@ type RemoteChunkStore struct {
 	bucket   string
 	fs       filesys.Filesys
 	lgr      *logrus.Entry
+	sealer   Sealer
 	remotesapi.UnimplementedChunkStoreServiceServer
 }
 
-func NewHttpFSBackedChunkStore(lgr *logrus.Entry, httpHost string, csCache DBCache, fs filesys.Filesys) *RemoteChunkStore {
+func NewHttpFSBackedChunkStore(lgr *logrus.Entry, httpHost string, csCache DBCache, fs filesys.Filesys, sealer Sealer) *RemoteChunkStore {
 	return &RemoteChunkStore{
 		HttpHost: httpHost,
 		csCache:  csCache,
@@ -59,6 +60,7 @@ func NewHttpFSBackedChunkStore(lgr *logrus.Entry, httpHost string, csCache DBCac
 		lgr: lgr.WithFields(logrus.Fields{
 			"service": "dolt.services.remotesapi.v1alpha1.ChunkStoreServiceServer",
 		}),
+		sealer: sealer,
 	}
 }
 
@@ -177,10 +179,15 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 			logger.Println("Failed to sign request", err)
 			return nil, err
 		}
+		preurl := url.String()
+		url, err = rs.sealer.Seal(url)
+		if err != nil {
+			logger.Println("Failed to seal request", err)
+			return nil, err
+		}
+		logger.Println("The URL is", preurl, "the ranges are", ranges, "sealed url", url.String())
 
-		logger.Println("The URL is", url)
-
-		getRange := &remotesapi.HttpGetRange{Url: url, Ranges: ranges}
+		getRange := &remotesapi.HttpGetRange{Url: url.String(), Ranges: ranges}
 		locs = append(locs, &remotesapi.DownloadLoc{Location: &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: getRange}})
 	}
 
@@ -242,10 +249,15 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 				logger.Println("Failed to sign request", err)
 				return err
 			}
+			preurl := url.String()
+			url, err = rs.sealer.Seal(url)
+			if err != nil {
+				logger.Println("Failed to seal request", err)
+				return err
+			}
+			logger.Println("The URL is", preurl, "the ranges are", ranges, "sealed url", url.String())
 
-			logger.Println("The URL is", url)
-
-			getRange := &remotesapi.HttpGetRange{Url: url, Ranges: ranges}
+			getRange := &remotesapi.HttpGetRange{Url: url.String(), Ranges: ranges}
 			locs = append(locs, &remotesapi.DownloadLoc{Location: &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: getRange}})
 		}
 
@@ -271,13 +283,13 @@ func (rs *RemoteChunkStore) getHost(md metadata.MD) string {
 	return host
 }
 
-func (rs *RemoteChunkStore) getDownloadUrl(logger *logrus.Entry, md metadata.MD, path string) (string, error) {
+func (rs *RemoteChunkStore) getDownloadUrl(logger *logrus.Entry, md metadata.MD, path string) (*url.URL, error) {
 	host := rs.getHost(md)
-	return (&url.URL{
+	return &url.URL{
 		Scheme: "http",
 		Host:   host,
 		Path:   path,
-	}).String(), nil
+	}, nil
 }
 
 func parseTableFileDetails(req *remotesapi.GetUploadLocsRequest) []*remotesapi.TableFileDetails {
@@ -323,32 +335,35 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 	for _, tfd := range tfds {
 		h := hash.New(tfd.Id)
 		url, err := rs.getUploadUrl(logger, md, repoPath, tfd)
-
 		if err != nil {
 			return nil, status.Error(codes.Internal, "Failed to get upload Url.")
 		}
+		url, err = rs.sealer.Seal(url)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "Failed to seal upload Url.")
+		}
 
-		loc := &remotesapi.UploadLoc_HttpPost{HttpPost: &remotesapi.HttpPostTableFile{Url: url}}
+		loc := &remotesapi.UploadLoc_HttpPost{HttpPost: &remotesapi.HttpPostTableFile{Url: url.String()}}
 		locs = append(locs, &remotesapi.UploadLoc{TableFileHash: h[:], Location: loc})
 
-		logger.Printf("sending upload location for chunk %s: %s", h.String(), url)
+		logger.Printf("sending upload location for chunk %s: %s", h.String(), url.String())
 	}
 
 	return &remotesapi.GetUploadLocsResponse{Locs: locs}, nil
 }
 
-func (rs *RemoteChunkStore) getUploadUrl(logger *logrus.Entry, md metadata.MD, repoPath string, tfd *remotesapi.TableFileDetails) (string, error) {
+func (rs *RemoteChunkStore) getUploadUrl(logger *logrus.Entry, md metadata.MD, repoPath string, tfd *remotesapi.TableFileDetails) (*url.URL, error) {
 	fileID := hash.New(tfd.Id).String()
 	params := url.Values{}
 	params.Add("num_chunks", strconv.Itoa(int(tfd.NumChunks)))
 	params.Add("content_length", strconv.Itoa(int(tfd.ContentLength)))
 	params.Add("content_hash", base64.RawURLEncoding.EncodeToString(tfd.ContentHash))
-	return (&url.URL{
+	return &url.URL{
 		Scheme:   "http",
 		Host:     rs.getHost(md),
 		Path:     fmt.Sprintf("%s/%s", repoPath, fileID),
 		RawQuery: params.Encode(),
-	}).String(), nil
+	}, nil
 }
 
 func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRequest) (*remotesapi.RebaseResponse, error) {
@@ -536,11 +551,15 @@ func getTableFileInfo(
 		if err != nil {
 			return nil, status.Error(codes.Internal, "failed to get download url for "+t.FileID())
 		}
+		url, err = rs.sealer.Seal(url)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "failed to get seal download url for "+t.FileID())
+		}
 
 		appendixTableFileInfo = append(appendixTableFileInfo, &remotesapi.TableFileInfo{
 			FileId:    t.FileID(),
 			NumChunks: uint32(t.NumChunks()),
-			Url:       url,
+			Url:       url.String(),
 		})
 	}
 	return appendixTableFileInfo, nil

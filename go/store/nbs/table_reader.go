@@ -277,7 +277,6 @@ func (hs offsetRecSlice) Len() int           { return len(hs) }
 func (hs offsetRecSlice) Less(i, j int) bool { return hs[i].offset < hs[j].offset }
 func (hs offsetRecSlice) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 
-var _ chunkReadPlanner = tableReader{}
 var _ chunkReader = tableReader{}
 
 func (tr tableReader) readCompressedAtOffsets(
@@ -655,11 +654,11 @@ func (tr tableReader) size() (uint64, error) {
 	return i.TableFileSize(), nil
 }
 
-func (tr tableReader) Close() error {
+func (tr tableReader) close() error {
 	return tr.tableIndex.Close()
 }
 
-func (tr tableReader) Clone() (tableReader, error) {
+func (tr tableReader) clone() (tableReader, error) {
 	ti, err := tr.tableIndex.Clone()
 	if err != nil {
 		return tableReader{}, err

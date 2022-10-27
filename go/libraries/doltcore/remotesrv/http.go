@@ -46,9 +46,10 @@ type filehandler struct {
 	fs       filesys.Filesys
 	readOnly bool
 	lgr      *logrus.Entry
+	sealer   Sealer
 }
 
-func newFileHandler(lgr *logrus.Entry, dbCache DBCache, fs filesys.Filesys, readOnly bool) filehandler {
+func newFileHandler(lgr *logrus.Entry, dbCache DBCache, fs filesys.Filesys, readOnly bool, sealer Sealer) filehandler {
 	return filehandler{
 		dbCache,
 		fs,
@@ -56,12 +57,22 @@ func newFileHandler(lgr *logrus.Entry, dbCache DBCache, fs filesys.Filesys, read
 		lgr.WithFields(logrus.Fields{
 			"service": "dolt.services.remotesapi.v1alpha1.HttpFileServer",
 		}),
+		sealer,
 	}
 }
 
 func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	logger := getReqLogger(fh.lgr, req.Method+"_"+req.RequestURI)
 	defer func() { logger.Println("finished") }()
+
+	var err error
+	req.URL, err = fh.sealer.Unseal(req.URL)
+	if err != nil {
+		logger.Printf("could not unseal incoming request URL: %s", err.Error())
+		respWr.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	logger.Printf("unsealed url %s", req.URL.String())
 
 	path := strings.TrimLeft(req.URL.Path, "/")
 
@@ -92,7 +103,7 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 			respWr.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		statusCode = readTableFile(logger, abs, respWr, req)
+		statusCode = readTableFile(logger, abs, respWr, req.Header.Get("Range"))
 
 	case http.MethodPost, http.MethodPut:
 		if fh.readOnly {
@@ -157,15 +168,13 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func readTableFile(logger *logrus.Entry, path string, respWr http.ResponseWriter, req *http.Request) int {
-	rangeStr := req.Header.Get("Range")
-
+func readTableFile(logger *logrus.Entry, path string, respWr http.ResponseWriter, rangeStr string) int {
 	var r io.ReadCloser
 	var readSize int64
 	var fileErr error
 	{
 		if rangeStr == "" {
-			logger.Println("going to read entire file")
+			logger.Println("going to read entire file", path)
 			r, readSize, fileErr = getFileReader(path)
 		} else {
 			offset, length, err := offsetAndLenFromRange(rangeStr)
@@ -173,7 +182,7 @@ func readTableFile(logger *logrus.Entry, path string, respWr http.ResponseWriter
 				logger.Println(err.Error())
 				return http.StatusBadRequest
 			}
-			logger.Printf("going to read file at offset %d, length %d", offset, length)
+			logger.Printf("going to read file %s at offset %d, length %d", path, offset, length)
 			readSize = length
 			r, fileErr = getFileReaderAt(path, offset, length)
 		}

@@ -126,9 +126,12 @@ func NewSqlEngine(
 	}
 
 	// Load the branch control permissions, if they exist
-	if err = branch_control.LoadData(sql.NewEmptyContext(), config.BranchCtrlFilePath, config.DoltCfgDirPath); err != nil {
+	var bcController *branch_control.Controller
+	if bcController, err = branch_control.LoadData(config.BranchCtrlFilePath, config.DoltCfgDirPath); err != nil {
 		return nil, err
 	}
+	// Set the server's super user
+	branch_control.SetSuperUser(config.ServerUser, config.ServerHost)
 
 	// Set up engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
@@ -166,7 +169,7 @@ func NewSqlEngine(
 		dbStates = append(dbStates, dbState)
 	}
 
-	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, mrEnv.Config(), dbStates...)
+	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, mrEnv.Config(), bcController, dbStates...)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +188,7 @@ func NewSqlEngine(
 	return &SqlEngine{
 		dbs:            nameToDB,
 		contextFactory: newSqlContext(sess, config.InitialDb),
-		dsessFactory:   newDoltSession(pro, mrEnv.Config(), config.Autocommit),
+		dsessFactory:   newDoltSession(pro, mrEnv.Config(), config.Autocommit, bcController),
 		engine:         engine,
 		resultFormat:   format,
 	}, nil
@@ -318,7 +321,6 @@ func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.C
 		if sessionDB := sess.GetCurrentDatabase(); sessionDB != "" {
 			sqlCtx.SetCurrentDatabase(sessionDB)
 		} else {
-
 			sqlCtx.SetCurrentDatabase(initialDb)
 		}
 
@@ -326,7 +328,8 @@ func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.C
 	}
 }
 
-func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig, autocommit bool) func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
+func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig,
+	autocommit bool, bc *branch_control.Controller) func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
 	return func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
 		ddbs := dsqle.DbsAsDSQLDBs(dbs)
 		states, err := getDbStates(ctx, ddbs)
@@ -334,7 +337,7 @@ func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfi
 			return nil, err
 		}
 
-		dsess, err := dsess.NewDoltSession(sql.NewEmptyContext(), mysqlSess, pro, config, states...)
+		dsess, err := dsess.NewDoltSession(sql.NewEmptyContext(), mysqlSess, pro, config, bc, states...)
 		if err != nil {
 			return nil, err
 		}

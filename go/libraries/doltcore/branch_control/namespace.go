@@ -31,13 +31,11 @@ type Namespace struct {
 	access *Access
 	binlog *Binlog
 
-	Branches  []MatchExpression
-	Users     []MatchExpression
-	Hosts     []MatchExpression
-	Values    []NamespaceValue
-	SuperUser string
-	SuperHost string
-	RWMutex   *sync.RWMutex
+	Branches []MatchExpression
+	Users    []MatchExpression
+	Hosts    []MatchExpression
+	Values   []NamespaceValue
+	RWMutex  *sync.RWMutex
 }
 
 // NamespaceValue contains the user-facing values of a particular row.
@@ -48,17 +46,15 @@ type NamespaceValue struct {
 }
 
 // newNamespace returns a new Namespace.
-func newNamespace(accessTbl *Access, superUser string, superHost string) *Namespace {
+func newNamespace(accessTbl *Access) *Namespace {
 	return &Namespace{
-		binlog:    NewNamespaceBinlog(nil),
-		access:    accessTbl,
-		Branches:  nil,
-		Users:     nil,
-		Hosts:     nil,
-		Values:    nil,
-		SuperUser: superUser,
-		SuperHost: superHost,
-		RWMutex:   &sync.RWMutex{},
+		binlog:   NewNamespaceBinlog(nil),
+		access:   accessTbl,
+		Branches: nil,
+		Users:    nil,
+		Hosts:    nil,
+		Values:   nil,
+		RWMutex:  &sync.RWMutex{},
 	}
 }
 
@@ -66,7 +62,7 @@ func newNamespace(accessTbl *Access, superUser string, superHost string) *Namesp
 // branch. Handles the super user case.
 func (tbl *Namespace) CanCreate(branch string, user string, host string) bool {
 	// Super user can always create branches
-	if user == tbl.SuperUser && host == tbl.SuperHost {
+	if IsSuperUser(user, host) {
 		return true
 	}
 	matchedSet := Match(tbl.Branches, branch, sql.Collation_utf8mb4_0900_ai_ci)
@@ -115,6 +111,11 @@ func (tbl *Namespace) GetIndex(branchExpr string, userExpr string, hostExpr stri
 		}
 	}
 	return -1
+}
+
+// GetBinlog returns the table's binlog.
+func (tbl *Namespace) GetBinlog() *Binlog {
+	return tbl.binlog
 }
 
 // Access returns the Access table.
