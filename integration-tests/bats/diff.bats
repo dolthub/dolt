@@ -850,6 +850,26 @@ SQL
     run dolt diff ref.with.period..test-branch
     [ $status -eq 1 ]
     [[ ! $output =~ "panic" ]]
+
+    run dolt diff $FIRST_COMMIT...test-branch
+    [ $status -eq 0 ]
+    [[ ! $output =~ "panic" ]]
+    run dolt diff main@$FIRST_COMMIT...test-branch
+    [ $status -eq 1 ]
+    [[ ! $output =~ "panic" ]]
+    run dolt diff ref.with.period...test-branch
+    [ $status -eq 1 ]
+    [[ ! $output =~ "panic" ]]
+
+    run dolt diff --merge-base $FIRST_COMMIT test-branch
+    [ $status -eq 0 ]
+    [[ ! $output =~ "panic" ]]
+    run dolt diff --merge-base main@$FIRST_COMMIT test-branch
+    [ $status -eq 1 ]
+    [[ ! $output =~ "panic" ]]
+    run dolt diff --merge-base ref.with.period test-branch
+    [ $status -eq 1 ]
+    [[ ! $output =~ "panic" ]]
 }
 
 @test "diff: with foreign key and sql output" {
