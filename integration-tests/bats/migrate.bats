@@ -229,3 +229,22 @@ SQL
     run dolt sql -q "SELECT * FROM t ORDER BY a LIMIT 1" -r csv
     [[ "$output" =~ "h&a,B" ]] || false
 }
+
+@test "migrate: database with inverted primary key order" {
+    dolt sql <<SQL
+CREATE TABLE t (
+    pk2 varchar(20) NOT NULL,
+    pk1 varchar(20) NOT NULL,
+    PRIMARY KEY (pk1, pk2));
+INSERT INTO t (pk2, pk1) VALUES ("z","a"),("y","b"),("x","c");
+SQL
+    dolt commit -Am "added table t"
+
+    run dolt schema show t
+    [[ "$output" =~ "PRIMARY KEY (\`pk1\`,\`pk2\`)" ]] || false
+
+    dolt migrate
+
+    run dolt schema show t
+    [[ "$output" =~ "PRIMARY KEY (\`pk1\`,\`pk2\`)" ]] || false
+}

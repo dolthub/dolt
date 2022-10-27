@@ -59,7 +59,7 @@ teardown() {
     dolt sql -q "create user dolt@'%' identified by '123'"
 
     PORT=$( definePORT )
-    dolt sql-server --port=$PORT --user dolt > log.txt 2>&1 &
+    dolt sql-server --port=$PORT --user dolt --socket "dolt.$PORT.sock" > log.txt 2>&1 &
     SERVER_PID=$!
     sleep 5
 
@@ -836,7 +836,7 @@ listener:
   host: "0.0.0.0"
   port: $PORT
 EOF
-    dolt sql-server --config ./config.yml &
+    dolt sql-server --config ./config.yml --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
     # We do things manually here because we need to control CLIENT_MULTI_STATEMENTS.
     python3 -c '
@@ -881,7 +881,7 @@ listener:
   host: "0.0.0.0"
   port: $PORT
 EOF
-    dolt sql-server --config ./config.yml &
+    dolt sql-server --config ./config.yml --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
     # We do things manually here because we need to control CLIENT_MULTI_STATEMENTS.
     python3 -c '
@@ -1298,15 +1298,15 @@ databases:
     cd repo1
     start_sql_server
     PORT=$( definePORT )
-    run dolt sql-server -P $PORT
+    run dolt sql-server -P $PORT --socket "dolt.$PORT.sock"
     [ "$status" -eq 1 ]
 }
 
-@test "sql-server: multi dir sql-server locks out childen" {
+@test "sql-server: multi dir sql-server locks out children" {
     start_sql_server
     cd repo2
     PORT=$( definePORT )
-    run dolt sql-server -P $PORT
+    run dolt sql-server -P $PORT --socket "dolt.$PORT.sock"
     [ "$status" -eq 1 ]
 }
 
@@ -1315,7 +1315,7 @@ databases:
     start_sql_server
     cd ..
     PORT=$( definePORT )
-    run dolt sql-server -P $PORT
+    run dolt sql-server -P $PORT --socket "dolt.$PORT.sock"
     [ "$status" -eq 1 ]
 }
 
@@ -1325,7 +1325,7 @@ databases:
     server_query repo1 1 dolt "" "create database newdb" ""
     cd newdb
     PORT=$( definePORT )
-    run dolt sql-server -P $PORT
+    run dolt sql-server -P $PORT --socket "dolt.$PORT.sock"
     [ "$status" -eq 1 ]
 }
 
@@ -1363,6 +1363,8 @@ databases:
     run dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<< "exit;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "# Welcome to the Dolt MySQL client." ]] || false
+
+    rm /tmp/mysql.sock
 }
 
 @test "sql-server: start server with socket option undefined should set default socket path" {
@@ -1380,6 +1382,8 @@ databases:
     run grep '\"/tmp/mysql.sock\"' log.txt
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
+
+    rm /tmp/mysql.sock
 }
 
 @test "sql-server: server fails to start up if there is already a file in the socket file path" {
@@ -1417,7 +1421,7 @@ listener:
   host: localhost
   port: $PORT
   max_connections: 10
-  socket: /tmp/mysql.sock
+  socket: dolt.$PORT.sock
 
 behavior:
   autocommit: true" > server.yaml
@@ -1428,7 +1432,7 @@ behavior:
 
     server_query repo2 1 dolt "" "select 1 as col1" "col1\n1"
 
-    run grep '\"/tmp/mysql.sock\"' log.txt
+    run grep "dolt.$PORT.sock" log.txt
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
 }
@@ -1470,7 +1474,7 @@ s.close()
 " > port_finder.py
 
     PORT=$(python3 port_finder.py)
-    run dolt sql-server --port=$PORT
+    run dolt sql-server --port=$PORT --socket "dolt.$PORT.sock"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
 
@@ -1524,7 +1528,7 @@ s.close()
     [ $status -eq 0 ]
 
     PORT=$( definePORT )
-    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt &
+    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --socket "dolt.$PORT.sock" &
     SERVER_PID=$! # will get killed by teardown_common
     sleep 5 # not using python wait so this works on windows
 

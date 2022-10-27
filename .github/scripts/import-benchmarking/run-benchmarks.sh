@@ -28,7 +28,7 @@ if [ -z "$MODE" ]; then
 fi
 
 nomsFormat="ldnbf"
-if [ "$NOMS_BIN_FORMAT" == "__DOLT__"]; then
+if [ "$NOMS_BIN_FORMAT" == "__DOLT__" ]; then
   nomsFormat="doltnbf"
 fi
 

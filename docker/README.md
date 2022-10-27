@@ -1,6 +1,6 @@
 # Dolt is Git for Data!
 
-Dolt is a SQL database that you can fork, clone, branch, merge, push
+[Dolt](https://doltdb.com) is a SQL database that you can fork, clone, branch, merge, push
 and pull just like a Git repository. Connect to Dolt just like any
 MySQL database to run queries or update the data using SQL
 commands. Use the command line interface to import CSV files, commit
@@ -24,12 +24,15 @@ Lots of things! Dolt is a generally useful tool with countless
 applications. But if you want some ideas, [here's how people are using
 it so far](https://www.dolthub.com/blog/2022-07-11-dolt-case-studies/).
 
-# Dolt CLI
+Learn more about Dolt use cases, configuration and guides to use dolt on our [documentation page](https://docs.dolthub.com/introduction/what-is-dolt).
 
-The `dolt` CLI has the same commands as `git`, with some extras.
+# How to use this image
 
-```
-$ dolt
+This image is for Dolt CLI, which has the same commands as `git`, with some extras. Running this image without any 
+arguments is equivalent to running `dolt` command locally.
+
+```shell
+$ docker run dolthub/dolt:latest
 Valid commands for dolt are
                 init - Create an empty Dolt data repository.
               status - Show the working tree status.
@@ -72,4 +75,4 @@ Valid commands for dolt are
                 dump - Export all tables in the working set into a file.
 ```
 
-Learn more about Dolt use cases, configuration and guides to use dolt on our [documentation page](https://docs.dolthub.com/introduction/what-is-dolt).
+This image is useful for creating custom Docker Image using this image as base image.

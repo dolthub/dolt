@@ -118,12 +118,12 @@ func (mmtr *fileTableReader) hash() (addr, error) {
 	return mmtr.h, nil
 }
 
-func (mmtr *fileTableReader) Close() error {
-	return mmtr.tableReader.Close()
+func (mmtr *fileTableReader) close() error {
+	return mmtr.tableReader.close()
 }
 
-func (mmtr *fileTableReader) Clone() (chunkSource, error) {
-	tr, err := mmtr.tableReader.Clone()
+func (mmtr *fileTableReader) clone() (chunkSource, error) {
+	tr, err := mmtr.tableReader.clone()
 	if err != nil {
 		return &fileTableReader{}, err
 	}

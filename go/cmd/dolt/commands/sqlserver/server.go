@@ -232,7 +232,12 @@ func Serve(
 				HttpPort: *serverConfig.RemotesapiPort(),
 				GrpcPort: *serverConfig.RemotesapiPort(),
 			})
-			remoteSrv = remotesrv.NewServer(args)
+			remoteSrv, err = remotesrv.NewServer(args)
+			if err != nil {
+				lgr.Errorf("error creating remotesapi server on port %d: %v", *serverConfig.RemotesapiPort(), err)
+				startError = err
+				return
+			}
 			listeners, err := remoteSrv.Listeners()
 			if err != nil {
 				lgr.Errorf("error starting remotesapi server listeners on port %d: %v", *serverConfig.RemotesapiPort(), err)
@@ -256,7 +261,12 @@ func Serve(
 			args := clusterController.RemoteSrvServerArgs(remoteSrvSqlCtx, remotesrv.ServerArgs{
 				Logger: logrus.NewEntry(lgr),
 			})
-			clusterRemoteSrv = remotesrv.NewServer(args)
+			clusterRemoteSrv, err = remotesrv.NewServer(args)
+			if err != nil {
+				lgr.Errorf("error creating remotesapi server on port %d: %v", *serverConfig.RemotesapiPort(), err)
+				startError = err
+				return
+			}
 			listeners, err := clusterRemoteSrv.Listeners()
 			if err != nil {
 				lgr.Errorf("error starting remotesapi server listeners for cluster config on port %d: %v", clusterController.RemoteSrvPort(), err)

@@ -74,6 +74,16 @@ func migrateWorkingSet(ctx context.Context, brRef ref.BranchRef, wsRef ref.Worki
 		return err
 	}
 
+	err = validateRootValue(ctx, oldHeadRoot, oldWs.WorkingRoot(), wr)
+	if err != nil {
+		return err
+	}
+
+	err = validateRootValue(ctx, oldHeadRoot, oldWs.StagedRoot(), sr)
+	if err != nil {
+		return err
+	}
+
 	newWs := doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(wr).WithStagedRoot(sr)
 
 	return new.UpdateWorkingSet(ctx, wsRef, newWs, hash.Hash{}, oldWs.Meta())
@@ -179,7 +189,7 @@ func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB
 
 	// validate root after we flush the ChunkStore to facilitate
 	// investigating failed migrations
-	if err = validateRootValue(ctx, oldRoot, mRoot); err != nil {
+	if err = validateRootValue(ctx, oldParentRoot, oldRoot, mRoot); err != nil {
 		return err
 	}
 
@@ -481,10 +491,19 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 		}
 	}
 
-	if patched {
-		return schema.SchemaFromCols(schema.NewColCollection(cols...))
+	if !patched {
+		return existing, nil
 	}
-	return existing, nil
+
+	sch, err := schema.SchemaFromCols(schema.NewColCollection(cols...))
+	if err != nil {
+		return nil, err
+	}
+
+	if err = sch.SetPkOrdinals(existing.GetPkOrdinals()); err != nil {
+		return nil, err
+	}
+	return sch, nil
 }
 
 func migrateIndexSet(
