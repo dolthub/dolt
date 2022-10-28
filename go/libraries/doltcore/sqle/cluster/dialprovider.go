@@ -34,9 +34,9 @@ import (
 // - client interceptors for transmitting our replication role.
 // - do not use environment credentials. (for now).
 type grpcDialProvider struct {
-	orig   dbfactory.GRPCDialProvider
-	ci     *clientinterceptor
-	caPath string
+	orig dbfactory.GRPCDialProvider
+	ci   *clientinterceptor
+	cfg  Config
 }
 
 func (p grpcDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfactory.GRPCRemoteConfig, error) {
@@ -86,16 +86,19 @@ func (p grpcDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 // if the remotesapi endpoints is HTTPS, then the system roots are used and
 // ServerName is verified against the presented URL SANs of the certificates.
 func (p grpcDialProvider) tlsConfig() (*tls.Config, error) {
-	if p.caPath == "" {
+	tlsCA := p.cfg.RemotesAPIConfig().TLSCA()
+	if tlsCA == "" {
 		return nil, nil
 	}
-	pem, err := ioutil.ReadFile(p.caPath)
+	urlmatches := p.cfg.RemotesAPIConfig().ServerNameURLMatches()
+	dnsmatches := p.cfg.RemotesAPIConfig().ServerNameDNSMatches()
+	pem, err := ioutil.ReadFile(tlsCA)
 	if err != nil {
 		return nil, err
 	}
 	roots := x509.NewCertPool()
 	if ok := roots.AppendCertsFromPEM(pem); !ok {
-		return nil, errors.New("error loading ca roots from " + p.caPath)
+		return nil, errors.New("error loading ca roots from " + tlsCA)
 	}
 	verifyFunc := func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		certs := make([]*x509.Certificate, len(rawCerts))
@@ -119,6 +122,40 @@ func (p grpcDialProvider) tlsConfig() (*tls.Config, error) {
 		_, err = certs[0].Verify(opts)
 		if err != nil {
 			return err
+		}
+		if len(urlmatches) > 0 {
+			found := false
+			for _, n := range urlmatches {
+				for _, cn := range certs[0].URIs {
+					if n == cn.String() {
+						found = true
+					}
+					break
+				}
+				if found {
+					break
+				}
+			}
+			if !found {
+				return errors.New("expected certificate to match something in server_name_urls, but it did not")
+			}
+		}
+		if len(dnsmatches) > 0 {
+			found := false
+			for _, n := range dnsmatches {
+				for _, cn := range certs[0].DNSNames {
+					if n == cn {
+						found = true
+					}
+					break
+				}
+				if found {
+					break
+				}
+			}
+			if !found {
+				return errors.New("expected certificate to match something in server_name_dns, but it did not")
+			}
 		}
 		return nil
 	}
