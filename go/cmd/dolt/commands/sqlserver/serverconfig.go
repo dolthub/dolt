@@ -523,6 +523,12 @@ func ValidateClusterConfig(config cluster.Config) error {
 	if config.RemotesAPIConfig().Port() < 0 || config.RemotesAPIConfig().Port() > 65535 {
 		return fmt.Errorf("cluster: remotesapi: port: is not in range 0-65535: %d", config.RemotesAPIConfig().Port())
 	}
+	if config.RemotesAPIConfig().TLSKey() == "" && config.RemotesAPIConfig().TLSCert() != "" {
+		return fmt.Errorf("cluster: remotesapi: tls_key: must supply a tls_key if you supply a tls_cert")
+	}
+	if config.RemotesAPIConfig().TLSKey() != "" && config.RemotesAPIConfig().TLSCert() == "" {
+		return fmt.Errorf("cluster: remotesapi: tls_cert: must supply a tls_cert if you supply a tls_key")
+	}
 	return nil
 }
 

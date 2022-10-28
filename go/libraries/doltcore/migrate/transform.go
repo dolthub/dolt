@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -277,6 +278,16 @@ func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.Root
 		return nil, err
 	}
 
+	removedTables, err := getRemovedTableNames(ctx, oldParent, oldRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	migrated, err = migrated.RemoveTables(ctx, true, false, removedTables...)
+	if err != nil {
+		return nil, err
+	}
+
 	err = oldRoot.IterTables(ctx, func(name string, oldTbl *doltdb.Table, sch schema.Schema) (bool, error) {
 		ok, err := oldTbl.HasConflicts(ctx)
 		if err != nil {
@@ -343,6 +354,21 @@ func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.Root
 	}
 
 	return migrated, nil
+}
+
+// renames also get returned here
+func getRemovedTableNames(ctx context.Context, prev, curr *doltdb.RootValue) ([]string, error) {
+	prevNames, err := prev.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tblNameSet := set.NewStrSet(prevNames)
+	currNames, err := curr.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tblNameSet.Remove(currNames...)
+	return tblNameSet.AsSlice(), nil
 }
 
 func migrateTable(ctx context.Context, newSch schema.Schema, oldParentTbl, oldTbl, newParentTbl *doltdb.Table) (*doltdb.Table, error) {

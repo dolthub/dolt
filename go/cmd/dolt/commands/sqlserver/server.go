@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -261,12 +262,22 @@ func Serve(
 			args := clusterController.RemoteSrvServerArgs(remoteSrvSqlCtx, remotesrv.ServerArgs{
 				Logger: logrus.NewEntry(lgr),
 			})
+
+			clusterRemoteSrvTLSConfig, err := LoadClusterTLSConfig(serverConfig.ClusterConfig())
+			if err != nil {
+				lgr.Errorf("error starting remotesapi server for cluster config, could not load tls config: %v", err)
+				startError = err
+				return
+			}
+			args.TLSConfig = clusterRemoteSrvTLSConfig
+
 			clusterRemoteSrv, err = remotesrv.NewServer(args)
 			if err != nil {
 				lgr.Errorf("error creating remotesapi server on port %d: %v", *serverConfig.RemotesapiPort(), err)
 				startError = err
 				return
 			}
+
 			listeners, err := clusterRemoteSrv.Listeners()
 			if err != nil {
 				lgr.Errorf("error starting remotesapi server listeners for cluster config on port %d: %v", clusterController.RemoteSrvPort(), err)
@@ -323,6 +334,22 @@ func Serve(
 	}
 
 	return
+}
+
+func LoadClusterTLSConfig(cfg cluster.Config) (*tls.Config, error) {
+	rcfg := cfg.RemotesAPIConfig()
+	if rcfg.TLSKey() == "" && rcfg.TLSCert() == "" {
+		return nil, nil
+	}
+	c, err := tls.LoadX509KeyPair(rcfg.TLSCert(), rcfg.TLSKey())
+	if err != nil {
+		return nil, err
+	}
+	return &tls.Config{
+		Certificates: []tls.Certificate{
+			c,
+		},
+	}, nil
 }
 
 func portInUse(hostPort string) bool {

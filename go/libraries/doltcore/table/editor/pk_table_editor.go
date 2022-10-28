@@ -280,18 +280,36 @@ func (te *pkTableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, in
 		if err != nil {
 			return nil, err
 		}
-		kvp, ok, err := te.tea.Get(ctx, keyHash, key)
+
+		pkKeys, err := te.tea.HasPartial(ctx, te.tSch, keyHash, key)
 		if err != nil {
 			return nil, err
 		}
-		if !ok {
+		if len(pkKeys) == 0 {
 			return nil, nil
 		}
-		dRow, err := row.FromNoms(te.Schema(), kvp.k, kvp.v)
-		if err != nil {
-			return nil, err
+
+		rows := make([]row.Row, len(pkKeys))
+		for i, pkKey := range pkKeys {
+			pkKeyHash, err := pkKey.key.Hash(pkKey.key.Format())
+			if err != nil {
+				return nil, err
+			}
+			kvp, ok, err := te.tea.Get(ctx, pkKeyHash, pkKey.key)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				return nil, nil
+			}
+			dRow, err := row.FromNoms(te.Schema(), kvp.k, kvp.v)
+			if err != nil {
+				return nil, err
+			}
+			rows[i] = dRow
 		}
-		return []row.Row{dRow}, nil
+
+		return rows, nil
 	}
 
 	return nil, fmt.Errorf("an index editor for `%s` could not be found on table `%s`", indexName, te.name)
