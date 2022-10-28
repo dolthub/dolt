@@ -299,8 +299,8 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	return NewDiffSummaryTableFunctionRowIter(diffSummaries), nil
 }
 
-// evaluateArguments returns fromCommitValStr, toCommitValStr and tableName.
-// It evaluates the argument expressions to turn them into values this DiffTableFunction
+// evaluateArguments returns fromCommitVal, toCommitVal, dotCommitVal, and tableName.
+// It evaluates the argument expressions to turn them into values this DiffSummaryTableFunction
 // can use. Note that this method only evals the expressions, and doesn't validate the values.
 func (ds *DiffSummaryTableFunction) evaluateArguments() (interface{}, interface{}, interface{}, string, error) {
 	var tableName string
