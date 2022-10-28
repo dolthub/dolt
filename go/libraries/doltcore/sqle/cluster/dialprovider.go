@@ -39,19 +39,19 @@ type grpcDialProvider struct {
 	caPath string
 }
 
-func (p grpcDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (string, []grpc.DialOption, grpcendpoint.HTTPFetcher, error) {
+func (p grpcDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfactory.GRPCRemoteConfig, error) {
 	tlsConfig, err := p.tlsConfig()
 	if err != nil {
-		return "", nil, nil, err
+		return dbfactory.GRPCRemoteConfig{}, err
 	}
 	config.TLSConfig = tlsConfig
 	config.WithEnvCreds = false
-	endpoint, opts, httpfetcher, err := p.orig.GetGRPCDialParams(config)
+	cfg, err := p.orig.GetGRPCDialParams(config)
 	if err != nil {
-		return "", nil, nil, err
+		return dbfactory.GRPCRemoteConfig{}, err
 	}
-	opts = append(opts, p.ci.Options()...)
-	opts = append(opts, grpc.WithConnectParams(grpc.ConnectParams{
+	cfg.DialOptions = append(cfg.DialOptions, p.ci.Options()...)
+	cfg.DialOptions = append(cfg.DialOptions, grpc.WithConnectParams(grpc.ConnectParams{
 		Backoff: backoff.Config{
 			BaseDelay:  250 * time.Millisecond,
 			Multiplier: 1.6,
@@ -60,7 +60,7 @@ func (p grpcDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (string,
 		},
 		MinConnectTimeout: 250 * time.Millisecond,
 	}))
-	return endpoint, opts, httpfetcher, nil
+	return cfg, nil
 }
 
 // Within a cluster, if remotesapi is configured with a tls_ca, we take the

@@ -238,7 +238,7 @@ func openBrowserForCredsAdd(dc creds.DoltCreds, loginUrl string) {
 }
 
 func getCredentialsClient(dEnv *env.DoltEnv, dc creds.DoltCreds, authEndpoint string, insecure bool) (remotesapi.CredentialsServiceClient, errhand.VerboseError) {
-	endpoint, opts, _, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
+	cfg, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: authEndpoint,
 		Creds:    dc,
 		Insecure: insecure,
@@ -246,7 +246,7 @@ func getCredentialsClient(dEnv *env.DoltEnv, dc creds.DoltCreds, authEndpoint st
 	if err != nil {
 		return nil, errhand.BuildDError("error: unable to build dial options for connecting to server with credentials.").AddCause(err).Build()
 	}
-	conn, err := grpc.Dial(endpoint, opts...)
+	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
 	if err != nil {
 		return nil, errhand.BuildDError("error: unable to connect to server with credentials.").AddCause(err).Build()
 	}

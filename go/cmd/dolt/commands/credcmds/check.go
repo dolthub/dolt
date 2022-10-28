@@ -136,14 +136,14 @@ func loadCred(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (creds.DoltCred
 }
 
 func checkCredAndPrintSuccess(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, endpoint string) errhand.VerboseError {
-	endpoint, opts, _, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
+	cfg, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: endpoint,
 		Creds:    dc,
 	})
 	if err != nil {
 		return errhand.BuildDError("error: unable to build server endpoint options.").AddCause(err).Build()
 	}
-	conn, err := grpc.Dial(endpoint, opts...)
+	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
 	if err != nil {
 		return errhand.BuildDError("error: unable to connect to server with credentials.").AddCause(err).Build()
 	}

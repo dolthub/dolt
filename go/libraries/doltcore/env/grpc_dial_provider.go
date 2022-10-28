@@ -51,7 +51,7 @@ func NewGRPCDialProviderFromDoltEnv(dEnv *DoltEnv) *GRPCDialProvider {
 }
 
 // GetGRPCDialParms implements dbfactory.GRPCDialProvider
-func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (string, []grpc.DialOption, grpcendpoint.HTTPFetcher, error) {
+func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfactory.GRPCRemoteConfig, error) {
 	endpoint := config.Endpoint
 	if strings.IndexRune(endpoint, ':') == -1 {
 		if config.Insecure {
@@ -89,14 +89,17 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (string,
 	} else if config.WithEnvCreds {
 		rpcCreds, err := p.getRPCCreds()
 		if err != nil {
-			return "", nil, nil, err
+			return dbfactory.GRPCRemoteConfig{}, err
 		}
 		if rpcCreds != nil {
 			opts = append(opts, grpc.WithPerRPCCredentials(rpcCreds))
 		}
 	}
-
-	return endpoint, opts, httpfetcher, nil
+	return dbfactory.GRPCRemoteConfig{
+		Endpoint:    endpoint,
+		DialOptions: opts,
+		HTTPFetcher: httpfetcher,
+	}, nil
 }
 
 // getRPCCreds returns any RPC credentials available to this dial provider. If a DoltEnv has been configured
