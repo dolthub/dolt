@@ -24,6 +24,8 @@ table TableSchema {
   secondary_indexes:[Index];
   checks:[CheckConstraint];
   collation:Collation;
+  pk_prefix_lengths:[uint64];
+  idx_prefix_lengths:[uint64];
 }
 
 table Column {
