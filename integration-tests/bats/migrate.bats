@@ -248,3 +248,21 @@ SQL
     run dolt schema show t
     [[ "$output" =~ "PRIMARY KEY (\`pk1\`,\`pk2\`)" ]] || false
 }
+
+@test "migrate: removed tables stay removed" {
+    dolt sql -q "create table alpha (pk int primary key);"
+    dolt sql -q "create table beta (pk int primary key);"
+    dolt commit -Am "create tables"
+
+    dolt sql -q "alter table alpha rename to zulu;"
+    dolt sql -q "drop table beta"
+    dolt commit -Am "rename table alpha to zeta, drop table beta"
+
+    dolt migrate
+
+    run dolt ls
+    [ $status -eq 0 ]
+    [[ "$output" =~ "zulu" ]] || false
+    [[ ! "$output" =~ "alpha" ]] || false
+    [[ ! "$output" =~ "beta" ]] || false
+}

@@ -1482,7 +1482,7 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ INSERT INTO child VALUES (1, 1);",
-				ExpectedErrStr: "cannot add or update a child row - Foreign key violation on fk: `nk01br56`, table: `child`, referenced table: `parent`, key: `[1]`",
+				ExpectedErrStr: "cannot add or update a child row - Foreign key violation on fk: `0050p5ek`, table: `child`, referenced table: `parent`, key: `[1]`",
 			},
 		},
 	},

@@ -68,12 +68,17 @@ type indexImpl struct {
 	comment       string
 }
 
-func NewIndex(name string, tags, allTags []uint64, indexColl *indexCollectionImpl, props IndexProperties) Index {
+func NewIndex(name string, tags, allTags []uint64, indexColl IndexCollection, props IndexProperties) Index {
+	var indexCollImpl *indexCollectionImpl
+	if indexColl != nil {
+		indexCollImpl = indexColl.(*indexCollectionImpl)
+	}
+
 	return &indexImpl{
 		name:          name,
 		tags:          tags,
 		allTags:       allTags,
-		indexColl:     indexColl,
+		indexColl:     indexCollImpl,
 		isUnique:      props.IsUnique,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
