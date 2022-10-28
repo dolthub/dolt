@@ -34,9 +34,22 @@ import (
 
 var GRPCDialProviderParam = "__DOLT__grpc_dial_provider"
 
-// GRPCDialProvider is an interface for getting a *grpc.ClientConn.
+type GRPCRemoteConfig struct {
+	Endpoint    string
+	DialOptions []grpc.DialOption
+	HTTPFetcher grpcendpoint.HTTPFetcher
+}
+
+// GRPCDialProvider is an interface for getting a concrete Endpoint,
+// DialOptions and HTTPFetcher from a slightly more abstract
+// grpcendpoint.Config. It allows a caller to override certain aspects of how
+// the grpc.ClientConn and the resulting remotestorage ChunkStore are
+// configured by dbfactory when it returns remotestorage DBs.
+//
+// An instance of this must be provided in |params[GRPCDialProviderParam]| when
+// calling |CreateDB| with a remotesapi remote. See *env.Remote for example.
 type GRPCDialProvider interface {
-	GetGRPCDialParams(grpcendpoint.Config) (string, []grpc.DialOption, error)
+	GetGRPCDialParams(grpcendpoint.Config) (GRPCRemoteConfig, error)
 }
 
 // DoldRemoteFactory is a DBFactory implementation for creating databases backed by a remote server that implements the
@@ -81,10 +94,13 @@ func (fact DoltRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFo
 	return db, vrw, ns, err
 }
 
+// If |params[NoCachingParameter]| is set in |params| of the CreateDB call for
+// a remotesapi database, then the configured database will have caching at the
+// remotestorage.ChunkStore layer disabled.
 var NoCachingParameter = "__dolt__NO_CACHING"
 
 func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}, dp GRPCDialProvider) (chunks.ChunkStore, error) {
-	endpoint, opts, err := dp.GetGRPCDialParams(grpcendpoint.Config{
+	cfg, err := dp.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint:     urlObj.Host,
 		Insecure:     fact.insecure,
 		WithEnvCreds: true,
@@ -93,10 +109,10 @@ func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.Noms
 		return nil, err
 	}
 
-	opts = append(opts, grpc.WithChainUnaryInterceptor(remotestorage.EventsUnaryClientInterceptor(events.GlobalCollector)))
+	opts := append(cfg.DialOptions, grpc.WithChainUnaryInterceptor(remotestorage.EventsUnaryClientInterceptor(events.GlobalCollector)))
 	opts = append(opts, grpc.WithChainUnaryInterceptor(remotestorage.RetryingUnaryClientInterceptor))
 
-	conn, err := grpc.Dial(endpoint, opts...)
+	conn, err := grpc.Dial(cfg.Endpoint, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +122,7 @@ func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.Noms
 	if err != nil {
 		return nil, fmt.Errorf("could not access dolt url '%s': %w", urlObj.String(), err)
 	}
+	cs = cs.WithHTTPFetcher(cfg.HTTPFetcher)
 
 	if _, ok := params[NoCachingParameter]; ok {
 		cs = cs.WithNoopChunkCache()

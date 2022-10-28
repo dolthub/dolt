@@ -14,8 +14,8 @@ teardown() {
 }
 
 @test "migration-integration: first-hour-db" {
-    dolt clone dolthub/first-hour-db
-    cd first-hour-db
+    dolt clone https://doltremoteapi.dolthub.com/dolthub/first-hour-db-migration-int
+    cd first-hour-db-migration-int
 
     dolt tag -v
     run dolt tag -v
@@ -39,8 +39,8 @@ teardown() {
 }
 
 @test "migration-integration: first-hour-db after garbage collection" {
-    dolt clone dolthub/first-hour-db
-    cd first-hour-db
+    dolt clone https://doltremoteapi.dolthub.com/dolthub/first-hour-db-migration-int
+    cd first-hour-db-migration-int
     dolt gc
 
     dolt tag -v
@@ -65,8 +65,8 @@ teardown() {
 }
 
 @test "migration-integration: us-jails" {
-    dolt clone dolthub/us-jails
-    cd us-jails
+    dolt clone https://doltremoteapi.dolthub.com/dolthub/us-jails-migration-integration
+    cd us-jails-migration-integration
 
     dolt tag -v
     run dolt tag -v

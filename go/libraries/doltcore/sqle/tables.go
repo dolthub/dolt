@@ -1971,76 +1971,30 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 			refColTags[i] = refCol.Tag
 		}
 
+		var tableIndexName, refTableIndexName string
 		tableIndex, ok, err := findIndexWithPrefix(t.sch, sqlFk.Columns)
 		if err != nil {
 			return err
 		}
-		if !ok {
-			// The engine matched on a primary key, and Dolt does not yet support using the primary key within the
-			// schema.Index interface (which is used internally to represent indexes across the codebase). In the
-			// meantime, we must generate a duplicate key over the primary key.
-			//TODO: use the primary key as-is
-			idxReturn, err := creation.CreateIndex(ctx, tbl, "", sqlFk.Columns, false, false, "", editor.Options{
-				ForeignKeyChecksDisabled: true,
-				Deaf:                     t.opts.Deaf,
-				Tempdir:                  t.opts.Tempdir,
-			})
-			if err != nil {
-				return err
-			}
-			tableIndex = idxReturn.NewIndex
-			tbl = idxReturn.NewTable
-			root, err = root.PutTable(ctx, t.tableName, idxReturn.NewTable)
-			if sqlFk.IsSelfReferential() {
-				refTbl = idxReturn.NewTable
-			}
+		// Use secondary index if found; otherwise it will use  empty string, indicating primary key
+		if ok {
+			tableIndexName = tableIndex.Name()
 		}
-
 		refTableIndex, ok, err := findIndexWithPrefix(refSch, sqlFk.ParentColumns)
 		if err != nil {
 			return err
 		}
-		if !ok {
-			// The engine matched on a primary key, and Dolt does not yet support using the primary key within the
-			// schema.Index interface (which is used internally to represent indexes across the codebase). In the
-			// meantime, we must generate a duplicate key over the primary key.
-			//TODO: use the primary key as-is
-			var refPkTags []uint64
-			for _, i := range refSch.GetPkOrdinals() {
-				refPkTags = append(refPkTags, refSch.GetAllCols().GetByIndex(i).Tag)
-			}
-
-			var colNames []string
-			for _, t := range refColTags {
-				c, _ := refSch.GetAllCols().GetByTag(t)
-				colNames = append(colNames, c.Name)
-			}
-
-			// Our duplicate index is only unique if it's the entire primary key (which is by definition unique)
-			unique := len(refPkTags) == len(refColTags)
-			idxReturn, err := creation.CreateIndex(ctx, refTbl, "", colNames, unique, false, "", editor.Options{
-				ForeignKeyChecksDisabled: true,
-				Deaf:                     t.opts.Deaf,
-				Tempdir:                  t.opts.Tempdir,
-			})
-			if err != nil {
-				return err
-			}
-			refTbl = idxReturn.NewTable
-			refTableIndex = idxReturn.NewIndex
-			root, err = root.PutTable(ctx, sqlFk.ParentTable, idxReturn.NewTable)
-			if err != nil {
-				return err
-			}
+		// Use secondary index if found; otherwise it will use  empty string, indicating primary key
+		if ok {
+			refTableIndexName = refTableIndex.Name()
 		}
-
 		doltFk = doltdb.ForeignKey{
 			Name:                   sqlFk.Name,
 			TableName:              sqlFk.Table,
-			TableIndex:             tableIndex.Name(),
+			TableIndex:             tableIndexName,
 			TableColumns:           colTags,
 			ReferencedTableName:    sqlFk.ParentTable,
-			ReferencedTableIndex:   refTableIndex.Name(),
+			ReferencedTableIndex:   refTableIndexName,
 			ReferencedTableColumns: refColTags,
 			OnUpdate:               onUpdateRefAction,
 			OnDelete:               onDeleteRefAction,

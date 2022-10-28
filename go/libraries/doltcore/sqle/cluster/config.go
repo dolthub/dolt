@@ -23,6 +23,9 @@ type Config interface {
 
 type RemotesAPIConfig interface {
 	Port() int
+	TLSKey() string
+	TLSCert() string
+	TLSCA() string
 }
 
 type StandbyRemoteConfig interface {

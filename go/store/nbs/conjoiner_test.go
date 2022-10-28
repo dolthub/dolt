@@ -64,7 +64,7 @@ func makeTestSrcs(t *testing.T, tableSizes []uint32, p tablePersister) (srcs chu
 		}
 		cs, err := p.Persist(context.Background(), mt, nil, &Stats{})
 		require.NoError(t, err)
-		c, err := cs.Clone()
+		c, err := cs.clone()
 		require.NoError(t, err)
 		srcs = append(srcs, c)
 	}
@@ -76,7 +76,7 @@ func TestConjoin(t *testing.T) {
 	makeTestTableSpecs := func(tableSizes []uint32, p tablePersister) (specs []tableSpec) {
 		for _, src := range makeTestSrcs(t, tableSizes, p) {
 			specs = append(specs, tableSpec{mustAddr(src.hash()), mustUint32(src.count())})
-			err := src.Close()
+			err := src.close()
 			require.NoError(t, err)
 		}
 		return
@@ -93,28 +93,34 @@ func TestConjoin(t *testing.T) {
 	}
 
 	assertContainAll := func(t *testing.T, p tablePersister, expect, actual []tableSpec) {
-		open := func(specs []tableSpec) (srcs chunkReaderGroup) {
+		open := func(specs []tableSpec) (sources chunkSources) {
 			for _, sp := range specs {
 				cs, err := p.Open(context.Background(), sp.name, sp.chunkCount, nil)
-
 				if err != nil {
 					require.NoError(t, err)
 				}
-
-				srcs = append(srcs, cs)
+				sources = append(sources, cs)
 			}
 			return
 		}
-		expectSrcs, actualSrcs := open(expect), open(actual)
-		chunkChan := make(chan extractRecord, mustUint32(expectSrcs.count()))
-		err := expectSrcs.extract(context.Background(), chunkChan)
-		require.NoError(t, err)
-		close(chunkChan)
 
-		for rec := range chunkChan {
-			has, err := actualSrcs.has(rec.a)
+		expectSrcs, actualSrcs := open(expect), open(actual)
+
+		ctx := context.Background()
+		for _, src := range expectSrcs {
+			err := extractAllChunks(ctx, src, func(rec extractRecord) {
+				var ok bool
+				for _, src := range actualSrcs {
+					var err error
+					ok, err = src.has(rec.a)
+					require.NoError(t, err)
+					if ok {
+						break
+					}
+				}
+				assert.True(t, ok)
+			})
 			require.NoError(t, err)
-			assert.True(t, has)
 		}
 	}
 
