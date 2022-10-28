@@ -183,7 +183,7 @@ func (fk ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
 				fk.Name, fk.ReferencedTableName)
 		}
 	}
-	if !sch.Indexes().Contains(fk.ReferencedTableIndex) {
+	if (fk.ReferencedTableIndex != "" && !sch.Indexes().Contains(fk.ReferencedTableIndex)) || (fk.ReferencedTableIndex == "" && sch.GetPKCols().Size() < len(fk.ReferencedTableColumns)) {
 		return fmt.Errorf("foreign key `%s` has entered an invalid state, referenced table `%s` is missing the index `%s`",
 			fk.Name, fk.ReferencedTableName, fk.ReferencedTableIndex)
 	}
@@ -203,7 +203,7 @@ func (fk ForeignKey) ValidateTableSchema(sch schema.Schema) error {
 			return fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` has unexpected schema", fk.Name, fk.TableName)
 		}
 	}
-	if !sch.Indexes().Contains(fk.TableIndex) {
+	if (fk.TableIndex != "" && !sch.Indexes().Contains(fk.TableIndex)) || (fk.TableIndex == "" && sch.GetPKCols().Size() < len(fk.TableColumns)) {
 		return fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` is missing the index `%s`",
 			fk.Name, fk.TableName, fk.TableIndex)
 	}

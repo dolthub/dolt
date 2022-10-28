@@ -244,7 +244,7 @@ func nomsParentFkConstraintViolations(
 				continue
 			}
 
-			postParentIndexPartialKey, err := row.ReduceToIndexPartialKey(postParent.Index, postParentRow)
+			postParentIndexPartialKey, err := row.ReduceToIndexPartialKey(foreignKey.TableColumns, postParent.Index, postParentRow)
 			if err != nil {
 				return nil, false, err
 			}
@@ -362,8 +362,14 @@ func nomsChildFkConstraintViolations(
 	preChildRowData types.Map,
 ) (*doltdb.Table, bool, error) {
 	foundViolations := false
-	postParentIndexTags := postParent.Index.IndexedColumnTags()
-	postChildIndexTags := postChild.Index.IndexedColumnTags()
+	var postParentIndexTags, postChildIndexTags []uint64
+	if postParent.Index.Name() == "" {
+		postParentIndexTags = foreignKey.ReferencedTableColumns
+		postChildIndexTags = foreignKey.TableColumns
+	} else {
+		postParentIndexTags = postParent.Index.IndexedColumnTags()
+		postChildIndexTags = postChild.Index.IndexedColumnTags()
+	}
 	postChildCVMap, err := postChild.Table.GetConstraintViolations(ctx)
 	if err != nil {
 		return nil, false, err
@@ -411,7 +417,7 @@ func nomsChildFkConstraintViolations(
 				continue
 			}
 
-			postChildIndexPartialKey, err := row.ReduceToIndexPartialKey(postChild.Index, postChildRow)
+			postChildIndexPartialKey, err := row.ReduceToIndexPartialKey(postChildIndexTags, postChild.Index, postChildRow)
 			if err != nil {
 				return nil, false, err
 			}
@@ -496,6 +502,28 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName st
 	if err != nil {
 		return nil, false, err
 	}
+
+	// Create Primary Key Index
+	if idxName == "" {
+		pkCols := sch.GetPKCols()
+		pkIdxColl := schema.NewIndexCollection(pkCols, pkCols)
+		pkIdxProps := schema.IndexProperties{
+			IsUnique:      true,
+			IsUserDefined: false,
+			Comment:       "",
+		}
+		pkIdx := schema.NewIndex("", pkCols.SortedTags, pkCols.SortedTags, pkIdxColl, pkIdxProps)
+		return &constraintViolationsLoadedTable{
+			TableName:   trueTblName,
+			Table:       tbl,
+			Schema:      sch,
+			RowData:     rowData,
+			Index:       pkIdx,
+			IndexSchema: pkIdx.Schema(),
+			IndexData:   rowData,
+		}, true, nil
+	}
+
 	idx, ok := sch.Indexes().GetByNameCaseInsensitive(idxName)
 	if !ok {
 		return &constraintViolationsLoadedTable{

@@ -73,10 +73,10 @@ Show changes between the working and staged tables, changes between the working 
    This form is to view the changes you made relative to the staging area for the next commit. In other words, the differences are what you could tell Dolt to further add but you still haven't. You can stage these changes by using dolt add.
 
 {{.EmphasisLeft}}dolt diff [--options] [--merge-base] <commit> [<tables>...]{{.EmphasisRight}}
-   This form is to view the changes you have in your working tables relative to the named {{.LessThan}}commit{{.GreaterThan}}. You can use HEAD to compare it with the latest commit, or a branch name to compare with the tip of a different branch. If {{.EmphasisLeft}}--merge-base{{.EmphasisRight}} is given, instead of using {{.LessThan}}commit{{.GreaterThan}}, use the merge base of {{.LessThan}}commit{{.GreaterThan}} and HEAD. {{.EmphasisLeft}}dolt diff --merge-base A{{.EmphasisRight}} is equivalent to {{.EmphasisLeft}}dolt diff $(dolt merge-base A HEAD){{.EmphasisRight}}.
+   This form is to view the changes you have in your working tables relative to the named {{.LessThan}}commit{{.GreaterThan}}. You can use HEAD to compare it with the latest commit, or a branch name to compare with the tip of a different branch. If {{.EmphasisLeft}}--merge-base{{.EmphasisRight}} is given, instead of using {{.LessThan}}commit{{.GreaterThan}}, use the merge base of {{.LessThan}}commit{{.GreaterThan}} and HEAD. {{.EmphasisLeft}}dolt diff --merge-base A{{.EmphasisRight}} is equivalent to {{.EmphasisLeft}}dolt diff $(dolt merge-base A HEAD){{.EmphasisRight}} and {{.EmphasisLeft}}dolt diff A...HEAD{{.EmphasisRight}}.
 
 {{.EmphasisLeft}}dolt diff [--options] [--merge-base] <commit> <commit> [<tables>...]{{.EmphasisRight}}
-   This is to view the changes between two arbitrary {{.EmphasisLeft}}commit{{.EmphasisRight}}. If {{.EmphasisLeft}}--merge-base{{.EmphasisRight} is given, use the merge base of the two commits for the "before" side. {{.EmphasisLeft}}dolt diff --merge-base A B{{.EmphasisRight}} is equivalent to {{.EmphasisLeft}}dolt diff $(dolt merge-base A B) B{{.EmphasisRight}}.
+   This is to view the changes between two arbitrary {{.EmphasisLeft}}commit{{.EmphasisRight}}. If {{.EmphasisLeft}}--merge-base{{.EmphasisRight} is given, use the merge base of the two commits for the "before" side. {{.EmphasisLeft}}dolt diff --merge-base A B{{.EmphasisRight}} is equivalent to {{.EmphasisLeft}}dolt diff $(dolt merge-base A B) B{{.EmphasisRight}} and {{.EmphasisLeft}}dolt diff A...B{{.EmphasisRight}}.
 
 {{.EmphasisLeft}}dolt diff [--options] <commit>..<commit> [<tables>...]{{.EmphasisRight}}
    This is synonymous to the above form (without the ..) to view the changes between two arbitrary {{.EmphasisLeft}}commit{{.EmphasisRight}}.
@@ -139,7 +139,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
 	ap.SupportsFlag(CachedFlag, "c", "Show only the unstaged data changes.")
 	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
-	ap.SupportsFlag(MergeBase, "", "Uses merge base of {{.LessThan}}from_commit{{.GreaterThan}} and {{.LessThan}}to_commit{{.GreaterThan}} (or HEAD if not supplied) as {{.LessThan}}from_commit{{.GreaterThan}}")
+	ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
 	return ap
 }
 
@@ -393,7 +393,7 @@ func (dArgs *diffArgs) applyDotRevisions(ctx context.Context, dEnv *env.DoltEnv,
 
 		if len(refs[1]) > 0 {
 			if toRoot, ok = maybeResolve(ctx, dEnv, refs[1]); !ok {
-				return fmt.Errorf("to ref in two dot diff must be valid ref: %s", refs[1])
+				return fmt.Errorf("to ref in three dot diff must be valid ref: %s", refs[1])
 			}
 			dArgs.toRoot = toRoot
 			dArgs.toRef = refs[1]

@@ -22,6 +22,9 @@ setup() {
 
 teardown() {
     stop_sql_server
+    # Added this sleep because it was leaving garbage without it.
+    sleep 1
+    rm -rf $BATS_TMPDIR/sql-server-test$$
     teardown_common
 }
 
@@ -41,12 +44,14 @@ teardown() {
     # start the server and ensure there are no databases yet
     cd $tempDir/empty_server
     start_sql_server
-    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ information_schema ]] || false
+    [[ $output =~ mysql ]] || false
 
     # verify that dolt_clone works
-    # TODO: Once dolt_clone can be called without a selected database, this can be removed
-    server_query "" 1 dolt "" "create database test01;" ""
-    server_query "test01" 1 dolt "" "call dolt_clone('file:///$tempDir/remote');" "status\n0"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test01" ""
+    dolt sql-client -P $PORT -u dolt --use-db 'test01' -q"call dolt_clone('file:///$tempDir/remote')" 
 }
 
 @test "sql-server: server assumes existing user" {
@@ -70,27 +75,40 @@ teardown() {
     dolt branch other
 
     start_sql_server
-    server_query repo1 1 dolt "" "SET PERSIST repo1_default_branch = 'dev';" ""
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "SET PERSIST repo1_default_branch = 'dev'"
     stop_sql_server
     start_sql_server
-    server_query repo1 1 dolt "" "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\ndev"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT @@repo1_default_branch;"
+    [ $status -eq 0 ]
+    [[ $output =~ "@@SESSION.repo1_default_branch" ]] || false
+    [[ $output =~ "dev" ]] || false
     stop_sql_server
 
     # system variable is lost when starting sql-server outside of the folder
     # because global config is used.
     cd ..
     start_sql_server
-    server_query repo1 1 dolt "" "SELECT LENGTH(@@repo1_default_branch);" "LENGTH(@@repo1_default_branch)\n0"
-    server_query repo1 1 dolt "" "SET PERSIST repo1_default_branch = 'other';" ""
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT LENGTH(@@repo1_default_branch);"
+    [ $status -eq 0 ]
+    [[ $output =~ "LENGTH(@@repo1_default_branch)" ]] || false
+    [[ $output =~ " 0 " ]] || false
+    
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SET PERSIST repo1_default_branch = 'other'"
     stop_sql_server
     start_sql_server
-    server_query repo1 1 dolt "" "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\nother"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT @@repo1_default_branch"
+    [ $status -eq 0 ]
+    [[ $output =~ "@@SESSION.repo1_default_branch" ]] || false
+    [[ $output =~ "other" ]] || false
     stop_sql_server
 
     # ensure we didn't blow away local setting
     cd repo1
     start_sql_server_with_args --user dolt --doltcfg-dir './'
-    server_query repo1 1 dolt "" "SELECT @@repo1_default_branch;" "@@SESSION.repo1_default_branch\ndev"
+        run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT @@repo1_default_branch"
+    [ $status -eq 0 ]
+    [[ $output =~ "@@SESSION.repo1_default_branch" ]] || false
+    [[ $output =~ "dev" ]] || false
 }
 
 @test "sql-server: user session variables from config" {
@@ -117,25 +135,21 @@ user_session_vars:
     run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user0  --password=pass0<<SQL
 SELECT @@aws_credentials_file, @@aws_credentials_profile;
 SQL
-    echo $output
     [[ "$output" =~ /Users/user0/.aws/config.*default ]] || false
 
     run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user1 --password=pass1<<SQL
 SELECT @@aws_credentials_file, @@aws_credentials_profile;
 SQL
-    echo $output
     [[ "$output" =~ /Users/user1/.aws/config.*lddev ]] || false
 
     run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user2 --password=pass2<<SQL
 SELECT @@aws_credentials_file, @@aws_credentials_profile;
 SQL
-    echo $output
     [[ "$output" =~ NULL.*NULL ]] || false
 
     run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user2 --password=pass2<<SQL
 SET @@aws_credentials_file="/Users/should_fail";
 SQL
-    echo $output
     [[ "$output" =~ "Variable 'aws_credentials_file' is a read only variable" ]] || false
 }
 
@@ -151,13 +165,13 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false
 
-    server_query repo1 1 dolt "" "CREATE TABLE one_pk (
+    dolt sql-client -P $PORT -u dolt -q "CREATE TABLE one_pk (
         pk BIGINT NOT NULL,
         c1 BIGINT,
         c2 BIGINT,
-        PRIMARY KEY (pk)    )" ""
+        PRIMARY KEY (pk))"
+    
     run dolt ls
-
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
 
@@ -165,14 +179,19 @@ SQL
     run dolt sql --user=dolt -q "insert into one_pk values (1,1,1)"
     [ "$status" -eq 1 ]
 
-    server_query repo1 1 dolt "" "SELECT * FROM one_pk ORDER by pk" ""
+    run dolt sql-client -P $PORT -u dolt -q "SELECT * FROM one_pk"
+    [ $status -eq 0 ]
+    ! [[ $output =~ " 1 " ]] || false
 
     # Test import as well (used by doltpy)
     echo 'pk,c1,c2' > import.csv
     echo '2,2,2' >> import.csv
     run dolt table import -u one_pk import.csv
     [ "$status" -eq 1 ]
-    server_query repo1 1 dolt "" "SELECT * FROM one_pk ORDER by pk" ""
+    
+    run dolt sql-client -P $PORT -u dolt -q "SELECT * FROM one_pk"
+    [ $status -eq 0 ]
+    ! [[ $output =~ " 2 " ]] || false
 }
 
 @test "sql-server: test dolt sql interface works properly with autocommit" {
@@ -188,11 +207,11 @@ SQL
 
     # create table with autocommit off and verify there are still no tables
     server_query repo1 0 dolt "" "CREATE TABLE one_pk (
-        pk BIGINT NOT NULL COMMENT 'tag:0',
-        c1 BIGINT COMMENT 'tag:1',
-        c2 BIGINT COMMENT 'tag:2',
-        PRIMARY KEY (pk)
-    )" ""
+        pk BIGINT NOT NULL,
+        c1 BIGINT,
+        c2 BIGINT,
+        PRIMARY KEY (pk))"
+    
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false
@@ -206,12 +225,12 @@ SQL
     [[ "$output" =~ "No tables in working set" ]] || false
 
     # create table with autocommit on and verify table creation
-    server_query repo1 1 dolt "" "CREATE TABLE one_pk (
+    dolt sql-client -P $PORT -u dolt -q "CREATE TABLE one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c1 BIGINT COMMENT 'tag:1',
         c2 BIGINT COMMENT 'tag:2',
         PRIMARY KEY (pk)
-    )" ""
+    )"
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
@@ -253,12 +272,12 @@ SQL
     start_sql_server repo1
 
     # add some working changes
-    server_query repo1 1 dolt "" "INSERT INTO test VALUES (7,7);"
+    dolt sql-client -P $PORT -u dolt -q "INSERT INTO test VALUES (7,7);"
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
-    server_query repo1 1 dolt "" "SELECT DOLT_RESET('--hard');"
+    dolt sql-client -P $PORT -u dolt -q "CALL DOLT_RESET('--hard');"
 
     run dolt status
     [ "$status" -eq 0 ]
@@ -269,7 +288,7 @@ SQL
 
     server_query repo1 1 dolt "" "
         INSERT INTO test VALUES (8,8);
-        SELECT DOLT_RESET('--hard');"
+        CALL DOLT_RESET('--hard');"
 
     run dolt status
     [ "$status" -eq 0 ]
@@ -285,12 +304,11 @@ SQL
     start_multi_db_server repo1
 
     # create a table in repo1
-    server_query repo1 1 dolt "" "CREATE TABLE r1_one_pk (
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE r1_one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c1 BIGINT COMMENT 'tag:1',
         c2 BIGINT COMMENT 'tag:2',
-        PRIMARY KEY (pk)
-    )" ""
+        PRIMARY KEY (pk))"
 
     # create a table in repo2
     server_query repo1 1 dolt "" "USE repo2; CREATE TABLE r2_one_pk (
@@ -298,11 +316,13 @@ SQL
         c3 BIGINT COMMENT 'tag:1',
         c4 BIGINT COMMENT 'tag:2',
         PRIMARY KEY (pk)
-    )" ";"
+    )"
 
     # validate tables in repos
-    server_query repo1 1 dolt "" "SHOW tables" "Tables_in_repo1\nr1_one_pk"
-    server_query repo1 1 dolt "" "USE repo2;SHOW tables" ";Tables_in_repo2\nr2_one_pk"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW tables"
+    [ $status -eq 0 ]
+    [[ $output =~ "r1_one_pk" ]] || false
+    server_query repo1 1 dolt "" "USE repo2; SHOW tables" ";Tables_in_repo2\nr2_one_pk"
 
     # put data in both
     server_query repo1 1 dolt "" "
@@ -314,78 +334,147 @@ SQL
     INSERT INTO r2_one_pk (pk,c3) VALUES (1,1);
     INSERT INTO r2_one_pk (pk,c3,c4) VALUES (2,2,2),(3,3,3)"
 
-    server_query repo1 1 dolt "" "SELECT * FROM repo1.r1_one_pk ORDER BY pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
-    server_query repo1 1 dolt "" "SELECT * FROM repo2.r2_one_pk ORDER BY pk" "pk,c3,c4\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo1.r1_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,," ]] || false
+    [[ $output =~ "1,1," ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
+
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,," ]] || false
+    [[ $output =~ "1,1," ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
 
     server_query repo1 1 dolt "" "
     DELETE FROM r1_one_pk where pk=0;
     USE repo2;
     DELETE FROM r2_one_pk where pk=0"
 
-    server_query repo1 1 dolt "" "SELECT * FROM repo1.r1_one_pk ORDER BY pk" "pk,c1,c2\n1,1,None\n2,2,2\n3,3,3"
-    server_query repo1 1 dolt "" "SELECT * FROM repo2.r2_one_pk ORDER BY pk" "pk,c3,c4\n1,1,None\n2,2,2\n3,3,3"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo1.r1_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "0,," ]] || false
+    [[ $output =~ "1,1," ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
 
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "0,," ]] || false
+    [[ $output =~ "1,1," ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
+    
     server_query repo1 1 dolt "" "
     UPDATE r1_one_pk SET c2=1 WHERE pk=1;
     USE repo2;
     UPDATE r2_one_pk SET c4=1 where pk=1"
 
-    server_query repo1 1 dolt "" "SELECT * FROM repo1.r1_one_pk ORDER BY pk" "pk,c1,c2\n1,1,1\n2,2,2\n3,3,3"
-    server_query repo1 1 dolt "" "SELECT * FROM repo2.r2_one_pk ORDER BY pk" "pk,c3,c4\n1,1,1\n2,2,2\n3,3,3"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo1.r1_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    echo $output
+    ! [[ $output =~ "0,," ]] || false
+    ! [[ $output =~ "1,1, " ]] || false
+    [[ $output =~ "1,1,1" ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
+
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "0,," ]] || false
+    ! [[ $output =~ "1,1, " ]] || false
+    [[ $output =~ "1,1,1" ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
 }
 
 @test "sql-server: test multi db without use statements" {
-    skip "autocommit fails when the current db is not the one being written"
     start_multi_db_server repo1
 
     # create a table in repo1
-    server_query repo1 1 dolt "" "CREATE TABLE repo1.r1_one_pk (
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE repo1.r1_one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c1 BIGINT COMMENT 'tag:1',
         c2 BIGINT COMMENT 'tag:2',
-        PRIMARY KEY (pk)
-    )" ""
+        PRIMARY KEY (pk))"
 
     # create a table in repo2
-    server_query repo1 1 dolt "" "USE repo2; CREATE TABLE repo2.r2_one_pk (
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE repo2.r2_one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c3 BIGINT COMMENT 'tag:1',
         c4 BIGINT COMMENT 'tag:2',
         PRIMARY KEY (pk)
-    )" ";"
+    )"
 
     # validate tables in repos
-    server_query repo1 1 dolt "" "SHOW tables" "Table\nr1_one_pk"
-    server_query repo1 1 dolt "" "USE repo2;SHOW tables" ";Table\nr2_one_pk"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW tables"
+    [ $status -eq 0 ]
+    [[ $output =~ "r1_one_pk" ]] || false
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "SHOW tables"
+    [ $status -eq 0 ]
+    [[ $output =~ "r2_one_pk" ]] || false
 
-    # put data in both
-    server_query repo1 1 dolt "" "
-    INSERT INTO repo1.r1_one_pk (pk) VALUES (0);
-    INSERT INTO repo1.r1_one_pk (pk,c1) VALUES (1,1);
-    INSERT INTO repo1.r1_one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
-    USE repo2;
-    INSERT INTO repo2.r2_one_pk (pk) VALUES (0);
-    INSERT INTO repo2.r2_one_pk (pk,c3) VALUES (1,1);
-    INSERT INTO repo2.r2_one_pk (pk,c3,c4) VALUES (2,2,2),(3,3,3)"
+    # put data in both using database scoped inserts
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo1.r1_one_pk (pk) VALUES (0)" 
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo1.r1_one_pk (pk,c1) VALUES (1,1)"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo1.r1_one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
+    
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo2.r2_one_pk (pk) VALUES (0)"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo2.r2_one_pk (pk,c3) VALUES (1,1)"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo2.r2_one_pk (pk,c3,c4) VALUES (2,2,2),(3,3,3)"
 
-    server_query repo1 1 dolt "" "SELECT * FROM repo1.r1_one_pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
-    server_query repo1 1 dolt "" "SELECT * FROM repo2.r2_one_pk" "pk,c3,c4\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo1.r1_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,," ]] || false
+    [[ $output =~ "1,1," ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
 
-    server_query repo1 1 dolt "" "
-    DELETE FROM repo1.r1_one_pk where pk=0;
-    USE repo2;
-    DELETE FROM repo2.r2_one_pk where pk=0"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,," ]] || false
+    [[ $output =~ "1,1," ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
+    
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "DELETE FROM repo1.r1_one_pk where pk=0"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "DELETE FROM repo2.r2_one_pk where pk=0"
+    
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo1.r1_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "0,," ]] || false
+    [[ $output =~ "1,1," ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
 
-    server_query repo1 1 dolt "" "SELECT * FROM repo1.r1_one_pk" "pk,c1,c2\n1,1,None\n2,2,2\n3,3,3"
-    server_query repo1 1 dolt "" "SELECT * FROM repo2.r2_one_pk" "pk,c3,c4\n1,1,None\n2,2,2\n3,3,3"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "0,," ]] || false
+    [[ $output =~ "1,1," ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
 
-    server_query repo1 1 dolt "" "
-    UPDATE repo1.r1_one_pk SET c2=1 WHERE pk=1;
-    USE repo2;
-    UPDATE repo2.r2_one_pk SET c4=1 where pk=1"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "UPDATE repo1.r1_one_pk SET c2=1 WHERE pk=1"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "UPDATE repo2.r2_one_pk SET c4=1 where pk=1"
 
-    server_query repo1 1 dolt "" "SELECT * FROM repo1.r1_one_pk" "pk,c1,c2\n1,1,1\n2,2,2\n3,3,3"
-    server_query repo1 1 dolt "" "SELECT * FROM repo2.r2_one_pk" "pk,c3,c4\n1,1,1\n2,2,2\n3,3,3"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo1.r1_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    echo $output
+    ! [[ $output =~ "0,," ]] || false
+    ! [[ $output =~ "1,1, " ]] || false
+    [[ $output =~ "1,1,1" ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
+
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "0,," ]] || false
+    ! [[ $output =~ "1,1, " ]] || false
+    [[ $output =~ "1,1,1" ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
 }
 
 @test "sql-server: DOLT_ADD, DOLT_COMMIT, DOLT_CHECKOUT, DOLT_MERGE work together in server mode" {
@@ -394,20 +483,22 @@ SQL
      cd repo1
      start_sql_server repo1
 
-     server_query repo1 1 dolt "" "
-     CREATE TABLE test (
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE test (
          pk int primary key
-     );
-     INSERT INTO test VALUES (0),(1),(2);
-     SELECT DOLT_ADD('.');
-     SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
-     SELECT DOLT_CHECKOUT('-b', 'feature-branch');
-     "
+     )"
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO test VALUES (0),(1),(2)"
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CALL DOLT_ADD('test')"
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CALL DOLT_COMMIT('-a', '-m', 'Step 1')"
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CALL DOLT_CHECKOUT('-b', 'feature-branch')"
 
-     server_query repo1 1 dolt "" "SELECT * FROM test order by pk" "pk\n0\n1\n2"
+     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT * FROM test"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
 
      server_query repo1 1 dolt "" "
-     SELECT DOLT_CHECKOUT('feature-branch');
+     CALL DOLT_CHECKOUT('feature-branch');
      INSERT INTO test VALUES (3);
      INSERT INTO test VALUES (4);
      INSERT INTO test VALUES (21232);
@@ -415,11 +506,17 @@ SQL
      UPDATE test SET pk=21 WHERE pk=21232;
      "
 
-     server_query repo1 1 dolt "" "SELECT * FROM test" "pk\n0\n1\n2"
+     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT * FROM test"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
+     ! [[ $output =~ " 3 " ]] || false
+     ! [[ $output =~ " 21 " ]] || false
 
      server_query repo1 1 dolt "" "
-     SELECT DOLT_CHECKOUT('feature-branch');
-     SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
+     CALL DOLT_CHECKOUT('feature-branch');
+     CALL DOLT_COMMIT('-a', '-m', 'Insert 3');
      "
 
      server_query repo1 1 dolt "" "
@@ -427,12 +524,19 @@ SQL
      INSERT INTO test VALUES (500001);
      DELETE FROM test WHERE pk=500001;
      UPDATE test SET pk=60 WHERE pk=500000;
-     SELECT DOLT_ADD('.');
-     SELECT DOLT_COMMIT('-m', 'Insert 60');
-     SELECT DOLT_MERGE('feature-branch','-m','merge feature-branch');
+     CALL DOLT_ADD('.');
+     CALL DOLT_COMMIT('-m', 'Insert 60');
+     CALL DOLT_MERGE('feature-branch','-m','merge feature-branch');
      "
 
-     server_query repo1 1 dolt "" "SELECT * FROM test order by pk" "pk\n0\n1\n2\n3\n21\n60"
+     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT * FROM test"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
+     [[ $output =~ " 3 " ]] || false
+     [[ $output =~ " 21 " ]] || false
+     [[ $output =~ " 60 " ]] || false
 
      run dolt status
      [ $status -eq 0 ]
@@ -460,9 +564,18 @@ SQL
      SELECT DOLT_MERGE('feature-branch');
      "
 
-     server_query repo1 1 dolt "" "SELECT * FROM test ORDER BY pk" "pk\n1\n2\n3\n1000"
+     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT * FROM test"
+     [ $status -eq 0 ]
+     echo $output
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
+     [[ $output =~ " 3 " ]] || false
+     [[ $output =~ " 1000 " ]] || false
+     ! [[ $output =~ " 0 " ]] || false
 
-     server_query repo1 1 dolt "" "SELECT COUNT(*) FROM dolt_log" "COUNT(*)\n3"
+     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT COUNT(*) FROM dolt_log"
+     [ $status -eq 0 ]
+     [[ $output =~ " 3 " ]] || false
 }
 
 @test "sql-server: Run queries on database without ever selecting it" {
@@ -471,42 +584,70 @@ SQL
      start_multi_db_server repo1
 
      # create table with autocommit on and verify table creation
-     server_query "" 1 dolt "" "CREATE TABLE repo2.one_pk (
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE TABLE repo2.one_pk (
         pk int,
-        PRIMARY KEY (pk)
-      )"
+        PRIMARY KEY (pk))"
 
-     server_query "" 1 dolt "" "INSERT INTO repo2.one_pk VALUES (0), (1), (2)"
-     server_query "" 1 dolt "" "SELECT * FROM repo2.one_pk" "pk\n0\n1\n2"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "INSERT INTO repo2.one_pk VALUES (0), (1), (2)"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM repo2.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
 
-     server_query "" 1 dolt "" "UPDATE repo2.one_pk SET pk=3 WHERE pk=2"
-     server_query "" 1 dolt "" "SELECT * FROM repo2.one_pk" "pk\n0\n1\n3"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "UPDATE repo2.one_pk SET pk=3 WHERE pk=2"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM repo2.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 3 " ]] || false
+     ! [[ $output =~ " 2 " ]] || false
 
-     server_query "" 1 dolt "" "DELETE FROM repo2.one_pk WHERE pk=3"
-     server_query "" 1 dolt "" "SELECT * FROM repo2.one_pk" "pk\n0\n1"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "DELETE FROM repo2.one_pk WHERE pk=3"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM repo2.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     ! [[ $output =~ " 3 " ]] || false
 
      # Empty commit statements should not error
-     server_query "" 1 dolt "" "commit"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "commit"
 
      # create a new database and table and rerun
-     server_query "" 1 dolt "" "CREATE DATABASE testdb" ""
-     server_query "" 1 dolt "" "CREATE TABLE testdb.one_pk (
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE testdb"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE TABLE testdb.one_pk (
         pk int,
-        PRIMARY KEY (pk)
-      )" ""
+        PRIMARY KEY (pk))"
 
-     server_query "" 1 dolt "" "INSERT INTO testdb.one_pk VALUES (0), (1), (2)"
-     server_query "" 1 dolt "" "SELECT * FROM testdb.one_pk" "pk\n0\n1\n2"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "INSERT INTO testdb.one_pk VALUES (0), (1), (2)"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM testdb.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
 
-     server_query "" 1 dolt "" "UPDATE testdb.one_pk SET pk=3 WHERE pk=2"
-     server_query "" 1 dolt "" "SELECT * FROM testdb.one_pk" "pk\n0\n1\n3"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "UPDATE testdb.one_pk SET pk=3 WHERE pk=2"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM testdb.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 3 " ]] || false
+     ! [[ $output =~ " 2 " ]] || false
 
-     server_query "" 1 dolt "" "DELETE FROM testdb.one_pk WHERE pk=3"
-     server_query "" 1 dolt "" "SELECT * FROM testdb.one_pk" "pk\n0\n1"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "DELETE FROM testdb.one_pk WHERE pk=3"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM testdb.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     ! [[ $output =~ " 3 " ]] || false
 
      # one last query on insert db.
-     server_query "" 1 dolt "" "INSERT INTO repo2.one_pk VALUES (4)"
-     server_query "" 1 dolt "" "SELECT * FROM repo2.one_pk" "pk\n0\n1\n4"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "INSERT INTO repo2.one_pk VALUES (4)"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM repo2.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 4 " ]] || false
 
      # verify changes outside the session
      cd repo2
@@ -516,9 +657,9 @@ SQL
 
      run dolt sql --user=dolt -q "select * from one_pk"
      [ "$status" -eq 0 ]
-     [[ "$output" =~ "0" ]] || false
-     [[ "$output" =~ "1" ]] || false
-     [[ "$output" =~ "4" ]] || false
+     [[ "$output" =~ " 0 " ]] || false
+     [[ "$output" =~ " 1 " ]] || false
+     [[ "$output" =~ " 4 " ]] || false
 }
 
 @test "sql-server: create database without USE" {
@@ -526,8 +667,8 @@ SQL
 
      start_multi_db_server repo1
 
-     server_query "" 1 dolt "" "CREATE DATABASE newdb" ""
-     server_query "" 1 dolt "" "CREATE TABLE newdb.test (a int primary key)" ""
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE newdb" ""
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE TABLE newdb.test (a int primary key)" ""
 
      # verify changes outside the session
      cd newdb
@@ -543,7 +684,9 @@ SQL
     start_sql_server repo1
 
     # check no tables on main
-    server_query repo1 1 dolt "" "SHOW Tables" ""
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
 
     # make some changes to main and commit to branch test_branch
     server_query repo1 1 dolt "" "
@@ -557,8 +700,7 @@ SQL
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
     CALL DOLT_ADD('.');
     CALL dolt_commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');"
-
-    server_query repo1 1 dolt "" "call dolt_add('.')" "status\n0"
+    
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
@@ -566,15 +708,15 @@ SQL
     run dolt sql --user=dolt -q "drop table one_pk"
     [ "$status" -eq 1 ]
 
-    server_query repo1 1 dolt "" "drop table one_pk" ""
-    server_query repo1 1 dolt "" "call dolt_commit('-am', 'Dropped table one_pk')"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "drop table one_pk"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_commit('-am', 'Dropped table one_pk')"
 
     run dolt ls
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "one_pk" ]] || false
 }
 
-# TODO: Need to update testing logic allow queries for a multiple session.
 @test "sql-server: Create a temporary table and validate that it doesn't persist after a session closes" {
     skiponwindows "Missing dependencies"
 
@@ -582,17 +724,21 @@ SQL
     start_sql_server repo1
 
     # check no tables on main
-    server_query repo1 1 dolt "" "SHOW Tables" ""
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
 
     # Create a temporary table with some indexes
-    server_query repo1 1 dolt "" "CREATE TEMPORARY TABLE one_pk (
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TEMPORARY TABLE one_pk (
         pk int,
         c1 int,
         c2 int,
         PRIMARY KEY (pk),
-        INDEX idx_v1 (c1, c2) COMMENT 'hello there'
-    )" ""
-    server_query repo1 1 dolt "" "SHOW tables" "" # validate that it does have show tables
+        INDEX idx_v1 (c1, c2) COMMENT 'hello there')"
+
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
 }
 
 @test "sql-server: connect to another branch with connection string" {
@@ -609,7 +755,9 @@ SQL
         PRIMARY KEY (pk)
     )" ""
 
-    server_query repo1 1 dolt "" "SHOW tables" "" # no tables on main
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
 
     server_query "repo1/feature-branch" 1 dolt "" "SHOW Tables" "Tables_in_repo1/feature-branch\ntest"
 }
@@ -649,15 +797,24 @@ SQL
     start_sql_server repo1
 
     server_query repo1 1 dolt "" '
-    select dolt_checkout("new");
+    CALL dolt_checkout("new");
     CREATE TABLE t (a int primary key, b int);
     INSERT INTO t VALUES (2,2),(3,3);' ""
 
-    server_query repo1 1 dolt "" "SHOW tables" "" # no tables on main
-    server_query repo1 1 dolt "" "set GLOBAL repo1_default_branch = 'refs/heads/new';" ""
-    server_query repo1 1 dolt "" "select @@GLOBAL.repo1_default_branch;" "@@GLOBAL.repo1_default_branch\nrefs/heads/new"
-    server_query repo1 1 dolt "" "select active_branch()" "active_branch()\nnew"
-    server_query repo1 1 dolt "" "SHOW tables" "Tables_in_repo1\nt"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "set GLOBAL repo1_default_branch = 'refs/heads/new'"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "select @@GLOBAL.repo1_default_branch;"
+    [ $status -eq 0 ]
+    [[ $output =~ "refs/heads/new" ]] || false
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "select active_branch()"
+    [ $status -eq 0 ]
+    [[ $output =~ "new" ]] || false
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
+    [ $status -eq 0 ]
+    [[ $output =~ " t " ]] || false
 }
 
 @test "sql-server: SET GLOBAL default branch as branch name" {
@@ -673,11 +830,20 @@ SQL
     CREATE TABLE t (a int primary key, b int);
     INSERT INTO t VALUES (2,2),(3,3);' ""
 
-    server_query repo1 1 dolt "" "SHOW tables" "" # no tables on main
-    server_query repo1 1 dolt "" "set GLOBAL repo1_default_branch = 'new';" ""
-    server_query repo1 1 dolt "" "select @@GLOBAL.repo1_default_branch;" "@@GLOBAL.repo1_default_branch\nnew"
-    server_query repo1 1 dolt "" "select active_branch()" "active_branch()\nnew"
-    server_query repo1 1 dolt "" "SHOW tables" "Tables_in_repo1\nt"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "set GLOBAL repo1_default_branch = 'new'"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "select @@GLOBAL.repo1_default_branch;"
+    [ $status -eq 0 ]
+    [[ $output =~ " new " ]] || false
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "select active_branch()"
+    [ $status -eq 0 ]
+    [[ $output =~ " new " ]] || false
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
+    [ $status -eq 0 ]
+    [[ $output =~ " t " ]] || false
 }
 
 @test "sql-server: disable_client_multi_statements makes create trigger work" {
@@ -697,7 +863,10 @@ listener:
 EOF
     dolt sql-server --config ./config.yml --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
-    # We do things manually here because we need to control CLIENT_MULTI_STATEMENTS.
+    sleep 1
+    
+    # We do things manually here because we need to control
+    # CLIENT_MULTI_STATEMENTS.
     python3 -c '
 import mysql.connector
 import sys
@@ -742,7 +911,8 @@ listener:
 EOF
     dolt sql-server --config ./config.yml --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
-    # We do things manually here because we need to control CLIENT_MULTI_STATEMENTS.
+    # We do things manually here because we need to control
+    # CLIENT_MULTI_STATEMENTS.
     python3 -c '
 import mysql.connector
 import sys
@@ -778,28 +948,42 @@ END""")
     cd repo1
     start_sql_server repo1
 
-    server_query repo1 1 dolt "" "CREATE TABLE t1(pk bigint primary key auto_increment, val int)" ""
-    server_query repo1 1 dolt "" "INSERT INTO t1 (val) VALUES (1)"
-    server_query repo1 1 dolt "" "SELECT * FROM t1" "pk,val\n1,1"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE t1(pk bigint primary key auto_increment, val int)"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO t1 (val) VALUES (1)"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM t1"
+    [ $status -eq 0 ]
+    [[ $output =~ "1,1" ]] || false
 
-    server_query repo1 1 dolt "" "INSERT INTO t1 (val) VALUES (2)"
-    server_query repo1 1 dolt "" "SELECT * FROM t1" "pk,val\n1,1\n2,2"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO t1 (val) VALUES (2)"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM t1"
+    [ $status -eq 0 ]
+    [[ $output =~ "1,1" ]] || false
+    [[ $output =~ "2,2" ]] || false
 
-    run server_query repo1 1 dolt "" "call dolt_add('.')"
-    run server_query repo1 1 dolt "" "call dolt_commit('-am', 'table with two values')"
-    run server_query repo1 1 dolt "" "call dolt_branch('new_branch')"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_commit('-am', 'table with two values')"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_branch('new_branch')"
 
     server_query repo1/new_branch 1 dolt "" "INSERT INTO t1 (val) VALUES (3)"
     server_query repo1/new_branch 1 dolt "" "SELECT * FROM t1" "pk,val\n1,1\n2,2\n3,3"
 
-    server_query repo1 1 dolt "" "INSERT INTO t1 (val) VALUES (4)"
-    server_query repo1 1 dolt "" "SELECT * FROM t1" "pk,val\n1,1\n2,2\n4,4"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO t1 (val) VALUES (4)"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM t1"
+    [ $status -eq 0 ]
+    [[ $output =~ "1,1" ]] || false
+    [[ $output =~ "2,2" ]] || false
+    [[ $output =~ "4,4" ]] || false
+    ! [[ $output =~ "3,3" ]] || false
     
     # drop the table on main, should keep counting from 4
-    server_query repo1 1 dolt "" "drop table t1;"
-    server_query repo1 1 dolt "" "CREATE TABLE t1(pk bigint primary key auto_increment, val int)" ""
-    server_query repo1 1 dolt "" "INSERT INTO t1 (val) VALUES (4)"
-    server_query repo1 1 dolt "" "SELECT * FROM t1" "pk,val\n4,4"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "drop table t1"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE t1(pk bigint primary key auto_increment, val int)" ""
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO t1 (val) VALUES (4)"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM t1"
+    [[ $output =~ "4,4" ]] || false
+    ! [[ $output =~ "1,1" ]] || false
+    ! [[ $output =~ "2,2" ]] || false
+    ! [[ $output =~ "3,3" ]] || false
 }
 
 @test "sql-server: sql-push --set-remote within session" {
@@ -811,13 +995,13 @@ END""")
     start_sql_server repo1
 
     dolt push origin main
-    run server_query repo1 1 dolt "" "select dolt_push() as p" "p\n0" 1
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call  dolt_push()"
+    [ $status -ne 0 ]
     [[ "$output" =~ "the current branch has no upstream branch" ]] || false
 
-    server_query repo1 1 dolt "" "select dolt_push('--set-upstream', 'origin', 'main') as p" "p\n1"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_push('--set-upstream', 'origin', 'main')"
 
-    skip "In-memory branch doesn't track upstream correctly"
-    server_query repo1 1 dolt "" "select dolt_push() as p" "p\n1"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_push()"
 }
 
 @test "sql-server: replicate to backup after sql-session commit" {
@@ -829,43 +1013,45 @@ END""")
     dolt config --local --add sqlserver.global.DOLT_REPLICATE_TO_REMOTE backup1
     start_sql_server repo1
 
-    server_query repo1 1 dolt "" "
-    CREATE TABLE test (
-      pk int primary key
-    );
-    INSERT INTO test VALUES (0),(1),(2);
-    SELECT DOLT_ADD('.');
-    SELECT DOLT_COMMIT('-m', 'Step 1');"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE test (pk int primary key);"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO test VALUES (0),(1),(2)"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CALL DOLT_ADD('.')"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CALL DOLT_COMMIT('-m', 'Step 1');"
 
     cd ..
     dolt clone file://./bac1 repo3
     cd repo3
     run dolt sql -q "select * from test" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "pk" ]]
-    [[ "${lines[1]}" =~ "0" ]]
-    [[ "${lines[2]}" =~ "1" ]]
-    [[ "${lines[3]}" =~ "2" ]]
+    [ "${lines[0]}" = "pk" ] 
+    [ "${lines[1]}" = "0" ]
+    [ "${lines[2]}" = "1" ]
+    [ "${lines[3]}" = "2" ]
 }
 
-@test "sql-server: create database with no starting repo" {
+@test "sql-server: create multiple databases with no starting repo" {
     skiponwindows "Missing dependencies"
 
     mkdir no_dolt && cd no_dolt
     start_sql_server
 
-    server_query "" 1 dolt "" "create database test1"
-    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntest1"
-    server_query "test1" 1 dolt "" "create table a(x int)"
-    server_query "test1" 1 dolt "" "select dolt_add('.')"
-    server_query "test1" 1 dolt "" "insert into a values (1), (2)"
-    server_query "test1" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test1"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test1" ]] ||	false
 
-    server_query "" 1 dolt "" "create database test2"
-    server_query "test2" 1 dolt "" "create table b(x int)"
-    server_query "test2" 1 dolt "" "select dolt_add('.')"
-    server_query "test2" 1 dolt "" "insert into b values (1), (2)"
-    server_query "test2" 1 dolt "" "select dolt_commit('-a', '-m', 'new table b')"
+    dolt sql-client -P $PORT -u dolt --use-db 'test1' -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db 'test1' -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db 'test1' -q "insert into a values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db 'test1' -q "call dolt_commit('-a', '-m', 'new table a')"
+
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test2"
+    dolt sql-client -P $PORT -u dolt --use-db 'test2' -q "create table b(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db 'test2' -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db 'test2' -q "insert into b values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db 'test2' -q "call dolt_commit('-a', '-m', 'new table b')"
 
     cd test1
     run dolt log
@@ -887,13 +1073,13 @@ END""")
 
     cd ..
 
-    server_query "" 1 dolt "" "create database test3"
-    server_query "test3" 1 dolt "" "create table c(x int)"
-    server_query "test3" 1 dolt "" "select dolt_add('.')"
-    server_query "test3" 1 dolt "" "insert into c values (1), (2)"
-    run server_query "test3" 1 dolt "" "select dolt_commit('-a', '-m', 'new table c')"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test3"
+    dolt sql-client -P $PORT -u dolt --use-db 'test3' -q "create table c(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db 'test3' -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db 'test3' -q "insert into c values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db 'test3' -q "call dolt_commit('-a', '-m', 'new table c')"
 
-    server_query "" 1 dolt "" "drop database test2"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "drop database test2"
 
     [ -d test3 ]
     [ ! -d test2 ]
@@ -901,43 +1087,57 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server
-    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntest1\ntest3"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test1" ]] || false
+    [[ $output =~ "test3" ]] || false
+    ! [[ $output =~ "test2" ]] || false
 }
 
-@test "sql-server: drop database with active connections" {
+@test "sql-server: can't drop branch qualified database names" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt "json ordering of keys differs"
 
     mkdir no_dolt && cd no_dolt
     start_sql_server
 
-    server_query "" 1 dolt "" "create database test1"
-    server_query "" 1 dolt "" "create database test2"
-    server_query "" 1 dolt "" "create database test3"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test1"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test2"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test3"
 
-    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntest1\ntest2\ntest3"
-    server_query "test1" 1 dolt "" "create table a(x int)"
-    server_query "test1" 1 dolt "" "select dolt_add('.')"
-    server_query "test1" 1 dolt "" "insert into a values (1), (2)"
-    run server_query "test1" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test1" ]] || false
+    [[ $output =~ "test2" ]] || false
+    [[ $output =~ "test3" ]] || false
 
-    server_query "test2" 1 dolt "" "create table a(x int)"
-    server_query "test2" 1 dolt "" "select dolt_add('.')"
-    server_query "test2" 1 dolt "" "insert into a values (3), (4)"
-    server_query "test2" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "insert into a values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_commit('-a', '-m', 'new table a')"
 
-    server_query "test3" 1 dolt "" "create table a(x int)"
-    server_query "test3" 1 dolt "" "select dolt_add('.')"
-    server_query "test3" 1 dolt "" "insert into a values (5), (6)"
-    server_query "test3" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "insert into a values (3), (4)"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "call dolt_commit('-a', '-m', 'new table a')"
 
-    server_query "test1" 1 dolt "" "call dolt_checkout('-b', 'newbranch')"
-    server_query "test1/newbranch" 1 dolt "" "select * from a" "x\n1\n2"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "insert into a values (5), (6)"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "call dolt_commit('-a', '-m', 'new table a')"
 
-    server_query "test2" 1 dolt "" "call dolt_checkout('-b', 'newbranch')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_branch('newbranch')"
+    # Something weird is going on here. This should not need an order by
+    server_query "test1/newbranch" 1 dolt "" "select * from a order by x" "x\n1\n2"
+
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "call dolt_branch('newbranch')"
     server_query "test2/newbranch" 1 dolt "" "select * from a" "x\n3\n4"
 
-    server_query "" 1 dolt "" "drop database TEST1"
+    # uppercase to ensure db names are treated case insensitive
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "drop database TEST1"
 
     run server_query "test1/newbranch" 1 dolt "" "select * from a" "" 1
     [[ "$output" =~ "database not found" ]] || false
@@ -946,13 +1146,15 @@ END""")
     run server_query "" 1 dolt "" "drop database \`test2/newbranch\`" "" 1
     [[ "$output" =~ "unable to drop revision database: test2/newbranch" ]] || false
 
-
-    server_query "" 1 dolt "" "drop database TEST2"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "drop database TEST2"
 
     run server_query "test2/newbranch" 1 dolt "" "select * from a" "" 1
     [[ "$output" =~ "database not found" ]] || false
 
-    server_query "test3" 1 dolt "" "select * from a" "x\n5\n6"
+    run dolt sql-client -P $PORT -u dolt --use-db test3 -q "select * from a"
+    [ $status -eq 0 ]
+    [[ $output =~ " 5 " ]] || false
+    [[ $output =~ " 6 " ]] || false
 }
 
 @test "sql-server: connect to databases case insensitive" {
@@ -961,16 +1163,22 @@ END""")
     mkdir no_dolt && cd no_dolt
     start_sql_server
 
-    server_query "" 1 dolt "" "create database Test1"
-    
-    server_query "" 1 dolt "" "show databases" "Database\nTest1\ninformation_schema\nmysql"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database Test1"
+
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "Test1" ]] || false
     server_query "" 1 dolt "" "use test1; create table a(x int);"
     server_query "" 1 dolt "" "use TEST1; insert into a values (1), (2);"
-    run server_query "" 1 dolt "" "use test1; select dolt_add('.'); select dolt_commit('-a', '-m', 'new table a');"
+    server_query "" 1 dolt "" "use test1; call dolt_add('.'); call dolt_commit('-a', '-m', 'new table a');"
     server_query "" 1 dolt "" "use test1; call dolt_checkout('-b', 'newbranch');"
     server_query "" 1 dolt "" "use \`TEST1/newbranch\`; select * from a order by x" ";x\n1\n2"
     server_query "" 1 dolt "" "use \`test1/newbranch\`; select * from a order by x" ";x\n1\n2"
-    server_query "" 1 dolt "" "use \`TEST1/NEWBRANCH\`" "" "database not found: TEST1/NEWBRANCH"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "use \`TEST1/NEWBRANCH\`"
+    [ $status -ne 0 ]
+    [[ $output =~ "database not found: TEST1/NEWBRANCH" ]] || false
 
     server_query "" 1 dolt "" "create database test2; use test2; select database();" ";;database()\ntest2"
     server_query "" 1 dolt "" "use test2; drop database TEST2; select database();" ";;database()\nNone"
@@ -982,14 +1190,19 @@ END""")
     mkdir no_dolt && cd no_dolt
     mkdir db_dir
     start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
+    
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test1"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test1" ]] || false
 
-    server_query "" 1 dolt "" "create database test1"
-    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntest1"
-    server_query "test1" 1 dolt "" "create table a(x int)"
-    server_query "test1" 1 dolt "" "select dolt_add('.')"
-    server_query "test1" 1 dolt "" "insert into a values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "insert into a values (1), (2)"
 
-    server_query "test1" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_commit('-a', '-m', 'new table a')"
 
     [ -d db_dir/test1 ]
 
@@ -1000,13 +1213,13 @@ END""")
 
     cd ../..
 
-    server_query "" 1 dolt "" "create database test3"
-    server_query "test3" 1 dolt "" "create table c(x int)"
-    server_query "test3" 1 dolt "" "select dolt_add('.')"
-    server_query "test3" 1 dolt "" "insert into c values (1), (2)"
-    server_query "test3" 1 dolt "" "call dolt_commit('-a', '-m', 'new table c')"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test3"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "create table c(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "insert into c values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "call dolt_commit('-a', '-m', 'new table c')"
 
-    server_query "" 1 dolt "" "drop database test1"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "drop database test1"
 
     [ -d db_dir/test3 ]
     [ ! -d db_dir/test1 ]
@@ -1014,7 +1227,11 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
-    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntest3"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test3" ]] || false
 }
 
 @test "sql-server: create database errors" {
@@ -1025,14 +1242,21 @@ END""")
     touch file_exists
     start_sql_server
 
-    server_query "" 1 dolt "" "create database test1"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test1"
 
     # Error on creation, already exists
-    server_query "" 1 dolt "" "create database test1" "" "exists"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test1"
+    [ $status -ne 0 ]
+    [[ $output =~ exists ]] || false
 
     # Files / dirs in the way
-    server_query "" 1 dolt "" "create database dir_exists" "" "exists"
-    server_query "" 1 dolt "" "create database file_exists" "" "exists"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "create database dir_exists"
+    [ $status -ne 0 ]
+    [[ $output =~ exists ]] || false
+    
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q	"create database file_exists"
+    [ $status -ne 0 ]
+    [[ $output =~ exists ]] || false
 }
 
 @test "sql-server: create database with existing repo" {
@@ -1041,21 +1265,25 @@ END""")
     cd repo1
     start_sql_server
 
-    server_query "" 1 dolt "" "create database test1"
-    server_query "repo1" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\nrepo1\ntest1"
-    server_query "test1" 1 dolt "" "create table a(x int)"
-    server_query "test1" 1 dolt "" "select dolt_add('.')"
-    server_query "test1" 1 dolt "" "insert into a values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "create database test1"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test1" ]] || false
+    [[ $output =~ "repo1" ]] || false
 
-    # not bothering to check the results of the commit here
-    server_query "test1" 1 dolt "" "call dolt_commit('-a', '-m', 'new table a')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "insert into a values (1), (2)"
 
-    server_query "" 1 dolt "" "create database test2"
-    server_query "test2" 1 dolt "" "create table b(x int)"
-    server_query "test2" 1 dolt "" "select dolt_add('.')"
-    server_query "test2" 1 dolt "" "insert into b values (1), (2)"
-    # not bothering to check the results of the commit here
-    server_query "test2" 1 dolt "" "call dolt_commit('-a', '-m', 'new table b')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_commit('-a', '-m', 'new table a')"
+
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "create database test2"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "create table b(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "insert into b values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "call dolt_commit('-a', '-m', 'new table b')"
 
     cd test1
     run dolt log
@@ -1079,7 +1307,13 @@ END""")
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server
-    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\nrepo1\ntest1\ntest2"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test1" ]] || false
+    [[ $output =~ "repo1" ]] || false
+    [[ $output =~ "test2" ]] || false
 }
 
 @test "sql-server: fetch uses database tempdir from different working directory" {
@@ -1114,7 +1348,7 @@ databases:
 
     start_sql_server_with_config repo1 server.yaml
 
-    server_query repo1 1 dolt "" "call dolt_fetch()" ""
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_fetch()"
 }
 
 @test "sql-server: run mysql from shell" {
@@ -1181,7 +1415,7 @@ databases:
 @test "sql-server: sql-server lock for new databases" {
     cd repo1
     start_sql_server
-    server_query repo1 1 dolt "" "create database newdb" ""
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database newdb"
     cd newdb
     PORT=$( definePORT )
     run dolt sql-server -P $PORT --socket "dolt.$PORT.sock"
@@ -1210,7 +1444,11 @@ databases:
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 
-    server_query repo2 1 dolt "" "select 1 as col1" "col1\n1"
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
+    [ $status -eq 0 ]
+    [[ $output =~ col1 ]] || false
+    [[ $output =~ " 1 " ]] || false
+
     run grep '\"/tmp/mysql.sock\"' log.txt
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
@@ -1236,7 +1474,10 @@ databases:
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 
-    server_query repo2 1 dolt "" "select 1 as col1" "col1\n1"
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
+    [ $status -eq 0 ]
+    [[ $output =~ col1 ]] || false
+    [[ $output =~ " 1 " ]] || false
 
     run grep '\"/tmp/mysql.sock\"' log.txt
     [ "$status" -eq 0 ]
@@ -1289,7 +1530,10 @@ behavior:
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 
-    server_query repo2 1 dolt "" "select 1 as col1" "col1\n1"
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
+    [ $status -eq 0 ]
+    [[ $output =~ col1 ]] || false
+    [[ $output =~ " 1 " ]] || false
 
     run grep "dolt.$PORT.sock" log.txt
     [ "$status" -eq 0 ]
@@ -1344,8 +1588,6 @@ s.close()
 }
 
 @test "sql-server: sigterm running server and restarting works correctly" {
-    skip "Skipping while we debug why this test hangs for hours in CI"
-
     start_sql_server
     run ls repo1/.dolt
     [[ "$output" =~ "sql-server.lock" ]] || false
@@ -1361,8 +1603,12 @@ s.close()
     run ls repo2/.dolt
     [[ "$output" =~ "sql-server.lock" ]] || false
 
+    skip "this now fails because of the socket file not being cleaned up"
     start_sql_server
-    server_query repo1 1 dolt "" "SELECT 1" "1\n1"
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
+    [ $status -eq 0 ]
+    [[ $output =~ col1 ]] || false
+    [[ $output =~ " 1 " ]] || false
     stop_sql_server
 
     # Try adding fake pid numbers. Could happen via debugger or something
@@ -1370,7 +1616,10 @@ s.close()
     echo "4123423" > repo2/.dolt/sql-server.lock
 
     start_sql_server
-    server_query repo1 1 dolt "" "SELECT 1" "1\n1"
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
+    [ $status -eq 0 ]
+    [[ $output =~ col1 ]] || false
+    [[ $output =~ " 1 " ]] || false
     stop_sql_server
 
     # Add malicious text to lockfile and expect to fail
@@ -1379,6 +1628,14 @@ s.close()
     run start_sql_server
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
     [ "$status" -eq 1 ]
+
+    rm repo1/.dolt/sql-server.lock
+
+    # this test was hanging as the server is stopped from the above error
+    # but stop_sql_server in teardown tries to kill process that is not
+    # running anymore, so start the server again, and it will be stopped in
+    # teardown
+    start_sql_server
 }
 
 @test "sql-server: create a database when no current database is set" {
@@ -1409,15 +1666,16 @@ s.close()
     cd nodb
     start_sql_server >> server_log.txt 2>&1
 
-    server_query "" 1 dolt "" "CREATE DATABASE mydb1"
-    server_query "" 1 dolt "" "CREATE DATABASE mydb2"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE mydb1"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE mydb2"
 
     [ -d mydb1 ]
     [ -d mydb2 ]
 
     rm -rf mydb2
 
-    server_query "" 1 dolt "" "SHOW DATABASES" "" 1
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "SHOW DATABASES"
+    [ $status -ne 0 ]
 
     run grep "panic" server_log.txt
     [ "${#lines[@]}" -eq 0 ]
@@ -1426,8 +1684,9 @@ s.close()
     [ "${#lines[@]}" -eq 1 ]
 
     # this tests fails sometimes as the server is stopped from the above error
-    # but stop_sql_server in teardown tries to kill process that is not running anymore,
-    # so start the server again, and it will be stopped in teardown
+    # but stop_sql_server in teardown tries to kill process that is not
+    # running anymore, so start the server again, and it will be stopped in
+    # teardown
     start_sql_server
 }
 
@@ -1441,12 +1700,12 @@ s.close()
     start_sql_server >> server_log.txt 2>&1
 
     # 'doltdb' will be nested database inside 'mydb'
-    server_query "" 1 dolt "" "CREATE DATABASE doltdb"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE doltdb"
     run dolt sql -q "SHOW DATABASES"
     [[ "$output" =~ "mydb" ]] || false
     [[ "$output" =~ "doltdb" ]] || false
 
-    server_query "" 1 dolt "" "DROP DATABASE mydb"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "DROP DATABASE mydb"
     run grep "database not found: mydb" server_log.txt
     [ "${#lines[@]}" -eq 0 ]
 
@@ -1469,7 +1728,7 @@ s.close()
     [[ "$output" =~ "mydb" ]] || false
 
     start_sql_server >> server_log.txt 2>&1
-    server_query "mydb" 1 dolt "" "DROP DATABASE mydb;"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "DROP DATABASE mydb;"
 
     run grep "database not found: mydb" server_log.txt
     [ "${#lines[@]}" -eq 0 ]
@@ -1489,7 +1748,7 @@ s.close()
     cd ..
 
     start_sql_server >> server_log.txt 2>&1
-    server_query "" 1 dolt "" "DROP DATABASE my_db;"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "DROP DATABASE my_db;"
 
     run grep "database not found: my_db" server_log.txt
     [ "${#lines[@]}" -eq 0 ]
