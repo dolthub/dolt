@@ -324,7 +324,9 @@ SQL
     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW tables"
     [ $status -eq 0 ]
     [[ $output =~ "r1_one_pk" ]] || false
-    server_query repo1 1 dolt "" "USE repo2; SHOW tables" ";Tables_in_repo2\nr2_one_pk"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "USE repo2; SHOW tables"
+    [ $status -eq 0 ]
+    [[ $output =~ "r2_one_pk" ]] || false
 
     # put data in both
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "
