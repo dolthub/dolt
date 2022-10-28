@@ -190,10 +190,12 @@ teardown() {
     
     start_sql_server
     
-    server_query "" 1 dolt "" "create database testdb" ""
-    server_query "" 1 dolt "" "show databases" "Database\ninformation_schema\nmysql\ntestdb" ""
-    server_query "testdb" 1 dolt "" "create table a(x int)" ""
-    server_query "testdb" 1 dolt "" "insert into a values (1), (2)" ""
+    dolt sql-client --use-db '' -u dolt -P $PORT -q "create database testdb"
+    run dolt sql-client --use-db '' -u dolt -P $PORT -r csv -q "show databases"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "testdb" ]] || false
+    dolt sql-client --use-db testdb -u dolt -P $PORT -q "create table a(x int)"
+    dolt sql-client --use-db testdb -u dolt -P $PORT -q "insert into a values (1), (2)"
 
     [ -d "testdb" ]
     cd testdb

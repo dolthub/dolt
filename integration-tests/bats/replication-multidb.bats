@@ -290,15 +290,15 @@ SQL
     start_multi_db_server repo1
     cd ..
 
-    server_query repo1 1 dolt "" "create table t1 (a int primary key)"
-    server_query repo1 1 dolt "" "call dolt_add('.')"
-    server_query repo1 1 dolt "" "call dolt_commit('-am', 'cm')"
-    server_query repo2 1 dolt "" "create table t2 (a int primary key)"
-    server_query repo2 1 dolt "" "call dolt_add('.')"
-    server_query repo2 1 dolt  "" "call dolt_commit('-am', 'cm')"
-    server_query repo3 1 dolt "" "create table t3 (a int primary key)"
-    server_query repo3 1 dolt "" "call dolt_add('.')"
-    server_query repo3 1 dolt "" "call dolt_commit('-am', 'cm')"
+    dolt sql-client --use-db repo1 -u dolt -P $PORT -q "create table t1 (a int primary key)"
+    dolt sql-client --use-db repo1 -u dolt -P $PORT -q "call dolt_add('.')"
+    dolt sql-client --use-db repo1 -u dolt -P $PORT -q "call dolt_commit('-am', 'cm')"
+    dolt sql-client --use-db repo2 -u dolt -P $PORT -q "create table t2 (a int primary key)"
+    dolt sql-client --use-db repo2 -u dolt -P $PORT -q "call dolt_add('.')"
+    dolt sql-client --use-db repo2 -u dolt -P $PORT -q "call dolt_commit('-am', 'cm')"
+    dolt sql-client --use-db repo3 -u dolt -P $PORT -q "create table t3 (a int primary key)"
+    dolt sql-client --use-db repo3 -u dolt -P $PORT -q "call dolt_add('.')"
+    dolt sql-client --use-db repo3 -u dolt -P $PORT -q "call dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
 
@@ -344,7 +344,18 @@ SQL
     cd dbs1
     start_multi_db_server repo1
     
-    server_query repo1 1 dolt "" "show tables" "Tables_in_repo1\nt1"
-    server_query repo2 1 dolt "" "show tables" "Tables_in_repo2\nt2"
-    server_query repo3 1 dolt "" "show tables" "Tables_in_repo3\nt3"
+    run dolt sql-client --use-db repo1 -u dolt -P $PORT -q "show tables"
+    [ $status -eq 0 ]
+    [[ "$output" =~ Tables_in_repo1 ]] || false
+    [[ "$output" =~ t1 ]] || false
+    
+    run dolt sql-client --use-db repo2 -u dolt -P $PORT -q "show tables"
+    [ $status -eq 0 ]
+    [[ "$output" =~ Tables_in_repo2 ]] || false
+    [[ "$output" =~ t2 ]] || false
+    
+    run dolt sql-client --use-db repo3 -u dolt -P $PORT -q "show tables"
+    [ $status -eq 0 ]
+    [[ "$output" =~ Tables_in_repo3 ]] || false
+    [[ "$output" =~ t3 ]] || false
 }
