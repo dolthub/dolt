@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -34,6 +35,7 @@ type DiffSummaryTableFunction struct {
 
 	fromCommitExpr sql.Expression
 	toCommitExpr   sql.Expression
+	dotCommitExpr  sql.Expression
 	tableNameExpr  sql.Expression
 	database       sql.Database
 }
@@ -84,16 +86,29 @@ func (ds *DiffSummaryTableFunction) FunctionName() string {
 	return "dolt_diff_summary"
 }
 
-// Resolved implements the sql.Resolvable interface
-func (ds *DiffSummaryTableFunction) Resolved() bool {
-	if ds.tableNameExpr != nil {
-		return ds.fromCommitExpr.Resolved() && ds.toCommitExpr.Resolved() && ds.tableNameExpr.Resolved()
+func (ds *DiffSummaryTableFunction) commitsResolved() bool {
+	if ds.dotCommitExpr != nil {
+		return ds.dotCommitExpr.Resolved()
 	}
 	return ds.fromCommitExpr.Resolved() && ds.toCommitExpr.Resolved()
 }
 
+// Resolved implements the sql.Resolvable interface
+func (ds *DiffSummaryTableFunction) Resolved() bool {
+	if ds.tableNameExpr != nil {
+		return ds.commitsResolved() && ds.tableNameExpr.Resolved()
+	}
+	return ds.commitsResolved()
+}
+
 // String implements the Stringer interface
 func (ds *DiffSummaryTableFunction) String() string {
+	if ds.dotCommitExpr != nil {
+		if ds.tableNameExpr != nil {
+			return fmt.Sprintf("DOLT_DIFF_SUMMARY(%s, %s)", ds.dotCommitExpr.String(), ds.tableNameExpr.String())
+		}
+		return fmt.Sprintf("DOLT_DIFF_SUMMARY(%s)", ds.dotCommitExpr.String())
+	}
 	if ds.tableNameExpr != nil {
 		return fmt.Sprintf("DOLT_DIFF_SUMMARY(%s, %s, %s)", ds.fromCommitExpr.String(), ds.toCommitExpr.String(), ds.tableNameExpr.String())
 	}
@@ -154,7 +169,12 @@ func (ds *DiffSummaryTableFunction) CheckPrivileges(ctx *sql.Context, opChecker 
 
 // Expressions implements the sql.Expressioner interface.
 func (ds *DiffSummaryTableFunction) Expressions() []sql.Expression {
-	exprs := []sql.Expression{ds.fromCommitExpr, ds.toCommitExpr}
+	exprs := []sql.Expression{}
+	if ds.dotCommitExpr != nil {
+		exprs = append(exprs, ds.dotCommitExpr)
+	} else {
+		exprs = append(exprs, ds.fromCommitExpr, ds.toCommitExpr)
+	}
 	if ds.tableNameExpr != nil {
 		exprs = append(exprs, ds.tableNameExpr)
 	}
@@ -163,8 +183,8 @@ func (ds *DiffSummaryTableFunction) Expressions() []sql.Expression {
 
 // WithExpressions implements the sql.Expressioner interface.
 func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
-	if len(expression) < 2 || len(expression) > 3 {
-		return nil, sql.ErrInvalidArgumentNumber.New(ds.FunctionName(), "2 or 3", len(expression))
+	if len(expression) < 1 {
+		return nil, sql.ErrInvalidArgumentNumber.New(ds.FunctionName(), "1 to 3", len(expression))
 	}
 
 	for _, expr := range expression {
@@ -173,19 +193,37 @@ func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression
 		}
 	}
 
-	ds.fromCommitExpr = expression[0]
-	ds.toCommitExpr = expression[1]
-	if len(expression) == 3 {
-		ds.tableNameExpr = expression[2]
+	if strings.Contains(expression[0].String(), "..") {
+		if len(expression) < 1 || len(expression) > 2 {
+			return nil, sql.ErrInvalidArgumentNumber.New(ds.FunctionName(), "1 or 2", len(expression))
+		}
+		ds.dotCommitExpr = expression[0]
+		if len(expression) == 2 {
+			ds.tableNameExpr = expression[1]
+		}
+	} else {
+		if len(expression) < 2 || len(expression) > 3 {
+			return nil, sql.ErrInvalidArgumentNumber.New(ds.FunctionName(), "2 or 3", len(expression))
+		}
+		ds.fromCommitExpr = expression[0]
+		ds.toCommitExpr = expression[1]
+		if len(expression) == 3 {
+			ds.tableNameExpr = expression[2]
+		}
 	}
 
 	// validate the expressions
-	if !sql.IsText(ds.fromCommitExpr.Type()) {
-		return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.fromCommitExpr.String())
-	}
-
-	if !sql.IsText(ds.toCommitExpr.Type()) {
-		return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.toCommitExpr.String())
+	if ds.dotCommitExpr != nil {
+		if !sql.IsText(ds.dotCommitExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.dotCommitExpr.String())
+		}
+	} else {
+		if !sql.IsText(ds.fromCommitExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.fromCommitExpr.String())
+		}
+		if !sql.IsText(ds.toCommitExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.toCommitExpr.String())
+		}
 	}
 
 	if ds.tableNameExpr != nil {
@@ -199,7 +237,7 @@ func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression
 
 // RowIter implements the sql.Node interface
 func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
-	fromCommitVal, toCommitVal, tableName, err := ds.evaluateArguments()
+	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := ds.evaluateArguments()
 	if err != nil {
 		return nil, err
 	}
@@ -209,13 +247,18 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		return nil, fmt.Errorf("unexpected database type: %T", ds.database)
 	}
 
-	sess := dsess.DSessFromSess(ctx.Session)
-	fromRoot, _, err := sess.ResolveRootForRef(ctx, sqledb.Name(), fromCommitVal)
+	fromCommitStr, toCommitStr, err := loadCommitStrings(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
 	if err != nil {
 		return nil, err
 	}
 
-	toRoot, _, err := sess.ResolveRootForRef(ctx, sqledb.Name(), toCommitVal)
+	sess := dsess.DSessFromSess(ctx.Session)
+	fromRoot, _, err := sess.ResolveRootForRef(ctx, sqledb.Name(), fromCommitStr)
+	if err != nil {
+		return nil, err
+	}
+
+	toRoot, _, err := sess.ResolveRootForRef(ctx, sqledb.Name(), toCommitStr)
 	if err != nil {
 		return nil, err
 	}
@@ -256,42 +299,43 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	return NewDiffSummaryTableFunctionRowIter(diffSummaries), nil
 }
 
-// evaluateArguments returns fromCommitValStr, toCommitValStr and tableName.
-// It evaluates the argument expressions to turn them into values this DiffTableFunction
+// evaluateArguments returns fromCommitVal, toCommitVal, dotCommitVal, and tableName.
+// It evaluates the argument expressions to turn them into values this DiffSummaryTableFunction
 // can use. Note that this method only evals the expressions, and doesn't validate the values.
-func (ds *DiffSummaryTableFunction) evaluateArguments() (string, string, string, error) {
+func (ds *DiffSummaryTableFunction) evaluateArguments() (interface{}, interface{}, interface{}, string, error) {
 	var tableName string
 	if ds.tableNameExpr != nil {
 		tableNameVal, err := ds.tableNameExpr.Eval(ds.ctx, nil)
 		if err != nil {
-			return "", "", "", err
+			return nil, nil, nil, "", err
 		}
 		tn, ok := tableNameVal.(string)
 		if !ok {
-			return "", "", "", ErrInvalidTableName.New(ds.tableNameExpr.String())
+			return nil, nil, nil, "", ErrInvalidTableName.New(ds.tableNameExpr.String())
 		}
 		tableName = tn
 	}
 
+	if ds.dotCommitExpr != nil {
+		dotCommitVal, err := ds.dotCommitExpr.Eval(ds.ctx, nil)
+		if err != nil {
+			return nil, nil, nil, "", err
+		}
+
+		return nil, nil, dotCommitVal, tableName, nil
+	}
+
 	fromCommitVal, err := ds.fromCommitExpr.Eval(ds.ctx, nil)
 	if err != nil {
-		return "", "", "", err
-	}
-	fromCommitValStr, ok := fromCommitVal.(string)
-	if !ok {
-		return "", "", "", fmt.Errorf("received '%v' when expecting commit hash string", fromCommitVal)
+		return nil, nil, nil, "", err
 	}
 
 	toCommitVal, err := ds.toCommitExpr.Eval(ds.ctx, nil)
 	if err != nil {
-		return "", "", "", err
-	}
-	toCommitValStr, ok := toCommitVal.(string)
-	if !ok {
-		return "", "", "", fmt.Errorf("received '%v' when expecting commit hash string", toCommitVal)
+		return nil, nil, nil, "", err
 	}
 
-	return fromCommitValStr, toCommitValStr, tableName, nil
+	return fromCommitVal, toCommitVal, nil, tableName, nil
 }
 
 // getDiffSummaryNodeFromDelta returns diffSummaryNode object and whether there is data diff or not. It gets tables
