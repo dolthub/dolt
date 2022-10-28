@@ -721,30 +721,6 @@ SQL
     ! [[ "$output" =~ "one_pk" ]] || false
 }
 
-@test "sql-server: Create a temporary table and validate that it doesn't persist after a session closes" {
-    skiponwindows "Missing dependencies"
-
-    cd repo1
-    start_sql_server repo1
-
-    # check no tables on main
-    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
-    [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 0 ]
-
-    # Create a temporary table with some indexes
-    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TEMPORARY TABLE one_pk (
-        pk int,
-        c1 int,
-        c2 int,
-        PRIMARY KEY (pk),
-        INDEX idx_v1 (c1, c2) COMMENT 'hello there')"
-
-    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
-    [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 0 ]
-}
-
 @test "sql-server: connect to another branch with connection string" {
     skiponwindows "Missing dependencies"
 

@@ -313,3 +313,20 @@ tests:
       result:
         columns: ["pk", "val"]
         rows: [["1", "1"], ["2", "2"]]
+- name: Create a temporary table and validate that it doesn't persist after a session closes
+  repos:
+  - name: repo1
+    server: {}
+  connections:
+  - on: repo1
+    queries:
+    - query: "show tables"
+      result:
+        columns: ["Tables_in_repo1"]
+        rows: []
+    - exec: "CREATE TEMPORARY TABLE t1(pk int primary key, val int)"
+    - exec: "INSERT INTO t1 VALUES (1, 1),(2, 2)"
+  - on: repo1
+    queries:
+    - exec: "INSERT INTO t1 VALUES (1, 1),(2, 2)"
+      error_match: "table not found"
