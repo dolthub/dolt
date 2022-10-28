@@ -36,12 +36,12 @@ func newReaderFromIndexData(q MemoryQuotaProvider, idxData []byte, name addr, tr
 	return &chunkSourceAdapter{tr, name}, nil
 }
 
-func (csa chunkSourceAdapter) Close() error {
-	return csa.tableReader.Close()
+func (csa chunkSourceAdapter) close() error {
+	return csa.tableReader.close()
 }
 
-func (csa chunkSourceAdapter) Clone() (chunkSource, error) {
-	tr, err := csa.tableReader.Clone()
+func (csa chunkSourceAdapter) clone() (chunkSource, error) {
+	tr, err := csa.tableReader.clone()
 	if err != nil {
 		return &chunkSourceAdapter{}, err
 	}

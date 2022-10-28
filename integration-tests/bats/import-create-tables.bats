@@ -169,7 +169,7 @@ pk,c1,c2,c3,c4,c5
 9,1,2,3,4,5
 DELIM
     dolt table import -c --pk=pk test 1pk5col-ints.csv
-    run dolt sql -q "create table fktest(id int not null, tpk int unsigned, c2 int, primary key(id), foreign key (tpk) references test(pk))"
+    run dolt sql -q "create table fktest(id int not null, tpk int, c2 int, primary key(id), foreign key (tpk) references test(pk))"
     [ "$status" -eq 0 ]
     run dolt sql -q "insert into fktest values (1, 0, 1)"
     [ "$status" -eq 0 ]
@@ -567,7 +567,7 @@ DELIM
     [[ "$output" =~ "CREATE TABLE \`test\`" ]]
     [[ "$output" =~ "\`pk\` int" ]]
     [[ "$output" =~ "\`str\` varchar(16383)" ]]
-    [[ "$output" =~ "\`int\` int unsigned" ]]
+    [[ "$output" =~ "\`int\` int" ]]
     [[ "$output" =~ "\`bool\` tinyint" ]]
     [[ "$output" =~ "\`float\` float" ]]
     [[ "$output" =~ "\`date\` date" ]]
