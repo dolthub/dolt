@@ -61,6 +61,7 @@ const (
 	SQLFlag     = "sql"
 	CachedFlag  = "cached"
 	SkinnyFlag  = "skinny"
+	MergeBase   = "merge-base"
 )
 
 var diffDocs = cli.CommandDocumentationContent{
@@ -71,11 +72,17 @@ Show changes between the working and staged tables, changes between the working 
 {{.EmphasisLeft}}dolt diff [--options] [<tables>...]{{.EmphasisRight}}
    This form is to view the changes you made relative to the staging area for the next commit. In other words, the differences are what you could tell Dolt to further add but you still haven't. You can stage these changes by using dolt add.
 
-{{.EmphasisLeft}}dolt diff [--options] <commit> [<tables>...]{{.EmphasisRight}}
-   This form is to view the changes you have in your working tables relative to the named {{.LessThan}}commit{{.GreaterThan}}. You can use HEAD to compare it with the latest commit, or a branch name to compare with the tip of a different branch.
+{{.EmphasisLeft}}dolt diff [--options] [--merge-base] <commit> [<tables>...]{{.EmphasisRight}}
+   This form is to view the changes you have in your working tables relative to the named {{.LessThan}}commit{{.GreaterThan}}. You can use HEAD to compare it with the latest commit, or a branch name to compare with the tip of a different branch. If {{.EmphasisLeft}}--merge-base{{.EmphasisRight}} is given, instead of using {{.LessThan}}commit{{.GreaterThan}}, use the merge base of {{.LessThan}}commit{{.GreaterThan}} and HEAD. {{.EmphasisLeft}}dolt diff --merge-base A{{.EmphasisRight}} is equivalent to {{.EmphasisLeft}}dolt diff $(dolt merge-base A HEAD){{.EmphasisRight}} and {{.EmphasisLeft}}dolt diff A...HEAD{{.EmphasisRight}}.
 
-{{.EmphasisLeft}}dolt diff [--options] <commit> <commit> [<tables>...]{{.EmphasisRight}}
-   This is to view the changes between two arbitrary {{.EmphasisLeft}}commit{{.EmphasisRight}}.
+{{.EmphasisLeft}}dolt diff [--options] [--merge-base] <commit> <commit> [<tables>...]{{.EmphasisRight}}
+   This is to view the changes between two arbitrary {{.EmphasisLeft}}commit{{.EmphasisRight}}. If {{.EmphasisLeft}}--merge-base{{.EmphasisRight} is given, use the merge base of the two commits for the "before" side. {{.EmphasisLeft}}dolt diff --merge-base A B{{.EmphasisRight}} is equivalent to {{.EmphasisLeft}}dolt diff $(dolt merge-base A B) B{{.EmphasisRight}} and {{.EmphasisLeft}}dolt diff A...B{{.EmphasisRight}}.
+
+{{.EmphasisLeft}}dolt diff [--options] <commit>..<commit> [<tables>...]{{.EmphasisRight}}
+   This is synonymous to the above form (without the ..) to view the changes between two arbitrary {{.EmphasisLeft}}commit{{.EmphasisRight}}.
+
+{{.EmphasisLeft}}dolt diff [--options] <commit>...<commit> [<tables>...]{{.EmphasisRight}}
+   This is to view the changes on the branch containing and up to the second {{.LessThan}}commit{{.GreaterThan}}, starting at a common ancestor of both {{.LessThan}}commit{{.GreaterThan}}. {{.EmphasisLeft}}dolt diff A...B{{.EmphasisRight}} is equivalent to {{.EmphasisLeft}}dolt diff $(dolt merge-base A B) B{{.EmphasisRight}} and {{.EmphasisLeft}}dolt diff --merge-base A B{{.EmphasisRight}. You can omit any one of {{.LessThan}}commit{{.GreaterThan}}, which has the same effect as using HEAD instead.
 
 The diffs displayed can be limited to show the first N by providing the parameter {{.EmphasisLeft}}--limit N{{.EmphasisRight}} where {{.EmphasisLeft}}N{{.EmphasisRight}} is the number of diffs to display.
 
@@ -132,6 +139,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
 	ap.SupportsFlag(CachedFlag, "c", "Show only the unstaged data changes.")
 	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
+	ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
 	return ap
 }
 
@@ -202,7 +210,7 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	dArgs.limit, _ = apr.GetInt(limitParam)
 	dArgs.where = apr.GetValueOrDefault(whereParam, "")
 
-	tableNames, err := dArgs.applyDiffRoots(ctx, dEnv, apr.Args, apr.Contains(CachedFlag))
+	tableNames, err := dArgs.applyDiffRoots(ctx, dEnv, apr.Args, apr.Contains(CachedFlag), apr.Contains(MergeBase))
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +251,7 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 
 // applyDiffRoots applies the appropriate |from| and |to| root values to the receiver and returns the table names
 // (if any) given to the command.
-func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCached bool) ([]string, error) {
+func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCached, useMergeBase bool) ([]string, error) {
 	headRoot, err := dEnv.HeadRoot(ctx)
 	if err != nil {
 		return nil, err
@@ -271,8 +279,22 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 	}
 
 	if len(args) == 0 {
+		if useMergeBase {
+			return nil, fmt.Errorf("Must supply at least one revision when using --merge-base flag")
+		}
 		// `dolt diff`
 		return nil, nil
+	}
+
+	if strings.Contains(args[0], "..") {
+		if useMergeBase {
+			return nil, fmt.Errorf("Cannot use `..` or `...` with --merge-base flag")
+		}
+		err = dArgs.applyDotRevisions(ctx, dEnv, args)
+		if err != nil {
+			return nil, err
+		}
+		return args[1:], err
 	}
 
 	// treat the first arg as a ref spec
@@ -280,6 +302,10 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 
 	// if it doesn't resolve, treat it as a table name
 	if !ok {
+		// `dolt diff table`
+		if useMergeBase {
+			return nil, fmt.Errorf("Must supply at least one revision when using --merge-base flag")
+		}
 		return args, nil
 	}
 
@@ -288,21 +314,121 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 
 	if len(args) == 1 {
 		// `dolt diff from_commit`
+		if useMergeBase {
+			err := dArgs.applyMergeBase(ctx, dEnv, args[0], "HEAD")
+			if err != nil {
+				return nil, err
+			}
+		}
 		return nil, nil
 	}
 
 	toRoot, ok := maybeResolve(ctx, dEnv, args[1])
 
 	if !ok {
-		// `dolt diff from_commit ...tables`
+		// `dolt diff from_commit [...tables]`
+		if useMergeBase {
+			err := dArgs.applyMergeBase(ctx, dEnv, args[0], "HEAD")
+			if err != nil {
+				return nil, err
+			}
+		}
 		return args[1:], nil
 	}
 
 	dArgs.toRoot = toRoot
 	dArgs.toRef = args[1]
 
-	// `dolt diff from_commit to_commit ...tables`
+	if useMergeBase {
+		err := dArgs.applyMergeBase(ctx, dEnv, args[0], args[1])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// `dolt diff from_commit to_commit [...tables]`
 	return args[2:], nil
+}
+
+// applyMergeBase applies the merge base of two revisions to the |from| root
+// values.
+func (dArgs *diffArgs) applyMergeBase(ctx context.Context, dEnv *env.DoltEnv, leftStr, rightStr string) error {
+	mergeBaseStr, err := getMergeBaseFromStrings(ctx, dEnv, leftStr, rightStr)
+	if err != nil {
+		return err
+	}
+
+	fromRoot, ok := maybeResolve(ctx, dEnv, mergeBaseStr)
+	if !ok {
+		return fmt.Errorf("merge base invalid %s", mergeBaseStr)
+	}
+
+	dArgs.fromRoot = fromRoot
+	dArgs.fromRef = mergeBaseStr
+
+	return nil
+}
+
+// applyDotRevisions applies the appropriate |from| and |to| root values to the
+// receiver for arguments containing `..` or `...`
+func (dArgs *diffArgs) applyDotRevisions(ctx context.Context, dEnv *env.DoltEnv, args []string) error {
+	// `dolt diff from_commit...to_commit [...tables]`
+	if strings.Contains(args[0], "...") {
+		refs := strings.Split(args[0], "...")
+		var toRoot *doltdb.RootValue
+		ok := true
+
+		if len(refs[0]) > 0 {
+			right := refs[1]
+			// Use current HEAD if right side of `...` does not exist
+			if len(refs[1]) == 0 {
+				right = "HEAD"
+			}
+
+			err := dArgs.applyMergeBase(ctx, dEnv, refs[0], right)
+			if err != nil {
+				return err
+			}
+		}
+
+		if len(refs[1]) > 0 {
+			if toRoot, ok = maybeResolve(ctx, dEnv, refs[1]); !ok {
+				return fmt.Errorf("to ref in three dot diff must be valid ref: %s", refs[1])
+			}
+			dArgs.toRoot = toRoot
+			dArgs.toRef = refs[1]
+		}
+
+		return nil
+	}
+
+	// `dolt diff from_commit..to_commit [...tables]`
+	if strings.Contains(args[0], "..") {
+		refs := strings.Split(args[0], "..")
+		var fromRoot *doltdb.RootValue
+		var toRoot *doltdb.RootValue
+		ok := true
+
+		if len(refs[0]) > 0 {
+			if fromRoot, ok = maybeResolve(ctx, dEnv, refs[0]); !ok {
+				return fmt.Errorf("from ref in two dot diff must be valid ref: %s", refs[0])
+			}
+			dArgs.fromRoot = fromRoot
+			dArgs.fromRef = refs[0]
+		}
+
+		if len(refs[1]) > 0 {
+			if toRoot, ok = maybeResolve(ctx, dEnv, refs[1]); !ok {
+				return fmt.Errorf("to ref in two dot diff must be valid ref: %s", refs[1])
+			}
+			dArgs.toRoot = toRoot
+			dArgs.toRef = refs[1]
+		}
+
+		return nil
+	}
+
+	return nil
 }
 
 // todo: distinguish between non-existent CommitSpec and other errors, don't assume non-existent
