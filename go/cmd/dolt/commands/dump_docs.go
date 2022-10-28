@@ -21,8 +21,6 @@ import (
 	"os"
 	"sort"
 
-	"github.com/dolthub/dolt/go/store/types"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -50,10 +48,6 @@ func (cmd *DumpDocsCmd) Name() string {
 // Description returns a description of the command
 func (cmd *DumpDocsCmd) Description() string {
 	return "dumps all documentation in md format to a directory"
-}
-
-func (cmd *DumpDocsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT(nbf)
 }
 
 // Hidden should return true if this command should be hidden from the help text
@@ -105,19 +99,17 @@ func (cmd *DumpDocsCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return 1
 	}
 
-	err = cmd.dumpDocs(wr, cmd.DoltCommand.Name(), cmd.DoltCommand.Subcommands)
+	verr := cmd.dumpDocs(wr, cmd.DoltCommand.Name(), cmd.DoltCommand.Subcommands)
 
-	if err != nil {
-		verr := errhand.BuildDError("error: Failed to dump docs.").AddCause(err).Build()
+	if verr != nil {
 		cli.PrintErrln(verr.Verbose())
-
 		return 1
 	}
 
 	return 0
 }
 
-func (cmd *DumpDocsCmd) dumpDocs(wr io.Writer, cmdStr string, subCommands []cli.Command) error {
+func (cmd *DumpDocsCmd) dumpDocs(wr io.Writer, cmdStr string, subCommands []cli.Command) errhand.VerboseError {
 	sort.Slice(subCommands, func(i, j int) bool {
 		return subCommands[i].Name() < subCommands[j].Name()
 	})
@@ -130,10 +122,9 @@ func (cmd *DumpDocsCmd) dumpDocs(wr io.Writer, cmdStr string, subCommands []cli.
 
 		if !hidden {
 			if subCmdHandler, ok := curr.(cli.SubCommandHandler); ok {
-				err := cmd.dumpDocs(wr, cmdStr+" "+subCmdHandler.Name(), subCmdHandler.Subcommands)
-
-				if err != nil {
-					return err
+				verr := cmd.dumpDocs(wr, cmdStr+" "+subCmdHandler.Name(), subCmdHandler.Subcommands)
+				if verr != nil {
+					return verr
 				}
 			} else {
 				docs := curr.Docs()
@@ -142,7 +133,7 @@ func (cmd *DumpDocsCmd) dumpDocs(wr io.Writer, cmdStr string, subCommands []cli.
 					docs.CommandStr = fmt.Sprintf("%s %s", cmdStr, curr.Name())
 					err := CreateMarkdown(wr, docs)
 					if err != nil {
-						return err
+						return errhand.BuildDError(fmt.Sprintf("error: Failed to create markdown for command: %s %s.", cmdStr, curr.Name())).AddCause(err).Build()
 					}
 				}
 			}
