@@ -1,0 +1,325 @@
+repos: &repos
+   - name: mysql
+     external-server:
+       - name: test
+       - port: 3307
+       - user: root
+       - password: password
+  - name: repo1
+    server: {}
+opts:
+  - seed: 0
+tests:
+  - name: "primary key types"
+    repos: *repos
+    tables:
+      - name: "int"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+      - name: "float"
+        schema: |
+        create table xy (
+          x float primary key,
+          y varchar(30)
+        );
+      - name: "varchar"
+        schema: |
+        create table xy (
+          x varchar(20) primary key,
+          y varchar(30)
+        );
+  - name: "config width"
+    repos: *repos
+    tables:
+      - name: "2 cols"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+      - name: "4 cols"
+        schema: |
+        create table xy (
+          x int primary key,
+          y int,
+          z int,
+          w int,
+        );
+      - name: "8 cols"
+        schema: |
+        create table xy (
+          x int primary key,
+          y int,
+          z int,
+          w int,
+          a int,
+          b int,
+          c int,
+          d int
+        );
+  - name: "schema types"
+    repos: *repos
+    tables:
+      - name: "varchar"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+      - name: "enum"
+        schema: |
+        create table xy (
+          x int primary key,
+          y enum()
+        );
+      - name: "bit"
+        schema: |
+        create table xy (
+          x int primary key,
+          y enum()
+        );
+      - name: "geometry"
+        schema: |
+        create table xy (
+          x int primary key,
+          y enum()
+        );
+      - name: "datetime"
+        schema: |
+        create table xy (
+          x int primary key,
+          y enum()
+        );
+  - name: "pk type"
+    repos: *repos
+    tables:
+      - name: "int"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+      - name: "float"
+        schema: |
+        create table xy (
+          x float primary key,
+          y varchar(30)
+        );
+      - name: "varchar"
+        schema: |
+        create table xy (
+          x varchar(30) primary key,
+          y varchar(30)
+        );
+  - name: "config width"
+    repos: *repos
+    tables:
+      - name: "2 cols"
+        schema: |
+        create table xy (
+          x int primary key,
+          y int
+        );
+      - name: "4 cols"
+        schema: |
+        create table xy (
+          x int primary key,
+          y int,
+          z int,
+          a int
+        );
+      - name: "8 cols"
+        schema: |
+        create table xy (
+          x int primary key,
+          y int,
+          z int,
+          a int,
+          b int,
+          c int,
+          d int,
+          e int
+        );
+  - name: "schema types"
+    repos: *repos
+    tables:
+      - name: "varchar"
+        schema: |
+        create table xy (
+          x int,
+          y varchar(30)
+        );
+      - name: "enum"
+        schema: |
+        create table xy (
+          x int primary key,
+          y ENUM('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h')
+        );
+      - name: "bit"
+        schema: |
+        create table xy (
+          x int primary key,
+          y bit(8)
+        );
+      - name: "geometry"
+        schema: |
+        create table xy (
+          x int primary key,
+          y geometry
+        );
+      - name: "datetime"
+        schema: |
+        create table xy (
+          x int primary key,
+          y datetime
+        );
+      - name: "time"
+        schema: |
+        create table xy (
+          x int primary key,
+          y time(6)
+        );
+  - name: "secondary indexes"
+    repos: *repos
+    tables:
+      - name: "no secondary"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30),
+          z varchar(30),
+          w varchar(30),
+        );
+      - name: "one index"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30),
+          z varchar(30),
+          w varchar(30),
+          index x (x),
+        );
+      - name: "two index"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30),
+          z varchar(30),
+          w varchar(30),
+          index x (x),
+          index y (y)
+        );
+      - name: "four index"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30),
+          z varchar(30),
+          w varchar(30),
+          index x (x),
+          index y (y),
+          index z (z),
+          index w (w)
+        );
+  - name: "blobs"
+    repos: *repos
+    tables:
+      - name: "no blob"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30),
+          z varchar(30),
+          w varchar(30)
+        );
+      - name: "1 blob"
+        schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30),
+        );
+      - name: "2 blobs"
+        schema: |
+        create table xy (
+        x int primary key,
+        y blob,
+        z blob,
+        w varchar(30)
+        );
+  - name: "sorting"
+    repos: *repos
+    tables:
+      - name: "sorted"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+      - name: "unsorted"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+        shuffle: true
+  - name: "import path"
+    repos: *repos
+    tables:
+      - name: "cli command"
+        schema:
+      - name: "dump"
+        schema:
+  - name: "row count"
+    repos: *repos
+    tables:
+      - name: "400k"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+          rows: 400000
+      - name: "800k"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+        rows: 800000
+      - name: "1.6mm"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+        rows: 1600000
+  - name: "access pattern"
+    repos:
+      - name: repo1
+    tables:
+      - name: "LOAD"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+        format: "load"
+      - name: "cli table import"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+        format: "cli"
+      - name: "SQL dump"
+        schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+        format: "dump"

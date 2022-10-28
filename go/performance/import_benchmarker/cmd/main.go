@@ -16,41 +16,92 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	ib "github.com/dolthub/dolt/go/performance/import_benchmarker"
 	"log"
 	"os"
-
-	"github.com/dolthub/dolt/go/performance/import_benchmarker"
 )
 
 const (
 	resultsTableName = "results"
 )
 
-var configPath = flag.String("config", "", "the path to a config file")
+var path = flag.String("testse", "", "the path to a test file")
 
 func main() {
 	flag.Parse()
-
-	// Construct a config
-	config, err := import_benchmarker.NewDefaultImportBenchmarkConfig()
-	if *configPath != "" {
-		config, err = import_benchmarker.FromFileConfig(*configPath)
-	}
-
+	def, err := ib.ParseTestsFile(*path)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatalln(err)
 	}
+	results := new(ib.ImportResults)
+	for _, test := range def.Tests {
+		for _, r := range test.Repos {
+			if r.ExternalServer != nil {
+				// mysql conn
+				db, err := ib.ConnectDB(r.ExternalServer.User, r.ExternalServer.Password, r.ExternalServer.Name, r.ExternalServer.Host, r.ExternalServer.Port)
+				if err != nil {
+					log.Fatalln(err)
+				}
+				err = test.RunServerTests(r.Name, db, results)
+				if err != nil {
+					log.Fatalln(err)
+				}
+			} else if r.Server != nil {
+				u, err := ib.NewDoltUser()
+				if err != nil {
+					log.Fatalln(err)
+				}
+				rs, err := u.MakeRepoStore()
+				if err != nil {
+					log.Fatalln(err)
+				}
 
-	// Get the working directory the tests will be executing in
-	wd := import_benchmarker.GetWorkingDir()
+				// start dolt server
+				repo, err := ib.MakeRepo(rs, r)
+				r.Server.Args = append(r.Server.Args, "")
+				server, err := ib.MakeServer(repo, r.Server)
+				if server != nil {
+					server.DBName = r.Name
+				}
+				defer server.GracefulStop()
 
-	// Generate the tests and the benchmarker.
-	results, err := import_benchmarker.RunBenchmarkTests(config, wd)
-	if err != nil {
-		log.Fatal(err)
+				db, err := server.DB()
+				if err != nil {
+					log.Fatalln(err)
+				}
+
+				_, err = db.Exec("SET GLOBAL local_infile=1 ")
+				if err != nil {
+					log.Fatalln(err)
+				}
+
+				err = test.RunServerTests(r.Name, db, results)
+				if err != nil {
+					log.Fatalln(err)
+				}
+			} else {
+				u, err := ib.NewDoltUser()
+				if err != nil {
+					log.Fatalln(err)
+				}
+				rs, err := u.MakeRepoStore()
+				if err != nil {
+					log.Fatalln(err)
+				}
+
+				// cli only access
+				repo, err := ib.MakeRepo(rs, r)
+				if err != nil {
+					log.Fatalln(err)
+				}
+				err = test.RunCliTests(r.Name, repo, results)
+				if err != nil {
+					log.Fatalln(err)
+				}
+			}
+		}
 	}
-
-	import_benchmarker.SerializeResults(results, wd, resultsTableName, "csv")
-
+	fmt.Println(results.String())
 	os.Exit(0)
 }
