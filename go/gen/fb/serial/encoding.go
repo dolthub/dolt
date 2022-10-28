@@ -18,6 +18,8 @@ package serial
 
 import (
 	"strconv"
+
+	flatbuffers "github.com/google/flatbuffers/go"
 )
 
 type Encoding byte
@@ -121,3 +123,4 @@ func (v Encoding) String() string {
 	}
 	return "Encoding(" + strconv.FormatInt(int64(v), 10) + ")"
 }
+

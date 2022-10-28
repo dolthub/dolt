@@ -18,6 +18,8 @@ package serial
 
 import (
 	"strconv"
+
+	flatbuffers "github.com/google/flatbuffers/go"
 )
 
 type Collation uint16
@@ -856,3 +858,4 @@ func (v Collation) String() string {
 	}
 	return "Collation(" + strconv.FormatInt(int64(v), 10) + ")"
 }
+

@@ -232,7 +232,6 @@ func WorkingSetAddMergeState(builder *flatbuffers.Builder, mergeState flatbuffer
 func WorkingSetEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
-
 type MergeState struct {
 	_tab flatbuffers.Table
 }
