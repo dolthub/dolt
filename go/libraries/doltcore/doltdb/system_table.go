@@ -171,7 +171,7 @@ var DocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
 var DocsMaybeCreateTableStmt = `
 CREATE TABLE IF NOT EXISTS dolt_docs (
   doc_name varchar(16383) NOT NULL,
-  doc_text varchar(16383),
+  doc_text varchar(65535),
   PRIMARY KEY (doc_name)
 );`
 
