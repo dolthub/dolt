@@ -157,10 +157,6 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 		return nil, err
 	}
 
-	if len(fromCommitStr) == 0 || len(toCommitStr) == 0 {
-		return nil, fmt.Errorf("expected strings for from and to revisions, got: %v, %v", fromCommitStr, toCommitStr)
-	}
-
 	ddb := sqledb.GetDoltDB()
 	dp := dtables.NewDiffPartition(dtf.tableDelta.ToTable, dtf.tableDelta.FromTable, toCommitStr, fromCommitStr, dtf.toDate, dtf.fromDate, dtf.tableDelta.ToSch, dtf.tableDelta.FromSch)
 
@@ -201,10 +197,6 @@ func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db
 		return nil, nil, err
 	}
 
-	if len(fromCommitStr) == 0 || len(toCommitStr) == 0 {
-		return nil, nil, fmt.Errorf("must have valid from and to refs: %s, %s", fromCommitStr, toCommitStr)
-	}
-
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	fromDetails, err := resolveRoot(ctx, sess, db.Name(), fromCommitStr)
@@ -220,9 +212,7 @@ func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db
 	return fromDetails, toDetails, nil
 }
 
-// loadCommitStrings gets the to and from commit strings, using the common
-// ancestor as the from commit string for three dot diff
-func loadCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db Database) (string, string, error) {
+func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db Database) (string, string, error) {
 	if dotRef != nil {
 		dotStr, err := interfaceToString(dotRef)
 		if err != nil {
@@ -269,6 +259,21 @@ func loadCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db 
 	toStr, err := interfaceToString(toRef)
 	if err != nil {
 		return "", "", err
+	}
+
+	return fromStr, toStr, nil
+}
+
+// loadCommitStrings gets the to and from commit strings, using the common
+// ancestor as the from commit string for three dot diff
+func loadCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db Database) (string, string, error) {
+	fromStr, toStr, err := resolveCommitStrings(ctx, fromRef, toRef, dotRef, db)
+	if err != nil {
+		return "", "", err
+	}
+
+	if len(fromStr) == 0 || len(toStr) == 0 {
+		return "", "", fmt.Errorf("expected strings for from and to revisions, got: %v, %v", fromStr, toStr)
 	}
 
 	return fromStr, toStr, nil
