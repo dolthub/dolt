@@ -55,6 +55,7 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 	rows := serializeClusteredIndex(b, sch)
 	indexes := serializeSecondaryIndexes(b, sch, sch.Indexes().AllIndexes())
 	checks := serializeChecks(b, sch.Checks().AllChecks())
+	pkPrefixLengths := serializePkPrefixLengths(b, sch.GetPkPrefixLengths())
 
 	serial.TableSchemaStart(b)
 	serial.TableSchemaAddClusteredIndex(b, rows)
@@ -62,6 +63,7 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 	serial.TableSchemaAddSecondaryIndexes(b, indexes)
 	serial.TableSchemaAddChecks(b, checks)
 	serial.TableSchemaAddCollation(b, serial.Collation(sch.GetCollation()))
+	serial.TableSchemaAddPkPrefixLengths(b, pkPrefixLengths)
 	root := serial.TableSchemaEnd(b)
 	bs := serial.FinishMessage(b, root, []byte(serial.TableSchemaFileID))
 	return bs, nil
@@ -92,6 +94,11 @@ func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Sc
 	}
 
 	err = sch.SetPkOrdinals(deserializeClusteredIndex(s))
+	if err != nil {
+		return nil, err
+	}
+
+	err = sch.SetPkPrefixLengths(deserializePkPrefixLengths(s))
 	if err != nil {
 		return nil, err
 	}
@@ -181,6 +188,27 @@ func deserializeClusteredIndex(s *serial.TableSchema) []int {
 		pkOrdinals[i] = int(ci.KeyColumns(i))
 	}
 	return pkOrdinals
+}
+
+func serializePkPrefixLengths(b *fb.Builder, pkPrefixLengths []uint64) fb.UOffsetT {
+	serial.TableSchemaStartPkPrefixLengthsVector(b, len(pkPrefixLengths))
+	for i := len(pkPrefixLengths) - 1; i >= 0; i-- {
+		b.PrependUint64(pkPrefixLengths[i])
+	}
+	return b.EndVector(len(pkPrefixLengths))
+}
+
+func deserializePkPrefixLengths(s *serial.TableSchema) []uint64 {
+	// check for keyless schema
+	if keylessSerialSchema(s) {
+		return nil
+	}
+
+	pkPrefixLengths := make([]uint64, s.PkPrefixLengthsLength())
+	for i := range pkPrefixLengths {
+		pkPrefixLengths[i] = s.PkPrefixLengths(i)
+	}
+	return pkPrefixLengths
 }
 
 func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
