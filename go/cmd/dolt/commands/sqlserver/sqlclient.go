@@ -28,8 +28,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/ishell"
 	"github.com/fatih/color"
-	_ "github.com/go-sql-driver/mysql"
+	mysqlDriver "github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -202,42 +203,69 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 		}
 	}
 
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig, dbToUse), nil)
+	// The standard DSN parser cannot handle a forward slash in the database name, so we have to workaround it.
+	// See the original issue: https://github.com/dolthub/dolt/issues/4623
+	parsedMySQLConfig, err := mysqlDriver.ParseDSN(ConnectionString(serverConfig, "no_database"))
 	if err != nil {
 		cli.PrintErrln(err.Error())
-		serverController.StopServer()
-		err = serverController.WaitForClose()
-		if err != nil {
-			cli.PrintErrln(err.Error())
-		}
 		return 1
 	}
+	parsedMySQLConfig.DBName = dbToUse
+	mysqlConnector, err := mysqlDriver.NewConnector(parsedMySQLConfig)
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+	conn := &dbr.Connection{DB: mysql.OpenDB(mysqlConnector), EventReceiver: nil, Dialect: dialect.MySQL}
 	_ = conn.Ping()
 
 	if hasQuery {
 		defer conn.Close()
-		rows, err := conn.Query(query)
-		if err != nil {
-			cli.PrintErrln(err.Error())
-			return 1
-		}
-		if rows != nil {
-			sqlCtx := sql.NewContext(ctx)
-			wrapper, err := NewMysqlRowWrapper(rows)
+
+		if apr.Contains(noAutoCommitFlag) {
+			_, err = conn.Exec("set @@autocommit = off;")
 			if err != nil {
 				cli.PrintErrln(err.Error())
 				return 1
 			}
-			defer wrapper.Close(sqlCtx)
-			if wrapper.HasMoreRows() {
-				err = engine.PrettyPrintResults(sqlCtx, format, wrapper.Schema(), wrapper)
+		}
+
+		scanner := commands.NewSqlStatementScanner(strings.NewReader(query))
+		query = ""
+		for scanner.Scan() {
+			query += scanner.Text()
+			if len(query) == 0 || query == "\n" {
+				continue
+			}
+
+			rows, err := conn.Query(query)
+			if err != nil {
+				cli.PrintErrln(err.Error())
+				return 1
+			}
+			if rows != nil {
+				sqlCtx := sql.NewContext(ctx)
+				wrapper, err := NewMysqlRowWrapper(rows)
 				if err != nil {
 					cli.PrintErrln(err.Error())
 					return 1
 				}
+				defer wrapper.Close(sqlCtx)
+				if wrapper.HasMoreRows() {
+					err = engine.PrettyPrintResults(sqlCtx, format, wrapper.Schema(), wrapper)
+					if err != nil {
+						cli.PrintErrln(err.Error())
+						return 1
+					}
+				}
 			}
+			query = ""
 		}
 
+		if err = scanner.Err(); err != nil {
+			cli.PrintErrln(err.Error())
+			return 1
+		}
 		return 0
 	}
 

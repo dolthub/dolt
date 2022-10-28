@@ -218,22 +218,30 @@ teardown() {
     # Can't use dolt sql-client to connect to branches
     
     # Connecting to heads that exist only on the remote should work fine (they get fetched)
-    server_query "repo2/new_feature" 1 dolt "" "show tables" "Tables_in_repo2/new_feature\ntest"
-    server_query repo2 1 dolt "" 'use `repo2/new_feature2`' ""
-    server_query repo2 1 dolt "" 'select * from `repo2/new_feature2`.test' "pk\n0\n1\n2"
+    dolt sql-client --use-db "repo2/new_feature" -u dolt -P $PORT -q "show tables" "Tables_in_repo2/new_feature\ntest"
+    dolt sql-client --use-db repo2 -P $PORT -u dolt -q 'use `repo2/new_feature2`'
+    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q 'select * from `repo2/new_feature2`.test'
+    [ $status -eq 0 ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ " 0 " ]] || false
+    [[ "$output" =~ " 1 " ]] || false
+    [[ "$output" =~ " 2 " ]] || false
     
     # Connecting to heads that don't exist should error out
-    run server_query "repo2/notexist" 1 dolt ""  'use `repo2/new_feature2`' "" 1
+    run dolt sql-client --use-db "repo2/notexist" -u dolt -P $PORT -q 'use `repo2/new_feature2`'
+    [ $status -ne 0 ]
     [[ $output =~ "database not found" ]] || false
     
-    run server_query repo2 1 dolt "" 'use `repo2/notexist`' "" 1
+    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q 'use `repo2/notexist`'
+    [ $status -ne 0 ]
     [[ $output =~ "database not found" ]] || false
 
     # Creating a branch locally that doesn't exist on the remote
     # works, but connecting to it is an error (nothing to pull)
-    server_query "repo2/new_feature" 1 dolt "" "select dolt_checkout('-b', 'new_branch') as b" "b\n0"
+    dolt sql-client --use-db "repo2/new_feature" -u dolt -P $PORT -q "select dolt_checkout('-b', 'new_branch')"
 
-    run server_query "repo2/new_branch" 1 dolt "" "show tables" "Table\ntest" "" 1
+    run dolt sql-client --use-db "repo2/new_branch" -u dolt -P $PORT -q "show tables"
+    [ $status -ne 0 ]
     [[ $output =~ "database not found" ]] || false
 }
 
@@ -319,7 +327,10 @@ teardown() {
     [ "$output" = "" ]
 
     # Can't connect to a specific branch with dolt sql-client
-    server_query "repo2/feature-branch" 1 dolt "" "SHOW Tables" "Tables_in_repo2/feature-branch\ntest"
+    run dolt sql-client --use-db "repo2/feature-branch" -u dolt -P $PORT -q "SHOW Tables"
+    [ $status -eq 0 ]
+    [[ $output =~ "feature-branch" ]] || false
+    [[ $output =~ "test" ]] || false
 }
 
 @test "remotes-sql-server: connect to hash works" {
@@ -340,7 +351,7 @@ teardown() {
     [[ $output =~ "Tables_in_repo2" ]] || false
     [[ $output =~ "test" ]] || false
     
-    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q"use \`repo2/$head_hash\`"
+    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "use \`repo2/$head_hash\`"
     [ $status -eq 0 ]
     [ "$output" = "" ]
 }
