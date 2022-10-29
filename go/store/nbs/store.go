@@ -514,26 +514,28 @@ func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 
 func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, maxTables int, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
-	err := checkDir(dir)
-
-	if err != nil {
+	if err := checkDir(dir); err != nil {
 		return nil, err
 	}
 
 	m, err := getFileManifest(ctx, dir)
-
 	if err != nil {
 		return nil, err
+	}
+
+	p := newFSTablePersister(dir, globalFDCache, q)
+
+	if chunkJournalFeatureFlag {
+		j := newChunkJournal(dir, m)
+		m, p = j, j
 	}
 
 	mm := makeManifestManager(m)
-	p := newFSTablePersister(dir, globalFDCache, q)
-	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{maxTables}, memTableSize)
 
+	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{maxTables}, memTableSize)
 	if err != nil {
 		return nil, err
 	}
-
 	return nbs, nil
 }
 

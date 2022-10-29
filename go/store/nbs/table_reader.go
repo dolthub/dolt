@@ -79,6 +79,9 @@ func (cmp CompressedChunk) ToChunk() (chunks.Chunk, error) {
 func ChunkToCompressedChunk(chunk chunks.Chunk) CompressedChunk {
 	compressed := snappy.Encode(nil, chunk.Data())
 	length := len(compressed)
+	// todo: this append allocates a new buffer and copies |compressed|.
+	//  This is costly, but maybe better, as it allows us to reclaim the
+	//  extra space allocated in snappy.Encode (see snappy.MaxEncodedLen).
 	compressed = append(compressed, []byte{0, 0, 0, 0}...)
 	binary.BigEndian.PutUint32(compressed[length:], crc(compressed[:length]))
 	return CompressedChunk{H: chunk.Hash(), FullCompressedChunk: compressed, CompressedData: compressed[:length]}
@@ -92,6 +95,11 @@ func (cmp CompressedChunk) Hash() hash.Hash {
 // IsEmpty returns true if the chunk contains no data.
 func (cmp CompressedChunk) IsEmpty() bool {
 	return len(cmp.CompressedData) == 0 || (len(cmp.CompressedData) == 1 && cmp.CompressedData[0] == 0)
+}
+
+// CompressedSize returns the size of this CompressedChunk.
+func (cmp CompressedChunk) CompressedSize() int {
+	return len(cmp.CompressedData)
 }
 
 var EmptyCompressedChunk CompressedChunk
