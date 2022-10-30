@@ -57,7 +57,15 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, 
 		return false, nil
 	})
 
-	return sql.NewPrimaryKeySchema(cols, sch.GetPkOrdinals()...), nil
+	pkSchema := sql.NewPrimaryKeySchema(cols, sch.GetPkOrdinals()...)
+	pkPrefixLengths := sch.GetPkPrefixLengths()
+	pkSchema.ColNameToLength = make(map[string]uint64)
+	tagToCol := sch.GetPKCols().TagToCol
+	for i = 0; i < len(pkPrefixLengths); i += 2 {
+		col := tagToCol[pkPrefixLengths[i]]
+		pkSchema.ColNameToLength[col.Name] = pkPrefixLengths[i+1]
+	}
+	return pkSchema, nil
 }
 
 // ToDoltSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
@@ -119,6 +127,18 @@ func ToDoltSchema(
 		return nil, err
 	}
 	sch.SetCollation(schema.Collation(collation))
+
+	// TODO: secondary index prefix lengths
+	var pkPrefixLengths []uint64
+	for _, col := range cols {
+		if length, ok := sqlSchema.ColNameToLength[col.Name]; ok {
+			pkPrefixLengths = append(pkPrefixLengths, col.Tag, length)
+		}
+	}
+	err = sch.SetPkPrefixLengths(pkPrefixLengths)
+	if err != nil {
+		return nil, err
+	}
 
 	return sch, nil
 }

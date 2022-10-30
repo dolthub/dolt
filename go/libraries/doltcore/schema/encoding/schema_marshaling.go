@@ -166,6 +166,7 @@ type schemaData struct {
 	CheckConstraints []encodedCheck   `noms:"checks,omitempty" json:"checks,omitempty"`
 	PkOrdinals       []int            `noms:"pkOrdinals,omitempty" json:"pkOrdinals,omitEmpty"`
 	Collation        schema.Collation `noms:"collation,omitempty" json:"collation,omitempty"`
+	PkPrefixLengths  []uint64         `noms:"" json:""`
 }
 
 func (sd *schemaData) Copy() *schemaData {
@@ -257,6 +258,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 		CheckConstraints: encodedChecks,
 		PkOrdinals:       sch.GetPkOrdinals(),
 		Collation:        sch.GetCollation(),
+		PkPrefixLengths:  sch.GetPkPrefixLengths(),
 	}, nil
 }
 
@@ -279,6 +281,8 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 		return nil, err
 	}
 	sch.SetCollation(sd.Collation)
+
+	sch.SetPkPrefixLengths(sd.PkPrefixLengths)
 
 	return sch, nil
 }
@@ -377,20 +381,22 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 		return nil, err
 	}
 
-	schemaCacheMu.Lock()
-	cachedData, ok := unmarshalledSchemaCache[h]
-	schemaCacheMu.Unlock()
-
-	if ok {
-		cachedSch := schema.SchemaFromColCollections(cachedData.all, cachedData.pk, cachedData.nonPK)
-		sd := cachedData.sd.Copy()
-		err := sd.addChecksIndexesAndPkOrderingToSchema(cachedSch)
-		if err != nil {
-			return nil, err
-		}
-
-		return cachedSch, nil
-	}
+	// TODO: cache is messing everything up
+	//schemaCacheMu.Lock()
+	//cachedData, ok := unmarshalledSchemaCache[h]
+	//schemaCacheMu.Unlock()
+	//
+	//
+	//if ok {
+	//	cachedSch := schema.SchemaFromColCollections(cachedData.all, cachedData.pk, cachedData.nonPK)
+	//	sd := cachedData.sd.Copy()
+	//	err := sd.addChecksIndexesAndPkOrderingToSchema(cachedSch)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	return cachedSch, nil
+	//}
 
 	var sd schemaData
 	if nbf.UsesFlatbuffers() {
