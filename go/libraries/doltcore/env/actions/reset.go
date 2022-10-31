@@ -16,7 +16,6 @@ package actions
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -79,7 +78,7 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 	for tblName, tbl := range untrackedTables {
 		newWkRoot, err = newWkRoot.PutTable(ctx, tblName, tbl)
 		if err != nil {
-			return nil, doltdb.Roots{}, errors.New("error: failed to write table back to database")
+			return nil, doltdb.Roots{}, fmt.Errorf("failed to write table back to database: %s", err)
 		}
 	}
 
