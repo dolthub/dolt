@@ -357,8 +357,6 @@ func (te *pkTableEditor) insertKeyVal(ctx context.Context, keyHash hash.Hash, ke
 		if err != nil {
 			return err
 		}
-
-		indexEd.idx.AllTags()
 		err = indexEd.InsertRowWithDupCb(ctx, fullKey, partialKey, types.EmptyTuple(te.nbf), func(ctx context.Context, uke *uniqueKeyErr) error {
 			tableTupleHash, err := uke.TableTuple.Hash(uke.TableTuple.Format())
 			if err != nil {
