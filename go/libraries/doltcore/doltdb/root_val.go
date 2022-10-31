@@ -37,9 +37,10 @@ import (
 const (
 	ddbRootStructName = "dolt_db_root"
 
-	tablesKey      = "tables"
-	foreignKeyKey  = "foreign_key"
-	featureVersKey = "feature_ver"
+	tablesKey        = "tables"
+	foreignKeyKey    = "foreign_key"
+	featureVersKey   = "feature_ver"
+	rootCollationKey = "root_collation_key"
 
 	// deprecated
 	superSchemasKey = "super_schemas"
@@ -85,9 +86,11 @@ type rvStorage interface {
 
 	GetTablesMap(ctx context.Context, vr types.ValueReadWriter, ns tree.NodeStore) (tableMap, error)
 	GetForeignKeys(ctx context.Context, vr types.ValueReader) (types.Value, bool, error)
+	GetCollation(ctx context.Context) (schema.Collation, error)
 
 	SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, m types.Value) (rvStorage, error)
 	SetFeatureVersion(v FeatureVersion) (rvStorage, error)
+	SetCollation(ctx context.Context, collation schema.Collation) (rvStorage, error)
 
 	EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error)
 
@@ -156,6 +159,17 @@ func (r nomsRvStorage) GetForeignKeys(context.Context, types.ValueReader) (types
 	return v.(types.Map), true, nil
 }
 
+func (r nomsRvStorage) GetCollation(ctx context.Context) (schema.Collation, error) {
+	v, found, err := r.valueSt.MaybeGet(rootCollationKey)
+	if err != nil {
+		return schema.Collation_Unspecified, err
+	}
+	if !found {
+		return schema.Collation_Default, nil
+	}
+	return schema.Collation(v.(types.Uint)), nil
+}
+
 func (r nomsRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error) {
 	m, err := r.GetTablesMap(ctx, vrw, ns)
 	if err != nil {
@@ -212,6 +226,14 @@ func (r nomsRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueRead
 
 func (r nomsRvStorage) SetFeatureVersion(v FeatureVersion) (rvStorage, error) {
 	st, err := r.valueSt.Set(featureVersKey, types.Int(v))
+	if err != nil {
+		return nomsRvStorage{}, err
+	}
+	return nomsRvStorage{st}, nil
+}
+
+func (r nomsRvStorage) SetCollation(ctx context.Context, collation schema.Collation) (rvStorage, error) {
+	st, err := r.valueSt.Set(rootCollationKey, types.Uint(collation))
 	if err != nil {
 		return nomsRvStorage{}, err
 	}
@@ -314,6 +336,7 @@ func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter, ns tree.Node
 		fkoff := builder.CreateByteVector(empty[:])
 		serial.RootValueStart(builder)
 		serial.RootValueAddFeatureVersion(builder, int64(DoltFeatureVersion))
+		serial.RootValueAddCollation(builder, serial.Collationutf8mb4_0900_bin)
 		serial.RootValueAddTables(builder, tablesoff)
 		serial.RootValueAddForeignKeyAddr(builder, fkoff)
 		bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
@@ -355,6 +378,18 @@ func (root *RootValue) GetFeatureVersion(ctx context.Context) (ver FeatureVersio
 
 func (root *RootValue) setFeatureVersion(v FeatureVersion) (*RootValue, error) {
 	newStorage, err := root.st.SetFeatureVersion(v)
+	if err != nil {
+		return nil, err
+	}
+	return root.withStorage(newStorage), nil
+}
+
+func (root *RootValue) GetCollation(ctx context.Context) (schema.Collation, error) {
+	return root.st.GetCollation(ctx)
+}
+
+func (root *RootValue) SetCollation(ctx context.Context, collation schema.Collation) (*RootValue, error) {
+	newStorage, err := root.st.SetCollation(ctx, collation)
 	if err != nil {
 		return nil, err
 	}
@@ -1165,6 +1200,15 @@ func (r fbRvStorage) GetForeignKeys(ctx context.Context, vr types.ValueReader) (
 	return v.(types.SerialMessage), true, nil
 }
 
+func (r fbRvStorage) GetCollation(ctx context.Context) (schema.Collation, error) {
+	collation := r.srv.Collation()
+	// Pre-existing repositories will return invalid here
+	if collation == serial.Collationinvalid {
+		return schema.Collation_Default, nil
+	}
+	return schema.Collation(collation), nil
+}
+
 func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error) {
 	builder := flatbuffers.NewBuilder(80)
 
@@ -1222,6 +1266,7 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 	fkoff := builder.CreateByteVector(r.srv.ForeignKeyAddrBytes())
 	serial.RootValueStart(builder)
 	serial.RootValueAddFeatureVersion(builder, r.srv.FeatureVersion())
+	serial.RootValueAddCollation(builder, r.srv.Collation())
 	serial.RootValueAddTables(builder, tablesoff)
 	serial.RootValueAddForeignKeyAddr(builder, fkoff)
 
@@ -1254,6 +1299,12 @@ func (r fbRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWr
 func (r fbRvStorage) SetFeatureVersion(v FeatureVersion) (rvStorage, error) {
 	ret := r.clone()
 	ret.srv.MutateFeatureVersion(int64(v))
+	return ret, nil
+}
+
+func (r fbRvStorage) SetCollation(ctx context.Context, collation schema.Collation) (rvStorage, error) {
+	ret := r.clone()
+	ret.srv.MutateCollation(serial.Collation(collation))
 	return ret, nil
 }
 

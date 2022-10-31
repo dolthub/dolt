@@ -39,6 +39,10 @@ type database struct {
 	ns tree.NodeStore
 }
 
+const (
+	databaseCollation = "db_collation"
+)
+
 var (
 	ErrOptimisticLockFailed = errors.New("optimistic lock failed on database Root update")
 	ErrMergeNeeded          = errors.New("dataset head is not ancestor of commit")

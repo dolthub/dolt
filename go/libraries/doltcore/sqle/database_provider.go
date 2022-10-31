@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -60,6 +61,7 @@ type DoltDatabaseProvider struct {
 var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.CollatedDatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.ExternalStoredProcedureProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.TableFunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
@@ -298,6 +300,10 @@ func (p DoltDatabaseProvider) GetRemoteDB(ctx *sql.Context, srcDB *doltdb.DoltDB
 }
 
 func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) error {
+	return p.CreateCollatedDatabase(ctx, name, sql.Collation_Default)
+}
+
+func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name string, collation sql.CollationID) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -348,6 +354,25 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	err = newEnv.InitRepo(ctx, newDbStorageFormat, sess.Username(), sess.Email(), p.defaultBranch)
 	if err != nil {
 		return err
+	}
+
+	// Set the collation
+	if collation != sql.Collation_Default {
+		workingRoot, err := newEnv.WorkingRoot(ctx)
+		if err != nil {
+			return err
+		}
+		newRoot, err := workingRoot.SetCollation(ctx, schema.Collation(collation))
+		if err != nil {
+			return err
+		}
+		// As this is a newly created database, we set both the working and staged roots to the same root value
+		if err = newEnv.UpdateWorkingRoot(ctx, newRoot); err != nil {
+			return err
+		}
+		if err = newEnv.UpdateStagedRoot(ctx, newRoot); err != nil {
+			return err
+		}
 	}
 
 	// if calling process has a lockfile, also create one for new database
