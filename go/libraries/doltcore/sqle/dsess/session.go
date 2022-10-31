@@ -475,12 +475,11 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 	if sessionState.WorkingSet.MergeActive() {
 		mergeParentCommits = []*doltdb.Commit{sessionState.WorkingSet.MergeState().Commit()}
 	} else if props.Amend {
-		var parentsHeadForAmend []*doltdb.Commit
 		numParentsHeadForAmend := headCommit.NumParents()
 		for i := 0; i < numParentsHeadForAmend; i++ {
 			parentCommit, err := headCommit.GetParent(ctx, i)
 			if err == nil {
-				parentsHeadForAmend = append(parentsHeadForAmend, parentCommit)
+				mergeParentCommits = append(mergeParentCommits, parentCommit)
 			}
 		}
 
