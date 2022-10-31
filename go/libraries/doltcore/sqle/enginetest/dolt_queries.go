@@ -768,10 +768,24 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
+				// Without access to the database, dolt_diff with dots should fail with a database access error
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff('main~..main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
 				// Without access to the database, dolt_diff_summary should fail with a database access error
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff_summary('main~', 'main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// Without access to the database, dolt_diff_summary with dots should fail with a database access error
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff_summary('main~..main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
@@ -796,10 +810,24 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
+				// After granting access to mydb.test, dolt_diff with dots should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_diff('main~..main', 'test');",
+				Expected: []sql.Row{{1}},
+			},
+			{
 				// With access to the db, but not the table, dolt_diff should fail
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff('main~', 'main', 'test2');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				// With access to the db, but not the table, dolt_diff with dots should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff('main~..main', 'test2');",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
@@ -810,10 +838,24 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
+				// With access to the db, but not the table, dolt_diff_summary with dots should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff_summary('main~...main', 'test2');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
 				// With access to the db, dolt_diff_summary should fail for all tables if no access any of tables
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff_summary('main~', 'main');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				// With access to the db, dolt_diff_summary with dots should fail for all tables if no access any of tables
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff_summary('main~...main');",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
@@ -831,6 +873,13 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
+				// After revoking access, dolt_diff with dots should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff('main~..main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
 				// Grant multi-table access for all of mydb
 				User:     "root",
 				Host:     "localhost",
@@ -845,10 +894,24 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
+				// After granting access to the entire db, dolt_diff should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_diff('main~..main', 'test');",
+				Expected: []sql.Row{{1}},
+			},
+			{
 				// After granting access to the entire db, dolt_diff_summary should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('main~', 'main');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				// After granting access to the entire db, dolt_diff_summary with dots should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('main~...main');",
 				Expected: []sql.Row{{1}},
 			},
 			{
@@ -870,6 +933,13 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff('main~', 'main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// After revoking access, dolt_diff with dots should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff('main~...main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
@@ -901,6 +971,13 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
+				// After granting global access to *.*, dolt_diff should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_diff('main~...main', 'test');",
+				Expected: []sql.Row{{1}},
+			},
+			{
 				// Revoke global access
 				User:     "root",
 				Host:     "localhost",
@@ -912,6 +989,13 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff('main~', 'main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// After revoking global access, dolt_diff with dots should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff('main~..main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 		},
@@ -4419,6 +4503,10 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:       "SELECT * from dolt_diff();",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
 				Query:       "SELECT * from dolt_diff('t');",
 				ExpectedErr: sql.ErrInvalidArgumentNumber,
 			},
@@ -4468,6 +4556,43 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:       "SELECT * from dolt_diff(hashof('main'), @Commit2, LOWER('T'));",
+				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+			},
+
+			{
+				Query:       "SELECT * from dolt_diff('main..main~');",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_diff('main..main~', 'extra', 't');",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_diff('main..main^', 123);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_diff('main..main~', 'doesnotexist');",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query:          "SELECT * from dolt_diff('fakefakefakefakefakefakefakefake..main', 't');",
+				ExpectedErrStr: "target commit not found",
+			},
+			{
+				Query:          "SELECT * from dolt_diff('main..fakefakefakefakefakefakefakefake', 't');",
+				ExpectedErrStr: "target commit not found",
+			},
+			{
+				Query:          "SELECT * from dolt_diff('fakefakefakefakefakefakefakefake...main', 't');",
+				ExpectedErrStr: "target commit not found",
+			},
+			{
+				Query:          "SELECT * from dolt_diff('main...fakefakefakefakefakefakefakefake', 't');",
+				ExpectedErrStr: "target commit not found",
+			},
+			{
+				Query:       "SELECT * from dolt_diff('main..main~', LOWER('T'));",
 				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
 			},
 		},
@@ -4574,6 +4699,14 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
+				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('STAGED..WORKING', 't') order by coalesce(from_pk, to_pk);",
+				Expected: []sql.Row{
+					{1, "one", "two", 1, "one", "100", "modified"},
+					{2, "three", "four", nil, nil, nil, "removed"},
+					{nil, nil, nil, 3, "five", "six", "added"},
+				},
+			},
+			{
 				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('WORKING', 'STAGED', 't') order by coalesce(from_pk, to_pk);",
 				Expected: []sql.Row{
 					{1, "one", "100", 1, "one", "two", "modified"},
@@ -4583,6 +4716,10 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('WORKING', 'WORKING', 't') order by coalesce(from_pk, to_pk);",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('WORKING..WORKING', 't') order by coalesce(from_pk, to_pk);",
 				Expected: []sql.Row{},
 			},
 			{
@@ -4640,7 +4777,21 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('main..branch1', 't');",
+				Expected: []sql.Row{
+					{nil, nil, 1, "one", "two", "removed"},
+					{2, "two", 2, "two", "three", "modified"},
+				},
+			},
+			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff('branch1', 'main', 't');",
+				Expected: []sql.Row{
+					{1, "one", "two", nil, nil, "added"},
+					{2, "two", "three", 2, "two", "modified"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff('branch1..main', 't');",
 				Expected: []sql.Row{
 					{1, "one", "two", nil, nil, "added"},
 					{2, "two", "three", 2, "two", "modified"},
@@ -4651,6 +4802,41 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{nil, nil, 1, "one", "two", "removed"},
 					{2, "two", nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('main~..branch1', 't');",
+				Expected: []sql.Row{
+					{nil, nil, 1, "one", "two", "removed"},
+					{2, "two", nil, nil, nil, "added"},
+				},
+			},
+
+			// Three dot
+			{
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('main...branch1', 't');",
+				Expected: []sql.Row{
+					{nil, nil, 1, "one", "two", "removed"},
+					{2, "two", nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff('branch1...main', 't');",
+				Expected: []sql.Row{
+					{2, "two", "three", nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('main~...branch1', 't');",
+				Expected: []sql.Row{
+					{nil, nil, 1, "one", "two", "removed"},
+					{2, "two", nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('main...branch1~', 't');",
+				Expected: []sql.Row{
+					{nil, nil, 1, "one", "two", "removed"},
 				},
 			},
 		},
@@ -4880,6 +5066,10 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				Query:    "select from_a, from_b, from_commit, to_commit, diff_type from dolt_diff('HEAD~', 'HEAD', 't1')",
 				Expected: []sql.Row{{1, 2, "HEAD~", "HEAD", "removed"}},
 			},
+			{
+				Query:    "select from_a, from_b, from_commit, to_commit, diff_type from dolt_diff('HEAD~..HEAD', 't1')",
+				Expected: []sql.Row{{1, 2, "HEAD~", "HEAD", "removed"}},
+			},
 		},
 	},
 	{
@@ -4897,6 +5087,10 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('HEAD~', 'HEAD', 't2')",
+				Expected: []sql.Row{{3, 4, "HEAD~", "HEAD", "added"}},
+			},
+			{
+				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('HEAD~..HEAD', 't2')",
 				Expected: []sql.Row{{3, 4, "HEAD~", "HEAD", "added"}},
 			},
 			{
@@ -4929,7 +5123,15 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1, 100, 1, 1, "modified"}},
 			},
 			{
+				Query:    "select to_pk2, to_col1, from_pk, from_col1, diff_type from dolt_diff('HEAD~..HEAD', 't1')",
+				Expected: []sql.Row{{1, 100, 1, 1, "modified"}},
+			},
+			{
 				Query:    "select to_pk2a, to_pk2b, to_col1, from_pk1a, from_pk1b, from_col1, diff_type from dolt_diff('HEAD~', 'HEAD', 't2');",
+				Expected: []sql.Row{{1, 1, 100, 1, 1, 1, "modified"}},
+			},
+			{
+				Query:    "select to_pk2a, to_pk2b, to_col1, from_pk1a, from_pk1b, from_col1, diff_type from dolt_diff('HEAD~..HEAD', 't2');",
 				Expected: []sql.Row{{1, 1, 100, 1, 1, 1, "modified"}},
 			},
 		},
@@ -5452,6 +5654,10 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:       "SELECT * from dolt_diff_summary();",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
 				Query:       "SELECT * from dolt_diff_summary('t');",
 				ExpectedErr: sql.ErrInvalidArgumentNumber,
 			},
@@ -5480,11 +5686,23 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 				ExpectedErrStr: "branch not found: fake-branch",
 			},
 			{
+				Query:          "SELECT * from dolt_diff_summary('fake-branch..main', 't');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
 				Query:          "SELECT * from dolt_diff_summary(@Commit1, 'fake-branch', 't');",
 				ExpectedErrStr: "branch not found: fake-branch",
 			},
 			{
+				Query:          "SELECT * from dolt_diff_summary('main..fake-branch', 't');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
 				Query:       "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 'doesnotexist');",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query:       "SELECT * from dolt_diff_summary('main^..main', 'doesnotexist');",
 				ExpectedErr: sql.ErrTableNotFound,
 			},
 			{
@@ -5497,6 +5715,10 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:       "SELECT * from dolt_diff_summary(@Commit1, @Commit2, LOWER('T'));",
+				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT * from dolt_diff_summary('main..main~', LOWER('T'));",
 				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
 			},
 		},
@@ -5703,11 +5925,19 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
 			},
 			{
+				Query:    "SELECT * from dolt_diff_summary('STAGED..WORKING', 't')",
+				Expected: []sql.Row{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
+			},
+			{
 				Query:    "SELECT * from dolt_diff_summary('WORKING', 'STAGED', 't')",
 				Expected: []sql.Row{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('WORKING', 'WORKING', 't')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('WORKING..WORKING', 't')",
 				Expected: []sql.Row{},
 			},
 			{
@@ -5751,6 +5981,10 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			"select dolt_checkout('main');",
 			"insert into t values (2, 'two', 'three');",
 			"set @Commit6 = dolt_commit('-am', 'inserting row 2 in main');",
+
+			"create table newtable (pk int primary key);",
+			"insert into newtable values (1), (2);",
+			"set @Commit7 = dolt_commit('-Am', 'new table newtable');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -5758,12 +5992,71 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2}},
 			},
 			{
+				Query:    "SELECT * from dolt_diff_summary('main..branch1', 't');",
+				Expected: []sql.Row{{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2}},
+			},
+			{
+				Query: "SELECT * from dolt_diff_summary('main', 'branch1');",
+				Expected: []sql.Row{
+					{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2},
+					{"newtable", 0, 0, 2, 0, 0, 2, 0, 2, 0, 2, 0},
+				},
+			},
+			{
+				Query: "SELECT * from dolt_diff_summary('main..branch1');",
+				Expected: []sql.Row{
+					{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2},
+					{"newtable", 0, 0, 2, 0, 0, 2, 0, 2, 0, 2, 0},
+				},
+			},
+			{
 				Query:    "SELECT * from dolt_diff_summary('branch1', 'main', 't');",
 				Expected: []sql.Row{{"t", 0, 1, 0, 1, 4, 0, 1, 1, 2, 2, 6}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('main~', 'branch1', 't');",
+				Query:    "SELECT * from dolt_diff_summary('branch1..main', 't');",
+				Expected: []sql.Row{{"t", 0, 1, 0, 1, 4, 0, 1, 1, 2, 2, 6}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('main~2', 'branch1', 't');",
 				Expected: []sql.Row{{"t", 0, 1, 1, 0, 2, 3, 0, 1, 1, 3, 2}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('main~2..branch1', 't');",
+				Expected: []sql.Row{{"t", 0, 1, 1, 0, 2, 3, 0, 1, 1, 3, 2}},
+			},
+
+			// Three dot
+			{
+				Query:    "SELECT * from dolt_diff_summary('main...branch1', 't');",
+				Expected: []sql.Row{{"t", 0, 1, 1, 0, 2, 3, 0, 1, 1, 3, 2}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('main...branch1');",
+				Expected: []sql.Row{{"t", 0, 1, 1, 0, 2, 3, 0, 1, 1, 3, 2}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('branch1...main', 't');",
+				Expected: []sql.Row{{"t", 1, 1, 0, 0, 3, 0, 0, 1, 2, 3, 6}},
+			},
+			{
+				Query: "SELECT * from dolt_diff_summary('branch1...main');",
+				Expected: []sql.Row{
+					{"t", 1, 1, 0, 0, 3, 0, 0, 1, 2, 3, 6},
+					{"newtable", 0, 2, 0, 0, 2, 0, 0, 0, 2, 0, 2},
+				},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('branch1...main^');",
+				Expected: []sql.Row{{"t", 1, 1, 0, 0, 3, 0, 0, 1, 2, 3, 6}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('branch1...main', 'newtable');",
+				Expected: []sql.Row{{"newtable", 0, 2, 0, 0, 2, 0, 0, 0, 2, 0, 2}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('main...main', 'newtable');",
+				Expected: []sql.Row{},
 			},
 		},
 	},
@@ -5923,8 +6216,17 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"t2", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
 			},
 			{
+				Query:    "select * from dolt_diff_summary('HEAD~..HEAD', 't2')",
+				Expected: []sql.Row{{"t2", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
+			},
+			{
 				// Old table name can be matched as well
 				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't1')",
+				Expected: []sql.Row{{"t1", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
+			},
+			{
+				// Old table name can be matched as well
+				Query:    "select * from dolt_diff_summary('HEAD~..HEAD', 't1')",
 				Expected: []sql.Row{{"t1", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
 			},
 		},

@@ -91,12 +91,21 @@ type Database struct {
 	revision string
 }
 
+var _ SqlDatabase = Database{}
+var _ dsess.RevisionDatabase = Database{}
+var _ globalstate.StateProvider = Database{}
+var _ sql.CollatedDatabase = Database{}
 var _ sql.Database = Database{}
+var _ sql.StoredProcedureDatabase = Database{}
 var _ sql.TableCreator = Database{}
-var _ sql.ViewDatabase = Database{}
+var _ sql.TableDropper = Database{}
+var _ sql.TableRenamer = Database{}
 var _ sql.TemporaryTableCreator = Database{}
 var _ sql.TemporaryTableDatabase = Database{}
-var _ dsess.RevisionDatabase = Database{}
+var _ sql.TransactionDatabase = Database{}
+var _ sql.TriggerDatabase = Database{}
+var _ sql.VersionedDatabase = Database{}
+var _ sql.ViewDatabase = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -159,17 +168,6 @@ func (db Database) Revision() string {
 func (db Database) EditOptions() editor.Options {
 	return db.editOpts
 }
-
-var _ SqlDatabase = Database{}
-var _ sql.VersionedDatabase = Database{}
-var _ sql.TableDropper = Database{}
-var _ sql.TableCreator = Database{}
-var _ sql.TemporaryTableCreator = Database{}
-var _ sql.TableRenamer = Database{}
-var _ sql.TriggerDatabase = Database{}
-var _ sql.StoredProcedureDatabase = Database{}
-var _ sql.TransactionDatabase = Database{}
-var _ globalstate.StateProvider = Database{}
 
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts editor.Options) (Database, error) {
@@ -1278,6 +1276,38 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 	return sess.GetAllTemporaryTables(ctx, db.Name())
+}
+
+// GetCollation implements the interface sql.CollatedDatabase.
+func (db Database) GetCollation(ctx *sql.Context) sql.CollationID {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return sql.Collation_Default
+	}
+	collation, err := root.GetCollation(ctx)
+	if err != nil {
+		return sql.Collation_Default
+	}
+	return sql.CollationID(collation)
+}
+
+// SetCollation implements the interface sql.CollatedDatabase.
+func (db Database) SetCollation(ctx *sql.Context, collation sql.CollationID) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
+	if collation == sql.Collation_Unspecified {
+		collation = sql.Collation_Default
+	}
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+	newRoot, err := root.SetCollation(ctx, schema.Collation(collation))
+	if err != nil {
+		return err
+	}
+	return db.SetRoot(ctx, newRoot)
 }
 
 // TODO: this is a hack to make user space DBs appear to the analyzer as full DBs with state etc., but the state is
