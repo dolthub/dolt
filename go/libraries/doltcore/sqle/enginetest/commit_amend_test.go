@@ -15,10 +15,11 @@
 package enginetest
 
 import (
+	"testing"
+
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
-	"testing"
 )
 
 func TestCommitMessageAmend(t *testing.T) {
