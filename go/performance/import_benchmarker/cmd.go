@@ -283,3 +283,24 @@ func ConnectDB(user, password, name, host string, port int) (*sql.DB, error) {
 	}
 	return db, nil
 }
+
+func newServer(u DoltUser, r TestRepo) (*SqlServer, error) {
+	rs, err := u.MakeRepoStore()
+	if err != nil {
+		return nil, err
+	}
+	// start dolt server
+	repo, err := MakeRepo(rs, r)
+	if err != nil {
+		return nil, err
+	}
+	r.Server.Args = append(r.Server.Args, "")
+	server, err := MakeServer(repo, r.Server)
+	if err != nil {
+		return nil, err
+	}
+	if server != nil {
+		server.DBName = r.Name
+	}
+	return server, nil
+}

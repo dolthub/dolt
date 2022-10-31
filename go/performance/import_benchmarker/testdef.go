@@ -18,8 +18,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/cespare/xxhash"
 	"github.com/creasty/defaults"
 	"github.com/dolthub/vitess/go/sqltypes"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -30,7 +32,7 @@ import (
 	sql2 "github.com/dolthub/go-mysql-server/sql"
 	ast "github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
+	yaml "gopkg.in/yaml.v3"
 )
 
 // TestDef is the top-level definition of tests to run.
@@ -53,14 +55,19 @@ type ImportTest struct {
 
 	// Skip the entire test with this reason.
 	Skip string `yaml:"skip"`
+
+	Results *ImportResults
+	files   map[uint64]*os.File
+	tmpdir  string
 }
 
 type Table struct {
-	Name    string `yaml:"name"`
-	Schema  string `yaml:"schema"`
-	Rows    int    `default:"400000" yaml:"rows"`
-	Fmt     string `default:"csv" yaml:"fmt"`
-	Shuffle bool   `default:"true" yaml:"shuffle"'`
+	Name        string `yaml:"name"`
+	Schema      string `yaml:"schema"`
+	Rows        int    `default:"400000" yaml:"rows"`
+	Fmt         string `default:"csv" yaml:"fmt"`
+	Shuffle     bool   `default:"false" yaml:"shuffle"'`
+	TargetTable string
 }
 
 func (s *Table) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -132,7 +139,7 @@ type Query struct {
 	// Args to be passed as query parameters to either Query or Exec.
 	Args []string `yaml:"args"`
 
-	// This can only be non-empty for a |Query|. Asserts the results of the
+	// This can only be non-empty for a |Query|. Asserts the Results of the
 	// |Query|.
 	Result QueryResult `yaml:"result"`
 
@@ -149,8 +156,8 @@ type Query struct {
 	RetryAttempts int `yaml:"retry_attempts"`
 }
 
-// |QueryResult| specifies assertions on the results of a |Query|. Columns must
-// be specified for a |Query| and the query results must fully match. If Rows
+// |QueryResult| specifies assertions on the Results of a |Query|. Columns must
+// be specified for a |Query| and the query Results must fully match. If Rows
 // are ommited, anything is allowed as long as all rows are read successfully.
 // All assertions here are string equality.
 type QueryResult struct {
@@ -247,121 +254,156 @@ func (r *ImportResults) append(ir ImportResult) {
 
 func (r *ImportResults) String() string {
 	b := strings.Builder{}
-	b.WriteString("results:\n")
+	b.WriteString("Results:\n")
 	for _, x := range r.res {
 		b.WriteString(x.String())
 	}
 	return b.String()
 }
 
-func (test ImportTest) Run(t *testing.T) {
+func (test *ImportTest) WithTmpDir(s string) {
+	test.tmpdir = s
+	test.files = make(map[uint64]*os.File)
+}
+
+func (test *ImportTest) Run(t *testing.T) {
 	if test.Skip != "" {
 		t.Skip(test.Skip)
 	}
-
-	results := new(ImportResults)
-	for _, r := range test.Repos {
-		if r.ExternalServer != nil {
-			// mysql conn
-			db, err := ConnectDB(r.ExternalServer.User, r.ExternalServer.Password, r.ExternalServer.Name, r.ExternalServer.Host, r.ExternalServer.Port)
-			require.NoError(t, err)
-			err = test.RunServerTests(r.Name, db, results)
-			require.NoError(t, err)
-		} else if r.Server != nil {
-			u, err := NewDoltUser()
-			require.NoError(t, err)
-			rs, err := u.MakeRepoStore()
-			require.NoError(t, err)
-
-			// start dolt server
-			repo, err := MakeRepo(rs, r)
-			r.Server.Args = append(r.Server.Args, "")
-			server, err := MakeServer(repo, r.Server)
-			if server != nil {
-				server.DBName = r.Name
-			}
-			defer server.GracefulStop()
-
-			db, err := server.DB()
-			require.NoError(t, err)
-
-			_, err = db.Exec("SET GLOBAL local_infile=1 ")
-			require.NoError(t, err)
-
-			err = test.RunServerTests(r.Name, db, results)
-			require.NoError(t, err)
-		} else {
-			u, err := NewDoltUser()
-			require.NoError(t, err)
-			rs, err := u.MakeRepoStore()
-			require.NoError(t, err)
-
-			// cli only access
-			repo, err := MakeRepo(rs, r)
-			require.NoError(t, err)
-
-			err = test.RunCliTests(r.Name, repo, results)
+	var err error
+	if test.Results == nil {
+		test.Results = new(ImportResults)
+		test.tmpdir, err = os.MkdirTemp("", "repo-store-")
+		if err != nil {
 			require.NoError(t, err)
 		}
 	}
-	fmt.Println(results.String())
+
+	u, err := NewDoltUser()
+	for _, r := range test.Repos {
+		if r.ExternalServer != nil {
+			err := test.RunExternalServerTests(r.Name, r.ExternalServer)
+			require.NoError(t, err)
+		} else if r.Server != nil {
+			err = test.RunSqlServerTests(r, u)
+			require.NoError(t, err)
+		} else {
+			err = test.RunCliTests(r, u)
+			require.NoError(t, err)
+		}
+	}
+	fmt.Println(test.Results.String())
 }
 
-func (test ImportTest) RunServerTests(name string, db *sql.DB, results *ImportResults) error {
-	return IterImportTables(test.Tables, func(tab Table, f *os.File) error {
-		// start timer
-		conn, err := db.Conn(context.Background())
+// RunExternalServerTests connects to a single externally provided server to run every test
+func (test *ImportTest) RunExternalServerTests(repoName string, s *ExternalServer) error {
+	return test.IterImportTables(test.Tables, func(tab Table, f *os.File) error {
+		db, err := ConnectDB(s.User, s.Password, s.Name, s.Host, s.Port)
 		if err != nil {
 			return err
 		}
-		defer conn.Close()
+		defer db.Close()
+		return test.benchmarkTest(repoName, db, tab, f)
+	})
+}
 
-		rows, err := conn.QueryContext(context.Background(), tab.Schema)
-		if err == nil {
-			rows.Close()
-		} else {
+// RunSqlServerTests creates a new repo and server for every import test.
+func (test *ImportTest) RunSqlServerTests(repo TestRepo, user DoltUser) error {
+	return test.IterImportTables(test.Tables, func(tab Table, f *os.File) error {
+		//make a new server for every test
+		server, err := newServer(user, repo)
+		if err != nil {
 			return err
 		}
+		defer server.GracefulStop()
 
-		start := time.Now()
+		db, err := server.DB()
+		if err != nil {
+			return err
+		}
+		err = modifyServerForImport(db)
+		if err != nil {
+			return err
+		}
+		return test.benchmarkTest(repo.Name, db, tab, f)
+	})
+}
 
-		q := fmt.Sprintf(`
+func modifyServerForImport(db *sql.DB) error {
+	_, err := db.Exec("SET GLOBAL local_infile=1 ")
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (test *ImportTest) benchmarkTest(repoName string, db *sql.DB, tab Table, f *os.File) error {
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	rows, err := conn.QueryContext(ctx, tab.Schema)
+	if err == nil {
+		rows.Close()
+	} else {
+		return err
+	}
+
+	start := time.Now()
+
+	q := fmt.Sprintf(`
 LOAD DATA LOCAL INFILE '%s' INTO TABLE xy
 FIELDS TERMINATED BY ',' ENCLOSED BY ''
 LINES TERMINATED BY '\n'
 IGNORE 1 LINES;`, f.Name())
 
-		rows, err = conn.QueryContext(context.Background(), q)
-		if err == nil {
-			rows.Close()
-		} else {
-			return err
-		}
+	rows, err = conn.QueryContext(ctx, q)
+	if err == nil {
+		rows.Close()
+	} else {
+		return err
+	}
 
-		stop := time.Now()
+	runtime := time.Since(start)
 
-		// end timer, append result
-		results.append(ImportResult{
-			test:  test.Name,
-			repo:  name,
-			table: tab.Name,
-			time:  stop.Sub(start).Seconds(),
-		})
-
-		rows, err = conn.QueryContext(context.Background(), "drop table xy;")
-		if err == nil {
-			rows.Close()
-		} else {
-			return err
-		}
-
-		return nil
+	test.Results.append(ImportResult{
+		test:  test.Name,
+		repo:  repoName,
+		table: tab.Name,
+		time:  runtime.Seconds(),
 	})
+
+	rows, err = conn.QueryContext(
+		ctx,
+		fmt.Sprintf("drop table %s;", tab.TargetTable),
+	)
+	if err == nil {
+		rows.Close()
+	} else {
+		return err
+	}
+
+	return nil
 }
 
-func (test ImportTest) RunCliTests(name string, repo Repo, results *ImportResults) error {
-	return IterImportTables(test.Tables, func(tab Table, f *os.File) error {
+// RunCliTests runs each import test on a new dolt repo to avoid accumulated
+// startup costs over time between tests.
+func (test *ImportTest) RunCliTests(r TestRepo, user DoltUser) error {
+	return test.IterImportTables(test.Tables, func(tab Table, f *os.File) error {
 		var err error
+
+		rs, err := user.MakeRepoStore()
+		if err != nil {
+			return err
+		}
+
+		repo, err := MakeRepo(rs, r)
+		if err != nil {
+			return err
+		}
 
 		err = repo.DoltExec("sql", "-q", tab.Schema)
 		if err != nil {
@@ -371,7 +413,7 @@ func (test ImportTest) RunCliTests(name string, repo Repo, results *ImportResult
 		// start timer
 		start := time.Now()
 
-		cmd := repo.DoltCmd("table", "import", "-r", "--file-type", "csv", "xy", f.Name())
+		cmd := repo.DoltCmd("table", "import", "-r", "--file-type", tab.Fmt, tab.TargetTable, f.Name())
 		_, err = cmd.StdoutPipe()
 		if err != nil {
 			return err
@@ -383,54 +425,64 @@ func (test ImportTest) RunCliTests(name string, repo Repo, results *ImportResult
 		}
 
 		// end timer, append result
-		stop := time.Now()
+		runtime := time.Since(start)
 
-		results.append(ImportResult{
+		test.Results.append(ImportResult{
 			test:  test.Name,
-			repo:  name,
+			repo:  r.Name,
 			table: tab.Name,
-			time:  stop.Sub(start).Seconds(),
+			time:  runtime.Seconds(),
 		})
 
 		// reset repo at end
-		return repo.DoltExec("sql", "-q", "drop table xy;")
+		return repo.DoltExec("sql", "-q", "drop table", tab.TargetTable)
 	})
 }
 
-func IterImportTables(tables []Table, cb func(t Table, f *os.File) error) error {
-	tmpdir, err := os.MkdirTemp("", "repo-store-")
-	if err != nil {
-		return err
-	}
-
+func (test *ImportTest) IterImportTables(tables []Table, cb func(t Table, f *os.File) error) error {
 	for _, t := range tables {
-		// parse schema to get data types
-		names, types := getSchemaColsTypes(t.Schema)
-		// generate n rows for types
-		f, err := os.CreateTemp(tmpdir, "import-data-")
+		key, err := tableKey(t)
+		if err != nil {
+			return err
+		}
+		table, names, types := parseTableAndSchema(t.Schema)
+		t.TargetTable = table
+
+		if f, ok := test.files[key]; ok {
+			// short circuit if we've already made file for schema/row count
+			return cb(t, f)
+		}
+
+		rows := make([]string, 0, t.Rows)
+		genRows(types, t.Rows, func(r []string) {
+			switch t.Fmt {
+			case "csv":
+				rows = append(rows, strings.Join(r, ","))
+			case "dump":
+			default:
+				panic(fmt.Sprintf("unknown format: %s", t.Fmt))
+			}
+		})
+
+		if t.Shuffle {
+			rand.Shuffle(len(rows), func(i, j int) { rows[i], rows[j] = rows[j], rows[i] })
+		}
+
+		f, err := os.CreateTemp(test.tmpdir, "import-data-")
 		if err != nil {
 			return err
 		}
 
 		switch t.Fmt {
 		case "csv":
-			// header
-			f.WriteString(strings.Join(names, ","))
-			f.WriteString("\n")
-		case "dump":
-		default:
-			panic(fmt.Sprintf("unknown format: %s", t.Fmt))
-		}
-		genRows(types, t.Rows, func(r []string) {
-			switch t.Fmt {
-			case "csv":
-				f.WriteString(strings.Join(r, ","))
-				f.WriteString("\n")
-			case "dump":
-			default:
-				panic(fmt.Sprintf("unknown format: %s", t.Fmt))
+			fmt.Fprintf(f, "%s\n", strings.Join(names, ","))
+			for _, r := range rows {
+				fmt.Fprintf(f, "%s\n", r)
 			}
-		})
+		}
+
+		// cache file for schema and row count
+		test.files[key] = f
 
 		err = cb(t, f)
 		if err != nil {
@@ -440,15 +492,32 @@ func IterImportTables(tables []Table, cb func(t Table, f *os.File) error) error 
 	return nil
 }
 
-func getSchemaColsTypes(q string) ([]string, []sql2.Type) {
+func tableKey(t Table) (uint64, error) {
+	hash := xxhash.New()
+	_, err := hash.Write([]byte(t.Schema))
+	if err != nil {
+		return 0, err
+	}
+	if _, err := hash.Write([]byte(fmt.Sprintf("%#v,", t.Rows))); err != nil {
+		return 0, err
+	}
+	if err != nil {
+		return 0, err
+	}
+	return hash.Sum64(), nil
+}
+
+func parseTableAndSchema(q string) (string, []string, []sql2.Type) {
 	stmt, _, err := ast.ParseOne(q)
 	if err != nil {
 		panic(fmt.Sprintf("invalid query: %s; %s", q, err))
 	}
 	var types []sql2.Type
 	var names []string
+	var table string
 	switch n := stmt.(type) {
 	case *ast.DDL:
+		table = n.Table.String()
 		for _, col := range n.TableSpec.Columns {
 			names = append(names, col.Name.String())
 			typ, err := sql2.ColumnTypeToType(&col.Type)
@@ -460,7 +529,7 @@ func getSchemaColsTypes(q string) ([]string, []sql2.Type) {
 	default:
 		panic(fmt.Sprintf("expected CREATE TABLE, found: %s", q))
 	}
-	return names, types
+	return table, names, types
 }
 
 func genRows(types []sql2.Type, n int, cb func(r []string)) {

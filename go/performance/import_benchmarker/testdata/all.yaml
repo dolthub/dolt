@@ -212,3 +212,26 @@ tests:
         x int primary key,
         y varchar(30)
       );
+  - name: "3.2mm"
+    rows: 3200000
+    schema: |
+      create table xy (
+        x int primary key,
+        y varchar(30)
+      );
+  - name: "shuffle"
+    shuffle: true
+    rows: 2000000
+    schema: |
+      create table xy (
+        x int primary key,
+        y varchar(30)
+      );
+  - name: "sorted"
+    shuffle: false
+    rows: 2000000
+    schema: |
+      create table xy (
+        x int primary key,
+        y varchar(30)
+      );

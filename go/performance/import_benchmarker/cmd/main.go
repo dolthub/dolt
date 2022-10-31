@@ -26,7 +26,7 @@ const (
 	resultsTableName = "results"
 )
 
-var path = flag.String("testse", "", "the path to a test file")
+var path = flag.String("test", "", "the path to a test file")
 
 func main() {
 	flag.Parse()
@@ -34,71 +34,29 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+
 	results := new(ib.ImportResults)
+	u, err := ib.NewDoltUser()
 	for _, test := range def.Tests {
+		test.Results = results
+		tmpdir, err := os.MkdirTemp("", "repo-store-")
+		if err != nil {
+			log.Fatalln(err)
+		}
+		test.WithTmpDir(tmpdir)
+
 		for _, r := range test.Repos {
-			if r.ExternalServer != nil {
-				// mysql conn
-				db, err := ib.ConnectDB(r.ExternalServer.User, r.ExternalServer.Password, r.ExternalServer.Name, r.ExternalServer.Host, r.ExternalServer.Port)
-				if err != nil {
-					log.Fatalln(err)
-				}
-				err = test.RunServerTests(r.Name, db, results)
-				if err != nil {
-					log.Fatalln(err)
-				}
-			} else if r.Server != nil {
-				u, err := ib.NewDoltUser()
-				if err != nil {
-					log.Fatalln(err)
-				}
-				rs, err := u.MakeRepoStore()
-				if err != nil {
-					log.Fatalln(err)
-				}
-
-				// start dolt server
-				repo, err := ib.MakeRepo(rs, r)
-				r.Server.Args = append(r.Server.Args, "")
-				server, err := ib.MakeServer(repo, r.Server)
-				if server != nil {
-					server.DBName = r.Name
-				}
-				defer server.GracefulStop()
-
-				db, err := server.DB()
-				if err != nil {
-					log.Fatalln(err)
-				}
-
-				_, err = db.Exec("SET GLOBAL local_infile=1 ")
-				if err != nil {
-					log.Fatalln(err)
-				}
-
-				err = test.RunServerTests(r.Name, db, results)
-				if err != nil {
-					log.Fatalln(err)
-				}
-			} else {
-				u, err := ib.NewDoltUser()
-				if err != nil {
-					log.Fatalln(err)
-				}
-				rs, err := u.MakeRepoStore()
-				if err != nil {
-					log.Fatalln(err)
-				}
-
-				// cli only access
-				repo, err := ib.MakeRepo(rs, r)
-				if err != nil {
-					log.Fatalln(err)
-				}
-				err = test.RunCliTests(r.Name, repo, results)
-				if err != nil {
-					log.Fatalln(err)
-				}
+			var err error
+			switch {
+			case r.ExternalServer != nil:
+				err = test.RunExternalServerTests(r.Name, r.ExternalServer)
+			case r.Server != nil:
+				err = test.RunSqlServerTests(r, u)
+			default:
+				err = test.RunCliTests(r, u)
+			}
+			if err != nil {
+				log.Fatalln(err)
 			}
 		}
 	}

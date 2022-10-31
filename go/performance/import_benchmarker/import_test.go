@@ -16,6 +16,10 @@ func TestDoltImport(t *testing.T) {
 	RunTestsFile(t, "testdata/dolt_server.yaml")
 }
 
+func TestShuffle(t *testing.T) {
+	RunTestsFile(t, "testdata/shuffle.yaml")
+}
+
 func TestAll(t *testing.T) {
 	RunTestsFile(t, "testdata/all.yaml")
 }
