@@ -131,7 +131,11 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 
 // Insert implements TableWriter.
 func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
-	if err := w.primary.ValidateKeyViolations(ctx, sqlRow); err != nil {
+	// TODO: trim sqlRow here
+	// TODO: maybe it should be by ordinals instead of tags
+
+	sqlRowKey := sqlRow
+	if err := w.primary.ValidateKeyViolations(ctx, sqlRowKey); err != nil {
 		return err
 	}
 	for _, wr := range w.secondary {
