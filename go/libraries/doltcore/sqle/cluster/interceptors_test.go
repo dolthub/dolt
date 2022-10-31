@@ -17,6 +17,7 @@ package cluster
 import (
 	"context"
 	"net"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -89,6 +90,47 @@ func withClient(t *testing.T, cb func(*testing.T, grpc_health_v1.HealthClient), 
 	return hs
 }
 
+func outboundCtx(vals ...interface{}) context.Context {
+	ctx := context.Background()
+	if len(vals) == 0 {
+		return ctx
+	}
+	if len(vals) == 2 {
+		return metadata.AppendToOutgoingContext(ctx,
+			clusterRoleHeader, string(vals[0].(Role)),
+			clusterRoleEpochHeader, strconv.Itoa(vals[1].(int)))
+	}
+	panic("bad test --- outboundCtx must take 0 or 2 values")
+}
+
+func TestServerInterceptorUnauthenticatedWithoutClientHeaders(t *testing.T) {
+	var si serverinterceptor
+	si.roleSetter = noopSetRole
+	si.lgr = lgr
+	si.setRole(RoleStandby, 10)
+	t.Run("Standby", func(t *testing.T) {
+		withClient(t, func(t *testing.T, client grpc_health_v1.HealthClient) {
+			_, err := client.Check(outboundCtx(), &grpc_health_v1.HealthCheckRequest{})
+			assert.Equal(t, codes.Unauthenticated, status.Code(err))
+			srv, err := client.Watch(outboundCtx(), &grpc_health_v1.HealthCheckRequest{})
+			assert.NoError(t, err)
+			_, err = srv.Recv()
+			assert.Equal(t, codes.Unauthenticated, status.Code(err))
+		}, si.Options(), nil)
+	})
+	si.setRole(RolePrimary, 10)
+	t.Run("Primary", func(t *testing.T) {
+		withClient(t, func(t *testing.T, client grpc_health_v1.HealthClient) {
+			_, err := client.Check(outboundCtx(), &grpc_health_v1.HealthCheckRequest{})
+			assert.Equal(t, codes.Unauthenticated, status.Code(err))
+			srv, err := client.Watch(outboundCtx(), &grpc_health_v1.HealthCheckRequest{})
+			assert.NoError(t, err)
+			_, err = srv.Recv()
+			assert.Equal(t, codes.Unauthenticated, status.Code(err))
+		}, si.Options(), nil)
+	})
+}
+
 func TestServerInterceptorAddsUnaryResponseHeaders(t *testing.T) {
 	var si serverinterceptor
 	si.setRole(RoleStandby, 10)
@@ -96,7 +138,7 @@ func TestServerInterceptorAddsUnaryResponseHeaders(t *testing.T) {
 	si.lgr = lgr
 	withClient(t, func(t *testing.T, client grpc_health_v1.HealthClient) {
 		var md metadata.MD
-		_, err := client.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{}, grpc.Header(&md))
+		_, err := client.Check(outboundCtx(RolePrimary, 10), &grpc_health_v1.HealthCheckRequest{}, grpc.Header(&md))
 		assert.Equal(t, codes.Unimplemented, status.Code(err))
 		if assert.Len(t, md.Get(clusterRoleHeader), 1) {
 			assert.Equal(t, "standby", md.Get(clusterRoleHeader)[0])
@@ -114,7 +156,7 @@ func TestServerInterceptorAddsStreamResponseHeaders(t *testing.T) {
 	si.lgr = lgr
 	withClient(t, func(t *testing.T, client grpc_health_v1.HealthClient) {
 		var md metadata.MD
-		srv, err := client.Watch(context.Background(), &grpc_health_v1.HealthCheckRequest{}, grpc.Header(&md))
+		srv, err := client.Watch(outboundCtx(RolePrimary, 10), &grpc_health_v1.HealthCheckRequest{}, grpc.Header(&md))
 		require.NoError(t, err)
 		_, err = srv.Recv()
 		assert.Equal(t, codes.Unimplemented, status.Code(err))
@@ -133,10 +175,10 @@ func TestServerInterceptorAsPrimaryDoesNotSendRequest(t *testing.T) {
 	si.roleSetter = noopSetRole
 	si.lgr = lgr
 	srv := withClient(t, func(t *testing.T, client grpc_health_v1.HealthClient) {
-		ctx := metadata.AppendToOutgoingContext(context.Background(), "test-header", "test-header-value")
+		ctx := metadata.AppendToOutgoingContext(outboundCtx(RoleStandby, 10), "test-header", "test-header-value")
 		_, err := client.Check(ctx, &grpc_health_v1.HealthCheckRequest{})
 		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
-		ctx = metadata.AppendToOutgoingContext(context.Background(), "test-header", "test-header-value")
+		ctx = metadata.AppendToOutgoingContext(outboundCtx(RoleStandby, 10), "test-header", "test-header-value")
 		ss, err := client.Watch(ctx, &grpc_health_v1.HealthCheckRequest{})
 		assert.NoError(t, err)
 		_, err = ss.Recv()
@@ -151,7 +193,7 @@ func TestClientInterceptorAddsUnaryRequestHeaders(t *testing.T) {
 	ci.roleSetter = noopSetRole
 	ci.lgr = lgr
 	srv := withClient(t, func(t *testing.T, client grpc_health_v1.HealthClient) {
-		_, err := client.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
+		_, err := client.Check(outboundCtx(), &grpc_health_v1.HealthCheckRequest{})
 		assert.Equal(t, codes.Unimplemented, status.Code(err))
 	}, nil, ci.Options())
 	if assert.Len(t, srv.md.Get(clusterRoleHeader), 1) {
@@ -168,7 +210,7 @@ func TestClientInterceptorAddsStreamRequestHeaders(t *testing.T) {
 	ci.roleSetter = noopSetRole
 	ci.lgr = lgr
 	srv := withClient(t, func(t *testing.T, client grpc_health_v1.HealthClient) {
-		srv, err := client.Watch(context.Background(), &grpc_health_v1.HealthCheckRequest{})
+		srv, err := client.Watch(outboundCtx(), &grpc_health_v1.HealthCheckRequest{})
 		require.NoError(t, err)
 		_, err = srv.Recv()
 		assert.Equal(t, codes.Unimplemented, status.Code(err))
@@ -187,12 +229,12 @@ func TestClientInterceptorAsStandbyDoesNotSendRequest(t *testing.T) {
 	ci.roleSetter = noopSetRole
 	ci.lgr = lgr
 	srv := withClient(t, func(t *testing.T, client grpc_health_v1.HealthClient) {
-		_, err := client.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
+		_, err := client.Check(outboundCtx(), &grpc_health_v1.HealthCheckRequest{})
 		assert.Equal(t, codes.Unimplemented, status.Code(err))
 		ci.setRole(RoleStandby, 11)
-		_, err = client.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
+		_, err = client.Check(outboundCtx(), &grpc_health_v1.HealthCheckRequest{})
 		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
-		_, err = client.Watch(context.Background(), &grpc_health_v1.HealthCheckRequest{})
+		_, err = client.Watch(outboundCtx(), &grpc_health_v1.HealthCheckRequest{})
 		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
 	}, nil, ci.Options())
 	if assert.Len(t, srv.md.Get(clusterRoleHeader), 1) {
