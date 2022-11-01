@@ -16,8 +16,9 @@ package actions
 
 import (
 	"context"
-	"errors"
 	"fmt"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -49,6 +50,54 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 		}
 	}
 
+	// mirroring Git behavior, untracked tables are ignored on 'reset --hard',
+	// save the state of these tables and apply them to |newHead|'s root.
+	//
+	// as a special case, if an untracked table has a tag collision with any
+	// tables in |newHead| we silently drop it from the new working set.
+	// these tag collision is typically cause by table renames (bug #751).
+
+	untracked, err := roots.Working.GetAllSchemas(ctx)
+	if err != nil {
+		return nil, doltdb.Roots{}, err
+	}
+	// untracked tables exist in |working| but not in |staged|
+	staged, err := roots.Staged.GetTableNames(ctx)
+	if err != nil {
+		return nil, doltdb.Roots{}, err
+	}
+	for _, name := range staged {
+		delete(untracked, name)
+	}
+
+	newWkRoot := roots.Head
+
+	ws, err := newWkRoot.GetAllSchemas(ctx)
+	if err != nil {
+		return nil, doltdb.Roots{}, err
+	}
+	tags := mapColumnTags(ws)
+
+	for name, sch := range untracked {
+		for _, pk := range sch.GetAllCols().GetColumns() {
+			if _, ok := tags[pk.Tag]; ok {
+				// |pk.Tag| collides with a schema in |newWkRoot|
+				delete(untracked, name)
+			}
+		}
+	}
+
+	for name := range untracked {
+		tbl, _, err := roots.Working.GetTable(ctx, name)
+		if err != nil {
+			return nil, doltdb.Roots{}, err
+		}
+		newWkRoot, err = newWkRoot.PutTable(ctx, name, tbl)
+		if err != nil {
+			return nil, doltdb.Roots{}, fmt.Errorf("failed to write table back to database: %s", err)
+		}
+	}
+
 	// need to save the state of files that aren't tracked
 	untrackedTables := make(map[string]*doltdb.Table)
 	wTblNames, err := roots.Working.GetTableNames(ctx)
@@ -73,14 +122,6 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 
 	for _, tblName := range headTblNames {
 		delete(untrackedTables, tblName)
-	}
-
-	newWkRoot := roots.Head
-	for tblName, tbl := range untrackedTables {
-		newWkRoot, err = newWkRoot.PutTable(ctx, tblName, tbl)
-		if err != nil {
-			return nil, doltdb.Roots{}, errors.New("error: failed to write table back to database")
-		}
 	}
 
 	roots.Working = newWkRoot
@@ -275,4 +316,16 @@ func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dr
 	roots.Working = newRoot
 
 	return roots, nil
+}
+
+// mapColumnTags takes a map from table name to schema.Schema and generates
+// a map from column tags to table names (see RootValue.GetAllSchemas).
+func mapColumnTags(tables map[string]schema.Schema) (m map[uint64]string) {
+	m = make(map[uint64]string, len(tables))
+	for tbl, sch := range tables {
+		for _, tag := range sch.GetAllCols().Tags {
+			m[tag] = tbl
+		}
+	}
+	return
 }
