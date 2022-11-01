@@ -64,6 +64,8 @@ type IndexCollection interface {
 	RenameIndex(oldName, newName string) (Index, error)
 	//SetPks changes the pks or pk ordinals
 	SetPks([]uint64) error
+	// SetIndexPrefixLength sets the prefix lengths for the specified index
+	SetIndexPrefixLength(indexName string, prefixLengths []uint16) error
 }
 
 type IndexProperties struct {
@@ -161,7 +163,6 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		isUnique:      props.IsUnique,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
-		length:        0,
 	}
 	ixc.indexes[indexName] = index
 	for _, tag := range tags {
@@ -426,6 +427,14 @@ func (ixc *indexCollectionImpl) SetPks(tags []uint64) error {
 		return ErrInvalidPkOrdinals
 	}
 	ixc.pks = tags
+	return nil
+}
+
+func (ixc *indexCollectionImpl) SetIndexPrefixLength(indexName string, prefixLengths []uint16) error {
+	if !ixc.Contains(indexName) {
+		return fmt.Errorf("`%s` does not exist as an index for this table", indexName)
+	}
+	ixc.indexes[indexName].prefixLengths = prefixLengths
 	return nil
 }
 

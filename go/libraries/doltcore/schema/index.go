@@ -54,6 +54,8 @@ type Index interface {
 	// ToTableTuple returns a tuple that may be used to retrieve the original row from the indexed table when given
 	// a full index key (and not a partial index key).
 	ToTableTuple(ctx context.Context, fullKey types.Tuple, format *types.NomsBinFormat) (types.Tuple, error)
+	// PrefixLengths returns the prefix lengths for the index
+	PrefixLengths() []uint16
 }
 
 var _ Index = (*indexImpl)(nil)
@@ -66,7 +68,7 @@ type indexImpl struct {
 	isUnique      bool
 	isUserDefined bool
 	comment       string
-	length        int // prefix length of this index, for blob and text only
+	prefixLengths []uint16 // prefix length of this index, for blob and text only
 }
 
 func NewIndex(name string, tags, allTags []uint64, indexColl IndexCollection, props IndexProperties) Index {
@@ -240,6 +242,11 @@ func (ix *indexImpl) ToTableTuple(ctx context.Context, fullKey types.Tuple, form
 		}
 	}
 	return types.NewTuple(format, resVals...)
+}
+
+// PrefixLengths implements Index.
+func (ix *indexImpl) PrefixLengths() []uint16 {
+	return ix.prefixLengths
 }
 
 // copy returns an exact copy of the calling index.

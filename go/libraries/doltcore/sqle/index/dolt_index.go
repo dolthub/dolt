@@ -255,6 +255,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
 		doltBinFormat:                 types.IsFormat_DOLT(vrw.Format()),
+		prefixLengths:                 idx.PrefixLengths(),
 	}, nil
 }
 
@@ -676,10 +677,7 @@ func (di *doltIndex) Comment() string {
 
 // PrefixLengths implements sql.Index
 func (di *doltIndex) PrefixLengths() []uint16 {
-	for _, idx := range di.tableSch.Indexes().AllIndexes() {
-		idx.Comment()
-	}
-	return nil
+	return di.prefixLengths
 }
 
 // IndexType implements sql.Index

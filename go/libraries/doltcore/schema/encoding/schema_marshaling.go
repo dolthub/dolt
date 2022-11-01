@@ -152,6 +152,7 @@ type encodedIndex struct {
 	Comment         string   `noms:"comment" json:"comment"`
 	Unique          bool     `noms:"unique" json:"unique"`
 	IsSystemDefined bool     `noms:"hidden,omitempty" json:"hidden,omitempty"` // Was previously named Hidden, do not change noms name
+	PrefixLengths   []uint16 `noms:"prefixLength,omitempty" json:"prefixLength,omitempty"`
 }
 
 type encodedCheck struct {
@@ -239,6 +240,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 			Comment:         index.Comment(),
 			Unique:          index.IsUnique(),
 			IsSystemDefined: !index.IsUserDefined(),
+			PrefixLengths:   index.PrefixLengths(),
 		}
 	}
 
@@ -306,6 +308,10 @@ func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) er
 				Comment:       encodedIndex.Comment,
 			},
 		)
+		if err != nil {
+			return err
+		}
+		err = sch.Indexes().SetIndexPrefixLength(encodedIndex.Name, encodedIndex.PrefixLengths)
 		if err != nil {
 			return err
 		}

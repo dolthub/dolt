@@ -263,8 +263,10 @@ func (t *TempTable) CreateIndex(ctx *sql.Context, indexName string, using sql.In
 		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
 	cols := make([]string, len(columns))
+	prefixLengths := make([]uint16, len(columns))
 	for i, c := range columns {
 		cols[i] = c.Name
+		prefixLengths[i] = uint16(c.Length)
 	}
 
 	ret, err := creation.CreateIndex(
@@ -272,6 +274,7 @@ func (t *TempTable) CreateIndex(ctx *sql.Context, indexName string, using sql.In
 		t.table,
 		indexName,
 		cols,
+		prefixLengths,
 		constraint == sql.IndexConstraint_Unique,
 		true,
 		comment,
