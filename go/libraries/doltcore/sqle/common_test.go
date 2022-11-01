@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // SetupFunc can be run to perform additional setup work before a test case
@@ -127,19 +126,6 @@ func equalSchemas(t *testing.T, expectedSch schema.Schema, sch schema.Schema) {
 		col := cols[i]
 		col.Tag = expectedCol.Tag
 		assert.Equal(t, expectedCol, col)
-	}
-}
-
-// TODO: this shouldn't be here
-func CreateWorkingRootUpdate() map[string]TableUpdate {
-	return map[string]TableUpdate{
-		TableWithHistoryName: {
-			RowUpdates: []row.Row{
-				mustRow(row.New(types.Format_Default, ReaddAgeAt5HistSch, row.TaggedValues{
-					0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"),
-				})),
-			},
-		},
 	}
 }
 
