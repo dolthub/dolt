@@ -33,7 +33,7 @@ import (
 var testChunks = [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
 
 func TestTableSetPrependEmpty(t *testing.T) {
-	ts := newFakeTableSet(&noopQuotaProvider{}).prepend(context.Background(), newMemTable(testMemTableSize), &Stats{})
+	ts := newFakeTableSet(&UnlimitedQuotaProvider{}).prepend(context.Background(), newMemTable(testMemTableSize), &Stats{})
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(t, specs)
@@ -41,7 +41,7 @@ func TestTableSetPrependEmpty(t *testing.T) {
 
 func TestTableSetPrepend(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet(&noopQuotaProvider{})
+	ts := newFakeTableSet(&UnlimitedQuotaProvider{})
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
@@ -66,7 +66,7 @@ func TestTableSetPrepend(t *testing.T) {
 
 func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet(&noopQuotaProvider{})
+	ts := newFakeTableSet(&UnlimitedQuotaProvider{})
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
@@ -89,7 +89,7 @@ func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 
 func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet(&noopQuotaProvider{})
+	ts := newFakeTableSet(&UnlimitedQuotaProvider{})
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
@@ -168,7 +168,7 @@ func TestTableSetRebase(t *testing.T) {
 
 func TestTableSetPhysicalLen(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet(&noopQuotaProvider{})
+	ts := newFakeTableSet(&UnlimitedQuotaProvider{})
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)

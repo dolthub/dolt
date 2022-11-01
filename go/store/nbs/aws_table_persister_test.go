@@ -38,7 +38,7 @@ import (
 )
 
 var parseIndexF = func(bs []byte) (tableIndex, error) {
-	return parseTableIndex(bs, &noopQuotaProvider{})
+	return parseTableIndex(bs, &UnlimitedQuotaProvider{})
 }
 
 func TestAWSTablePersisterPersist(t *testing.T) {
@@ -57,7 +57,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				assert := assert.New(t)
 				s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
 				limits := awsLimits{partTarget: calcPartSize(mt, 3)}
-				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, ns: ns, q: &noopQuotaProvider{}}
+				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, ns: ns, q: &UnlimitedQuotaProvider{}}
 
 				src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 				require.NoError(t, err)
@@ -74,7 +74,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 
 				s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
 				limits := awsLimits{partTarget: calcPartSize(mt, 1)}
-				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, ns: ns, q: &noopQuotaProvider{}}
+				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, ns: ns, q: &UnlimitedQuotaProvider{}}
 
 				src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 				require.NoError(t, err)
@@ -98,7 +98,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 
 				s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
 				limits := awsLimits{partTarget: 1 << 10}
-				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, ns: ns, q: &noopQuotaProvider{}}
+				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, ns: ns, q: &UnlimitedQuotaProvider{}}
 
 				src, err := s3p.Persist(context.Background(), mt, existingTable, &Stats{})
 				require.NoError(t, err)
@@ -114,7 +114,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				s3svc := &failingFakeS3{makeFakeS3(t), sync.Mutex{}, 1}
 				ddb := makeFakeDTS(makeFakeDDB(t), nil)
 				limits := awsLimits{partTarget: calcPartSize(mt, 4)}
-				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, ns: ns, q: &noopQuotaProvider{}}
+				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, ns: ns, q: &UnlimitedQuotaProvider{}}
 
 				_, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 				assert.Error(err)
@@ -136,7 +136,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			ddb := makeFakeDDB(t)
 			s3svc, dts := makeFakeS3(t), makeFakeDTS(ddb, nil)
 			limits := awsLimits{itemMax: maxDynamoItemSize, chunkMax: 2 * mustUint32(mt.count())}
-			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits, ns: "", q: &noopQuotaProvider{}}
+			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits, ns: "", q: &UnlimitedQuotaProvider{}}
 
 			src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 			require.NoError(t, err)
@@ -156,7 +156,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			s3svc, dts := makeFakeS3(t), makeFakeDTS(ddb, tc)
 			limits := awsLimits{itemMax: maxDynamoItemSize, chunkMax: 2 * mustUint32(mt.count())}
 
-			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits, ns: "", q: &noopQuotaProvider{}}
+			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits, ns: "", q: &UnlimitedQuotaProvider{}}
 
 			tableData, name, err := buildTable(testChunks)
 			require.NoError(t, err)
@@ -181,7 +181,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			ddb := makeFakeDDB(t)
 			s3svc, dts := makeFakeS3(t), makeFakeDTS(ddb, nil)
 			limits := awsLimits{itemMax: maxDynamoItemSize, chunkMax: 1, partTarget: calcPartSize(mt, 1)}
-			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits, ns: "", q: &noopQuotaProvider{}}
+			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits, ns: "", q: &UnlimitedQuotaProvider{}}
 
 			src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 			require.NoError(t, err)
@@ -201,7 +201,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			ddb := makeFakeDDB(t)
 			s3svc, dts := makeFakeS3(t), makeFakeDTS(ddb, nil)
 			limits := awsLimits{itemMax: 0, chunkMax: 2 * mustUint32(mt.count()), partTarget: calcPartSize(mt, 1)}
-			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits, ns: "", q: &noopQuotaProvider{}}
+			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits, ns: "", q: &UnlimitedQuotaProvider{}}
 
 			src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 			require.NoError(t, err)
@@ -337,7 +337,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			ddb,
 			awsLimits{targetPartSize, minPartSize, maxPartSize, maxItemSize, maxChunkCount},
 			"",
-			&noopQuotaProvider{},
+			&UnlimitedQuotaProvider{},
 		}
 	}
 
@@ -537,7 +537,7 @@ func bytesToChunkSource(t *testing.T, bs ...[]byte) chunkSource {
 	tableSize, name, err := tw.finish()
 	require.NoError(t, err)
 	data := buff[:tableSize]
-	ti, err := parseTableIndexByCopy(data, &noopQuotaProvider{})
+	ti, err := parseTableIndexByCopy(data, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	rdr, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
 	require.NoError(t, err)

@@ -45,7 +45,7 @@ func TestPlanCompaction(t *testing.T) {
 		}
 		data, name, err := buildTable(content)
 		require.NoError(t, err)
-		ti, err := parseTableIndexByCopy(data, &noopQuotaProvider{})
+		ti, err := parseTableIndexByCopy(data, &UnlimitedQuotaProvider{})
 		require.NoError(t, err)
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
 		require.NoError(t, err)
@@ -63,7 +63,7 @@ func TestPlanCompaction(t *testing.T) {
 		totalChunks += mustUint32(src.count())
 	}
 
-	idx, err := parseTableIndex(plan.mergedIndex, &noopQuotaProvider{})
+	idx, err := parseTableIndex(plan.mergedIndex, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 
 	assert.Equal(totalChunks, idx.chunkCount())

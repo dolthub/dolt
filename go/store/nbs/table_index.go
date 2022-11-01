@@ -491,7 +491,6 @@ func (ti onHeapTableIndex) Close() error {
 		ti.offsets1 = nil
 		ti.offsets2 = nil
 		ti.suffixes = nil
-
 		return ti.q.ReleaseQuota(indexMemSize(ti.count))
 	}
 	if cnt < 0 {
