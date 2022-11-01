@@ -478,9 +478,10 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 		numParentsHeadForAmend := headCommit.NumParents()
 		for i := 0; i < numParentsHeadForAmend; i++ {
 			parentCommit, err := headCommit.GetParent(ctx, i)
-			if err == nil {
-				mergeParentCommits = append(mergeParentCommits, parentCommit)
+			if err != nil {
+				return nil, err
 			}
+			mergeParentCommits = append(mergeParentCommits, parentCommit)
 		}
 
 		err = actions.ResetSoftToRef(ctx, sessionState.dbData, "HEAD~1")
