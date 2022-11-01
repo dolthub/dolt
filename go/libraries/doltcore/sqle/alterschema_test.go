@@ -163,7 +163,7 @@ func TestAddColumnToTable(t *testing.T) {
 			defaultVal: mustStringToColumnDefault("42"),
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
 				schemaNewColumnWithDefault("newCol", dtestutils.NextTag, types.IntKind, false, "42")),
-			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
+			expectedRows: addColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
 		},
 		{
 			name:       "first order",
@@ -181,7 +181,7 @@ func TestAddColumnToTable(t *testing.T) {
 				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 			),
-			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
+			expectedRows: addColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
 		},
 		{
 			name:       "middle order",
@@ -199,7 +199,7 @@ func TestAddColumnToTable(t *testing.T) {
 				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 			),
-			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
+			expectedRows: addColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
 		},
 		{
 			name:        "tag collision",
@@ -764,4 +764,23 @@ func TestModifyColumn(t *testing.T) {
 			require.Equal(t, tt.expectedSchema, sch)
 		})
 	}
+}
+
+// addColToRows adds a column to all the rows given and returns it. This method relies on the fact that
+// noms_row.SetColVal doesn't need a full schema, just one that includes the column being set.
+func addColToRows(t *testing.T, rs []row.Row, tag uint64, val types.Value) []row.Row {
+	if types.IsNull(val) {
+		return rs
+	}
+
+	colColl := schema.NewColCollection(schema.NewColumn("unused", tag, val.Kind(), false))
+	fakeSch := schema.UnkeyedSchemaFromCols(colColl)
+
+	newRows := make([]row.Row, len(rs))
+	var err error
+	for i, r := range rs {
+		newRows[i], err = r.SetColVal(tag, val, fakeSch)
+		require.NoError(t, err)
+	}
+	return newRows
 }

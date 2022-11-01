@@ -1434,6 +1434,25 @@ type HistoryNode struct {
 	Children []HistoryNode
 }
 
+// mustRowData converts a slice of row.TaggedValues into a noms types.Map containing that data.
+func mustRowData(t *testing.T, ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, colVals []row.TaggedValues) *types.Map {
+	m, err := types.NewMap(ctx, vrw)
+	require.NoError(t, err)
+
+	me := m.Edit()
+	for _, taggedVals := range colVals {
+		r, err := row.New(types.Format_Default, sch, taggedVals)
+		require.NoError(t, err)
+
+		me = me.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
+	}
+
+	m, err = me.Map(ctx)
+	require.NoError(t, err)
+
+	return &m
+}
+
 func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []HistoryNode {
 	vrw := dEnv.DoltDB.ValueReadWriter()
 
@@ -1444,7 +1463,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []Histo
 			Updates: map[string]TableUpdate{
 				TableWithHistoryName: {
 					NewSch: InitialHistSch,
-					NewRowData: dtestutils.MustRowData(t, ctx, vrw, InitialHistSch, []row.TaggedValues{
+					NewRowData: mustRowData(t, ctx, vrw, InitialHistSch, []row.TaggedValues{
 						{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son")},
 						{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks")},
 						{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn")},
@@ -1458,7 +1477,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []Histo
 					Updates: map[string]TableUpdate{
 						TableWithHistoryName: {
 							NewSch: AddAgeAt4HistSch,
-							NewRowData: dtestutils.MustRowData(t, ctx, vrw, AddAgeAt4HistSch, []row.TaggedValues{
+							NewRowData: mustRowData(t, ctx, vrw, AddAgeAt4HistSch, []row.TaggedValues{
 								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 4: types.Int(35)},
 								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 4: types.Int(38)},
 								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 4: types.Int(37)},
@@ -1474,7 +1493,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []Histo
 					Updates: map[string]TableUpdate{
 						TableWithHistoryName: {
 							NewSch: AddAddrAt3HistSch,
-							NewRowData: dtestutils.MustRowData(t, ctx, vrw, AddAddrAt3HistSch, []row.TaggedValues{
+							NewRowData: mustRowData(t, ctx, vrw, AddAddrAt3HistSch, []row.TaggedValues{
 								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")},
 								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")},
 								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")},
@@ -1490,7 +1509,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []Histo
 							Updates: map[string]TableUpdate{
 								TableWithHistoryName: {
 									NewSch: ReaddAgeAt5HistSch,
-									NewRowData: dtestutils.MustRowData(t, ctx, vrw, ReaddAgeAt5HistSch, []row.TaggedValues{
+									NewRowData: mustRowData(t, ctx, vrw, ReaddAgeAt5HistSch, []row.TaggedValues{
 										{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 5: types.Uint(35)},
 										{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 5: types.Uint(38)},
 										{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 5: types.Uint(37)},

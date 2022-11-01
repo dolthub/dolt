@@ -15,17 +15,12 @@
 package dtestutils
 
 import (
-	"context"
-	"testing"
-
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/google/uuid"
 )
 
 var UUIDS = []uuid.UUID{
@@ -172,76 +167,6 @@ func CreateTestDataTable(typed bool) (*table.InMemTable, schema.Schema) {
 	}
 
 	return imt, sch
-}
-
-// AddColToRows adds a column to all the rows given and returns it. This method relies on the fact that
-// noms_row.SetColVal doesn't need a full schema, just one that includes the column being set.
-func AddColToRows(t *testing.T, rs []row.Row, tag uint64, val types.Value) []row.Row {
-	if types.IsNull(val) {
-		return rs
-	}
-
-	colColl := schema.NewColCollection(schema.NewColumn("unused", tag, val.Kind(), false))
-	fakeSch := schema.UnkeyedSchemaFromCols(colColl)
-
-	newRows := make([]row.Row, len(rs))
-	var err error
-	for i, r := range rs {
-		newRows[i], err = r.SetColVal(tag, val, fakeSch)
-		require.NoError(t, err)
-	}
-	return newRows
-}
-
-// Coerces the rows given into the schema given. Only possible if the types are equivalent.
-func ConvertToSchema(sch schema.Schema, rs ...row.Row) []row.Row {
-	newRows := make([]row.Row, len(rs))
-	for i, r := range rs {
-		taggedVals := make(row.TaggedValues)
-		_, err := r.IterCols(func(tag uint64, val types.Value) (stop bool, err error) {
-			if _, ok := sch.GetAllCols().GetByTag(tag); ok {
-				taggedVals[tag] = val
-			}
-			return false, nil
-		})
-
-		if err != nil {
-			panic(err)
-		}
-
-		newRows[i], err = row.New(types.Format_Default, sch, taggedVals)
-
-		if err != nil {
-			panic(err)
-		}
-	}
-	return newRows
-}
-
-// MustRowData converts a slice of row.TaggedValues into a noms types.Map containing that data.
-func MustRowData(t *testing.T, ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, colVals []row.TaggedValues) *types.Map {
-	m, err := types.NewMap(ctx, vrw)
-	require.NoError(t, err)
-
-	me := m.Edit()
-	for _, taggedVals := range colVals {
-		r, err := row.New(types.Format_Default, sch, taggedVals)
-		require.NoError(t, err)
-
-		me = me.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
-	}
-
-	m, err = me.Map(ctx)
-	require.NoError(t, err)
-
-	return &m
-}
-
-// MustMap contructs a types.Map for a slice of alternating key, value types.Value.
-func MustMap(t *testing.T, vrw types.ValueReadWriter, kv ...types.Value) types.Map {
-	m, err := types.NewMap(context.Background(), vrw, kv...)
-	require.NoError(t, err)
-	return m
 }
 
 // MustMap contructs a types.Tuple for a slice of types.Values.
