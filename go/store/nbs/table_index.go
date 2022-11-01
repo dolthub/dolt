@@ -33,29 +33,26 @@ var (
 type tableIndex interface {
 	// ChunkCount returns the total number of chunks in the indexed file.
 	ChunkCount() uint32
+
 	// EntrySuffixMatches returns true if the entry at index |idx| matches
 	// the suffix of the address |h|. Used by |Lookup| after finding
 	// matching indexes based on |Prefixes|.
 	EntrySuffixMatches(idx uint32, h *addr) (bool, error)
+
 	// IndexEntry returns the |indexEntry| at |idx|. Optionally puts the
 	// full address of that entry in |a| if |a| is not |nil|.
 	IndexEntry(idx uint32, a *addr) (indexEntry, error)
+
 	// Lookup returns an |indexEntry| for the chunk corresponding to the
 	// provided address |h|. Second returns is |true| if an entry exists
 	// and |false| otherwise.
 	Lookup(h *addr) (indexEntry, bool, error)
-	// Ordinals returns a slice of indexes which maps the |i|th chunk in
-	// the indexed file to its corresponding entry in index. The |i|th
-	// entry in the result is the |i|th chunk in the indexed file, and its
-	// corresponding value in the slice is the index entry that maps to it.
-	Ordinals() ([]uint32, error)
-	// Prefixes returns the sorted slice of |uint64| |addr| prefixes; each
-	// entry corresponds to an indexed chunk address.
-	Prefixes() ([]uint64, error)
-	// PrefixAt returns the prefix at the specified index
-	PrefixAt(idx uint32) uint64
+
+	prefixTuples() (prefixArray, error)
+
 	// TableFileSize returns the total size of the indexed table file, in bytes.
 	TableFileSize() uint64
+
 	// TotalUncompressedData returns the total uncompressed data size of
 	// the table file. Used for informational statistics only.
 	TotalUncompressedData() uint64
@@ -66,6 +63,27 @@ type tableIndex interface {
 	// Clone returns a |tableIndex| with the same contents which can be
 	// |Close|d independently.
 	Clone() (tableIndex, error)
+}
+
+type prefixArray []byte
+
+func (a prefixArray) get(i uint32) (t prefixTuple) {
+	copy(t[:], a[i*prefixTupleSize:(i+1)*prefixTupleSize])
+	return
+}
+
+func (a prefixArray) len() uint32 {
+	return uint32(len(a) / prefixTupleSize)
+}
+
+type prefixTuple [12]byte
+
+func (t prefixTuple) prefix() uint64 {
+	return binary.BigEndian.Uint64(t[:addrPrefixSize])
+}
+
+func (t prefixTuple) ordinal() uint32 {
+	return binary.BigEndian.Uint32(t[addrPrefixSize:])
 }
 
 func ReadTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData uint64, err error) {
@@ -179,17 +197,24 @@ func readTableIndexByCopy(rd io.ReadSeeker, q MemoryQuotaProvider) (onHeapTableI
 }
 
 type onHeapTableIndex struct {
-	q             MemoryQuotaProvider
-	refCnt        *int32
-	tableFileSize uint64
-	// Tuple bytes
-	tupleB []byte
-	// Offset bytes
-	offsetB1 []byte
-	offsetB2 []byte
-	// Suffix bytes
-	suffixB               []byte
+	// prefixes is a packed array of 12 byte tuples:
+	// (8 byte addr prefix, 4 byte uint32 ordinal)
+	// it is sorted by addr prefix, the ordinal value
+	// can be used to lookup offset and addr suffix
+	prefixes []byte
+
+	// the offsets arrays contains packed uint64s
+	offsets1 []byte
+	offsets2 []byte
+
+	// suffixes is a array of 12 byte addr suffixes
+	suffixes []byte
+
+	q      MemoryQuotaProvider
+	refCnt *int32
+
 	chunkCount            uint32
+	tableFileSize         uint64
 	totalUncompressedData uint64
 }
 
@@ -231,10 +256,10 @@ func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, chunkCount uint3
 	return onHeapTableIndex{
 		refCnt:                refCnt,
 		q:                     q,
-		tupleB:                tuples,
-		offsetB1:              offsetsBuff1,
-		offsetB2:              offsetsBuff2,
-		suffixB:               suffixes,
+		prefixes:              tuples,
+		offsets1:              offsetsBuff1,
+		offsets2:              offsetsBuff2,
+		suffixes:              suffixes,
 		chunkCount:            chunkCount,
 		totalUncompressedData: totalUncompressedData,
 	}, nil
@@ -251,7 +276,7 @@ func (ti onHeapTableIndex) PrefixAt(idx uint32) uint64 {
 func (ti onHeapTableIndex) EntrySuffixMatches(idx uint32, h *addr) (bool, error) {
 	ord := ti.ordinalAt(idx)
 	o := ord * addrSuffixSize
-	b := ti.suffixB[o : o+addrSuffixSize]
+	b := ti.suffixes[o : o+addrSuffixSize]
 	return bytes.Equal(h[addrPrefixSize:], b), nil
 }
 
@@ -262,7 +287,7 @@ func (ti onHeapTableIndex) IndexEntry(idx uint32, a *addr) (entry indexEntry, er
 		binary.BigEndian.PutUint64(a[:], prefix)
 
 		o := int64(addrSuffixSize * ord)
-		b := ti.suffixB[o : o+addrSuffixSize]
+		b := ti.suffixes[o : o+addrSuffixSize]
 		copy(a[addrPrefixSize:], b)
 	}
 
@@ -325,7 +350,7 @@ func (ti onHeapTableIndex) findPrefix(prefix uint64) (idx uint32) {
 		h := idx + (j-idx)/2 // avoid overflow when computing h
 		// i ≤ h < j
 		o := int64(prefixTupleSize * h)
-		if bytes.Compare(ti.tupleB[o:o+addrPrefixSize], query) < 0 {
+		if bytes.Compare(ti.prefixes[o:o+addrPrefixSize], query) < 0 {
 			idx = h + 1 // preserves f(i-1) == false
 		} else {
 			j = h // preserves f(j) == true
@@ -336,7 +361,7 @@ func (ti onHeapTableIndex) findPrefix(prefix uint64) (idx uint32) {
 
 func (ti onHeapTableIndex) tupleAt(idx uint32) (prefix uint64, ord uint32) {
 	off := int64(prefixTupleSize * idx)
-	b := ti.tupleB[off : off+prefixTupleSize]
+	b := ti.prefixes[off : off+prefixTupleSize]
 
 	prefix = binary.BigEndian.Uint64(b[:])
 	ord = binary.BigEndian.Uint32(b[addrPrefixSize:])
@@ -345,13 +370,13 @@ func (ti onHeapTableIndex) tupleAt(idx uint32) (prefix uint64, ord uint32) {
 
 func (ti onHeapTableIndex) prefixAt(idx uint32) uint64 {
 	off := int64(prefixTupleSize * idx)
-	b := ti.tupleB[off : off+addrPrefixSize]
+	b := ti.prefixes[off : off+addrPrefixSize]
 	return binary.BigEndian.Uint64(b)
 }
 
 func (ti onHeapTableIndex) ordinalAt(idx uint32) uint32 {
 	off := int64(prefixTupleSize*idx) + addrPrefixSize
-	b := ti.tupleB[off : off+ordinalSize]
+	b := ti.prefixes[off : off+ordinalSize]
 	return binary.BigEndian.Uint32(b)
 }
 
@@ -361,42 +386,27 @@ func (ti onHeapTableIndex) offsetAt(ord uint32) uint64 {
 	var b []byte
 	if ord < chunks1 {
 		off := int64(offsetSize * ord)
-		b = ti.offsetB1[off : off+offsetSize]
+		b = ti.offsets1[off : off+offsetSize]
 	} else {
 		off := int64(offsetSize * (ord - chunks1))
-		b = ti.offsetB2[off : off+offsetSize]
+		b = ti.offsets2[off : off+offsetSize]
 	}
-
 	return binary.BigEndian.Uint64(b)
 }
 
-func (ti onHeapTableIndex) Ordinals() ([]uint32, error) {
-	o := make([]uint32, ti.chunkCount)
-	for i, off := uint32(0), 0; i < ti.chunkCount; i, off = i+1, off+prefixTupleSize {
-		b := ti.tupleB[off+addrPrefixSize : off+prefixTupleSize]
-		o[i] = binary.BigEndian.Uint32(b)
-	}
-	return o, nil
-}
-
-func (ti onHeapTableIndex) Prefixes() ([]uint64, error) {
-	p := make([]uint64, ti.chunkCount)
-	for i, off := uint32(0), 0; i < ti.chunkCount; i, off = i+1, off+prefixTupleSize {
-		b := ti.tupleB[off : off+addrPrefixSize]
-		p[i] = binary.BigEndian.Uint64(b)
-	}
-	return p, nil
+func (ti onHeapTableIndex) prefixTuples() (prefixArray, error) {
+	return prefixArray(ti.prefixes), nil
 }
 
 func (ti onHeapTableIndex) hashAt(idx uint32) hash.Hash {
 	// Get tuple
 	off := int64(prefixTupleSize * idx)
-	tuple := ti.tupleB[off : off+prefixTupleSize]
+	tuple := ti.prefixes[off : off+prefixTupleSize]
 
 	// Get prefix, ordinal, and suffix
 	prefix := tuple[:addrPrefixSize]
 	ord := binary.BigEndian.Uint32(tuple[addrPrefixSize:]) * addrSuffixSize
-	suffix := ti.suffixB[ord : ord+addrSuffixSize] // suffix is 12 bytes
+	suffix := ti.suffixes[ord : ord+addrSuffixSize] // suffix is 12 bytes
 
 	// Combine prefix and suffix to get hash
 	buf := [hash.ByteLen]byte{}
@@ -532,17 +542,16 @@ func (ti onHeapTableIndex) TotalUncompressedData() uint64 {
 func (ti onHeapTableIndex) Close() error {
 	cnt := atomic.AddInt32(ti.refCnt, -1)
 	if cnt == 0 {
-		ti.tupleB = nil
-		ti.offsetB1 = nil
-		ti.offsetB2 = nil
-		ti.suffixB = nil
+		ti.prefixes = nil
+		ti.offsets1 = nil
+		ti.offsets2 = nil
+		ti.suffixes = nil
 
 		return ti.q.ReleaseQuota(indexMemSize(ti.chunkCount))
 	}
 	if cnt < 0 {
 		panic("Close() called and reduced ref count to < 0.")
 	}
-
 	return nil
 }
 

@@ -192,19 +192,18 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			return compactionPlan{}, err
 		}
 
-		ordinals, err := index.Ordinals()
-		if err != nil {
-			return compactionPlan{}, err
-		}
-		prefixes, err := index.Prefixes()
+		tuples, err := index.prefixTuples()
 		if err != nil {
 			return compactionPlan{}, err
 		}
 
 		// Add all the prefix tuples from this index to the list of all prefixIndexRecs, modifying the ordinals such that all entries from the 1st item in sources come after those in the 0th and so on.
-		for j, prefix := range prefixes {
-			rec := prefixIndexRec{prefix: prefix, order: ordinalOffset + ordinals[j]}
-			prefixIndexRecs = append(prefixIndexRecs, rec)
+		for j := uint32(0); j < tuples.len(); j++ {
+			tup := tuples.get(j)
+			prefixIndexRecs = append(prefixIndexRecs, prefixIndexRec{
+				prefix: tup.prefix(),
+				order:  tup.ordinal() + ordinalOffset,
+			})
 		}
 
 		var cnt uint32
@@ -226,9 +225,9 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			}
 
 			// Bring over the suffixes block, in order
-			n := copy(plan.mergedIndex[suffixesPos:], onHeap.suffixB)
+			n := copy(plan.mergedIndex[suffixesPos:], onHeap.suffixes)
 
-			if n != len(onHeap.suffixB) {
+			if n != len(onHeap.suffixes) {
 				return compactionPlan{}, errors.New("failed to copy all data")
 			}
 
@@ -236,18 +235,19 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 		} else {
 			// Build up the index one entry at a time.
 			var a addr
-			for i := 0; i < len(ordinals); i++ {
+			for i := uint32(0); i < tuples.len(); i++ {
 				e, err := index.IndexEntry(uint32(i), &a)
 				if err != nil {
 					return compactionPlan{}, err
 				}
-				li := lengthsPos + lengthSize*uint64(ordinals[i])
-				si := suffixesPos + addrSuffixSize*uint64(ordinals[i])
+				ord := tuples.get(i).ordinal()
+				li := lengthsPos + lengthSize*uint64(ord)
+				si := suffixesPos + addrSuffixSize*uint64(ord)
 				binary.BigEndian.PutUint32(plan.mergedIndex[li:], e.Length())
 				copy(plan.mergedIndex[si:], a[addrPrefixSize:])
 			}
-			lengthsPos += lengthSize * uint64(len(ordinals))
-			suffixesPos += addrSuffixSize * uint64(len(ordinals))
+			lengthsPos += lengthSize * uint64(index.ChunkCount())
+			suffixesPos += addrSuffixSize * uint64(index.ChunkCount())
 		}
 	}
 
