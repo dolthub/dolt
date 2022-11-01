@@ -24,8 +24,7 @@ table TableSchema {
   secondary_indexes:[Index];
   checks:[CheckConstraint];
   collation:Collation;
-  pk_prefix_lengths:[uint64];
-  idx_prefix_lengths:[uint64];
+  pk_prefix_lengths:[uint16];
 }
 
 table Column {
@@ -92,6 +91,8 @@ table Index {
   primary_key:bool;
   unique_key:bool;
   system_defined:bool;
+
+  idx_prefix_lengths:[uint16];
 }
 
 table CheckConstraint {

@@ -17,6 +17,8 @@
 package serial
 
 import (
+	"strconv"
+
 	flatbuffers "github.com/google/flatbuffers/go"
 )
 
@@ -210,11 +212,11 @@ func (rcv *TableSchema) MutateCollation(n Collation) bool {
 	return rcv._tab.MutateUint16Slot(12, uint16(n))
 }
 
-func (rcv *TableSchema) PkPrefixLengths(j int) uint64 {
+func (rcv *TableSchema) PkPrefixLengths(j int) uint16 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
-		return rcv._tab.GetUint64(a + flatbuffers.UOffsetT(j*8))
+		return rcv._tab.GetUint16(a + flatbuffers.UOffsetT(j*2))
 	}
 	return 0
 }
@@ -227,42 +229,16 @@ func (rcv *TableSchema) PkPrefixLengthsLength() int {
 	return 0
 }
 
-func (rcv *TableSchema) MutatePkPrefixLengths(j int, n uint64) bool {
+func (rcv *TableSchema) MutatePkPrefixLengths(j int, n uint16) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
-		return rcv._tab.MutateUint64(a+flatbuffers.UOffsetT(j*8), n)
+		return rcv._tab.MutateUint16(a+flatbuffers.UOffsetT(j*2), n)
 	}
 	return false
 }
 
-func (rcv *TableSchema) IdxPrefixLengths(j int) uint64 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.GetUint64(a + flatbuffers.UOffsetT(j*8))
-	}
-	return 0
-}
-
-func (rcv *TableSchema) IdxPrefixLengthsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func (rcv *TableSchema) MutateIdxPrefixLengths(j int, n uint64) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.MutateUint64(a+flatbuffers.UOffsetT(j*8), n)
-	}
-	return false
-}
-
-const TableSchemaNumFields = 7
+const TableSchemaNumFields = 6
 
 func TableSchemaStart(builder *flatbuffers.Builder) {
 	builder.StartObject(TableSchemaNumFields)
@@ -295,13 +271,7 @@ func TableSchemaAddPkPrefixLengths(builder *flatbuffers.Builder, pkPrefixLengths
 	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(pkPrefixLengths), 0)
 }
 func TableSchemaStartPkPrefixLengthsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(8, numElems, 8)
-}
-func TableSchemaAddIdxPrefixLengths(builder *flatbuffers.Builder, idxPrefixLengths flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(idxPrefixLengths), 0)
-}
-func TableSchemaStartIdxPrefixLengthsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(8, numElems, 8)
+	return builder.StartVector(2, numElems, 2)
 }
 func TableSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
@@ -711,7 +681,33 @@ func (rcv *Index) MutateSystemDefined(n bool) bool {
 	return rcv._tab.MutateBoolSlot(18, n)
 }
 
-const IndexNumFields = 8
+func (rcv *Index) IdxPrefixLengths(j int) uint16 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetUint16(a + flatbuffers.UOffsetT(j*2))
+	}
+	return 0
+}
+
+func (rcv *Index) IdxPrefixLengthsLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *Index) MutateIdxPrefixLengths(j int, n uint16) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateUint16(a+flatbuffers.UOffsetT(j*2), n)
+	}
+	return false
+}
+
+const IndexNumFields = 9
 
 func IndexStart(builder *flatbuffers.Builder) {
 	builder.StartObject(IndexNumFields)
@@ -748,6 +744,12 @@ func IndexAddUniqueKey(builder *flatbuffers.Builder, uniqueKey bool) {
 }
 func IndexAddSystemDefined(builder *flatbuffers.Builder, systemDefined bool) {
 	builder.PrependBoolSlot(7, systemDefined, false)
+}
+func IndexAddIdxPrefixLengths(builder *flatbuffers.Builder, idxPrefixLengths flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(8, flatbuffers.UOffsetT(idxPrefixLengths), 0)
+}
+func IndexStartIdxPrefixLengthsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(2, numElems, 2)
 }
 func IndexEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

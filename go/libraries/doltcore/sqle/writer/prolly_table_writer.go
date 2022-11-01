@@ -134,6 +134,18 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 	// TODO: trim sqlRow here
 	// TODO: maybe it should be by ordinals instead of tags
 
+	pkPrefixLengths := w.sch.GetPkPrefixLengths()
+	if pkPrefixLengths == nil {
+
+	}
+
+	for i := 0; i < len(pkPrefixLengths); i += 2 {
+		idx, ok := w.sch.GetPKCols().TagToIdx[pkPrefixLengths[i]]
+		if !ok {
+			panic("impossible")
+		}
+	}
+
 	sqlRowKey := sqlRow
 	if err := w.primary.ValidateKeyViolations(ctx, sqlRowKey); err != nil {
 		return err
