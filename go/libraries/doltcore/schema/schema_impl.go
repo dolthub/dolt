@@ -386,7 +386,7 @@ func (si *schemaImpl) GetKeyDescriptor() val.TupleDesc {
 			useCollations = true
 			collations = append(collations, sqlType.(sql.StringType).Collation())
 		} else {
-			collations = append(collations, sql.Collation_Invalid)
+			collations = append(collations, sql.Collation_Unspecified)
 		}
 		return
 	})
@@ -408,7 +408,7 @@ func (si *schemaImpl) GetValueDescriptor() val.TupleDesc {
 	var collations []sql.CollationID
 	if IsKeyless(si) {
 		tt = []val.Type{val.KeylessCardType}
-		collations = []sql.CollationID{sql.Collation_Invalid}
+		collations = []sql.CollationID{sql.Collation_Unspecified}
 	}
 
 	useCollations := false // We only use collations if a string exists
@@ -423,7 +423,7 @@ func (si *schemaImpl) GetValueDescriptor() val.TupleDesc {
 			useCollations = true
 			collations = append(collations, sqlType.(sql.StringType).Collation())
 		} else {
-			collations = append(collations, sql.Collation_Invalid)
+			collations = append(collations, sql.Collation_Unspecified)
 		}
 		return
 	})
@@ -441,19 +441,19 @@ func (si *schemaImpl) GetValueDescriptor() val.TupleDesc {
 
 // GetCollation implements the Schema interface.
 func (si *schemaImpl) GetCollation() Collation {
-	// Schemas made before this change (and invalid schemas) will contain invalid, so we'll the default collation
+	// Schemas made before this change (and invalid schemas) will contain unspecified, so we'll the inherent collation
 	// instead (as that matches their behavior).
-	if si.collation == Collation_Invalid {
-		return Collation_Default
+	if si.collation == Collation_Unspecified {
+		return Collation_utf8mb4_0900_bin
 	}
 	return si.collation
 }
 
 // SetCollation implements the Schema interface.
 func (si *schemaImpl) SetCollation(collation Collation) {
-	// Schemas made before this change may try to set this to invalid, so we'll set it to the default collation.
-	if collation == Collation_Invalid {
-		si.collation = Collation_Default
+	// Schemas made before this change may try to set this to unspecified, so we'll set it to the inherent collation.
+	if collation == Collation_Unspecified {
+		si.collation = Collation_utf8mb4_0900_bin
 	} else {
 		si.collation = collation
 	}

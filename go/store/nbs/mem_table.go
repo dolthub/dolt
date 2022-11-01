@@ -218,6 +218,6 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []by
 	return name, buff[:tableSize], count, nil
 }
 
-func (mt *memTable) Close() error {
+func (mt *memTable) close() error {
 	return nil
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -70,6 +71,16 @@ func migrateWorkingSet(ctx context.Context, brRef ref.BranchRef, wsRef ref.Worki
 	}
 
 	sr, err := migrateRoot(ctx, oldHeadRoot, oldWs.StagedRoot(), newHeadRoot)
+	if err != nil {
+		return err
+	}
+
+	err = validateRootValue(ctx, oldHeadRoot, oldWs.WorkingRoot(), wr)
+	if err != nil {
+		return err
+	}
+
+	err = validateRootValue(ctx, oldHeadRoot, oldWs.StagedRoot(), sr)
 	if err != nil {
 		return err
 	}
@@ -179,7 +190,7 @@ func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB
 
 	// validate root after we flush the ChunkStore to facilitate
 	// investigating failed migrations
-	if err = validateRootValue(ctx, oldRoot, mRoot); err != nil {
+	if err = validateRootValue(ctx, oldParentRoot, oldRoot, mRoot); err != nil {
 		return err
 	}
 
@@ -267,6 +278,16 @@ func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.Root
 		return nil, err
 	}
 
+	removedTables, err := getRemovedTableNames(ctx, oldParent, oldRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	migrated, err = migrated.RemoveTables(ctx, true, false, removedTables...)
+	if err != nil {
+		return nil, err
+	}
+
 	err = oldRoot.IterTables(ctx, func(name string, oldTbl *doltdb.Table, sch schema.Schema) (bool, error) {
 		ok, err := oldTbl.HasConflicts(ctx)
 		if err != nil {
@@ -333,6 +354,21 @@ func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.Root
 	}
 
 	return migrated, nil
+}
+
+// renames also get returned here
+func getRemovedTableNames(ctx context.Context, prev, curr *doltdb.RootValue) ([]string, error) {
+	prevNames, err := prev.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tblNameSet := set.NewStrSet(prevNames)
+	currNames, err := curr.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tblNameSet.Remove(currNames...)
+	return tblNameSet.AsSlice(), nil
 }
 
 func migrateTable(ctx context.Context, newSch schema.Schema, oldParentTbl, oldTbl, newParentTbl *doltdb.Table) (*doltdb.Table, error) {
@@ -481,10 +517,19 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 		}
 	}
 
-	if patched {
-		return schema.SchemaFromCols(schema.NewColCollection(cols...))
+	if !patched {
+		return existing, nil
 	}
-	return existing, nil
+
+	sch, err := schema.SchemaFromCols(schema.NewColCollection(cols...))
+	if err != nil {
+		return nil, err
+	}
+
+	if err = sch.SetPkOrdinals(existing.GetPkOrdinals()); err != nil {
+		return nil, err
+	}
+	return sch, nil
 }
 
 func migrateIndexSet(

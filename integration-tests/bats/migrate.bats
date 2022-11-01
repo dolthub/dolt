@@ -229,3 +229,40 @@ SQL
     run dolt sql -q "SELECT * FROM t ORDER BY a LIMIT 1" -r csv
     [[ "$output" =~ "h&a,B" ]] || false
 }
+
+@test "migrate: database with inverted primary key order" {
+    dolt sql <<SQL
+CREATE TABLE t (
+    pk2 varchar(20) NOT NULL,
+    pk1 varchar(20) NOT NULL,
+    PRIMARY KEY (pk1, pk2));
+INSERT INTO t (pk2, pk1) VALUES ("z","a"),("y","b"),("x","c");
+SQL
+    dolt commit -Am "added table t"
+
+    run dolt schema show t
+    [[ "$output" =~ "PRIMARY KEY (\`pk1\`,\`pk2\`)" ]] || false
+
+    dolt migrate
+
+    run dolt schema show t
+    [[ "$output" =~ "PRIMARY KEY (\`pk1\`,\`pk2\`)" ]] || false
+}
+
+@test "migrate: removed tables stay removed" {
+    dolt sql -q "create table alpha (pk int primary key);"
+    dolt sql -q "create table beta (pk int primary key);"
+    dolt commit -Am "create tables"
+
+    dolt sql -q "alter table alpha rename to zulu;"
+    dolt sql -q "drop table beta"
+    dolt commit -Am "rename table alpha to zeta, drop table beta"
+
+    dolt migrate
+
+    run dolt ls
+    [ $status -eq 0 ]
+    [[ "$output" =~ "zulu" ]] || false
+    [[ ! "$output" =~ "alpha" ]] || false
+    [[ ! "$output" =~ "beta" ]] || false
+}
