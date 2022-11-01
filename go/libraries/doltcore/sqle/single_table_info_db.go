@@ -295,7 +295,7 @@ func (idx fmtIndex) Comment() string {
 }
 
 // PrefixLengths implements sql.Index
-func (idx fmtIndex) PrefixLengths() []uint64 {
+func (idx fmtIndex) PrefixLengths() []uint16 {
 	return nil
 }
 
