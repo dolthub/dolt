@@ -131,7 +131,9 @@ func (fk ForeignKey) DeepEquals(other ForeignKey) bool {
 	}
 	return fk.Name == other.Name &&
 		fk.TableName == other.TableName &&
-		fk.ReferencedTableName == other.ReferencedTableName
+		fk.ReferencedTableName == other.ReferencedTableName &&
+		fk.TableIndex == other.TableIndex &&
+		fk.ReferencedTableIndex == other.ReferencedTableIndex
 }
 
 // HashOf returns the Noms hash of a ForeignKey.
