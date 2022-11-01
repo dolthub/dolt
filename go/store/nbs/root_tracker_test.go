@@ -635,8 +635,8 @@ func extractAllChunks(ctx context.Context, src chunkSource, cb func(rec extractR
 	}
 
 	var a addr
-	for i := uint32(0); i < index.ChunkCount(); i++ {
-		_, err = index.IndexEntry(i, &a)
+	for i := uint32(0); i < index.chunkCount(); i++ {
+		_, err = index.indexEntry(i, &a)
 		if err != nil {
 			return err
 		}

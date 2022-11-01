@@ -99,7 +99,7 @@ func newFileTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProv
 		return nil, err
 	}
 
-	if chunkCount != index.chunkCount {
+	if chunkCount != index.chunkCount() {
 		return nil, errors.New("unexpected chunk count")
 	}
 

@@ -66,8 +66,8 @@ func TestPlanCompaction(t *testing.T) {
 	idx, err := parseTableIndex(plan.mergedIndex, &noopQuotaProvider{})
 	require.NoError(t, err)
 
-	assert.Equal(totalChunks, idx.chunkCount)
-	assert.Equal(totalUnc, idx.totalUncompressedData)
+	assert.Equal(totalChunks, idx.chunkCount())
+	assert.Equal(totalUnc, idx.totalUncompressedData())
 
 	tr, err := newTableReader(idx, tableReaderAtFromBytes(nil), fileBlockSize)
 	require.NoError(t, err)

@@ -153,7 +153,7 @@ func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 	}
 
 	filterIdx := uint32(0)
-	filterLen := uint32(tr.idx.ChunkCount())
+	filterLen := uint32(tr.idx.chunkCount())
 
 	var remaining bool
 	for i, addr := range addrs {
@@ -176,7 +176,7 @@ func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 
 		// prefixes are equal, so locate and compare against the corresponding suffix
 		for j := filterIdx; j < filterLen && addr.prefix == tups.get(j).prefix(); j++ {
-			m, err := tr.idx.EntrySuffixMatches(j, addr.a)
+			m, err := tr.idx.entrySuffixMatches(j, addr.a)
 			if err != nil {
 				return false, err
 			}
@@ -195,11 +195,11 @@ func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 }
 
 func (tr tableReader) count() (uint32, error) {
-	return tr.idx.ChunkCount(), nil
+	return tr.idx.chunkCount(), nil
 }
 
 func (tr tableReader) uncompressedLen() (uint64, error) {
-	return tr.idx.TotalUncompressedData(), nil
+	return tr.idx.totalUncompressedData(), nil
 }
 
 func (tr tableReader) index() (tableIndex, error) {
@@ -208,14 +208,14 @@ func (tr tableReader) index() (tableIndex, error) {
 
 // returns true iff |h| can be found in this table.
 func (tr tableReader) has(h addr) (bool, error) {
-	_, ok, err := tr.idx.Lookup(&h)
+	_, ok, err := tr.idx.lookup(&h)
 	return ok, err
 }
 
 // returns the storage associated with |h|, iff present. Returns nil if absent. On success,
 // the returned byte slice directly references the underlying storage.
 func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
-	e, found, err := tr.idx.Lookup(&h)
+	e, found, err := tr.idx.lookup(&h)
 	if err != nil {
 		return nil, err
 	}
@@ -478,7 +478,7 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 	}
 
 	filterIdx := uint32(0)
-	filterLen := uint32(tr.idx.ChunkCount())
+	filterLen := uint32(tr.idx.chunkCount())
 	ors = make(offsetRecSlice, 0, len(reqs))
 
 	// Iterate over |reqs| and |prefixes| (both sorted by address) and build the set
@@ -505,13 +505,13 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 
 		// record all offsets within the table which contain the data required.
 		for j := filterIdx; j < filterLen && req.prefix == tups.get(j).prefix(); j++ {
-			m, err := tr.idx.EntrySuffixMatches(j, req.a)
+			m, err := tr.idx.entrySuffixMatches(j, req.a)
 			if err != nil {
 				return nil, false, err
 			}
 			if m {
 				reqs[i].found = true
-				entry, err := tr.idx.IndexEntry(j, nil)
+				entry, err := tr.idx.indexEntry(j, nil)
 				if err != nil {
 					return nil, false, err
 				}
@@ -618,9 +618,9 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 	}
 
 	var ors offsetRecSlice
-	for i := uint32(0); i < tr.idx.ChunkCount(); i++ {
+	for i := uint32(0); i < tr.idx.chunkCount(); i++ {
 		a := new(addr)
-		e, err := tr.idx.IndexEntry(i, a)
+		e, err := tr.idx.indexEntry(i, a)
 		if err != nil {
 			return err
 		}
@@ -639,7 +639,7 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 
 func (tr tableReader) reader(ctx context.Context) (io.Reader, error) {
 	i, _ := tr.index()
-	return io.LimitReader(&readerAdapter{tr.r, 0, ctx}, int64(i.TableFileSize())), nil
+	return io.LimitReader(&readerAdapter{tr.r, 0, ctx}, int64(i.tableFileSize())), nil
 }
 
 func (tr tableReader) size() (uint64, error) {
@@ -647,7 +647,7 @@ func (tr tableReader) size() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return i.TableFileSize(), nil
+	return i.tableFileSize(), nil
 }
 
 func (tr tableReader) close() error {
@@ -655,7 +655,7 @@ func (tr tableReader) close() error {
 }
 
 func (tr tableReader) clone() (tableReader, error) {
-	idx, err := tr.idx.Clone()
+	idx, err := tr.idx.clone()
 	if err != nil {
 		return tableReader{}, err
 	}

@@ -165,7 +165,7 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			return compactionPlan{}, err
 		}
 
-		plan.chunkCount += index.ChunkCount()
+		plan.chunkCount += index.chunkCount()
 
 		// Calculate the amount of chunk data in |src|
 		chunkDataLen := calcChunkDataLen(index)
@@ -218,7 +218,7 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 		if onHeap, ok := index.(onHeapTableIndex); ok {
 			// TODO: copy the lengths and suffixes as a byte-copy from src BUG #3438
 			// Bring over the lengths block, in order
-			for ord := uint32(0); ord < onHeap.chunkCount; ord++ {
+			for ord := uint32(0); ord < onHeap.chunkCount(); ord++ {
 				e := onHeap.getIndexEntry(ord)
 				binary.BigEndian.PutUint32(plan.mergedIndex[lengthsPos:], e.Length())
 				lengthsPos += lengthSize
@@ -236,7 +236,7 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			// Build up the index one entry at a time.
 			var a addr
 			for i := uint32(0); i < tuples.len(); i++ {
-				e, err := index.IndexEntry(uint32(i), &a)
+				e, err := index.indexEntry(uint32(i), &a)
 				if err != nil {
 					return compactionPlan{}, err
 				}
@@ -246,8 +246,8 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 				binary.BigEndian.PutUint32(plan.mergedIndex[li:], e.Length())
 				copy(plan.mergedIndex[si:], a[addrPrefixSize:])
 			}
-			lengthsPos += lengthSize * uint64(index.ChunkCount())
-			suffixesPos += addrSuffixSize * uint64(index.ChunkCount())
+			lengthsPos += lengthSize * uint64(index.chunkCount())
+			suffixesPos += addrSuffixSize * uint64(index.chunkCount())
 		}
 	}
 
@@ -278,5 +278,5 @@ func nameFromSuffixes(suffixes []byte) (name addr) {
 }
 
 func calcChunkDataLen(index tableIndex) uint64 {
-	return index.TableFileSize() - indexSize(index.ChunkCount()) - footerSize
+	return index.tableFileSize() - indexSize(index.chunkCount()) - footerSize
 }

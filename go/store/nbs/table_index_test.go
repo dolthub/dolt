@@ -33,15 +33,15 @@ func TestParseTableIndex(t *testing.T) {
 	idx, err := parseTableIndexByCopy(bs, &noopQuotaProvider{})
 	require.NoError(t, err)
 	defer idx.Close()
-	assert.Equal(t, uint32(596), idx.ChunkCount())
+	assert.Equal(t, uint32(596), idx.chunkCount())
 	seen := make(map[addr]bool)
-	for i := uint32(0); i < idx.ChunkCount(); i++ {
+	for i := uint32(0); i < idx.chunkCount(); i++ {
 		var onheapaddr addr
-		e, err := idx.IndexEntry(i, &onheapaddr)
+		e, err := idx.indexEntry(i, &onheapaddr)
 		require.NoError(t, err)
 		if _, ok := seen[onheapaddr]; !ok {
 			seen[onheapaddr] = true
-			lookupe, ok, err := idx.Lookup(&onheapaddr)
+			lookupe, ok, err := idx.lookup(&onheapaddr)
 			require.NoError(t, err)
 			assert.True(t, ok)
 			assert.Equal(t, e.Offset(), lookupe.Offset(), "%v does not match %v for address %v", e, lookupe, onheapaddr)
@@ -59,10 +59,14 @@ func BenchmarkFindPrefix(b *testing.B) {
 	idx, err := parseTableIndexByCopy(bs, &noopQuotaProvider{})
 	require.NoError(b, err)
 	defer idx.Close()
-	assert.Equal(b, uint32(596), idx.ChunkCount())
+	assert.Equal(b, uint32(596), idx.chunkCount())
 
-	prefixes, err := idx.Prefixes()
+	tups, err := idx.prefixTuples()
 	require.NoError(b, err)
+	prefixes := make([]uint64, 512)
+	for i := range prefixes {
+		prefixes[i] = tups.get(uint32(i)).prefix()
+	}
 
 	b.Run("benchmark prefixIdx()", func(b *testing.B) {
 		var ord uint32
@@ -84,7 +88,7 @@ func BenchmarkFindPrefix(b *testing.B) {
 func prefixIdx(ti onHeapTableIndex, prefix uint64) (idx uint32) {
 	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
 	// an extremely tight loop and inlining the code was a significant perf improvement.
-	idx, j := 0, ti.chunkCount
+	idx, j := 0, ti.chunkCount()
 	for idx < j {
 		h := idx + (j-idx)/2 // avoid overflow when computing h
 		// i ≤ h < j

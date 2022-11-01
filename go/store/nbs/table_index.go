@@ -31,38 +31,39 @@ var (
 )
 
 type tableIndex interface {
-	// ChunkCount returns the total number of chunks in the indexed file.
-	ChunkCount() uint32
-
-	// EntrySuffixMatches returns true if the entry at index |idx| matches
-	// the suffix of the address |h|. Used by |Lookup| after finding
+	// entrySuffixMatches returns true if the entry at index |idx| matches
+	// the suffix of the address |h|. Used by |lookup| after finding
 	// matching indexes based on |Prefixes|.
-	EntrySuffixMatches(idx uint32, h *addr) (bool, error)
+	entrySuffixMatches(idx uint32, h *addr) (bool, error)
 
-	// IndexEntry returns the |indexEntry| at |idx|. Optionally puts the
+	// indexEntry returns the |indexEntry| at |idx|. Optionally puts the
 	// full address of that entry in |a| if |a| is not |nil|.
-	IndexEntry(idx uint32, a *addr) (indexEntry, error)
+	indexEntry(idx uint32, a *addr) (indexEntry, error)
 
-	// Lookup returns an |indexEntry| for the chunk corresponding to the
+	// lookup returns an |indexEntry| for the chunk corresponding to the
 	// provided address |h|. Second returns is |true| if an entry exists
 	// and |false| otherwise.
-	Lookup(h *addr) (indexEntry, bool, error)
+	lookup(h *addr) (indexEntry, bool, error)
 
+	// prefixTuples returns the prefixArray for this index.
 	prefixTuples() (prefixArray, error)
 
-	// TableFileSize returns the total size of the indexed table file, in bytes.
-	TableFileSize() uint64
+	// chunkCount returns the total number of chunks in the indexed file.
+	chunkCount() uint32
 
-	// TotalUncompressedData returns the total uncompressed data size of
+	// tableFileSize returns the total size of the indexed table file, in bytes.
+	tableFileSize() uint64
+
+	// totalUncompressedData returns the total uncompressed data size of
 	// the table file. Used for informational statistics only.
-	TotalUncompressedData() uint64
+	totalUncompressedData() uint64
 
 	// Close releases any resources used by this tableIndex.
 	Close() error
 
-	// Clone returns a |tableIndex| with the same contents which can be
+	// clone returns a |tableIndex| with the same contents which can be
 	// |Close|d independently.
-	Clone() (tableIndex, error)
+	clone() (tableIndex, error)
 }
 
 type prefixArray []byte
@@ -213,9 +214,9 @@ type onHeapTableIndex struct {
 	q      MemoryQuotaProvider
 	refCnt *int32
 
-	chunkCount            uint32
-	tableFileSize         uint64
-	totalUncompressedData uint64
+	count          uint32
+	tableFileSz    uint64
+	uncompressedSz uint64
 }
 
 var _ tableIndex = &onHeapTableIndex{}
@@ -227,12 +228,12 @@ var _ tableIndex = &onHeapTableIndex{}
 // additional space) and the rest into the region of |indexBuff| previously
 // occupied by lengths. |onHeapTableIndex| computes directly on the given
 // |indexBuff| and |offsetsBuff1| buffers.
-func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, chunkCount uint32, totalUncompressedData uint64, q MemoryQuotaProvider) (onHeapTableIndex, error) {
-	tuples := indexBuff[:prefixTupleSize*chunkCount]
-	lengths := indexBuff[prefixTupleSize*chunkCount : prefixTupleSize*chunkCount+lengthSize*chunkCount]
-	suffixes := indexBuff[prefixTupleSize*chunkCount+lengthSize*chunkCount:]
+func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, totalUncompressedData uint64, q MemoryQuotaProvider) (onHeapTableIndex, error) {
+	tuples := indexBuff[:prefixTupleSize*count]
+	lengths := indexBuff[prefixTupleSize*count : prefixTupleSize*count+lengthSize*count]
+	suffixes := indexBuff[prefixTupleSize*count+lengthSize*count:]
 
-	chunks2 := chunkCount / 2
+	chunks2 := count / 2
 
 	lR := bytes.NewReader(lengths)
 	r := NewOffsetsReader(lR)
@@ -254,33 +255,25 @@ func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, chunkCount uint3
 	*refCnt = 1
 
 	return onHeapTableIndex{
-		refCnt:                refCnt,
-		q:                     q,
-		prefixes:              tuples,
-		offsets1:              offsetsBuff1,
-		offsets2:              offsetsBuff2,
-		suffixes:              suffixes,
-		chunkCount:            chunkCount,
-		totalUncompressedData: totalUncompressedData,
+		refCnt:         refCnt,
+		q:              q,
+		prefixes:       tuples,
+		offsets1:       offsetsBuff1,
+		offsets2:       offsetsBuff2,
+		suffixes:       suffixes,
+		count:          count,
+		uncompressedSz: totalUncompressedData,
 	}, nil
 }
 
-func (ti onHeapTableIndex) ChunkCount() uint32 {
-	return ti.chunkCount
-}
-
-func (ti onHeapTableIndex) PrefixAt(idx uint32) uint64 {
-	return ti.prefixAt(idx)
-}
-
-func (ti onHeapTableIndex) EntrySuffixMatches(idx uint32, h *addr) (bool, error) {
+func (ti onHeapTableIndex) entrySuffixMatches(idx uint32, h *addr) (bool, error) {
 	ord := ti.ordinalAt(idx)
 	o := ord * addrSuffixSize
 	b := ti.suffixes[o : o+addrSuffixSize]
 	return bytes.Equal(h[addrPrefixSize:], b), nil
 }
 
-func (ti onHeapTableIndex) IndexEntry(idx uint32, a *addr) (entry indexEntry, err error) {
+func (ti onHeapTableIndex) indexEntry(idx uint32, a *addr) (entry indexEntry, err error) {
 	prefix, ord := ti.tupleAt(idx)
 
 	if a != nil {
@@ -309,33 +302,33 @@ func (ti onHeapTableIndex) getIndexEntry(ord uint32) indexEntry {
 	}
 }
 
-func (ti onHeapTableIndex) Lookup(h *addr) (indexEntry, bool, error) {
+func (ti onHeapTableIndex) lookup(h *addr) (indexEntry, bool, error) {
 	ord, err := ti.lookupOrdinal(h)
 	if err != nil {
 		return indexResult{}, false, err
 	}
-	if ord == ti.chunkCount {
+	if ord == ti.count {
 		return indexResult{}, false, nil
 	}
 	return ti.getIndexEntry(ord), true, nil
 }
 
-// lookupOrdinal returns the ordinal of |h| if present. Returns |ti.chunkCount|
+// lookupOrdinal returns the ordinal of |h| if present. Returns |ti.count|
 // if absent.
 func (ti onHeapTableIndex) lookupOrdinal(h *addr) (uint32, error) {
 	prefix := h.Prefix()
 
-	for idx := ti.findPrefix(prefix); idx < ti.chunkCount && ti.prefixAt(idx) == prefix; idx++ {
-		m, err := ti.EntrySuffixMatches(idx, h)
+	for idx := ti.findPrefix(prefix); idx < ti.count && ti.prefixAt(idx) == prefix; idx++ {
+		m, err := ti.entrySuffixMatches(idx, h)
 		if err != nil {
-			return ti.chunkCount, err
+			return ti.count, err
 		}
 		if m {
 			return ti.ordinalAt(idx), nil
 		}
 	}
 
-	return ti.chunkCount, nil
+	return ti.count, nil
 }
 
 // findPrefix returns the first position in |tr.prefixes| whose value == |prefix|.
@@ -345,7 +338,7 @@ func (ti onHeapTableIndex) findPrefix(prefix uint64) (idx uint32) {
 	binary.BigEndian.PutUint64(query, prefix)
 	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
 	// an extremely tight loop and inlining the code was a significant perf improvement.
-	idx, j := 0, ti.chunkCount
+	idx, j := 0, ti.count
 	for idx < j {
 		h := idx + (j-idx)/2 // avoid overflow when computing h
 		// i ≤ h < j
@@ -382,7 +375,7 @@ func (ti onHeapTableIndex) ordinalAt(idx uint32) uint32 {
 
 // the first n - n/2 offsets are stored in offsetsB1 and the rest in offsetsB2
 func (ti onHeapTableIndex) offsetAt(ord uint32) uint64 {
-	chunks1 := ti.chunkCount - ti.chunkCount/2
+	chunks1 := ti.count - ti.count/2
 	var b []byte
 	if ord < chunks1 {
 		off := int64(offsetSize * ord)
@@ -419,7 +412,7 @@ func (ti onHeapTableIndex) hashAt(idx uint32) hash.Hash {
 // prefixIdxLBound returns the first position in |tr.prefixes| whose value is <= |prefix|.
 // will return index less than where prefix would be if prefix is not found.
 func (ti onHeapTableIndex) prefixIdxLBound(prefix uint64) uint32 {
-	l, r := uint32(0), ti.chunkCount
+	l, r := uint32(0), ti.count
 	for l < r {
 		m := l + (r-l)/2 // find middle, rounding down
 		if ti.prefixAt(m) < prefix {
@@ -435,10 +428,10 @@ func (ti onHeapTableIndex) prefixIdxLBound(prefix uint64) uint32 {
 // prefixIdxLBound returns the first position in |tr.prefixes| whose value is >= |prefix|.
 // will return index greater than where prefix would be if prefix is not found.
 func (ti onHeapTableIndex) prefixIdxUBound(prefix uint64) (idx uint32) {
-	l, r := uint32(0), ti.chunkCount
+	l, r := uint32(0), ti.count
 	for l < r {
-		m := l + (r-l+1)/2      // find middle, rounding up
-		if m >= ti.chunkCount { // prevent index out of bounds
+		m := l + (r-l+1)/2 // find middle, rounding up
+		if m >= ti.count { // prevent index out of bounds
 			return r
 		}
 		pre := ti.prefixAt(m)
@@ -469,6 +462,52 @@ func (ti onHeapTableIndex) padStringAndDecode(s string, p string) uint64 {
 	return binary.BigEndian.Uint64(h)
 }
 
+func (ti onHeapTableIndex) chunkCount() uint32 {
+	return ti.count
+}
+
+// tableFileSize returns the size of the table file that this index references.
+// This assumes that the index follows immediately after the last chunk in the
+// file and that the last chunk in the file is in the index.
+func (ti onHeapTableIndex) tableFileSize() (sz uint64) {
+	sz = footerSize
+	if ti.count > 0 {
+		last := ti.getIndexEntry(ti.count - 1)
+		sz += last.Offset()
+		sz += uint64(last.Length())
+		sz += indexSize(ti.count)
+	}
+	return
+}
+
+func (ti onHeapTableIndex) totalUncompressedData() uint64 {
+	return ti.uncompressedSz
+}
+
+func (ti onHeapTableIndex) Close() error {
+	cnt := atomic.AddInt32(ti.refCnt, -1)
+	if cnt == 0 {
+		ti.prefixes = nil
+		ti.offsets1 = nil
+		ti.offsets2 = nil
+		ti.suffixes = nil
+
+		return ti.q.ReleaseQuota(indexMemSize(ti.count))
+	}
+	if cnt < 0 {
+		panic("Close() called and reduced ref count to < 0.")
+	}
+	return nil
+}
+
+func (ti onHeapTableIndex) clone() (tableIndex, error) {
+	cnt := atomic.AddInt32(ti.refCnt, 1)
+	if cnt == 1 {
+		panic("Clone() called after last Close(). This index is no longer valid.")
+	}
+	return ti, nil
+}
+
 func (ti onHeapTableIndex) ResolveShortHash(short []byte) ([]string, error) {
 	// Convert to string
 	shortHash := string(short)
@@ -486,7 +525,7 @@ func (ti onHeapTableIndex) ResolveShortHash(short []byte) ([]string, error) {
 		pIdxL = ti.findPrefix(sPrefix)
 
 		// Prefix doesn't exist
-		if pIdxL == ti.chunkCount {
+		if pIdxL == ti.count {
 			return []string{}, errors.New("can't find prefix")
 		}
 
@@ -521,44 +560,4 @@ func (ti onHeapTableIndex) ResolveShortHash(short []byte) ([]string, error) {
 	}
 
 	return res, nil
-}
-
-// TableFileSize returns the size of the table file that this index references.
-// This assumes that the index follows immediately after the last chunk in the
-// file and that the last chunk in the file is in the index.
-func (ti onHeapTableIndex) TableFileSize() uint64 {
-	if ti.chunkCount == 0 {
-		return footerSize
-	}
-	entry := ti.getIndexEntry(ti.chunkCount - 1)
-	offset, len := entry.Offset(), uint64(entry.Length())
-	return offset + len + indexSize(ti.chunkCount) + footerSize
-}
-
-func (ti onHeapTableIndex) TotalUncompressedData() uint64 {
-	return ti.totalUncompressedData
-}
-
-func (ti onHeapTableIndex) Close() error {
-	cnt := atomic.AddInt32(ti.refCnt, -1)
-	if cnt == 0 {
-		ti.prefixes = nil
-		ti.offsets1 = nil
-		ti.offsets2 = nil
-		ti.suffixes = nil
-
-		return ti.q.ReleaseQuota(indexMemSize(ti.chunkCount))
-	}
-	if cnt < 0 {
-		panic("Close() called and reduced ref count to < 0.")
-	}
-	return nil
-}
-
-func (ti onHeapTableIndex) Clone() (tableIndex, error) {
-	cnt := atomic.AddInt32(ti.refCnt, 1)
-	if cnt == 1 {
-		panic("Clone() called after last Close(). This index is no longer valid.")
-	}
-	return ti, nil
 }

@@ -33,9 +33,9 @@ func IterChunks(rd io.ReadSeeker, cb func(chunk chunks.Chunk) (stop bool, err er
 	defer idx.Close()
 
 	seen := make(map[addr]bool)
-	for i := uint32(0); i < idx.ChunkCount(); i++ {
+	for i := uint32(0); i < idx.chunkCount(); i++ {
 		var a addr
-		ie, err := idx.IndexEntry(i, &a)
+		ie, err := idx.indexEntry(i, &a)
 		if err != nil {
 			return err
 		}
@@ -80,7 +80,16 @@ func GetTableIndexPrefixes(rd io.ReadSeeker) (prefixes []uint64, err error) {
 		}
 	}()
 
-	return idx.Prefixes()
+	tups, err := idx.prefixTuples()
+	if err != nil {
+		return nil, err
+	}
+
+	prefixes = make([]uint64, idx.chunkCount())
+	for i := range prefixes {
+		prefixes[i] = tups.get(uint32(i)).prefix()
+	}
+	return
 }
 
 func GuessPrefixOrdinal(prefix uint64, n uint32) int {
