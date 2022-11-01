@@ -17,14 +17,12 @@ package main
 import (
 	"bytes"
 	"context"
-	"io"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"database/sql"
-	driver "github.com/dolthub/dolt/go/performance/utils/sql_server_driver"
+	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -60,35 +58,11 @@ func ParseTestsFile(path string) (TestDef, error) {
 	return res, err
 }
 
-func (f WithFile) WriteAtDir(dir string) error {
-	path := filepath.Join(dir, f.Name)
-	d := filepath.Dir(path)
-	err := os.MkdirAll(d, 0750)
-	if err != nil {
-		return err
-	}
-	if f.SourcePath != "" {
-		source, err := os.Open(f.SourcePath)
-		if err != nil {
-			return err
-		}
-		defer source.Close()
-		dest, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0550)
-		if err != nil {
-			return err
-		}
-		_, err = io.Copy(dest, source)
-		return err
-	} else {
-		return os.WriteFile(path, []byte(f.Contents), 0550)
-	}
-}
-
-func MakeRepo(t *testing.T, rs driver.RepoStore, r driver.TestRepo) Repo {
+func MakeRepo(t *testing.T, rs driver.RepoStore, r driver.TestRepo) driver.Repo {
 	repo, err := rs.MakeRepo(r.Name)
 	require.NoError(t, err)
 	for _, f := range r.WithFiles {
-		require.NoError(t, f.WriteAtDir(repo.dir))
+		require.NoError(t, f.WriteAtDir(repo.Dir))
 	}
 	for _, remote := range r.WithRemotes {
 		require.NoError(t, repo.CreateRemote(remote.Name, remote.URL))
@@ -162,7 +136,7 @@ func (test Test) Run(t *testing.T) {
 			MakeRepo(t, rs, r)
 		}
 		for _, f := range mr.WithFiles {
-			require.NoError(t, f.WriteAtDir(rs.dir))
+			require.NoError(t, f.WriteAtDir(rs.Dir))
 		}
 
 		server := MakeServer(t, rs, mr.Server)
@@ -276,7 +250,7 @@ func RetryTestRun(t *testing.T, attempts int, test func(require.TestingT)) {
 	rtt.try(attempts, test)
 }
 
-func RunQuery(t *testing.T, conn *sql.Conn, q Query) {
+func RunQuery(t *testing.T, conn *sql.Conn, q driver.Query) {
 	RetryTestRun(t, q.RetryAttempts, func(t require.TestingT) {
 		RunQueryAttempt(t, conn, q)
 	})

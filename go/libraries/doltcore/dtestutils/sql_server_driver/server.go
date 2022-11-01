@@ -1,6 +1,11 @@
 package sql_server_driver
 
-import "gopkg.in/yaml.v3"
+import (
+	"gopkg.in/yaml.v3"
+	"io"
+	"os"
+	"path/filepath"
+)
 
 // |Connection| represents a single connection to a sql-server instance defined
 // in the test. The connection will be established and every |Query| in
@@ -74,6 +79,30 @@ type WithFile struct {
 	// A source file path to copy to |Name|. Mutually exclusive with
 	// Contents.
 	SourcePath string `yaml:"source_path"`
+}
+
+func (f WithFile) WriteAtDir(dir string) error {
+	path := filepath.Join(dir, f.Name)
+	d := filepath.Dir(path)
+	err := os.MkdirAll(d, 0750)
+	if err != nil {
+		return err
+	}
+	if f.SourcePath != "" {
+		source, err := os.Open(f.SourcePath)
+		if err != nil {
+			return err
+		}
+		defer source.Close()
+		dest, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0550)
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(dest, source)
+		return err
+	} else {
+		return os.WriteFile(path, []byte(f.Contents), 0550)
+	}
 }
 
 // |Server| defines a sql-server process to start. |Name| must match the

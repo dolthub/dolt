@@ -107,11 +107,11 @@ func (u DoltUser) MakeRepoStore() (RepoStore, error) {
 
 type RepoStore struct {
 	user DoltUser
-	dir  string
+	Dir  string
 }
 
 func (rs RepoStore) MakeRepo(name string) (Repo, error) {
-	path := filepath.Join(rs.dir, name)
+	path := filepath.Join(rs.Dir, name)
 	err := os.Mkdir(path, 0750)
 	if err != nil {
 		return Repo{}, err
@@ -126,18 +126,18 @@ func (rs RepoStore) MakeRepo(name string) (Repo, error) {
 
 func (rs RepoStore) DoltCmd(args ...string) *exec.Cmd {
 	cmd := rs.user.DoltCmd(args...)
-	cmd.Dir = rs.dir
+	cmd.Dir = rs.Dir
 	return cmd
 }
 
 type Repo struct {
 	user DoltUser
-	dir  string
+	Dir  string
 }
 
 func (r Repo) DoltCmd(args ...string) *exec.Cmd {
 	cmd := r.user.DoltCmd(args...)
-	cmd.Dir = r.dir
+	cmd.Dir = r.Dir
 	return cmd
 }
 
