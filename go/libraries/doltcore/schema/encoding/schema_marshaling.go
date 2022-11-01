@@ -166,7 +166,7 @@ type schemaData struct {
 	CheckConstraints []encodedCheck   `noms:"checks,omitempty" json:"checks,omitempty"`
 	PkOrdinals       []int            `noms:"pkOrdinals,omitempty" json:"pkOrdinals,omitEmpty"`
 	Collation        schema.Collation `noms:"collation,omitempty" json:"collation,omitempty"`
-	PkPrefixLengths  []uint64         `noms:"" json:""`
+	PkPrefixLengths  []uint16         `noms:"pkPrefixLengths,omitempty" json:"pkPrefixLengths,omitempty"`
 }
 
 func (sd *schemaData) Copy() *schemaData {

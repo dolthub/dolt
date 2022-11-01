@@ -139,13 +139,6 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 
 	}
 
-	for i := 0; i < len(pkPrefixLengths); i += 2 {
-		idx, ok := w.sch.GetPKCols().TagToIdx[pkPrefixLengths[i]]
-		if !ok {
-			panic("impossible")
-		}
-	}
-
 	sqlRowKey := sqlRow
 	if err := w.primary.ValidateKeyViolations(ctx, sqlRowKey); err != nil {
 		return err

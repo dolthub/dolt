@@ -190,21 +190,21 @@ func deserializeClusteredIndex(s *serial.TableSchema) []int {
 	return pkOrdinals
 }
 
-func serializePkPrefixLengths(b *fb.Builder, pkPrefixLengths []uint64) fb.UOffsetT {
+func serializePkPrefixLengths(b *fb.Builder, pkPrefixLengths []uint16) fb.UOffsetT {
 	serial.TableSchemaStartPkPrefixLengthsVector(b, len(pkPrefixLengths))
 	for i := len(pkPrefixLengths) - 1; i >= 0; i-- {
-		b.PrependUint64(pkPrefixLengths[i])
+		b.PrependUint16(pkPrefixLengths[i])
 	}
 	return b.EndVector(len(pkPrefixLengths))
 }
 
-func deserializePkPrefixLengths(s *serial.TableSchema) []uint64 {
+func deserializePkPrefixLengths(s *serial.TableSchema) []uint16 {
 	// check for keyless schema
 	if keylessSerialSchema(s) {
 		return nil
 	}
 
-	pkPrefixLengths := make([]uint64, s.PkPrefixLengthsLength())
+	pkPrefixLengths := make([]uint16, s.PkPrefixLengthsLength())
 	for i := range pkPrefixLengths {
 		pkPrefixLengths[i] = s.PkPrefixLengths(i)
 	}
