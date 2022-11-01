@@ -163,16 +163,16 @@ func (r *ImportResults) String() string {
 func (r *ImportResults) SqlDump() string {
 	b := strings.Builder{}
 	b.WriteString(`
-CREATE TABLE IF NOT EXISTS import_perf_results (
-  test_name varchar(64),
-  server varchar(64),
-  detail varchar(64),
-  row_cnt int,
-  time double,
-  file_format varchar(8),
-  sorted bool,
-  primary key (test_name, detail, server)
-);
+	CREATE TABLE IF NOT EXISTS import_perf_results (
+	  test_name varchar(64),
+	  server varchar(64),
+	  detail varchar(64),
+	  row_cnt int,
+	  time double,
+	  file_format varchar(8),
+	  sorted bool,
+	  primary key (test_name, detail, server)
+	);
 `)
 
 	for _, r := range r.res {

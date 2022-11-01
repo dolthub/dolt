@@ -2,6 +2,19 @@
 
 Benchmark different import workflows expressed as yaml files.
 
+Sample usage:
+```bash
+go build \
+  github.com/dolthub/dolt/go/performance/import_benchmarker/cmd \
+  -test testdata/shuffle.yaml
+```
+
+The `dolt` binary used for performance comparisons will be on the users
+`PATH`.
+
+Tests with an `external-server` configuration are expected to be avaible
+from the host machine when the command is started.
+
 ## Inputs 
 
 Specify imports for different servers and workloads along several
@@ -25,6 +38,15 @@ dimensions:
 
 For an examples of the specific yaml input syntax, see the example
 files below, or refer to the tests in `testdata/`.
+
+Server Details:
+
+- For dolt sql-server tests, a new sql-server will be constructed individually
+  for each test run.
+- External servers are provided outside of the lifecycle of the `import_benchmarker`
+  command. The same database instance is used for every table import test.
+- Import files are cached on the schema, row number, and format in between
+  tests.
 
 ## Outputs
 
@@ -190,14 +212,6 @@ order by 1,2;
 | pk type           | varchar      | 400000  | 1      | 3.86       | 1.38     | 1.43     |
 +-------------------+--------------+---------+--------+------------+----------+----------+
 ```
-
-Server Details:
-
-- For dolt sql-server tests, a new sql-server will be constructed individually
-  for each test run.
-- External servers use the same database instance for every test.
-- Import files are cached on the schema, row number, and format in between
-  tests.
 
 Example test spec 1:
 ```yaml
