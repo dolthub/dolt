@@ -36,14 +36,14 @@ import (
 )
 
 type logOpts struct {
-	numLines            int
-	showParents         bool
-	minParents          int
-	decoration          string
-	oneLine             bool
-	excludingCommitSpec *doltdb.CommitSpec
-	commitSpec          *doltdb.CommitSpec
-	tableName           string
+	numLines             int
+	showParents          bool
+	minParents           int
+	decoration           string
+	oneLine              bool
+	excludingCommitSpecs []*doltdb.CommitSpec
+	commitSpecs          []*doltdb.CommitSpec
+	tableName            string
 }
 
 type logNode struct {
@@ -114,17 +114,12 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, logDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.NArg() > 2 {
-		usage()
-		return 1
-	}
-
 	opts, err := parseLogArgs(ctx, dEnv, apr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	if opts.commitSpec == nil {
-		opts.commitSpec = dEnv.RepoStateReader().CWBHeadSpec()
+	if len(opts.commitSpecs) == 0 {
+		opts.commitSpecs = append(opts.commitSpecs, dEnv.RepoStateReader().CWBHeadSpec())
 	}
 	if len(opts.tableName) > 0 {
 		return handleErrAndExit(logTableCommits(ctx, dEnv, opts))
@@ -152,146 +147,95 @@ func parseLogArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		oneLine:     apr.Contains(cli.OneLineFlag),
 		decoration:  decorateOption,
 	}
-	cs, notCs, tableName, err := parseRefsAndTable(ctx, apr, dEnv)
+
+	err := opts.parseRefsAndTable(ctx, apr, dEnv)
 	if err != nil {
 		return nil, err
 	}
-	opts.commitSpec = cs
-	opts.excludingCommitSpec = notCs
-	opts.tableName = tableName
 
 	excludingRef, ok := apr.GetValue(cli.NotFlag)
 	if ok {
-		if opts.excludingCommitSpec != nil {
+		if len(opts.excludingCommitSpecs) > 0 {
 			return nil, fmt.Errorf("cannot use --not argument with two dots or ref with ^")
 		}
 		if len(opts.tableName) > 0 {
 			return nil, fmt.Errorf("cannot use --not argument with table")
 		}
-		cs, err := doltdb.NewCommitSpec(excludingRef)
+		notCs, err := doltdb.NewCommitSpec(excludingRef)
 		if err != nil {
 			return nil, fmt.Errorf("invalid commit %s\n", excludingRef)
 		}
-		opts.excludingCommitSpec = cs
+		opts.excludingCommitSpecs = append(opts.excludingCommitSpecs, notCs)
 	}
 
 	return opts, nil
 }
 
-func parseRefsAndTable(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (*doltdb.CommitSpec, *doltdb.CommitSpec, string, error) {
-	switch apr.NArg() {
-	// dolt log
-	case 0:
-		return nil, nil, "", nil
-
-	// dolt log <ref/^ref/revision-range/table>
-	case 1:
-		return getCommitOrTableFromString(ctx, apr.Arg(0), dEnv, true)
-
-	// dolt log <ref/^ref> <ref/^ref/table>
-	case 2:
-		firstCs, firstExNotCs, _, err := getCommitOrTableFromString(ctx, apr.Arg(0), dEnv, false)
-		if err != nil {
-			return nil, nil, "", err
-		}
-
-		secondCs, secondExNotCs, tableName, err := getCommitOrTableFromString(ctx, apr.Arg(1), dEnv, false)
-		if err != nil {
-			return nil, nil, "", err
-		}
-
-		if len(tableName) > 0 {
-			if firstExNotCs != nil {
-				return nil, nil, "", fmt.Errorf("Providing tableName for two dot log not yet supported")
-			}
-			// dolt log <ref> <table>
-			return firstCs, nil, tableName, nil
-		}
-
-		if firstCs != nil && secondCs != nil {
-			commit, err := dEnv.DoltDB.Resolve(ctx, firstCs, dEnv.RepoStateReader().CWBHeadRef())
-			if err != nil {
-				return nil, nil, "", err
-			}
-
-			// Handles table name matching branch name (dolt log <ref> <table>)
-			exists, err := tableExists(ctx, commit, apr.Arg(1))
-			if err != nil {
-				return nil, nil, "", err
-			}
-
-			if exists {
-				return firstCs, nil, apr.Arg(1), nil
-			}
-
-			return nil, nil, "", fmt.Errorf("Cannot provide two commit refs") // dolt log <ref> <ref>
-		}
-		if firstExNotCs != nil && secondExNotCs != nil {
-			return nil, nil, "", fmt.Errorf("Cannot exclude two commit refs") // dolt log ^<ref> ^<ref>
-		}
-		// dolt log ^<ref> <ref>
-		if firstExNotCs != nil && secondCs != nil {
-			return secondCs, firstExNotCs, "", nil
-		}
-		// dolt log <ref> ^<ref>
-		if firstCs != nil && secondExNotCs != nil {
-			return firstCs, secondExNotCs, "", nil
-		}
-
-		return nil, nil, "", nil
-
-	default:
-		return nil, nil, "", fmt.Errorf("Cannot provide more than 3 arguments")
-	}
-}
-
-func getCommitOrTableFromString(ctx context.Context, str string, dEnv *env.DoltEnv, canDot bool) (*doltdb.CommitSpec, *doltdb.CommitSpec, string, error) {
-	// <ref>...<ref>
-	if strings.Contains(str, "...") {
-		return nil, nil, "", fmt.Errorf("Three dot dolt log not supported")
+func (opts *logOpts) parseRefsAndTable(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) error {
+	// `dolt log`
+	if apr.NArg() == 0 {
+		return nil
 	}
 
-	// <ref>..<ref>
-	if strings.Contains(str, "..") {
-		if !canDot {
-			return nil, nil, "", fmt.Errorf("Cannot use two dot when 2 arguments provided")
+	// `dolt log <ref>..<ref>`
+	if strings.Contains(apr.Arg(0), "..") {
+		if strings.Contains(apr.Arg(0), "...") {
+			return fmt.Errorf("three dot log not yet supported")
 		}
-		refs := strings.Split(str, "..")
+		if apr.NArg() > 1 {
+			return fmt.Errorf("Cannot use two dot when 2 or more arguments provided")
+		}
+		refs := strings.Split(apr.Arg(0), "..")
 		notCs, err := getCommitSpec(refs[0])
 		if err != nil {
-			return nil, nil, "", err
+			return err
 		}
 
 		cs, err := getCommitSpec(refs[1])
 		if err != nil {
-			return nil, nil, "", err
+			return err
 		}
 
-		return cs, notCs, "", nil
+		opts.commitSpecs = append(opts.commitSpecs, cs)
+		opts.excludingCommitSpecs = append(opts.excludingCommitSpecs, notCs)
+
+		return nil
 	}
 
-	// ^<ref>
-	if strings.HasPrefix(str, "^") {
-		commit := strings.TrimPrefix(str, "^")
-		notCs, err := getCommitSpec(commit)
-		if err != nil {
-			return nil, nil, "", err
+	seenRefs := make(map[string]bool)
+
+	for _, arg := range apr.Args {
+		// ^<ref>
+		if strings.HasPrefix(arg, "^") {
+			commit := strings.TrimPrefix(arg, "^")
+			notCs, err := getCommitSpec(commit)
+			if err != nil {
+				return err
+			}
+
+			opts.excludingCommitSpecs = append(opts.excludingCommitSpecs, notCs)
+		} else {
+			argIsRef := actions.ValidateIsRef(ctx, arg, dEnv.DoltDB, dEnv.RepoStateReader())
+			// <ref>
+			if argIsRef && !seenRefs[arg] {
+				cs, err := getCommitSpec(arg)
+				if err != nil {
+					return err
+				}
+				seenRefs[arg] = true
+				opts.commitSpecs = append(opts.commitSpecs, cs)
+			} else {
+				// <table>
+				opts.tableName = arg
+			}
 		}
-		return nil, notCs, "", err
 	}
 
-	argIsRef := actions.ValidateIsRef(ctx, str, dEnv.DoltDB, dEnv.RepoStateReader())
-	// <ref>
-	if argIsRef {
-		cs, err := getCommitSpec(str)
-		if err != nil {
-			return nil, nil, "", err
-		}
-		return cs, nil, "", nil
+	if len(opts.tableName) > 0 && len(opts.excludingCommitSpecs) > 0 {
+		return fmt.Errorf("Cannot provide table name with excluding refs")
 	}
 
-	// <table>
-	return nil, nil, str, nil
+	return nil
 }
 
 func getCommitSpec(commit string) (*doltdb.CommitSpec, error) {
@@ -303,10 +247,22 @@ func getCommitSpec(commit string) (*doltdb.CommitSpec, error) {
 }
 
 func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
-	commit, err := dEnv.DoltDB.Resolve(ctx, opts.commitSpec, dEnv.RepoStateReader().CWBHeadRef())
-	if err != nil {
-		cli.PrintErrln(color.HiRedString("Fatal error: cannot get HEAD commit for current branch."))
-		return 1
+	hashes := make([]hash.Hash, len(opts.commitSpecs))
+
+	for i, cs := range opts.commitSpecs {
+		commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
+		if err != nil {
+			cli.PrintErrln(color.HiRedString("Fatal error: cannot get HEAD commit for current branch."))
+			return 1
+		}
+
+		h, err := commit.HashOf()
+		if err != nil {
+			cli.PrintErrln(color.HiRedString("Fatal error: failed to get commit hash"))
+			return 1
+		}
+
+		hashes[i] = h
 	}
 
 	cHashToRefs := map[hash.Hash][]string{}
@@ -356,39 +312,37 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 		cHashToRefs[t.Hash] = append(cHashToRefs[t.Hash], tagName)
 	}
 
-	h, err := commit.HashOf()
-
-	if err != nil {
-		cli.PrintErrln(color.HiRedString("Fatal error: failed to get commit hash"))
-		return 1
-	}
-
-	matchFunc := func(commit *doltdb.Commit) (bool, error) {
-		return commit.NumParents() >= opts.minParents, nil
+	matchFunc := func(c *doltdb.Commit) (bool, error) {
+		return c.NumParents() >= opts.minParents, nil
 	}
 
 	var commits []*doltdb.Commit
-	if opts.excludingCommitSpec == nil {
-		commits, err = commitwalk.GetTopNTopoOrderedCommitsMatching(ctx, dEnv.DoltDB, h, opts.numLines, matchFunc)
+	if len(opts.excludingCommitSpecs) == 0 {
+		commits, err = commitwalk.GetTopNTopoOrderedCommitsMatching(ctx, dEnv.DoltDB, hashes, opts.numLines, matchFunc)
 	} else {
-		excludingCommit, err := dEnv.DoltDB.Resolve(ctx, opts.excludingCommitSpec, dEnv.RepoStateReader().CWBHeadRef())
-		if err != nil {
-			cli.PrintErrln(color.HiRedString("Fatal error: cannot get excluding commit for current branch."))
-			return 1
+		excludingHashes := make([]hash.Hash, len(opts.excludingCommitSpecs))
+
+		for i, excludingSpec := range opts.excludingCommitSpecs {
+			excludingCommit, err := dEnv.DoltDB.Resolve(ctx, excludingSpec, dEnv.RepoStateReader().CWBHeadRef())
+			if err != nil {
+				cli.PrintErrln(color.HiRedString("Fatal error: cannot get excluding commit for current branch."))
+				return 1
+			}
+
+			excludingHash, err := excludingCommit.HashOf()
+			if err != nil {
+				cli.PrintErrln(color.HiRedString("Fatal error: failed to get commit hash"))
+				return 1
+			}
+
+			excludingHashes[i] = excludingHash
 		}
 
-		excludingHash, err := excludingCommit.HashOf()
-
-		if err != nil {
-			cli.PrintErrln(color.HiRedString("Fatal error: failed to get commit hash"))
-			return 1
-		}
-
-		commits, err = commitwalk.GetDotDotRevisions(ctx, dEnv.DoltDB, h, dEnv.DoltDB, excludingHash, opts.numLines)
+		commits, err = commitwalk.GetDotDotRevisions(ctx, dEnv.DoltDB, hashes, dEnv.DoltDB, excludingHashes, opts.numLines)
 	}
 
 	if err != nil {
-		cli.PrintErrln("Error retrieving commit.")
+		cli.PrintErrln(err)
 		return 1
 	}
 
@@ -417,12 +371,19 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 			commitHash:   cmHash,
 			parentHashes: pHashes,
 			branchNames:  cHashToRefs[cmHash],
-			isHead:       cmHash == h})
+			isHead:       hashIsHead(cmHash, hashes)})
 	}
 
 	logToStdOut(opts, commitsInfo)
 
 	return 0
+}
+
+func hashIsHead(cmHash hash.Hash, hashes []hash.Hash) bool {
+	if len(hashes) > 1 || len(hashes) == 0 {
+		return false
+	}
+	return cmHash == hashes[0]
 }
 
 func tableExists(ctx context.Context, commit *doltdb.Commit, tableName string) (bool, error) {
@@ -440,31 +401,37 @@ func tableExists(ctx context.Context, commit *doltdb.Commit, tableName string) (
 }
 
 func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) error {
-	commit, err := dEnv.DoltDB.Resolve(ctx, opts.commitSpec, dEnv.RepoStateReader().CWBHeadRef())
-	if err != nil {
-		return err
-	}
+	hashes := make([]hash.Hash, len(opts.commitSpecs))
 
-	// Check that the table exists in the head commit
-	exists, err := tableExists(ctx, commit, opts.tableName)
-	if err != nil {
-		return err
-	}
+	for i, cs := range opts.commitSpecs {
+		commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
+		if err != nil {
+			return err
+		}
 
-	if !exists {
-		return fmt.Errorf("error: table %s does not exist", opts.tableName)
-	}
+		h, err := commit.HashOf()
+		if err != nil {
+			return err
+		}
 
-	h, err := commit.HashOf()
-	if err != nil {
-		return err
+		// Check that the table exists in the head commits
+		exists, err := tableExists(ctx, commit, opts.tableName)
+		if err != nil {
+			return err
+		}
+
+		if !exists {
+			return fmt.Errorf("error: table %s does not exist", opts.tableName)
+		}
+
+		hashes[i] = h
 	}
 
 	matchFunc := func(commit *doltdb.Commit) (bool, error) {
 		return commit.NumParents() >= opts.minParents, nil
 	}
 
-	itr, err := commitwalk.GetTopologicalOrderIterator(ctx, dEnv.DoltDB, h, matchFunc)
+	itr, err := commitwalk.GetTopologicalOrderIterator(ctx, dEnv.DoltDB, hashes, matchFunc)
 	if err != nil && err != io.EOF {
 		return err
 	}

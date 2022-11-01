@@ -547,12 +547,12 @@ type logTableFunctionRowIter struct {
 }
 
 func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error), cHashToRefs map[hash.Hash][]string) (*logTableFunctionRowIter, error) {
-	hash, err := commit.HashOf()
+	h, err := commit.HashOf()
 	if err != nil {
 		return nil, err
 	}
 
-	child, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash, matchFn)
+	child, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, []hash.Hash{h}, matchFn)
 	if err != nil {
 		return nil, err
 	}
@@ -562,12 +562,12 @@ func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *d
 		showParents: ltf.showParents,
 		decoration:  ltf.decoration,
 		cHashToRefs: cHashToRefs,
-		headHash:    hash,
+		headHash:    h,
 	}, nil
 }
 
 func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit, excludingCommit *doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error), cHashToRefs map[hash.Hash][]string) (*logTableFunctionRowIter, error) {
-	hash, err := commit.HashOf()
+	h, err := commit.HashOf()
 	if err != nil {
 		return nil, err
 	}
@@ -577,7 +577,7 @@ func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, 
 		return nil, err
 	}
 
-	child, err := commitwalk.GetDotDotRevisionsIterator(ctx, ddb, hash, exHash, matchFn)
+	child, err := commitwalk.GetDotDotRevisionsIterator(ctx, ddb, []hash.Hash{h}, ddb, []hash.Hash{exHash}, matchFn)
 	if err != nil {
 		return nil, err
 	}
@@ -587,7 +587,7 @@ func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, 
 		showParents: ltf.showParents,
 		decoration:  ltf.decoration,
 		cHashToRefs: cHashToRefs,
-		headHash:    hash,
+		headHash:    h,
 	}, nil
 }
 

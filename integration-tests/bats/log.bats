@@ -105,6 +105,13 @@ teardown() {
     [[ ! "$output" =~ "MAIN" ]] || false
     [[ ! "$output" =~ "AFTER" ]] || false
     [[ "$output" =~ "BRANCH1" ]] || false
+    run dolt log ^main ^branch1
+    [ $status -eq 0 ]
+    run dolt log main branch1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
 
     # Invalid two dot
     run dolt log main..branch1 testtable
@@ -119,11 +126,9 @@ teardown() {
     [ $status -eq 1 ]
      run dolt log main main..branch1
     [ $status -eq 1 ]
-    run dolt log ^main ^branch1
-    [ $status -eq 1 ]
-    run dolt log main branch1
-    [ $status -eq 1 ]
     run dolt log ^main testtable
+    [ $status -eq 1 ]
+    run dolt log testtable ^main
     [ $status -eq 1 ]
     run dolt log ^branch1 --not main
     [ $status -eq 1 ]
