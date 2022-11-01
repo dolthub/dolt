@@ -2,10 +2,12 @@
 set -e
 set -o pipefail
 
-SYSBENCH_TEST="oltp_point_select"
+SYSBENCH_TEST="types_delete_insert"
 WORKING_DIR=`mktemp -d`
 PPROF=0
 PORT=3366
+
+export SINGLE_THREAD_FEATURE_FLAG=1
 
 # parse options
 # superuser.com/questions/186272/

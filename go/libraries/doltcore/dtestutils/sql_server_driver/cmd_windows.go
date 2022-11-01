@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sql_server_driver
 
 import (
-	"syscall"
 	"golang.org/x/sys/windows"
+	"syscall"
 )
 
 func (s *SqlServer) GracefulStop() error {

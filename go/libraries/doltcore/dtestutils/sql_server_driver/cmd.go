@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sql_server_driver
 
 import (
 	"bytes"
@@ -259,10 +259,11 @@ func (s *SqlServer) Restart(newargs *[]string) error {
 }
 
 func (s *SqlServer) DB() (*sql.DB, error) {
-	authority := "root"
-	location := fmt.Sprintf("tcp(127.0.0.1:%d)", s.Port)
-	dbname := s.DBName
-	dsn := fmt.Sprintf("%s@%s/%s?allowAllFiles=true&tls=preferred", authority, location, dbname)
+	return ConnectDB("root", "", s.DBName, "127.0.0.1", s.Port)
+}
+
+func ConnectDB(user, password, name, host string, port int) (*sql.DB, error) {
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?allowAllFiles=true&tls=preferred", user, password, host, port, name)
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, err

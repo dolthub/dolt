@@ -17,6 +17,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 	ib "github.com/dolthub/dolt/go/performance/import_benchmarker"
 	"log"
 	"os"
@@ -36,7 +37,7 @@ func main() {
 	}
 
 	results := new(ib.ImportResults)
-	u, err := ib.NewDoltUser()
+	u, err := driver.NewDoltUser()
 	for _, test := range def.Tests {
 		test.Results = results
 		tmpdir, err := os.MkdirTemp("", "repo-store-")
@@ -60,6 +61,6 @@ func main() {
 			}
 		}
 	}
-	fmt.Println(results.String())
+	fmt.Println(results.SqlDump())
 	os.Exit(0)
 }

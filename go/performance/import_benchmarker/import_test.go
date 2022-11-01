@@ -19,7 +19,3 @@ func TestDoltImport(t *testing.T) {
 func TestShuffle(t *testing.T) {
 	RunTestsFile(t, "testdata/shuffle.yaml")
 }
-
-func TestAll(t *testing.T) {
-	RunTestsFile(t, "testdata/all.yaml")
-}

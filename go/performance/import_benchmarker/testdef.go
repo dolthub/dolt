@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"database/sql"
+	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 	sql2 "github.com/dolthub/go-mysql-server/sql"
 	ast "github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/stretchr/testify/require"
@@ -49,9 +50,9 @@ type Opts struct {
 // any Servers defined within them will be started. The interactions and
 // assertions defined in Conns will be run.
 type ImportTest struct {
-	Name   string     `yaml:"name"`
-	Repos  []TestRepo `yaml:"repos"`
-	Tables []Table    `yaml:"tables"`
+	Name   string            `yaml:"name"`
+	Repos  []driver.TestRepo `yaml:"repos"`
+	Tables []Table           `yaml:"tables"`
 
 	// Skip the entire test with this reason.
 	Skip string `yaml:"skip"`
@@ -81,111 +82,6 @@ func (s *Table) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-// |TestRepo| represents an init'd dolt repository that is available to a
-// server instance. It can be created with some files and with remotes defined.
-// |Name| can include path components separated by `/`, which will create the
-// repository in a subdirectory.
-type TestRepo struct {
-	Name string `yaml:"name"`
-
-	// Only valid on ImportTest.Repos, not in Test.MultiRepos.Repos. If set, a
-	// sql-server process will be run against this TestRepo. It will be
-	// available as TestRepo.Name.
-	Server         *Server         `yaml:"server"`
-	ExternalServer *ExternalServer `yaml:"external-server"`
-}
-
-// |Server| defines a sql-server process to start. |Name| must match the
-// top-level |Name| of a |TestRepo| or |MultiRepo|.
-type Server struct {
-	Name string   `yaml:"name"`
-	Args []string `yaml:"args"`
-
-	// The |Port| which the server will be running on. For now, it is up to
-	// the |Args| to make sure this is true. Defaults to 3308.
-	Port int `yaml:"port"`
-
-	// Assertions to be run against the log output of the server process
-	// after the server process successfully terminates.
-	LogMatches []string `yaml:"log_matches"`
-
-	// Assertions to be run against the log output of the server process
-	// after the server process exits with an error. If |ErrorMatches| is
-	// defined, then the server process must exit with a non-0 exit code
-	// after it is launched. This will be asserted before any |Connections|
-	// interactions are performed.
-	ErrorMatches []string `yaml:"error_matches"`
-}
-
-type ExternalServer struct {
-	Name     string `yaml:"name"`
-	Host     string `yaml:"host"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	// The |Port| which the server will be running on. For now, it is up to
-	// the |Args| to make sure this is true. Defaults to 3308.
-	Port int `yaml:"port"`
-}
-
-// The primary interaction of a |Connection|. Either |Query| or |Exec| should
-// be set, not both.
-type Query struct {
-	// Run a query against the connection.
-	Query string `yaml:"query"`
-
-	// Run a command against the connection.
-	Exec string `yaml:"exec"`
-
-	// Args to be passed as query parameters to either Query or Exec.
-	Args []string `yaml:"args"`
-
-	// This can only be non-empty for a |Query|. Asserts the Results of the
-	// |Query|.
-	Result QueryResult `yaml:"result"`
-
-	// If this is non-empty, asserts the the |Query| or the |Exec|
-	// generates an error that matches this string.
-	ErrorMatch string `yaml:"error_match"`
-
-	// If this is non-zero, it represents the number of times to try the
-	// |Query| or the |Exec| and to check its assertions before we fail the
-	// test as a result of failed assertions. When interacting with queries
-	// that introspect things like replication state, this can be used to
-	// wait for quiescence in an inherently racey process. Interactions
-	// will be delayed slightly between each failure.
-	RetryAttempts int `yaml:"retry_attempts"`
-}
-
-// |QueryResult| specifies assertions on the Results of a |Query|. Columns must
-// be specified for a |Query| and the query Results must fully match. If Rows
-// are ommited, anything is allowed as long as all rows are read successfully.
-// All assertions here are string equality.
-type QueryResult struct {
-	Columns []string   `yaml:"columns"`
-	Rows    ResultRows `yaml:"rows"`
-}
-
-type ResultRows struct {
-	Or *[][][]string
-}
-
-func (r *ResultRows) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind == yaml.SequenceNode {
-		res := make([][][]string, 1)
-		r.Or = &res
-		return value.Decode(&(*r.Or)[0])
-	}
-	var or struct {
-		Or *[][][]string `yaml:"or"`
-	}
-	err := value.Decode(&or)
-	if err != nil {
-		return err
-	}
-	r.Or = or.Or
-	return nil
-}
-
 func ParseTestsFile(path string) (TestDef, error) {
 	contents, err := os.ReadFile(path)
 	if err != nil {
@@ -198,23 +94,23 @@ func ParseTestsFile(path string) (TestDef, error) {
 	return res, err
 }
 
-func MakeRepo(rs RepoStore, r TestRepo) (Repo, error) {
+func MakeRepo(rs driver.RepoStore, r driver.TestRepo) (driver.Repo, error) {
 	repo, err := rs.MakeRepo(r.Name)
 	if err != nil {
-		return Repo{}, err
+		return driver.Repo{}, err
 	}
 	return repo, nil
 }
 
-func MakeServer(dc DoltCmdable, s *Server) (*SqlServer, error) {
+func MakeServer(dc driver.DoltCmdable, s *driver.Server) (*driver.SqlServer, error) {
 	if s == nil {
 		return nil, nil
 	}
-	opts := []SqlServerOpt{WithArgs(s.Args...)}
+	opts := []driver.SqlServerOpt{driver.WithArgs(s.Args...)}
 	if s.Port != 0 {
-		opts = append(opts, WithPort(s.Port))
+		opts = append(opts, driver.WithPort(s.Port))
 	}
-	server, err := StartSqlServer(dc, opts...)
+	server, err := driver.StartSqlServer(dc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -234,14 +130,17 @@ func MakeServer(dc DoltCmdable, s *Server) (*SqlServer, error) {
 }
 
 type ImportResult struct {
-	table string
-	repo  string
-	test  string
-	time  float64
+	detail string
+	server string
+	test   string
+	time   float64
+	rows   int
+	fmt    string
+	sorted bool
 }
 
 func (r ImportResult) String() string {
-	return fmt.Sprintf("- %s/%s/%s: %.2fs\n", r.test, r.repo, r.table, r.time)
+	return fmt.Sprintf("- %s/%s/%s: %.2fs\n", r.test, r.server, r.detail, r.time)
 }
 
 type ImportResults struct {
@@ -258,6 +157,34 @@ func (r *ImportResults) String() string {
 	for _, x := range r.res {
 		b.WriteString(x.String())
 	}
+	return b.String()
+}
+
+func (r *ImportResults) SqlDump() string {
+	b := strings.Builder{}
+	b.WriteString(`
+CREATE TABLE IF NOT EXISTS import_perf_results (
+  test_name varchar(64),
+  server varchar(64),
+  detail varchar(64),
+  row_cnt int,
+  time double,
+  file_format varchar(8),
+  sorted bool,
+  primary key (test_name, detail, server)
+);
+`)
+
+	for _, r := range r.res {
+		var sorted int
+		if r.sorted {
+			sorted = 1
+		}
+		b.WriteString(fmt.Sprintf(
+			"insert into import_perf_results values\n  ('%s', '%s', '%s', %d, %.2f, '%s', %b);\n",
+			r.test, r.server, r.detail, r.rows, r.time, r.fmt, sorted))
+	}
+
 	return b.String()
 }
 
@@ -279,7 +206,7 @@ func (test *ImportTest) Run(t *testing.T) {
 		}
 	}
 
-	u, err := NewDoltUser()
+	u, err := driver.NewDoltUser()
 	for _, r := range test.Repos {
 		if r.ExternalServer != nil {
 			err := test.RunExternalServerTests(r.Name, r.ExternalServer)
@@ -296,9 +223,9 @@ func (test *ImportTest) Run(t *testing.T) {
 }
 
 // RunExternalServerTests connects to a single externally provided server to run every test
-func (test *ImportTest) RunExternalServerTests(repoName string, s *ExternalServer) error {
+func (test *ImportTest) RunExternalServerTests(repoName string, s *driver.ExternalServer) error {
 	return test.IterImportTables(test.Tables, func(tab Table, f *os.File) error {
-		db, err := ConnectDB(s.User, s.Password, s.Name, s.Host, s.Port)
+		db, err := driver.ConnectDB(s.User, s.Password, s.Name, s.Host, s.Port)
 		if err != nil {
 			return err
 		}
@@ -308,7 +235,7 @@ func (test *ImportTest) RunExternalServerTests(repoName string, s *ExternalServe
 }
 
 // RunSqlServerTests creates a new repo and server for every import test.
-func (test *ImportTest) RunSqlServerTests(repo TestRepo, user DoltUser) error {
+func (test *ImportTest) RunSqlServerTests(repo driver.TestRepo, user driver.DoltUser) error {
 	return test.IterImportTables(test.Tables, func(tab Table, f *os.File) error {
 		//make a new server for every test
 		server, err := newServer(user, repo)
@@ -327,6 +254,27 @@ func (test *ImportTest) RunSqlServerTests(repo TestRepo, user DoltUser) error {
 		}
 		return test.benchmarkTest(repo.Name, db, tab, f)
 	})
+}
+
+func newServer(u driver.DoltUser, r driver.TestRepo) (*driver.SqlServer, error) {
+	rs, err := u.MakeRepoStore()
+	if err != nil {
+		return nil, err
+	}
+	// start dolt server
+	repo, err := MakeRepo(rs, r)
+	if err != nil {
+		return nil, err
+	}
+	r.Server.Args = append(r.Server.Args, "")
+	server, err := MakeServer(repo, r.Server)
+	if err != nil {
+		return nil, err
+	}
+	if server != nil {
+		server.DBName = r.Name
+	}
+	return server, nil
 }
 
 func modifyServerForImport(db *sql.DB) error {
@@ -370,10 +318,13 @@ IGNORE 1 LINES;`, f.Name())
 	runtime := time.Since(start)
 
 	test.Results.append(ImportResult{
-		test:  test.Name,
-		repo:  repoName,
-		table: tab.Name,
-		time:  runtime.Seconds(),
+		test:   test.Name,
+		server: repoName,
+		detail: tab.Name,
+		time:   runtime.Seconds(),
+		rows:   tab.Rows,
+		fmt:    tab.Fmt,
+		sorted: !tab.Shuffle,
 	})
 
 	rows, err = conn.QueryContext(
@@ -391,7 +342,7 @@ IGNORE 1 LINES;`, f.Name())
 
 // RunCliTests runs each import test on a new dolt repo to avoid accumulated
 // startup costs over time between tests.
-func (test *ImportTest) RunCliTests(r TestRepo, user DoltUser) error {
+func (test *ImportTest) RunCliTests(r driver.TestRepo, user driver.DoltUser) error {
 	return test.IterImportTables(test.Tables, func(tab Table, f *os.File) error {
 		var err error
 
@@ -428,14 +379,17 @@ func (test *ImportTest) RunCliTests(r TestRepo, user DoltUser) error {
 		runtime := time.Since(start)
 
 		test.Results.append(ImportResult{
-			test:  test.Name,
-			repo:  r.Name,
-			table: tab.Name,
-			time:  runtime.Seconds(),
+			test:   test.Name,
+			server: r.Name,
+			detail: tab.Name,
+			time:   runtime.Seconds(),
+			rows:   tab.Rows,
+			fmt:    tab.Fmt,
+			sorted: !tab.Shuffle,
 		})
 
 		// reset repo at end
-		return repo.DoltExec("sql", "-q", "drop table", tab.TargetTable)
+		return repo.DoltExec("sql", "-q", fmt.Sprintf("drop table %s", tab.TargetTable))
 	})
 }
 
@@ -572,130 +526,4 @@ func RunTestsFile(t *testing.T, path string) {
 	for _, test := range def.Tests {
 		t.Run(test.Name, test.Run)
 	}
-}
-
-type retryTestingT struct {
-	*testing.T
-	errorfStrings []string
-	errorfArgs    [][]interface{}
-	failNow       bool
-}
-
-func (r *retryTestingT) Errorf(format string, args ...interface{}) {
-	r.T.Helper()
-	r.errorfStrings = append(r.errorfStrings, format)
-	r.errorfArgs = append(r.errorfArgs, args)
-}
-
-func (r *retryTestingT) FailNow() {
-	r.T.Helper()
-	r.failNow = true
-	panic(r)
-}
-
-func (r *retryTestingT) try(attempts int, test func(require.TestingT)) {
-	for i := 0; i < attempts; i++ {
-		r.errorfStrings = nil
-		r.errorfArgs = nil
-		r.failNow = false
-		if i != 0 {
-			time.Sleep(RetrySleepDuration)
-		}
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					if _, ok := r.(*retryTestingT); ok {
-					} else {
-						panic(r)
-					}
-				}
-			}()
-			test(r)
-		}()
-		if !r.failNow && len(r.errorfStrings) == 0 {
-			return
-		}
-	}
-	for i := range r.errorfStrings {
-		r.T.Errorf(r.errorfStrings[i], r.errorfArgs[i]...)
-	}
-	if r.failNow {
-		r.T.FailNow()
-	}
-}
-
-func RetryTestRun(t *testing.T, attempts int, test func(require.TestingT)) {
-	if attempts == 0 {
-		attempts = 1
-	}
-	rtt := &retryTestingT{T: t}
-	rtt.try(attempts, test)
-}
-
-func RunQuery(t *testing.T, conn *sql.Conn, q Query) {
-	RetryTestRun(t, q.RetryAttempts, func(t require.TestingT) {
-		RunQueryAttempt(t, conn, q)
-	})
-}
-
-func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q Query) {
-	args := make([]any, len(q.Args))
-	for i := range q.Args {
-		args[i] = q.Args[i]
-	}
-	if q.Query != "" {
-		rows, err := conn.QueryContext(context.Background(), q.Query, args...)
-		if err == nil {
-			defer rows.Close()
-		}
-		if q.ErrorMatch != "" {
-			require.Error(t, err)
-			require.Regexp(t, q.ErrorMatch, err.Error())
-			return
-		}
-		require.NoError(t, err)
-
-		cols, err := rows.Columns()
-		require.NoError(t, err)
-		require.Equal(t, q.Result.Columns, cols)
-
-		rowstrings, err := RowsToStrings(len(cols), rows)
-		require.NoError(t, err)
-		if q.Result.Rows.Or != nil {
-			require.Contains(t, *q.Result.Rows.Or, rowstrings)
-		}
-	} else if q.Exec != "" {
-		_, err := conn.ExecContext(context.Background(), q.Exec, args...)
-		if q.ErrorMatch == "" {
-			require.NoError(t, err)
-		} else {
-			require.Error(t, err)
-			require.Regexp(t, q.ErrorMatch, err.Error())
-		}
-	}
-}
-
-func RowsToStrings(cols int, rows *sql.Rows) ([][]string, error) {
-	ret := make([][]string, 0)
-	for rows.Next() {
-		scanned := make([]any, cols)
-		for j := range scanned {
-			scanned[j] = new(sql.NullString)
-		}
-		err := rows.Scan(scanned...)
-		if err != nil {
-			return nil, err
-		}
-		printed := make([]string, cols)
-		for j := range scanned {
-			s := scanned[j].(*sql.NullString)
-			if !s.Valid {
-				printed[j] = "NULL"
-			} else {
-				printed[j] = s.String
-			}
-		}
-		ret = append(ret, printed)
-	}
-	return ret, rows.Err()
 }

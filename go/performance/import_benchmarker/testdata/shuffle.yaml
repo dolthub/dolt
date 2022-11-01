@@ -1,7 +1,7 @@
 opts:
   seed: 0
 tests:
-- name: "row count"
+- name: "sorting"
   repos:
   - name: repo1
     server:
