@@ -2,27 +2,36 @@
 
 Benchmark different import workflows expressed as yaml files.
 
-Sample usage:
+## Usage
+
+Sample:
 ```bash
 go build \
   github.com/dolthub/dolt/go/performance/import_benchmarker/cmd \
   -test testdata/shuffle.yaml
 ```
 
-The `dolt` binary used for performance comparisons will be on the users
-`PATH`.
+Requirements:
+
+Tests that use dolt require a `dolt` binary in `PATH` for performance comparisons.
 
 Tests with an `external-server` configuration are expected to be available
-from the host machine when the command is started.
+from the host machine on startup.
 
-An example mysql server `docker-compose.yml` config:
+Example `mysqld` server on the host OS, assuming an initialized `datadir`
+and pre-existing database:
+```bash
+mysqld --port 3308 --local-infile=1 --socket=/tmp/mysqld2.sock
+````
+
+Example mysql server `docker-compose.yml` config:
 ```yaml
 mysql:
   image: mysql/mysql-server:8.0
   container_name: mysql-import-perf
   ports:
-      - "4306:3306"
-  command: --local-infile=1
+      - "3308:3306"
+  command: --local-infile=1 --socket=/tmp/mysqld2.sock
   volumes:
       - ./mysql:/var/lib/mysql
   restart: always # always restart unless stopped manually
@@ -33,10 +42,11 @@ mysql:
       MYSQL_DATABASE: test
 ```
 
-Alternatively with `mysqld`:
-```bash
-mysqld --port 3308 --local-infile=1
-```
+Note the `--local-infile` parameter, which permits `LOAD DATA`, and
+the `--socket` parameter, which specifies a non-default socket that
+will not conflict with any `dolt sql-server` instances. All other
+parameters, including the database name, are configurable in the test
+file yaml.
 
 ## Inputs 
 
@@ -56,8 +66,6 @@ dimensions:
   - schema (string): CREATE_TABLE statement for table to import
   - shuffle (bool): by default generated rows are sorted; indicate `true` to shuffle
   - batch (bool): whether to batch insert statements (only applies to fmt=sql)
-  - autocommit (bool): default import uses a single transaction;
-    spread each insert into individual transaction.
 
 For an examples of the specific yaml input syntax, see the example
 files below, or refer to the tests in `testdata/`.
@@ -236,6 +244,8 @@ order by 1,2;
 +-------------------+--------------+---------+--------+------------+----------+----------+
 ```
 
+## Example tests
+
 Example test spec 1:
 ```yaml
 tests:
@@ -263,7 +273,7 @@ tests:
       );
 ```
 
-We will import two tables with a dolt sql-server on port 3308.
+We will import two tables with a dolt sql-server on port `3308`.
 Both tables have 100,000 rows, and a schema with two columns.
 The "sorted" test imports the default sorted rows, while the
 "shuffle" imports unsorted rows. 

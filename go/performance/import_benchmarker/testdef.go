@@ -72,7 +72,6 @@ type Table struct {
 	Fmt         string `default:"csv" yaml:"fmt"`
 	Shuffle     bool   `default:"false" yaml:"shuffle"'`
 	Batch       bool   `default:"false" yaml:"batch"'`
-	Autocommit  bool   `default:"false" yaml:"autocommit"'`
 	TargetTable string
 }
 
@@ -135,15 +134,14 @@ func MakeServer(dc driver.DoltCmdable, s *driver.Server) (*driver.SqlServer, err
 }
 
 type ImportResult struct {
-	detail     string
-	server     string
-	test       string
-	time       float64
-	rows       int
-	fmt        string
-	sorted     bool
-	batch      bool
-	autocommit bool
+	detail string
+	server string
+	test   string
+	time   float64
+	rows   int
+	fmt    string
+	sorted bool
+	batch  bool
 }
 
 func (r ImportResult) String() string {
@@ -179,7 +177,6 @@ CREATE TABLE IF NOT EXISTS import_perf_results (
   file_format varchar(8),
   sorted bool,
   batch bool,
-  autocommit bool,
   primary key (test_name, detail, server)
 	);
 `)
@@ -192,15 +189,11 @@ CREATE TABLE IF NOT EXISTS import_perf_results (
 		}
 		var batch int
 		if r.batch {
-			sorted = 1
-		}
-		var ac int
-		if r.autocommit {
-			ac = 1
+			batch = 1
 		}
 		b.WriteString(fmt.Sprintf(
-			",\n  ('%s', '%s', '%s', %d, %.2f, '%s', %b, %b, %b)",
-			r.test, r.server, r.detail, r.rows, r.time, r.fmt, sorted, batch, ac))
+			",\n  ('%s', '%s', '%s', %d, %.2f, '%s', %b, %b)",
+			r.test, r.server, r.detail, r.rows, r.time, r.fmt, sorted, batch))
 	}
 	b.WriteString(";\n")
 
@@ -354,15 +347,14 @@ IGNORE 1 LINES;`, f.Name())
 	runtime := time.Since(start)
 
 	test.Results.append(ImportResult{
-		test:       test.Name,
-		server:     repoName,
-		detail:     tab.Name,
-		time:       runtime.Seconds(),
-		rows:       tab.Rows,
-		fmt:        tab.Fmt,
-		sorted:     !tab.Shuffle,
-		autocommit: tab.Autocommit,
-		batch:      tab.Batch,
+		test:   test.Name,
+		server: repoName,
+		detail: tab.Name,
+		time:   runtime.Seconds(),
+		rows:   tab.Rows,
+		fmt:    tab.Fmt,
+		sorted: !tab.Shuffle,
+		batch:  tab.Batch,
 	})
 
 	rows, err = conn.QueryContext(
@@ -431,15 +423,14 @@ func (test *ImportTest) benchSql(repoName string, db *sql.DB, tab Table, f *os.F
 	runtime := time.Since(start)
 
 	test.Results.append(ImportResult{
-		test:       test.Name,
-		server:     repoName,
-		detail:     tab.Name,
-		time:       runtime.Seconds(),
-		rows:       tab.Rows,
-		fmt:        tab.Fmt,
-		sorted:     !tab.Shuffle,
-		autocommit: tab.Autocommit,
-		batch:      tab.Batch,
+		test:   test.Name,
+		server: repoName,
+		detail: tab.Name,
+		time:   runtime.Seconds(),
+		rows:   tab.Rows,
+		fmt:    tab.Fmt,
+		sorted: !tab.Shuffle,
+		batch:  tab.Batch,
 	})
 
 	if err == nil {
@@ -513,15 +504,14 @@ func (test *ImportTest) RunCliTests(r driver.TestRepo, user driver.DoltUser) err
 		runtime := time.Since(start)
 
 		test.Results.append(ImportResult{
-			test:       test.Name,
-			server:     r.Name,
-			detail:     tab.Name,
-			time:       runtime.Seconds(),
-			rows:       tab.Rows,
-			fmt:        tab.Fmt,
-			sorted:     !tab.Shuffle,
-			autocommit: tab.Autocommit,
-			batch:      tab.Batch,
+			test:   test.Name,
+			server: r.Name,
+			detail: tab.Name,
+			time:   runtime.Seconds(),
+			rows:   tab.Rows,
+			fmt:    tab.Fmt,
+			sorted: !tab.Shuffle,
+			batch:  tab.Batch,
 		})
 
 		// reset repo at end
@@ -540,7 +530,11 @@ func (test *ImportTest) IterImportTables(tables []Table, cb func(t Table, f *os.
 
 		if f, ok := test.files[key]; ok {
 			// short circuit if we've already made file for schema/row count
-			return cb(t, f)
+			err = cb(t, f)
+			if err != nil {
+				return err
+			}
+			continue
 		}
 
 		rows := make([]string, 0, t.Rows)
