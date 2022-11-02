@@ -2,6 +2,9 @@
 
 Benchmark different import workflows expressed as yaml files.
 
+Unit tests in `import_test.go` are not suitable for reporting performance
+comparisons.
+
 ## Usage
 
 Sample:
