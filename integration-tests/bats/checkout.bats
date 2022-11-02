@@ -253,3 +253,35 @@ SQL
   [[ "$commitmeta" =~ "$shaparent1" ]] || false
   [[ "$commitmeta" =~ "$shaparent2" ]] || false
 }
+
+@test "checkout: dolt_commit --amend on merge commits does not modify metadata of merged parents" {
+  dolt sql -q "create table test (id int primary key, id2 int);"
+  dolt add .
+  dolt commit -m "original table"
+
+  dolt checkout -b test-branch
+  dolt sql -q 'insert into test (id, id2) values (0, 2);'
+  dolt add .
+  dolt commit -m "conclicting commit message"
+
+  shaparent1=$(dolt log --oneline --decorate=no | head -n 1 | cut -d ' ' -f 1)
+  # remove special characters (color)
+  shaparent1=$(echo $shaparent1 | sed -E "s/[[:cntrl:]]\[[0-9]{1,3}m//g")
+
+  dolt checkout main
+  dolt sql -q 'insert into test (id, id2) values (0, 1);'
+  dolt add .
+  dolt commit -m "original commit message"
+  shaparent2=$(dolt log --oneline --decorate=no | head -n 1 | cut -d ' ' -f 1)
+  # remove special characters (color)
+  shaparent2=$(echo $shaparent2 | sed -E "s/[[:cntrl:]]\[[0-9]{1,3}m//g")
+
+  dolt merge test-branch
+  dolt conflicts resolve --theirs .
+  dolt commit -m "final merge"
+
+  dolt sql -q "call dolt_commit('--amend', '-m', 'new merge');"
+  commitmeta=$(dolt log --oneline --parents | head -n 1)
+  [[ "$commitmeta" =~ "$shaparent1" ]] || false
+  [[ "$commitmeta" =~ "$shaparent2" ]] || false
+}
