@@ -91,6 +91,7 @@ func SchemaFromColCollections(allCols, pkColColl, nonPKColColl *ColCollection) S
 		checkCollection: NewCheckCollection(),
 		pkOrdinals:      []int{},
 		collation:       Collation_Default,
+		pkPrefixLengths: []uint16{},
 	}
 }
 

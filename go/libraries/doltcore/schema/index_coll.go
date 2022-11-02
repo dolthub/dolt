@@ -163,6 +163,7 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		isUnique:      props.IsUnique,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
+		prefixLengths: []uint16{},
 	}
 	ixc.indexes[indexName] = index
 	for _, tag := range tags {
@@ -188,6 +189,7 @@ func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags [
 		isUnique:      props.IsUnique,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
+		prefixLengths: []uint16{},
 	}
 	ixc.indexes[indexName] = index
 	for _, tag := range tags {
@@ -327,6 +329,7 @@ func (ixc *indexCollectionImpl) Merge(indexes ...Index) {
 				isUnique:      index.IsUnique(),
 				isUserDefined: index.IsUserDefined(),
 				comment:       index.Comment(),
+				prefixLengths: index.PrefixLengths(),
 			}
 			ixc.AddIndex(newIndex)
 		}
