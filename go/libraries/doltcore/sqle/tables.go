@@ -1765,9 +1765,16 @@ func (t *AlterableDoltTable) CreateIndex(
 	}
 	columns := make([]string, len(indexColumns))
 	prefixLengths := make([]uint16, len(indexColumns))
+	var hasNonZeroPrefix bool // TODO: use a better check
 	for i, indexCol := range indexColumns {
 		columns[i] = indexCol.Name
 		prefixLengths[i] = uint16(indexCol.Length)
+		if indexCol.Length != 0 {
+			hasNonZeroPrefix = true
+		}
+	}
+	if !hasNonZeroPrefix {
+		prefixLengths = nil
 	}
 
 	table, err := t.DoltTable.DoltTable(ctx)

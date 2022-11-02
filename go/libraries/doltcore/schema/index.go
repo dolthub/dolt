@@ -85,6 +85,7 @@ func NewIndex(name string, tags, allTags []uint64, indexColl IndexCollection, pr
 		isUnique:      props.IsUnique,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
+		prefixLengths: []uint16{},
 	}
 }
 
