@@ -73,9 +73,6 @@ teardown() {
     # (init) - 1M - 2M - 3M (main)              #
     #                                           #
     # # # # # # # # # # # # # # # # # # # # # # # 
-
-
-
     
     # Valid two dot
     run dolt log main..branchA
