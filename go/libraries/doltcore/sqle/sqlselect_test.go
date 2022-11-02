@@ -19,15 +19,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -1670,7 +1670,6 @@ func updateTables(t *testing.T, ctx context.Context, root *doltdb.RootValue, tbl
 	return root
 }
 
-
 // initializeWithHistory will go through the provided historyNodes and create the intended commit graph
 func initializeWithHistory(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, historyNodes ...HistoryNode) {
 	for _, node := range historyNodes {
@@ -1718,7 +1717,6 @@ func processNode(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, node Hist
 		processNode(t, ctx, dEnv, child, cm)
 	}
 }
-
 
 func validateTest(t *testing.T, test SelectTest) {
 	if (test.ExpectedRows == nil) != (test.ExpectedSchema == nil && test.ExpectedSqlSchema == nil) {

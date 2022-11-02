@@ -20,13 +20,14 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/google/uuid"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/google/uuid"
 )
 
 // This file collects useful test table definitions and functions for SQL tests to use. It primarily defines a table

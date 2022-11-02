@@ -116,7 +116,6 @@ func newRow(sch schema.Schema, id uuid.UUID, name string, age uint, isMarried bo
 	return r
 }
 
-
 func TestRowAsInsertStmt(t *testing.T) {
 	id := uuid.MustParse("00000000-0000-0000-0000-000000000000")
 	tableName := "people"

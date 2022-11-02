@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	homePrefix   = "home"
+	homePrefix = "home"
 )
 
 type MultiRepoTestSetup struct {

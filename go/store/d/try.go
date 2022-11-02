@@ -39,7 +39,7 @@ var (
 	Chk Assertion = &panicker{}
 )
 
-type panicker struct {}
+type panicker struct{}
 
 func (s *panicker) NoError(err error) {
 	PanicIfError(err)

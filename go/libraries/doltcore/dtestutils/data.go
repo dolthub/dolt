@@ -15,10 +15,11 @@
 package dtestutils
 
 import (
+	"github.com/google/uuid"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/google/uuid"
 )
 
 var uuids = []uuid.UUID{

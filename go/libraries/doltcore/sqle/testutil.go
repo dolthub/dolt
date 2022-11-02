@@ -21,6 +21,10 @@ import (
 	"io"
 	"strings"
 
+	sqle "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -35,9 +39,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
-	sqle "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
 )
 
 // ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
@@ -421,7 +422,6 @@ func CreateEmptyTestDatabase() (*env.DoltEnv, error) {
 
 	return dEnv, nil
 }
-
 
 const (
 	TestHomeDirPrefix = "/user/dolt/"

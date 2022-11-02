@@ -138,7 +138,6 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreCommitUnchangedRoot() {
 	assertInputInStore(input, h, store2, suite.Assert())
 }
 
-
 func assertInputInStore(input string, h hash.Hash, s ChunkStore, assert *assert.Assertions) {
 	chunk, err := s.Get(context.Background(), h)
 	assert.NoError(err)
