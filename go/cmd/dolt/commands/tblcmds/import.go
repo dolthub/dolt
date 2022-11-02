@@ -16,12 +16,19 @@ package tblcmds
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"io"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
+	"sync/atomic"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/fatih/color"
+	"golang.org/x/sync/errgroup"
+	"golang.org/x/text/message"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -33,9 +40,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
@@ -44,18 +50,20 @@ import (
 )
 
 const (
-	createParam      = "create-table"
-	updateParam      = "update-table"
-	replaceParam     = "replace-table"
-	tableParam       = "table"
-	fileParam        = "file"
-	schemaParam      = "schema"
-	mappingFileParam = "map"
-	forceParam       = "force"
-	contOnErrParam   = "continue"
-	primaryKeyParam  = "pk"
-	fileTypeParam    = "file-type"
-	delimParam       = "delim"
+	createParam       = "create-table"
+	updateParam       = "update-table"
+	replaceParam      = "replace-table"
+	tableParam        = "table"
+	fileParam         = "file"
+	schemaParam       = "schema"
+	mappingFileParam  = "map"
+	forceParam        = "force"
+	contOnErrParam    = "continue"
+	primaryKeyParam   = "pk"
+	fileTypeParam     = "file-type"
+	delimParam        = "delim"
+	ignoreSkippedRows = "ignore-skipped-rows"
+	disableFkChecks   = "disable-fk-checks"
 )
 
 var importDocs = cli.CommandDocumentationContent{
@@ -66,7 +74,7 @@ The schema for the new table can be specified explicitly by providing a SQL sche
 
 If {{.EmphasisLeft}}--update-table | -u{{.EmphasisRight}} is given the operation will update {{.LessThan}}table{{.GreaterThan}} with the contents of file. The table's existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
-During import, if there is an error importing any row, the import will be aborted by default.  Use the {{.EmphasisLeft}}--continue{{.EmphasisRight}} flag to continue importing when an error is encountered.
+During import, if there is an error importing any row, the import will be aborted by default. Use the {{.EmphasisLeft}}--continue{{.EmphasisRight}} flag to continue importing when an error is encountered. You can add the {{.EmphasisLeft}}--ignore-skipped-rows{{.EmphasisRight}} flag to prevent the import utility from printing all the skipped rows. 
 
 If {{.EmphasisLeft}}--replace-table | -r{{.EmphasisRight}} is given the operation will replace {{.LessThan}}table{{.GreaterThan}} with the contents of the file. The table's existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
@@ -75,37 +83,34 @@ If the schema for the existing table does not match the schema for the new file,
 A mapping file can be used to map fields between the file being imported and the table being written to. This can be used when creating a new table, or updating or replacing an existing table.
 
 ` + schcmds.MappingFileHelp +
-
 		`
-In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimeter`,
+In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimiter`,
 
 	Synopsis: []string{
-		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
-		"-u [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue]  [--ignore-skipped-rows] [--disable-fk-checks] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"-u [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--ignore-skipped-rows] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 		"-r [--map {{.LessThan}}file{{.GreaterThan}}] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
 }
 
-type tableImportOp string
-
-const (
-	CreateOp  tableImportOp = "overwrite"
-	ReplaceOp tableImportOp = "replace"
-	UpdateOp  tableImportOp = "update"
-	InvalidOp tableImportOp = "invalid"
-)
+var bitTypeRegex = regexp.MustCompile(`(?m)b\'(\d+)\'`)
 
 type importOptions struct {
-	operation   tableImportOp
-	tableName   string
-	contOnErr   bool
-	force       bool
-	schFile     string
-	primaryKeys []string
-	nameMapper  rowconv.NameMapper
-	src         mvdata.DataLocation
-	dest        mvdata.TableDataLocation
-	srcOptions  interface{}
+	operation         mvdata.TableImportOp
+	destTableName     string
+	contOnErr         bool
+	force             bool
+	schFile           string
+	primaryKeys       []string
+	nameMapper        rowconv.NameMapper
+	src               mvdata.DataLocation
+	srcOptions        interface{}
+	ignoreSkippedRows bool
+	disableFkChecks   bool
+}
+
+func (m importOptions) IsBatched() bool {
+	return false
 }
 
 func (m importOptions) WritesToTable() bool {
@@ -113,9 +118,6 @@ func (m importOptions) WritesToTable() bool {
 }
 
 func (m importOptions) SrcName() string {
-	if t, tblSrc := m.src.(mvdata.TableDataLocation); tblSrc {
-		return t.Name
-	}
 	if f, fileSrc := m.src.(mvdata.FileDataLocation); fileSrc {
 		return f.Path
 	}
@@ -123,7 +125,7 @@ func (m importOptions) SrcName() string {
 }
 
 func (m importOptions) DestName() string {
-	return m.dest.Name
+	return m.destTableName
 }
 
 func (m importOptions) ColNameMapper() rowconv.NameMapper {
@@ -135,8 +137,8 @@ func (m importOptions) FloatThreshold() float64 {
 }
 
 func (m importOptions) checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
-	if !m.force && m.operation == CreateOp {
-		return m.dest.Exists(ctx, root, fs)
+	if !m.force && m.operation == mvdata.CreateOp {
+		return root.HasTable(ctx, m.destTableName)
 	}
 	return false, nil
 }
@@ -166,6 +168,8 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 	schemaFile, _ := apr.GetValue(schemaParam)
 	force := apr.Contains(forceParam)
 	contOnErr := apr.Contains(contOnErrParam)
+	ignore := apr.Contains(ignoreSkippedRows)
+	disableFks := apr.Contains(disableFkChecks)
 
 	val, _ := apr.GetValue(primaryKeyParam)
 	pks := funcitr.MapStrings(strings.Split(val, ","), strings.TrimSpace)
@@ -194,6 +198,8 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 			srcOpts = mvdata.XlsxOptions{SheetName: tableName}
 		} else if val.Format == mvdata.JsonFile {
 			srcOpts = mvdata.JSONOptions{TableName: tableName, SchFile: schemaFile}
+		} else if val.Format == mvdata.ParquetFile {
+			srcOpts = mvdata.ParquetOptions{TableName: tableName, SchFile: schemaFile}
 		}
 
 	case mvdata.StreamDataLocation:
@@ -207,17 +213,17 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		}
 	}
 
-	var moveOp tableImportOp
+	var moveOp mvdata.TableImportOp
 	switch {
 	case apr.Contains(createParam):
-		moveOp = CreateOp
+		moveOp = mvdata.CreateOp
 	case apr.Contains(replaceParam):
-		moveOp = ReplaceOp
+		moveOp = mvdata.ReplaceOp
 	default:
-		moveOp = UpdateOp
+		moveOp = mvdata.UpdateOp
 	}
 
-	if moveOp != CreateOp {
+	if moveOp != mvdata.CreateOp {
 		root, err := dEnv.WorkingRoot(ctx)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
@@ -231,19 +237,18 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		}
 	}
 
-	tableLoc := mvdata.TableDataLocation{Name: tableName}
-
 	return &importOptions{
-		operation:   moveOp,
-		tableName:   tableName,
-		contOnErr:   contOnErr,
-		force:       force,
-		schFile:     schemaFile,
-		nameMapper:  colMapper,
-		primaryKeys: pks,
-		src:         srcLoc,
-		dest:        tableLoc,
-		srcOptions:  srcOpts,
+		operation:         moveOp,
+		destTableName:     tableName,
+		contOnErr:         contOnErr,
+		force:             force,
+		schFile:           schemaFile,
+		nameMapper:        colMapper,
+		primaryKeys:       pks,
+		src:               srcLoc,
+		srcOptions:        srcOpts,
+		ignoreSkippedRows: ignore,
+		disableFkChecks:   disableFks,
 	}, nil
 
 }
@@ -288,11 +293,6 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 		if !hasDelim && val.Format == mvdata.InvalidDataFormat {
 			return errhand.BuildDError("Could not infer type file '%s'\nFile extensions should match supported file types, or should be explicitly defined via the file-type parameter", path).Build()
 		}
-
-	case mvdata.TableDataLocation:
-		if hasDelim {
-			return errhand.BuildDError("delim is not a valid parameter for this type of file").Build()
-		}
 	}
 
 	if srcFileLoc, isFileType := srcLoc.(mvdata.FileDataLocation); isFileType {
@@ -303,6 +303,8 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 		_, hasSchema := apr.GetValue(schemaParam)
 		if srcFileLoc.Format == mvdata.JsonFile && apr.Contains(createParam) && !hasSchema {
 			return errhand.BuildDError("Please specify schema file for .json tables.").Build()
+		} else if srcFileLoc.Format == mvdata.ParquetFile && apr.Contains(createParam) && !hasSchema {
+			return errhand.BuildDError("Please specify schema file for .parquet tables.").Build()
 		}
 	}
 
@@ -321,14 +323,27 @@ func (cmd ImportCmd) Description() string {
 	return "Creates, overwrites, replaces, or updates a table from the data in a file."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ImportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, importDocs, ap))
+func (cmd ImportCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(importDocs, ap)
 }
 
-func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
-	ap := createArgParser()
+func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{tableParam, "The new or existing table being imported to."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{fileParam, "The file being imported. Supported file types are csv, psv, and nbf."})
+	ap.SupportsFlag(createParam, "c", "Create a new table, or overwrite an existing table (with the -f flag) from the imported data.")
+	ap.SupportsFlag(updateParam, "u", "Update an existing table with the imported data.")
+	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the force flag will allow the target to be overwritten.")
+	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")
+	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
+	ap.SupportsFlag(ignoreSkippedRows, "", "Ignore the skipped rows printed by the --continue flag.")
+	ap.SupportsFlag(disableFkChecks, "", "Disables foreign key checks.")
+	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
+	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
+	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
+	ap.SupportsString(fileTypeParam, "", "file_type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
+	ap.SupportsString(delimParam, "", "delimiter", "Specify a delimiter for a csv style file with a non-comma delimiter.")
 	return ap
 }
 
@@ -339,9 +354,9 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, importDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, importDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	dEnv, err := commands.MaybeMigrateEnv(ctx, dEnv)
@@ -370,43 +385,36 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	mover, nDMErr := newImportDataMover(ctx, root, dEnv, mvOpts, importStatsCB)
-
+	rd, nDMErr := newImportDataReader(ctx, root, dEnv, mvOpts)
 	if nDMErr != nil {
-
 		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, mvOpts)
+	wr, nDMErr := newImportSqlEngineMover(ctx, dEnv, rd.GetSchema(), mvOpts)
+	if nDMErr != nil {
+		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	skipped, err := move(ctx, rd, wr, mvOpts)
+	if err != nil {
+		bdr := errhand.BuildDError("\nAn error occurred while moving data")
+		bdr.AddCause(err)
+
+		bdr.AddDetails("Errors during import can be ignored using '--continue'")
+
+		return commands.HandleVErrAndExitCode(bdr.Build(), usage)
+	}
 
 	cli.PrintErrln()
 
 	if skipped > 0 {
 		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
 	}
-	if verr == nil {
-		cli.PrintErrln(color.CyanString("Import completed successfully."))
-	}
+	cli.Println(color.CyanString("Import completed successfully."))
 
-	return commands.HandleVErrAndExitCode(verr, usage)
-}
-
-func createArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{tableParam, "The new or existing table being imported to."})
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{fileParam, "The file being imported. Supported file types are csv, psv, and nbf."})
-	ap.SupportsFlag(createParam, "c", "Create a new table, or overwrite an existing table (with the -f flag) from the imported data.")
-	ap.SupportsFlag(updateParam, "u", "Update an existing table with the imported data.")
-	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the force flag will allow the target to be overwritten.")
-	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")
-	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
-	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
-	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
-	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
-	ap.SupportsString(fileTypeParam, "", "file_type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
-	ap.SupportsString(delimParam, "", "delimiter", "Specify a delimeter for a csv style file with a non-comma delimiter.")
-	return ap
+	return 0
 }
 
 var displayStrLen int
@@ -414,13 +422,15 @@ var displayStrLen int
 func importStatsCB(stats types.AppliedEditStats) {
 	noEffect := stats.NonExistentDeletes + stats.SameVal
 	total := noEffect + stats.Modifications + stats.Additions
-	displayStr := fmt.Sprintf("Rows Processed: %d, Additions: %d, Modifications: %d, Had No Effect: %d", total, stats.Additions, stats.Modifications, noEffect)
+	p := message.NewPrinter(message.MatchLanguage("en")) // adds commas
+	displayStr := p.Sprintf("Rows Processed: %d, Additions: %d, Modifications: %d, Had No Effect: %d", total, stats.Additions, stats.Modifications, noEffect)
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
-func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions, statsCB noms.StatsCB) (*mvdata.DataMover, *mvdata.DataMoverCreationError) {
+func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions) (table.SqlRowReader, *mvdata.DataMoverCreationError) {
 	var err error
 
+	// Checks whether import destination table already exists. This can probably be simplified to not need a root value...
 	ow, err := impOpts.checkOverwrite(ctx, root, dEnv.FS)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
@@ -429,83 +439,198 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: fmt.Errorf("%s already exists. Use -f to overwrite.", impOpts.DestName())}
 	}
 
-	wrSch, dmce := getImportSchema(ctx, root, dEnv.FS, impOpts)
-	if dmce != nil {
-		return nil, dmce
-	}
-
-	rd, srcIsSorted, err := impOpts.src.NewReader(ctx, root, dEnv.FS, impOpts.srcOptions)
+	rd, _, err := impOpts.src.NewReader(ctx, root, dEnv.FS, impOpts.srcOptions)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
 
-	defer func() {
-		if rd != nil {
-			rd.Close(ctx)
-		}
-	}()
+	return rd, nil
+}
 
-	err = wrSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		preImage := impOpts.nameMapper.PreImage(col.Name)
-		_, found := rd.GetSchema().GetAllCols().GetByName(preImage)
+func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema schema.Schema, imOpts *importOptions) (*mvdata.SqlEngineTableWriter, *mvdata.DataMoverCreationError) {
+	moveOps := &mvdata.MoverOptions{Force: imOpts.force, TableToWriteTo: imOpts.destTableName, ContinueOnErr: imOpts.contOnErr, Operation: imOpts.operation, DisableFks: imOpts.disableFkChecks}
+
+	// Returns the schema of the table to be created or the existing schema
+	tableSchema, dmce := getImportSchema(ctx, dEnv, imOpts)
+	if dmce != nil {
+		return nil, dmce
+	}
+
+	// Validate that the schema from files has primary keys.
+	err := tableSchema.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		preImage := imOpts.nameMapper.PreImage(col.Name)
+		_, found := rdSchema.GetAllCols().GetByName(preImage)
 		if !found {
 			err = fmt.Errorf("input primary keys do not match primary keys of existing table")
 		}
 		return err == nil, err
 	})
-
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 	}
 
-	transforms, fieldMapping, err := mvdata.NameMapTransform(ctx, root.VRW(), rd.GetSchema(), wrSch, impOpts.nameMapper)
+	// construct the schema of the set of column to be updated.
+	rowOperationColColl := schema.NewColCollection()
+	rdSchema.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		wrColName := imOpts.nameMapper.Map(col.Name)
+		wrCol, ok := tableSchema.GetAllCols().GetByName(wrColName)
+		if ok {
+			rowOperationColColl = rowOperationColColl.Append(wrCol)
+		}
+
+		return false, nil
+	})
+
+	rowOperationSchema, err := schema.SchemaFromCols(rowOperationColColl)
 	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateMapperErr, Cause: err}
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 	}
 
-	// read tags will be the tags of read rows which come from the imported data.  Being able to distinguish columns coming
-	// from the import data allows us to merge the data with existing rows
-	rdTags := make([]uint64, 0, len(fieldMapping.SrcToDest))
-	for _, tag := range fieldMapping.SrcToDest {
-		rdTags = append(rdTags, tag)
+	// Leave a warning if the import operation is operating on fewer columns than the relevant table's schema.
+	// This can certainly be intentional, but it is often due to typos in the header of a csv file.
+	if rowOperationSchema.GetAllCols().Size() < tableSchema.GetAllCols().Size() {
+		cli.PrintErrln(color.YellowString("Warning: There are fewer columns in the import file's schema than the table's schema.\nIf unintentional, check for any typos in the import file's header."))
 	}
 
-	bulkTeaf := editor.NewBulkImportTEAFactory(root.VRW().Format(), root.VRW(), dEnv.TempTableFilesDir())
-	opts := editor.Options{Deaf: bulkTeaf}
-
-	var wr table.TableWriteCloser
-	switch impOpts.operation {
-	case CreateOp:
-		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, opts)
-	case ReplaceOp:
-		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, opts)
-	case UpdateOp:
-		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, rdTags, opts)
-	default:
-		err = errors.New("invalid move operation")
-	}
-
+	mv, err := mvdata.NewSqlEngineTableWriter(ctx, dEnv, tableSchema, rowOperationSchema, moveOps, importStatsCB)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
 	}
 
-	imp := &mvdata.DataMover{
-		Rd:         rd,
-		Transforms: transforms,
-		Wr:         wr,
-		ContOnErr:  impOpts.contOnErr,
-	}
-	rd = nil
-
-	return imp, nil
+	return mv, nil
 }
 
-func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
-	if impOpts.schFile != "" {
-		tn, out, err := mvdata.SchAndTableNameFromFile(ctx, impOpts.schFile, fs, root)
+type badRowFn func(row sql.Row, err error) (quit bool)
 
-		if err == nil && tn != impOpts.tableName {
-			err = fmt.Errorf("table name '%s' from schema file %s does not match table arg '%s'", tn, impOpts.schFile, impOpts.tableName)
+func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableWriter, options *importOptions) (int64, error) {
+	g, ctx := errgroup.WithContext(ctx)
+
+	// Set up the necessary data points for the import job
+	parsedRowChan := make(chan sql.Row)
+	var rowErr error
+	var printBadRowsStarted bool
+	var badCount int64
+
+	badRowCB := func(row sql.Row, err error) (quit bool) {
+		// record the first error encountered unless asked to ignore it
+		if row != nil && rowErr == nil && !options.contOnErr {
+			rowErr = fmt.Errorf("A bad row was encountered: %s: %w", sql.FormatRow(row), err)
+		}
+
+		atomic.AddInt64(&badCount, 1)
+
+		// only log info for the --continue option
+		if !options.contOnErr {
+			return true
+		}
+
+		// Don't log the skipped rows when the ignore-skipped-rows param is specified.
+		if options.ignoreSkippedRows {
+			return false
+		}
+
+		if !printBadRowsStarted {
+			cli.PrintErrln("The following rows were skipped:")
+			printBadRowsStarted = true
+		}
+
+		cli.PrintErrln(sql.FormatRow(row))
+
+		return false
+	}
+
+	// Start the group that reads rows from the reader
+	g.Go(func() error {
+		defer close(parsedRowChan)
+
+		return moveRows(ctx, wr, rd, options, parsedRowChan, badRowCB)
+	})
+
+	// Start the group that writes rows
+	g.Go(func() error {
+		err := wr.WriteRows(ctx, parsedRowChan, badRowCB)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	err := g.Wait()
+	if err != nil && err != io.EOF {
+		// don't lose the rowErr if there is one
+		if rowErr != nil {
+			return badCount, fmt.Errorf("%w\n%s", err, rowErr.Error())
+		}
+		return badCount, err
+	}
+
+	if rowErr != nil {
+		return badCount, rowErr
+	}
+
+	err = wr.Commit(ctx)
+	if err != nil {
+		return badCount, err
+	}
+
+	return badCount, nil
+}
+
+func moveRows(
+	ctx context.Context,
+	wr *mvdata.SqlEngineTableWriter,
+	rd table.SqlRowReader,
+	options *importOptions,
+	parsedRowChan chan sql.Row,
+	badRowCb badRowFn,
+) error {
+	rdSqlSch, err := sqlutil.FromDoltSchema(options.destTableName, rd.GetSchema())
+	if err != nil {
+		return err
+	}
+
+	for {
+		sqlRow, err := rd.ReadSqlRow(ctx)
+		if err == io.EOF {
+			return nil
+		}
+
+		if err != nil {
+			if table.IsBadRow(err) {
+				quit := badRowCb(sqlRow, err)
+				if quit {
+					return err
+				}
+			} else {
+				return err
+			}
+		} else {
+			sqlRow, err = NameAndTypeTransform(sqlRow, wr.RowOperationSchema(), rdSqlSch, options.nameMapper)
+			if err != nil {
+				return err
+			}
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case parsedRowChan <- sqlRow:
+			}
+		}
+	}
+}
+
+func getImportSchema(ctx context.Context, dEnv *env.DoltEnv, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
+	root, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+	}
+
+	if impOpts.schFile != "" {
+		tn, out, err := mvdata.SchAndTableNameFromFile(ctx, impOpts.schFile, dEnv.FS, root)
+
+		if err == nil && tn != impOpts.destTableName {
+			err = fmt.Errorf("table name '%s' from schema file %s does not match table arg '%s'", tn, impOpts.schFile, impOpts.destTableName)
 		}
 
 		if err != nil {
@@ -515,13 +640,13 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 		return out, nil
 	}
 
-	if impOpts.operation == CreateOp {
+	if impOpts.operation == mvdata.CreateOp {
 		if impOpts.srcIsStream() {
 			// todo: capture stream data to file so we can use schema inferrence
 			return nil, nil
 		}
 
-		rd, _, err := impOpts.src.NewReader(ctx, root, fs, impOpts.srcOptions)
+		rd, _, err := impOpts.src.NewReader(ctx, root, dEnv.FS, impOpts.srcOptions)
 		if err != nil {
 			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 		}
@@ -531,7 +656,7 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 			return rd.GetSchema(), nil
 		}
 
-		outSch, err := mvdata.InferSchema(ctx, root, rd, impOpts.tableName, impOpts.primaryKeys, impOpts)
+		outSch, err := mvdata.InferSchema(ctx, root, rd, impOpts.destTableName, impOpts.primaryKeys, impOpts)
 		if err != nil {
 			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 		}
@@ -540,7 +665,7 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 	}
 
 	// UpdateOp || ReplaceOp
-	tblRd, _, err := impOpts.dest.NewReader(ctx, root, fs, nil)
+	tblRd, err := mvdata.NewSqlEngineReader(ctx, dEnv, impOpts.destTableName)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
@@ -553,19 +678,19 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 	switch err.ErrType {
 	case mvdata.CreateReaderErr:
 		bdr := errhand.BuildDError("Error creating reader for %s.", mvOpts.src.String())
-		bdr.AddDetails("When attempting to move data from %s to %s, could not open a reader.", mvOpts.src.String(), mvOpts.dest.String())
+		bdr.AddDetails("When attempting to move data from %s to %s, could not open a reader.", mvOpts.src.String(), mvOpts.destTableName)
 		return bdr.AddCause(err.Cause).Build()
 
 	case mvdata.SchemaErr:
 		bdr := errhand.BuildDError("Error determining the output schema.")
-		bdr.AddDetails("When attempting to move data from %s to %s, could not determine the output schema.", mvOpts.src.String(), mvOpts.dest.String())
+		bdr.AddDetails("When attempting to move data from %s to %s, could not determine the output schema.", mvOpts.src.String(), mvOpts.destTableName)
 		bdr.AddDetails(`Schema File: "%s"`, mvOpts.schFile)
 		bdr.AddDetails(`explicit pks: "%s"`, strings.Join(mvOpts.primaryKeys, ","))
 		return bdr.AddCause(err.Cause).Build()
 
 	case mvdata.MappingErr:
 		bdr := errhand.BuildDError("Error determining the mapping from input fields to output fields.")
-		bdr.AddDetails("When attempting to move data from %s to %s, determine the mapping from input fields t, output fields.", mvOpts.src.String(), mvOpts.dest.String())
+		bdr.AddDetails("When attempting to move data from %s to %s, determine the mapping from input fields t, output fields.", mvOpts.src.String(), mvOpts.destTableName)
 		bdr.AddDetails(`Mapping File: "%s"`, mvOpts.nameMapper)
 		return bdr.AddCause(err.Cause).Build()
 
@@ -576,30 +701,140 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 
 	case mvdata.CreateMapperErr:
 		bdr := errhand.BuildDError("Error creating input to output mapper.")
-		details := fmt.Sprintf("When attempting to move data from %s to %s, could not create a mapper.", mvOpts.src.String(), mvOpts.dest.String())
+		details := fmt.Sprintf("When attempting to move data from %s to %s, could not create a mapper.", mvOpts.src.String(), mvOpts.destTableName)
 		bdr.AddDetails(details)
 		bdr.AddCause(err.Cause)
 
 		return bdr.AddCause(err.Cause).Build()
 
 	case mvdata.CreateWriterErr:
-		if err.Cause == mvdata.ErrNoPK {
-			builder := errhand.BuildDError("Attempting to write to %s with a schema that does not contain a primary key.", mvOpts.dest.String())
-			builder.AddDetails("A primary key is required and can be specified by:\n" +
-				"\tusing -pk option to designate a field as the primary key by name.\n" +
-				"\tusing -schema to provide a schema descriptor file.")
-			return builder.Build()
-		} else {
-			bdr := errhand.BuildDError("Error creating writer for %s.\n", mvOpts.dest.String())
-			bdr.AddDetails("When attempting to move data from %s to %s, could not open a writer.", mvOpts.src.String(), mvOpts.dest.String())
-			return bdr.AddCause(err.Cause).Build()
-		}
-
+		bdr := errhand.BuildDError("Error creating writer for %s.\n", mvOpts.destTableName)
+		bdr.AddDetails("When attempting to move data from %s to %s, could not open a writer.", mvOpts.src.String(), mvOpts.destTableName)
+		return bdr.AddCause(err.Cause).Build()
 	case mvdata.CreateSorterErr:
 		bdr := errhand.BuildDError("Error creating sorting reader.")
-		bdr.AddDetails("When attempting to move data from %s to %s, could not open create sorting reader.", mvOpts.src.String(), mvOpts.dest.String())
+		bdr.AddDetails("When attempting to move data from %s to %s, could not open create sorting reader.", mvOpts.src.String(), mvOpts.destTableName)
 		return bdr.AddCause(err.Cause).Build()
 	}
 
 	panic("Unhandled Error type")
+}
+
+// NameAndTypeTransform does 1) match the read and write schema with subsetting and name matching. 2) Address any
+// type inconsistencies.
+func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, rdSchema sql.PrimaryKeySchema, nameMapper rowconv.NameMapper) (sql.Row, error) {
+	row = applyMapperToRow(row, rowOperationSchema, rdSchema, nameMapper)
+
+	for i, col := range rowOperationSchema.Schema {
+		// Check if this a string that can be converted to a boolean
+		val, ok := detectAndConvertToBoolean(row[i], col.Type)
+		if ok {
+			row[i] = val
+			continue
+		}
+
+		// Bit types need additional verification due to the differing values they can take on. "4", "0x04", b'100' should
+		// be interpreted in the correct manner.
+		if _, ok := col.Type.(sql.BitType); ok {
+			colAsString, ok := row[i].(string)
+			if !ok {
+				return nil, fmt.Errorf("error: column value should be of type string")
+			}
+
+			// Check if the column can be parsed an uint64
+			val, err := strconv.ParseUint(colAsString, 10, 64)
+			if err == nil {
+				row[i] = val
+				continue
+			}
+
+			// Check if the column is of type b'110'
+			groups := bitTypeRegex.FindStringSubmatch(colAsString)
+			// Note that we use the second element as the first value in `groups` is the entire string.
+			if len(groups) > 1 {
+				val, err = strconv.ParseUint(groups[1], 2, 64)
+				if err == nil {
+					row[i] = val
+					continue
+				}
+			}
+
+			// Check if the column can be parsed as a hex string
+			numberStr := strings.Replace(colAsString, "0x", "", -1)
+			val, err = strconv.ParseUint(numberStr, 16, 64)
+			if err == nil {
+				row[i] = val
+			} else {
+				return nil, fmt.Errorf("error: Unparsable bit value %s", colAsString)
+			}
+		}
+
+		// For non string types we want empty strings to be converted to nils. String types should be allowed to take on
+		// an empty string value
+		switch col.Type.(type) {
+		case sql.StringType:
+		default:
+			row[i] = emptyStringToNil(row[i])
+		}
+	}
+
+	return row, nil
+}
+
+// detectAndConvertToBoolean determines whether a column is potentially a boolean and converts it accordingly.
+func detectAndConvertToBoolean(columnVal interface{}, columnType sql.Type) (bool, bool) {
+	switch columnType.Type() {
+	case sqltypes.Int8, sqltypes.Bit: // TODO: noms bool wraps MustCreateBitType
+		switch columnVal.(type) {
+		case int8:
+			return stringToBoolean(strconv.Itoa(int(columnVal.(int8))))
+		case string:
+			return stringToBoolean(columnVal.(string))
+		case bool:
+			return columnVal.(bool), true
+		}
+	}
+
+	return false, false
+}
+
+func stringToBoolean(s string) (result bool, canConvert bool) {
+	lower := strings.ToLower(s)
+	switch lower {
+	case "true":
+		return true, true
+	case "false":
+		return false, true
+	case "0":
+		return false, true
+	case "1":
+		return true, true
+	default:
+		return false, false
+	}
+}
+
+func emptyStringToNil(val interface{}) interface{} {
+	if val == nil {
+		return val
+	}
+
+	if s, canConvert := val.(string); canConvert {
+		if s == "" {
+			return nil
+		}
+	}
+
+	return val
+}
+
+func applyMapperToRow(row sql.Row, rowOperationSchema, rdSchema sql.PrimaryKeySchema, nameMapper rowconv.NameMapper) sql.Row {
+	returnRow := make(sql.Row, len(rowOperationSchema.Schema))
+
+	for i, col := range rowOperationSchema.Schema {
+		rdIdx := rdSchema.IndexOf(nameMapper.PreImage(col.Name), col.Source)
+		returnRow[i] = row[rdIdx]
+	}
+
+	return returnRow
 }

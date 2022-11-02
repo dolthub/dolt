@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -47,19 +48,26 @@ const (
 	// InMemBlobstore Scheme
 	LocalBSScheme = "localbs"
 
+	OSSScheme = "oss"
+
 	defaultScheme       = HTTPSScheme
 	defaultMemTableSize = 256 * 1024 * 1024
 )
 
-// DBFactory is an interface for creating concrete datas.Database instances which may have different backing stores.
+// DBFactory is an interface for creating concrete datas.Database instances from different backing stores
 type DBFactory interface {
-	CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, error)
+	// CreateDB returns the database located at the URL given and its associated data access interfaces
+	CreateDB(ctx context.Context, nbf *types.NomsBinFormat, u *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error)
+	// PrepareDB does any necessary setup work for a new database to be created at the URL given, e.g. to receive a push.
+	// Not all factories support this operation.
+	PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, u *url.URL, params map[string]interface{}) error
 }
 
 // DBFactories is a map from url scheme name to DBFactory.  Additional factories can be added to the DBFactories map
 // from external packages.
 var DBFactories = map[string]DBFactory{
 	AWSScheme:     AWSFactory{},
+	OSSScheme:     OSSFactory{},
 	GSScheme:      GSFactory{},
 	FileScheme:    FileFactory{},
 	MemScheme:     MemFactory{},
@@ -70,11 +78,11 @@ var DBFactories = map[string]DBFactory{
 
 // CreateDB creates a database based on the supplied urlStr, and creation params.  The DBFactory used for creation is
 // determined by the scheme of the url.  Naked urls will use https by default.
-func CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]interface{}) (datas.Database, error) {
+func CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	urlObj, err := earl.Parse(urlStr)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 
 	scheme := urlObj.Scheme
@@ -86,5 +94,26 @@ func CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, para
 		return fact.CreateDB(ctx, nbf, urlObj, params)
 	}
 
-	return nil, fmt.Errorf("unknown url scheme: '%s'", urlObj.Scheme)
+	return nil, nil, nil, fmt.Errorf("unknown url scheme: '%s'", urlObj.Scheme)
+}
+
+// PrepareDB does the necessary work to create a database at the URL given, e.g. to ready a new remote for pushing. Not
+// all URL schemes can support this operation. The DBFactory used for preparing the DB is determined by the scheme of
+// the url. Naked urls will use https by default.
+func PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]interface{}) error {
+	url, err := earl.Parse(urlStr)
+	if err != nil {
+		return err
+	}
+
+	scheme := url.Scheme
+	if len(scheme) == 0 {
+		scheme = defaultScheme
+	}
+
+	if fact, ok := DBFactories[strings.ToLower(scheme)]; ok {
+		return fact.PrepareDB(ctx, nbf, url, params)
+	}
+
+	return fmt.Errorf("unknown url scheme: '%s'", url.Scheme)
 }

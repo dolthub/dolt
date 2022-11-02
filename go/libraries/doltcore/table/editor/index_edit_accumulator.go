@@ -28,16 +28,15 @@ import (
 	"github.com/dolthub/dolt/go/store/types/edits"
 )
 
-const (
-	indexFlushThreshold = 256 * 1024
-)
+// var for testing
+var indexFlushThreshold int64 = 256 * 1024
 
 type IndexEditAccumulator interface {
 	// Delete adds a row to be deleted when these edits are eventually applied.
-	Delete(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, partialKey, value types.Tuple) error
+	Delete(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, value types.Tuple) error
 
 	// Insert adds a row to be inserted when these edits are eventually applied.
-	Insert(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, partialKey types.Tuple, value types.Tuple) error
+	Insert(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, value types.Tuple) error
 
 	// Has returns true if the current TableEditAccumulator contains the given key, or it exists in the row data.
 	Has(ctx context.Context, keyHash hash.Hash, key types.Tuple) (bool, error)
@@ -167,6 +166,8 @@ type indexEditAccumulatorImpl struct {
 	uncommittedEAId uint64
 }
 
+var _ IndexEditAccumulator = (*indexEditAccumulatorImpl)(nil)
+
 func (iea *indexEditAccumulatorImpl) flushUncommitted() {
 	// if we are not already actively writing edits to the uncommittedEA then change the state and push all in mem edits
 	// to a types.EditAccumulator
@@ -208,7 +209,7 @@ func (iea *indexEditAccumulatorImpl) flushUncommitted() {
 }
 
 // Insert adds a row to be inserted when these edits are eventually applied.
-func (iea *indexEditAccumulatorImpl) Insert(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, partialKey types.Tuple, value types.Tuple) error {
+func (iea *indexEditAccumulatorImpl) Insert(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, value types.Tuple) error {
 	if _, ok := iea.uncommitted.deletes[keyHash]; ok {
 		delete(iea.uncommitted.deletes, keyHash)
 	} else {
@@ -224,7 +225,7 @@ func (iea *indexEditAccumulatorImpl) Insert(ctx context.Context, keyHash, partia
 	if iea.flushingUncommitted {
 		iea.uncommittedEA.AddEdit(key, value)
 
-		if iea.uncommitted.ops-iea.lastFlush > flushThreshold {
+		if iea.uncommitted.ops-iea.lastFlush > indexFlushThreshold {
 			iea.flushUncommitted()
 		}
 	} else if iea.uncommitted.ops > indexFlushThreshold {
@@ -234,7 +235,7 @@ func (iea *indexEditAccumulatorImpl) Insert(ctx context.Context, keyHash, partia
 }
 
 // Delete adds a row to be deleted when these edits are eventually applied.
-func (iea *indexEditAccumulatorImpl) Delete(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, partialKey, value types.Tuple) error {
+func (iea *indexEditAccumulatorImpl) Delete(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, value types.Tuple) error {
 	if _, ok := iea.uncommitted.adds[keyHash]; ok {
 		delete(iea.uncommitted.adds, keyHash)
 		delete(iea.uncommitted.partialAdds[partialKeyHash], keyHash)
@@ -246,7 +247,7 @@ func (iea *indexEditAccumulatorImpl) Delete(ctx context.Context, keyHash, partia
 	if iea.flushingUncommitted {
 		iea.uncommittedEA.AddEdit(key, nil)
 
-		if iea.uncommitted.ops-iea.lastFlush > flushThreshold {
+		if iea.uncommitted.ops-iea.lastFlush > indexFlushThreshold {
 			iea.flushUncommitted()
 		}
 	} else if iea.uncommitted.ops > indexFlushThreshold {
@@ -285,10 +286,8 @@ func (iea *indexEditAccumulatorImpl) HasPartial(ctx context.Context, idxSch sche
 
 	var err error
 	var matches []hashedTuple
-	var mapIter table.TableReadCloser = noms.NewNomsRangeReader(idxSch, iea.rowData, []*noms.ReadRange{
-		{Start: partialKey, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-			return tuple.StartsWith(partialKey), nil
-		}}})
+	var mapIter table.ReadCloser = noms.NewNomsRangeReader(idxSch, iea.rowData, []*noms.ReadRange{
+		{Start: partialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(partialKey)}})
 	defer mapIter.Close(ctx)
 	var r row.Row
 	for r, err = mapIter.ReadRow(ctx); err == nil; r, err = mapIter.ReadRow(ctx) {
@@ -411,10 +410,10 @@ func (iea *indexEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *
 	}
 
 	eps := make([]types.EditProvider, 0, len(flushedEPs)+1)
-	eps = append(eps, committedEP)
 	for i := 0; i < len(flushedEPs); i++ {
 		eps = append(eps, flushedEPs[i].Edits)
 	}
+	eps = append(eps, committedEP)
 
 	defer func() {
 		for _, ep := range eps {

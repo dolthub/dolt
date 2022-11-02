@@ -201,7 +201,7 @@ func TestStructUnionWithCycles(tt *testing.T) {
 
 	vs := newTestValueStore()
 	t1, _ := inodeType.Desc.(StructDesc).Field("contents")
-	enc, err := EncodeValue(t1, Format_7_18)
+	enc, err := EncodeValue(t1, vs.Format())
 	require.NoError(tt, err)
 	t2, err := DecodeValue(enc, vs)
 	require.NoError(tt, err)

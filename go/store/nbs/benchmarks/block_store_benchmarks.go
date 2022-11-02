@@ -137,7 +137,12 @@ func benchmarkReadMany(openStore storeOpenFn, hashes hashSlice, src *dataSource,
 			wg.Add(1)
 			go func(hashes hash.HashSlice) {
 				chunkChan := make(chan *chunks.Chunk, len(hashes))
-				err := store.GetMany(context.Background(), hashes.HashSet(), func(c *chunks.Chunk) { chunkChan <- c })
+				err := store.GetMany(context.Background(), hashes.HashSet(), func(ctx context.Context, c *chunks.Chunk) {
+					select {
+					case chunkChan <- c:
+					case <-ctx.Done():
+					}
+				})
 
 				d.PanicIfError(err)
 
@@ -153,7 +158,12 @@ func benchmarkReadMany(openStore storeOpenFn, hashes hashSlice, src *dataSource,
 
 	if len(batch) > 0 {
 		chunkChan := make(chan *chunks.Chunk, len(batch))
-		err := store.GetMany(context.Background(), batch.HashSet(), func(c *chunks.Chunk) { chunkChan <- c })
+		err := store.GetMany(context.Background(), batch.HashSet(), func(ctx context.Context, c *chunks.Chunk) {
+			select {
+			case chunkChan <- c:
+			case <-ctx.Done():
+			}
+		})
 		assert.NoError(t, err)
 
 		close(chunkChan)

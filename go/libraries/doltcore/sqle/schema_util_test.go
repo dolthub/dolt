@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/dolthub/dolt/go/libraries/utils/set"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
@@ -136,7 +134,7 @@ func NewSchemaForTable(tableName string, colNamesAndTypes ...interface{}) schema
 
 	// existingTags *set.Uint64Set, tableName string, existingColKinds []types.NomsKind, newColName string, newColKind types.NomsKind
 	nomsKinds := make([]types.NomsKind, 0)
-	tags := set.NewUint64Set(nil)
+	tags := make(schema.TagMapping)
 
 	cols := make([]schema.Column, len(colNamesAndTypes)/2)
 	for i := 0; i < len(colNamesAndTypes); i += 2 {
@@ -144,7 +142,7 @@ func NewSchemaForTable(tableName string, colNamesAndTypes ...interface{}) schema
 		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
 
 		tag := schema.AutoGenerateTag(tags, tableName, nomsKinds, name, nomsKind)
-		tags.Add(tag)
+		tags.Add(tag, tableName)
 		nomsKinds = append(nomsKinds, nomsKind)
 
 		isPk := i/2 == 0
@@ -194,90 +192,4 @@ func ConcatRows(schemasAndRows ...interface{}) row.Row {
 	}
 
 	return r
-}
-
-// Rewrites the tag numbers for the row given to begin at zero and be contiguous, just like result set schemas. We don't
-// want to just use the field mappings in the result set schema used by sqlselect, since that would only demonstrate
-// that the code was consistent with itself, not actually correct.
-func CompressRow(sch schema.Schema, r row.Row) row.Row {
-	var itag uint64
-	compressedRow := make(row.TaggedValues)
-
-	// TODO: this is probably incorrect and will break for schemas where the tag numbering doesn't match the declared order
-	sch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
-		if val, ok := r.GetColVal(tag); ok {
-			compressedRow[itag] = val
-		}
-		itag++
-		return false
-	})
-
-	// call to compress schema is a no-op in most cases
-	r, err := row.New(types.Format_Default, CompressSchema(sch), compressedRow)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return r
-}
-
-// Compresses each of the rows given ala compressRow
-func CompressRows(sch schema.Schema, rs ...row.Row) []row.Row {
-	compressed := make([]row.Row, len(rs))
-	for i := range rs {
-		compressed[i] = CompressRow(sch, rs[i])
-	}
-	return compressed
-}
-
-// Rewrites the tag numbers for the schema given to start at 0, just like result set schemas. If one or more column
-// names are given, only those column names are included in the compressed schema. The column list can also be used to
-// reorder the columns as necessary.
-func CompressSchema(sch schema.Schema, colNames ...string) schema.Schema {
-	var itag uint64
-	var cols []schema.Column
-
-	if len(colNames) > 0 {
-		cols = make([]schema.Column, len(colNames))
-		for _, colName := range colNames {
-			column, ok := sch.GetAllCols().GetByName(colName)
-			if !ok {
-				panic("No column found for column name " + colName)
-			}
-			column.Tag = itag
-			cols[itag] = column
-			itag++
-		}
-	} else {
-		cols = make([]schema.Column, sch.GetAllCols().Size())
-		sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			col.Tag = itag
-			cols[itag] = col
-			itag++
-			return false, nil
-		})
-	}
-
-	colCol := schema.NewColCollection(cols...)
-	return schema.UnkeyedSchemaFromCols(colCol)
-}
-
-// Rewrites the tag numbers for the schemas given to start at 0, just like result set schemas.
-func CompressSchemas(schs ...schema.Schema) schema.Schema {
-	var itag uint64
-	var cols []schema.Column
-
-	cols = make([]schema.Column, 0)
-	for _, sch := range schs {
-		sch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
-			col.Tag = itag
-			cols = append(cols, col)
-			itag++
-			return false
-		})
-	}
-
-	colCol := schema.NewColCollection(cols...)
-	return schema.UnkeyedSchemaFromCols(colCol)
 }

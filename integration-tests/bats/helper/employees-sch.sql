@@ -1,5 +1,5 @@
 CREATE TABLE employees (
-    `id` LONGTEXT NOT NULL,
+    `id` varchar(20) NOT NULL,
     `first name` LONGTEXT,
     `last name` LONGTEXT,
     `title` LONGTEXT,

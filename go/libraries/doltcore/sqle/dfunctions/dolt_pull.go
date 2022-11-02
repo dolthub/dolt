@@ -25,20 +25,24 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
 const DoltPullFuncName = "dolt_pull"
 
+// Deprecated: please use the version in the dprocedures package
 type DoltPullFunc struct {
 	expression.NaryExpression
 }
 
 // NewPullFunc creates a new PullFunc expression.
+// Deprecated: please use the version in the dprocedures package
 func NewPullFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltPullFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
@@ -62,98 +66,150 @@ func (d DoltPullFunc) WithChildren(children ...sql.Expression) (sql.Expression, 
 }
 
 func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	args, err := getDoltArgs(ctx, row, d.Children())
+	if err != nil {
+		return noConflictsOrViolations, err
+	}
+	conflicts, _, err := DoDoltPull(ctx, args)
+	return conflicts, err
+}
+
+// DoDoltPull returns conflicts, fast_forward statuses
+func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
-		return noConflicts, fmt.Errorf("empty database name.")
+		return noConflictsOrViolations, threeWayMerge, fmt.Errorf("empty database name.")
+	}
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return noConflictsOrViolations, threeWayMerge, err
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := sess.GetDbData(ctx, dbName)
 	if !ok {
-		return noConflicts, sql.ErrDatabaseNotFound.New(dbName)
+		return noConflictsOrViolations, threeWayMerge, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	ap := cli.CreatePullArgParser()
-	args, err := getDoltArgs(ctx, row, d.Children())
-
-	apr, err := ap.Parse(args)
+	apr, err := cli.CreatePullArgParser().Parse(args)
 	if err != nil {
-		return noConflicts, err
+		return noConflictsOrViolations, threeWayMerge, err
 	}
 
-	if apr.NArg() > 1 {
-		return noConflicts, actions.ErrInvalidPullArgs
+	if apr.NArg() > 2 {
+		return noConflictsOrViolations, threeWayMerge, actions.ErrInvalidPullArgs
 	}
 
-	var remoteName string
+	var remoteName, remoteRefName string
 	if apr.NArg() == 1 {
 		remoteName = apr.Arg(0)
+	} else if apr.NArg() == 2 {
+		remoteName = apr.Arg(0)
+		remoteRefName = apr.Arg(1)
 	}
 
-	pullSpec, err := env.NewPullSpec(ctx, dbData.Rsr, remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag))
+	pullSpec, err := env.NewPullSpec(ctx, dbData.Rsr, remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
 	if err != nil {
-		return noConflicts, err
+		return noConflictsOrViolations, threeWayMerge, err
 	}
 
-	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dbData.Ddb.ValueReadWriter().Format())
+	srcDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb, pullSpec.Remote, false)
 	if err != nil {
-		return noConflicts, fmt.Errorf("failed to get remote db; %w", err)
+		return noConflictsOrViolations, threeWayMerge, fmt.Errorf("failed to get remote db; %w", err)
 	}
 
 	ws, err := sess.WorkingSet(ctx, dbName)
 	if err != nil {
-		return noConflicts, err
+		return noConflictsOrViolations, threeWayMerge, err
 	}
 
-	var conflicts interface{}
+	// Fetch all references
+	branchRefs, err := srcDB.GetHeadRefs(ctx)
+	if err != nil {
+		return noConflictsOrViolations, threeWayMerge, env.ErrFailedToReadDb
+	}
+
+	hasBranch, err := srcDB.HasBranch(ctx, pullSpec.Branch.GetPath())
+	if err != nil {
+		return noConflictsOrViolations, threeWayMerge, err
+	}
+	if !hasBranch {
+		return noConflictsOrViolations, threeWayMerge,
+			fmt.Errorf("branch %q not found on remote", pullSpec.Branch.GetPath())
+	}
+
+	var conflicts int
+	var fastForward int
 	for _, refSpec := range pullSpec.RefSpecs {
-		remoteTrackRef := refSpec.DestRef(pullSpec.Branch)
+		rsSeen := false // track invalid refSpecs
+		for _, branchRef := range branchRefs {
+			remoteTrackRef := refSpec.DestRef(branchRef)
 
-		if remoteTrackRef != nil {
+			if remoteTrackRef == nil {
+				continue
+			}
 
-			// todo: can we pass nil for either of the channels?
-			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), pullSpec.Remote, srcDB, dbData.Ddb, pullSpec.Branch, remoteTrackRef, runProgFuncs, stopProgFuncs)
+			rsSeen = true
+			tmpDir, err := dbData.Rsw.TempTableFilesDir()
 			if err != nil {
-				return noConflicts, err
+				return noConflictsOrViolations, threeWayMerge, err
+			}
+			// todo: can we pass nil for either of the channels?
+			srcDBCommit, err := actions.FetchRemoteBranch(ctx, tmpDir, pullSpec.Remote, srcDB, dbData.Ddb, branchRef, runProgFuncs, stopProgFuncs)
+			if err != nil {
+				return noConflictsOrViolations, threeWayMerge, err
 			}
 
 			// TODO: this could be replaced with a canFF check to test for error
 			err = dbData.Ddb.FastForward(ctx, remoteTrackRef, srcDBCommit)
 			if err != nil {
-				return noConflicts, fmt.Errorf("fetch failed; %w", err)
+				return noConflictsOrViolations, threeWayMerge, fmt.Errorf("fetch failed; %w", err)
+			}
+
+			// Only merge iff branch is current branch and there is an upstream set (pullSpec.Branch is set to nil if there is no upstream)
+			if branchRef != pullSpec.Branch {
+				continue
 			}
 
 			roots, ok := sess.GetRoots(ctx, dbName)
 			if !ok {
-				return noConflicts, sql.ErrDatabaseNotFound.New(dbName)
+				return noConflictsOrViolations, threeWayMerge, sql.ErrDatabaseNotFound.New(dbName)
 			}
 
 			mergeSpec, err := createMergeSpec(ctx, sess, dbName, apr, remoteTrackRef.String())
 			if err != nil {
-				return noConflicts, err
-			}
-			ws, conflicts, err = mergeIntoWorkingSet(ctx, sess, roots, ws, dbName, mergeSpec)
-			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
-				return conflicts, err
+				return noConflictsOrViolations, threeWayMerge, err
 			}
 
-			err = sess.SetWorkingSet(ctx, dbName, ws, nil)
-			if err != nil {
-				return conflicts, err
+			msg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, dbData.Rsr.CWBHeadRef().GetPath())
+			ws, conflicts, fastForward, err = performMerge(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
+			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
+				return conflicts, fastForward, err
 			}
+
+			err = sess.SetWorkingSet(ctx, dbName, ws)
+			if err != nil {
+				return conflicts, fastForward, err
+			}
+		}
+		if !rsSeen {
+			return noConflictsOrViolations, threeWayMerge, fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, refSpec.GetRemRefToLocal())
 		}
 	}
 
-	err = actions.FetchFollowTags(ctx, dbData.Rsw.TempTableFilesDir(), srcDB, dbData.Ddb, runProgFuncs, stopProgFuncs)
+	tmpDir, err := dbData.Rsw.TempTableFilesDir()
 	if err != nil {
-		return noConflicts, err
+		return noConflictsOrViolations, threeWayMerge, err
+	}
+	err = actions.FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, runProgFuncs, stopProgFuncs)
+	if err != nil {
+		return conflicts, fastForward, err
 	}
 
-	return noConflicts, nil
+	return conflicts, fastForward, nil
 }
 
-func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent) {
+func pullerProgFunc(ctx context.Context, statsCh <-chan pull.Stats) {
 	for {
 		if ctx.Err() != nil {
 			return
@@ -161,13 +217,13 @@ func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent)
 		select {
 		case <-ctx.Done():
 			return
-		case <-pullerEventCh:
+		case <-statsCh:
 		default:
 		}
 	}
 }
 
-func progFunc(ctx context.Context, progChan <-chan datas.PullProgress) {
+func progFunc(ctx context.Context, progChan <-chan pull.PullProgress) {
 	for {
 		if ctx.Err() != nil {
 			return
@@ -181,9 +237,9 @@ func progFunc(ctx context.Context, progChan <-chan datas.PullProgress) {
 	}
 }
 
-func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent) {
-	pullerEventCh := make(chan datas.PullerEvent)
-	progChan := make(chan datas.PullProgress)
+func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.Stats) {
+	statsCh := make(chan pull.Stats)
+	progChan := make(chan pull.PullProgress)
 	wg := &sync.WaitGroup{}
 
 	wg.Add(1)
@@ -195,15 +251,15 @@ func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan datas.PullProgress
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		pullerProgFunc(ctx, pullerEventCh)
+		pullerProgFunc(ctx, statsCh)
 	}()
 
-	return wg, progChan, pullerEventCh
+	return wg, progChan, statsCh
 }
 
-func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) {
+func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, statsCh chan pull.Stats) {
 	cancel()
 	close(progChan)
-	close(pullerEventCh)
+	close(statsCh)
 	wg.Wait()
 }

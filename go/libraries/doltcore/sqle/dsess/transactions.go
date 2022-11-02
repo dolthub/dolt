@@ -15,7 +15,7 @@
 package dsess
 
 import (
-	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -36,6 +36,13 @@ import (
 const (
 	maxTxCommitRetries = 5
 )
+
+var ErrRetryTransaction = errors.New("this transaction conflicts with a committed transaction from another client")
+var ErrUnresolvedConflictsCommit = errors.New("Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1")
+var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transaction resulted in a working set with constraint violations, transaction rolled back. " +
+	"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
+	"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
+	"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.")
 
 func TransactionsDisabled(ctx *sql.Context) bool {
 	enabled, err := ctx.GetSessionVariable(ctx, TransactionsDisabledSysVar)
@@ -60,12 +67,18 @@ func (d DisabledTransaction) String() string {
 	return "Disabled transaction"
 }
 
+func (d DisabledTransaction) IsReadOnly() bool {
+	return false
+}
+
 type DoltTransaction struct {
-	startState    *doltdb.WorkingSet
-	workingSetRef ref.WorkingSetRef
-	dbData        env.DbData
-	savepoints    []savepoint
-	mergeEditOpts editor.Options
+	sourceDbName    string
+	startState      *doltdb.WorkingSet
+	workingSetRef   ref.WorkingSetRef
+	dbData          env.DbData
+	savepoints      []savepoint
+	mergeEditOpts   editor.Options
+	tCharacteristic sql.TransactionCharacteristic
 }
 
 type savepoint struct {
@@ -74,16 +87,20 @@ type savepoint struct {
 }
 
 func NewDoltTransaction(
+	dbName string,
 	startState *doltdb.WorkingSet,
 	workingSet ref.WorkingSetRef,
 	dbData env.DbData,
 	mergeEditOpts editor.Options,
+	tCharacteristic sql.TransactionCharacteristic,
 ) *DoltTransaction {
 	return &DoltTransaction{
-		startState:    startState,
-		workingSetRef: workingSet,
-		dbData:        dbData,
-		mergeEditOpts: mergeEditOpts,
+		sourceDbName:    dbName,
+		startState:      startState,
+		workingSetRef:   workingSet,
+		dbData:          dbData,
+		mergeEditOpts:   mergeEditOpts,
+		tCharacteristic: tCharacteristic,
 	}
 }
 
@@ -92,16 +109,20 @@ func (tx DoltTransaction) String() string {
 	return "DoltTransaction"
 }
 
+func (tx DoltTransaction) IsReadOnly() bool {
+	return tx.tCharacteristic == sql.ReadOnly
+}
+
 var txLock sync.Mutex
 
 // Commit attempts to merge the working set given into the current working set.
-// Uses the same algorithm as merge.Merger:
+// Uses the same algorithm as merge.RootMerger:
 // |current working set working root| is the root
 // |workingSet.workingRoot| is the mergeRoot
 // |tx.startRoot| is ancRoot
 // if workingSet.workingRoot == ancRoot, attempt a fast-forward merge
 // TODO: Non-working roots aren't merged into the working set and just stomp any changes made there. We need merge
-//  strategies for staged as well as merge state.
+// strategies for staged as well as merge state.
 func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
 	ws, _, err := tx.doCommit(ctx, workingSet, nil, txCommit)
 	return ws, err
@@ -120,7 +141,7 @@ func doltCommit(ctx *sql.Context,
 	tx *DoltTransaction,
 	commit *doltdb.PendingCommit,
 	workingSet *doltdb.WorkingSet,
-	hash hash.Hash,
+	currHash hash.Hash,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	headRef, err := workingSet.Ref().ToHeadRef()
 	if err != nil {
@@ -128,7 +149,7 @@ func doltCommit(ctx *sql.Context,
 	}
 
 	workingSet = workingSet.ClearMerge()
-	newCommit, err := tx.dbData.Ddb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, commit, workingSet, hash, tx.getWorkingSetMeta(ctx))
+	newCommit, err := tx.dbData.Ddb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, commit, workingSet, currHash, tx.getWorkingSetMeta(ctx))
 	return workingSet, newCommit, err
 }
 
@@ -154,27 +175,6 @@ func (tx *DoltTransaction) doCommit(
 	commit *doltdb.PendingCommit,
 	writeFn transactionWrite,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
-	if err != nil {
-		return nil, nil, err
-	}
-	if forceTransactionCommit.(int8) != 1 {
-		workingRoot := workingSet.WorkingRoot()
-		hasConflicts, err := workingRoot.HasConflicts(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		if hasConflicts {
-			return nil, nil, doltdb.ErrUnresolvedConflicts
-		}
-		hasConstraintViolations, err := workingRoot.HasConstraintViolations(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		if hasConstraintViolations {
-			return nil, nil, doltdb.ErrUnresolvedConstraintViolations
-		}
-	}
 
 	for i := 0; i < maxTxCommitRetries; i++ {
 		updatedWs, newCommit, err := func() (*doltdb.WorkingSet, *doltdb.Commit, error) {
@@ -184,26 +184,30 @@ func (tx *DoltTransaction) doCommit(
 
 			newWorkingSet := false
 
-			ws, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, tx.workingSetRef)
+			existingWs, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, tx.workingSetRef)
 			if err == doltdb.ErrWorkingSetNotFound {
 				// This is to handle the case where an existing DB pre working sets is committing to this HEAD for the
 				// first time. Can be removed and called an error post 1.0
-				ws = doltdb.EmptyWorkingSet(tx.workingSetRef)
+				existingWs = doltdb.EmptyWorkingSet(tx.workingSetRef)
 				newWorkingSet = true
 			} else if err != nil {
 				return nil, nil, err
 			}
 
-			wsHash, err := ws.HashOf()
+			existingWSHash, err := existingWs.HashOf()
 			if err != nil {
 				return nil, nil, err
 			}
 
-			existingWorkingRoot := ws.WorkingRoot()
-			if newWorkingSet || rootsEqual(existingWorkingRoot, tx.startState.WorkingRoot()) {
+			if newWorkingSet || rootsEqual(existingWs.WorkingRoot(), tx.startState.WorkingRoot()) {
 				// ff merge
+				err = tx.validateWorkingSetForCommit(ctx, workingSet, isFfMerge)
+				if err != nil {
+					return nil, nil, err
+				}
+
 				var newCommit *doltdb.Commit
-				workingSet, newCommit, err = writeFn(ctx, tx, commit, workingSet, wsHash)
+				workingSet, newCommit, err = writeFn(ctx, tx, commit, workingSet, existingWSHash)
 				if err == datas.ErrOptimisticLockFailed {
 					// this is effectively a `continue` in the loop
 					return nil, nil, nil
@@ -214,36 +218,26 @@ func (tx *DoltTransaction) doCommit(
 				return workingSet, newCommit, nil
 			}
 
+			// otherwise (not a ff), merge the working sets together
 			start := time.Now()
-			mergedRoot, stats, err := merge.MergeRoots(ctx, existingWorkingRoot, workingSet.WorkingRoot(), tx.startState.WorkingRoot(), tx.mergeEditOpts)
+			// TODO: this loses track of merge conflicts in the working set, clearing them out and replacing them with any
+			//  new merge conflicts produced by this merge operation. We want to preserve merge conflicts in the working set
+			//  given and permit them to be committed as long as a) no new ones are introduced, and b) any merge conflicts in
+			//  the shared working set match the merge conflicts in this one. Longer term, we will implement transaction
+			//  commit without a merge, making this point moot.
+			mergedWorkingSet, err := tx.mergeRoots(ctx, existingWs, workingSet)
 			if err != nil {
 				return nil, nil, err
 			}
 			logrus.Tracef("merge took %s", time.Since(start))
 
-			var tablesWithConflicts []string
-			for table, mergeStats := range stats {
-				if mergeStats.Conflicts > 0 {
-					if transactionMergeStomp {
-						tablesWithConflicts = append(tablesWithConflicts, table)
-					} else {
-						// TODO: surface duplicate key errors as appropriate
-						return nil, nil, fmt.Errorf("conflict in table %s", table)
-					}
-				}
+			err = tx.validateWorkingSetForCommit(ctx, mergedWorkingSet, notFfMerge)
+			if err != nil {
+				return nil, nil, err
 			}
 
-			// Only resolve conflicts automatically if the stomp environment key is set
-			if len(tablesWithConflicts) > 0 {
-				mergedRoot, err = tx.stompConflicts(ctx, mergedRoot, tablesWithConflicts)
-				if err != nil {
-					return nil, nil, err
-				}
-			}
-
-			mergedWorkingSet := workingSet.WithWorkingRoot(mergedRoot)
 			var newCommit *doltdb.Commit
-			mergedWorkingSet, newCommit, err = writeFn(ctx, tx, commit, mergedWorkingSet, wsHash)
+			mergedWorkingSet, newCommit, err = writeFn(ctx, tx, commit, mergedWorkingSet, existingWSHash)
 			if err == datas.ErrOptimisticLockFailed {
 				// this is effectively a `continue` in the loop
 				return nil, nil, nil
@@ -265,45 +259,144 @@ func (tx *DoltTransaction) doCommit(
 	return nil, nil, datas.ErrOptimisticLockFailed
 }
 
-// stompConflicts resolves the conflicted tables in the root given by blindly accepting theirs, and returns the
-// updated root value
-func (tx *DoltTransaction) stompConflicts(ctx *sql.Context, mergedRoot *doltdb.RootValue, tablesWithConflicts []string) (*doltdb.RootValue, error) {
-	start := time.Now()
-	tableEditSession := editor.CreateTableEditSession(mergedRoot, tx.mergeEditOpts)
-
-	for _, tblName := range tablesWithConflicts {
-		tbl, _, err := mergedRoot.GetTable(ctx, tblName)
-		if err != nil {
-			return nil, err
-		}
-
-		err = merge.ResolveTable(ctx, mergedRoot.VRW(), tblName, tbl, merge.Theirs, tableEditSession)
-		if err != nil {
-			return nil, err
-		}
-
-		err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
-			tbl, err = tbl.ClearConflicts()
-			if err != nil {
-				return nil, err
-			}
-
-			return root.PutTable(ctx, tblName, tbl)
-		})
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	var err error
-	mergedRoot, err = tableEditSession.Flush(ctx)
+// mergeRoots merges the roots in the existing working set with the one being committed and returns the resulting
+// working set. Conflicts are automatically resolved with "accept ours" if the session settings dictate it.
+func (tx *DoltTransaction) mergeRoots(
+	ctx *sql.Context,
+	existingWorkingRoot *doltdb.WorkingSet,
+	workingSet *doltdb.WorkingSet,
+) (*doltdb.WorkingSet, error) {
+	mo := merge.MergeOpts{IsCherryPick: false}
+	mergedRoot, _, err := merge.MergeRoots(
+		ctx,
+		existingWorkingRoot.WorkingRoot(),
+		workingSet.WorkingRoot(),
+		tx.startState.WorkingRoot(),
+		workingSet,
+		tx.startState,
+		tx.mergeEditOpts, mo)
 	if err != nil {
 		return nil, err
 	}
-	logrus.Tracef("resolving conflicts took %s", time.Since(start))
+	return workingSet.WithWorkingRoot(mergedRoot), nil
+}
 
-	return mergedRoot, nil
+// rollback attempts a transaction rollback
+func (tx *DoltTransaction) rollback(ctx *sql.Context) error {
+	sess := DSessFromSess(ctx.Session)
+	rollbackErr := sess.RollbackTransaction(ctx, tx.sourceDbName, tx)
+	if rollbackErr != nil {
+		return rollbackErr
+	}
+
+	// We also need to cancel out the transaction here so that a new one will begin on the next statement
+	// TODO: it would be better for the engine to handle these details probably, this code is duplicated from the
+	//  rollback statement implementation in the engine.
+	ctx.SetTransaction(nil)
+	ctx.SetIgnoreAutoCommit(false)
+
+	return nil
+}
+
+type ffMerge bool
+
+const (
+	isFfMerge  = ffMerge(true)
+	notFfMerge = ffMerge(false)
+)
+
+// validateWorkingSetForCommit validates that the working set given is legal to
+// commit according to the session settings. Returns an error if the given
+// working set has conflicts or constraint violations and the session settings
+// do not allow them.
+//
+// If dolt_allow_commit_conflicts = 0 and dolt_force_transaction_commit = 0, and
+// a transaction's post-commit working set contains a documented conflict
+// ( either as a result of a merge that occurred inside the transaction, or a
+// result of a transaction merge) that transaction will be rolled back.
+//
+// The justification for this behavior is that we want to protect the working
+// set from conflicts with the above settings.
+//
+// If dolt_force_transaction_commit = 0, and a transaction's post-commit working
+// set contains a documented constraint violation ( either as a result of a merge
+// that occurred inside the transaction, or a result of a transaction merge)
+// that transaction will be rolled back.
+//
+// The justification for this behavior is that we want to protect the working
+// set from constraint violations with the above settings.
+func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, workingSet *doltdb.WorkingSet, isFf ffMerge) error {
+	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
+	if err != nil {
+		return err
+	}
+
+	allowCommitConflicts, err := ctx.GetSessionVariable(ctx, AllowCommitConflicts)
+	if err != nil {
+		return err
+	}
+
+	workingRoot := workingSet.WorkingRoot()
+	hasConflicts, err := workingRoot.HasConflicts(ctx)
+	if err != nil {
+		return err
+	}
+	hasConstraintViolations, err := workingRoot.HasConstraintViolations(ctx)
+	if err != nil {
+		return err
+	}
+
+	if hasConflicts {
+		// TODO: Sometimes this returns the wrong error. Define an internal
+		// merge to be a merge that occurs inside a transaction. Define a
+		// transaction merge to be the merge that resolves changes between two
+		// transactions. If an internal merge creates a documented conflict and
+		// the transaction merge is not a fast-forward, a retry transaction
+		// error will be returned. Instead, an ErrUnresolvedConflictsCommit should
+		// be returned.
+
+		// Conflicts are never acceptable when they resulted from a merge with the existing working set -- it's equivalent
+		// to hitting a write lock (which we didn't take). Always roll back and return an error in this case.
+		if !isFf {
+			rollbackErr := tx.rollback(ctx)
+			if rollbackErr != nil {
+				return rollbackErr
+			}
+
+			return sql.ErrLockDeadlock.New(ErrRetryTransaction.Error())
+		}
+
+		// If there were conflicts before merge with the persisted working set, whether we allow it to be committed is a
+		// session setting
+		if !(allowCommitConflicts.(int8) == 1 || forceTransactionCommit.(int8) == 1) {
+			rollbackErr := tx.rollback(ctx)
+			if rollbackErr != nil {
+				return rollbackErr
+			}
+
+			return ErrUnresolvedConflictsCommit
+		}
+	}
+
+	if hasConstraintViolations {
+		// Constraint violations are acceptable in the working set if force
+		// transaction commit is enabled, regardless if an internal merge ( a
+		// merge that occurs inside a transaction) or a transaction merge
+		// created them.
+
+		// TODO: We need to add more granularity in terms of what types of constraint violations can be committed. For example,
+		// in the case of foreign_key_checks=0 you should be able to commit foreign key violations.
+		if forceTransactionCommit.(int8) != 1 {
+			rollbackErr := tx.rollback(ctx)
+			if rollbackErr != nil {
+				return rollbackErr
+			}
+
+			return ErrUnresolvedConstraintViolationsCommit
+		}
+	}
+
+	return nil
 }
 
 // CreateSavepoint creates a new savepoint with the name and root value given. If a savepoint with the name given
@@ -350,11 +443,11 @@ func (tx *DoltTransaction) ClearSavepoint(name string) *doltdb.RootValue {
 	return existingRoot
 }
 
-func (tx DoltTransaction) getWorkingSetMeta(ctx *sql.Context) *doltdb.WorkingSetMeta {
+func (tx DoltTransaction) getWorkingSetMeta(ctx *sql.Context) *datas.WorkingSetMeta {
 	sess := DSessFromSess(ctx.Session)
-	return &doltdb.WorkingSetMeta{
-		User:        sess.Username,
-		Email:       sess.Email,
+	return &datas.WorkingSetMeta{
+		Name:        sess.Username(),
+		Email:       sess.Email(),
 		Timestamp:   uint64(time.Now().Unix()),
 		Description: "sql transaction",
 	}

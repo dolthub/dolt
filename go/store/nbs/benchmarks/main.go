@@ -24,7 +24,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"regexp"
 	"sort"
@@ -109,7 +108,7 @@ func main() {
 				d.PanicIfError(err)
 			}()
 			open = func() (chunks.ChunkStore, error) {
-				return nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, bufSize)
+				return nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, bufSize, nbs.NewUnlimitedMemQuotaProvider())
 			}
 			reset = func() {
 				err := file.RemoveAll(dir)
@@ -125,7 +124,7 @@ func main() {
 				d.PanicIfError(err)
 			}()
 			open = func() (chunks.ChunkStore, error) {
-				f, err := ioutil.TempFile(dir, "")
+				f, err := os.CreateTemp(dir, "")
 				d.Chk.NoError(err)
 				return newFileBlockStore(f)
 			}
@@ -139,7 +138,7 @@ func main() {
 		} else if *toAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 			open = func() (chunks.ChunkStore, error) {
-				return nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), dynamoTable, *toAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
+				return nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), dynamoTable, *toAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize, nbs.NewUnlimitedMemQuotaProvider())
 			}
 			reset = func() {
 				ddb := dynamodb.New(sess)
@@ -161,12 +160,12 @@ func main() {
 	} else {
 		if *useNBS != "" {
 			open = func() (chunks.ChunkStore, error) {
-				return nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), *useNBS, bufSize)
+				return nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), *useNBS, bufSize, nbs.NewUnlimitedMemQuotaProvider())
 			}
 		} else if *useAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 			open = func() (chunks.ChunkStore, error) {
-				return nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), dynamoTable, *useAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
+				return nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), dynamoTable, *useAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize, nbs.NewUnlimitedMemQuotaProvider())
 			}
 		}
 		writeDB = func() {}
@@ -224,7 +223,7 @@ func main() {
 }
 
 func makeTempDir(tmpdir string, t assert.TestingT) (dir string) {
-	dir, err := ioutil.TempDir(tmpdir, "")
+	dir, err := os.MkdirTemp(tmpdir, "")
 	assert.NoError(t, err)
 	return
 }

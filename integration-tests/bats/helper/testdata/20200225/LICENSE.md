@@ -1,1 +1,0 @@
-This is a repository level LICENSE. Either edit it, add it, and commit it, or remove the file.

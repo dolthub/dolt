@@ -54,6 +54,11 @@ func (totwv *TableOfTablesWithViolations) Schema() sql.Schema {
 	}
 }
 
+// Collation implements the interface sql.Table.
+func (totwv *TableOfTablesWithViolations) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
 // Partitions implements the interface sql.Table.
 func (totwv *TableOfTablesWithViolations) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	tblNames, err := totwv.root.TablesWithConstraintViolations(ctx)
@@ -81,11 +86,11 @@ func (totwv *TableOfTablesWithViolations) PartitionRows(ctx *sql.Context, part s
 	if !ok {
 		return nil, fmt.Errorf("TablesWithConstraintViolations returned %s but it cannot be found", tblName)
 	}
-	data, err := tbl.GetConstraintViolations(ctx)
+	n, err := tbl.NumConstraintViolations(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rows = append(rows, sql.Row{tblName, data.Len()})
+	rows = append(rows, sql.Row{tblName, n})
 	return sql.RowsToRowIter(rows...), nil
 }
 
@@ -98,7 +103,7 @@ type tableOfTablesPartitionIter struct {
 var _ sql.PartitionIter = (*tableOfTablesPartitionIter)(nil)
 
 // Next implements the interface sql.PartitionIter.
-func (t *tableOfTablesPartitionIter) Next() (sql.Partition, error) {
+func (t *tableOfTablesPartitionIter) Next(*sql.Context) (sql.Partition, error) {
 	if t.idx >= len(t.tblNames) {
 		return nil, io.EOF
 	}

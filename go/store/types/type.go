@@ -119,11 +119,7 @@ func (t *Type) writeToAsType(w nomsWriter, seensStructs map[string]*Type, nbf *N
 	return t.Desc.writeTo(w, nbf, t, seensStructs)
 }
 
-func (t *Type) WalkValues(ctx context.Context, cb ValueCallback) error {
-	return t.Desc.walkValues(cb)
-}
-
-func (t *Type) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (t *Type) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
 

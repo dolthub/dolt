@@ -26,6 +26,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -33,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -60,15 +62,18 @@ func (cmd RootsCmd) RequiresRepo() bool {
 
 // Description returns a description of the command
 func (cmd RootsCmd) Description() string {
-	return "Displays the current Dolt cli version."
+	return "Displays store root values (or potential store root values) that we find in the current database."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd RootsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd RootsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return false
+}
+
+func (cmd RootsCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 
-func (cmd RootsCmd) createArgParser() *argparser.ArgParser {
+func (cmd RootsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsInt(numFilesParam, "n", "number", "Number of table files to scan.")
 	return ap
@@ -76,12 +81,19 @@ func (cmd RootsCmd) createArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd RootsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
+	ap := cmd.ArgParser()
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	dir := filepath.Join(dEnv.GetDoltDir(), dbfactory.DataDir)
-	itr, err := NewTableFileIter(dir, dEnv.FS)
+	doltDir := dEnv.GetDoltDir()
+	if doltDir == "" {
+		cli.Println(color.YellowString("can no longer find a database on disk"))
+		return 1
+	}
+
+	dir := filepath.Join(doltDir, dbfactory.DataDir)
+	oldgen := filepath.Join(dir, "oldgen")
+	itr, err := NewTableFileIter([]string{dir, oldgen}, dEnv.FS)
 
 	if err != nil {
 		return BuildVerrAndExit("Unable to read table files.", err)
@@ -115,9 +127,9 @@ func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified 
 	return nbs.IterChunks(rdCloser.(io.ReadSeeker), func(chunk chunks.Chunk) (stop bool, err error) {
 		//Want a clean db every loop
 		sp, _ := spec.ForDatabase("mem")
-		db := sp.GetDatabase(ctx)
+		vrw := sp.GetVRW(ctx)
 
-		value, err := types.DecodeValue(chunk, db)
+		value, err := types.DecodeValue(chunk, vrw)
 
 		if err != nil {
 			return false, err
@@ -139,11 +151,26 @@ func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified 
 
 			if mightBeDatasetMap {
 				err := types.WriteEncodedValue(ctx, cli.OutStream, value)
-
 				if err != nil {
 					return false, err
 				}
-
+				cli.Println()
+			}
+		} else if sm, ok := value.(types.SerialMessage); ok {
+			if serial.GetFileID(sm) == serial.StoreRootFileID {
+				msg, err := serial.TryGetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
+				if err != nil {
+					return false, err
+				}
+				ambytes := msg.AddressMapBytes()
+				node, err := tree.NodeFromBytes(ambytes)
+				if err != nil {
+					return false, err
+				}
+				err = tree.OutputAddressMapNode(cli.OutStream, node)
+				if err != nil {
+					return false, err
+				}
 				cli.Println()
 			}
 		}
@@ -162,29 +189,33 @@ type TableFileIter struct {
 	pos   int
 }
 
-func NewTableFileIter(dir string, fs filesys.Filesys) (*TableFileIter, error) {
+func NewTableFileIter(dirs []string, fs filesys.Filesys) (*TableFileIter, error) {
 	var tableFiles []fileAndTime
-	err := fs.Iter(dir, false, func(path string, size int64, isDir bool) (stop bool) {
-		if !isDir {
-			filename := filepath.Base(path)
+	for _, dir := range dirs {
+		err := fs.Iter(dir, false, func(path string, size int64, isDir bool) (stop bool) {
+			if !isDir {
+				filename := filepath.Base(path)
 
-			if len(filename) == 32 {
-				t, ok := fs.LastModified(path)
-				if !ok {
-					t = time.Now()
+				if len(filename) == 32 {
+					t, ok := fs.LastModified(path)
+					if !ok {
+						t = time.Now()
+					}
+
+					tableFiles = append(tableFiles, fileAndTime{path, t})
 				}
-
-				tableFiles = append(tableFiles, fileAndTime{path, t})
 			}
+
+			return false
+		})
+
+		if err != nil {
+			return nil, err
 		}
+	}
 
-		return false
-	})
-
-	if err != nil {
-		return nil, err
-	} else if len(tableFiles) == 0 {
-		return nil, fmt.Errorf("No table files found in '%s'", dir)
+	if len(tableFiles) == 0 {
+		return nil, fmt.Errorf("No table files found in '%v'", dirs)
 	}
 
 	sort.Slice(tableFiles, func(i, j int) bool {
@@ -195,6 +226,10 @@ func NewTableFileIter(dir string, fs filesys.Filesys) (*TableFileIter, error) {
 }
 
 func (itr *TableFileIter) next() (string, time.Time) {
+	if itr.pos >= len(itr.files) {
+		return "", time.Time{}
+	}
+
 	curr := itr.files[itr.pos]
 	itr.pos++
 

@@ -41,6 +41,10 @@ func (c Chunk) Hash() hash.Hash {
 	return c.r
 }
 
+func (c Chunk) Size() int {
+	return len(c.data)
+}
+
 func (c Chunk) Data() []byte {
 	return c.data
 }

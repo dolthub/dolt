@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -72,32 +73,30 @@ func WriteValueFile(ctx context.Context, filepath string, store *FileValueStore,
 
 // WriteToWriter writes the values out to the provided writer in the value file format
 func WriteToWriter(ctx context.Context, wr io.Writer, store *FileValueStore, values ...types.Value) error {
-	db := datas.NewDatabase(store)
+	vrw := types.NewValueStore(store)
+	ns := tree.NewNodeStore(store)
+	db := datas.NewTypesDatabase(vrw, ns)
 	ds, err := db.GetDataset(ctx, env.DefaultInitBranch)
 
 	if err != nil {
 		return err
 	}
 
-	l, err := types.NewList(ctx, db, values...)
+	l, err := types.NewList(ctx, vrw, values...)
 
 	if err != nil {
 		return err
 	}
 
-	ds, err = db.CommitValue(ctx, ds, l)
+	ds, err = datas.CommitValue(ctx, db, ds, l)
 
 	if err != nil {
 		return err
 	}
 
-	ref, _, err := ds.MaybeHeadRef()
+	addr, _ := ds.MaybeHeadAddr()
 
-	if err != nil {
-		return err
-	}
-
-	err = write(wr, ref.TargetHash(), store)
+	err = write(wr, addr, store)
 
 	if err != nil {
 		return err
@@ -113,11 +112,13 @@ func WriteToWriter(ctx context.Context, wr io.Writer, store *FileValueStore, val
 // uint32 num chunks
 //
 // for each chunk:
-//   hash of chunk
-//   len of chunk
+//
+//	hash of chunk
+//	len of chunk
 //
 // for each chunk
-//   chunk bytes
+//
+//	chunk bytes
 func write(wr io.Writer, h hash.Hash, store *FileValueStore) error {
 	// The Write*IfNoErr functions makes the error handling code less annoying
 	err := iohelp.WritePrimIfNoErr(wr, uint32(len(store.nbf.VersionString())), nil)
@@ -131,19 +132,29 @@ func write(wr io.Writer, h hash.Hash, store *FileValueStore) error {
 
 	err = store.iterChunks(func(ch chunks.Chunk) error {
 		h := ch.Hash()
-		err = iohelp.WriteIfNoErr(wr, h[:], err)
+		err = iohelp.WriteIfNoErr(wr, h[:], nil)
 		return iohelp.WritePrimIfNoErr(wr, uint32(len(ch.Data())), err)
 	})
+	if err != nil {
+		return err
+	}
 
 	err = store.iterChunks(func(ch chunks.Chunk) error {
-		return iohelp.WriteIfNoErr(wr, ch.Data(), err)
+		return iohelp.WriteIfNoErr(wr, ch.Data(), nil)
 	})
 
 	return err
 }
 
+// ValueFile is the in memory representation of a value file.
+type ValueFile struct {
+	Values []types.Value
+	Ns     tree.NodeStore
+	Vrw    types.ValueReadWriter
+}
+
 // ReadValueFile reads from the provided file and returns the values stored in the file
-func ReadValueFile(ctx context.Context, filepath string) ([]types.Value, error) {
+func ReadValueFile(ctx context.Context, filepath string) (*ValueFile, error) {
 	f, err := os.Open(filepath)
 
 	if err != nil {
@@ -157,28 +168,22 @@ func ReadValueFile(ctx context.Context, filepath string) ([]types.Value, error) 
 
 // ReadFromReader reads from the provided reader which should provided access to data in the value file format and returns
 // the values
-func ReadFromReader(ctx context.Context, rd io.Reader) ([]types.Value, error) {
+func ReadFromReader(ctx context.Context, rd io.Reader) (*ValueFile, error) {
 	h, store, err := read(ctx, rd)
 
 	if err != nil {
 		return nil, err
 	}
 
-	db := datas.NewDatabase(store)
-	v, err := db.ReadValue(ctx, h)
+	vrw := types.NewValueStore(store)
+
+	v, err := vrw.ReadValue(ctx, h)
 
 	if err != nil {
 		return nil, err
 	}
 
-	commitSt, ok := v.(types.Struct)
-
-	if !ok {
-		return nil, ErrCorruptNVF
-	}
-
-	rootVal, ok, err := commitSt.MaybeGet(datas.ValueField)
-
+	rootVal, err := datas.GetCommittedValue(ctx, vrw, v)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +199,13 @@ func ReadFromReader(ctx context.Context, rd io.Reader) ([]types.Value, error) {
 		return nil, err
 	}
 
-	return values, nil
+	ns := tree.NewNodeStore(store)
+
+	return &ValueFile{
+		Values: values,
+		Ns:     ns,
+		Vrw:    vrw,
+	}, nil
 }
 
 // see the write section to see the value file
@@ -229,6 +240,10 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 		nbf = types.Format_7_18
 	case types.Format_LD_1.VersionString():
 		nbf = types.Format_LD_1
+	case types.Format_DOLT_DEV.VersionString():
+		nbf = types.Format_DOLT_DEV
+	case types.Format_DOLT.VersionString():
+		nbf = types.Format_DOLT
 	default:
 		return hash.Hash{}, nil, fmt.Errorf("unknown noms format: %s", string(data))
 	}

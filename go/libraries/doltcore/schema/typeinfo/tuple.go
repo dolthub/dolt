@@ -98,11 +98,6 @@ func (ti *tupleType) NomsKind() types.NomsKind {
 	return types.TupleKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *tupleType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	return nil, fmt.Errorf(`"%v" cannot parse strings`, ti.String())
-}
-
 // Promote implements TypeInfo interface.
 func (ti *tupleType) Promote() TypeInfo {
 	return ti

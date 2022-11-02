@@ -16,6 +16,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"strings"
@@ -26,8 +27,9 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/events"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func isHelp(str string) bool {
@@ -63,8 +65,10 @@ type Command interface {
 	Description() string
 	// Exec executes the command
 	Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
-	// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-	CreateMarkdown(fs filesys.Filesys, path, commandStr string) error
+	// Docs returns the documentation for this command, or nil if it's undocumented
+	Docs() *CommandDocumentation
+	// ArgParser returns the arg parser for this command
+	ArgParser() *argparser.ArgParser
 }
 
 // SignalCommand is an extension of Command that allows commands to install their own signal handlers, rather than use
@@ -108,6 +112,12 @@ type HiddenCommand interface {
 	Hidden() bool
 }
 
+type FormatGatedCommand interface {
+	Command
+
+	GatedForNBF(nbf *types.NomsBinFormat) bool
+}
+
 // SubCommandHandler is a command implementation which holds subcommands which can be called
 type SubCommandHandler struct {
 	name        string
@@ -147,7 +157,11 @@ func (hc SubCommandHandler) RequiresRepo() bool {
 	return false
 }
 
-func (hc SubCommandHandler) CreateMarkdown(_ filesys.Filesys, _, _ string) error {
+func (hc SubCommandHandler) Docs() *CommandDocumentation {
+	return nil
+}
+
+func (hc SubCommandHandler) ArgParser() *argparser.ArgParser {
 	return nil
 }
 
@@ -178,10 +192,11 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 
 	if !isHelp(subCommandStr) {
 		PrintErrln(color.RedString("Unknown Command " + subCommandStr))
+		return 1
 	}
 
 	hc.printUsage(commandStr)
-	return 1
+	return 0
 }
 
 func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string, cmd Command, args []string, dEnv *env.DoltEnv) int {
@@ -211,6 +226,14 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string
 		defer stop()
 	}
 
+	fgc, ok := cmd.(FormatGatedCommand)
+	if ok && dEnv.DoltDB != nil && fgc.GatedForNBF(dEnv.DoltDB.Format()) {
+		vs := dEnv.DoltDB.Format().VersionString()
+		err := fmt.Sprintf("Dolt command '%s' is not supported in format %s", cmd.Name(), vs)
+		PrintErrln(color.YellowString(err))
+		return 1
+	}
+
 	ret := cmd.Exec(ctx, commandStr, args, dEnv)
 
 	if evt != nil {
@@ -238,6 +261,41 @@ func CheckEnvIsValid(dEnv *env.DoltEnv) bool {
 			PrintErrln("\tyou might need to upgrade your Dolt client")
 			PrintErrln("\tvisit https://github.com/dolthub/dolt/releases/latest/")
 		}
+		return false
+	}
+
+	return true
+}
+
+const (
+	userNameRequiredError = `Author identity unknown
+
+*** Please tell me who you are.
+
+Run
+
+  dolt config --global --add user.email "you@example.com"
+  dolt config --global --add user.name "Your Name"
+
+to set your account's default identity.
+Omit --global to set the identity only in this repository.
+
+fatal: empty ident name not allowed
+`
+)
+
+// CheckUserNameAndEmail returns true if the user name and email are set for this environment, or prints an error and
+// returns false if not.
+func CheckUserNameAndEmail(dEnv *env.DoltEnv) bool {
+	_, err := dEnv.Config.GetString(env.UserEmailKey)
+	if err != nil {
+		PrintErr(userNameRequiredError)
+		return false
+	}
+
+	_, err = dEnv.Config.GetString(env.UserNameKey)
+	if err != nil {
+		PrintErr(userNameRequiredError)
 		return false
 	}
 

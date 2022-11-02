@@ -1,0 +1,54 @@
+#!/usr/bin/expect
+set timeout 10
+
+set port [lindex $argv 0];
+set database [lindex $argv 1];
+
+spawn mysql --host 0.0.0.0 --port $port --user dolt
+
+expect {
+  "mysql> " { send "show databases;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "*repo1*repo2*" { send "use repo1;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "*Database changed*" { send "show tables;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "*r1t_one*r1t_two*" { send "select count(*) from r1t_one;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "*3*" { send "use repo2;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "*Database changed*" { send "show tables;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "*r2t_three*" { send "select count(*) from r2t_three;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "*4*" { send "select @@autocommit;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "*0 |*" { send "exit\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect eof

@@ -160,30 +160,6 @@ func (ti *bitType) NomsKind() types.NomsKind {
 	return types.UintKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *bitType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil || *str == "" {
-		return types.NullValue, nil
-	}
-	if val, err := strconv.ParseUint(*str, 10, 64); err == nil {
-		uintVal, err := ti.sqlBitType.Convert(val)
-		if err != nil {
-			return nil, err
-		}
-		if val, ok := uintVal.(uint64); ok {
-			return types.Uint(val), nil
-		}
-	}
-	strVal, err := ti.sqlBitType.Convert(*str)
-	if err != nil {
-		return nil, err
-	}
-	if val, ok := strVal.(uint64); ok {
-		return types.Uint(val), nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
-}
-
 // Promote implements TypeInfo interface.
 func (ti *bitType) Promote() TypeInfo {
 	return &bitType{ti.sqlBitType.Promote().(sql.BitType)}
@@ -232,11 +208,27 @@ func bitTypeConverter(ctx context.Context, src *bitType, destTi TypeInfo) (tc Ty
 		return wrapIsValid(dest.IsValid, src, dest)
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geomcollType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geometryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *linestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multilinestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipolygonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *pointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *polygonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
 		return wrapIsValid(dest.IsValid, src, dest)

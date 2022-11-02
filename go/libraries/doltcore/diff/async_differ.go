@@ -28,25 +28,11 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type RowDiffer interface {
-	// Start starts the RowDiffer.
-	Start(ctx context.Context, from, to types.Map)
-
-	// GetDiffs returns the requested number of diff.Differences, or times out.
-	GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error)
-
-	// GetDiffsWithFilter returns the requested number of filtered diff.Differences, or times out.
-	GetDiffsWithFilter(numDiffs int, timeout time.Duration, filterByChangeType types.DiffChangeType) ([]*diff.Difference, bool, error)
-
-	// Close closes the RowDiffer.
-	Close() error
-}
-
-func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) RowDiffer {
+func NewRowDiffer(ctx context.Context, format *types.NomsBinFormat, fromSch, toSch schema.Schema, buf int) RowDiffer {
 	ad := NewAsyncDiffer(buf)
 
 	// Returns an EmptyRowDiffer if the two schemas are not diffable.
-	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
+	if !schema.ArePrimaryKeySetsDiffable(format, fromSch, toSch) {
 		return &EmptyRowDiffer{}
 	}
 
@@ -186,14 +172,16 @@ type keylessDiffer struct {
 
 var _ RowDiffer = &keylessDiffer{}
 
-func (kd *keylessDiffer) getDiffs(numDiffs int, timeoutChan <-chan time.Time, pred diffPredicate) (diffs []*diff.Difference, more bool, err error) {
-	diffs = make([]*diff.Difference, numDiffs)
+func (kd *keylessDiffer) getDiffs(numDiffs int, timeoutChan <-chan time.Time, pred diffPredicate) ([]*diff.Difference, bool, error) {
+	diffs := make([]*diff.Difference, numDiffs)
 	idx := 0
 
 	for {
 		// first populate |diffs| with copies of |kd.df|
+
+		cpy := kd.df // save a copy of kd.df to reference
 		for (idx < numDiffs) && (kd.copiesLeft > 0) {
-			diffs[idx] = &kd.df
+			diffs[idx] = &cpy
 			idx++
 			kd.copiesLeft--
 		}
@@ -201,34 +189,28 @@ func (kd *keylessDiffer) getDiffs(numDiffs int, timeoutChan <-chan time.Time, pr
 			return diffs, true, nil
 		}
 
-		// then get another Difference
-		var d diff.Difference
-		select {
-		case <-timeoutChan:
-			return diffs, true, nil
+		// then find the next Difference the satisfies |pred|
+		match := false
+		for !match {
+			select {
+			case <-timeoutChan:
+				return diffs, true, nil
 
-		case <-kd.egCtx.Done():
-			return nil, false, kd.eg.Wait()
+			case <-kd.egCtx.Done():
+				return nil, false, kd.eg.Wait()
 
-		case d, more = <-kd.diffChan:
-			if !more {
-				return diffs[:idx], more, nil
-			}
+			case d, more := <-kd.diffChan:
+				if !more {
+					return diffs[:idx], more, nil
+				}
 
-			ok := false
-			for !ok {
+				var err error
 				kd.df, kd.copiesLeft, err = convertDiff(d)
 				if err != nil {
 					return nil, false, err
 				}
 
-				ok = pred(&kd.df)
-
-				if !ok {
-					if d, more = <-kd.diffChan; !more {
-						return diffs[:idx], more, nil
-					}
-				}
+				match = pred(&kd.df)
 			}
 		}
 	}
@@ -300,6 +282,10 @@ type EmptyRowDiffer struct {
 var _ RowDiffer = &EmptyRowDiffer{}
 
 func (e EmptyRowDiffer) Start(ctx context.Context, from, to types.Map) {
+}
+
+func (e EmptyRowDiffer) StartWithRange(ctx context.Context, from, to types.Map, start types.Value, inRange types.ValueInRange) {
+
 }
 
 func (e EmptyRowDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error) {

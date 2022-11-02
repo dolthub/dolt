@@ -23,7 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
-//  FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
+// FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
 // typeWidth are 0 or less than the length of the name or type, then the length of the name or type will be used
 func FmtCol(indent, nameWidth, typeWidth int, col schema.Column) string {
 	sqlType := col.TypeInfo.ToSqlType()
@@ -101,29 +101,47 @@ func FmtForeignKey(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
 	sb.WriteString("CONSTRAINT ")
 	sb.WriteString(QuoteIdentifier(fk.Name))
 	sb.WriteString(" FOREIGN KEY (")
-	for i, tag := range fk.TableColumns {
-		if i != 0 {
-			sb.WriteRune(',')
+	if fk.IsResolved() {
+		for i, tag := range fk.TableColumns {
+			if i != 0 {
+				sb.WriteRune(',')
+			}
+			c, _ := sch.GetAllCols().GetByTag(tag)
+			sb.WriteString(QuoteIdentifier(c.Name))
 		}
-		c, _ := sch.GetAllCols().GetByTag(tag)
-		sb.WriteString(QuoteIdentifier(c.Name))
+	} else {
+		for i, col := range fk.UnresolvedFKDetails.TableColumns {
+			if i != 0 {
+				sb.WriteRune(',')
+			}
+			sb.WriteString(QuoteIdentifier(col))
+		}
 	}
 	sb.WriteString(")\n    REFERENCES ")
 	sb.WriteString(QuoteIdentifier(fk.ReferencedTableName))
 	sb.WriteString(" (")
-	for i, tag := range fk.ReferencedTableColumns {
-		if i != 0 {
-			sb.WriteRune(',')
+	if fk.IsResolved() {
+		for i, tag := range fk.ReferencedTableColumns {
+			if i != 0 {
+				sb.WriteRune(',')
+			}
+			c, _ := parentSch.GetAllCols().GetByTag(tag)
+			sb.WriteString(QuoteIdentifier(c.Name))
 		}
-		c, _ := parentSch.GetAllCols().GetByTag(tag)
-		sb.WriteString(QuoteIdentifier(c.Name))
+	} else {
+		for i, col := range fk.UnresolvedFKDetails.ReferencedTableColumns {
+			if i != 0 {
+				sb.WriteRune(',')
+			}
+			sb.WriteString(QuoteIdentifier(col))
+		}
 	}
 	sb.WriteRune(')')
-	if fk.OnDelete != doltdb.ForeignKeyReferenceOption_DefaultAction {
+	if fk.OnDelete != doltdb.ForeignKeyReferentialAction_DefaultAction {
 		sb.WriteString("\n    ON DELETE ")
 		sb.WriteString(fk.OnDelete.String())
 	}
-	if fk.OnUpdate != doltdb.ForeignKeyReferenceOption_DefaultAction {
+	if fk.OnUpdate != doltdb.ForeignKeyReferentialAction_DefaultAction {
 		sb.WriteString("\n    ON UPDATE ")
 		sb.WriteString(fk.OnUpdate.String())
 	}
@@ -184,6 +202,33 @@ func AlterTableRenameColStmt(tableName string, oldColName string, newColName str
 	b.WriteString(QuoteIdentifier(oldColName))
 	b.WriteString(" TO ")
 	b.WriteString(QuoteIdentifier(newColName))
+	b.WriteRune(';')
+	return b.String()
+}
+
+func AlterTableDropPks(tableName string) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" DROP PRIMARY KEY")
+	b.WriteRune(';')
+	return b.String()
+}
+
+func AlterTableAddPrimaryKeys(tableName string, pks *schema.ColCollection) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" ADD PRIMARY KEY (")
+
+	for i := 0; i < pks.Size(); i++ {
+		if i == 0 {
+			b.WriteString(pks.GetByIndex(i).Name)
+		} else {
+			b.WriteString("," + pks.GetByIndex(i).Name)
+		}
+	}
+	b.WriteRune(')')
 	b.WriteRune(';')
 	return b.String()
 }

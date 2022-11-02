@@ -138,7 +138,7 @@ func (se *SetEditor) Set(ctx context.Context) (Set, error) {
 
 		var err error
 		if ch == nil {
-			ch, err = newSequenceChunker(ctx, cur, 0, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
+			ch, err = newSequenceChunker(ctx, cur, 0, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), newMapChunker, hashValueBytes)
 		} else {
 			err = ch.advanceTo(ctx, cur)
 		}

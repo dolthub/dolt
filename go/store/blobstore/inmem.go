@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"io/ioutil"
 	"sync"
 
 	"github.com/google/uuid"
@@ -31,7 +30,7 @@ type byteSliceReadCloser struct {
 
 func newByteSliceReadCloser(data []byte) *byteSliceReadCloser {
 	reader := bytes.NewReader(data)
-	return &byteSliceReadCloser{reader, ioutil.NopCloser(reader)}
+	return &byteSliceReadCloser{reader, io.NopCloser(reader)}
 }
 
 // InMemoryBlobstore provides an in memory implementation of the Blobstore interface
@@ -81,7 +80,7 @@ func (bs *InMemoryBlobstore) Put(ctx context.Context, key string, reader io.Read
 	defer bs.mutex.Unlock()
 
 	ver := uuid.New().String()
-	data, err := ioutil.ReadAll(reader)
+	data, err := io.ReadAll(reader)
 
 	if err != nil {
 		return "", err
@@ -107,7 +106,7 @@ func (bs *InMemoryBlobstore) CheckAndPut(ctx context.Context, expectedVersion, k
 	}
 
 	newVer := uuid.New().String()
-	data, err := ioutil.ReadAll(reader)
+	data, err := io.ReadAll(reader)
 
 	if err != nil {
 		return "", err

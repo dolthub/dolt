@@ -25,27 +25,34 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/libraries/utils/tracing"
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
-var ErrFetchFailure = errors.New("fetch failed")
-var ErrSpecWithoutChunkSource = errors.New("manifest referenced table file for which there is no chunkSource.")
+var (
+	ErrFetchFailure                           = errors.New("fetch failed")
+	ErrSpecWithoutChunkSource                 = errors.New("manifest referenced table file for which there is no chunkSource.")
+	ErrConcurrentManifestWriteDuringOverwrite = errors.New("concurrent manifest write during manifest overwrite")
+)
 
 // The root of a Noms Chunk Store is stored in a 'manifest', along with the
 // names of the tables that hold all the chunks in the store. The number of
@@ -58,22 +65,19 @@ const (
 	defaultMemTableSize uint64 = (1 << 20) * 128 // 128MB
 	defaultMaxTables           = 256
 
-	defaultIndexCacheSize    = (1 << 20) * 64 // 64MB
-	defaultManifestCacheSize = 1 << 23        // 8MB
+	defaultManifestCacheSize = 1 << 23 // 8MB
 	preflushChunkCount       = 8
-
-	copyTableFileBufferSize = 128 * 1024 * 1024
 )
 
 var (
 	cacheOnce           = sync.Once{}
-	globalIndexCache    *indexCache
 	makeManifestManager func(manifest) manifestManager
 	globalFDCache       *fdCache
 )
 
+var tracer = otel.Tracer("github.com/dolthub/dolt/go/store/nbs")
+
 func makeGlobalCaches() {
-	globalIndexCache = newIndexCache(defaultIndexCacheSize)
 	globalFDCache = newFDCache(defaultMaxTables)
 
 	manifestCache := newManifestCache(defaultManifestCacheSize)
@@ -83,7 +87,7 @@ func makeGlobalCaches() {
 
 type NBSCompressedChunkStore interface {
 	chunks.ChunkStore
-	GetManyCompressed(context.Context, hash.HashSet, func(CompressedChunk)) error
+	GetManyCompressed(context.Context, hash.HashSet, func(context.Context, CompressedChunk)) error
 }
 
 type NomsBlockStore struct {
@@ -110,15 +114,52 @@ type Range struct {
 	Length uint32
 }
 
+func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
+	locs, err := nbs.GetChunkLocations(hashes)
+	if err != nil {
+		return nil, err
+	}
+	toret := make(map[string]map[hash.Hash]Range, len(locs))
+	for k, v := range locs {
+		toret[k.String()] = v
+	}
+	return toret, nil
+}
+
 func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
 	gr := toGetRecords(hashes)
+
+	forIndex := func(ti tableIndex, cur map[hash.Hash]Range) (map[hash.Hash]Range, error) {
+		if cur == nil {
+			cur = make(map[hash.Hash]Range)
+		}
+		var foundHashes []hash.Hash
+		for h := range hashes {
+			a := addr(h)
+			e, ok, err := ti.Lookup(&a)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				foundHashes = append(foundHashes, h)
+				cur[h] = Range{Offset: e.Offset(), Length: e.Length()}
+			}
+		}
+		for _, h := range foundHashes {
+			delete(hashes, h)
+		}
+		return cur, nil
+	}
 
 	ranges := make(map[hash.Hash]map[hash.Hash]Range)
 	f := func(css chunkSources) error {
 		for _, cs := range css {
 			switch tr := cs.(type) {
-			case *mmapTableReader:
-				offsetRecSlice, _ := tr.findOffsets(gr)
+			case *fileTableReader:
+				offsetRecSlice, _, err := tr.findOffsets(gr)
+				if err != nil {
+					return err
+				}
 				if len(offsetRecSlice) > 0 {
 					y, ok := ranges[hash.Hash(tr.h)]
 
@@ -140,34 +181,29 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 					ranges[hash.Hash(tr.h)] = y
 				}
 			case *chunkSourceAdapter:
-				y, ok := ranges[hash.Hash(tr.h)]
-
-				if !ok {
-					y = make(map[hash.Hash]Range)
-				}
-
 				tableIndex, err := tr.index()
-
 				if err != nil {
 					return err
 				}
-
-				var foundHashes []hash.Hash
-				for h := range hashes {
-					a := addr(h)
-					e, ok := tableIndex.Lookup(&a)
-					if ok {
-						foundHashes = append(foundHashes, h)
-						y[h] = Range{Offset: e.Offset(), Length: e.Length()}
-					}
+				found, err := forIndex(tableIndex, ranges[hash.Hash(tr.h)])
+				if err != nil {
+					return err
 				}
-
-				ranges[hash.Hash(tr.h)] = y
-
-				for _, h := range foundHashes {
-					delete(hashes, h)
+				ranges[hash.Hash(tr.h)] = found
+			case *persistingChunkSource:
+				tableIndex, err := tr.index()
+				if err != nil {
+					return err
 				}
-
+				h, err := tr.hash()
+				if err != nil {
+					return err
+				}
+				found, err := forIndex(tableIndex, ranges[hash.Hash(h)])
+				if err != nil {
+					return err
+				}
+				ranges[hash.Hash(h)] = found
 			default:
 				panic(reflect.TypeOf(cs))
 			}
@@ -258,7 +294,7 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 		}
 	}
 
-	newTables, err := nbs.tables.Rebase(ctx, updatedContents.specs, nbs.stats)
+	newTables, err := nbs.tables.rebase(ctx, updatedContents.specs, nbs.stats)
 	if err != nil {
 		return manifestContents{}, err
 	}
@@ -266,7 +302,7 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	nbs.upstream = updatedContents
 	oldTables := nbs.tables
 	nbs.tables = newTables
-	err = oldTables.Close()
+	err = oldTables.close()
 	if err != nil {
 		return manifestContents{}, err
 	}
@@ -335,7 +371,7 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 		}
 	}
 
-	newTables, err := nbs.tables.Rebase(ctx, updatedContents.specs, nbs.stats)
+	newTables, err := nbs.tables.rebase(ctx, updatedContents.specs, nbs.stats)
 	if err != nil {
 		return manifestContents{}, err
 	}
@@ -343,7 +379,7 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 	nbs.upstream = updatedContents
 	oldTables := nbs.tables
 	nbs.tables = newTables
-	err = oldTables.Close()
+	err = oldTables.close()
 	if err != nil {
 		return manifestContents{}, err
 	}
@@ -385,30 +421,58 @@ func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSp
 	}
 }
 
-func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {
-	cacheOnce.Do(makeGlobalCaches)
-	readRateLimiter := make(chan struct{}, 32)
-	p := &awsTablePersister{
-		s3,
-		bucket,
-		readRateLimiter,
-		&ddbTableStore{ddb, table, readRateLimiter, nil},
-		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
-		globalIndexCache,
-		ns,
-		func(bs []byte) (tableIndex, error) {
-			ohi, err := parseTableIndex(bs)
-			if err != nil {
-				return nil, err
-			}
-			return newMmapTableIndex(ohi, nil)
-		},
+// OverwriteStoreManifest is a low level interface to completely replace the manifest contents
+// of |store| with the supplied |root|, |tableFiles| and |appendixTableFiles|. It performs concurrency
+// control on the existing |store| manifest, and can fail with |ErrConcurrentManifestWriteDuringOverwrite|
+// if the |store|'s view is stale. If contents should be unconditionally replaced without regard for the existing
+// contents, run this in a loop, rebasing |store| after each failure.
+//
+// Regardless of success or failure, |OverwriteStoreManifest| does *not* Rebase the |store|. The persisted
+// manifest contents will have been updated, but nothing about the in-memory view of the |store| will reflect
+// those updates. If |store| is Rebase'd, then the new upstream contents will be picked up.
+//
+// Extreme care should be taken when updating manifest contents through this interface. Logic typically
+// assumes that stores grow monotonically unless the |gcGen| of a manifest changes. Since this interface
+// cannot set |gcGen|, callers must ensure that calls to this function grow the store monotonically.
+func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root hash.Hash, tableFiles map[hash.Hash]uint32, appendixTableFiles map[hash.Hash]uint32) (err error) {
+	contents := manifestContents{
+		root:    root,
+		nbfVers: store.upstream.nbfVers,
 	}
-	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
+	// Appendix table files should come first in specs
+	for h, c := range appendixTableFiles {
+		s := tableSpec{name: addr(h), chunkCount: c}
+		contents.appendix = append(contents.appendix, s)
+		contents.specs = append(contents.specs, s)
+	}
+	for h, c := range tableFiles {
+		s := tableSpec{name: addr(h), chunkCount: c}
+		contents.specs = append(contents.specs, s)
+	}
+	contents.lock = generateLockHash(contents.root, contents.specs, contents.appendix)
+
+	store.mm.LockForUpdate()
+	defer func() {
+		unlockErr := store.mm.UnlockForUpdate()
+
+		if err == nil {
+			err = unlockErr
+		}
+	}()
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	updatedContents, err := store.mm.Update(ctx, store.upstream.lock, contents, store.stats, nil)
+	if err != nil {
+		return err
+	}
+	if updatedContents.lock != contents.lock {
+		return ErrConcurrentManifestWriteDuringOverwrite
+	}
+	// We don't update |nbs.upstream| here since the tables have not been rebased
+	return nil
 }
 
-func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {
+func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	readRateLimiter := make(chan struct{}, 32)
 	p := &awsTablePersister{
@@ -417,39 +481,52 @@ func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string
 		readRateLimiter,
 		&ddbTableStore{ddb, table, readRateLimiter, nil},
 		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
-		globalIndexCache,
 		ns,
-		func(bs []byte) (tableIndex, error) {
-			return parseTableIndex(bs)
-		},
+		q,
 	}
 	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
+}
+
+func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+	cacheOnce.Do(makeGlobalCaches)
+	readRateLimiter := make(chan struct{}, 32)
+	p := &awsTablePersister{
+		s3,
+		bucket,
+		readRateLimiter,
+		&ddbTableStore{ddb, table, readRateLimiter, nil},
+		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
+		ns,
+		q,
+	}
+	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
 // NewGCSStore returns an nbs implementation backed by a GCSBlobstore
-func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string, gcs *storage.Client, memTableSize uint64) (*NomsBlockStore, error) {
+func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string, gcs *storage.Client, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 
 	bs := blobstore.NewGCSBlobstore(gcs, bucketName, path)
-	return NewBSStore(ctx, nbfVerStr, bs, memTableSize)
+	return NewBSStore(ctx, nbfVerStr, bs, memTableSize, q)
 }
 
 // NewBSStore returns an nbs implementation backed by a Blobstore
-func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64) (*NomsBlockStore, error) {
+func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 
 	mm := makeManifestManager(blobstoreManifest{"manifest", bs})
 
-	p := &blobstorePersister{bs, s3BlockSize, globalIndexCache}
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
+	p := &blobstorePersister{bs, s3BlockSize, q}
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
-func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64) (*NomsBlockStore, error) {
-	return newLocalStore(ctx, nbfVerStr, dir, memTableSize, defaultMaxTables)
+func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+	return newLocalStore(ctx, nbfVerStr, dir, memTableSize, defaultMaxTables, q)
 }
 
-func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, maxTables int) (*NomsBlockStore, error) {
+func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, maxTables int, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	err := checkDir(dir)
 
@@ -464,8 +541,8 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 	}
 
 	mm := makeManifestManager(m)
-	p := newFSTablePersister(dir, globalFDCache, globalIndexCache)
-	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{maxTables}, memTableSize)
+	p := newFSTablePersister(dir, globalFDCache, q)
+	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{maxTables}, memTableSize)
 
 	if err != nil {
 		return nil, err
@@ -485,7 +562,7 @@ func checkDir(dir string) error {
 	return nil
 }
 
-func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager, p tablePersister, c conjoiner, memTableSize uint64) (*NomsBlockStore, error) {
+func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager, p tablePersister, q MemoryQuotaProvider, c conjoiner, memTableSize uint64) (*NomsBlockStore, error) {
 	if memTableSize == 0 {
 		memTableSize = defaultMemTableSize
 	}
@@ -494,7 +571,7 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 		mm:       mm,
 		p:        p,
 		c:        c,
-		tables:   newTableSet(p),
+		tables:   newTableSet(p, q),
 		upstream: manifestContents{nbfVers: nbfVerStr},
 		mtSize:   memTableSize,
 		stats:    NewStats(),
@@ -510,7 +587,7 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 	}
 
 	if exists {
-		newTables, err := nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
+		newTables, err := nbs.tables.rebase(ctx, contents.specs, nbs.stats)
 
 		if err != nil {
 			return nil, err
@@ -519,7 +596,7 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 		nbs.upstream = contents
 		oldTables := nbs.tables
 		nbs.tables = newTables
-		err = oldTables.Close()
+		err = oldTables.close()
 		if err != nil {
 			return nil, err
 		}
@@ -556,7 +633,7 @@ func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
 		return errors.New("failed to add chunk")
 	}
 
-	nbs.putCount++
+	atomic.AddUint64(&nbs.putCount, 1)
 
 	nbs.stats.PutLatency.SampleTimeSince(t1)
 
@@ -570,7 +647,7 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, h addr, data []byte) bo
 		nbs.mt = newMemTable(nbs.mtSize)
 	}
 	if !nbs.mt.addChunk(h, data) {
-		nbs.tables = nbs.tables.Prepend(ctx, nbs.mt, nbs.stats)
+		nbs.tables = nbs.tables.prepend(ctx, nbs.mt, nbs.stats)
 		nbs.mt = newMemTable(nbs.mtSize)
 		return nbs.mt.addChunk(h, data)
 	}
@@ -578,10 +655,8 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, h addr, data []byte) bo
 }
 
 func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
-	span, ctx := tracing.StartSpan(ctx, "nbs.Get")
-	defer func() {
-		span.Finish()
-	}()
+	ctx, span := tracer.Start(ctx, "nbs.Get")
+	defer span.End()
 
 	t1 := time.Now()
 	defer func() {
@@ -626,23 +701,17 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 	return chunks.EmptyChunk, nil
 }
 
-func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
-	span, ctx := tracing.StartSpan(ctx, "nbs.GetMany")
-	span.LogKV("num_hashes", len(hashes))
-	defer func() {
-		span.Finish()
-	}()
+func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
+	ctx, span := tracer.Start(ctx, "nbs.GetMany", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
+	span.End()
 	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, stats *Stats) (bool, error) {
 		return cr.getMany(ctx, eg, reqs, found, nbs.stats)
 	})
 }
 
-func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(CompressedChunk)) error {
-	span, ctx := tracing.StartSpan(ctx, "nbs.GetManyCompressed")
-	span.LogKV("num_hashes", len(hashes))
-	defer func() {
-		span.Finish()
-	}()
+func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
+	ctx, span := tracer.Start(ctx, "nbs.GetManyCompressed", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
+	defer span.End()
 	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, stats *Stats) (bool, error) {
 		return cr.getManyCompressed(ctx, eg, reqs, found, nbs.stats)
 	})
@@ -704,29 +773,6 @@ func toGetRecords(hashes hash.HashSet) []getRecord {
 
 	sort.Sort(getRecordByPrefix(reqs))
 	return reqs
-}
-
-func (nbs *NomsBlockStore) CalcReads(hashes hash.HashSet, blockSize uint64) (reads int, split bool, err error) {
-	reqs := toGetRecords(hashes)
-	tables := func() (tables tableSet) {
-		nbs.mu.RLock()
-		defer nbs.mu.RUnlock()
-		tables = nbs.tables
-
-		return
-	}()
-
-	reads, split, remaining, err := tables.calcReads(reqs, blockSize)
-
-	if err != nil {
-		return 0, false, err
-	}
-
-	if remaining {
-		return 0, false, errors.New("failed to find all chunks")
-	}
-
-	return
 }
 
 func (nbs *NomsBlockStore) Count() (uint32, error) {
@@ -866,14 +912,17 @@ func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	exists, contents, err := nbs.mm.Fetch(ctx, nbs.stats)
-
 	if err != nil {
 		return err
 	}
 
 	if exists {
-		newTables, err := nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
+		if contents.lock == nbs.upstream.lock {
+			// short-circuit if manifest is unchanged
+			return nil
+		}
 
+		newTables, err := nbs.tables.rebase(ctx, contents.specs, nbs.stats)
 		if err != nil {
 			return err
 		}
@@ -881,7 +930,7 @@ func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
 		nbs.upstream = contents
 		oldTables := nbs.tables
 		nbs.tables = newTables
-		err = oldTables.Close()
+		err = oldTables.close()
 		if err != nil {
 			return err
 		}
@@ -903,7 +952,7 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 	anyPossiblyNovelChunks := func() bool {
 		nbs.mu.Lock()
 		defer nbs.mu.Unlock()
-		return nbs.mt != nil || nbs.tables.Novel() > 0
+		return nbs.mt != nil || len(nbs.tables.novel) > 0
 	}
 
 	if !anyPossiblyNovelChunks() && current == last {
@@ -935,7 +984,7 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 			}
 
 			if cnt > preflushChunkCount {
-				nbs.tables = nbs.tables.Prepend(ctx, nbs.mt, nbs.stats)
+				nbs.tables = nbs.tables.prepend(ctx, nbs.mt, nbs.stats)
 				nbs.mt = nil
 			}
 		}
@@ -984,7 +1033,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	handleOptimisticLockFailure := func(upstream manifestContents) error {
-		newTables, err := nbs.tables.Rebase(ctx, upstream.specs, nbs.stats)
+		newTables, err := nbs.tables.rebase(ctx, upstream.specs, nbs.stats)
 		if err != nil {
 			return err
 		}
@@ -992,7 +1041,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		nbs.upstream = upstream
 		oldTables := nbs.tables
 		nbs.tables = newTables
-		err = oldTables.Close()
+		err = oldTables.close()
 
 		if last != upstream.root {
 			return errOptimisticLockFailedRoot
@@ -1018,7 +1067,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		}
 
 		if cnt > 0 {
-			nbs.tables = nbs.tables.Prepend(ctx, nbs.mt, nbs.stats)
+			nbs.tables = nbs.tables.prepend(ctx, nbs.mt, nbs.stats)
 			nbs.mt = nil
 		}
 	}
@@ -1032,7 +1081,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 			return err
 		}
 
-		newTables, err := nbs.tables.Rebase(ctx, newUpstream.specs, nbs.stats)
+		newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, nbs.stats)
 
 		if err != nil {
 			return err
@@ -1041,7 +1090,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		nbs.upstream = newUpstream
 		oldTables := nbs.tables
 		nbs.tables = newTables
-		err = oldTables.Close()
+		err = oldTables.close()
 		if err != nil {
 			return err
 		}
@@ -1049,7 +1098,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		return errOptimisticLockFailedTables
 	}
 
-	specs, err := nbs.tables.ToSpecs()
+	specs, err := nbs.tables.toSpecs()
 	if err != nil {
 		return err
 	}
@@ -1090,7 +1139,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		return handleOptimisticLockFailure(upstream)
 	}
 
-	newTables, err := nbs.tables.Flatten()
+	newTables, err := nbs.tables.flatten(ctx)
 
 	if err != nil {
 		return nil
@@ -1103,11 +1152,13 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 }
 
 func (nbs *NomsBlockStore) Version() string {
+	nbs.mu.RLock()
+	defer nbs.mu.RUnlock()
 	return nbs.upstream.nbfVers
 }
 
 func (nbs *NomsBlockStore) Close() error {
-	return nbs.tables.Close()
+	return nbs.tables.close()
 }
 
 func (nbs *NomsBlockStore) Stats() interface{} {
@@ -1125,7 +1176,7 @@ func (nbs *NomsBlockStore) StatsSummary() string {
 // tableFile is our implementation of TableFile.
 type tableFile struct {
 	info TableSpecInfo
-	open func(ctx context.Context) (io.ReadCloser, error)
+	open func(ctx context.Context) (io.ReadCloser, uint64, error)
 }
 
 // FileID gets the id of the file
@@ -1138,8 +1189,8 @@ func (tf tableFile) NumChunks() int {
 	return int(tf.info.GetChunkCount())
 }
 
-// Open returns an io.ReadCloser which can be used to read the bytes of a table file.
-func (tf tableFile) Open(ctx context.Context) (io.ReadCloser, error) {
+// Open returns an io.ReadCloser which can be used to read the bytes of a table file and the content length in bytes.
+func (tf tableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
 	return tf.open(ctx)
 }
 
@@ -1200,13 +1251,17 @@ func getTableFiles(css map[addr]chunkSource, contents manifestContents, numSpecs
 func newTableFile(cs chunkSource, info tableSpec) tableFile {
 	return tableFile{
 		info: info,
-		open: func(ctx context.Context) (io.ReadCloser, error) {
+		open: func(ctx context.Context) (io.ReadCloser, uint64, error) {
+			s, err := cs.size()
+			if err != nil {
+				return nil, 0, err
+			}
 			r, err := cs.reader(ctx)
 			if err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 
-			return ioutil.NopCloser(r), nil
+			return io.NopCloser(r), s, nil
 		},
 	}
 }
@@ -1278,30 +1333,60 @@ func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
 	}
 }
 
-// WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
-func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
+func (nbs *NomsBlockStore) Path() (string, bool) {
 	fsPersister, ok := nbs.p.(*fsTablePersister)
+	if !ok {
+		return "", false
+	}
+	return fsPersister.dir, true
+}
 
+// WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
+func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+	fsPersister, ok := nbs.p.(*fsTablePersister)
 	if !ok {
 		return errors.New("Not implemented")
 	}
 
-	path := filepath.Join(fsPersister.dir, fileId)
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
+	tn, err := func() (n string, err error) {
+		var r io.ReadCloser
+		r, _, err = getRd()
+		if err != nil {
+			return "", err
+		}
+		defer func() {
+			cerr := r.Close()
+			if err == nil {
+				err = cerr
+			}
+		}()
 
+		var temp *os.File
+		temp, err = tempfiles.MovableTempFileProvider.NewFile(fsPersister.dir, tempTablePrefix)
+		if err != nil {
+			return "", err
+		}
+
+		defer func() {
+			cerr := temp.Close()
+			if err == nil {
+				err = cerr
+			}
+		}()
+
+		_, err = io.Copy(temp, r)
+		if err != nil {
+			return "", err
+		}
+
+		return temp.Name(), nil
+	}()
 	if err != nil {
 		return err
 	}
 
-	defer func() {
-		closeErr := f.Close()
-
-		if err == nil {
-			err = closeErr
-		}
-	}()
-
-	return writeTo(f, rd, copyTableFileBufferSize)
+	path := filepath.Join(fsPersister.dir, fileId)
+	return file.Rename(tn, path)
 }
 
 // AddTableFilesToManifest adds table files to the manifest
@@ -1325,36 +1410,6 @@ func (nbs *NomsBlockStore) AddTableFilesToManifest(ctx context.Context, fileIdTo
 
 	_, err := nbs.UpdateManifest(ctx, fileIdHashToNumChunks)
 	return err
-}
-
-func writeTo(wr io.Writer, rd io.Reader, bufferSize uint32) error {
-	buf := make([]byte, bufferSize)
-
-	for {
-		// can return bytes and an io.EOF
-		n, err := rd.Read(buf)
-
-		if err != nil && err != io.EOF {
-			return err
-		}
-
-		pos := 0
-		for pos < n {
-			n, wrErr := wr.Write(buf[pos:n])
-
-			if wrErr != nil {
-				return wrErr
-			}
-
-			pos += n
-		}
-
-		if err == io.EOF {
-			break
-		}
-	}
-
-	return nil
 }
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.
@@ -1487,7 +1542,7 @@ LOOP:
 			var addErr error
 			mu := new(sync.Mutex)
 			hashset := hash.NewHashSet(hs...)
-			err := nbs.GetManyCompressed(ctx, hashset, func(c CompressedChunk) {
+			err := nbs.GetManyCompressed(ctx, hashset, func(ctx context.Context, c CompressedChunk) {
 				mu.Lock()
 				defer mu.Unlock()
 				if addErr != nil {
@@ -1519,7 +1574,7 @@ func (nbs *NomsBlockStore) gcTableSize() (uint64, error) {
 		return 0, err
 	}
 
-	avgTableSize := total / uint64(nbs.tables.Upstream()+nbs.tables.Novel()+1)
+	avgTableSize := total / uint64(nbs.tables.Size()+1)
 
 	// max(avgTableSize, defaultMemTableSize)
 	if avgTableSize > nbs.mtSize {
@@ -1567,14 +1622,14 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 	nbs.mt = newMemTable(nbs.mtSize)
 
 	// clear nbs.tables.novel
-	nbs.tables, err = nbs.tables.Flatten()
+	nbs.tables, err = nbs.tables.flatten(ctx)
 	if err != nil {
 		return err
 	}
 
 	// replace nbs.tables.upstream with gc compacted tables
 	nbs.upstream = upstream
-	nbs.tables, err = nbs.tables.Rebase(ctx, upstream.specs, nbs.stats)
+	nbs.tables, err = nbs.tables.rebase(ctx, upstream.specs, nbs.stats)
 	if err != nil {
 		return err
 	}
@@ -1600,4 +1655,28 @@ func (nbs *NomsBlockStore) SetRootChunk(ctx context.Context, root, previous hash
 		// Same behavior as Commit
 		// I guess this thing infinitely retries without backoff in the case off errOptimisticLockFailedTables
 	}
+}
+
+// CalcReads computes the number of IO operations necessary to fetch |hashes|.
+func CalcReads(nbs *NomsBlockStore, hashes hash.HashSet, blockSize uint64) (reads int, split bool, err error) {
+	reqs := toGetRecords(hashes)
+	tables := func() (tables tableSet) {
+		nbs.mu.RLock()
+		defer nbs.mu.RUnlock()
+		tables = nbs.tables
+
+		return
+	}()
+
+	reads, split, remaining, err := tableSetCalcReads(tables, reqs, blockSize)
+
+	if err != nil {
+		return 0, false, err
+	}
+
+	if remaining {
+		return 0, false, errors.New("failed to find all chunks")
+	}
+
+	return
 }

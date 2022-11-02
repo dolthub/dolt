@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+	"unsafe"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -32,15 +33,26 @@ const (
 	blobStringTypeParam_Length  = "length"
 )
 
+// blobStringType handles the TEXT types. This was originally done in varStringType, however it did not properly
+// handle large strings (such as strings over several hundred megabytes), and thus this type was created. Any
+// repositories that were made before the introduction of blobStringType will still use varStringType for existing
+// columns.
 type blobStringType struct {
 	sqlStringType sql.StringType
 }
 
 var _ TypeInfo = (*blobStringType)(nil)
 
+var (
+	TinyTextType   TypeInfo = &blobStringType{sqlStringType: sql.TinyText}
+	TextType       TypeInfo = &blobStringType{sqlStringType: sql.Text}
+	MediumTextType TypeInfo = &blobStringType{sqlStringType: sql.MediumText}
+	LongTextType   TypeInfo = &blobStringType{sqlStringType: sql.LongText}
+)
+
 func CreateBlobStringTypeFromParams(params map[string]string) (TypeInfo, error) {
 	var length int64
-	var collation sql.Collation
+	var collation sql.CollationID
 	var err error
 	if collationStr, ok := params[blobStringTypeParam_Collate]; ok {
 		collation, err = sql.ParseCollation(nil, &collationStr, false)
@@ -69,7 +81,11 @@ func CreateBlobStringTypeFromParams(params map[string]string) (TypeInfo, error) 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *blobStringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Blob); ok {
-		return fromBlob(val)
+		b, err := fromBlob(val)
+		if sql.IsBinaryType(ti.sqlStringType) {
+			return b, err
+		}
+		return string(b), err
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -86,7 +102,11 @@ func (ti *blobStringType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecRea
 		if err != nil {
 			return nil, err
 		}
-		return fromBlob(val)
+		b, err := fromBlob(val)
+		if sql.IsBinaryType(ti.sqlStringType) {
+			return b, err
+		}
+		return string(b), err
 	case types.NullKind:
 		_ = reader.ReadKind()
 		return nil, nil
@@ -130,7 +150,7 @@ func (ti *blobStringType) FormatValue(v types.Value) (*string, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &resStr, nil
+		return (*string)(unsafe.Pointer(&resStr)), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -169,21 +189,6 @@ func (ti *blobStringType) NomsKind() types.NomsKind {
 	return types.BlobKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *blobStringType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil {
-		return types.NullValue, nil
-	}
-	strVal, err := ti.sqlStringType.Convert(*str)
-	if err != nil {
-		return nil, err
-	}
-	if val, ok := strVal.(string); ok {
-		return types.NewBlob(ctx, vrw, strings.NewReader(val))
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
-}
-
 // Promote implements TypeInfo interface.
 func (ti *blobStringType) Promote() TypeInfo {
 	return &blobStringType{ti.sqlStringType.Promote().(sql.StringType)}
@@ -203,7 +208,24 @@ func (ti *blobStringType) ToSqlType() sql.Type {
 func blobStringTypeConverter(ctx context.Context, src *blobStringType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			blob, ok := v.(types.Blob)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting blob to %s: %T", strings.ToLower(dest.String()), v)
+			}
+			val, err := fromBlob(blob)
+			if err != nil {
+				return nil, err
+			}
+			newVal, err := strconv.ParseUint(string(val), 10, int(dest.sqlBitType.NumberOfBits()))
+			if err != nil {
+				return nil, err
+			}
+			return types.Uint(newVal), nil
+		}, true, nil
 	case *blobStringType:
 		return wrapIsValid(dest.IsValid, src, dest)
 	case *boolType:
@@ -216,11 +238,27 @@ func blobStringTypeConverter(ctx context.Context, src *blobStringType, destTi Ty
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geomcollType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geometryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *linestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multilinestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipolygonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *pointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *polygonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)

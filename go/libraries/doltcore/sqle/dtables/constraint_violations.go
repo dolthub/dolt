@@ -17,6 +17,8 @@ package dtables
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -24,24 +26,16 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// ConstraintViolationsTable is a sql.Table implementation that provides access to the constraint violations that exist
-// for a user table.
-type ConstraintViolationsTable struct {
-	tblName string
-	root    *doltdb.RootValue
-	cvSch   schema.Schema
-	sqlSch  sql.Schema
-	tbl     *doltdb.Table
-	rs      RootSetter
+// NewConstraintViolationsTable returns a sql.Table that lists constraint violations.
+func NewConstraintViolationsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+	if root.VRW().Format() == types.Format_DOLT {
+		return newProllyCVTable(ctx, tblName, root, rs)
+	}
+
+	return newNomsCVTable(ctx, tblName, root, rs)
 }
 
-const varcharMaxByteLength = 65535
-
-var _ sql.Table = (*ConstraintViolationsTable)(nil)
-var _ sql.DeletableTable = (*ConstraintViolationsTable)(nil)
-
-// NewConstraintViolationsTable returns a new ConstraintViolationsTable.
-func NewConstraintViolationsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+func newNomsCVTable(ctx *sql.Context, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
 	tbl, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
 	if err != nil {
 		return nil, err
@@ -56,7 +50,8 @@ func NewConstraintViolationsTable(ctx *sql.Context, tblName string, root *doltdb
 	if err != nil {
 		return nil, err
 	}
-	return &ConstraintViolationsTable{
+
+	return &constraintViolationsTable{
 		tblName: tblName,
 		root:    root,
 		cvSch:   cvSch,
@@ -66,28 +61,47 @@ func NewConstraintViolationsTable(ctx *sql.Context, tblName string, root *doltdb
 	}, nil
 }
 
+// constraintViolationsTable is a sql.Table implementation that provides access to the constraint violations that exist
+// for a user table for the old format.
+type constraintViolationsTable struct {
+	tblName string
+	root    *doltdb.RootValue
+	cvSch   schema.Schema
+	sqlSch  sql.PrimaryKeySchema
+	tbl     *doltdb.Table
+	rs      RootSetter
+}
+
+var _ sql.Table = (*constraintViolationsTable)(nil)
+var _ sql.DeletableTable = (*constraintViolationsTable)(nil)
+
 // Name implements the interface sql.Table.
-func (cvt *ConstraintViolationsTable) Name() string {
+func (cvt *constraintViolationsTable) Name() string {
 	return doltdb.DoltConstViolTablePrefix + cvt.tblName
 }
 
 // String implements the interface sql.Table.
-func (cvt *ConstraintViolationsTable) String() string {
+func (cvt *constraintViolationsTable) String() string {
 	return doltdb.DoltConstViolTablePrefix + cvt.tblName
 }
 
 // Schema implements the interface sql.Table.
-func (cvt *ConstraintViolationsTable) Schema() sql.Schema {
-	return cvt.sqlSch
+func (cvt *constraintViolationsTable) Schema() sql.Schema {
+	return cvt.sqlSch.Schema
+}
+
+// Collation implements the interface sql.Table.
+func (cvt *constraintViolationsTable) Collation() sql.CollationID {
+	return sql.Collation_Default
 }
 
 // Partitions implements the interface sql.Table.
-func (cvt *ConstraintViolationsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(types.EmptyMap), nil
+func (cvt *constraintViolationsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+	return index.SinglePartitionIterFromNomsMap(nil), nil
 }
 
 // PartitionRows implements the interface sql.Table.
-func (cvt *ConstraintViolationsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+func (cvt *constraintViolationsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	cvMap, err := cvt.tbl.GetConstraintViolations(ctx)
 	if err != nil {
 		return nil, err
@@ -96,11 +110,11 @@ func (cvt *ConstraintViolationsTable) PartitionRows(ctx *sql.Context, part sql.P
 	if err != nil {
 		return nil, err
 	}
-	return &constraintViolationsIter{ctx, cvt.cvSch, iter}, nil
+	return &constraintViolationsIter{cvt.cvSch, iter}, nil
 }
 
 // Deleter implements the interface sql.DeletableTable.
-func (cvt *ConstraintViolationsTable) Deleter(ctx *sql.Context) sql.RowDeleter {
+func (cvt *constraintViolationsTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 	cvMap, err := cvt.tbl.GetConstraintViolations(ctx)
 	if err != nil {
 		panic(err)
@@ -108,9 +122,8 @@ func (cvt *ConstraintViolationsTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 	return &constraintViolationsDeleter{cvt, cvMap.Edit()}
 }
 
-// constraintViolationsIter is the iterator for ConstraintViolationsTable.
+// constraintViolationsIter is the iterator for constraintViolationsTable.
 type constraintViolationsIter struct {
-	ctx  *sql.Context
 	dSch schema.Schema
 	iter types.MapIterator
 }
@@ -118,8 +131,8 @@ type constraintViolationsIter struct {
 var _ sql.RowIter = (*constraintViolationsIter)(nil)
 
 // Next implements the interface sql.RowIter.
-func (cvi *constraintViolationsIter) Next() (sql.Row, error) {
-	k, v, err := cvi.iter.NextTuple(cvi.ctx)
+func (cvi *constraintViolationsIter) Next(ctx *sql.Context) (sql.Row, error) {
+	k, v, err := cvi.iter.NextTuple(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -135,9 +148,9 @@ func (cvi *constraintViolationsIter) Close(*sql.Context) error {
 	return nil
 }
 
-// constraintViolationsDeleter handles deletions on the generated ConstraintViolationsTable.
+// constraintViolationsDeleter handles deletions on the generated constraintViolationsTable.
 type constraintViolationsDeleter struct {
-	cvt    *ConstraintViolationsTable
+	cvt    *constraintViolationsTable
 	editor *types.MapEditor
 }
 

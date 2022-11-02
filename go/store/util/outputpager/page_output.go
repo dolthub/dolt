@@ -22,10 +22,13 @@
 package outputpager
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"sync"
+	"syscall"
 
 	flag "github.com/juju/gnuflag"
 	goisatty "github.com/mattn/go-isatty"
@@ -35,6 +38,7 @@ import (
 
 var (
 	noPager bool
+	testing = false
 )
 
 type Pager struct {
@@ -45,18 +49,31 @@ type Pager struct {
 }
 
 func Start() *Pager {
-	if noPager || !IsStdoutTty() {
-		return &Pager{os.Stdout, nil, nil, nil, nil}
+	// `testing` is set to true only to test this function because when testing this function, stdout is not Terminal.
+	// otherwise, it must be always false.
+	if !testing {
+		if noPager || !IsStdoutTty() {
+			return &Pager{os.Stdout, nil, nil, nil, nil}
+		}
 	}
 
-	lessPath, err := exec.LookPath("less")
-	d.Chk.NoError(err)
+	var lessPath string
+	var err error
+	var cmd *exec.Cmd
 
-	// -F ... Quit if entire file fits on first screen.
-	// -S ... Chop (truncate) long lines rather than wrapping.
-	// -R ... Output "raw" control characters.
-	// -X ... Don't use termcap init/deinit strings.
-	cmd := exec.Command(lessPath, "-FSRX")
+	lessPath, err = exec.LookPath("less")
+	if err != nil {
+		lessPath, err = exec.LookPath("more")
+		d.Chk.NoError(err)
+		cmd = exec.Command(lessPath)
+	} else {
+		d.Chk.NoError(err)
+		// -F ... Quit if entire file fits on first screen.
+		// -S ... Chop (truncate) long lines rather than wrapping.
+		// -R ... Output "raw" control characters.
+		// -X ... Don't use termcap init/deinit strings.
+		cmd = exec.Command(lessPath, "-FSRX")
+	}
 
 	stdin, stdout, err := os.Pipe()
 	d.Chk.NoError(err)
@@ -66,9 +83,28 @@ func Start() *Pager {
 	cmd.Start()
 
 	p := &Pager{stdout, stdin, stdout, &sync.Mutex{}, make(chan struct{})}
+
+	interruptChannel := make(chan os.Signal, 1)
+	signal.Notify(interruptChannel, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+
+	go func() {
+		for {
+			select {
+			case _, ok := <-interruptChannel:
+				if ok {
+					p.closePipe()
+					p.doneCh <- struct{}{}
+				}
+			default:
+			}
+		}
+	}()
+
 	go func() {
 		err := cmd.Wait()
-		d.Chk.NoError(err)
+		if err != nil {
+			fmt.Printf("error occurred during exit: %s ", err)
+		}
 		p.closePipe()
 		p.doneCh <- struct{}{}
 	}()
@@ -100,4 +136,8 @@ func RegisterOutputpagerFlags(flags *flag.FlagSet) {
 
 func IsStdoutTty() bool {
 	return goisatty.IsTerminal(os.Stdout.Fd())
+}
+
+func SetTestingArg(s bool) {
+	testing = s
 }

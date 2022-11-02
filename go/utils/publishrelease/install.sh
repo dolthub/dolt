@@ -51,8 +51,14 @@ assert_linux_or_macos() {
   if [ "$OS" != Linux -a "$OS" != Darwin ]; then
     fail "E_UNSUPPORTED_OS" "dolt install.sh only supports macOS and Linux."
   fi
-  if [ "$ARCH" != x86_64 -a "$ARCH" != i386 -a "$ARCH" != i686 -a "$ARCH-$OS" != arm64-Darwin ]; then
-    fail "E_UNSUPPOSED_ARCH" "dolt install.sh only supports installing dolt on x86_64 or x86 or Darwin-arm64."
+
+  # Translate aarch64 to arm64, since that's what GOARCH calls it
+  if [ "$ARCH" == "aarch64" ]; then
+    ARCH="arm64"
+  fi
+
+  if [ "$ARCH-$OS" != "x86_64-Linux" -a "$ARCH-$OS" != "x86_64-Darwin" -a "$ARCH-$OS" != "arm64-Darwin" -a "$ARCH-$OS" != "arm64-Linux" ]; then
+    fail "E_UNSUPPOSED_ARCH" "dolt install.sh only supports installing dolt on x86_64, x86, Linux-aarch64, or Darwin-arm64."
   fi
 
   if [ "$OS" == Linux ]; then
@@ -62,10 +68,8 @@ assert_linux_or_macos() {
   fi
   if [ "$ARCH" == x86_64 ]; then
     PLATFORM_TUPLE=$PLATFORM_TUPLE-amd64
-  elif [ "$ARCH" == arm64 -a "$OS" == Darwin ]; then
-    PLATFORM_TUPLE=$PLATFORM_TUPLE-amd64
-  else
-    PLATFORM_TUPLE=$PLATFORM_TUPLE-386
+  elif [ "$ARCH" == arm64 ]; then
+    PLATFORM_TUPLE=$PLATFORM_TUPLE-arm64
   fi
 }
 
@@ -99,9 +103,9 @@ install_binary_release() {
   echo "Downloading:" $URL
   curl -A "$CURL_USER_AGENT" -fsL "$URL" > "$FILE"
   tar zxf "$FILE"
-  echo "Installing dolt, git-dolt and git-dolt-smudge to /usr/local/bin."
+  echo "Installing dolt /usr/local/bin."
   [ -d /usr/local/bin ] || install -o 0 -g 0 -d /usr/local/bin
-  install -o 0 -g 0 dolt-$PLATFORM_TUPLE/bin/{dolt,git-dolt,git-dolt-smudge} /usr/local/bin
+  install -o 0 -g 0 dolt-$PLATFORM_TUPLE/bin/dolt /usr/local/bin
   install -o 0 -g 0 -d /usr/local/share/doc/dolt/
   install -o 0 -g 0 -m 644 dolt-$PLATFORM_TUPLE/LICENSES /usr/local/share/doc/dolt/
 }

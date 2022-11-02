@@ -19,12 +19,15 @@ import (
 	"io"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/enginetest"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -75,6 +78,9 @@ func TestReader(t *testing.T) {
 	sch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
 
+	sqlSch, err := sqlutil.FromDoltSchema("", sch)
+	require.NoError(t, err)
+
 	vrw := types.NewMemoryValueStore()
 	reader, err := OpenJSONReader(vrw, "file.json", fs, sch)
 	require.NoError(t, err)
@@ -83,9 +89,9 @@ func TestReader(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, verifySchema)
 
-	var rows []row.Row
+	var rows []sql.Row
 	for {
-		r, err := reader.ReadRow(context.Background())
+		r, err := reader.ReadSqlRow(context.Background())
 		if err == io.EOF {
 			break
 		} else {
@@ -94,12 +100,12 @@ func TestReader(t *testing.T) {
 		rows = append(rows, r)
 	}
 
-	expectedRows := []row.Row{
-		newRow(sch, 0, "tim", "sehn"),
-		newRow(sch, 1, "brian", "hendriks"),
+	expectedRows := []sql.Row{
+		{0, "tim", "sehn"},
+		{1, "brian", "hendriks"},
 	}
 
-	assert.Equal(t, expectedRows, rows)
+	assert.Equal(t, enginetest.WidenRows(sqlSch.Schema, expectedRows), rows)
 }
 
 func TestReaderBadJson(t *testing.T) {
@@ -161,7 +167,7 @@ func TestReaderBadJson(t *testing.T) {
 
 	err = nil
 	for {
-		_, err = reader.ReadRow(context.Background())
+		_, err = reader.ReadSqlRow(context.Background())
 		if err != nil {
 			break
 		}
@@ -177,7 +183,7 @@ func newRow(sch schema.Schema, id int, first, last string) row.Row {
 		2: types.String(last),
 	}
 
-	r, err := row.New(types.Format_LD_1, sch, vals)
+	r, err := row.New(types.Format_Default, sch, vals)
 
 	if err != nil {
 		panic(err)

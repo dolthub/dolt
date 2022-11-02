@@ -21,7 +21,7 @@ import (
 
 	"github.com/dolthub/fslock"
 	"github.com/fatih/color"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"

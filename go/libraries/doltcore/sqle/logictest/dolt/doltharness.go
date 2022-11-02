@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/sqllogictest/go/logictest"
 	"github.com/dolthub/vitess/go/vt/proto/query"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -50,10 +49,7 @@ const (
 type DoltHarness struct {
 	Version string
 	engine  *sqle.Engine
-
-	sess    *dsess.Session
-	idxReg  *sql.IndexRegistry
-	viewReg *sql.ViewRegistry
+	sess    *dsess.DoltSession
 }
 
 func (h *DoltHarness) EngineStr() string {
@@ -69,11 +65,7 @@ func (h *DoltHarness) ExecuteStatement(statement string) error {
 	ctx := sql.NewContext(
 		context.Background(),
 		sql.WithPid(rand.Uint64()),
-		sql.WithIndexRegistry(h.idxReg),
-		sql.WithViewRegistry(h.viewReg),
 		sql.WithSession(h.sess))
-
-	statement = normalizeStatement(statement)
 
 	_, rowIter, err := h.engine.Query(ctx, statement)
 	if err != nil {
@@ -88,8 +80,6 @@ func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []s
 	ctx := sql.NewContext(
 		context.Background(),
 		sql.WithPid(uint64(pid)),
-		sql.WithIndexRegistry(h.idxReg),
-		sql.WithViewRegistry(h.viewReg),
 		sql.WithSession(h.sess))
 
 	var sch sql.Schema
@@ -112,7 +102,7 @@ func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []s
 		return "", nil, err
 	}
 
-	results, err = rowsToResultStrings(rowIter)
+	results, err = rowsToResultStrings(ctx, rowIter)
 	if err != nil {
 		return "", nil, err
 	}
@@ -140,17 +130,10 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	h.sess = dsess.DefaultSession()
-	h.idxReg = sql.NewIndexRegistry()
-	h.viewReg = sql.NewViewRegistry()
+	ctx := dsql.NewTestSQLCtx(context.Background())
+	h.sess = ctx.Session.(*dsess.DoltSession)
 
-	ctx := sql.NewContext(
-		context.Background(),
-		sql.WithIndexRegistry(h.idxReg),
-		sql.WithViewRegistry(h.viewReg),
-		sql.WithSession(h.sess))
-
-	dbs := h.engine.Analyzer.Catalog.AllDatabases()
+	dbs := h.engine.Analyzer.Catalog.AllDatabases(ctx)
 	dsqlDBs := make([]dsql.Database, len(dbs))
 	for i, db := range dbs {
 		dsqlDB := db.(dsql.Database)
@@ -158,7 +141,6 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 
 		sess := dsess.DSessFromSess(ctx.Session)
 		err := sess.AddDB(ctx, getDbState(db, dEnv))
-
 		if err != nil {
 			return err
 		}
@@ -169,13 +151,6 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		}
 
 		err = dsqlDB.SetRoot(ctx, root)
-
-		if err != nil {
-			return err
-		}
-
-		err = dsql.RegisterSchemaFragments(ctx, dsqlDB, root)
-
 		if err != nil {
 			return err
 		}
@@ -211,44 +186,13 @@ func getDbState(db sql.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
 	}
 }
 
-// We cheat a little at these tests. A great many of them use tables without primary keys, which we don't currently
-// support. Until we do, we just make every column in such tables part of the primary key.
-func normalizeStatement(statement string) string {
-	if !strings.Contains(statement, "CREATE TABLE") {
-		return statement
-	}
-	if strings.Contains(statement, "PRIMARY KEY") {
-		return statement
-	}
-
-	stmt, err := sqlparser.Parse(statement)
-	if err != nil {
-		panic(err)
-	}
-	create, ok := stmt.(*sqlparser.DDL)
-	if !ok {
-		panic("Expected CREATE TABLE statement")
-	}
-
-	lastParen := strings.LastIndex(statement, ")")
-	normalized := statement[:lastParen] + ", PRIMARY KEY ("
-	for i, column := range create.TableSpec.Columns {
-		normalized += column.Name.String()
-		if i != len(create.TableSpec.Columns)-1 {
-			normalized += ", "
-		}
-	}
-	normalized += "))"
-	return normalized
-}
-
 func drainIterator(ctx *sql.Context, iter sql.RowIter) error {
 	if iter == nil {
 		return nil
 	}
 
 	for {
-		_, err := iter.Next()
+		_, err := iter.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -261,13 +205,13 @@ func drainIterator(ctx *sql.Context, iter sql.RowIter) error {
 
 // This shouldn't be necessary -- the fact that an iterator can return an error but not clean up after itself in all
 // cases is a bug.
-func drainIteratorIgnoreErrors(iter sql.RowIter) {
+func drainIteratorIgnoreErrors(ctx *sql.Context, iter sql.RowIter) {
 	if iter == nil {
 		return
 	}
 
 	for {
-		_, err := iter.Next()
+		_, err := iter.Next(ctx)
 		if err == io.EOF {
 			return
 		}
@@ -275,18 +219,18 @@ func drainIteratorIgnoreErrors(iter sql.RowIter) {
 }
 
 // Returns the rows in the iterator given as an array of their string representations, as expected by the test files
-func rowsToResultStrings(iter sql.RowIter) ([]string, error) {
+func rowsToResultStrings(ctx *sql.Context, iter sql.RowIter) ([]string, error) {
 	var results []string
 	if iter == nil {
 		return results, nil
 	}
 
 	for {
-		row, err := iter.Next()
+		row, err := iter.Next(ctx)
 		if err == io.EOF {
 			return results, nil
 		} else if err != nil {
-			drainIteratorIgnoreErrors(iter)
+			drainIteratorIgnoreErrors(ctx, iter)
 			return nil, err
 		} else {
 			for _, col := range row {
@@ -362,9 +306,28 @@ func schemaToSchemaString(sch sql.Schema) (string, error) {
 }
 
 func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, error) {
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	db := dsql.NewDatabase("dolt", dEnv.DbData(), opts)
-	pro := dsql.NewDoltDatabaseProvider(dEnv.Config, db)
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil, err
+	}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
+	db, err := dsql.NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
+	if err != nil {
+		return nil, err
+	}
+
+	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	if err != nil {
+		return nil, err
+	}
+
+	b := env.GetDefaultInitBranch(dEnv.Config)
+	pro, err := dsql.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS)
+	if err != nil {
+		return nil, err
+	}
+
+	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 	engine := sqle.NewDefault(pro)
 
 	return engine, nil

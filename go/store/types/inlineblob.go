@@ -55,11 +55,7 @@ func (v InlineBlob) isPrimitive() bool {
 	return true
 }
 
-func (v InlineBlob) WalkValues(ctx context.Context, cb ValueCallback) error {
-	return nil
-}
-
-func (v InlineBlob) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (v InlineBlob) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
 

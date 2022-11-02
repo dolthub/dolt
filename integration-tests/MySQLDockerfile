@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM --platform=linux/amd64 ubuntu:18.04
 
 # install python, libmysqlclient-dev, java, bats, git ruby, perl, cpan
 ENV DEBIAN_FRONTEND=noninteractive
@@ -6,11 +6,16 @@ RUN apt update -y && \
     apt install -y \
         curl \
         gnupg \
+        libwxbase3.0-0v5 \
+        libwxgtk3.0-gtk3-0v5 \
+        libsctp1 \
         software-properties-common && \
-    curl -OL https://packages.erlang-solutions.com/erlang-solutions_2.0_all.deb && \
-    dpkg -i erlang-solutions_2.0_all.deb && \
     curl -sL https://deb.nodesource.com/setup_14.x | bash - && \
     add-apt-repository ppa:deadsnakes/ppa -y && \
+    curl -OL http://packages.erlang-solutions.com/ubuntu/pool/esl-erlang_22.3.4.9-1~ubuntu~bionic_amd64.deb && \
+    dpkg -i esl-erlang_22.3.4.9-1~ubuntu~bionic_amd64.deb && \
+    curl -LO http://packages.erlang-solutions.com/ubuntu/pool/elixir_1.10.1-1~ubuntu~bionic_all.deb && \
+    dpkg -i elixir_1.10.1-1~ubuntu~bionic_all.deb && \
     apt update -y && \
     apt install -y \
         python3.8 \
@@ -44,14 +49,12 @@ RUN apt update -y && \
         postgresql-contrib \
         libpq-dev \
         nodejs \
-        esl-erlang \
-        elixir \
         postgresql-server-dev-all && \
-    update-ca-certificates -f
+        update-ca-certificates -f
 
 # install go
 WORKDIR /root
-ENV GO_VERSION=1.17.1
+ENV GO_VERSION=1.19
 ENV GOPATH=$HOME/go
 ENV PATH=$PATH:$GOPATH/bin
 ENV PATH=$PATH:$GOPATH/bin:/usr/local/go/bin
@@ -62,16 +65,25 @@ RUN curl -O "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" && \
     mkdir -p $HOME/go/{bin,src} && \
     go version
 
-# go get the MySQL dependency
-RUN go get -u github.com/go-sql-driver/mysql
+# install MySQL dependency from source
+RUN git clone https://github.com/go-sql-driver/mysql.git
+WORKDIR mysql
+RUN git checkout tags/v1.6.0 -b v1.6.0
+RUN go install .
+WORKDIR /
 
 # install dotnet
 RUN curl -LO https://download.visualstudio.microsoft.com/download/pr/13b9d84c-a35b-4ffe-8f62-447a01403d64/1f9ae31daa0f7d98513e7551246899f2/dotnet-sdk-5.0.400-linux-x64.tar.gz && \
     tar -C /usr/local/bin -xzf dotnet-sdk-5.0.400-linux-x64.tar.gz && \
     dotnet --version
 
+# install pip for python3.8
+RUN curl -LO https://bootstrap.pypa.io/get-pip.py && \
+  python3.8 get-pip.py && \
+  pip --version
+
 # install mysql connector and pymsql
-RUN pip3 install mysql-connector-python PyMySQL sqlalchemy
+RUN pip install mysql-connector-python PyMySQL sqlalchemy
 
 # Setup JAVA_HOME -- useful for docker commandline
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64/
@@ -96,17 +108,16 @@ COPY mysql-client-tests/ruby/Gemfile.lock /mysql-client-tests/ruby/
 WORKDIR /mysql-client-tests/ruby
 RUN gem install bundler -v 2.1.4 && bundle install
 
-# install R
-RUN Rscript -e 'install.packages("RMariaDB")' && \
-    Rscript -e 'install.packages("RMySQL")' && \
-    Rscript -e 'install.packages("DBI")'
+# install R packages
+RUN Rscript -e 'install.packages(c("DBI", "RMySQL", "RMariaDB"), \
+                  repos = c(RSPM="https://packagemanager.rstudio.com/cran/__linux__/bionic/latest"))'
 
 # install postgres and psql
 RUN service postgresql start
 
 # install mysql_fdw
 WORKDIR /mysql-client-tests/mysql_fdw
-RUN git clone https://github.com/EnterpriseDB/mysql_fdw
+RUN git clone https://github.com/EnterpriseDB/mysql_fdw --branch REL-2_7_0
 WORKDIR /mysql-client-tests/mysql_fdw/mysql_fdw
 RUN make USE_PGXS=1 && \
     make USE_PGXS=1 install

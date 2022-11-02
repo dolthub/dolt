@@ -30,44 +30,38 @@ func TestEnumConvertNomsValueToValue(t *testing.T) {
 	tests := []struct {
 		typ         *enumType
 		input       types.Uint
-		output      string
+		output      uint16
 		expectedErr bool
 	}{
 		{
 			generateEnumType(t, 3),
 			1,
-			"aaaa",
+			1,
 			false,
 		},
 		{
 			generateEnumType(t, 5),
 			2,
-			"aaab",
+			2,
 			false,
 		},
 		{
 			generateEnumType(t, 8),
 			3,
-			"aaac",
+			3,
 			false,
 		},
 		{
 			generateEnumType(t, 7),
 			7,
-			"aaag",
+			7,
 			false,
 		},
 		{
 			generateEnumType(t, 2),
 			0,
-			"",
+			0,
 			false,
-		},
-		{
-			generateEnumType(t, 3),
-			4,
-			"",
-			true,
 		},
 	}
 
@@ -175,12 +169,6 @@ func TestEnumFormatValue(t *testing.T) {
 			false,
 		},
 		{
-			generateEnumType(t, 2),
-			0,
-			"",
-			false,
-		},
-		{
 			generateEnumType(t, 3),
 			4,
 			"",
@@ -249,7 +237,7 @@ func TestEnumParseValue(t *testing.T) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf(`%v %v`, test.typ.String(), test.input), func(t *testing.T) {
 			vrw := types.NewMemoryValueStore()
-			output, err := test.typ.ParseValue(context.Background(), vrw, &test.input)
+			output, err := StringDefaultType.ConvertToType(context.Background(), vrw, test.typ, types.String(test.input))
 			if !test.expectedErr {
 				require.NoError(t, err)
 				assert.Equal(t, test.output, output)

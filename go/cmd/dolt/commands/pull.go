@@ -21,12 +21,12 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 var pullDocs = cli.CommandDocumentationContent{
@@ -36,7 +36,7 @@ var pullDocs = cli.CommandDocumentationContent{
 More precisely, dolt pull runs {{.EmphasisLeft}}dolt fetch{{.EmphasisRight}} with the given parameters and calls {{.EmphasisLeft}}dolt merge{{.EmphasisRight}} to merge the retrieved branch {{.EmphasisLeft}}HEAD{{.EmphasisRight}} into the current branch.
 `,
 	Synopsis: []string{
-		"{{.LessThan}}remote{{.GreaterThan}}",
+		`[{{.LessThan}}remote{{.GreaterThan}}, [{{.LessThan}}remoteBranch{{.GreaterThan}}]]`,
 	},
 }
 
@@ -52,16 +52,13 @@ func (cmd PullCmd) Description() string {
 	return "Fetch from a dolt remote data repository and merge."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd PullCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd PullCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreatePullArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, pullDocs, ap))
+	return cli.NewCommandDocumentation(pullDocs, ap)
 }
 
-func (cmd PullCmd) createArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(cli.SquashParam, "", "Merges changes to the working set without updating the commit history")
-	return ap
+func (cmd PullCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreatePullArgParser()
 }
 
 // EventType returns the type of the event to log
@@ -71,23 +68,29 @@ func (cmd PullCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-
 	ap := cli.CreatePullArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pullDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, pullDocs, ap))
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.NArg() > 1 {
+	if apr.NArg() > 2 {
 		verr := errhand.VerboseErrorFromError(actions.ErrInvalidPullArgs)
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	var remoteName string
+	var remoteName, remoteRefName string
 	if apr.NArg() == 1 {
 		remoteName = apr.Arg(0)
+	} else if apr.NArg() == 2 {
+		remoteName = apr.Arg(0)
+		remoteRefName = apr.Arg(1)
 	}
 
-	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag))
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
+
+	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -101,17 +104,40 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 // pullHelper splits pull into fetch, prepare merge, and merge to interleave printing
 func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) error {
-	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format())
-
+	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
 	if err != nil {
 		return fmt.Errorf("failed to get remote db; %w", err)
 	}
-	for _, refSpec := range pullSpec.RefSpecs {
-		remoteTrackRef := refSpec.DestRef(pullSpec.Branch)
 
-		if remoteTrackRef != nil {
+	// Fetch all references
+	branchRefs, err := srcDB.GetHeadRefs(ctx)
+	if err != nil {
+		return env.ErrFailedToReadDb
+	}
 
-			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dEnv.TempTableFilesDir(), pullSpec.Remote, srcDB, dEnv.DoltDB, pullSpec.Branch, remoteTrackRef, runProgFuncs, stopProgFuncs)
+	hasBranch, err := srcDB.HasBranch(ctx, pullSpec.Branch.GetPath())
+	if err != nil {
+		return err
+	}
+	if !hasBranch {
+		return fmt.Errorf("branch %q not found on remote", pullSpec.Branch.GetPath())
+	}
+
+	// Go through every reference and every branch in each reference
+	for _, rs := range pullSpec.RefSpecs {
+		rsSeen := false // track invalid refSpecs
+		for _, branchRef := range branchRefs {
+			remoteTrackRef := rs.DestRef(branchRef)
+			if remoteTrackRef == nil {
+				continue
+			}
+
+			rsSeen = true
+			tmpDir, err := dEnv.TempTableFilesDir()
+			if err != nil {
+				return err
+			}
+			srcDBCommit, err := actions.FetchRemoteBranch(ctx, tmpDir, pullSpec.Remote, srcDB, dEnv.DoltDB, branchRef, buildProgStarter(downloadLanguage), stopProgFuncs)
 			if err != nil {
 				return err
 			}
@@ -121,45 +147,77 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				return fmt.Errorf("fetch failed; %w", err)
 			}
 
-			t := doltdb.CommitNowFunc()
+			// Only merge iff branch is current branch and there is an upstream set (pullSpec.Branch is set to nil if there is no upstream)
+			if branchRef != pullSpec.Branch {
+				continue
+			}
+
+			t := datas.CommitNowFunc()
 
 			roots, err := dEnv.Roots(ctx)
 			if err != nil {
 				return err
 			}
 
-			name, email, err := env.GetNameAndEmail(dEnv.Config)
-			if err != nil {
-				return err
+			name, email, configErr := env.GetNameAndEmail(dEnv.Config)
+			// If the name and email aren't set we can set them to empty values for now. This is only valid for ff
+			// merges which detect for later.
+			if configErr != nil {
+				if pullSpec.Noff {
+					return configErr
+				}
+				name, email = "", ""
 			}
 
-			mergeSpec, ok, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
+			// Begin merge
+			mergeSpec, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, pullSpec.NoCommit, pullSpec.NoEdit, t)
 			if err != nil {
 				return err
 			}
-			err = mergePrinting(ctx, dEnv, mergeSpec)
-			if !ok {
+			if mergeSpec == nil {
 				return nil
 			}
+
+			// If configurations are not set and a ff merge are not possible throw an error.
+			if configErr != nil {
+				canFF, err := mergeSpec.HeadC.CanFastForwardTo(ctx, mergeSpec.MergeC)
+				if err != nil {
+					return err
+				}
+
+				if !canFF {
+					return configErr
+				}
+			}
+
+			err = validateMergeSpec(ctx, mergeSpec)
 			if err != nil {
 				return err
 			}
 
-			stats, err := merge.MergeCommitSpec(ctx, dEnv, mergeSpec)
-			printSuccessStats(stats)
+			suggestedMsg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, dEnv.RepoStateReader().CWBHeadRef().GetPath())
+			tblStats, err := performMerge(ctx, dEnv, mergeSpec, suggestedMsg)
+			printSuccessStats(tblStats)
 			if err != nil {
 				return err
 			}
+		}
+		if !rsSeen {
+			return fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, rs.GetRemRefToLocal())
 		}
 	}
 
 	if err != nil {
 		return err
 	}
-	err = actions.FetchFollowTags(ctx, dEnv.TempTableFilesDir(), srcDB, dEnv.DoltDB, runProgFuncs, stopProgFuncs)
-
+	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
 		return err
 	}
+	err = actions.FetchFollowTags(ctx, tmpDir, srcDB, dEnv.DoltDB, buildProgStarter(downloadLanguage), stopProgFuncs)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

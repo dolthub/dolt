@@ -21,43 +21,43 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// RefClosure is a transitive closure of types.Ref.
-type RefClosure interface {
-	// Contains returns true if |ref| is contained in the closure.
-	Contains(ctx context.Context, ref types.Ref) (bool, error)
+// CommitClosure is a transitive closure of commit parents.
+type CommitClosure interface {
+	// Contains returns true if |commit| is contained in the closure.
+	Contains(ctx context.Context, commit *Commit) (bool, error)
 }
 
-// NewSetRefClosure computes the entire transitive closure of |ref|.
-func NewSetRefClosure(ctx context.Context, vr types.ValueReader, ref types.Ref) (RefClosure, error) {
-	s, err := transitiveClosure(ctx, vr, ref)
+// NewSetCommitClosure computes the entire transitive closure of |commit|.
+func NewSetCommitClosure(ctx context.Context, vr types.ValueReader, commit *Commit) (CommitClosure, error) {
+	s, err := transitiveClosure(ctx, vr, commit)
 	if err != nil {
-		return setRefClosure{}, err
+		return setCommitClosure{}, err
 	}
 
-	return setRefClosure{HashSet: s}, nil
+	return setCommitClosure{HashSet: s}, nil
 }
 
-type setRefClosure struct {
+type setCommitClosure struct {
 	hash.HashSet
 }
 
-var _ RefClosure = setRefClosure{}
+var _ CommitClosure = setCommitClosure{}
 
-// Contains returns true if |ref| is contained in the closure.
-func (s setRefClosure) Contains(ctx context.Context, ref types.Ref) (ok bool, err error) {
-	ok = s.HashSet.Has(ref.TargetHash())
+// Contains returns true if |commit| is contained in the closure.
+func (s setCommitClosure) Contains(ctx context.Context, commit *Commit) (ok bool, err error) {
+	ok = s.HashSet.Has(commit.Addr())
 	return
 }
 
-func transitiveClosure(ctx context.Context, vr types.ValueReader, ref types.Ref) (s hash.HashSet, err error) {
-	h := &RefByHeightHeap{ref}
+func transitiveClosure(ctx context.Context, vr types.ValueReader, commit *Commit) (s hash.HashSet, err error) {
+	h := &CommitByHeightHeap{commit}
 	s = hash.NewHashSet()
 
-	var curr types.RefSlice
+	var curr []*Commit
 	for !h.Empty() {
-		curr = h.PopRefsOfHeight(h.MaxHeight())
-		for _, r := range curr {
-			s.Insert(r.TargetHash())
+		curr = h.PopCommitsOfHeight(h.MaxHeight())
+		for _, c := range curr {
+			s.Insert(c.Addr())
 		}
 
 		err = parentsToQueue(ctx, curr, h, vr)
@@ -69,44 +69,42 @@ func transitiveClosure(ctx context.Context, vr types.ValueReader, ref types.Ref)
 	return s, nil
 }
 
-// NewLazyRefClosure makes a lazy RefClosure, which computes the
-// transitive closure of |ref| on demand to answer Contains() queries.
-func NewLazyRefClosure(ref types.Ref, vr types.ValueReader) RefClosure {
-	return lazyRefClosure{
-		seen: hash.NewHashSet(ref.TargetHash()),
-		heap: &RefByHeightHeap{ref},
+// NewLazyCommitClosure makes a lazy CommitClosure, which computes the
+// transitive closure of |commit| on demand to answer Contains() queries.
+func NewLazyCommitClosure(commit *Commit, vr types.ValueReader) CommitClosure {
+	return lazyCommitClosure{
+		seen: hash.NewHashSet(commit.Addr()),
+		heap: &CommitByHeightHeap{commit},
 		vr:   vr,
 	}
 }
 
-type lazyRefClosure struct {
+type lazyCommitClosure struct {
 	seen hash.HashSet
-	heap *RefByHeightHeap
+	heap *CommitByHeightHeap
 	vr   types.ValueReader
 }
 
-var _ RefClosure = lazyRefClosure{}
+var _ CommitClosure = lazyCommitClosure{}
 
-// Contains returns true if |ref| is contained in the closure.
-func (l lazyRefClosure) Contains(ctx context.Context, ref types.Ref) (ok bool, err error) {
-	err = l.traverseBelowDepth(ctx, ref.Height())
+// Contains returns true if |commit| is contained in the closure.
+func (l lazyCommitClosure) Contains(ctx context.Context, commit *Commit) (ok bool, err error) {
+	err = l.traverseBelowDepth(ctx, commit.Height())
 	if err != nil {
 		return false, err
 	}
-	return l.seen.Has(ref.TargetHash()), nil
+	return l.seen.Has(commit.Addr()), nil
 }
 
 // traverseBelowDepth traverses through all of the refs of height |depth| or higher,
 // adding them to the set |l.seen|.
-func (l lazyRefClosure) traverseBelowDepth(ctx context.Context, depth uint64) (err error) {
-	var curr types.RefSlice
+func (l lazyCommitClosure) traverseBelowDepth(ctx context.Context, depth uint64) (err error) {
+	var curr []*Commit
 	for !l.heap.Empty() && depth <= l.heap.MaxHeight() {
-
-		curr = l.heap.PopRefsOfHeight(l.heap.MaxHeight())
+		curr = l.heap.PopCommitsOfHeight(l.heap.MaxHeight())
 		for _, r := range curr {
-			l.seen.Insert(r.TargetHash())
+			l.seen.Insert(r.Addr())
 		}
-
 		err = parentsToQueue(ctx, curr, l.heap, l.vr)
 		if err != nil {
 			return err

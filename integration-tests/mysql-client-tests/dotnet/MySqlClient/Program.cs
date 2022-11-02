@@ -78,4 +78,48 @@ public class DoltSQL
             Console.WriteLine(ex.ToString());
         }
     }
+
+    public static void DoltSqlTest(MySqlConnection conn)
+    {
+        string[] queries = new string[] {
+            "select dolt_add('-A');",
+            "select dolt_commit('-m', 'my commit')",
+            "select dolt_checkout('-b', 'mybranch')",
+            "insert into test (pk, `value`) values (1,1)",
+            "select dolt_commit('-a', '-m', 'my commit2')",
+            "select dolt_checkout('main')",
+            "select dolt_merge('mybranch')",
+        };
+
+        for (int i = 0; i < queries.Length ; i++) {
+            try
+            {
+                var cmd = new MySqlCommand(queries[i], conn);
+                cmd.ExecuteScalar();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+            }
+        }
+
+         var finalCmd = new MySqlCommand("select COUNT(*) FROM dolt_log", conn);
+         try
+         {
+             object result = finalCmd.ExecuteScalar();
+             if (result != null)
+             {
+                int r = Convert.ToInt32(result);
+                if (r != 3)
+                {
+                    TestException ex = new TestException($"Expected 3, Recieved {r}");
+                    throw ex;
+                }
+            }
+         }
+         catch (Exception ex)
+         {
+             Console.WriteLine(ex.ToString());
+         }
+    }
 }

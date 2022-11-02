@@ -21,31 +21,37 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 const DoltAddFuncName = "dolt_add"
 
+// Deprecated: please use the version in the dprocedures package
 type DoltAddFunc struct {
 	children []sql.Expression
 }
 
 func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	args, err := getDoltArgs(ctx, row, d.Children())
+	if err != nil {
+		return 1, err
+	}
+	return DoDoltAdd(ctx, args)
+}
+
+func DoDoltAdd(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
 		return 1, fmt.Errorf("Empty database name.")
 	}
-
-	ap := cli.CreateAddArgParser()
-	args, err := getDoltArgs(ctx, row, d.Children())
-
-	if err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return 1, err
 	}
 
-	apr, err := ap.Parse(args)
+	apr, err := cli.CreateAddArgParser().Parse(args)
 	if err != nil {
 		return 1, err
 	}
@@ -61,24 +67,24 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 			return 1, fmt.Errorf("db session not found")
 		}
 
-		roots, err = actions.StageAllTablesNoDocs(ctx, roots)
+		roots, err = actions.StageAllTables(ctx, roots)
 		if err != nil {
 			return 1, err
 		}
 
 		err = dSess.SetRoots(ctx, dbName, roots)
 		if err != nil {
-			return nil, err
+			return 1, err
 		}
 	} else {
-		roots, err = actions.StageTablesNoDocs(ctx, roots, apr.Args)
+		roots, err = actions.StageTables(ctx, roots, apr.Args)
 		if err != nil {
 			return 1, err
 		}
 
 		err = dSess.SetRoots(ctx, dbName, roots)
 		if err != nil {
-			return nil, err
+			return 1, err
 		}
 	}
 
@@ -126,6 +132,7 @@ func (d DoltAddFunc) WithChildren(children ...sql.Expression) (sql.Expression, e
 }
 
 // NewDoltAddFunc creates a new DoltAddFunc expression whose children represents the args passed in DOLT_ADD.
+// Deprecated: please use the version in the dprocedures package
 func NewDoltAddFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltAddFunc{children: args}, nil
 }

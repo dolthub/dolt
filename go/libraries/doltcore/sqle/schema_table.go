@@ -17,37 +17,43 @@ package sqle
 import (
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// The fixed SQL schema for the `dolt_schemas` table.
-func SchemasTableSqlSchema() sql.Schema {
-	sqlSchema, err := sqlutil.FromDoltSchema(doltdb.SchemasTableName, SchemasTableSchema())
-	if err != nil {
-		panic(err) // should never happen
-	}
-	return sqlSchema
+var errDoltSchemasTableFormat = fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
+var noSchemaIndexDefined = fmt.Errorf("could not find index `%s` on system table `%s`", doltdb.SchemasTablesIndexName, doltdb.SchemasTableName)
+
+const (
+	viewFragment    = "view"
+	triggerFragment = "trigger"
+)
+
+type Extra struct {
+	CreatedAt int64
 }
 
 // The fixed dolt schema for the `dolt_schemas` table.
 func SchemasTableSchema() schema.Schema {
-	typeCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, typeinfo.LegacyStringDefaultType, false, "", false, "")
+	typeCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, typeinfo.StringDefaultType, false, "", false, "")
 	if err != nil {
 		panic(err)
 	}
-	nameCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, typeinfo.LegacyStringDefaultType, false, "", false, "")
+	nameCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, typeinfo.StringDefaultType, false, "", false, "")
 	if err != nil {
 		panic(err)
 	}
-	fragmentCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesFragmentCol, schema.DoltSchemasFragmentTag, typeinfo.LegacyStringDefaultType, false, "", false, "")
+	fragmentCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesFragmentCol, schema.DoltSchemasFragmentTag, typeinfo.StringDefaultType, false, "", false, "")
 	if err != nil {
 		panic(err)
 	}
@@ -55,25 +61,29 @@ func SchemasTableSchema() schema.Schema {
 	if err != nil {
 		panic(err)
 	}
-	colColl := schema.NewColCollection(typeCol, nameCol, fragmentCol, idCol)
+	extraCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesExtraCol, schema.DoltSchemasExtraTag, typeinfo.JSONType, false, "", false, "")
+	if err != nil {
+		panic(err)
+	}
+	colColl := schema.NewColCollection(typeCol, nameCol, fragmentCol, idCol, extraCol)
 	return schema.MustSchemaFromCols(colColl)
 }
 
 // GetOrCreateDoltSchemasTable returns the `dolt_schemas` table in `db`, creating it if it does not already exist.
 func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *WritableDoltTable, retErr error) {
-	root, err := db.GetRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-	tbl, found, err := db.GetTableInsensitiveWithRoot(ctx, root, doltdb.SchemasTableName)
+	tbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
 	}
 	var rowsToAdd []sql.Row
 	if found {
 		schemasTable := tbl.(*WritableDoltTable)
-		// Old schemas table does not contain the `id` column.
-		if !tbl.Schema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) {
+		// Old schemas table does not contain the `id` or `extra` column.
+		if !tbl.Schema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) || !tbl.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) {
+			root, err := db.GetRoot(ctx)
+			if err != nil {
+				return nil, err
+			}
 			root, rowsToAdd, err = migrateOldSchemasTableToNew(ctx, db, root, schemasTable)
 			if err != nil {
 				return nil, err
@@ -82,16 +92,16 @@ func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 			return schemasTable, nil
 		}
 	}
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
 	// Create the schemas table as an empty table
 	err = db.createDoltTable(ctx, doltdb.SchemasTableName, root, SchemasTableSchema())
 	if err != nil {
 		return nil, err
 	}
-	root, err = db.GetRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-	tbl, found, err = db.GetTableInsensitiveWithRoot(ctx, root, doltdb.SchemasTableName)
+	tbl, found, err = db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
 	}
@@ -113,11 +123,7 @@ func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 		return nil, err
 	}
 	// If there was an old schemas table that contained rows, then add that data here
-	root, err = db.GetRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-	tbl, found, err = db.GetTableInsensitiveWithRoot(ctx, root, doltdb.SchemasTableName)
+	tbl, found, err = db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
 	}
@@ -158,14 +164,14 @@ func migrateOldSchemasTableToNew(
 	[]sql.Row,
 	error,
 ) {
-	// Copy all of the old data over and add an index column
+	// Copy all of the old data over and add an index column and an extra column
 	var rowsToAdd []sql.Row
-	table, err := schemasTable.doltTable(ctx)
+	table, err := schemasTable.DoltTable.DoltTable(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	rowData, err := table.GetRowData(ctx)
+	rowData, err := table.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -179,8 +185,12 @@ func migrateOldSchemasTableToNew(
 		if err != nil {
 			return err
 		}
-		// prepend the new id to each row
-		sqlRow = append(sqlRow, id)
+		// append the new id to row, if missing
+		if !schemasTable.sqlSchema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) {
+			sqlRow = append(sqlRow, id)
+		}
+		// append the extra cols to row
+		sqlRow = append(sqlRow, nil)
 		rowsToAdd = append(rowsToAdd, sqlRow)
 		id++
 		return nil
@@ -199,6 +209,53 @@ func migrateOldSchemasTableToNew(
 	return root, rowsToAdd, nil
 }
 
+func nextSchemasTableIndex(ctx *sql.Context, root *doltdb.RootValue) (int64, error) {
+	tbl, _, err := root.GetTable(ctx, doltdb.SchemasTableName)
+	if err != nil {
+		return 0, err
+	}
+
+	rows, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	empty, err := rows.Empty()
+	if err != nil {
+		return 0, err
+	}
+	if empty {
+		return 1, nil
+	}
+
+	if types.IsFormat_DOLT(tbl.Format()) {
+		p := durable.ProllyMapFromIndex(rows)
+		key, _, err := p.Last(ctx)
+		if err != nil {
+			return 0, err
+		}
+		kd, _ := p.Descriptors()
+
+		i, _ := kd.GetInt64(0, key)
+		return i + 1, nil
+	} else {
+		m := durable.NomsMapFromIndex(rows)
+		keyTpl, _, err := m.Last(ctx)
+		if err != nil {
+			return 0, err
+		}
+		if keyTpl == nil {
+			return 1, nil
+		}
+
+		key, err := keyTpl.(types.Tuple).Get(1)
+		if err != nil {
+			return 0, err
+		}
+		return int64(key.(types.Int)) + 1, nil
+	}
+}
+
 // fragFromSchemasTable returns the row with the given schema fragment if it exists.
 func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType string, name string) (sql.Row, bool, error) {
 	indexes, err := tbl.GetIndexes(ctx)
@@ -213,25 +270,111 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 		}
 	}
 	if fragNameIndex == nil {
-		return nil, false, fmt.Errorf("could not find index `%s` on system table `%s`", doltdb.SchemasTablesIndexName, doltdb.SchemasTableName)
+		return nil, false, noSchemaIndexDefined
 	}
 
-	indexLookup, err := fragNameIndex.Get(fragType, name)
+	exprs := fragNameIndex.Expressions()
+	lookup, err := sql.NewIndexBuilder(fragNameIndex).Equals(ctx, exprs[0], fragType).Equals(ctx, exprs[1], name).Build(ctx)
 	if err != nil {
 		return nil, false, err
 	}
-	dil := indexLookup.(*doltIndexLookup)
-	rowIter, err := dil.RowIter(ctx, dil.IndexRowData(), nil)
+
+	iter, err := index.RowIterForIndexLookup(ctx, tbl.DoltTable, lookup, tbl.sqlSch, nil)
 	if err != nil {
 		return nil, false, err
 	}
-	defer rowIter.Close(ctx)
-	sqlRow, err := rowIter.Next()
-	if err == nil {
+
+	defer func() {
+		if cerr := iter.Close(ctx); cerr != nil {
+			err = cerr
+		}
+	}()
+
+	// todo(andy): use filtered reader?
+	for {
+		sqlRow, err := iter.Next(ctx)
+		if err == io.EOF {
+			return nil, false, nil
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		if sqlRow[0] != fragType || sqlRow[1] != name {
+			continue
+		}
 		return sqlRow, true, nil
-	} else if err == io.EOF {
-		return nil, false, nil
-	} else {
-		return nil, false, err
 	}
+}
+
+type schemaFragment struct {
+	name     string
+	fragment string
+	created  time.Time
+}
+
+func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType string) ([]schemaFragment, error) {
+	iter, err := SqlTableToRowIter(ctx, tbl.DoltTable, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var frags []schemaFragment
+	for {
+		sqlRow, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		if sqlRow[0] != fragType {
+			continue
+		}
+
+		// For tables that haven't been converted yet or are filled with nil, use 1 as the trigger creation time
+		if len(sqlRow) < 5 || sqlRow[4] == nil {
+			frags = append(frags, schemaFragment{
+				name:     sqlRow[1].(string),
+				fragment: sqlRow[2].(string),
+				created:  time.Unix(1, 0).UTC(), // TablePlus editor thinks 0 is out of range
+			})
+			continue
+		}
+
+		// Extract Created Time from JSON column
+		createdTime, err := getCreatedTime(ctx, sqlRow)
+
+		frags = append(frags, schemaFragment{
+			name:     sqlRow[1].(string),
+			fragment: sqlRow[2].(string),
+			created:  time.Unix(createdTime, 0).UTC(),
+		})
+	}
+	return frags, nil
+}
+
+func getCreatedTime(ctx *sql.Context, row sql.Row) (int64, error) {
+	doc, err := row[4].(sql.JSONValue).Unmarshall(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	err = fmt.Errorf("value %v does not contain creation time", doc.Val)
+
+	obj, ok := doc.Val.(map[string]interface{})
+	if !ok {
+		return 0, err
+	}
+
+	v, ok := obj["CreatedAt"]
+	if !ok {
+		return 0, err
+	}
+
+	f, ok := v.(float64)
+	if !ok {
+		return 0, err
+	}
+	return int64(f), nil
 }

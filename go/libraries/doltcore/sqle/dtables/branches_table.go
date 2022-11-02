@@ -15,15 +15,13 @@
 package dtables
 
 import (
-	"errors"
+	"fmt"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
 var _ sql.Table = (*BranchesTable)(nil)
@@ -66,9 +64,14 @@ func (bt *BranchesTable) Schema() sql.Schema {
 	}
 }
 
+// Collation implements the sql.Table interface.
+func (bt *BranchesTable) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
 // Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.
 func (bt *BranchesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(types.Map{}), nil
+	return index.SinglePartitionIterFromNomsMap(nil), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
@@ -109,7 +112,7 @@ func NewBranchItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (*BranchItr, error) {
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (itr *BranchItr) Next() (sql.Row, error) {
+func (itr *BranchItr) Next(ctx *sql.Context) (sql.Row, error) {
 	if itr.idx >= len(itr.commits) {
 		return nil, io.EOF
 	}
@@ -120,7 +123,7 @@ func (itr *BranchItr) Next() (sql.Row, error) {
 
 	name := itr.branches[itr.idx]
 	cm := itr.commits[itr.idx]
-	meta, err := cm.GetCommitMeta()
+	meta, err := cm.GetCommitMeta(ctx)
 
 	if err != nil {
 		return nil, err
@@ -173,81 +176,23 @@ type branchWriter struct {
 	bt *BranchesTable
 }
 
-func branchAndHashFromRow(r sql.Row) (string, string, error) {
-	branchName, ok := r[0].(string)
-
-	if !ok {
-		return "", "", errors.New("invalid value type for branch")
-	} else if !doltdb.IsValidUserBranchName(branchName) {
-		return "", "", doltdb.ErrInvBranchName
-	}
-
-	commitHash, ok := r[1].(string)
-
-	if !ok {
-		return "", "", errors.New("invalid value type for hash")
-	}
-
-	return branchName, commitHash, nil
-}
-
 // Insert inserts the row given, returning an error if it cannot. Insert will be called once for each row to process
 // for the insert operation, which may involve many rows. After all rows in an operation have been processed, Close
 // is called.
 func (bWr branchWriter) Insert(ctx *sql.Context, r sql.Row) error {
-	branchName, commitHash, err := branchAndHashFromRow(r)
-
-	if err != nil {
-		return err
-	}
-
-	cs, err := doltdb.NewCommitSpec(commitHash)
-
-	if err != nil {
-		return err
-	}
-
-	ddb := bWr.bt.ddb
-	cm, err := ddb.Resolve(ctx, cs, nil)
-
-	if err != nil {
-		return err
-	}
-
-	branchRef := ref.NewBranchRef(branchName)
-
-	// TODO: this isn't safe in a SQL context, since we have to update the working set of the new branch and it's a
-	//  race. It needs to be able to retry the same as committing a transaction.
-	return ddb.NewBranchAtCommit(ctx, branchRef, cm)
+	return fmt.Errorf("the dolt_branches table is read-only; use the dolt_branch stored procedure to edit remotes")
 }
 
 // Update the given row. Provides both the old and new rows.
 func (bWr branchWriter) Update(ctx *sql.Context, old sql.Row, new sql.Row) error {
-	return bWr.Insert(ctx, new)
+	return fmt.Errorf("the dolt_branches table is read-only; use the dolt_branch stored procedure to edit remotes")
 }
 
 // Delete deletes the given row. Returns ErrDeleteRowNotFound if the row was not found. Delete will be called once for
 // each row to process for the delete operation, which may involve many rows. After all rows have been processed,
 // Close is called.
 func (bWr branchWriter) Delete(ctx *sql.Context, r sql.Row) error {
-	branchName, _, err := branchAndHashFromRow(r)
-
-	if err != nil {
-		return err
-	}
-
-	brRef := ref.NewBranchRef(branchName)
-	exists, err := bWr.bt.ddb.HasRef(ctx, brRef)
-
-	if err != nil {
-		return err
-	}
-
-	if !exists {
-		return sql.ErrDeleteRowNotFound.New()
-	}
-
-	return bWr.bt.ddb.DeleteBranch(ctx, brRef)
+	return fmt.Errorf("the dolt_branches table is read-only; use the dolt_branch stored procedure to edit remotes")
 }
 
 // StatementBegin implements the interface sql.TableEditor. Currently a no-op.

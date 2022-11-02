@@ -17,13 +17,12 @@ package commands
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 var addDocs = cli.CommandDocumentationContent{
@@ -51,27 +50,26 @@ func (cmd AddCmd) Description() string {
 	return "Add table changes to the list of staged table changes."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd AddCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd AddCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateAddArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, addDocs, ap))
+	return cli.NewCommandDocumentation(addDocs, ap)
+}
+
+func (cmd AddCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateAddArgParser()
 }
 
 // Exec executes the command
 func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateAddArgParser()
-	helpPr, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, addDocs, ap))
+	helpPr, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, addDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, helpPr)
 
-	if apr.ContainsArg(doltdb.DocTableName) {
-		// Only allow adding the dolt_docs table if it has a conflict to resolve
-		hasConflicts, _ := docCnfsOnWorkingRoot(ctx, dEnv)
-		if !hasConflicts {
-			return HandleDocTableVErrAndExitCode()
-		}
-	}
-
 	allFlag := apr.Contains(cli.AllFlag)
+
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), helpPr)
+	}
 
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
@@ -81,17 +79,12 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if apr.NArg() == 0 && !allFlag {
 		cli.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		roots, err = actions.StageAllTables(ctx, roots, dEnv.Docs)
+		roots, err = actions.StageAllTables(ctx, roots)
 		if err != nil {
 			return handleStageError(err)
 		}
 	} else {
-		tables, docs, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), apr.Args)
-		if err != nil {
-			return handleStageError(err)
-		}
-
-		roots, err = actions.StageTables(ctx, roots, docs, tables)
+		roots, err = actions.StageTables(ctx, roots, apr.Args)
 		if err != nil {
 			return handleStageError(err)
 		}

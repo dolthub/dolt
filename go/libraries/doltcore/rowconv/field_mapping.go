@@ -21,16 +21,11 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
 // ErrMappingFileRead is an error returned when a mapping file cannot be read
 var ErrMappingFileRead = errors.New("error reading mapping file")
-
-// ErrUnmarshallingMapping is an error used when a mapping file cannot be converted from json
-var ErrUnmarshallingMapping = errors.New("error unmarshalling mapping")
 
 // ErrEmptyMapping is an error returned when the mapping is empty (No src columns, no destination columns)
 var ErrEmptyMapping = errors.New("empty mapping error")
@@ -44,12 +39,6 @@ type BadMappingErr struct {
 // String representing the BadMappingError
 func (err *BadMappingErr) Error() string {
 	return fmt.Sprintf("Mapping file attempted to map %s to %s, but one or both of those fields are unknown.", err.srcField, err.destField)
-}
-
-// IsBadMappingErr returns true if the error is a BadMappingErr
-func IsBadMappingErr(err error) bool {
-	_, ok := err.(*BadMappingErr)
-	return ok
 }
 
 // NameMapper is a simple interface for mapping a string to another string
@@ -86,34 +75,6 @@ type FieldMapping struct {
 	SrcToDest map[uint64]uint64
 }
 
-// MapsAllDestPKs checks that each PK column in DestSch has a corresponding column in SrcSch
-func (fm *FieldMapping) MapsAllDestPKs() bool {
-	ds := set.NewUint64Set(nil)
-	for _, v := range fm.SrcToDest {
-		ds.Add(v)
-	}
-	for _, tag := range fm.DestSch.GetPKCols().Tags {
-		if !ds.Contains(tag) {
-			return false
-		}
-	}
-	return true
-}
-
-func InvertMapping(fm *FieldMapping) *FieldMapping {
-	invertedMap := make(map[uint64]uint64)
-
-	for k, v := range fm.SrcToDest {
-		invertedMap[v] = k
-	}
-
-	return &FieldMapping{
-		SrcSch:    fm.DestSch,
-		DestSch:   fm.SrcSch,
-		SrcToDest: invertedMap,
-	}
-}
-
 // NewFieldMapping creates a FieldMapping from a source schema, a destination schema, and a map from tags in the source
 // schema to tags in the dest schema.
 func NewFieldMapping(srcSch, destSch schema.Schema, srcTagToDestTag map[uint64]uint64) (*FieldMapping, error) {
@@ -132,15 +93,6 @@ func NewFieldMapping(srcSch, destSch schema.Schema, srcTagToDestTag map[uint64]u
 	}
 
 	return &FieldMapping{srcSch, destSch, srcTagToDestTag}, nil
-}
-
-// Returns the identity mapping for the schema given.
-func IdentityMapping(sch schema.Schema) *FieldMapping {
-	fieldMapping, err := TagMapping(sch, sch)
-	if err != nil {
-		panic("Error creating identity mapping")
-	}
-	return fieldMapping
 }
 
 // TagMapping takes a source schema and a destination schema and maps all columns which have a matching tag in the
@@ -226,28 +178,39 @@ func NameMapperFromFile(mappingFile string, FS filesys.ReadableFS) (NameMapper, 
 	return nm, nil
 }
 
-// TypedToUntypedMapping takes a schema and creates a mapping to an untyped schema with all the same columns.
-func TypedToUntypedMapping(sch schema.Schema) (*FieldMapping, error) {
-	untypedSch, err := untyped.UntypeSchema(sch)
+// TagMappingByTagAndName takes a source schema and a destination schema and maps
+// pks by tag and non-pks by name.
+func TagMappingByTagAndName(srcSch, destSch schema.Schema) (*FieldMapping, error) {
+	srcToDest := make(map[uint64]uint64, destSch.GetAllCols().Size())
+
+	keyMap, valMap, err := schema.MapSchemaBasedOnTagAndName(srcSch, destSch)
 	if err != nil {
 		return nil, err
 	}
 
-	identityMap := make(map[uint64]uint64)
-	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		identityMap[tag] = tag
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
+	var successes int
+	for i, j := range keyMap {
+		if j == -1 {
+			continue
+		}
+		srcTag := srcSch.GetPKCols().GetByIndex(i).Tag
+		dstTag := destSch.GetPKCols().GetByIndex(j).Tag
+		srcToDest[srcTag] = dstTag
+		successes++
+	}
+	for i, j := range valMap {
+		if j == -1 {
+			continue
+		}
+		srcTag := srcSch.GetNonPKCols().GetByIndex(i).Tag
+		dstTag := destSch.GetNonPKCols().GetByIndex(j).Tag
+		srcToDest[srcTag] = dstTag
+		successes++
 	}
 
-	mapping, err := NewFieldMapping(sch, untypedSch, identityMap)
-
-	if err != nil {
-		panic(err)
+	if successes == 0 {
+		return nil, ErrEmptyMapping
 	}
 
-	return mapping, nil
+	return NewFieldMapping(srcSch, destSch, srcToDest)
 }

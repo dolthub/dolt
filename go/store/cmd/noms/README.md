@@ -1,24 +1,5 @@
-## Example
+The noms command is badly supported, but can be useful for certain debugging tasks. Notably, `noms manifest`
+and `noms show` are kept in good working order. The rest are in varying states of brokenness, but may still be useful.
 
-```shell
-cd $GOPATH/src/github.com/attic-labs/noms/samples/go/counter
-go build
-./counter /tmp/nomsdb::counter
-./counter /tmp/nomsdb::counter
-./counter /tmp/nomsdb::counter
-
-noms serve /tmp/nomsdb
-```
-
-Then, in a separate shell:
-
-```shell
-# This starts where the previous count left off because we're serving the same database
-./counter http://localhost:8000::counter
-
-# Display the datasets at this server
-noms ds http://localhost:8000
-
-# Print the history of the counter dataset
-noms log http://localhost:8000::counter
-```
+For inspecting the raw data of a dolt database, the `splunk.pl` script in this directory is your best bet. It
+uses `noms manifest` and `noms show` in a simple shell to explore a tree of values and refs. 

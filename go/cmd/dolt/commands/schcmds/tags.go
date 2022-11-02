@@ -21,12 +21,12 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var tblTagsDocs = cli.CommandDocumentationContent{
@@ -51,12 +51,12 @@ func (cmd TagsCmd) Description() string {
 	return "Shows the column tags of one or more tables."
 }
 
-func (cmd TagsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, tblTagsDocs, ap))
+func (cmd TagsCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(tblTagsDocs, ap)
 }
 
-func (cmd TagsCmd) createArgParser() *argparser.ArgParser {
+func (cmd TagsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table(s) whose tags will be displayed."})
 	ap.SupportsString(commands.FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json. Defaults to tabular.")
@@ -64,8 +64,8 @@ func (cmd TagsCmd) createArgParser() *argparser.ArgParser {
 }
 
 func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblTagsDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tblTagsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	tables := apr.Args
@@ -124,7 +124,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	}
 
-	outputFmt := commands.FormatTabular
+	outputFmt := engine.FormatTabular
 
 	formatSr, ok := apr.GetValue(commands.FormatFlag)
 
@@ -138,7 +138,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	sqlCtx := sql.NewContext(ctx)
-	err = commands.PrettyPrintResults(sqlCtx, outputFmt, headerSchema, sql.RowsToRowIter(rows...), false)
+	err = engine.PrettyPrintResults(sqlCtx, outputFmt, headerSchema, sql.RowsToRowIter(rows...))
 
 	return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }

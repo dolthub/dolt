@@ -36,7 +36,7 @@ import (
 
 const uint32Size = 4
 
-func compareEncodedKeys(a, b []byte) int {
+func compareEncodedKeys(nbf *NomsBinFormat, a, b []byte) int {
 	if compared, res := compareEmpties(a, b); compared {
 		return res
 	}
@@ -64,7 +64,7 @@ func compareEncodedKeys(a, b []byte) int {
 	for pos := 0; pos < int(minNumKeys) && cres == 0; pos++ {
 		aKey, aRest := splitAfterFirstKey(a)
 		bKey, bRest := splitAfterFirstKey(b)
-		cres = compareEncodedKey(aKey, bKey)
+		cres = compareEncodedKey(nbf, aKey, bKey)
 		a, b = aRest, bRest
 	}
 
@@ -82,7 +82,7 @@ func compareEncodedKeys(a, b []byte) int {
 // compareEncodedKey accepts two byte slices that each contain a number of
 // encoded keys. It extracts the first key in each slice and returns the result
 // of comparing them.
-func compareEncodedKey(a, b []byte) int {
+func compareEncodedKey(nbf *NomsBinFormat, a, b []byte) int {
 	// keys that are orderd by value are encoded as:
 	//   NomsKind(1-byte) + length(4-bytes) + encoding(n-bytes)
 	// keys that are not ordred by value are encoded as
@@ -114,14 +114,14 @@ func compareEncodedKey(a, b []byte) int {
 	// create a1, b1 slices that just contain encoding
 	a1, b1 := a[1+uint32Size:1+uint32Size+lenA], b[1+uint32Size:1+uint32Size+lenB]
 
-	return compareEncodedNomsValues(a1, b1)
+	return compareEncodedNomsValues(nbf, a1, b1)
 }
 
 // compareEncodedNomsValues compares two slices. Each slice contains a first
 // byte that holds the nomsKind of the original key and an encoding for that key.
 // This method relies on knowledge about how bytes are arranged in a Noms
 // encoding and makes use of that for comparing values efficiently.
-func compareEncodedNomsValues(a, b []byte) int {
+func compareEncodedNomsValues(nbf *NomsBinFormat, a, b []byte) int {
 	if compared, res := compareEmpties(a, b); compared {
 		return res
 	}
@@ -164,9 +164,9 @@ func compareEncodedNomsValues(a, b []byte) int {
 		return 1
 	case FloatKind:
 		reader := binaryNomsReader{a[1:], 0}
-		aNum := Float(reader.ReadFloat(Format_7_18))
+		aNum := Float(reader.ReadFloat(nbf))
 		reader.buff, reader.offset = b[1:], 0
-		bNum := Float(reader.ReadFloat(Format_7_18))
+		bNum := Float(reader.ReadFloat(nbf))
 		if aNum == bNum {
 			return 0
 		}
@@ -217,7 +217,7 @@ func minByte(a, b byte) byte {
 }
 
 // encodeKeys() serializes a list of keys to the byte slice |bs|.
-func encodeKeys(bs []byte, colId uint32, opKind NomsKind, keys []Value) ([]byte, []Value, error) {
+func encodeKeys(nbf *NomsBinFormat, bs []byte, colId uint32, opKind NomsKind, keys []Value) ([]byte, []Value, error) {
 	// All ldb keys start with a 4-byte collection id that serves as a namespace
 	// that keeps them separate from other collections.
 	idHolder := [4]byte{}
@@ -234,7 +234,7 @@ func encodeKeys(bs []byte, colId uint32, opKind NomsKind, keys []Value) ([]byte,
 	valuesToEncode := ValueSlice{}
 	for _, gk := range keys {
 		var err error
-		bs, err = encodeGraphKey(bs, gk)
+		bs, err = encodeGraphKey(nbf, bs, gk)
 
 		if err != nil {
 			return nil, nil, err
@@ -247,11 +247,11 @@ func encodeKeys(bs []byte, colId uint32, opKind NomsKind, keys []Value) ([]byte,
 	return bs, valuesToEncode, nil
 }
 
-func encodeGraphKey(bs []byte, v Value) ([]byte, error) {
-	return encodeForGraph(bs, v, false)
+func encodeGraphKey(nbf *NomsBinFormat, bs []byte, v Value) ([]byte, error) {
+	return encodeForGraph(nbf, bs, v, false)
 }
 
-func encodeForGraph(bs []byte, v Value, asValue bool) ([]byte, error) {
+func encodeForGraph(nbf *NomsBinFormat, bs []byte, v Value, asValue bool) ([]byte, error) {
 	// Note: encToSlice() and append() will both grow the backing store of |bs|
 	// as necessary. Always call them when writing to |bs|.
 	if asValue || isKindOrderedByValue(v.Kind()) {
@@ -259,7 +259,7 @@ func encodeForGraph(bs []byte, v Value, asValue bool) ([]byte, error) {
 		// noms-kind(1-byte), serialization-len(4-bytes), serialization(n-bytes)
 		buf := [initialBufferSize]byte{}
 		uint32buf := [4]byte{}
-		encodedVal, err := encToSlice(v, buf[:])
+		encodedVal, err := encToSlice(nbf, v, buf[:])
 
 		if err != nil {
 			return nil, err
@@ -272,7 +272,7 @@ func encodeForGraph(bs []byte, v Value, asValue bool) ([]byte, error) {
 	} else {
 		// if we're encoding hash values, we know the length, so we can leave that out
 		bs = append(bs, uint8(v.Kind()))
-		h, err := v.Hash(Format_7_18)
+		h, err := v.Hash(nbf)
 
 		if err != nil {
 			return nil, err
@@ -284,10 +284,10 @@ func encodeForGraph(bs []byte, v Value, asValue bool) ([]byte, error) {
 }
 
 // Note that, if 'v' are prolly trees, any in-memory child chunks will be written to vw at this time.
-func encToSlice(v Value, initBuf []byte) ([]byte, error) {
+func encToSlice(nbf *NomsBinFormat, v Value, initBuf []byte) ([]byte, error) {
 	// TODO: Are there enough calls to this that it's worth re-using a nomsWriter?
 	w := &binaryNomsWriter{initBuf, 0}
-	err := v.writeTo(w, Format_7_18)
+	err := v.writeTo(w, nbf)
 
 	if err != nil {
 		return nil, err
@@ -322,11 +322,11 @@ func TestCompareTotalOrdering(t *testing.T) {
 			if i == j {
 				assert.True(vi.Equals(vj))
 			} else if i < j {
-				x, err := vi.Less(Format_7_18, vj)
+				x, err := vi.Less(vrw.Format(), vj)
 				require.NoError(t, err)
 				assert.True(x)
 			} else {
-				x, err := vi.Less(Format_7_18, vj)
+				x, err := vi.Less(vrw.Format(), vj)
 				require.NoError(t, err)
 				assert.False(x)
 			}
@@ -348,26 +348,26 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	require.NoError(t, err)
 	nMap, err := NewMap(context.Background(), vrw, words...)
 	require.NoError(t, err)
-	nRef, err := NewRef(blob, Format_7_18)
+	nRef, err := NewRef(blob, vrw.Format())
 	require.NoError(t, err)
 	nSet, err := NewSet(context.Background(), vrw, nums...)
 	require.NoError(t, err)
-	nStruct, err := NewStruct(Format_7_18, "teststruct", map[string]Value{"f1": Float(1)})
+	nStruct, err := NewStruct(vrw.Format(), "teststruct", map[string]Value{"f1": Float(1)})
 	require.NoError(t, err)
 
 	vals := ValueSlice{Bool(true), Float(19), String("hellow"), blob, nList, nMap, nRef, nSet, nStruct}
-	err = SortWithErroringLess(ValueSort{vals, Format_7_18})
+	err = SortWithErroringLess(ValueSort{vals, vrw.Format()})
 	require.NoError(t, err)
 
 	for i, v1 := range vals {
 		for j, v2 := range vals {
 			iBytes := [1024]byte{}
 			jBytes := [1024]byte{}
-			bytes1, err := encodeGraphKey(iBytes[:0], v1)
+			bytes1, err := encodeGraphKey(vrw.Format(), iBytes[:0], v1)
 			require.NoError(t, err)
-			bytes2, err := encodeGraphKey(jBytes[:0], v2)
+			bytes2, err := encodeGraphKey(vrw.Format(), jBytes[:0], v2)
 			require.NoError(t, err)
-			res := compareEncodedKey(bytes1, bytes2)
+			res := compareEncodedKey(vrw.Format(), bytes1, bytes2)
 			expectedRes := compareInts(i, j)
 
 			assert.Equal(expectedRes, res, "%d:%d", i, j)
@@ -378,10 +378,12 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 func TestComparePrimitives(t *testing.T) {
 	assert := assert.New(t)
 
+	nbf := Format_7_18
+
 	bools := []Bool{false, true}
 	for i, v1 := range bools {
 		for j, v2 := range bools {
-			res := compareEncodedNomsValues(encode(v1), encode(v2))
+			res := compareEncodedNomsValues(nbf, encode(nbf, v1), encode(nbf, v2))
 			assert.Equal(compareInts(i, j), res)
 		}
 	}
@@ -389,7 +391,7 @@ func TestComparePrimitives(t *testing.T) {
 	nums := []Float{-1111.29, -23, 0, 4.2345, 298}
 	for i, v1 := range nums {
 		for j, v2 := range nums {
-			res := compareEncodedNomsValues(encode(v1), encode(v2))
+			res := compareEncodedNomsValues(nbf, encode(nbf, v1), encode(nbf, v2))
 			assert.Equal(compareInts(i, j), res)
 		}
 	}
@@ -397,7 +399,7 @@ func TestComparePrimitives(t *testing.T) {
 	words := []String{"", "aaa", "another", "another1"}
 	for i, v1 := range words {
 		for j, v2 := range words {
-			res := compareEncodedNomsValues(encode(v1), encode(v2))
+			res := compareEncodedNomsValues(nbf, encode(nbf, v1), encode(nbf, v2))
 			assert.Equal(compareInts(i, j), res)
 		}
 	}
@@ -405,7 +407,7 @@ func TestComparePrimitives(t *testing.T) {
 
 func TestCompareEncodedKeys(t *testing.T) {
 	assert := assert.New(t)
-	vrw := newTestValueStore()
+	vrw := newTestValueStore_7_18()
 	defer vrw.Close()
 
 	k1 := ValueSlice{String("one"), Float(3)}
@@ -414,16 +416,16 @@ func TestCompareEncodedKeys(t *testing.T) {
 	bs1 := [initialBufferSize]byte{}
 	bs2 := [initialBufferSize]byte{}
 
-	e1, _, err := encodeKeys(bs1[:0], 0x01020304, MapKind, k1)
+	e1, _, err := encodeKeys(vrw.Format(), bs1[:0], 0x01020304, MapKind, k1)
 	require.NoError(t, err)
-	e2, _, err := encodeKeys(bs2[:0], 0x01020304, MapKind, k2)
+	e2, _, err := encodeKeys(vrw.Format(), bs2[:0], 0x01020304, MapKind, k2)
 	require.NoError(t, err)
-	assert.Equal(-1, compareEncodedKeys(e1, e2))
+	assert.Equal(-1, compareEncodedKeys(vrw.Format(), e1, e2))
 }
 
-func encode(v Value) []byte {
+func encode(nbf *NomsBinFormat, v Value) []byte {
 	w := &binaryNomsWriter{make([]byte, 128), 0}
-	v.writeTo(w, Format_7_18)
+	v.writeTo(w, nbf)
 	return w.data()
 }
 

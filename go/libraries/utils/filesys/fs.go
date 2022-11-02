@@ -51,6 +51,10 @@ type WritableFS interface {
 	// it will be overwritten.
 	OpenForWrite(fp string, perm os.FileMode) (io.WriteCloser, error)
 
+	// OpenForWriteAppend opens a file for writing. The file will be created if it does not exist, and it will
+	// append only to that new file. If file exists, it will append to existing file.
+	OpenForWriteAppend(fp string, perm os.FileMode) (io.WriteCloser, error)
+
 	// WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,
 	// and if it does exist it will be overwritten.
 	WriteFile(fp string, data []byte) error
@@ -67,6 +71,9 @@ type WritableFS interface {
 
 	// MoveFile will move a file from the srcPath in the filesystem to the destPath
 	MoveFile(srcPath, destPath string) error
+
+	// TempDir returns the path of a new temporary directory.
+	TempDir() string
 }
 
 // FSIterCB specifies the signature of the function that will be called for every item found while iterating.
@@ -93,6 +100,9 @@ type Filesys interface {
 	ReadableFS
 	WritableFS
 	WalkableFS
+
+	// WithWorkingDir returns a copy of this Filesys with the given working directory
+	WithWorkingDir(path string) (Filesys, error)
 }
 
 func UnmarshalJSONFile(fs ReadableFS, path string, dest interface{}) error {
@@ -103,4 +113,31 @@ func UnmarshalJSONFile(fs ReadableFS, path string, dest interface{}) error {
 	}
 
 	return json.Unmarshal(data, dest)
+}
+
+func CopyFile(srcPath, destPath string, srcFS, destFS Filesys) (err error) {
+	rd, err := srcFS.OpenForRead(srcPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		cerr := rd.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
+
+	wr, err := destFS.OpenForWrite(destPath, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		cerr := wr.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
+
+	_, err = io.Copy(wr, rd)
+	return
 }

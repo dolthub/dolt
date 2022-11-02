@@ -59,13 +59,14 @@ var (
 )
 
 // RegisterHRSCommenter is called to with three arguments:
-//  typename: the name of the struct this function will be applied to
-//  unique: an arbitrary string to differentiate functions that should be applied
-//    to different structs that have the same name (e.g. two implementations of
-//    the "Employee" type.
-//  commenter: an interface with a 'Comment()' function that gets called for all
-//    Values with this name. The function should verify the type of the Value
-//    and, if appropriate, return a non-empty string to be appended as the comment
+//
+//	typename: the name of the struct this function will be applied to
+//	unique: an arbitrary string to differentiate functions that should be applied
+//	  to different structs that have the same name (e.g. two implementations of
+//	  the "Employee" type.
+//	commenter: an interface with a 'Comment()' function that gets called for all
+//	  Values with this name. The function should verify the type of the Value
+//	  and, if appropriate, return a non-empty string to be appended as the comment
 func RegisterHRSCommenter(typename, unique string, commenter HRSCommenter) {
 	registryLock.Lock()
 	defer registryLock.Unlock()
@@ -255,7 +256,6 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 			return err
 		}
 
-		w.outdent()
 		w.write(")")
 
 	case MapKind:
@@ -445,11 +445,6 @@ func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {
 		w.write(t.TargetKind().String())
 		w.write("<")
 		for i, et := range t.Desc.(CompoundDesc).ElemTypes {
-			if et.TargetKind() == UnionKind && len(et.Desc.(CompoundDesc).ElemTypes) == 0 {
-				// If one of the element types is an empty union all the other element types must
-				// also be empty union types.
-				break
-			}
 			if i != 0 {
 				w.write(", ")
 			}
@@ -460,6 +455,9 @@ func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {
 		}
 		w.write(">")
 	case UnionKind:
+		if len(t.Desc.(CompoundDesc).ElemTypes) == 0 {
+			w.write("Union<>")
+		}
 		for i, et := range t.Desc.(CompoundDesc).ElemTypes {
 			if i != 0 {
 				w.write(" | ")

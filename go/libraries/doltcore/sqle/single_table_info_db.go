@@ -21,9 +21,10 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 // SingleTableInfoDatabase is intended to allow a sole schema to make use of any display functionality in `go-mysql-server`.
@@ -37,10 +38,9 @@ type SingleTableInfoDatabase struct {
 	parentSchs  map[string]schema.Schema
 }
 
-var _ sql.Database = (*SingleTableInfoDatabase)(nil)
-var _ sql.Table = (*SingleTableInfoDatabase)(nil)
+var _ doltReadOnlyTableInterface = (*SingleTableInfoDatabase)(nil)
 var _ sql.IndexedTable = (*SingleTableInfoDatabase)(nil)
-var _ sql.ForeignKeyTable = (*SingleTableInfoDatabase)(nil)
+var _ SqlDatabase = (*SingleTableInfoDatabase)(nil)
 
 func NewSingleTableDatabase(tableName string, sch schema.Schema, foreignKeys []doltdb.ForeignKey, parentSchs map[string]schema.Schema) *SingleTableInfoDatabase {
 	return &SingleTableInfoDatabase{
@@ -78,9 +78,13 @@ func (db *SingleTableInfoDatabase) String() string {
 func (db *SingleTableInfoDatabase) Schema() sql.Schema {
 	sqlSch, err := sqlutil.FromDoltSchema(db.tableName, db.sch)
 	if err != nil {
-		panic(err)
 	}
-	return sqlSch
+	return sqlSch.Schema
+}
+
+// Collation implements sql.Table.
+func (db *SingleTableInfoDatabase) Collation() sql.CollationID {
+	return sql.CollationID(db.sch.GetCollation())
 }
 
 // Partitions implements sql.Table.
@@ -90,16 +94,43 @@ func (db *SingleTableInfoDatabase) Partitions(*sql.Context) (sql.PartitionIter, 
 
 // PartitionRows implements sql.Table.
 func (db *SingleTableInfoDatabase) PartitionRows(*sql.Context, sql.Partition) (sql.RowIter, error) {
-	return nil, fmt.Errorf("cannot get parition rows of a single table information database")
+	return nil, fmt.Errorf("cannot get partition rows of a single table information database")
 }
 
-// GetForeignKeys implements sql.ForeignKeyTable.
-func (db *SingleTableInfoDatabase) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
+func (db *SingleTableInfoDatabase) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter2, error) {
+	return nil, fmt.Errorf("cannot get partition rows of a single table information database")
+}
+
+func (db *SingleTableInfoDatabase) LookupPartitions(context *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	return nil, fmt.Errorf("cannot get paritions of a single table information database")
+}
+
+// CreateIndexForForeignKey implements sql.ForeignKeyTable.
+func (db *SingleTableInfoDatabase) CreateIndexForForeignKey(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn) error {
+	return fmt.Errorf("cannot create foreign keys on a single table information database")
+}
+
+// GetDeclaredForeignKeys implements sql.ForeignKeyTable.
+func (db *SingleTableInfoDatabase) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
 	fks := make([]sql.ForeignKeyConstraint, len(db.foreignKeys))
 	for i, fk := range db.foreignKeys {
+		if !fk.IsResolved() {
+			fks[i] = sql.ForeignKeyConstraint{
+				Name:           fk.Name,
+				Database:       ctx.GetCurrentDatabase(),
+				Table:          fk.TableName,
+				Columns:        fk.UnresolvedFKDetails.TableColumns,
+				ParentDatabase: ctx.GetCurrentDatabase(),
+				ParentTable:    fk.ReferencedTableName,
+				ParentColumns:  fk.UnresolvedFKDetails.ReferencedTableColumns,
+				OnUpdate:       toReferentialAction(fk.OnUpdate),
+				OnDelete:       toReferentialAction(fk.OnDelete),
+			}
+			continue
+		}
 		if parentSch, ok := db.parentSchs[fk.ReferencedTableName]; ok {
 			var err error
-			fks[i], err = toForeignKeyConstraint(fk, db.sch, parentSch)
+			fks[i], err = toForeignKeyConstraint(fk, ctx.GetCurrentDatabase(), db.sch, parentSch)
 			if err != nil {
 				return nil, err
 			}
@@ -111,33 +142,174 @@ func (db *SingleTableInfoDatabase) GetForeignKeys(ctx *sql.Context) ([]sql.Forei
 	return fks, nil
 }
 
+// GetReferencedForeignKeys implements sql.ForeignKeyTable.
+func (db *SingleTableInfoDatabase) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
+	return nil, nil
+}
+
+// AddForeignKey implements sql.ForeignKeyTable.
+func (db *SingleTableInfoDatabase) AddForeignKey(ctx *sql.Context, fk sql.ForeignKeyConstraint) error {
+	return fmt.Errorf("cannot create foreign keys on a single table information database")
+}
+
+// DropForeignKey implements sql.ForeignKeyTable.
+func (db *SingleTableInfoDatabase) DropForeignKey(ctx *sql.Context, fkName string) error {
+	return fmt.Errorf("cannot create foreign keys on a single table information database")
+}
+
+// UpdateForeignKey implements sql.ForeignKeyTable.
+func (db *SingleTableInfoDatabase) UpdateForeignKey(ctx *sql.Context, fkName string, fk sql.ForeignKeyConstraint) error {
+	return fmt.Errorf("cannot create foreign keys on a single table information database")
+}
+
+// GetForeignKeyUpdater implements sql.ForeignKeyTable.
+func (db *SingleTableInfoDatabase) GetForeignKeyUpdater(ctx *sql.Context) sql.ForeignKeyUpdater {
+	return nil
+}
+
 // WithIndexLookup implements sql.IndexedTable.
-func (db *SingleTableInfoDatabase) WithIndexLookup(sql.IndexLookup) sql.Table {
+func (db *SingleTableInfoDatabase) IndexedAccess(sql.Index) sql.IndexedTable {
 	return db
 }
 
 // GetIndexes implements sql.IndexedTable.
 func (db *SingleTableInfoDatabase) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	var sqlIndexes []sql.Index
-	for _, index := range db.sch.Indexes().AllIndexes() {
-		cols := make([]schema.Column, index.Count())
-		for i, tag := range index.IndexedColumnTags() {
-			cols[i], _ = index.GetColumn(tag)
+	for _, idx := range db.sch.Indexes().AllIndexes() {
+		cols := make([]schema.Column, idx.Count())
+		for i, tag := range idx.IndexedColumnTags() {
+			cols[i], _ = idx.GetColumn(tag)
 		}
-		sqlIndexes = append(sqlIndexes, &doltIndex{
-			cols:         cols,
-			db:           db,
-			id:           index.Name(),
-			indexRowData: types.EmptyMap,
-			indexSch:     index.Schema(),
-			table:        nil,
-			tableData:    types.EmptyMap,
-			tableName:    db.tableName,
-			tableSch:     db.sch,
-			unique:       index.IsUnique(),
-			comment:      index.Comment(),
-			generated:    false,
+		sqlIndexes = append(sqlIndexes, &fmtIndex{
+			id:        idx.Name(),
+			db:        db.Name(),
+			tbl:       db.tableName,
+			cols:      cols,
+			unique:    idx.IsUnique(),
+			generated: false,
+			comment:   idx.Comment(),
 		})
 	}
 	return sqlIndexes, nil
+}
+
+func (db *SingleTableInfoDatabase) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
+	return checksInSchema(db.sch), nil
+}
+
+func (db *SingleTableInfoDatabase) IsTemporary() bool {
+	return false
+}
+
+func (db *SingleTableInfoDatabase) DataLength(ctx *sql.Context) (uint64, error) {
+	// TODO: to answer this accurately, we need the table as well as the schema
+	return 0, nil
+}
+
+// AnalyzeTable implements the sql.StatisticsTable interface.
+func (db *SingleTableInfoDatabase) AnalyzeTable(ctx *sql.Context) error {
+	return nil
+}
+
+// Statistics implements the sql.StatisticsTable interface.
+func (db *SingleTableInfoDatabase) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
+	return nil, nil
+}
+
+func (db *SingleTableInfoDatabase) PrimaryKeySchema() sql.PrimaryKeySchema {
+	sqlSch, err := sqlutil.FromDoltSchema(db.tableName, db.sch)
+	if err != nil {
+	}
+	return sqlSch
+}
+
+func (db *SingleTableInfoDatabase) GetRoot(context *sql.Context) (*doltdb.RootValue, error) {
+	return nil, nil
+}
+
+func (db *SingleTableInfoDatabase) DbData() env.DbData {
+	panic("SingleTableInfoDatabase doesn't have DbData")
+}
+
+func (db *SingleTableInfoDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
+	panic("SingleTableInfoDatabase cannot start transaction")
+}
+
+func (db *SingleTableInfoDatabase) Flush(context *sql.Context) error {
+	panic("SingleTableInfoDatabase cannot Flush")
+}
+
+func (db *SingleTableInfoDatabase) EditOptions() editor.Options {
+	return editor.Options{}
+}
+
+// fmtIndex is used for CREATE TABLE statements only.
+type fmtIndex struct {
+	id  string
+	db  string
+	tbl string
+
+	cols      []schema.Column
+	unique    bool
+	generated bool
+	comment   string
+}
+
+// CanSupport implements sql.Index
+func (idx fmtIndex) CanSupport(r ...sql.Range) bool {
+	return true
+}
+
+// ID implements sql.Index
+func (idx fmtIndex) ID() string {
+	return idx.id
+}
+
+// Database implements sql.Index
+func (idx fmtIndex) Database() string {
+	return idx.db
+}
+
+// Table implements sql.Index
+func (idx fmtIndex) Table() string {
+	return idx.tbl
+}
+
+// Expressions implements sql.Index
+func (idx fmtIndex) Expressions() []string {
+	strs := make([]string, len(idx.cols))
+	for i, col := range idx.cols {
+		strs[i] = idx.tbl + "." + col.Name
+	}
+	return strs
+}
+
+// IsUnique implements sql.Index
+func (idx fmtIndex) IsUnique() bool {
+	return idx.unique
+}
+
+// Comment implements sql.Index
+func (idx fmtIndex) Comment() string {
+	return idx.comment
+}
+
+// IndexType implements sql.Index
+func (idx fmtIndex) IndexType() string {
+	return "BTREE"
+}
+
+// IsGenerated implements sql.Index
+func (idx fmtIndex) IsGenerated() bool {
+	return idx.generated
+}
+
+// NewLookup implements sql.Index
+func (idx fmtIndex) IndexedAccess(index sql.IndexLookup) (sql.IndexedTable, error) {
+	panic("unimplemented")
+}
+
+// ColumnExpressionTypes implements sql.Index
+func (idx fmtIndex) ColumnExpressionTypes() []sql.ColumnExpressionType {
+	panic("unimplemented")
 }

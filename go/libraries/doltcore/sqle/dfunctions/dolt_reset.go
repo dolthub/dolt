@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -28,15 +29,27 @@ import (
 
 const DoltResetFuncName = "dolt_reset"
 
+// Deprecated: please use the version in the dprocedures package
 type DoltResetFunc struct {
 	children []sql.Expression
 }
 
 func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	args, err := getDoltArgs(ctx, row, d.Children())
+	if err != nil {
+		return 1, err
+	}
+	return DoDoltReset(ctx, args)
+}
+
+func DoDoltReset(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
 		return 1, fmt.Errorf("Empty database name.")
+	}
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return 1, err
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
@@ -46,14 +59,7 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	ap := cli.CreateResetArgParser()
-	args, err := getDoltArgs(ctx, row, d.Children())
-
-	if err != nil {
-		return 1, err
-	}
-
-	apr, err := ap.Parse(args)
+	apr, err := cli.CreateResetArgParser().Parse(args)
 	if err != nil {
 		return 1, err
 	}
@@ -61,6 +67,21 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	// Check if problems with args first.
 	if apr.ContainsAll(cli.HardResetParam, cli.SoftResetParam) {
 		return 1, fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.HardResetParam, cli.SoftResetParam)
+	}
+
+	provider := dSess.Provider()
+	db, err := provider.Database(ctx, dbName)
+	if err != nil {
+		return 1, err
+	}
+
+	// Disallow manipulating any roots for read-only databases – changing the branch
+	// HEAD would allow changing data, and working set and index shouldn't ever have
+	// any contents for a read-only database.
+	if rodb, ok := db.(sql.ReadOnlyDatabase); ok {
+		if rodb.IsReadOnly() {
+			return 1, fmt.Errorf("unable to reset HEAD in read-only databases")
+		}
 	}
 
 	// Get all the needed roots.
@@ -93,9 +114,9 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 		ws, err := dSess.WorkingSet(ctx, dbName)
 		if err != nil {
-			return nil, err
+			return 1, err
 		}
-		err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged), nil)
+		err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge())
 		if err != nil {
 			return 1, err
 		}
@@ -154,6 +175,7 @@ func (d DoltResetFunc) WithChildren(children ...sql.Expression) (sql.Expression,
 	return NewDoltResetFunc(children...)
 }
 
+// Deprecated: please use the version in the dprocedures package
 func NewDoltResetFunc(args ...sql.Expression) (sql.Expression, error) {
 	return DoltResetFunc{children: args}, nil
 }

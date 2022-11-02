@@ -16,6 +16,155 @@ teardown() {
     [[ "$output" =~ "Initialize data repository" ]] || false
 }
 
+@test "log: log respects branches" {
+    dolt branch branch1
+    dolt commit --allow-empty -m "commit 1 MAIN"
+    dolt commit	--allow-empty -m "commit 2 MAIN"
+    dolt commit	--allow-empty -m "commit 3 MAIN"
+    run dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "BRANCH1" ]] || false
+    dolt checkout branch1
+    dolt commit	--allow-empty -m "commit 1 BRANCH1"
+    dolt commit --allow-empty -m "commit 2 BRANCH1"
+    dolt commit --allow-empty -m "commit 3 BRANCH1"
+    run	dolt log
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+    dolt checkout main
+    run	dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "BRANCH1" ]] || false
+}
+
+@test "log: two dot log" {
+    dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "commit 1 MAIN"
+    dolt commit	--allow-empty -m "commit 2 MAIN"
+    dolt checkout -b branch1
+    dolt commit	--allow-empty -m "commit 1 BRANCH1"
+    dolt commit --allow-empty -m "commit 2 BRANCH1"
+    dolt commit --allow-empty -m "commit 3 BRANCH1"
+
+    run dolt log branch1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+    run dolt log main 
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "BRANCH1" ]] || false
+    dolt checkout main
+    dolt commit	--allow-empty -m "commit 3 AFTER"
+    
+    # Valid two dot
+    run dolt log main..branch1
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+    run dolt log ^main branch1
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+    run dolt log branch1 ^main
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+    run dolt log branch1 --not main
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+    run dolt log branch1..main
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ ! "$output" =~ "BRANCH1" ]] || false
+    run dolt log main..main
+    [ $status -eq 0 ]
+    
+    run dolt log main^..branch1
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+    run dolt log ^main^ branch1
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+    run dolt log branch1 --not main^
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+
+    # Invalid two dot
+    run dolt log main..branch1 testtable
+    [ $status -eq 1 ]
+    run dolt log testtable main..branch1 
+    [ $status -eq 1 ]
+    run dolt log ^main branch1 testtable
+    [ $status -eq 1 ]
+    run dolt log branch1 testtable --not main
+    [ $status -eq 1 ]
+    run dolt log main..branch1 main
+    [ $status -eq 1 ]
+     run dolt log main main..branch1
+    [ $status -eq 1 ]
+    run dolt log ^main ^branch1
+    [ $status -eq 1 ]
+    run dolt log main branch1
+    [ $status -eq 1 ]
+    run dolt log ^main testtable
+    [ $status -eq 1 ]
+    run dolt log ^branch1 --not main
+    [ $status -eq 1 ]
+    run dolt log main..branch1 --not main
+    [ $status -eq 1 ]
+    run dolt log branch1 --not main branch1
+    [ $status -eq 1 ]
+    run dolt log branch1 --not main --not branch1
+    [ $status -eq 1 ]
+
+    run dolt log main...branch1
+    [ $status -eq 1 ]
+}
+
+@test "log: branch name and table name are the same" {
+    dolt commit --allow-empty -m "commit 1 MAIN"
+    dolt commit	--allow-empty -m "commit 2 MAIN"
+    dolt checkout -b myname
+    dolt sql -q "create table myname (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "commit 1 BRANCH1"
+    dolt commit --allow-empty -m "commit 2 BRANCH1"
+    dolt commit --allow-empty -m "commit 3 BRANCH1"
+
+    # Should default to branch name if one argument provided
+    run dolt log myname
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+
+    # Should default to first argument as branch name, second argument as table name (if table exists) if two arguments provided
+    run dolt log myname myname 
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+
+    # Table main does not exist
+    run dolt log main main
+    [ $status -eq 1 ]
+}
+
 @test "log: with -n specified" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
@@ -60,7 +209,7 @@ teardown() {
     dolt sql -q "insert into test values (1,1)"
     dolt add test
     dolt commit -m "Commit3"
-    dolt merge test-branch
+    dolt merge test-branch --no-commit
     run dolt log
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit1" ]] || false
@@ -99,6 +248,7 @@ teardown() {
 
 @test "log: Log on a table has basic functionality" {
     dolt sql -q "create table test (pk int PRIMARY KEY)"
+    dolt add .
     dolt commit -am "first commit"
 
     run dolt log test
@@ -116,6 +266,7 @@ teardown() {
     [[ ! "$output" =~ "Initialize data repository" ]] || false
 
     dolt sql -q "create table test2 (pk int PRIMARY KEY)"
+    dolt add .
     dolt commit -am "third commit"
 
     # Validate we only look at the right commits
@@ -129,6 +280,7 @@ teardown() {
 
 @test "log: Log on a table works with -n" {
     dolt sql -q "create table test (pk int PRIMARY KEY)"
+    dolt add .
     dolt commit -am "first commit"
 
     run dolt log -n 1 test
@@ -144,6 +296,7 @@ teardown() {
     [[ "$output" =~ "first commit" ]] || false
 
     dolt sql -q "create table test2 (pk int PRIMARY KEY)"
+    dolt add .
     dolt commit -am "third commit"
 
     dolt sql -q "insert into test2 values (4)"
@@ -179,7 +332,7 @@ teardown() {
     dolt sql -q "insert into test values (1,1)"
     dolt add test
     dolt commit -m "Commit3"
-    dolt merge test-branch
+    dolt merge test-branch --no-commit
 
     run dolt log test
     [ $status -eq 0 ]
@@ -259,8 +412,7 @@ teardown() {
     # Should be fast-forward 
     dolt merge branch1
     # An actual merge
-    dolt merge branch2
-    dolt commit -m "Merged branch2"
+    dolt merge branch2 -m "Merged branch2"
 
     # Only shows merge commits
     run dolt log --merges
@@ -285,4 +437,94 @@ teardown() {
     [ $status -eq 0 ]
     regex='commit .* .*\n'
     [[ "$output" =~ $regex ]] || false
+}
+
+@test "log: --oneline only shows commit message in one line" {
+    dolt commit --allow-empty -m "a message 1"
+    dolt commit --allow-empty -m "a message 2"
+    run dolt log --oneline
+    [[ !("$output" =~ "Author") ]] || false
+    [[ !("$output" =~ "Date") ]] || false
+    [[ !("$output" =~ "commit") ]] || false
+    res=$(dolt log --oneline | wc -l)
+    [ "$res" -eq 3 ] # don't forget initial commit
+    dolt commit --allow-empty -m "a message 3"
+    res=$(dolt log --oneline | wc -l)
+    [ "$res" -eq 4 ] # exactly 1 line is added
+}
+
+@test "log: --decorate=short shows trimmed branches and tags" {
+    dolt tag tag_v0
+    run dolt log --decorate=short
+    [[ "$output" =~ "commit" ]] || false
+    [[ "$output" =~ "Author" ]] || false
+    [[ "$output" =~ "Date" ]] || false
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "tag: tag_v0" ]] || false
+    [[ !("$output" =~ "/refs/heads/") ]] || false
+    [[ !("$output" =~ "/refs/tags/") ]] || false
+}
+
+@test "log: --decorate=full shows full branches and tags" {
+    dolt tag tag_v0
+    run dolt log --decorate=full
+    [[ "$output" =~ "commit" ]] || false
+    [[ "$output" =~ "Author" ]] || false
+    [[ "$output" =~ "Date" ]] || false
+    [[ "$output" =~ "refs/heads/main" ]] || false
+    [[ "$output" =~ "tag: refs/tags/tag_v0" ]] || false
+}
+
+@test "log: --decorate=no doesn't show branches or tags" {
+    dolt tag tag_v0
+    run dolt log --decorate=no
+    [[ "$output" =~ "commit" ]] || false
+    [[ "$output" =~ "Author" ]] || false
+    [[ "$output" =~ "Date" ]] || false
+    [[ !("$output" =~ "main") ]] || false
+    [[ !("$output" =~ "tag_v0") ]] || false
+}
+
+@test "log: decorate and oneline work together" {
+    dolt commit --allow-empty -m "a message 1"
+    dolt commit --allow-empty -m "a message 2"
+    run dolt log --oneline --decorate=full
+    [[ !("$output" =~ "commit") ]] || false
+    [[ !("$output" =~ "Author") ]] || false
+    [[ !("$output" =~ "Date") ]] || false
+    [[ "$output" =~ "refs/heads/main" ]] || false
+    res=$(dolt log --oneline --decorate=full | wc -l)
+    [ "$res" -eq 3 ] # don't forget initial commit
+    dolt commit --allow-empty -m "a message 3"
+    res=$(dolt log --oneline | wc -l)
+    [ "$res" -eq 4 ] # exactly 1 line is added
+}
+
+@test "log: --decorate=notanoption throws error" {
+    run dolt log --decorate=notanoption
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "fatal: invalid --decorate option" ]] || false
+}
+
+@test "log: check pager" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    dolt commit --allow-empty -m "commit 1"
+    dolt commit	--allow-empty -m "commit 2"
+    dolt commit	--allow-empty -m "commit 3"
+    dolt commit --allow-empty -m "commit 4"
+    dolt commit	--allow-empty -m "commit 5"
+    dolt commit	--allow-empty -m "commit 6"
+    dolt commit --allow-empty -m "commit 7"
+    dolt commit	--allow-empty -m "commit 8"
+    dolt commit	--allow-empty -m "commit 9"
+    dolt commit --allow-empty -m "commit 10"
+    dolt commit	--allow-empty -m "commit 11"
+    dolt commit	--allow-empty -m "commit 12"
+    dolt commit	--allow-empty -m "commit 13"
+    dolt commit --allow-empty -m "commit 14"
+    dolt commit	--allow-empty -m "commit 15"
+    dolt commit	--allow-empty -m "commit 16"
+
+    run expect $BATS_TEST_DIRNAME/log.expect
+    [ "$status" -eq 0 ]
 }

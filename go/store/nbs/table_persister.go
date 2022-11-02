@@ -27,12 +27,10 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"sort"
-	"sync"
-
-	"github.com/dolthub/dolt/go/store/util/sizecache"
 )
+
+var errCacheMiss = errors.New("index cache miss")
 
 // tablePersister allows interaction with persistent storage. It provides
 // primitives for pushing the contents of a memTable to persistent storage,
@@ -53,64 +51,6 @@ type tablePersister interface {
 
 	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 	PruneTableFiles(ctx context.Context, contents manifestContents) error
-}
-
-// indexCache provides sized storage for table indices. While getting and/or
-// setting the cache entry for a given table name, the caller MUST hold the
-// lock that for that entry.
-type indexCache struct {
-	cache  *sizecache.SizeCache
-	cond   *sync.Cond
-	locked map[addr]struct{}
-}
-
-// Returns an indexCache which will burn roughly |size| bytes of memory.
-func newIndexCache(size uint64) *indexCache {
-	return &indexCache{sizecache.New(size), sync.NewCond(&sync.Mutex{}), map[addr]struct{}{}}
-}
-
-// Take an exclusive lock on the cache entry for |name|. Callers must do this
-// before calling get(addr) or put(addr, index)
-func (sic *indexCache) lockEntry(name addr) {
-	sic.cond.L.Lock()
-	defer sic.cond.L.Unlock()
-
-	for {
-		if _, present := sic.locked[name]; !present {
-			sic.locked[name] = struct{}{}
-			break
-		}
-		sic.cond.Wait()
-	}
-}
-
-func (sic *indexCache) unlockEntry(name addr) error {
-	sic.cond.L.Lock()
-	defer sic.cond.L.Unlock()
-
-	_, ok := sic.locked[name]
-
-	if !ok {
-		return fmt.Errorf("failed to unlock %s", name.String())
-	}
-
-	delete(sic.locked, name)
-
-	sic.cond.Broadcast()
-
-	return nil
-}
-
-func (sic *indexCache) get(name addr) (onHeapTableIndex, bool) {
-	if idx, found := sic.cache.Get(name); found {
-		return idx.(onHeapTableIndex), true
-	}
-	return onHeapTableIndex{}, false
-}
-
-func (sic *indexCache) put(name addr, idx onHeapTableIndex) {
-	indexSize := uint64(idx.chunkCount) * (addrSize + ordinalSize + lengthSize + uint64Size)
-	sic.cache.Add(name, indexSize, idx)
 }
 
 type chunkSourcesByAscendingCount struct {
@@ -163,10 +103,6 @@ func (csbc chunkSourcesByAscendingCount) Swap(i, j int) {
 type chunkSourcesByDescendingDataSize struct {
 	sws []sourceWithSize
 	err error
-}
-
-func newChunkSourcesByDescendingDataSize(sws []sourceWithSize) chunkSourcesByDescendingDataSize {
-	return chunkSourcesByDescendingDataSize{sws, nil}
 }
 
 func (csbds chunkSourcesByDescendingDataSize) Len() int { return len(csbds.sws) }
@@ -256,8 +192,14 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			return compactionPlan{}, err
 		}
 
-		ordinals := index.Ordinals()
-		prefixes := index.Prefixes()
+		ordinals, err := index.Ordinals()
+		if err != nil {
+			return compactionPlan{}, err
+		}
+		prefixes, err := index.Prefixes()
+		if err != nil {
+			return compactionPlan{}, err
+		}
 
 		// Add all the prefix tuples from this index to the list of all prefixIndexRecs, modifying the ordinals such that all entries from the 1st item in sources come after those in the 0th and so on.
 		for j, prefix := range prefixes {
@@ -277,15 +219,16 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 		if onHeap, ok := index.(onHeapTableIndex); ok {
 			// TODO: copy the lengths and suffixes as a byte-copy from src BUG #3438
 			// Bring over the lengths block, in order
-			for _, length := range onHeap.lengths {
-				binary.BigEndian.PutUint32(plan.mergedIndex[lengthsPos:], length)
+			for ord := uint32(0); ord < onHeap.chunkCount; ord++ {
+				e := onHeap.getIndexEntry(ord)
+				binary.BigEndian.PutUint32(plan.mergedIndex[lengthsPos:], e.Length())
 				lengthsPos += lengthSize
 			}
 
 			// Bring over the suffixes block, in order
-			n := copy(plan.mergedIndex[suffixesPos:], onHeap.suffixes)
+			n := copy(plan.mergedIndex[suffixesPos:], onHeap.suffixB)
 
-			if n != len(onHeap.suffixes) {
+			if n != len(onHeap.suffixB) {
 				return compactionPlan{}, errors.New("failed to copy all data")
 			}
 
@@ -294,7 +237,10 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			// Build up the index one entry at a time.
 			var a addr
 			for i := 0; i < len(ordinals); i++ {
-				e := index.IndexEntry(uint32(i), &a)
+				e, err := index.IndexEntry(uint32(i), &a)
+				if err != nil {
+					return compactionPlan{}, err
+				}
 				li := lengthsPos + lengthSize*uint64(ordinals[i])
 				si := suffixesPos + addrSuffixSize*uint64(ordinals[i])
 				binary.BigEndian.PutUint32(plan.mergedIndex[li:], e.Length())

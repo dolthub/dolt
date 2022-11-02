@@ -78,11 +78,15 @@ func pkRowFromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error)
 		if col.IsPartOfPK {
 			return false, errors.New("writing columns that are part of the primary key to non-pk values. col:" + col.Name)
 		} else if !types.IsNull(val) {
-			if col.Kind != val.Kind() {
-				return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
-			} else {
+			// Column is GeometryKind and received PointKind, LineStringKind, or PolygonKind
+			if col.Kind == types.GeometryKind && types.IsGeometryKind(val.Kind()) {
 				filteredVals[tag] = val
+			} else if col.Kind == val.Kind() {
+				filteredVals[tag] = val
+			} else {
+				return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
 			}
+
 		}
 
 		return false, nil
@@ -213,6 +217,9 @@ func fromTaggedVals(nbf *types.NomsBinFormat, sch schema.Schema, keyVals, nonKey
 		} else if !col.IsPartOfPK {
 			return false, errors.New("writing columns that are not part of the primary key to pk values. col:" + col.Name)
 		} else if !types.IsNull(val) && col.Kind != val.Kind() {
+			if col.Kind == types.GeometryKind && types.IsGeometryKind(val.Kind()) {
+				return false, nil
+			}
 			return false, errors.New("bug.  Setting a value to an incorrect kind. col: " + col.Name)
 		}
 
@@ -233,6 +240,10 @@ func fromTaggedVals(nbf *types.NomsBinFormat, sch schema.Schema, keyVals, nonKey
 		if col.IsPartOfPK {
 			return false, errors.New("writing columns that are part of the primary key to non-pk values. col:" + col.Name)
 		} else if !types.IsNull(val) && col.Kind != val.Kind() {
+			if col.Kind == types.GeometryKind && types.IsGeometryKind(val.Kind()) {
+				filteredVals[tag] = val
+				return false, nil
+			}
 			return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
 		} else {
 			filteredVals[tag] = val
@@ -256,10 +267,30 @@ func (nr nomsRow) NomsMapValue(sch schema.Schema) types.Valuable {
 	return nr.value.NomsTupleForNonPKCols(nr.nbf, sch.GetNonPKCols())
 }
 
+func (nr nomsRow) NomsMapKeyTuple(sch schema.Schema, tf *types.TupleFactory) (types.Tuple, error) {
+	tv := nr.key.NomsTupleForPKCols(nr.nbf, sch.GetPKCols())
+
+	if tf != nil {
+		return tf.Create(tv.vs...)
+	} else {
+		return types.NewTuple(tv.nbf, tv.vs...)
+	}
+}
+
+func (nr nomsRow) NomsMapValueTuple(sch schema.Schema, tf *types.TupleFactory) (types.Tuple, error) {
+	tv := nr.value.NomsTupleForNonPKCols(nr.nbf, sch.GetNonPKCols())
+
+	if tf != nil {
+		return tf.Create(tv.vs...)
+	} else {
+		return types.NewTuple(tv.nbf, tv.vs...)
+	}
+}
+
 // ReduceToIndexKeys creates a full key, partial key, and value tuple from the given row (first tuple being the full key). Please
 // refer to the note in the index editor for more information regarding partial keys. NomsRows map always
 // keys to an empty value tuple.
-func (nr nomsRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple, types.Tuple, error) {
+func (nr nomsRow) ReduceToIndexKeys(idx schema.Index, tf *types.TupleFactory) (types.Tuple, types.Tuple, types.Tuple, error) {
 	vals := make([]types.Value, 0, len(idx.AllTags())*2)
 	for _, tag := range idx.AllTags() {
 		val, ok := nr.GetColVal(tag)
@@ -268,14 +299,30 @@ func (nr nomsRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple,
 		}
 		vals = append(vals, types.Uint(tag), val)
 	}
-	fullKey, err := types.NewTuple(nr.Format(), vals...)
-	if err != nil {
-		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+
+	var err error
+	var fullKey types.Tuple
+	var partialKey types.Tuple
+	if tf == nil {
+		fullKey, err = types.NewTuple(nr.Format(), vals...)
+		if err != nil {
+			return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+		}
+		partialKey, err = types.NewTuple(nr.Format(), vals[:idx.Count()*2]...)
+		if err != nil {
+			return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+		}
+	} else {
+		fullKey, err = tf.Create(vals...)
+		if err != nil {
+			return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+		}
+		partialKey, err = tf.Create(vals[:idx.Count()*2]...)
+		if err != nil {
+			return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+		}
 	}
-	partialKey, err := types.NewTuple(nr.Format(), vals[:idx.Count()*2]...)
-	if err != nil {
-		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
-	}
+
 	return fullKey, partialKey, types.EmptyTuple(nr.Format()), nil
 }
 

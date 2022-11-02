@@ -28,47 +28,63 @@ import (
 type Identifier string
 
 const (
-	UnknownTypeIdentifier    Identifier = "unknown"
-	BitTypeIdentifier        Identifier = "bit"
-	BlobStringTypeIdentifier Identifier = "blobstring"
-	BoolTypeIdentifier       Identifier = "bool"
-	DatetimeTypeIdentifier   Identifier = "datetime"
-	DecimalTypeIdentifier    Identifier = "decimal"
-	EnumTypeIdentifier       Identifier = "enum"
-	FloatTypeIdentifier      Identifier = "float"
-	JSONTypeIdentifier       Identifier = "json"
-	InlineBlobTypeIdentifier Identifier = "inlineblob"
-	IntTypeIdentifier        Identifier = "int"
-	SetTypeIdentifier        Identifier = "set"
-	TimeTypeIdentifier       Identifier = "time"
-	TupleTypeIdentifier      Identifier = "tuple"
-	UintTypeIdentifier       Identifier = "uint"
-	UuidTypeIdentifier       Identifier = "uuid"
-	VarBinaryTypeIdentifier  Identifier = "varbinary"
-	VarStringTypeIdentifier  Identifier = "varstring"
-	YearTypeIdentifier       Identifier = "year"
+	UnknownTypeIdentifier            Identifier = "unknown"
+	BitTypeIdentifier                Identifier = "bit"
+	BlobStringTypeIdentifier         Identifier = "blobstring"
+	BoolTypeIdentifier               Identifier = "bool"
+	DatetimeTypeIdentifier           Identifier = "datetime"
+	DecimalTypeIdentifier            Identifier = "decimal"
+	EnumTypeIdentifier               Identifier = "enum"
+	FloatTypeIdentifier              Identifier = "float"
+	JSONTypeIdentifier               Identifier = "json"
+	InlineBlobTypeIdentifier         Identifier = "inlineblob"
+	IntTypeIdentifier                Identifier = "int"
+	SetTypeIdentifier                Identifier = "set"
+	TimeTypeIdentifier               Identifier = "time"
+	TupleTypeIdentifier              Identifier = "tuple"
+	UintTypeIdentifier               Identifier = "uint"
+	UuidTypeIdentifier               Identifier = "uuid"
+	VarBinaryTypeIdentifier          Identifier = "varbinary"
+	VarStringTypeIdentifier          Identifier = "varstring"
+	YearTypeIdentifier               Identifier = "year"
+	GeometryTypeIdentifier           Identifier = "geometry"
+	PointTypeIdentifier              Identifier = "point"
+	LineStringTypeIdentifier         Identifier = "linestring"
+	PolygonTypeIdentifier            Identifier = "polygon"
+	MultiPointTypeIdentifier         Identifier = "multipoint"
+	MultiLineStringTypeIdentifier    Identifier = "multilinestring"
+	MultiPolygonTypeIdentifier       Identifier = "multipolygon"
+	GeometryCollectionTypeIdentifier Identifier = "geometrycollection"
 )
 
 var Identifiers = map[Identifier]struct{}{
-	UnknownTypeIdentifier:    {},
-	BitTypeIdentifier:        {},
-	BlobStringTypeIdentifier: {},
-	BoolTypeIdentifier:       {},
-	DatetimeTypeIdentifier:   {},
-	DecimalTypeIdentifier:    {},
-	EnumTypeIdentifier:       {},
-	FloatTypeIdentifier:      {},
-	JSONTypeIdentifier:       {},
-	InlineBlobTypeIdentifier: {},
-	IntTypeIdentifier:        {},
-	SetTypeIdentifier:        {},
-	TimeTypeIdentifier:       {},
-	TupleTypeIdentifier:      {},
-	UintTypeIdentifier:       {},
-	UuidTypeIdentifier:       {},
-	VarBinaryTypeIdentifier:  {},
-	VarStringTypeIdentifier:  {},
-	YearTypeIdentifier:       {},
+	UnknownTypeIdentifier:            {},
+	BitTypeIdentifier:                {},
+	BlobStringTypeIdentifier:         {},
+	BoolTypeIdentifier:               {},
+	DatetimeTypeIdentifier:           {},
+	DecimalTypeIdentifier:            {},
+	EnumTypeIdentifier:               {},
+	FloatTypeIdentifier:              {},
+	JSONTypeIdentifier:               {},
+	InlineBlobTypeIdentifier:         {},
+	IntTypeIdentifier:                {},
+	SetTypeIdentifier:                {},
+	TimeTypeIdentifier:               {},
+	TupleTypeIdentifier:              {},
+	UintTypeIdentifier:               {},
+	UuidTypeIdentifier:               {},
+	VarBinaryTypeIdentifier:          {},
+	VarStringTypeIdentifier:          {},
+	YearTypeIdentifier:               {},
+	GeometryTypeIdentifier:           {},
+	PointTypeIdentifier:              {},
+	LineStringTypeIdentifier:         {},
+	PolygonTypeIdentifier:            {},
+	MultiPointTypeIdentifier:         {},
+	MultiLineStringTypeIdentifier:    {},
+	MultiPolygonTypeIdentifier:       {},
+	GeometryCollectionTypeIdentifier: {},
 }
 
 // TypeInfo is an interface used for encoding type information.
@@ -104,9 +120,6 @@ type TypeInfo interface {
 
 	// NomsKind returns the NomsKind that best matches this TypeInfo.
 	NomsKind() types.NomsKind
-
-	// ParseValue parses a string and returns a go value that represents it according to this type.
-	ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error)
 
 	// Promote will promote the current TypeInfo to the largest representing TypeInfo of the same kind, such as Int8 to Int64.
 	Promote() TypeInfo
@@ -158,6 +171,27 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		return DatetimeType, nil
 	case sqltypes.Year:
 		return YearType, nil
+	case sqltypes.Geometry:
+		switch sqlType.String() {
+		case sql.PointType{}.String():
+			return &pointType{sqlType.(sql.PointType)}, nil
+		case sql.LineStringType{}.String():
+			return &linestringType{sqlType.(sql.LineStringType)}, nil
+		case sql.PolygonType{}.String():
+			return &polygonType{sqlType.(sql.PolygonType)}, nil
+		case sql.MultiPointType{}.String():
+			return &multipointType{}, nil
+		case sql.MultiLineStringType{}.String():
+			return &multilinestringType{}, nil
+		case sql.MultiPolygonType{}.String():
+			return &multipolygonType{}, nil
+		case sql.GeomCollType{}.String():
+			return &geomcollType{}, nil
+		case sql.GeometryType{}.String():
+			return &geometryType{sqlGeometryType: sqlType.(sql.GeometryType)}, nil
+		default:
+			return nil, fmt.Errorf(`expected "PointTypeIdentifier" from SQL basetype "Geometry"`)
+		}
 	case sqltypes.Decimal:
 		decimalSQLType, ok := sqlType.(sql.DecimalType)
 		if !ok {
@@ -252,6 +286,22 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 		return CreateIntTypeFromParams(params)
 	case JSONTypeIdentifier:
 		return JSONType, nil
+	case GeometryTypeIdentifier:
+		return CreateGeometryTypeFromParams(params)
+	case PointTypeIdentifier:
+		return CreatePointTypeFromParams(params)
+	case LineStringTypeIdentifier:
+		return CreateLineStringTypeFromParams(params)
+	case PolygonTypeIdentifier:
+		return CreatePolygonTypeFromParams(params)
+	case MultiPointTypeIdentifier:
+		return CreateMultiPointTypeFromParams(params)
+	case MultiLineStringTypeIdentifier:
+		return CreateMultiLineStringTypeFromParams(params)
+	case MultiPolygonTypeIdentifier:
+		return CreateMultiPolygonTypeFromParams(params)
+	case GeometryCollectionTypeIdentifier:
+		return CreateGeomCollTypeFromParams(params)
 	case SetTypeIdentifier:
 		return CreateSetTypeFromParams(params)
 	case TimeTypeIdentifier:
@@ -288,8 +338,16 @@ func FromKind(kind types.NomsKind) TypeInfo {
 		return Int64Type
 	case types.JSONKind:
 		return JSONType
+	case types.LineStringKind:
+		return LineStringType
 	case types.NullKind:
 		return UnknownType
+	case types.GeometryKind:
+		return GeometryType
+	case types.PointKind:
+		return PointType
+	case types.PolygonKind:
+		return PolygonType
 	case types.StringKind:
 		return StringDefaultType
 	case types.TimestampKind:
@@ -305,20 +363,6 @@ func FromKind(kind types.NomsKind) TypeInfo {
 	default:
 		panic(fmt.Errorf(`no default type info for NomsKind "%v"`, kind.String()))
 	}
-}
-
-// Convert takes in a types.Value, as well as the source and destination TypeInfos, and
-// converts the TypeInfo into the applicable types.Value.
-func Convert(ctx context.Context, vrw types.ValueReadWriter, v types.Value, srcTi TypeInfo, destTi TypeInfo) (types.Value, error) {
-	str, err := srcTi.FormatValue(v)
-	if err != nil {
-		return nil, err
-	}
-	val, err := destTi.ParseValue(ctx, vrw, str)
-	if err != nil {
-		return nil, err
-	}
-	return val, nil
 }
 
 // IsStringType returns whether the given TypeInfo represents a CHAR, VARCHAR, or TEXT-derivative.

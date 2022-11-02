@@ -75,7 +75,7 @@ INSERT INTO quiz VALUES (9);
 SQL
     dolt add -A && dolt commit -m "renamed test to quiz, added values"
     skip "merge works on matching table names currently, panics on renames"
-    run dolt merge other
+    run dolt merge other -m "merge"
     [ "$status" -eq 0 ]
     run dolt ls
     [ "$status" -eq 0 ]

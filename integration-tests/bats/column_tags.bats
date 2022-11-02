@@ -57,7 +57,6 @@ SQL
     [[ "$output" =~ "TeSt,c1,8201" ]] || false
 }
 
-
 @test "column_tags: Merging two branches that added same tag, name, type, and constraints" {
     dolt sql <<SQL
 CREATE TABLE test (
@@ -78,8 +77,9 @@ SQL
     dolt add test
     dolt commit	-m "Added column c2 bigint"
     dolt checkout main
-    dolt merge branch1
-    dolt merge branch2
+    dolt merge branch1 -m "merge branch1"
+    run dolt merge branch2 -m "merge branch2"
+    [ $status -eq 0 ]
 }
 
 @test "column_tags: Merging branches that use the same tag referring to different schema fails" {
@@ -156,8 +156,8 @@ SQL
     dolt add test
     dolt commit -m "Added columns c2 bigint and c3 double to branch2"
     dolt checkout main
-    dolt merge branch1
-    run dolt merge branch2
+    dolt merge branch1 -m "merge branch1"
+    run dolt merge branch2 -m "merge branch2"
     [ $status -eq 0 ]
     run dolt schema show
     [[ "${lines[2]}" =~ "\`pk\` bigint NOT NULL" ]] || false
@@ -190,8 +190,8 @@ SQL
     # pk and c1 will have the same tags on both branches due to deterministic tag generation
     dolt commit -m "Committed test table"
     dolt checkout main
-    dolt merge branch1
-    run dolt merge branch2
+    dolt merge branch1 -m "merge branch1"
+    run dolt merge branch2 -m "merge branch2"
     [ $status -eq 0 ]
     run dolt schema show
     [[ "${lines[2]}" =~ "\`pk\` bigint NOT NULL" ]] || false
@@ -236,4 +236,57 @@ DELIM
     [[ "$output" =~ "ints_table,c3,14526" ]] || false
     [[ "$output" =~ "ints_table,c4,5634" ]] || false
     [[ "$output" =~ "ints_table,c5,12796" ]] || false
+}
+
+@test "column_tags: Round-tripping a column type through different NomsKinds restores original tag" {
+    dolt sql -q "CREATE TABLE t (pk INT PRIMARY KEY, col1 int);"
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "col1   | 10878" ]] || false
+
+    dolt sql -q "ALTER TABLE t MODIFY COLUMN col1 VARCHAR(100);"
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "col1   | 16050" ]] || false
+
+    dolt sql -q "ALTER TABLE t MODIFY COLUMN col1 int;"
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "col1   | 10878" ]] || false
+}
+
+@test "column_tags: Round-tripping a column type through same NomsKinds keeps original tag" {
+    dolt sql -q "CREATE TABLE t (pk INT PRIMARY KEY, col1 VARCHAR(100));"
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "col1   | 16050" ]] || false
+
+    dolt sql -q "ALTER TABLE t MODIFY COLUMN col1 VARCHAR(101);"
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "col1   | 16050" ]] || false
+
+     dolt sql -q "ALTER TABLE t MODIFY COLUMN col1 VARCHAR(100);"
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "col1   | 16050" ]] || false
+}
+
+@test "column_tags: Round-tripping a column type after some other column has been altered" {
+    dolt sql -q "CREATE TABLE t (pk INT PRIMARY KEY, col1 int);"
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "col1   | 10878" ]] || false
+
+    dolt sql -q "ALTER TABLE t ADD COLUMN col2 int;"
+
+    dolt sql -q "ALTER TABLE t MODIFY COLUMN col1 VARCHAR(100);"
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "col1   | 11127" ]] || false
+
+    dolt sql -q "ALTER TABLE t MODIFY COLUMN col1 int;"
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "col1   | 10186" ]] || false
 }

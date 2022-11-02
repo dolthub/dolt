@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -73,9 +72,20 @@ func (fs *localFS) Exists(path string) (exists bool, isDir bool) {
 	return true, stat.IsDir()
 }
 
+// WithWorkingDir returns a copy of this file system with a new working dir as given.
+func (fs localFS) WithWorkingDir(path string) (Filesys, error) {
+	abs, err := fs.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+
+	fs.cwd = abs
+	return &fs, nil
+}
+
 var errStopMarker = errors.New("stop")
 
-// Iter iterates over the files and subdirectories within a given directory (Optionally recursively.
+// Iter iterates over the files and subdirectories within a given directory (Optionally recursively).
 func (fs *localFS) Iter(path string, recursive bool, cb FSIterCB) error {
 	var err error
 	path, err = fs.Abs(path)
@@ -85,14 +95,19 @@ func (fs *localFS) Iter(path string, recursive bool, cb FSIterCB) error {
 	}
 
 	if !recursive {
-		info, err := ioutil.ReadDir(path)
+		dirEntries, err := os.ReadDir(path)
 
 		if err != nil {
 			return err
 		}
 
-		for _, curr := range info {
-			stop := cb(filepath.Join(path, curr.Name()), curr.Size(), curr.IsDir())
+		for _, entry := range dirEntries {
+			fi, err := entry.Info()
+			if err != nil {
+				return err
+			}
+
+			stop := cb(filepath.Join(path, fi.Name()), fi.Size(), fi.IsDir())
 
 			if stop {
 				return nil
@@ -158,7 +173,7 @@ func (fs *localFS) ReadFile(fp string) ([]byte, error) {
 		return nil, err
 	}
 
-	return ioutil.ReadFile(fp)
+	return os.ReadFile(fp)
 }
 
 // OpenForWrite opens a file for writing.  The file will be created if it does not exist, and if it does exist
@@ -174,6 +189,19 @@ func (fs *localFS) OpenForWrite(fp string, perm os.FileMode) (io.WriteCloser, er
 	return os.OpenFile(fp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm)
 }
 
+// OpenForWriteAppend opens a file for writing. The file will be created if it does not exist, and it will
+// append only to that new file. If file exists, it will append to existing file.
+func (fs *localFS) OpenForWriteAppend(fp string, perm os.FileMode) (io.WriteCloser, error) {
+	var err error
+	fp, err = fs.Abs(fp)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return os.OpenFile(fp, os.O_CREATE|os.O_APPEND|os.O_WRONLY, perm)
+}
+
 // WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,
 // and if it does exist it will be overwritten.
 func (fs *localFS) WriteFile(fp string, data []byte) error {
@@ -184,7 +212,7 @@ func (fs *localFS) WriteFile(fp string, data []byte) error {
 		return err
 	}
 
-	return ioutil.WriteFile(fp, data, os.ModePerm)
+	return os.WriteFile(fp, data, os.ModePerm)
 }
 
 // MkDirs creates a folder and all the parent folders that are necessary to create it.
@@ -289,4 +317,8 @@ func (fs *localFS) LastModified(path string) (t time.Time, exists bool) {
 	}
 
 	return stat.ModTime(), true
+}
+
+func (fs *localFS) TempDir() string {
+	return os.TempDir()
 }

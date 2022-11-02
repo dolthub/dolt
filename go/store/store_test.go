@@ -28,9 +28,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -40,11 +41,14 @@ func poe(err error) {
 	}
 }
 
-func getDBAtDir(ctx context.Context, dir string) datas.Database {
-	cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), dir, 1<<28)
+func getDBAtDir(ctx context.Context, dir string) (datas.Database, types.ValueReadWriter) {
+	cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), dir, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 	poe(err)
 
-	return datas.NewDatabase(nbs.NewNBSMetricWrapper(cs))
+	csm := nbs.NewNBSMetricWrapper(cs)
+	vrw := types.NewValueStore(csm)
+	ns := tree.NewNodeStore(csm)
+	return datas.NewTypesDatabase(vrw, ns), vrw
 }
 
 const (
@@ -56,41 +60,34 @@ const (
 var benchmarkTmpDir = os.TempDir()
 var genOnce = &sync.Once{}
 
-func getBenchmarkDB(ctx context.Context) datas.Database {
+func getBenchmarkDB(ctx context.Context) (datas.Database, types.ValueReadWriter) {
 	return getDBAtDir(ctx, benchmarkTmpDir)
 }
 
-func writeTupleToDB(ctx context.Context, db datas.Database, dsID string, vals ...types.Value) {
-	root, err := types.NewTuple(db.Format(), vals...)
+func writeTupleToDB(ctx context.Context, db datas.Database, vrw types.ValueReadWriter, dsID string, vals ...types.Value) {
+	root, err := types.NewTuple(vrw.Format(), vals...)
 	poe(err)
 
 	ds, err := db.GetDataset(ctx, dsID)
 	poe(err)
 
-	_, err = db.CommitValue(ctx, ds, root)
+	_, err = datas.CommitValue(ctx, db, ds, root)
 	poe(err)
 }
 
 func readTupleFromDB(ctx context.Context, t require.TestingT, dsID string) (*types.NomsBinFormat, []types.Value) {
-	db := getBenchmarkDB(ctx)
+	db, vrw := getBenchmarkDB(ctx)
 	ds, err := db.GetDataset(ctx, dsID)
 	require.NoError(t, err)
 
-	ref, ok, err := ds.MaybeHeadRef()
+	val, ok, err := ds.MaybeHeadValue()
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	val, err := ref.TargetValue(ctx, db)
-	require.NoError(t, err)
-
-	st := val.(types.Struct)
-	val, ok, err = st.MaybeGet("value")
-	require.NoError(t, err)
-	require.True(t, ok)
 	tup := val.(types.Tuple)
 	valSlice, err := tup.AsSlice()
 	require.NoError(t, err)
-	return db.Format(), valSlice
+	return vrw.Format(), valSlice
 }
 
 var testDataCols = []schema.Column{
@@ -107,13 +104,13 @@ var testDataCols = []schema.Column{
 
 func generateTestData(ctx context.Context) {
 	genOnce.Do(func() {
-		db := getBenchmarkDB(ctx)
-		nbf := db.Format()
+		db, vrw := getBenchmarkDB(ctx)
+		nbf := vrw.Format()
 
-		m, err := types.NewMap(ctx, db)
+		m, err := types.NewMap(ctx, vrw)
 		poe(err)
 
-		idx, err := types.NewMap(ctx, db)
+		idx, err := types.NewMap(ctx, vrw)
 		poe(err)
 
 		me := m.Edit()
@@ -138,7 +135,7 @@ func generateTestData(ctx context.Context) {
 		idx, err = idxMe.Map(ctx)
 		poe(err)
 
-		writeTupleToDB(ctx, db, simIdxBenchDataset, m, idx)
+		writeTupleToDB(ctx, db, vrw, simIdxBenchDataset, m, idx)
 	})
 }
 
@@ -228,12 +225,16 @@ func BenchmarkMapItr(b *testing.B) {
 		closeFunc = cl.Close
 	}
 
-	dmItr := sqle.NewDoltMapIter(ctx, itr.NextTuple, closeFunc, sqle.NewKVToSqlRowConverterForCols(m.Format(), testDataCols))
+	sch, err := schema.SchemaFromCols(schema.NewColCollection(testDataCols...))
+	require.NoError(b, err)
+
+	dmItr := index.NewDoltMapIter(itr.NextTuple, closeFunc, index.NewKVToSqlRowConverterForCols(m.Format(), sch, nil))
+	sqlCtx := sql.NewContext(ctx)
 
 	b.ResetTimer()
 	for {
 		var r sql.Row
-		r, err = dmItr.Next()
+		r, err = dmItr.Next(sqlCtx)
 
 		if r == nil || err != nil {
 			break
@@ -244,6 +245,7 @@ func BenchmarkMapItr(b *testing.B) {
 	if err != io.EOF {
 		require.NoError(b, err)
 	}
+	_ = dmItr.Close(sqlCtx)
 }
 
 /*func BenchmarkFullScan(b *testing.B) {
@@ -268,7 +270,7 @@ func BenchmarkMapItr(b *testing.B) {
 	require.NoError(b, err)
 	require.True(b, ok)
 
-	m, err := tbl.GetRowData(ctx)
+	m, err := tbl.GetNomsRowData(ctx)
 	require.NoError(b, err)
 	require.True(b, uint64(b.N) < m.Len(), "b.N:%d >= numRows:%d", b.N, m.Len())
 

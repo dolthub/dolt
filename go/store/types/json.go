@@ -31,18 +31,28 @@ type JSON struct {
 func NewJSONDoc(nbf *NomsBinFormat, vrw ValueReadWriter, value Value) (JSON, error) {
 	w := newBinaryNomsWriter()
 	if err := JSONKind.writeTo(&w, nbf); err != nil {
-		return EmptyJSONDoc(nbf), err
+		return emptyJSONDoc(nbf), err
 	}
 
 	if err := value.writeTo(&w, nbf); err != nil {
-		return EmptyJSONDoc(nbf), err
+		return emptyJSONDoc(nbf), err
 	}
 
 	return JSON{valueImpl{vrw, nbf, w.data(), nil}}, nil
 }
 
-// EmptyJSONDoc creates and empty JSON value.
-func EmptyJSONDoc(nbf *NomsBinFormat) JSON {
+func NewTestJSONDoc(nbf *NomsBinFormat, vrw ValueReadWriter, buf []byte) (JSON, error) {
+	w := newBinaryNomsWriter()
+	if err := JSONKind.writeTo(&w, nbf); err != nil {
+		return emptyJSONDoc(nbf), err
+	}
+
+	w.writeString(string(buf))
+	return JSON{valueImpl{vrw, nbf, w.data(), nil}}, nil
+}
+
+// emptyJSONDoc creates and empty JSON value.
+func emptyJSONDoc(nbf *NomsBinFormat) JSON {
 	w := newBinaryNomsWriter()
 	if err := JSONKind.writeTo(&w, nbf); err != nil {
 		d.PanicIfError(err)
@@ -58,7 +68,7 @@ func readJSON(nbf *NomsBinFormat, dec *valueDecoder) (JSON, error) {
 	k := dec.PeekKind()
 	if k == NullKind {
 		dec.skipKind()
-		return EmptyJSONDoc(nbf), nil
+		return emptyJSONDoc(nbf), nil
 	}
 	if k != JSONKind {
 		return JSON{}, errors.New("current value is not a JSON")
@@ -121,15 +131,6 @@ func (t JSON) Inner() (Value, error) {
 	dec := newValueDecoder(t.buff, t.vrw)
 	dec.skipKind()
 	return dec.readValue(t.nbf)
-}
-
-// WalkValues implements the Value interface.
-func (t JSON) WalkValues(ctx context.Context, cb ValueCallback) error {
-	val, err := t.Inner()
-	if err != nil {
-		return err
-	}
-	return val.WalkValues(ctx, cb)
 }
 
 // typeOf implements the Value interface.

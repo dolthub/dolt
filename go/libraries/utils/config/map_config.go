@@ -30,6 +30,10 @@ func NewMapConfig(properties map[string]string) *MapConfig {
 	return &MapConfig{properties}
 }
 
+func NewEmptyMapConfig() *MapConfig {
+	return &MapConfig{make(map[string]string)}
+}
+
 // GetString retrieves a value for a given key.
 func (mc *MapConfig) GetString(k string) (string, error) {
 	if val, ok := mc.properties[k]; ok {
@@ -46,7 +50,7 @@ func (mc *MapConfig) GetStringOrDefault(key, defStr string) string {
 	return defStr
 }
 
-// SetString sets the values for a map of updates.
+// SetStrings sets the values for a map of updates.
 func (mc *MapConfig) SetStrings(updates map[string]string) error {
 	for k, v := range updates {
 		mc.properties[k] = v

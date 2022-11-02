@@ -212,6 +212,12 @@ func (p *Parser) parseSingleTypeWithToken(tok rune, tokenText string) (*types.Ty
 		return types.PrimitiveTypeMap[types.TypeKind], nil
 	case "Value":
 		return types.PrimitiveTypeMap[types.ValueKind], nil
+	case "Tuple":
+		f := types.Format_Default
+		if p.vrw != nil {
+			f = p.vrw.Format()
+		}
+		return types.TypeOf(types.EmptyTuple(f))
 	case "Struct":
 		return p.parseStructType()
 	case "Map":
@@ -344,54 +350,68 @@ func (p *Parser) parseMapType() (*types.Type, error) {
 }
 
 // Value :
-//   Type
-//   Bool
-//   Float
-//   String
-//   List
-//   Set
-//   Map
-//   Struct
+//
+//	Type
+//	Bool
+//	Float
+//	String
+//	List
+//	Set
+//	Map
+//	Struct
+//	Tuple
 //
 // Bool :
-//   `true`
-//   `false`
+//
+//	`true`
+//	`false`
 //
 // Float :
-//   ...
+//
+//	...
 //
 // String :
-//   ...
+//
+//	...
 //
 // List :
-//   `[` Values? `]`
+//
+//	`[` Values? `]`
 //
 // Values :
-//   Value
-//   Value `,` Values?
+//
+//	Value
+//	Value `,` Values?
 //
 // Set :
-//   `set` `{` Values? `}`
+//
+//	`set` `{` Values? `}`
 //
 // Map :
-//   `map` `{` MapEntries? `}`
+//
+//	`map` `{` MapEntries? `}`
 //
 // MapEntries :
-//   MapEntry
-//   MapEntry `,` MapEntries?
+//
+//	MapEntry
+//	MapEntry `,` MapEntries?
 //
 // MapEntry :
-//   Value `:` Value
+//
+//	Value `:` Value
 //
 // Struct :
-//   `struct` StructName? `{` StructFields? `}`
+//
+//	`struct` StructName? `{` StructFields? `}`
 //
 // StructFields :
-//   StructField
-//   StructField `,` StructFields?
+//
+//	StructField
+//	StructField `,` StructFields?
 //
 // StructField :
-//   StructFieldName `:` Value
+//
+//	StructFieldName `:` Value
 func (p *Parser) parseValue(ctx context.Context) (types.Value, error) {
 	tok := p.lex.next()
 	switch tok {
@@ -606,7 +626,7 @@ func (p *Parser) parseStruct(ctx context.Context) (types.Struct, error) {
 		v, err := p.parseValue(ctx)
 
 		if err != nil {
-			return types.EmptyStruct(types.Format_Default), err
+			return types.Struct{}, err
 		}
 
 		data[fieldName] = v

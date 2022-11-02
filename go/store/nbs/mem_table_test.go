@@ -24,7 +24,6 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -39,14 +38,14 @@ import (
 )
 
 var testMDChunks = []chunks.Chunk{
-	mustChunk(types.EncodeValue(types.String("Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, "), types.Format_7_18)),
-	mustChunk(types.EncodeValue(types.String("and nothing particular to interest me on shore, I thought I would sail about a little and see the watery "), types.Format_7_18)),
-	mustChunk(types.EncodeValue(types.String("part of the world. It is a way I have of driving off the spleen and regulating the "), types.Format_7_18)),
-	mustChunk(types.EncodeValue(types.String("circulation. Whenever I find myself growing grim about the mouth; whenever it is a damp, drizzly "), types.Format_7_18)),
-	mustChunk(types.EncodeValue(types.String("November in my soul; whenever I find myself involuntarily pausing before coffin warehouses, and bringing "), types.Format_7_18)),
-	mustChunk(types.EncodeValue(types.String("funeral I meet; and especially whenever my hypos get such an upper hand of me, that it requires "), types.Format_7_18)),
-	mustChunk(types.EncodeValue(types.String("a strong moral principle to prevent me from deliberately stepping into the street, and methodically "), types.Format_7_18)),
-	mustChunk(types.EncodeValue(types.String("knocking people’s hats off—then, I account it high time to get to sea as soon as I can."), types.Format_7_18)),
+	mustChunk(types.EncodeValue(types.String("Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, "), types.Format_Default)),
+	mustChunk(types.EncodeValue(types.String("and nothing particular to interest me on shore, I thought I would sail about a little and see the watery "), types.Format_Default)),
+	mustChunk(types.EncodeValue(types.String("part of the world. It is a way I have of driving off the spleen and regulating the "), types.Format_Default)),
+	mustChunk(types.EncodeValue(types.String("circulation. Whenever I find myself growing grim about the mouth; whenever it is a damp, drizzly "), types.Format_Default)),
+	mustChunk(types.EncodeValue(types.String("November in my soul; whenever I find myself involuntarily pausing before coffin warehouses, and bringing "), types.Format_Default)),
+	mustChunk(types.EncodeValue(types.String("funeral I meet; and especially whenever my hypos get such an upper hand of me, that it requires "), types.Format_Default)),
+	mustChunk(types.EncodeValue(types.String("a strong moral principle to prevent me from deliberately stepping into the street, and methodically "), types.Format_Default)),
+	mustChunk(types.EncodeValue(types.String("knocking people’s hats off—then, I account it high time to get to sea as soon as I can."), types.Format_Default)),
 }
 
 var testMDChunksSize uint64
@@ -68,12 +67,12 @@ func TestWriteChunks(t *testing.T) {
 		t.Error(err)
 	}
 
-	dir, err := ioutil.TempDir("", "write_chunks_test")
+	dir, err := os.MkdirTemp("", "write_chunks_test")
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = ioutil.WriteFile(dir+name, data, os.ModePerm)
+	err = os.WriteFile(dir+name, data, os.ModePerm)
 	if err != nil {
 		t.Error(err)
 	}
@@ -151,25 +150,28 @@ func TestMemTableWrite(t *testing.T) {
 
 	td1, _, err := buildTable(chunks[1:2])
 	require.NoError(t, err)
-	ti1, err := parseTableIndex(td1)
+	ti1, err := parseTableIndexByCopy(td1, &noopQuotaProvider{})
 	require.NoError(t, err)
-	tr1 := newTableReader(ti1, tableReaderAtFromBytes(td1), fileBlockSize)
+	tr1, err := newTableReader(ti1, tableReaderAtFromBytes(td1), fileBlockSize)
+	require.NoError(t, err)
 	assert.True(tr1.has(computeAddr(chunks[1])))
 
 	td2, _, err := buildTable(chunks[2:])
 	require.NoError(t, err)
-	ti2, err := parseTableIndex(td2)
+	ti2, err := parseTableIndexByCopy(td2, &noopQuotaProvider{})
 	require.NoError(t, err)
-	tr2 := newTableReader(ti2, tableReaderAtFromBytes(td2), fileBlockSize)
+	tr2, err := newTableReader(ti2, tableReaderAtFromBytes(td2), fileBlockSize)
+	require.NoError(t, err)
 	assert.True(tr2.has(computeAddr(chunks[2])))
 
 	_, data, count, err := mt.write(chunkReaderGroup{tr1, tr2}, &Stats{})
 	require.NoError(t, err)
 	assert.Equal(uint32(1), count)
 
-	ti, err := parseTableIndex(data)
+	ti, err := parseTableIndexByCopy(data, &noopQuotaProvider{})
 	require.NoError(t, err)
-	outReader := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	outReader, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	require.NoError(t, err)
 	assert.True(outReader.has(computeAddr(chunks[0])))
 	assert.False(outReader.has(computeAddr(chunks[1])))
 	assert.False(outReader.has(computeAddr(chunks[2])))
@@ -265,7 +267,7 @@ func (crg chunkReaderGroup) hasMany(addrs []hasRecord) (bool, error) {
 	return true, nil
 }
 
-func (crg chunkReaderGroup) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (bool, error) {
+func (crg chunkReaderGroup) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
 	for _, haver := range crg {
 		remaining, err := haver.getMany(ctx, eg, reqs, found, stats)
 		if err != nil {
@@ -278,7 +280,7 @@ func (crg chunkReaderGroup) getMany(ctx context.Context, eg *errgroup.Group, req
 	return true, nil
 }
 
-func (crg chunkReaderGroup) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (bool, error) {
+func (crg chunkReaderGroup) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
 	for _, haver := range crg {
 		remaining, err := haver.getManyCompressed(ctx, eg, reqs, found, stats)
 		if err != nil {
@@ -305,22 +307,10 @@ func (crg chunkReaderGroup) uncompressedLen() (data uint64, err error) {
 	return
 }
 
-func (crg chunkReaderGroup) extract(ctx context.Context, chunks chan<- extractRecord) error {
-	for _, haver := range crg {
-		err := haver.extract(ctx, chunks)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (crg chunkReaderGroup) Close() error {
+func (crg chunkReaderGroup) close() error {
 	var firstErr error
 	for _, c := range crg {
-		err := c.Close()
+		err := c.close()
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}

@@ -57,11 +57,7 @@ func (s String) isPrimitive() bool {
 	return true
 }
 
-func (s String) WalkValues(ctx context.Context, cb ValueCallback) error {
-	return nil
-}
-
-func (s String) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (s String) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
 

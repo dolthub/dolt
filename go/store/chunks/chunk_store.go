@@ -41,7 +41,7 @@ type ChunkStore interface {
 	// GetMany gets the Chunks with |hashes| from the store. On return,
 	// |foundChunks| will have been fully sent all chunks which have been
 	// found. Any non-present chunks will silently be ignored.
-	GetMany(ctx context.Context, hashes hash.HashSet, found func(*Chunk)) error
+	GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *Chunk)) error
 
 	// Returns true iff the value at the address |h| is contained in the
 	// store
@@ -109,6 +109,12 @@ type ChunkStoreGarbageCollector interface {
 	// chunks sent on |keepChunks| and will have removed all other content
 	// from the ChunkStore.
 	MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest ChunkStore) error
+}
+
+type PrefixChunkStore interface {
+	ChunkStore
+
+	ResolveShortHash(ctx context.Context, short []byte) (hash.Hash, error)
 }
 
 // GenerationalCS is an interface supporting the getting old gen and new gen chunk stores

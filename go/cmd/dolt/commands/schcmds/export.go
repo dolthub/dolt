@@ -20,6 +20,8 @@ import (
 	"io"
 	"os"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -27,16 +29,18 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var schExportDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Exports a table's schema.",
-	LongDesc:  "",
+	ShortDesc: "Exports table schemas as SQL DDL statements.",
+	LongDesc: "Exports table schemas as SQL DDL statements, which can then be executed to recreate tables." + `
+
+If ` + "`table`" + ` is given, only that table's schema will be exported, otherwise all table schemas will be exported.
+
+If ` + "`file`" + ` is given, the exported schemas will be written to that file, otherwise they will be written to standard out.`,
 	Synopsis: []string{
-		"{{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"[{{.LessThan}}table{{.GreaterThan}}] [{{.LessThan}}file{{.GreaterThan}}]",
 	},
 }
 
@@ -52,16 +56,15 @@ func (cmd ExportCmd) Description() string {
 	return "Exports a table's schema in SQL form."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ExportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, schExportDocs, ap))
+func (cmd ExportCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(schExportDocs, ap)
 }
 
-func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
+func (cmd ExportCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table whose schema is being exported."})
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "the file that the schema will be written to."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "the file to which the schema will be exported."})
 	return ap
 }
 
@@ -72,8 +75,8 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, schExportDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, schExportDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	root, verr := commands.GetWorkingWithVErr(dEnv)
@@ -130,7 +133,11 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 	}
 
 	for _, tn := range tablesToExport {
-		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+		tmpDir, err := dEnv.TempTableFilesDir()
+		if err != nil {
+			return errhand.BuildDError("error: ").AddCause(err).Build()
+		}
+		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 		verr := exportTblSchema(ctx, tn, root, wr, opts)
 		if verr != nil {
 			return verr
@@ -142,6 +149,7 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 
 func exportTblSchema(ctx context.Context, tblName string, root *doltdb.RootValue, wr io.Writer, opts editor.Options) errhand.VerboseError {
 	sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(root, opts))
+
 	stmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, tblName)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)

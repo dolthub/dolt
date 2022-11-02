@@ -18,14 +18,11 @@ import (
 	"context"
 	"errors"
 	"io"
-	"io/ioutil"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -49,7 +46,7 @@ func (dl StreamDataLocation) Exists(ctx context.Context, root *doltdb.RootValue,
 }
 
 // NewReader creates a TableReadCloser for the DataLocation
-func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error) {
+func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, opts interface{}) (rdCl table.SqlRowReader, sorted bool, err error) {
 	switch dl.Format {
 	case CsvFile:
 		delim := ","
@@ -62,12 +59,12 @@ func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootVal
 			}
 		}
 
-		rd, err := csv.NewCSVReader(root.VRW().Format(), ioutil.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim(delim))
+		rd, err := csv.NewCSVReader(root.VRW().Format(), io.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim(delim))
 
 		return rd, false, err
 
 	case PsvFile:
-		rd, err := csv.NewCSVReader(root.VRW().Format(), ioutil.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim("|"))
+		rd, err := csv.NewCSVReader(root.VRW().Format(), io.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim("|"))
 		return rd, false, err
 	}
 
@@ -76,7 +73,7 @@ func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootVal
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 // an existing table.
-func (dl StreamDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB, opts editor.Options) (table.TableWriteCloser, error) {
+func (dl StreamDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, outSch schema.Schema, opts editor.Options, wr io.WriteCloser) (table.SqlRowWriter, error) {
 	switch dl.Format {
 	case CsvFile:
 		return csv.NewCSVWriter(iohelp.NopWrCloser(dl.Writer), outSch, csv.NewCSVInfo())
@@ -86,16 +83,4 @@ func (dl StreamDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataM
 	}
 
 	return nil, errors.New(string(dl.Format) + "is an unsupported format to write to stdout")
-}
-
-// NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
-// their primary key.
-func (dl StreamDataLocation) NewUpdatingWriter(ctx context.Context, mvOpts DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB, _ []uint64, opts editor.Options) (table.TableWriteCloser, error) {
-	panic("Updating is not supported for stdout")
-}
-
-// NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table while
-// preserving schema
-func (dl StreamDataLocation) NewReplacingWriter(ctx context.Context, mvOpts DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB, opts editor.Options) (table.TableWriteCloser, error) {
-	panic("Replacing is not supported for stdout")
 }

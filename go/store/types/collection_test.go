@@ -64,7 +64,7 @@ func (suite *collectionTestSuite) TestChunkCountAndType() {
 	suite.Equal(suite.expectChunkCount, leafCount(suite.col), "chunk count")
 	refType, err := MakeRefType(suite.expectType)
 	suite.NoError(err)
-	err = suite.col.WalkRefs(Format_7_18, func(r Ref) error {
+	err = suite.col.walkRefs(suite.col.asSequence().format(), func(r Ref) error {
 		t, err := TypeOf(r)
 
 		if err != nil {

@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -110,7 +109,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("Error opening -verify file %s: %v\n", *verifyFilename, err)
 		}
-		verifyContents, err := ioutil.ReadAll(verifyFile)
+		verifyContents, err := io.ReadAll(verifyFile)
 		if err != nil {
 			log.Fatalf("Error reading -verify file %s: %v\n", *verifyFilename, err)
 		}
@@ -144,6 +143,7 @@ var StandardCandidates = []string{
 	"LICENSE.md",
 	"COPYING",
 	"LICENSE-MIT",
+	"UNLICENSE",
 }
 
 func PrintPkgLicense(out io.Writer, pkg string, dir string) {
@@ -170,7 +170,7 @@ func PrintLicense(out io.Writer, filepath string) {
 	if err != nil {
 		log.Fatalf("Error opening license file [%s] for copying: %v\n", filepath, err)
 	}
-	contents, err := ioutil.ReadAll(f)
+	contents, err := io.ReadAll(f)
 	if err != nil {
 		log.Fatalf("Error reading license file [%s] for copying: %v\n", filepath, err)
 	}

@@ -24,124 +24,64 @@ package nbs
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 )
 
-type indexParserF func([]byte) (tableIndex, error)
-
-func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, indexCache *indexCache, stats *Stats, parseIndex indexParserF) (cs chunkSource, err error) {
-	if indexCache != nil {
-		indexCache.lockEntry(name)
-		defer func() {
-			unlockErr := indexCache.unlockEntry(name)
-
-			if err == nil {
-				err = unlockErr
-			}
-		}()
-
-		if index, found := indexCache.get(name); found {
-			tra := &awsTableReaderAt{al: al, ddb: ddb, s3: s3, name: name, chunkCount: chunkCount}
-			return &chunkSourceAdapter{newTableReader(index, tra, s3BlockSize), name}, nil
-		}
-	}
-
-	t1 := time.Now()
-	indexBytes, tra, err := func() ([]byte, tableReaderAt, error) {
+func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+	var tra tableReaderAt
+	index, err := loadTableIndex(stats, chunkCount, q, func(p []byte) error {
 		if al.tableMayBeInDynamo(chunkCount) {
 			data, err := ddb.ReadTable(ctx, name, stats)
-
 			if data == nil && err == nil { // There MUST be either data or an error
-				return nil, &dynamoTableReaderAt{}, errors.New("no data available")
+				return errors.New("no data available")
 			}
-
 			if data != nil {
-				return data, &dynamoTableReaderAt{ddb: ddb, h: name}, nil
+				if len(p) > len(data) {
+					return errors.New("not enough data for chunk count")
+				}
+				indexBytes := data[len(data)-len(p):]
+				copy(p, indexBytes)
+				tra = &dynamoTableReaderAt{ddb: ddb, h: name}
+				return nil
 			}
-
 			if _, ok := err.(tableNotInDynamoErr); !ok {
-				return nil, &dynamoTableReaderAt{}, err
+				return err
 			}
 		}
 
-		size := indexSize(chunkCount) + footerSize
-		buff := make([]byte, size)
-
-		n, _, err := s3.ReadFromEnd(ctx, name, buff, stats)
-
+		n, _, err := s3.ReadFromEnd(ctx, name, p, stats)
 		if err != nil {
-			return nil, &dynamoTableReaderAt{}, err
+			return err
 		}
-
-		if size != uint64(n) {
-			return nil, &dynamoTableReaderAt{}, errors.New("failed to read all data")
+		if len(p) != n {
+			return errors.New("failed to read all data")
 		}
-
-		return buff, &s3TableReaderAt{s3: s3, h: name}, nil
-	}()
-
+		tra = &s3TableReaderAt{h: name, s3: s3}
+		return nil
+	})
 	if err != nil {
 		return &chunkSourceAdapter{}, err
 	}
 
-	stats.IndexBytesPerRead.Sample(uint64(len(indexBytes)))
-	stats.IndexReadLatency.SampleTimeSince(t1)
-
-	index, err := parseIndex(indexBytes)
-
+	tr, err := newTableReader(index, tra, s3BlockSize)
 	if err != nil {
-		return emptyChunkSource{}, err
+		_ = index.Close()
+		return &chunkSourceAdapter{}, err
 	}
-
-	if ohi, ok := index.(onHeapTableIndex); indexCache != nil && ok {
-		indexCache.put(name, ohi)
-	}
-
-	return &chunkSourceAdapter{newTableReader(index, tra, s3BlockSize), name}, nil
+	return &chunkSourceAdapter{tr, name}, nil
 }
 
-type awsTableReaderAt struct {
-	once     sync.Once
-	getTRErr error
-	tra      tableReaderAt
+func loadTableIndex(stats *Stats, cnt uint32, q MemoryQuotaProvider, loadIndexBytes func(p []byte) error) (tableIndex, error) {
+	idxSz := int(indexSize(cnt) + footerSize)
+	offsetSz := int((cnt - (cnt / 2)) * offsetSize)
+	buf := make([]byte, idxSz+offsetSz)
 
-	al  awsLimits
-	ddb *ddbTableStore
-	s3  *s3ObjectReader
-
-	name       addr
-	chunkCount uint32
-}
-
-func (atra *awsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (int, error) {
-	atra.once.Do(func() {
-		atra.tra, atra.getTRErr = atra.getTableReaderAt(ctx, stats)
-	})
-
-	if atra.getTRErr != nil {
-		return 0, atra.getTRErr
+	t1 := time.Now()
+	if err := loadIndexBytes(buf[:idxSz]); err != nil {
+		return nil, err
 	}
+	stats.IndexReadLatency.SampleTimeSince(t1)
+	stats.IndexBytesPerRead.Sample(uint64(len(buf)))
 
-	return atra.tra.ReadAtWithStats(ctx, p, off, stats)
-}
-
-func (atra *awsTableReaderAt) getTableReaderAt(ctx context.Context, stats *Stats) (tableReaderAt, error) {
-	if atra.al.tableMayBeInDynamo(atra.chunkCount) {
-		data, err := atra.ddb.ReadTable(ctx, atra.name, stats)
-
-		if data == nil && err == nil { // There MUST be either data or an error
-			return &dynamoTableReaderAt{}, errors.New("no data available")
-		}
-
-		if data != nil {
-			return &dynamoTableReaderAt{ddb: atra.ddb, h: atra.name}, nil
-		}
-
-		if _, ok := err.(tableNotInDynamoErr); !ok {
-			return &dynamoTableReaderAt{}, err
-		}
-	}
-
-	return &s3TableReaderAt{s3: atra.s3, h: atra.name}, nil
+	return parseTableIndexWithOffsetBuff(buf[:idxSz], buf[idxSz:], q)
 }

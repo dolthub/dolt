@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/nbs"
 )
@@ -27,47 +28,54 @@ const (
 	defaultMemTableSize = 128 * 1024 * 1024
 )
 
-type DBCache struct {
+type LocalCSCache struct {
 	mu  *sync.Mutex
-	dbs map[string]*nbs.NomsBlockStore
+	dbs map[string]remotesrv.RemoteSrvStore
 
 	fs filesys.Filesys
 }
 
-func NewLocalCSCache(filesys filesys.Filesys) *DBCache {
-	return &DBCache{
+func NewLocalCSCache(filesys filesys.Filesys) *LocalCSCache {
+	return &LocalCSCache{
 		&sync.Mutex{},
-		make(map[string]*nbs.NomsBlockStore),
+		make(map[string]remotesrv.RemoteSrvStore),
 		filesys,
 	}
 }
 
-func (cache *DBCache) Get(org, repo, nbfVerStr string) (*nbs.NomsBlockStore, error) {
+func (cache *LocalCSCache) Get(repopath, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
 
-	id := filepath.Join(org, repo)
+	id := filepath.FromSlash(repopath)
 
 	if cs, ok := cache.dbs[id]; ok {
 		return cs, nil
 	}
 
-	var newCS *nbs.NomsBlockStore
-	if cache.fs != nil {
-		err := cache.fs.MkDirs(id)
+	err := cache.fs.MkDirs(id)
+	if err != nil {
+		return nil, err
+	}
+	path, err := cache.fs.Abs(id)
+	if err != nil {
+		return nil, err
+	}
 
-		if err != nil {
-			return nil, err
-		}
-
-		newCS, err = nbs.NewLocalStore(context.TODO(), nbfVerStr, id, defaultMemTableSize)
-
-		if err != nil {
-			return nil, err
-		}
+	newCS, err := nbs.NewLocalStore(context.TODO(), nbfVerStr, path, defaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
+	if err != nil {
+		return nil, err
 	}
 
 	cache.dbs[id] = newCS
 
 	return newCS, nil
+}
+
+type SingletonCSCache struct {
+	s remotesrv.RemoteSrvStore
+}
+
+func (cache SingletonCSCache) Get(path, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
+	return cache.s, nil
 }

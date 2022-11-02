@@ -240,6 +240,7 @@ SQL
 
     dolt diff -r sql firstbranch newbranch > query
     dolt checkout firstbranch
+
     cat query
     dolt sql < query
     dolt add test
@@ -498,11 +499,11 @@ SQL
 
 @test "sql-diff: reconciles CREATE/ALTER/DROP VIEW" {
     dolt sql -q 'create table test (pk int not null primary key)'
-    dolt sql -q 'create view double as select pk*2 from test'
+    dolt sql -q 'create view double_view as select pk*2 from test'
     run dolt diff -r sql
     [ "$status" -eq 0 ]
     skip "create view statements not implemented"
-    [[ "$output" =~ "CREATE VIEW `double`" ]] || false
+    [[ "$output" =~ "CREATE VIEW `double_view`" ]] || false
 }
 
 @test "sql-diff: diff sql recreates tables with all types" {
@@ -678,7 +679,7 @@ SQL
 }
 
 @test "sql-diff: sql diff ignores dolt docs" {
-    echo "This is a README" > README.md 
+    echo "This is a README" > README.md
     run dolt diff -r sql
     [ "$status" -eq 0 ]
     skip "Have to decide how to treat dolty_docs in diff -r sql"
@@ -693,11 +694,12 @@ CREATE TABLE test (
   PRIMARY KEY(pk)
 );
 SQL
-    dolt sql -q "insert into test (pk, c1) values (0, NULL)";
+    dolt sql -q "insert into test (pk, c1) values (0, NULL)"
+    dolt diff -r sql
     run dolt diff -r sql
     [ "$status" -eq 0 ]
-    skip "dolt diff -sql prints out NULL values right now"
-    [[ ! "$output" =~ "NULL" ]] || false;
+    [[ "$output" =~ 'INSERT INTO `test` (`pk`,`c1`) VALUES (0,NULL)' ]] || false
+
     dolt sql -q "drop table test"
     dolt sql <<SQL
 CREATE TABLE test (
@@ -706,9 +708,8 @@ CREATE TABLE test (
   PRIMARY KEY(pk)
 );
 SQL
-    dolt sql -q "insert into test (pk, c1) values (0, NULL)";
+    dolt sql -q "insert into test (pk, c1) values (0, NULL)"
     run dolt diff -r sql
-    skip "dolt diff -sql fails with filed to tranform row pk:0 |"
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "failed to transform" ]] || false 
+    [[ "$output" =~ 'INSERT INTO `test` (`pk`,`c1`) VALUES (0,NULL)' ]] || false
 }

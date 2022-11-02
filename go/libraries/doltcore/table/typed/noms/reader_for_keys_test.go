@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -43,18 +42,17 @@ func TestReaderForKeys(t *testing.T) {
 	sch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
 
-	var db datas.Database
 	storage := &chunks.MemoryStorage{}
-	db = datas.NewDatabase(storage.NewView())
-	m, err := types.NewMap(ctx, db)
+	vrw := types.NewValueStore(storage.NewView())
+	m, err := types.NewMap(ctx, vrw)
 	assert.NoError(t, err)
 
 	me := m.Edit()
 	for i := 0; i <= 100; i += 2 {
-		k, err := types.NewTuple(db.Format(), types.Uint(pkTag), types.Int(i))
+		k, err := types.NewTuple(vrw.Format(), types.Uint(pkTag), types.Int(i))
 		require.NoError(t, err)
 
-		v, err := types.NewTuple(db.Format(), types.Uint(valTag), types.Int(100-i))
+		v, err := types.NewTuple(vrw.Format(), types.Uint(valTag), types.Int(100-i))
 		require.NoError(t, err)
 
 		me.Set(k, v)
@@ -93,7 +91,7 @@ func TestReaderForKeys(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			rd := NewNomsMapReaderForKeys(m, sch, intKeysToTupleKeys(t, db.Format(), test.keys))
+			rd := NewNomsMapReaderForKeys(m, sch, intKeysToTupleKeys(t, vrw.Format(), test.keys))
 
 			var rows []row.Row
 			for {

@@ -365,7 +365,7 @@ SQL
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1);"
     run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1)"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "already exists" ]] || false
+    [[ "$output" =~ "duplicate foreign key" ]] || false
 }
 
 @test "foreign-keys: ALTER TABLE DROP FOREIGN KEY" {
@@ -498,10 +498,10 @@ ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1);
 SQL
     run dolt sql -q "ALTER TABLE child DROP INDEX v1"
     [ "$status" -ne "0" ]
-    [[ "$output" =~ "cannot drop index: v1 is referenced by foreign key fk_name" ]] || false
+    [[ "$output" =~ 'cannot drop index: `v1` is used by foreign key `fk_name`' ]] || false
     run dolt sql -q "ALTER TABLE parent DROP INDEX v1"
     [ "$status" -ne "0" ]
-    [[ "$output" =~ "cannot drop index: v1 is referenced by foreign key fk_name" ]] || false
+    [[ "$output" =~ 'cannot drop index: `v1` is used by foreign key `fk_name`' ]] || false
 
     run dolt sql -q "ALTER TABLE child DROP FOREIGN KEY fk_name"
     [ "$status" -eq "0" ]
@@ -809,49 +809,21 @@ INSERT INTO child  VALUES (1, 1, 1), (2, 2, 2);
 SQL
 
     echo $'id,v1,v2\n1,3,3\n2,4,4' > update_parent.csv
-    dolt table import -u parent update_parent.csv
-    run dolt sql -q "SELECT * FROM parent" -r=csv
+    run dolt table import -u parent update_parent.csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Rows Processed: 2, Additions: 0, Modifications: 2, Had No Effect: 0" ]] || false
+
+    run dolt sql -r csv -q "select * from parent order by id"
     [ "$status" -eq "0" ]
     [[ "$output" =~ "id,v1,v2" ]] || false
     [[ "$output" =~ "1,3,3" ]] || false
     [[ "$output" =~ "2,4,4" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-    run dolt sql -q "SELECT * FROM child" -r=csv
+
+    run dolt sql -r csv -q "select * from child order by id"
     [ "$status" -eq "0" ]
     [[ "$output" =~ "id,v1,v2" ]] || false
     [[ "$output" =~ "1,3,1" ]] || false
     [[ "$output" =~ "2,4,2" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-
-    echo $'id,v1,v2\n1,1,1\n2,2,2' > update_child.csv
-    run dolt table import -u child update_child.csv
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "violation" ]] || false
-
-    echo $'id,v1,v2\n3,3,3\n4,4,4' > update_child.csv
-    dolt table import -u child update_child.csv
-    run dolt sql -q "SELECT * FROM child" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "id,v1,v2" ]] || false
-    [[ "$output" =~ "1,3,1" ]] || false
-    [[ "$output" =~ "2,4,2" ]] || false
-    [[ "$output" =~ "3,3,3" ]] || false
-    [[ "$output" =~ "4,4,4" ]] || false
-    [[ "${#lines[@]}" = "5" ]] || false
-
-    echo $'id,v1,v2\n1,1,1\n2,2,2' > update_child.csv
-    run dolt table import -r child update_child.csv
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "violation" ]] || false
-
-    echo $'id,v1,v2\n3,3,3\n4,4,4' > update_child.csv
-    dolt table import -r child update_child.csv
-    run dolt sql -q "SELECT * FROM child" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "id,v1,v2" ]] || false
-    [[ "$output" =~ "3,3,3" ]] || false
-    [[ "$output" =~ "4,4,4" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
 }
 
 @test "foreign-keys: Commit all" {
@@ -1080,7 +1052,7 @@ SQL
     dolt add -A
     dolt commit --force -m "updated parent"
     dolt checkout main
-    dolt merge other
+    dolt merge other -m "merge other"
 
     run dolt sql -q "SELECT * FROM parent ORDER BY id ASC" -r=csv
     [ "$status" -eq "0" ]
@@ -1124,7 +1096,7 @@ SQL
     dolt add -A
     dolt commit --force -m "updated parent"
     dolt checkout main
-    dolt merge other
+    dolt merge other -m "merge other"
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false
@@ -1156,7 +1128,7 @@ SQL
     dolt add -A
     dolt commit --force -m "updated child"
     dolt checkout main
-    dolt merge other
+    dolt merge other -m "merge other"
 
     run dolt sql -q "SELECT * FROM parent ORDER BY id ASC" -r=csv
     [ "$status" -eq "0" ]
@@ -1200,7 +1172,7 @@ SQL
     dolt add -A
     dolt commit --force -m "updated child"
     dolt checkout main
-    dolt merge other
+    dolt merge other -m "merge other"
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false
@@ -1233,7 +1205,7 @@ SQL
     dolt add -A
     dolt commit --force -m "updated both"
     dolt checkout main
-    dolt merge other
+    dolt merge other -m "merge other"
 
     run dolt sql -q "SELECT * FROM parent ORDER BY id ASC" -r=csv
     [ "$status" -eq "0" ]
@@ -1279,7 +1251,7 @@ SQL
     dolt add -A
     dolt commit --force -m "updated both"
     dolt checkout main
-    dolt merge other
+    dolt merge other -m "merge other"
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false
@@ -1309,12 +1281,50 @@ SQL
     dolt add -A
     dolt commit -m "added 2s"
     dolt checkout main
-    dolt merge other
+    dolt merge other -m "merge other"
     run dolt conflicts resolve --theirs parent
     [ "$status" -eq "1" ]
     [[ "$output" =~ "violation" ]] || false
     run dolt conflicts resolve --theirs child
     [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+}
+
+@test "foreign-keys: Resolve catches violations with stored procedure" {
+    dolt sql <<SQL
+ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);
+INSERT INTO parent VALUES (0,0,0);
+INSERT INTO child VALUES (0,0,0);
+SQL
+    dolt add -A
+    dolt commit -m "added tables"
+    dolt branch other
+    dolt sql <<SQL
+INSERT INTO parent VALUES (1,1,1);
+INSERT INTO child VALUES (1,1,1);
+SQL
+    dolt add -A
+    dolt commit -m "added 1s"
+    dolt checkout other
+    dolt sql <<SQL
+INSERT INTO parent VALUES (1,2,2);
+INSERT INTO child VALUES (1,2,2);
+SQL
+    dolt add -A
+    dolt commit -m "added 2s"
+    dolt checkout main
+    dolt merge other -m "merge other"
+    run dolt sql <<SQL
+set @@dolt_allow_commit_conflicts = 1;
+call dolt_conflicts_resolve('--theirs', 'parent');
+SQL
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "violation" ]] || false
+    run dolt sql <<SQL
+set @@dolt_allow_commit_conflicts = 1;
+call dolt_conflicts_resolve('--theirs', 'child');
+SQL
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "violation" ]] || false
 }
 
@@ -1354,15 +1364,16 @@ SQL
 }
 
 @test "foreign-keys: self-referential same column(s)" {
+    # We differ from MySQL here as we do not allow duplicate indexes (required in MySQL to reference the same
+    # column in self-referential) but we do reuse existing indexes (MySQL requires unique indexes for parent and
+    # child rows).
     dolt sql <<SQL
 CREATE INDEX v1v2 ON parent(v1, v2);
 SQL
-    run dolt sql -q "ALTER TABLE parent ADD CONSTRAINT fk_named FOREIGN KEY (v1) REFERENCES parent(v1);"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ 'the same column `v1` cannot be used in self referential foreign keys' ]] || false
-    run dolt sql -q "ALTER TABLE parent ADD CONSTRAINT fk_named FOREIGN KEY (v1, v2) REFERENCES parent(v1, v2);"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "self referential" ]] || false
+    run dolt sql -q "ALTER TABLE parent ADD CONSTRAINT fk_name1 FOREIGN KEY (v1) REFERENCES parent(v1);"
+    [ "$status" -eq "0" ]
+    run dolt sql -q "ALTER TABLE parent ADD CONSTRAINT fk_name2 FOREIGN KEY (v1, v2) REFERENCES parent(v1, v2);"
+    [ "$status" -eq "0" ]
 }
 
 @test "foreign-keys: self-referential child column follows parent RESTRICT" {
@@ -1565,7 +1576,7 @@ SQL
     # Run a query and assert that no changes were made
     run dolt sql -q "DELETE FROM colors where color='green'"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `["green"]`' ]] || false
+    [[ "$output" =~ 'cannot delete or update a parent row' ]] || false
 
     run dolt sql -r csv -q "SELECT * FROM colors"
     [ "$status" -eq "0" ]
@@ -1621,7 +1632,7 @@ SHOW WARNINGS;
 SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ '1452' ]] || false # first ensure the proper code
-    [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `["yellow"]`' ]] || false
+    [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `[yellow]`' ]] || false
 }
 
 @test "foreign-keys: updating to null works as expected in commit" {
@@ -1672,16 +1683,356 @@ SQL
 
     run dolt table import -u businesses fk_test.csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "Rows Processed: 2, Additions: 2, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ 'Rows Processed: 2, Additions: 2, Modifications: 0, Had No Effect: 0' ]] || false
 
-    # Ensure this fails when the field is NOT NULL
+    run dolt sql -r csv -q "SELECT * FROM businesses order by name"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'name,naics_2017' ]] || false
+    [[ "$output" =~ 'test,' ]] || false
+    [[ "$output" =~ 'test2,100' ]] || false
+}
+
+@test "foreign-keys: Delayed foreign key resolution" {
     dolt sql <<SQL
-TRUNCATE businesses;
-ALTER TABLE businesses MODIFY naics_2017 char(6) NOT NULL;
+SET FOREIGN_KEY_CHECKS=0;
+CREATE TABLE delayed_child (
+  pk int PRIMARY KEY,
+  v1 int,
+  CONSTRAINT fk_delayed FOREIGN KEY (v1) REFERENCES delayed_parent(v1)
+);
+CREATE TABLE delayed_parent (
+  pk int PRIMARY KEY,
+  v1 int,
+  INDEX (v1)
+);
+INSERT INTO delayed_child VALUES (1, 2);
+SET FOREIGN_KEY_CHECKS=1;
+SQL
+    run dolt schema show delayed_child
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "fk_delayed" ]] || false
+    run dolt sql -q "SELECT * FROM delayed_parent" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    run dolt sql -q "SELECT * FROM delayed_child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
+    run dolt sql -q "INSERT INTO delayed_child VALUES (2, 3);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "foreign key constraint fails" ]] || false
+    [[ "$output" =~ "fk_delayed" ]] || false
+    dolt sql <<SQL
+INSERT INTO delayed_parent VALUES (1, 2), (2, 3);
+INSERT INTO delayed_child VALUES (2, 3);
+SQL
+    run dolt sql -q "SELECT * FROM delayed_child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "$output" =~ "2,3" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
+
+@test "foreign-keys: Delayed foreign key resolution through file" {
+    # Generally foreign keys are disabled when importing a MySQL dump so this tests that exact scenario
+    # Should logically be the same as the above test but you never know what may change
+    cat <<SQL > delayed.sql
+SET FOREIGN_KEY_CHECKS=0;
+CREATE TABLE delayed_child (
+  pk int PRIMARY KEY,
+  v1 int,
+  CONSTRAINT fk_delayed FOREIGN KEY (v1) REFERENCES delayed_parent(v1)
+);
+CREATE TABLE delayed_parent (
+  pk int PRIMARY KEY,
+  v1 int,
+  INDEX (v1)
+);
+INSERT INTO delayed_child VALUES (1, 2);
+SET FOREIGN_KEY_CHECKS=1;
+SQL
+    dolt sql < delayed.sql
+    run dolt schema show delayed_child
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "fk_delayed" ]] || false
+    run dolt sql -q "SELECT * FROM delayed_parent" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    run dolt sql -q "SELECT * FROM delayed_child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
+    run dolt sql -q "INSERT INTO delayed_child VALUES (2, 3);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "foreign key constraint fails" ]] || false
+    [[ "$output" =~ "fk_delayed" ]] || false
+    dolt sql <<SQL
+INSERT INTO delayed_parent VALUES (1, 2), (2, 3);
+INSERT INTO delayed_child VALUES (2, 3);
+SQL
+    run dolt sql -q "SELECT * FROM delayed_child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "$output" =~ "2,3" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
+
+@test "foreign-keys: Delayed foreign key resolution resetting FOREIGN_KEY_CHECKS" {
+    dolt sql <<SQL
+SET FOREIGN_KEY_CHECKS=0;
+CREATE TABLE delayed_child (
+  pk int PRIMARY KEY,
+  v1 int,
+  CONSTRAINT fk_delayed FOREIGN KEY (v1) REFERENCES delayed_parent(v1)
+);
+INSERT INTO delayed_child VALUES (1, 2);
+SET FOREIGN_KEY_CHECKS=1;
+SQL
+    run dolt schema show delayed_child
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "fk_delayed" ]] || false
+    run dolt sql -q "SELECT * FROM delayed_child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
+    run dolt sql -q "INSERT INTO delayed_child VALUES (2, 3);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "foreign key constraint fails" ]] || false
+    [[ "$output" =~ "fk_delayed" ]] || false
+    dolt sql <<SQL
+CREATE TABLE delayed_parent (
+  pk int PRIMARY KEY,
+  v1 int,
+  INDEX (v1)
+);
+INSERT INTO delayed_parent VALUES (1, 2), (2, 3);
+INSERT INTO delayed_child VALUES (2, 3);
+SQL
+    run dolt sql -q "SELECT * FROM delayed_child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "$output" =~ "2,3" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
+
+@test "foreign-keys: DROP TABLE with FOREIGN_KEY_CHECKS=0" {
+    dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_dropped FOREIGN KEY (v1) REFERENCES parent(v1)"
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'fk_dropped' ]] || false
+
+    run dolt sql -q "DROP TABLE parent"
+    [ "$status" -eq "1" ]
+    dolt sql <<SQL
+SET FOREIGN_KEY_CHECKS=0;
+DROP TABLE PARENT;
+SET FOREIGN_KEY_CHECKS=1;
+SQL
+    run dolt sql -q "INSERT INTO child VALUES (4, 5, 6);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "foreign key constraint fails" ]] || false
+    [[ "$output" =~ "fk_dropped" ]] || false
+    dolt sql <<SQL
+CREATE TABLE parent (pk INT PRIMARY KEY, v1 INT, INDEX (v1));
+INSERT INTO parent VALUES (1, 5);
+INSERT INTO child VALUES (4, 5, 6);
+SQL
+    run dolt sql -q "SELECT * FROM parent" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,5" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    run dolt sql -q "SELECT * FROM child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "id,v1,v2" ]] || false
+    [[ "$output" =~ "4,5,6" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+}
+
+@test "foreign-keys: alter table add constraint for different database" {
+    run dolt sql  <<SQL
+CREATE DATABASE public;
+CREATE TABLE public.cities (pk integer NOT NULL, city varchar(255), state varchar(2));
+CREATE TABLE public.states (state_id integer NOT NULL, state varchar(2));
+ALTER TABLE public.cities ADD CONSTRAINT cities_pkey PRIMARY KEY (pk);
+ALTER TABLE public.states ADD CONSTRAINT states_pkey PRIMARY KEY (state_id);
+ALTER TABLE public.cities ADD CONSTRAINT foreign_key1 FOREIGN KEY (state) REFERENCES public.states(state);
+SQL
+    [ $status -eq 1 ]
+    [[ $output =~ "missing index for foreign key" ]] || false
+
+    run dolt sql -q "SHOW CREATE TABLE public.cities"
+    [[ $output =~ "PRIMARY KEY (\`pk\`)" ]] || false
+    [[ ! $output =~ "CONSTRAINT" ]] || false
+
+    run dolt sql -q "SHOW CREATE TABLE public.states"
+    [[ $output =~ "PRIMARY KEY (\`state_id\`)" ]] || false
+    [[ ! $output =~ "KEY \`foreign_key1\` (\`state\`)" ]] || false
+
+    run dolt sql <<SQL
+CREATE INDEX foreign_key1 ON public.states(state);
+ALTER TABLE public.cities ADD CONSTRAINT foreign_key1 FOREIGN KEY (state) REFERENCES public.states(state);
+SQL
+    [ $status -eq 0 ]
+
+    run dolt sql -q "SHOW CREATE TABLE public.cities"
+    [[ $output =~ "CONSTRAINT \`foreign_key1\` FOREIGN KEY (\`state\`) REFERENCES \`states\` (\`state\`)" ]] || false
+
+    run dolt sql -q "SHOW CREATE TABLE public.states"
+    [[ $output =~ "KEY \`foreign_key1\` (\`state\`)" ]] || false
+}
+
+@test "foreign-keys: alter table add constraint with foreign key check is off" {
+    skip "Add foreign key constraint statement is ignored instead of failing"
+    run dolt sql  <<SQL
+set foreign_key_checks = off;
+CREATE DATABASE public;
+CREATE TABLE public.cities (pk integer NOT NULL, city varchar(255), state varchar(2));
+CREATE TABLE public.states (state_id integer NOT NULL, state varchar(2));
+ALTER TABLE public.cities ADD CONSTRAINT cities_pkey PRIMARY KEY (pk);
+ALTER TABLE public.states ADD CONSTRAINT states_pkey PRIMARY KEY (state_id);
+ALTER TABLE public.cities ADD CONSTRAINT foreign_key1 FOREIGN KEY (state) REFERENCES public.states(state);
+SQL
+    [ $status -eq 1 ]
+    [[ $output =~ "missing index for constraint" ]] || false
+
+    run dolt sql -q "SHOW CREATE TABLE public.cities"
+    [[ $output =~ "PRIMARY KEY (\`pk\`)" ]] || false
+    [[ ! $output =~ "CONSTRAINT" ]] || false
+
+    run dolt sql -q "SHOW CREATE TABLE public.states"
+    [[ $output =~ "PRIMARY KEY (\`state_id\`)" ]] || false
+    [[ ! $output =~ "KEY \`foreign_key1\` (\`state\`)" ]] || false
+
+    run dolt sql <<SQL
+CREATE INDEX foreign_key1 ON public.states(state);
+ALTER TABLE public.cities ADD CONSTRAINT foreign_key1 FOREIGN KEY (state) REFERENCES public.states(state);
+SQL
+    [ $status -eq 0 ]
+
+    run dolt sql -q "SHOW CREATE TABLE public.cities"
+    [[ $output =~ "CONSTRAINT \`foreign_key1\` FOREIGN KEY (\`state\`) REFERENCES \`states\` (\`state\`)" ]] || false
+
+    run dolt sql -q "SHOW CREATE TABLE public.states"
+    [[ $output =~ "KEY \`foreign_key1\` (\`state\`)" ]] || false
+}
+
+@test "foreign-keys: creating a foreign key constraint on a table with an unsupported type works" {
+
+    # https://github.com/dolthub/dolt/issues/3023
+    dolt sql <<SQL
+CREATE TABLE IF NOT EXISTS restaurants (
+    id INT PRIMARY KEY,
+    coordinate POINT
+);
+CREATE TABLE IF NOT EXISTS hours (
+    restaurant_id INT PRIMARY KEY AUTO_INCREMENT,
+    FOREIGN KEY (restaurant_id) REFERENCES restaurants(id)
+);
 SQL
 
-    run dolt table import -u businesses fk_test.csv
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "Bad Row:" ]] || false
-    [[ "$output" =~ "naics_2017" ]] || false
+    run dolt sql -q "show create table hours";
+    [ $status -eq 0 ]
+    [[ $output =~ "FOREIGN KEY (\`restaurant_id\`) REFERENCES \`restaurants\` (\`id\`)" ]] || false
+}
+
+@test "foreign-keys: create foreign key onto primary key" {
+    dolt sql <<SQL
+    drop table child;
+    drop table parent;
+    create table parent (a int, b int, c int, primary key (b,a));
+    create table child (a int primary key, b int);
+SQL
+
+    # ok, it's a prefix
+    dolt sql -q "alter table child add constraint fk1 foreign key (b) references parent (b)"
+
+    # not a prefix
+    run dolt sql -q "alter table child add constraint fk2 foreign key (a) references parent (a)"
+
+    # not a prefix
+    run dolt sql -q "alter table child add constraint fk3 foreign key (a,b) references parent (a,b)"
+
+    # ok
+    run dolt sql -q "alter table child add constraint fk4 foreign key (b,a) references parent (b,a)"
+    [ $status -eq 0 ]
+
+    # the prefix key should not be unique
+    run dolt sql -q "show create table parent"
+    [ $status -eq 0 ]
+    [[ ! $output =~ "KEY \`b\` (\`b\`)" ]] || false
+    [[ ! $output =~ "UNIQUE" ]] || false
+
+    run dolt sql -q "show create table child"
+    [ $status -eq 0 ]
+    [[ $output =~ "CONSTRAINT \`fk1\` FOREIGN KEY (\`b\`) REFERENCES \`parent\` (\`b\`)" ]] || false
+    [[ $output =~ "CONSTRAINT \`fk4\` FOREIGN KEY (\`b\`,\`a\`) REFERENCES \`parent\` (\`b\`,\`a\`)" ]] || false
+}
+
+@test "foreign-keys: creating a foreign key constraint on a table with rows violating it" {
+    dolt sql <<SQL
+CREATE TABLE a (
+  id int NOT NULL AUTO_INCREMENT,
+  a text NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT INTO a (id,a) VALUES (1,'a');
+CREATE TABLE b (
+  id int NOT NULL AUTO_INCREMENT,
+  b text NOT NULL,
+  a_id int,
+  PRIMARY KEY (id),
+  KEY b_a_id (a_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT INTO b (id, b, a_id) VALUES (1, 'b', NULL);
+INSERT INTO b (id, b, a_id) VALUES (2, 'b2', 31337);
+INSERT INTO b (id, b, a_id) VALUES (3, 'b2', 31337);
+INSERT INTO b (id, b, a_id) VALUES (4, 'b2', 31337);
+SQL
+
+    run dolt sql -q "ALTER TABLE b ADD CONSTRAINT fk_b_a_id_refs_a FOREIGN KEY (a_id) REFERENCES a (id)";
+    [ "$status" -eq 1 ]
+    [[ ! "$output" =~ "panic:" ]] || false
+    [[ "$output" =~ "cannot add or update a child row - Foreign key violation on fk: \`fk_b_a_id_refs_a\`, table: \`b\`, referenced table: \`a\`, key: \`[31337]\`" ]] || false
+}
+
+@test "foreign-keys: partial updates work against foreign key constraints" {
+    skip "Partial updates are unsupported"
+    dolt sql <<SQL
+DROP TABLE IF EXISTS parent;
+DROP TABLE IF EXISTS child;
+CREATE TABLE parent(
+  a int PRIMARY KEY
+);
+CREATE TABLE child (
+  a int NOT NULL,
+  b int DEFAULT NULL,
+  c int DEFAULT NULL,
+  PRIMARY KEY (a),
+  KEY child_b (b),
+  KEY child_c (c),
+  CONSTRAINT child_ibfk_1 FOREIGN KEY (b) REFERENCES parent (a),
+  CONSTRAINT child_ibfk_2 FOREIGN KEY (c) REFERENCES parent (a)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+INSERT INTO parent VALUES (1);
+
+SET FOREIGN_KEY_CHECKS=0;
+INSERT INTO child values (100, 1, 1), (101, 2, 2);
+SET FOREIGN_KEY_CHECKS=1;
+SQL
+
+    run dolt sql -q "update child set b = 1 where a = 101;"
+    [ "$status" -eq 0 ]
 }

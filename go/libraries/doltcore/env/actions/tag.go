@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 type TagProps struct {
@@ -31,9 +32,13 @@ type TagProps struct {
 }
 
 func CreateTag(ctx context.Context, dEnv *env.DoltEnv, tagName, startPoint string, props TagProps) error {
+	return CreateTagOnDB(ctx, dEnv.DoltDB, tagName, startPoint, props, dEnv.RepoStateReader().CWBHeadRef())
+}
+
+func CreateTagOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagName, startPoint string, props TagProps, headRef ref.DoltRef) error {
 	tagRef := ref.NewTagRef(tagName)
 
-	hasRef, err := dEnv.DoltDB.HasRef(ctx, tagRef)
+	hasRef, err := ddb.HasRef(ctx, tagRef)
 
 	if err != nil {
 		return err
@@ -53,22 +58,26 @@ func CreateTag(ctx context.Context, dEnv *env.DoltEnv, tagName, startPoint strin
 		return err
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
+	cm, err := ddb.Resolve(ctx, cs, headRef)
 
 	if err != nil {
 		return err
 	}
 
-	meta := doltdb.NewTagMeta(props.TaggerName, props.TaggerEmail, props.Description)
+	meta := datas.NewTagMeta(props.TaggerName, props.TaggerEmail, props.Description)
 
-	return dEnv.DoltDB.NewTagAtCommit(ctx, tagRef, cm, meta)
+	return ddb.NewTagAtCommit(ctx, tagRef, cm, meta)
 }
 
 func DeleteTags(ctx context.Context, dEnv *env.DoltEnv, tagNames ...string) error {
+	return DeleteTagsOnDB(ctx, dEnv.DoltDB, tagNames...)
+}
+
+func DeleteTagsOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagNames ...string) error {
 	for _, tn := range tagNames {
 		dref := ref.NewTagRef(tn)
 
-		hasRef, err := dEnv.DoltDB.HasRef(ctx, dref)
+		hasRef, err := ddb.HasRef(ctx, dref)
 
 		if err != nil {
 			return err
@@ -77,7 +86,7 @@ func DeleteTags(ctx context.Context, dEnv *env.DoltEnv, tagNames ...string) erro
 			return doltdb.ErrTagNotFound
 		}
 
-		err = dEnv.DoltDB.DeleteTag(ctx, dref)
+		err = ddb.DeleteTag(ctx, dref)
 
 		if err != nil {
 			return err

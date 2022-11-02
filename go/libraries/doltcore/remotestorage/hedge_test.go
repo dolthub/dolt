@@ -16,7 +16,6 @@ package remotestorage
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -28,35 +27,63 @@ func init() {
 	MaxHedgesPerRequest = 1024
 }
 
-func TestPercentileStrategy(t *testing.T) {
-	s := NewPercentileStrategy(0, 1*time.Hour, 95.0)
+func TestPercentileEstimator(t *testing.T) {
+	e := NewPercentileEstimator(0, 1*time.Hour, 95.0)
 	for i := 0; i < 90; i++ {
-		s.Observe(1, 1, 1*time.Millisecond, nil)
+		e.Observe(1, 1, 1*time.Millisecond, nil)
 	}
 	for i := 0; i < 10; i++ {
-		s.Observe(10, 1, 100*time.Millisecond, nil)
+		e.Observe(10, 1, 100*time.Millisecond, nil)
 	}
-	d := s.Duration(10)
+	d := e.Duration(10)
 	assert.True(t, d > 90*time.Millisecond, "p95 is greater than 90 milliseconds, is %d", d)
 }
 
+// testEstimator is a DynamicEstimator for testing
+type testEstimator struct {
+	d            time.Duration
+	observations int
+}
+
+// Duration implements DurationEstimator.
+func (e *testEstimator) Duration(sz uint64) time.Duration {
+	return e.d
+}
+
+// Observe implements DurationObserver.
+func (e *testEstimator) Observe(sz uint64, n int, d time.Duration, err error) {
+	e.observations++
+}
+
+func TestEstimateStrategy(t *testing.T) {
+	e := &testEstimator{1 * time.Second, 0}
+	s := NewEstimateStrategy(e)
+	d := s.NextTry(0, 0, 0)
+	assert.Equal(t, 1*time.Second, d)
+}
+
 func TestMinStrategy(t *testing.T) {
-	u := NewPercentileStrategy(0, 1*time.Hour, 95.0)
-	s := NewMinStrategy(1*time.Second, u)
-	d := s.Duration(10)
-	assert.Equal(t, d, 1*time.Second)
-	for i := 0; i < 100; i++ {
-		s.Observe(10, 1, 15*time.Second, nil)
-	}
-	d = s.Duration(10)
-	assert.NotEqual(t, d, 1*time.Second)
+	fS := NewFixedHedgeStrategy(1 * time.Second)
+	s := NewMinHedgeStrategy(2*time.Second, fS)
+	assert.Equal(t, 2*time.Second, s.NextTry(0, 0, 1))
+	fS.FixedNextTry = 3 * time.Second
+	assert.Equal(t, 3*time.Second, s.NextTry(0, 0, 1))
+}
+
+func TestExponentialStrategy(t *testing.T) {
+	fS := NewFixedHedgeStrategy(1 * time.Second)
+	s := NewExponentialHedgeStrategy(fS)
+	d := s.NextTry(0, 0, 1)
+	assert.Equal(t, 2*time.Second, d)
+	d = s.NextTry(0, 0, 2)
+	assert.Equal(t, 4*time.Second, d)
 }
 
 func TestHedgerRunsWork(t *testing.T) {
-	h := NewHedger(1, NewMinStrategy(1*time.Second, nil))
+	h := NewHedger(1, NewFixedHedgeStrategy(1*time.Second), NewNoopObserver())
 	ran := false
 	i, err := h.Do(context.Background(), Work{
-		Work: func(ctx context.Context, n int) (interface{}, error) {
+		Run: func(ctx context.Context, n int) (interface{}, error) {
 			ran = true
 			return true, nil
 		},
@@ -66,13 +93,13 @@ func TestHedgerRunsWork(t *testing.T) {
 	assert.True(t, i.(bool))
 }
 
-func TestHedgerHedgesWork(t *testing.T) {
-	h := NewHedger(1, NewMinStrategy(10*time.Millisecond, nil))
+func TestHedgerHedgesWorkRuns(t *testing.T) {
+	h := NewHedger(1, NewFixedHedgeStrategy(10*time.Millisecond), NewNoopObserver())
 	ch := make(chan int, 2)
 	ch <- 1
 	ch <- 2
 	i, err := h.Do(context.Background(), Work{
-		Work: func(ctx context.Context, n int) (interface{}, error) {
+		Run: func(ctx context.Context, n int) (interface{}, error) {
 			i := <-ch
 			if i == 1 {
 				<-ctx.Done()
@@ -89,18 +116,64 @@ func TestHedgerHedgesWork(t *testing.T) {
 	assert.Equal(t, 0, <-ch)
 }
 
+func TestHedgerObservesWork(t *testing.T) {
+	e := &testEstimator{}
+	h := NewHedger(1, NewFixedHedgeStrategy(10*time.Millisecond), e)
+	ch := make(chan int, 2)
+	ch <- 1
+	ch <- 2
+	i, err := h.Do(context.Background(), Work{
+		Run: func(ctx context.Context, n int) (interface{}, error) {
+			i := <-ch
+			if i == 1 {
+				<-ctx.Done()
+				close(ch)
+				return 1, nil
+			} else if i == 2 {
+				return 2, nil
+			}
+			panic("unexpected value in ch")
+		},
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 2, i.(int))
+	assert.Equal(t, 0, <-ch)
+	assert.Equal(t, e.observations, 1)
+}
+
+// Behaves a bit like a WaitGroup but allows Done() to be called more than its
+// configured count and after Wait() has already returned.
+type sloppyWG struct {
+	cnt int32
+	ch  chan struct{}
+}
+
+func newSloppyWG(i int32) *sloppyWG {
+	return &sloppyWG{i, make(chan struct{})}
+}
+
+func (w *sloppyWG) Done() {
+	cur := atomic.AddInt32(&w.cnt, -1)
+	if cur == 0 {
+		close(w.ch)
+	}
+}
+
+func (w *sloppyWG) Wait() {
+	<-w.ch
+}
+
 func TestHedgerObeysMaxHedges(t *testing.T) {
 	try := func(max int) {
-		h := NewHedger(int64(max), NewMinStrategy(1*time.Millisecond, nil))
+		h := NewHedger(int64(max), NewFixedHedgeStrategy(1*time.Millisecond), NewNoopObserver())
 		cnt := int32(0)
-		wg := &sync.WaitGroup{}
-		wg.Add(max + 4)
+		wg := newSloppyWG(int32(max + 4))
 		h.after = func(d time.Duration) <-chan time.Time {
 			wg.Done()
 			return time.After(d)
 		}
 		i, err := h.Do(context.Background(), Work{
-			Work: func(ctx context.Context, n int) (interface{}, error) {
+			Run: func(ctx context.Context, n int) (interface{}, error) {
 				cur := atomic.AddInt32(&cnt, 1)
 				if cur == int32(max)+1 {
 					wg.Wait()
@@ -129,16 +202,15 @@ func TestMaxHedgesPerRequestObeyed(t *testing.T) {
 	}()
 
 	MaxHedgesPerRequest = 0
-	h := NewHedger(int64(32), NewMinStrategy(1*time.Millisecond, nil))
+	h := NewHedger(int64(32), NewFixedHedgeStrategy(1*time.Millisecond), NewNoopObserver())
 	cnt := int32(0)
-	wg := &sync.WaitGroup{}
-	wg.Add(4)
+	wg := newSloppyWG(4)
 	h.after = func(d time.Duration) <-chan time.Time {
 		wg.Done()
 		return time.After(d)
 	}
 	i, err := h.Do(context.Background(), Work{
-		Work: func(ctx context.Context, n int) (interface{}, error) {
+		Run: func(ctx context.Context, n int) (interface{}, error) {
 			cur := atomic.AddInt32(&cnt, 1)
 			if cur == int32(1) {
 				wg.Wait()
@@ -153,14 +225,13 @@ func TestMaxHedgesPerRequestObeyed(t *testing.T) {
 
 	MaxHedgesPerRequest = 1
 	cnt = int32(0)
-	wg = &sync.WaitGroup{}
-	wg.Add(7)
+	wg = newSloppyWG(7)
 	h.after = func(d time.Duration) <-chan time.Time {
 		wg.Done()
 		return time.After(d)
 	}
 	i, err = h.Do(context.Background(), Work{
-		Work: func(ctx context.Context, n int) (interface{}, error) {
+		Run: func(ctx context.Context, n int) (interface{}, error) {
 			cur := atomic.AddInt32(&cnt, 1)
 			if cur == int32(1) {
 				<-ctx.Done()
@@ -178,7 +249,7 @@ func TestMaxHedgesPerRequestObeyed(t *testing.T) {
 }
 
 func TestHedgerContextCancelObeyed(t *testing.T) {
-	h := NewHedger(int64(3), NewMinStrategy(1*time.Millisecond, nil))
+	h := NewHedger(int64(3), NewFixedHedgeStrategy(1*time.Millisecond), NewNoopObserver())
 	resCh := make(chan struct{})
 	canCh := make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
@@ -190,7 +261,7 @@ func TestHedgerContextCancelObeyed(t *testing.T) {
 		cancel()
 	}()
 	_, err := h.Do(ctx, Work{
-		Work: func(ctx context.Context, n int) (interface{}, error) {
+		Run: func(ctx context.Context, n int) (interface{}, error) {
 			canCh <- struct{}{}
 			<-ctx.Done()
 			resCh <- struct{}{}
@@ -202,4 +273,40 @@ func TestHedgerContextCancelObeyed(t *testing.T) {
 	<-resCh
 	<-resCh
 	<-resCh
+}
+
+func TestHedgerObeysStrategy(t *testing.T) {
+	before := MaxHedgesPerRequest
+	defer func() {
+		MaxHedgesPerRequest = before
+	}()
+
+	fixedInterval := 10 * time.Millisecond
+	h := NewHedger(1, NewFixedHedgeStrategy(fixedInterval), NewNoopObserver())
+
+	MaxHedgesPerRequest = 1
+	cnt := int32(0)
+	wg := newSloppyWG(7)
+
+	h.after = func(d time.Duration) <-chan time.Time {
+		assert.Equal(t, fixedInterval, d)
+		wg.Done()
+		return time.After(d)
+	}
+
+	_, err := h.Do(context.Background(), Work{
+		Run: func(ctx context.Context, n int) (interface{}, error) {
+			cur := atomic.AddInt32(&cnt, 1)
+			if cur == 1 {
+				<-ctx.Done()
+				return 1, nil
+			} else if cur == 2 {
+				wg.Wait()
+				return 2, nil
+			} else {
+				panic("should not hedge more than MaxHedgesPerRequest")
+			}
+		},
+	})
+	assert.NoError(t, err)
 }

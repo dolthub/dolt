@@ -24,7 +24,6 @@ package nbs
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -85,7 +84,7 @@ func TestFSTableCache(t *testing.T) {
 			var names []addr
 			for i := byte(0); i < 4; i++ {
 				name := computeAddr([]byte{i})
-				require.NoError(t, ioutil.WriteFile(filepath.Join(dir, name.String()), nil, 0666))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, name.String()), nil, 0666))
 				names = append(names, name)
 			}
 
@@ -103,7 +102,7 @@ func TestFSTableCache(t *testing.T) {
 			dir := makeTempDir(t)
 			defer file.RemoveAll(dir)
 
-			require.NoError(t, ioutil.WriteFile(filepath.Join(dir, "boo"), nil, 0666))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "boo"), nil, 0666))
 			_, err := newFSTableCache(dir, 1024, 4)
 			assert.Error(t, err)
 		})
@@ -114,7 +113,7 @@ func TestFSTableCache(t *testing.T) {
 			defer file.RemoveAll(dir)
 
 			tempFile := filepath.Join(dir, tempTablePrefix+"boo")
-			require.NoError(t, ioutil.WriteFile(tempFile, nil, 0666))
+			require.NoError(t, os.WriteFile(tempFile, nil, 0666))
 			_, err := newFSTableCache(dir, 1024, 4)
 			require.NoError(t, err)
 			_, fserr := os.Stat(tempFile)

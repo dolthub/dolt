@@ -17,8 +17,8 @@ package edits
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -53,7 +53,7 @@ func testDBE(t *testing.T, kvps []types.KVP) {
 	ctx := context.Background()
 	nbf := types.Format_Default
 	vrw := types.NewMemoryValueStore()
-	tmpDir, err := ioutil.TempDir("", "TestDiskBackedEdits")
+	tmpDir, err := os.MkdirTemp("", "TestDiskBackedEdits")
 	require.NoError(t, err)
 
 	newEA := func() types.EditAccumulator {
@@ -68,7 +68,7 @@ func testDBE(t *testing.T, kvps []types.KVP) {
 	itr, err := dbe.FinishedEditing()
 	assert.NoError(t, err)
 
-	inOrder, count, err := IsInOrder(itr)
+	inOrder, count, err := IsInOrder(nbf, itr)
 
 	assert.NoError(t, err)
 	require.Equal(t, len(kvps), count, "Invalid count %d != %d", count, len(kvps))

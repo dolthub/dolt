@@ -24,17 +24,11 @@ package spec
 import (
 	"context"
 	"errors"
-	"fmt"
-	"regexp"
-
-	"github.com/dolthub/dolt/go/store/d"
 
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-var datasetCapturePrefixRe = regexp.MustCompile("^(" + datas.DatasetRe.String() + ")")
 
 // AbsolutePath describes the location of a Value within a Noms database.
 //
@@ -50,10 +44,6 @@ type AbsolutePath struct {
 	// Hash is the hash this AbsolutePath is rooted at. Only one of Dataset and
 	// Hash should be set.
 	Hash hash.Hash
-	// Path is the relative path from Dataset or Hash. This can be empty. In
-	// that case, the AbsolutePath describes the value at either Dataset or
-	// Hash.
-	Path types.Path
 }
 
 // NewAbsolutePath attempts to parse 'str' and return an AbsolutePath.
@@ -64,7 +54,6 @@ func NewAbsolutePath(str string) (AbsolutePath, error) {
 
 	var h hash.Hash
 	var dataset string
-	var pathStr string
 
 	if str[0] == '#' {
 		tail := str[1:]
@@ -78,53 +67,37 @@ func NewAbsolutePath(str string) (AbsolutePath, error) {
 		} else {
 			return AbsolutePath{}, errors.New("invalid hash: " + hashStr)
 		}
-
-		pathStr = tail[hash.StringLen:]
 	} else {
-		datasetParts := datasetCapturePrefixRe.FindStringSubmatch(str)
-		if datasetParts == nil {
-			return AbsolutePath{}, fmt.Errorf("invalid dataset name: %s", str)
-		}
-
-		dataset = datasetParts[1]
-		pathStr = str[len(dataset):]
+		// This form is only used in the noms command. Commands like `noms show` that use a path with '.' separation will
+		// no longer work
+		dataset = str
 	}
 
-	if len(pathStr) == 0 {
-		return AbsolutePath{Hash: h, Dataset: dataset}, nil
-	}
-
-	path, err := types.ParsePath(pathStr)
-	if err != nil {
-		return AbsolutePath{}, err
-	}
-
-	return AbsolutePath{Hash: h, Dataset: dataset, Path: path}, nil
+	return AbsolutePath{Hash: h, Dataset: dataset}, nil
 }
 
 // Resolve returns the Value reachable by 'p' in 'db'.
-func (p AbsolutePath) Resolve(ctx context.Context, db datas.Database) (val types.Value) {
+func (p AbsolutePath) Resolve(ctx context.Context, db datas.Database, vrw types.ValueReadWriter) (val types.Value, err error) {
 	if len(p.Dataset) > 0 {
 		var ok bool
 		ds, err := db.GetDataset(ctx, p.Dataset)
-		d.PanicIfError(err)
+		if err != nil {
+			return nil, err
+		}
 
 		if val, ok = ds.MaybeHead(); !ok {
 			val = nil
 		}
 	} else if !p.Hash.IsEmpty() {
 		var err error
-		val, err = db.ReadValue(ctx, p.Hash)
-		d.PanicIfError(err)
+		val, err = vrw.ReadValue(ctx, p.Hash)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		panic("Unreachable")
 	}
 
-	if val != nil && p.Path != nil {
-		var err error
-		val, err = p.Path.Resolve(ctx, val, db)
-		d.PanicIfError(err)
-	}
 	return
 }
 
@@ -145,26 +118,5 @@ func (p AbsolutePath) String() (str string) {
 		panic("Unreachable")
 	}
 
-	return str + p.Path.String()
-}
-
-// ReadAbsolutePaths attempts to parse each path in 'paths' and resolve them.
-// If any path fails to parse correctly or if any path can be resolved to an
-// existing Noms Value, then this function returns (nil, error).
-func ReadAbsolutePaths(ctx context.Context, db datas.Database, paths ...string) ([]types.Value, error) {
-	r := make([]types.Value, 0, len(paths))
-	for _, ps := range paths {
-		p, err := NewAbsolutePath(ps)
-		if err != nil {
-			return nil, fmt.Errorf("invalid input path '%s'", ps)
-		}
-
-		v := p.Resolve(ctx, db)
-		if v == nil {
-			return nil, fmt.Errorf("input path '%s' does not exist in database", ps)
-		}
-
-		r = append(r, v)
-	}
-	return r, nil
+	return str
 }

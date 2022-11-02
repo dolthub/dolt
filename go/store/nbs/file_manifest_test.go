@@ -23,7 +23,7 @@ package nbs
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -39,7 +39,7 @@ import (
 )
 
 func makeFileManifestTempDir(t *testing.T) fileManifest {
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
 	return fileManifest{dir: dir} //, cache: newManifestCache(defaultManifestCacheSize)}
 }
@@ -220,10 +220,10 @@ func tryClobberManifest(dir, contents string) ([]byte, error) {
 
 // clobberManifest simulates another process writing dir/manifestFileName concurrently. It ignores the lock file, so it's up to the caller to ensure correctness.
 func clobberManifest(dir, contents string) error {
-	if err := ioutil.WriteFile(filepath.Join(dir, lockFileName), nil, 0666); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, lockFileName), nil, 0666); err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filepath.Join(dir, manifestFileName), []byte(contents), 0666)
+	return os.WriteFile(filepath.Join(dir, manifestFileName), []byte(contents), 0666)
 }
 
 func runClobber(dir, contents string) ([]byte, error) {

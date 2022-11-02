@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var mergeBaseDocs = cli.CommandDocumentationContent{
@@ -49,13 +48,12 @@ func (cmd MergeBaseCmd) Description() string {
 	return mergeBaseDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd MergeBaseCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, mergeBaseDocs, ap))
+func (cmd MergeBaseCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(mergeBaseDocs, ap)
 }
 
-func (cmd MergeBaseCmd) createArgParser() *argparser.ArgParser {
+func (cmd MergeBaseCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	//ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"start-point", "A commit that a new branch should point at."})
 	return ap
@@ -68,8 +66,8 @@ func (cmd MergeBaseCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, mergeBaseDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, mergeBaseDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	var verr errhand.VerboseError
@@ -78,24 +76,39 @@ func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	left, verr := ResolveCommitWithVErr(dEnv, apr.Arg(0))
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
+
+	mergeBaseStr, verr := getMergeBaseFromStrings(ctx, dEnv, apr.Arg(0), apr.Arg(1))
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	right, verr := ResolveCommitWithVErr(dEnv, apr.Arg(1))
+	cli.Println(mergeBaseStr)
+	return 0
+}
+
+// getMergeBaseFromStrings resolves two revisions and returns the merge base
+// commit hash string
+func getMergeBaseFromStrings(ctx context.Context, dEnv *env.DoltEnv, leftStr, rightStr string) (string, errhand.VerboseError) {
+	left, verr := ResolveCommitWithVErr(dEnv, leftStr)
 	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
+		return "", verr
+	}
+
+	right, verr := ResolveCommitWithVErr(dEnv, rightStr)
+	if verr != nil {
+		return "", verr
 	}
 
 	mergeBase, err := merge.MergeBase(ctx, left, right)
 	if err != nil {
-		verr = errhand.BuildDError("could not find merge-base for args %s", apr.Args).AddCause(err).Build()
-		return HandleVErrAndExitCode(verr, usage)
+		verr = errhand.BuildDError("could not find merge-base for args %s %s", leftStr, rightStr).AddCause(err).Build()
+		return "", verr
 	}
 
-	cli.Println(mergeBase.String())
-	return 0
+	return mergeBase.String(), nil
 }
 
 func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr string) (*doltdb.Commit, errhand.VerboseError) {

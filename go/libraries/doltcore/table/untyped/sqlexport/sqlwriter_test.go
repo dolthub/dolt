@@ -19,17 +19,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/uuid"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type StringBuilderCloser struct {
@@ -41,14 +40,22 @@ func (*StringBuilderCloser) Close() error {
 }
 
 func TestEndToEnd(t *testing.T) {
-	id := uuid.MustParse("00000000-0000-0000-0000-000000000000")
 	tableName := "people"
-
-	dropCreateStatement := sqlfmt.DropTableIfExistsStmt(tableName) + "\nCREATE TABLE `people` (\n  `id` char(36) character set ascii collate ascii_bin NOT NULL,\n  `name` varchar(16383) NOT NULL,\n  `age` bigint unsigned NOT NULL,\n  `is_married` bit(1) NOT NULL,\n  `title` varchar(16383),\n  PRIMARY KEY (`id`),\n  KEY `idx_name` (`name`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+	dropCreateStatement := sqlfmt.DropTableIfExistsStmt(tableName) + "\n" +
+		"CREATE TABLE `people` (\n" +
+		"  `id` varchar(16383) NOT NULL,\n" +
+		"  `name` varchar(16383) NOT NULL,\n" +
+		"  `age` bigint unsigned NOT NULL,\n" +
+		"  `is_married` bigint NOT NULL,\n" +
+		"  `title` varchar(16383),\n" +
+		"  PRIMARY KEY (`id`),\n" +
+		"  KEY `idx_name` (`name`),\n" +
+		"  CONSTRAINT `test-check` CHECK ((`age` < 123))\n" +
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"
 
 	type test struct {
 		name           string
-		rows           []row.Row
+		rows           []sql.Row
 		sch            schema.Schema
 		expectedOutput string
 	}
@@ -56,15 +63,16 @@ func TestEndToEnd(t *testing.T) {
 	tests := []test{
 		{
 			name: "two rows",
-			rows: rs(
-				dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie")),
-				dtestutils.NewTypedRow(id, "guy personson", 0, true, strPointer("officially a person"))),
+			rows: []sql.Row{
+				{"00000000-0000-0000-0000-000000000000", "some guy", 100, 0, "normie"},
+				{"00000000-0000-0000-0000-000000000000", "guy personson", 0, 1, "officially a person"},
+			},
 			sch: dtestutils.TypedSchema,
 			expectedOutput: dropCreateStatement + "\n" +
 				"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
-				`VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,FALSE,'normie');` + "\n" +
+				`VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,0,'normie');` + "\n" +
 				"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
-				`VALUES ('00000000-0000-0000-0000-000000000000','guy personson',0,TRUE,'officially a person');` + "\n",
+				`VALUES ('00000000-0000-0000-0000-000000000000','guy personson',0,1,'officially a person');` + "\n",
 		},
 		{
 			name:           "no rows",
@@ -80,16 +88,17 @@ func TestEndToEnd(t *testing.T) {
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 
-			schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, root.VRW(), tt.sch)
+			empty, err := durable.NewEmptyIndex(ctx, root.VRW(), root.NodeStore(), tt.sch)
 			require.NoError(t, err)
-			empty, err := types.NewMap(ctx, root.VRW())
+
+			indexes, err := durable.NewIndexSet(ctx, root.VRW(), root.NodeStore())
 			require.NoError(t, err)
-			idxRef, err := types.NewRef(empty, root.VRW().Format())
+			indexes, err = indexes.PutIndex(ctx, dtestutils.IndexName, empty)
 			require.NoError(t, err)
-			idxMap, err := types.NewMap(ctx, root.VRW(), types.String(dtestutils.IndexName), idxRef)
+
+			tbl, err := doltdb.NewTable(ctx, root.VRW(), root.NodeStore(), tt.sch, empty, indexes, nil)
 			require.NoError(t, err)
-			tbl, err := doltdb.NewTable(ctx, root.VRW(), schVal, empty, idxMap, nil)
-			require.NoError(t, err)
+
 			root, err = root.PutTable(ctx, tableName, tbl)
 			require.NoError(t, err)
 
@@ -102,7 +111,7 @@ func TestEndToEnd(t *testing.T) {
 			}
 
 			for _, r := range tt.rows {
-				assert.NoError(t, w.WriteRow(ctx, r))
+				assert.NoError(t, w.WriteSqlRow(ctx, r))
 			}
 
 			assert.NoError(t, w.Close(ctx))

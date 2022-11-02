@@ -20,66 +20,75 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
-	"path/filepath"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const jsonHeader = `{"rows": [`
 const jsonFooter = `]}`
 
 var WriteBufSize = 256 * 1024
+var defaultString = sql.MustCreateStringWithDefaults(sqltypes.VarChar, 16383)
 
-type JSONWriter struct {
+type RowWriter struct {
 	closer      io.Closer
+	header      string
+	footer      string
+	separator   string
 	bWr         *bufio.Writer
 	sch         schema.Schema
 	rowsWritten int
 }
 
-func OpenJSONWriter(path string, fs filesys.WritableFS, outSch schema.Schema) (*JSONWriter, error) {
-	err := fs.MkDirs(filepath.Dir(path))
+var _ table.SqlRowWriter = (*RowWriter)(nil)
 
-	if err != nil {
-		return nil, err
-	}
-
-	wr, err := fs.OpenForWrite(path, os.ModePerm)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return NewJSONWriter(wr, outSch)
+// NewJSONWriter returns a new writer that encodes rows as a single JSON object with a single key: "rows", which is a
+// slice of all rows. To customize the output of the JSON object emitted, use |NewJSONWriterWithHeader|
+func NewJSONWriter(wr io.WriteCloser, outSch schema.Schema) (*RowWriter, error) {
+	return NewJSONWriterWithHeader(wr, outSch, jsonHeader, jsonFooter, ",")
 }
 
-func NewJSONWriter(wr io.WriteCloser, outSch schema.Schema) (*JSONWriter, error) {
+func NewJSONWriterWithHeader(wr io.WriteCloser, outSch schema.Schema, header, footer, separator string) (*RowWriter, error) {
 	bwr := bufio.NewWriterSize(wr, WriteBufSize)
-	err := iohelp.WriteAll(bwr, []byte(jsonHeader))
-	if err != nil {
-		return nil, err
+	return &RowWriter{
+		closer:    wr,
+		bWr:       bwr,
+		sch:       outSch,
+		header:    header,
+		footer:    footer,
+		separator: separator,
+	}, nil
+}
+
+func (j *RowWriter) GetSchema() schema.Schema {
+	return j.sch
+}
+
+func (j *RowWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
+	// The Type.SQL() call takes in a SQL context to determine the output character set for types that use a collation.
+	// The context given is not a SQL context, so we force the `utf8mb4` character set to be used, as it is the most
+	// likely to be supported by the destination. `utf8mb4` is the default character set for empty SQL contexts, so we
+	// don't need to explicitly set it.
+	sqlContext := sql.NewEmptyContext()
+
+	if j.rowsWritten == 0 {
+		err := iohelp.WriteAll(j.bWr, []byte(j.header))
+		if err != nil {
+			return err
+		}
 	}
-	return &JSONWriter{closer: wr, bWr: bwr, sch: outSch}, nil
-}
 
-func (jsonw *JSONWriter) GetSchema() schema.Schema {
-	return jsonw.sch
-}
-
-// WriteRow will write a row to a table
-func (jsonw *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
-	allCols := jsonw.sch.GetAllCols()
+	allCols := j.sch.GetAllCols()
 	colValMap := make(map[string]interface{}, allCols.Size())
 	if err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		val, ok := r.GetColVal(tag)
-		if !ok || types.IsNull(val) {
+		val := row[allCols.TagToIdx[tag]]
+		if val == nil {
 			return false, nil
 		}
 
@@ -92,21 +101,25 @@ func (jsonw *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
 			typeinfo.TimeTypeIdentifier,
 			typeinfo.TupleTypeIdentifier,
 			typeinfo.UuidTypeIdentifier,
-			typeinfo.VarBinaryTypeIdentifier,
-			typeinfo.YearTypeIdentifier:
-			v, err := col.TypeInfo.FormatValue(val)
+			typeinfo.VarBinaryTypeIdentifier:
+			sqlVal, err := col.TypeInfo.ToSqlType().SQL(sqlContext, nil, val)
 			if err != nil {
 				return true, err
 			}
-			val = types.String(*v)
+			val = sqlVal.ToString()
+		case typeinfo.JSONTypeIdentifier:
+			sqlVal, err := col.TypeInfo.ToSqlType().SQL(sqlContext, nil, val)
+			if err != nil {
+				return true, err
+			}
+			str := sqlVal.ToString()
 
-		case typeinfo.BitTypeIdentifier,
-			typeinfo.BoolTypeIdentifier,
-			typeinfo.VarStringTypeIdentifier,
-			typeinfo.UintTypeIdentifier,
-			typeinfo.IntTypeIdentifier,
-			typeinfo.FloatTypeIdentifier:
-			// use primitive type
+			// This is kind of silly: we are unmarshalling JSON just to marshall it back again
+			// But it makes marshalling much simpler
+			err = json.Unmarshal([]byte(str), &val)
+			if err != nil {
+				return false, err
+			}
 		}
 
 		colValMap[col.Name] = val
@@ -121,35 +134,39 @@ func (jsonw *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
 		return errors.New("marshaling did not work")
 	}
 
-	if jsonw.rowsWritten != 0 {
-		_, err := jsonw.bWr.WriteRune(',')
-
+	if j.rowsWritten != 0 {
+		_, err := j.bWr.WriteString(j.separator)
 		if err != nil {
 			return err
 		}
 	}
 
-	newErr := iohelp.WriteAll(jsonw.bWr, data)
+	newErr := iohelp.WriteAll(j.bWr, data)
 	if newErr != nil {
 		return newErr
 	}
-	jsonw.rowsWritten++
+	j.rowsWritten++
 
 	return nil
 }
 
-// Close should flush all writes, release resources being held
-func (jsonw *JSONWriter) Close(ctx context.Context) error {
-	if jsonw.closer != nil {
-		err := iohelp.WriteAll(jsonw.bWr, []byte(jsonFooter))
+func (j *RowWriter) Flush() error {
+	return j.bWr.Flush()
+}
 
-		if err != nil {
-			return err
+// Close should flush all writes, release resources being held
+func (j *RowWriter) Close(ctx context.Context) error {
+	if j.closer != nil {
+		if j.rowsWritten > 0 {
+			err := iohelp.WriteAll(j.bWr, []byte(j.footer))
+			if err != nil {
+				return err
+			}
 		}
 
-		errFl := jsonw.bWr.Flush()
-		errCl := jsonw.closer.Close()
-		jsonw.closer = nil
+		errFl := j.bWr.Flush()
+		errCl := j.closer.Close()
+		j.closer = nil
 
 		if errCl != nil {
 			return errCl
@@ -157,8 +174,8 @@ func (jsonw *JSONWriter) Close(ctx context.Context) error {
 
 		return errFl
 	}
-	return errors.New("already closed")
 
+	return errors.New("already closed")
 }
 
 func marshalToJson(valMap interface{}) ([]byte, error) {

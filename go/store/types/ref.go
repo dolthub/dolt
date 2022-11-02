@@ -24,13 +24,17 @@ package types
 import (
 	"bytes"
 	"context"
+	"fmt"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type Ref struct {
 	valueImpl
 }
+
+type RefSlice []Ref
 
 type refPart uint32
 
@@ -129,7 +133,7 @@ func skipRef(dec *typedBinaryNomsReader) ([]uint32, error) {
 }
 
 func maxChunkHeight(nbf *NomsBinFormat, v Value) (max uint64, err error) {
-	err = v.WalkRefs(nbf, func(r Ref) error {
+	err = v.walkRefs(nbf, func(r Ref) error {
 		if height := r.Height(); height > max {
 			max = height
 		}
@@ -185,10 +189,6 @@ func (r Ref) Value(ctx context.Context) (Value, error) {
 	return r, nil
 }
 
-func (r Ref) WalkValues(ctx context.Context, cb ValueCallback) error {
-	return nil
-}
-
 func (r Ref) typeOf() (*Type, error) {
 	t, err := r.TargetType()
 
@@ -219,4 +219,31 @@ func (r Ref) String() string {
 
 func (r Ref) HumanReadableString() string {
 	panic("unreachable")
+}
+
+// Returns a function that can be used to walk the hashes of all the
+// Refs of a given Chunk. The callback also takes a boolean parameter |isleaf|,
+// which is true when the ref points to a known leaf chunk. This function is
+// meant to decouple callers from the types package itself, and so the callback
+// itself does not take |types.Ref| values.
+func WalkAddrsForChunkStore(cs chunks.ChunkStore) (func(chunks.Chunk, func(h hash.Hash, isleaf bool) error) error, error) {
+	nbf, err := GetFormatForVersionString(cs.Version())
+	if err != nil {
+		return nil, fmt.Errorf("could not find binary format corresponding to %s. try upgrading dolt.", cs.Version())
+	}
+	return WalkAddrsForNBF(nbf), nil
+}
+
+func WalkAddrsForNBF(nbf *NomsBinFormat) func(chunks.Chunk, func(h hash.Hash, isleaf bool) error) error {
+	return func(c chunks.Chunk, cb func(h hash.Hash, isleaf bool) error) error {
+		return walkRefs(c.Data(), nbf, func(r Ref) error {
+			return cb(r.TargetHash(), r.Height() == 1)
+		})
+	}
+}
+
+func WalkAddrs(v Value, nbf *NomsBinFormat, cb func(h hash.Hash, isleaf bool) error) error {
+	return v.walkRefs(nbf, func(r Ref) error {
+		return cb(r.TargetHash(), r.Height() == 1)
+	})
 }

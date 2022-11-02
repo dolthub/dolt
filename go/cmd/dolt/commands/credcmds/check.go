@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var checkShortDesc = "Check authenticating with a credential keypair against a doltremoteapi."
@@ -54,10 +53,9 @@ func (cmd CheckCmd) Description() string {
 	return checkShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CheckCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, checkDocs, ap))
+func (cmd CheckCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(checkDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -71,7 +69,7 @@ func (cmd CheckCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CREDS_CHECK
 }
 
-func (cmd CheckCmd) createArgParser() *argparser.ArgParser {
+func (cmd CheckCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString("endpoint", "", "", "API endpoint, otherwise taken from config.")
 	ap.SupportsString("creds", "", "", "Public Key ID or Public Key for credentials, otherwise taken from config.")
@@ -80,8 +78,8 @@ func (cmd CheckCmd) createArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd CheckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, checkDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, checkDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	endpoint := loadEndpoint(dEnv, apr)
@@ -138,14 +136,14 @@ func loadCred(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (creds.DoltCred
 }
 
 func checkCredAndPrintSuccess(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, endpoint string) errhand.VerboseError {
-	endpoint, opts, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
+	cfg, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: endpoint,
 		Creds:    dc,
 	})
 	if err != nil {
 		return errhand.BuildDError("error: unable to build server endpoint options.").AddCause(err).Build()
 	}
-	conn, err := grpc.Dial(endpoint, opts...)
+	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
 	if err != nil {
 		return errhand.BuildDError("error: unable to connect to server with credentials.").AddCause(err).Build()
 	}

@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var newDocs = cli.CommandDocumentationContent{
@@ -49,10 +48,9 @@ func (cmd NewCmd) Description() string {
 	return newDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd NewCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, newDocs, ap))
+func (cmd NewCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(newDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -66,15 +64,15 @@ func (cmd NewCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CREDS_NEW
 }
 
-func (cmd NewCmd) createArgParser() *argparser.ArgParser {
+func (cmd NewCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	return ap
 }
 
 // Exec executes the command
 func (cmd NewCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, newDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, newDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
 
 	_, newCreds, verr := actions.NewCredsFile(dEnv)

@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
@@ -65,7 +64,7 @@ const (
 	moveFlag        = "move"
 	deleteFlag      = "delete"
 	deleteForceFlag = "D"
-	verboseFlag     = "verbose"
+	verboseFlag     = cli.VerboseFlag
 	allFlag         = "all"
 	remoteFlag      = "remote"
 	showCurrentFlag = "show-current"
@@ -83,13 +82,12 @@ func (cmd BranchCmd) Description() string {
 	return "Create, list, edit, delete branches."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd BranchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, branchDocs, ap))
+func (cmd BranchCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(branchDocs, ap)
 }
 
-func (cmd BranchCmd) createArgParser() *argparser.ArgParser {
+func (cmd BranchCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"start-point", "A commit that a new branch should point at."})
 	ap.SupportsFlag(listFlag, "", "List branches")
@@ -102,6 +100,7 @@ func (cmd BranchCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(allFlag, "a", "When in list mode, shows remote tracked branches")
 	ap.SupportsFlag(remoteFlag, "r", "When in list mode, show only remote tracked branches. When with -d, delete a remote tracking branch.")
 	ap.SupportsFlag(showCurrentFlag, "", "Print the name of the current branch")
+	ap.SupportsString(cli.TrackFlag, "t", "", "When creating a new branch, set up 'upstream' configuration.")
 	return ap
 }
 
@@ -112,8 +111,8 @@ func (cmd BranchCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, branchDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, branchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	switch {
@@ -140,7 +139,7 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	branchSet := set.NewStrSet(apr.Args)
 
 	verbose := apr.Contains(verboseFlag)
-	printRemote := apr.Contains(remoteParam)
+	printRemote := apr.Contains(cli.RemoteParam)
 	printAll := apr.Contains(allFlag)
 
 	branches, err := dEnv.DoltDB.GetHeadRefs(ctx)
@@ -220,7 +219,7 @@ func moveBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 	force := apr.Contains(forceFlag)
 	src := apr.Arg(0)
 	dest := apr.Arg(1)
-	err := actions.RenameBranch(ctx, dEnv, src, apr.Arg(1), force)
+	err := actions.RenameBranch(ctx, dEnv.DbData(), dEnv.Config, src, apr.Arg(1), force)
 
 	var verr errhand.VerboseError
 	if err != nil {
@@ -285,7 +284,7 @@ func handleDeleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser
 	for i := 0; i < apr.NArg(); i++ {
 		brName := apr.Arg(i)
 
-		err := actions.DeleteBranch(ctx, dEnv, brName, actions.DeleteOptions{
+		err := actions.DeleteBranch(ctx, dEnv.DbData(), dEnv.Config, brName, actions.DeleteOptions{
 			Force:  force,
 			Remote: apr.Contains(remoteFlag),
 		})
@@ -313,16 +312,50 @@ func createBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return 1
 	}
 
+	var remote string
+	var remoteBranch string
 	newBranch := apr.Arg(0)
 	startPt := "head"
-
 	if apr.NArg() == 2 {
 		startPt = apr.Arg(1)
+	}
+
+	trackVal, setTrackUpstream := apr.GetValue(cli.TrackFlag)
+	if setTrackUpstream {
+		if trackVal == "inherit" {
+			return HandleVErrAndExitCode(errhand.BuildDError("--track='inherit' is not supported yet").Build(), usage)
+		} else if trackVal == "direct" && apr.NArg() != 2 {
+			return HandleVErrAndExitCode(errhand.BuildDError("invalid arguments").Build(), usage)
+		}
+		if apr.NArg() == 2 {
+			newBranch = apr.Arg(0)
+			startPt = apr.Arg(1)
+		} else {
+			// if track option is defined with no value, the branch name is taken as track value
+			newBranch = trackVal
+			startPt = apr.Arg(0)
+		}
+		remote, remoteBranch = ParseRemoteBranchName(startPt)
+		remotes, err := dEnv.RepoStateReader().GetRemotes()
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usage)
+		}
+		_, remoteOk := remotes[remote]
+		if !remoteOk {
+			return HandleVErrAndExitCode(errhand.BuildDError("'%s' is not a valid remote ref and a branch '%s' cannot be created from it", startPt, newBranch).Build(), usage)
+		}
 	}
 
 	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, apr.Contains(forceFlag))
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usage)
+	}
+
+	if setTrackUpstream {
+		// at this point new branch is created
+		branchRef := ref.NewBranchRef(newBranch)
+		verr := SetRemoteUpstreamForBranchRef(dEnv, remote, remoteBranch, branchRef)
+		return HandleVErrAndExitCode(verr, usage)
 	}
 
 	return 0

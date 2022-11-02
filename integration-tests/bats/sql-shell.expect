@@ -1,21 +1,28 @@
 #!/usr/bin/expect
 
-set timeout 1
 spawn dolt sql
-set id $spawn_id
+set first $spawn_id
 
-expect -i id "doltsql> "
-send -i id "CREATE TABLE test_expect (pk int primary key);\r"
+expect -i first -re "\rdolt_repo_.*> "
+send -i first "CREATE TABLE test_expect (pk int primary key);\r"
+expect -i first "CREATE TABLE test_expect (pk int primary key);\r"
 
-expect -i id "doltsql> "
+expect -i first -re "\rdolt_repo_.*> "
 
 # spawn the second process
 spawn dolt sql
-set id2 $spawn_id
+set second $spawn_id
 
-# Todo: Should this be a dolt ls instead ?
-expect -i id2 "doltsql> "
-send -i id2 "show tables;\r"
+expect -i second -re "\rdolt_repo.*> "
+send -i second "show tables;\r"
+expect -i second "show tables;\r"
 
-expect -i id eof
-expect -i id2 eof
+expect -i second -re "\rdolt_repo.*> "
+
+send -i first "quit\r"
+send -i second "quit\r"
+expect -i first "quit\r"
+expect -i second "quit\r"
+
+expect -i first eof
+expect -i second eof

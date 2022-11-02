@@ -95,9 +95,9 @@ func (ts testSet) toSet(vrw ValueReadWriter) (Set, error) {
 	return NewSet(context.Background(), vrw, ts...)
 }
 
-func newSortedTestSet(length int, gen genValueFn) (values testSet) {
+func newSortedTestSet(nbf *NomsBinFormat, length int, gen genValueFn) (values testSet) {
 	for i := 0; i < length; i++ {
-		values = append(values, mustValue(gen(i)))
+		values = append(values, mustValue(gen(nbf, i)))
 	}
 	return
 }
@@ -111,7 +111,7 @@ func newTestSetFromSet(s Set) testSet {
 	return values
 }
 
-func newRandomTestSet(length int, gen genValueFn) testSet {
+func newRandomTestSet(nbf *NomsBinFormat, length int, gen genValueFn) testSet {
 	s := rand.NewSource(4242)
 	used := map[int]bool{}
 
@@ -119,7 +119,7 @@ func newRandomTestSet(length int, gen genValueFn) testSet {
 	for len(values) < length {
 		v := int(s.Int63()) & 0xffffff
 		if _, ok := used[v]; !ok {
-			values = append(values, mustValue(gen(v)))
+			values = append(values, mustValue(gen(nbf, v)))
 			used[v] = true
 		}
 	}
@@ -148,8 +148,8 @@ func newSetTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 	vs := newTestValueStore()
 
 	length := 1 << size
-	elemType := mustType(TypeOf(mustValue(gen(0))))
-	elems := newSortedTestSet(length, gen)
+	elemType := mustType(TypeOf(mustValue(gen(vs.Format(), 0))))
+	elems := newSortedTestSet(vs.Format(), length, gen)
 	tr := mustType(MakeSetType(elemType))
 	set := mustSet(NewSet(context.Background(), vs, elems...))
 	return &setTestSuite{
@@ -267,29 +267,29 @@ func (suite *setTestSuite) TestStreamingSet2() {
 }
 
 func TestSetSuite4K(t *testing.T) {
-	suite.Run(t, newSetTestSuite(12, 8, 2, 2, newNumber))
+	suite.Run(t, newSetTestSuite(12, 5, 2, 2, newNumber))
 }
 
 func TestSetSuite4KStructs(t *testing.T) {
-	suite.Run(t, newSetTestSuite(12, 9, 2, 2, newNumberStruct))
+	suite.Run(t, newSetTestSuite(12, 8, 2, 2, newNumberStruct))
 }
 
 func getTestNativeOrderSet(scale int, vrw ValueReadWriter) testSet {
-	return newRandomTestSet(64*scale, newNumber)
+	return newRandomTestSet(vrw.Format(), 64*scale, newNumber)
 }
 
 func getTestRefValueOrderSet(scale int, vrw ValueReadWriter) testSet {
-	return newRandomTestSet(64*scale, newNumber)
+	return newRandomTestSet(vrw.Format(), 64*scale, newNumber)
 }
 
 func getTestRefToNativeOrderSet(scale int, vrw ValueReadWriter) testSet {
-	return newRandomTestSet(64*scale, func(v int) (Value, error) {
+	return newRandomTestSet(vrw.Format(), 64*scale, func(nbf *NomsBinFormat, v int) (Value, error) {
 		return vrw.WriteValue(context.Background(), Float(v))
 	})
 }
 
 func getTestRefToValueOrderSet(scale int, vrw ValueReadWriter) testSet {
-	return newRandomTestSet(64*scale, func(v int) (Value, error) {
+	return newRandomTestSet(vrw.Format(), 64*scale, func(nbf *NomsBinFormat, v int) (Value, error) {
 		return vrw.WriteValue(context.Background(), mustSet(NewSet(context.Background(), vrw, Float(v))))
 	})
 }
@@ -548,7 +548,7 @@ func TestSetValidateInsertAscending(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	validateSetInsertion(t, vs, generateNumbersAsValues(300))
+	validateSetInsertion(t, vs, generateNumbersAsValues(vs.Format(), 300))
 }
 
 func TestSetInsert(t *testing.T) {
@@ -765,7 +765,7 @@ func TestSetOfStruct(t *testing.T) {
 
 	elems := []Value{}
 	for i := 0; i < 200; i++ {
-		st, err := NewStruct(Format_7_18, "S1", StructData{"o": Float(i)})
+		st, err := NewStruct(vs.Format(), "S1", StructData{"o": Float(i)})
 		require.NoError(t, err)
 		elems = append(elems, st)
 	}
@@ -816,7 +816,7 @@ func TestSetIter2(t *testing.T) {
 		ts := toTestSet(scale, vrw)
 		set, err := ts.toSet(vrw)
 		require.NoError(t, err)
-		err = SortWithErroringLess(ValueSort{ts, Format_7_18})
+		err = SortWithErroringLess(ValueSort{ts, vrw.Format()})
 		require.NoError(t, err)
 		idx := uint64(0)
 		endAt := uint64(64)
@@ -870,7 +870,7 @@ func TestSetIterAll2(t *testing.T) {
 		ts := toTestSet(scale, vrw)
 		set, err := ts.toSet(vrw)
 		require.NoError(t, err)
-		err = SortWithErroringLess(ValueSort{ts, Format_7_18})
+		err = SortWithErroringLess(ValueSort{ts, vrw.Format()})
 		require.NoError(t, err)
 		idx := uint64(0)
 
@@ -892,9 +892,9 @@ func testSetOrder(assert *assert.Assertions, vrw ValueReadWriter, valueType *Typ
 	assert.NoError(err)
 	i := 0
 	_ = m.IterAll(context.Background(), func(value Value) error {
-		expHsh, err := expectOrdering[i].Hash(Format_7_18)
+		expHsh, err := expectOrdering[i].Hash(vrw.Format())
 		assert.NoError(err)
-		hsh, err := value.Hash(Format_7_18)
+		hsh, err := value.Hash(vrw.Format())
 		assert.NoError(err)
 		assert.Equal(expHsh.String(), hsh.String())
 		i++
@@ -1064,14 +1064,14 @@ func TestSetChunks(t *testing.T) {
 
 	l1, err := NewSet(context.Background(), vs, Float(0))
 	require.NoError(t, err)
-	c1 := getChunks(l1)
+	c1 := getChunks(vs.Format(), l1)
 	assert.Len(c1, 0)
 
-	ref, err := NewRef(Float(0), Format_7_18)
+	ref, err := NewRef(Float(0), vs.Format())
 	require.NoError(t, err)
 	l2, err := NewSet(context.Background(), vs, ref)
 	require.NoError(t, err)
-	c2 := getChunks(l2)
+	c2 := getChunks(vs.Format(), l2)
 	assert.Len(c2, 1)
 }
 
@@ -1090,8 +1090,8 @@ func TestSetChunks2(t *testing.T) {
 		require.NoError(t, err)
 		val, err := vrw.ReadValue(context.Background(), ref.TargetHash())
 		require.NoError(t, err)
-		set2chunks := getChunks(val)
-		for i, r := range getChunks(set) {
+		set2chunks := getChunks(vrw.Format(), val)
+		for i, r := range getChunks(vrw.Format(), set) {
 			assert.True(mustType(TypeOf(r)).Equals(mustType(TypeOf(set2chunks[i]))), "%s != %s", mustString(mustType(TypeOf(r)).Describe(context.Background())), mustString(mustType(TypeOf(set2chunks[i])).Describe(context.Background())))
 		}
 	}
@@ -1106,7 +1106,7 @@ func TestSetFirstNNumbers(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
 
-	nums := generateNumbersAsValues(testSetSize)
+	nums := generateNumbersAsValues(vs.Format(), testSetSize)
 	s, err := NewSet(context.Background(), vs, nums...)
 	require.NoError(t, err)
 	assert.Equal(deriveCollectionHeight(s), getRefHeightOfCollection(s))
@@ -1167,7 +1167,7 @@ func TestSetTypeAfterMutations(t *testing.T) {
 
 	test := func(n int, c interface{}) {
 		vs := newTestValueStore()
-		values := generateNumbersAsValues(n)
+		values := generateNumbersAsValues(vs.Format(), n)
 
 		s, err := NewSet(context.Background(), vs, values...)
 		require.NoError(t, err)
@@ -1192,7 +1192,7 @@ func TestSetTypeAfterMutations(t *testing.T) {
 		assert.True(mustType(TypeOf(s)).Equals(mustType(MakeSetType(PrimitiveTypeMap[FloatKind]))))
 	}
 
-	test(10, setLeafSequence{})
+	test(1, setLeafSequence{})
 	test(2000, metaSequence{})
 }
 
@@ -1212,16 +1212,16 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 		mustValue(NewSet(context.Background(), vs, Bool(true))),
 		mustValue(NewList(context.Background(), vs, Bool(true))),
 		mustValue(NewMap(context.Background(), vs, Bool(true), Float(0))),
-		mustValue(NewStruct(Format_7_18, "", StructData{"field": Bool(true)})),
+		mustValue(NewStruct(vs.Format(), "", StructData{"field": Bool(true)})),
 		// Refs of values
-		mustValue(NewRef(Bool(true), Format_7_18)),
-		mustValue(NewRef(Float(0), Format_7_18)),
-		mustValue(NewRef(String("hello"), Format_7_18)),
-		mustValue(NewRef(mustValue(NewBlob(context.Background(), vs, bytes.NewBufferString("buf"))), Format_7_18)),
-		mustValue(NewRef(mustValue(NewSet(context.Background(), vs, Bool(true))), Format_7_18)),
-		mustValue(NewRef(mustValue(NewList(context.Background(), vs, Bool(true))), Format_7_18)),
-		mustValue(NewRef(mustValue(NewMap(context.Background(), vs, Bool(true), Float(0))), Format_7_18)),
-		mustValue(NewRef(mustValue(NewStruct(Format_7_18, "", StructData{"field": Bool(true)})), Format_7_18)),
+		mustValue(NewRef(Bool(true), vs.Format())),
+		mustValue(NewRef(Float(0), vs.Format())),
+		mustValue(NewRef(String("hello"), vs.Format())),
+		mustValue(NewRef(mustValue(NewBlob(context.Background(), vs, bytes.NewBufferString("buf"))), vs.Format())),
+		mustValue(NewRef(mustValue(NewSet(context.Background(), vs, Bool(true))), vs.Format())),
+		mustValue(NewRef(mustValue(NewList(context.Background(), vs, Bool(true))), vs.Format())),
+		mustValue(NewRef(mustValue(NewMap(context.Background(), vs, Bool(true), Float(0))), vs.Format())),
+		mustValue(NewRef(mustValue(NewStruct(vs.Format(), "", StructData{"field": Bool(true)})), vs.Format())),
 	}
 
 	s, err := NewSet(context.Background(), vs, vals...)
@@ -1309,10 +1309,10 @@ func TestSetWithStructShouldHaveOptionalFields(t *testing.T) {
 	vs := newTestValueStore()
 
 	list, err := NewSet(context.Background(), vs,
-		mustValue(NewStruct(Format_7_18, "Foo", StructData{
+		mustValue(NewStruct(vs.Format(), "Foo", StructData{
 			"a": Float(1),
 		})),
-		mustValue(NewStruct(Format_7_18, "Foo", StructData{
+		mustValue(NewStruct(vs.Format(), "Foo", StructData{
 			"a": Float(2),
 			"b": String("bar"),
 		})),

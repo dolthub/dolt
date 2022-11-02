@@ -17,37 +17,15 @@ package actions
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 )
 
-func StageTables(ctx context.Context, roots doltdb.Roots, docs doltdocs.Docs, tbls []string) (doltdb.Roots, error) {
-	if len(docs) > 0 {
-		var err error
-		roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
-		if err != nil {
-			return doltdb.Roots{}, err
-		}
-	}
-
+func StageTables(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
 	return stageTables(ctx, roots, tbls)
 }
 
-func StageTablesNoDocs(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
-	return stageTables(ctx, roots, tbls)
-}
-
-func StageAllTables(ctx context.Context, roots doltdb.Roots, docs doltdocs.Docs) (doltdb.Roots, error) {
-	var err error
-
-	// To stage all docs for removal, use an empty slice instead of nil
-	if docs != nil {
-		roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
-		if err != nil {
-			return doltdb.Roots{}, err
-		}
-	}
-
+func StageAllTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
 	tbls, err := doltdb.UnionTableNames(ctx, roots.Staged, roots.Working)
 	if err != nil {
 		return doltdb.Roots{}, err
@@ -56,10 +34,17 @@ func StageAllTables(ctx context.Context, roots doltdb.Roots, docs doltdocs.Docs)
 	return stageTables(ctx, roots, tbls)
 }
 
-func StageAllTablesNoDocs(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
-	tbls, err := doltdb.UnionTableNames(ctx, roots.Staged, roots.Working)
+func StageModifiedAndDeletedTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
+	_, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
 		return doltdb.Roots{}, err
+	}
+
+	tbls := []string{}
+	for _, tableDelta := range unstaged {
+		if !tableDelta.IsAdd() {
+			tbls = append(tbls, tableDelta.FromName)
+		}
 	}
 
 	return stageTables(ctx, roots, tbls)
@@ -92,12 +77,15 @@ func stageTables(
 // clearEmptyConflicts clears any 0-row conflicts from the tables named, and returns a new root.
 func clearEmptyConflicts(ctx context.Context, tbls []string, working *doltdb.RootValue) (*doltdb.RootValue, error) {
 	for _, tblName := range tbls {
-		tbl, _, err := working.GetTable(ctx, tblName)
+		tbl, ok, err := working.GetTable(ctx, tblName)
 		if err != nil {
 			return nil, err
 		}
+		if !ok {
+			continue
+		}
 
-		has, err := tbl.HasConflicts()
+		has, err := tbl.HasConflicts(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +96,7 @@ func clearEmptyConflicts(ctx context.Context, tbls []string, working *doltdb.Roo
 			}
 
 			if num == 0 {
-				clrTbl, err := tbl.ClearConflicts()
+				clrTbl, err := tbl.ClearConflicts(ctx)
 				if err != nil {
 					return nil, err
 				}

@@ -3,6 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 remotesrv_pid=
 setup() {
+    skiponwindows "tests are flaky on Windows"
     setup_common
     cd $BATS_TMPDIR
     mkdir remotes-$$
@@ -22,6 +23,281 @@ teardown() {
 
 @test "remotes: dolt remotes server is running" {
     ps -p $remotesrv_pid | grep remotesrv
+}
+
+@test "remotes: pull also fetches" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push origin main
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    run dolt branch -va
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "other" ]] || false
+
+    cd ../repo1
+    dolt checkout -b other
+    dolt push origin other
+
+    cd ../repo2
+    dolt pull
+    run dolt branch -va
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "other" ]] || false
+}
+
+@test "remotes: pull also fetches, but does not merge other branches" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push --set-upstream origin main
+    dolt checkout -b other
+    dolt commit --allow-empty -m "first commit on other"
+    dolt push --set-upstream origin other
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+
+    dolt commit --allow-empty -m "a commit for main from repo2"
+    dolt push
+
+    run dolt branch
+    [[ ! "$output" =~ "other" ]] || false
+
+    run dolt checkout other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "branch 'other' set up to track 'origin/other'." ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "first commit on other" ]] || false
+
+    run dolt status
+    [[ "$output" =~ "Your branch is up to date with 'origin/other'." ]] || false
+
+    dolt commit --allow-empty -m "second commit on other from repo2"
+    dolt push
+
+    cd ../repo1
+    dolt checkout other
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "second commit on other from repo2" ]] || false
+
+    dolt checkout main
+    run dolt status
+    [[ "$output" =~ "behind 'origin/main' by 1 commit" ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "a commit for main from repo2" ]] || false
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "a commit for main from repo2" ]] || false
+}
+
+@test "remotes: cli 'dolt checkout new_branch' without -b flag creates new branch and sets upstream if there is a remote branch with matching name" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push origin main
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    dolt commit --allow-empty -m "a commit for main from repo2"
+    dolt push
+    run dolt branch
+    [[ ! "$output" =~ "other" ]] || false
+
+    run dolt checkout other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "branch 'other' set up to track 'origin/other'." ]] || false
+
+    run dolt status
+    [[ "$output" =~ "Your branch is up to date with 'origin/other'." ]] || false
+}
+
+@test "remotes: guessing the remote branch fails if there are multiple remotes with branches with matching name" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push origin main
+    dolt checkout -b other
+    dolt push origin other
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    dolt remote add test-remote file://../remote
+    dolt push test-remote main
+    dolt checkout -b other
+    dolt push test-remote other
+    dolt branch -a
+    dolt checkout main
+    dolt branch -d other
+    run dolt branch
+    [[ ! "$output" =~ "other" ]] || false
+
+    run dolt checkout other
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'other' matched multiple (2) remote tracking branches" ]] || false
+}
+
+@test "remotes: cli 'dolt checkout -b new_branch' should not set upstream if there is a remote branch with matching name" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt sql -q "CREATE TABLE a (pk int)"
+    dolt add .
+    dolt commit -am "add table a"
+    dolt push --set-upstream origin main
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    dolt branch
+    [[ ! "$output" =~ "other" ]] || false
+
+    run dolt checkout -b other
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "branch 'other' set up to track 'origin/other'." ]] || false
+
+    run dolt status
+    [[ ! "$output" =~ "Your branch is up to date with 'origin/other'." ]] || false
+
+    cd ../repo1
+    dolt checkout other
+    dolt sql -q "INSERT INTO a VALUES (1), (2)"
+    dolt commit -am "add table a"
+    dolt push
+
+    cd ../repo2
+    dolt checkout other
+    run dolt pull
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "There is no tracking information for the current branch." ]] || false
+}
+
+@test "remotes: select DOLT_CHECKOUT('new_branch') without '-b' sets upstream if there is a remote branch with matching name" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt sql -q "CREATE TABLE test (pk INT)"
+    dolt add .
+    dolt commit -am "main commit"
+    dolt push test-remote main
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "remotes/test-remote/test-branch" ]] || false
+
+    cd ..
+    dolt clone --remote=test-remote http://localhost:50051/test-org/test-repo repo2
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "test-branch" ]] || false
+    [[ ! "$output" =~ "remotes/test-remote/test-branch" ]] || false
+
+    cd repo1
+    dolt checkout -b test-branch
+    dolt sql -q "INSERT INTO test VALUES (1);"
+    dolt commit -am "test commit"
+    dolt push test-remote test-branch
+
+    cd ../repo2
+    dolt fetch test-remote
+    run dolt branch
+    [[ ! "$output" =~ "test-branch" ]] || false
+
+    run dolt sql << SQL
+SELECT DOLT_CHECKOUT('test-branch');
+SELECT * FROM test;
+SELECT DOLT_PULL();
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt branch
+    [[ "$output" =~ "test-branch" ]] || false
+
+    dolt checkout test-branch
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Your branch is up to date with 'test-remote/test-branch'." ]] || false
+}
+
+@test "remotes: select 'DOLT_CHECKOUT('-b','new_branch') should not set upstream if there is a remote branch with matching name" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt sql -q "CREATE TABLE a (pk int)"
+    dolt add .
+    dolt commit -am "add table a"
+    dolt push --set-upstream origin main
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    dolt branch
+    [[ ! "$output" =~ "other" ]] || false
+
+    # Checkout with DOLT_CHECKOUT and confirm the table has the row added in the remote
+    run dolt sql << SQL
+SELECT DOLT_CHECKOUT('-b','other');
+SELECT DOLT_PULL();
+SQL
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "There is no tracking information for the current branch." ]] || false
 }
 
 @test "remotes: add a remote using dolt remote" {
@@ -70,7 +346,7 @@ teardown() {
 
 @test "remotes: push and pull main branch from a remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
-    run dolt push test-remote main
+    run dolt push --set-upstream test-remote main
     [ "$status" -eq 0 ]
     [ -d "$BATS_TMPDIR/remotes-$$/test-org/test-repo" ]
     run dolt pull test-remote
@@ -81,11 +357,51 @@ teardown() {
 @test "remotes: push and pull non-main branch from remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
-    run dolt push test-remote test-branch
+    run dolt push --set-upstream test-remote test-branch
     [ "$status" -eq 0 ]
     run dolt pull test-remote
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Everything up-to-date" ]] || false
+}
+
+@test "remotes: pull with explicit remote and branch" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt checkout -b test-branch
+    dolt sql -q "create table t1(c0 varchar(100));"
+    dolt add .
+    dolt commit -am "adding table t1"
+    run dolt push test-remote test-branch
+    [ "$status" -eq 0 ]
+    dolt checkout main
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "t1" ]] || false
+
+    # Specifying a non-existent remote branch returns an error
+    run dolt pull test-remote doesnotexist
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'branch "doesnotexist" not found on remote' ]] || false
+
+    # Explicitly specifying the remote and branch will merge in that branch
+    run dolt pull test-remote test-branch
+    [ "$status" -eq 0 ]
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+
+    # Make a conflicting working set change and test that pull complains
+    dolt reset --hard HEAD^1
+    dolt sql -q "create table t1 (pk int primary key);"
+    run dolt pull test-remote test-branch
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'local changes to the following tables would be overwritten by merge' ]] || false
+
+    # Commit changes and test that a merge conflict fails the pull
+    dolt add .
+    dolt commit -am "adding new t1 table"
+    run dolt pull test-remote test-branch
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table with same name added in 2 commits can't be merged" ]] || false
 }
 
 @test "remotes: push and pull from non-main branch and use --set-upstream" {
@@ -101,10 +417,23 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
+@test "remotes: push output" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt checkout -b test-branch
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add .
+    dolt commit -m "Added test table"
+    dolt push --set-upstream test-remote test-branch | tr "\n" "*" > output.txt
+    run tail -c 1 output.txt
+    [ "$output" = "*" ]
+}
+
 @test "remotes: push and pull with docs from remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     echo "license-text" > LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     echo "readme-text" > README.md
+    dolt docs read README.md README.md
     dolt add .
     dolt commit -m "test doc commit"
     dolt push test-remote main
@@ -119,23 +448,21 @@ teardown() {
 
     cd ../../
     echo "updated-license" > LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     dolt add .
     dolt commit -m "updated license"
     dolt push test-remote main
 
     cd dolt-repo-clones/test-repo
-    echo "this text should remain after pull :p" > README.md
     run dolt pull
     [[ "$output" =~ "Updating" ]] || false
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "updated license" ]] || false
+    dolt docs write LICENSE.md > LICENSE.md
     run cat LICENSE.md
     [ "$status" -eq 0 ]
     [[ "$output" =~ "updated-license" ]] || false
-    run cat README.md
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "this text should remain after pull :p" ]] || false
 }
 
 @test "remotes: push and pull tags to/from remote" {
@@ -162,7 +489,7 @@ SQL
     [[ "$output" =~ "v1" ]] || false
 }
 
-@test "remotes: tags are only pulled if their commit is pulled" {
+@test "remotes: tags are fetched when pulling" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
@@ -187,11 +514,6 @@ SQL
     cd dolt-repo-clones/test-repo
     run dolt pull
     [ "$status" -eq 0 ]
-    run dolt tag
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "v1" ]] || false
-    [[ ! "$output" =~ "other_tag" ]] || false
-    dolt fetch
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "v1" ]] || false
@@ -304,7 +626,9 @@ SQL
 @test "remotes: clone a remote with docs" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     echo "license-text" > LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     echo "readme-text" > README.md
+    dolt docs read README.md README.md
     dolt add .
     dolt commit -m "test doc commit"
     dolt push test-remote main
@@ -320,6 +644,8 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "LICENSE.md" ]] || false
     [[ ! "$output" =~ "README.md" ]] || false
+    dolt docs write LICENSE.md > LICENSE.md
+    dolt docs write README.md > README.md
     run ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "LICENSE.md" ]] || false
@@ -429,10 +755,97 @@ SQL
     [[ "$output" =~ "remotes/test-remote/poop" ]] || false
 }
 
+@test "remotes: fetch output" {
+    # create main remote branch
+    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt sql -q 'create table test (id int primary key);'
+    dolt add .
+    dolt commit -m 'create test table.'
+    dolt push origin main:main
+
+    # create remote branch "branch1"
+    dolt checkout -b branch1
+    dolt sql -q 'insert into test (id) values (1), (2), (3);'
+    dolt add .
+    dolt commit -m 'add some values to branch 1.'
+    dolt push --set-upstream origin branch1
+
+    # create remote branch "branch2"
+    dolt checkout -b branch2
+    dolt sql -q 'insert into test (id) values (4), (5), (6);'
+    dolt add .
+    dolt commit -m 'add some values to branch 2.'
+    dolt push --set-upstream origin branch2
+
+    # create first clone
+    cd dolt-repo-clones
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd test-repo
+    dolt status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    cd ../..
+
+    # create second clone
+    cd "dolt-repo-clones"
+    dolt clone http://localhost:50051/test-org/test-repo test-repo2
+    cd test-repo2
+    dolt status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    # CHANGE 1: add more data to branch1
+    dolt checkout -b branch1 remotes/origin/branch1
+    dolt sql -q 'insert into test (id) values (100), (101), (102);'
+    dolt add .
+    dolt commit -m 'add more values to branch 1.'
+    dolt push --set-upstream origin branch1
+
+    # CHANGE 2: add more data to branch2
+    dolt checkout -b branch2 remotes/origin/branch2
+    dolt sql -q 'insert into test (id) values (103), (104), (105);'
+    dolt add .
+    dolt commit -m 'add more values to branch 2.'
+    dolt push --set-upstream origin branch2
+
+    # CHANGE 3: create remote branch "branch3"
+    dolt checkout -b branch3
+    dolt sql -q 'insert into test (id) values (7), (8), (9);'
+    dolt add .
+    dolt commit -m 'add some values to branch 3.'
+    dolt push --set-upstream origin branch3
+
+    # CHANGE 4: create remote branch "branch4"
+    dolt checkout -b branch4
+    dolt sql -q 'insert into test (id) values (10), (11), (12);'
+    dolt add .
+    dolt commit -m 'add some values to  branch 4.'
+    dolt push --set-upstream origin branch4
+
+    cd ..
+    cd test-repo
+    run dolt fetch
+    [ "$status" -eq 0 ]
+    # The number of $lines and $output printed is non-deterministic
+    # due to EphemeralPrinter. We can't test for their length here.
+    [ "$output" != "" ]
+
+    run dolt fetch
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
 @test "remotes: dolt fetch with docs" {
     # Initial commit of docs on remote
     echo "initial-license" > LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     echo "initial-readme" > README.md
+    dolt docs read README.md README.md
     dolt add .
     dolt commit -m "initial doc commit"
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
@@ -451,22 +864,28 @@ SQL
     cd "dolt-repo-clones"
     run dolt clone http://localhost:50051/test-org/test-repo
     cd test-repo
+    dolt docs write LICENSE.md > LICENSE.md
+    dolt docs write README.md > README.md
     run cat LICENSE.md
     [ "$status" -eq 0 ]
     [[ "$output" =~ "initial-license" ]] || false
     run cat README.md
     [ "$status" -eq 0 ]
     [[ "$output" =~ "initial-readme" ]] || false
-    # Change the docs 
+    # Change the docs
     echo "dolt-repo-clones-license" > LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     echo "dolt-repo-clones-readme" > README.md
+    dolt docs read README.md README.md
     dolt add .
     dolt commit -m "dolt-repo-clones updated docs"
 
     # Go back to original repo, and change the docs again
     cd ../../
     echo "initial-license-updated" > LICENSE.md
+    dolt docs read LICENSE.md LICENSE.md
     echo "initial-readme-updated" > README.md
+    dolt docs read README.md README.md
     dolt add .
     dolt commit -m "update initial doc values in test-org/test-repo"
 
@@ -508,8 +927,7 @@ SQL
     [[ ! "$output" =~ "test commit" ]] || false
     run dolt merge origin/main
     [ "$status" -eq 0 ]
-    # This needs to say up-to-date like the skipped test above
-    # [[ "$output" =~ "up to date" ]]
+    [[ "$output" =~ "up-to-date" ]]
     run dolt fetch
     [ "$status" -eq 0 ]
     run dolt merge origin/main
@@ -543,7 +961,6 @@ SQL
     cd "dolt-repo-clones/test-repo"
     run dolt merge remotes/origin/main
     [ "$status" -eq 0 ]
-    # This needs to say up-to-date like the skipped test above
     [[ "$output" =~ "Everything up-to-date" ]]
     run dolt fetch origin main
     [ "$status" -eq 0 ]
@@ -616,9 +1033,15 @@ CREATE TABLE test2 (
 SQL
     dolt add test2
     dolt commit -m "another test commit"
-    run dolt pull origin
+    run dolt pull origin --no-edit
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Merge branch 'main' of" ]] || false
+    [[ ! "$output" =~ "test commit" ]] || false
+    [[ ! "$output" =~ "another test commit" ]] || false
 }
 
 @test "remotes: generate a merge with a conflict with a remote branch" {
@@ -636,7 +1059,7 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "created table"
-    dolt push test-remote main
+    dolt push --set-upstream test-remote main
     cd "dolt-repo-clones"
     dolt clone http://localhost:50051/test-org/test-repo
     cd ..
@@ -780,10 +1203,9 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-
 @test "remotes: force fetch from main" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
-    dolt push test-remote main
+    dolt push --set-upstream test-remote main
 
     cd "dolt-repo-clones"
     dolt clone http://localhost:50051/test-org/test-repo
@@ -826,39 +1248,77 @@ SQL
     [ "$status" -ne 0 ]
     run dolt fetch -f test-remote
     [ "$status" -eq 0 ]
-    dolt pull
+    run dolt pull --no-edit
     [ "$status" -eq 0 ]
 }
 
-@test "remotes: DOLT_CHECKOUT to checkout to a remote branch." {
+@test "remotes: validate that a config isn't needed for a pull." {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
-    dolt sql <<SQL
-    CREATE TABLE test (
-      pk BIGINT NOT NULL,
-      PRIMARY KEY (pk)
-    );
-SQL
-    dolt commit -a -m "main commit"
     dolt push test-remote main
-    dolt checkout -b test-branch
-    dolt sql -q "INSERT INTO test VALUES (1);"
-    dolt commit -a -m "test commit"
-    dolt push test-remote test-branch
+    dolt fetch test-remote
     cd "dolt-repo-clones"
-
-    run dolt clone http://localhost:50051/test-org/test-repo
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
-    cd test-repo
-
-    # Checkout with DOLT_CHECKOUT and confirm the table has the row added in the remote
-    run dolt sql << SQL
-SELECT DOLT_CHECKOUT('test-branch');
-SELECT * FROM test;
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd ..
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk int,
+  val int,
+  PRIMARY KEY (pk)
+);
 SQL
+    dolt add test
+    dolt commit -m "test commit"
+    dolt push test-remote main
+
+    # cd to the other directory and execute a pull without a config
+    cd "dolt-repo-clones/test-repo"
+    dolt config --global --unset user.name
+    dolt config --global --unset user.email
+
+    run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "pk" ]] || false
-    [[ "$output" =~ "1" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test commit" ]] || false
+
+    # turn back on the configs and make a change in the remote
+    dolt config --global --add user.name mysql-test-runner
+    dolt config --global --add user.email mysql-test-runner@liquidata.co
+
+    cd ../../
+    dolt sql -q "insert into test values (1,1)"
+    dolt commit -am "commit from main repo"
+    dolt push test-remote main
+
+    # Try a --no-ff merge and make sure it fails
+    cd "dolt-repo-clones/test-repo"
+    # turn configs off again
+    dolt config --global --unset user.name
+    dolt config --global --unset user.email
+
+    run dolt pull --no-ff
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Aborting commit due to empty committer name. Is your config set?" ]] || false
+
+    # Now do a two sided merge
+    dolt config --global --add user.name mysql-test-runner
+    dolt config --global --add user.email mysql-test-runner@liquidata.co
+
+    dolt sql -q "insert into test values (2,1)"
+    dolt commit -am "commit from test repo"
+
+    cd ../../
+    dolt sql -q "insert into test values (2,2)"
+    dolt commit -am "commit from main repo"
+    dolt push test-remote main
+
+    cd "dolt-repo-clones/test-repo"
+    dolt config --global --unset user.name
+    dolt config --global --unset user.email
+
+    run dolt pull
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Aborting commit due to empty committer name. Is your config set?" ]] || false
 }
 
 create_main_remote_branch() {
@@ -1033,7 +1493,7 @@ setup_ref_test() {
 
 @test "remotes: can use refs/remotes/origin/... as commit reference for merge" {
     setup_ref_test
-    dolt merge refs/remotes/origin/main
+    dolt merge refs/remotes/origin/main -m "merge"
 }
 
 @test "remotes: can use remotes/origin/... as commit reference for log" {
@@ -1049,7 +1509,7 @@ setup_ref_test() {
 
 @test "remotes: can use remotes/origin/... as commit reference for merge" {
     setup_ref_test
-    dolt merge remotes/origin/main
+    dolt merge remotes/origin/main -m "merge"
 }
 
 @test "remotes: can use origin/... as commit reference for log" {
@@ -1065,7 +1525,7 @@ setup_ref_test() {
 
 @test "remotes: can use origin/... as commit reference for merge" {
     setup_ref_test
-    dolt merge origin/main
+    dolt merge origin/main -m "merge"
 }
 
 @test "remotes: can delete remote reference branch as origin/..." {
@@ -1199,4 +1659,532 @@ setup_ref_test() {
    run dolt fetch origin dadasdfasdfa
    [ "$status" -eq 1 ]
    [[ "$output" =~ "invalid ref spec: 'dadasdfasdfa'" ]] || false
+}
+
+@test "remotes: checkout with -f flag without conflict" {
+    # create main remote branch
+    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt sql -q 'create table test (id int primary key);'
+    dolt sql -q 'insert into test (id) values (8);'
+    dolt add .
+    dolt commit -m 'create test table.'
+    dolt push origin main:main
+
+    # create remote branch "branch1"
+    dolt checkout -b branch1
+    dolt sql -q 'insert into test (id) values (1), (2), (3);'
+    dolt add .
+    dolt commit -m 'add some values to branch 1.'
+    dolt push --set-upstream origin branch1
+
+    run dolt checkout -f main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'main'" ]] || false
+
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "8" ]] || false
+    [[ ! "$output" =~ "1" ]] || false
+    [[ ! "$output" =~ "2" ]] || false
+    [[ ! "$output" =~ "3" ]] || false
+
+    dolt checkout branch1
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "8" ]] || false
+}
+
+@test "remotes: checkout with -f flag with conflict" {
+    # create main remote branch
+    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt sql -q 'create table test (id int primary key);'
+    dolt sql -q 'insert into test (id) values (8);'
+    dolt add .
+    dolt commit -m 'create test table.'
+    dolt push origin main:main
+
+    # create remote branch "branch1"
+    dolt checkout -b branch1
+    dolt sql -q 'insert into test (id) values (1), (2), (3);'
+    dolt add .
+    dolt commit -m 'add some values to branch 1.'
+    dolt push --set-upstream origin branch1
+
+    dolt sql -q 'insert into test (id) values (4);'
+    run dolt checkout main
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Please commit your changes or stash them before you switch branches." ]] || false
+
+    run dolt checkout -f main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'main'" ]] || false
+
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "8" ]] || false
+    [[ ! "$output" =~ "4" ]] || false
+
+    dolt checkout branch1
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "8" ]] || false
+    [[ ! "$output" =~ "4" ]] || false
+}
+
+@test "remotes: clone sets default upstream for main" {
+    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt push origin main
+    cd dolt-repo-clones
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd test-repo
+    dolt push
+}
+
+@test "remotes: set upstream succeeds even if up to date" {
+    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt push origin main
+    dolt checkout -b feature
+    dolt push --set-upstream origin feature
+
+    cd dolt-repo-clones
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd test-repo
+    dolt checkout -b feature
+    run dolt push
+    [ "$status" -eq 1 ]
+    dolt push --set-upstream origin feature
+    dolt push
+}
+
+@test "remotes: clone local repo with file url" {
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt commit --allow-empty -am "commit from repo1"
+
+    cd ..
+    dolt clone file://./repo1/.dolt/noms repo2
+    cd repo2
+    run dolt log
+    [[ "$output" =~ "commit from repo1" ]] || false
+
+    run dolt status
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    dolt commit --allow-empty -am "commit from repo2"
+    dolt push
+
+    cd ../repo1
+    run dolt log
+    [[ "$output" =~ "commit from repo1" ]]
+    [[ "$output" =~ "commit from repo2" ]]
+}
+
+@test "remotes: clone local repo with absolute file path" {
+    skiponwindows "absolute paths don't work on windows"
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt commit --allow-empty -am "commit from repo1"
+
+    cd ..
+    dolt clone file://$(pwd)/repo1/.dolt/noms repo2
+    cd repo2
+    run dolt log
+    [[ "$output" =~ "commit from repo1" ]] || false
+
+    run dolt status
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    dolt commit --allow-empty -am "commit from repo2"
+    dolt push
+
+    cd ../repo1
+    run dolt log
+    [[ "$output" =~ "commit from repo1" ]]
+    [[ "$output" =~ "commit from repo2" ]]
+}
+
+@test "remotes: local clone does not contain working set changes" {
+    mkdir repo1
+    cd repo1
+    dolt init
+    run dolt sql -q "create table t (i int)"
+    [ "$status" -eq 0 ]
+    run dolt status
+    [[ "$output" =~ "new table:" ]] || false
+
+    cd ..
+    dolt clone file://./repo1/.dolt/noms repo2
+    cd repo2
+
+    run dolt status
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "remotes: local clone pushes to other branch" {
+    mkdir repo1
+    cd repo1
+    dolt init
+
+    cd ..
+    dolt clone file://./repo1/.dolt/noms repo2
+    cd repo2
+    dolt checkout -b other
+    dolt sql -q "create table t (i int)"
+    dolt add .
+    dolt commit -am "adding table from other"
+    dolt push origin other
+
+    cd ../repo1
+    dolt checkout other
+    run dolt log
+    [[ "$output" =~ "adding table from other" ]]
+}
+
+@test "remotes: dolt_remote uses the right db directory in a multidb env" {
+    tempDir=$(mktemp -d)
+
+    cd $tempDir
+    mkdir db1
+    cd db1
+    dolt init
+    cd ..
+
+    run dolt sql -q "use db1; call dolt_remote('add', 'test1', 'foo/bar');"
+    [ "$status" -eq 0 ]
+
+    run grep "test1" db1/.dolt/repo_state.json
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '"name": "test1"' ]] || false
+    [ ! -d ".dolt" ]
+
+    run dolt sql -q "use db1; call dolt_remote('remove', 'test1');"
+    [ "$status" -eq 0 ]
+    [ ! -d ".dolt" ]
+}
+
+@test "remotes: dolt_remote add and remove works with other commands" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    run dolt sql <<SQL
+CALL dolt_remote('add', 'origin', 'http://localhost:50051/test-org/test-repo');
+CALL dolt_push('origin', 'main');
+SQL
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "must provide a GRPCDialProvider param through GRPCDialProviderParam" ]] || false
+
+    cd ..
+    dolt clone http://localhost:50051/test-org/test-repo repo2
+
+    cd repo2
+    run dolt branch -va
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "other" ]] || false
+
+    cd ../repo1
+    dolt checkout -b other
+    dolt push origin other
+
+    cd ../repo2
+    dolt pull
+    run dolt branch -va
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "other" ]] || false
+
+    dolt checkout main
+    dolt sql -q "CREATE TABLE a(pk int primary key)"
+    dolt add .
+    dolt commit -am "add table a"
+    dolt push
+
+    cd ../repo1
+    dolt sql -q "CALL dolt_remote('remove', 'origin')"
+    run dolt pull
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no remote" ]] || false
+}
+
+@test "remotes: dolt status on local repo compares with remote tracking" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push --set-upstream origin main
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    dolt sql -q "CREATE TABLE test (id int primary key)"
+    dolt add .
+    dolt commit -am "create table"
+    run dolt push
+    [ "$status" -eq "0" ]
+    dolt log
+
+    cd ../repo1
+    run dolt status
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    dolt fetch
+    run dolt status
+    [[ "$output" =~ "behind" ]] || false
+    [[ "$output" =~ "1 commit" ]] || false
+
+    dolt sql -q "CREATE TABLE different (id int primary key)"
+    dolt add .
+    dolt commit -am "create different table"
+
+    run dolt status
+    [[ "$output" =~ "diverged" ]] || false
+    [[ "$output" =~ "1 and 1" ]] || false
+
+    dolt pull --no-edit
+    run dolt status
+    [[ "$output" =~ "ahead" ]] || false
+    [[ "$output" =~ "2 commit" ]] || false
+}
+
+@test "remotes: dolt checkout --track origin/feature checks out new local branch 'feature' with upstream set" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push --set-upstream origin main
+    dolt checkout -b feature
+    dolt push --set-upstream origin feature
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    run dolt branch
+    [[ ! "$output" =~ "feature" ]] || false
+
+    run dolt checkout --track origin/feature
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'feature'" ]] || false
+    [[ "$output" =~ "branch 'feature' set up to track 'origin/feature'." ]] || false
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+}
+
+@test "remotes: dolt checkout -b newbranch --track origin/feature checks out new local branch 'newbranch' with upstream set" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push --set-upstream origin main
+    dolt checkout -b feature
+    dolt push --set-upstream origin feature
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    run dolt branch
+    [[ ! "$output" =~ "feature" ]] || false
+
+    run dolt checkout -b newbranch --track origin/feature
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'newbranch'" ]] || false
+    [[ "$output" =~ "branch 'newbranch' set up to track 'origin/feature'." ]] || false
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+
+    dolt checkout main
+    dolt branch -D newbranch
+
+    # branch.autosetupmerge configuration defaults to --track, so the upstream is set
+    run dolt checkout -b newbranch origin/feature
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'newbranch'" ]] || false
+    [[ "$output" =~ "branch 'newbranch' set up to track 'origin/feature'." ]] || false
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+}
+
+@test "remotes: dolt branch track flag sets upstream" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt sql -q "CREATE TABLE a (pk int)"
+    dolt add .
+    dolt commit -am "add table a"
+    dolt push --set-upstream origin main
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    dolt branch
+    [[ ! "$output" =~ "other" ]] || false
+
+    run dolt branch --track other origin/other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "branch 'other' set up to track 'origin/other'" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+
+    dolt checkout other
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+
+    run dolt branch --track direct feature origin/other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "branch 'feature' set up to track 'origin/other'" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch other" ]] || false
+
+    dolt commit --allow-empty -m "new commit to other"
+    dolt push
+    dolt checkout feature
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Fast-forward" ]] || false
+}
+
+@test "remotes: dolt_clone failure cleanup" {
+    repoDir="$BATS_TMPDIR/dolt-repo-$$"
+
+    # try to clone a remote that doesn't exist
+    cd $repoDir
+    run dolt sql -q 'call dolt_clone("file:///tmp/sanity/remote");'
+    [ "$status" -eq 1 ]
+
+    # Make sure there's nothing remaining from the failed clone
+    [ ! -d "$repoDir/remote" ]
+}
+
+@test "remotes: dolt_clone procedure" {
+    repoDir="$BATS_TMPDIR/dolt-repo-$$"
+
+    # make directories outside of the dolt repo
+    tempDir=$(mktemp -d)
+    cd $tempDir
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push origin main
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+
+    cd $repoDir
+
+    run dolt sql -q "call dolt_clone()"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: invalid number of arguments" ]] || false
+
+    run dolt sql -q "call dolt_clone('file://$tempDir/remote', 'foo', 'bar')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: invalid number of arguments" ]] || false
+
+    # Clone a local database and check for all the branches
+    run dolt sql -q "call dolt_clone('file://$tempDir/remote');"
+    [ "$status" -eq 0 ]
+    cd remote
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "other" ]] || false
+    [[ "$output" =~ "main" ]] || false
+    run dolt branch --remote
+    [[ "$output" =~ "origin/other" ]] || false
+    [[ "$output" =~ "origin/main" ]] || false
+    cd ..
+
+    # Ensure we can't clone it again
+    run dolt sql -q "call dolt_clone('file://$tempDir/remote');"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "can't create database remote; database exists" ]] || false
+    run dolt sql -q "show databases"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remote" ]] || false
+
+    # Drop the new database and re-clone it with a different name
+    dolt sql -q "drop database remote"
+    run dolt sql -q "show databases"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "repo2" ]] || false
+    dolt sql -q "call dolt_clone('file://$tempDir/remote', 'repo2');"
+
+    # Sanity check that we can use the new database
+    dolt sql << SQL
+use repo2;
+create table new_table(a int primary key);
+insert into new_table values (1), (2);
+SQL
+    cd repo2
+    dolt add .
+    dolt commit -am "a commit for main from repo2"
+    dolt push origin main
+    cd ..
+
+    # Test -remote option to customize the origin remote name for the cloned DB
+    run dolt sql -q "call dolt_clone('-remote', 'custom', 'file://$tempDir/remote', 'custom_remote');"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "use custom_remote; select name from dolt_remotes;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "custom" ]] || false
+
+    # Test -branch option to only clone a single branch
+    run dolt sql -q "call dolt_clone('-branch', 'other', 'file://$tempDir/remote', 'single_branch');"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "use single_branch; select name from dolt_branches;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "other" ]] || false
+    [[ ! "$output" =~ "main" ]] || false
+    run dolt sql -q "use single_branch; select active_branch();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "other" ]] || false
+    # TODO: To match Git's semantics, clone for a single branch should NOT create any other
+    #       remote tracking branches (https://github.com/dolthub/dolt/issues/3873)
+    # run dolt checkout main
+    # [ "$status" -eq 1 ]
+
+    # Set up a test repo in the remote server
+    cd repo2
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt sql -q "CREATE TABLE test_table (pk INT)"
+    dolt add .
+    dolt commit -am "main commit"
+    dolt push test-remote main
+    cd ..
+
+    # Test cloning from a server remote
+    run dolt sql -q "call dolt_clone('http://localhost:50051/test-org/test-repo');"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "use test_repo; show tables;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test_table" ]] || false
 }

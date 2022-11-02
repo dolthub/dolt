@@ -29,7 +29,6 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var tblSchemaDocs = cli.CommandDocumentationContent{
@@ -56,13 +55,12 @@ func (cmd ShowCmd) Description() string {
 	return "Shows the schema of one or more tables."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ShowCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, tblSchemaDocs, ap))
+func (cmd ShowCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(tblSchemaDocs, ap)
 }
 
-func (cmd ShowCmd) createArgParser() *argparser.ArgParser {
+func (cmd ShowCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table(s) whose schema is being displayed."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"commit", "commit at which point the schema will be displayed."})
@@ -76,8 +74,8 @@ func (cmd ShowCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblSchemaDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tblSchemaDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	verr := printSchemas(ctx, apr, dEnv)
@@ -105,7 +103,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 			args = args[1:]
 
 			var err error
-			root, err = cm.GetRootValue()
+			root, err = cm.GetRootValue(ctx)
 
 			if err != nil {
 				verr = errhand.BuildDError("unable to get root value").AddCause(err).Build()
@@ -135,7 +133,11 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 			}
 		}
 
-		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+		tmpDir, err := dEnv.TempTableFilesDir()
+		if err != nil {
+			return errhand.BuildDError("error: ").AddCause(err).Build()
+		}
+		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 		sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(root, opts))
 
 		var notFound []string

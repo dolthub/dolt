@@ -4,17 +4,21 @@ const fs = require('fs');
 
 const region = core.getInput('region');
 const version = core.getInput('version');
+const format = core.getInput('format');
 const Template = core.getInput('template');
 const dataFilePath = core.getInput('dataFile');
 const CcAddresses = JSON.parse(core.getInput('ccAddresses'));
 const ToAddresses = JSON.parse(core.getInput('toAddresses'));
 const ReplyToAddresses = JSON.parse(core.getInput('replyToAddresses'));
+const workflowURL = core.getInput('workflowURL');
 
-const data = fs.readFileSync(dataFilePath, { encoding: 'utf-8' });
+const data = dataFilePath ? fs.readFileSync(dataFilePath, { encoding: 'utf-8' }) : "";
 
 const templated = {
     version,
+    format,
     results: data,
+    workflowURL,
 };
 
 // Set the region

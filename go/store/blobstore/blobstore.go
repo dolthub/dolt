@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"io/ioutil"
 )
 
 // Blobstore is an interface for storing and retrieving blobs of data by key
@@ -39,7 +38,7 @@ func GetBytes(ctx context.Context, bs Blobstore, key string, br BlobRange) ([]by
 	}
 
 	defer rc.Close()
-	data, err := ioutil.ReadAll(rc)
+	data, err := io.ReadAll(rc)
 
 	if err != nil {
 		return nil, "", err

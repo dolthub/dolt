@@ -23,7 +23,6 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var tblMvDocs = cli.CommandDocumentationContent{
@@ -38,7 +37,7 @@ in a new table and a deleted table in the working set. These changes can be stag
 using {{.EmphasisLeft}}dolt commit{{.EmphasisRight}}.`,
 
 	Synopsis: []string{
-		"[-f] {{.LessThan}}oldtable{{.EmphasisRight}} {{.LessThan}}newtable{{.EmphasisRight}}",
+		"[-f] {{.LessThan}}oldtable{{.GreaterThan}} {{.LessThan}}newtable{{.GreaterThan}}",
 	},
 }
 
@@ -54,13 +53,12 @@ func (cmd MvCmd) Description() string {
 	return "Moves a table"
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd MvCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, tblMvDocs, ap))
+func (cmd MvCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(tblMvDocs, ap)
 }
 
-func (cmd MvCmd) createArgParser() *argparser.ArgParser {
+func (cmd MvCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"oldtable", "The table being moved."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"newtable", "The new name of the table"})
@@ -75,8 +73,8 @@ func (cmd MvCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblMvDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tblMvDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() != 2 {
@@ -86,6 +84,7 @@ func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 
 	oldName := apr.Arg(0)
 	newName := apr.Arg(1)
+
 	queryStr := ""
 	if force := apr.Contains(forceParam); force {
 		queryStr = fmt.Sprintf("DROP TABLE IF EXISTS `%s`;", newName)

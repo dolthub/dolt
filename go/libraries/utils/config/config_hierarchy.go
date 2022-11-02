@@ -23,6 +23,8 @@ const (
 	namespaceSep = "::"
 )
 
+var ErrUnknownConfig = errors.New("config not found")
+
 // ConfigHierarchy is a hierarchical read-only configuration store.  When a key is looked up in the ConfigHierarchy it
 // will go through its configs in order and will return the first value for a given key that is found.  Configs are
 // iterated in order, so the configurations added first have the highest priority.
@@ -42,7 +44,7 @@ func NewConfigHierarchy() *ConfigHierarchy {
 
 // AddConfig adds a ReadWriteConfig to the hierarchy.  Newly added configs are at a lower priority than the configs that
 // were added previously.  Though the ConfigHierarchy does not support modification of stored values in the configs
-// directly, the configs it manages must implement the WriteConfig interface.
+// directly, the configs it manages must implement the WritableConfig interface.
 func (ch *ConfigHierarchy) AddConfig(name string, cs ReadWriteConfig) {
 	name = strings.TrimSpace(strings.ToLower(name))
 

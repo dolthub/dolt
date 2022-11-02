@@ -51,7 +51,7 @@ func TestMoveRemaining(t *testing.T) {
 		2,
 		3,
 		[]types.KVPSlice{sl1, sl2[:1]},
-		types.Format_7_18,
+		nbf,
 	}
 
 	builder := NewKVPCollBuilder(2, nbf)

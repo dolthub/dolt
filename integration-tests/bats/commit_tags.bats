@@ -42,7 +42,6 @@ teardown() {
 }
 
 @test "commit_tags: create tag v1.2.3" {
-    skip "Noms doesn't support '.' in dataset names"
     run dolt tag v1.2.3
     [ $status -eq 0 ]
 }
@@ -81,8 +80,8 @@ teardown() {
     dolt tag v1 HEAD^
     run dolt diff v1
     [ $status -eq 0 ]
-    [[ "$output" =~ "-  | 0" ]]
-    [[ "$output" =~ "+  | 3" ]]
+    [[ "$output" =~ "- | 0" ]]
+    [[ "$output" =~ "+ | 3" ]]
 }
 
 @test "commit_tags: use a tag as a ref for merge" {
@@ -90,7 +89,7 @@ teardown() {
     dolt checkout -b other HEAD^
     dolt sql -q "insert into test values (8),(9)"
     dolt add -A && dolt commit -m 'made changes'
-    run dolt merge v1
+    run dolt merge v1 -m "merge v1"
     [ $status -eq 0 ]
     run dolt sql -q "select * from test"
     [ $status -eq 0 ]
@@ -127,7 +126,7 @@ teardown() {
     run dolt push origin master
     [ $status -eq 0 ]
     cd ../repo_clone
-    run dolt pull
+    run dolt pull --no-edit
     [ $status -eq 0 ]
     run dolt tag
     [ $status -eq 0 ]
@@ -136,4 +135,17 @@ teardown() {
     run dolt tag -v
     [ $status -eq 0 ]
     [[ "$output" =~ "SAMO" ]] || false
+}
+
+@test "commit_tags: create a tag with semver string" {
+    dolt tag v1.0.0 HEAD^
+
+    run dolt tag
+    [ $status -eq 0 ]
+    [[ "$output" =~ "v1.0.0" ]] || false
+
+    dolt tag 1.0.0 HEAD
+    run dolt tag
+    [ $status -eq 0 ]
+    [[ "$output" =~ "1.0.0" ]] || false
 }

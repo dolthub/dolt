@@ -21,10 +21,10 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -45,7 +45,6 @@ func NewMemoryDbData(ctx context.Context, cfg config.ReadableConfig) (DbData, er
 		Ddb: ddb,
 		Rsw: rs,
 		Rsr: rs,
-		Drw: rs,
 	}, nil
 }
 
@@ -56,7 +55,7 @@ func NewMemoryDoltDB(ctx context.Context, initBranch string) (*doltdb.DoltDB, er
 
 	m := "memory"
 	branchRef := ref.NewBranchRef(initBranch)
-	err := ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, m, m, doltdb.CommitNowFunc(), branchRef)
+	err := ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, m, m, datas.CommitNowFunc(), branchRef)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +75,7 @@ func NewMemoryRepoState(ctx context.Context, ddb *doltdb.DoltDB, initBranch stri
 		return MemoryRepoState{}, err
 	}
 
-	root, err := commit.GetRootValue()
+	root, err := commit.GetRootValue(ctx)
 	if err != nil {
 		return MemoryRepoState{}, err
 	}
@@ -101,7 +100,6 @@ type MemoryRepoState struct {
 
 var _ RepoStateReader = MemoryRepoState{}
 var _ RepoStateWriter = MemoryRepoState{}
-var _ DocsReadWriter = MemoryRepoState{}
 
 func (m MemoryRepoState) CWBHeadRef() ref.DoltRef {
 	return m.Head
@@ -181,8 +179,8 @@ func (m MemoryRepoState) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, er
 	return workingSet, nil
 }
 
-func (m MemoryRepoState) workingSetMeta() *doltdb.WorkingSetMeta {
-	return &doltdb.WorkingSetMeta{
+func (m MemoryRepoState) workingSetMeta() *datas.WorkingSetMeta {
+	return &datas.WorkingSetMeta{
 		Timestamp:   uint64(time.Now().Unix()),
 		Description: "updated from dolt environment",
 	}
@@ -197,7 +195,7 @@ func (m MemoryRepoState) GetRemotes() (map[string]Remote, error) {
 	return make(map[string]Remote), nil
 }
 
-func (m MemoryRepoState) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
+func (m MemoryRepoState) AddRemote(r Remote) error {
 	return fmt.Errorf("cannot insert a remote in a memory database")
 }
 
@@ -213,23 +211,15 @@ func (m MemoryRepoState) RemoveRemote(ctx context.Context, name string) error {
 	return fmt.Errorf("cannot delete a remote from a memory database")
 }
 
-func (m MemoryRepoState) TempTableFilesDir() string {
-	return os.TempDir()
-}
-
-func (m MemoryRepoState) GetDocsOnDisk(docNames ...string) (doltdocs.Docs, error) {
-	return nil, fmt.Errorf("cannot get docs from a memory database")
-}
-
-func (m MemoryRepoState) WriteDocsToDisk(docs doltdocs.Docs) error {
-	return fmt.Errorf("cannot write docs to a memory database")
+func (m MemoryRepoState) TempTableFilesDir() (string, error) {
+	return os.TempDir(), nil
 }
 
 func (m MemoryRepoState) GetBackups() (map[string]Remote, error) {
 	panic("cannot get backups on in memory database")
 }
 
-func (m MemoryRepoState) AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error {
+func (m MemoryRepoState) AddBackup(r Remote) error {
 	panic("cannot add backup to in memory database")
 }
 

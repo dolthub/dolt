@@ -40,10 +40,12 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
 
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -55,7 +57,6 @@ const (
 
 type ProtocolImpl interface {
 	NewChunkStore(sp Spec) (chunks.ChunkStore, error)
-	NewDatabase(sp Spec) (datas.Database, error)
 }
 
 var ExternalProtocols = map[string]ProtocolImpl{}
@@ -164,7 +165,9 @@ type Spec struct {
 	Path AbsolutePath
 
 	// db is lazily created, so it needs to be a pointer to a Database.
-	db *datas.Database
+	db  *datas.Database
+	vrw *types.ValueReadWriter
+	ns  *tree.NodeStore
 }
 
 func newSpec(dbSpec string, opts SpecOptions) (Spec, error) {
@@ -178,6 +181,8 @@ func newSpec(dbSpec string, opts SpecOptions) (Spec, error) {
 		DatabaseName: dbName,
 		Options:      opts,
 		db:           new(datas.Database),
+		vrw:          new(types.ValueReadWriter),
+		ns:           new(tree.NodeStore),
 	}, nil
 }
 
@@ -215,10 +220,6 @@ func ForDatasetOpts(spec string, opts SpecOptions) (Spec, error) {
 
 	if path.Dataset == "" {
 		return Spec{}, errors.New("dataset name required for dataset spec")
-	}
-
-	if !path.Path.IsEmpty() {
-		return Spec{}, errors.New("path is not allowed for dataset spec")
 	}
 
 	sp.Path = path
@@ -271,9 +272,32 @@ func (sp Spec) String() string {
 // is called. If the Spec is closed, it is re-opened with a new Database.
 func (sp Spec) GetDatabase(ctx context.Context) datas.Database {
 	if *sp.db == nil {
-		*sp.db = sp.createDatabase(ctx)
+		db, vrw, ns := sp.createDatabase(ctx)
+		*sp.db = db
+		*sp.vrw = vrw
+		*sp.ns = ns
 	}
 	return *sp.db
+}
+
+func (sp Spec) GetNodeStore(ctx context.Context) tree.NodeStore {
+	if *sp.db == nil {
+		db, vrw, ns := sp.createDatabase(ctx)
+		*sp.db = db
+		*sp.vrw = vrw
+		*sp.ns = ns
+	}
+	return *sp.ns
+}
+
+func (sp Spec) GetVRW(ctx context.Context) types.ValueReadWriter {
+	if *sp.db == nil {
+		db, vrw, ns := sp.createDatabase(ctx)
+		*sp.db = db
+		*sp.vrw = vrw
+		*sp.ns = ns
+	}
+	return *sp.vrw
 }
 
 // NewChunkStore returns a new ChunkStore instance that this Spec's
@@ -289,7 +313,7 @@ func (sp Spec) NewChunkStore(ctx context.Context) chunks.ChunkStore {
 	case "gs":
 		return parseGCSSpec(ctx, sp.Href(), sp.Options)
 	case "nbs":
-		cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28)
+		cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 		d.PanicIfError(err)
 		return cs
 	case "mem":
@@ -339,7 +363,7 @@ func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunk
 	}
 
 	sess := session.Must(session.NewSession(awsConfig))
-	cs, err := nbs.NewAWSStore(ctx, types.Format_Default.VersionString(), parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
+	cs, err := nbs.NewAWSStore(ctx, types.Format_Default.VersionString(), parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 
 	d.PanicIfError(err)
 
@@ -361,7 +385,7 @@ func parseGCSSpec(ctx context.Context, gcsURL string, options SpecOptions) chunk
 		panic("Could not create GCSBlobstore")
 	}
 
-	cs, err := nbs.NewGCSStore(ctx, types.Format_Default.VersionString(), bucket, path, gcs, 1<<28)
+	cs, err := nbs.NewGCSStore(ctx, types.Format_Default.VersionString(), bucket, path, gcs, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 
 	d.PanicIfError(err)
 
@@ -383,9 +407,12 @@ func (sp Spec) GetDataset(ctx context.Context) (ds datas.Dataset) {
 
 // GetValue returns the Value at this Spec's Path within its Database, or nil
 // if this isn't a Path Spec or if that path isn't found.
-func (sp Spec) GetValue(ctx context.Context) (val types.Value) {
+func (sp Spec) GetValue(ctx context.Context) (val types.Value, err error) {
 	if !sp.Path.IsEmpty() {
-		val = sp.Path.Resolve(ctx, sp.GetDatabase(ctx))
+		val, err = sp.Path.Resolve(ctx, sp.GetDatabase(ctx), sp.GetVRW(ctx))
+		if err != nil {
+			return nil, err
+		}
 	}
 	return
 }
@@ -403,42 +430,6 @@ func (sp Spec) Href() string {
 	}
 }
 
-// Pin returns a Spec in which the dataset component, if any, has been replaced
-// with the hash of the HEAD of that dataset. This "pins" the path to the state
-// of the database at the current moment in time.  Returns itself if the
-// PathSpec is already "pinned".
-func (sp Spec) Pin(ctx context.Context) (Spec, bool) {
-	var ds datas.Dataset
-
-	if !sp.Path.IsEmpty() {
-		if !sp.Path.Hash.IsEmpty() {
-			// Spec is already pinned.
-			return sp, true
-		}
-
-		var err error
-		ds, err = sp.GetDatabase(ctx).GetDataset(ctx, sp.Path.Dataset)
-		d.PanicIfError(err)
-	} else {
-		ds = sp.GetDataset(ctx)
-	}
-
-	commit, ok := ds.MaybeHead()
-	if !ok {
-		return Spec{}, false
-	}
-
-	nbf := sp.GetDatabase(ctx).Format()
-	r := sp
-
-	var err error
-	r.Path.Dataset = ""
-	r.Path.Hash, err = commit.Hash(nbf)
-	d.PanicIfError(err)
-
-	return r, true
-}
-
 func (sp Spec) Close() error {
 	db := *sp.db
 	if db == nil {
@@ -449,29 +440,83 @@ func (sp Spec) Close() error {
 	return db.Close()
 }
 
-func (sp Spec) createDatabase(ctx context.Context) datas.Database {
+func (sp Spec) createDatabase(ctx context.Context) (datas.Database, types.ValueReadWriter, tree.NodeStore) {
 	switch sp.Protocol {
 	case "aws":
-		return datas.NewDatabase(parseAWSSpec(ctx, sp.Href(), sp.Options))
+		cs := parseAWSSpec(ctx, sp.Href(), sp.Options)
+		ns := tree.NewNodeStore(cs)
+		vrw := types.NewValueStore(cs)
+		return datas.NewTypesDatabase(vrw, ns), vrw, ns
 	case "gs":
-		return datas.NewDatabase(parseGCSSpec(ctx, sp.Href(), sp.Options))
+		cs := parseGCSSpec(ctx, sp.Href(), sp.Options)
+		ns := tree.NewNodeStore(cs)
+		vrw := types.NewValueStore(cs)
+		return datas.NewTypesDatabase(vrw, ns), vrw, ns
 	case "nbs":
-		os.Mkdir(sp.DatabaseName, 0777)
-		cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28)
+		// If the database is the oldgen database return a standard NBS store.
+		if strings.Contains(sp.DatabaseName, "oldgen") {
+			return getStandardLocalStore(ctx, sp.DatabaseName)
+		}
+
+		oldgenDb := filepath.Join(sp.DatabaseName, "oldgen")
+
+		err := validateDir(oldgenDb)
+		// If we can't validate that an oldgen db exists just use a standard local store.
+		if err != nil {
+			return getStandardLocalStore(ctx, sp.DatabaseName)
+		}
+
+		newGenSt, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 		d.PanicIfError(err)
-		return datas.NewDatabase(cs)
+
+		oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenDb, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
+		d.PanicIfError(err)
+
+		cs := nbs.NewGenerationalCS(oldGenSt, newGenSt)
+
+		ns := tree.NewNodeStore(cs)
+		vrw := types.NewValueStore(cs)
+		return datas.NewTypesDatabase(vrw, ns), vrw, ns
 	case "mem":
 		storage := &chunks.MemoryStorage{}
-		return datas.NewDatabase(storage.NewViewWithDefaultFormat())
+		cs := storage.NewViewWithDefaultFormat()
+		ns := tree.NewNodeStore(cs)
+		vrw := types.NewValueStore(cs)
+		return datas.NewTypesDatabase(vrw, ns), vrw, ns
 	default:
 		impl, ok := ExternalProtocols[sp.Protocol]
 		if !ok {
 			d.PanicIfError(fmt.Errorf("unknown protocol: %s", sp.Protocol))
 		}
-		r, err := impl.NewDatabase(sp)
+		cs, err := impl.NewChunkStore(sp)
 		d.PanicIfError(err)
-		return r
+		vrw := types.NewValueStore(cs)
+		ns := tree.NewNodeStore(cs)
+		return datas.NewTypesDatabase(vrw, ns), vrw, ns
 	}
+}
+
+func getStandardLocalStore(ctx context.Context, dbName string) (datas.Database, types.ValueReadWriter, tree.NodeStore) {
+	os.Mkdir(dbName, 0777)
+
+	cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), dbName, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
+	d.PanicIfError(err)
+
+	vrw := types.NewValueStore(cs)
+	ns := tree.NewNodeStore(cs)
+	return datas.NewTypesDatabase(vrw, ns), vrw, ns
+}
+
+func validateDir(path string) error {
+	info, err := os.Stat(path)
+
+	if err != nil {
+		return err
+	} else if !info.IsDir() {
+		return filesys.ErrIsFile
+	}
+
+	return nil
 }
 
 func parseDatabaseSpec(spec string) (protocol, name string, err error) {

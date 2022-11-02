@@ -264,7 +264,7 @@ func TestDecimalParseValue(t *testing.T) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf(`%v %v`, test.typ.String(), test.input), func(t *testing.T) {
 			vrw := types.NewMemoryValueStore()
-			output, err := test.typ.ParseValue(context.Background(), vrw, &test.input)
+			output, err := StringDefaultType.ConvertToType(context.Background(), vrw, test.typ, types.String(test.input))
 			if !test.expectedErr {
 				require.NoError(t, err)
 				assert.True(t, test.output.Equals(output))
@@ -350,7 +350,9 @@ func TestDecimalMarshal(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, test.expectedVal, sql.MustConvert(typ.sqlDecimalType.Convert(decimal.Decimal(val.(types.Decimal)))))
+				expectedDecimal, err := decimal.NewFromString(test.expectedVal)
+				require.NoError(t, err)
+				assert.True(t, expectedDecimal.Equal(decimal.Decimal(val.(types.Decimal))))
 				umar, err := typ.ConvertNomsValueToValue(val)
 				require.NoError(t, err)
 				testVal := sql.MustConvert(typ.sqlDecimalType.Convert(test.val))
@@ -560,7 +562,7 @@ func TestDecimalRoundTrip(t *testing.T) {
 				output, err := test.typ.ConvertNomsValueToValue(parsed)
 				require.NoError(t, err)
 				assert.Equal(t, test.output, output)
-				parsed2, err := test.typ.ParseValue(context.Background(), vrw, &test.input)
+				parsed2, err := StringDefaultType.ConvertToType(context.Background(), vrw, test.typ, types.String(test.input))
 				require.NoError(t, err)
 				assert.Equal(t, parsed, parsed2)
 				output2, err := test.typ.FormatValue(parsed2)
@@ -568,7 +570,7 @@ func TestDecimalRoundTrip(t *testing.T) {
 				assert.Equal(t, test.output, *output2)
 			} else {
 				assert.Error(t, err)
-				_, err = test.typ.ParseValue(context.Background(), vrw, &test.input)
+				_, err = StringDefaultType.ConvertToType(context.Background(), vrw, test.typ, types.String(test.input))
 				assert.Error(t, err)
 			}
 		})

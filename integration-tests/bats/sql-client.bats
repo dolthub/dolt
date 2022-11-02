@@ -25,7 +25,7 @@ SQL
 }
 
 show_tables() {
-    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt =<<SQL
+    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
 USE repo1;
 SHOW TABLES;
 SQL
@@ -42,7 +42,7 @@ teardown() {
 }
 
 @test "sql-client: test sql-client shows tables" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     cd repo1
     start_sql_server repo1
     cd ../
@@ -61,9 +61,76 @@ teardown() {
     [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
     [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
     [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
-    [ "${lines[3]}" = '+-------+' ]
-    [ "${lines[4]}" = '| Table |' ]
-    [ "${lines[5]}" = '+-------+' ]
-    [ "${lines[6]}" = '| test  |' ]
-    [ "${lines[7]}" = '+-------+' ]
+    [ "${lines[3]}" = '+-----------------+' ]
+    [ "${lines[4]}" = '| Tables_in_repo1 |' ]
+    [ "${lines[5]}" = '+-----------------+' ]
+    [ "${lines[6]}" = '| test            |' ]
+    [ "${lines[7]}" = '+-----------------+' ]
+}
+
+@test "sql-client: --user argument is required" {
+    run dolt sql-client
+    [ "$status" -eq 1 ]
+    [[ "$output" =~  "--user or -u argument is required" ]] || false
+}
+
+@test "sql-client: multiple statments in --query" {
+    cd repo1
+    start_sql_server repo1
+
+    dolt sql-client -u dolt -P $PORT --use-db repo1 -q "
+    	 create table t(c int);
+	 insert into t values (0),(1);
+	 update t set c=2 where c=0;"
+    run dolt sql-client -u dolt -P $PORT --use-db repo1 -q "select c from t"
+    [ $status -eq 0 ]
+    [[ $output =~ " 1 " ]] || false
+    [[ $output =~ " 2 " ]] || false
+    ! [[ $output =~ " 0 " ]] || false
+}
+
+@test "sql-client: no-auto-commit" {
+    cd repo1
+    start_sql_server repo1
+
+    dolt sql-client -u dolt -P $PORT --use-db repo1 --no-auto-commit -q "CREATE TABLE one_pk (
+        pk BIGINT NOT NULL,
+        c1 BIGINT,
+        c2 BIGINT,
+        PRIMARY KEY (pk)
+    )"
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables in working set" ]] || false
+
+    # Now issue a manual commit
+    dolt sql-client -u dolt -P $PORT --use-db repo1 --no-auto-commit -q "CREATE TABLE one_pk (
+        pk BIGINT NOT NULL,
+        c1 BIGINT,
+        c2 BIGINT,
+        PRIMARY KEY (pk));
+	COMMIT;"
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "one_pk" ]] || false
+}
+
+@test "sql-client: connect directly to a branch using --use-db" {
+    cd repo1
+    dolt branch branch1
+    start_sql_server repo1
+
+    dolt sql-client -u dolt -P $PORT --use-db repo1/branch1 -q "
+         create table t(c int);
+         insert into t values (0),(1);
+         update t set c=2 where c=0;"
+    run	dolt sql-client -u dolt -P $PORT --use-db repo1/branch1 -q "select c from t"
+    [ $status -eq 0 ]
+    [[ $output =~ " 1 " ]] || false
+    [[ $output =~ " 2 " ]] || false
+    ! [[ $output =~ " 0 " ]] || false
+
+    run dolt sql-client -u dolt -P $PORT --use-db repo1 -q "select c from t"
+    [ $status -ne 0 ]
+    [[ $output =~ "not found" ]] || false
 }

@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -33,6 +32,8 @@ const (
 	emailParamName      = "email"
 	usernameParamName   = "name"
 	initBranchParamName = "initial-branch"
+	newFormatFlag       = "new-format"
+	oldFormatFlag       = "old-format"
 )
 
 var initDocs = cli.CommandDocumentationContent{
@@ -43,7 +44,7 @@ Running dolt init in an already initialized directory will fail.
 `,
 
 	Synopsis: []string{
-		//`[{{.LessThan}}options{{.GreaterThan}}] [{{.LessThan}}path{{.GreaterThan}}]`,
+		"",
 	},
 }
 
@@ -65,35 +66,54 @@ func (cmd InitCmd) RequiresRepo() bool {
 	return false
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd InitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, initDocs, ap))
+func (cmd InitCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(initDocs, ap)
 }
 
-func (cmd InitCmd) createArgParser() *argparser.ArgParser {
+func (cmd InitCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(usernameParamName, "", "name", fmt.Sprintf("The name used in commits to this repo. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", env.UserNameKey))
 	ap.SupportsString(emailParamName, "", "email", fmt.Sprintf("The email address used. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", env.UserEmailKey))
 	ap.SupportsString(cli.DateParam, "", "date", "Specify the date used in the initial commit. If not specified the current system time is used.")
 	ap.SupportsString(initBranchParamName, "b", "branch", fmt.Sprintf("The branch name used to initialize this database. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config. If unset, the default initialized branch will be named '%s'.", env.InitBranchName, env.DefaultInitBranch))
+	ap.SupportsFlag(newFormatFlag, "", fmt.Sprintf("Specify this flag to use the new storage format (%s).", types.Format_DOLT.VersionString()))
+	ap.SupportsFlag(oldFormatFlag, "", fmt.Sprintf("Specify this flag to use the old storage format (%s).", types.Format_LD_1.VersionString()))
 	return ap
 }
 
 // Exec executes the command
 func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, initDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, initDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if dEnv.HasDoltDir() {
 		cli.PrintErrln(color.RedString("This directory has already been initialized."))
 		return 1
 	}
+	if apr.Contains(newFormatFlag) && apr.Contains(oldFormatFlag) {
+		e := fmt.Sprintf("options %s and %s are mutually exclusive", newFormatFlag, oldFormatFlag)
+		cli.PrintErrln(color.RedString(e))
+		return 1
+	}
+	if apr.Contains(newFormatFlag) {
+		types.Format_Default = types.Format_DOLT
+	} else if apr.Contains(oldFormatFlag) {
+		types.Format_Default = types.Format_LD_1
+	}
 
 	name, _ := apr.GetValue(usernameParamName)
 	email, _ := apr.GetValue(emailParamName)
 	initBranch, _ := apr.GetValue(initBranchParamName)
+
+	if len(name) == 0 || len(email) == 0 {
+		// This command creates a commit, so we need user identity
+		if !cli.CheckUserNameAndEmail(dEnv) {
+			return 1
+		}
+	}
+
 	name = dEnv.Config.IfEmptyUseConfig(name, env.UserNameKey)
 	email = dEnv.Config.IfEmptyUseConfig(email, env.UserEmailKey)
 	if initBranch == "" {
@@ -130,6 +150,21 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to initialize directory as a data repo. %s", err.Error()))
 		return 1
+	}
+
+	configuration := make(map[string]string)
+	if apr.Contains(usernameParamName) {
+		configuration[env.UserNameKey] = name
+	}
+	if apr.Contains(emailParamName) {
+		configuration[env.UserEmailKey] = email
+	}
+	if len(configuration) > 0 {
+		err = dEnv.Config.WriteableConfig().SetStrings(configuration)
+		if err != nil {
+			cli.PrintErrln(color.RedString("Failed to store initial configuration. %s", err.Error()))
+			return 1
+		}
 	}
 
 	cli.Println(color.CyanString("Successfully initialized dolt data repository."))

@@ -28,6 +28,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/verbose"
@@ -130,13 +131,13 @@ func (r *Resolver) ResolvePathSpec(str string) string {
 // Resolve string to database spec. If a config is present,
 //   - resolve a db alias to its db spec
 //   - resolve "" to the default db spec
-func (r *Resolver) GetDatabase(ctx context.Context, str string) (datas.Database, error) {
+func (r *Resolver) GetDatabase(ctx context.Context, str string) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	dbc := r.DbConfigForDbSpec(str)
 	sp, err := spec.ForDatabaseOpts(r.verbose(ctx, str, dbc.Url), specOptsForConfig(r.config, dbc))
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
-	return sp.GetDatabase(ctx), nil
+	return sp.GetDatabase(ctx), sp.GetVRW(ctx), sp.GetNodeStore(ctx), nil
 }
 
 // Resolve string to a chunkstore. Like ResolveDatabase, but returns the underlying ChunkStore
@@ -150,25 +151,36 @@ func (r *Resolver) GetChunkStore(ctx context.Context, str string) (chunks.ChunkS
 }
 
 // Resolve string to a dataset. If a config is present,
-//  - if no db prefix is present, assume the default db
-//  - if the db prefix is an alias, replace it
-func (r *Resolver) GetDataset(ctx context.Context, str string) (datas.Database, datas.Dataset, error) {
+//   - if no db prefix is present, assume the default db
+//   - if the db prefix is an alias, replace it
+func (r *Resolver) GetDataset(ctx context.Context, str string) (datas.Database, types.ValueReadWriter, datas.Dataset, error) {
 	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
 	sp, err := spec.ForDatasetOpts(r.verbose(ctx, str, specStr), specOptsForConfig(r.config, dbc))
 	if err != nil {
-		return nil, datas.Dataset{}, err
+		return nil, nil, datas.Dataset{}, err
 	}
-	return sp.GetDatabase(ctx), sp.GetDataset(ctx), nil
+	return sp.GetDatabase(ctx), sp.GetVRW(ctx), sp.GetDataset(ctx), nil
 }
 
 // Resolve string to a value path. If a config is present,
-//  - if no db spec is present, assume the default db
-//  - if the db spec is an alias, replace it
-func (r *Resolver) GetPath(ctx context.Context, str string) (datas.Database, types.Value, error) {
+//   - if no db spec is present, assume the default db
+//   - if the db spec is an alias, replace it
+func (r *Resolver) GetPath(ctx context.Context, str string) (datas.Database, types.ValueReadWriter, types.Value, error) {
 	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
 	sp, err := spec.ForPathOpts(r.verbose(ctx, str, specStr), specOptsForConfig(r.config, dbc))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return sp.GetDatabase(ctx), sp.GetValue(ctx), nil
+	value, err := sp.GetValue(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return sp.GetDatabase(ctx), sp.GetVRW(ctx), value, nil
+}
+
+// GetDatabaseForPath returns the database and a VRW for the path given, but does not attempt to load a value
+func (r *Resolver) GetDatabaseSpecForPath(ctx context.Context, str string) (spec.Spec, error) {
+	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
+	return spec.ForPathOpts(r.verbose(ctx, str, specStr), specOptsForConfig(r.config, dbc))
 }

@@ -16,28 +16,25 @@ package indexcmds
 
 import (
 	"context"
-	"fmt"
+	"io"
 	"strings"
 
-	"github.com/fatih/color"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var catDocs = cli.CommandDocumentationContent{
@@ -71,11 +68,11 @@ func (cmd CatCmd) Description() string {
 	return "Internal debugging command to display the contents of an index."
 }
 
-func (cmd CatCmd) CreateMarkdown(filesys.Filesys, string, string) error {
+func (cmd CatCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 
-func (cmd CatCmd) createArgParser() *argparser.ArgParser {
+func (cmd CatCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table that the given index belongs to."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"index", "The name of the index that belongs to the given table."})
@@ -84,15 +81,15 @@ func (cmd CatCmd) createArgParser() *argparser.ArgParser {
 }
 
 func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, catDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, catDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() == 0 {
 		usage()
 		return 0
 	} else if apr.NArg() != 2 {
-		return HandleErr(errhand.BuildDError("Both the table and index names must be provided.").Build(), usage)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Both the table and index names must be provided.").Build(), usage)
 	}
 
 	cmd.resultFormat = formatTabular
@@ -105,13 +102,13 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		case "json":
 			cmd.resultFormat = formatJson
 		default:
-			return HandleErr(errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build(), usage)
+			return commands.HandleVErrAndExitCode(errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build(), usage)
 		}
 	}
 
 	working, err := dEnv.WorkingRoot(context.Background())
 	if err != nil {
-		return HandleErr(errhand.BuildDError("Unable to get working.").AddCause(err).Build(), nil)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get working.").AddCause(err).Build(), nil)
 	}
 
 	tableName := apr.Arg(0)
@@ -119,151 +116,87 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	table, ok, err := working.GetTable(ctx, tableName)
 	if err != nil {
-		return HandleErr(errhand.BuildDError("Unable to get table `%s`.", tableName).AddCause(err).Build(), nil)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get table `%s`.", tableName).AddCause(err).Build(), nil)
 	}
 	if !ok {
-		return HandleErr(errhand.BuildDError("The table `%s` does not exist.", tableName).Build(), nil)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("The table `%s` does not exist.", tableName).Build(), nil)
 	}
 	tblSch, err := table.GetSchema(ctx)
 	if err != nil {
-		return HandleErr(errhand.BuildDError("Unable to get schema for `%s`.", tableName).AddCause(err).Build(), nil)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get schema for `%s`.", tableName).AddCause(err).Build(), nil)
 	}
 	index := tblSch.Indexes().GetByName(indexName)
 	if index == nil {
-		return HandleErr(errhand.BuildDError("The index `%s` does not exist on table `%s`.", indexName, tableName).Build(), nil)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("The index `%s` does not exist on table `%s`.", indexName, tableName).Build(), nil)
 	}
 	indexRowData, err := table.GetIndexRowData(ctx, index.Name())
 	if err != nil {
-		return HandleErr(errhand.BuildDError("The index `%s` does not have a data map.", indexName).Build(), nil)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("The index `%s` does not have a data map.", indexName).Build(), nil)
 	}
 
 	err = cmd.prettyPrintResults(ctx, index.Schema(), indexRowData)
 	if err != nil {
-		return HandleErr(errhand.BuildDError("Unable to display data for `%s`.", indexName).AddCause(err).Build(), nil)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to display data for `%s`.", indexName).AddCause(err).Build(), nil)
 	}
 
 	return 0
 }
 
-// TODO: merge this with the cmd/sql.go code, which is what this was modified from
-func (cmd CatCmd) prettyPrintResults(ctx context.Context, doltSch schema.Schema, rowData types.Map) error {
-	nbf := types.Format_Default
+func (cmd CatCmd) prettyPrintResults(ctx context.Context, doltSch schema.Schema, idx durable.Index) error {
 
-	untypedSch, err := untyped.UntypeUnkeySchema(doltSch)
+	wr, err := getTableWriter(cmd.resultFormat, doltSch)
 	if err != nil {
 		return err
 	}
+	defer wr.Close(ctx)
 
-	rowChannel := make(chan row.Row)
-	p := pipeline.NewPartialPipeline(pipeline.InFuncForChannel(rowChannel))
+	sess := dsess.DefaultSession(dsess.EmptyDatabaseProvider())
+	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
 
-	switch cmd.resultFormat {
-	case formatCsv:
-		nullPrinter := nullprinter.NewNullPrinterWithNullString(untypedSch, "")
-		p.AddStage(pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow))
-
-	case formatTabular:
-		nullPrinter := nullprinter.NewNullPrinter(untypedSch)
-		p.AddStage(pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow))
-		autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
-		p.AddStage(pipeline.NamedTransform{Name: "fwt", Func: autoSizeTransform.TransformToFWT})
-	}
-
-	cliWr := iohelp.NopWrCloser(cli.CliOut)
-
-	var wr table.TableWriteCloser
-
-	switch cmd.resultFormat {
-	case formatTabular:
-		wr, err = tabular.NewTextTableWriter(cliWr, untypedSch)
-	case formatCsv:
-		wr, err = csv.NewCSVWriter(cliWr, untypedSch, csv.NewCSVInfo())
-	case formatJson:
-		wr, err = json.NewJSONWriter(cliWr, untypedSch)
-	default:
-		panic("unimplemented output format type")
-	}
-
+	rowItr, err := table.NewTableIterator(ctx, doltSch, idx, 0)
 	if err != nil {
 		return err
 	}
+	defer rowItr.Close(sqlCtx)
 
-	p.RunAfter(func() { _ = wr.Close(ctx) })
-
-	cliSink := pipeline.ProcFuncForWriter(ctx, wr)
-	p.SetOutput(cliSink)
-
-	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
-		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(ctx, tff.Row, untypedSch)))
-		return true
-	})
-
-	colNames, err := schema.ExtractAllColNames(untypedSch)
-
-	if err != nil {
-		return err
-	}
-
-	r, err := untyped.NewRowFromTaggedStrings(nbf, untypedSch, colNames)
-
-	if err != nil {
-		return err
-	}
-
-	if cmd.resultFormat == formatTabular {
-		p.InjectRow("fwt", r)
-	}
-
-	var rowFn func(key types.Value, value types.Value) (row.Row, error)
-	switch cmd.resultFormat {
-	case formatJson:
-		rowFn = func(key types.Value, value types.Value) (row.Row, error) {
-			return row.FromNoms(doltSch, key.(types.Tuple), value.(types.Tuple))
+	for {
+		r, err := rowItr.Next(sqlCtx)
+		if err == io.EOF {
+			break
 		}
-	default:
-		rowFn = func(key types.Value, _ types.Value) (row.Row, error) {
-			taggedValues := make(row.TaggedValues)
-			tplIter, err := key.(types.Tuple).Iterator()
-			if err != nil {
-				return nil, err
-			}
-			for tplIter.HasMore() {
-				_, tagVal, err := tplIter.Next()
-				if err != nil {
-					return nil, err
-				}
-				_, val, err := tplIter.Next()
-				if err != nil {
-					return nil, err
-				}
-				if val != types.NullValue {
-					tag := uint64(tagVal.(types.Uint))
-					strPtr, err := doltSch.GetAllCols().TagToCol[tag].TypeInfo.FormatValue(val)
-					if err != nil {
-						return nil, err
-					}
-					taggedValues[tag] = types.String(*strPtr)
-				}
-			}
-			return row.New(nbf, untypedSch, taggedValues)
+		if err != nil {
+			return err
 		}
-	}
-
-	go func() {
-		defer close(rowChannel)
-		_ = rowData.IterAll(ctx, func(k, v types.Value) error {
-			r, iterErr := rowFn(k, v)
-			if iterErr == nil {
-				rowChannel <- r
-			}
-			return nil
-		})
-	}()
-
-	p.Start()
-	if err := p.Wait(); err != nil {
-		return fmt.Errorf("error processing results: %v", err)
+		err = wr.WriteSqlRow(ctx, r)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
+}
+
+func getTableWriter(format resultFormat, sch schema.Schema) (wr table.SqlRowWriter, err error) {
+	s, err := sqlutil.FromDoltSchema("", sch)
+	if err != nil {
+		return nil, err
+	}
+	sqlSch := s.Schema
+	cliWR := iohelp.NopWrCloser(cli.OutStream)
+
+	switch format {
+	case formatTabular:
+		wr = tabular.NewFixedWidthTableWriter(sqlSch, cliWR, 100)
+	case formatCsv:
+		wr, err = csv.NewCSVWriter(cliWR, sch, csv.NewCSVInfo())
+		if err != nil {
+			return nil, err
+		}
+	case formatJson:
+		wr, err = json.NewJSONWriter(cliWR, sch)
+	default:
+		panic("unhandled format")
+	}
+
+	return wr, nil
 }

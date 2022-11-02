@@ -21,11 +21,52 @@ teardown() {
     teardown_common
 }
 
-@test "sql-shell: run a query in sql shell" {
+@test "sql-shell: --user option changes superuser" {
+    # remove config
+    rm -rf .doltcfg
+
+    # default is root@localhost
+    run dolt sql <<< "select user, host from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "dolt" ]] || false
+    [[ "$output" =~ "localhost" ]] || false
+
+    # make it dolt@localhost
+    run dolt sql --user=dolt <<< "select user, host from mysql.user"
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "dolt" ]] || false
+    [[ "$output" =~ "localhost" ]] || false
+
+    # remove config
+    rm -rf .doltcfg
+}
+
+@test "sql-shell: use user without privileges, and no superuser created" {
+    rm -rf .doltcfg
+
+    # default user is root
+    run dolt sql <<< "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]]
+
+    # create user
+    run dolt sql <<< "create user new_user@'localhost'"
+    [ "$status" -eq 0 ]
+
+    run dolt sql --user=new_user <<< "select user from mysql.user"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Access denied for user" ]]
+
+    rm -rf .doltcfg
+}
+
+@test "sql-shell: pipe query text to sql shell" {
     skiponwindows "Works on Windows command prompt but not the WSL terminal used during bats"
-    run bash -c "echo 'select * from test;' | dolt sql"
+    run bash -c "echo 'show tables' | dolt sql"
     [ $status -eq 0 ]
-    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "test" ]] || false
 }
 
 @test "sql-shell: sql shell writes to disk after every iteration (autocommit)" {
@@ -34,12 +75,686 @@ teardown() {
     echo "$output"
 
     # 2 tables are created. 1 from above and 1 in the expect file.
-    [[ "$output" =~ "+-------------+" ]] || false
-    [[ "$output" =~ "| Table       |" ]] || false
-    [[ "$output" =~ "+-------------+" ]] || false
-    [[ "$output" =~ "| test        |" ]] || false
-    [[ "$output" =~ "| test_expect |" ]] || false
-    [[ "$output" =~ "+-------------+" ]] || false
+    [[ "$output" =~ "+---------------------" ]] || false
+    [[ "$output" =~ "| Tables_in_dolt_repo_" ]] || false
+    [[ "$output" =~ "+---------------------" ]] || false
+    [[ "$output" =~ "| test                " ]] || false
+    [[ "$output" =~ "| test_expect         " ]] || false
+    [[ "$output" =~ "+---------------------" ]] || false
+}
+
+@test "sql-shell: default datadir, doltcfg, and privs" {
+    # remove config files
+    rm -rf .doltcfg
+
+    run dolt sql <<< "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+
+    run ls .doltcfg
+    ! [[ "$output" =~ "privileges.db" ]] || false
+
+    run dolt sql <<< "create user new_user"
+    [ "$status" -eq 0 ]
+
+    run dolt sql <<< "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
+
+    run ls .doltcfg
+    [[ "$output" =~ "privileges.db" ]] || false
+
+    rm -rf .doltcfg
+}
+
+@test "sql-shell: specify data-dir" {
+    # remove config files
+    rm -rf .doltcfg
+    rm -rf db_dir
+
+    # create data dir
+    mkdir db_dir
+    cd db_dir
+
+    # create databases
+    mkdir db1
+    cd db1
+    dolt init
+    cd ..
+
+    mkdir db2
+    cd db2
+    dolt init
+    cd ..
+
+    mkdir db3
+    cd db3
+    dolt init
+    cd ..
+
+    cd ..
+
+    # show databases, expect all
+    run dolt sql --data-dir=db_dir <<< "show databases;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "db1" ]] || false
+    [[ "$output" =~ "db2" ]] || false
+    [[ "$output" =~ "db3" ]] || false
+
+    # show users, expect just root user
+    run dolt sql --data-dir=db_dir <<< "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+
+    run ls -a db_dir
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+
+    # create new user
+    run dolt sql --data-dir=db_dir <<< "create user new_user"
+    [ "$status" -eq 0 ]
+
+    # show users, expect root user and new_user
+    run dolt sql --data-dir=db_dir <<< "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "privileges.db" ]] || false
+
+    run ls -a db_dir
+    [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "privileges.db" ]] || false
+
+    run ls db_dir/.doltcfg
+    [[ "$output" =~ "privileges.db" ]] || false
+
+    # test relative to $datadir
+    cd db_dir
+
+    # show databases, expect all
+    run dolt sql <<< "show databases;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "db1" ]] || false
+    [[ "$output" =~ "db2" ]] || false
+    [[ "$output" =~ "db3" ]] || false
+
+    # expect to find same users when in $datadir
+    run dolt sql <<< "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    cd ..
+
+    # remove config files
+    rm -rf .doltcfg
+    rm -rf db_dir
+}
+
+@test "sql-shell: specify doltcfg directory" {
+    # remove any previous config directories
+    rm -rf .doltcfg
+    rm -rf doltcfgdir
+
+    # show users, expect just root user
+    run dolt sql --doltcfg-dir=doltcfgdir <<< "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "doltcfgdir" ]] || false
+
+    # create new_user
+    run dolt sql --doltcfg-dir=doltcfgdir <<< "create user new_user"
+    [ "$status" -eq 0 ]
+
+    # show users, expect root user and new_user
+    run dolt sql --doltcfg-dir=doltcfgdir <<< "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
+
+    run ls doltcfgdir
+    [[ "$output" =~ "privileges.db" ]] || false
+
+    # remove files
+    rm -rf .doltcfg
+    rm -rf doltcfgdir
+}
+
+@test "sql-shell: specify privilege file" {
+    # remove config files
+    rm -rf .doltcfg
+    rm -f privs.db
+
+    # show users, expect just root user
+    run dolt sql --privilege-file=privs.db <<< "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "privs.db" ]] || false
+
+    # create new_user
+    run dolt sql --privilege-file=privs.db <<< "create user new_user"
+    [ "$status" -eq 0 ]
+
+    # show users, expect root user and new_user
+    run dolt sql --privilege-file=privs.db <<< "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ "privs.db" ]] || false
+
+    # expect to not see new_user when privs.db not specified
+    run dolt sql <<< "select user from mysql.user"
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    # remove config files
+    rm -rf .doltcfg
+    rm -f privs.db
+}
+
+@test "sql-shell: specify data-dir and doltcfg-dir" {
+    # remove config files
+    rm -rf .doltcfg
+    rm -rf db_dir
+    rm -rf doltcfgdir
+
+    # create data dir
+    mkdir db_dir
+    cd db_dir
+
+    # create databases
+    mkdir db1
+    cd db1
+    dolt init
+    cd ..
+
+    mkdir db2
+    cd db2
+    dolt init
+    cd ..
+
+    mkdir db3
+    cd db3
+    dolt init
+    cd ..
+
+    cd ..
+
+    # show databases, expect all
+    run dolt sql --data-dir=db_dir --doltcfg-dir=doltcfgdir <<< "show databases;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "db1" ]] || false
+    [[ "$output" =~ "db2" ]] || false
+    [[ "$output" =~ "db3" ]] || false
+
+    # show users, expect just root user
+    run dolt sql --data-dir=db_dir --doltcfg-dir=doltcfgdir <<< "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "doltcfgdir" ]] || false
+
+    run ls -a db_dir
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+
+    # create new user
+    run dolt sql --data-dir=db_dir --doltcfg-dir=doltcfgdir <<< "create user new_user"
+    [ "$status" -eq 0 ]
+
+    # show users, expect root user and new_user
+    run dolt sql --data-dir=db_dir --doltcfg-dir=doltcfgdir <<< "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
+    ! [[ "$output" =~ "privileges.db" ]] || false
+
+    run ls db_dir
+    ! [[ "$output" =~ "privileges.db" ]] || false
+
+    run ls doltcfgdir
+    [[ "$output" =~ "privileges.db" ]] || false
+
+    # test relative to $datadir
+    cd db_dir
+
+    # show databases, expect all
+    run dolt sql <<< "show databases;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "db1" ]] || false
+    [[ "$output" =~ "db2" ]] || false
+    [[ "$output" =~ "db3" ]] || false
+
+    # show users, expect root
+    run dolt sql <<< "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    # show users, expect root and new_user
+    run dolt sql --doltcfg-dir=../doltcfgdir <<< "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    cd ..
+
+    # remove config files
+    rm -rf .doltcfg
+    rm -rf db_dir
+    rm -rf doltcfgdir
+}
+
+@test "sql-shell: specify data-dir and privilege-file" {
+    # remove config files
+    rm -rf .doltcfg
+    rm -rf db_dir
+    rm -rf privs.db
+
+    # create data dir
+    mkdir db_dir
+    cd db_dir
+
+    # create databases
+    mkdir db1
+    cd db1
+    dolt init
+    cd ..
+
+    mkdir db2
+    cd db2
+    dolt init
+    cd ..
+
+    mkdir db3
+    cd db3
+    dolt init
+    cd ..
+
+    cd ..
+
+    # show databases, expect all
+    run dolt sql --data-dir=db_dir --privilege-file=privs.db <<< "show databases;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "db1" ]] || false
+    [[ "$output" =~ "db2" ]] || false
+    [[ "$output" =~ "db3" ]] || false
+
+    # show users, expect just root user
+    run dolt sql --data-dir=db_dir --privilege-file=privs.db <<< "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+
+    run ls -a db_dir
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+
+    # create new user
+    run dolt sql --data-dir=db_dir --privilege-file=privs.db <<< "create user new_user"
+    [ "$status" -eq 0 ]
+
+    # show users, expect root user and new_user
+    run dolt sql --data-dir=db_dir --privilege-file=privs.db <<< "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ "privs.db" ]] || false
+
+    run ls -a db_dir
+    [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "privs.db" ]] || false
+
+    run ls db_dir/.doltcfg
+    ! [[ "$output" =~ "privs.db" ]] || false
+
+    # test relative to $datadir
+    cd db_dir
+
+    # show databases, expect all
+    run dolt sql <<< "show databases;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "db1" ]] || false
+    [[ "$output" =~ "db2" ]] || false
+    [[ "$output" =~ "db3" ]] || false
+
+    # show users, expect root
+    run dolt sql <<< "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    # show users, expect root and new_user
+    run dolt sql --privilege-file=../privs.db <<< "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    cd ..
+
+    # remove config files
+    rm -rf .doltcfg
+    rm -rf db_dir
+    rm -rf privs.db
+}
+
+@test "sql-shell: specify doltcfg-dir and privilege-file" {
+    # remove any previous config directories
+    rm -rf .doltcfg
+    rm -rf doltcfgdir
+    rm -rf privs.db
+
+    # show users, expect just root user
+    run dolt sql --doltcfg-dir=doltcfgdir --privilege-file=privs.db <<< "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "doltcfgdir" ]] || false
+
+    # create new_user
+    run dolt sql --doltcfg-dir=doltcfgdir --privilege-file=privs.db <<< "create user new_user"
+    [ "$status" -eq 0 ]
+
+    # show users, expect root user and new_user
+    run dolt sql --doltcfg-dir=doltcfgdir --privilege-file=privs.db <<< "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
+    [[ "$output" =~ "privs.db" ]] || false
+
+    run ls doltcfgdir
+    ! [[ "$output" =~ "privileges.db" ]] || false
+    ! [[ "$output" =~ "privs.db" ]] || false
+
+    # remove config directory just in case
+    rm -rf .doltcfg
+    rm -rf doltcfgdir
+    rm -rf privs.db
+}
+
+@test "sql-shell: specify data directory, cfg directory, and privilege file" {
+    # remove config files
+    rm -rf .doltcfg
+    rm -rf db_dir
+    rm -rf doltcfgdir
+    rm -rf privs.db
+
+    # create data dir
+    mkdir db_dir
+    cd db_dir
+
+    # create databases
+    mkdir db1
+    cd db1
+    dolt init
+    cd ..
+
+    mkdir db2
+    cd db2
+    dolt init
+    cd ..
+
+    mkdir db3
+    cd db3
+    dolt init
+    cd ..
+
+    cd ..
+
+    # show databases, expect all
+    run dolt sql --data-dir=db_dir --doltcfg-dir=doltcfgdir --privilege-file=privs.db <<< "show databases;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "db1" ]] || false
+    [[ "$output" =~ "db2" ]] || false
+    [[ "$output" =~ "db3" ]] || false
+
+    # show users, expect just root user
+    run dolt sql --data-dir=db_dir --doltcfg-dir=doltcfgdir --privilege-file=privs.db <<< "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    ! [[ "$output" =~ "doltcfgdir" ]] || false
+
+    run ls -a db_dir
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+
+    # create new user
+    run dolt sql --data-dir=db_dir --doltcfg-dir=doltcfgdir --privilege-file=privs.db <<< "create user new_user"
+    [ "$status" -eq 0 ]
+
+    # show users, expect root user and new_user
+    run dolt sql --data-dir=db_dir --doltcfg-dir=doltcfgdir --privilege-file=privs.db <<< "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    run ls -a
+    ! [[ "$output" =~ "privileges.db" ]] || false
+    [[ "$output" =~ "privs.db" ]] || false
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
+
+    run ls db_dir
+    ! [[ "$output" =~ "privileges.db" ]] || false
+    ! [[ "$output" =~ "privs.db" ]] || false
+
+    run ls doltcfgdir
+    ! [[ "$output" =~ "privileges.db" ]] || false
+    ! [[ "$output" =~ "privs.db" ]] || false
+
+    # test relative to $datadir
+    cd db_dir
+
+    # show databases, expect all
+    run dolt sql <<< "show databases;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "db1" ]] || false
+    [[ "$output" =~ "db2" ]] || false
+    [[ "$output" =~ "db3" ]] || false
+
+    # show users, expect root
+    run dolt sql <<< "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    # show users, expect root and new_user
+    run dolt sql --doltcfg-dir=../doltcfgdir <<< "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    # show users, expect root and new_user
+    run dolt sql --privilege-file=../privs.db <<< "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    cd ..
+
+    # remove config files
+    rm -rf .doltcfg
+    rm -rf db_dir
+    rm -rf doltcfgdir
+    rm -rf privs.db
+}
+
+
+@test "sql-shell: .doltcfg in parent directory errors" {
+    # remove existing directories
+    rm -rf .doltcfg
+    rm -rf inner_db
+
+    mkdir .doltcfg
+    mkdir inner_db
+    cd inner_db
+    mkdir .doltcfg
+
+    run dolt sql <<< "show databases;"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "multiple .doltcfg directories detected" ]] || false
+
+    # specifying datadir, resolves issue
+    run dolt sql --data-dir=. <<< "show databases;"
+    [ "$status" -eq 0 ]
+
+    # remove existing directories
+    rm -rf .doltcfg
+    rm -rf inner_db
+}
+
+@test "sql-shell: .doltcfg defaults to parent directory" {
+    # remove existing directories
+    rm -rf .doltcfg
+    rm -rf inner_db
+
+    # create user in parent
+    run dolt sql <<< "create user new_user"
+    [ "$status" -eq 0 ]
+
+    run dolt sql <<< "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    # check that .doltcfg and privileges.db was created
+    run ls -a
+    [[ "$output" =~ ".doltcfg" ]] || false
+    run ls .doltcfg
+    [[ "$output" =~ "privileges.db" ]] || false
+
+    mkdir inner_db
+    cd inner_db
+    run dolt sql <<< "select user from mysql.user"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    # remove existing directories
+    rm -rf .doltcfg
+    rm -rf inner_db
+}
+
+@test "sql-shell: specify data directory outside of dolt repo" {
+    # remove files
+    rm -rf datadir
+    rm -rf .doltcfg
+    rm -rf new_repo
+
+    # initialize data directory and inner dbs
+    mkdir datadir
+    cd datadir
+
+    mkdir db1
+    cd db1
+    dolt init
+    cd ..
+
+    mkdir db2
+    cd db2
+    dolt init
+    cd ..
+
+    mkdir db3
+    cd db3
+    dolt init
+    cd ..
+
+    # save data path
+    DATADIR=$(pwd)
+
+    cd ..
+
+    # initialize new repo
+    mkdir new_repo
+    cd new_repo
+
+    run dolt sql --data-dir=$DATADIR <<< "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "db1" ]] || false
+    [[ $output =~ "db2" ]] || false
+    [[ $output =~ "db3" ]] || false
+
+    run dolt sql --data-dir=$DATADIR <<< "create user new_user"
+    [ $status -eq 0 ]
+
+    run dolt sql --data-dir=$DATADIR <<< "use db1; select user from mysql.user"
+    [ $status -eq 0 ]
+    [[ $output =~ "new_user" ]] || false
+
+    run dolt sql --data-dir=$DATADIR <<< "use db2; select user from mysql.user"
+    [ $status -eq 0 ]
+    [[ $output =~ "new_user" ]] || false
+
+    run dolt sql --data-dir=$DATADIR <<< "use db3; select user from mysql.user"
+    [ $status -eq 0 ]
+    [[ $output =~ "new_user" ]] || false
+
+    # check that correct files exist
+    cd ..
+
+    run ls -a
+    [[ $output =~ "datadir" ]] || false
+    [[ $output =~ "new_repo" ]] || false
+    ! [[ $output =~ ".doltcfg" ]] || false
+
+    run ls -a datadir
+    [[ $output =~ ".doltcfg" ]] || false
+
+    run ls -a datadir/.doltcfg
+    [[ $output =~ "privileges.db" ]] || false
+
+    # remove files
+    rm -rf new_repo
+    rm -rf datadir
 }
 
 @test "sql-shell: bad sql in sql shell should error" {
@@ -77,9 +792,12 @@ SQL
   [ $status -eq 0 ]
   [[ "$output" =~ "$TESTSTR" ]] || false
 
+  dolt sql -q "SELECT * FROM test2" -r json
   run dolt sql -q "SELECT * FROM test2" -r json
   [ $status -eq 0 ]
-  [[ "$output" =~ "$TESTSTR" ]] || false
+  # The golang json encoder escapes < and > and & for HTML compatibility
+  JSON_TESTSTR='0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`~!@#$%^\u0026*()){}[]/=?+|,.\u003c\u003e;:_-_%d%s%f'
+  [[ "$output" =~ "$JSON_TESTSTR" ]] || false
 
   dolt add .
   dolt commit -m "added data"

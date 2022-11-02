@@ -20,18 +20,19 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
 var ErrCantFF = errors.New("can't fast forward merge")
-var ErrInvalidPullArgs = errors.New("dolt pull takes at most one arg")
+var ErrInvalidPullArgs = errors.New("dolt pull takes at most two args")
 var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrFailedToSaveRepoState = errors.New("failed to save repo state")
 var ErrFailedToDeleteRemote = errors.New("failed to delete remote")
@@ -40,15 +41,15 @@ var ErrFailedToDeleteBackup = errors.New("failed to delete backup")
 var ErrFailedToGetBackupDb = errors.New("failed to get backup db")
 var ErrUnknownPushErr = errors.New("unknown push error")
 
-type ProgStarter func(ctx context.Context) (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent)
-type ProgStopper func(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent)
+type ProgStarter func(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.Stats)
+type ProgStopper func(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, statsCh chan pull.Stats)
 
 // Push will update a destination branch, in a given destination database if it can be done as a fast forward merge.
 // This is accomplished first by verifying that the remote tracking reference for the source database can be updated to
 // the given commit via a fast forward merge.  If this is the case, an attempt will be made to update the branch in the
 // destination db to the given commit via fast forward move.  If that succeeds the tracking branch is updated in the
 // source db.
-func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef ref.BranchRef, remoteRef ref.RemoteRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
+func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef ref.BranchRef, remoteRef ref.RemoteRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
 	var err error
 	if mode == ref.FastForwardOnly {
 		canFF, err := srcDB.CanFastForward(ctx, remoteRef, commit)
@@ -60,13 +61,12 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 		}
 	}
 
-	rf, err := commit.GetStRef()
-
+	h, err := commit.HashOf()
 	if err != nil {
 		return err
 	}
 
-	err = destDB.PushChunks(ctx, tempTableDir, srcDB, rf, progChan, pullerEventCh)
+	err = destDB.PullChunks(ctx, tempTableDir, srcDB, h, progChan, statsCh)
 
 	if err != nil {
 		return err
@@ -90,22 +90,8 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 	return err
 }
 
-func DoPush(ctx context.Context, rsr env.RepoStateReader, rsw env.RepoStateWriter, srcDB *doltdb.DoltDB, tempTableDir string, opts *env.PushOpts, progStarter ProgStarter, progStopper ProgStopper) error {
-	destDB, err := opts.Remote.GetRemoteDB(ctx, srcDB.ValueReadWriter().Format())
-
-	if err != nil {
-		if err == remotestorage.ErrInvalidDoltSpecPath {
-			urlObj, _ := earl.Parse(opts.Remote.Url)
-			path := urlObj.Path
-			if path[0] == '/' {
-				path = path[1:]
-			}
-
-			var detail = fmt.Sprintf("the remote: %s %s '%s' should be in the format 'organization/repo'", opts.Remote.Name, opts.Remote.Url, path)
-			return fmt.Errorf("%w; %s; %s", ErrFailedToGetRemoteDb, detail, err.Error())
-		}
-		return err
-	}
+func DoPush(ctx context.Context, rsr env.RepoStateReader, rsw env.RepoStateWriter, srcDB, destDB *doltdb.DoltDB, tempTableDir string, opts *env.PushOpts, progStarter ProgStarter, progStopper ProgStopper) error {
+	var err error
 
 	switch opts.SrcRef.GetType() {
 	case ref.BranchRefType:
@@ -120,47 +106,46 @@ func DoPush(ctx context.Context, rsr env.RepoStateReader, rsw env.RepoStateWrite
 		err = fmt.Errorf("%w: %s of type %s", ErrCannotPushRef, opts.SrcRef.String(), opts.SrcRef.GetType())
 	}
 
-	if err != nil {
-		return err
+	if err == nil || errors.Is(err, doltdb.ErrUpToDate) || errors.Is(err, pull.ErrDBUpToDate) {
+		if opts.SetUpstream {
+			err := rsw.UpdateBranch(opts.SrcRef.GetPath(), env.BranchConfig{
+				Merge: ref.MarshalableRef{
+					Ref: opts.DestRef,
+				},
+				Remote: opts.Remote.Name,
+			})
+			if err != nil {
+				return err
+			}
+		}
 	}
 
-	if opts.SetUpstream {
-		return rsw.UpdateBranch(opts.SrcRef.GetPath(), env.BranchConfig{
-			Merge: ref.MarshalableRef{
-				Ref: opts.DestRef,
-			},
-			Remote: opts.Remote.Name,
-		})
-	}
-
-	return nil
+	return err
 }
 
 // PushTag pushes a commit tag and all underlying data from a local source database to a remote destination database.
-func PushTag(ctx context.Context, tempTableDir string, destRef ref.TagRef, srcDB, destDB *doltdb.DoltDB, tag *doltdb.Tag, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
+func PushTag(ctx context.Context, tempTableDir string, destRef ref.TagRef, srcDB, destDB *doltdb.DoltDB, tag *doltdb.Tag, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
 	var err error
 
-	rf, err := tag.GetStRef()
+	addr, err := tag.GetAddr()
+	if err != nil {
+		return err
+	}
+
+	err = destDB.PullChunks(ctx, tempTableDir, srcDB, addr, progChan, statsCh)
 
 	if err != nil {
 		return err
 	}
 
-	err = destDB.PushChunks(ctx, tempTableDir, srcDB, rf, progChan, pullerEventCh)
-
-	if err != nil {
-		return err
-	}
-
-	return destDB.SetHead(ctx, destRef, rf)
+	return destDB.SetHead(ctx, destRef, addr)
 }
 
 func deleteRemoteBranch(ctx context.Context, toDelete, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote) error {
 	err := DeleteRemoteBranch(ctx, toDelete.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB)
 
 	if err != nil {
-		return fmt.Errorf("%w; '%s' from remote '%s'", ErrFailedToDeleteRemote, toDelete.String(), remote.Name)
-		//return err
+		return fmt.Errorf("%w; '%s' from remote '%s'; %s", ErrFailedToDeleteRemote, toDelete.String(), remote.Name, err)
 	}
 
 	return nil
@@ -186,20 +171,19 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 	}
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
-	wg, progChan, pullerEventCh := progStarter(newCtx)
-	err = Push(ctx, tempTableDir, mode, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan, pullerEventCh)
-	progStopper(cancelFunc, wg, progChan, pullerEventCh)
+	wg, progChan, statsCh := progStarter(newCtx)
+	err = Push(ctx, tempTableDir, mode, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan, statsCh)
+	progStopper(cancelFunc, wg, progChan, statsCh)
 
-	if err != nil {
-		switch err {
-		case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded:
-			return err
-		default:
-			return fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())
-		}
+	switch err {
+	case nil:
+		cli.Println()
+		return nil
+	case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded:
+		return err
+	default:
+		return fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())
 	}
-
-	return nil
 }
 
 func pushTagToRemote(ctx context.Context, tempTableDir string, srcRef, destRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, progStarter ProgStarter, progStopper ProgStopper) error {
@@ -210,14 +194,15 @@ func pushTagToRemote(ctx context.Context, tempTableDir string, srcRef, destRef r
 	}
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
-	wg, progChan, pullerEventCh := progStarter(newCtx)
-	err = PushTag(ctx, tempTableDir, destRef.(ref.TagRef), localDB, remoteDB, tg, progChan, pullerEventCh)
-	progStopper(cancelFunc, wg, progChan, pullerEventCh)
+	wg, progChan, statsCh := progStarter(newCtx)
+	err = PushTag(ctx, tempTableDir, destRef.(ref.TagRef), localDB, remoteDB, tg, progChan, statsCh)
+	progStopper(cancelFunc, wg, progChan, statsCh)
 
 	if err != nil {
 		return err
 	}
 
+	cli.Println()
 	return nil
 }
 
@@ -248,49 +233,45 @@ func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef 
 }
 
 // FetchCommit takes a fetches a commit and all underlying data from a remote source database to the local destination database.
-func FetchCommit(ctx context.Context, tempTablesDir string, srcDB, destDB *doltdb.DoltDB, srcDBCommit *doltdb.Commit, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
-	stRef, err := srcDBCommit.GetStRef()
-
+func FetchCommit(ctx context.Context, tempTablesDir string, srcDB, destDB *doltdb.DoltDB, srcDBCommit *doltdb.Commit, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
+	h, err := srcDBCommit.HashOf()
 	if err != nil {
 		return err
 	}
 
-	return destDB.PullChunks(ctx, tempTablesDir, srcDB, stRef, progChan, pullerEventCh)
+	return destDB.PullChunks(ctx, tempTablesDir, srcDB, h, progChan, statsCh)
 }
 
-// FetchCommit takes a fetches a commit tag and all underlying data from a remote source database to the local destination database.
-func FetchTag(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.DoltDB, srcDBTag *doltdb.Tag, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
-	stRef, err := srcDBTag.GetStRef()
-
+// FetchTag takes a fetches a commit tag and all underlying data from a remote source database to the local destination database.
+func FetchTag(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.DoltDB, srcDBTag *doltdb.Tag, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
+	addr, err := srcDBTag.GetAddr()
 	if err != nil {
 		return err
 	}
 
-	return destDB.PullChunks(ctx, tempTableDir, srcDB, stRef, progChan, pullerEventCh)
+	return destDB.PullChunks(ctx, tempTableDir, srcDB, addr, progChan, statsCh)
 }
 
 // Clone pulls all data from a remote source database to a local destination database.
-func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- datas.TableFileEvent) error {
+func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- pull.TableFileEvent) error {
 	return srcDB.Clone(ctx, destDB, eventCh)
 }
 
-// fetchFollowTags fetches all tags from the source DB whose commits have already
+// FetchFollowTags fetches all tags from the source DB whose commits have already
 // been fetched into the destination DB.
 // todo: potentially too expensive to iterate over all srcDB tags
 func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.DoltDB, progStarter ProgStarter, progStopper ProgStopper) error {
 	err := IterResolvedTags(ctx, srcDB, func(tag *doltdb.Tag) (stop bool, err error) {
-		stRef, err := tag.GetStRef()
+		tagHash, err := tag.GetAddr()
 		if err != nil {
 			return true, err
 		}
 
-		tagHash := stRef.TargetHash()
-
-		tv, err := destDB.ValueReadWriter().ReadValue(ctx, tagHash)
+		has, err := destDB.Has(ctx, tagHash)
 		if err != nil {
 			return true, err
 		}
-		if tv != nil {
+		if has {
 			// tag is already fetched
 			return false, nil
 		}
@@ -300,25 +281,30 @@ func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *do
 			return true, err
 		}
 
-		cv, err := destDB.ValueReadWriter().ReadValue(ctx, cmHash)
+		has, err = destDB.Has(ctx, cmHash)
 		if err != nil {
 			return true, err
 		}
-		if cv == nil {
+		if !has {
 			// neither tag nor commit has been fetched
 			return false, nil
 		}
 
 		newCtx, cancelFunc := context.WithCancel(ctx)
-		wg, progChan, pullerEventCh := progStarter(newCtx)
-		err = FetchTag(ctx, tempTableDir, srcDB, destDB, tag, progChan, pullerEventCh)
-		progStopper(cancelFunc, wg, progChan, pullerEventCh)
+		wg, progChan, statsCh := progStarter(newCtx)
+		err = FetchTag(ctx, tempTableDir, srcDB, destDB, tag, progChan, statsCh)
+		progStopper(cancelFunc, wg, progChan, statsCh)
+		if err == nil {
+			cli.Println()
+		} else if err == pull.ErrDBUpToDate {
+			err = nil
+		}
 
 		if err != nil {
 			return true, err
 		}
 
-		err = destDB.SetHead(ctx, tag.GetDoltRef(), stRef)
+		err = destDB.SetHead(ctx, tag.GetDoltRef(), tagHash)
 
 		return false, err
 	})
@@ -330,7 +316,17 @@ func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *do
 	return nil
 }
 
-func FetchRemoteBranch(ctx context.Context, tempTablesDir string, rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef, progStarter ProgStarter, progStopper ProgStopper) (*doltdb.Commit, error) {
+// FetchRemoteBranch fetches and returns the |Commit| corresponding to the remote ref given. Returns an error if the
+// remote reference doesn't exist or can't be fetched. Blocks until the fetch is complete.
+func FetchRemoteBranch(
+	ctx context.Context,
+	tempTablesDir string,
+	rem env.Remote,
+	srcDB, destDB *doltdb.DoltDB,
+	srcRef ref.DoltRef,
+	progStarter ProgStarter,
+	progStopper ProgStopper,
+) (*doltdb.Commit, error) {
 	evt := events.GetEventFromContext(ctx)
 
 	u, err := earl.Parse(rem.Url)
@@ -349,9 +345,12 @@ func FetchRemoteBranch(ctx context.Context, tempTablesDir string, rem env.Remote
 	}
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
-	wg, progChan, pullerEventCh := progStarter(newCtx)
-	err = FetchCommit(ctx, tempTablesDir, srcDB, destDB, srcDBCommit, progChan, pullerEventCh)
-	progStopper(cancelFunc, wg, progChan, pullerEventCh)
+	wg, progChan, statsCh := progStarter(newCtx)
+	err = FetchCommit(ctx, tempTablesDir, srcDB, destDB, srcDBCommit, progChan, statsCh)
+	progStopper(cancelFunc, wg, progChan, statsCh)
+	if err == pull.ErrDBUpToDate {
+		err = nil
+	}
 
 	if err != nil {
 		return nil, err
@@ -361,12 +360,9 @@ func FetchRemoteBranch(ctx context.Context, tempTablesDir string, rem env.Remote
 }
 
 // FetchRefSpecs is the common SQL and CLI entrypoint for fetching branches, tags, and heads from a remote.
-func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.RemoteRefSpec, remote env.Remote, mode ref.UpdateMode, progStarter ProgStarter, progStopper ProgStopper) error {
-	srcDB, err := remote.GetRemoteDBWithoutCaching(ctx, dbData.Ddb.ValueReadWriter().Format())
-	if err != nil {
-		return err
-	}
-
+// This function takes dbData which is a env.DbData object for handling repoState read and write, and srcDB is
+// a remote *doltdb.DoltDB object that is used to fetch remote branches from.
+func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB, refSpecs []ref.RemoteRefSpec, remote env.Remote, mode ref.UpdateMode, progStarter ProgStarter, progStopper ProgStopper) error {
 	branchRefs, err := srcDB.GetHeadRefs(ctx)
 	if err != nil {
 		return env.ErrFailedToReadDb
@@ -380,7 +376,11 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.Remote
 
 			if remoteTrackRef != nil {
 				rsSeen = true
-				srcDBCommit, err := FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), remote, srcDB, dbData.Ddb, branchRef, remoteTrackRef, progStarter, progStopper)
+				tmpDir, err := dbData.Rsw.TempTableFilesDir()
+				if err != nil {
+					return err
+				}
+				srcDBCommit, err := FetchRemoteBranch(ctx, tmpDir, remote, srcDB, dbData.Ddb, branchRef, progStarter, progStopper)
 				if err != nil {
 					return err
 				}
@@ -420,7 +420,11 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.Remote
 		}
 	}
 
-	err = FetchFollowTags(ctx, dbData.Rsw.TempTableFilesDir(), srcDB, dbData.Ddb, progStarter, progStopper)
+	tmpDir, err := dbData.Rsw.TempTableFilesDir()
+	if err != nil {
+		return err
+	}
+	err = FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, progStarter, progStopper)
 	if err != nil {
 		return err
 	}
@@ -445,19 +449,19 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 	}
 
 	if srcRoot == destRoot {
-		return datas.ErrDBUpToDate
+		return pull.ErrDBUpToDate
 	}
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
-	wg, progChan, pullerEventCh := progStarter(newCtx)
-	defer progStopper(cancelFunc, wg, progChan, pullerEventCh)
+	wg, progChan, statsCh := progStarter(newCtx)
+	defer func() {
+		progStopper(cancelFunc, wg, progChan, statsCh)
+		if err == nil {
+			cli.Println()
+		}
+	}()
 
-	err = destDb.PushChunksForRefHash(ctx, tempTableDir, srcDb, srcRoot, pullerEventCh)
-	if err != nil {
-		return err
-	}
-
-	err = destDb.Rebase(ctx)
+	err = destDb.PullChunks(ctx, tempTableDir, srcDb, srcRoot, progChan, statsCh)
 	if err != nil {
 		return err
 	}
@@ -465,4 +469,9 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 	destDb.CommitRoot(ctx, srcRoot, destRoot)
 
 	return nil
+}
+
+func HandleInitRemoteStorageClientErr(name, url string, err error) error {
+	var detail = fmt.Sprintf("the remote: %s '%s' could not be accessed", name, url)
+	return fmt.Errorf("%w; %s; %s", ErrFailedToGetRemoteDb, detail, err.Error())
 }

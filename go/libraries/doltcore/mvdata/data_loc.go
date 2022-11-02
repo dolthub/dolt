@@ -17,6 +17,7 @@ package mvdata
 import (
 	"context"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 
@@ -24,10 +25,8 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
@@ -55,6 +54,9 @@ const (
 
 	// SqlFile is the format of a data location that is a .sql file
 	SqlFile DataFormat = ".sql"
+
+	// ParquetFile is the format of a data location that is a .paquet file
+	ParquetFile DataFormat = ".parquet"
 )
 
 // ReadableStr returns a human readable string for a DataFormat
@@ -72,6 +74,8 @@ func (df DataFormat) ReadableStr() string {
 		return "json file"
 	case SqlFile:
 		return "sql file"
+	case ParquetFile:
+		return "parquet file"
 	default:
 		return "invalid"
 	}
@@ -85,18 +89,11 @@ type DataLocation interface {
 	Exists(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error)
 
 	// NewReader creates a TableReadCloser for the DataLocation
-	NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error)
+	NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, opts interface{}) (rdCl table.SqlRowReader, sorted bool, err error)
 
 	// NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 	// an existing table.
-	NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB, opts editor.Options) (table.TableWriteCloser, error)
-
-	// NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
-	// their primary key.
-	NewUpdatingWriter(ctx context.Context, mvOpts DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB, rdTags []uint64, opts editor.Options) (table.TableWriteCloser, error)
-
-	// NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table if it has the same schema.
-	NewReplacingWriter(ctx context.Context, mvOpts DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB, opts editor.Options) (table.TableWriteCloser, error)
+	NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, outSch schema.Schema, opts editor.Options, wr io.WriteCloser) (table.SqlRowWriter, error)
 }
 
 // NewDataLocation creates a DataLocation object from a path and a format string.  If the path is the name of a table
@@ -110,21 +107,19 @@ func NewDataLocation(path, fileFmtStr string) DataLocation {
 	if len(path) == 0 {
 		return StreamDataLocation{Format: dataFmt, Reader: cli.InStream, Writer: cli.OutStream}
 	} else if fileFmtStr == "" {
-		if doltdb.IsValidTableName(path) {
-			return TableDataLocation{path}
-		} else {
-			switch strings.ToLower(filepath.Ext(path)) {
-			case string(CsvFile):
-				dataFmt = CsvFile
-			case string(PsvFile):
-				dataFmt = PsvFile
-			case string(XlsxFile):
-				dataFmt = XlsxFile
-			case string(JsonFile):
-				dataFmt = JsonFile
-			case string(SqlFile):
-				dataFmt = SqlFile
-			}
+		switch strings.ToLower(filepath.Ext(path)) {
+		case string(CsvFile):
+			dataFmt = CsvFile
+		case string(PsvFile):
+			dataFmt = PsvFile
+		case string(XlsxFile):
+			dataFmt = XlsxFile
+		case string(JsonFile):
+			dataFmt = JsonFile
+		case string(SqlFile):
+			dataFmt = SqlFile
+		case string(ParquetFile):
+			dataFmt = ParquetFile
 		}
 	}
 

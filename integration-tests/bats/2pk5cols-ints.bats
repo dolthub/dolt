@@ -22,13 +22,14 @@ teardown() {
     teardown_common
 }
 
-@test "2pk5cols-ints: create a table with a schema file and examine repo" {
+@test "2pk5cols-ints: empty table" {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "test" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ pk1[[:space:]]+\|[[:space:]]+pk2[[:space:]]+\|[[:space:]]+c1[[:space:]]+\|[[:space:]]+c2[[:space:]]+\|[[:space:]]+c3[[:space:]]+\|[[:space:]]+c4[[:space:]]+\|[[:space:]]+c5 ]] || false
+    [ "${#lines[@]}" -eq 0 ]
+
     run dolt diff
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "diff --dolt a/test b/test" ]
@@ -97,8 +98,8 @@ teardown() {
     [[ "$output" =~ "duplicate primary key" ]] || false
     run dolt sql -q "insert into test (pk1,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 1 ]
-    [ "$output" = "Field 'pk2' doesn't have a default value" ] || false
+    [[ "$output" =~ "Field 'pk2' doesn't have a default value" ]] || false
     run dolt sql -q "insert into test (c1,c2,c3,c4,c5) values (6,6,6,6,6)"
     [ "$status" -eq 1 ]
-    [ "$output" = "Field 'pk1' doesn't have a default value" ] || false
+    [[ "$output" =~ "Field 'pk1' doesn't have a default value" ]] || false
 }

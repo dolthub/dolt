@@ -17,26 +17,24 @@ package commands
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var revertDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Undo the changes introduced in a commit",
-	LongDesc: `Removes the changes made in a commit (or series of commits) from the working set, and then automatically commits the
-result. This is done by way of a three-way merge. Given a specific commit (e.g. HEAD~1), this is similar to applying the
-patch from HEAD~1..HEAD~2, giving us a patch of what to remove to effectively remove the influence of the specified
-commit. If multiple commits are specified, then this process is repeated for each commit in the order specified. This
-requires a clean working set.
-
-For now, any conflicts or constraint violations that are brought by the merge cause the command to fail.`,
+	LongDesc: "Removes the changes made in a commit (or series of commits) from the working set, and then automatically " +
+		"commits the result. This is done by way of a three-way merge. Given a specific commit " +
+		"(e.g. {{.EmphasisLeft}}HEAD~1{{.EmphasisRight}}), this is similar to applying the patch from " +
+		"{{.EmphasisLeft}}HEAD~1..HEAD~2{{.EmphasisRight}}, giving us a patch of what to remove to effectively remove the " +
+		"influence of the specified commit. If multiple commits are specified, then this process is repeated for each " +
+		"commit in the order specified. This requires a clean working set." +
+		"\n\nAny conflicts or constraint violations caused by the merge cause the command to fail.",
 	Synopsis: []string{
 		"<revision>...",
 	},
@@ -56,23 +54,40 @@ func (cmd RevertCmd) Description() string {
 	return "Undo the changes introduced in a commit."
 }
 
-// CreateMarkdown implements the interface cli.Command.
-func (cmd RevertCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := argparser.NewArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, revertDocs, ap))
+func (cmd RevertCmd) Docs() *cli.CommandDocumentation {
+	ap := cli.CreateRevertArgParser()
+	return cli.NewCommandDocumentation(revertDocs, ap)
+}
+
+func (cmd RevertCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateRevertArgParser()
 }
 
 // Exec implements the interface cli.Command.
 func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateRevertArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, revertDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
+
+	// This command creates a commit, so we need user identity
+	if !cli.CheckUserNameAndEmail(dEnv) {
+		return 1
+	}
 
 	if apr.NArg() < 1 {
 		usage()
 		return 1
 	}
-	headRoot, err := dEnv.HeadRoot(ctx)
+
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
+
+	headCommit, err := dEnv.HeadCommit(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	headRoot, err := headCommit.GetRootValue(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -106,9 +121,12 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		}
 		commits[i] = commit
 	}
-
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	workingRoot, revertMessage, err := merge.Revert(ctx, dEnv.DoltDB, workingRoot, commits, opts)
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
+	workingRoot, revertMessage, err := merge.Revert(ctx, dEnv.DoltDB, workingRoot, headCommit, commits, opts)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

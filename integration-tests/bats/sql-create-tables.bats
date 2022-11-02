@@ -154,8 +154,7 @@ CREATE TABLE test (
     c3 BIGINT,
     c4 BIGINT,
     c5 BIGINT,
-    PRIMARY KEY (pk1),
-    PRIMARY KEY (pk2)
+    PRIMARY KEY (pk1, pk2)
 );
 SQL
     [ "$status" -eq 0 ]
@@ -214,7 +213,6 @@ SQL
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
-
 @test "sql-create-tables: create a table using sql with a string" {
     run dolt sql <<SQL
 CREATE TABLE test (
@@ -231,7 +229,6 @@ SQL
     [[ "$output" =~ "\`c1\` longtext" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
-
 
 @test "sql-create-tables: create a table using sql with an unsigned int" {
     run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 BIGINT UNSIGNED, PRIMARY KEY (pk))"
@@ -307,7 +304,6 @@ SQL
     [[ "$output" =~ "date" ]] || false
 }
 
-
 @test "sql-create-tables: create two table with the same name" {
     dolt sql <<SQL
 CREATE TABLE test (
@@ -347,7 +343,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test2\`" ]] || false
     [[ "$output" =~ "\`pk\` bigint NOT NULL" ]] || false
-    [[ "$output" =~ "\`c1\` bigint DEFAULT 5 COMMENT 'hi'" ]] || false
+    [[ "$output" =~ "\`c1\` bigint DEFAULT '5' COMMENT 'hi'" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
@@ -363,7 +359,7 @@ SQL
     cd workspace
     dolt init
     cd ..
-    dolt sql --multi-db-dir ./ -b -q "USE workspace;CREATE TABLE mytable LIKE otherdb.othertable;"
+    dolt sql --data-dir ./ -b -q "USE workspace;CREATE TABLE mytable LIKE otherdb.othertable;"
     cd workspace
     run dolt schema show mytable
     [ "$status" -eq 0 ]
@@ -401,11 +397,11 @@ SQL
 
     run dolt sql -q "alter table test1 rename column b to a"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "name" ]] || false
+    [[ "$output" =~ "already exists" ]] || false
     
     run dolt sql -q "alter table test1 add column A int"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "name" ]] || false
+    [[ "$output" =~ "already exists" ]] || false
 
     run dolt sql -q "alter table test1 change column b A bigint"
     [ "$status" -eq 1 ]
@@ -458,7 +454,6 @@ SQL
 CREATE TEMPORARY TABLE colors (
     id INT NOT NULL,
     color VARCHAR(32) NOT NULL,
-
     PRIMARY KEY (id),
     INDEX color_index(color)
 );
@@ -537,7 +532,6 @@ SQL
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-
 @test "sql-create-tables: You can create a temp table of the same name as a normal table. Run it through operations" {
     run dolt sql <<SQL
 CREATE TABLE goodtable(pk int PRIMARY KEY);
@@ -583,7 +577,9 @@ SQL
 }
 
 @test "sql-create-tables: Alter on a temporary table" {
-    run dolt sql <<SQL
+    skip "cannot alter temporary tables"
+    
+    dolt sql <<SQL
 CREATE TEMPORARY TABLE goodtable(pk int PRIMARY KEY);
 ALTER TABLE goodtable ADD COLUMN val int;
 
@@ -709,7 +705,7 @@ SQL
     cd repo2
     dolt init
     cd ..
-    run dolt sql --multi-db-dir ./ -b -q "USE repo2;CREATE TEMPORARY TABLE temp2 LIKE repo1.tableone;"
+    run dolt sql --data-dir ./ -b -q "USE repo2;CREATE TEMPORARY TABLE temp2 LIKE repo1.tableone;"
     [ "$status" -eq 0 ]
     cd repo2
 
@@ -770,4 +766,13 @@ SELECT * FROM myTempTable;
 SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "table not found: myTempTable" ]] || false
+}
+
+@test "sql-create-tables: BINARY attributes" {
+    dolt sql <<SQL
+CREATE TABLE budgets(id CHAR(36) CHARACTER SET utf8mb4 BINARY);
+CREATE TABLE budgets2(id CHAR(36) BINARY);
+SQL
+    dolt sql -q "INSERT INTO budgets VALUES (UUID());"
+    dolt sql -q "INSERT INTO budgets2 VALUES (UUID());"
 }

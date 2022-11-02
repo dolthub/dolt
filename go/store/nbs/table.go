@@ -130,6 +130,7 @@ const (
 	uint32Size      = 4
 	ordinalSize     = uint32Size
 	lengthSize      = uint32Size
+	offsetSize      = uint64Size
 	magicNumber     = "\xff\xb5\xd8\xc2\x24\x63\xee\x50"
 	magicNumberSize = 8 //len(magicNumber)
 	footerSize      = uint32Size + uint64Size + magicNumberSize
@@ -227,49 +228,36 @@ type chunkReader interface {
 	has(h addr) (bool, error)
 	hasMany(addrs []hasRecord) (bool, error)
 	get(ctx context.Context, h addr, stats *Stats) ([]byte, error)
-	getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (bool, error)
-	getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (bool, error)
-	extract(ctx context.Context, chunks chan<- extractRecord) error
+	getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error)
+	getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error)
 	count() (uint32, error)
 	uncompressedLen() (uint64, error)
 
-	// Close releases resources retained by the |chunkReader|.
-	Close() error
-}
-
-type chunkReadPlanner interface {
-	findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool)
-	getManyAtOffsets(
-		ctx context.Context,
-		eg *errgroup.Group,
-		offsetRecords offsetRecSlice,
-		found func(*chunks.Chunk),
-		stats *Stats,
-	) error
-	getManyCompressedAtOffsets(
-		ctx context.Context,
-		eg *errgroup.Group,
-		offsetRecords offsetRecSlice,
-		found func(CompressedChunk),
-		stats *Stats,
-	) error
+	// close releases resources retained by the |chunkReader|.
+	close() error
 }
 
 type chunkSource interface {
 	chunkReader
+
+	// hash returns the hash address of this chunkSource.
 	hash() (addr, error)
-	calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error)
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
 	reader(context.Context) (io.Reader, error)
+
+	// size returns the total size of the chunkSource: chunks, index, and footer
+	size() (uint64, error)
+
+	// index returns the tableIndex of this chunkSource.
 	index() (tableIndex, error)
 
-	// Clone returns a |chunkSource| with the same contents as the
+	// clone returns a |chunkSource| with the same contents as the
 	// original, but with independent |Close| behavior. A |chunkSource|
 	// cannot be |Close|d more than once, so if a |chunkSource| is being
 	// retained in two objects with independent life-cycle, it should be
 	// |Clone|d first.
-	Clone() chunkSource
+	clone() (chunkSource, error)
 }
 
 type chunkSources []chunkSource
@@ -282,8 +270,9 @@ type TableFile interface {
 	// NumChunks returns the number of chunks in a table file
 	NumChunks() int
 
-	// Open returns an io.ReadCloser which can be used to read the bytes of a table file.
-	Open(ctx context.Context) (io.ReadCloser, error)
+	// Open returns an io.ReadCloser which can be used to read the bytes of a
+	// table file. It also returns the content length of the table file.
+	Open(ctx context.Context) (io.ReadCloser, uint64, error)
 }
 
 // Describes what is possible to do with TableFiles in a TableFileStore.
@@ -308,7 +297,7 @@ type TableFileStore interface {
 	Size(ctx context.Context) (uint64, error)
 
 	// WriteTableFile will read a table file from the provided reader and write it to the TableFileStore.
-	WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error
+	WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error
 
 	// AddTableFilesToManifest adds table files to the manifest
 	AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int) error

@@ -16,10 +16,11 @@ package doltdb
 
 import (
 	"context"
-	"errors"
 	"io"
 
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -66,7 +67,7 @@ func CommitItrForAllBranches(ctx context.Context, ddb *DoltDB) (CommitItr, error
 	return cmItr, nil
 }
 
-// CommitItrForRoots will return a CommitItr which will iterate over all descendant commits of the provided rootCommits.
+// CommitItrForRoots will return a CommitItr which will iterate over all ancestor commits of the provided rootCommits.
 func CommitItrForRoots(ddb *DoltDB, rootCommits ...*Commit) CommitItr {
 	return &commitItr{
 		ddb:         ddb,
@@ -132,7 +133,7 @@ func (cmItr *commitItr) Next(ctx context.Context) (hash.Hash, *Commit, error) {
 
 	next := cmItr.unprocessed[numUnprocessed-1]
 	cmItr.unprocessed = cmItr.unprocessed[:numUnprocessed-1]
-	cmItr.curr, err = hashToCommit(ctx, cmItr.ddb.ValueReadWriter(), next)
+	cmItr.curr, err = hashToCommit(ctx, cmItr.ddb.ValueReadWriter(), cmItr.ddb.ns, next)
 
 	if err != nil {
 		return hash.Hash{}, nil, err
@@ -141,19 +142,12 @@ func (cmItr *commitItr) Next(ctx context.Context) (hash.Hash, *Commit, error) {
 	return next, cmItr.curr, nil
 }
 
-func hashToCommit(ctx context.Context, vrw types.ValueReadWriter, h hash.Hash) (*Commit, error) {
-	val, err := vrw.ReadValue(ctx, h)
-
+func hashToCommit(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, h hash.Hash) (*Commit, error) {
+	dc, err := datas.LoadCommitAddr(ctx, vrw, h)
 	if err != nil {
 		return nil, err
 	}
-
-	if val == nil {
-		return nil, errors.New("failed to get commit")
-	}
-
-	cmSt := val.(types.Struct)
-	return NewCommit(vrw, cmSt), nil
+	return NewCommit(ctx, vrw, ns, dc)
 }
 
 // CommitFilter is a function that returns true if a commit should be filtered out, and false if it should be kept
@@ -163,6 +157,11 @@ type CommitFilter func(context.Context, hash.Hash, *Commit) (filterOut bool, err
 type FilteringCommitItr struct {
 	itr    CommitItr
 	filter CommitFilter
+}
+
+// AllCommits is a CommitFilter that matches all commits
+func AllCommits(_ context.Context, _ hash.Hash, _ *Commit) (filterOut bool, err error) {
+	return false, nil
 }
 
 func NewFilteringCommitItr(itr CommitItr, filter CommitFilter) FilteringCommitItr {

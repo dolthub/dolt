@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
@@ -50,7 +51,7 @@ func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	roots, err := dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
-	roots, err = actions.StageAllTables(context.Background(), roots, dEnv.Docs)
+	roots, err = actions.StageAllTables(context.Background(), roots)
 	require.NoError(t, err)
 
 	return dEnv.UpdateRoots(context.Background(), roots)
@@ -114,7 +115,7 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	roots, err := dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
-	roots, err = actions.StageAllTables(context.Background(), roots, dEnv.Docs)
+	roots, err = actions.StageAllTables(context.Background(), roots)
 	require.NoError(t, err)
 
 	name, email, err := env.GetNameAndEmail(dEnv.Config)
@@ -166,13 +167,7 @@ func (r ResetHard) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	err = dEnv.UpdateStagedRoot(context.Background(), headRoot)
-	if err != nil {
-		return err
-	}
-
-	err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv)
-	return err
+	return dEnv.UpdateStagedRoot(context.Background(), headRoot)
 }
 
 type Query struct {
@@ -186,8 +181,12 @@ func (q Query) CommandString() string { return fmt.Sprintf("query %s", q.Query) 
 func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	sqlDb := dsqle.NewDatabase("dolt", dEnv.DbData(), opts)
+	tmpDir, err := dEnv.TempTableFilesDir()
+	require.NoError(t, err)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
+	sqlDb, err := dsqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
+	require.NoError(t, err)
+
 	engine, sqlCtx, err := dsqle.NewTestEngine(t, dEnv, context.Background(), sqlDb, root)
 	require.NoError(t, err)
 
@@ -197,7 +196,7 @@ func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	}
 
 	for {
-		_, err := iter.Next()
+		_, err := iter.Next(sqlCtx)
 		if err == io.EOF {
 			break
 		}
@@ -240,7 +239,7 @@ func (c Checkout) CommandString() string { return fmt.Sprintf("checkout: %s", c.
 
 // Exec executes a Checkout command on a test dolt environment.
 func (c Checkout) Exec(_ *testing.T, dEnv *env.DoltEnv) error {
-	return actions.CheckoutBranch(context.Background(), dEnv, c.BranchName)
+	return actions.CheckoutBranch(context.Background(), dEnv, c.BranchName, false)
 }
 
 type Merge struct {
@@ -292,34 +291,27 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 			return errhand.VerboseErrorFromError(err)
 		}
 
-		rv, err := cm2.GetRootValue()
+		rv, err := cm2.GetRootValue(context.Background())
 		assert.NoError(t, err)
 
 		err = dEnv.UpdateWorkingSet(context.Background(), workingSet.WithWorkingRoot(rv))
 		require.NoError(t, err)
-
-		err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv)
-		assert.NoError(t, err)
-
 	} else {
-		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+		tmpDir, err := dEnv.TempTableFilesDir()
+		require.NoError(t, err)
+		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 		mergedRoot, tblToStats, err := merge.MergeCommits(context.Background(), cm1, cm2, opts)
 		require.NoError(t, err)
 		for _, stats := range tblToStats {
 			require.True(t, stats.Conflicts == 0)
 		}
 
-		err = dEnv.StartMerge(context.Background(), cm2)
+		err = dEnv.StartMerge(context.Background(), cm2, dref.String())
 		if err != nil {
 			return err
 		}
 
 		err = dEnv.UpdateWorkingRoot(context.Background(), mergedRoot)
-		if err != nil {
-			return err
-		}
-
-		err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv)
 		if err != nil {
 			return err
 		}
@@ -348,7 +340,7 @@ type ConflictsCat struct {
 func (c ConflictsCat) CommandString() string { return fmt.Sprintf("conflicts_cat: %s", c.TableName) }
 
 // Exec executes a ConflictsCat command on a test dolt environment.
-func (c ConflictsCat) Exec(t *testing.T, dEnv *env.DoltEnv) error {
+func (c ConflictsCat) Exec(t *testing.T, wg *sync.WaitGroup, dEnv *env.DoltEnv) error {
 	out := cnfcmds.CatCmd{}.Exec(context.Background(), "dolt conflicts cat", []string{c.TableName}, dEnv)
 	require.Equal(t, 0, out)
 	return nil

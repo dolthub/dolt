@@ -20,10 +20,10 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 const (
@@ -43,7 +43,8 @@ const (
 	RemotesApiHostKey     = "remotes.default_host"
 	RemotesApiHostPortKey = "remotes.default_port"
 
-	AddCredsUrlKey = "creds.add_url"
+	AddCredsUrlKey     = "creds.add_url"
+	DoltLabInsecureKey = "doltlab.insecure"
 
 	MetricsDisabled = "metrics.disabled"
 	MetricsHost     = "metrics.host"
@@ -54,20 +55,25 @@ const (
 var LocalConfigWhitelist = set.NewStrSet([]string{UserNameKey, UserEmailKey})
 var GlobalConfigWhitelist = set.NewStrSet([]string{UserNameKey, UserEmailKey})
 
-// DoltConfigElement is an enum representing the elements that make up the ConfigHierarchy
-type DoltConfigElement int
+// ConfigScope is an enum representing the elements that make up the ConfigHierarchy
+type ConfigScope int
 
 const (
 	// LocalConfig is the repository's local config portion of the ConfigHierarchy
-	LocalConfig DoltConfigElement = iota
+	LocalConfig ConfigScope = iota
 
 	// GlobalConfig is the user's global config portion of the ConfigHierarchy
 	GlobalConfig
 )
 
+const (
+	// SqlServerGlobalsPrefix is config namespace accessible by the SQL engine (ex: sqlserver.global.key)
+	SqlServerGlobalsPrefix = "sqlserver.global"
+)
+
 // String gives the string name of an element that was used when it was added to the ConfigHierarchy, which is the
 // same name that is used to retrieve that element of the string hierarchy.
-func (ce DoltConfigElement) String() string {
+func (ce ConfigScope) String() string {
 	switch ce {
 	case LocalConfig:
 		return localConfigName
@@ -88,23 +94,10 @@ type DoltCliConfig struct {
 
 var _ config.ReadableConfig = &DoltCliConfig{}
 
-func loadDoltCliConfig(hdp HomeDirProvider, fs filesys.ReadWriteFS) (*DoltCliConfig, error) {
+func LoadDoltCliConfig(hdp HomeDirProvider, fs filesys.ReadWriteFS) (*DoltCliConfig, error) {
 	ch := config.NewConfigHierarchy()
 
-	gPath, err := getGlobalCfgPath(hdp)
-	if err != nil {
-		return nil, err
-	}
-
 	lPath := getLocalConfigPath()
-
-	gCfg, err := ensureGlobalConfig(gPath, fs)
-	if err != nil {
-		return nil, err
-	}
-
-	ch.AddConfig(globalConfigName, gCfg)
-
 	if exists, _ := fs.Exists(lPath); exists {
 		lCfg, err := config.FromFile(lPath, fs)
 
@@ -112,6 +105,18 @@ func loadDoltCliConfig(hdp HomeDirProvider, fs filesys.ReadWriteFS) (*DoltCliCon
 			ch.AddConfig(localConfigName, lCfg)
 		}
 	}
+
+	gPath, err := getGlobalCfgPath(hdp)
+	if err != nil {
+		return nil, err
+	}
+
+	gCfg, err := ensureGlobalConfig(gPath, fs)
+	if err != nil {
+		return nil, err
+	}
+
+	ch.AddConfig(globalConfigName, gCfg)
 
 	return &DoltCliConfig{ch, ch, fs}, nil
 }
@@ -155,8 +160,13 @@ func (dcc *DoltCliConfig) createLocalConfigAt(dir string, vals map[string]string
 }
 
 // GetConfig retrieves a specific element of the config hierarchy.
-func (dcc *DoltCliConfig) GetConfig(element DoltConfigElement) (config.ReadWriteConfig, bool) {
-	return dcc.ch.GetConfig(element.String())
+func (dcc *DoltCliConfig) GetConfig(element ConfigScope) (config.ReadWriteConfig, bool) {
+	switch element {
+	case LocalConfig, GlobalConfig:
+		return dcc.ch.GetConfig(element.String())
+	default:
+		return nil, false
+	}
 }
 
 // GetStringOrDefault retrieves a string from the config hierarchy and returns it if available.  Otherwise it returns
@@ -197,7 +207,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	name, err := cfg.GetString(UserNameKey)
 
 	if err == config.ErrConfigParamNotFound {
-		return "", "", doltdb.ErrNameNotConfigured
+		return "", "", datas.ErrNameNotConfigured
 	} else if err != nil {
 		return "", "", err
 	}
@@ -205,10 +215,71 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	email, err := cfg.GetString(UserEmailKey)
 
 	if err == config.ErrConfigParamNotFound {
-		return "", "", doltdb.ErrEmailNotConfigured
+		return "", "", datas.ErrEmailNotConfigured
 	} else if err != nil {
 		return "", "", err
 	}
 
 	return name, email, nil
+}
+
+// writeableLocalDoltCliConfig is an extension to DoltCliConfig that reads values from the hierarchy but writes to
+// local config.
+type writeableLocalDoltCliConfig struct {
+	*DoltCliConfig
+}
+
+// WriteableConfig returns a ReadWriteConfig reading from this config hierarchy. The config will read from the hierarchy
+// and write to the local config if it's available, or the global config otherwise.
+func (dcc *DoltCliConfig) WriteableConfig() config.ReadWriteConfig {
+	return writeableLocalDoltCliConfig{dcc}
+}
+
+// SetFailsafes sets the config values given as failsafes, i.e. values that will be returned as a last resort if they
+// are not found elsewhere in the config hierarchy. The "failsafe" config can be written to in order to conform to the
+// interface of ConfigHierarchy, but values will not persist beyond this session.
+// Calling SetFailsafes more than once will overwrite any previous values.
+// Should only be called after primary configuration of the config hierarchy has been completed.
+func (dcc DoltCliConfig) SetFailsafes(cfg map[string]string) {
+	existing, ok := dcc.ch.GetConfig("failsafe")
+	if !ok {
+		existing = config.NewEmptyMapConfig()
+		dcc.ch.AddConfig("failsafe", existing)
+	}
+
+	_ = existing.SetStrings(cfg)
+}
+
+const (
+	DefaultEmail = "doltuser@dolthub.com"
+	DefaultName  = "Dolt System Account"
+)
+
+var DefaultFailsafeConfig = map[string]string{
+	UserEmailKey: DefaultEmail,
+	UserNameKey:  DefaultName,
+}
+
+func (w writeableLocalDoltCliConfig) SetStrings(updates map[string]string) error {
+	cfg, ok := w.GetConfig(LocalConfig)
+	if !ok {
+		cfg, ok = w.GetConfig(GlobalConfig)
+		if !ok {
+			return errors.New("no local or global config found")
+		}
+	}
+
+	return cfg.SetStrings(updates)
+}
+
+func (w writeableLocalDoltCliConfig) Unset(params []string) error {
+	cfg, ok := w.GetConfig(LocalConfig)
+	if !ok {
+		cfg, ok = w.GetConfig(GlobalConfig)
+		if !ok {
+			return errors.New("no local or global config found")
+		}
+	}
+
+	return cfg.Unset(params)
 }

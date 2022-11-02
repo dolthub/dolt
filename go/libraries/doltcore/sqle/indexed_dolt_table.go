@@ -15,35 +15,38 @@
 package sqle
 
 import (
-	"encoding/binary"
-	"errors"
-	"io"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// IndexedDoltTable is a wrapper for a DoltTable and a doltIndexLookup. It implements the sql.Table interface like
-// DoltTable, but its RowIter function returns values that match the indexLookup, instead of all rows. It's returned by
-// the DoltTable WithIndexLookup function.
+// IndexedDoltTable is a wrapper for a DoltTable. It implements the sql.Table interface like
+// DoltTable, but its RowIter function returns values that match a sql.Range, instead of all
+// rows. It's returned by the DoltTable.IndexedAccess function.
 type IndexedDoltTable struct {
-	table       *DoltTable
-	indexLookup *doltIndexLookup
+	table        *DoltTable
+	idx          index.DoltIndex
+	lb           index.LookupBuilder
+	isDoltFormat bool
+	mu           *sync.Mutex
+}
+
+func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
+	return &IndexedDoltTable{
+		table:        t,
+		idx:          idx,
+		isDoltFormat: types.IsFormat_DOLT(t.Format()),
+		mu:           &sync.Mutex{},
+	}
 }
 
 var _ sql.IndexedTable = (*IndexedDoltTable)(nil)
 
 func (idt *IndexedDoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return idt.table.GetIndexes(ctx)
-}
-
-func (idt *IndexedDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	// TODO: this should probably be an error (there should be at most one indexed lookup on a given table)
-	return idt.table.WithIndexLookup(lookup)
 }
 
 func (idt *IndexedDoltTable) Name() string {
@@ -58,68 +61,54 @@ func (idt *IndexedDoltTable) Schema() sql.Schema {
 	return idt.table.Schema()
 }
 
+func (idt *IndexedDoltTable) Collation() sql.CollationID {
+	return sql.CollationID(idt.table.sch.GetCollation())
+}
+
+func (idt *IndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	return index.NewRangePartitionIter(ctx, idt.table, lookup, idt.isDoltFormat)
+}
+
 func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(idt.indexLookup.IndexRowData()), nil
+	panic("should call LookupPartitions on an IndexedDoltTable")
 }
 
 func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	if singlePart, ok := part.(sqlutil.SinglePartition); ok {
-		return idt.indexLookup.RowIter(ctx, singlePart.RowData, nil)
+	idt.mu.Lock()
+	defer idt.mu.Unlock()
+	key, canCache, err := idt.table.DataCacheKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if idt.lb == nil || !canCache || idt.lb.Key() != key {
+		idt.lb, err = index.NewLookupBuilder(ctx, idt.table, idt.idx, key, nil, idt.table.sqlSch, idt.isDoltFormat)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return nil, errors.New("unexpected partition type")
+	return idt.lb.NewRowIter(ctx, part)
+}
+
+func (idt *IndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	idt.mu.Lock()
+	defer idt.mu.Unlock()
+	key, canCache, err := idt.table.DataCacheKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if idt.lb == nil || !canCache || idt.lb.Key() != key {
+		idt.lb, err = index.NewLookupBuilder(ctx, idt.table, idt.idx, key, nil, idt.table.sqlSch, idt.isDoltFormat)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return idt.lb.NewRowIter(ctx, part)
 }
 
 func (idt *IndexedDoltTable) IsTemporary() bool {
 	return idt.table.IsTemporary()
-}
-
-type rangePartition struct {
-	partitionRange lookup.Range
-	keyBytes       []byte
-	rowData        types.Map
-}
-
-func (rp rangePartition) Key() []byte {
-	return rp.keyBytes
-}
-
-type rangePartitionIter struct {
-	ranges  []lookup.Range
-	curr    int
-	mu      *sync.Mutex
-	rowData types.Map
-}
-
-func NewRangePartitionIter(ranges []lookup.Range, rowData types.Map) *rangePartitionIter {
-	return &rangePartitionIter{
-		ranges:  ranges,
-		curr:    0,
-		mu:      &sync.Mutex{},
-		rowData: rowData,
-	}
-}
-
-// Close is required by the sql.PartitionIter interface. Does nothing.
-func (itr *rangePartitionIter) Close(*sql.Context) error {
-	return nil
-}
-
-// Next returns the next partition if there is one, or io.EOF if there isn't.
-func (itr *rangePartitionIter) Next() (sql.Partition, error) {
-	itr.mu.Lock()
-	defer itr.mu.Unlock()
-
-	if itr.curr >= len(itr.ranges) {
-		return nil, io.EOF
-	}
-
-	var bytes [4]byte
-	binary.BigEndian.PutUint32(bytes[:], uint32(itr.curr))
-	part := rangePartition{itr.ranges[itr.curr], bytes[:], itr.rowData}
-	itr.curr += 1
-
-	return part, nil
 }
 
 var _ sql.IndexedTable = (*WritableIndexedDoltTable)(nil)
@@ -127,38 +116,75 @@ var _ sql.UpdatableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.DeletableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.ReplaceableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.StatisticsTable = (*WritableIndexedDoltTable)(nil)
+var _ sql.ProjectedTable = (*WritableIndexedDoltTable)(nil)
+
+func NewWritableIndexedDoltTable(t *WritableDoltTable, idx index.DoltIndex) *WritableIndexedDoltTable {
+	return &WritableIndexedDoltTable{
+		WritableDoltTable: t,
+		idx:               idx,
+		isDoltFormat:      types.IsFormat_DOLT(idx.Format()),
+		mu:                &sync.Mutex{},
+	}
+}
 
 type WritableIndexedDoltTable struct {
 	*WritableDoltTable
-	indexLookup *doltIndexLookup
+	idx          index.DoltIndex
+	isDoltFormat bool
+	lb           index.LookupBuilder
+	mu           *sync.Mutex
+}
+
+var _ sql.Table2 = (*WritableIndexedDoltTable)(nil)
+
+func (t *WritableIndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	return index.NewRangePartitionIter(ctx, t.DoltTable, lookup, t.isDoltFormat)
 }
 
 func (t *WritableIndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	if len(t.indexLookup.ranges) > 1 {
-		return NewRangePartitionIter(t.indexLookup.ranges, t.indexLookup.IndexRowData()), nil
-	}
-
-	return sqlutil.NewSinglePartitionIter(t.indexLookup.IndexRowData()), nil
+	panic("called partitions on a lookup indexed table")
 }
 
 func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return partitionIndexedTableRows(ctx, t, t.projectedCols, part)
-}
-
-func partitionIndexedTableRows(ctx *sql.Context, t *WritableIndexedDoltTable, projectedCols []string, part sql.Partition) (sql.RowIter, error) {
-	switch typed := part.(type) {
-	case rangePartition:
-		return t.indexLookup.RowIterForRanges(ctx, typed.rowData, []lookup.Range{typed.partitionRange}, projectedCols)
-	case sqlutil.SinglePartition:
-		return t.indexLookup.RowIter(ctx, typed.RowData, projectedCols)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	key, canCache, err := t.DataCacheKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if t.lb == nil || !canCache || t.lb.Key() != key {
+		t.lb, err = index.NewLookupBuilder(ctx, t.DoltTable, t.idx, key, t.projectedCols, t.sqlSch, t.isDoltFormat)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return nil, errors.New("unknown partition type")
+	return t.lb.NewRowIter(ctx, part)
 }
 
-func (t *WritableIndexedDoltTable) WithProjection(colNames []string) sql.Table {
+func (t *WritableIndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter2, error) {
+	iter, err := t.PartitionRows(ctx, part)
+	if err != nil {
+		return nil, err
+	}
+	return iter.(sql.RowIter2), nil
+}
+
+// WithProjections implements sql.ProjectedTable
+func (t *WritableIndexedDoltTable) WithProjections(colNames []string) sql.Table {
 	return &WritableIndexedDoltTable{
-		WritableDoltTable: t.WithProjection(colNames).(*WritableDoltTable),
-		indexLookup:       t.indexLookup,
+		WritableDoltTable: t.WithProjections(colNames).(*WritableDoltTable),
+		idx:               t.idx,
 	}
+}
+
+// Projections implements sql.ProjectedTable
+func (t *WritableIndexedDoltTable) Projections() []string {
+	names := make([]string, len(t.projectedCols))
+	cols := t.sch.GetAllCols()
+	for i := range t.projectedCols {
+		col := cols.TagToCol[t.projectedCols[i]]
+		names[i] = col.Name
+	}
+	return names
 }

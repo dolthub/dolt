@@ -17,6 +17,7 @@ package noms
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -26,9 +27,45 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// InRangeCheck is a call made as the reader reads through values to check that the next value
-// being read is in the range]
-type InRangeCheck func(tuple types.Tuple) (bool, error)
+// InRangeCheck evaluates tuples to determine whether they are valid and/or should be skipped.
+type InRangeCheck interface {
+	// Check is a call made as the reader reads through values to check that the next value either being read is valid
+	// and whether it should be skipped or returned.
+	Check(ctx context.Context, tuple types.Tuple) (valid bool, skip bool, err error)
+}
+
+// InRangeCheckAlways will always return that the given tuple is valid and not to be skipped.
+type InRangeCheckAlways struct{}
+
+func (InRangeCheckAlways) Check(context.Context, types.Tuple) (valid bool, skip bool, err error) {
+	return true, false, nil
+}
+
+func (InRangeCheckAlways) String() string {
+	return "Always"
+}
+
+// InRangeCheckNever will always return that the given tuple is not valid.
+type InRangeCheckNever struct{}
+
+func (InRangeCheckNever) Check(context.Context, types.Tuple) (valid bool, skip bool, err error) {
+	return false, false, nil
+}
+
+func (InRangeCheckNever) String() string {
+	return "Never"
+}
+
+// InRangeCheckPartial will check if the given tuple contains the aliased tuple as a partial key.
+type InRangeCheckPartial types.Tuple
+
+func (ircp InRangeCheckPartial) Check(_ context.Context, t types.Tuple) (valid bool, skip bool, err error) {
+	return t.StartsWith(types.Tuple(ircp)), false, nil
+}
+
+func (ircp InRangeCheckPartial) String() string {
+	return fmt.Sprintf("StartsWith(%v)", types.Tuple(ircp).HumanReadableString())
+}
 
 // ReadRange represents a range of values to be read
 type ReadRange struct {
@@ -40,6 +77,10 @@ type ReadRange struct {
 	Reverse bool
 	// Check is a callb made as the reader reads through values to check that the next value being read is in the range.
 	Check InRangeCheck
+}
+
+func (rr *ReadRange) String() string {
+	return fmt.Sprintf("ReadRange[Start: %v, Inclusive: %t, Reverse %t, Check: %v]", rr.Start.HumanReadableString(), rr.Inclusive, rr.Reverse, rr.Check)
 }
 
 // NewRangeEndingAt creates a range with a starting key which will be iterated in reverse
@@ -177,15 +218,16 @@ func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tupl
 			return types.Tuple{}, types.Tuple{}, err
 		}
 
-		var inRange bool
 		if err != io.EOF {
-			inRange, err = nrr.currCheck(k)
-
+			valid, skip, err := nrr.currCheck.Check(ctx, k)
 			if err != nil {
 				return types.Tuple{}, types.Tuple{}, err
 			}
 
-			if inRange {
+			if valid {
+				if skip {
+					continue
+				}
 				if !v.Empty() {
 					nrr.cardCounter.updateWithKV(k, v)
 					if !nrr.cardCounter.empty() && !nrr.cardCounter.done() {

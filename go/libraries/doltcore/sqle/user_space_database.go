@@ -17,9 +17,10 @@ package sqle
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 // UserSpaceDatabase in an implementation of sql.Database for root values. Does not expose any of the internal dolt tables.
@@ -54,7 +55,10 @@ func (db *UserSpaceDatabase) GetTableInsensitive(ctx *sql.Context, tableName str
 	if err != nil {
 		return nil, false, err
 	}
-	dt := NewDoltTable(tableName, sch, table, db, false, db.editOpts)
+	dt, err := NewDoltTable(tableName, sch, table, db, db.editOpts)
+	if err != nil {
+		return nil, false, err
+	}
 	return dt, true, nil
 }
 
@@ -84,7 +88,7 @@ func (db *UserSpaceDatabase) DbData() env.DbData {
 	panic("UserSpaceDatabase does not have dbdata")
 }
 
-func (db *UserSpaceDatabase) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
+func (db *UserSpaceDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
 	panic("UserSpaceDatabase does not support transactions")
 }
 
@@ -93,5 +97,5 @@ func (db *UserSpaceDatabase) Flush(ctx *sql.Context) error {
 }
 
 func (db *UserSpaceDatabase) EditOptions() editor.Options {
-	panic("UserSpaceDatabase does not have edit options")
+	return editor.Options{}
 }

@@ -73,7 +73,7 @@ func concat(ctx context.Context, fst, snd sequence, newSequenceChunker newSequen
 			cur = cur.parent
 			if cur != nil && ch.parent == nil {
 				// If fst is shallower than snd, its cur will have a parent whereas the
-				// chunker to snd won't. In that case, create a parent for fst.
+				// sequenceSplitter to snd won't. In that case, create a parent for fst.
 				err := ch.createParent(ctx)
 
 				if err != nil {

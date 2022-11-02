@@ -17,7 +17,9 @@ package mvdata
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -63,7 +65,7 @@ func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
 
 	cs, _ := doltdb.NewCommitSpec("master")
 	commit, _ := ddb.Resolve(context.Background(), cs, nil)
-	root, err := commit.GetRootValue()
+	root, err := commit.GetRootValue(context.Background())
 
 	if err != nil {
 		panic(err)
@@ -79,7 +81,6 @@ func TestBasics(t *testing.T) {
 		expectedIsFileType bool
 	}{
 		{NewDataLocation("", ".csv"), "stream", false},
-		{NewDataLocation(testTableName, ""), DoltDB.ReadableStr() + ":" + testTableName, false},
 		{NewDataLocation("file.csv", ""), CsvFile.ReadableStr() + ":file.csv", true},
 		{NewDataLocation("file.psv", ""), PsvFile.ReadableStr() + ":file.psv", true},
 		{NewDataLocation("file.json", ""), JsonFile.ReadableStr() + ":file.json", true},
@@ -127,7 +128,6 @@ func init() {
 
 func TestExists(t *testing.T) {
 	testLocations := []DataLocation{
-		NewDataLocation(testTableName, ""),
 		NewDataLocation("file.csv", ""),
 		NewDataLocation("file.psv", ""),
 		NewDataLocation("file.json", ""),
@@ -144,11 +144,7 @@ func TestExists(t *testing.T) {
 				t.Error("Shouldn't exist before creation")
 			}
 
-			if tableVal, isTable := loc.(TableDataLocation); isTable {
-				var err error
-				root, err = root.CreateEmptyTable(context.Background(), tableVal.Name, fakeSchema)
-				assert.NoError(t, err)
-			} else if fileVal, isFile := loc.(FileDataLocation); isFile {
+			if fileVal, isFile := loc.(FileDataLocation); isFile {
 				err := fs.WriteFile(fileVal.Path, []byte("test"))
 				assert.NoError(t, err)
 			}
@@ -163,6 +159,14 @@ func TestExists(t *testing.T) {
 }
 
 type testDataMoverOptions struct{}
+
+func (t testDataMoverOptions) IsBatched() bool {
+	return false
+}
+
+func (t testDataMoverOptions) IsAutocommitOff() bool {
+	return false
+}
 
 func (t testDataMoverOptions) WritesToTable() bool {
 	return true
@@ -184,7 +188,7 @@ func TestCreateRdWr(t *testing.T) {
 	}{
 		{NewDataLocation("file.csv", ""), reflect.TypeOf((*csv.CSVReader)(nil)).Elem(), reflect.TypeOf((*csv.CSVWriter)(nil)).Elem()},
 		{NewDataLocation("file.psv", ""), reflect.TypeOf((*csv.CSVReader)(nil)).Elem(), reflect.TypeOf((*csv.CSVWriter)(nil)).Elem()},
-		{NewDataLocation("file.json", ""), reflect.TypeOf((*json.JSONReader)(nil)).Elem(), reflect.TypeOf((*json.JSONWriter)(nil)).Elem()},
+		{NewDataLocation("file.json", ""), reflect.TypeOf((*json.JSONReader)(nil)).Elem(), reflect.TypeOf((*json.RowWriter)(nil)).Elem()},
 		//{NewDataLocation("file.nbf", ""), reflect.TypeOf((*nbf.NBFReader)(nil)).Elem(), reflect.TypeOf((*nbf.NBFWriter)(nil)).Elem()},
 	}
 
@@ -200,11 +204,25 @@ func TestCreateRdWr(t *testing.T) {
 
 		loc := test.dl
 
-		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-		wr, err := loc.NewCreatingWriter(context.Background(), mvOpts, dEnv, root, true, fakeSchema, nil, opts)
+		tmpDir, tdErr := dEnv.TempTableFilesDir()
+		if tdErr != nil {
+			t.Fatal("Unexpected error accessing .dolt directory.", tdErr)
+		}
+		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 
-		if err != nil {
-			t.Fatal("Unexpected error creating writer.", err)
+		filePath, fpErr := dEnv.FS.Abs(strings.Split(loc.String(), ":")[1])
+		if fpErr != nil {
+			t.Fatal("Unexpected error getting filepath", fpErr)
+		}
+
+		writer, wrErr := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
+		if wrErr != nil {
+			t.Fatal("Unexpected error opening file for writer.", wrErr)
+		}
+
+		wr, wErr := loc.NewCreatingWriter(context.Background(), mvOpts, root, fakeSchema, opts, writer)
+		if wErr != nil {
+			t.Fatal("Unexpected error creating writer.", wErr)
 		}
 
 		actualWrT := reflect.TypeOf(wr).Elem()
@@ -220,15 +238,10 @@ func TestCreateRdWr(t *testing.T) {
 			t.Fatal("Failed to write data. bad:", numBad, err)
 		}
 
-		if wr, ok := wr.(DataMoverCloser); ok {
-			root, err = wr.Flush(context.Background())
-			assert.NoError(t, err)
-		}
-
 		rd, _, err := loc.NewReader(context.Background(), root, dEnv.FS, JSONOptions{TableName: testTableName, SchFile: testSchemaFileName})
 
 		if err != nil {
-			t.Fatal("Unexpected error creating writer", err)
+			t.Fatal("Unexpected error creating reader", err)
 		}
 
 		actualRdT := reflect.TypeOf(rd).Elem()

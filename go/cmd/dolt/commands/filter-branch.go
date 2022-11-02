@@ -22,15 +22,14 @@ import (
 	"strings"
 
 	sqle "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
-	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/fatih/color"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -40,8 +39,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -77,13 +74,12 @@ func (cmd FilterBranchCmd) Description() string {
 	return fmt.Sprintf("%s.", filterBranchDocs.ShortDesc)
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd FilterBranchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, filterBranchDocs, ap))
+func (cmd FilterBranchCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(filterBranchDocs, ap)
 }
 
-func (cmd FilterBranchCmd) createArgParser() *argparser.ArgParser {
+func (cmd FilterBranchCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(allFlag, "a", "filter all branches")
 	return ap
@@ -96,14 +92,18 @@ func (cmd FilterBranchCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, filterBranchDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, filterBranchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() < 1 || apr.NArg() > 2 {
 		args := strings.Join(apr.Args, ", ")
 		verr := errhand.BuildDError("%s takes 1 or 2 args, %d provided: %s", cmd.Name(), apr.NArg(), args).Build()
 		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 
 	query := apr.Arg(0)
@@ -152,7 +152,7 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 }
 
 func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit, query string, mt missingTbls) (*doltdb.RootValue, error) {
-	root, err := cm.GetRootValue()
+	root, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -173,25 +173,16 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 	}
 
 	itr := sql.RowsToRowIter() // empty RowIter
-	switch s := sqlStatement.(type) {
+	switch sqlStatement.(type) {
 	case *sqlparser.Insert, *sqlparser.Update:
-		_, itr, err = eng.query(sqlCtx, query)
+		_, itr, err = eng.Query(sqlCtx, query)
 
 	case *sqlparser.Delete:
-		_, itr, err = eng.query(sqlCtx, query)
+		_, itr, err = eng.Query(sqlCtx, query)
 	case *sqlparser.MultiAlterDDL:
-		_, itr, err = eng.query(sqlCtx, query)
+		_, itr, err = eng.Query(sqlCtx, query)
 	case *sqlparser.DDL:
-		_, err := sqlparser.ParseStrictDDL(query)
-		if se, ok := vterrors.AsSyntaxError(err); ok {
-			return nil, vterrors.SyntaxError{Message: "While Parsing DDL: " + se.Message, Position: se.Position, Statement: se.Statement}
-		}
-		if err != nil {
-			return nil, fmt.Errorf("error parsing DDL: %v", err.Error())
-		}
-		// ddl returns a nil itr
-		_, _, err = eng.ddl(sqlCtx, s, query)
-
+		_, itr, err = eng.Query(sqlCtx, query)
 	case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
 		return nil, fmt.Errorf("filter-branch queries must be write queries: '%s'", query)
 
@@ -209,7 +200,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 	}
 
 	for {
-		_, err = itr.Next()
+		_, err = itr.Next(sqlCtx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -221,7 +212,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 		return nil, err
 	}
 
-	roots, err := eng.getRoots(sqlCtx)
+	roots, err := eng.GetRoots(sqlCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -233,15 +224,32 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 // The SQL engine returned has transactions disabled. This is to prevent transactions starts from overwriting the root
 // we set manually with the one at the working set of the HEAD being rebased.
 // Some functionality will not work on this kind of engine, e.g. many DOLT_ functions.
-func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*sql.Context, *sqlEngine, error) {
-	sess := dsess.DefaultSession()
+func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*sql.Context, *engine.SqlEngine, error) {
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil, nil, err
+	}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
+	db, err := dsqle.NewDatabase(ctx, dbName, dEnv.DbData(), opts)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	sqlCtx := sql.NewContext(ctx,
-		sql.WithSession(sess),
-		sql.WithIndexRegistry(sql.NewIndexRegistry()),
-		sql.WithViewRegistry(sql.NewViewRegistry()),
-		sql.WithTracer(tracing.Tracer(ctx)))
-	err := sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	b := env.GetDefaultInitBranch(dEnv.Config)
+	pro, err := dsqle.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sess := dsess.DefaultSession(pro)
+
+	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
+	err = sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -251,18 +259,8 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 		return nil, nil, err
 	}
 
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	db := dsqle.NewDatabase(dbName, dEnv.DbData(), opts)
-
-	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, db)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	parallelism := runtime.GOMAXPROCS(0)
 	azr := analyzer.NewBuilder(pro).WithParallelism(parallelism).Build()
-
-	engine := sqle.New(azr, &sqle.Config{Auth: new(auth.None)})
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
 	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
@@ -288,7 +286,7 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 		return nil, nil, err
 	}
 
-	root, err := cm.GetRootValue()
+	root, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -298,17 +296,9 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 		return nil, nil, err
 	}
 
-	err = dsqle.RegisterSchemaFragments(sqlCtx, db, root)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	sqlCtx.SetCurrentDatabase(dbName)
 
-	se := &sqlEngine{
-		dbs:    map[string]dsqle.SqlDatabase{dbName: db},
-		engine: engine,
-	}
+	se := engine.NewRebasedSqlEngine(sqle.New(azr, &sqle.Config{IsReadOnly: false}), map[string]dsqle.SqlDatabase{dbName: db})
 
 	return sqlCtx, se, nil
 }

@@ -20,9 +20,11 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/shopspring/decimal"
 	"gopkg.in/src-d/go-errors.v1"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -63,12 +65,28 @@ func GetTypeConverter(ctx context.Context, srcTi TypeInfo, destTi TypeInfo) (tc 
 		return enumTypeConverter(ctx, src, destTi)
 	case *floatType:
 		return floatTypeConverter(ctx, src, destTi)
+	case *geomcollType:
+		return geomcollTypeConverter(ctx, src, destTi)
+	case *geometryType:
+		return geometryTypeConverter(ctx, src, destTi)
 	case *inlineBlobType:
 		return inlineBlobTypeConverter(ctx, src, destTi)
 	case *intType:
 		return intTypeConverter(ctx, src, destTi)
 	case *jsonType:
 		return jsonTypeConverter(ctx, src, destTi)
+	case *linestringType:
+		return linestringTypeConverter(ctx, src, destTi)
+	case *multilinestringType:
+		return multilinestringTypeConverter(ctx, src, destTi)
+	case *multipointType:
+		return multipointTypeConverter(ctx, src, destTi)
+	case *multipolygonType:
+		return multipolygonTypeConverter(ctx, src, destTi)
+	case *pointType:
+		return pointTypeConverter(ctx, src, destTi)
+	case *polygonType:
+		return polygonTypeConverter(ctx, src, destTi)
 	case *setType:
 		return setTypeConverter(ctx, src, destTi)
 	case *timeType:
@@ -112,7 +130,7 @@ func wrapConvertValueToNomsValue(
 			if err != nil {
 				return nil, err
 			}
-			vInt = str
+			vInt = string(str)
 		case types.Bool:
 			vInt = bool(val)
 		case types.Decimal:
@@ -121,12 +139,30 @@ func wrapConvertValueToNomsValue(
 			vInt = float64(val)
 		case types.InlineBlob:
 			vInt = *(*string)(unsafe.Pointer(&val))
+		case types.SerialMessage:
+			vInt = *(*string)(unsafe.Pointer(&val))
 		case types.Int:
 			vInt = int64(val)
+		case types.JSON:
+			var err error
+			vInt, err = json.NomsJSON(val).ToString(sql.NewEmptyContext())
+			if err != nil {
+				return nil, err
+			}
+		case types.LineString:
+			vInt = types.ConvertTypesLineStringToSQLLineString(val)
+		case types.Point:
+			vInt = types.ConvertTypesPointToSQLPoint(val)
+		case types.Polygon:
+			vInt = types.ConvertTypesPolygonToSQLPolygon(val)
+		case types.MultiPoint:
+			vInt = types.ConvertTypesMultiPointToSQLMultiPoint(val)
+		case types.MultiLineString:
+			vInt = types.ConvertTypesMultiLineStringToSQLMultiLineString(val)
 		case types.String:
 			vInt = string(val)
 		case types.Timestamp:
-			vInt = time.Time(val)
+			vInt = time.Time(val).UTC()
 		case types.UUID:
 			vInt = val.String()
 		case types.Uint:

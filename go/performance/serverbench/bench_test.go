@@ -129,7 +129,7 @@ func getEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv, cfg 
 	}
 
 	dEnv = env.Load(ctx, os.UserHomeDir, fs, doltdb.LocalDirDoltDB, "bench")
-	err = dEnv.InitRepo(ctx, types.Format_7_18, name, email, env.DefaultInitBranch)
+	err = dEnv.InitRepo(ctx, types.Format_Default, name, email, env.DefaultInitBranch)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func getProfFile(b *testing.B) *os.File {
 }
 
 func executeServerQueries(ctx context.Context, b *testing.B, dEnv *env.DoltEnv, cfg srv.ServerConfig, queries []query) {
-	serverController := srv.CreateServerController()
+	serverController := srv.NewServerController()
 
 	eg, ctx := errgroup.WithContext(ctx)
 
@@ -210,7 +210,7 @@ func executeServerQueries(ctx context.Context, b *testing.B, dEnv *env.DoltEnv, 
 }
 
 func executeQuery(cfg srv.ServerConfig, q query) error {
-	cs := srv.ConnectionString(cfg) + database
+	cs := srv.ConnectionString(cfg, database)
 	conn, err := dbr.Open("mysql", cs, nil)
 	if err != nil {
 		return err

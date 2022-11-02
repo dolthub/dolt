@@ -16,40 +16,42 @@ package sqlserver
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
+	"net/http"
+	"runtime"
 	"strconv"
 	"time"
 
-	sqle "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/analyzer"
-	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/dolthub/vitess/go/mysql"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/utils/tracing"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
-func Serve(ctx context.Context, version string, serverConfig ServerConfig, serverController *ServerController, dEnv *env.DoltEnv) (startError error, closeError error) {
-	if serverConfig == nil {
-		cli.Println("No configuration given, using defaults")
-		serverConfig = DefaultServerConfig()
-	}
-
+func Serve(
+	ctx context.Context,
+	version string,
+	serverConfig ServerConfig,
+	serverController *ServerController,
+	dEnv *env.DoltEnv,
+) (startError error, closeError error) {
 	// Code is easier to work through if we assume that serverController is never nil
 	if serverController == nil {
-		serverController = CreateServerController()
+		serverController = NewServerController()
 	}
 
 	var mySQLServer *server.Server
@@ -62,11 +64,15 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		}
 		serverController.StopServer()
 		serverController.serverStopped(closeError)
+		sqlserver.SetRunningServer(nil)
 	}()
 
 	if startError = ValidateConfig(serverConfig); startError != nil {
 		return startError, nil
 	}
+
+	lgr := logrus.StandardLogger()
+	lgr.SetOutput(cli.CliErr)
 
 	if serverConfig.LogLevel() != LogLevel_Info {
 		var level logrus.Level
@@ -79,85 +85,271 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	}
 	logrus.SetFormatter(LogFormat{})
 
-	permissions := auth.AllPermissions
-	if serverConfig.ReadOnly() {
-		permissions = auth.ReadPerm
-	}
+	var mrEnv *env.MultiRepoEnv
+	var err error
+	fs := dEnv.FS
 
-	userAuth := auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions)
-
-	var mrEnv env.MultiRepoEnv
 	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
 	if len(dbNamesAndPaths) == 0 {
-		var err error
-		mrEnv, err = env.DoltEnvAsMultiEnv(dEnv)
+		if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
+			fs, err = dEnv.FS.WithWorkingDir(serverConfig.DataDir())
+			if err != nil {
+				return err, nil
+			}
+		}
+
+		mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 		if err != nil {
 			return err, nil
 		}
 	} else {
-		var err error
-		mrEnv, err = env.LoadMultiEnv(ctx, env.GetCurrentUserHomeDir, dEnv.FS, version, dbNamesAndPaths...)
+		if len(serverConfig.DataDir()) > 0 {
+			fs, err = fs.WithWorkingDir(serverConfig.DataDir())
+			if err != nil {
+				return err, nil
+			}
+		}
+
+		mrEnv, err = env.MultiEnvForPaths(
+			ctx,
+			env.GetCurrentUserHomeDir,
+			dEnv.Config.WriteableConfig(),
+			fs,
+			version,
+			dEnv.IgnoreLockFile,
+			dbNamesAndPaths...,
+		)
 
 		if err != nil {
 			return err, nil
 		}
 	}
 
-	dbs, err := commands.CollectDBs(ctx, mrEnv)
+	clusterController, err := cluster.NewController(lgr, serverConfig.ClusterConfig(), mrEnv.Config())
 	if err != nil {
 		return err, nil
 	}
-	all := append(dsqleDBsAsSqlDBs(dbs), information_schema.NewInformationSchemaDatabase())
-	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, all...)
 
-	a := analyzer.NewBuilder(pro).WithParallelism(serverConfig.QueryParallelism()).Build()
-	sqlEngine := sqle.New(a, nil)
-
-	portAsString := strconv.Itoa(serverConfig.Port())
-	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
-
-	if portInUse(hostPort) {
-		portInUseError := fmt.Errorf("Port %s already in use.", portAsString)
-		return portInUseError, nil
+	serverConf, sErr, cErr := getConfigFromServerConfig(serverConfig)
+	if cErr != nil {
+		return nil, cErr
+	} else if sErr != nil {
+		return sErr, nil
 	}
 
-	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
-	writeTimeout := time.Duration(serverConfig.WriteTimeout()) * time.Millisecond
-
-	tlsConfig, err := LoadTLSConfig(serverConfig)
-	if err != nil {
-		return nil, err
+	// Create SQL Engine with users
+	config := &engine.SqlEngineConfig{
+		InitialDb:          "",
+		IsReadOnly:         serverConfig.ReadOnly(),
+		PrivFilePath:       serverConfig.PrivilegeFilePath(),
+		BranchCtrlFilePath: serverConfig.BranchControlFilePath(),
+		DoltCfgDirPath:     serverConfig.CfgDir(),
+		ServerUser:         serverConfig.User(),
+		ServerPass:         serverConfig.Password(),
+		ServerHost:         serverConfig.Host(),
+		Autocommit:         serverConfig.AutoCommit(),
+		JwksConfig:         serverConfig.JwksConfig(),
+		ClusterController:  clusterController,
 	}
-
-	mySQLServer, startError = server.NewServer(
-		server.Config{
-			Protocol:               "tcp",
-			Address:                hostPort,
-			Auth:                   userAuth,
-			ConnReadTimeout:        readTimeout,
-			ConnWriteTimeout:       writeTimeout,
-			MaxConnections:         serverConfig.MaxConnections(),
-			TLSConfig:              tlsConfig,
-			RequireSecureTransport: serverConfig.RequireSecureTransport(),
-			// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
-			// to the value of mysql that we support.
-		},
-		sqlEngine,
-		newSessionBuilder(sqlEngine, dEnv.Config, pro, mrEnv, serverConfig.AutoCommit()),
+	sqlEngine, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		engine.FormatTabular,
+		config,
 	)
+	if err != nil {
+		return err, nil
+	}
+	defer sqlEngine.Close()
+
+	// Add superuser if specified user exists; add root superuser if no user specified and no existing privileges
+	userSpecified := config.ServerUser != ""
+	privsExist := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.UserTable().Data().Count() != 0
+	if userSpecified {
+		superuser := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, "%", false)
+		if userSpecified && superuser == nil {
+			sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, "%", config.ServerPass)
+		}
+	} else if !privsExist {
+		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(defaultUser, "%", defaultPass)
+	}
+
+	labels := serverConfig.MetricsLabels()
+
+	var listener *metricsListener
+	listener, startError = newMetricsListener(labels, version)
+	if startError != nil {
+		cli.Println(startError)
+		return
+	}
+	defer listener.Close()
+
+	v, ok := serverConfig.(validatingServerConfig)
+	if ok && v.goldenMysqlConnectionString() != "" {
+		mySQLServer, startError = server.NewValidatingServer(
+			serverConf,
+			sqlEngine.GetUnderlyingEngine(),
+			newSessionBuilder(sqlEngine, serverConfig),
+			listener,
+			v.goldenMysqlConnectionString(),
+		)
+	} else {
+		mySQLServer, startError = server.NewServer(
+			serverConf,
+			sqlEngine.GetUnderlyingEngine(),
+			newSessionBuilder(sqlEngine, serverConfig),
+			listener,
+		)
+	}
 
 	if startError != nil {
 		cli.PrintErr(startError)
 		return
+	} else {
+		sqlserver.SetRunningServer(mySQLServer)
 	}
 
-	serverController.registerCloseFunction(startError, mySQLServer.Close)
+	var metSrv *http.Server
+	if serverConfig.MetricsHost() != "" && serverConfig.MetricsPort() > 0 {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+
+		metSrv = &http.Server{
+			Addr:    fmt.Sprintf("%s:%d", serverConfig.MetricsHost(), serverConfig.MetricsPort()),
+			Handler: mux,
+		}
+
+		go func() {
+			_ = metSrv.ListenAndServe()
+		}()
+	}
+
+	var remoteSrv *remotesrv.Server
+	if serverConfig.RemotesapiPort() != nil {
+		if remoteSrvSqlCtx, err := sqlEngine.NewContext(context.Background()); err == nil {
+			args := sqle.RemoteSrvServerArgs(remoteSrvSqlCtx, remotesrv.ServerArgs{
+				Logger:   logrus.NewEntry(lgr),
+				ReadOnly: true,
+				HttpPort: *serverConfig.RemotesapiPort(),
+				GrpcPort: *serverConfig.RemotesapiPort(),
+			})
+			remoteSrv, err = remotesrv.NewServer(args)
+			if err != nil {
+				lgr.Errorf("error creating remotesapi server on port %d: %v", *serverConfig.RemotesapiPort(), err)
+				startError = err
+				return
+			}
+			listeners, err := remoteSrv.Listeners()
+			if err != nil {
+				lgr.Errorf("error starting remotesapi server listeners on port %d: %v", *serverConfig.RemotesapiPort(), err)
+				startError = err
+				return
+			} else {
+				go func() {
+					remoteSrv.Serve(listeners)
+				}()
+			}
+		} else {
+			lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
+			startError = err
+			return
+		}
+	}
+
+	var clusterRemoteSrv *remotesrv.Server
+	if clusterController != nil {
+		if remoteSrvSqlCtx, err := sqlEngine.NewContext(context.Background()); err == nil {
+			args := clusterController.RemoteSrvServerArgs(remoteSrvSqlCtx, remotesrv.ServerArgs{
+				Logger: logrus.NewEntry(lgr),
+			})
+
+			clusterRemoteSrvTLSConfig, err := LoadClusterTLSConfig(serverConfig.ClusterConfig())
+			if err != nil {
+				lgr.Errorf("error starting remotesapi server for cluster config, could not load tls config: %v", err)
+				startError = err
+				return
+			}
+			args.TLSConfig = clusterRemoteSrvTLSConfig
+
+			clusterRemoteSrv, err = remotesrv.NewServer(args)
+			if err != nil {
+				lgr.Errorf("error creating remotesapi server on port %d: %v", *serverConfig.RemotesapiPort(), err)
+				startError = err
+				return
+			}
+
+			listeners, err := clusterRemoteSrv.Listeners()
+			if err != nil {
+				lgr.Errorf("error starting remotesapi server listeners for cluster config on port %d: %v", clusterController.RemoteSrvPort(), err)
+				startError = err
+				return
+			} else {
+				go func() {
+					clusterRemoteSrv.Serve(listeners)
+				}()
+			}
+
+			clusterController.ManageQueryConnections(
+				mySQLServer.SessionManager().Iter,
+				sqlEngine.GetUnderlyingEngine().ProcessList.Kill,
+				mySQLServer.SessionManager().KillConnection,
+			)
+		} else {
+			lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
+			startError = err
+			return
+		}
+
+	}
+
+	if ok, f := mrEnv.IsLocked(); ok {
+		startError = env.ErrActiveServerLock.New(f)
+		return
+	}
+	if err = mrEnv.Lock(); err != nil {
+		startError = err
+		return
+	}
+
+	serverController.registerCloseFunction(startError, func() error {
+		if metSrv != nil {
+			metSrv.Close()
+		}
+		if remoteSrv != nil {
+			remoteSrv.GracefulStop()
+		}
+		if clusterRemoteSrv != nil {
+			clusterRemoteSrv.GracefulStop()
+		}
+
+		return mySQLServer.Close()
+	})
+
 	closeError = mySQLServer.Start()
 	if closeError != nil {
 		cli.PrintErr(closeError)
-		return
 	}
+	if err := mrEnv.Unlock(); err != nil {
+		cli.PrintErr(err)
+	}
+
 	return
+}
+
+func LoadClusterTLSConfig(cfg cluster.Config) (*tls.Config, error) {
+	rcfg := cfg.RemotesAPIConfig()
+	if rcfg.TLSKey() == "" && rcfg.TLSCert() == "" {
+		return nil, nil
+	}
+	c, err := tls.LoadX509KeyPair(rcfg.TLSCert(), rcfg.TLSKey())
+	if err != nil {
+		return nil, err
+	}
+	return &tls.Config{
+		Certificates: []tls.Certificate{
+			c,
+		},
+	}, nil
 }
 
 func portInUse(hostPort string) bool {
@@ -170,114 +362,132 @@ func portInUse(hostPort string) bool {
 	return false
 }
 
-func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsqle.DoltDatabaseProvider, mrEnv env.MultiRepoEnv, autocommit bool) server.SessionBuilder {
-	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
-		tmpSqlCtx := sql.NewEmptyContext()
-
-		client := sql.Client{Address: conn.RemoteAddr().String(), User: conn.User, Capabilities: conn.Capabilities}
-		mysqlSess := sql.NewSession(host, client, conn.ConnectionID)
-		doltDbs := dsqle.DbsAsDSQLDBs(sqlEngine.Analyzer.Catalog.AllDatabases())
-		dbStates, err := getDbStates(ctx, doltDbs)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
-		doltSess, err := dsess.NewSession(tmpSqlCtx, mysqlSess, pro, dConf, dbStates...)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
-		err = doltSess.SetSessionVariable(tmpSqlCtx, sql.AutoCommitSessionVar, autocommit)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
-		ir := sql.NewIndexRegistry()
-		vr := sql.NewViewRegistry()
-		sqlCtx := sql.NewContext(
-			ctx,
-			sql.WithIndexRegistry(ir),
-			sql.WithViewRegistry(vr),
-			sql.WithSession(doltSess),
-			sql.WithTracer(tracing.Tracer(ctx)))
-
-		dbs := dsqle.DbsAsDSQLDBs(sqlEngine.Analyzer.Catalog.AllDatabases())
-		for _, db := range dbs {
-			root, err := db.GetRoot(sqlCtx)
-			if err != nil {
-				cli.PrintErrln(err)
-				return nil, nil, nil, err
-			}
-
-			err = dsqle.RegisterSchemaFragments(sqlCtx, db, root)
-			if err != nil {
-				cli.PrintErr(err)
-				return nil, nil, nil, err
-			}
-
-			db.DbData().Ddb.SetCommitHookLogger(ctx, doltSess.GetLogger().Logger.Out)
-		}
-
-		return doltSess, ir, vr, nil
+func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.SessionBuilder {
+	userToSessionVars := make(map[string]map[string]string)
+	userVars := config.UserVars()
+	for _, curr := range userVars {
+		userToSessionVars[curr.Name] = curr.Vars
 	}
-}
 
-func getDbStates(ctx context.Context, dbs []dsqle.SqlDatabase) ([]dsess.InitialDbState, error) {
-	dbStates := make([]dsess.InitialDbState, len(dbs))
-	for i, db := range dbs {
-		var init dsess.InitialDbState
-		var err error
-
-		_, val, ok := sql.SystemVariables.GetGlobal(dsess.DoltDefaultBranchKey)
-		if ok && val != "" {
-			init, err = GetInitialDBStateWithDefaultBranch(ctx, db, val.(string))
-		} else {
-			init, err = dsqle.GetInitialDBState(ctx, db)
-		}
+	return func(ctx context.Context, conn *mysql.Conn, addr string) (sql.Session, error) {
+		mysqlSess, err := server.DefaultSessionBuilder(ctx, conn, addr)
 		if err != nil {
 			return nil, err
 		}
+		mysqlBaseSess, ok := mysqlSess.(*sql.BaseSession)
+		if !ok {
+			return nil, fmt.Errorf("unknown GMS base session type")
+		}
 
-		dbStates[i] = init
+		dsess, err := se.NewDoltSession(ctx, mysqlBaseSess)
+		if err != nil {
+			if goerrors.Is(err, env.ErrFailedToAccessDB) {
+				if server := sqlserver.GetRunningServer(); server != nil {
+					_ = server.Close()
+				}
+			}
+			return nil, err
+		}
+
+		varsForUser := userToSessionVars[conn.User]
+		if len(varsForUser) > 0 {
+			sqlCtx, err := se.NewContext(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			for key, val := range varsForUser {
+				err = dsess.InitSessionVariable(sqlCtx, key, val)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		return dsess, nil
 	}
-
-	return dbStates, nil
 }
 
-func GetInitialDBStateWithDefaultBranch(ctx context.Context, db dsqle.SqlDatabase, branch string) (dsess.InitialDbState, error) {
-	init, err := dsqle.GetInitialDBState(ctx, db)
+// getConfigFromServerConfig processes ServerConfig and returns server.Config for sql-server.
+func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error, error) {
+	serverConf, err := handleProtocolAndAddress(serverConfig)
 	if err != nil {
-		return dsess.InitialDbState{}, err
+		return server.Config{}, err, nil
 	}
 
-	ddb := init.DbData.Ddb
-	r := ref.NewBranchRef(branch)
+	serverConf.DisableClientMultiStatements = serverConfig.DisableClientMultiStatements()
 
-	head, err := ddb.ResolveCommitRef(ctx, r)
-	if err != nil {
-		err = fmt.Errorf("@@GLOBAL.dolt_default_branch (%s) is not a valid branch", branch)
-		return dsess.InitialDbState{}, err
-	}
-	init.HeadCommit = head
+	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
+	writeTimeout := time.Duration(serverConfig.WriteTimeout()) * time.Millisecond
 
-	workingSetRef, err := ref.WorkingSetRefForHead(r)
+	tlsConfig, err := LoadTLSConfig(serverConfig)
 	if err != nil {
-		return dsess.InitialDbState{}, err
+		return server.Config{}, nil, err
 	}
 
-	ws, err := init.DbData.Ddb.ResolveWorkingSet(ctx, workingSetRef)
-	if err != nil {
-		return dsess.InitialDbState{}, err
+	// if persist is 'load' we use currently set persisted global variable,
+	// else if 'ignore' we set persisted global variable to current value from serverConfig
+	if serverConfig.PersistenceBehavior() == loadPerisistentGlobals {
+		serverConf, err = serverConf.NewConfig()
+		if err != nil {
+			return server.Config{}, err, nil
+		}
+	} else {
+		err = sql.SystemVariables.SetGlobal("max_connections", serverConfig.MaxConnections())
+		if err != nil {
+			return server.Config{}, err, nil
+		}
 	}
-	init.WorkingSet = ws
 
-	return init, nil
+	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
+	// to the value of mysql that we support.
+	serverConf.ConnReadTimeout = readTimeout
+	serverConf.ConnWriteTimeout = writeTimeout
+	serverConf.MaxConnections = serverConfig.MaxConnections()
+	serverConf.TLSConfig = tlsConfig
+	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
+
+	return serverConf, nil, nil
 }
 
-func dsqleDBsAsSqlDBs(dbs []dsqle.SqlDatabase) []sql.Database {
-	sqlDbs := make([]sql.Database, 0, len(dbs))
-	for _, db := range dbs {
-		sqlDbs = append(sqlDbs, db)
+// handleProtocolAndAddress returns new server.Config object with only Protocol and Address defined.
+func handleProtocolAndAddress(serverConfig ServerConfig) (server.Config, error) {
+	serverConf := server.Config{Protocol: "tcp"}
+
+	portAsString := strconv.Itoa(serverConfig.Port())
+	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
+	if portInUse(hostPort) {
+		portInUseError := fmt.Errorf("Port %s already in use.", portAsString)
+		return server.Config{}, portInUseError
 	}
-	return sqlDbs
+	serverConf.Address = hostPort
+
+	sock, useSock, err := checkForUnixSocket(serverConfig)
+	if err != nil {
+		return server.Config{}, err
+	}
+	if useSock {
+		serverConf.Socket = sock
+	}
+
+	return serverConf, nil
+}
+
+// checkForUnixSocket evaluates ServerConfig for whether the unix socket is to be used or not.
+// If user defined socket flag or host is 'localhost', it returns the unix socket file location
+// either user-defined or the default if it was not defined.
+func checkForUnixSocket(config ServerConfig) (string, bool, error) {
+	if config.Socket() != "" {
+		if runtime.GOOS == "windows" {
+			return "", false, fmt.Errorf("cannot define unix socket file on Windows")
+		}
+		return config.Socket(), true, nil
+	} else {
+		// if host is undefined or defined as "localhost" -> unix
+		if runtime.GOOS != "windows" && config.Host() == "localhost" {
+			return defaultUnixSocketFilePath, true, nil
+		}
+	}
+
+	return "", false, nil
 }

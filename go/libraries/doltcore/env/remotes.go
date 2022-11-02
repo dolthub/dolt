@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"path"
 	"path/filepath"
 	"sort"
@@ -45,6 +46,8 @@ var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrNoRefSpecForRemote = errors.New("no refspec for remote")
 var ErrInvalidSetUpstreamArgs = errors.New("invalid set-upstream arguments")
 var ErrInvalidFetchSpec = errors.New("invalid fetch spec")
+var ErrPullWithRemoteNoUpstream = errors.New("You asked to pull from the remote '%s', but did not specify a branch. Because this is not the default configured remote for your current branch, you must specify a branch.")
+var ErrPullWithNoRemoteAndNoUpstream = errors.New("There is no tracking information for the current branch.\nPlease specify which branch you want to merge with.\n\n\tdolt pull <remote> <branch>\n\nIf you wish to set tracking information for this branch you can do so with:\n\n\t dolt push --set-upstream <remote> <branch>\n")
 
 func IsEmptyRemote(r Remote) bool {
 	return len(r.Name) == 0 && len(r.Url) == 0 && r.FetchSpecs == nil && r.Params == nil
@@ -55,22 +58,10 @@ type Remote struct {
 	Url        string            `json:"url"`
 	FetchSpecs []string          `json:"fetch_specs"`
 	Params     map[string]string `json:"params"`
-	dialer     dbfactory.GRPCDialProvider
 }
 
-func GetRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dialer dbfactory.GRPCDialProvider) (Remote, *doltdb.DoltDB, error) {
-	r := NewRemote(remoteName, remoteUrl, params, dialer)
-	ddb, err := r.GetRemoteDB(ctx, types.Format_Default)
-
-	if err != nil {
-		return NoRemote, nil, err
-	}
-
-	return r, ddb, nil
-}
-
-func NewRemote(name, url string, params map[string]string, dialer dbfactory.GRPCDialProvider) Remote {
-	return Remote{name, url, []string{"refs/heads/*:refs/remotes/" + name + "/*"}, params, dialer}
+func NewRemote(name, url string, params map[string]string) Remote {
+	return Remote{name, url, []string{"refs/heads/*:refs/remotes/" + name + "/*"}, params}
 }
 
 func (r *Remote) GetParam(pName string) (string, bool) {
@@ -88,26 +79,38 @@ func (r *Remote) GetParamOrDefault(pName, defVal string) string {
 	return val
 }
 
-func (r *Remote) GetRemoteDB(ctx context.Context, nbf *types.NomsBinFormat) (*doltdb.DoltDB, error) {
+func (r *Remote) GetRemoteDB(ctx context.Context, nbf *types.NomsBinFormat, dialer dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {
 	params := make(map[string]interface{})
 	for k, v := range r.Params {
 		params[k] = v
 	}
-	if r.dialer != nil {
-		params[dbfactory.GRPCDialProviderParam] = r.dialer
-	}
+
+	params[dbfactory.GRPCDialProviderParam] = dialer
+
 	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }
 
-func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsBinFormat) (*doltdb.DoltDB, error) {
+// Prepare does whatever work is necessary to prepare the remote given to receive pushes. Not all remote types can
+// support this operations and must be prepared manually. For existing remotes, no work is done.
+func (r *Remote) Prepare(ctx context.Context, nbf *types.NomsBinFormat, dialer dbfactory.GRPCDialProvider) error {
+	params := make(map[string]interface{})
+	for k, v := range r.Params {
+		params[k] = v
+	}
+
+	params[dbfactory.GRPCDialProviderParam] = dialer
+
+	return dbfactory.PrepareDB(ctx, nbf, r.Url, params)
+}
+
+func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsBinFormat, dialer dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {
 	params := make(map[string]interface{})
 	for k, v := range r.Params {
 		params[k] = v
 	}
 	params[dbfactory.NoCachingParameter] = "true"
-	if r.dialer != nil {
-		params[dbfactory.GRPCDialProviderParam] = r.dialer
-	}
+	params[dbfactory.GRPCDialProviderParam] = dialer
+
 	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }
 
@@ -120,7 +123,7 @@ type PushOpts struct {
 	SetUpstream bool
 }
 
-func NewParseOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoStateReader, ddb *doltdb.DoltDB, force bool, setUpstream bool) (*PushOpts, error) {
+func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoStateReader, ddb *doltdb.DoltDB, force bool, setUpstream bool) (*PushOpts, error) {
 	var err error
 	remotes, err := rsr.GetRemotes()
 	if err != nil {
@@ -242,6 +245,8 @@ func NewParseOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoS
 	return opts, nil
 }
 
+// NewFetchOpts returns remote and refSpec for given remote name. If remote name is not defined,
+// default remote is used. Default remote is "origin" if there are multiple remotes for now.
 func NewFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRefSpec, error) {
 	var err error
 	remotes, err := rsr.GetRemotes()
@@ -269,7 +274,7 @@ func NewFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRefSp
 
 	var rs []ref.RemoteRefSpec
 	if len(args) != 0 {
-		rs, err = parseRSFromArgs(remName, args)
+		rs, err = ParseRSFromArgs(remName, args)
 	} else {
 		rs, err = GetRefSpecs(rsr, remName)
 	}
@@ -281,7 +286,7 @@ func NewFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRefSp
 	return remote, rs, err
 }
 
-func parseRSFromArgs(remName string, args []string) ([]ref.RemoteRefSpec, error) {
+func ParseRSFromArgs(remName string, args []string) ([]ref.RemoteRefSpec, error) {
 	var refSpecs []ref.RemoteRefSpec
 	for i := 0; i < len(args); i++ {
 		rsStr := args[i]
@@ -364,6 +369,8 @@ type PullSpec struct {
 	Msg        string
 	Squash     bool
 	Noff       bool
+	NoCommit   bool
+	NoEdit     bool
 	Force      bool
 	RemoteName string
 	Remote     Remote
@@ -371,14 +378,14 @@ type PullSpec struct {
 	Branch     ref.DoltRef
 }
 
-func NewPullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, squash, noff, force bool) (*PullSpec, error) {
-	branch := rsr.CWBHeadRef()
-
+// NewPullSpec returns PullSpec object using arguments passed into this function, which are remoteName, remoteRefName,
+// squash, noff, noCommit, noEdit,  refSpecs, force and remoteOnly. This function validates remote and gets remoteRef
+// for given remoteRefName; if it's not defined, it uses current branch to get its upstream branch if it exists.
+func NewPullSpec(_ context.Context, rsr RepoStateReader, remoteName, remoteRefName string, squash, noff, noCommit, noEdit, force, remoteOnly bool) (*PullSpec, error) {
 	refSpecs, err := GetRefSpecs(rsr, remoteName)
 	if err != nil {
 		return nil, err
 	}
-
 	if len(refSpecs) == 0 {
 		return nil, ErrNoRefSpecForRemote
 	}
@@ -389,13 +396,37 @@ func NewPullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, sq
 	}
 	remote := remotes[refSpecs[0].GetRemote()]
 
+	var remoteRef ref.DoltRef
+	if remoteRefName == "" {
+		branch := rsr.CWBHeadRef()
+		trackedBranches, err := rsr.GetBranches()
+		if err != nil {
+			return nil, err
+		}
+
+		trackedBranch, hasUpstream := trackedBranches[branch.GetPath()]
+		if !hasUpstream {
+			if remoteOnly {
+				return nil, fmt.Errorf(ErrPullWithRemoteNoUpstream.Error(), remoteName)
+			} else {
+				return nil, ErrPullWithNoRemoteAndNoUpstream
+			}
+		}
+
+		remoteRef = trackedBranch.Merge.Ref
+	} else {
+		remoteRef = ref.NewBranchRef(remoteRefName)
+	}
+
 	return &PullSpec{
 		Squash:     squash,
 		Noff:       noff,
+		NoCommit:   noCommit,
+		NoEdit:     noEdit,
 		RemoteName: remoteName,
 		Remote:     remote,
 		RefSpecs:   refSpecs,
-		Branch:     branch,
+		Branch:     remoteRef,
 		Force:      force,
 	}, nil
 }
@@ -407,9 +438,9 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 		return "", "", err
 	}
 
-	if u.Scheme != "" {
+	if u.Scheme != "" && fs != nil {
 		if u.Scheme == dbfactory.FileScheme || u.Scheme == dbfactory.LocalBSScheme {
-			absUrl, err := getAbsFileRemoteUrl(u.Host+u.Path, fs)
+			absUrl, err := getAbsFileRemoteUrl(u, fs)
 
 			if err != nil {
 				return "", "", err
@@ -438,7 +469,10 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 	return dbfactory.HTTPSScheme, "https://" + path.Join(hostName, u.Path), nil
 }
 
-func getAbsFileRemoteUrl(urlStr string, fs filesys2.Filesys) (string, error) {
+func getAbsFileRemoteUrl(u *url.URL, fs filesys2.Filesys) (string, error) {
+	urlStr := u.Host + u.Path
+	scheme := u.Scheme
+
 	var err error
 	urlStr = filepath.Clean(urlStr)
 	urlStr, err = fs.Abs(urlStr)
@@ -450,16 +484,18 @@ func getAbsFileRemoteUrl(urlStr string, fs filesys2.Filesys) (string, error) {
 	exists, isDir := fs.Exists(urlStr)
 
 	if !exists {
-		return "", filesys2.ErrDirNotExist
+		// TODO: very odd that GetAbsRemoteUrl will create a directory if it doesn't exist.
+		//  This concern should be separated
+		err = fs.MkDirs(urlStr)
+		if err != nil {
+			return "", fmt.Errorf("failed to create directory '%s': %w", urlStr, err)
+		}
 	} else if !isDir {
 		return "", filesys2.ErrIsFile
 	}
 
-	urlStr = strings.ReplaceAll(urlStr, `\`, "/")
-	if !strings.HasPrefix(urlStr, "/") {
-		urlStr = "/" + urlStr
-	}
-	return dbfactory.FileScheme + "://" + urlStr, nil
+	urlStr = filepath.ToSlash(urlStr)
+	return scheme + "://" + urlStr, nil
 }
 
 // GetDefaultBranch returns the default branch from among the branches given, returning

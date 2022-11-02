@@ -454,6 +454,10 @@ func (t Tuple) decoderSkipToFields() (valueDecoder, uint64) {
 	return dec, count
 }
 
+func (t Tuple) Size() int {
+	return len(t.buff)
+}
+
 // Len is the number of fields in the struct.
 func (t Tuple) Len() uint64 {
 	if len(t.buff) == 0 {
@@ -686,6 +690,15 @@ func (t Tuple) TupleCompare(nbf *NomsBinFormat, otherTuple Tuple) (int, error) {
 		otherKind := otherDec.ReadKind()
 
 		if kind != otherKind {
+			// If we are comparing any type to a null type, always evaluate
+			// the null value as greater than the non-null value. This is needed
+			// to keep null value ordering consistent in indexes.
+			if kind == NullKind {
+				return 1, nil
+			} else if otherKind == NullKind {
+				return -1, nil
+			}
+
 			return int(kind) - int(otherKind), nil
 		}
 

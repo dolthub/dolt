@@ -18,11 +18,12 @@ import (
 	"context"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var rebuildDocs = cli.CommandDocumentationContent{
@@ -46,11 +47,11 @@ func (cmd RebuildCmd) Description() string {
 	return "Internal debugging command to rebuild the contents of an index."
 }
 
-func (cmd RebuildCmd) CreateMarkdown(filesys.Filesys, string, string) error {
+func (cmd RebuildCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 
-func (cmd RebuildCmd) createArgParser() *argparser.ArgParser {
+func (cmd RebuildCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table that the given index belongs to."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"index", "The name of the index to rebuild."})
@@ -58,8 +59,8 @@ func (cmd RebuildCmd) createArgParser() *argparser.ArgParser {
 }
 
 func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, rebuildDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, rebuildDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() == 0 {
@@ -67,6 +68,10 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 		return 0
 	} else if apr.NArg() != 2 {
 		return HandleErr(errhand.BuildDError("Both the table and index names must be provided.").Build(), usage)
+	}
+
+	if dEnv.IsLocked() {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), usage)
 	}
 
 	working, err := dEnv.WorkingRoot(context.Background())
@@ -84,12 +89,24 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 	if !ok {
 		return HandleErr(errhand.BuildDError("The table `%s` does not exist.", tableName).Build(), nil)
 	}
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	indexRowData, err := editor.RebuildIndex(ctx, table, indexName, opts)
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return HandleErr(errhand.BuildDError("error: ").AddCause(err).Build(), nil)
+	}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return HandleErr(errhand.BuildDError("could not get table schema").AddCause(err).Build(), nil)
+	}
+	idxSch := sch.Indexes().GetByName(indexName)
+	if idxSch == nil {
+		return HandleErr(errhand.BuildDError("the index `%s` does not exist on table `%s`", indexName, tableName).Build(), nil)
+	}
+	indexRowData, err := creation.BuildSecondaryIndex(ctx, table, idxSch, opts)
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to rebuild index `%s` on table `%s`.", indexName, tableName).AddCause(err).Build(), nil)
 	}
-	updatedTable, err := table.SetIndexRowData(ctx, indexName, indexRowData)
+	updatedTable, err := table.SetIndexRows(ctx, indexName, indexRowData)
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to set rebuilt index.").AddCause(err).Build(), nil)
 	}

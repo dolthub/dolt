@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"bytes"
 	"crypto/md5"
 	"errors"
 	"hash"
@@ -57,6 +58,8 @@ type ByteSink interface {
 
 	// FlushToFile writes all the data that was written to the ByteSink to a file at the given path
 	FlushToFile(path string) error
+
+	Reader() (io.ReadCloser, error)
 }
 
 // ErrBuffFull used by the FixedBufferSink when the data written is larger than the buffer allocated.
@@ -102,6 +105,10 @@ func (sink *FixedBufferByteSink) Flush(wr io.Writer) error {
 // FlushToFile writes all the data that was written to the ByteSink to a file at the given path
 func (sink *FixedBufferByteSink) FlushToFile(path string) (err error) {
 	return flushSinkToFile(sink, path)
+}
+
+func (sink *FixedBufferByteSink) Reader() (io.ReadCloser, error) {
+	return io.NopCloser(bytes.NewReader(sink.buff)), nil
 }
 
 // BlockBufferByteSink allocates blocks of data with a given block size to store the bytes written to the sink. New
@@ -151,6 +158,14 @@ func (sink *BlockBufferByteSink) Flush(wr io.Writer) (err error) {
 // FlushToFile writes all the data that was written to the ByteSink to a file at the given path
 func (sink *BlockBufferByteSink) FlushToFile(path string) (err error) {
 	return flushSinkToFile(sink, path)
+}
+
+func (sink *BlockBufferByteSink) Reader() (io.ReadCloser, error) {
+	rs := make([]io.Reader, len(sink.blocks))
+	for i := range sink.blocks {
+		rs[i] = bytes.NewReader(sink.blocks[i])
+	}
+	return io.NopCloser(io.MultiReader(rs...)), nil
 }
 
 // BufferedFileByteSink is a ByteSink implementation that buffers some amount of data before it passes it
@@ -237,17 +252,28 @@ func (sink *BufferedFileByteSink) backgroundWrite() {
 	sink.ae.SetIfError(err)
 }
 
+func (sink *BufferedFileByteSink) finish() error {
+	// |finish()| is not thread-safe. We just use writeCh == nil as a
+	// sentinel to mean we've been called again from Reader() as part of a
+	// retry or something.
+	if sink.writeCh != nil {
+		toWrite := len(sink.currentBlock)
+		if toWrite > 0 {
+			sink.writeCh <- sink.currentBlock[:toWrite]
+		}
+
+		close(sink.writeCh)
+		sink.wg.Wait()
+
+		sink.writeCh = nil
+	}
+	return sink.ae.Get()
+}
+
 // Flush writes all the data that was written to the ByteSink to the supplied writer
 func (sink *BufferedFileByteSink) Flush(wr io.Writer) (err error) {
-	toWrite := len(sink.currentBlock)
-	if toWrite > 0 {
-		sink.writeCh <- sink.currentBlock[:toWrite]
-	}
-
-	close(sink.writeCh)
-	sink.wg.Wait()
-
-	if err := sink.ae.Get(); err != nil {
+	err = sink.finish()
+	if err != nil {
 		return err
 	}
 
@@ -273,19 +299,20 @@ func (sink *BufferedFileByteSink) Flush(wr io.Writer) (err error) {
 
 // FlushToFile writes all the data that was written to the ByteSink to a file at the given path
 func (sink *BufferedFileByteSink) FlushToFile(path string) (err error) {
-	toWrite := len(sink.currentBlock)
-	if toWrite > 0 {
-		sink.writeCh <- sink.currentBlock[:toWrite]
-	}
-
-	close(sink.writeCh)
-	sink.wg.Wait()
-
-	if err := sink.ae.Get(); err != nil {
+	err = sink.finish()
+	if err != nil {
 		return err
 	}
 
 	return file.Rename(sink.path, path)
+}
+
+func (sink *BufferedFileByteSink) Reader() (io.ReadCloser, error) {
+	err := sink.finish()
+	if err != nil {
+		return nil, err
+	}
+	return os.Open(sink.path)
 }
 
 // HashingByteSink is a ByteSink that keeps an md5 hash of all the data written to it.
@@ -328,6 +355,10 @@ func (sink *HashingByteSink) Flush(wr io.Writer) error {
 // FlushToFile writes all the data that was written to the ByteSink to a file at the given path
 func (sink *HashingByteSink) FlushToFile(path string) error {
 	return sink.backingSink.FlushToFile(path)
+}
+
+func (sink *HashingByteSink) Reader() (io.ReadCloser, error) {
+	return sink.backingSink.Reader()
 }
 
 // GetMD5 gets the MD5 hash of all the bytes written to the sink

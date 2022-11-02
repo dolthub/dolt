@@ -25,12 +25,17 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/libraries/utils/tracing"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var emptyKey = orderedKey{}
+
+var tracer = otel.Tracer("github.com/dolthub/dolt/go/store/types")
 
 func newMetaTuple(ref Ref, key orderedKey, numLeaves uint64) (metaTuple, error) {
 	d.PanicIfTrue(ref.buff == nil)
@@ -181,8 +186,8 @@ type metaSequence struct {
 	sequenceImpl
 }
 
-func newMetaSequence(vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) metaSequence {
-	return metaSequence{newSequenceImpl(vrw, buff, offsets, len)}
+func newMetaSequence(nbf *NomsBinFormat, vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) metaSequence {
+	return metaSequence{newSequenceImpl(nbf, vrw, buff, offsets, len)}
 }
 
 func newMetaSequenceFromTuples(kind NomsKind, level uint64, tuples []metaTuple, vrw ValueReadWriter) (metaSequence, error) {
@@ -212,7 +217,7 @@ func newMetaSequenceFromTuples(kind NomsKind, level uint64, tuples []metaTuple, 
 		offsets[i+sequencePartValues+1] = w.offset
 	}
 
-	return newMetaSequence(vrw, w.data(), offsets, length), nil
+	return newMetaSequence(vrw.Format(), vrw, w.data(), offsets, length), nil
 }
 
 func (ms metaSequence) tuples() ([]metaTuple, error) {
@@ -416,10 +421,8 @@ func (ms metaSequence) isLeaf() bool {
 
 // metaSequence interface
 func (ms metaSequence) getChildSequence(ctx context.Context, idx int) (sequence, error) {
-	span, ctx := tracing.StartSpan(ctx, "metaSequence.getChildSequence")
-	defer func() {
-		span.Finish()
-	}()
+	ctx, span := tracer.Start(ctx, "metaSequence.getChildSequence")
+	span.End()
 
 	item, err := ms.getItem(idx)
 
@@ -438,11 +441,11 @@ func (ms metaSequence) getChildSequence(ctx context.Context, idx int) (sequence,
 // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
 // concatentation as one long composite sequence
 func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint64, length uint64) (sequence, error) {
-	span, ctx := tracing.StartSpan(ctx, "metaSequence.getChildSequence")
-	span.LogKV("level", ms.treeLevel(), "length", length)
-	defer func() {
-		span.Finish()
-	}()
+	ctx, span := tracer.Start(ctx, "metaSequence.getChildSequence", trace.WithAttributes(
+		attribute.Int64("level", int64(ms.treeLevel())),
+		attribute.Int64("length", int64(length)),
+	))
+	defer span.End()
 
 	level := ms.treeLevel()
 	d.PanicIfFalse(level > 0)
@@ -559,9 +562,11 @@ func (ms metaSequence) getChildren(ctx context.Context, start, end uint64) ([]se
 	return seqs, err
 }
 
-func metaHashValueBytes(item sequenceItem, rv *rollingValueHasher) error {
-	rv.hashBytes(item.(metaTuple).buff)
-	return nil
+func metaHashValueBytes(item sequenceItem, sp sequenceSplitter) error {
+	return sp.Append(func(bw *binaryNomsWriter) error {
+		bw.writeRaw(item.(metaTuple).buff)
+		return nil
+	})
 }
 
 type emptySequence struct {
@@ -589,7 +594,7 @@ func (es emptySequence) format() *NomsBinFormat {
 	return es.nbf
 }
 
-func (es emptySequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (es emptySequence) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
 

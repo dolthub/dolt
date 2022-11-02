@@ -37,9 +37,9 @@ var EmptyList List
 // or more types. The type of the list will reflect the type of the elements in the list. For
 // example:
 //
-//  l := NewList(Float(1), Bool(true))
-//  fmt.Println(l.Type().Describe())
-//  // outputs List<Bool | Float>
+//	l := NewList(Float(1), Bool(true))
+//	fmt.Println(l.Type().Describe())
+//	// outputs List<Bool | Float>
 //
 // Lists, like all Noms values are immutable so the "mutation" methods return a new list.
 type List struct {
@@ -137,24 +137,6 @@ func (l List) asSequence() sequence {
 // Value interface
 func (l List) Value(ctx context.Context) (Value, error) {
 	return l, nil
-}
-
-func (l List) WalkValues(ctx context.Context, cb ValueCallback) error {
-	var err error
-	iterErr := iterAll(ctx, l, func(v Value, idx uint64) error {
-		if err != nil {
-			return nil
-		}
-
-		err = cb(v)
-		return err
-	})
-
-	if err != nil {
-		return err
-	}
-
-	return iterErr
 }
 
 // Get returns the value at the given index. If this list has been chunked then this will have to
@@ -485,7 +467,13 @@ func (l List) DiffWithLimit(ctx context.Context, last List, changes chan<- Splic
 }
 
 func (l List) newChunker(ctx context.Context, cur *sequenceCursor, vrw ValueReadWriter) (*sequenceChunker, error) {
-	return newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
+	makeChunk := makeListLeafChunkFn(vrw)
+	makeParentChunk := newIndexedMetaSequenceChunkFn(ListKind, vrw)
+	return newSequenceChunker(ctx, cur, 0, vrw, makeChunk, makeParentChunk, newListChunker, hashValueBytes)
+}
+
+func newListChunker(nbf *NomsBinFormat, salt byte) sequenceSplitter {
+	return newRollingValueHasher(nbf, salt)
 }
 
 func makeListLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
@@ -514,7 +502,7 @@ func makeListLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 }
 
 func newEmptyListSequenceChunker(ctx context.Context, vrw ValueReadWriter) (*sequenceChunker, error) {
-	return newEmptySequenceChunker(ctx, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
+	return newEmptySequenceChunker(ctx, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), newListChunker, hashValueBytes)
 }
 
 func (l List) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {

@@ -27,7 +27,7 @@ type blobLeafSequence struct {
 	leafSequence
 }
 
-func newBlobLeafSequence(vrw ValueReadWriter, data []byte) (sequence, error) {
+func newBlobLeafSequence(nbf *NomsBinFormat, vrw ValueReadWriter, data []byte) (sequence, error) {
 	d.PanicIfTrue(vrw == nil)
 	offsets := make([]uint32, sequencePartValues+1)
 	w := newBinaryNomsWriter()
@@ -45,7 +45,7 @@ func newBlobLeafSequence(vrw ValueReadWriter, data []byte) (sequence, error) {
 	w.writeCount(count)
 	offsets[sequencePartValues] = w.offset
 	w.writeRaw(data)
-	return blobLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}, nil
+	return blobLeafSequence{newLeafSequence(nbf, vrw, w.data(), offsets, count)}, nil
 }
 
 func (bl blobLeafSequence) writeTo(w nomsWriter, nbf *NomsBinFormat) error {

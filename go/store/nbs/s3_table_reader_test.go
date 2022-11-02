@@ -23,7 +23,7 @@ package nbs
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"net"
 	"os"
 	"syscall"
@@ -105,7 +105,7 @@ func (fs3 *flakyS3) GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInp
 
 	if _, ok := fs3.alreadyFailed[*input.Key]; !ok {
 		fs3.alreadyFailed[*input.Key] = struct{}{}
-		output.Body = ioutil.NopCloser(resettingReader{})
+		output.Body = io.NopCloser(resettingReader{})
 	}
 
 	return output, nil

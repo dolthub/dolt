@@ -26,12 +26,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
@@ -83,11 +81,6 @@ func TestCreateTable(t *testing.T) {
 			name:        "Test reserved table name",
 			query:       "create table dolt_table (id int primary key, age int)",
 			expectedErr: "Invalid table name",
-		},
-		{
-			name:        "Test bad table name begins with number",
-			query:       "create table 1testTable (id int primary key, age int)",
-			expectedErr: "syntax error",
 		},
 		{
 			name:        "Test in use table name",
@@ -235,7 +228,7 @@ func TestCreateTable(t *testing.T) {
 			expectedTable: "ip2nation",
 			expectedSchema: dtestutils.CreateSchema(
 				schemaNewColumnWDefVal(t, "ip", 7265, sql.Uint32, true, "0", schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "country", 6630, sql.MustCreateStringWithDefaults(sqltypes.Char, 2), false, `""`, schema.NotNullConstraint{})),
+				schemaNewColumnWDefVal(t, "country", 6630, sql.MustCreateStringWithDefaults(sqltypes.Char, 2), false, `''`, schema.NotNullConstraint{})),
 		},
 		{
 			name:          "Test ip2nationCountries",
@@ -250,25 +243,24 @@ func TestCreateTable(t *testing.T) {
 							lon float NOT NULL default 0.0,
 							PRIMARY KEY (code));`,
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumnWDefVal(t, "code", 7802, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 4), true, `""`, schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "iso_code_2", 9266, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 2), false, `""`, schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "iso_code_3", 8427, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 3), false, `""`),
-				schemaNewColumnWDefVal(t, "iso_country", 7151, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `""`, schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "country", 879, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `""`, schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "lat", 3502, sql.Float32, false, "0", schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "lon", 9907, sql.Float32, false, "0", schema.NotNullConstraint{})),
+				schemaNewColumnWDefVal(t, "code", 7802, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 4), true, `''`, schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "iso_code_2", 9266, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 2), false, `''`, schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "iso_code_3", 8427, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 3), false, `''`),
+				schemaNewColumnWDefVal(t, "iso_country", 7151, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `''`, schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "country", 879, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `''`, schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "lat", 3502, sql.Float32, false, "0.0", schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "lon", 9907, sql.Float32, false, "0.0", schema.NotNullConstraint{})),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			dtestutils.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema, AllPeopleRows...)
 			ctx := context.Background()
-			root, _ := dEnv.WorkingRoot(ctx)
+			dEnv := CreateEmptyTestDatabase(t)
+			root, err := dEnv.WorkingRoot(ctx)
+			require.NoError(t, err)
 
 			updatedRoot, err := ExecuteSql(t, dEnv, root, tt.query)
-
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
 			} else {
@@ -336,10 +328,10 @@ func TestDropTable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
 			ctx := context.Background()
-			root, _ := dEnv.WorkingRoot(ctx)
+			dEnv := CreateTestDatabase(t)
+			root, err := dEnv.WorkingRoot(ctx)
+			require.NoError(t, err)
 
 			updatedRoot, err := ExecuteSql(t, dEnv, root, tt.query)
 
@@ -370,11 +362,46 @@ func TestAddColumn(t *testing.T) {
 		expectedErr    string
 	}{
 		{
-			name:  "alter add column",
+			name:  "alter add string column no default",
 			query: "alter table people add (newColumn varchar(80))",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
 				schemaNewColumn(t, "newColumn", 4208, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false)),
 			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, nil),
+		},
+		{
+			name:  "alter add float column without default",
+			query: "alter table people add (newColumn float)",
+			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
+				schemaNewColumn(t, "newColumn", 4208, sql.Float32, false)),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, nil),
+		},
+		{
+			name:  "alter add uint column without default",
+			query: "alter table people add (newColumn bigint unsigned)",
+			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
+				schemaNewColumn(t, "newColumn", 4208, sql.Uint64, false)),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, nil),
+		},
+		{
+			name:  "alter add int column default",
+			query: "alter table people add (newColumn int default 2)",
+			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
+				schemaNewColumnWDefVal(t, "newColumn", 2803, sql.Int32, false, "2")),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 2803, types.Int(int32(2))),
+		},
+		{
+			name:  "alter add uint column default",
+			query: "alter table people add (newColumn bigint unsigned default 20)",
+			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
+				schemaNewColumnWDefVal(t, "newColumn", 517, sql.Uint64, false, "20")),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 517, types.Uint(uint64(20))),
+		},
+		{
+			name:  "alter add string column with default",
+			query: "alter table people add (newColumn varchar(80) default 'hi')",
+			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
+				schemaNewColumnWDefVal(t, "newColumn", 13690, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, `'hi'`)),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 13690, types.String("hi")),
 		},
 		{
 			name:  "alter add column first",
@@ -384,10 +411,10 @@ func TestAddColumn(t *testing.T) {
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
+				schema.NewColumn("is_married", IsMarriedTag, types.IntKind, false),
 				schema.NewColumn("age", AgeTag, types.IntKind, false),
 				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
+				schema.NewColumn("uuid", UuidTag, types.StringKind, false),
 				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
 			),
 			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, nil),
@@ -400,10 +427,10 @@ func TestAddColumn(t *testing.T) {
 				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schemaNewColumn(t, "newColumn", 4208, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false),
-				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
+				schema.NewColumn("is_married", IsMarriedTag, types.IntKind, false),
 				schema.NewColumn("age", AgeTag, types.IntKind, false),
 				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
+				schema.NewColumn("uuid", UuidTag, types.StringKind, false),
 				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
 			),
 			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, nil),
@@ -412,22 +439,22 @@ func TestAddColumn(t *testing.T) {
 			name:  "alter add column not null",
 			query: "alter table people add (newColumn varchar(80) not null default 'default')",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
-				schemaNewColumnWDefVal(t, "newColumn", 4208, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, `"default"`, schema.NotNullConstraint{})),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, types.String("default")),
+				schemaNewColumnWDefVal(t, "newColumn", 13690, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, `'default'`, schema.NotNullConstraint{})),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 13690, types.String("default")),
 		},
 		{
 			name:  "alter add column not null with expression default",
-			query: "alter table people add (newColumn int not null default 2+2/2)",
+			query: "alter table people add (newColumn int not null default (2+2/2))",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
-				schemaNewColumnWDefVal(t, "newColumn", 4435, sql.Int32, false, "((2 + (2 / 2)))", schema.NotNullConstraint{})),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4435, types.Int(3)),
+				schemaNewColumnWDefVal(t, "newColumn", 2803, sql.Int32, false, "((2 + (2 / 2)))", schema.NotNullConstraint{})),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 2803, types.Int(3)),
 		},
 		{
 			name:  "alter add column not null with negative expression",
 			query: "alter table people add (newColumn float not null default -1.1)",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
-				schemaNewColumnWDefVal(t, "newColumn", 13066, sql.Float32, false, "-1.1", schema.NotNullConstraint{})),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 13066, types.Float(float32(-1.1))),
+				schemaNewColumnWDefVal(t, "newColumn", 12469, sql.Float32, false, "-1.1", schema.NotNullConstraint{})),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 12469, types.Float(float32(-1.1))),
 		},
 		{
 			name:        "alter add column not null with type mismatch in default",
@@ -448,8 +475,8 @@ func TestAddColumn(t *testing.T) {
 			name:  "alter add column not null without default",
 			query: "alter table people add (newColumn varchar(80) not null)",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
-				schemaNewColumnWDefVal(t, "newColumn", 4208, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, "", schema.NotNullConstraint{})),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, types.String("")),
+				schemaNewColumnWDefVal(t, "newColumn", 13690, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, "", schema.NotNullConstraint{})),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 13690, types.String("")),
 		},
 		{
 			name:  "alter add column nullable",
@@ -465,12 +492,16 @@ func TestAddColumn(t *testing.T) {
 				schemaNewColumn(t, "newColumn", 4208, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false)),
 			expectedRows: AllPeopleRows,
 		},
+		{
+			name:        "alter table add column name clash",
+			query:       "alter table people add column(age int)",
+			expectedErr: `Column "age" already exists`,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
+			dEnv := CreateTestDatabase(t)
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
@@ -486,445 +517,25 @@ func TestAddColumn(t *testing.T) {
 
 			assert.NotNil(t, updatedRoot)
 			table, _, err := updatedRoot.GetTable(ctx, PeopleTableName)
+
 			assert.NoError(t, err)
 			sch, err := table.GetSchema(ctx)
 			assert.NoError(t, err)
 			equalSchemas(t, tt.expectedSchema, sch)
 
+			if types.Format_Default != types.Format_LD_1 {
+				return // todo: convert these to enginetests
+			}
+
 			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")
 			assert.NoError(t, err)
 			require.True(t, ok)
 
-			rowData, err := updatedTable.GetRowData(ctx)
+			rowData, err := updatedTable.GetNomsRowData(ctx)
 			assert.NoError(t, err)
 			var foundRows []row.Row
 			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
 				r, err := row.FromNoms(tt.expectedSchema, key.(types.Tuple), value.(types.Tuple))
-				assert.NoError(t, err)
-				foundRows = append(foundRows, r)
-				return false, nil
-			})
-
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expectedRows, foundRows)
-		})
-	}
-}
-
-func TestModifyAndChangeColumn(t *testing.T) {
-	tests := []struct {
-		name           string
-		query          string
-		expectedSchema schema.Schema
-		expectedRows   []row.Row
-		expectedErr    string
-	}{
-		{
-			name:  "alter modify column reorder middle",
-			query: "alter table people modify column first_name varchar(16383) not null after last_name",
-			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
-				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
-				schema.NewColumn("age", AgeTag, types.IntKind, false),
-				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
-				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
-			),
-			expectedRows: AllPeopleRows,
-		},
-		{
-			name:  "alter modify column reorder first",
-			query: "alter table people modify column first_name varchar(16383) not null first",
-			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
-				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
-				schema.NewColumn("age", AgeTag, types.IntKind, false),
-				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
-				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
-			),
-			expectedRows: AllPeopleRows,
-		},
-		{
-			name:  "alter modify column drop null constraint",
-			query: "alter table people modify column first_name varchar(16383) null",
-			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
-				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false),
-				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
-				schema.NewColumn("age", AgeTag, types.IntKind, false),
-				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
-				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
-			),
-			expectedRows: AllPeopleRows,
-		},
-		{
-			name:  "alter change column rename and reorder",
-			query: "alter table people change first_name christian_name varchar(16383) not null after last_name",
-			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
-				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("christian_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
-				schema.NewColumn("age", AgeTag, types.IntKind, false),
-				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
-				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
-			),
-			expectedRows: AllPeopleRows,
-		},
-		{
-			name:  "alter change column rename and reorder first",
-			query: "alter table people change column first_name christian_name varchar(16383) not null first",
-			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("christian_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
-				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
-				schema.NewColumn("age", AgeTag, types.IntKind, false),
-				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
-				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
-			),
-			expectedRows: AllPeopleRows,
-		},
-		{
-			name:  "alter change column drop null constraint",
-			query: "alter table people change column first_name first_name varchar(16383) null",
-			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
-				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false),
-				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
-				schema.NewColumn("age", AgeTag, types.IntKind, false),
-				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
-				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
-			),
-			expectedRows: AllPeopleRows,
-		},
-		{
-			name:        "alter modify column not null with type mismatch in default",
-			query:       "alter table people modify rating double default 'not a number'",
-			expectedErr: "incompatible type for default value",
-		},
-		{
-			name:        "alter modify column not null, existing null values",
-			query:       "alter table people modify num_episodes bigint unsigned not null",
-			expectedErr: "cannot change column to NOT NULL",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
-			ctx := context.Background()
-			root, _ := dEnv.WorkingRoot(ctx)
-
-			updatedRoot, err := ExecuteSql(t, dEnv, root, tt.query)
-
-			if tt.expectedErr == "" {
-				require.NoError(t, err)
-			} else {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedErr)
-				return
-			}
-
-			assert.NotNil(t, updatedRoot)
-			table, _, err := updatedRoot.GetTable(ctx, PeopleTableName)
-			assert.NoError(t, err)
-			sch, err := table.GetSchema(ctx)
-			assert.NoError(t, err)
-			equalSchemas(t, tt.expectedSchema, sch)
-
-			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")
-			assert.NoError(t, err)
-			require.True(t, ok)
-
-			rowData, err := updatedTable.GetRowData(ctx)
-			assert.NoError(t, err)
-			var foundRows []row.Row
-			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-				r, err := row.FromNoms(tt.expectedSchema, key.(types.Tuple), value.(types.Tuple))
-				assert.NoError(t, err)
-				foundRows = append(foundRows, r)
-				return false, nil
-			})
-
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expectedRows, foundRows)
-		})
-	}
-}
-
-func TestModifyColumnType(t *testing.T) {
-	tests := []struct {
-		name            string
-		setupStmts      []string
-		alterStmt       string
-		tableName       string
-		expectedRows    [][]types.Value
-		expectedIdxRows [][]types.Value
-		expectedErr     bool
-	}{
-		{
-			name: "alter modify column type similar types",
-			setupStmts: []string{
-				"create table test(pk bigint primary key, v1 bigint, index (v1))",
-				"insert into test values (0, 3), (1, 2)",
-			},
-			alterStmt: "alter table test modify column v1 int",
-			tableName: "test",
-			expectedRows: [][]types.Value{
-				{types.Int(0), types.Int(3)},
-				{types.Int(1), types.Int(2)},
-			},
-			expectedIdxRows: [][]types.Value{
-				{types.Int(2), types.Int(1)},
-				{types.Int(3), types.Int(0)},
-			},
-		},
-		{
-			name: "alter modify column type different types",
-			setupStmts: []string{
-				"create table test(pk bigint primary key, v1 bigint, index (v1))",
-				"insert into test values (0, 3), (1, 2)",
-			},
-			alterStmt: "alter table test modify column v1 varchar(20)",
-			tableName: "test",
-			expectedRows: [][]types.Value{
-				{types.Int(0), types.String("3")},
-				{types.Int(1), types.String("2")},
-			},
-			expectedIdxRows: [][]types.Value{
-				{types.String("2"), types.Int(1)},
-				{types.String("3"), types.Int(0)},
-			},
-		},
-		{
-			name: "alter modify column type different types reversed",
-			setupStmts: []string{
-				"create table test(pk bigint primary key, v1 varchar(20), index (v1))",
-				`insert into test values (0, "3"), (1, "2")`,
-			},
-			alterStmt: "alter table test modify column v1 bigint",
-			tableName: "test",
-			expectedRows: [][]types.Value{
-				{types.Int(0), types.Int(3)},
-				{types.Int(1), types.Int(2)},
-			},
-			expectedIdxRows: [][]types.Value{
-				{types.Int(2), types.Int(1)},
-				{types.Int(3), types.Int(0)},
-			},
-		},
-		{
-			name: "alter modify column type primary key",
-			setupStmts: []string{
-				"create table test(pk bigint primary key, v1 bigint, index (v1))",
-				"insert into test values (0, 3), (1, 2)",
-			},
-			alterStmt: "alter table test modify column pk varchar(20)",
-			tableName: "test",
-			expectedRows: [][]types.Value{
-				{types.String("0"), types.Int(3)},
-				{types.String("1"), types.Int(2)},
-			},
-			expectedIdxRows: [][]types.Value{
-				{types.Int(2), types.String("1")},
-				{types.Int(3), types.String("0")},
-			},
-		},
-		{
-			name: "alter modify column type incompatible types with empty table",
-			setupStmts: []string{
-				"create table test(pk bigint primary key, v1 bit(20), index (v1))",
-			},
-			alterStmt:       "alter table test modify column pk datetime",
-			tableName:       "test",
-			expectedRows:    [][]types.Value(nil),
-			expectedIdxRows: [][]types.Value(nil),
-		},
-		{
-			name: "alter modify column type incompatible types with non-empty table",
-			setupStmts: []string{
-				"create table test(pk bigint primary key, v1 bit(20), index (v1))",
-				"insert into test values (1, 1)",
-			},
-			alterStmt:   "alter table test modify column pk datetime",
-			expectedErr: true,
-		},
-		{
-			name: "alter modify column type different types incompatible values",
-			setupStmts: []string{
-				"create table test(pk bigint primary key, v1 varchar(20), index (v1))",
-				"insert into test values (0, 3), (1, 'a')",
-			},
-			alterStmt:   "alter table test modify column v1 bigint",
-			expectedErr: true,
-		},
-		{
-			name: "alter modify column type foreign key parent",
-			setupStmts: []string{
-				"create table test(pk bigint primary key, v1 bigint, index (v1))",
-				"create table test2(pk bigint primary key, v1 bigint, index (v1), foreign key (v1) references test(v1))",
-			},
-			alterStmt:   "alter table test modify column v1 varchar(20)",
-			expectedErr: true,
-		},
-		{
-			name: "alter modify column type foreign key child",
-			setupStmts: []string{
-				"create table test(pk bigint primary key, v1 bigint, index (v1))",
-				"create table test2(pk bigint primary key, v1 bigint, index (v1), foreign key (v1) references test(v1))",
-			},
-			alterStmt:   "alter table test2 modify column v1 varchar(20)",
-			expectedErr: true,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			ctx := context.Background()
-			root, _ := dEnv.WorkingRoot(ctx)
-			var err error
-
-			for _, stmt := range test.setupStmts {
-				root, err = ExecuteSql(t, dEnv, root, stmt)
-				require.NoError(t, err)
-			}
-			root, err = ExecuteSql(t, dEnv, root, test.alterStmt)
-			if test.expectedErr == false {
-				require.NoError(t, err)
-			} else {
-				require.Error(t, err)
-				return
-			}
-
-			table, _, err := root.GetTable(ctx, test.tableName)
-			require.NoError(t, err)
-			sch, err := table.GetSchema(ctx)
-			require.NoError(t, err)
-			rowData, err := table.GetRowData(ctx)
-			require.NoError(t, err)
-
-			var foundRows [][]types.Value
-			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-				r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
-				require.NoError(t, err)
-				var vals []types.Value
-				_, _ = r.IterSchema(sch, func(tag uint64, val types.Value) (stop bool, err error) {
-					vals = append(vals, val)
-					return false, nil
-				})
-				foundRows = append(foundRows, vals)
-				return false, nil
-			})
-			require.NoError(t, err)
-			assert.Equal(t, test.expectedRows, foundRows)
-
-			foundRows = nil
-			idx := sch.Indexes().AllIndexes()[0]
-			idxRowData, err := table.GetIndexRowData(ctx, idx.Name())
-			require.NoError(t, err)
-			err = idxRowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-				r, err := row.FromNoms(idx.Schema(), key.(types.Tuple), value.(types.Tuple))
-				require.NoError(t, err)
-				var vals []types.Value
-				_, _ = r.IterSchema(idx.Schema(), func(tag uint64, val types.Value) (stop bool, err error) {
-					vals = append(vals, val)
-					return false, nil
-				})
-				foundRows = append(foundRows, vals)
-				return false, nil
-			})
-			require.NoError(t, err)
-			assert.Equal(t, test.expectedIdxRows, foundRows)
-		})
-	}
-}
-
-func TestDropColumn(t *testing.T) {
-	tests := []struct {
-		name           string
-		query          string
-		expectedSchema schema.Schema
-		expectedRows   []row.Row
-		expectedErr    string
-	}{
-		{
-			name:           "alter drop column",
-			query:          "alter table people drop rating",
-			expectedSchema: dtestutils.RemoveColumnFromSchema(PeopleTestSchema, RatingTag),
-			expectedRows:   dtestutils.ConvertToSchema(dtestutils.RemoveColumnFromSchema(PeopleTestSchema, RatingTag), AllPeopleRows...),
-		},
-		{
-			name:           "alter drop column with optional column keyword",
-			query:          "alter table people drop column rating",
-			expectedSchema: dtestutils.RemoveColumnFromSchema(PeopleTestSchema, RatingTag),
-			expectedRows:   dtestutils.ConvertToSchema(dtestutils.RemoveColumnFromSchema(PeopleTestSchema, RatingTag), AllPeopleRows...),
-		},
-		{
-			name:        "drop primary key",
-			query:       "alter table people drop column id",
-			expectedErr: "Cannot drop column in primary key",
-		},
-		{
-			name:        "table not found",
-			query:       "alter table notFound drop column id",
-			expectedErr: "table not found: notFound",
-		},
-		{
-			name:        "column not found",
-			query:       "alter table people drop column notFound",
-			expectedErr: `table "people" does not have column "notFound"`,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
-			ctx := context.Background()
-			root, _ := dEnv.WorkingRoot(ctx)
-
-			updatedRoot, err := ExecuteSql(t, dEnv, root, tt.query)
-
-			if tt.expectedErr == "" {
-				require.NoError(t, err)
-			} else {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedErr)
-				return
-			}
-
-			require.NotNil(t, updatedRoot)
-			table, _, err := updatedRoot.GetTable(ctx, PeopleTableName)
-			assert.NoError(t, err)
-			sch, err := table.GetSchema(ctx)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expectedSchema, sch)
-
-			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")
-			assert.NoError(t, err)
-			require.True(t, ok)
-
-			rowData, err := updatedTable.GetRowData(ctx)
-			assert.NoError(t, err)
-			var foundRows []row.Row
-			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-				updatedSch, err := updatedTable.GetSchema(ctx)
-				assert.NoError(t, err)
-				r, err := row.FromNoms(updatedSch, key.(types.Tuple), value.(types.Tuple))
 				assert.NoError(t, err)
 				foundRows = append(foundRows, r)
 				return false, nil
@@ -951,10 +562,10 @@ func TestRenameColumn(t *testing.T) {
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
+				schema.NewColumn("is_married", IsMarriedTag, types.IntKind, false),
 				schema.NewColumn("age", AgeTag, types.IntKind, false),
 				schema.NewColumn("newRating", RatingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
+				schema.NewColumn("uuid", UuidTag, types.StringKind, false),
 				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
 			),
 			expectedRows: AllPeopleRows,
@@ -966,10 +577,10 @@ func TestRenameColumn(t *testing.T) {
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
+				schema.NewColumn("is_married", IsMarriedTag, types.IntKind, false),
 				schema.NewColumn("age", AgeTag, types.IntKind, false),
 				schema.NewColumn("newRating", RatingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
+				schema.NewColumn("uuid", UuidTag, types.StringKind, false),
 				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
 			),
 			expectedRows: AllPeopleRows,
@@ -981,10 +592,10 @@ func TestRenameColumn(t *testing.T) {
 				schema.NewColumn("newId", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
+				schema.NewColumn("is_married", IsMarriedTag, types.IntKind, false),
 				schema.NewColumn("age", AgeTag, types.IntKind, false),
 				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
+				schema.NewColumn("uuid", UuidTag, types.StringKind, false),
 				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
 			),
 			expectedRows: AllPeopleRows,
@@ -1001,15 +612,14 @@ func TestRenameColumn(t *testing.T) {
 		},
 		{
 			name:        "column name collision",
-			query:       "alter table people rename column id to age",
-			expectedErr: "A column with the name age already exists",
+			query:       "alter table people rename column id to AGE",
+			expectedErr: "Column \"AGE\" already exists",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
+			dEnv := CreateTestDatabase(t)
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
@@ -1030,11 +640,15 @@ func TestRenameColumn(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedSchema, sch)
 
+			if types.Format_Default != types.Format_LD_1 {
+				return // todo: convert these to enginetests
+			}
+
 			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")
 			assert.NoError(t, err)
 			require.True(t, ok)
 
-			rowData, err := updatedTable.GetRowData(ctx)
+			rowData, err := updatedTable.GetNomsRowData(ctx)
 			assert.NoError(t, err)
 			var foundRows []row.Row
 			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
@@ -1052,7 +666,7 @@ func TestRenameColumn(t *testing.T) {
 	}
 }
 
-func TestRenameTable(t *testing.T) {
+func TestRenameTableStatements(t *testing.T) {
 	tests := []struct {
 		name           string
 		query          string
@@ -1087,6 +701,14 @@ func TestRenameTable(t *testing.T) {
 			expectedRows:   AllAppsRows,
 		},
 		{
+			name:           "alter rename table with alter syntax",
+			query:          "alter table people rename to 123People",
+			oldTableName:   "people",
+			newTableName:   "123People",
+			expectedSchema: PeopleTestSchema,
+			expectedRows:   AllPeopleRows,
+		},
+		{
 			name:        "table not found",
 			query:       "rename table notFound to newNowFound",
 			expectedErr: "table not found: notFound",
@@ -1110,8 +732,7 @@ func TestRenameTable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
+			dEnv := CreateTestDatabase(t)
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
@@ -1128,6 +749,7 @@ func TestRenameTable(t *testing.T) {
 			has, err := updatedRoot.HasTable(ctx, tt.oldTableName)
 			require.NoError(t, err)
 			assert.False(t, has)
+
 			newTable, ok, err := updatedRoot.GetTable(ctx, tt.newTableName)
 			require.NoError(t, err)
 			require.True(t, ok)
@@ -1136,7 +758,11 @@ func TestRenameTable(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedSchema, sch)
 
-			rowData, err := newTable.GetRowData(ctx)
+			if types.Format_Default != types.Format_LD_1 {
+				return // todo: convert these to enginetests
+			}
+
+			rowData, err := newTable.GetNomsRowData(ctx)
 			require.NoError(t, err)
 			var foundRows []row.Row
 			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
@@ -1156,23 +782,21 @@ func TestRenameTable(t *testing.T) {
 }
 
 func TestAlterSystemTables(t *testing.T) {
-	systemTableNames := []string{"dolt_docs", "dolt_log", "dolt_history_people", "dolt_diff_people", "dolt_commit_diff_people"}
+	systemTableNames := []string{"dolt_log", "dolt_history_people", "dolt_diff_people", "dolt_commit_diff_people"} // "dolt_docs",
 	reservedTableNames := []string{"dolt_schemas", "dolt_query_catalog"}
 
 	var dEnv *env.DoltEnv
 	setup := func() {
-		dEnv = dtestutils.CreateTestEnv()
-		CreateTestDatabase(dEnv, t)
+		dEnv = CreateTestDatabase(t)
+		dtestutils.CreateEmptyTestTable(t, dEnv, "dolt_docs", doltdb.DocsSchema)
+		dtestutils.CreateEmptyTestTable(t, dEnv, doltdb.SchemasTableName, SchemasTableSchema())
 
-		dtestutils.CreateTestTable(t, dEnv, "dolt_docs",
-			doltdocs.Schema,
-			NewRow(types.String("LICENSE.md"), types.String("A license")))
-		dtestutils.CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName,
-			dtables.DoltQueryCatalogSchema,
-			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description")))
-		dtestutils.CreateTestTable(t, dEnv, doltdb.SchemasTableName,
-			SchemasTableSchema(),
-			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual")))
+		CreateTestTable(t, dEnv, "dolt_docs", doltdb.DocsSchema,
+			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')")
+		CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
+			"INSERT INTO dolt_query_catalog VALUES ('abc123', 1, 'example', 'select 2+2 from dual', 'description')")
+		CreateTestTable(t, dEnv, doltdb.SchemasTableName, SchemasTableSchema(),
+			"INSERT INTO dolt_schemas (type, name, fragment, id) VALUES ('view', 'name', 'select 2+2 from dual', 1)")
 	}
 
 	t.Run("Create", func(t *testing.T) {
@@ -1240,6 +864,13 @@ func TestParseCreateTableStatement(t *testing.T) {
 				schemaNewColumn(t, "id", 4817, sql.Int32, true, schema.NotNullConstraint{})),
 		},
 		{
+			name:          "Test create table starting with number",
+			query:         "create table 123table (id int primary key)",
+			expectedTable: "`123table`",
+			expectedSchema: dtestutils.CreateSchema(
+				schemaNewColumn(t, "id", 4817, sql.Int32, true, schema.NotNullConstraint{})),
+		},
+		{
 			name:          "Test create two column schema",
 			query:         "create table testTable (id int primary key, age int)",
 			expectedTable: "testTable",
@@ -1252,11 +883,6 @@ func TestParseCreateTableStatement(t *testing.T) {
 			query:         "create table testTable id int, age int",
 			expectedTable: "testTable",
 			expectedErr:   "syntax error",
-		},
-		{
-			name:        "Test bad table name begins with number",
-			query:       "create table 1testTable (id int primary key, age int)",
-			expectedErr: "syntax error",
 		},
 		{
 			name: "Test types",
@@ -1393,7 +1019,7 @@ func TestParseCreateTableStatement(t *testing.T) {
 			expectedTable: "ip2nation",
 			expectedSchema: dtestutils.CreateSchema(
 				schemaNewColumnWDefVal(t, "ip", 7265, sql.Uint32, true, "0", schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "country", 6630, sql.MustCreateStringWithDefaults(sqltypes.Char, 2), false, `""`, schema.NotNullConstraint{})),
+				schemaNewColumnWDefVal(t, "country", 6630, sql.MustCreateStringWithDefaults(sqltypes.Char, 2), false, `''`, schema.NotNullConstraint{})),
 		},
 		{
 			name:          "Test ip2nationCountries",
@@ -1408,13 +1034,13 @@ func TestParseCreateTableStatement(t *testing.T) {
 							lon float NOT NULL default 0.0,
 							PRIMARY KEY (code));`,
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumnWDefVal(t, "code", 7802, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 4), true, `""`, schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "iso_code_2", 9266, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 2), false, `""`, schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "iso_code_3", 8427, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 3), false, `""`),
-				schemaNewColumnWDefVal(t, "iso_country", 7151, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `""`, schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "country", 879, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `""`, schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "lat", 3502, sql.Float32, false, "0", schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "lon", 9907, sql.Float32, false, "0", schema.NotNullConstraint{})),
+				schemaNewColumnWDefVal(t, "code", 7802, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 4), true, `''`, schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "iso_code_2", 9266, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 2), false, `''`, schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "iso_code_3", 8427, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 3), false, `''`),
+				schemaNewColumnWDefVal(t, "iso_country", 7151, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `''`, schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "country", 879, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `''`, schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "lat", 3502, sql.Float32, false, "0.0", schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "lon", 9907, sql.Float32, false, "0.0", schema.NotNullConstraint{})),
 		},
 	}
 
@@ -1487,14 +1113,12 @@ INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5'
 	root, err = ExecuteSql(t, dEnv, root, "CREATE INDEX abc ON child (parent_value);")
 	require.NoError(t, err)
 	_, err = ExecuteSql(t, dEnv, root, "CREATE INDEX abc_idx ON child_idx (parent_value);")
-	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), "duplicate")
-	}
+	require.NoError(t, err)
 	root, err = ExecuteSql(t, dEnv, root, "CREATE UNIQUE INDEX abc_unq ON child_unq (parent_value);")
 	require.NoError(t, err)
 	_, err = ExecuteSql(t, dEnv, root, "CREATE UNIQUE INDEX abc_non_unq ON child_non_unq (parent_value);")
 	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), "UNIQUE constraint violation")
+		assert.Contains(t, err.Error(), "duplicate unique key given")
 	}
 
 	// check foreign keys for updated index (or verify they weren't updated)
@@ -1505,7 +1129,7 @@ INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5'
 	require.Equal(t, "abc", fkChild.TableIndex)
 	fkChildIdx, ok := fkc.GetByNameCaseInsensitive("fk_child_idx")
 	require.True(t, ok)
-	require.Equal(t, "parent_value", fkChildIdx.TableIndex)
+	require.Equal(t, "abc_idx", fkChildIdx.TableIndex)
 	fkChildUnq, ok := fkc.GetByNameCaseInsensitive("fk_child_unq")
 	require.True(t, ok)
 	require.Equal(t, "abc_unq", fkChildUnq.TableIndex)
@@ -1520,7 +1144,7 @@ INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5'
 	require.NoError(t, err)
 	_, err = ExecuteSql(t, dEnv, root, "INSERT INTO child_unq VALUES ('6', 5)")
 	if assert.Error(t, err) {
-		assert.True(t, sql.ErrUniqueKeyViolation.Is(err))
+		assert.True(t, sql.ErrUniqueKeyViolation.Is(err.(sql.WrappedInsertError).Cause))
 	}
 	root, err = ExecuteSql(t, dEnv, root, "INSERT INTO child_non_unq VALUES ('6', 5)")
 	require.NoError(t, err)

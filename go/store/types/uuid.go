@@ -70,11 +70,7 @@ func (v UUID) isPrimitive() bool {
 	return true
 }
 
-func (v UUID) WalkValues(ctx context.Context, cb ValueCallback) error {
-	return nil
-}
-
-func (v UUID) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (v UUID) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
 

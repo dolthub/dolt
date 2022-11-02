@@ -206,7 +206,11 @@ func (v NomsJSON) Compare(ctx *sql.Context, other sql.JSONValue) (cmp int, err e
 
 // ToString implements the sql.JSONValue interface.
 func (v NomsJSON) ToString(ctx *sql.Context) (string, error) {
-	jd, err := types.JSON(v).Inner()
+	return NomsJSONToString(ctx, v)
+}
+
+func NomsJSONToString(ctx context.Context, js NomsJSON) (string, error) {
+	jd, err := types.JSON(js).Inner()
 	if err != nil {
 		return "", err
 	}

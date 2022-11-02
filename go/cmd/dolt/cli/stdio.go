@@ -19,34 +19,33 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"sync/atomic"
-
-	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 
 	"github.com/fatih/color"
 	"github.com/google/uuid"
+	"github.com/vbauerster/mpb/v8/cwriter"
+
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
+var colorOutput = color.Output
+var CliOut = colorOutput
+var CliErr = color.Error
+
 var outputClosed uint64
+
+var InStream io.ReadCloser = os.Stdin
+var OutStream io.WriteCloser = os.Stdout
+
+var ExecuteWithStdioRestored func(userFunc func())
 
 func CloseOutput() {
 	if atomic.CompareAndSwapUint64(&outputClosed, 0, 1) {
 		fmt.Fprintln(CliOut)
 	}
 }
-
-func outputIsClosed() bool {
-	isClosed := atomic.LoadUint64(&outputClosed)
-	return isClosed == 1
-}
-
-var CliOut = color.Output
-var CliErr = color.Error
-
-var ExecuteWithStdioRestored func(userFunc func())
-
-var InStream io.ReadCloser = os.Stdin
-var OutStream io.WriteCloser = os.Stdout
 
 func SetIOStreams(inStream io.ReadCloser, outStream io.WriteCloser) {
 	InStream = inStream
@@ -141,6 +140,11 @@ func PrintErrf(format string, a ...interface{}) {
 	fmt.Fprintf(CliErr, format, a...)
 }
 
+// DeleteAndPrint prints a new message and deletes the old one given the
+// previous messages length. It returns the length of the printed message that
+// should be passed as prevMsgLen on the next call of DeleteAndPrint.
+//
+// DeleteAndPrint does not work for multiline messages.
 func DeleteAndPrint(prevMsgLen int, msg string) int {
 	if outputIsClosed() {
 		return 0
@@ -170,4 +174,87 @@ func DeleteAndPrint(prevMsgLen int, msg string) int {
 
 	Print(string(backspacesAndMsg))
 	return msgLen
+}
+
+// EphemeralPrinter is tool than you can use to print temporary line(s) to the
+// console. Each time Display is called, the output is reset, and you can begin
+// writing anew.
+type EphemeralPrinter struct {
+	w           *cwriter.Writer
+	mu          sync.Mutex // protects the following
+	lines       int
+	atLineStart bool
+}
+
+// NewEphemeralPrinter creates a new EphemeralPrinter.
+func NewEphemeralPrinter() *EphemeralPrinter {
+	var out io.Writer
+	// Bypass the colored writer.
+	if CliOut == colorOutput {
+		if ExecuteWithStdioRestored != nil {
+			ExecuteWithStdioRestored(func() {
+				out = os.Stdout
+			})
+		} else {
+			out = os.Stdout
+		}
+	} else {
+		out = CliOut
+	}
+	w := cwriter.New(out)
+	e := &EphemeralPrinter{w: w, mu: sync.Mutex{}, atLineStart: true}
+	return e
+}
+
+// Printf formats and prints a string to the printer. If no newline character is
+// provided, one will be added to ensure that the output can be cleared in the
+// future. You can print multiple lines.
+func (e *EphemeralPrinter) Printf(format string, a ...interface{}) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if outputIsClosed() {
+		return
+	}
+
+	str := fmt.Sprintf(format, a...)
+	lines := strings.Split(str, "\n")
+	for i, line := range lines {
+		if i != 0 {
+			_, _ = e.w.Write([]byte("\n"))
+			e.lines++
+			e.atLineStart = true
+		}
+
+		_, _ = e.w.Write([]byte(line))
+		if len(line) > 0 {
+			e.atLineStart = false
+		}
+	}
+}
+
+// Display clears the previous output and displays the new text.
+func (e *EphemeralPrinter) Display() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if outputIsClosed() {
+		return
+	}
+
+	if !e.atLineStart {
+		// Cursor needs to be at the start of a line. This will ensure that the
+		// output is cleared properly.
+		_, _ = e.w.Write([]byte("\n"))
+		e.lines++
+		e.atLineStart = true
+	}
+
+	_ = e.w.Flush(e.lines)
+	e.lines = 0
+}
+
+func outputIsClosed() bool {
+	isClosed := atomic.LoadUint64(&outputClosed)
+	return isClosed == 1
 }

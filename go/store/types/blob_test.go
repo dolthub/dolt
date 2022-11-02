@@ -25,7 +25,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"strings"
 	"testing"
@@ -283,7 +282,7 @@ func TestBlobNewParallel(t *testing.T) {
 	vrw := newTestValueStore()
 
 	readAll := func(b Blob) []byte {
-		data, err := ioutil.ReadAll(b.Reader(context.Background()))
+		data, err := io.ReadAll(b.Reader(context.Background()))
 		require.NoError(t, err)
 		return data
 	}

@@ -17,6 +17,7 @@ package commitwalk
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -34,6 +36,18 @@ const (
 	testHomeDir = "/doesnotexist/home"
 	workingDir  = "/doesnotexist/work"
 )
+
+var lastUserTSMillis int64
+
+func MonotonicNow() time.Time {
+	now := time.Now()
+	millis := now.UnixMilli()
+	if millis <= lastUserTSMillis {
+		now = time.UnixMilli(lastUserTSMillis).Add(time.Millisecond)
+	}
+	lastUserTSMillis = now.UnixMilli()
+	return now
+}
 
 func testHomeDirFunc() (string, error) {
 	return testHomeDir, nil
@@ -48,7 +62,7 @@ func createUninitializedEnv() *env.DoltEnv {
 
 func TestGetDotDotRevisions(t *testing.T) {
 	dEnv := createUninitializedEnv()
-	err := dEnv.InitRepo(context.Background(), types.Format_LD_1, "Bill Billerson", "bill@billerson.com", env.DefaultInitBranch)
+	err := dEnv.InitRepo(context.Background(), types.Format_Default, "Bill Billerson", "bill@billerson.com", env.DefaultInitBranch)
 	require.NoError(t, err)
 
 	cs, err := doltdb.NewCommitSpec(env.DefaultInitBranch)
@@ -56,10 +70,11 @@ func TestGetDotDotRevisions(t *testing.T) {
 	commit, err := dEnv.DoltDB.Resolve(context.Background(), cs, nil)
 	require.NoError(t, err)
 
-	rv, err := commit.GetRootValue()
+	rv, err := commit.GetRootValue(context.Background())
 	require.NoError(t, err)
-	rvh, err := dEnv.DoltDB.WriteRootValue(context.Background(), rv)
+	r, rvh, err := dEnv.DoltDB.WriteRootValue(context.Background(), rv)
 	require.NoError(t, err)
+	rv = r
 
 	// Create 5 commits on main.
 	mainCommits := make([]*doltdb.Commit, 6)
@@ -108,6 +123,7 @@ func TestGetDotDotRevisions(t *testing.T) {
 
 	res, err := GetDotDotRevisions(context.Background(), dEnv.DoltDB, featureHash, dEnv.DoltDB, mainHash, 100)
 	require.NoError(t, err)
+
 	assert.Len(t, res, 7)
 	assertEqualHashes(t, featureCommits[7], res[0])
 	assertEqualHashes(t, featureCommits[6], res[1])
@@ -200,7 +216,7 @@ func assertEqualHashes(t *testing.T, lc, rc *doltdb.Commit) {
 }
 
 func mustCreateCommit(t *testing.T, ddb *doltdb.DoltDB, bn string, rvh hash.Hash, parents ...*doltdb.Commit) *doltdb.Commit {
-	cm, err := doltdb.NewCommitMeta("Bill Billerson", "bill@billerson.com", "A New Commit.")
+	cm, err := datas.NewCommitMetaWithUserTS("Bill Billerson", "bill@billerson.com", "A New Commit.", MonotonicNow())
 	require.NoError(t, err)
 	pcs := make([]*doltdb.CommitSpec, 0, len(parents))
 	for _, parent := range parents {
@@ -215,13 +231,13 @@ func mustCreateCommit(t *testing.T, ddb *doltdb.DoltDB, bn string, rvh hash.Hash
 }
 
 func mustForkDB(t *testing.T, fromDB *doltdb.DoltDB, bn string, cm *doltdb.Commit) *env.DoltEnv {
-	stref, err := cm.GetStRef()
+	h, err := cm.HashOf()
 	require.NoError(t, err)
 	forkEnv := createUninitializedEnv()
-	err = forkEnv.InitRepo(context.Background(), types.Format_LD_1, "Bill Billerson", "bill@billerson.com", env.DefaultInitBranch)
+	err = forkEnv.InitRepo(context.Background(), types.Format_Default, "Bill Billerson", "bill@billerson.com", env.DefaultInitBranch)
 	require.NoError(t, err)
-	p1 := make(chan datas.PullProgress)
-	p2 := make(chan datas.PullerEvent)
+	p1 := make(chan pull.PullProgress)
+	p2 := make(chan pull.Stats)
 	go func() {
 		for range p1 {
 		}
@@ -230,9 +246,12 @@ func mustForkDB(t *testing.T, fromDB *doltdb.DoltDB, bn string, cm *doltdb.Commi
 		for range p2 {
 		}
 	}()
-	err = forkEnv.DoltDB.PullChunks(context.Background(), "", fromDB, stref, p1, p2)
+	err = forkEnv.DoltDB.PullChunks(context.Background(), "", fromDB, h, p1, p2)
+	if err == pull.ErrDBUpToDate {
+		err = nil
+	}
 	require.NoError(t, err)
-	err = forkEnv.DoltDB.SetHead(context.Background(), ref.NewBranchRef(bn), stref)
+	err = forkEnv.DoltDB.SetHead(context.Background(), ref.NewBranchRef(bn), h)
 	require.NoError(t, err)
 	return forkEnv
 }

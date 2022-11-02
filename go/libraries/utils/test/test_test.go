@@ -16,7 +16,6 @@ package test
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -39,7 +38,7 @@ func TestLDTestUtils(t *testing.T) {
 	}
 
 	fName := "test.data"
-	err = ioutil.WriteFile(fName, data, os.ModePerm)
+	err = os.WriteFile(fName, data, os.ModePerm)
 
 	if err != nil {
 		t.Fatal("Couldn't write to current directory")

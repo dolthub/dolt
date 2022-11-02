@@ -31,13 +31,15 @@ type StrSet struct {
 func newStrSet(items []string, caseSensitive bool) *StrSet {
 	s := &StrSet{make(map[string]bool, len(items)), caseSensitive}
 
-	if items != nil {
-		for _, item := range items {
-			s.items[item] = true
-		}
+	for _, item := range items {
+		s.items[item] = true
 	}
 
 	return s
+}
+
+func NewEmptyStrSet() *StrSet {
+	return newStrSet(nil, true)
 }
 
 func NewStrSet(items []string) *StrSet {

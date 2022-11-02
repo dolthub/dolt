@@ -3,6 +3,13 @@ name: Check Compatibility
 on:
   pull_request:
     branches: [ main ]
+    paths:
+      - 'go/**'
+      - 'integration-tests/**'
+
+concurrency:
+  group: ci-compatibility-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -11,17 +18,17 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ ubuntu-18.04 ]
+        os: [ ubuntu-22.04 ]
     steps:
       - name: Setup Go 1.x
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          go-version: ^1.17
+          go-version: ^1.19
         id: go
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v1
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
         with:
-          node-version: ^12
+          node-version: ^16
       - name: Create CI Bin
         run: |
           mkdir -p ./.ci_bin
@@ -37,8 +44,8 @@ jobs:
           go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
       - name: Setup Dolt Config
         run: |
-          dolt config --global --add user.name 'Liquidata Actions'
-          dolt config --global --add user.email 'actions@liquidata.co'
+          dolt config --global --add user.name 'DoltHub Actions'
+          dolt config --global --add user.email 'actions@dolthub.com'
       - name: Test all
         run: ./runner.sh
         working-directory: ./integration-tests/compatibility

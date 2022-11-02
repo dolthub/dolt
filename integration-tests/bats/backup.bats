@@ -11,6 +11,7 @@ setup() {
     dolt init
     dolt tag v1
     dolt sql -q "create table t1 (a int)"
+    dolt add .
     dolt commit -am "cm"
     dolt branch feature
     dolt remote add origin file://../rem1
@@ -167,10 +168,7 @@ teardown() {
     cd repo1
     dolt backup add bac1 file://../bac1
     dolt backup sync bac1
-    run dolt backup sync bac1
-    [ "$status" -eq 1 ]
-    [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "backup already up to date" ]] || false
+    dolt backup sync bac1
 }
 
 @test "backup: no backup exists" {
@@ -190,6 +188,7 @@ teardown() {
     cd .. && mkdir repo2 && cd repo2
     dolt init
     dolt sql -q "create table s1 (a int)"
+    dolt add .
     dolt commit -am "cm"
 
     dolt backup add bac1 file://../bac1
@@ -238,4 +237,17 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
     [[ "$output" =~ "address conflict with a remote: 'bac1'" ]] || false
+}
+
+@test "backup: sync-url" {
+    cd repo1
+    dolt backup sync-url file://../bac1
+
+    cd ..
+    run dolt backup restore file://./bac1 repo2
+    cd repo2
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
 }

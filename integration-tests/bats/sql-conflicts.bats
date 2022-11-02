@@ -17,7 +17,7 @@ CREATE TABLE two_pk (
   c2 BIGINT,
   PRIMARY KEY (pk1,pk2)
 );
-CREATE TABLE empty (
+CREATE TABLE empty_table (
   pk BIGINT NOT NULL,
   PRIMARY KEY (pk)
 );
@@ -31,7 +31,7 @@ teardown() {
 }
 
 @test "sql-conflicts: read from empty table" {
-    dolt sql -q "SELECT * FROM dolt_conflicts_empty"
+    dolt sql -q "SELECT * FROM dolt_conflicts_empty_table"
 }
 
 @test "sql-conflicts: add conflict" {
@@ -46,7 +46,7 @@ teardown() {
   dolt add .
   dolt commit -m "changed feature_branch"
   dolt checkout main
-  dolt merge feature_branch
+  dolt merge feature_branch -m "merge"
 
   EXPECTED=$( echo -e "table,num_conflicts\none_pk,1\ntwo_pk,1")
   run dolt sql -r csv -q "SELECT * FROM dolt_conflicts ORDER BY \`table\`"
@@ -75,7 +75,7 @@ teardown() {
   [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]] ]] || false
   [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+theirs[[:space:]] ]] || false
 
-  dolt sql --disable-batch <<SQL
+  dolt sql  <<SQL
   set autocommit = off;
   DELETE from dolt_conflicts_two_pk WHERE our_pk1 = 0 and our_pk2 = 0;
   DELETE from dolt_conflicts_one_pk WHERE our_pk1 = 0;
@@ -87,11 +87,10 @@ SQL
   [ "$status" -eq 0 ]
   [[ "$output" =~ "$EXPECTED" ]] || false
 
-  # delete an already resolved conflict a 2nd time is an error
+  # delete an already resolved conflict a 2nd time is fine
   run dolt sql -q "DELETE from dolt_conflicts_one_pk WHERE our_pk1 = 0"
-  [ "$status" -eq 1 ]
+  [ "$status" -eq 0 ]
 }
-
 
 @test "sql-conflicts: modify conflict" {
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0)"
@@ -109,7 +108,7 @@ SQL
   dolt add .
   dolt commit -m "changed feature_branch"
   dolt checkout main
-  dolt merge feature_branch
+  dolt merge feature_branch -m "merge"
 
   EXPECTED=$( echo -e "table,num_conflicts\none_pk,1\ntwo_pk,1")
   run dolt sql -r csv -q "SELECT * FROM dolt_conflicts ORDER BY \`table\`"
@@ -138,7 +137,7 @@ SQL
   [[ "$output" =~ \*[[:space:]]*\|[[:space:]]+ours[[:space:]] ]] || false
   [[ "$output" =~ \*[[:space:]]*\|[[:space:]]+theirs[[:space:]] ]] || false
 
-  dolt sql --disable-batch << SQL
+  dolt sql  << SQL
 set autocommit = off;
 DELETE from dolt_conflicts_one_pk WHERE our_pk1 = 0;
 DELETE from dolt_conflicts_two_pk WHERE our_pk1 = 0 and our_pk2 = 0;
@@ -167,7 +166,7 @@ SQL
   dolt add .
   dolt commit -m "changed feature_branch"
   dolt checkout main
-  dolt merge feature_branch
+  dolt merge feature_branch -m "merge"
 
   EXPECTED=$( echo -e "table,num_conflicts\none_pk,1\ntwo_pk,1")
   run dolt sql -r csv -q "SELECT * FROM dolt_conflicts ORDER BY \`table\`"
@@ -230,7 +229,7 @@ SQL
   dolt add .
   dolt commit -m "changed feature_branch"
   dolt checkout main
-  dolt merge feature_branch
+  dolt merge feature_branch -m "merge"
 
   EXPECTED=$( echo -e "table,num_conflicts\none_pk,5")
   run dolt sql -r csv -q "SELECT * FROM dolt_conflicts"

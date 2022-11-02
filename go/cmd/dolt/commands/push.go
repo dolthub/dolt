@@ -33,8 +33,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
 var pushDocs = cli.CommandDocumentationContent{
@@ -65,13 +65,12 @@ func (cmd PushCmd) Description() string {
 	return "Push to a dolt remote."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd PushCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, pushDocs, ap))
+func (cmd PushCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(pushDocs, ap)
 }
 
-func (cmd PushCmd) createArgParser() *argparser.ArgParser {
+func (cmd PushCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(cli.SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} and other commands.")
 	ap.SupportsFlag(cli.ForceFlag, "f", "Update the remote with local history, overwriting any conflicting history in the remote.")
@@ -85,11 +84,11 @@ func (cmd PushCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pushDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, pushDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	opts, err := env.NewParseOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
+	opts, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
 	if err != nil {
 		var verr errhand.VerboseError
 		switch err {
@@ -110,8 +109,18 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
+	remoteDB, err := opts.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
+	if err != nil {
+		err = actions.HandleInitRemoteStorageClientErr(opts.Remote.Name, opts.Remote.Url, err)
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
 	var verr errhand.VerboseError
-	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, dEnv.TempTableFilesDir(), opts, runProgFuncs, stopProgFuncs)
+	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, remoteDB, tmpDir, opts, buildProgStarter(defaultLanguage), stopProgFuncs)
 	if err != nil {
 		verr = printInfoForPushError(err, opts.Remote, opts.DestRef, opts.RemoteRef)
 	}
@@ -174,76 +183,40 @@ func (ts *TextSpinner) next() string {
 	return string([]rune{spinnerSeq[ts.seqPos]})
 }
 
-func pullerProgFunc(ctx context.Context, pullerEventCh chan datas.PullerEvent) {
-	var pos int
-	var currentTreeLevel int
-	var percentBuffered float64
-	var tableFilesBuffered int
-	var filesUploaded int
-	var ts TextSpinner
+func pullerProgFunc(ctx context.Context, statsCh chan pull.Stats, language progLanguage) {
+	p := cli.NewEphemeralPrinter()
 
-	uploadRate := ""
-
-	for evt := range pullerEventCh {
-		if ctx.Err() != nil {
+	for {
+		select {
+		case <-ctx.Done():
 			return
-		}
-		switch evt.EventType {
-		case datas.NewLevelTWEvent:
-			if evt.TWEventDetails.TreeLevel != 1 {
-				currentTreeLevel = evt.TWEventDetails.TreeLevel
-				percentBuffered = 0
+		case stats, ok := <-statsCh:
+			if !ok {
+				return
 			}
-		case datas.DestDBHasTWEvent:
-			if evt.TWEventDetails.TreeLevel != -1 {
-				currentTreeLevel = evt.TWEventDetails.TreeLevel
+			if language == downloadLanguage {
+				p.Printf("Downloaded %s chunks, %s @ %s/s.",
+					humanize.Comma(int64(stats.FetchedSourceChunks)),
+					humanize.Bytes(stats.FetchedSourceBytes),
+					humanize.SIWithDigits(stats.FetchedSourceBytesPerSec, 2, "B"),
+				)
+			} else {
+				p.Printf("Uploaded %s of %s @ %s/s.",
+					humanize.Bytes(stats.FinishedSendBytes),
+					humanize.Bytes(stats.BufferedSendBytes),
+					humanize.SIWithDigits(stats.SendBytesPerSec, 2, "B"),
+				)
 			}
-
-		case datas.LevelUpdateTWEvent:
-			if evt.TWEventDetails.TreeLevel != -1 {
-				currentTreeLevel = evt.TWEventDetails.TreeLevel
-				toBuffer := evt.TWEventDetails.ChunksInLevel - evt.TWEventDetails.ChunksAlreadyHad
-
-				if toBuffer > 0 {
-					percentBuffered = 100 * float64(evt.TWEventDetails.ChunksBuffered) / float64(toBuffer)
-				}
-			}
-
-		case datas.LevelDoneTWEvent:
-
-		case datas.TableFileClosedEvent:
-			tableFilesBuffered += 1
-
-		case datas.StartUploadTableFileEvent:
-
-		case datas.UploadTableFileUpdateEvent:
-			bps := float64(evt.TFEventDetails.Stats.Read) / evt.TFEventDetails.Stats.Elapsed.Seconds()
-			uploadRate = humanize.Bytes(uint64(bps)) + "/s"
-
-		case datas.EndUploadTableFileEvent:
-			filesUploaded += 1
+			p.Display()
 		}
-
-		if currentTreeLevel == -1 {
-			continue
-		}
-
-		var msg string
-		if len(uploadRate) > 0 {
-			msg = fmt.Sprintf("%s Tree Level: %d, Percent Buffered: %.2f%%, Files Written: %d, Files Uploaded: %d, Current Upload Speed: %s", ts.next(), currentTreeLevel, percentBuffered, tableFilesBuffered, filesUploaded, uploadRate)
-		} else {
-			msg = fmt.Sprintf("%s Tree Level: %d, Percent Buffered: %.2f%% Files Written: %d, Files Uploaded: %d", ts.next(), currentTreeLevel, percentBuffered, tableFilesBuffered, filesUploaded)
-		}
-
-		pos = cli.DeleteAndPrint(pos, msg)
 	}
 }
 
-func progFunc(ctx context.Context, progChan chan datas.PullProgress) {
-	var latest datas.PullProgress
+func progFunc(ctx context.Context, progChan chan pull.PullProgress) {
+	var latest pull.PullProgress
 	last := time.Now().UnixNano() - 1
-	lenPrinted := 0
 	done := false
+	p := cli.NewEphemeralPrinter()
 	for !done {
 		if ctx.Err() != nil {
 			return
@@ -266,47 +239,47 @@ func progFunc(ctx context.Context, progChan chan datas.PullProgress) {
 		if done || deltaTime > halfSec {
 			last = nowUnix
 			if latest.KnownCount > 0 {
-				progMsg := fmt.Sprintf("Counted chunks: %d, Buffered chunks: %d)", latest.KnownCount, latest.DoneCount)
-				lenPrinted = cli.DeleteAndPrint(lenPrinted, progMsg)
+				p.Printf("Counted chunks: %d, Buffered chunks: %d)\n", latest.KnownCount, latest.DoneCount)
+				p.Display()
 			}
 		}
 	}
+	p.Display()
+}
 
-	if lenPrinted > 0 {
-		cli.Println()
+// progLanguage is the language to use when displaying progress for a pull from a src db to a sink db.
+type progLanguage int
+
+const (
+	defaultLanguage progLanguage = iota
+	downloadLanguage
+)
+
+func buildProgStarter(language progLanguage) actions.ProgStarter {
+	return func(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.Stats) {
+		statsCh := make(chan pull.Stats, 128)
+		progChan := make(chan pull.PullProgress, 128)
+		wg := &sync.WaitGroup{}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			progFunc(ctx, progChan)
+		}()
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pullerProgFunc(ctx, statsCh, language)
+		}()
+
+		return wg, progChan, statsCh
 	}
 }
 
-func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent) {
-	pullerEventCh := make(chan datas.PullerEvent, 128)
-	progChan := make(chan datas.PullProgress, 128)
-	wg := &sync.WaitGroup{}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		progFunc(ctx, progChan)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		pullerProgFunc(ctx, pullerEventCh)
-	}()
-
-	return wg, progChan, pullerEventCh
-}
-
-func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) {
+func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, statsCh chan pull.Stats) {
 	cancel()
 	close(progChan)
-	close(pullerEventCh)
+	close(statsCh)
 	wg.Wait()
-
-	cli.Println()
-}
-
-func bytesPerSec(bytes uint64, start time.Time) string {
-	bps := float64(bytes) / float64(time.Since(start).Seconds())
-	return humanize.Bytes(uint64(bps))
 }

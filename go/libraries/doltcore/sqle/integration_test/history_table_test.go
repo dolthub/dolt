@@ -31,7 +31,7 @@ import (
 )
 
 func TestHistoryTable(t *testing.T) {
-	SkipByDefaultInCI(t)
+	sqle.SkipByDefaultInCI(t)
 	dEnv := setupHistoryTests(t)
 	for _, test := range historyTableTests() {
 		t.Run(test.name, func(t *testing.T) {
@@ -212,7 +212,7 @@ func setupHistoryTests(t *testing.T) *env.DoltEnv {
 
 	// get commit hashes from the log table
 	q := "select commit_hash, date from dolt_log order by date desc;"
-	rows, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, root, q)
+	rows, err := sqle.ExecuteSelect(t, dEnv, root, q)
 	require.NoError(t, err)
 	require.Equal(t, 5, len(rows))
 	HEAD = rows[0][0].(string)
@@ -234,7 +234,7 @@ func testHistoryTable(t *testing.T, test historyTableTest, dEnv *env.DoltEnv) {
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 
-	actRows, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, root, test.query)
+	actRows, err := sqle.ExecuteSelect(t, dEnv, root, test.query)
 	require.NoError(t, err)
 
 	require.Equal(t, len(test.rows), len(actRows))

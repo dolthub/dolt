@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -31,11 +32,13 @@ import (
 
 const DoltPushFuncName = "dolt_push"
 
+// Deprecated: please use the version in the dprocedures package
 type DoltPushFunc struct {
 	expression.NaryExpression
 }
 
 // NewPushFunc creates a new PushFunc expression.
+// Deprecated: please use the version in the dprocedures package
 func NewPushFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltPushFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
@@ -59,10 +62,21 @@ func (d DoltPushFunc) WithChildren(children ...sql.Expression) (sql.Expression, 
 }
 
 func (d DoltPushFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	args, err := getDoltArgs(ctx, row, d.Children())
+	if err != nil {
+		return cmdFailure, err
+	}
+	return DoDoltPush(ctx, args)
+}
+
+func DoDoltPush(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
 		return cmdFailure, fmt.Errorf("empty database name")
+	}
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return cmdFailure, err
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
@@ -72,22 +86,25 @@ func (d DoltPushFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return cmdFailure, fmt.Errorf("could not load database %s", dbName)
 	}
 
-	ap := cli.CreatePushArgParser()
-	args, err := getDoltArgs(ctx, row, d.Children())
+	apr, err := cli.CreatePushArgParser().Parse(args)
 	if err != nil {
 		return cmdFailure, err
 	}
 
-	apr, err := ap.Parse(args)
+	opts, err := env.NewPushOpts(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
 	if err != nil {
 		return cmdFailure, err
+	}
+	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb, opts.Remote, true)
+	if err != nil {
+		return 1, actions.HandleInitRemoteStorageClientErr(opts.Remote.Name, opts.Remote.Url, err)
 	}
 
-	opts, err := env.NewParseOpts(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
+	tmpDir, err := dbData.Rsw.TempTableFilesDir()
 	if err != nil {
 		return cmdFailure, err
 	}
-	err = actions.DoPush(ctx, dbData.Rsr, dbData.Rsw, dbData.Ddb, dbData.Rsw.TempTableFilesDir(), opts, runProgFuncs, stopProgFuncs)
+	err = actions.DoPush(ctx, dbData.Rsr, dbData.Rsw, dbData.Ddb, remoteDB, tmpDir, opts, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:
@@ -98,5 +115,6 @@ func (d DoltPushFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 			return cmdFailure, err
 		}
 	}
+	// TODO : set upstream should be persisted outside of session
 	return cmdSuccess, nil
 }

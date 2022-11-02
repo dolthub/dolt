@@ -26,6 +26,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
@@ -55,6 +57,8 @@ type CSVReader struct {
 	numLine         int
 	fieldsPerRecord int
 }
+
+var _ table.SqlTableReader = (*CSVReader)(nil)
 
 // OpenCSVReader opens a reader at a given path within a given filesys.  The CSVFileInfo should describe the csv file
 // being opened.
@@ -98,6 +102,18 @@ func NewCSVReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *CSVFileInfo) 
 	}, nil
 }
 
+// trimBOM checks if the given string has the Byte Order Mark, and removes it if it is
+// the BOM is there if the first 3 bytes are xEF\xBB\xBF and indicates that a file is in UTF-8 encoding
+func trimBOM(s string) string {
+	if len(s) < 3 {
+		return s
+	}
+	if s[0] == '\xEF' && s[1] == '\xBB' && s[2] == '\xBF' {
+		return s[3:]
+	}
+	return s
+}
+
 func getColHeaders(br *bufio.Reader, info *CSVFileInfo) ([]string, error) {
 	colStrs := info.Columns
 	if info.HasHeaderLine {
@@ -108,7 +124,7 @@ func getColHeaders(br *bufio.Reader, info *CSVFileInfo) ([]string, error) {
 		} else if strings.TrimSpace(line) == "" {
 			return nil, errors.New("Header line is empty")
 		}
-
+		line = trimBOM(line)
 		colStrsFromFile, err := csvSplitLine(line, info.Delim, info.EscapeQuotes)
 
 		if err != nil {
@@ -176,6 +192,64 @@ func (csvr *CSVReader) ReadRow(ctx context.Context) (row.Row, error) {
 	}
 
 	return row.New(csvr.nbf, csvr.sch, taggedVals)
+}
+
+func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
+	if csvr.isDone {
+		return nil, io.EOF
+	}
+
+	rowVals, err := csvr.csvReadRecords(nil)
+
+	if err == io.EOF {
+		csvr.isDone = true
+		return nil, io.EOF
+	}
+
+	schSize := csvr.sch.GetAllCols().Size()
+	if len(rowVals) != schSize {
+		var out strings.Builder
+		for _, cv := range rowVals {
+			if cv != nil {
+				out.WriteString(*cv)
+			}
+			out.WriteRune(',')
+		}
+
+		badMpStr, unusedRowValues := interpretRowSizeError(csvr.sch, rowVals)
+
+		args := []string{
+			fmt.Sprintf("CSV reader expected %d values, but saw %d.", schSize, len(rowVals)),
+			fmt.Sprintf("row values: '%s'", badMpStr),
+		}
+
+		if len(unusedRowValues) > 0 {
+			args = append(args, fmt.Sprintf("with the following values left over: '%v'", unusedRowValues))
+		}
+
+		return rowValsToSQLRows(rowVals), table.NewBadRow(nil,
+			args...,
+		)
+	}
+
+	if err != nil {
+		return rowValsToSQLRows(rowVals), table.NewBadRow(nil, err.Error())
+	}
+
+	return rowValsToSQLRows(rowVals), nil
+}
+
+func rowValsToSQLRows(rowVals []*string) sql.Row {
+	var sqlRow sql.Row
+	for _, rowVal := range rowVals {
+		if rowVal == nil {
+			sqlRow = append(sqlRow, nil)
+		} else {
+			sqlRow = append(sqlRow, *rowVal)
+		}
+	}
+
+	return sqlRow
 }
 
 // GetSchema gets the schema of the rows that this reader will return
@@ -407,4 +481,44 @@ func (csvr *CSVReader) parseQuotedField(rs *recordState) (kontinue bool, err err
 			return false, err
 		}
 	}
+}
+
+// interpretRowSizeError returns a format map (written as a string) of a set of columns to their row values. It also
+// returns a slice of an unused strings.
+func interpretRowSizeError(schema schema.Schema, rowVals []*string) (string, []string) {
+	cols := schema.GetAllCols().GetColumns()
+
+	keyValPairs := make([][]string, len(cols))
+	unusedRowValues := make([]string, 0)
+
+	// 1. Start by adding all cols to the map and their relevant pair
+	for i, col := range cols {
+		if i >= len(rowVals) || rowVals[i] == nil {
+			keyValPairs[i] = []string{col.Name, ""}
+		} else {
+			keyValPairs[i] = []string{col.Name, *rowVals[i]}
+		}
+	}
+
+	// 2. Append any unused row values to print to the user
+	for i := len(cols); i < len(rowVals); i++ {
+		if rowVals[i] == nil {
+			unusedRowValues = append(unusedRowValues, fmt.Sprintf("%q", ""))
+		} else {
+			unusedRowValues = append(unusedRowValues, fmt.Sprintf("%q", *rowVals[i]))
+		}
+	}
+
+	// 3. Pretty print the column names to value pairings
+	var b bytes.Buffer
+
+	b.Write([]byte("{\n"))
+
+	for _, pair := range keyValPairs {
+		b.Write([]byte(fmt.Sprintf("\t%q: %q\n", pair[0], pair[1])))
+	}
+
+	b.Write([]byte("}\n"))
+
+	return b.String(), unusedRowValues
 }

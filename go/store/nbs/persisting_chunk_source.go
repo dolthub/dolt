@@ -95,14 +95,14 @@ func (ccs *persistingChunkSource) getReader() chunkReader {
 	return ccs.cs
 }
 
-func (ccs *persistingChunkSource) Close() error {
+func (ccs *persistingChunkSource) close() error {
 	// persistingChunkSource does not own |cs| or |mt|. No need to close them.
 	return nil
 }
 
-func (ccs *persistingChunkSource) Clone() chunkSource {
+func (ccs *persistingChunkSource) clone() (chunkSource, error) {
 	// persistingChunkSource does not own |cs| or |mt|. No need to Clone.
-	return ccs
+	return ccs, nil
 }
 
 func (ccs *persistingChunkSource) has(h addr) (bool, error) {
@@ -134,7 +134,7 @@ func (ccs *persistingChunkSource) get(ctx context.Context, h addr, stats *Stats)
 	return cr.get(ctx, h, stats)
 }
 
-func (ccs *persistingChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (bool, error) {
+func (ccs *persistingChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
 	cr := ccs.getReader()
 	if cr == nil {
 		return false, ErrNoReader
@@ -142,7 +142,7 @@ func (ccs *persistingChunkSource) getMany(ctx context.Context, eg *errgroup.Grou
 	return cr.getMany(ctx, eg, reqs, found, stats)
 }
 
-func (ccs *persistingChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (bool, error) {
+func (ccs *persistingChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
 	cr := ccs.getReader()
 	if cr == nil {
 		return false, ErrNoReader
@@ -226,32 +226,18 @@ func (ccs *persistingChunkSource) reader(ctx context.Context) (io.Reader, error)
 	return ccs.cs.reader(ctx)
 }
 
-func (ccs *persistingChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error) {
-	err = ccs.wait()
-
-	if err != nil {
-		return 0, false, err
-	}
-
-	if ccs.cs == nil {
-		return 0, false, ErrNoChunkSource
-	}
-
-	return ccs.cs.calcReads(reqs, blockSize)
-}
-
-func (ccs *persistingChunkSource) extract(ctx context.Context, chunks chan<- extractRecord) error {
+func (ccs *persistingChunkSource) size() (uint64, error) {
 	err := ccs.wait()
 
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if ccs.cs == nil {
-		return ErrNoChunkSource
+		return 0, ErrNoChunkSource
 	}
 
-	return ccs.cs.extract(ctx, chunks)
+	return ccs.cs.size()
 }
 
 type emptyChunkSource struct{}
@@ -268,11 +254,11 @@ func (ecs emptyChunkSource) get(ctx context.Context, h addr, stats *Stats) ([]by
 	return nil, nil
 }
 
-func (ecs emptyChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (bool, error) {
+func (ecs emptyChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
 	return true, nil
 }
 
-func (ecs emptyChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (bool, error) {
+func (ecs emptyChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
 	return true, nil
 }
 
@@ -296,18 +282,18 @@ func (ecs emptyChunkSource) reader(context.Context) (io.Reader, error) {
 	return &bytes.Buffer{}, nil
 }
 
+func (ecs emptyChunkSource) size() (uint64, error) {
+	return 0, nil
+}
+
 func (ecs emptyChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error) {
 	return 0, true, nil
 }
 
-func (ecs emptyChunkSource) extract(ctx context.Context, chunks chan<- extractRecord) error {
+func (ecs emptyChunkSource) close() error {
 	return nil
 }
 
-func (ecs emptyChunkSource) Close() error {
-	return nil
-}
-
-func (ecs emptyChunkSource) Clone() chunkSource {
-	return ecs
+func (ecs emptyChunkSource) clone() (chunkSource, error) {
+	return ecs, nil
 }

@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // SendMetricsCommand is the command used for sending metrics
@@ -63,18 +62,22 @@ func (cmd SendMetricsCmd) Hidden() bool {
 	return true
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd SendMetricsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd SendMetricsCmd) Docs() *cli.CommandDocumentation {
 	return nil
+}
+
+func (cmd SendMetricsCmd) ArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(outputFlag, "o", "Flush events to stdout.")
+	return ap
 }
 
 // Exec is the implementation of the command that flushes the events to the grpc service
 // Exec executes the command
 func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(outputFlag, "o", "Flush events to stdout.")
+	ap := cmd.ArgParser()
 
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{ShortDesc: sendMetricsShortDesc}, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{ShortDesc: sendMetricsShortDesc}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
@@ -148,14 +151,14 @@ func getGRPCEmitter(dEnv *env.DoltEnv) *events.GrpcEmitter {
 	}
 
 	hostAndPort := fmt.Sprintf("%s:%d", host, port)
-	endpoint, opts, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
+	cfg, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: hostAndPort,
 		Insecure: insecure,
 	})
 	if err != nil {
 		return nil
 	}
-	conn, err := grpc.Dial(endpoint, opts...)
+	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
 	if err != nil {
 		return nil
 	}

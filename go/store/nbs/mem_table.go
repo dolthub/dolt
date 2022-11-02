@@ -138,13 +138,13 @@ func (mt *memTable) get(ctx context.Context, h addr, stats *Stats) ([]byte, erro
 	return mt.chunks[h], nil
 }
 
-func (mt *memTable) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (bool, error) {
+func (mt *memTable) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
 	var remaining bool
 	for _, r := range reqs {
 		data := mt.chunks[*r.a]
 		if data != nil {
 			c := chunks.NewChunkWithHash(hash.Hash(*r.a), data)
-			found(&c)
+			found(ctx, &c)
 		} else {
 			remaining = true
 		}
@@ -152,13 +152,13 @@ func (mt *memTable) getMany(ctx context.Context, eg *errgroup.Group, reqs []getR
 	return remaining, nil
 }
 
-func (mt *memTable) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (bool, error) {
+func (mt *memTable) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
 	var remaining bool
 	for _, r := range reqs {
 		data := mt.chunks[*r.a]
 		if data != nil {
 			c := chunks.NewChunkWithHash(hash.Hash(*r.a), data)
-			found(ChunkToCompressedChunk(c))
+			found(ctx, ChunkToCompressedChunk(c))
 		} else {
 			remaining = true
 		}
@@ -218,6 +218,6 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []by
 	return name, buff[:tableSize], count, nil
 }
 
-func (mt *memTable) Close() error {
+func (mt *memTable) close() error {
 	return nil
 }

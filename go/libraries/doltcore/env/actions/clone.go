@@ -18,9 +18,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
+	"sort"
 	"sync"
+
+	"github.com/dustin/go-humanize"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -28,8 +30,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/strhelp"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -50,6 +55,7 @@ var ErrUserNotFound = errors.New("could not determine user name. run dolt config
 var ErrEmailNotFound = errors.New("could not determine email. run dolt config --global --add user.email")
 var ErrCloneFailed = errors.New("clone failed")
 
+// EnvForClone creates a new DoltEnv and configures it with repo state from the specified remote. The returned DoltEnv is ready for content to be cloned into it. The directory used for the new DoltEnv is determined by resolving the specified dir against the specified Filesys.
 func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider) (*env.DoltEnv, error) {
 	exists, _ := fs.Exists(filepath.Join(dir, dbfactory.DoltDir))
 
@@ -58,20 +64,17 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 	}
 
 	err := fs.MkDirs(dir)
-
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateDirectory, dir, err.Error())
 	}
 
-	err = os.Chdir(dir)
-
+	newFs, err := fs.WithWorkingDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToAccessDir, dir, err.Error())
 	}
 
-	dEnv := env.Load(ctx, homeProvider, fs, doltdb.LocalDirDoltDB, version)
+	dEnv := env.Load(ctx, homeProvider, newFs, doltdb.LocalDirDoltDB, version)
 	err = dEnv.InitRepoWithNoData(ctx, nbf)
-
 	if err != nil {
 		return nil, fmt.Errorf("%w; %s", ErrFailedToInitRepo, err.Error())
 	}
@@ -79,7 +82,6 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 	dEnv.RSLoadErr = nil
 	if !env.IsEmptyRemote(r) {
 		dEnv.RepoState, err = env.CloneRepoState(dEnv.FS, r)
-
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateRepoStateWithRemote, r.Name, err.Error())
 		}
@@ -88,43 +90,75 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 	return dEnv, nil
 }
 
-func cloneProg(eventCh <-chan datas.TableFileEvent) {
+func cloneProg(eventCh <-chan pull.TableFileEvent) {
 	var (
 		chunks            int64
 		chunksDownloading int64
 		chunksDownloaded  int64
-		cliPos            int
+		currStats         = make(map[string]iohelp.ReadStats)
+		tableFiles        = make(map[string]*nbs.TableFile)
 	)
 
-	cliPos = cli.DeleteAndPrint(cliPos, "Retrieving remote information.")
+	p := cli.NewEphemeralPrinter()
+
+	p.Printf("Retrieving remote information.\n")
+	p.Display()
+
 	for tblFEvt := range eventCh {
 		switch tblFEvt.EventType {
-		case datas.Listed:
+		case pull.Listed:
 			for _, tf := range tblFEvt.TableFiles {
+				c := tf
+				tableFiles[c.FileID()] = &c
 				chunks += int64(tf.NumChunks())
 			}
-		case datas.DownloadStart:
+		case pull.DownloadStart:
 			for _, tf := range tblFEvt.TableFiles {
 				chunksDownloading += int64(tf.NumChunks())
 			}
-		case datas.DownloadSuccess:
+		case pull.DownloadStats:
+			for i, s := range tblFEvt.Stats {
+				tf := tblFEvt.TableFiles[i]
+				currStats[tf.FileID()] = s
+			}
+		case pull.DownloadSuccess:
 			for _, tf := range tblFEvt.TableFiles {
 				chunksDownloading -= int64(tf.NumChunks())
 				chunksDownloaded += int64(tf.NumChunks())
+				delete(currStats, tf.FileID())
 			}
-		case datas.DownloadFailed:
+		case pull.DownloadFailed:
 			// Ignore for now and output errors on the main thread
+			for _, tf := range tblFEvt.TableFiles {
+				delete(currStats, tf.FileID())
+			}
 		}
 
-		str := fmt.Sprintf("%s of %s chunks complete. %s chunks being downloaded currently.", strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunks), strhelp.CommaIfy(chunksDownloading))
-		cliPos = cli.DeleteAndPrint(cliPos, str)
+		p.Printf("%s of %s chunks complete. %s chunks being downloaded currently.\n",
+			strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunks), strhelp.CommaIfy(chunksDownloading))
+		for _, fileId := range sortedKeys(currStats) {
+			s := currStats[fileId]
+			bps := float64(s.Read) / s.Elapsed.Seconds()
+			rate := humanize.Bytes(uint64(bps)) + "/s"
+			p.Printf("Downloading file: %s (%s chunks) - %.2f%% downloaded, %s\n",
+				fileId, strhelp.CommaIfy(int64((*tableFiles[fileId]).NumChunks())), s.Percent*100, rate)
+		}
+		p.Display()
 	}
+	p.Display()
+}
 
-	cli.Println()
+func sortedKeys(m map[string]iohelp.ReadStats) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, dEnv *env.DoltEnv) error {
-	eventCh := make(chan datas.TableFileEvent, 128)
+	eventCh := make(chan pull.TableFileEvent, 128)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -139,7 +173,7 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	wg.Wait()
 
 	if err != nil {
-		if err == datas.ErrNoData {
+		if err == pull.ErrNoData {
 			err = ErrNoDataAtRemote
 		}
 		return fmt.Errorf("%w; %s", ErrCloneFailed, err.Error())
@@ -156,15 +190,11 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 
 	// If we couldn't find a branch but the repo cloned successfully, it's empty. Initialize it instead of pulling from
 	// the remote.
-	performPull := true
 	if branch == "" {
-		err = InitEmptyClonedRepo(ctx, dEnv)
-		if err != nil {
+		if err = InitEmptyClonedRepo(ctx, dEnv); err != nil {
 			return nil
 		}
-
 		branch = env.GetDefaultInitBranch(dEnv.Config)
-		performPull = false
 	}
 
 	cs, _ := doltdb.NewCommitSpec(branch)
@@ -175,7 +205,7 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 
 	}
 
-	rootVal, err := cm.GetRootValue()
+	rootVal, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: %s; %s", ErrFailedToGetRootValue, branch, err.Error())
 	}
@@ -208,13 +238,6 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		}
 	}
 
-	if performPull {
-		err = SaveDocsFromRoot(ctx, rootVal, dEnv)
-		if err != nil {
-			return ErrFailedToUpdateDocs
-		}
-	}
-
 	// TODO: make this interface take a DoltRef and marshal it automatically
 	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: ref.NewBranchRef(branch)})
 	if err != nil {
@@ -226,7 +249,14 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		return err
 	}
 
-	ws := doltdb.EmptyWorkingSet(wsRef)
+	// Retrieve existing working set, delete if it exists
+	ws, err := dEnv.DoltDB.ResolveWorkingSet(ctx, wsRef)
+	if ws != nil {
+		dEnv.DoltDB.DeleteWorkingSet(ctx, wsRef)
+	}
+	ws = doltdb.EmptyWorkingSet(wsRef)
+
+	// Update to use current Working and Staged root
 	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(rootVal).WithStagedRoot(rootVal))
 	if err != nil {
 		return err
@@ -248,7 +278,7 @@ func InitEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 		return ErrEmailNotFound
 	}
 
-	err := dEnv.InitDBWithTime(ctx, types.Format_Default, name, email, initBranch, doltdb.CommitNowFunc())
+	err := dEnv.InitDBWithTime(ctx, types.Format_Default, name, email, initBranch, datas.CommitNowFunc())
 	if err != nil {
 		return ErrFailedToInitRepo
 	}

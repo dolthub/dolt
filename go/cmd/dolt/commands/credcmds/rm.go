@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var rmDocs = cli.CommandDocumentationContent{
@@ -46,13 +45,12 @@ func (cmd RmCmd) Description() string {
 	return rmDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd RmCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, rmDocs, ap))
+func (cmd RmCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(rmDocs, ap)
 }
 
-func (cmd RmCmd) createArgParser() *argparser.ArgParser {
+func (cmd RmCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	return ap
 }
@@ -70,8 +68,8 @@ func (cmd RmCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, rmDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, rmDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	args = apr.Args
 

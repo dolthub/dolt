@@ -24,7 +24,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -107,18 +106,17 @@ func TestRangeReader(t *testing.T) {
 	sch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
 
-	var db datas.Database
 	storage := &chunks.MemoryStorage{}
-	db = datas.NewDatabase(storage.NewView())
-	m, err := types.NewMap(ctx, db)
+	vrw := types.NewValueStore(storage.NewView())
+	m, err := types.NewMap(ctx, vrw)
 	assert.NoError(t, err)
 
 	me := m.Edit()
 	for i := 0; i <= 100; i += 2 {
-		k, err := types.NewTuple(db.Format(), types.Uint(pkTag), types.Int(i))
+		k, err := types.NewTuple(vrw.Format(), types.Uint(pkTag), types.Int(i))
 		require.NoError(t, err)
 
-		v, err := types.NewTuple(db.Format(), types.Uint(valTag), types.Int(100-i))
+		v, err := types.NewTuple(vrw.Format(), types.Uint(valTag), types.Int(100-i))
 		require.NoError(t, err)
 
 		me.Set(k, v)
@@ -164,10 +162,9 @@ func TestRangeReaderOnEmptyMap(t *testing.T) {
 	sch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
 
-	var db datas.Database
 	storage := &chunks.MemoryStorage{}
-	db = datas.NewDatabase(storage.NewView())
-	m, err := types.NewMap(ctx, db)
+	vrw := types.NewValueStore(storage.NewView())
+	m, err := types.NewMap(ctx, vrw)
 	assert.NoError(t, err)
 
 	for _, test := range rangeReaderTests {
@@ -182,26 +179,26 @@ func TestRangeReaderOnEmptyMap(t *testing.T) {
 	}
 }
 
-func greaterThanCheck(n int64) func(k types.Tuple) (bool, error) {
-	return func(k types.Tuple) (bool, error) {
-		col0, err := k.Get(1)
+type greaterThanCheck int64
 
-		if err != nil {
-			panic(err)
-		}
+func (n greaterThanCheck) Check(ctx context.Context, k types.Tuple) (valid bool, skip bool, err error) {
+	col0, err := k.Get(1)
 
-		return int64(col0.(types.Int)) > n, nil
+	if err != nil {
+		panic(err)
 	}
+
+	return int64(col0.(types.Int)) > int64(n), false, nil
 }
 
-func lessThanCheck(n int64) func(k types.Tuple) (bool, error) {
-	return func(k types.Tuple) (bool, error) {
-		col0, err := k.Get(1)
+type lessThanCheck int64
 
-		if err != nil {
-			panic(err)
-		}
+func (n lessThanCheck) Check(ctx context.Context, k types.Tuple) (valid bool, skip bool, err error) {
+	col0, err := k.Get(1)
 
-		return int64(col0.(types.Int)) < n, nil
+	if err != nil {
+		panic(err)
 	}
+
+	return int64(col0.(types.Int)) < int64(n), false, nil
 }

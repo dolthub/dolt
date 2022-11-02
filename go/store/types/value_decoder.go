@@ -46,6 +46,14 @@ type CodecReader interface {
 	ReadInlineBlob() []byte
 	ReadTimestamp() (time.Time, error)
 	ReadDecimal() (decimal.Decimal, error)
+	ReadGeometry() (Geometry, error)
+	ReadPoint() (Point, error)
+	ReadLineString() (LineString, error)
+	ReadPolygon() (Polygon, error)
+	ReadMultiPoint() (MultiPoint, error)
+	ReadMultiLineString() (MultiLineString, error)
+	ReadMultiPolygon() (MultiPolygon, error)
+	ReadGeomColl() (GeomColl, error)
 	ReadBlob() (Blob, error)
 	ReadJSON() (JSON, error)
 }
@@ -78,6 +86,38 @@ func (r *valueDecoder) ReadBlob() (Blob, error) {
 		return Blob{}, err
 	}
 	return newBlob(seq), nil
+}
+
+func (r *valueDecoder) ReadGeometry() (Geometry, error) {
+	return readGeometry(nil, r)
+}
+
+func (r *valueDecoder) ReadPoint() (Point, error) {
+	return readPoint(nil, r)
+}
+
+func (r *valueDecoder) ReadLineString() (LineString, error) {
+	return readLineString(nil, r)
+}
+
+func (r *valueDecoder) ReadPolygon() (Polygon, error) {
+	return readPolygon(nil, r)
+}
+
+func (r *valueDecoder) ReadMultiPoint() (MultiPoint, error) {
+	return readMultiPoint(nil, r)
+}
+
+func (r *valueDecoder) ReadMultiLineString() (MultiLineString, error) {
+	return readMultiLineString(nil, r)
+}
+
+func (r *valueDecoder) ReadMultiPolygon() (MultiPolygon, error) {
+	return readMultiPolygon(nil, r)
+}
+
+func (r *valueDecoder) ReadGeomColl() (GeomColl, error) {
+	return readGeomColl(nil, r)
 }
 
 func (r *valueDecoder) ReadJSON() (JSON, error) {
@@ -157,10 +197,10 @@ func (r *valueDecoder) readSequence(nbf *NomsBinFormat, kind NomsKind, leafSkipp
 	end := r.pos()
 
 	if level > 0 {
-		return newMetaSequence(r.vrw, r.byteSlice(start, end), offsets, length), nil
+		return newMetaSequence(nbf, r.vrw, r.byteSlice(start, end), offsets, length), nil
 	}
 
-	return newLeafSequence(r.vrw, r.byteSlice(start, end), offsets, length), nil
+	return newLeafSequence(nbf, r.vrw, r.byteSlice(start, end), offsets, length), nil
 }
 
 func (r *valueDecoder) readBlobSequence(nbf *NomsBinFormat) (sequence, error) {
@@ -356,6 +396,98 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		return r.readTuple(nbf)
 	case JSONKind:
 		return r.ReadJSON()
+	case GeometryKind:
+		r.skipKind()
+		buf := []byte(r.ReadString())
+		srid, _, geomType, err := DeserializeEWKBHeader(buf)
+		if err != nil {
+			return nil, err
+		}
+		buf = buf[EWKBHeaderSize:]
+		switch geomType {
+		case WKBPointID:
+			return DeserializeTypesPoint(buf, false, srid), nil
+		case WKBLineID:
+			return DeserializeTypesLine(buf, false, srid), nil
+		case WKBPolyID:
+			return DeserializeTypesPoly(buf, false, srid), nil
+		case WKBMultiPointID:
+			return DeserializeTypesMPoint(buf, false, srid), nil
+		default:
+			return nil, ErrUnknownType
+		}
+	case PointKind:
+		r.skipKind()
+		buf := []byte(r.ReadString())
+		srid, _, geomType, err := DeserializeEWKBHeader(buf)
+		if err != nil {
+			return nil, err
+		}
+		if geomType != WKBPointID {
+			return nil, ErrUnknownType
+		}
+		buf = buf[EWKBHeaderSize:]
+		return DeserializeTypesPoint(buf, false, srid), nil
+	case LineStringKind:
+		r.skipKind()
+		buf := []byte(r.ReadString())
+		srid, _, geomType, err := DeserializeEWKBHeader(buf)
+		if err != nil {
+			return nil, err
+		}
+		if geomType != WKBLineID {
+			return nil, ErrUnknownType
+		}
+		buf = buf[EWKBHeaderSize:]
+		return DeserializeTypesLine(buf, false, srid), nil
+	case PolygonKind:
+		r.skipKind()
+		buf := []byte(r.ReadString())
+		srid, _, geomType, err := DeserializeEWKBHeader(buf)
+		if err != nil {
+			return nil, err
+		}
+		if geomType != WKBPolyID {
+			return nil, ErrUnknownType
+		}
+		buf = buf[EWKBHeaderSize:]
+		return DeserializeTypesPoly(buf, false, srid), nil
+	case MultiPointKind:
+		r.skipKind()
+		buf := []byte(r.ReadString())
+		srid, _, geomType, err := DeserializeEWKBHeader(buf)
+		if err != nil {
+			return nil, err
+		}
+		if geomType != WKBMultiPointID {
+			return nil, ErrUnknownType
+		}
+		buf = buf[EWKBHeaderSize:]
+		return DeserializeTypesMPoint(buf, false, srid), nil
+	case MultiLineStringKind:
+		r.skipKind()
+		buf := []byte(r.ReadString())
+		srid, _, geomType, err := DeserializeEWKBHeader(buf)
+		if err != nil {
+			return nil, err
+		}
+		if geomType != WKBMultiLineID {
+			return nil, ErrUnknownType
+		}
+		buf = buf[EWKBHeaderSize:]
+		return DeserializeTypesMLine(buf, false, srid), nil
+	case MultiPolygonKind:
+		r.skipKind()
+		buf := []byte(r.ReadString())
+		srid, _, geomType, err := DeserializeEWKBHeader(buf)
+		if err != nil {
+			return nil, err
+		}
+		if geomType != WKBMultiPolyID {
+			return nil, ErrUnknownType
+		}
+		buf = buf[EWKBHeaderSize:]
+		return DeserializeTypesMPoly(buf, false, srid), nil
 	case TypeKind:
 		r.skipKind()
 		return r.readType()
@@ -403,6 +535,27 @@ func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
 		r.skipKind()
 		r.skipUint()
 	case StringKind:
+		r.skipKind()
+		r.skipString()
+	case GeometryKind:
+		r.skipKind()
+		r.skipString()
+	case PointKind:
+		r.skipKind()
+		r.skipString()
+	case LineStringKind:
+		r.skipKind()
+		r.skipString()
+	case PolygonKind:
+		r.skipKind()
+		r.skipString()
+	case MultiLineStringKind:
+		r.skipKind()
+		r.skipString()
+	case MultiPointKind:
+		r.skipKind()
+		r.skipString()
+	case MultiPolygonKind:
 		r.skipKind()
 		r.skipString()
 	case ListKind:

@@ -10,76 +10,152 @@ make_repo() {
 }
 
 setup() {
+    skiponwindows "tests are flaky on Windows"
     setup_no_dolt_init
+    mkdir $BATS_TMPDIR/sql-server-test$$
+    nativevar DOLT_ROOT_PATH $BATS_TMPDIR/sql-server-test$$ /p
+    dolt config --global --add user.email "test@test.com"
+    dolt config --global --add user.name "test"
     make_repo repo1
     make_repo repo2
 }
 
 teardown() {
     stop_sql_server
+    # Added this sleep because it was leaving garbage without it.
+    sleep 1
+    rm -rf $BATS_TMPDIR/sql-server-test$$
     teardown_common
 }
 
-@test "sql-server: port in use" {
-    cd repo1
+@test "sql-server: server with no dbs yet should be able to clone" {
+    # make directories outside of the existing init'ed dolt repos to ensure that
+    # we are starting a sql-server with no existing dolt databases inside it
+    tempDir=$(mktemp -d)
+    cd $tempDir
+    mkdir empty_server
+    mkdir remote
 
-    let PORT="$$ % (65536-1024) + 1024"
-    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt &
-    SERVER_PID=$! # will get killed by teardown_common
-    sleep 5 # not using python wait so this works on windows
+    # create a file remote to clone later
+    cd $BATS_TMPDIR/dolt-repo-$$/repo1
+    dolt remote add remote01 file:///$tempDir/remote
+    dolt push remote01 main
 
-    run dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "in use" ]] || false
+    # start the server and ensure there are no databases yet
+    cd $tempDir/empty_server
+    start_sql_server
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ information_schema ]] || false
+    [[ $output =~ mysql ]] || false
+
+    # verify that dolt_clone works
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test01" ""
+    dolt sql-client -P $PORT -u dolt --use-db 'test01' -q"call dolt_clone('file:///$tempDir/remote')" 
 }
 
-@test "sql-server: multi-client" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-
+@test "sql-server: server assumes existing user" {
     cd repo1
-    start_sql_multi_user_server repo1
+    dolt sql -q "create user dolt@'%' identified by '123'"
 
-    cd $BATS_TEST_DIRNAME
-    let PORT="$$ % (65536-1024) + 1024"
-    python3 server_multiclient_test.py $PORT
+    PORT=$( definePORT )
+    dolt sql-server --port=$PORT --user dolt --socket "dolt.$PORT.sock" > log.txt 2>&1 &
+    SERVER_PID=$!
+    sleep 5
+
+    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt --password=wrongpassword <<< "exit;"
+    run grep 'Error authenticating user using MySQL native password' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
 }
 
-@test "sql-server: test autocommit" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-
+@test "sql-server: Database specific system variables should be loaded" {
     cd repo1
-    start_sql_server repo1
+    dolt branch dev
+    dolt branch other
 
-    # No tables at the start
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "No tables in working set" ]] || false
+    start_sql_server
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "SET PERSIST repo1_default_branch = 'dev'"
+    stop_sql_server
+    start_sql_server
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT @@repo1_default_branch;"
+    [ $status -eq 0 ]
+    [[ $output =~ "@@SESSION.repo1_default_branch" ]] || false
+    [[ $output =~ "dev" ]] || false
+    stop_sql_server
 
-    # create table with autocommit off and verify there are still no tables
-    server_query repo1 0 "CREATE TABLE one_pk (
-        pk BIGINT NOT NULL COMMENT 'tag:0',
-        c1 BIGINT COMMENT 'tag:1',
-        c2 BIGINT COMMENT 'tag:2',
-        PRIMARY KEY (pk)
-    )" ""
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "No tables in working set" ]] || false
+    # system variable is lost when starting sql-server outside of the folder
+    # because global config is used.
+    cd ..
+    start_sql_server
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT LENGTH(@@repo1_default_branch);"
+    [ $status -eq 0 ]
+    [[ $output =~ "LENGTH(@@repo1_default_branch)" ]] || false
+    [[ $output =~ " 0 " ]] || false
+    
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SET PERSIST repo1_default_branch = 'other'"
+    stop_sql_server
+    start_sql_server
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT @@repo1_default_branch"
+    [ $status -eq 0 ]
+    [[ $output =~ "@@SESSION.repo1_default_branch" ]] || false
+    [[ $output =~ "other" ]] || false
+    stop_sql_server
 
-    # create table with autocommit on and verify table creation
-    server_query repo1 1 "CREATE TABLE one_pk (
-        pk BIGINT NOT NULL COMMENT 'tag:0',
-        c1 BIGINT COMMENT 'tag:1',
-        c2 BIGINT COMMENT 'tag:2',
-        PRIMARY KEY (pk)
-    )" ""
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "one_pk" ]] || false
+    # ensure we didn't blow away local setting
+    cd repo1
+    start_sql_server_with_args --user dolt --doltcfg-dir './'
+        run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT @@repo1_default_branch"
+    [ $status -eq 0 ]
+    [[ $output =~ "@@SESSION.repo1_default_branch" ]] || false
+    [[ $output =~ "dev" ]] || false
 }
+
+@test "sql-server: user session variables from config" {
+  cd repo1
+  echo "
+privilege_file: privs.json
+user_session_vars:
+- name: user0
+  vars:
+    aws_credentials_file: /Users/user0/.aws/config
+    aws_credentials_profile: default
+- name: user1
+  vars:
+    aws_credentials_file: /Users/user1/.aws/config
+    aws_credentials_profile: lddev" > server.yaml
+
+    dolt sql --privilege-file=privs.json -q "CREATE USER dolt@'127.0.0.1'"
+    dolt sql --privilege-file=privs.json -q "CREATE USER user0@'127.0.0.1' IDENTIFIED BY 'pass0'"
+    dolt sql --privilege-file=privs.json -q "CREATE USER user1@'127.0.0.1' IDENTIFIED BY 'pass1'"
+    dolt sql --privilege-file=privs.json -q "CREATE USER user2@'127.0.0.1' IDENTIFIED BY 'pass2'"
+
+    start_sql_server_with_config "" server.yaml
+
+    run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user0  --password=pass0<<SQL
+SELECT @@aws_credentials_file, @@aws_credentials_profile;
+SQL
+    [[ "$output" =~ /Users/user0/.aws/config.*default ]] || false
+
+    run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user1 --password=pass1<<SQL
+SELECT @@aws_credentials_file, @@aws_credentials_profile;
+SQL
+    [[ "$output" =~ /Users/user1/.aws/config.*lddev ]] || false
+
+    run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user2 --password=pass2<<SQL
+SELECT @@aws_credentials_file, @@aws_credentials_profile;
+SQL
+    [[ "$output" =~ NULL.*NULL ]] || false
+
+    run dolt sql-client --host=127.0.0.1 --port=$PORT --user=user2 --password=pass2<<SQL
+SET @@aws_credentials_file="/Users/should_fail";
+SQL
+    [[ "$output" =~ "Variable 'aws_credentials_file' is a read only variable" ]] || false
+}
+
 
 @test "sql-server: test command line modification" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     start_sql_server repo1
@@ -89,31 +165,37 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false
 
-    server_query repo1 1 "CREATE TABLE one_pk (
+    dolt sql-client -P $PORT -u dolt -q "CREATE TABLE one_pk (
         pk BIGINT NOT NULL,
         c1 BIGINT,
         c2 BIGINT,
-        PRIMARY KEY (pk)
-    )" ""
+        PRIMARY KEY (pk))"
+    
     run dolt ls
-
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
 
     # Add rows on the command line
-    dolt sql -q "insert into one_pk values (1,1,1)"
+    run dolt sql --user=dolt -q "insert into one_pk values (1,1,1)"
+    [ "$status" -eq 1 ]
 
-    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n1,1,1"
+    run dolt sql-client -P $PORT -u dolt -q "SELECT * FROM one_pk"
+    [ $status -eq 0 ]
+    ! [[ $output =~ " 1 " ]] || false
 
     # Test import as well (used by doltpy)
     echo 'pk,c1,c2' > import.csv
     echo '2,2,2' >> import.csv
-    dolt table import -u one_pk import.csv
-    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n1,1,1\n2,2,2"
+    run dolt table import -u one_pk import.csv
+    [ "$status" -eq 1 ]
+    
+    run dolt sql-client -P $PORT -u dolt -q "SELECT * FROM one_pk"
+    [ $status -eq 0 ]
+    ! [[ $output =~ " 2 " ]] || false
 }
 
 @test "sql-server: test dolt sql interface works properly with autocommit" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     start_sql_server repo1
@@ -124,48 +206,50 @@ teardown() {
     [[ "$output" =~ "No tables in working set" ]] || false
 
     # create table with autocommit off and verify there are still no tables
-    server_query repo1 0 "CREATE TABLE one_pk (
-        pk BIGINT NOT NULL COMMENT 'tag:0',
-        c1 BIGINT COMMENT 'tag:1',
-        c2 BIGINT COMMENT 'tag:2',
-        PRIMARY KEY (pk)
-    )" ""
+    dolt sql-client -P $PORT -u dolt --no-auto-commit -q "" "CREATE TABLE one_pk (
+        pk BIGINT NOT NULL,
+        c1 BIGINT,
+        c2 BIGINT,
+        PRIMARY KEY (pk))"
+    
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false
 
     # check that dolt_commit throws an error when there are no changes to commit
-    run server_query repo1 0 "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
-    [ "$status" -eq 1 ]
+    run dolt sql-client -P $PORT -u dolt --no-auto-commit -q "CALL DOLT_COMMIT('-a', '-m', 'Commit1')"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "nothing to commit" ]] || false 
 
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false
 
     # create table with autocommit on and verify table creation
-    server_query repo1 1 "CREATE TABLE one_pk (
+    dolt sql-client -P $PORT -u dolt -q "CREATE TABLE one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c1 BIGINT COMMENT 'tag:1',
         c2 BIGINT COMMENT 'tag:2',
         PRIMARY KEY (pk)
-    )" ""
+    )"
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
 
+    dolt sql --user=dolt -q "CALL DOLT_ADD('.')"
     # check that dolt_commit works properly when autocommit is on
-    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+    run dolt sql --user=dolt -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
     [ "$status" -eq 0 ]
 
     # check that dolt_commit throws error now that there are no working set changes.
-    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+    run dolt sql --user=dolt -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
     [ "$status" -eq 1 ]
 
     # Make a change to the working set but not the staged set.
-    run dolt sql -q "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
+    run dolt sql --user=dolt -q "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
 
     # check that dolt_commit throws error now that there are no staged changes.
-    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+    run dolt sql --user=dolt -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
     [ "$status" -eq 1 ]
 
     run dolt log
@@ -173,271 +257,8 @@ teardown() {
     [[ "$output" =~ "Commit1" ]] || false
 }
 
-@test "sql-server: test basic querying via dolt sql-server" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-
-    cd repo1
-    start_sql_server repo1
-
-    server_query repo1 1 "SHOW tables" ""
-    server_query repo1 1 "CREATE TABLE one_pk (
-        pk BIGINT NOT NULL COMMENT 'tag:0',
-        c1 BIGINT COMMENT 'tag:1',
-        c2 BIGINT COMMENT 'tag:2',
-        PRIMARY KEY (pk)
-    )" ""
-    server_query repo1 1 "SHOW tables" "Table\none_pk"
-    insert_query repo1 1 "INSERT INTO one_pk (pk) VALUES (0)"
-    server_query repo1 1 "SELECT * FROM one_pk ORDER BY pk" "pk,c1,c2\n0,None,None"
-    insert_query repo1 1 "INSERT INTO one_pk (pk,c1) VALUES (1,1)"
-    insert_query repo1 1 "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
-    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
-    update_query repo1 1 "UPDATE one_pk SET c2=c1 WHERE c2 is NULL and c1 IS NOT NULL"
-}
-
-@test "sql-server: test multiple queries on the same connection" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-
-    cd repo1
-    start_sql_server repo1
-
-    multi_query repo1 1 "CREATE TABLE one_pk (
-        pk BIGINT NOT NULL COMMENT 'tag:0',
-        c1 BIGINT COMMENT 'tag:1',
-        c2 BIGINT COMMENT 'tag:2',
-        PRIMARY KEY (pk)
-    );
-    INSERT INTO one_pk (pk) VALUES (0);
-    INSERT INTO one_pk (pk,c1) VALUES (1,1);
-    INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);"
-
-    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
-}
-
-@test "sql-server: test manual commit" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-
-
-    cd repo1
-    start_sql_server repo1
-
-    # check that only main branch exists
-    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmain,Initialize data repository"
-
-    # check that new connections are set to main by default
-    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches WHERE hash = @@repo1_head" "name,latest_commit_message\nmain,Initialize data repository"
-
-    # check no tables on main
-    server_query repo1 0 "SHOW Tables" ""
-
-    # make some changes to main and commit to branch test_branch
-    multi_query repo1 0 "
-    SET @@repo1_head=hashof('main');
-    CREATE TABLE one_pk (
-        pk BIGINT NOT NULL COMMENT 'tag:0',
-        c1 BIGINT COMMENT 'tag:1',
-        c2 BIGINT COMMENT 'tag:2',
-        PRIMARY KEY (pk)
-    );
-    INSERT INTO one_pk (pk) VALUES (0);
-    INSERT INTO one_pk (pk,c1) VALUES (1,1);
-    INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
-    SET @@repo1_head=commit('-m', 'test commit message', '--author', 'John Doe <john@example.com>');
-    INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);"
-
-    # validate new branch was created
-    server_query repo1 0 "SELECT name,latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmain,Initialize data repository\ntest_branch,test commit message"
-
-    # Check that the author information is correct.
-    server_query repo1 0 "SELECT latest_committer,latest_committer_email FROM dolt_branches ORDER BY latest_commit_date DESC LIMIT 1" "latest_committer,latest_committer_email\nJohn Doe,john@example.com"
-
-    # validate no tables on main still
-    server_query repo1 0 "SHOW tables" ""
-
-    # validate tables and data on test_branch
-    server_query repo1 0 "SET @@repo1_head=hashof('test_branch');SHOW tables" ";Table\none_pk"
-    server_query repo1 0 "SET @@repo1_head=hashof('test_branch');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
-}
-
-@test "sql-server: test manual merge" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-
-    cd repo1
-    start_sql_server repo1
-
-    # check that only main branch exists
-    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmain,Initialize data repository"
-
-    # check that new connections are set to main by default
-    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches WHERE hash = @@repo1_head" "name,latest_commit_message\nmain,Initialize data repository"
-
-    # check no tables on main
-    server_query repo1 0 "SHOW Tables" ""
-
-    # make some changes to main and commit to branch test_branch
-    multi_query repo1 0 "
-    SET @@repo1_head=hashof('main');
-    CREATE TABLE one_pk (
-        pk BIGINT NOT NULL COMMENT 'tag:0',
-        c1 BIGINT COMMENT 'tag:1',
-        c2 BIGINT COMMENT 'tag:2',
-        PRIMARY KEY (pk)
-    );
-    INSERT INTO one_pk (pk) VALUES (0);
-    INSERT INTO one_pk (pk,c1) VALUES (1,1);
-    INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
-    SET @@repo1_head=commit('-m', 'test commit message');
-    INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);"
-
-    # validate new branch was created
-    server_query repo1 0 "SELECT name,latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmain,Initialize data repository\ntest_branch,test commit message"
-
-    # validate no tables on main still
-    server_query repo1 0 "SHOW tables" ""
-
-    # Merge the test_branch into main. This should a fast forward merge.
-    multi_query repo1 0 "
-    SET @@repo1_head = merge('test_branch');
-    INSERT INTO dolt_branches (name, hash) VALUES('main', @@repo1_head);"
-
-    # Validate tables and data on main
-    server_query repo1 0 "SET @@repo1_head=hashof('main');SHOW tables" ";Table\none_pk"
-    server_query repo1 0 "SET @@repo1_head=hashof('main');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
-
-    # Validate the commit main matches that of test_branch (this is a fast forward) by matching commit hashes.
-    server_query repo1 0 "select COUNT(hash) from dolt_branches where hash IN (select hash from dolt_branches WHERE name = 'test_branch')" "COUNT(hash)\n2"
-
-    # make some changes to test_branch and commit. Make some changes to main and commit. Merge.
-    multi_query repo1 0 "
-    SET @@repo1_head=hashof('main');
-    UPDATE one_pk SET c1=10 WHERE pk=2;
-    SET @@repo1_head=commit('-m', 'Change c 1 to 10');
-    INSERT INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);
-
-    SET @@repo1_head=hashof('test_branch');
-    INSERT INTO one_pk (pk,c1,c2) VALUES (4,4,4);
-    SET @@repo1_head=commit('-m', 'add 4');
-    INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);"
-
-    multi_query repo1 0 "
-    SET @@repo1_head=hashof('main');
-    SET @@repo1_head=merge('test_branch');
-    INSERT INTO dolt_branches (name, hash) VALUES('main', @@repo1_head);"
-
-    # Validate tables and data on main
-    server_query repo1 0 "SET @@repo1_head=hashof('main');SHOW tables" ";Table\none_pk"
-    server_query repo1 0 "SET @@repo1_head=hashof('main');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,10,2\n3,3,3\n4,4,4"
-
-    # Validate the a merge commit was written by making sure the hashes of the two branches don't match
-    server_query repo1 0 "select COUNT(hash) from dolt_branches where hash IN (select hash from dolt_branches WHERE name = 'test_branch')" "COUNT(hash)\n1"
-}
-
-
-@test "sql-server: test manual squash" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-
-    cd repo1
-    start_sql_server repo1
-
-    # check that only main branch exists
-    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmain,Initialize data repository"
-
-    # check that new connections are set to main by default
-    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches WHERE hash = @@repo1_head" "name,latest_commit_message\nmain,Initialize data repository"
-
-    # check no tables on main
-    server_query repo1 0 "SHOW Tables" ""
-
-    # make some changes to main and commit to branch test_branch
-    multi_query repo1 0 "
-    SET @@repo1_head=hashof('main');
-    CREATE TABLE one_pk (
-        pk BIGINT NOT NULL,
-        c1 BIGINT,
-        c2 BIGINT,
-        PRIMARY KEY (pk)
-    );
-    INSERT INTO one_pk (pk) VALUES (0);
-    INSERT INTO one_pk (pk,c1) VALUES (1,1);
-    INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
-    SET @@repo1_head=commit('-m', 'test commit message');
-    INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);
-    INSERT INTO one_pk (pk,c1,c2) VALUES (4,4,4),(5,5,5);
-    SET @@repo1_head=commit('-m', 'second commit');
-    INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);
-    "
-
-    # validate new branch was created
-    server_query repo1 0 "SELECT name,latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmain,Initialize data repository\ntest_branch,second commit"
-
-    # validate no tables on main still
-    server_query repo1 0 "SHOW tables" ""
-
-    # Squash the test_branch into main even though it is a fast-forward merge.
-    multi_query repo1 0 "
-    SET @@repo1_working = squash('test_branch');
-    SET @@repo1_head = COMMIT('-m', 'cm1');
-    UPDATE dolt_branches SET hash = @@repo1_head WHERE name= 'main';"
-
-    # Validate tables and data on main
-    server_query repo1 0 "SET @@repo1_head=hashof('main');SHOW tables" ";Table\none_pk"
-    server_query repo1 0 "SET @@repo1_head=hashof('main');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3\n4,4,4\n5,5,5"
-
-    # Validate that the squash operations resulted in one commit to main than before
-    server_query repo1 0 "SET @@repo1_head=hashof('main');select COUNT(*) from dolt_log" ";COUNT(*)\n2"
-
-    # make some changes to main and commit. Make some changes to test_branch and commit. Squash/Merge.
-    multi_query repo1 0 "
-    SET @@repo1_head=hashof('main');
-    UPDATE one_pk SET c1=10 WHERE pk=2;
-    SET @@repo1_head=commit('-m', 'Change c 1 to 10');
-    UPDATE dolt_branches SET hash = @@repo1_head WHERE name= 'main';
-
-    SET @@repo1_head=hashof('test_branch');
-    INSERT INTO one_pk (pk,c1,c2) VALUES (6,6,6);
-    SET @@repo1_head=commit('-m', 'add 6');
-    INSERT INTO one_pk (pk,c1,c2) VALUES (7,7,7);
-    SET @@repo1_head=commit('-m', 'add 7');
-    INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);"
-
-    # Validate that running a squash operation without updating the working variable itself alone does not
-    # change the working root value
-    server_query repo1 0 "SET @@repo1_head=hashof('main');SET @junk = squash('test_branch');SELECT * FROM one_pk ORDER by pk" ";;pk,c1,c2\n0,None,None\n1,1,None\n2,10,2\n3,3,3\n4,4,4\n5,5,5"
-
-    multi_query repo1 0 "
-    SET @@repo1_head=hashof('main');
-    SET @@repo1_working = squash('test_branch');
-    SET @@repo1_head = COMMIT('-m', 'cm2');
-    UPDATE dolt_branches SET hash = @@repo1_head WHERE name= 'main';"
-
-    # Validate tables and data on main
-    server_query repo1 0 "SET @@repo1_head=hashof('main');SHOW tables" ";Table\none_pk"
-    server_query repo1 0 "SET @@repo1_head=hashof('main');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,10,2\n3,3,3\n4,4,4\n5,5,5\n6,6,6\n7,7,7"
-
-    # Validate that the squash operations resulted in one commit to main than before
-    server_query repo1 0 "select COUNT(*) from dolt_log" "COUNT(*)\n4"
-
-    # Validate the a squash commit was written by making sure the hashes of the two branches don't match
-    server_query repo1 0 "select COUNT(hash) from dolt_branches where hash IN (select hash from dolt_branches WHERE name = 'test_branch')" "COUNT(hash)\n1"
-
-    # check that squash with unknown branch throws an error
-    run server_query repo1 0 "SET @@repo1_working = squash('fake');" ""
-    [ "$status" -eq 1 ]
-
-    # TODO: this throws an error on COMMIT because it has conflicts on the root it's trying to commit
-    multi_query repo1 0 "
-    SELECT DOLT_CHECKOUT('main');
-    INSERT INTO one_pk values (8,8,8);"
-
-    skip "Unclear behavior below here, need a simpler test of these assertions"
-    
-    # check that squash with uncommitted changes throws an error
-    run server_query repo1 0 "SET @@repo1_working = squash('test_branch');" ""
-    [ "$status" -eq 1 ]
-}
-
 @test "sql-server: test reset_hard" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt sql <<SQL
@@ -452,62 +273,63 @@ SQL
     start_sql_server repo1
 
     # add some working changes
-    server_query repo1 1 "INSERT INTO test VALUES (7,7);"
+    dolt sql-client -P $PORT -u dolt -q "INSERT INTO test VALUES (7,7);"
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
-    multi_query repo1 1 "
-        SET @@repo1_head = reset('hard');
-        REPLACE INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
+    dolt sql-client -P $PORT -u dolt -q "CALL DOLT_RESET('--hard');"
 
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "working tree clean" ]] || false
-    run dolt sql -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
+    run dolt sql --user=dolt -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "6,6" ]] || false
 
-    multi_query repo1 1 "
+    dolt sql-client -P $PORT -u dolt -q "
         INSERT INTO test VALUES (8,8);
-        SET @@repo1_head = reset('hard');
-        REPLACE INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
+        CALL DOLT_RESET('--hard');"
 
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "working tree clean" ]] || false
-    run dolt sql -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
+    run dolt sql --user=dolt -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "6,6" ]] || false
 }
 
 @test "sql-server: test multi db with use statements" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     start_multi_db_server repo1
 
     # create a table in repo1
-    server_query repo1 1 "CREATE TABLE r1_one_pk (
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE r1_one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c1 BIGINT COMMENT 'tag:1',
         c2 BIGINT COMMENT 'tag:2',
-        PRIMARY KEY (pk)
-    )" ""
+        PRIMARY KEY (pk))"
 
     # create a table in repo2
-    server_query repo1 1 "USE repo2; CREATE TABLE r2_one_pk (
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "USE repo2;
+    CREATE TABLE r2_one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c3 BIGINT COMMENT 'tag:1',
         c4 BIGINT COMMENT 'tag:2',
         PRIMARY KEY (pk)
-    )" ";"
+    )"
 
     # validate tables in repos
-    server_query repo1 1 "SHOW tables" "Table\nr1_one_pk"
-    server_query repo1 1 "USE repo2;SHOW tables" ";Table\nr2_one_pk"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW tables"
+    [ $status -eq 0 ]
+    [[ $output =~ "r1_one_pk" ]] || false
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "USE repo2; SHOW tables"
+    [ $status -eq 0 ]
+    [[ $output =~ "r2_one_pk" ]] || false
 
     # put data in both
-    multi_query repo1 1 "
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "
     INSERT INTO r1_one_pk (pk) VALUES (0);
     INSERT INTO r1_one_pk (pk,c1) VALUES (1,1);
     INSERT INTO r1_one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
@@ -516,120 +338,171 @@ SQL
     INSERT INTO r2_one_pk (pk,c3) VALUES (1,1);
     INSERT INTO r2_one_pk (pk,c3,c4) VALUES (2,2,2),(3,3,3)"
 
-    server_query repo1 1 "SELECT * FROM repo1.r1_one_pk ORDER BY pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
-    server_query repo1 1 "SELECT * FROM repo2.r2_one_pk ORDER BY pk" "pk,c3,c4\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo1.r1_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,," ]] || false
+    [[ $output =~ "1,1," ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
 
-    multi_query repo1 1 "
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,," ]] || false
+    [[ $output =~ "1,1," ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
+
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "
     DELETE FROM r1_one_pk where pk=0;
     USE repo2;
     DELETE FROM r2_one_pk where pk=0"
 
-    server_query repo1 1 "SELECT * FROM repo1.r1_one_pk ORDER BY pk" "pk,c1,c2\n1,1,None\n2,2,2\n3,3,3"
-    server_query repo1 1 "SELECT * FROM repo2.r2_one_pk ORDER BY pk" "pk,c3,c4\n1,1,None\n2,2,2\n3,3,3"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo1.r1_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "0,," ]] || false
+    [[ $output =~ "1,1," ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
 
-    multi_query repo1 1 "
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "0,," ]] || false
+    [[ $output =~ "1,1," ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
+    
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "
     UPDATE r1_one_pk SET c2=1 WHERE pk=1;
     USE repo2;
     UPDATE r2_one_pk SET c4=1 where pk=1"
 
-    server_query repo1 1 "SELECT * FROM repo1.r1_one_pk ORDER BY pk" "pk,c1,c2\n1,1,1\n2,2,2\n3,3,3"
-    server_query repo1 1 "SELECT * FROM repo2.r2_one_pk ORDER BY pk" "pk,c3,c4\n1,1,1\n2,2,2\n3,3,3"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo1.r1_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    echo $output
+    ! [[ $output =~ "0,," ]] || false
+    ! [[ $output =~ "1,1, " ]] || false
+    [[ $output =~ "1,1,1" ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
+
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "0,," ]] || false
+    ! [[ $output =~ "1,1, " ]] || false
+    [[ $output =~ "1,1,1" ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
 }
 
-
 @test "sql-server: test multi db without use statements" {
-    skip "autocommit fails when the current db is not the one being written"
     start_multi_db_server repo1
 
     # create a table in repo1
-    server_query repo1 1 "CREATE TABLE repo1.r1_one_pk (
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE repo1.r1_one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c1 BIGINT COMMENT 'tag:1',
         c2 BIGINT COMMENT 'tag:2',
-        PRIMARY KEY (pk)
-    )" ""
+        PRIMARY KEY (pk))"
 
     # create a table in repo2
-    server_query repo1 1 "USE repo2; CREATE TABLE repo2.r2_one_pk (
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE repo2.r2_one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c3 BIGINT COMMENT 'tag:1',
         c4 BIGINT COMMENT 'tag:2',
         PRIMARY KEY (pk)
-    )" ";"
+    )"
 
     # validate tables in repos
-    server_query repo1 1 "SHOW tables" "Table\nr1_one_pk"
-    server_query repo1 1 "USE repo2;SHOW tables" ";Table\nr2_one_pk"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW tables"
+    [ $status -eq 0 ]
+    [[ $output =~ "r1_one_pk" ]] || false
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "SHOW tables"
+    [ $status -eq 0 ]
+    [[ $output =~ "r2_one_pk" ]] || false
 
-    # put data in both
-    multi_query repo1 1 "
-    INSERT INTO repo1.r1_one_pk (pk) VALUES (0);
-    INSERT INTO repo1.r1_one_pk (pk,c1) VALUES (1,1);
-    INSERT INTO repo1.r1_one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
-    USE repo2;
-    INSERT INTO repo2.r2_one_pk (pk) VALUES (0);
-    INSERT INTO repo2.r2_one_pk (pk,c3) VALUES (1,1);
-    INSERT INTO repo2.r2_one_pk (pk,c3,c4) VALUES (2,2,2),(3,3,3)"
+    # put data in both using database scoped inserts
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo1.r1_one_pk (pk) VALUES (0)" 
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo1.r1_one_pk (pk,c1) VALUES (1,1)"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo1.r1_one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
+    
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo2.r2_one_pk (pk) VALUES (0)"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo2.r2_one_pk (pk,c3) VALUES (1,1)"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo2.r2_one_pk (pk,c3,c4) VALUES (2,2,2),(3,3,3)"
 
-    server_query repo1 1 "SELECT * FROM repo1.r1_one_pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
-    server_query repo1 1 "SELECT * FROM repo2.r2_one_pk" "pk,c3,c4\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo1.r1_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,," ]] || false
+    [[ $output =~ "1,1," ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
 
-    multi_query repo1 1 "
-    DELETE FROM repo1.r1_one_pk where pk=0;
-    USE repo2;
-    DELETE FROM repo2.r2_one_pk where pk=0"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,," ]] || false
+    [[ $output =~ "1,1," ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
+    
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "DELETE FROM repo1.r1_one_pk where pk=0"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "DELETE FROM repo2.r2_one_pk where pk=0"
+    
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo1.r1_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "0,," ]] || false
+    [[ $output =~ "1,1," ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
 
-    server_query repo1 1 "SELECT * FROM repo1.r1_one_pk" "pk,c1,c2\n1,1,None\n2,2,2\n3,3,3"
-    server_query repo1 1 "SELECT * FROM repo2.r2_one_pk" "pk,c3,c4\n1,1,None\n2,2,2\n3,3,3"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "0,," ]] || false
+    [[ $output =~ "1,1," ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
 
-    multi_query repo1 1 "
-    UPDATE repo1.r1_one_pk SET c2=1 WHERE pk=1;
-    USE repo2;
-    UPDATE repo2.r2_one_pk SET c4=1 where pk=1"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "UPDATE repo1.r1_one_pk SET c2=1 WHERE pk=1"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "UPDATE repo2.r2_one_pk SET c4=1 where pk=1"
 
-    server_query repo1 1 "SELECT * FROM repo1.r1_one_pk" "pk,c1,c2\n1,1,1\n2,2,2\n3,3,3"
-    server_query repo1 1 "SELECT * FROM repo2.r2_one_pk" "pk,c3,c4\n1,1,1\n2,2,2\n3,3,3"
-}
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo1.r1_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    echo $output
+    ! [[ $output =~ "0,," ]] || false
+    ! [[ $output =~ "1,1, " ]] || false
+    [[ $output =~ "1,1,1" ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
 
-@test "sql-server: test CREATE and DROP database via sql-server" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-
-    cd repo1
-    start_sql_server repo1
-
-    multi_query repo1 1 "
-    CREATE DATABASE memdb;
-    USE memdb;
-    CREATE TABLE pk(pk int primary key);
-    INSERT INTO pk (pk) VALUES (0);
-    "
-
-    server_query repo1 1 "SELECT * FROM memdb.pk ORDER BY pk" "pk\n0"
-    server_query repo1 1 "DROP DATABASE memdb" ""
-    server_query repo1 1 "SHOW DATABASES" "Database\ninformation_schema\nrepo1"
-
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo2.r2_one_pk ORDER BY pk"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "0,," ]] || false
+    ! [[ $output =~ "1,1, " ]] || false
+    [[ $output =~ "1,1,1" ]] || false
+    [[ $output =~ "2,2,2" ]] || false
+    [[ $output =~ "3,3,3" ]] || false
 }
 
 @test "sql-server: DOLT_ADD, DOLT_COMMIT, DOLT_CHECKOUT, DOLT_MERGE work together in server mode" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
      cd repo1
      start_sql_server repo1
 
-     multi_query repo1 1 "
-     CREATE TABLE test (
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE test (
          pk int primary key
-     );
-     INSERT INTO test VALUES (0),(1),(2);
-     SELECT DOLT_ADD('.');
-     SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
-     SELECT DOLT_CHECKOUT('-b', 'feature-branch');
-     "
+     )"
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO test VALUES (0),(1),(2)"
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CALL DOLT_ADD('test')"
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CALL DOLT_COMMIT('-a', '-m', 'Step 1')"
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CALL DOLT_CHECKOUT('-b', 'feature-branch')"
 
-     server_query repo1 1 "SELECT * FROM test" "pk\n0\n1\n2"
+     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT * FROM test"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
 
-     multi_query repo1 1 "
-     SELECT DOLT_CHECKOUT('feature-branch');
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "
+     CALL DOLT_CHECKOUT('feature-branch');
      INSERT INTO test VALUES (3);
      INSERT INTO test VALUES (4);
      INSERT INTO test VALUES (21232);
@@ -637,25 +510,37 @@ SQL
      UPDATE test SET pk=21 WHERE pk=21232;
      "
 
-     server_query repo1 1 "SELECT * FROM test" "pk\n0\n1\n2"
-     
-     multi_query repo1 1 "
-     SELECT DOLT_CHECKOUT('feature-branch');
-     SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
+     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT * FROM test"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
+     ! [[ $output =~ " 3 " ]] || false
+     ! [[ $output =~ " 21 " ]] || false
+
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "
+     CALL DOLT_CHECKOUT('feature-branch');
+     CALL DOLT_COMMIT('-a', '-m', 'Insert 3');
      "
-     
-     multi_query repo1 1 "
+
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "
      INSERT INTO test VALUES (500000);
      INSERT INTO test VALUES (500001);
      DELETE FROM test WHERE pk=500001;
      UPDATE test SET pk=60 WHERE pk=500000;
-     SELECT DOLT_ADD('.');
-     SELECT DOLT_COMMIT('-m', 'Insert 60');
-     SELECT DOLT_MERGE('feature-branch');
-     SELECT DOLT_COMMIT('-a', '-m', 'Finish up Merge');
+     CALL DOLT_ADD('.');
+     CALL DOLT_COMMIT('-m', 'Insert 60');
+     CALL DOLT_MERGE('feature-branch','-m','merge feature-branch');
      "
-     
-     server_query repo1 1 "SELECT * FROM test order by pk" "pk\n0\n1\n2\n3\n21\n60"
+
+     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT * FROM test"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
+     [[ $output =~ " 3 " ]] || false
+     [[ $output =~ " 21 " ]] || false
+     [[ $output =~ " 60 " ]] || false
 
      run dolt status
      [ $status -eq 0 ]
@@ -663,12 +548,12 @@ SQL
 }
 
 @test "sql-server: DOLT_MERGE ff works" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
      cd repo1
      start_sql_server repo1
 
-     multi_query repo1 1 "
+     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "
      CREATE TABLE test (
           pk int primary key
      );
@@ -683,101 +568,133 @@ SQL
      SELECT DOLT_MERGE('feature-branch');
      "
 
-     server_query repo1 1 "SELECT * FROM test ORDER BY pk" "pk\n1\n2\n3\n1000"
+     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT * FROM test"
+     [ $status -eq 0 ]
+     echo $output
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
+     [[ $output =~ " 3 " ]] || false
+     [[ $output =~ " 1000 " ]] || false
+     ! [[ $output =~ " 0 " ]] || false
 
-     server_query repo1 1 "SELECT COUNT(*) FROM dolt_log" "COUNT(*)\n3"
-}
-
-@test "sql-server: LOAD DATA LOCAL INFILE works" {
-    skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
-     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-
-     cd repo1
-     start_sql_server repo1
-
-     multi_query repo1 1 "
-     CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
-     SET local_infile=1;
-     LOAD DATA LOCAL INFILE '$BATS_TEST_DIRNAME/helper/1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY ',' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
-     "
-
-     server_query repo1 1 "SELECT * FROM test" "pk,c1,c2,c3,c4,c5\n0,1,2,3,4,5\n1,1,2,3,4,5"
+     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT COUNT(*) FROM dolt_log"
+     [ $status -eq 0 ]
+     [[ $output =~ " 3 " ]] || false
 }
 
 @test "sql-server: Run queries on database without ever selecting it" {
-     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+     skiponwindows "Missing dependencies"
 
      start_multi_db_server repo1
 
      # create table with autocommit on and verify table creation
-     unselected_server_query 1 "CREATE TABLE repo2.one_pk (
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE TABLE repo2.one_pk (
         pk int,
-        PRIMARY KEY (pk)
-      )" ""
+        PRIMARY KEY (pk))"
 
-     insert_query repo1 1 "INSERT INTO repo2.one_pk VALUES (0), (1), (2)"
-     unselected_server_query 1 "SELECT * FROM repo2.one_pk" "pk\n0\n1\n2"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "INSERT INTO repo2.one_pk VALUES (0), (1), (2)"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM repo2.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
 
-     unselected_update_query 1 "UPDATE repo2.one_pk SET pk=3 WHERE pk=2"
-     unselected_server_query 1 "SELECT * FROM repo2.one_pk" "pk\n0\n1\n3"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "UPDATE repo2.one_pk SET pk=3 WHERE pk=2"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM repo2.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 3 " ]] || false
+     ! [[ $output =~ " 2 " ]] || false
 
-     unselected_update_query 1 "DELETE FROM repo2.one_pk WHERE pk=3"
-     unselected_server_query 1 "SELECT * FROM repo2.one_pk" "pk\n0\n1"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "DELETE FROM repo2.one_pk WHERE pk=3"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM repo2.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     ! [[ $output =~ " 3 " ]] || false
 
      # Empty commit statements should not error
-     unselected_server_query 1 "commit"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "commit"
 
      # create a new database and table and rerun
-     unselected_server_query 1 "CREATE DATABASE testdb" ""
-     unselected_server_query 1 "CREATE TABLE testdb.one_pk (
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE testdb"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE TABLE testdb.one_pk (
         pk int,
-        PRIMARY KEY (pk)
-      )" ""
+        PRIMARY KEY (pk))"
 
-     insert_query repo1 1 "INSERT INTO testdb.one_pk VALUES (0), (1), (2)"
-     unselected_server_query 1 "SELECT * FROM testdb.one_pk" "pk\n0\n1\n2"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "INSERT INTO testdb.one_pk VALUES (0), (1), (2)"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM testdb.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 2 " ]] || false
 
-     unselected_update_query 1 "UPDATE testdb.one_pk SET pk=3 WHERE pk=2"
-     unselected_server_query 1 "SELECT * FROM testdb.one_pk" "pk\n0\n1\n3"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "UPDATE testdb.one_pk SET pk=3 WHERE pk=2"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM testdb.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 3 " ]] || false
+     ! [[ $output =~ " 2 " ]] || false
 
-     unselected_update_query 1 "DELETE FROM testdb.one_pk WHERE pk=3"
-     unselected_server_query 1 "SELECT * FROM testdb.one_pk" "pk\n0\n1"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "DELETE FROM testdb.one_pk WHERE pk=3"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM testdb.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     ! [[ $output =~ " 3 " ]] || false
 
      # one last query on insert db.
-     insert_query repo1 1 "INSERT INTO repo2.one_pk VALUES (4)"
-     unselected_server_query 1 "SELECT * FROM repo2.one_pk" "pk\n0\n1\n4"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "INSERT INTO repo2.one_pk VALUES (4)"
+     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SELECT * FROM repo2.one_pk"
+     [ $status -eq 0 ]
+     [[ $output =~ " 0 " ]] || false
+     [[ $output =~ " 1 " ]] || false
+     [[ $output =~ " 4 " ]] || false
+
+     # verify changes outside the session
+     cd repo2
+     run dolt sql --user=dolt -q "show tables"
+     [ "$status" -eq 0 ]
+     [[ "$output" =~ "one_pk" ]] || false
+
+     run dolt sql --user=dolt -q "select * from one_pk"
+     [ "$status" -eq 0 ]
+     [[ "$output" =~ " 0 " ]] || false
+     [[ "$output" =~ " 1 " ]] || false
+     [[ "$output" =~ " 4 " ]] || false
 }
 
-@test "sql-server: JSON queries" {
-    cd repo1
-    start_sql_server repo1
+@test "sql-server: create database without USE" {
+     skiponwindows "Missing dependencies"
 
-    # create table with autocommit on and verify table creation
-    server_query repo1 1 "CREATE TABLE js_test (
-        pk int NOT NULL,
-        js json,
-        PRIMARY KEY (pk)
-    )" ""
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "js_test" ]] || false
+     start_multi_db_server repo1
 
-    insert_query repo1 1 "INSERT INTO js_test VALUES (1, '{\"a\":1}');"
-    server_query repo1 1 "SELECT * FROM js_test;" "pk,js\n1,{\"a\": 1}"
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE newdb" ""
+     dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE TABLE newdb.test (a int primary key)" ""
+
+     # verify changes outside the session
+     cd newdb
+     run dolt sql --user=dolt -q "show tables"
+     [ "$status" -eq 0 ]
+     [[ "$output" =~ "test" ]] || false
 }
 
 @test "sql-server: manual commit table can be dropped (validates superschema structure)" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     start_sql_server repo1
 
     # check no tables on main
-    server_query repo1 1 "SHOW Tables" ""
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
 
     # make some changes to main and commit to branch test_branch
-    multi_query repo1 1 "
-    SET @@repo1_head=hashof('main');
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "
+    CALL DOLT_CHECKOUT('main');
     CREATE TABLE one_pk (
         pk BIGINT NOT NULL,
         c1 BIGINT,
@@ -785,67 +702,55 @@ SQL
         PRIMARY KEY (pk)
     );
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
-    SET @@repo1_head=commit('-m', 'test commit message', '--author', 'John Doe <john@example.com>');
-    INSERT INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
-
-    dolt add .
+    CALL DOLT_ADD('.');
+    CALL dolt_commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');"
+    
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
 
-    dolt sql -q "drop table one_pk"
-    dolt commit -am "Dropped table one_pk"
+    run dolt sql --user=dolt -q "drop table one_pk"
+    [ "$status" -eq 1 ]
+
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "drop table one_pk"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_commit('-am', 'Dropped table one_pk')"
 
     run dolt ls
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "one_pk" ]] || false
 }
 
-# TODO: Need to update testing logic allow queries for a multiple session.
-@test "sql-server: Create a temporary table and validate that it doesn't persist after a session closes" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-
-    cd repo1
-    start_sql_server repo1
-
-    # check no tables on main
-    server_query repo1 1 "SHOW Tables" ""
-
-    # Create a temporary table with some indexes
-    server_query repo1 1 "CREATE TEMPORARY TABLE one_pk (
-        pk int,
-        c1 int,
-        c2 int,
-        PRIMARY KEY (pk),
-        INDEX idx_v1 (c1, c2) COMMENT 'hello there'
-    )" ""
-    server_query repo1 1 "SHOW tables" "" # validate that it does have show tables
-}
-
 @test "sql-server: connect to another branch with connection string" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt checkout -b "feature-branch"
     dolt checkout main
     start_sql_server repo1
 
-    server_query "repo1/feature-branch" 1 "CREATE TABLE test (
+    dolt sql-client --use-db "repo1/feature-branch" -u dolt -P $PORT -q "CREATE TABLE test (
         pk int,
         c1 int,
         PRIMARY KEY (pk)
     )" ""
 
-    server_query repo1 1 "SHOW tables" "" # no tables on main
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
 
-    server_query "repo1/feature-branch" 1 "SHOW Tables" "Table\ntest"
+    run dolt sql-client --use-db "repo1/feature-branch" -u dolt -P $PORT -q "SHOW Tables"
+    [ $status -eq 0 ]
+    [[ $output =~ "feature-branch" ]] || false
+    [[ $output =~ "test" ]] || false
 }
 
 @test "sql-server: connect to a commit with connection string" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt sql -q "create table test (pk int primary key)"
+    dolt add .
     dolt commit -a -m "Created new table"
     dolt sql -q "insert into test values (1), (2), (3)"
     dolt commit -a -m "Inserted 3 values"
@@ -857,138 +762,100 @@ SQL
     # get the second-to-last commit hash
     hash=`dolt log | grep commit | cut -d" " -f2 | tail -n+2 | head -n1`
 
-    server_query "repo1/$hash" 1 "select count(*) from test" "count(*)\n3"
+    run dolt sql-client --use-db "repo1/$hash" -u dolt -P $PORT -q "select count(*) from test"
+    [ $status -eq 0 ]
+    [[ $output =~ " 3 " ]] || false
 
     # fails
-    server_query "repo1/$hash" 1 "insert into test values (7)" "" "read-only"
+    run dolt sql-client --use-db "repo1/$hash" -u dolt -P $PORT -q "insert into test values (7)"
+    [ $status -ne 0 ]
+    [[ $output =~ "read-only" ]] || false
 
     # server should still be alive after an error
-    server_query "repo1/$hash" 1 "select count(*) from test" "count(*)\n3"
-}
-
-@test "sql-server: select a branch with the USE syntax" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-
-    cd repo1
-    dolt checkout -b "feature-branch"
-    dolt checkout main
-    start_sql_server repo1
-
-    multi_query repo1 1 '
-    USE `repo1/feature-branch`;
-    CREATE TABLE test ( 
-        pk int,
-        c1 int,
-        PRIMARY KEY (pk)
-    )' ""
-
-    server_query repo1 1 "SHOW tables" "" # no tables on main
-
-    server_query "repo1/feature-branch" 1 "SHOW Tables" "Table\ntest"
+    run dolt sql-client --use-db "repo1/$hash" -u dolt -P $PORT -q "select count(*) from test"
+    [ $status -eq 0 ]
+    [[ $output =~ " 3 " ]] || false
 }
 
 @test "sql-server: SET GLOBAL default branch as ref" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt checkout -b "new"
     dolt checkout main
     start_sql_server repo1
 
-    multi_query repo1 1 '
-    select dolt_checkout("new");
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q '
+    CALL dolt_checkout("new");
     CREATE TABLE t (a int primary key, b int);
-    INSERT INTO t VALUES (2,2),(3,3);' ""
+    INSERT INTO t VALUES (2,2),(3,3);'
 
-    server_query repo1 1 "SHOW tables" "" # no tables on main
-    server_query repo1 1 "set GLOBAL dolt_default_branch = 'refs/heads/new';" ""
-    server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nrefs/heads/new"
-    server_query repo1 1 "select active_branch()" "active_branch()\nnew"
-    server_query repo1 1 "SHOW tables" "Table\nt"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "set GLOBAL repo1_default_branch = 'refs/heads/new'"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "select @@GLOBAL.repo1_default_branch;"
+    [ $status -eq 0 ]
+    [[ $output =~ "refs/heads/new" ]] || false
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "select active_branch()"
+    [ $status -eq 0 ]
+    [[ $output =~ "new" ]] || false
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
+    [ $status -eq 0 ]
+    [[ $output =~ " t " ]] || false
 }
 
 @test "sql-server: SET GLOBAL default branch as branch name" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt checkout -b "new"
     dolt checkout main
     start_sql_server repo1
 
-    multi_query repo1 1 '
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q '
     select dolt_checkout("new");
     CREATE TABLE t (a int primary key, b int);
-    INSERT INTO t VALUES (2,2),(3,3);' ""
+    INSERT INTO t VALUES (2,2),(3,3);'
 
-    server_query repo1 1 "SHOW tables" "" # no tables on main
-    server_query repo1 1 "set GLOBAL dolt_default_branch = 'new';" ""
-    server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nnew"
-    server_query repo1 1 "select active_branch()" "active_branch()\nnew"
-    server_query repo1 1 "SHOW tables" "Table\nt"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "set GLOBAL repo1_default_branch = 'new'"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "select @@GLOBAL.repo1_default_branch;"
+    [ $status -eq 0 ]
+    [[ $output =~ " new " ]] || false
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "select active_branch()"
+    [ $status -eq 0 ]
+    [[ $output =~ " new " ]] || false
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
+    [ $status -eq 0 ]
+    [[ $output =~ " t " ]] || false
 }
 
-@test "sql-server: require_secure_transport no key or cert" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+@test "sql-server: disable_client_multi_statements makes create trigger work" {
+    skiponwindows "Missing dependencies"
     cd repo1
-    let PORT="$$ % (65536-1024) + 1024"
-    cat >config.yml <<EOF
-listener:
-  require_secure_transport: true
-EOF
-    run dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --config ./config.yml
-    [ "$status" -eq 1 ]
-}
-
-@test "sql-server: tls_key non-existant" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-    cd repo1
-    cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_key.pem .
-    cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_cert.pem .
-    let PORT="$$ % (65536-1024) + 1024"
-    cat >config.yml <<EOF
-listener:
-  tls_cert: doesnotexist_cert.pem
-  tls_key: chain_key.pem
-EOF
-    run dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --config ./config.yml
-    [ "$status" -eq 1 ]
-}
-
-@test "sql-server: tls_cert non-existant" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-    cd repo1
-    cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_key.pem .
-    cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_cert.pem .
-    let PORT="$$ % (65536-1024) + 1024"
-    cat >config.yml <<EOF
-listener:
-  tls_cert: chain_cert.pem
-  tls_key: doesnotexist.pem
-EOF
-    run dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --config ./config.yml
-    [ "$status" -eq 1 ]
-}
-
-@test "sql-server: tls only server" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-    cd repo1
-    cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_key.pem .
-    cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_cert.pem .
-    let PORT="$$ % (65536-1024) + 1024"
+    dolt sql -q 'create table test (id int primary key)'
+    PORT=$( definePORT )
     cat >config.yml <<EOF
 log_level: debug
+behavior:
+  disable_client_multi_statements: true
 user:
   name: dolt
 listener:
   host: "0.0.0.0"
   port: $PORT
-  tls_cert: chain_cert.pem
-  tls_key: chain_key.pem
-  require_secure_transport: true
 EOF
-    dolt sql-server --config ./config.yml &
+    dolt sql-server --config ./config.yml --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
-    # We do things manually here because we need TLS support.
+    sleep 1
+    
+    # We do things manually here because we need to control
+    # CLIENT_MULTI_STATEMENTS.
     python3 -c '
 import mysql.connector
 import sys
@@ -998,7 +865,12 @@ while True:
   try:
     with mysql.connector.connect(host="127.0.0.1", user="dolt", port='"$PORT"', database="repo1", connection_timeout=1) as c:
       cursor = c.cursor()
-      cursor.execute("show tables")
+      cursor.execute("""
+CREATE TRIGGER test_on_insert BEFORE INSERT ON test
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '\''45000'\'' SET MESSAGE_TEXT = '\''You cannot insert into this table'\'';
+END""")
       for (t) in cursor:
         print(t)
       sys.exit(0)
@@ -1013,25 +885,102 @@ while True:
 '
 }
 
-@test "sql-server: auto increment for a table should reset between drops" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+@test "sql-server: client_multi_statements work" {
+    skiponwindows "Missing dependencies"
+    cd repo1
+    dolt sql -q 'create table test (id int primary key)'
+    PORT=$( definePORT )
+    cat >config.yml <<EOF
+log_level: debug
+user:
+  name: dolt
+listener:
+  host: "0.0.0.0"
+  port: $PORT
+EOF
+    dolt sql-server --config ./config.yml --socket "dolt.$PORT.sock" &
+    SERVER_PID=$!
+    # We do things manually here because we need to control
+    # CLIENT_MULTI_STATEMENTS.
+    python3 -c '
+import mysql.connector
+import sys
+import time
+i=0
+while True:
+  try:
+    with mysql.connector.connect(host="127.0.0.1", user="dolt", port='"$PORT"', database="repo1", connection_timeout=1) as c:
+      cursor = c.cursor()
+      cursor.execute("""
+CREATE TRIGGER test_on_insert BEFORE INSERT ON test
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '\''45000'\'' SET MESSAGE_TEXT = '\''You cannot insert into this table'\'';
+END""")
+      for (t) in cursor:
+        print(t)
+      sys.exit(0)
+  except mysql.connector.Error as err:
+    if err.errno != 2003:
+      raise err
+    else:
+      i += 1
+      time.sleep(1)
+      if i == 10:
+        raise err
+'
+}
+
+@test "sql-server: auto increment is globally distinct across branches and connections" {
+    skiponwindows "Missing dependencies"
 
     cd repo1
     start_sql_server repo1
 
-    server_query repo1 1 "CREATE TABLE t1(pk int auto_increment primary key, val int)" ""
-    insert_query repo1 1 "INSERT INTO t1 VALUES (0, 1),(0, 2)"
-    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE t1(pk bigint primary key auto_increment, val int)"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO t1 (val) VALUES (1)"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM t1"
+    [ $status -eq 0 ]
+    [[ $output =~ "1,1" ]] || false
 
-    # drop the table and try again
-    server_query repo1 1 "drop table t1;"
-    server_query repo1 1 "CREATE TABLE t1(pk int auto_increment primary key, val int)" ""
-    insert_query repo1 1 "INSERT INTO t1 VALUES (0, 1),(0, 2)"
-    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO t1 (val) VALUES (2)"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM t1"
+    [ $status -eq 0 ]
+    [[ $output =~ "1,1" ]] || false
+    [[ $output =~ "2,2" ]] || false
+
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_commit('-am', 'table with two values')"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_branch('new_branch')"
+
+    dolt sql-client --use-db repo1/new_branch -u dolt -P $PORT -q "INSERT INTO t1 (val) VALUES (3)"
+    run dolt sql-client --use-db repo1/new_branch -u dolt -P $PORT --result-format csv -q "SELECT * FROM t1"
+    [ $status -eq 0 ]
+    [[ $output =~ "1,1" ]] || false
+    [[ $output =~ "2,2" ]] || false
+    [[ $output =~ "3,3" ]] || false
+
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO t1 (val) VALUES (4)"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM t1"
+    [ $status -eq 0 ]
+    [[ $output =~ "1,1" ]] || false
+    [[ $output =~ "2,2" ]] || false
+    [[ $output =~ "4,4" ]] || false
+    ! [[ $output =~ "3,3" ]] || false
+    
+    # drop the table on main, should keep counting from 4
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "drop table t1"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE t1(pk bigint primary key auto_increment, val int)" ""
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO t1 (val) VALUES (4)"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM t1"
+    [[ $output =~ "4,4" ]] || false
+    ! [[ $output =~ "1,1" ]] || false
+    ! [[ $output =~ "2,2" ]] || false
+    ! [[ $output =~ "3,3" ]] || false
 }
 
 @test "sql-server: sql-push --set-remote within session" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     mkdir rem1
     cd repo1
@@ -1039,46 +988,342 @@ while True:
     start_sql_server repo1
 
     dolt push origin main
-    run server_query repo1 1 "select dolt_push() as p" "p\n0"
-    [ "$status" -eq 1 ]
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call  dolt_push()"
+    [ $status -ne 0 ]
     [[ "$output" =~ "the current branch has no upstream branch" ]] || false
 
-    server_query repo1 1 "select dolt_push('--set-upstream', 'origin', 'main') as p" "p\n1"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_push('--set-upstream', 'origin', 'main')"
 
-    skip "In-memory branch doesn't track upstream correctly"
-    server_query repo1 1 "select dolt_push() as p" "p\n1"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_push()"
 }
 
 @test "sql-server: replicate to backup after sql-session commit" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     mkdir bac1
     cd repo1
     dolt remote add backup1 file://../bac1
-    dolt config --local --add DOLT_REPLICATE_TO_REMOTE backup1
+    dolt config --local --add sqlserver.global.DOLT_REPLICATE_TO_REMOTE backup1
     start_sql_server repo1
 
-    multi_query repo1 1 "
-    CREATE TABLE test (
-      pk int primary key
-    );
-    INSERT INTO test VALUES (0),(1),(2);
-    SELECT DOLT_ADD('.');
-    SELECT DOLT_COMMIT('-m', 'Step 1');"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE test (pk int primary key);"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO test VALUES (0),(1),(2)"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CALL DOLT_ADD('.')"
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CALL DOLT_COMMIT('-m', 'Step 1');"
 
     cd ..
     dolt clone file://./bac1 repo3
     cd repo3
     run dolt sql -q "select * from test" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "pk" ]]
-    [[ "${lines[1]}" =~ "0" ]]
-    [[ "${lines[2]}" =~ "1" ]]
-    [[ "${lines[3]}" =~ "2" ]]
+    [ "${lines[0]}" = "pk" ] 
+    [ "${lines[1]}" = "0" ]
+    [ "${lines[2]}" = "1" ]
+    [ "${lines[3]}" = "2" ]
 }
 
-@test "sql-server: read-replica pulls new commits on read" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+@test "sql-server: create multiple databases with no starting repo" {
+    skiponwindows "Missing dependencies"
+
+    mkdir no_dolt && cd no_dolt
+    start_sql_server
+
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test1"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test1" ]] ||	false
+
+    dolt sql-client -P $PORT -u dolt --use-db 'test1' -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db 'test1' -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db 'test1' -q "insert into a values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db 'test1' -q "call dolt_commit('-a', '-m', 'new table a')"
+
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test2"
+    dolt sql-client -P $PORT -u dolt --use-db 'test2' -q "create table b(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db 'test2' -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db 'test2' -q "insert into b values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db 'test2' -q "call dolt_commit('-a', '-m', 'new table b')"
+
+    cd test1
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new table a" ]] || false
+
+    run dolt sql --user=dolt -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "a" ]] || false
+
+    cd ../test2
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new table b" ]] || false
+
+    run dolt sql --user=dolt -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "b" ]] || false
+
+    cd ..
+
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test3"
+    dolt sql-client -P $PORT -u dolt --use-db 'test3' -q "create table c(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db 'test3' -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db 'test3' -q "insert into c values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db 'test3' -q "call dolt_commit('-a', '-m', 'new table c')"
+
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "drop database test2"
+
+    [ -d test3 ]
+    [ ! -d test2 ]
+
+    # make sure the databases exist on restart
+    stop_sql_server
+    start_sql_server
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test1" ]] || false
+    [[ $output =~ "test3" ]] || false
+    ! [[ $output =~ "test2" ]] || false
+}
+
+@test "sql-server: can't drop branch qualified database names" {
+    skiponwindows "Missing dependencies"
+
+    mkdir no_dolt && cd no_dolt
+    start_sql_server
+
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test1"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test2"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test3"
+
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test1" ]] || false
+    [[ $output =~ "test2" ]] || false
+    [[ $output =~ "test3" ]] || false
+
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "insert into a values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_commit('-a', '-m', 'new table a')"
+
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "insert into a values (3), (4)"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "call dolt_commit('-a', '-m', 'new table a')"
+
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "insert into a values (5), (6)"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "call dolt_commit('-a', '-m', 'new table a')"
+
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_branch('newbranch')"
+    run dolt sql-client --use-db "test1/newbranch" -u dolt -P $PORT -q "select * from a"
+    [ $status -eq 0 ]
+    [[ $output =~ " 1 " ]] || false
+    [[ $output =~ " 2 " ]] || false
+
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "call dolt_branch('newbranch')"
+    run dolt sql-client --use-db "test2/newbranch" -u dolt -P $PORT -q "select * from a"
+    [ $status -eq 0 ]
+    [[ $output =~ " 3 " ]] || false
+    [[ $output =~ " 4 " ]] || false
+
+    # uppercase to ensure db names are treated case insensitive
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "drop database TEST1"
+
+    run dolt sql-client --use-db "test1/newbranch" -u dolt -P $PORT -q "select * from a"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "database not found" ]] || false
+    
+    # can't drop a branch-qualified database name
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "drop database \`test2/newbranch\`"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "unable to drop revision database: test2/newbranch" ]] || false
+
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "drop database TEST2"
+
+    run dolt sql-client --use-db "test2/newbranch" -u dolt -P $PORT -q "select * from a"
+    [ $status -ne 0 ]
+    echo $output
+    [[ "$output" =~ "database not found" ]] || false
+
+    run dolt sql-client -P $PORT -u dolt --use-db test3 -q "select * from a"
+    [ $status -eq 0 ]
+    [[ $output =~ " 5 " ]] || false
+    [[ $output =~ " 6 " ]] || false
+}
+
+@test "sql-server: connect to databases case insensitive" {
+    skiponwindows "Missing dependencies"
+
+    mkdir no_dolt && cd no_dolt
+    start_sql_server
+
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database Test1"
+
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "Test1" ]] || false
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "use test1; create table a(x int);"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "use TEST1; insert into a values (1), (2);"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "use test1; call dolt_add('.'); call dolt_commit('-a', '-m', 'new table a');"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "use test1; call dolt_checkout('-b', 'newbranch');"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "use \`TEST1/newbranch\`; select * from a order by x" ";x\n1\n2"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "use \`test1/newbranch\`; select * from a order by x" ";x\n1\n2"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "use \`TEST1/NEWBRANCH\`"
+    [ $status -ne 0 ]
+    [[ $output =~ "database not found: TEST1/NEWBRANCH" ]] || false
+
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test2; use test2; select database();"
+    [ $status -eq 0 ]
+    [[ $output =~ "test2" ]] || false
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "use test2; drop database TEST2; select database();"
+    [ $status -eq 0 ]
+    [[ $output =~ "NULL" ]] || false
+}
+
+@test "sql-server: create and drop database with --data-dir" {
+    skiponwindows "Missing dependencies"
+
+    mkdir no_dolt && cd no_dolt
+    mkdir db_dir
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
+    
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test1"
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test1" ]] || false
+
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "insert into a values (1), (2)"
+
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_commit('-a', '-m', 'new table a')"
+
+    [ -d db_dir/test1 ]
+
+    cd db_dir/test1
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new table a" ]] || false
+
+    cd ../..
+
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test3"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "create table c(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "insert into c values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db test3 -q "call dolt_commit('-a', '-m', 'new table c')"
+
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "drop database test1"
+
+    [ -d db_dir/test3 ]
+    [ ! -d db_dir/test1 ]
+
+    # make sure the databases exist on restart
+    stop_sql_server
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test3" ]] || false
+}
+
+@test "sql-server: create database errors" {
+    skiponwindows "Missing dependencies"
+
+    mkdir no_dolt && cd no_dolt
+    mkdir dir_exists
+    touch file_exists
+    start_sql_server
+
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test1"
+
+    # Error on creation, already exists
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test1"
+    [ $status -ne 0 ]
+    [[ $output =~ exists ]] || false
+
+    # Files / dirs in the way
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "create database dir_exists"
+    [ $status -ne 0 ]
+    [[ $output =~ exists ]] || false
+    
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q	"create database file_exists"
+    [ $status -ne 0 ]
+    [[ $output =~ exists ]] || false
+}
+
+@test "sql-server: create database with existing repo" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+    start_sql_server
+
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "create database test1"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test1" ]] || false
+    [[ $output =~ "repo1" ]] || false
+
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "create table a(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "insert into a values (1), (2)"
+
+    dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_commit('-a', '-m', 'new table a')"
+
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "create database test2"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "create table b(x int)"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "call dolt_add('.')"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "insert into b values (1), (2)"
+    dolt sql-client -P $PORT -u dolt --use-db test2 -q "call dolt_commit('-a', '-m', 'new table b')"
+
+    cd test1
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new table a" ]] || false
+
+    run dolt sql --user=dolt -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "a" ]] || false
+
+    cd ../test2
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new table b" ]] || false
+
+    run dolt sql --user=dolt -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "b" ]] || false
+
+    cd ../
+    # make sure the databases exist on restart
+    stop_sql_server
+    start_sql_server
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "mysql" ]] || false
+    [[ $output =~ "information_schema" ]] || false
+    [[ $output =~ "test1" ]] || false
+    [[ $output =~ "repo1" ]] || false
+    [[ $output =~ "test2" ]] || false
+}
+
+@test "sql-server: fetch uses database tempdir from different working directory" {
+    skiponwindows "Missing dependencies"
 
     mkdir remote1
     cd repo2
@@ -1093,12 +1338,426 @@ while True:
 
     cd ../repo2
     dolt sql -q "create table test (a int)"
+    dolt add .
     dolt commit -am "new commit"
     dolt push -u remote1 main
 
     cd ../repo1
-    dolt config --local --add DOLT_READ_REPLICA_REMOTE remote1
-    start_sql_server repo1
+    REPO_PATH=$(pwd)
+    cd ..
 
-    server_query repo1 1 "show tables" "Table\ntest"
+    echo "
+databases:
+  - name: repo1
+    path: $REPO_PATH
+" > server.yaml
+
+    start_sql_server_with_config repo1 server.yaml
+
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_fetch()"
+}
+
+@test "sql-server: run mysql from shell" {
+    skiponwindows "Has dependencies that are not installed on Windows CI"
+    if [[ `uname` == 'Darwin' ]]; then
+      skip "Unsupported in MacOS CI"
+    fi
+
+    cd repo1
+    dolt sql -q "create table r1t_one (id1 int primary key, col1 varchar(20));"
+    dolt sql -q "insert into r1t_one values (1,'aaaa'), (2,'bbbb'), (3,'cccc');"
+    dolt sql -q "create table r1t_two (id2 int primary key, col2 varchar(20));"
+    dolt add .
+    dolt commit -am "create two tables"
+
+    cd ../repo2
+    dolt sql -q "create table r2t_one (id1 int primary key, col1 varchar(20));"
+    dolt sql -q "create table r2t_two (id2 int primary key, col2 varchar(20));"
+    dolt sql -q "create table r2t_three (id3 int primary key, col3 varchar(20));"
+    dolt sql -q "insert into r2t_three values (4,'dddd'), (3,'gggg'), (2,'eeee'), (1,'ffff');"
+    dolt add .
+    dolt commit -am "create three tables"
+
+    cd ..
+    start_sql_server_with_args --user dolt -ltrace --no-auto-commit
+
+    run expect $BATS_TEST_DIRNAME/sql-server-mysql.expect $PORT repo1
+    [ "$status" -eq 0 ]
+}
+
+@test "sql-server: sql-server lock cleanup" {
+    cd repo1
+    start_sql_server
+    stop_sql_server
+    start_sql_server
+    stop_sql_server
+}
+
+@test "sql-server: sql-server locks database" {
+    cd repo1
+    start_sql_server
+    PORT=$( definePORT )
+    run dolt sql-server -P $PORT --socket "dolt.$PORT.sock"
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: multi dir sql-server locks out children" {
+    start_sql_server
+    cd repo2
+    PORT=$( definePORT )
+    run dolt sql-server -P $PORT --socket "dolt.$PORT.sock"
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: sql-server child locks out parent multi dir" {
+    cd repo2
+    start_sql_server
+    cd ..
+    PORT=$( definePORT )
+    run dolt sql-server -P $PORT --socket "dolt.$PORT.sock"
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: sql-server lock for new databases" {
+    cd repo1
+    start_sql_server
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "create database newdb"
+    cd newdb
+    PORT=$( definePORT )
+    run dolt sql-server -P $PORT --socket "dolt.$PORT.sock"
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: sql-server locks database to writes" {
+    cd repo2
+    dolt sql -q "create table a (x int primary key)" 
+    start_sql_server
+    run dolt sql -q "create table b (x int primary key)" 
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database is locked to writes" ]] || false
+    run dolt sql -q "insert into b values (0)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database is locked to writes" ]] || false
+}
+
+@test "sql-server: start server without socket flag should set default socket path" {
+    skiponwindows "unix socket is not available on Windows"
+    cd repo2
+    DEFAULT_DB="repo2"
+    PORT=$( definePORT )
+
+    dolt sql-server --port $PORT --user dolt >> log.txt 2>&1 &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
+    [ $status -eq 0 ]
+    [[ $output =~ col1 ]] || false
+    [[ $output =~ " 1 " ]] || false
+
+    run grep '\"/tmp/mysql.sock\"' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+
+    run dolt sql-client --user=dolt <<< "exit;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "# Welcome to the Dolt MySQL client." ]] || false
+
+    run dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<< "exit;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "# Welcome to the Dolt MySQL client." ]] || false
+
+    rm /tmp/mysql.sock
+}
+
+@test "sql-server: start server with socket option undefined should set default socket path" {
+    skiponwindows "unix socket is not available on Windows"
+    cd repo2
+    DEFAULT_DB="repo2"
+    PORT=$( definePORT )
+
+    dolt sql-server --port $PORT --user dolt --socket > log.txt 2>&1 &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
+    [ $status -eq 0 ]
+    [[ $output =~ col1 ]] || false
+    [[ $output =~ " 1 " ]] || false
+
+    run grep '\"/tmp/mysql.sock\"' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+
+    rm /tmp/mysql.sock
+}
+
+@test "sql-server: server fails to start up if there is already a file in the socket file path" {
+    skiponwindows "unix socket is not available on Windows"
+    cd repo2
+    touch mysql.sock
+
+    run pwd
+    REPO_NAME=$output
+
+    PORT=$( definePORT )
+    dolt sql-server --port=$PORT --socket="$REPO_NAME/mysql.sock" --user dolt > log.txt 2>&1 &
+    SERVER_PID=$!
+    run wait_for_connection $PORT 5000
+    [ "$status" -eq 1 ]
+
+    run grep 'address already in use' log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+}
+
+@test "sql-server: start server with yaml config with socket file path defined" {
+    skiponwindows "unix socket is not available on Windows"
+    cd repo2
+    DEFAULT_DB="repo2"
+    PORT=$( definePORT )
+
+    echo "
+log_level: debug
+
+user:
+  name: dolt
+
+listener:
+  host: localhost
+  port: $PORT
+  max_connections: 10
+  socket: dolt.$PORT.sock
+
+behavior:
+  autocommit: true" > server.yaml
+
+    dolt sql-server --config server.yaml > log.txt 2>&1 &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
+    [ $status -eq 0 ]
+    [[ $output =~ col1 ]] || false
+    [[ $output =~ " 1 " ]] || false
+
+    run grep "dolt.$PORT.sock" log.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+}
+
+@test "sql-server: start server multidir creates sql-server.lock file in every rep" {
+    start_sql_server
+    run ls repo1/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    run ls repo2/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    stop_sql_server
+    run ls repo1/.dolt
+    ! [[ "$output" =~ "sql-server.lock" ]] || false
+
+    run ls repo2/.dolt
+    ! [[ "$output" =~ "sql-server.lock" ]] || false
+}
+
+@test "sql-server: running a dolt function in the same directory as a running server correctly errors" {
+    start_sql_server
+
+    cd repo1
+    run dolt commit --allow-empty --am "adasdasd"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
+
+    run dolt gc
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
+
+    echo "import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind(('', 0))
+addr = s.getsockname()
+print(addr[1])
+s.close()
+" > port_finder.py
+
+    PORT=$(python3 port_finder.py)
+    run dolt sql-server --port=$PORT --socket "dolt.$PORT.sock"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
+
+    stop_sql_server
+
+    run dolt gc
+    [ "$status" -eq 0 ]
+}
+
+@test "sql-server: sigterm running server and restarting works correctly" {
+    start_sql_server
+    run ls repo1/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    run ls repo2/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    kill -9 $SERVER_PID
+
+    run ls repo1/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    run ls repo2/.dolt
+    [[ "$output" =~ "sql-server.lock" ]] || false
+
+    skip "this now fails because of the socket file not being cleaned up"
+    start_sql_server
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
+    [ $status -eq 0 ]
+    [[ $output =~ col1 ]] || false
+    [[ $output =~ " 1 " ]] || false
+    stop_sql_server
+
+    # Try adding fake pid numbers. Could happen via debugger or something
+    echo "423423" > repo1/.dolt/sql-server.lock
+    echo "4123423" > repo2/.dolt/sql-server.lock
+
+    start_sql_server
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
+    [ $status -eq 0 ]
+    [[ $output =~ col1 ]] || false
+    [[ $output =~ " 1 " ]] || false
+    stop_sql_server
+
+    # Add malicious text to lockfile and expect to fail
+    echo "iamamaliciousactor" > repo1/.dolt/sql-server.lock
+
+    run start_sql_server
+    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
+    [ "$status" -eq 1 ]
+
+    rm repo1/.dolt/sql-server.lock
+
+    # this test was hanging as the server is stopped from the above error
+    # but stop_sql_server in teardown tries to kill process that is not
+    # running anymore, so start the server again, and it will be stopped in
+    # teardown
+    start_sql_server
+}
+
+@test "sql-server: create a database when no current database is set" {
+    mkdir new_format && cd new_format
+    run dolt init --new-format
+    [ $status -eq 0 ]
+
+    PORT=$( definePORT )
+    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --socket "dolt.$PORT.sock" &
+    SERVER_PID=$! # will get killed by teardown_common
+    sleep 5 # not using python wait so this works on windows
+
+    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<< "create database mydb1;"
+    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<< "exit;"
+    [ -d mydb1 ]
+
+    cd mydb1
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ ! $output =~ "OLD ( __LD_1__ )" ]] || false
+    [[ "$output" =~ "NEW ( __DOLT__ )" ]] || false
+}
+
+@test "sql-server: deleting database directory when a running server is using it does not panic" {
+    skiponwindows "Missing dependencies"
+
+    mkdir nodb
+    cd nodb
+    start_sql_server >> server_log.txt 2>&1
+
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE mydb1"
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE mydb2"
+
+    [ -d mydb1 ]
+    [ -d mydb2 ]
+
+    rm -rf mydb2
+
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "SHOW DATABASES"
+    [ $status -ne 0 ]
+
+    run grep "panic" server_log.txt
+    [ "${#lines[@]}" -eq 0 ]
+
+    run grep "failed to access 'mydb2' database: can no longer find .dolt dir on disk" server_log.txt
+    [ "${#lines[@]}" -eq 1 ]
+
+    # this tests fails sometimes as the server is stopped from the above error
+    # but stop_sql_server in teardown tries to kill process that is not
+    # running anymore, so start the server again, and it will be stopped in
+    # teardown
+    start_sql_server
+}
+
+@test "sql-server: dropping database that the server is running in should drop only the db itself not its nested dbs" {
+    skiponwindows "Missing dependencies"
+
+    mkdir mydb
+    cd mydb
+    dolt init
+
+    start_sql_server >> server_log.txt 2>&1
+
+    # 'doltdb' will be nested database inside 'mydb'
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE doltdb"
+    run dolt sql -q "SHOW DATABASES"
+    [[ "$output" =~ "mydb" ]] || false
+    [[ "$output" =~ "doltdb" ]] || false
+
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "DROP DATABASE mydb"
+    run grep "database not found: mydb" server_log.txt
+    [ "${#lines[@]}" -eq 0 ]
+
+    [ ! -d .dolt ]
+
+    # nested databases inside dropped database should still exist
+    run dolt sql -q "SHOW DATABASES"
+    [[ "$output" =~ "doltdb" ]] || false
+    [[ ! "$output" =~ "mydb" ]] || false
+}
+
+@test "sql-server: dropping database currently selected and that the server is running in" {
+    skiponwindows "Missing dependencies"
+
+    mkdir mydb
+    cd mydb
+    dolt init
+
+    run dolt sql -q "SHOW DATABASES"
+    [[ "$output" =~ "mydb" ]] || false
+
+    start_sql_server >> server_log.txt 2>&1
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "DROP DATABASE mydb;"
+
+    run grep "database not found: mydb" server_log.txt
+    [ "${#lines[@]}" -eq 0 ]
+
+    [ ! -d .dolt ]
+
+    run dolt sql -q "SHOW DATABASES"
+    [[ ! "$output" =~ "mydb" ]] || false
+}
+
+@test "sql-server: dropping database with '-' in it" {
+    skiponwindows "Missing dependencies"
+
+    mkdir my-db
+    cd my-db
+    dolt init
+    cd ..
+
+    start_sql_server >> server_log.txt 2>&1
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "DROP DATABASE my_db;"
+
+    run grep "database not found: my_db" server_log.txt
+    [ "${#lines[@]}" -eq 0 ]
+
+    [ ! -d my-db ]
 }

@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	sqle "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
 )
 
@@ -45,8 +45,8 @@ func (l LogFormat) Format(entry *logrus.Entry) ([]byte, error) {
 		lvl = "TRACE"
 	}
 
-	connectionId := entry.Data[sqle.ConnectionIdLogField]
-	delete(entry.Data, sqle.ConnectionIdLogField)
+	connectionId := entry.Data[sql.ConnectionIdLogField]
+	delete(entry.Data, sql.ConnectionIdLogField)
 
 	var dataFormat strings.Builder
 	var i int
@@ -67,7 +67,12 @@ func (l LogFormat) Format(entry *logrus.Entry) ([]byte, error) {
 		}
 	}
 
-	msg := fmt.Sprintf("%s %s [conn %d] %s {%s}\n", entry.Time.Format(time.RFC3339), lvl, connectionId, entry.Message, dataFormat.String())
+	var msg string
+	if connectionId == nil {
+		msg = fmt.Sprintf("%s %s [no conn] %s {%s}\n", entry.Time.Format(time.RFC3339), lvl, entry.Message, dataFormat.String())
+	} else {
+		msg = fmt.Sprintf("%s %s [conn %d] %s {%s}\n", entry.Time.Format(time.RFC3339), lvl, connectionId, entry.Message, dataFormat.String())
+	}
 	return ([]byte)(msg), nil
 }
 

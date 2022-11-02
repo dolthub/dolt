@@ -40,12 +40,8 @@ import (
 )
 
 var commands = []*util.Command{
-	nomsCommit,
 	nomsConfig,
-	nomsDiff,
 	nomsDs,
-	nomsLog,
-	nomsMerge,
 	nomsRoot,
 	nomsShow,
 	nomsSync,
@@ -56,11 +52,7 @@ var commands = []*util.Command{
 
 var kingpinCommands = []util.KingpinCommand{
 	nomsBlob,
-	nomsList,
-	nomsMap,
-	nomsSet,
 	nomsStats,
-	nomsStruct,
 }
 
 var actions = []string{
@@ -242,5 +234,6 @@ See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spell
 	cat.Flag("raw", "If true, includes the raw binary version of each chunk in the nbs file").Bool()
 	cat.Flag("decompressed", "If true, includes the decompressed binary version of each chunk in the nbs file").Bool()
 	cat.Flag("no-show", "If true, skips printing of the value").Bool()
+	cat.Flag("no-refs", "If true, skips printing of the refs").Bool()
 	cat.Flag("hashes-only", "If true, only prints the b32 hashes").Bool()
 }

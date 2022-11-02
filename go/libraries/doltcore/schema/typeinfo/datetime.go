@@ -187,21 +187,6 @@ func (ti *datetimeType) NomsKind() types.NomsKind {
 	return types.TimestampKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *datetimeType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil || *str == "" {
-		return types.NullValue, nil
-	}
-	strVal, err := ti.sqlDatetimeType.Convert(*str)
-	if err != nil {
-		return nil, err
-	}
-	if val, ok := strVal.(time.Time); ok {
-		return types.Timestamp(val), nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
-}
-
 // Promote implements TypeInfo interface.
 func (ti *datetimeType) Promote() TypeInfo {
 	return &datetimeType{ti.sqlDatetimeType.Promote().(sql.DatetimeType)}
@@ -234,11 +219,27 @@ func datetimeTypeConverter(ctx context.Context, src *datetimeType, destTi TypeIn
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geomcollType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geometryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *linestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multilinestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipolygonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *pointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *polygonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)

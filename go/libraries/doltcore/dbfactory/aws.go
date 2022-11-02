@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -47,6 +48,8 @@ const (
 	//AWSCredsProfile is a creation parameter that can be used to specify which AWS profile to use.
 	AWSCredsProfile = "aws-creds-profile"
 )
+
+var AWSCredTypes = []string{RoleCS.String(), EnvCS.String(), FileCS.String()}
 
 // AWSCredentialSource is an enum type representing the different credential sources (auto, role, env, file, or invalid)
 type AWSCredentialSource int
@@ -104,18 +107,25 @@ func AWSCredentialSourceFromStr(str string) AWSCredentialSource {
 type AWSFactory struct {
 }
 
+func (fact AWSFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
+	// nothing to prepare
+	return nil
+}
+
 // CreateDB creates an AWS backed database
-func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, error) {
+func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	var db datas.Database
 	cs, err := fact.newChunkStore(ctx, nbf, urlObj, params)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 
-	db = datas.NewDatabase(cs)
+	vrw := types.NewValueStore(cs)
+	ns := tree.NewNodeStore(cs)
+	db = datas.NewTypesDatabase(vrw, ns)
 
-	return db, nil
+	return db, vrw, ns, nil
 }
 
 func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (chunks.ChunkStore, error) {
@@ -137,7 +147,13 @@ func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinForm
 	}
 
 	sess := session.Must(session.NewSessionWithOptions(opts))
-	return nbs.NewAWSStore(ctx, nbf.VersionString(), parts[0], dbName, parts[1], s3.New(sess), dynamodb.New(sess), defaultMemTableSize)
+	_, err = sess.Config.Credentials.Get()
+	if err != nil {
+		return nil, err
+	}
+
+	q := nbs.NewUnlimitedMemQuotaProvider()
+	return nbs.NewAWSStore(ctx, nbf.VersionString(), parts[0], dbName, parts[1], s3.New(sess), dynamodb.New(sess), defaultMemTableSize, q)
 }
 
 func validatePath(path string) (string, error) {
@@ -151,9 +167,7 @@ func validatePath(path string) (string, error) {
 		pathLen--
 	}
 
-	// Should probably have regex validation of a valid database name here once we decide what valid database names look
-	// like.
-	if len(path) == 0 || strings.Index(path, "/") != -1 {
+	if len(path) == 0 {
 		return "", errors.New("invalid database name")
 	}
 
@@ -174,12 +188,19 @@ func awsConfigFromParams(params map[string]interface{}) (session.Options, error)
 		}
 	}
 
-	opts := session.Options{}
+	opts := session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+	}
 
 	profile := ""
 	if val, ok := params[AWSCredsProfile]; ok {
 		profile = val.(string)
 		opts.Profile = val.(string)
+	}
+
+	filePath, ok := params[AWSCredsFileParam]
+	if ok && len(filePath.(string)) != 0 && awsCredsSource == RoleCS {
+		awsCredsSource = FileCS
 	}
 
 	switch awsCredsSource {

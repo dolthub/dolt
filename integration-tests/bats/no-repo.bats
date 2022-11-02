@@ -26,34 +26,52 @@ teardown() {
     [[ "$output" =~ "init - Create an empty Dolt data repository." ]] || false
     [[ "$output" =~ "status - Show the working tree status." ]] || false
     [[ "$output" =~ "add - Add table changes to the list of staged table changes." ]] || false
+    [[ "$output" =~ "diff - Diff a table." ]] || false
     [[ "$output" =~ "reset - Remove table changes from the list of staged table changes." ]] || false
+    [[ "$output" =~ "clean - Remove untracked tables from working set." ]] || false
     [[ "$output" =~ "commit - Record changes to the repository." ]] || false
     [[ "$output" =~ "sql - Run a SQL query against tables in repository." ]] || false
     [[ "$output" =~ "sql-server - Start a MySQL-compatible server." ]] || false
+    [[ "$output" =~ "sql-client - Starts a built-in MySQL client." ]] || false
     [[ "$output" =~ "log - Show commit logs." ]] || false
-    [[ "$output" =~ "diff - Diff a table." ]] || false
-    [[ "$output" =~ "blame - Show what revision and author last modified each row of a table." ]] || false
-    [[ "$output" =~ "merge - Merge a branch." ]] || false
     [[ "$output" =~ "branch - Create, list, edit, delete branches." ]] || false
-    [[ "$output" =~ "tag - Create, list, delete tags" ]] || false
     [[ "$output" =~ "checkout - Checkout a branch or overwrite a table from HEAD." ]] || false
-    [[ "$output" =~ "remote - Manage set of tracked repositories." ]] || false
-    [[ "$output" =~ "push - Push to a dolt remote." ]] || false
-    [[ "$output" =~ "pull - Fetch from a dolt remote data repository and merge." ]] || false
-    [[ "$output" =~ "fetch - Update the database from a remote data repository." ]] || false
+    [[ "$output" =~ "merge - Merge a branch." ]] || false
+    [[ "$output" =~ "conflicts - Commands for viewing and resolving merge conflicts." ]] || false
+    [[ "$output" =~ "cherry-pick - Apply the changes introduced by an existing commit." ]] || false
+    [[ "$output" =~ "revert - Undo the changes introduced in a commit." ]] || false
     [[ "$output" =~ "clone - Clone from a remote data repository." ]] || false
-    [[ "$output" =~ "creds - Commands for managing credentials." ]] || false
-    [[ "$output" =~ "login - Login to a dolt remote host." ]] || false
-    [[ "$output" =~ "version - Displays the current Dolt cli version." ]] || false
+    [[ "$output" =~ "fetch - Update the database from a remote data repository." ]] || false
+    [[ "$output" =~ "pull - Fetch from a dolt remote data repository and merge." ]] || false
+    [[ "$output" =~ "push - Push to a dolt remote." ]] || false
     [[ "$output" =~ "config - Dolt configuration." ]] || false
+    [[ "$output" =~ "remote - Manage set of tracked repositories." ]] || false
+    [[ "$output" =~ "backup - Manage a set of server backups." ]] || false
+    [[ "$output" =~ "login - Login to a dolt remote host." ]] || false
+    [[ "$output" =~ "creds - Commands for managing credentials." ]] || false
     [[ "$output" =~ "ls - List tables in the working set." ]] || false
     [[ "$output" =~ "schema - Commands for showing and importing table schemas." ]] || false
     [[ "$output" =~ "table - Commands for copying, renaming, deleting, and exporting tables." ]] || false
-    [[ "$output" =~ "conflicts - Commands for viewing and resolving merge conflicts." ]] || false
-    [[ "$output" =~ "migrate - Executes a repository migration to update to the latest format." ]] || false
+    [[ "$output" =~ "tag - Create, list, delete tags." ]] || false
+    [[ "$output" =~ "blame - Show what revision and author last modified each row of a table." ]] || false
+    [[ "$output" =~ "constraints - Commands for handling constraints." ]] || false
+    [[ "$output" =~ "migrate - Executes a database migration to use the latest Dolt data format." ]] || false
+    [[ "$output" =~ "read-tables - Fetch table(s) at a specific commit into a new dolt repo" ]] || false
     [[ "$output" =~ "gc - Cleans up unreferenced data from the repository." ]] || false
     [[ "$output" =~ "filter-branch - Edits the commit history using the provided query." ]] || false
     [[ "$output" =~ "merge-base - Find the common ancestor of two commits." ]] || false
+    [[ "$output" =~ "version - Displays the current Dolt cli version." ]] || false
+    [[ "$output" =~ "dump - Export all tables in the working set into a file." ]] || false
+}
+
+@test "no-repo: dolt --help exits 0" {
+    run dolt --help
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "Valid commands for dolt are" ]
+
+    # Check help output for supported commands (spotcheck)
+    [[ "$output" =~ "init - Create an empty Dolt data repository." ]] || false
+    [[ "$output" =~ "status - Show the working tree status." ]] || false
 }
 
 @test "no-repo: check all commands for valid help text" {
@@ -90,6 +108,19 @@ teardown() {
     [[ "$output" =~ $regex ]] || false
 }
 
+@test "no-repo: dolt version does not need write permissions" {
+    chmod 111 .
+    run dolt version
+    skip "dolt version needs write perms"
+    [ "$status" -eq 0 ]
+    chmod 755 .
+}
+
+@test "no-repo: dolt version does not fail on empty .dolt dir" {
+    mkdir .dolt
+    run dolt version
+    [ "$status" -eq 0 ]
+}
 
 # Tests for dolt commands outside of a dolt repository
 NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
@@ -142,9 +173,22 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
 }
 
 @test "no-repo: dolt sql outside of a dolt repository" {
-    run dolt sql
-    [ "$status" -ne 0 ]
-    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+    run dolt sql -q "show databases"
+    [ "$status" -eq 0 ]
+}
+
+@test "no-repo: dolt sql statements with no databases" {
+    run dolt sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no database selected" ]] || false
+
+    run dolt sql -q "create table a (a int primary key)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no database selected" ]] || false
+
+    run dolt sql -q "show triggers"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no database selected" ]] || false
 }
 
 @test "no-repo: dolt checkout outside of a dolt repository" {
@@ -282,3 +326,20 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [[ "$output" =~ "Failed to load the HOME directory" ]]
 }
 
+@test "no-repo: init with new storage version" {
+    DOLT_DEFAULT_BIN_FORMAT="__DOLT__" dolt init
+    run cat .dolt/noms/manifest
+    [[ "$output" =~ "__DOLT__" ]]
+    [[ ! "$output" =~ "__LD_1__" ]]
+}
+
+@test "no-repo: dolt login exits when receiving SIGINT" {
+    dolt login & # run this in the background
+    PID=$! # capture background PID
+    sleep 1 # Wait a sec
+    kill -SIGINT $PID # Send SIGINT (CTRL + C) to PID
+    sleep 1 # Wait another sec
+    run grep -q 'dolt' <(ps) # Ensure no process named dolt is running
+    [ "$output" == "" ]
+    run kill -9 $PID # Kill process if it doesn't pass
+}

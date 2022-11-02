@@ -4,16 +4,20 @@ on:
   pull_request:
     branches: [ main ]
 
+concurrency:
+  group: ci-check-repo-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     name: Verify format and committers
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Setup Go 1.x
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          go-version: ^1.17
-      - uses: actions/checkout@v2
+          go-version: ^1.19
+      - uses: actions/checkout@v3
       - name: Check all
         working-directory: ./go
         # Keep this in sync with //go/utils/prepr/prepr.sh.
@@ -24,6 +28,7 @@ jobs:
           ./utils/repofmt/check_fmt.sh
           ./Godeps/verify.sh
           ./utils/repofmt/check_bats_fmt.sh
+          ./utils/repofmt/check_prepared_tests.sh
         env:
           BRANCH_NAME: ${{ github.head_ref }}
           CHANGE_TARGET: ${{ github.base_ref }}

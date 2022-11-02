@@ -46,7 +46,7 @@ func (w *parallelRefWalker) goWork() error {
 			}
 			var res []hash.Hash
 			for _, v := range work.vals {
-				err := v.WalkRefs(w.nbf, func(r Ref) error {
+				err := v.walkRefs(w.nbf, func(r Ref) error {
 					res = append(res, r.TargetHash())
 					return nil
 				})

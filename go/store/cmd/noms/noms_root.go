@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/d"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -86,12 +85,12 @@ func runRoot(ctx context.Context, args []string) int {
 	}
 
 	// If BUG 3407 is correct, we might be able to just take cs and make a Database directly from that.
-	db, err := cfg.GetDatabase(ctx, args[0])
+	db, vrw, _, err := cfg.GetDatabase(ctx, args[0])
 	util.CheckErrorNoUsage(err)
 	defer db.Close()
-	v, err := db.ReadValue(ctx, h)
+	v, err := vrw.ReadValue(ctx, h)
 	util.CheckErrorNoUsage(err)
-	if !validate(ctx, db.Format(), v) {
+	if !validate(ctx, vrw.Format(), v) {
 		return 1
 	}
 
@@ -167,15 +166,5 @@ func validate(ctx context.Context, nbf *types.NomsBinFormat, r types.Value) bool
 		return false
 	}
 
-	yep, err := r.(types.Map).Any(ctx, func(k, v types.Value) bool {
-		if !datas.IsRefOfCommitType(nbf, mustType(types.TypeOf(v))) {
-			fmt.Fprintf(os.Stderr, "Invalid root map. Value for key '%s' is not a ref of commit.", string(k.(types.String)))
-			return false
-		}
-		return true
-	})
-
-	d.PanicIfError(err)
-
-	return yep
+	return true
 }

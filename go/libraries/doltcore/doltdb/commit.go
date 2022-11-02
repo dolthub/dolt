@@ -15,125 +15,57 @@
 package doltdb
 
 import (
-	"bytes"
 	"context"
 	"errors"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
-)
-
-const (
-	metaField        = datas.CommitMetaField
-	parentsField     = datas.ParentsField
-	parentsListField = datas.ParentsListField
-	rootValueField   = datas.ValueField
 )
 
 var errCommitHasNoMeta = errors.New("commit has no metadata")
 var errHasNoRootValue = errors.New("no root value")
 
+// Rootish is an object resolvable to a RootValue.
+type Rootish interface {
+	// ResolveRootValue resolves a Rootish to a RootValue.
+	ResolveRootValue(ctx context.Context) (*RootValue, error)
+
+	// HashOf returns the hash.Hash of the Rootish.
+	HashOf() (hash.Hash, error)
+}
+
 // Commit contains information on a commit that was written to noms
 type Commit struct {
-	vrw      types.ValueReadWriter
-	commitSt types.Struct
-	parents  []types.Ref
+	vrw     types.ValueReadWriter
+	ns      tree.NodeStore
+	parents []*datas.Commit
+	dCommit *datas.Commit
 }
 
-func NewCommit(vrw types.ValueReadWriter, commitSt types.Struct) *Commit {
-	parents, err := readParents(vrw, commitSt)
+var _ Rootish = &Commit{}
+
+func NewCommit(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, commit *datas.Commit) (*Commit, error) {
+	parents, err := datas.GetCommitParents(ctx, vrw, commit.NomsValue())
 	if err != nil {
-		panic(err)
-	}
-	return &Commit{vrw, commitSt, parents}
-}
-
-func readParents(vrw types.ValueReadWriter, commitSt types.Struct) ([]types.Ref, error) {
-	if l, found, err := commitSt.MaybeGet(parentsListField); err != nil {
 		return nil, err
-	} else if found && l != nil {
-		l := l.(types.List)
-		parents := make([]types.Ref, 0, l.Len())
-		i, err := l.Iterator(context.TODO())
-		if err != nil {
-			return nil, err
-		}
-		for {
-			v, err := i.Next(context.TODO())
-			if err != nil {
-				return nil, err
-			}
-			if v == nil {
-				break
-			}
-			parents = append(parents, v.(types.Ref))
-		}
-		return parents, nil
 	}
-	if s, found, err := commitSt.MaybeGet(parentsField); err != nil {
-		return nil, err
-	} else if found && s != nil {
-		s := s.(types.Set)
-		parents := make([]types.Ref, 0, s.Len())
-		i, err := s.Iterator(context.TODO())
-		if err != nil {
-			return nil, err
-		}
-		for {
-			v, err := i.Next(context.TODO())
-			if err != nil {
-				return nil, err
-			}
-			if v == nil {
-				break
-			}
-			parents = append(parents, v.(types.Ref))
-		}
-		return parents, nil
-	}
-	return nil, nil
+	return &Commit{vrw, ns, parents, commit}, nil
 }
 
 // HashOf returns the hash of the commit
 func (c *Commit) HashOf() (hash.Hash, error) {
-	return c.commitSt.Hash(c.vrw.Format())
+	return c.dCommit.Addr(), nil
 }
 
 // GetCommitMeta gets the metadata associated with the commit
-func (c *Commit) GetCommitMeta() (*CommitMeta, error) {
-	metaVal, found, err := c.commitSt.MaybeGet(metaField)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if !found {
-		return nil, errCommitHasNoMeta
-	}
-
-	if metaVal != nil {
-		if metaSt, ok := metaVal.(types.Struct); ok {
-			cm, err := commitMetaFromNomsSt(metaSt)
-
-			if err == nil {
-				return cm, nil
-			}
-		}
-	}
-
-	h, err := c.HashOf()
-
-	if err != nil {
-		return nil, errCommitHasNoMeta
-	}
-
-	return nil, errors.New(h.String() + " is a commit without the required metadata.")
+func (c *Commit) GetCommitMeta(ctx context.Context) (*datas.CommitMeta, error) {
+	return datas.GetCommitMeta(ctx, c.dCommit.NomsValue())
 }
 
-// ParentRefs returns the noms types.Refs for the commits
-func (c *Commit) ParentRefs() []types.Ref {
+// DatasParents returns the []*datas.Commit of the commit parents.
+func (c *Commit) DatasParents() []*datas.Commit {
 	return c.parents
 }
 
@@ -141,115 +73,63 @@ func (c *Commit) ParentRefs() []types.Ref {
 func (c *Commit) ParentHashes(ctx context.Context) ([]hash.Hash, error) {
 	hashes := make([]hash.Hash, len(c.parents))
 	for i, pr := range c.parents {
-		hashes[i] = pr.TargetHash()
+		hashes[i] = pr.Addr()
 	}
 	return hashes, nil
 }
 
 // NumParents gets the number of parents a commit has.
-func (c *Commit) NumParents() (int, error) {
-	return len(c.parents), nil
+func (c *Commit) NumParents() int {
+	return len(c.parents)
 }
 
 func (c *Commit) Height() (uint64, error) {
-	maxHeight, err := maxChunkHeight(c.commitSt, c.vrw.Format())
-	if err != nil {
-		return 0, err
-	}
-	return maxHeight + 1, nil
-}
-
-func maxChunkHeight(v types.Value, nbf *types.NomsBinFormat) (max uint64, err error) {
-	err = v.WalkRefs(nbf, func(r types.Ref) error {
-		if height := r.Height(); height > max {
-			max = height
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return 0, err
-	}
-
-	return max, nil
-}
-
-func (c *Commit) getParent(ctx context.Context, idx int) (*types.Struct, error) {
-	parentRef := c.parents[idx]
-	targVal, err := parentRef.TargetValue(ctx, c.vrw)
-	if err != nil {
-		return nil, err
-	}
-	parentSt := targVal.(types.Struct)
-	return &parentSt, nil
+	return c.dCommit.Height(), nil
 }
 
 // GetRootValue gets the RootValue of the commit.
-func (c *Commit) GetRootValue() (*RootValue, error) {
-	rootVal, _, err := c.commitSt.MaybeGet(rootValueField)
-
+func (c *Commit) GetRootValue(ctx context.Context) (*RootValue, error) {
+	rootV, err := datas.GetCommittedValue(ctx, c.vrw, c.dCommit.NomsValue())
 	if err != nil {
 		return nil, err
 	}
-
-	if rootVal != nil {
-		if rootSt, ok := rootVal.(types.Struct); ok {
-			return newRootValue(c.vrw, rootSt)
-		}
+	if rootV == nil {
+		return nil, errHasNoRootValue
 	}
-
-	return nil, errHasNoRootValue
+	return newRootValue(c.vrw, c.ns, rootV)
 }
 
-// GetStRef returns a Noms Ref for this Commit's Noms commit Struct.
-func (c *Commit) GetStRef() (types.Ref, error) {
-	return types.NewRef(c.commitSt, c.vrw.Format())
+func (c *Commit) GetParent(ctx context.Context, idx int) (*Commit, error) {
+	return NewCommit(ctx, c.vrw, c.ns, c.parents[idx])
 }
 
 var ErrNoCommonAncestor = errors.New("no common ancestor")
 
 func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
-	ref1, err := types.NewRef(cm1.commitSt, cm1.vrw.Format())
-
+	addr, err := getCommitAncestorAddr(ctx, cm1.dCommit, cm2.dCommit, cm1.vrw, cm2.vrw, cm1.ns, cm2.ns)
 	if err != nil {
 		return nil, err
 	}
 
-	ref2, err := types.NewRef(cm2.commitSt, cm2.vrw.Format())
-
+	targetCommit, err := datas.LoadCommitAddr(ctx, cm1.vrw, addr)
 	if err != nil {
 		return nil, err
 	}
 
-	ref, err := getCommitAncestorRef(ctx, ref1, ref2, cm1.vrw, cm2.vrw)
-
-	if err != nil {
-		return nil, err
-	}
-
-	targetVal, err := ref.TargetValue(ctx, cm1.vrw)
-
-	if err != nil {
-		return nil, err
-	}
-
-	ancestorSt := targetVal.(types.Struct)
-	return NewCommit(cm1.vrw, ancestorSt), nil
+	return NewCommit(ctx, cm1.vrw, cm1.ns, targetCommit)
 }
 
-func getCommitAncestorRef(ctx context.Context, ref1, ref2 types.Ref, vrw1, vrw2 types.ValueReadWriter) (types.Ref, error) {
-	ancestorRef, ok, err := datas.FindCommonAncestor(ctx, ref1, ref2, vrw1, vrw2)
-
+func getCommitAncestorAddr(ctx context.Context, c1, c2 *datas.Commit, vrw1, vrw2 types.ValueReadWriter, ns1, ns2 tree.NodeStore) (hash.Hash, error) {
+	ancestorAddr, ok, err := datas.FindCommonAncestor(ctx, c1, c2, vrw1, vrw2, ns1, ns2)
 	if err != nil {
-		return types.Ref{}, err
+		return hash.Hash{}, err
 	}
 
 	if !ok {
-		return types.Ref{}, ErrNoCommonAncestor
+		return hash.Hash{}, ErrNoCommonAncestor
 	}
 
-	return ancestorRef, nil
+	return ancestorAddr, nil
 }
 
 func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error) {
@@ -259,12 +139,12 @@ func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error
 		return false, err
 	} else if ancestor == nil {
 		return false, errors.New("cannot perform fast forward merge; commits have no common ancestor")
-	} else if ancestor.commitSt.Equals(c.commitSt) {
-		if ancestor.commitSt.Equals(new.commitSt) {
+	} else if ancestor.dCommit.Addr() == c.dCommit.Addr() {
+		if ancestor.dCommit.Addr() == new.dCommit.Addr() {
 			return true, ErrUpToDate
 		}
 		return true, nil
-	} else if ancestor.commitSt.Equals(new.commitSt) {
+	} else if ancestor.dCommit.Addr() == new.dCommit.Addr() {
 		return false, ErrIsAhead
 	}
 
@@ -278,12 +158,12 @@ func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error
 		return false, err
 	} else if ancestor == nil {
 		return false, errors.New("cannot perform fast forward merge; commits have no common ancestor")
-	} else if ancestor.commitSt.Equals(new.commitSt) {
-		if ancestor.commitSt.Equals(c.commitSt) {
+	} else if ancestor.dCommit.Addr() == new.dCommit.Addr() {
+		if ancestor.dCommit.Addr() == c.dCommit.Addr() {
 			return true, ErrUpToDate
 		}
 		return true, nil
-	} else if ancestor.commitSt.Equals(c.commitSt) {
+	} else if ancestor.dCommit.Addr() == c.dCommit.Addr() {
 		return false, ErrIsBehind
 	}
 
@@ -291,22 +171,34 @@ func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error
 }
 
 func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*Commit, error) {
-	ancestorSt, err := getAncestor(ctx, c.vrw, c.commitSt, as)
-
-	if err != nil {
-		return nil, err
+	if as == nil || len(as.Instructions) == 0 {
+		return c, nil
 	}
 
-	return NewCommit(c.vrw, ancestorSt), nil
+	cur := c
+
+	instructions := as.Instructions
+	for _, inst := range instructions {
+		if inst >= cur.NumParents() {
+			return nil, ErrInvalidAncestorSpec
+		}
+
+		var err error
+		cur, err = cur.GetParent(ctx, inst)
+		if err != nil {
+			return nil, err
+		}
+		if cur == nil {
+			return nil, ErrInvalidAncestorSpec
+		}
+	}
+
+	return cur, nil
 }
 
-func (c *Commit) DebugString(ctx context.Context) string {
-	var buf bytes.Buffer
-	err := types.WriteEncodedValue(ctx, &buf, c.commitSt)
-	if err != nil {
-		panic(err)
-	}
-	return buf.String()
+// ResolveRootValue implements Rootish.
+func (c *Commit) ResolveRootValue(ctx context.Context) (*RootValue, error) {
+	return c.GetRootValue(ctx)
 }
 
 // PendingCommit represents a commit that hasn't yet been written to storage. It contains a root value and options to
@@ -322,67 +214,27 @@ type PendingCommit struct {
 // |roots| are the current roots to include in the PendingCommit. roots.Staged is used as the new root to package in the
 // commit, once written.
 // |headRef| is the ref of the HEAD the commit will update
-// |parentCommits| are any additional merge parents for this commit. The current HEAD commit is always considered a
-// parent.
+// |mergeParentCommits| are any merge parents for this commit
 // |cm| is the metadata for the commit
+// The current branch head will be automatically filled in as the first parent at commit time.
 func (ddb *DoltDB) NewPendingCommit(
 	ctx context.Context,
 	roots Roots,
-	headRef ref.DoltRef,
-	parentCommits []*Commit,
-	cm *CommitMeta,
+	mergeParentCommits []*Commit,
+	cm *datas.CommitMeta,
 ) (*PendingCommit, error) {
-	val, err := ddb.writeRootValue(ctx, roots.Staged)
+	newstaged, val, err := ddb.writeRootValue(ctx, roots.Staged)
 	if err != nil {
 		return nil, err
 	}
+	roots.Staged = newstaged
 
-	// TODO: is this flush necessary?
-	err = ddb.db.Flush(ctx)
-	if err != nil {
-		return nil, err
+	var parents []hash.Hash
+	for _, pc := range mergeParentCommits {
+		parents = append(parents, pc.dCommit.Addr())
 	}
 
-	ds, err := ddb.db.GetDataset(ctx, headRef.String())
-	if err != nil {
-		return nil, err
-	}
-
-	nomsHeadRef, hasHead, err := ds.MaybeHeadRef()
-	if err != nil {
-		return nil, err
-	}
-
-	parents, err := types.NewList(ctx, ddb.db)
-	if err != nil {
-		return nil, err
-	}
-
-	parentEditor := parents.Edit()
-	if hasHead {
-		parentEditor = parentEditor.Append(nomsHeadRef)
-	}
-
-	for _, pc := range parentCommits {
-		rf, err := types.NewRef(pc.commitSt, ddb.db.Format())
-		if err != nil {
-			return nil, err
-		}
-
-		parentEditor = parentEditor.Append(rf)
-	}
-
-	parents, err = parentEditor.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	st, err := cm.toNomsStruct(ddb.db.Format())
-	if err != nil {
-		return nil, err
-	}
-
-	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st, Policy: nil}
+	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
 	return &PendingCommit{
 		Roots:         roots,
 		Val:           val,

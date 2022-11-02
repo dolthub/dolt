@@ -29,6 +29,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -38,12 +39,25 @@ func mustGetValue(v types.Value, found bool, err error) types.Value {
 	return v
 }
 
+func mustGetCommittedValue(db *database, v types.Value) types.Value {
+	r, err := GetCommittedValue(context.Background(), db, v)
+	d.PanicIfError(err)
+	d.PanicIfFalse(r != nil)
+	return r
+}
+
+func mustHeadAddr(ds Dataset) hash.Hash {
+	h, ok := ds.MaybeHeadAddr()
+	d.PanicIfFalse(ok)
+	return h
+}
+
 func TestExplicitBranchUsingDatasets(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
 	id2 := "othertestdataset"
 	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView())
+	store := NewDatabase(stg.NewViewWithDefaultFormat()).(*database)
 	defer store.Close()
 
 	ds1, err := store.GetDataset(context.Background(), id1)
@@ -51,50 +65,48 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 
 	// ds1: |a|
 	a := types.String("a")
-	ds1, err = store.CommitValue(context.Background(), ds1, a)
+	ds1, err = CommitValue(context.Background(), store, ds1, a)
 	assert.NoError(err)
-	assert.True(mustGetValue(mustHead(ds1).MaybeGet(ValueField)).Equals(a))
+	assert.True(mustGetCommittedValue(ds1.db, mustHead(ds1)).Equals(a))
 
 	// ds1: |a|
 	//        \ds2
 	ds2, err := store.GetDataset(context.Background(), id2)
 	assert.NoError(err)
-	ds2, err = store.Commit(context.Background(), ds2, mustHeadValue(ds1), CommitOptions{ParentsList: mustList(types.NewList(context.Background(), store, mustHeadRef(ds1)))})
+	ds2, err = store.Commit(context.Background(), ds2, mustHeadValue(ds1), CommitOptions{Parents: []hash.Hash{mustHeadAddr(ds1)}})
 	assert.NoError(err)
-	assert.True(mustGetValue(mustHead(ds2).MaybeGet(ValueField)).Equals(a))
+	assert.True(mustGetCommittedValue(store, mustHead(ds2)).Equals(a))
 
 	// ds1: |a| <- |b|
 	b := types.String("b")
-	ds1, err = store.CommitValue(context.Background(), ds1, b)
+	ds1, err = CommitValue(context.Background(), store, ds1, b)
 	assert.NoError(err)
-	assert.True(mustGetValue(mustHead(ds1).MaybeGet(ValueField)).Equals(b))
+	assert.True(mustGetCommittedValue(store, mustHead(ds1)).Equals(b))
 
 	// ds1: |a|    <- |b|
 	//        \ds2 <- |c|
 	c := types.String("c")
-	ds2, err = store.CommitValue(context.Background(), ds2, c)
+	ds2, err = CommitValue(context.Background(), store, ds2, c)
 	assert.NoError(err)
-	assert.True(mustGetValue(mustHead(ds2).MaybeGet(ValueField)).Equals(c))
+	assert.True(mustGetCommittedValue(store, mustHead(ds2)).Equals(c))
 
 	// ds1: |a|    <- |b| <--|d|
 	//        \ds2 <- |c| <--/
-	mergeParents, err := types.NewList(context.Background(), store, mustRef(types.NewRef(mustHead(ds1), types.Format_7_18)), mustRef(types.NewRef(mustHead(ds2), types.Format_7_18)))
-	assert.NoError(err)
 	d := types.String("d")
-	ds2, err = store.Commit(context.Background(), ds2, d, CommitOptions{ParentsList: mergeParents})
+	ds2, err = store.Commit(context.Background(), ds2, d, CommitOptions{Parents: []hash.Hash{mustHeadAddr(ds1), mustHeadAddr(ds2)}})
 	assert.NoError(err)
-	assert.True(mustGetValue(mustHead(ds2).MaybeGet(ValueField)).Equals(d))
+	assert.True(mustGetCommittedValue(store, mustHead(ds2)).Equals(d))
 
-	ds1, err = store.Commit(context.Background(), ds1, d, CommitOptions{ParentsList: mergeParents})
+	ds1, err = store.Commit(context.Background(), ds1, d, CommitOptions{Parents: []hash.Hash{mustHeadAddr(ds1), mustHeadAddr(ds2)}})
 	assert.NoError(err)
-	assert.True(mustGetValue(mustHead(ds1).MaybeGet(ValueField)).Equals(d))
+	assert.True(mustGetCommittedValue(store, mustHead(ds1)).Equals(d))
 }
 
 func TestTwoClientsWithEmptyDataset(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
 	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView())
+	store := NewDatabase(stg.NewViewWithDefaultFormat())
 	defer store.Close()
 
 	dsx, err := store.GetDataset(context.Background(), id1)
@@ -104,22 +116,22 @@ func TestTwoClientsWithEmptyDataset(t *testing.T) {
 
 	// dsx: || -> |a|
 	a := types.String("a")
-	dsx, err = store.CommitValue(context.Background(), dsx, a)
+	dsx, err = CommitValue(context.Background(), store, dsx, a)
 	assert.NoError(err)
-	assert.True(mustGetValue(mustHead(dsx).MaybeGet(ValueField)).Equals(a))
+	assert.True(mustGetCommittedValue(dsx.db, mustHead(dsx)).Equals(a))
 
 	// dsy: || -> |b|
 	_, ok := dsy.MaybeHead()
 	assert.False(ok)
 	b := types.String("b")
-	_, err = store.CommitValue(context.Background(), dsy, b)
+	_, err = CommitValue(context.Background(), store, dsy, b)
 	assert.Error(err)
 
 	// Commit failed, but dsy now has latest head, so we should be able to just try again.
 	// dsy: |a| -> |b|
 	dsy, err = store.GetDataset(context.Background(), id1)
 	assert.NoError(err)
-	dsy, err = store.CommitValue(context.Background(), dsy, b)
+	dsy, err = CommitValue(context.Background(), store, dsy, b)
 	assert.NoError(err)
 	headVal := mustHeadValue(dsy)
 	assert.True(headVal.Equals(b))
@@ -129,7 +141,7 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
 	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView())
+	store := NewDatabase(stg.NewViewWithDefaultFormat())
 	defer store.Close()
 
 	a := types.String("a")
@@ -137,9 +149,9 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 		// ds1: || -> |a|
 		ds1, err := store.GetDataset(context.Background(), id1)
 		assert.NoError(err)
-		ds1, err = store.CommitValue(context.Background(), ds1, a)
+		ds1, err = CommitValue(context.Background(), store, ds1, a)
 		assert.NoError(err)
-		assert.True(mustGetValue(mustHead(ds1).MaybeGet(ValueField)).Equals(a))
+		assert.True(mustGetCommittedValue(ds1.db, mustHead(ds1)).Equals(a))
 	}
 
 	dsx, err := store.GetDataset(context.Background(), id1)
@@ -148,36 +160,24 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	assert.NoError(err)
 
 	// dsx: |a| -> |b|
-	assert.True(mustGetValue(mustHead(dsx).MaybeGet(ValueField)).Equals(a))
+	assert.True(mustGetCommittedValue(dsx.db, mustHead(dsx)).Equals(a))
 	b := types.String("b")
-	dsx, err = store.CommitValue(context.Background(), dsx, b)
+	dsx, err = CommitValue(context.Background(), store, dsx, b)
 	assert.NoError(err)
-	assert.True(mustGetValue(mustHead(dsx).MaybeGet(ValueField)).Equals(b))
+	assert.True(mustGetCommittedValue(dsx.db, mustHead(dsx)).Equals(b))
 
 	// dsy: |a| -> |c|
-	assert.True(mustGetValue(mustHead(dsy).MaybeGet(ValueField)).Equals(a))
+	assert.True(mustGetCommittedValue(dsy.db, mustHead(dsy)).Equals(a))
 	c := types.String("c")
-	_, err = store.CommitValue(context.Background(), dsy, c)
+	_, err = CommitValue(context.Background(), store, dsy, c)
 	assert.Error(err)
 	// Commit failed, but dsy now has latest head, so we should be able to just try again.
 	// dsy: |b| -> |c|
 	dsy, err = store.GetDataset(context.Background(), id1)
 	assert.NoError(err)
-	dsy, err = store.CommitValue(context.Background(), dsy, c)
+	dsy, err = CommitValue(context.Background(), store, dsy, c)
 	assert.NoError(err)
-	assert.True(mustGetValue(mustHead(dsy).MaybeGet(ValueField)).Equals(c))
-}
-
-func TestIdValidation(t *testing.T) {
-	assert := assert.New(t)
-	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView())
-
-	invalidDatasetNames := []string{" ", "", "a ", " a", "$", "#", ":", "\n", "💩"}
-	for _, id := range invalidDatasetNames {
-		_, err := store.GetDataset(context.Background(), id)
-		assert.Error(err)
-	}
+	assert.True(mustGetCommittedValue(dsy.db, mustHead(dsy)).Equals(c))
 }
 
 func TestHeadValueFunctions(t *testing.T) {
@@ -186,7 +186,7 @@ func TestHeadValueFunctions(t *testing.T) {
 	id1 := "testdataset"
 	id2 := "otherdataset"
 	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView())
+	store := NewDatabase(stg.NewViewWithDefaultFormat())
 	defer store.Close()
 
 	ds1, err := store.GetDataset(context.Background(), id1)
@@ -195,17 +195,16 @@ func TestHeadValueFunctions(t *testing.T) {
 
 	// ds1: |a|
 	a := types.String("a")
-	ds1, err = store.CommitValue(context.Background(), ds1, a)
+	ds1, err = CommitValue(context.Background(), store, ds1, a)
 	assert.NoError(err)
 	assert.True(ds1.HasHead())
 
-	hv, ok, err := mustHead(ds1).MaybeGet(ValueField)
-	assert.True(ok)
+	hv, err := GetCommittedValue(context.Background(), ds1.db, mustHead(ds1))
 	assert.NoError(err)
 	assert.Equal(a, hv)
 	assert.Equal(a, mustHeadValue(ds1))
 
-	hv, ok, err = ds1.MaybeHeadValue()
+	hv, ok, err := ds1.MaybeHeadValue()
 	assert.NoError(err)
 	assert.True(ok)
 	assert.Equal(a, hv)
@@ -217,8 +216,7 @@ func TestHeadValueFunctions(t *testing.T) {
 	assert.False(ok)
 }
 
-func TestIsValidDatasetName(t *testing.T) {
-	assert := assert.New(t)
+func TestValidateDatasetId(t *testing.T) {
 	cases := []struct {
 		name  string
 		valid bool
@@ -228,10 +226,46 @@ func TestIsValidDatasetName(t *testing.T) {
 		{"f1", true},
 		{"1f", true},
 		{"", false},
-		{"f!!", false},
+		{"f!!", true},
+		{"!!", true},
+		{"refs/heads/", false},
+		{"refs/heads/.", false},
+		{"refs/heads/hello", true},
+		{"refs/heads//hello", true},
+		{"refs/heads/hello world", false},
+		{"refs/heads/hello\tworld", false},
+		{"refs/heads/hello\nworld", false},
+		{"refs/heads/hello@world", true},
+		{"refs/heads/hello-world", true},
+		{"refs/heads\x00/hello-world", false},
+		{"refs/heads/hello-world.", false},
+		{"refs/heads/hello..world", false},
+		{"refs/heads/helloworld]]", true},
+		{"refs/heads/hello[world", false},
+		{"refs/heads/hello@{world}", false},
+		{"refs/heads/hello-worبld", false},
+		{"refs/.lock/hello-world", false},
+		{"refs/heads/.lock", false},
+		{"refs/heads/must.lockme", true},
 	}
+
 	for _, c := range cases {
-		assert.Equal(c.valid, IsValidDatasetName(c.name),
-			"Expected %s validity to be %t", c.name, c.valid)
+		stg := &chunks.MemoryStorage{}
+		store := NewDatabase(stg.NewViewWithDefaultFormat())
+
+		t.Run(c.name, func(t *testing.T) {
+			err := ValidateDatasetId(c.name)
+			if c.valid {
+				assert.NoError(t, err)
+
+				_, err := store.GetDataset(context.Background(), c.name)
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+
+				_, err := store.GetDataset(context.Background(), c.name)
+				assert.Error(t, err)
+			}
+		})
 	}
 }

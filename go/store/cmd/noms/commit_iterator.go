@@ -28,20 +28,20 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 type CommitIterator struct {
-	db       datas.Database
+	vr       types.ValueReader
 	branches branchList
 }
 
 // NewCommitIterator initializes a new CommitIterator with the first commit to be printed.
-func NewCommitIterator(db datas.Database, commit types.Struct) *CommitIterator {
-	cr, err := types.NewRef(commit, db.Format())
+func NewCommitIterator(vr types.ValueReader, commit types.Value) *CommitIterator {
+	cr, err := types.NewRef(commit, vr.Format())
 	d.PanicIfError(err)
-
-	return &CommitIterator{db: db, branches: branchList{branch{cr: cr, commit: commit}}}
+	return &CommitIterator{vr: vr, branches: branchList{branch{addr: cr.TargetHash(), height: cr.Height(), commit: commit}}}
 }
 
 // Next returns information about the next commit to be printed. LogNode contains enough contextual
@@ -70,16 +70,12 @@ func (iter *CommitIterator) Next(ctx context.Context) (LogNode, bool) {
 	// If this commit has parents, then a branch is splitting. Create a branch for each of the parents
 	// and splice that into the iterators list of branches.
 	branches := branchList{}
-	pFld, ok, err := br.commit.MaybeGet(datas.ParentsField)
+
+	parents, err := datas.GetCommitParents(ctx, iter.vr, br.commit)
 	d.PanicIfError(err)
-	d.PanicIfFalse(ok)
-
-	parents := commitRefsFromSet(ctx, pFld.(types.Set))
 	for _, p := range parents {
-		v, err := iter.db.ReadValue(ctx, p.TargetHash())
-		d.PanicIfError(err)
-
-		b := branch{cr: p, commit: v.(types.Struct)}
+		v := p.NomsValue()
+		b := branch{height: p.Height(), addr: p.Addr(), commit: v}
 		branches = append(branches, b)
 	}
 	iter.branches = iter.branches.Splice(col, 1, branches...)
@@ -94,7 +90,8 @@ func (iter *CommitIterator) Next(ctx context.Context) (LogNode, bool) {
 	// ancestors that will be folded together on this commit's graph.
 	foldedCols := iter.branches.HighestBranchIndexes()
 	node := LogNode{
-		cr:               br.cr,
+		height:           br.height,
+		addr:             br.addr,
 		commit:           br.commit,
 		startingColCount: startingColCount,
 		endingColCount:   len(iter.branches),
@@ -107,18 +104,19 @@ func (iter *CommitIterator) Next(ctx context.Context) (LogNode, bool) {
 }
 
 type LogNode struct {
-	cr               types.Ref    // typed ref of commit to be printed
-	commit           types.Struct // commit that needs to be printed
-	startingColCount int          // how many branches are being tracked when this commit is printed
-	endingColCount   int          // home many branches will be tracked when next commit is printed
-	col              int          // col to put the '*' character in graph
-	newCols          []int        // col to start using '\' in graph
-	foldedCols       []int        // cols with common ancestors, that will get folded together
-	lastCommit       bool         // this is the last commit that will be returned by iterator
+	addr             hash.Hash
+	height           uint64
+	commit           types.Value // commit that needs to be printed
+	startingColCount int         // how many branches are being tracked when this commit is printed
+	endingColCount   int         // home many branches will be tracked when next commit is printed
+	col              int         // col to put the '*' character in graph
+	newCols          []int       // col to start using '\' in graph
+	foldedCols       []int       // cols with common ancestors, that will get folded together
+	lastCommit       bool        // this is the last commit that will be returned by iterator
 }
 
 func (n LogNode) String() string {
-	return fmt.Sprintf("cr: %s(%d), startingColCount: %d, endingColCount: %d, col: %d, newCols: %v, foldedCols: %v, expanding: %t, shrunk: %t, shrinking: %t", n.cr.TargetHash().String()[0:9], n.cr.Height(), n.startingColCount, n.endingColCount, n.col, n.newCols, n.foldedCols, n.Expanding(), n.Shrunk(), n.Shrinking())
+	return fmt.Sprintf("cr: %s(%d), startingColCount: %d, endingColCount: %d, col: %d, newCols: %v, foldedCols: %v, expanding: %t, shrunk: %t, shrinking: %t", n.addr.String()[0:9], n.height, n.startingColCount, n.endingColCount, n.col, n.newCols, n.foldedCols, n.Expanding(), n.Shrunk(), n.Shrinking())
 }
 
 // Expanding reports whether this commit's graph will expand to show an additional branch
@@ -137,12 +135,13 @@ func (n LogNode) Shrunk() bool {
 }
 
 type branch struct {
-	cr     types.Ref
-	commit types.Struct
+	addr   hash.Hash
+	height uint64
+	commit types.Value
 }
 
 func (b branch) String() string {
-	return fmt.Sprintf("%s(%d)", b.cr.TargetHash().String()[0:9], b.cr.Height())
+	return fmt.Sprintf("%s(%d)", b.addr.String()[0:9], b.height)
 }
 
 type branchList []branch
@@ -157,14 +156,14 @@ func (bl branchList) IsEmpty() bool {
 // This indicates that two or more branches or converging.
 func (bl branchList) HighestBranchIndexes() []int {
 	maxHeight := uint64(0)
-	var cr types.Ref
+	var br branch
 	cols := []int{}
 	for i, b := range bl {
-		if b.cr.Height() > maxHeight {
-			maxHeight = b.cr.Height()
-			cr = b.cr
+		if b.height > maxHeight {
+			maxHeight = b.height
+			br = b
 			cols = []int{i}
-		} else if b.cr.Height() == maxHeight && b.cr.Equals(cr) {
+		} else if b.height == maxHeight && b.addr == br.addr {
 			cols = append(cols, i)
 		}
 	}

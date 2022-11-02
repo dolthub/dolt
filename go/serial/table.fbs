@@ -1,0 +1,56 @@
+// Copyright 2021 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+include "prolly.fbs";
+
+namespace serial;
+
+table Table {
+  // address of schema.
+  schema:[ubyte] (required);
+
+  // an embedded row map;
+  // for __DOLT_DEV__, an EncodeValue(types.Map).
+  // for __DOLT__, a TupleMap.
+  primary_index:[ubyte] (required);
+
+  // Entries map from index names to addresses of
+  // index maps.
+  secondary_indexes:[ubyte]; // Embedded AddressMap
+
+  auto_increment_value:uint64;
+
+  conflicts:Conflicts;
+
+  // address of a violations types.Map (for __DOLT_DEV__).
+  violations:[ubyte];
+
+  // address of artifacts
+  artifacts:[ubyte];
+}
+
+table Conflicts {
+    // address of a conflicts types.Map (for __DOLT_DEV__).
+    data:[ubyte] (required);
+
+    // address of merge destination schema
+    our_schema:[ubyte] (required);
+    // address of merge source schema
+    their_schema:[ubyte] (required);
+    // address of merge common ancestor schema
+    ancestor_schema:[ubyte] (required);
+}
+
+// KEEP THIS IN SYNC WITH fileidentifiers.go
+file_identifier "DTBL";

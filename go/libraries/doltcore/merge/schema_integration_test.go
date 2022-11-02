@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type testCommand struct {
@@ -297,11 +298,11 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 	{
 		name: "index name collisions",
 		setup: []testCommand{
-			{commands.SqlCmd{}, []string{"-q", "create index both on test (c1,c2);"}},
+			{commands.SqlCmd{}, []string{"-q", "create index `both` on test (c1,c2);"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
 			{commands.CheckoutCmd{}, []string{"other"}},
-			{commands.SqlCmd{}, []string{"-q", "create index both on test (c2, c3);"}},
+			{commands.SqlCmd{}, []string{"-q", "create index `both` on test (c2, c3);"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
 			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
@@ -372,6 +373,77 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 		},
 	},
 	{
+		name: "check definition collision",
+		setup: []testCommand{
+			{commands.SqlCmd{}, []string{"-q", "alter table test add constraint chk check (c3 > 0);"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
+			{commands.CheckoutCmd{}, []string{"other"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add constraint chk check (c3 < 0);"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
+			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
+		},
+		expConflict: merge.SchemaConflict{
+			TableName: "test",
+			ChkConflicts: []merge.ChkConflict{
+				{
+					Kind:   merge.TagCollision,
+					Ours:   schema.NewCheck("chk", "(c3 > 0)", true),
+					Theirs: schema.NewCheck("chk", "(c3 < 0)", true),
+				},
+				{
+					Kind:   merge.NameCollision,
+					Ours:   schema.NewCheck("chk", "(c3 > 0)", true),
+					Theirs: schema.NewCheck("chk", "(c3 < 0)", true),
+				},
+			},
+		},
+	},
+	{
+		name: "modified check",
+		setup: []testCommand{
+			{commands.SqlCmd{}, []string{"-q", "alter table test add constraint chk check (c3 > 0);"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
+
+			{commands.CheckoutCmd{}, []string{"other"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add constraint chk check (c3 > 0);"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
+
+			{commands.MergeCmd{}, []string{env.DefaultInitBranch}},
+			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
+			{commands.MergeCmd{}, []string{"other"}},
+
+			{commands.SqlCmd{}, []string{"-q", "alter table test drop constraint chk;"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add constraint chk check (c3 > 10);"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
+
+			{commands.CheckoutCmd{}, []string{"other"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test drop constraint chk;"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add constraint chk check (c3 < 10);"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
+		},
+		expConflict: merge.SchemaConflict{
+			TableName: "test",
+			ChkConflicts: []merge.ChkConflict{
+				{
+					Kind:   merge.TagCollision,
+					Ours:   schema.NewCheck("chk", "(c3 > 10)", true),
+					Theirs: schema.NewCheck("chk", "(c3 < 10)", true),
+				},
+				{
+					Kind:   merge.NameCollision,
+					Ours:   schema.NewCheck("chk", "(c3 > 10)", true),
+					Theirs: schema.NewCheck("chk", "(c3 < 10)", true),
+				},
+			},
+		},
+	},
+	{
 		name: "primary key conflicts",
 		setup: []testCommand{
 			{commands.CheckoutCmd{}, []string{"other"}},
@@ -413,7 +485,12 @@ var mergeForeignKeyTests = []mergeForeignKeyTest{
 			TableColumns:           []uint64{13001},
 			ReferencedTableName:    "test",
 			ReferencedTableIndex:   "t1_idx",
-			ReferencedTableColumns: []uint64{12111}}),
+			ReferencedTableColumns: []uint64{12111},
+			UnresolvedFKDetails: doltdb.UnresolvedFKDetails{
+				TableColumns:           []string{"q1"},
+				ReferencedTableColumns: []string{"t1"},
+			},
+		}),
 		expFKConflict: []merge.FKConflict{},
 	},
 	//{
@@ -471,6 +548,7 @@ func fkCollection(fks ...doltdb.ForeignKey) *doltdb.ForeignKeyCollection {
 func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
+
 	for _, c := range setupCommon {
 		c.exec(t, ctx, dEnv)
 	}
@@ -534,7 +612,7 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 
 	otherSch := getSchema(t, dEnv)
 
-	_, actConflicts, err := merge.SchemaMerge(mainSch, otherSch, ancSch, "test")
+	_, actConflicts, err := merge.SchemaMerge(context.Background(), types.Format_Default, mainSch, otherSch, ancSch, "test")
 	if test.expectedErr != nil {
 		assert.True(t, errors.Is(err, test.expectedErr))
 		return
@@ -556,6 +634,12 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 		assert.True(t, test.expConflict.ColConflicts[i].Ours.Equals(icc.Ours))
 		assert.True(t, test.expConflict.ColConflicts[i].Theirs.Equals(icc.Theirs))
 	}
+
+	require.Equal(t, len(test.expConflict.ChkConflicts), len(actConflicts.ChkConflicts))
+	for i, icc := range actConflicts.ChkConflicts {
+		assert.True(t, test.expConflict.ChkConflicts[i].Ours == icc.Ours)
+		assert.True(t, test.expConflict.ChkConflicts[i].Theirs == icc.Theirs)
+	}
 }
 
 func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
@@ -576,17 +660,20 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv)
 	require.Equal(t, 0, exitCode)
 
-	mainRoot, err := dEnv.WorkingRoot(ctx)
+	mainWS, err := dEnv.WorkingSet(ctx)
 	require.NoError(t, err)
+	mainRoot := mainWS.WorkingRoot()
 
 	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv)
 	require.Equal(t, 0, exitCode)
 
-	otherRoot, err := dEnv.WorkingRoot(ctx)
+	otherWS, err := dEnv.WorkingSet(ctx)
 	require.NoError(t, err)
+	otherRoot := otherWS.WorkingRoot()
 
 	opts := editor.TestEditorOptions(dEnv.DoltDB.ValueReadWriter())
-	mergedRoot, _, err := merge.MergeRoots(ctx, mainRoot, otherRoot, ancRoot, opts)
+	mo := merge.MergeOpts{IsCherryPick: false}
+	mergedRoot, _, err := merge.MergeRoots(ctx, mainRoot, otherRoot, ancRoot, mainWS, otherWS, opts, mo)
 	assert.NoError(t, err)
 
 	fkc, err := mergedRoot.GetForeignKeyCollection(ctx)

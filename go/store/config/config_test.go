@@ -22,7 +22,6 @@
 package config
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -228,7 +227,7 @@ func TestBadConfig(t *testing.T) {
 	path := getPaths(assert, "home.bad")
 	cfile := writeConfig(assert, ldbConfig, path.home)
 	// overwrite with something invalid
-	assert.NoError(ioutil.WriteFile(cfile, []byte("invalid config"), os.ModePerm))
+	assert.NoError(os.WriteFile(cfile, []byte("invalid config"), os.ModePerm))
 	assert.NoError(os.Chdir(path.home))
 	_, err := FindNomsConfig()
 	assert.Error(err, path.config)

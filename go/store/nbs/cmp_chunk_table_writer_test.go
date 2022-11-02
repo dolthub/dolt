@@ -35,9 +35,10 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	// Setup a TableReader to read compressed chunks out of
-	ti, err := parseTableIndex(buff)
+	ti, err := parseTableIndexByCopy(buff, &noopQuotaProvider{})
 	require.NoError(t, err)
-	tr := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+	tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+	require.NoError(t, err)
 
 	hashes := make(hash.HashSet)
 	for _, chnk := range testMDChunks {
@@ -48,7 +49,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	found := make([]CompressedChunk, 0)
 
 	eg, egCtx := errgroup.WithContext(ctx)
-	_, err = tr.getManyCompressed(egCtx, eg, reqs, func(c CompressedChunk) { found = append(found, c) }, &Stats{})
+	_, err = tr.getManyCompressed(egCtx, eg, reqs, func(ctx context.Context, c CompressedChunk) { found = append(found, c) }, &Stats{})
 	require.NoError(t, err)
 	require.NoError(t, eg.Wait())
 
@@ -72,9 +73,10 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	outputBuff := output.Bytes()
-	outputTI, err := parseTableIndex(outputBuff)
+	outputTI, err := parseTableIndexByCopy(outputBuff, &noopQuotaProvider{})
 	require.NoError(t, err)
-	outputTR := newTableReader(outputTI, tableReaderAtFromBytes(buff), fileBlockSize)
+	outputTR, err := newTableReader(outputTI, tableReaderAtFromBytes(buff), fileBlockSize)
+	require.NoError(t, err)
 
 	compareContentsOfTables(t, ctx, hashes, tr, outputTR)
 }
@@ -93,7 +95,7 @@ func readAllChunks(ctx context.Context, hashes hash.HashSet, reader tableReader)
 	reqs := toGetRecords(hashes)
 	found := make([]*chunks.Chunk, 0)
 	eg, ctx := errgroup.WithContext(ctx)
-	_, err := reader.getMany(ctx, eg, reqs, func(c *chunks.Chunk) { found = append(found, c) }, &Stats{})
+	_, err := reader.getMany(ctx, eg, reqs, func(ctx context.Context, c *chunks.Chunk) { found = append(found, c) }, &Stats{})
 	if err != nil {
 		return nil, err
 	}

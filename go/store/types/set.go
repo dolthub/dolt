@@ -149,14 +149,6 @@ func (s Set) Value(ctx context.Context) (Value, error) {
 	return s, nil
 }
 
-func (s Set) WalkValues(ctx context.Context, cb ValueCallback) error {
-	err := iterAll(ctx, s, func(v Value, idx uint64) error {
-		return cb(v)
-	})
-
-	return err
-}
-
 func (s Set) First(ctx context.Context) (Value, error) {
 	cur, err := newCursorAt(ctx, s.orderedSequence, emptyKey, false, false)
 
@@ -342,7 +334,11 @@ func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 }
 
 func newEmptySetSequenceChunker(ctx context.Context, vrw ValueReadWriter) (*sequenceChunker, error) {
-	return newEmptySequenceChunker(ctx, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
+	return newEmptySequenceChunker(ctx, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), newSetChunker, hashValueBytes)
+}
+
+func newSetChunker(nbf *NomsBinFormat, salt byte) sequenceSplitter {
+	return newRollingValueHasher(nbf, salt)
 }
 
 func (s Set) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {

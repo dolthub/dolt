@@ -16,7 +16,12 @@ package editor
 
 import (
 	"context"
+	"io"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -43,6 +48,9 @@ type TableEditAccumulator interface {
 	// This assumes that the given hash is for the given key.
 	Get(ctx context.Context, keyHash hash.Hash, key types.Tuple) (*doltKVP, bool, error)
 
+	// HasPartial returns true if the current TableEditAccumulator contains the given partialKey
+	HasPartial(ctx context.Context, idxSch schema.Schema, partialKeyHash hash.Hash, partialKey types.Tuple) ([]hashedTuple, error)
+
 	// Commit applies the in memory edits to the list of committed in memory edits
 	Commit(ctx context.Context, nbf *types.NomsBinFormat) error
 
@@ -53,7 +61,8 @@ type TableEditAccumulator interface {
 	MaterializeEdits(ctx context.Context, nbf *types.NomsBinFormat) (m types.Map, err error)
 }
 
-const flushThreshold = 256 * 1024
+// var for testing
+var flushThreshold int64 = 256 * 1024
 
 // inMemModifications represent row adds and deletes that have not been written to the underlying storage and only exist
 // in memory
@@ -171,6 +180,51 @@ func (tea *tableEditAccumulatorImpl) Get(ctx context.Context, keyHash hash.Hash,
 	}
 
 	return &doltKVP{k: key, v: v}, true, err
+}
+
+func (tea *tableEditAccumulatorImpl) HasPartial(ctx context.Context, idxSch schema.Schema, partialKeyHash hash.Hash, partialKey types.Tuple) ([]hashedTuple, error) {
+	var err error
+	var matches []hashedTuple
+	var mapIter table.ReadCloser = noms.NewNomsRangeReader(idxSch, tea.rowData, []*noms.ReadRange{
+		{Start: partialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(partialKey)}})
+	defer mapIter.Close(ctx)
+	var r row.Row
+	for r, err = mapIter.ReadRow(ctx); err == nil; r, err = mapIter.ReadRow(ctx) {
+		tplKeyVal, err := r.NomsMapKey(idxSch).Value(ctx)
+		if err != nil {
+			return nil, err
+		}
+		key := tplKeyVal.(types.Tuple)
+		tplValVal, err := r.NomsMapValue(idxSch).Value(ctx)
+		if err != nil {
+			return nil, err
+		}
+		val := tplValVal.(types.Tuple)
+		keyHash, err := key.Hash(key.Format())
+		if err != nil {
+			return nil, err
+		}
+		matches = append(matches, hashedTuple{key, val, keyHash})
+	}
+
+	if err != io.EOF {
+		return nil, err
+	}
+
+	orderedMods := []*inMemModifications{tea.committed, tea.uncommitted}
+	for _, mods := range orderedMods {
+		for i := len(matches) - 1; i >= 0; i-- {
+			if _, ok := mods.adds[matches[i].hash]; ok {
+				matches[i] = matches[len(matches)-1]
+				matches = matches[:len(matches)-1]
+			}
+		}
+		if added, ok := mods.adds[partialKeyHash]; ok {
+			matches = append(matches, hashedTuple{key: added.k, value: added.v})
+		}
+	}
+
+	return matches, nil
 }
 
 func (tea *tableEditAccumulatorImpl) flushUncommitted() {
@@ -311,6 +365,10 @@ func (tea *tableEditAccumulatorImpl) Rollback(ctx context.Context) error {
 
 // MaterializeEdits applies the in memory edits to the row data and returns types.Map
 func (tea *tableEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *types.NomsBinFormat) (m types.Map, err error) {
+	// In the case where the current edits become so large that they need to be flushed to disk, the committed edits will also be flushed
+	// to disk first before the uncommitted edits.  When commit gets run now the uncommitted edits will then become committed edits,
+	// but they need to be applied after the flushed edits.  So in the loop below where we build the list of EditProviders the newly
+	// committed edits must be applied last.
 	err = tea.Commit(ctx, nbf)
 	if err != nil {
 		return types.EmptyMap, err
@@ -332,10 +390,10 @@ func (tea *tableEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *
 	}
 
 	eps := make([]types.EditProvider, 0, len(flushedEPs)+1)
-	eps = append(eps, committedEP)
 	for i := 0; i < len(flushedEPs); i++ {
 		eps = append(eps, flushedEPs[i].Edits)
 	}
+	eps = append(eps, committedEP)
 
 	defer func() {
 		for _, ep := range eps {

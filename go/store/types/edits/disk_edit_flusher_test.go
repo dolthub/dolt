@@ -58,6 +58,7 @@ func TestEditFlusher(t *testing.T) {
 	for i := 0; i < numEditors; i++ {
 		require.Equal(t, uint64(i), eps[i].ID)
 		kvp, err := eps[i].Edits.Next()
+		require.NoError(t, err)
 		key, err := kvp.Key.Value(ctx)
 		require.NoError(t, err)
 		keyTuplvals, err := key.(types.Tuple).AsSlice()

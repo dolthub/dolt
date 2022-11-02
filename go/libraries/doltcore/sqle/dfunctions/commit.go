@@ -19,106 +19,28 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 const CommitFuncName = "commit"
 
+// Deprecated: please use the version in the dprocedures package
 type CommitFunc struct {
 	children []sql.Expression
 }
 
 // NewCommitFunc creates a new CommitFunc expression.
+// Deprecated: please use the version in the dprocedures package
 func NewCommitFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &CommitFunc{children: args}, nil
 }
 
 // Eval implements the Expression interface.
 func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	dbName := ctx.GetCurrentDatabase()
-	dSess := dsess.DSessFromSess(ctx.Session)
-
-	//  Get the params associated with COMMIT.
-	ap := cli.CreateCommitArgParser()
 	args, err := getDoltArgs(ctx, row, cf.Children())
 	if err != nil {
-		return nil, err
+		return noConflictsOrViolations, err
 	}
-
-	apr, err := ap.Parse(args)
-	if err != nil {
-		return nil, err
-	}
-
-	var name, email string
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		name = dSess.Username
-		email = dSess.Email
-	}
-
-	// Get the commit message.
-	commitMessage, msgOk := apr.GetValue(cli.CommitMessageArg)
-	if !msgOk {
-		return nil, fmt.Errorf("Must provide commit message.")
-	}
-
-	parent, err := dSess.GetHeadCommit(ctx, dbName)
-	if err != nil {
-		return nil, err
-	}
-
-	roots, ok := dSess.GetRoots(ctx, dbName)
-	if !ok {
-		return nil, fmt.Errorf("unknown database '%s'", dbName)
-	}
-	root := roots.Working
-
-	// Update the superschema to with any new information from the table map.
-	tblNames, err := root.GetTableNames(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	root, err = root.UpdateSuperSchemasFromOther(ctx, tblNames, root)
-	if err != nil {
-		return nil, err
-	}
-
-	ddb, ok := dSess.GetDoltDB(ctx, dbName)
-
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	h, err := ddb.WriteRootValue(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-
-	meta, err := doltdb.NewCommitMeta(name, email, commitMessage)
-	if err != nil {
-		return nil, err
-	}
-
-	cm, err := ddb.CommitDanglingWithParentCommits(ctx, h, []*doltdb.Commit{parent}, meta)
-	if err != nil {
-		return nil, err
-	}
-
-	h, err = cm.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	return h.String(), nil
+	return DoDoltCommit(ctx, args)
 }
 
 // String implements the Stringer interface.

@@ -19,6 +19,7 @@ import (
 	mysql "database/sql"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -27,19 +28,23 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/ishell"
 	"github.com/fatih/color"
-	_ "github.com/go-sql-driver/mysql"
+	mysqlDriver "github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
 const (
-	sqlClientDualFlag = "dual"
+	sqlClientDualFlag     = "dual"
+	sqlClientQueryFlag    = "query"
+	sqlClientUseDbFlag    = "use-db"
+	sqlClientResultFormat = "result-format"
 )
 
 var sqlClientDocs = cli.CommandDocumentationContent{
@@ -51,11 +56,14 @@ You may also start a dolt server and automatically connect to it using this clie
 Similar to {{.EmphasisLeft}}dolt sql-server{{.EmphasisRight}}, this command may use a YAML configuration file or command line arguments. For more information on the YAML file, refer to the documentation on {{.EmphasisLeft}}dolt sql-server{{.EmphasisRight}}.`,
 	Synopsis: []string{
 		"[-d] --config {{.LessThan}}file{{.GreaterThan}}",
-		"[-d] [-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}] [--query-parallelism {{.LessThan}}num-go-routines{{.GreaterThan}}] [-r]",
+		"[-d] [-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--data-dir {{.LessThan}}directory{{.GreaterThan}}] [--query-parallelism {{.LessThan}}num-go-routines{{.GreaterThan}}] [-r]",
+		"-q {{.LessThan}}string{{.GreaterThan}} [--use-db {{.LessThan}}db_name{{.GreaterThan}}] [--result-format {{.LessThan}}format{{.GreaterThan}}] [-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}]",
 	},
 }
 
-type SqlClientCmd struct{}
+type SqlClientCmd struct {
+	VersionStr string
+}
 
 var _ cli.Command = SqlClientCmd{}
 
@@ -67,14 +75,18 @@ func (cmd SqlClientCmd) Description() string {
 	return "Starts a built-in MySQL client."
 }
 
-func (cmd SqlClientCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, sqlClientDocs, ap))
+func (cmd SqlClientCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(sqlClientDocs, ap)
 }
 
-func (cmd SqlClientCmd) createArgParser() *argparser.ArgParser {
-	ap := SqlServerCmd{}.CreateArgParser()
+func (cmd SqlClientCmd) ArgParser() *argparser.ArgParser {
+	ap := SqlServerCmd{}.ArgParser()
 	ap.SupportsFlag(sqlClientDualFlag, "d", "Causes this command to spawn a dolt server that is automatically connected to.")
+	ap.SupportsString(sqlClientQueryFlag, "q", "string", "Sends the given query to the server and immediately exits.")
+	ap.SupportsString(sqlClientUseDbFlag, "", "db_name", fmt.Sprintf("Selects the given database before executing a query. "+
+		"By default, uses the current folder's name. Must be used with the --%s flag.", sqlClientQueryFlag))
+	ap.SupportsString(sqlClientResultFormat, "", "format", fmt.Sprintf("Returns the results in the given format. Must be used with the --%s flag.", sqlClientQueryFlag))
 	return ap
 }
 
@@ -87,26 +99,58 @@ func (cmd SqlClientCmd) Hidden() bool {
 }
 
 func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlClientDocs, ap))
+	ap := cmd.ArgParser()
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlClientDocs, ap))
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	var serverConfig ServerConfig
 	var serverController *ServerController
 	var err error
 
+	if _, ok := apr.GetValue(commands.UserFlag); !ok {
+		cli.PrintErrln(color.RedString("--user or -u argument is required"))
+		return 1
+	}
+
 	if apr.Contains(sqlClientDualFlag) {
-		serverConfig, err = GetServerConfig(dEnv, apr, true)
+		if !dEnv.Valid() {
+			if !cli.CheckEnvIsValid(dEnv) {
+				return 2
+			}
+
+			cli.PrintErrln(color.RedString("--dual flag requires running within a dolt database directory"))
+			cli.PrintErrln(err.Error())
+			return 1
+		}
+		if apr.Contains(sqlClientQueryFlag) {
+			cli.PrintErrln(color.RedString(fmt.Sprintf("--%s flag may not be used with --%s", sqlClientDualFlag, sqlClientQueryFlag)))
+			return 1
+		}
+		if apr.Contains(sqlClientUseDbFlag) {
+			cli.PrintErrln(color.RedString(fmt.Sprintf("--%s flag may not be used with --%s", sqlClientDualFlag, sqlClientUseDbFlag)))
+			return 1
+		}
+		if apr.Contains(sqlClientResultFormat) {
+			cli.PrintErrln(color.RedString(fmt.Sprintf("--%s flag may not be used with --%s", sqlClientDualFlag, sqlClientResultFormat)))
+			return 1
+		}
+
+		serverConfig, err = GetServerConfig(dEnv, apr)
 		if err != nil {
+			cli.PrintErrln(color.RedString("Bad Configuration"))
+			cli.PrintErrln(err.Error())
+			return 1
+		}
+		if err = SetupDoltConfig(dEnv, apr, serverConfig); err != nil {
 			cli.PrintErrln(color.RedString("Bad Configuration"))
 			cli.PrintErrln(err.Error())
 			return 1
 		}
 		cli.PrintErrf("Starting server with Config %v\n", ConfigInfo(serverConfig))
 
-		serverController = CreateServerController()
+		serverController = NewServerController()
 		go func() {
-			_, _ = Serve(ctx, SqlServerCmd{}.VersionStr, serverConfig, serverController, dEnv)
+			_, _ = Serve(ctx, cmd.VersionStr, serverConfig, serverController, dEnv)
 		}()
 		err = serverController.WaitForStart()
 		if err != nil {
@@ -114,7 +158,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			return 1
 		}
 	} else {
-		serverConfig, err = GetServerConfig(dEnv, apr, false)
+		serverConfig, err = GetServerConfig(dEnv, apr)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Bad Configuration"))
 			cli.PrintErrln(err.Error())
@@ -122,17 +166,109 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 		}
 	}
 
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig), nil)
-	if err != nil {
-		cli.PrintErrln(err.Error())
-		serverController.StopServer()
-		err = serverController.WaitForClose()
-		if err != nil {
-			cli.PrintErrln(err.Error())
-		}
+	query, hasQuery := apr.GetValue(sqlClientQueryFlag)
+	dbToUse, hasUseDb := apr.GetValue(sqlClientUseDbFlag)
+	resultFormat, hasResultFormat := apr.GetValue(sqlClientResultFormat)
+	if !hasQuery && hasUseDb {
+		cli.PrintErrln(color.RedString(fmt.Sprintf("--%s may only be used with --%s", sqlClientUseDbFlag, sqlClientQueryFlag)))
+		return 1
+	} else if !hasQuery && hasResultFormat {
+		cli.PrintErrln(color.RedString(fmt.Sprintf("--%s may only be used with --%s", sqlClientUseDbFlag, sqlClientResultFormat)))
 		return 1
 	}
+	if !hasUseDb && hasQuery {
+		directory, err := os.Getwd()
+		if err != nil {
+			cli.PrintErrln(color.RedString(err.Error()))
+			return 1
+		}
+		dbToUse = filepath.Base(directory)
+	}
+	format := engine.FormatTabular
+	if hasResultFormat {
+		switch strings.ToLower(resultFormat) {
+		case "tabular":
+			format = engine.FormatTabular
+		case "csv":
+			format = engine.FormatCsv
+		case "json":
+			format = engine.FormatJson
+		case "null":
+			format = engine.FormatNull
+		case "vertical":
+			format = engine.FormatVertical
+		default:
+			cli.PrintErrln(color.RedString(fmt.Sprintf("unknown --%s value: %s", sqlClientResultFormat, resultFormat)))
+			return 1
+		}
+	}
+
+	// The standard DSN parser cannot handle a forward slash in the database name, so we have to workaround it.
+	// See the original issue: https://github.com/dolthub/dolt/issues/4623
+	parsedMySQLConfig, err := mysqlDriver.ParseDSN(ConnectionString(serverConfig, "no_database"))
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+	parsedMySQLConfig.DBName = dbToUse
+	mysqlConnector, err := mysqlDriver.NewConnector(parsedMySQLConfig)
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+	conn := &dbr.Connection{DB: mysql.OpenDB(mysqlConnector), EventReceiver: nil, Dialect: dialect.MySQL}
 	_ = conn.Ping()
+
+	if hasQuery {
+		defer conn.Close()
+
+		if apr.Contains(noAutoCommitFlag) {
+			_, err = conn.Exec("set @@autocommit = off;")
+			if err != nil {
+				cli.PrintErrln(err.Error())
+				return 1
+			}
+		}
+
+		scanner := commands.NewSqlStatementScanner(strings.NewReader(query))
+		query = ""
+		for scanner.Scan() {
+			query += scanner.Text()
+			if len(query) == 0 || query == "\n" {
+				continue
+			}
+
+			rows, err := conn.Query(query)
+			if err != nil {
+				cli.PrintErrln(err.Error())
+				return 1
+			}
+			if rows != nil {
+				sqlCtx := sql.NewContext(ctx)
+				wrapper, err := NewMysqlRowWrapper(rows)
+				if err != nil {
+					cli.PrintErrln(err.Error())
+					return 1
+				}
+				defer wrapper.Close(sqlCtx)
+				if wrapper.HasMoreRows() {
+					err = engine.PrettyPrintResults(sqlCtx, format, wrapper.Schema(), wrapper)
+					if err != nil {
+						cli.PrintErrln(err.Error())
+						return 1
+					}
+				}
+			}
+			query = ""
+		}
+
+		if err = scanner.Err(); err != nil {
+			cli.PrintErrln(err.Error())
+			return 1
+		}
+		return 0
+	}
+
 	ticker := time.NewTicker(time.Second * 10)
 	go func() {
 		for range ticker.C {
@@ -162,6 +298,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			"quit", "exit", "quit()", "exit()",
 		},
 		LineTerminator: ";",
+		MysqlShellCmds: []string{},
 	}
 
 	shell := ishell.NewUninterpreted(&shellConf)
@@ -198,7 +335,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			}
 			if wrapper.HasMoreRows() {
 				sqlCtx := sql.NewContext(ctx)
-				err = commands.PrettyPrintResults(sqlCtx, 0, wrapper.Schema(), wrapper, commands.HasTopLevelOrderByClause(query))
+				err = engine.PrettyPrintResultsExtended(sqlCtx, engine.FormatTabular, wrapper.Schema(), wrapper)
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 					return
@@ -271,7 +408,7 @@ func (s *MysqlRowWrapper) Schema() sql.Schema {
 	return s.schema
 }
 
-func (s *MysqlRowWrapper) Next() (sql.Row, error) {
+func (s *MysqlRowWrapper) Next(*sql.Context) (sql.Row, error) {
 	if s.finished {
 		return nil, io.EOF
 	}

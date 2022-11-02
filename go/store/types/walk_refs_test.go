@@ -35,16 +35,16 @@ import (
 )
 
 func TestWalkRefs(t *testing.T) {
-	runTest := func(v Value, t *testing.T) {
+	runTest := func(nbf *NomsBinFormat, v Value, t *testing.T) {
 		assert := assert.New(t)
 		expected := hash.HashSlice{}
-		v.WalkRefs(Format_7_18, func(r Ref) error {
+		v.walkRefs(nbf, func(r Ref) error {
 			expected = append(expected, r.TargetHash())
 			return nil
 		})
-		val, err := EncodeValue(v, Format_7_18)
+		val, err := EncodeValue(v, nbf)
 		require.NoError(t, err)
-		err = WalkRefs(val, Format_7_18, func(r Ref) error {
+		err = walkRefs(val.Data(), nbf, func(r Ref) error {
 			if assert.True(len(expected) > 0) {
 				assert.Equal(expected[0], r.TargetHash())
 				expected = expected[1:]
@@ -60,32 +60,32 @@ func TestWalkRefs(t *testing.T) {
 		t.Parallel()
 		t.Run("Typed", func(t *testing.T) {
 			vrw := newTestValueStore()
-			s, err := NewStruct(Format_7_18, "", StructData{"n": Float(1)})
+			s, err := NewStruct(vrw.Format(), "", StructData{"n": Float(1)})
 			require.NoError(t, err)
-			runTest(mustRef(NewRef(mustMap(NewMap(context.Background(), vrw, s, Float(2))), Format_7_18)), t)
+			runTest(vrw.Format(), mustRef(NewRef(mustMap(NewMap(context.Background(), vrw, s, Float(2))), vrw.Format())), t)
 		})
 		t.Run("OfValue", func(t *testing.T) {
-			runTest(mustValue(ToRefOfValue(mustRef(NewRef(Bool(false), Format_7_18)), Format_7_18)), t)
+			runTest(Format_Default, mustValue(ToRefOfValue(mustRef(NewRef(Bool(false), Format_Default)), Format_Default)), t)
 		})
 	})
 
 	t.Run("Struct", func(t *testing.T) {
 		t.Parallel()
 		data := StructData{
-			"ref": mustRef(NewRef(Bool(false), Format_7_18)),
+			"ref": mustRef(NewRef(Bool(false), Format_Default)),
 			"num": Float(42),
 		}
-		st, err := NewStruct(Format_7_18, "nom", data)
+		st, err := NewStruct(Format_Default, "nom", data)
 		require.NoError(t, err)
-		runTest(st, t)
+		runTest(Format_Default, st, t)
 	})
 
 	// must return a slice with an even number of elements
-	newValueSlice := func(r *rand.Rand) ValueSlice {
+	newValueSlice := func(nbf *NomsBinFormat, r *rand.Rand) ValueSlice {
 		vs := make(ValueSlice, 256)
 		for i := range vs {
 			var err error
-			vs[i], err = NewStruct(Format_7_18, "", StructData{"n": Float(r.Uint64())})
+			vs[i], err = NewStruct(nbf, "", StructData{"n": Float(r.Uint64())})
 			require.NoError(t, err)
 		}
 		return vs
@@ -99,17 +99,17 @@ func TestWalkRefs(t *testing.T) {
 		t.Run("OfRefs", func(t *testing.T) {
 			l, err := NewList(context.Background(), vrw, mustValue(vrw.WriteValue(context.Background(), Float(42))), mustValue(vrw.WriteValue(context.Background(), Float(0))))
 			require.NoError(t, err)
-			runTest(l, t)
+			runTest(vrw.Format(), l, t)
 		})
 
 		t.Run("Chunked", func(t *testing.T) {
-			l, err := NewList(context.Background(), vrw, newValueSlice(r)...)
+			l, err := NewList(context.Background(), vrw, newValueSlice(vrw.Format(), r)...)
 			require.NoError(t, err)
 			for l.sequence.isLeaf() {
-				l, err = l.Concat(context.Background(), mustList(NewList(context.Background(), vrw, newValueSlice(r)...)))
+				l, err = l.Concat(context.Background(), mustList(NewList(context.Background(), vrw, newValueSlice(vrw.Format(), r)...)))
 				require.NoError(t, err)
 			}
-			runTest(l, t)
+			runTest(vrw.Format(), l, t)
 		})
 	})
 
@@ -121,20 +121,20 @@ func TestWalkRefs(t *testing.T) {
 		t.Run("OfRefs", func(t *testing.T) {
 			s, err := NewSet(context.Background(), vrw, mustValue(vrw.WriteValue(context.Background(), Float(42))), mustValue(vrw.WriteValue(context.Background(), Float(0))))
 			require.NoError(t, err)
-			runTest(s, t)
+			runTest(vrw.Format(), s, t)
 		})
 
 		t.Run("Chunked", func(t *testing.T) {
-			s, err := NewSet(context.Background(), vrw, newValueSlice(r)...)
+			s, err := NewSet(context.Background(), vrw, newValueSlice(vrw.Format(), r)...)
 			require.NoError(t, err)
 			for s.isLeaf() {
 				e := s.Edit()
-				e, err = e.Insert(newValueSlice(r)...)
+				e, err = e.Insert(newValueSlice(vrw.Format(), r)...)
 				require.NoError(t, err)
 				s, err = e.Set(context.Background())
 				require.NoError(t, err)
 			}
-			runTest(s, t)
+			runTest(vrw.Format(), s, t)
 		})
 	})
 
@@ -146,22 +146,22 @@ func TestWalkRefs(t *testing.T) {
 		t.Run("OfRefs", func(t *testing.T) {
 			m, err := NewMap(context.Background(), vrw, mustValue(vrw.WriteValue(context.Background(), Float(42))), mustValue(vrw.WriteValue(context.Background(), Float(0))))
 			require.NoError(t, err)
-			runTest(m, t)
+			runTest(vrw.Format(), m, t)
 		})
 
 		t.Run("Chunked", func(t *testing.T) {
-			m, err := NewMap(context.Background(), vrw, newValueSlice(r)...)
+			m, err := NewMap(context.Background(), vrw, newValueSlice(vrw.Format(), r)...)
 			require.NoError(t, err)
 			for m.isLeaf() {
 				e := m.Edit()
-				vs := newValueSlice(r)
+				vs := newValueSlice(vrw.Format(), r)
 				for i := 0; i < len(vs); i += 2 {
 					e = e.Set(vs[i], vs[i+1])
 				}
 				m, err = e.Map(context.Background())
 				require.NoError(t, err)
 			}
-			runTest(m, t)
+			runTest(vrw.Format(), m, t)
 		})
 	})
 
@@ -182,6 +182,6 @@ func TestWalkRefs(t *testing.T) {
 			b, err = b.Concat(context.Background(), mustBlob(NewBlob(context.Background(), vrw, freshRandomBytes())))
 			require.NoError(t, err)
 		}
-		runTest(b, t)
+		runTest(vrw.Format(), b, t)
 	})
 }

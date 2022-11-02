@@ -5,7 +5,7 @@ setup() {
     setup_common
     dolt sql <<SQL
 CREATE TABLE test (
-  pk LONGTEXT NOT NULL COMMENT 'tag:0',
+  pk varchar(20) NOT NULL COMMENT 'tag:0',
   c1 LONGTEXT COMMENT 'tag:1',
   c2 LONGTEXT COMMENT 'tag:2',
   c3 LONGTEXT COMMENT 'tag:3',
@@ -43,7 +43,7 @@ teardown() {
     [ "${#lines[@]}" -eq 6 ]
     run dolt sql -q "select * from test where pk='bob'"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 0 ]
 }
 
 @test "1pk5col-strings: interact with a strings type table with sql" {
@@ -91,8 +91,8 @@ teardown() {
     [ "$status" -eq 0 ]
     run dolt sql <<< "insert into test (pk,c1) values ('test2', 'this; should; work')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows inserted: 1" ]]
+    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql <<< "insert into test (pk,c1) values ('test3', 'this \\\\'' should \\\\'' work')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows inserted: 1" ]]
+    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
 }

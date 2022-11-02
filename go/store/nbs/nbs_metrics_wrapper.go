@@ -52,8 +52,8 @@ func (nbsMW *NBSMetricWrapper) Size(ctx context.Context) (uint64, error) {
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
-func (nbsMW *NBSMetricWrapper) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
-	return nbsMW.nbs.WriteTableFile(ctx, fileId, numChunks, rd, contentLength, contentHash)
+func (nbsMW *NBSMetricWrapper) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+	return nbsMW.nbs.WriteTableFile(ctx, fileId, numChunks, contentHash, getRd)
 }
 
 // AddTableFilesToManifest adds table files to the manifest
@@ -83,7 +83,7 @@ func (nbsMW *NBSMetricWrapper) PruneTableFiles(ctx context.Context) error {
 // GetManyCompressed gets the compressed Chunks with |hashes| from the store. On return,
 // |found| will have been fully sent all chunks which have been
 // found. Any non-present chunks will silently be ignored.
-func (nbsMW *NBSMetricWrapper) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(CompressedChunk)) error {
+func (nbsMW *NBSMetricWrapper) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
 	atomic.AddInt32(&nbsMW.TotalChunkGets, int32(len(hashes)))
 	return nbsMW.nbs.GetManyCompressed(ctx, hashes, found)
 }

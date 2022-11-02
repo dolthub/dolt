@@ -161,7 +161,7 @@ func TestInlineBlobParseValue(t *testing.T) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf(`%v %v`, DefaultInlineBlobType.String(), test.input), func(t *testing.T) {
 			vrw := types.NewMemoryValueStore()
-			output, err := DefaultInlineBlobType.ParseValue(context.Background(), vrw, &test.input)
+			output, err := StringDefaultType.ConvertToType(context.Background(), vrw, DefaultInlineBlobType, types.String(test.input))
 			require.NoError(t, err)
 			assert.Equal(t, test.output, output)
 		})

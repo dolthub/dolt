@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var lsDocs = cli.CommandDocumentationContent{
@@ -46,19 +45,19 @@ func (cmd LsCmd) Description() string {
 	return "Internal debugging command to display the list of indexes."
 }
 
-func (cmd LsCmd) CreateMarkdown(filesys.Filesys, string, string) error {
+func (cmd LsCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 
-func (cmd LsCmd) createArgParser() *argparser.ArgParser {
+func (cmd LsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table to display indexes from. If one is not specified, then all tables' indexes are displayed."})
 	return ap
 }
 
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, lsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() > 1 {

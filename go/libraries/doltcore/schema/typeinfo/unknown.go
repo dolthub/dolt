@@ -74,11 +74,6 @@ func (ti *unknownType) NomsKind() types.NomsKind {
 	return types.UnknownKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *unknownType) ParseValue(context.Context, types.ValueReadWriter, *string) (types.Value, error) {
-	return nil, fmt.Errorf(`"Unknown" cannot convert any strings to a Noms value`)
-}
-
 // Promote implements TypeInfo interface.
 func (ti *unknownType) Promote() TypeInfo {
 	return ti

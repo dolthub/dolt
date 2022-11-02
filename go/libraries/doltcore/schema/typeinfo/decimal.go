@@ -101,14 +101,19 @@ func (ti *decimalType) ConvertValueToNomsValue(ctx context.Context, vrw types.Va
 	if v == nil {
 		return types.NullValue, nil
 	}
-	decVal, err := ti.sqlDecimalType.ConvertToDecimal(v)
+	decVal, err := ti.sqlDecimalType.ConvertToNullDecimal(v)
 	if err != nil {
 		return nil, err
 	}
 	if !decVal.Valid {
 		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a null value from embedded type`, ti.String())
 	}
-	return types.Decimal(decVal.Decimal), nil
+	dec, err := ti.sqlDecimalType.BoundsCheck(decVal.Decimal)
+	if err != nil {
+		return nil, err
+	}
+
+	return types.Decimal(dec), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -170,14 +175,6 @@ func (ti *decimalType) IsValid(v types.Value) bool {
 // NomsKind implements TypeInfo interface.
 func (ti *decimalType) NomsKind() types.NomsKind {
 	return types.DecimalKind
-}
-
-// ParseValue implements TypeInfo interface.
-func (ti *decimalType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil || *str == "" {
-		return types.NullValue, nil
-	}
-	return ti.ConvertValueToNomsValue(context.Background(), nil, *str)
 }
 
 // Promote implements TypeInfo interface.
@@ -246,6 +243,10 @@ func decimalTypeConverter(ctx context.Context, src *decimalType, destTi TypeInfo
 		}, true, nil
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geomcollType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geometryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
 		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
 			s, err := src.ConvertNomsValueToValue(v)
@@ -266,6 +267,18 @@ func decimalTypeConverter(ctx context.Context, src *decimalType, destTi TypeInfo
 			return dest.ConvertValueToNomsValue(ctx, vrw, decimal.Decimal(val).Round(0))
 		}, true, nil
 	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *linestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multilinestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipolygonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *pointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *polygonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
 		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {

@@ -24,10 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -192,7 +189,7 @@ var BasicReplaceTests = []ReplaceTest{
 			NewPeopleRow(11, "Selma", "Bouvier", false, 40, 7),
 		),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind,
-			"is_married", types.BoolKind, "age", types.IntKind, "rating", types.FloatKind),
+			"is_married", types.IntKind, "age", types.IntKind, "rating", types.FloatKind),
 	},
 	{
 		Name:         "replace partial columns multiple rows null pk",
@@ -210,18 +207,6 @@ var BasicReplaceTests = []ReplaceTest{
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
-		Name: "replace partial columns existing pk",
-		AdditionalSetup: CreateTableFn("temppeople",
-			NewSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind, "num", types.IntKind),
-			NewRow(types.Int(2), types.String("Bart"), types.String("Simpson"), types.Int(44))),
-		ReplaceQuery: "replace into temppeople (id, first_name, last_name, num) values (2, 'Bart', 'Simpson', 88)",
-		SelectQuery:  "select id, first_name, last_name, num from temppeople where id = 2 ORDER BY id",
-		ExpectedRows: ToSqlRows(
-			NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind, "num", types.IntKind),
-			NewResultSetRow(types.Int(2), types.String("Bart"), types.String("Simpson"), types.Int(88))),
-		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind, "num", types.IntKind),
-	},
-	{
 		Name: "replace partial columns multiple rows replace existing pk",
 		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, rating) values
 					(0, "Homer", "Simpson", true, 45, 100),
@@ -232,7 +217,7 @@ var BasicReplaceTests = []ReplaceTest{
 			NewPeopleRow(8, "Milhouse", "Van Houten", false, 8, 100),
 		),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind,
-			"is_married", types.BoolKind, "age", types.IntKind, "rating", types.FloatKind),
+			"is_married", types.IntKind, "age", types.IntKind, "rating", types.FloatKind),
 	},
 	{
 		Name: "replace partial columns multiple rows null pk",
@@ -241,6 +226,18 @@ var BasicReplaceTests = []ReplaceTest{
 					(8, "Milhouse", "Van Houten", false, 8, 3.5),
 					(7, "Maggie", null, false, 1, 5.1)`,
 		ExpectedErr: "Constraint failed for column 'last_name': Not null",
+	},
+	{
+		Name: "replace partial columns existing pk",
+		AdditionalSetup: ExecuteSetupSQL(context.Background(), `
+			CREATE TABLE temppeople (id bigint primary key, first_name varchar(16383), last_name varchar(16383), num bigint);
+			INSERT INTO temppeople VALUES (2, 'Bart', 'Simpson', 44);`),
+		ReplaceQuery: "replace into temppeople (id, first_name, last_name, num) values (2, 'Bart', 'Simpson', 88)",
+		SelectQuery:  "select id, first_name, last_name, num from temppeople where id = 2 ORDER BY id",
+		ExpectedRows: ToSqlRows(
+			NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind, "num", types.IntKind),
+			NewResultSetRow(types.Int(2), types.String("Bart"), types.String("Simpson"), types.Int(88))),
+		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind, "num", types.IntKind),
 	},
 }
 
@@ -255,42 +252,39 @@ func TestExecuteReplace(t *testing.T) {
 var systemTableReplaceTests = []ReplaceTest{
 	{
 		Name: "replace into dolt_docs",
-		AdditionalSetup: CreateTableFn("dolt_docs",
-			doltdocs.Schema,
-			NewRow(types.String("LICENSE.md"), types.String("A license"))),
-		ReplaceQuery: "replace into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
-		ExpectedErr:  "cannot insert into table",
+		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema,
+			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')"),
+		ReplaceQuery:   "replace into dolt_docs (doc_name, doc_text) values ('LICENSE.md', 'Some text')",
+		SelectQuery:    "select * from dolt_docs",
+		ExpectedRows:   []sql.Row{{"LICENSE.md", "Some text"}},
+		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
 	},
 	{
 		Name: "replace into dolt_query_catalog",
-		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
-			dtables.DoltQueryCatalogSchema,
-			NewRow(types.String("existingEntry"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
+		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
+			"INSERT INTO dolt_query_catalog VALUES ('existingEntry', 1, 'example', 'select 2+2 from dual', 'description')"),
 		ReplaceQuery: "replace into dolt_query_catalog (id, display_order, name, query, description) values ('existingEntry', 1, 'example', 'select 1+1 from dual', 'description')",
 		SelectQuery:  "select * from dolt_query_catalog",
-		ExpectedRows: ToSqlRows(dtables.DoltQueryCatalogSchema,
+		ExpectedRows: ToSqlRows(CompressSchema(dtables.DoltQueryCatalogSchema),
 			NewRow(types.String("existingEntry"), types.Uint(1), types.String("example"), types.String("select 1+1 from dual"), types.String("description")),
 		),
 		ExpectedSchema: CompressSchema(dtables.DoltQueryCatalogSchema),
 	},
 	{
 		Name: "replace into dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			SchemasTableSchema(),
-			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
-		ReplaceQuery: "replace into dolt_schemas (type, name, fragment) values ('view', 'name', 'select 1+1 from dual')",
-		SelectQuery:  "select * from dolt_schemas",
-		ExpectedRows: ToSqlRows(SchemasTableSchema(),
-			NewRow(types.String("view"), types.String("name"), types.String("select 1+1 from dual")),
-		),
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemasTableSchema(),
+			"INSERT INTO dolt_schemas VALUES ('view', 'name', 'select 2+2 from dual', 1, NULL)"),
+		ReplaceQuery:   "replace into dolt_schemas (id, type, name, fragment) values ('1', 'view', 'name', 'select 1+1 from dual')",
+		SelectQuery:    "select type, name, fragment, id, extra from dolt_schemas",
+		ExpectedRows:   []sql.Row{{"view", "name", "select 1+1 from dual", int64(1), nil}},
 		ExpectedSchema: CompressSchema(SchemasTableSchema()),
 	},
 }
 
 func TestReplaceIntoSystemTables(t *testing.T) {
-	for _, test := range systemTableInsertTests {
+	for _, test := range systemTableReplaceTests {
 		t.Run(test.Name, func(t *testing.T) {
-			testInsertQuery(t, test)
+			testReplaceQuery(t, test)
 		})
 	}
 }
@@ -306,8 +300,7 @@ func testReplaceQuery(t *testing.T, test ReplaceTest) {
 		t.Skip("Skipping tests until " + singleReplaceQueryTest)
 	}
 
-	dEnv := dtestutils.CreateTestEnv()
-	CreateEmptyTestDatabase(dEnv, t)
+	dEnv := CreateEmptyTestDatabase(t)
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)

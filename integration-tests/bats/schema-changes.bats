@@ -28,11 +28,21 @@ teardown() {
     dolt commit -m 'made table'
     dolt sql -q 'alter table test drop column c1'
     dolt sql -q 'alter table test add column c1 longtext'
+
+    dolt diff
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "BIGINT" ]] || false
-    [[ "$output" =~ "LONGTEXT" ]] || false
+    [[ "$output" =~ "bigint" ]] || false
+    [[ "$output" =~ "longtext" ]] || false
     [[ ! "$ouput" =~ "Merge failed" ]] || false
+}
+
+@test "schema-changes: dolt schema alter column preserves table checks" {
+    dolt sql -q "alter table test add constraint test_check CHECK (c2 < 12345);"
+    dolt sql -q "alter table test rename column c1 to c0;"
+    run dolt schema show test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CONSTRAINT \`test_check\` CHECK ((\`c2\` < 12345))" ]] || false
 }
 
 @test "schema-changes: dolt schema rename column" {
@@ -52,6 +62,14 @@ teardown() {
     [[ "$output" =~ "\`c0\` bigint" ]] || false
     [[ ! "$output" =~ "\`c1\` bigint" ]] || false
     dolt sql -q "select * from test"
+}
+
+@test "schema-changes: dolt schema rename column fails when column is used in table check" {
+    dolt sql -q "alter table test add constraint test_check CHECK (c2 < 12345);"
+    run dolt sql -q "alter table test rename column c2 to c0"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "because it would invalidate check constraint" ]] || false
+
 }
 
 @test "schema-changes: dolt schema delete column" {
@@ -76,27 +94,46 @@ teardown() {
     dolt add test
     dolt commit -m "committed table so we can see diffs"
     dolt sql -q "alter table test add c0 bigint"
+
+    dolt diff
     run dolt diff
+
+    EXPECTED=$(cat <<'EOF'
+ CREATE TABLE `test` (
+   `pk` bigint NOT NULL COMMENT 'tag:0',
+   `c1` bigint COMMENT 'tag:1',
+   `c2` bigint COMMENT 'tag:2',
+   `c3` bigint COMMENT 'tag:3',
+   `c4` bigint COMMENT 'tag:4',
+   `c5` bigint COMMENT 'tag:5',
++  `c0` bigint,
+   PRIMARY KEY (`pk`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+EOF
+)    
+
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]]+\`c0\` ]] || false
-    [[ "$output" =~ "| c0 |" ]] || false
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    # no data diff
+    [ "${#lines[@]}" -eq 13 ]
+    
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]]+\`c0\` ]] || false
-    [[ ! "$output" =~ "| c0 |" ]] || false
+    [[ "$output" =~ "$EXPECTED" ]] || false
+    [ "${#lines[@]}" -eq 13 ]
+
     run dolt diff --data
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ \+[[:space:]]+\`c0\` ]] || false
-    [[ "$output" =~ "| c0 |" ]] || false
-    [[ "$output" =~ ">" ]] || false
-    [[ "$output" =~ "<" ]] || false
-    # Check for a blank column in the diff output
-    [[ "$output" =~ \|[[:space:]]+\| ]] || false
+    [ "${#lines[@]}" -eq 3 ]
+    [[ ! "$output" =~ ">" ]] || false
+
     dolt sql -q "insert into test (pk,c0,c1,c2,c3,c4,c5) values (0,0,0,0,0,0,0)"
+
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \|[[:space:]]+c0[[:space:]]+\| ]] || false
-    [[ "$output" =~ \+[[:space:]]+[[:space:]]+\|[[:space:]]+0 ]] || false
+    [[ "$output" =~ "| c0" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
     dolt sql -q "alter table test drop column c0"
     dolt diff
 }
@@ -185,18 +222,19 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,column,tag" ]] || false
     [[ "$output" =~ "test2,pk1,6801" ]] || false
-    [[ "$output" =~ "test2,pk2,4776" ]] || false
-    [[ "$output" =~ "test2,v1,10579" ]] || false
-    [[ "$output" =~ "test2,v2,7704" ]] || false
+    [[ "$output" =~ "test2,PK2,4776" ]] || false
+    [[ "$output" =~ "test2,V1,10579" ]] || false
+    [[ "$output" =~ "test2,V2,7704" ]] || false
 
+    dolt diff
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '<   `pk2`  BIGINT NOT NULL' ]] || false
-    [[ "$output" =~ '>   `pk2` TINYINT NOT NULL' ]] || false
-    [[ "$output" =~ '<   `v1` VARCHAR(100) NOT NULL' ]] || false
-    [[ "$output" =~ '>   `v1` VARCHAR(300) NOT NULL' ]] || false
-    [[ "$output" =~ '<   `v2`  VARCHAR(120)' ]] || false
-    [[ "$output" =~ '>   `v2` VARCHAR(1024)' ]] || false
+    [[ "$output" =~ '-  `pk2` bigint NOT NULL,' ]] || false
+    [[ "$output" =~ '-  `v1` varchar(100) NOT NULL,' ]] || false
+    [[ "$output" =~ '-  `v2` varchar(120),' ]] || false
+    [[ "$output" =~ '+  `PK2` tinyint NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `V1` varchar(300) NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `V2` varchar(1024) NOT NULL,' ]] || false
     [[ "$output" =~ 'PRIMARY KEY' ]] || false
 
     dolt add .
@@ -208,12 +246,13 @@ SQL
     dolt add .
     dolt commit -m "Created table with one row"
 
-    dolt merge main
+    skip_nbf_dolt "In __DOLT__ the following throws an error since the primary key types changed"
+    dolt merge main --no-commit
 
     run dolt sql -q 'show create table test2'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '`pk2` tinyint NOT NULL' ]] || false
-    [[ "$output" =~ '`v1` varchar(300) NOT NULL' ]] || false
+    [[ "$output" =~ '`PK2` tinyint NOT NULL' ]] || false
+    [[ "$output" =~ '`V1` varchar(300) NOT NULL' ]] || false
 
     run dolt sql -q 'select * from test2' -r csv
     [ "$status" -eq 0 ]
@@ -234,8 +273,8 @@ SQL
     dolt pull
     run dolt sql -q 'show create table test2'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '`pk2` tinyint NOT NULL' ]] || false
-    [[ "$output" =~ '`v1` varchar(300) NOT NULL' ]] || false
+    [[ "$output" =~ '`PK2` tinyint NOT NULL' ]] || false
+    [[ "$output" =~ '`V1` varchar(300) NOT NULL' ]] || false
 
     run dolt sql -q 'select * from test2' -r csv
     [ "$status" -eq 0 ]
@@ -244,13 +283,115 @@ SQL
     [[ "$output" =~ '2,2,abc,def' ]] || false
 
     # make sure diff works as expected for schema change on clone
+    dolt diff HEAD~2
     run dolt diff HEAD~2
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '<   `pk2`  BIGINT NOT NULL' ]] || false
-    [[ "$output" =~ '>   `pk2` TINYINT NOT NULL' ]] || false
-    [[ "$output" =~ '<   `v1` VARCHAR(100) NOT NULL' ]] || false
-    [[ "$output" =~ '>   `v1` VARCHAR(300) NOT NULL' ]] || false
-    [[ "$output" =~ '<   `v2`  VARCHAR(120)' ]] || false
-    [[ "$output" =~ '>   `v2` VARCHAR(1024)' ]] || false
+    [[ "$output" =~ '-  `pk2` bigint NOT NULL,' ]] || false
+    [[ "$output" =~ '-  `v1` varchar(100) NOT NULL,' ]] || false
+    [[ "$output" =~ '-  `v2` varchar(120),' ]] || false
+    [[ "$output" =~ '+  `PK2` tinyint NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `V1` varchar(300) NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `V2` varchar(1024) NOT NULL,' ]] || false
     [[ "$output" =~ 'PRIMARY KEY' ]] || false
+}
+
+@test "schema-changes: drop then add column" {
+    dolt sql <<SQL
+CREATE TABLE test2(
+  pk1 BIGINT,
+  pk2 BIGINT,
+  v1 BIGINT,
+  PRIMARY KEY(pk1, pk2)
+);
+insert into test2 values (1, 1, 1), (2, 2, 2);
+SQL
+
+    # Commit is important here because we are testing column reuse on
+    # drop / add, we want to be sure that we don't re-use any old
+    # values from before the column was dropped
+    dolt add .
+    dolt commit -am "Committing test table"
+
+    dolt sql -q "alter table test2 drop column v1"
+    dolt sql -q "alter table test2 add column v1 bigint"
+
+    dolt status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ modified:[[:space:]]+test2 ]] || false
+    
+    dolt sql -q "select * from test2 where pk1 = 1"
+    run dolt sql -q "select * from test2 where pk1 = 1"
+    [ "$status" -eq 0 ]
+    [[  "$output" =~ "| 1   | 1   | NULL |" ]] || false
+}
+
+@test "schema-changes: drop then add column show no schema diff" {
+    dolt sql <<SQL
+CREATE TABLE test2(
+  pk1 BIGINT,
+  pk2 BIGINT,
+  v1 BIGINT,
+  PRIMARY KEY(pk1, pk2)
+);
+insert into test2 values (1, 1, 1), (2, 2, 2);
+SQL
+
+    dolt add .
+    # Commit is important here because we are testing column reuse on
+    # drop / add, we want to be sure that we don't re-use any old
+    # values from before the column was dropped
+    dolt commit -am "Committing test table"
+
+    dolt sql -q "alter table test2 drop column v1"
+    dolt sql -q "alter table test2 add column v1 bigint"
+
+    dolt status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ modified:[[:space:]]+test2 ]] || false
+    
+    dolt sql -q "select * from test2 where pk1 = 1"
+    run dolt sql -q "select * from test2 where pk1 = 1"
+    [ "$status" -eq 0 ]
+    [[  "$output" =~ "| 1   | 1   | NULL |" ]] || false
+
+    dolt diff --data
+    run dolt diff --data
+    [ "$status" -eq 0 ]
+
+    EXPECTED=$(cat <<'EOF'
++---+-----+-----+------+
+|   | pk1 | pk2 | v1   |
++---+-----+-----+------+
+| < | 1   | 1   | 1    |
+| > | 1   | 1   | NULL |
+| < | 2   | 2   | 2    |
+| > | 2   | 2   | NULL |
++---+-----+-----+------+
+EOF
+)               
+    
+    [[ "$output" =~ "$EXPECTED" ]] || false
+}
+
+# We passed nil where a sql ctx was expected in merge. When we added
+# collations, the sql ctx became required and merge started to panic.
+@test "schema-changes: regression test for merging check constraints with TEXT type panicking due to a nil sql ctx" {
+    dolt sql -q "create table t (pk int primary key, col1 text);"
+    dolt commit -Am "initial"
+    dolt branch right
+    dolt sql -q "insert into t values (1, 'valid');"
+    dolt commit -am "row"
+
+    dolt checkout right
+    dolt sql -q "alter table t add constraint col1_check CHECK (col1 = 'valid');"
+    dolt commit -am "add check"
+
+    dolt checkout main
+    dolt merge -m "merge" right
+
+    run dolt sql -q "show create table t;"
+    [ $status -eq 0 ]
+    [[ $output =~ "CHECK ((\`col1\` = 'valid'))" ]] || false
 }

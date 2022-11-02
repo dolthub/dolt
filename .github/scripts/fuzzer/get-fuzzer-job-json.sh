@@ -19,8 +19,13 @@ echo '
     "namespace": "fuzzer"
   },
   "spec": {
-    "backoffLimit": 1,
+    "backoffLimit": 2,
     "template": {
+      "metadata": {
+        "labels": {
+          "k8s-liquidata-inc-monitored-job": "created-by-static-config"
+        }
+      },
       "spec": {
         "serviceAccountName": "fuzzer",
         "containers": [
@@ -37,11 +42,11 @@ echo '
               "--bucket=dolt-fuzzer-runs",
               "--region=us-west-2",
               "--version-gate-job",
-              "--fuzzer-args=merge, --cycles=5"
+              "--fuzzer-args=basic, --cycles=5"
             ]
           }
         ],
-        "restartPolicy": "Never"
+        "restartPolicy": "OnFailure"
       }
     }
   }

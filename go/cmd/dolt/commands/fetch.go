@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 var fetchDocs = cli.CommandDocumentationContent{
@@ -58,16 +58,19 @@ func (cmd FetchCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_FETCH
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd FetchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd FetchCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateFetchArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
+	return cli.NewCommandDocumentation(fetchDocs, ap)
+}
+
+func (cmd FetchCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateFetchArgParser()
 }
 
 // Exec executes the command
 func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateFetchArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, fetchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	r, refSpecs, err := env.NewFetchOpts(apr.Args, dEnv.RepoStateReader())
@@ -76,7 +79,12 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 	updateMode := ref.UpdateMode{Force: apr.Contains(cli.ForceFlag)}
 
-	err = actions.FetchRefSpecs(ctx, dEnv.DbData(), refSpecs, r, updateMode, runProgFuncs, stopProgFuncs)
+	srcDB, err := r.GetRemoteDBWithoutCaching(ctx, dEnv.DbData().Ddb.ValueReadWriter().Format(), dEnv)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	err = actions.FetchRefSpecs(ctx, dEnv.DbData(), srcDB, refSpecs, r, updateMode, buildProgStarter(downloadLanguage), stopProgFuncs)
 	switch err {
 	case doltdb.ErrUpToDate:
 		return HandleVErrAndExitCode(nil, usage)

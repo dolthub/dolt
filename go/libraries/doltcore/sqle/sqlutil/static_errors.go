@@ -23,11 +23,15 @@ type StaticErrorTable struct {
 	err error
 }
 
-func (t *StaticErrorTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+func (t *StaticErrorTable) Partitions(_ *sql.Context) (sql.PartitionIter, error) {
 	return nil, t.err
 }
 
-func (t *StaticErrorTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIter, error) {
+func (t *StaticErrorTable) PartitionRows(_ *sql.Context, _ sql.Partition) (sql.RowIter, error) {
+	return nil, t.err
+}
+
+func (t *StaticErrorTable) LookupPartitions(_ *sql.Context, _ sql.IndexLookup) (sql.PartitionIter, error) {
 	return nil, t.err
 }
 
@@ -43,7 +47,7 @@ func NewStaticErrorRowIter(err error) sql.RowIter {
 	return &StaticErrorRowIter{err}
 }
 
-func (i *StaticErrorRowIter) Next() (sql.Row, error) {
+func (i *StaticErrorRowIter) Next(*sql.Context) (sql.Row, error) {
 	return nil, i.err
 }
 
@@ -55,6 +59,8 @@ func (i *StaticErrorRowIter) Close(*sql.Context) error {
 type StaticErrorEditor struct {
 	err error
 }
+
+var _ sql.ForeignKeyUpdater = (*StaticErrorEditor)(nil)
 
 func NewStaticErrorEditor(err error) *StaticErrorEditor {
 	return &StaticErrorEditor{err}
@@ -72,7 +78,7 @@ func (e *StaticErrorEditor) Update(*sql.Context, sql.Row, sql.Row) error {
 	return e.err
 }
 
-func (e *StaticErrorEditor) SetAutoIncrementValue(*sql.Context, interface{}) error {
+func (e *StaticErrorEditor) SetAutoIncrementValue(*sql.Context, uint64) error {
 	return e.err
 }
 
@@ -86,7 +92,19 @@ func (e *StaticErrorEditor) StatementComplete(ctx *sql.Context) error {
 	return nil
 }
 
+func (e *StaticErrorEditor) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
+	return &StaticErrorTable{nil, e.err}
+}
+
 func (e *StaticErrorEditor) Close(*sql.Context) error {
 	// Or e.err?
 	return nil
+}
+
+func (e *StaticErrorEditor) IndexedAccess(index sql.Index) sql.IndexedTable {
+	return &StaticErrorTable{nil, e.err}
+}
+
+func (e *StaticErrorEditor) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return nil, nil
 }

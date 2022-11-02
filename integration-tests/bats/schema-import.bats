@@ -80,10 +80,10 @@ teardown() {
     [[ "$output" =~ "\`pk\` int" ]] || false
     [[ "$output" =~ "\`int\` int" ]] || false
     [[ "$output" =~ "\`string\` varchar(16383)" ]] || false
-    [[ "$output" =~ "\`boolean\` bit(1)" ]] || false
+    [[ "$output" =~ "\`boolean\` tinyint" ]] || false
     [[ "$output" =~ "\`float\` float" ]] || false
-    [[ "$output" =~ "\`uint\` int unsigned" ]] || false
-    [[ "$output" =~ "\`uuid\` char(36) character set ascii collate ascii_bin" ]] || false
+    [[ "$output" =~ "\`uint\` int" ]] || false
+    [[ "$output" =~ "\`uuid\` char(36) CHARACTER SET ascii COLLATE ascii_bin" ]] || false
 }
 
 @test "schema-import: with an empty csv" {
@@ -105,10 +105,10 @@ DELIM
     [[ "$output" =~ "\`pk\` int" ]] || false
     [[ "$output" =~ "\`int\` int" ]] || false
     [[ "$output" =~ "\`string\` varchar(16383)" ]] || false
-    [[ "$output" =~ "\`boolean\` bit(1)" ]] || false
+    [[ "$output" =~ "\`boolean\` tinyint" ]] || false
     [[ "$output" =~ "\`float\` float" ]] || false
     [[ "$output" =~ "\`uint\` int" ]] || false
-    [[ "$output" =~ "\`uuid\` char(36) character set ascii collate ascii_bin" ]] || false
+    [[ "$output" =~ "\`uuid\` char(36) CHARACTER SET ascii COLLATE ascii_bin" ]] || false
 }
 
 @test "schema-import: with invalid names" {
@@ -256,13 +256,15 @@ DELIM
     dolt commit -m "added table"
     run dolt schema import -pks=pk -u test abc-xyz.csv
     [ "$status" -eq 0 ]
+
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+   \`x\` VARCHAR(16383)" ]] || false
-    [[ "$output" =~ "+   \`y\` FLOAT" ]] || false
-    [[ "$output" =~ "+   \`z\` INT" ]] || false
+    [[ "$output" =~ '+  `x` varchar(16383),' ]] || false
+    [[ "$output" =~ '+  `y` float,' ]] || false
+    [[ "$output" =~ '+  `z` int,' ]] || false
     # assert no columns were deleted/replaced
     [[ ! "$output" = "-    \`" ]] || false
+
     run dolt sql -r csv -q 'select * from test'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "pk,a,b,c,x,y,z" ]] || false
@@ -277,13 +279,15 @@ DELIM
     dolt commit -m "added table"
     run dolt schema import -pks=pk -r test abc-xyz.csv
     [ "$status" -eq 0 ]
+
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+   \`x\` VARCHAR(16383)" ]] || false
-    [[ "$output" =~ "+   \`y\` FLOAT" ]] || false
-    [[ "$output" =~ "+   \`z\` INT" ]] || false
+    [[ "$output" =~ '+  `x` varchar(16383),' ]] || false
+    [[ "$output" =~ '+  `y` float,' ]] || false
+    [[ "$output" =~ '+  `z` int,' ]] || false
     # assert no columns were deleted/replaced
     [[ ! "$output" = "-    \`" ]] || false
+
     run dolt sql -r csv -q 'select count(*) from test'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "count(*)" ]] || false
@@ -301,11 +305,12 @@ DELIM
     dolt commit -m "added test"
     run dolt schema import -pks=pk -r test xyz.csv
     [ "$status" -eq 0 ]
+
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "-   \`a\`" ]] || false
-    [[ "$output" =~ "-   \`b\`" ]] || false
-    [[ "$output" =~ "-   \`c\`" ]] || false
+    [[ "$output" =~ '-  `a` varchar(16383),' ]] || false
+    [[ "$output" =~ '-  `b` float,' ]] || false
+    [[ "$output" =~ '-  `c` tinyint,' ]] || false
     # assert no columns were added
     [[ ! "$output" = "+    \`" ]] || false
 }

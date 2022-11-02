@@ -29,8 +29,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func getChunks(v Value) (chunks []Ref) {
-	_ = v.WalkRefs(Format_7_18, func(r Ref) error {
+func getChunks(nbf *NomsBinFormat, v Value) (chunks []Ref) {
+	_ = v.walkRefs(nbf, func(r Ref) error {
 		chunks = append(chunks, r)
 		return nil
 	})
@@ -39,10 +39,11 @@ func getChunks(v Value) (chunks []Ref) {
 
 func TestGenericStructEquals(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
 
-	s1, err := NewStruct(Format_7_18, "S1", StructData{"s": String("hi"), "x": Bool(true)})
+	s1, err := NewStruct(vs.Format(), "S1", StructData{"s": String("hi"), "x": Bool(true)})
 	require.NoError(t, err)
-	s2, err := NewStruct(Format_7_18, "S1", StructData{"s": String("hi"), "x": Bool(true)})
+	s2, err := NewStruct(vs.Format(), "S1", StructData{"s": String("hi"), "x": Bool(true)})
 	require.NoError(t, err)
 
 	assert.True(s1.Equals(s2))
@@ -51,21 +52,23 @@ func TestGenericStructEquals(t *testing.T) {
 
 func TestGenericStructChunks(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
 
 	b := Bool(true)
-	s1, err := NewStruct(Format_7_18, "S1", StructData{"r": mustRef(NewRef(b, Format_7_18))})
+	s1, err := NewStruct(vs.Format(), "S1", StructData{"r": mustRef(NewRef(b, vs.Format()))})
 	require.NoError(t, err)
 
-	assert.Len(getChunks(s1), 1)
-	h, err := Bool(true).Hash(Format_7_18)
+	assert.Len(getChunks(vs.Format(), s1), 1)
+	h, err := Bool(true).Hash(vs.Format())
 	require.NoError(t, err)
-	assert.Equal(h, getChunks(s1)[0].TargetHash())
+	assert.Equal(h, getChunks(vs.Format(), s1)[0].TargetHash())
 }
 
 func TestGenericStructNew(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
 
-	s, err := NewStruct(Format_7_18, "S2", StructData{"b": Bool(true), "o": String("hi")})
+	s, err := NewStruct(vs.Format(), "S2", StructData{"b": Bool(true), "o": String("hi")})
 	require.NoError(t, err)
 	v, _, err := s.MaybeGet("b")
 	require.NoError(t, err)
@@ -74,7 +77,7 @@ func TestGenericStructNew(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(ok)
 
-	s2, err := NewStruct(Format_7_18, "S2", StructData{"b": Bool(false), "o": String("hi")})
+	s2, err := NewStruct(vs.Format(), "S2", StructData{"b": Bool(false), "o": String("hi")})
 	require.NoError(t, err)
 	v2, _, err := s2.MaybeGet("b")
 	require.NoError(t, err)
@@ -89,7 +92,7 @@ func TestGenericStructSet(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
 
-	s, err := NewStruct(Format_7_18, "S3", StructData{"b": Bool(true), "o": String("hi")})
+	s, err := NewStruct(vs.Format(), "S3", StructData{"b": Bool(true), "o": String("hi")})
 	require.NoError(t, err)
 	s2, err := s.Set("b", Bool(false))
 	require.NoError(t, err)
@@ -116,7 +119,7 @@ func TestGenericStructSet(t *testing.T) {
 	)).Equals(mustType(TypeOf(s5))))
 
 	// Subtype is not equal.
-	s6, err := NewStruct(Format_7_18, "", StructData{"l": mustList(NewList(context.Background(), vs, Float(0), Float(1), Bool(false), Bool(true)))})
+	s6, err := NewStruct(vs.Format(), "", StructData{"l": mustList(NewList(context.Background(), vs, Float(0), Float(1), Bool(false), Bool(true)))})
 	require.NoError(t, err)
 	s7, err := s6.Set("l", mustList(NewList(context.Background(), vs, Float(2), Float(3))))
 	require.NoError(t, err)
@@ -126,19 +129,20 @@ func TestGenericStructSet(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t7.Equals(mustType(TypeOf(s7))))
 
-	s8, err := NewStruct(Format_7_18, "S", StructData{"a": Bool(true), "c": Bool(true)})
+	s8, err := NewStruct(vs.Format(), "S", StructData{"a": Bool(true), "c": Bool(true)})
 	require.NoError(t, err)
 	s9, err := s8.Set("b", Bool(true))
 	require.NoError(t, err)
-	st, err := NewStruct(Format_7_18, "S", StructData{"a": Bool(true), "b": Bool(true), "c": Bool(true)})
+	st, err := NewStruct(vs.Format(), "S", StructData{"a": Bool(true), "b": Bool(true), "c": Bool(true)})
 	assert.True(s9.Equals(st))
 	require.NoError(t, err)
 }
 
 func TestGenericStructDelete(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
 
-	s1, err := NewStruct(Format_7_18, "S", StructData{"b": Bool(true), "o": String("hi")})
+	s1, err := NewStruct(vs.Format(), "S", StructData{"b": Bool(true), "o": String("hi")})
 	require.NoError(t, err)
 
 	s2, err := s1.Delete("notThere")
@@ -147,13 +151,13 @@ func TestGenericStructDelete(t *testing.T) {
 
 	s3, err := s1.Delete("o")
 	require.NoError(t, err)
-	s4, err := NewStruct(Format_7_18, "S", StructData{"b": Bool(true)})
+	s4, err := NewStruct(vs.Format(), "S", StructData{"b": Bool(true)})
 	require.NoError(t, err)
 	assert.True(s3.Equals(s4))
 
 	s5, err := s3.Delete("b")
 	require.NoError(t, err)
-	s6, err := NewStruct(Format_7_18, "S", StructData{})
+	s6, err := NewStruct(vs.Format(), "S", StructData{})
 	require.NoError(t, err)
 	assert.True(s5.Equals(s6))
 }
@@ -197,41 +201,41 @@ func TestStructDiff(t *testing.T) {
 		return ValueChanged{ct, String(fieldName), oldV, newV}
 	}
 
-	s1, err := NewStruct(Format_7_18, "", StructData{"a": Bool(true), "b": String("hi"), "c": Float(4)})
+	s1, err := NewStruct(vs.Format(), "", StructData{"a": Bool(true), "b": String("hi"), "c": Float(4)})
 	require.NoError(t, err)
 
 	assertDiff([]ValueChanged{},
-		s1, mustStruct(NewStruct(Format_7_18, "", StructData{"a": Bool(true), "b": String("hi"), "c": Float(4)})))
+		s1, mustStruct(NewStruct(vs.Format(), "", StructData{"a": Bool(true), "b": String("hi"), "c": Float(4)})))
 
 	assertDiff([]ValueChanged{vc(DiffChangeModified, "a", Bool(false), Bool(true)), vc(DiffChangeModified, "b", String("bye"), String("hi"))},
-		s1, mustStruct(NewStruct(Format_7_18, "", StructData{"a": Bool(false), "b": String("bye"), "c": Float(4)})))
+		s1, mustStruct(NewStruct(vs.Format(), "", StructData{"a": Bool(false), "b": String("bye"), "c": Float(4)})))
 
 	assertDiff([]ValueChanged{vc(DiffChangeModified, "b", String("bye"), String("hi")), vc(DiffChangeModified, "c", Float(5), Float(4))},
-		s1, mustStruct(NewStruct(Format_7_18, "", StructData{"a": Bool(true), "b": String("bye"), "c": Float(5)})))
+		s1, mustStruct(NewStruct(vs.Format(), "", StructData{"a": Bool(true), "b": String("bye"), "c": Float(5)})))
 
 	assertDiff([]ValueChanged{vc(DiffChangeModified, "a", Bool(false), Bool(true)), vc(DiffChangeModified, "c", Float(10), Float(4))},
-		s1, mustStruct(NewStruct(Format_7_18, "", StructData{"a": Bool(false), "b": String("hi"), "c": Float(10)})))
+		s1, mustStruct(NewStruct(vs.Format(), "", StructData{"a": Bool(false), "b": String("hi"), "c": Float(10)})))
 
 	assertDiff([]ValueChanged{vc(DiffChangeAdded, "a", nil, Bool(true))},
-		s1, mustStruct(NewStruct(Format_7_18, "NewType", StructData{"b": String("hi"), "c": Float(4)})))
+		s1, mustStruct(NewStruct(vs.Format(), "NewType", StructData{"b": String("hi"), "c": Float(4)})))
 
 	assertDiff([]ValueChanged{vc(DiffChangeAdded, "b", nil, String("hi"))},
-		s1, mustStruct(NewStruct(Format_7_18, "NewType", StructData{"a": Bool(true), "c": Float(4)})))
+		s1, mustStruct(NewStruct(vs.Format(), "NewType", StructData{"a": Bool(true), "c": Float(4)})))
 
 	assertDiff([]ValueChanged{vc(DiffChangeRemoved, "Z", Float(17), nil)},
-		s1, mustStruct(NewStruct(Format_7_18, "NewType", StructData{"Z": Float(17), "a": Bool(true), "b": String("hi"), "c": Float(4)})))
+		s1, mustStruct(NewStruct(vs.Format(), "NewType", StructData{"Z": Float(17), "a": Bool(true), "b": String("hi"), "c": Float(4)})))
 
 	assertDiff([]ValueChanged{vc(DiffChangeAdded, "b", nil, String("hi")), vc(DiffChangeRemoved, "d", Float(5), nil)},
-		s1, mustStruct(NewStruct(Format_7_18, "NewType", StructData{"a": Bool(true), "c": Float(4), "d": Float(5)})))
+		s1, mustStruct(NewStruct(vs.Format(), "NewType", StructData{"a": Bool(true), "c": Float(4), "d": Float(5)})))
 
-	s2 := mustStruct(NewStruct(Format_7_18, "", StructData{
+	s2 := mustStruct(NewStruct(vs.Format(), "", StructData{
 		"a": mustList(NewList(context.Background(), vs, Float(0), Float(1))),
 		"b": mustMap(NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true))),
 		"c": mustSet(NewSet(context.Background(), vs, Float(0), Float(1), String("foo"))),
 	}))
 
 	assertDiff([]ValueChanged{},
-		s2, mustStruct(NewStruct(Format_7_18, "", StructData{
+		s2, mustStruct(NewStruct(vs.Format(), "", StructData{
 			"a": mustList(NewList(context.Background(), vs, Float(0), Float(1))),
 			"b": mustMap(NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true))),
 			"c": mustSet(NewSet(context.Background(), vs, Float(0), Float(1), String("foo"))),
@@ -245,7 +249,7 @@ func TestStructDiff(t *testing.T) {
 			mustMap(NewMap(context.Background(), vs, String("foo"), Bool(true), String("bar"), Bool(true))),
 			mustMap(NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true)))),
 	},
-		s2, mustStruct(NewStruct(Format_7_18, "", StructData{
+		s2, mustStruct(NewStruct(vs.Format(), "", StructData{
 			"a": mustList(NewList(context.Background(), vs, Float(1), Float(1))),
 			"b": mustMap(NewMap(context.Background(), vs, String("foo"), Bool(true), String("bar"), Bool(true))),
 			"c": mustSet(NewSet(context.Background(), vs, Float(0), Float(1), String("foo"))),
@@ -255,7 +259,7 @@ func TestStructDiff(t *testing.T) {
 		vc(DiffChangeModified, "a", mustList(NewList(context.Background(), vs, Float(0))), mustList(NewList(context.Background(), vs, Float(0), Float(1)))),
 		vc(DiffChangeModified, "c", mustSet(NewSet(context.Background(), vs, Float(0), Float(2), String("foo"))), mustSet(NewSet(context.Background(), vs, Float(0), Float(1), String("foo")))),
 	},
-		s2, mustStruct(NewStruct(Format_7_18, "", StructData{
+		s2, mustStruct(NewStruct(vs.Format(), "", StructData{
 			"a": mustList(NewList(context.Background(), vs, Float(0))),
 			"b": mustMap(NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true))),
 			"c": mustSet(NewSet(context.Background(), vs, Float(0), Float(2), String("foo"))),
@@ -265,7 +269,7 @@ func TestStructDiff(t *testing.T) {
 		vc(DiffChangeModified, "b", mustMap(NewMap(context.Background(), vs, String("boo"), Bool(false), String("bar"), Bool(true))), mustMap(NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true)))),
 		vc(DiffChangeModified, "c", mustSet(NewSet(context.Background(), vs, Float(0), Float(1), String("bar"))), mustSet(NewSet(context.Background(), vs, Float(0), Float(1), String("foo")))),
 	},
-		s2, mustStruct(NewStruct(Format_7_18, "", StructData{
+		s2, mustStruct(NewStruct(vs.Format(), "", StructData{
 			"a": mustList(NewList(context.Background(), vs, Float(0), Float(1))),
 			"b": mustMap(NewMap(context.Background(), vs, String("boo"), Bool(false), String("bar"), Bool(true))),
 			"c": mustSet(NewSet(context.Background(), vs, Float(0), Float(1), String("bar"))),
@@ -295,6 +299,7 @@ func TestEscStructField(t *testing.T) {
 
 func TestMakeStructTemplate(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
 
 	assertInvalidStructName := func(n string) {
 		assert.Panics(func() {
@@ -313,7 +318,7 @@ func TestMakeStructTemplate(t *testing.T) {
 
 	assertValidStructName := func(n string) {
 		template := MakeStructTemplate(n, []string{})
-		str, err := template.NewStruct(Format_7_18, nil)
+		str, err := template.NewStruct(vs.Format(), nil)
 		require.NoError(t, err)
 		assert.Equal(n, str.Name())
 	}
@@ -369,9 +374,9 @@ func TestMakeStructTemplate(t *testing.T) {
 	assertValidFieldOrder([]string{"a", "b", "c"})
 
 	template := MakeStructTemplate("A", []string{"a", "b"})
-	str, err := template.NewStruct(Format_7_18, []Value{Float(42), Bool(true)})
+	str, err := template.NewStruct(vs.Format(), []Value{Float(42), Bool(true)})
 	require.NoError(t, err)
-	assert.True(mustStruct(NewStruct(Format_7_18, "A", StructData{
+	assert.True(mustStruct(NewStruct(vs.Format(), "A", StructData{
 		"a": Float(42),
 		"b": Bool(true),
 	})).Equals(str))
@@ -379,12 +384,12 @@ func TestMakeStructTemplate(t *testing.T) {
 
 func TestStructWithNil(t *testing.T) {
 	assert.Panics(t, func() {
-		NewStruct(Format_7_18, "A", StructData{
+		NewStruct(Format_Default, "A", StructData{
 			"a": nil,
 		})
 	})
 	assert.Panics(t, func() {
-		NewStruct(Format_7_18, "A", StructData{
+		NewStruct(Format_Default, "A", StructData{
 			"a": Float(42),
 			"b": nil,
 		})

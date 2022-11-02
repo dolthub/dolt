@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var lsDocs = cli.CommandDocumentationContent{
@@ -52,10 +51,9 @@ func (cmd LsCmd) Description() string {
 	return lsDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd LsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+func (cmd LsCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(lsDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -69,7 +67,7 @@ func (cmd LsCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CREDS_LS
 }
 
-func (cmd LsCmd) createArgParser() *argparser.ArgParser {
+func (cmd LsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag("verbose", "v", "Verbose output, including key id.")
 	return ap
@@ -77,8 +75,8 @@ func (cmd LsCmd) createArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, lsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.Contains("verbose") {

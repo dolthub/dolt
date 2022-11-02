@@ -25,7 +25,6 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -45,7 +44,7 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 	cacheSize := 2
 	fc := newFDCache(cacheSize)
 	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, nil)
+	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
 
 	// Create some tables manually, load them into the cache
 	func() {
@@ -85,7 +84,7 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 }
 
 func makeTempDir(t *testing.T) string {
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
 	return dir
 }
@@ -97,7 +96,7 @@ func writeTableData(dir string, chunx ...[]byte) (addr, error) {
 		return addr{}, err
 	}
 
-	err = ioutil.WriteFile(filepath.Join(dir, name.String()), tableData, 0666)
+	err = os.WriteFile(filepath.Join(dir, name.String()), tableData, 0666)
 
 	if err != nil {
 		return addr{}, err
@@ -121,16 +120,17 @@ func TestFSTablePersisterPersist(t *testing.T) {
 	defer file.RemoveAll(dir)
 	fc := newFDCache(defaultMaxTables)
 	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, nil)
+	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
 
 	src, err := persistTableData(fts, testChunks...)
 	require.NoError(t, err)
 	if assert.True(mustUint32(src.count()) > 0) {
-		buff, err := ioutil.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
+		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		require.NoError(t, err)
-		ti, err := parseTableIndex(buff)
+		ti, err := parseTableIndexByCopy(buff, &noopQuotaProvider{})
 		require.NoError(t, err)
-		tr := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+		require.NoError(t, err)
 		assertChunksInReader(testChunks, tr, assert)
 	}
 }
@@ -159,7 +159,7 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 	defer file.RemoveAll(dir)
 	fc := newFDCache(defaultMaxTables)
 	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, nil)
+	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
 
 	src, err := fts.Persist(context.Background(), mt, existingTable, &Stats{})
 	require.NoError(t, err)
@@ -174,7 +174,7 @@ func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 	dir := makeTempDir(t)
 	fc := newFDCache(1)
 	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, nil)
+	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
 	defer file.RemoveAll(dir)
 
 	var name addr
@@ -210,7 +210,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 	defer file.RemoveAll(dir)
 	fc := newFDCache(len(sources))
 	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, nil)
+	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
 
 	for i, c := range testChunks {
 		randChunk := make([]byte, (i+1)*13)
@@ -226,11 +226,12 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 	require.NoError(t, err)
 
 	if assert.True(mustUint32(src.count()) > 0) {
-		buff, err := ioutil.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
+		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		require.NoError(t, err)
-		ti, err := parseTableIndex(buff)
+		ti, err := parseTableIndexByCopy(buff, &noopQuotaProvider{})
 		require.NoError(t, err)
-		tr := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+		require.NoError(t, err)
 		assertChunksInReader(testChunks, tr, assert)
 	}
 
@@ -245,7 +246,7 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 	defer file.RemoveAll(dir)
 	fc := newFDCache(defaultMaxTables)
 	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, nil)
+	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
 
 	reps := 3
 	sources := make(chunkSources, reps)
@@ -264,11 +265,12 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 	require.NoError(t, err)
 
 	if assert.True(mustUint32(src.count()) > 0) {
-		buff, err := ioutil.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
+		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		require.NoError(t, err)
-		ti, err := parseTableIndex(buff)
+		ti, err := parseTableIndexByCopy(buff, &noopQuotaProvider{})
 		require.NoError(t, err)
-		tr := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+		require.NoError(t, err)
 		assertChunksInReader(testChunks, tr, assert)
 		assert.EqualValues(reps*len(testChunks), mustUint32(tr.count()))
 	}

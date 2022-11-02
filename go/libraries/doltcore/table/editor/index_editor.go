@@ -16,15 +16,18 @@ package editor
 
 import (
 	"context"
-
 	"fmt"
 	"sync"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+const rebuildIndexFlushInterval = 1 << 25
 
 var _ error = (*uniqueKeyErr)(nil)
 
@@ -39,7 +42,7 @@ type uniqueKeyErr struct {
 // Error implements the error interface.
 func (u *uniqueKeyErr) Error() string {
 	keyStr, _ := formatKey(context.Background(), u.IndexTuple)
-	return fmt.Sprintf("UNIQUE constraint violation on index '%s': %s", u.IndexName, keyStr)
+	return fmt.Sprintf("duplicate unique key given: %s", keyStr)
 }
 
 // NOTE: Regarding partial keys and full keys. For this example, let's say that our table has a primary key W, with
@@ -68,11 +71,12 @@ func (u *uniqueKeyErr) Error() string {
 type IndexEditor struct {
 	nbf *types.NomsBinFormat
 
-	idxSch schema.Schema
-	tblSch schema.Schema
-	idx    schema.Index
-	iea    IndexEditAccumulator
-	stack  indexOperationStack
+	idxSch       schema.Schema
+	tblSch       schema.Schema
+	idx          schema.Index
+	iea          IndexEditAccumulator
+	stack        indexOperationStack
+	permanentErr error // If this is set then we should always return this error as the IndexEditor is no longer usable
 
 	// This mutex blocks on each operation, so that map reads and updates are serialized
 	writeMutex *sync.Mutex
@@ -81,12 +85,13 @@ type IndexEditor struct {
 // NewIndexEditor creates a new index editor
 func NewIndexEditor(ctx context.Context, index schema.Index, indexData types.Map, tableSch schema.Schema, opts Options) *IndexEditor {
 	ie := &IndexEditor{
-		idxSch:     index.Schema(),
-		tblSch:     tableSch,
-		idx:        index,
-		iea:        opts.Deaf.NewIndexEA(ctx, indexData),
-		nbf:        indexData.Format(),
-		writeMutex: &sync.Mutex{},
+		idxSch:       index.Schema(),
+		tblSch:       tableSch,
+		idx:          index,
+		iea:          opts.Deaf.NewIndexEA(ctx, indexData),
+		nbf:          indexData.Format(),
+		permanentErr: nil,
+		writeMutex:   &sync.Mutex{},
 	}
 	return ie
 }
@@ -94,6 +99,20 @@ func NewIndexEditor(ctx context.Context, index schema.Index, indexData types.Map
 // InsertRow adds the given row to the index. If the row already exists and the index is unique, then an error is returned.
 // Otherwise, it is a no-op.
 func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tuple, value types.Tuple) error {
+	return ie.InsertRowWithDupCb(ctx, key, partialKey, value, func(ctx context.Context, uke *uniqueKeyErr) error {
+		msg, err := formatKey(context.Background(), uke.IndexTuple)
+		if err != nil {
+			return err
+		}
+		// The only secondary index that can throw unique key errors is a unique index
+		return sql.NewUniqueKeyErr(msg, !ie.idx.IsUnique(), nil)
+	})
+}
+
+// InsertRowWithDupCb adds the given row to the index. If the row already exists and the
+// index is unique, then a uniqueKeyErr is passed to |cb|. If |cb| returns a non-nil
+// error then the insert is aborted. Otherwise, the insert proceeds.
+func (ie *IndexEditor) InsertRowWithDupCb(ctx context.Context, key, partialKey types.Tuple, value types.Tuple, cb func(ctx context.Context, uke *uniqueKeyErr) error) error {
 	keyHash, err := key.Hash(key.Format())
 	if err != nil {
 		return err
@@ -106,6 +125,10 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 	ie.writeMutex.Lock()
 	defer ie.writeMutex.Unlock()
 
+	if ie.permanentErr != nil {
+		return ie.permanentErr
+	}
+
 	if ie.idx.IsUnique() {
 		if matches, err := ie.iea.HasPartial(ctx, ie.idxSch, partialKeyHash, partialKey); err != nil {
 			return err
@@ -114,8 +137,11 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 			if err != nil {
 				return err
 			}
-			// For a UNIQUE key violation, there should only be 1 at max. We still do an "over 0" check for safety though.
-			return &uniqueKeyErr{tableTuple, matches[0].key, ie.idx.Name()}
+			cause := &uniqueKeyErr{tableTuple, partialKey, ie.idx.Name()}
+			err = cb(ctx, cause)
+			if err != nil {
+				return err
+			}
 		}
 	} else {
 		if rowExists, err := ie.iea.Has(ctx, keyHash, key); err != nil {
@@ -126,7 +152,7 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 		}
 	}
 
-	err = ie.iea.Insert(ctx, keyHash, partialKeyHash, key, partialKey, value)
+	err = ie.iea.Insert(ctx, keyHash, partialKeyHash, key, value)
 	if err != nil {
 		return err
 	}
@@ -149,7 +175,11 @@ func (ie *IndexEditor) DeleteRow(ctx context.Context, key, partialKey, value typ
 	ie.writeMutex.Lock()
 	defer ie.writeMutex.Unlock()
 
-	err = ie.iea.Delete(ctx, keyHash, partialKeyHash, key, partialKey, value)
+	if ie.permanentErr != nil {
+		return ie.permanentErr
+	}
+
+	err = ie.iea.Delete(ctx, keyHash, partialKeyHash, key, value)
 	if err != nil {
 		return err
 	}
@@ -168,6 +198,10 @@ func (ie *IndexEditor) HasPartial(ctx context.Context, partialKey types.Tuple) (
 	ie.writeMutex.Lock()
 	defer ie.writeMutex.Unlock()
 
+	if ie.permanentErr != nil {
+		return false, ie.permanentErr
+	}
+
 	tpls, err := ie.iea.HasPartial(ctx, ie.idxSch, partialKeyHash, partialKey)
 	if err != nil {
 		return false, err
@@ -180,9 +214,16 @@ func (ie *IndexEditor) HasPartial(ctx context.Context, partialKey types.Tuple) (
 // Insert on a key, it will use Delete on that same key. The stack size is very small, therefore too many consecutive
 // calls will cause the stack to empty. This should only be called in the event that an operation was performed that
 // has failed for other reasons, such as an INSERT on the parent table failing on a separate index editor. In the event
-// that Undo is called and there are no operations to undo OR the reverse operation fails (it never should), this panics
-// rather than errors, as the index editor is in an invalid state that cannot be corrected.
+// that Undo is called and there are no operations to undo OR the reverse operation fails (such as memory capacity
+// reached), then we set a permanent error as the index editor is in an invalid state that cannot be corrected.
+//
+// We don't return an error here as Undo will only be called when there's an error in a different editor. We allow the
+// user to handle that initial error, as ALL further calls to this IndexEditor will return the error set here.
 func (ie *IndexEditor) Undo(ctx context.Context) {
+	if ie.permanentErr != nil {
+		return
+	}
+
 	indexOp, ok := ie.stack.Pop()
 	if !ok {
 		panic(fmt.Sprintf("attempted to undo the last operation on index '%s' but failed due to an empty stack", ie.idx.Name()))
@@ -195,16 +236,18 @@ func (ie *IndexEditor) Undo(ctx context.Context) {
 	if indexOp.isInsert {
 		err := ie.DeleteRow(ctx, indexOp.fullKey, indexOp.partialKey, indexOp.value)
 		if err != nil {
-			panic(fmt.Sprintf("index '%s' is in an invalid and unrecoverable state: "+
+			ie.permanentErr = fmt.Errorf("index '%s' is in an invalid and unrecoverable state: "+
 				"attempted to undo previous insertion but encountered the following error: %v",
-				ie.idx.Name(), err))
+				ie.idx.Name(), err)
+			return
 		}
 	} else {
 		err := ie.InsertRow(ctx, indexOp.fullKey, indexOp.partialKey, indexOp.value)
 		if err != nil {
-			panic(fmt.Sprintf("index '%s' is in an invalid and unrecoverable state: "+
+			ie.permanentErr = fmt.Errorf("index '%s' is in an invalid and unrecoverable state: "+
 				"attempted to undo previous deletion but encountered the following error: %v",
-				ie.idx.Name(), err))
+				ie.idx.Name(), err)
+			return
 		}
 	}
 }
@@ -213,6 +256,10 @@ func (ie *IndexEditor) Undo(ctx context.Context) {
 func (ie *IndexEditor) Map(ctx context.Context) (types.Map, error) {
 	ie.writeMutex.Lock()
 	defer ie.writeMutex.Unlock()
+
+	if ie.permanentErr != nil {
+		return types.EmptyMap, ie.permanentErr
+	}
 
 	return ie.iea.MaterializeEdits(ctx, ie.nbf)
 }
@@ -231,7 +278,9 @@ func (ie *IndexEditor) StatementFinished(ctx context.Context, errored bool) erro
 	ie.writeMutex.Lock()
 	defer ie.writeMutex.Unlock()
 
-	if errored {
+	if ie.permanentErr != nil {
+		return ie.permanentErr
+	} else if errored {
 		return ie.iea.Rollback(ctx)
 	}
 
@@ -240,7 +289,7 @@ func (ie *IndexEditor) StatementFinished(ctx context.Context, errored bool) erro
 
 // Close is a no-op for an IndexEditor.
 func (ie *IndexEditor) Close() error {
-	return nil
+	return ie.permanentErr
 }
 
 func RebuildIndex(ctx context.Context, tbl *doltdb.Table, indexName string, opts Options) (types.Map, error) {
@@ -249,7 +298,7 @@ func RebuildIndex(ctx context.Context, tbl *doltdb.Table, indexName string, opts
 		return types.EmptyMap, err
 	}
 
-	tableRowData, err := tbl.GetRowData(ctx)
+	tableRowData, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return types.EmptyMap, err
 	}
@@ -259,7 +308,12 @@ func RebuildIndex(ctx context.Context, tbl *doltdb.Table, indexName string, opts
 		return types.EmptyMap, fmt.Errorf("index `%s` does not exist", indexName)
 	}
 
-	rebuiltIndexData, err := rebuildIndexRowData(ctx, tbl.ValueReadWriter(), sch, tableRowData, index, opts)
+	tf := tupleFactories.Get().(*types.TupleFactory)
+	tf.Reset(tbl.Format())
+	defer tupleFactories.Put(tf)
+
+	opts = opts.WithDeaf(NewBulkImportTEAFactory(tbl.Format(), tbl.ValueReadWriter(), opts.Tempdir))
+	rebuiltIndexData, err := rebuildIndexRowData(ctx, tbl.ValueReadWriter(), sch, tableRowData, index, opts, tf)
 	if err != nil {
 		return types.EmptyMap, err
 	}
@@ -276,48 +330,51 @@ func RebuildAllIndexes(ctx context.Context, t *doltdb.Table, opts Options) (*dol
 		return t, nil
 	}
 
-	tableRowData, err := t.GetRowData(ctx)
+	tableRowData, err := t.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	indexesMap, err := t.GetIndexData(ctx)
+	indexes, err := t.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	tf := tupleFactories.Get().(*types.TupleFactory)
+	tf.Reset(t.Format())
+	defer tupleFactories.Put(tf)
+
+	opts = opts.WithDeaf(NewBulkImportTEAFactory(t.Format(), t.ValueReadWriter(), opts.Tempdir))
 	for _, index := range sch.Indexes().AllIndexes() {
-		rebuiltIndexRowData, err := rebuildIndexRowData(ctx, t.ValueReadWriter(), sch, tableRowData, index, opts)
+		rebuiltIndexRowData, err := rebuildIndexRowData(ctx, t.ValueReadWriter(), sch, tableRowData, index, opts, tf)
 		if err != nil {
 			return nil, err
 		}
-		rebuiltIndexRowDataRef, err := doltdb.WriteValAndGetRef(ctx, t.ValueReadWriter(), rebuiltIndexRowData)
-		if err != nil {
-			return nil, err
-		}
-		indexesMap, err = indexesMap.Edit().Set(types.String(index.Name()), rebuiltIndexRowDataRef).Map(ctx)
+
+		indexes, err = indexes.PutNomsIndex(ctx, index.Name(), rebuiltIndexRowData)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return t.SetIndexData(ctx, indexesMap)
+	return t.SetIndexSet(ctx, indexes)
 }
 
-func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, tblRowData types.Map, index schema.Index, opts Options) (types.Map, error) {
+func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, tblRowData types.Map, index schema.Index, opts Options, tf *types.TupleFactory) (types.Map, error) {
 	emptyIndexMap, err := types.NewMap(ctx, vrw)
 	if err != nil {
 		return types.EmptyMap, err
 	}
-	indexEditor := NewIndexEditor(ctx, index, emptyIndexMap, sch, opts)
 
+	var rowNumber int64
+	indexEditor := NewIndexEditor(ctx, index, emptyIndexMap, sch, opts)
 	err = tblRowData.IterAll(ctx, func(key, value types.Value) error {
 		dRow, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
 		if err != nil {
 			return err
 		}
 
-		fullKey, partialKey, keyVal, err := dRow.ReduceToIndexKeys(index)
+		fullKey, partialKey, keyVal, err := dRow.ReduceToIndexKeys(index, tf)
 		if err != nil {
 			return err
 		}
@@ -327,8 +384,19 @@ func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch sch
 			return err
 		}
 
+		rowNumber++
+		if rowNumber%rebuildIndexFlushInterval == 0 {
+			rebuiltIndexMap, err := indexEditor.Map(ctx)
+			if err != nil {
+				return err
+			}
+
+			indexEditor = NewIndexEditor(ctx, index, rebuiltIndexMap, sch, opts)
+		}
+
 		return nil
 	})
+
 	if err != nil {
 		return types.EmptyMap, err
 	}

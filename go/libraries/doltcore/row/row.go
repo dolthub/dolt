@@ -45,20 +45,26 @@ type Row interface {
 	// don't make sense in the context of keyless tables.
 	// Make these methods package private.
 
-	// Sets a value for the column with the tag given, returning a new row with the update.
+	// SetColVal sets a value for the column with the tag given, returning a new row with the update.
 	SetColVal(tag uint64, val types.Value, sch schema.Schema) (Row, error)
 
-	// Returns the noms map key for this row, using the schema provided.
+	// NomsMapKey returns the noms map key for this row, using the schema provided.
 	NomsMapKey(sch schema.Schema) types.LesserValuable
 
-	// Returns the noms map value for this row, using the schema provided.
+	// NomsMapValue returns the noms map value for this row, using the schema provided.
 	NomsMapValue(sch schema.Schema) types.Valuable
+
+	// NomsMapKeyTuple returns the noms map key tuple for this row, using the schema provided
+	NomsMapKeyTuple(sch schema.Schema, tf *types.TupleFactory) (types.Tuple, error)
+
+	// NomsMapValueTuple returns the noms map value tuple for this row, using the schema provided.
+	NomsMapValueTuple(sch schema.Schema, tf *types.TupleFactory) (types.Tuple, error)
 
 	// TaggedValues returns the row as TaggedValues.
 	TaggedValues() (TaggedValues, error)
 
 	// ReduceToIndexKeys returns full and partial index keys
-	ReduceToIndexKeys(idx schema.Index) (full types.Tuple, partial types.Tuple, value types.Tuple, err error)
+	ReduceToIndexKeys(idx schema.Index, tf *types.TupleFactory) (full types.Tuple, partial types.Tuple, value types.Tuple, err error)
 }
 
 func New(nbf *types.NomsBinFormat, sch schema.Schema, colVals TaggedValues) (Row, error) {
@@ -157,15 +163,19 @@ func ReduceToIndexKeysFromTagMap(nbf *types.NomsBinFormat, idx schema.Index, tag
 }
 
 // ReduceToIndexPartialKey creates an index record from a primary storage record.
-func ReduceToIndexPartialKey(idx schema.Index, r Row) (types.Tuple, error) {
+func ReduceToIndexPartialKey(tags []uint64, idx schema.Index, r Row) (types.Tuple, error) {
 	var vals []types.Value
-	for _, tag := range idx.IndexedColumnTags() {
+	if idx.Name() != "" {
+		tags = idx.IndexedColumnTags()
+	}
+	for _, tag := range tags {
 		val, ok := r.GetColVal(tag)
 		if !ok {
 			val = types.NullValue
 		}
 		vals = append(vals, types.Uint(tag), val)
 	}
+
 	return types.NewTuple(r.Format(), vals...)
 }
 

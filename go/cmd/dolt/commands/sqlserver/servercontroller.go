@@ -19,8 +19,6 @@ import (
 )
 
 type ServerController struct {
-	//serverClosed    *sync.WaitGroup
-	//serverStarted   *sync.WaitGroup
 	startCh         chan struct{}
 	closeCh         chan struct{}
 	closeCalled     *sync.Once
@@ -31,16 +29,15 @@ type ServerController struct {
 	closeError      error
 }
 
-// CreateServerController creates a `ServerController` for use with synchronizing on `Serve`.
-func CreateServerController() *ServerController {
-	sc := &ServerController{
+// NewServerController creates a `ServerController` for use with synchronizing on `Serve`.
+func NewServerController() *ServerController {
+	return &ServerController{
 		startCh:         make(chan struct{}),
 		closeCh:         make(chan struct{}),
 		closeCalled:     &sync.Once{},
 		closeRegistered: &sync.Once{},
 		stopRegistered:  &sync.Once{},
 	}
-	return sc
 }
 
 // registerCloseFunction is called within `Serve` to associate the close function with a future `StopServer` call.

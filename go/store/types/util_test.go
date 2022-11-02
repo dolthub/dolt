@@ -57,15 +57,15 @@ func intsToValueSlice(ints ...int) ValueSlice {
 	return vs
 }
 
-func generateNumbersAsValues(n int) []Value {
-	return generateNumbersAsValuesFromToBy(0, n, 1)
+func generateNumbersAsValues(nbf *NomsBinFormat, n int) []Value {
+	return generateNumbersAsValuesFromToBy(nbf, 0, n, 1)
 }
 
-func generateNumbersAsValueSlice(n int) ValueSlice {
-	return generateNumbersAsValuesFromToBy(0, n, 1)
+func generateNumbersAsValueSlice(nbf *NomsBinFormat, n int) ValueSlice {
+	return generateNumbersAsValuesFromToBy(nbf, 0, n, 1)
 }
 
-func generateNumbersAsValuesFromToBy(from, to, by int) ValueSlice {
+func generateNumbersAsValuesFromToBy(nbf *NomsBinFormat, from, to, by int) ValueSlice {
 	d.Chk.True(to >= from, "to must be greater than or equal to from")
 	d.Chk.True(by > 0, "must be an integer greater than zero")
 	nums := []Value{}
@@ -75,12 +75,12 @@ func generateNumbersAsValuesFromToBy(from, to, by int) ValueSlice {
 	return nums
 }
 
-func generateNumbersAsStructsFromToBy(from, to, by int) ValueSlice {
+func generateNumbersAsStructsFromToBy(nbf *NomsBinFormat, from, to, by int) ValueSlice {
 	d.Chk.True(to >= from, "to must be greater than or equal to from")
 	d.Chk.True(by > 0, "must be an integer greater than zero")
 	nums := []Value{}
 	for i := from; i < to; i += by {
-		nums = append(nums, mustValue(NewStruct(Format_7_18, "num", StructData{"n": Float(i)})))
+		nums = append(nums, mustValue(NewStruct(nbf, "num", StructData{"n": Float(i)})))
 	}
 	return nums
 }
@@ -88,7 +88,7 @@ func generateNumbersAsStructsFromToBy(from, to, by int) ValueSlice {
 func generateNumbersAsRefOfStructs(vrw ValueReadWriter, n int) []Value {
 	nums := []Value{}
 	for i := 0; i < n; i++ {
-		r, err := vrw.WriteValue(context.Background(), mustValue(NewStruct(Format_7_18, "num", StructData{"n": Float(i)})))
+		r, err := vrw.WriteValue(context.Background(), mustValue(NewStruct(vrw.Format(), "num", StructData{"n": Float(i)})))
 		d.PanicIfError(err)
 		nums = append(nums, r)
 	}
@@ -110,18 +110,20 @@ func leafDiffCount(c1, c2 Collection) int {
 	leaves2, _, err := LoadLeafNodes(context.Background(), []Collection{c2}, 0, c2.Len())
 	d.PanicIfError(err)
 
+	nbf := c1.asSequence().format()
+
 	for _, l := range leaves1 {
-		h, err := l.Hash(Format_7_18)
+		h, err := l.Hash(nbf)
 		d.PanicIfError(err)
 		hashes[h]++
 	}
 
 	for _, l := range leaves2 {
-		if c, ok := hashes[mustHash(l.Hash(Format_7_18))]; ok {
+		if c, ok := hashes[mustHash(l.Hash(nbf))]; ok {
 			if c == 1 {
-				delete(hashes, mustHash(l.Hash(Format_7_18)))
+				delete(hashes, mustHash(l.Hash(nbf)))
 			} else {
-				hashes[mustHash(l.Hash(Format_7_18))] = c - 1
+				hashes[mustHash(l.Hash(nbf))] = c - 1
 			}
 		} else {
 			count++

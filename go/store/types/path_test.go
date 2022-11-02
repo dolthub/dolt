@@ -33,8 +33,8 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func hashIdx(v Value) string {
-	return fmt.Sprintf("[#%s]", mustHash(v.Hash(Format_7_18)).String())
+func hashIdx(nbf *NomsBinFormat, v Value) string {
+	return fmt.Sprintf("[#%s]", mustHash(v.Hash(nbf)).String())
 }
 
 func assertResolvesTo(assert *assert.Assertions, expect, ref Value, str string) {
@@ -59,8 +59,9 @@ func assertResolvesToWithVR(assert *assert.Assertions, expect, ref Value, str st
 
 func TestPathStruct(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
 
-	v, err := NewStruct(Format_7_18, "", StructData{
+	v, err := NewStruct(vs.Format(), "", StructData{
 		"foo": String("foo"),
 		"bar": Bool(false),
 		"baz": Float(203),
@@ -72,7 +73,7 @@ func TestPathStruct(t *testing.T) {
 	assertResolvesTo(assert, Float(203), v, `.baz`)
 	assertResolvesTo(assert, nil, v, `.notHere`)
 
-	v2, err := NewStruct(Format_7_18, "", StructData{
+	v2, err := NewStruct(vs.Format(), "", StructData{
 		"v1": v,
 	})
 
@@ -204,13 +205,13 @@ func TestPathHashIndex(t *testing.T) {
 	vs := newTestValueStore()
 
 	b := Bool(true)
-	br, err := NewRef(b, Format_7_18)
+	br, err := NewRef(b, vs.Format())
 	require.NoError(t, err)
 	i := Float(0)
 	str := String("foo")
 	l, err := NewList(context.Background(), vs, b, i, str)
 	require.NoError(t, err)
-	lr, err := NewRef(l, Format_7_18)
+	lr, err := NewRef(l, vs.Format())
 	require.NoError(t, err)
 	m, err := NewMap(context.Background(), vs,
 		b, br,
@@ -224,8 +225,8 @@ func TestPathHashIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	resolvesTo := func(col, key, expVal, expKey Value) {
-		assertResolvesTo(assert, expVal, col, hashIdx(key))
-		assertResolvesTo(assert, expKey, col, hashIdx(key)+"@key")
+		assertResolvesTo(assert, expVal, col, hashIdx(vs.Format(), key))
+		assertResolvesTo(assert, expKey, col, hashIdx(vs.Format(), key)+"@key")
 	}
 
 	// Primitives are only addressable by their values.
@@ -255,7 +256,7 @@ func TestPathHashIndexOfSingletonCollection(t *testing.T) {
 	vs := newTestValueStore()
 
 	resolvesToNil := func(col, val Value) {
-		assertResolvesTo(assert, nil, col, hashIdx(val))
+		assertResolvesTo(assert, nil, col, hashIdx(vs.Format(), val))
 	}
 
 	b := Bool(true)
@@ -288,7 +289,7 @@ func TestPathMulti(t *testing.T) {
 
 	require.NoError(t, err)
 
-	s, err := NewStruct(Format_7_18, "", StructData{
+	s, err := NewStruct(vs.Format(), "", StructData{
 		"foo": l,
 	})
 
@@ -309,9 +310,9 @@ func TestPathMulti(t *testing.T) {
 	assertResolvesTo(assert, m2, s, `.foo[1]`)
 	assertResolvesTo(assert, String("dar"), s, `.foo[1]["d"]`)
 	assertResolvesTo(assert, String("earth"), s, `.foo[1][false]`)
-	assertResolvesTo(assert, String("fire"), s, fmt.Sprintf(`.foo[1]%s`, hashIdx(m1)))
-	assertResolvesTo(assert, m1, s, fmt.Sprintf(`.foo[1]%s@key`, hashIdx(m1)))
-	assertResolvesTo(assert, String("car"), s, fmt.Sprintf(`.foo[1]%s@key["c"]`, hashIdx(m1)))
+	assertResolvesTo(assert, String("fire"), s, fmt.Sprintf(`.foo[1]%s`, hashIdx(vs.Format(), m1)))
+	assertResolvesTo(assert, m1, s, fmt.Sprintf(`.foo[1]%s@key`, hashIdx(vs.Format(), m1)))
+	assertResolvesTo(assert, String("car"), s, fmt.Sprintf(`.foo[1]%s@key["c"]`, hashIdx(vs.Format(), m1)))
 	assertResolvesTo(assert, String("fire"), s, `.foo[1]@at(2)`)
 	assertResolvesTo(assert, m1, s, `.foo[1]@at(2)@key`)
 	assertResolvesTo(assert, String("car"), s, `.foo[1]@at(2)@key@at(2)`)
@@ -322,6 +323,7 @@ func TestPathMulti(t *testing.T) {
 
 func TestPathParseSuccess(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
 
 	test := func(str string) {
 		p, err := ParsePath(str)
@@ -338,7 +340,7 @@ func TestPathParseSuccess(t *testing.T) {
 		assert.Equal(expectStr, p.String())
 	}
 
-	h, err := Float(42).Hash(Format_7_18) // arbitrary hash
+	h, err := Float(42).Hash(vs.Format()) // arbitrary hash
 	require.NoError(t, err)
 
 	test(".foo")
@@ -481,7 +483,7 @@ func TestPathCanBePathIndex(t *testing.T) {
 	assert.True(ValueCanBePathIndex(Float(5)))
 	assert.True(ValueCanBePathIndex(String("yes")))
 
-	assert.False(ValueCanBePathIndex(mustValue(NewRef(String("yes"), Format_7_18))))
+	assert.False(ValueCanBePathIndex(mustValue(NewRef(String("yes"), vs.Format()))))
 	assert.False(ValueCanBePathIndex(mustBlob(NewBlob(context.Background(), vs, bytes.NewReader([]byte("yes"))))))
 }
 
@@ -548,7 +550,7 @@ func TestPathType(t *testing.T) {
 	require.NoError(t, err)
 	assertResolvesTo(assert, PrimitiveTypeMap[StringKind], m, `["string"]@key@type`)
 	assertResolvesTo(assert, mustType(TypeOf(m)), m, `@type`)
-	s, err := NewStruct(Format_7_18, "", StructData{
+	s, err := NewStruct(vs.Format(), "", StructData{
 		"str": String("foo"),
 		"num": Float(42),
 	})
@@ -566,15 +568,15 @@ func TestPathType(t *testing.T) {
 
 func TestPathTarget(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
 
-	s, err := NewStruct(Format_7_18, "", StructData{
+	s, err := NewStruct(vs.Format(), "", StructData{
 		"foo": String("bar"),
 	})
 	require.NoError(t, err)
-	vs := newTestValueStore()
 	r, err := vs.WriteValue(context.Background(), s)
 	require.NoError(t, err)
-	s2, err := NewStruct(Format_7_18, "", StructData{
+	s2, err := NewStruct(vs.Format(), "", StructData{
 		"ref": r,
 	})
 

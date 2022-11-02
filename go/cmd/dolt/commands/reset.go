@@ -19,14 +19,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 const (
@@ -35,24 +34,28 @@ const (
 )
 
 var resetDocContent = cli.CommandDocumentationContent{
-	ShortDesc: "Resets staged tables to their HEAD state",
-	LongDesc: `Sets the state of a table in the staging area to be that table's value at HEAD
-
-{{.EmphasisLeft}}dolt reset <tables>...{{.EmphasisRight}}"
-	This form resets the values for all staged {{.LessThan}}tables{{.GreaterThan}} to their values at {{.EmphasisLeft}}HEAD{{.EmphasisRight}}. (It does not affect the working tree or
-	the current branch.)
-
-	This means that {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} is the opposite of {{.EmphasisLeft}}dolt add <tables>{{.EmphasisRight}}.
-
-	After running {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} to update the staged tables, you can use {{.EmphasisLeft}}dolt checkout{{.EmphasisRight}} to check the
-	contents out of the staged tables to the working tables.
-
-dolt reset .
-	This form resets {{.EmphasisLeft}}all{{.EmphasisRight}} staged tables to their values at HEAD. It is the opposite of {{.EmphasisLeft}}dolt add .{{.EmphasisRight}}`,
-
+	ShortDesc: "Resets staged or working tables to HEAD or a specified commit",
+	LongDesc: "{{.EmphasisLeft}}dolt reset <tables>...{{.EmphasisRight}}" +
+		"\n\n" +
+		"The default form resets the values for all staged {{.LessThan}}tables{{.GreaterThan}} to their values at {{.EmphasisLeft}}HEAD{{.EmphasisRight}}. " +
+		"It does not affect the working tree or the current branch." +
+		"\n\n" +
+		"This means that {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} is the opposite of {{.EmphasisLeft}}dolt add <tables>{{.EmphasisRight}}." +
+		"\n\n" +
+		"After running {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} to update the staged tables, you can use {{.EmphasisLeft}}dolt checkout{{.EmphasisRight}} to check the contents out of the staged tables to the working tables." +
+		"\n\n" +
+		"{{.EmphasisLeft}}dolt reset [--hard | --soft] <revision>{{.EmphasisRight}}" +
+		"\n\n" +
+		"This form resets all tables to values in the specified revision (i.e. commit, tag, working set). " +
+		"The --soft option resets HEAD to a revision without changing the current working set. " +
+		" The --hard option resets all three HEADs to a revision, deleting all uncommitted changes in the current working set." +
+		"\n\n" +
+		"{{.EmphasisLeft}}dolt reset .{{.EmphasisRight}}" +
+		"\n\n" +
+		"This form resets {{.EmphasisLeft}}all{{.EmphasisRight}} staged tables to their values at HEAD. It is the opposite of {{.EmphasisLeft}}dolt add .{{.EmphasisRight}}",
 	Synopsis: []string{
 		"{{.LessThan}}tables{{.GreaterThan}}...",
-		"[--hard | --soft]",
+		"[--hard | --soft] {{.LessThan}}revision{{.GreaterThan}}",
 	},
 }
 
@@ -68,20 +71,23 @@ func (cmd ResetCmd) Description() string {
 	return "Remove table changes from the list of staged table changes."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ResetCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd ResetCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateResetArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
+	return cli.NewCommandDocumentation(resetDocContent, ap)
+}
+
+func (cmd ResetCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateResetArgParser()
 }
 
 // Exec executes the command
 func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateResetArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, resetDocContent, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.ContainsArg(doltdb.DocTableName) {
-		return HandleDocTableVErrAndExitCode()
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 
 	roots, err := dEnv.Roots(ctx)
@@ -139,12 +145,6 @@ var tblDiffTypeToShortLabel = map[diff.TableDiffType]string{
 	diff.AddedTable:    "N",
 }
 
-var docDiffTypeToShortLabel = map[diff.DocDiffType]string{
-	diff.ModifiedDoc: "M",
-	diff.RemovedDoc:  "D",
-	diff.AddedDoc:    "N",
-}
-
 func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootValue) {
 	// Printing here is best effort.  Fail silently
 	working, err := dEnv.WorkingRoot(ctx)
@@ -158,11 +158,6 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		return
 	}
 
-	notStagedDocs, err := diff.NewDocDiffs(ctx, working, nil, nil)
-	if err != nil {
-		return
-	}
-
 	removeModified := 0
 	for _, td := range notStagedTbls {
 		if !td.IsAdd() {
@@ -170,7 +165,7 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		}
 	}
 
-	if removeModified+notStagedDocs.NumRemoved+notStagedDocs.NumModified > 0 {
+	if removeModified > 0 {
 		cli.Println("Unstaged changes after reset:")
 
 		var lines []string
@@ -187,14 +182,6 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.ModifiedTable], td.CurName()))
 			}
 		}
-
-		for _, docName := range notStagedDocs.Docs {
-			ddt := notStagedDocs.DocToType[docName]
-			if ddt != diff.AddedDoc {
-				lines = append(lines, fmt.Sprintf("%s\t%s", docDiffTypeToShortLabel[ddt], docName))
-			}
-		}
-
 		cli.Println(strings.Join(lines, "\n"))
 	}
 }
@@ -222,26 +209,4 @@ func handleResetError(err error, usage cli.UsagePrinter) int {
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
-}
-
-func getAllRoots(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, errhand.VerboseError) {
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-
-	if err != nil {
-		return nil, nil, nil, errhand.BuildDError("Unable to get staged.").AddCause(err).Build()
-	}
-
-	stagedRoot, err := dEnv.StagedRoot(ctx)
-
-	if err != nil {
-		return nil, nil, nil, errhand.BuildDError("Unable to get staged.").AddCause(err).Build()
-	}
-
-	headRoot, err := dEnv.HeadRoot(ctx)
-
-	if err != nil {
-		return nil, nil, nil, errhand.BuildDError("Unable to get at HEAD.").AddCause(err).Build()
-	}
-
-	return workingRoot, stagedRoot, headRoot, nil
 }

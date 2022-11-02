@@ -5,6 +5,7 @@ setup() {
     setup_common
 
     dolt sql -q "create table t1 (a bigint primary key, b bigint)"
+    dolt add .
     dolt sql -q "insert into t1 values (0,0), (1,1)"
     dolt commit -am "Init"
     dolt sql -q "drop table t1"
@@ -17,11 +18,12 @@ teardown() {
 
 @test "replace: same table gives empty diff" {
     dolt sql -q "create table t1 (a bigint primary key, b bigint)"
-    run dolt diff -r=sql main
+    dolt diff -r sql main
+    run dolt diff -r sql main
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "DELETE FROM \`t1\` WHERE (\`a\`=0);" ]] || false
-    [[ "$output" =~ "DELETE FROM \`t1\` WHERE (\`a\`=1);" ]] || false
+    [[ "$output" =~ "DELETE FROM \`t1\` WHERE \`a\`=0;" ]] || false
+    [[ "$output" =~ "DELETE FROM \`t1\` WHERE \`a\`=1;" ]] || false
 
     dolt sql -q "insert into t1 values (0,0), (1,1)"
     dolt add .

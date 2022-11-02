@@ -25,12 +25,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/clienttest"
@@ -48,29 +49,31 @@ func (s *nbeSuite) TestNomsBlobGet() {
 	sp, err := spec.ForDatabase(s.TempDir)
 	s.NoError(err)
 	defer sp.Close()
-	db := sp.GetDatabase(context.Background())
+	ctx := context.Background()
+	db := sp.GetDatabase(ctx)
+	vrw := sp.GetVRW(ctx)
 
 	blobBytes := []byte("hello")
-	blob, err := types.NewBlob(context.Background(), db, bytes.NewBuffer(blobBytes))
+	blob, err := types.NewBlob(ctx, vrw, bytes.NewBuffer(blobBytes))
 	s.NoError(err)
 
-	ref, err := db.WriteValue(context.Background(), blob)
+	ref, err := vrw.WriteValue(ctx, blob)
 	s.NoError(err)
 
-	ref, err = db.WriteValue(context.Background(), blob)
+	ref, err = vrw.WriteValue(context.Background(), blob)
 	s.NoError(err)
 	ds, err := db.GetDataset(context.Background(), "datasetID")
 	s.NoError(err)
 	ds, err = db.GetDataset(context.Background(), "datasetID")
 	s.NoError(err)
-	_, err = db.CommitValue(context.Background(), ds, ref)
+	_, err = datas.CommitValue(context.Background(), db, ds, ref)
 	s.NoError(err)
 
 	hashSpec := fmt.Sprintf("%s::#%s", s.TempDir, ref.TargetHash().String())
 	filePath := filepath.Join(s.TempDir, "out")
 	s.MustRun(main, []string{"blob", "export", hashSpec, filePath})
 
-	fileBytes, err := ioutil.ReadFile(filePath)
+	fileBytes, err := os.ReadFile(filePath)
 	s.NoError(err)
 	s.Equal(blobBytes, fileBytes)
 

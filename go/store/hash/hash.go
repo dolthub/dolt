@@ -51,6 +51,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/d"
 )
@@ -148,6 +149,10 @@ func NewHashSet(hashes ...Hash) HashSet {
 	return out
 }
 
+func (hs HashSet) Size() int {
+	return len(hs)
+}
+
 // Insert adds a Hash to the set.
 func (hs HashSet) Insert(hash Hash) {
 	hs[hash] = struct{}{}
@@ -180,4 +185,24 @@ func (hs HashSet) InsertAll(other HashSet) {
 	for h, _ := range other {
 		hs[h] = struct{}{}
 	}
+}
+
+func (hs HashSet) Empty() {
+	for h := range hs {
+		delete(hs, h)
+	}
+}
+
+func (hs HashSet) String() string {
+	var sb strings.Builder
+	sb.Grow(len(hs)*34 + 100)
+
+	sb.WriteString("HashSet {\n")
+	for h := range hs {
+		sb.WriteString("\t")
+		sb.WriteString(h.String())
+		sb.WriteString("\n")
+	}
+	sb.WriteString("}\n")
+	return sb.String()
 }

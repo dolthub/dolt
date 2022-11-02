@@ -186,6 +186,46 @@ func TestTupleLess(t *testing.T) {
 			[]Value{UUID(uuid.MustParse(OneUUID)), String("abc")},
 			true,
 		},
+		{
+			[]Value{UUID(uuid.MustParse(OneUUID)), String("abc")},
+			[]Value{UUID(uuid.MustParse(OneUUID)), NullValue},
+			true,
+		},
+		{
+			[]Value{UUID(uuid.MustParse(OneUUID)), NullValue},
+			[]Value{UUID(uuid.MustParse(OneUUID)), String("abc")},
+			false,
+		},
+		{
+			[]Value{UUID(uuid.MustParse(OneUUID)), Timestamp(time.Now())},
+			[]Value{UUID(uuid.MustParse(OneUUID)), NullValue},
+			true,
+		},
+		{
+			[]Value{UUID(uuid.MustParse(OneUUID)), NullValue},
+			[]Value{UUID(uuid.MustParse(OneUUID)), Timestamp(time.Now())},
+			false,
+		},
+		{
+			[]Value{UUID(uuid.MustParse(OneUUID)), Int(100)},
+			[]Value{UUID(uuid.MustParse(OneUUID)), NullValue},
+			true,
+		},
+		{
+			[]Value{UUID(uuid.MustParse(OneUUID)), NullValue},
+			[]Value{UUID(uuid.MustParse(OneUUID)), Int(100)},
+			false,
+		},
+		{
+			[]Value{UUID(uuid.MustParse(OneUUID)), Point{1, 1.0, 1.0}},
+			[]Value{UUID(uuid.MustParse(OneUUID)), NullValue},
+			true,
+		},
+		{
+			[]Value{UUID(uuid.MustParse(OneUUID)), NullValue},
+			[]Value{UUID(uuid.MustParse(OneUUID)), Point{1, 1.0, 1.0}},
+			false,
+		},
 	}
 
 	isLTZero := func(n int) bool {
@@ -194,23 +234,25 @@ func TestTupleLess(t *testing.T) {
 
 	nbf := Format_Default
 	for _, test := range tests {
-		tpl1, err := NewTuple(nbf, test.vals1...)
+		t.Run("", func(t *testing.T) {
+			tpl1, err := NewTuple(nbf, test.vals1...)
 
-		require.NoError(t, err)
+			require.NoError(t, err)
 
-		tpl2, err := NewTuple(nbf, test.vals2...)
-		require.NoError(t, err)
+			tpl2, err := NewTuple(nbf, test.vals2...)
+			require.NoError(t, err)
 
-		actual, err := tpl1.Less(nbf, tpl2)
-		require.NoError(t, err)
+			actual, err := tpl1.Less(nbf, tpl2)
+			require.NoError(t, err)
 
-		if actual != test.expected {
-			t.Error("tpl1:", mustString(EncodedValue(context.Background(), tpl1)), "tpl2:", mustString(EncodedValue(context.Background(), tpl2)), "expected", test.expected, "actual:", actual)
-		}
+			if actual != test.expected {
+				t.Error("tpl1:", mustString(EncodedValue(context.Background(), tpl1)), "tpl2:", mustString(EncodedValue(context.Background(), tpl2)), "expected", test.expected, "actual:", actual)
+			}
 
-		res, err := tpl1.Compare(nbf, tpl2)
-		require.NoError(t, err)
-		require.Equal(t, actual, isLTZero(res))
+			res, err := tpl1.Compare(nbf, tpl2)
+			require.NoError(t, err)
+			require.Equal(t, actual, isLTZero(res))
+		})
 	}
 }
 

@@ -270,7 +270,7 @@ SQL
     dolt commit -m "inserted 20 & 21 on other"
 
     dolt checkout main
-    dolt merge other
+    dolt merge other -m "merge other"
     dolt sql -q "INSERT INTO test VALUES (NULL,22);"
     run dolt sql -q "SELECT pk FROM test WHERE c0 = 22 ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
@@ -382,7 +382,7 @@ SQL
     [[ "${lines[6]}" =~ "6,6" ]] || false
 }
 
-@test "auto_increment: skipping works" {
+@test "auto_increment: skipping keys" {
 dolt sql <<SQL
 CREATE TABLE t (
     pk int PRIMARY KEY AUTO_INCREMENT,
@@ -440,6 +440,7 @@ CREATE TABLE t (
     c0 int
 );
 
+CALL DOLT_ADD('.');
 INSERT INTO t (c0) VALUES (1), (2);
 SELECT DOLT_COMMIT('-a', '-m', 'cm1');
 SELECT DOLT_CHECKOUT('-b', 'test');
@@ -471,6 +472,7 @@ CREATE TABLE t (
     c0 int
 );
 
+CALL DOLT_ADD('.');
 INSERT INTO t (c0) VALUES (1), (2);
 SELECT DOLT_COMMIT('-a', '-m', 'cm1');
 SELECT DOLT_CHECKOUT('-b', 'test');
@@ -504,6 +506,7 @@ CREATE TABLE t (
     c0 int
 );
 
+CALL DOLT_ADD('.');
 INSERT INTO t (c0) VALUES (1), (2);
 SELECT DOLT_COMMIT('-a', '-m', 'cm1');
 SELECT DOLT_CHECKOUT('-b', 'test');
@@ -537,6 +540,7 @@ CREATE TABLE t (
     c0 int
 );
 
+CALL DOLT_ADD('.');
 INSERT INTO t VALUES (4, 4), (5, 5);
 SELECT DOLT_COMMIT('-a', '-m', 'cm1');
 SELECT DOLT_CHECKOUT('-b', 'test');
@@ -570,14 +574,205 @@ SQL
     [[ "$output" =~ "0,john,0" ]] || false
 }
 
-@test "auto_increment: alter table change column works" {
-    dolt sql -q "create table t(pk int primary key);"
+@test "auto_increment: alter table change column to auto inc" {
+    dolt sql -q "create table t(pk int primary key, v int);"
+    dolt sql -q "insert into t values (1,1), (2,2), (3,3);"
     dolt sql -q "ALTER TABLE t CHANGE COLUMN pk pk int NOT NULL AUTO_INCREMENT PRIMARY KEY;"
 
-    dolt sql -q 'insert into t values (NULL), (NULL), (NULL)'
+    dolt sql -q 'insert into t(pk) values (NULL), (NULL), (NULL)'
+    run dolt sql -q "SELECT pk FROM t ORDER BY pk" -r csv
+    [[ "${lines[0]}" =~ "pk" ]] || false
+    [[ "${lines[1]}" =~ "1" ]] || false
+    [[ "${lines[2]}" =~ "2" ]] || false
+    [[ "${lines[3]}" =~ "3" ]] || false
+    [[ "${lines[4]}" =~ "4" ]] || false
+    [[ "${lines[5]}" =~ "5" ]] || false
+    [[ "${lines[6]}" =~ "6" ]] || false
+}
+
+@test "auto_increment: alter table change to remove auto inc" {
+    dolt sql -q "create table t(pk int primary key, v int);"
+    dolt sql -q "insert into t values (1,1), (2,2);"
+    dolt sql -q "ALTER TABLE t CHANGE COLUMN pk pk int NOT NULL AUTO_INCREMENT PRIMARY KEY;"
+
+    run dolt sql -q 'show create table t'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ AUTO_INCREMENT ]] || false
+    
+    dolt sql -q 'insert into t(pk) values (NULL), (NULL)'
+    dolt sql -q "ALTER TABLE t CHANGE COLUMN pk pk int NOT NULL PRIMARY KEY;"
+
+    # null insert into key column is no longer possible
+    run dolt sql -q 'insert into t(pk) values (NULL), (NULL)'
+    [ "$status" -ne 0 ]
+    run dolt sql -q 'insert into t(v) values (5), (6)'
+    [ "$status" -ne 0 ]
+
+    run dolt sql -q 'show create table t'
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ AUTO_INCREMENT ]] || false
+
+    dolt sql -q 'insert into t(pk) values (5), (6)'
+    
+    run dolt sql -q "SELECT pk FROM t ORDER BY pk" -r csv
+    [[ "${lines[0]}" =~ "pk" ]] || false
+    [[ "${lines[1]}" =~ "1" ]] || false
+    [[ "${lines[2]}" =~ "2" ]] || false
+    [[ "${lines[3]}" =~ "3" ]] || false
+    [[ "${lines[4]}" =~ "4" ]] || false
+    [[ "${lines[5]}" =~ "5" ]] || false
+    [[ "${lines[6]}" =~ "6" ]] || false
+}
+
+@test "auto_increment: alter table modify column to auto inc" {
+    dolt sql -q "create table t(pk int primary key, v int);"
+    dolt sql -q "insert into t values (1,1), (2,2), (3,3);"
+    dolt sql -q "ALTER TABLE t modify COLUMN pk int NOT NULL AUTO_INCREMENT;"
+
+    dolt sql -q 'insert into t(pk) values (NULL), (NULL), (NULL)'
     run dolt sql -q "SELECT * FROM t ORDER BY pk" -r csv
     [[ "${lines[0]}" =~ "pk" ]] || false
     [[ "${lines[1]}" =~ "1" ]] || false
     [[ "${lines[2]}" =~ "2" ]] || false
     [[ "${lines[3]}" =~ "3" ]] || false
+    [[ "${lines[4]}" =~ "4" ]] || false
+    [[ "${lines[5]}" =~ "5" ]] || false
+    [[ "${lines[6]}" =~ "6" ]] || false
+}
+
+@test "auto_increment: alter table modify column to auto inc with different types" {
+    dolt sql -q "create table t(pk int unsigned primary key, v int);"
+    dolt sql -q "insert into t values (1,1);"
+    dolt sql -q "ALTER TABLE t modify COLUMN pk int unsigned NOT NULL AUTO_INCREMENT;"
+
+    dolt sql -q 'insert into t(pk) values (NULL)'
+    run dolt sql -q "SELECT * FROM t ORDER BY pk" -r csv
+    [[ "${lines[0]}" =~ "pk" ]] || false
+    [[ "${lines[1]}" =~ "1" ]] || false
+    [[ "${lines[2]}" =~ "2" ]] || false
+
+    dolt sql -q "drop table t"
+    dolt sql -q "create table t(pk float primary key, v int);"
+    dolt sql -q "insert into t values (1,1);"
+    dolt sql -q "ALTER TABLE t modify COLUMN pk float NOT NULL AUTO_INCREMENT;"
+
+    dolt sql -q 'insert into t(pk) values (NULL)'
+    run dolt sql -q "SELECT * FROM t ORDER BY pk" -r csv
+    [[ "${lines[0]}" =~ "pk" ]] || false
+    [[ "${lines[1]}" =~ "1" ]] || false
+    [[ "${lines[2]}" =~ "2" ]] || false
+
+    # type changes in the alter statement
+    dolt sql -q "drop table t"
+    dolt sql -q "create table t(pk int unsigned primary key, v int);"
+    dolt sql -q "insert into t values (1,1);"
+    dolt sql -q "ALTER TABLE t modify COLUMN pk int NOT NULL AUTO_INCREMENT;"
+
+    dolt sql -q 'insert into t(pk) values (NULL)'
+    run dolt sql -q "SELECT * FROM t ORDER BY pk" -r csv
+    [[ "${lines[0]}" =~ "pk" ]] || false
+    [[ "${lines[1]}" =~ "1" ]] || false
+    [[ "${lines[2]}" =~ "2" ]] || false
+
+    dolt sql -q "drop table t"
+    dolt sql -q "create table t(pk float primary key, v int);"
+    dolt sql -q "insert into t values (1,1);"
+    dolt sql -q "ALTER TABLE t modify COLUMN pk int NOT NULL AUTO_INCREMENT;"
+
+    dolt sql -q 'insert into t(pk) values (NULL)'
+    run dolt sql -q "SELECT * FROM t ORDER BY pk" -r csv
+    [[ "${lines[0]}" =~ "pk" ]] || false
+    [[ "${lines[1]}" =~ "1" ]] || false
+    [[ "${lines[2]}" =~ "2" ]] || false    
+}
+
+@test "auto_increment: alter table add constraint for different database" {
+    dolt sql  <<SQL
+CREATE DATABASE public;
+CREATE TABLE public.test (pk integer NOT NULL, c1 integer, c2 integer);
+ALTER TABLE public.test ADD CONSTRAINT serial_pk_pkey PRIMARY KEY (pk);
+ALTER TABLE public.test MODIFY pk integer auto_increment;
+SQL
+
+    run dolt sql -q "SHOW CREATE TABLE public.test"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "NOT NULL AUTO_INCREMENT" ]] || false
+}
+
+@test "auto_increment: globally distinct auto increment values" {
+    dolt sql  <<SQL
+call dolt_add('.');
+call dolt_commit('-am', 'empty table');
+call dolt_branch('branch1');
+call dolt_branch('branch2');
+
+insert into test (c0) values (1), (2);
+call dolt_commit('-am', 'main values');
+
+call dolt_checkout('branch1');
+insert into test (c0) values (3), (4);
+call dolt_commit('-am', 'branch1 values');
+
+call dolt_checkout('branch2');
+insert into test (c0) values (5), (6);
+call dolt_commit('-am', 'branch2 values');
+SQL
+
+    run dolt sql -q 'select * from test' -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+
+    dolt checkout branch1
+    run dolt sql -q 'select * from test' -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "3,3" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+
+    dolt checkout branch2
+    run dolt sql -q 'select * from test' -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "5,5" ]] || false
+    [[ "$output" =~ "6,6" ]] || false
+
+    # Should have the same result across multiple invocations of sql as well
+    dolt checkout main
+    dolt sql  <<SQL
+create table t1 (ai bigint primary key auto_increment, c0 int);
+call dolt_add('.');
+call dolt_commit('-am', 'empty table');
+call dolt_branch('branch3');
+call dolt_branch('branch4');
+insert into t1 (c0) values (1), (2);
+call dolt_commit('-am', 'main values');
+SQL
+
+    dolt sql  <<SQL    
+call dolt_checkout('branch3');
+insert into t1 (c0) values (3), (4);
+call dolt_commit('-am', 'branch3 values');
+SQL
+
+    dolt sql  <<SQL        
+call dolt_checkout('branch4');
+insert into t1 (c0) values (5), (6);
+call dolt_commit('-am', 'branch4 values');
+SQL
+
+    run dolt sql -q 'select * from t1' -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+
+    dolt checkout branch3
+    run dolt sql -q 'select * from t1' -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "3,3" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+
+    dolt checkout branch4
+    run dolt sql -q 'select * from t1' -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "5,5" ]] || false
+    [[ "$output" =~ "6,6" ]] || false    
 }

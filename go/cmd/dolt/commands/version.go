@@ -17,12 +17,11 @@ package commands
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 const (
@@ -49,12 +48,11 @@ func (cmd VersionCmd) RequiresRepo() bool {
 	return false
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd VersionCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd VersionCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 
-func (cmd VersionCmd) createArgParser() *argparser.ArgParser {
+func (cmd VersionCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(featureVersionFlag, "f", "query the feature version of this repository.")
 	return ap
@@ -65,8 +63,17 @@ func (cmd VersionCmd) createArgParser() *argparser.ArgParser {
 func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	cli.Println("dolt version", cmd.VersionStr)
 
+	if dEnv.HasDoltDir() && dEnv.RSLoadErr == nil && !cli.CheckEnvIsValid(dEnv) {
+		return 2
+	} else if dEnv.HasDoltDir() && dEnv.RSLoadErr == nil {
+		nbf := dEnv.DoltDB.Format()
+		cli.Printf("database storage format: %s\n", dfunctions.GetStorageFormatDisplayString(nbf))
+	} else {
+		cli.Println("no valid database in this directory")
+	}
+
 	usage := func() {}
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	apr := cli.ParseArgsOrDie(ap, args, usage)
 
 	var verr errhand.VerboseError

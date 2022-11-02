@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/clienttest"
@@ -49,13 +50,30 @@ func (s *nomsRootTestSuite) TestBasic() {
 
 	ds := sp.GetDataset(context.Background())
 	dbSpecStr := spec.CreateDatabaseSpecString("nbs", s.DBDir)
-	ds, _ = ds.Database().CommitValue(context.Background(), ds, types.String("hello!"))
-	c1, _ := s.MustRun(main, []string{"root", dbSpecStr})
-	s.Equal("maojl4udo9a7mtk2rnhuc08r0u7hc0fn\n", c1)
+	db := ds.Database()
 
-	ds, _ = ds.Database().CommitValue(context.Background(), ds, types.String("goodbye"))
+	var goldenHello, goldenGoodbye string
+	switch types.Format_Default {
+	case types.Format_DOLT:
+		goldenHello = "sf173aaa57qjoakme0iufkg4c17beoqe\n"
+		goldenGoodbye = "gjcehnn4v0sbtt1hste082hfv1kg0hqv\n"
+	case types.Format_LD_1:
+		goldenHello = "u8g2r4qg97kkqn42lvao77st2mv3bpl0\n"
+		goldenGoodbye = "70b9adi6amrab3a5t4hcibdob0cq49m0\n"
+	case types.Format_DOLT_DEV:
+		goldenHello = "sf173aaa57qjoakme0iufkg4c17beoqe\n"
+		goldenGoodbye = "gjcehnn4v0sbtt1hste082hfv1kg0hqv\n"
+	default:
+		s.Fail("no golden values exist for NBF %s", types.Format_Default.VersionString())
+	}
+
+	ds, _ = datas.CommitValue(context.Background(), db, ds, types.String("hello!"))
+	c1, _ := s.MustRun(main, []string{"root", dbSpecStr})
+	s.Equal(goldenHello, c1)
+
+	ds, _ = datas.CommitValue(context.Background(), db, ds, types.String("goodbye"))
 	c2, _ := s.MustRun(main, []string{"root", dbSpecStr})
-	s.Equal("avdab61n1s1d1emdee7kb7e49quisr5n\n", c2)
+	s.Equal(goldenGoodbye, c2)
 
 	// TODO: Would be good to test successful --update too, but requires changes to MustRun to allow
 	// input because of prompt :(.

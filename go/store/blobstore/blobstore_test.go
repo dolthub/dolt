@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -73,7 +72,7 @@ func appendGCSTest(tests []BlobstoreTest) []BlobstoreTest {
 }
 
 func appendLocalTest(tests []BlobstoreTest) []BlobstoreTest {
-	dir, err := ioutil.TempDir("", uuid.New().String())
+	dir, err := os.MkdirTemp("", uuid.New().String())
 
 	if err != nil {
 		panic("Could not create temp dir")

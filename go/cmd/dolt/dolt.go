@@ -16,25 +16,32 @@ package main
 
 import (
 	"context"
+	crand "crypto/rand"
+	"encoding/binary"
+	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/profile"
-	"github.com/uber/jaeger-client-go"
-	"github.com/uber/jaeger-client-go/transport"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/sdk/resource"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/admin"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cnfcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/credcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cvcmds"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/docscmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/indexcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/schcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
@@ -43,50 +50,53 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const (
-	Version = "0.30.1"
+	Version = "0.50.12"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
+var dumpZshCommand = &commands.GenZshCompCmd{}
 var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Command{
 	commands.InitCmd{},
 	commands.StatusCmd{},
 	commands.AddCmd{},
+	commands.DiffCmd{},
 	commands.ResetCmd{},
+	commands.CleanCmd{},
 	commands.CommitCmd{},
 	commands.SqlCmd{VersionStr: Version},
+	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
-	sqlserver.SqlClientCmd{},
+	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.LogCmd{},
-	commands.DiffCmd{},
-	commands.BlameCmd{},
-	commands.MergeCmd{},
 	commands.BranchCmd{},
-	commands.TagCmd{},
 	commands.CheckoutCmd{},
+	commands.MergeCmd{},
+	cnfcmds.Commands,
+	commands.CherryPickCmd{},
+	commands.RevertCmd{},
+	commands.CloneCmd{},
+	commands.FetchCmd{},
+	commands.PullCmd{},
+	commands.PushCmd{},
+	commands.ConfigCmd{},
 	commands.RemoteCmd{},
 	commands.BackupCmd{},
-	commands.PushCmd{},
-	commands.PullCmd{},
-	commands.FetchCmd{},
-	commands.CloneCmd{},
-	commands.RevertCmd{},
-	credcmds.Commands,
 	commands.LoginCmd{},
-	commands.VersionCmd{VersionStr: Version},
-	commands.ConfigCmd{},
+	credcmds.Commands,
 	commands.LsCmd{},
 	schcmds.Commands,
 	tblcmds.Commands,
-	cnfcmds.Commands,
+	commands.TagCmd{},
+	commands.BlameCmd{},
 	cvcmds.Commands,
 	commands.SendMetricsCmd{},
-	dumpDocsCommand,
 	commands.MigrateCmd{},
 	indexcmds.Commands,
 	commands.ReadTablesCmd{},
@@ -94,10 +104,17 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.FilterBranchCmd{},
 	commands.MergeBaseCmd{},
 	commands.RootsCmd{},
+	commands.VersionCmd{VersionStr: Version},
+	commands.DumpCmd{},
+	commands.InspectCmd{},
+	dumpDocsCommand,
+	dumpZshCommand,
+	docscmds.Commands,
 })
 
 func init() {
 	dumpDocsCommand.DoltCommand = doltCommand
+	dumpZshCommand.DoltCommand = doltCommand
 	dfunctions.VersionString = Version
 }
 
@@ -107,6 +124,11 @@ const jaegerFlag = "--jaeger"
 const profFlag = "--prof"
 const csMetricsFlag = "--csmetrics"
 const stdInFlag = "--stdin"
+const stdOutFlag = "--stdout"
+const stdErrFlag = "--stderr"
+const stdOutAndErrFlag = "--out-and-err"
+const ignoreLocksFlag = "--ignore-lock-file"
+
 const cpuProf = "cpu"
 const memProf = "mem"
 const blockingProf = "blocking"
@@ -122,9 +144,10 @@ func runMain() int {
 	args := os.Args[1:]
 
 	csMetrics := false
+	ignoreLockFile := false
 	if len(args) > 0 {
 		var doneDebugFlags bool
-		for !doneDebugFlags {
+		for !doneDebugFlags && len(args) > 0 {
 			switch args[0] {
 			case profFlag:
 				switch args[1] {
@@ -189,13 +212,21 @@ func runMain() int {
 			// and browse to http://localhost:16686
 			case jaegerFlag:
 				cli.Println("running with jaeger tracing reporting to localhost")
-				transport := transport.NewHTTPTransport("http://localhost:14268/api/traces?format=jaeger.thrift", transport.HTTPBatchSize(128000))
-				reporter := jaeger.NewRemoteReporter(transport)
-				tracer, closer := jaeger.NewTracer("dolt", jaeger.NewConstSampler(true), reporter)
-				opentracing.SetGlobalTracer(tracer)
-				defer closer.Close()
-				args = args[1:]
-
+				exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint("http://localhost:14268/api/traces")))
+				if err != nil {
+					cli.Println(color.YellowString("could not create jaeger collector: %v", err))
+				} else {
+					tp := tracesdk.NewTracerProvider(
+						tracesdk.WithBatcher(exp),
+						tracesdk.WithResource(resource.NewWithAttributes(
+							semconv.SchemaURL,
+							semconv.ServiceNameKey.String("dolt"),
+						)),
+					)
+					otel.SetTracerProvider(tp)
+					defer tp.Shutdown(context.Background())
+					args = args[1:]
+				}
 			// Currently goland doesn't support running with a different working directory when using go modules.
 			// This is a hack that allows a different working directory to be set after the application starts using
 			// chdir=<DIR>.  The syntax is not flexible and must match exactly this.
@@ -213,16 +244,45 @@ func runMain() int {
 				cli.Println("Using file contents as stdin:", stdInFile)
 
 				f, err := os.Open(stdInFile)
-
 				if err != nil {
-					panic(err)
+					cli.PrintErrln("Failed to open", stdInFile, err.Error())
+					return 1
 				}
 
 				os.Stdin = f
 				args = args[2:]
 
+			case stdOutFlag, stdErrFlag, stdOutAndErrFlag:
+				filename := args[1]
+
+				f, err := os.OpenFile(filename, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, os.ModePerm)
+				if err != nil {
+					cli.PrintErrln("Failed to open", filename, "for writing:", err.Error())
+					return 1
+				}
+
+				switch args[0] {
+				case stdOutFlag:
+					cli.Println("Stdout being written to", filename)
+					cli.CliOut = f
+				case stdErrFlag:
+					cli.Println("Stderr being written to", filename)
+					cli.CliErr = f
+				case stdOutAndErrFlag:
+					cli.Println("Stdout and Stderr being written to", filename)
+					cli.CliOut = f
+					cli.CliErr = f
+				}
+
+				color.NoColor = true
+				args = args[2:]
+
 			case csMetricsFlag:
 				csMetrics = true
+				args = args[1:]
+
+			case ignoreLocksFlag:
+				ignoreLockFile = true
 				args = args[1:]
 
 			case featureVersionFlag:
@@ -239,6 +299,8 @@ func runMain() int {
 		}
 	}
 
+	seedGlobalRand()
+
 	restoreIO := cli.InitIO()
 	defer restoreIO()
 
@@ -246,12 +308,7 @@ func runMain() int {
 
 	ctx := context.Background()
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
-
-	if dEnv.DBLoadError == nil && commandNeedsMigrationCheck(args) {
-		if commands.MigrationNeeded(ctx, dEnv, args) {
-			return 1
-		}
-	}
+	dEnv.IgnoreLockFile = ignoreLockFile
 
 	root, err := env.GetCurrentUserHomeDir()
 	if err != nil {
@@ -300,12 +357,44 @@ func runMain() int {
 
 	defer tempfiles.MovableTempFileProvider.Clean()
 
-	if dEnv.DoltDB != nil {
-		dEnv.DoltDB.SetCommitHookLogger(ctx, cli.OutStream)
+	// Find all database names and add global variables for them. This needs to
+	// occur before a call to dsess.InitPersistedSystemVars. Otherwise, database
+	// specific persisted system vars will fail to load.
+	//
+	// In general, there is a lot of work TODO in this area. System global
+	// variables are persisted to the Dolt local config if found and if not
+	// found the Dolt global config (typically ~/.dolt/config_global.json).
+
+	// Depending on what directory a dolt sql-server is started in, users may
+	// see different variables values. For example, start a dolt sql-server in
+	// the dolt database folder and persist some system variable.
+
+	// If dolt sql-server is started outside that folder, those system variables
+	// will be lost. This is particularly confusing for database specific system
+	// variables like `${db_name}_default_branch` (maybe these should not be
+	// part of Dolt config in the first place!).
+
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	if err != nil {
+		cli.PrintErrln("failed to load database names")
+		return 1
+	}
+	_ = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
+		dsess.DefineSystemVariablesForDB(dbName)
+		return false, nil
+	})
+
+	err = dsess.InitPersistedSystemVars(dEnv)
+	if err != nil {
+		cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
 	}
 
 	start := time.Now()
+	var wg sync.WaitGroup
+	ctx, stop := context.WithCancel(ctx)
 	res := doltCommand.Exec(ctx, "dolt", args, dEnv)
+	stop()
+	wg.Wait()
 
 	if csMetrics && dEnv.DoltDB != nil {
 		metricsSummary := dEnv.DoltDB.CSMetricsSummary()
@@ -316,48 +405,13 @@ func runMain() int {
 	return res
 }
 
-// These subcommands cannot be performed if a migration is needed
-func commandNeedsMigrationCheck(args []string) bool {
-	if len(args) == 0 {
-		return false
+func seedGlobalRand() {
+	bs := make([]byte, 8)
+	_, err := crand.Read(bs)
+	if err != nil {
+		panic("failed to initial rand " + err.Error())
 	}
-
-	// special case for -h, --help
-	for _, arg := range args {
-		if arg == "-h" || arg == "--help" {
-			return false
-		}
-	}
-
-	subCommandStr := strings.ToLower(strings.TrimSpace(args[0]))
-	for _, cmd := range []cli.Command{
-		commands.ResetCmd{},
-		commands.CommitCmd{},
-		commands.RevertCmd{},
-		commands.SqlCmd{},
-		sqlserver.SqlServerCmd{},
-		sqlserver.SqlClientCmd{},
-		commands.DiffCmd{},
-		commands.MergeCmd{},
-		commands.BranchCmd{},
-		commands.CheckoutCmd{},
-		commands.RemoteCmd{},
-		commands.BackupCmd{},
-		commands.PushCmd{},
-		commands.PullCmd{},
-		commands.FetchCmd{},
-		commands.CloneCmd{},
-		schcmds.ImportCmd{},
-		tblcmds.ImportCmd{},
-		tblcmds.RmCmd{},
-		tblcmds.MvCmd{},
-		tblcmds.CpCmd{},
-	} {
-		if subCommandStr == strings.ToLower(cmd.Name()) {
-			return true
-		}
-	}
-	return false
+	rand.Seed(int64(binary.LittleEndian.Uint64(bs)))
 }
 
 // processEventsDir runs the dolt send-metrics command in a new process

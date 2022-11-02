@@ -92,13 +92,13 @@ func IndexOfConstraint(constraints []ColConstraint, constraintType string) int {
 
 // ColConstraintsAreEqual validates two ColConstraint slices are identical.
 func ColConstraintsAreEqual(a, b []ColConstraint) bool {
+	// kinda shitty.  Probably shouldn't require order to be identical
 	if len(a) != len(b) {
 		return false
 	} else if len(a) == 0 {
 		return true
 	}
 
-	// kinda shitty.  Probably shouldn't require order to be identital
 	for i := 0; i < len(a); i++ {
 		ca, cb := a[i], b[i]
 

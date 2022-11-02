@@ -15,6 +15,7 @@
 package sqlserver
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -26,11 +27,20 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
+
+//TODO: server tests need to expose a higher granularity for server interactions:
+// - replication readers and writers that are connected through configs
+// - configs need to be dynamic
+// - interleave inter and intra-session queries
+// - simulate server/connection failures
+// - load balancing?
+// - multi-master?
 
 type testPerson struct {
 	Name       string
@@ -50,9 +60,9 @@ var (
 )
 
 func TestServerArgs(t *testing.T) {
-	serverController := CreateServerController()
+	serverController := NewServerController()
 	go func() {
-		startServer(context.Background(), "test", "dolt sql-server", []string{
+		startServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"-H", "localhost",
 			"-P", "15200",
 			"-u", "username",
@@ -60,7 +70,7 @@ func TestServerArgs(t *testing.T) {
 			"-t", "5",
 			"-l", "info",
 			"-r",
-		}, dtestutils.CreateEnvWithSeedData(t), serverController)
+		}, sqle.CreateEnvWithSeedData(t), serverController)
 	}()
 	err := serverController.WaitForStart()
 	require.NoError(t, err)
@@ -90,11 +100,11 @@ listener:
     read_timeout_millis: 5000
     write_timeout_millis: 5000
 `
-	serverController := CreateServerController()
+	serverController := NewServerController()
 	go func() {
-		dEnv := dtestutils.CreateEnvWithSeedData(t)
+		dEnv := sqle.CreateEnvWithSeedData(t)
 		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig))
-		startServer(context.Background(), "test", "dolt sql-server", []string{
+		startServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"--config", "config.yaml",
 		}, dEnv, serverController)
 	}()
@@ -110,20 +120,19 @@ listener:
 }
 
 func TestServerBadArgs(t *testing.T) {
-	env := dtestutils.CreateEnvWithSeedData(t)
+	env := sqle.CreateEnvWithSeedData(t)
 
 	tests := [][]string{
 		{"-H", "127.0.0.0.1"},
 		{"-H", "loclahost"},
 		{"-P", "300"},
 		{"-P", "90000"},
-		{"-u", ""},
 		{"-l", "everything"},
 	}
 
 	for _, test := range tests {
 		t.Run(strings.Join(test, " "), func(t *testing.T) {
-			serverController := CreateServerController()
+			serverController := NewServerController()
 			go func(serverController *ServerController) {
 				startServer(context.Background(), "test", "dolt sql-server", test, env, serverController)
 			}(serverController)
@@ -139,32 +148,33 @@ func TestServerBadArgs(t *testing.T) {
 }
 
 func TestServerGoodParams(t *testing.T) {
-	env := dtestutils.CreateEnvWithSeedData(t)
+	env := sqle.CreateEnvWithSeedData(t)
 
 	tests := []ServerConfig{
 		DefaultServerConfig(),
-		DefaultServerConfig().withHost("127.0.0.1").withPort(15400),
-		DefaultServerConfig().withHost("localhost").withPort(15401),
-		//DefaultServerConfig().withHost("::1").withPort(15402), // Fails on Jenkins, assuming no IPv6 support
-		DefaultServerConfig().withUser("testusername").withPort(15403),
-		DefaultServerConfig().withPassword("hunter2").withPort(15404),
-		DefaultServerConfig().withTimeout(0).withPort(15405),
-		DefaultServerConfig().withTimeout(5).withPort(15406),
-		DefaultServerConfig().withLogLevel(LogLevel_Debug).withPort(15407),
-		DefaultServerConfig().withLogLevel(LogLevel_Info).withPort(15408),
-		DefaultServerConfig().withReadOnly(true).withPort(15409),
-		DefaultServerConfig().withUser("testusernamE").withPassword("hunter2").withTimeout(4).withPort(15410),
+		DefaultServerConfig().WithHost("127.0.0.1").WithPort(15400),
+		DefaultServerConfig().WithHost("localhost").WithPort(15401),
+		//DefaultServerConfig().WithHost("::1").WithPort(15402), // Fails on Jenkins, assuming no IPv6 support
+		DefaultServerConfig().withUser("testusername").WithPort(15403),
+		DefaultServerConfig().withPassword("hunter2").WithPort(15404),
+		DefaultServerConfig().withTimeout(0).WithPort(15405),
+		DefaultServerConfig().withTimeout(5).WithPort(15406),
+		DefaultServerConfig().withLogLevel(LogLevel_Debug).WithPort(15407),
+		DefaultServerConfig().withLogLevel(LogLevel_Info).WithPort(15408),
+		DefaultServerConfig().withReadOnly(true).WithPort(15409),
+		DefaultServerConfig().withUser("testusernamE").withPassword("hunter2").withTimeout(4).WithPort(15410),
+		DefaultServerConfig().withAllowCleartextPasswords(true),
 	}
 
 	for _, test := range tests {
 		t.Run(ConfigInfo(test), func(t *testing.T) {
-			sc := CreateServerController()
+			sc := NewServerController()
 			go func(config ServerConfig, sc *ServerController) {
-				_, _ = Serve(context.Background(), "", config, sc, env)
+				_, _ = Serve(context.Background(), "0.0.0", config, sc, env)
 			}(test, sc)
 			err := sc.WaitForStart()
 			require.NoError(t, err)
-			conn, err := dbr.Open("mysql", ConnectionString(test), nil)
+			conn, err := dbr.Open("mysql", ConnectionString(test, "dbname"), nil)
 			require.NoError(t, err)
 			err = conn.Close()
 			require.NoError(t, err)
@@ -176,19 +186,19 @@ func TestServerGoodParams(t *testing.T) {
 }
 
 func TestServerSelect(t *testing.T) {
-	env := dtestutils.CreateEnvWithSeedData(t)
-	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15300)
+	env := sqle.CreateEnvWithSeedData(t)
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15300)
 
-	sc := CreateServerController()
+	sc := NewServerController()
 	defer sc.StopServer()
 	go func() {
-		_, _ = Serve(context.Background(), "", serverConfig, sc, env)
+		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, env)
 	}()
 	err := sc.WaitForStart()
 	require.NoError(t, err)
 
 	const dbName = "dolt"
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+dbName, nil)
+	conn, err := dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	defer conn.Close()
 	sess := conn.NewSession(nil)
@@ -228,7 +238,7 @@ func TestServerSelect(t *testing.T) {
 
 // If a port is already in use, throw error "Port XXXX already in use."
 func TestServerFailsIfPortInUse(t *testing.T) {
-	serverController := CreateServerController()
+	serverController := NewServerController()
 	server := &http.Server{
 		Addr:    ":15200",
 		Handler: http.DefaultServeMux,
@@ -243,7 +253,7 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 			"-t", "5",
 			"-l", "info",
 			"-r",
-		}, dtestutils.CreateEnvWithSeedData(t), serverController)
+		}, sqle.CreateEnvWithSeedData(t), serverController)
 	}()
 	err := serverController.WaitForStart()
 	require.Error(t, err)
@@ -251,20 +261,20 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 }
 
 func TestServerSetDefaultBranch(t *testing.T) {
-	dEnv := dtestutils.CreateEnvWithSeedData(t)
-	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15302)
+	dEnv := sqle.CreateEnvWithSeedData(t)
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15302)
 
-	sc := CreateServerController()
+	sc := NewServerController()
 	defer sc.StopServer()
 	go func() {
-		_, _ = Serve(context.Background(), "", serverConfig, sc, dEnv)
+		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, dEnv)
 	}()
 	err := sc.WaitForStart()
 	require.NoError(t, err)
 
 	const dbName = "dolt"
 
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+dbName, nil)
+	conn, err := dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 
@@ -306,7 +316,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	}
 	conn.Close()
 
-	conn, err = dbr.Open("mysql", ConnectionString(serverConfig)+dbName, nil)
+	conn, err = dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -343,7 +353,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	}
 	conn.Close()
 
-	conn, err = dbr.Open("mysql", ConnectionString(serverConfig)+dbName, nil)
+	conn, err = dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -382,57 +392,63 @@ func TestReadReplica(t *testing.T) {
 	}
 	defer os.Chdir(cwd)
 
-	multiSetup := testcommands.NewMultiRepoTestSetup(t)
+	multiSetup := testcommands.NewMultiRepoTestSetup(t.Fatal)
 	defer os.RemoveAll(multiSetup.Root)
 
 	multiSetup.NewDB("read_replica")
 	multiSetup.NewRemote("remote1")
-	multiSetup.PushToRemote("read_replica", "remote1")
+	multiSetup.PushToRemote("read_replica", "remote1", "main")
 	multiSetup.CloneDB("remote1", "source_db")
 
 	readReplicaDbName := multiSetup.DbNames[0]
 	sourceDbName := multiSetup.DbNames[1]
 
-	localCfg, ok := multiSetup.MrEnv[readReplicaDbName].Config.GetConfig(env.LocalConfig)
+	localCfg, ok := multiSetup.MrEnv.GetEnv(readReplicaDbName).Config.GetConfig(env.LocalConfig)
 	if !ok {
 		t.Fatal("local config does not exist")
 	}
-	localCfg.SetStrings(map[string]string{dsqle.DoltReadReplicaKey: "remote1"})
+	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{dsess.ReadReplicaRemote: "remote1", dsess.ReplicateHeads: "main,feature"})
+	dsess.InitPersistedSystemVars(multiSetup.MrEnv.GetEnv(readReplicaDbName))
 
 	// start server as read replica
-	sc := CreateServerController()
-	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15303)
+	sc := NewServerController()
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15303)
+
+	// set socket to nil to force tcp
+	serverConfig = serverConfig.WithHost("127.0.0.1").WithSocket("")
 
 	func() {
-		err = os.Setenv(dsqle.DoltReadReplicaKey, "remote1")
 		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
-
 		go func() {
-			_, _ = Serve(context.Background(), "", serverConfig, sc, multiSetup.MrEnv[readReplicaDbName])
+			_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, multiSetup.MrEnv.GetEnv(readReplicaDbName))
 		}()
 		err = sc.WaitForStart()
 		require.NoError(t, err)
 	}()
 	defer sc.StopServer()
-	defer os.Unsetenv(dsqle.DoltReadReplicaKey)
 
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
-	defer conn.Close()
+	replicatedTable := "new_table"
+	multiSetup.CreateTable(sourceDbName, replicatedTable)
+	multiSetup.StageAll(sourceDbName)
+	_ = multiSetup.CommitWithWorkingSet(sourceDbName)
+	multiSetup.PushToRemote(sourceDbName, "remote1", "main")
 
-	require.NoError(t, err)
-	sess := conn.NewSession(nil)
+	t.Run("read replica pulls multiple branches", func(t *testing.T) {
+		conn, err := dbr.Open("mysql", ConnectionString(serverConfig, readReplicaDbName), nil)
+		defer conn.Close()
+		require.NoError(t, err)
+		sess := conn.NewSession(nil)
 
-	t.Run("push common new commit", func(t *testing.T) {
-		var res []string
-		replicatedTable := "new_table"
-		multiSetup.CreateTable(sourceDbName, replicatedTable)
-		multiSetup.StageAll(sourceDbName)
-		_ = multiSetup.CommitWithWorkingSet(sourceDbName)
-		multiSetup.PushToRemote(sourceDbName, "remote1")
+		newBranch := "feature"
+		multiSetup.NewBranch(sourceDbName, newBranch)
+		multiSetup.CheckoutBranch(sourceDbName, newBranch)
+		multiSetup.PushToRemote(sourceDbName, "remote1", newBranch)
 
-		q := sess.SelectBySql("show tables")
-		_, err := q.LoadContext(context.Background(), &res)
+		var res []int
+
+		q := sess.SelectBySql(fmt.Sprintf("select dolt_checkout('%s')", newBranch))
+		_, err = q.LoadContext(context.Background(), &res)
 		assert.NoError(t, err)
-		assert.ElementsMatch(t, res, []string{replicatedTable})
+		assert.ElementsMatch(t, res, []int{0})
 	})
 }

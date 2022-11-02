@@ -142,6 +142,13 @@ func (b *binaryNomsReader) readUint16() uint16 {
 	return v
 }
 
+func (b *binaryNomsReader) readUint24() uint32 {
+	var bs [4]byte
+	copy(bs[1:], b.buff[b.offset:])
+	b.offset += 3
+	return binary.BigEndian.Uint32(bs[:])
+}
+
 func (b *binaryNomsReader) PeekKind() NomsKind {
 	return NomsKind(b.peekUint8())
 }
@@ -321,6 +328,14 @@ func (b *binaryNomsReader) ReadString() string {
 func (b *binaryNomsReader) ReadInlineBlob() []byte {
 	size := uint32(b.readUint16())
 	bytes := b.buff[b.offset : b.offset+size]
+	b.offset += size
+	return bytes
+}
+
+func (b *binaryNomsReader) readSerialMessage() []byte {
+	size := b.readUint24()
+	// start at offset-4, to include the kind byte + Uint24 for size...
+	bytes := b.buff[b.offset-4 : b.offset+size]
 	b.offset += size
 	return bytes
 }

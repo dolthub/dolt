@@ -19,7 +19,6 @@ import (
 	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -32,8 +31,7 @@ type NeedsRebaseFn func(ctx context.Context, cm *doltdb.Commit) (bool, error)
 // EntireHistory returns a |NeedsRebaseFn| that rebases the entire commit history.
 func EntireHistory() NeedsRebaseFn {
 	return func(_ context.Context, cm *doltdb.Commit) (bool, error) {
-		n, err := cm.NumParents()
-		return n != 0, err
+		return cm.NumParents() != 0, nil
 	}
 }
 
@@ -55,11 +53,7 @@ func StopAtCommit(stopCommit *doltdb.Commit) NeedsRebaseFn {
 			return false, nil
 		}
 
-		n, err := cm.NumParents()
-		if err != nil {
-			return false, err
-		}
-		if n == 0 {
+		if cm.NumParents() == 0 {
 			return false, fmt.Errorf("commit %s is missing from the commit history of at least one rebase head", sh)
 		}
 
@@ -74,17 +68,17 @@ type ReplayCommitFn func(ctx context.Context, commit, parent, rebasedParent *dol
 // wrapReplayRootFn converts a |ReplayRootFn| to a |ReplayCommitFn|
 func wrapReplayRootFn(fn ReplayRootFn) ReplayCommitFn {
 	return func(ctx context.Context, commit, parent, rebasedParent *doltdb.Commit) (rebaseRoot *doltdb.RootValue, err error) {
-		root, err := commit.GetRootValue()
+		root, err := commit.GetRootValue(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		parentRoot, err := parent.GetRootValue()
+		parentRoot, err := parent.GetRootValue(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		rebasedParentRoot, err := rebasedParent.GetRootValue()
+		rebasedParentRoot, err := rebasedParent.GetRootValue(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -129,16 +123,12 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
 	rsw := dbData.Rsw
-	drw := dbData.Drw
 
 	cwbRef := rsr.CWBHeadRef()
-	dd, err := drw.GetDocsOnDisk()
-	if err != nil {
-		return err
-	}
 
 	heads := make([]*doltdb.Commit, len(refs))
 	for i, dRef := range refs {
+		var err error
 		heads[i], err = ddb.ResolveCommitRef(ctx, dRef)
 		if err != nil {
 			return err
@@ -173,12 +163,7 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 		return err
 	}
 
-	r, err := cm.GetRootValue()
-	if err != nil {
-		return err
-	}
-
-	_, err = doltdocs.UpdateRootWithDocs(ctx, r, dd)
+	r, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return err
 	}
@@ -253,12 +238,13 @@ func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommi
 		return nil, err
 	}
 
-	valueHash, err := ddb.WriteRootValue(ctx, rebasedRoot)
+	r, valueHash, err := ddb.WriteRootValue(ctx, rebasedRoot)
 	if err != nil {
 		return nil, err
 	}
+	rebasedRoot = r
 
-	oldMeta, err := commit.GetCommitMeta()
+	oldMeta, err := commit.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, err
 	}

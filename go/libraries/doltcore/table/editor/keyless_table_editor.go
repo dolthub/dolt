@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -136,7 +136,7 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 	}
 
 	for i, index := range sch.Indexes().AllIndexes() {
-		indexData, err := tbl.GetIndexRowData(ctx, index.Name())
+		indexData, err := tbl.GetNomsIndexRowData(ctx, index.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -145,7 +145,70 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 	return te, nil
 }
 
-func (kte *keylessTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error {
+func (kte *keylessTableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, indexName string, idxSch schema.Schema) ([]row.Row, error) {
+	//TODO: This probably fails on some cases due to the edit materialization via the Table call.
+	// For example, for the REPLACE statement, if the deletion succeeds but the insertion fails,
+	// the deletion will not be rolled back due to Table(). This needs to be able to query rows
+	// without materializing edits, similar to the pkTable.
+	tbl, err := kte.Table(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	idxMap, err := tbl.GetNomsIndexRowData(ctx, indexName)
+	if err != nil {
+		return nil, err
+	}
+
+	indexIter := noms.NewNomsRangeReader(idxSch, idxMap,
+		[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(key)}},
+	)
+
+	rowData, err := tbl.GetNomsRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	lookupTags := map[uint64]int{schema.KeylessRowIdTag: 0}
+
+	var rowKVPS [][2]types.Tuple
+	for {
+		k, err := indexIter.ReadKey(ctx)
+
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+
+		keylessKey, err := indexKeyToTableKey(tbl.Format(), k, lookupTags)
+		if err != nil {
+			return nil, err
+		}
+
+		keylessVal, ok, err := rowData.MaybeGetTuple(ctx, keylessKey)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, nil
+		}
+
+		rowKVPS = append(rowKVPS, [2]types.Tuple{keylessKey, keylessVal})
+	}
+
+	rows := make([]row.Row, len(rowKVPS))
+	for i, rowKVP := range rowKVPS {
+		rows[i], err = row.FromNoms(kte.Schema(), rowKVP[0], rowKVP[1])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return rows, nil
+}
+
+func (kte *keylessTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateCb) error {
 	dRow, err := row.FromNoms(kte.sch, key, val)
 	if err != nil {
 		return err
@@ -186,7 +249,7 @@ func (kte *keylessTableEditor) DeleteByKey(ctx context.Context, key types.Tuple,
 }
 
 // InsertRow implements TableEditor.
-func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row, _ PKDuplicateErrFunc) (err error) {
+func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row, _ PKDuplicateCb) (err error) {
 	kte.mu.Lock()
 	defer kte.mu.Unlock()
 
@@ -220,7 +283,7 @@ func (kte *keylessTableEditor) DeleteRow(ctx context.Context, r row.Row) (err er
 }
 
 // UpdateRow implements TableEditor.
-func (kte *keylessTableEditor) UpdateRow(ctx context.Context, old row.Row, new row.Row, _ PKDuplicateErrFunc) (err error) {
+func (kte *keylessTableEditor) UpdateRow(ctx context.Context, old row.Row, new row.Row, _ PKDuplicateCb) (err error) {
 	kte.mu.Lock()
 	defer kte.mu.Unlock()
 
@@ -246,8 +309,15 @@ func (kte *keylessTableEditor) UpdateRow(ctx context.Context, old row.Row, new r
 	return kte.acc.increment(key, val)
 }
 
-func (kte *keylessTableEditor) hasEdits() bool {
+func (kte *keylessTableEditor) HasEdits() bool {
 	return kte.dirty
+}
+
+// MarkDirty implements TableEditor.
+func (kte *keylessTableEditor) MarkDirty() {
+	kte.mu.Lock()
+	defer kte.mu.Unlock()
+	kte.dirty = true
 }
 
 // GetAutoIncrementValue implements TableEditor, AUTO_INCREMENT is not yet supported for keyless tables.
@@ -308,6 +378,12 @@ func (kte *keylessTableEditor) StatementStarted(ctx context.Context) {}
 
 // StatementFinished implements TableEditor.
 func (kte *keylessTableEditor) StatementFinished(ctx context.Context, errored bool) error {
+	// If there was an error, clear all deltas
+	if errored {
+		for k := range kte.acc.deltas {
+			delete(kte.acc.deltas, k)
+		}
+	}
 	return nil
 }
 
@@ -360,15 +436,15 @@ func (kte *keylessTableEditor) flush(ctx context.Context) error {
 	}
 
 	kte.eg.Go(func() (err error) {
-		kte.tbl, err = applyEdits(ctx, tbl, acc, kte.indexEds, nil)
+		kte.tbl, err = applyEdits(ctx, tbl, acc, kte.indexEds)
 		return err
 	})
 
 	return nil
 }
 
-func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, indexEds []*IndexEditor, errFunc PKDuplicateErrFunc) (_ *doltdb.Table, retErr error) {
-	rowData, err := tbl.GetRowData(ctx)
+func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, indexEds []*IndexEditor) (_ *doltdb.Table, retErr error) {
+	rowData, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -386,7 +462,7 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 	}
 
 	ed := rowData.Edit()
-	iter := table.NewMapPointReader(rowData, keys...)
+	iter := newMapPointReader(rowData, keys)
 
 	var ok bool
 	for {
@@ -416,10 +492,11 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 			return nil, err
 		}
 
-		func(k, v types.Tuple) (*doltdb.Table, error) {
+		err = func(k, v types.Tuple) (localErr error) {
+			// TODO: Unclear if this dead code or not. Leaving for posterity.
 			indexOpsToUndo := make([]int, len(indexEds))
 			defer func() {
-				if retErr != nil {
+				if localErr != nil {
 					for i, opsToUndo := range indexOpsToUndo {
 						for undone := 0; undone < opsToUndo; undone++ {
 							indexEds[i].Undo(ctx)
@@ -436,28 +513,32 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 					r, _, err = row.KeylessRowsFromTuples(k, v)
 				}
 				if err != nil {
-					return nil, err
+					return err
 				}
-				fullKey, partialKey, value, err := r.ReduceToIndexKeys(indexEd.Index())
+				fullKey, partialKey, value, err := r.ReduceToIndexKeys(indexEd.Index(), nil)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				if delta.delta < 1 {
 					err = indexEd.DeleteRow(ctx, fullKey, partialKey, value)
 					if err != nil {
-						return nil, err
+						return err
 					}
 				} else {
 					err = indexEd.InsertRow(ctx, fullKey, partialKey, value)
 					if err != nil {
-						return nil, err
+						return err
 					}
 				}
 				indexOpsToUndo[i]++
 			}
-			return nil, nil
+			return nil
 		}(k, v)
+
+		if err != nil {
+			return nil, err
+		}
 
 		if ok {
 			ed.Set(k, v)
@@ -472,7 +553,7 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 		if idxErr != nil {
 			return nil, err
 		}
-		tbl, idxErr = tbl.SetIndexRowData(ctx, indexEds[i].Index().Name(), indexMap)
+		tbl, idxErr = tbl.SetNomsIndexRows(ctx, indexEds[i].Index().Name(), indexMap)
 		if idxErr != nil {
 			return nil, err
 		}
@@ -483,7 +564,45 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 		return nil, err
 	}
 
-	return tbl.UpdateRows(ctx, rowData)
+	return tbl.UpdateNomsRows(ctx, rowData)
+}
+
+type pointReader struct {
+	m          types.Map
+	keys       []types.Tuple
+	emptyTuple types.Tuple
+	idx        int
+}
+
+func newMapPointReader(m types.Map, keys []types.Tuple) *pointReader {
+	return &pointReader{
+		m:          m,
+		keys:       keys,
+		emptyTuple: types.EmptyTuple(m.Format()),
+	}
+}
+
+// NextTuple implements types.MapIterator.
+func (pr *pointReader) NextTuple(ctx context.Context) (k, v types.Tuple, err error) {
+	if pr.idx >= len(pr.keys) {
+		return types.Tuple{}, types.Tuple{}, io.EOF
+	}
+
+	k = pr.keys[pr.idx]
+	v = pr.emptyTuple
+
+	var ok bool
+	// todo: optimize by implementing MapIterator.Seek()
+	v, ok, err = pr.m.MaybeGetTuple(ctx, k)
+	pr.idx++
+
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, err
+	} else if !ok {
+		return k, pr.emptyTuple, nil
+	}
+
+	return k, v, nil
 }
 
 // for deletes (cardinality < 1): |ok| is set false

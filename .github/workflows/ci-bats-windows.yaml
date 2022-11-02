@@ -1,17 +1,28 @@
 name: Test Bats Windows
 
 on:
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      email:
+        description: 'Email address to receive bats failure notification'
+        required: true
+        default: ''
+  repository_dispatch:
+    types: [ bats-windows ]
 
 jobs:
   get-files:
-    name: Get File list
-    runs-on: ubuntu-18.04
+    name: Get file list
+    runs-on: ubuntu-22.04
     outputs:
       files: ${{ steps.get_file_list.outputs.files }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        with:
+          ref: ${{ github.event.client_payload.ref }}
+      - uses: actions/checkout@v3
+        if: ${{ github.event_name == 'workflow_dispatch' }}
       - name: Get file list
         id: get_file_list
         run: |
@@ -21,20 +32,20 @@ jobs:
           IFS=$'\n'
 
           file_arr=($files)
-          echo "::set-output name=files::${file_arr[@]}"
+          echo "files=${file_arr[@]}" >> $GITHUB_OUTPUT
 
           IFS=$SAVEIFS
         working-directory: ./integration-tests/bats
   format-files-output:
     name: Format files output
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     needs: get-files
     outputs:
       files: ${{ steps.format_files.outputs.files }}
     steps:
       - name: Format
         id: format_files
-        uses: actions/github-script@v4
+        uses: actions/github-script@v6
         env:
           FILES: ${{ needs.get-files.outputs.files }}
         with:
@@ -74,7 +85,7 @@ jobs:
           fi
       - name: Configure AWS Credentials
         if: ${{ env.use_credentials == 'true' }}
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v1-node16
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -82,18 +93,23 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           role-duration-seconds: 3600
       - name: Setup Go 1.x
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          go-version: ^1.17
+          go-version: ^1.19
         id: go
       - name: Setup Python 3.x
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ^3.6
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v1
+      - uses: actions/checkout@v3
+        if: ${{ github.event_name == 'repository_dispatch' }}
         with:
-          node-version: ^12
+          ref: ${{ github.event.client_payload.ref }}
+      - uses: actions/checkout@v3
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+      - uses: actions/setup-node@v3
+        with:
+          node-version: ^16
       - name: Create CI Bin
         run: |
           mkdir -p ./.ci_bin
@@ -114,12 +130,13 @@ jobs:
       - name: Install Python Deps
         run: |
           pip install mysql-connector-python
+          pip install pandas
+          pip install pyarrow
       - name: Install Dolt
         working-directory: ./go
         run: |
           go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
-          go build -mod=readonly -o ../.ci_bin/git-dolt ./cmd/git-dolt/.
-          go build -mod=readonly -o ../.ci_bin/git-dolt-smudge ./cmd/git-dolt-smudge/.
+
           go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
           go build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.
       - name: Setup Dolt Config
@@ -132,3 +149,36 @@ jobs:
         env:
           IS_WINDOWS: true
           WINDOWS_BASE_DIR: "/d/a"
+          BATS_TEST_RETRIES: "3"
+
+  report-bats-failure:
+    name: Report Bats Windows Failure via Email
+    needs: test-per-file
+    runs-on: ubuntu-22.04
+    if: always() && (needs.test-per-file.result == 'failure')
+    steps:
+      - uses: actions/checkout@v3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Send Email
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: ./.github/actions/ses-email-action
+        with:
+          region: us-west-2
+          version: ${{ github.ref }}
+          template: 'BatsWindowsFailureTemplate'
+          toAddresses: '["${{ github.event.inputs.email }}"]'
+          workflowURL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      - name: Send Email
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        uses: ./.github/actions/ses-email-action
+        with:
+          region: us-west-2
+          version: ${{ github.event.client_payload.ref }}
+          template: 'BatsWindowsFailureTemplate'
+          toAddresses: '["${{ github.event.client_payload.actor_email }}", "tim@dolthub.com"]'
+          workflowURL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

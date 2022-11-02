@@ -215,26 +215,6 @@ func (s Struct) Value(ctx context.Context) (Value, error) {
 	return s, nil
 }
 
-func (s Struct) WalkValues(ctx context.Context, cb ValueCallback) error {
-	dec, count := s.decoderSkipToFields()
-	for i := uint64(0); i < count; i++ {
-		dec.skipString()
-		v, err := dec.readValue(s.format())
-
-		if err != nil {
-			return err
-		}
-
-		err = cb(v)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (s Struct) typeOf() (*Type, error) {
 	dec := s.decoder()
 	return readStructTypeOfValue(s.format(), &dec)
@@ -250,7 +230,7 @@ func readStructTypeOfValue(nbf *NomsBinFormat, dec *valueDecoder) (*Type, error)
 		t, err := dec.readTypeOfValue(nbf)
 
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error decoding type of field %s: %w", fname, err)
 		}
 
 		typeFields[i] = StructField{

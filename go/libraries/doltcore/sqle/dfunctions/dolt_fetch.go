@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -35,11 +36,13 @@ const (
 	cmdSuccess = 1
 )
 
+// Deprecated: please use the version in the dprocedures package
 type DoltFetchFunc struct {
 	expression.NaryExpression
 }
 
 // NewFetchFunc creates a new FetchFunc expression.
+// Deprecated: please use the version in the dprocedures package
 func NewFetchFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltFetchFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
@@ -63,10 +66,21 @@ func (d DoltFetchFunc) WithChildren(children ...sql.Expression) (sql.Expression,
 }
 
 func (d DoltFetchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	args, err := getDoltArgs(ctx, row, d.Children())
+	if err != nil {
+		return cmdFailure, err
+	}
+	return DoDoltFetch(ctx, args)
+}
+
+func DoDoltFetch(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
 		return cmdFailure, fmt.Errorf("empty database name")
+	}
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return cmdFailure, err
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
@@ -75,13 +89,7 @@ func (d DoltFetchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return cmdFailure, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	ap := cli.CreateFetchArgParser()
-	args, err := getDoltArgs(ctx, row, d.Children())
-	if err != nil {
-		return cmdFailure, err
-	}
-
-	apr, err := ap.Parse(args)
+	apr, err := cli.CreateFetchArgParser().Parse(args)
 	if err != nil {
 		return cmdFailure, err
 	}
@@ -93,7 +101,12 @@ func (d DoltFetchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 	updateMode := ref.UpdateMode{Force: apr.Contains(cli.ForceFlag)}
 
-	err = actions.FetchRefSpecs(ctx, dbData, refSpecs, remote, updateMode, runProgFuncs, stopProgFuncs)
+	srcDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb, remote, false)
+	if err != nil {
+		return 1, err
+	}
+
+	err = actions.FetchRefSpecs(ctx, dbData, srcDB, refSpecs, remote, updateMode, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		return cmdFailure, fmt.Errorf("fetch failed: %w", err)
 	}

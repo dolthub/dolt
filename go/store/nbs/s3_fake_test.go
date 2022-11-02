@@ -24,7 +24,6 @@ package nbs
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"strconv"
 	"strings"
@@ -77,12 +76,16 @@ func (m *fakeS3) readerForTable(name addr) (chunkReader, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if buff, present := m.data[name.String()]; present {
-		ti, err := parseTableIndex(buff)
+		ti, err := parseTableIndexByCopy(buff, &noopQuotaProvider{})
 
 		if err != nil {
 			return nil, err
 		}
-		return newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize), nil
+		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize)
+		if err != nil {
+			return nil, err
+		}
+		return tr, nil
 	}
 	return nil, nil
 }
@@ -95,13 +98,17 @@ func (m *fakeS3) readerForTableWithNamespace(ns string, name addr) (chunkReader,
 		key = ns + "/" + key
 	}
 	if buff, present := m.data[key]; present {
-		ti, err := parseTableIndex(buff)
+		ti, err := parseTableIndexByCopy(buff, &noopQuotaProvider{})
 
 		if err != nil {
 			return nil, err
 		}
 
-		return newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize), nil
+		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize)
+		if err != nil {
+			return nil, err
+		}
+		return tr, nil
 	}
 	return nil, nil
 }
@@ -146,7 +153,7 @@ func (m *fakeS3) UploadPartWithContext(ctx aws.Context, input *s3.UploadPartInpu
 	m.assert.NotNil(input.UploadId, "UploadId is a required field")
 	m.assert.NotNil(input.Body, "Body is a required field")
 
-	data, err := ioutil.ReadAll(input.Body)
+	data, err := io.ReadAll(input.Body)
 	m.assert.NoError(err)
 
 	m.mu.Lock()
@@ -233,7 +240,7 @@ func (m *fakeS3) GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInput,
 	}
 
 	return &s3.GetObjectOutput{
-		Body:          ioutil.NopCloser(bytes.NewReader(obj)),
+		Body:          io.NopCloser(bytes.NewReader(obj)),
 		ContentLength: aws.Int64(int64(len(obj))),
 	}, nil
 }

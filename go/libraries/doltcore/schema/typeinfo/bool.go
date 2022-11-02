@@ -161,14 +161,6 @@ func (ti *boolType) NomsKind() types.NomsKind {
 	return types.BoolKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *boolType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil || *str == "" {
-		return types.NullValue, nil
-	}
-	return ti.ConvertValueToNomsValue(context.Background(), nil, *str)
-}
-
 // Promote implements TypeInfo interface.
 func (ti *boolType) Promote() TypeInfo {
 	return ti
@@ -181,7 +173,7 @@ func (ti *boolType) String() string {
 
 // ToSqlType implements TypeInfo interface.
 func (ti *boolType) ToSqlType() sql.Type {
-	return ti.sqlBitType
+	return sql.Boolean
 }
 
 // boolTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
@@ -200,7 +192,19 @@ func boolTypeConverter(ctx context.Context, src *boolType, destTi TypeInfo) (tc 
 			}
 		}, true, nil
 	case *blobStringType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val := v.(types.Bool)
+			var newVal int
+			if val {
+				newVal = 1
+			} else {
+				newVal = 0
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, newVal)
+		}, true, nil
 	case *boolType:
 		return identityTypeConverter, false, nil
 	case *datetimeType:
@@ -211,9 +215,37 @@ func boolTypeConverter(ctx context.Context, src *boolType, destTi TypeInfo) (tc 
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *inlineBlobType:
+	case *geomcollType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geometryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *inlineBlobType:
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val := v.(types.Bool)
+			var newVal int
+			if val {
+				newVal = 1
+			} else {
+				newVal = 0
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, newVal)
+		}, true, nil
 	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *linestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multilinestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipolygonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *pointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *polygonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
@@ -226,9 +258,33 @@ func boolTypeConverter(ctx context.Context, src *boolType, destTi TypeInfo) (tc 
 	case *uuidType:
 		return nil, false, IncompatibleTypeConversion.New(src.String(), destTi.String())
 	case *varBinaryType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val := v.(types.Bool)
+			var newVal int
+			if val {
+				newVal = 1
+			} else {
+				newVal = 0
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, newVal)
+		}, true, nil
 	case *varStringType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val := v.(types.Bool)
+			var newVal int
+			if val {
+				newVal = 1
+			} else {
+				newVal = 0
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, newVal)
+		}, true, nil
 	case *yearType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	default:

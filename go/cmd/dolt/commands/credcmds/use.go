@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var useDocs = cli.CommandDocumentationContent{
@@ -52,10 +51,9 @@ func (cmd UseCmd) Description() string {
 	return useDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd UseCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, useDocs, ap))
+func (cmd UseCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(useDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -69,15 +67,15 @@ func (cmd UseCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CREDS_USE
 }
 
-func (cmd UseCmd) createArgParser() *argparser.ArgParser {
+func (cmd UseCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	return ap
 }
 
 // Exec executes the command
 func (cmd UseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, useDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, useDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	args = apr.Args
 	if len(args) != 1 {

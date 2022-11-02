@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
@@ -70,13 +69,12 @@ func (cmd GarbageCollectionCmd) RequiresRepo() bool {
 	return true
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd GarbageCollectionCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, gcDocs, ap))
+func (cmd GarbageCollectionCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(gcDocs, ap)
 }
 
-func (cmd GarbageCollectionCmd) createArgParser() *argparser.ArgParser {
+func (cmd GarbageCollectionCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(gcShallowFlag, "s", "perform a fast, but incomplete garbage collection pass")
 	return ap
@@ -92,21 +90,22 @@ func (cmd GarbageCollectionCmd) EventType() eventsapi.ClientEventType {
 func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	var verr errhand.VerboseError
 
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, gcDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, gcDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
+
+	if dEnv.IsLocked() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
 
 	var err error
 	if apr.Contains(gcShallowFlag) {
-		db, ok := dEnv.DoltDB.ValueReadWriter().(datas.Database)
-		if !ok {
-			verr = errhand.BuildDError("this database does not support shallow garbage collection").Build()
-			return HandleVErrAndExitCode(verr, usage)
-		}
-
-		err = datas.PruneTableFiles(ctx, db)
-
+		err = dEnv.DoltDB.ShallowGC(ctx)
 		if err != nil {
+			if err == chunks.ErrUnsupportedOperation {
+				verr = errhand.BuildDError("this database does not support shallow garbage collection").Build()
+				return HandleVErrAndExitCode(verr, usage)
+			}
 			verr = errhand.BuildDError("an error occurred during garbage collection").AddCause(err).Build()
 		}
 	} else {
@@ -154,9 +153,6 @@ func MaybeMigrateEnv(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, erro
 	}
 	if tmp.RSLoadErr != nil {
 		return nil, tmp.RSLoadErr
-	}
-	if tmp.DocsLoadErr != nil {
-		return nil, tmp.DocsLoadErr
 	}
 	if tmp.DBLoadError != nil {
 		return nil, tmp.DBLoadError

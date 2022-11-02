@@ -16,7 +16,7 @@ create view four as select 2+2 as res from dual;
 select * from four;
 SQL
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
+    [ "${#lines[@]}" -eq 5 ]
     [[ "${lines[1]}" =~ ' res ' ]] || false
     [[ "${lines[3]}" =~ ' 4 ' ]] || false
 }
@@ -50,7 +50,7 @@ create view now as select now() from dual;
 select * from four, now;
 SQL
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
+    [ "${#lines[@]}" -eq 5 ]
     [[ "${lines[1]}" =~ ' res ' ]] || false
     [[ "${lines[3]}" =~ ' 4 ' ]] || false
 }
@@ -103,10 +103,10 @@ select * from my_users_view;
 SQL
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 8 ]
-    [[ "${lines[1]}" =~ ' id ' ]] || false
-    [[ "${lines[3]}" =~ ' 1 ' ]] || false
-    [[ "${lines[4]}" =~ ' 2 ' ]] || false
-    [[ "${lines[5]}" =~ ' 3 ' ]] || false
+    [[ "${lines[2]}" =~ ' id ' ]] || false
+    [[ "${lines[4]}" =~ ' 1 ' ]] || false
+    [[ "${lines[5]}" =~ ' 2 ' ]] || false
+    [[ "${lines[6]}" =~ ' 3 ' ]] || false
 }
 
 @test "create-views: view referencing table selects values inserted after it was created" {
@@ -118,14 +118,14 @@ insert into my_users values (4), (5), (6);
 select * from my_users_view;
 SQL
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 11 ]
-    [[ "${lines[1]}" =~ ' id ' ]] || false
-    [[ "${lines[3]}" =~ ' 1 ' ]] || false
-    [[ "${lines[4]}" =~ ' 2 ' ]] || false
-    [[ "${lines[5]}" =~ ' 3 ' ]] || false
-    [[ "${lines[6]}" =~ ' 4 ' ]] || false
-    [[ "${lines[7]}" =~ ' 5 ' ]] || false
-    [[ "${lines[8]}" =~ ' 6 ' ]] || false
+    [ "${#lines[@]}" -eq 12 ]
+    [[ "${lines[3]}" =~ ' id ' ]] || false
+    [[ "${lines[5]}" =~ ' 1 ' ]] || false
+    [[ "${lines[6]}" =~ ' 2 ' ]] || false
+    [[ "${lines[7]}" =~ ' 3 ' ]] || false
+    [[ "${lines[8]}" =~ ' 4 ' ]] || false
+    [[ "${lines[9]}" =~ ' 5 ' ]] || false
+    [[ "${lines[10]}" =~ ' 6 ' ]] || false
 }
 
 @test "create-views: select view with alias" {
@@ -137,14 +137,14 @@ insert into my_users values (4), (5), (6);
 select v.* from my_users_view as V;
 SQL
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 11 ]
-    [[ "${lines[1]}" =~ ' id ' ]] || false
-    [[ "${lines[3]}" =~ ' 1 ' ]] || false
-    [[ "${lines[4]}" =~ ' 2 ' ]] || false
-    [[ "${lines[5]}" =~ ' 3 ' ]] || false
-    [[ "${lines[6]}" =~ ' 4 ' ]] || false
-    [[ "${lines[7]}" =~ ' 5 ' ]] || false
-    [[ "${lines[8]}" =~ ' 6 ' ]] || false
+    [ "${#lines[@]}" -eq 12 ]
+    [[ "${lines[3]}" =~ ' id ' ]] || false
+    [[ "${lines[5]}" =~ ' 1 ' ]] || false
+    [[ "${lines[6]}" =~ ' 2 ' ]] || false
+    [[ "${lines[7]}" =~ ' 3 ' ]] || false
+    [[ "${lines[8]}" =~ ' 4 ' ]] || false
+    [[ "${lines[9]}" =~ ' 5 ' ]] || false
+    [[ "${lines[10]}" =~ ' 6 ' ]] || false
 }
 
 @test "create-views: selecting from broken view fails" {
@@ -177,7 +177,7 @@ SQL
     run dolt sql -q 'select * from testing'
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
-    [[ "${lines[1]}" =~ '2 + 2' ]] || false
+    [[ "${lines[1]}" =~ '2+2' ]] || false
     [[ "${lines[3]}" =~ ' 4 ' ]] || false
 }
 
@@ -191,7 +191,7 @@ SQL
 }
 
 @test "create-views: database with broken view can be used" {
-    run dolt sql -q 'create table users (id longtext primary key)'
+    run dolt sql -q 'create table users (id varchar(20) primary key)'
     [ "$status" -eq 0 ]
     run dolt sql -q 'create view all_users as select * from users'
     [ "$status" -eq 0 ]
@@ -234,4 +234,95 @@ SQL
     run dolt sql -q "select * from five"
     [ "$status" -eq 1 ]
     [[ "${lines[0]}" =~ "table not found: five" ]] || false
+}
+
+@test "create-views: AS OF" {
+    dolt sql <<SQL
+create table t1 (a int primary key, b int);
+call dolt_add('.');
+insert into t1 values (1,1);
+select dolt_commit('-am', 'table with one row');
+select dolt_branch('onerow');
+insert into t1 values (2,2);
+select dolt_commit('-am', 'table with two rows');
+select dolt_branch('tworows');
+create view v1 as select * from t1;
+call dolt_add('.');
+select dolt_commit('-am', 'view with select *');
+select dolt_branch('view');
+insert into t1 values (3,3);
+call dolt_add('.');
+select dolt_commit('-am', 'table with three rows');
+select dolt_branch('threerows');
+drop view v1;
+create view v1 as select a+10, b+10 from t1;
+SQL
+
+    # should show the original view definition
+    run dolt sql -r csv -q "select * from dolt_schemas as of 'view' order by 1"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "select * from t1" ]] || false
+
+    # should use the view definition from branch named, data from branch named
+    run dolt sql -r csv -q "select * from \`dolt_repo_$$/view\`.v1 order by 1"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "${lines[1]}" =~ "1,1" ]] || false
+    [[ "${lines[2]}" =~ "2,2" ]] || false
+
+    # should use the view definition from HEAD, data from branch named
+    run dolt sql -r csv -q "select * from v1 as of 'view' order by 1"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "${lines[1]}" =~ "11,11" ]] || false
+    [[ "${lines[2]}" =~ "12,12" ]] || false
+}   
+
+@test "create-views: describe correctly works with complex views" {
+    dolt sql -q "create table t(pk int primary key, val int)"
+    dolt sql -q "create view view1 as select * from t"
+
+    run dolt sql -r csv -q "describe view1"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "${lines[1]}" =~ 'pk,int,NO,"",NULL,""' ]] || false
+    [[ "${lines[2]}" =~ 'val,int,YES,"",NULL,""' ]] || false
+
+    dolt sql -q "create view view2 as select pk from t"
+    run dolt sql -r csv -q "describe view2"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "${lines[1]}" =~ 'pk,int,NO,"",NULL,""' ]] || false
+
+    dolt sql -q "create table t2(pk int primary key, val int)"
+    dolt sql -q "insert into t values (1,1)"
+    dolt sql -q "insert into t2 values (1,2)"
+
+    dolt sql -q "create view view3 as select t.val as v1, t2.val as v2 from t inner join t2 on t.pk=t2.pk"
+    run dolt sql -r csv -q "describe view3"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "${lines[1]}" =~ 'v1,int,YES,"",NULL,""' ]] || false
+    [[ "${lines[2]}" =~ 'v2,int,YES,"",NULL,""' ]] || false
+}
+
+@test "create-views: can correctly alter a view" {
+    skip "ALTER VIEW is unsupported"
+    dolt sql -q "create table t(pk int primary key, val int)"
+    dolt sql -q "create view view1 as select * from t"
+
+    dolt sql -q "alter view view1 as select val from t"
+}
+
+@test "create-views: views get properly formatted in the information schema table" {
+    skip "views are not correctly formatted right now"
+    dolt sql -q "create table t(pk int primary key, val int)"
+    dolt sql -q "create view view1 as select pk from t"
+
+    DATABASE=$(dolt sql -r csv -q "SELECT DATABASE()" | sed -n 2p)
+    run dolt sql -r csv -q "SELECT VIEW_DEFINITION FROM information_schema.views where TABLE_NAME='view1'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "VIEW_DEFINITION" ]] || false
+    [[ "$output" =~ "select $DATABASE.t from $DATABASE.t" ]] || false
 }

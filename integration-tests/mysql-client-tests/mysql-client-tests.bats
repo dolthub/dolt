@@ -19,7 +19,7 @@ setup() {
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext)"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
 
-    let PORT="$$ % (65536-1024) + 1024"
+    PORT=$( definePORT )
     USER="dolt"
     dolt sql-server --host 0.0.0.0 --port=$PORT --user=$USER --loglevel=trace &
     SERVER_PID=$!
@@ -33,6 +33,12 @@ teardown() {
     cd ..
     kill $SERVER_PID
     rm -rf $REPO_NAME
+
+    # Check if postgresql is still running. If so stop it
+    active=$(service postgresql status)
+    if echo "$active" | grep "online"; then
+        service postgresql stop
+    fi
 }
 
 @test "go go-sql-drive/mysql test" {
@@ -41,15 +47,15 @@ teardown() {
 }
 
 @test "python mysql.connector client" {
-    python3 $BATS_TEST_DIRNAME/python/mysql.connector-test.py $USER $PORT $REPO_NAME
+    python3.8 $BATS_TEST_DIRNAME/python/mysql.connector-test.py $USER $PORT $REPO_NAME
 }
 
 @test "python pymysql client" {
-    python3 $BATS_TEST_DIRNAME/python/pymysql-test.py $USER $PORT $REPO_NAME
+    python3.8 $BATS_TEST_DIRNAME/python/pymysql-test.py $USER $PORT $REPO_NAME
 }
 
 @test "python sqlachemy client" {
-    python3 $BATS_TEST_DIRNAME/python/sqlalchemy-test.py $USER $PORT $REPO_NAME
+    python3.8 $BATS_TEST_DIRNAME/python/sqlalchemy-test.py $USER $PORT $REPO_NAME
 }
 
 @test "mysql-connector-java client" {
@@ -59,6 +65,7 @@ teardown() {
 
 @test "node mysql client" {
     node $BATS_TEST_DIRNAME/node/index.js $USER $PORT $REPO_NAME
+    node $BATS_TEST_DIRNAME/node/knex.js $USER $PORT $REPO_NAME
 }
 
 @test "c mysql connector" {
@@ -159,4 +166,18 @@ EOF" -m "postgres"
 
 @test "R RMariaDB client" {
     Rscript $BATS_TEST_DIRNAME/r/rmariadb-test.r $USER $PORT $REPO_NAME
+}
+
+definePORT() {
+  getPORT=""
+  for i in {0..9}
+  do
+    let getPORT="($$ + $i) % (65536-1024) + 1024"
+    portinuse=$(lsof -i -P -n | grep LISTEN | grep $attemptedPORT | wc -l)
+      if [ $portinuse -eq 0 ]
+      then
+        echo "$getPORT"
+        break
+      fi
+  done
 }

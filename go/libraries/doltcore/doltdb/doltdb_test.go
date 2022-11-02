@@ -16,7 +16,7 @@ package doltdb
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -25,13 +25,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -69,15 +71,8 @@ func createTestSchema(t *testing.T) schema.Schema {
 	return sch
 }
 
-func CreateTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*Table, error) {
-	schemaVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), vrw, tSchema)
-
-	if err != nil {
-		return nil, err
-	}
-
-	empty, _ := types.NewMap(context.Background(), vrw)
-	tbl, err := NewTable(context.Background(), vrw, schemaVal, rowData, empty, nil)
+func CreateTestTable(vrw types.ValueReadWriter, ns tree.NodeStore, tSchema schema.Schema, rowData durable.Index) (*Table, error) {
+	tbl, err := NewTable(context.Background(), vrw, ns, tSchema, rowData, nil, nil)
 
 	if err != nil {
 		return nil, err
@@ -86,20 +81,20 @@ func CreateTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData t
 	return tbl, nil
 }
 
-func createTestRowData(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
-	return createTestRowDataFromTaggedValues(t, vrw, sch,
-		row.TaggedValues{
-			idTag: types.UUID(id0), firstTag: types.String("bill"), lastTag: types.String("billerson"), ageTag: types.Uint(53)},
-		row.TaggedValues{
-			idTag: types.UUID(id1), firstTag: types.String("eric"), lastTag: types.String("ericson"), isMarriedTag: types.Bool(true), ageTag: types.Uint(21)},
-		row.TaggedValues{
-			idTag: types.UUID(id2), firstTag: types.String("john"), lastTag: types.String("johnson"), isMarriedTag: types.Bool(false), ageTag: types.Uint(53)},
-		row.TaggedValues{
-			idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)},
-	)
-}
+func createTestRowData(t *testing.T, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) durable.Index {
+	if types.Format_Default == types.Format_DOLT {
+		idx, err := durable.NewEmptyIndex(context.Background(), vrw, ns, sch)
+		require.NoError(t, err)
+		return idx
+	}
 
-func createTestRowDataFromTaggedValues(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema, vals ...row.TaggedValues) (types.Map, []row.Row) {
+	vals := []row.TaggedValues{
+		{idTag: types.UUID(id0), firstTag: types.String("bill"), lastTag: types.String("billerson"), ageTag: types.Uint(53)},
+		{idTag: types.UUID(id1), firstTag: types.String("eric"), lastTag: types.String("ericson"), isMarriedTag: types.Bool(true), ageTag: types.Uint(21)},
+		{idTag: types.UUID(id2), firstTag: types.String("john"), lastTag: types.String("johnson"), isMarriedTag: types.Bool(false), ageTag: types.Uint(53)},
+		{idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)},
+	}
+
 	var err error
 	rows := make([]row.Row, len(vals))
 
@@ -108,7 +103,7 @@ func createTestRowDataFromTaggedValues(t *testing.T, vrw types.ValueReadWriter, 
 	ed := m.Edit()
 
 	for i, val := range vals {
-		r, err := row.New(types.Format_Default, sch, val)
+		r, err := row.New(vrw.Format(), sch, val)
 		require.NoError(t, err)
 		rows[i] = r
 		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
@@ -116,8 +111,7 @@ func createTestRowDataFromTaggedValues(t *testing.T, vrw types.ValueReadWriter, 
 
 	m, err = ed.Map(context.Background())
 	assert.NoError(t, err)
-
-	return m, rows
+	return durable.IndexFromNomsMap(m, vrw, ns)
 }
 
 func TestIsValidTableName(t *testing.T) {
@@ -130,7 +124,6 @@ func TestIsValidTableName(t *testing.T) {
 	assert.False(t, IsValidTableName("-"))
 	assert.False(t, IsValidTableName("-a"))
 	assert.False(t, IsValidTableName(""))
-	assert.False(t, IsValidTableName("1a"))
 	assert.False(t, IsValidTableName("a1-"))
 	assert.False(t, IsValidTableName("ab!!c"))
 }
@@ -173,6 +166,15 @@ func TestSystemTableTags(t *testing.T) {
 		assert.Equal(t, doltSchemasMin+1, schema.DoltSchemasTypeTag)
 		assert.Equal(t, doltSchemasMin+2, schema.DoltSchemasNameTag)
 		assert.Equal(t, doltSchemasMin+3, schema.DoltSchemasFragmentTag)
+		assert.Equal(t, doltSchemasMin+4, schema.DoltSchemasExtraTag)
+	})
+	t.Run("dolt_conflicts_ tags", func(t *testing.T) {
+		doltConflictsMin := sysTableMin + uint64(7000)
+		assert.Equal(t, doltConflictsMin+0, schema.DoltConflictsOurDiffTypeTag)
+		assert.Equal(t, doltConflictsMin+1, schema.DoltConflictsTheirDiffTypeTag)
+		assert.Equal(t, doltConflictsMin+2, schema.DoltConflictsBaseCardinalityTag)
+		assert.Equal(t, doltConflictsMin+3, schema.DoltConflictsOurCardinalityTag)
+		assert.Equal(t, doltConflictsMin+4, schema.DoltConflictsTheirCardinalityTag)
 	})
 }
 
@@ -226,7 +228,7 @@ func TestLoadBadLocalFSRepo(t *testing.T) {
 	}
 
 	contents := []byte("not a directory")
-	ioutil.WriteFile(filepath.Join(testDir, dbfactory.DoltDataDir), contents, 0644)
+	os.WriteFile(filepath.Join(testDir, dbfactory.DoltDataDir), contents, 0644)
 
 	ddb, err := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB, filesys.LocalFS)
 	assert.Nil(t, ddb, "Should return nil when loading a non-directory data dir file")
@@ -271,14 +273,14 @@ func TestLDNoms(t *testing.T) {
 			t.Fatal("Couldn't find commit")
 		}
 
-		meta, err := commit.GetCommitMeta()
+		meta, err := commit.GetCommitMeta(context.Background())
 		assert.NoError(t, err)
 
 		if meta.Name != committerName || meta.Email != committerEmail {
 			t.Error("Unexpected metadata")
 		}
 
-		root, err := commit.GetRootValue()
+		root, err := commit.GetRootValue(context.Background())
 
 		assert.NoError(t, err)
 
@@ -288,9 +290,10 @@ func TestLDNoms(t *testing.T) {
 			t.Fatal("There should be no tables in empty db")
 		}
 
+		ctx := context.Background()
 		tSchema := createTestSchema(t)
-		rowData, _ := createTestRowData(t, ddb.db, tSchema)
-		tbl, err = CreateTestTable(ddb.db, tSchema, rowData)
+		rowData, err := durable.NewEmptyIndex(ctx, ddb.vrw, ddb.ns, tSchema)
+		tbl, err = CreateTestTable(ddb.vrw, ddb.ns, tSchema, rowData)
 
 		if err != nil {
 			t.Fatal("Failed to create test table with data")
@@ -299,31 +302,38 @@ func TestLDNoms(t *testing.T) {
 		root, err = root.PutTable(context.Background(), "test", tbl)
 		assert.NoError(t, err)
 
-		valHash, err = ddb.WriteRootValue(context.Background(), root)
+		root, valHash, err = ddb.WriteRootValue(context.Background(), root)
 		assert.NoError(t, err)
-	}
 
-	// reopen the db and commit the value.  Perform a couple checks for
-	{
-		ddb, _ := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB, filesys.LocalFS)
-		meta, err := NewCommitMeta(committerName, committerEmail, "Sample data")
+		meta, err = datas.NewCommitMeta(committerName, committerEmail, "Sample data")
 		if err != nil {
 			t.Error("Failed to commit")
 		}
 
-		commit, err := ddb.Commit(context.Background(), valHash, ref.NewBranchRef("master"), meta)
+		commit, err = ddb.Commit(context.Background(), valHash, ref.NewBranchRef("master"), meta)
 		if err != nil {
 			t.Error("Failed to commit")
 		}
 
-		numParents, err := commit.NumParents()
+		rootHash, err := ddb.NomsRoot(context.Background())
+		if err != nil {
+			t.Error("Failed to get root hash")
+		}
+		branches, err := ddb.GetBranchesByRootHash(context.Background(), rootHash)
+		if err != nil {
+			t.Error("Failed to get branches by root hash")
+		}
+		assert.Equal(t, len(branches), 1)
+		assert.Equal(t, branches[0].Ref.GetPath(), "master")
+
+		numParents := commit.NumParents()
 		assert.NoError(t, err)
 
 		if numParents != 1 {
 			t.Error("Unexpected ancestry")
 		}
 
-		root, err := commit.GetRootValue()
+		root, err = commit.GetRootValue(context.Background())
 		assert.NoError(t, err)
 
 		readTable, ok, err := root.GetTable(context.Background(), "test")
@@ -333,10 +343,13 @@ func TestLDNoms(t *testing.T) {
 			t.Error("Could not retrieve test table")
 		}
 
-		has, err := readTable.HasTheSameSchema(tbl)
-		assert.NoError(t, err)
+		ts, err := tbl.GetSchema(context.Background())
+		require.NoError(t, err)
 
-		if !has {
+		rs, err := readTable.GetSchema(context.Background())
+		require.NoError(t, err)
+
+		if !schema.SchemasAreEqual(ts, rs) {
 			t.Error("Unexpected schema")
 		}
 	}

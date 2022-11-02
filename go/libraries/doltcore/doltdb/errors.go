@@ -42,13 +42,11 @@ var ErrAlreadyOnWorkspace = errors.New("Already on workspace")
 
 var ErrNomsIO = errors.New("error reading from or writing to noms")
 
-var ErrNoConflicts = errors.New("no conflicts")
 var ErrUpToDate = errors.New("up to date")
 var ErrIsAhead = errors.New("current fast forward from a to b. a is ahead of b already")
 var ErrIsBehind = errors.New("cannot reverse from b to a. b is a is behind a already")
 
-var ErrUnresolvedConflicts = errors.New("merge has unresolved conflicts. please use the dolt_conflicts table to resolve")
-var ErrUnresolvedConstraintViolations = errors.New("merge has unresolved constraint violations. please use the dolt_constraint_violations table to resolve")
+var ErrUnresolvedConflictsOrViolations = errors.New("merge has unresolved conflicts or constraint violations")
 var ErrMergeActive = errors.New("merging is not possible because you have not committed an active merge")
 
 type ErrClientOutOfDate struct {
@@ -71,21 +69,15 @@ func IsInvalidFormatErr(err error) bool {
 }
 
 func IsNotFoundErr(err error) bool {
-	switch err {
-	case ErrHashNotFound, ErrBranchNotFound, ErrTableNotFound:
-		return true
-	default:
-		return false
-	}
+	return errors.Is(err, ErrHashNotFound) ||
+		errors.Is(err, ErrBranchNotFound) ||
+		errors.Is(err, ErrTableNotFound)
 }
 
 func IsNotACommit(err error) bool {
-	switch err {
-	case ErrHashNotFound, ErrBranchNotFound, ErrFoundHashNotACommit:
-		return true
-	default:
-		return false
-	}
+	return errors.Is(err, ErrHashNotFound) ||
+		errors.Is(err, ErrBranchNotFound) ||
+		errors.Is(err, ErrFoundHashNotACommit)
 }
 
 type RootType int

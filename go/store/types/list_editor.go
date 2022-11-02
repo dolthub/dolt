@@ -139,7 +139,7 @@ func (le *ListEditor) List(ctx context.Context) (List, error) {
 
 		var err error
 		if ch == nil {
-			ch, err = newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
+			ch, err = newListLeafChunker(ctx, cur, vrw)
 		} else {
 			err = ch.advanceTo(ctx, cur)
 		}
@@ -183,6 +183,12 @@ func (le *ListEditor) List(ctx context.Context) (List, error) {
 	}
 
 	return newList(seq), nil
+}
+
+func newListLeafChunker(ctx context.Context, cur *sequenceCursor, vrw ValueReadWriter) (*sequenceChunker, error) {
+	makeChunk := makeListLeafChunkFn(vrw)
+	makeParentChunk := newIndexedMetaSequenceChunkFn(ListKind, vrw)
+	return newSequenceChunker(ctx, cur, 0, vrw, makeChunk, makeParentChunk, newListChunker, hashValueBytes)
 }
 
 func collapseListEdit(newEdit, edit *listEdit) bool {

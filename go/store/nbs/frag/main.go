@@ -36,7 +36,6 @@ import (
 	flag "github.com/juju/gnuflag"
 
 	"github.com/dolthub/dolt/go/store/d"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
@@ -58,6 +57,8 @@ func main() {
 		flag.PrintDefaults()
 	}
 
+	ctx := context.Background()
+
 	profile.RegisterProfileFlags(flag.CommandLine)
 	flag.Parse(true)
 
@@ -69,7 +70,7 @@ func main() {
 	var store *nbs.NomsBlockStore
 	if *dir != "" {
 		var err error
-		store, err = nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), *dir, memTableSize)
+		store, err = nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), *dir, memTableSize, nbs.NewUnlimitedMemQuotaProvider())
 		d.PanicIfError(err)
 
 		*dbName = *dir
@@ -77,25 +78,29 @@ func main() {
 		sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 
 		var err error
-		store, err = nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), *table, *dbName, *bucket, s3.New(sess), dynamodb.New(sess), memTableSize)
+		store, err = nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), *table, *dbName, *bucket, s3.New(sess), dynamodb.New(sess), memTableSize, nbs.NewUnlimitedMemQuotaProvider())
 		d.PanicIfError(err)
 	} else {
 		log.Fatalf("Must set either --dir or ALL of --table, --bucket and --db\n")
 	}
 
-	db := datas.NewDatabase(store)
-	defer db.Close()
+	vrw := types.NewValueStore(store)
 
-	defer profile.MaybeStartProfile().Stop()
-
-	dss, err := db.Datasets(context.Background())
-
+	root, err := store.Root(ctx)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error: failed to get datasets")
+		fmt.Fprintf(os.Stderr, "error: failed to get root: %v\n", err)
 		os.Exit(1)
 	}
 
-	ref, err := types.NewRef(dss, types.Format_7_18)
+	defer profile.MaybeStartProfile().Stop()
+
+	rootValue, err := vrw.ReadValue(ctx, root)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: failed to get root value: %v\n", err)
+		os.Exit(1)
+	}
+
+	ref, err := types.NewRef(rootValue, types.Format_Default)
 	d.PanicIfError(err)
 	height := ref.Height()
 	fmt.Println("Store is of height", height)
@@ -106,18 +111,11 @@ func main() {
 	var optimal, sum int
 	visited := map[hash.Hash]bool{}
 
-	root, err := store.Root(context.Background())
-
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error: failed to get root")
-		os.Exit(1)
-	}
-
 	current := hash.HashSlice{root}
 	for numNodes := 1; numNodes > 0; numNodes = len(current) {
 		// Start by reading the values of the current level of the graph
 		currentValues := make(map[hash.Hash]types.Value, len(current))
-		readValues, err := db.ReadManyValues(context.Background(), current)
+		readValues, err := vrw.ReadManyValues(ctx, current)
 		d.PanicIfError(err)
 		for i, v := range readValues {
 			h := current[i]
@@ -132,13 +130,11 @@ func main() {
 		orderedChildren := hash.HashSlice{}
 		nextLevel := hash.HashSlice{}
 		for _, h := range current {
-			_ = currentValues[h].WalkRefs(types.Format_7_18, func(r types.Ref) error {
-				target := r.TargetHash()
-				orderedChildren = append(orderedChildren, target)
-				if !visited[target] && r.Height() > 1 {
-					nextLevel = append(nextLevel, target)
+			_ = types.WalkAddrs(currentValues[h], types.Format_Default, func(h hash.Hash, isleaf bool) error {
+				orderedChildren = append(orderedChildren, h)
+				if !visited[h] && !isleaf {
+					nextLevel = append(nextLevel, h)
 				}
-
 				return nil
 			})
 		}
@@ -157,14 +153,14 @@ func main() {
 			if i+1 == numGroups { // last group
 				go func(i int) {
 					defer wg.Done()
-					reads[i], _, err = store.CalcReads(orderedChildren[i*branchFactor:].HashSet(), 0)
+					reads[i], _, err = nbs.CalcReads(store, orderedChildren[i*branchFactor:].HashSet(), 0)
 					d.PanicIfError(err)
 				}(i)
 				continue
 			}
 			go func(i int) {
 				defer wg.Done()
-				reads[i], _, err = store.CalcReads(orderedChildren[i*branchFactor:(i+1)*branchFactor].HashSet(), 0)
+				reads[i], _, err = nbs.CalcReads(store, orderedChildren[i*branchFactor:(i+1)*branchFactor].HashSet(), 0)
 				d.PanicIfError(err)
 			}(i)
 		}

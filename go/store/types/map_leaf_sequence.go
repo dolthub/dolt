@@ -144,7 +144,7 @@ func newMapLeafSequence(vrw ValueReadWriter, data ...mapEntry) (orderedSequence,
 
 		offsets[i+sequencePartValues+1] = w.offset
 	}
-	return mapLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}, nil
+	return mapLeafSequence{newLeafSequence(vrw.Format(), vrw, w.data(), offsets, count)}, nil
 }
 
 func (ml mapLeafSequence) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
@@ -164,7 +164,7 @@ func (ml mapLeafSequence) getTupleMapEntry(idx int) (tupleMapEntry, error) {
 	return readTupleMapEntry(&dec, ml.format())
 }
 
-func (ml mapLeafSequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (ml mapLeafSequence) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	w := binaryNomsWriter{make([]byte, 4), 0}
 	err := ml.writeTo(&w, ml.format())
 
@@ -553,7 +553,7 @@ func (mes mapEntrySequence) typeOf() (*Type, error) {
 	panic("not implemented")
 }
 
-func (mes mapEntrySequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (mes mapEntrySequence) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	panic("not implemented")
 }
 

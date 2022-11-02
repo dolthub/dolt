@@ -25,8 +25,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
+)
+
+const (
+	dirParamName = "dir"
 )
 
 var readTablesDocs = cli.CommandDocumentationContent{
@@ -53,10 +56,13 @@ func (cmd ReadTablesCmd) Description() string {
 	return readTablesDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ReadTablesCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, readTablesDocs, ap))
+func (cmd ReadTablesCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT(nbf)
+}
+
+func (cmd ReadTablesCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(readTablesDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -65,7 +71,7 @@ func (cmd ReadTablesCmd) RequiresRepo() bool {
 	return false
 }
 
-func (cmd ReadTablesCmd) createArgParser() *argparser.ArgParser {
+func (cmd ReadTablesCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = [][2]string{
 		{"remote-repo", "Remote repository to retrieve data from"},
@@ -78,9 +84,9 @@ func (cmd ReadTablesCmd) createArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, readTablesDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, readTablesDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() < 2 {
@@ -145,7 +151,7 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 	}
 
 	for _, tblName := range tblNames {
-		destRoot, verr = pullTableValue(ctx, dEnv, srcDB, srcRoot, destRoot, tblName, commitStr)
+		destRoot, verr = pullTableValue(ctx, dEnv, srcDB, srcRoot, destRoot, downloadLanguage, tblName, commitStr)
 
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
@@ -161,9 +167,8 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 	return 0
 }
 
-func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB, srcRoot, destRoot *doltdb.RootValue, tblName, commitStr string) (*doltdb.RootValue, errhand.VerboseError) {
+func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB, srcRoot, destRoot *doltdb.RootValue, language progLanguage, tblName, commitStr string) (*doltdb.RootValue, errhand.VerboseError) {
 	tbl, ok, err := srcRoot.GetTable(ctx, tblName)
-
 	if !ok {
 		return nil, errhand.BuildDError("No table named '%s' at '%s'", tblName, commitStr).Build()
 	} else if err != nil {
@@ -171,22 +176,26 @@ func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB
 	}
 
 	tblHash, err := tbl.HashOf()
-
 	if err != nil {
 		return nil, errhand.BuildDError("Unable to read from remote database.").AddCause(err).Build()
 	}
 
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil, errhand.BuildDError("error: ").AddCause(err).Build()
+	}
+
 	newCtx, cancelFunc := context.WithCancel(ctx)
 	cli.Println("Retrieving", tblName)
-	wg, progChan, pullerEventCh := runProgFuncs(newCtx)
-	err = dEnv.DoltDB.PushChunksForRefHash(ctx, dEnv.TempTableFilesDir(), srcDB, tblHash, pullerEventCh)
+	runProgFunc := buildProgStarter(language)
+	wg, progChan, pullerEventCh := runProgFunc(newCtx)
+	err = dEnv.DoltDB.PullChunks(ctx, tmpDir, srcDB, tblHash, progChan, pullerEventCh)
 	stopProgFuncs(cancelFunc, wg, progChan, pullerEventCh)
 	if err != nil {
 		return nil, errhand.BuildDError("Failed reading chunks for remote table '%s' at '%s'", tblName, commitStr).AddCause(err).Build()
 	}
 
 	destRoot, err = destRoot.SetTableHash(ctx, tblName, tblHash)
-
 	if err != nil {
 		return nil, errhand.BuildDError("Unable to write to local database.").AddCause(err).Build()
 	}
@@ -213,7 +222,7 @@ func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams 
 		return nil, nil, errhand.BuildDError("Failed to find commit '%s'", commitStr).Build()
 	}
 
-	srcRoot, err := cm.GetRootValue()
+	srcRoot, err := cm.GetRootValue(ctx)
 
 	if err != nil {
 		return nil, nil, errhand.BuildDError("Failed to read from database").AddCause(err).Build()

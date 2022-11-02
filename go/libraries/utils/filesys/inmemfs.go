@@ -16,9 +16,10 @@ package filesys
 
 import (
 	"bytes"
+	"encoding/base32"
 	"errors"
 	"io"
-	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,6 +89,8 @@ type InMemFS struct {
 	objs   map[string]memObj
 }
 
+var _ Filesys = (*InMemFS)(nil)
+
 // EmptyInMemFS creates an empty InMemFS instance
 func EmptyInMemFS(workingDir string) *InMemFS {
 	return NewInMemFS([]string{}, map[string][]byte{}, workingDir)
@@ -134,6 +137,17 @@ func NewInMemFS(dirs []string, files map[string][]byte, cwd string) *InMemFS {
 	}
 
 	return fs
+}
+
+// WithWorkingDir returns a copy of this file system with the current working dir set to the path given
+func (fs InMemFS) WithWorkingDir(path string) (Filesys, error) {
+	abs, err := fs.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+
+	fs.cwd = abs
+	return &fs, nil
 }
 
 func (fs *InMemFS) getAbsPath(path string) string {
@@ -257,7 +271,7 @@ func (fs *InMemFS) OpenForRead(fp string) (io.ReadCloser, error) {
 	fileObj := fs.objs[fp].(*memFile)
 	buf := bytes.NewReader(fileObj.data)
 
-	return ioutil.NopCloser(buf), nil
+	return io.NopCloser(buf), nil
 }
 
 // ReadFile reads the entire contents of a file
@@ -269,7 +283,7 @@ func (fs *InMemFS) ReadFile(fp string) ([]byte, error) {
 		return nil, err
 	}
 
-	return ioutil.ReadAll(r)
+	return io.ReadAll(r)
 }
 
 type inMemFSWriteCloser struct {
@@ -301,6 +315,28 @@ func (fsw *inMemFSWriteCloser) Close() error {
 // OpenForWrite opens a file for writing.  The file will be created if it does not exist, and if it does exist
 // it will be overwritten.
 func (fs *InMemFS) OpenForWrite(fp string, perm os.FileMode) (io.WriteCloser, error) {
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
+	fp = fs.getAbsPath(fp)
+
+	if exists, isDir := fs.exists(fp); exists && isDir {
+		return nil, ErrIsDir
+	}
+
+	dir := filepath.Dir(fp)
+	parentDir, err := fs.mkDirs(dir)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &inMemFSWriteCloser{fp, parentDir, fs, bytes.NewBuffer(make([]byte, 0, 512)), fs.rwLock}, nil
+}
+
+// OpenForWriteAppend opens a file for writing.  The file will be created if it does not exist, and if it does exist
+// it will append to existing file.
+func (fs *InMemFS) OpenForWriteAppend(fp string, perm os.FileMode) (io.WriteCloser, error) {
 	fs.rwLock.Lock()
 	defer fs.rwLock.Unlock()
 
@@ -501,6 +537,44 @@ func (fs *InMemFS) MoveFile(srcPath, destPath string) error {
 	return os.ErrNotExist
 }
 
+func (fs *InMemFS) CopyFile(srcPath, destPath string) error {
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
+	srcPath = fs.getAbsPath(srcPath)
+	destPath = fs.getAbsPath(destPath)
+
+	if exists, destIsDir := fs.exists(destPath); exists && destIsDir {
+		return ErrIsDir
+	}
+
+	if obj, ok := fs.objs[srcPath]; ok {
+		if obj.isDir() {
+			return ErrIsDir
+		}
+
+		destDir := filepath.Dir(destPath)
+		destParentDir, err := fs.mkDirs(destDir)
+		if err != nil {
+			return err
+		}
+
+		destData := make([]byte, len(obj.(*memFile).data))
+		copy(destData, obj.(*memFile).data)
+
+		now := InMemNowFunc()
+		destObj := &memFile{destPath, destData, destParentDir, now}
+
+		fs.objs[destPath] = destObj
+		destParentDir.objs[destPath] = destObj
+		destParentDir.time = now
+
+		return nil
+	}
+
+	return os.ErrNotExist
+}
+
 // converts a path to an absolute path.  If it's already an absolute path the input path will be returned unaltered
 func (fs *InMemFS) Abs(path string) (string, error) {
 	path = fs.pathToNative(path)
@@ -523,6 +597,13 @@ func (fs *InMemFS) LastModified(path string) (t time.Time, exists bool) {
 	}
 
 	return time.Time{}, false
+}
+
+func (fs *InMemFS) TempDir() string {
+	buf := make([]byte, 16)
+	rand.Read(buf)
+	s := base32.HexEncoding.EncodeToString(buf)
+	return "/var/folders/gc/" + s + "/T/"
 }
 
 func (fs *InMemFS) pathToNative(path string) string {

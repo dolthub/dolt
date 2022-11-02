@@ -15,14 +15,12 @@
 package dtables
 
 import (
-	"io"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
 var _ sql.Table = (*LogTable)(nil)
@@ -61,53 +59,50 @@ func (dt *LogTable) Schema() sql.Schema {
 	}
 }
 
+// Collation implements the sql.Table interface.
+func (dt *LogTable) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
 // Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.
 func (dt *LogTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(types.Map{}), nil
+	return index.SinglePartitionIterFromNomsMap(nil), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
-func (dt *LogTable) PartitionRows(sqlCtx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return NewLogItr(sqlCtx, dt.ddb, dt.head)
+func (dt *LogTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
+	return NewLogItr(ctx, dt.ddb, dt.head)
 }
 
 // LogItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type LogItr struct {
-	commits []*doltdb.Commit
-	idx     int
+	child doltdb.CommitItr
 }
 
 // NewLogItr creates a LogItr from the current environment.
-func NewLogItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*LogItr, error) {
-	commits, err := actions.TimeSortedCommits(sqlCtx, ddb, head, -1)
-
+func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*LogItr, error) {
+	hash, err := head.HashOf()
 	if err != nil {
 		return nil, err
 	}
 
-	return &LogItr{commits, 0}, nil
+	child, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &LogItr{child}, nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (itr *LogItr) Next() (sql.Row, error) {
-	if itr.idx >= len(itr.commits) {
-		return nil, io.EOF
-	}
-
-	defer func() {
-		itr.idx++
-	}()
-
-	cm := itr.commits[itr.idx]
-	meta, err := cm.GetCommitMeta()
-
+func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
+	h, cm, err := itr.child.Next(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	h, err := cm.HashOf()
-
+	meta, err := cm.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, err
 	}

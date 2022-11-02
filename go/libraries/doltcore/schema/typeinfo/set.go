@@ -39,7 +39,7 @@ type setType struct {
 var _ TypeInfo = (*setType)(nil)
 
 func CreateSetTypeFromParams(params map[string]string) (TypeInfo, error) {
-	var collation sql.Collation
+	var collation sql.CollationID
 	var err error
 	if collationStr, ok := params[setTypeParam_Collation]; ok {
 		collation, err = sql.ParseCollation(nil, &collationStr, false)
@@ -69,11 +69,7 @@ func CreateSetTypeFromParams(params map[string]string) (TypeInfo, error) {
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *setType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Uint); ok {
-		res, err := ti.sqlSetType.Unmarshal(uint64(val))
-		if err != nil {
-			return nil, fmt.Errorf(`"%v" cannot convert "%v" to value`, ti.String(), val)
-		}
-		return res, nil
+		return uint64(val), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -86,12 +82,7 @@ func (ti *setType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (i
 	k := reader.ReadKind()
 	switch k {
 	case types.UintKind:
-		val := reader.ReadUint()
-		res, err := ti.sqlSetType.Unmarshal(uint64(val))
-		if err != nil {
-			return nil, fmt.Errorf(`"%v" cannot convert "%v" to value`, ti.String(), val)
-		}
-		return res, nil
+		return reader.ReadUint(), nil
 	case types.NullKind:
 		return nil, nil
 	}
@@ -104,11 +95,11 @@ func (ti *setType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueR
 	if v == nil {
 		return types.NullValue, nil
 	}
-	val, err := ti.sqlSetType.Marshal(v)
+	val, err := ti.sqlSetType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
-	return types.Uint(val), nil
+	return types.Uint(val.(uint64)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -134,13 +125,13 @@ func (ti *setType) FormatValue(v types.Value) (*string, error) {
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
-	strVal, err := ti.ConvertNomsValueToValue(v)
+	convVal, err := ti.ConvertNomsValueToValue(v)
 	if err != nil {
 		return nil, err
 	}
-	val, ok := strVal.(string)
-	if !ok {
-		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
+	val, err := ti.sqlSetType.BitsToString(convVal.(uint64))
+	if err != nil {
+		return nil, err
 	}
 	return &val, nil
 }
@@ -168,7 +159,7 @@ func (ti *setType) GetTypeParams() map[string]string {
 // IsValid implements TypeInfo interface.
 func (ti *setType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Uint); ok {
-		_, err := ti.sqlSetType.Unmarshal(uint64(val))
+		_, err := ti.sqlSetType.BitsToString(uint64(val))
 		if err != nil {
 			return false
 		}
@@ -183,18 +174,6 @@ func (ti *setType) IsValid(v types.Value) bool {
 // NomsKind implements TypeInfo interface.
 func (ti *setType) NomsKind() types.NomsKind {
 	return types.UintKind
-}
-
-// ParseValue implements TypeInfo interface.
-func (ti *setType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil {
-		return types.NullValue, nil
-	}
-	val, err := ti.sqlSetType.Marshal(*str)
-	if err != nil {
-		return nil, err
-	}
-	return types.Uint(val), nil
 }
 
 // Promote implements TypeInfo interface.
@@ -229,11 +208,27 @@ func setTypeConverter(ctx context.Context, src *setType, destTi TypeInfo) (tc Ty
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geomcollType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geometryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *linestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multilinestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipolygonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *pointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *polygonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
 		return wrapIsValid(dest.IsValid, src, dest)

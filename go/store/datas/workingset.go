@@ -17,53 +17,71 @@ package datas
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/store/nomdl"
+	flatbuffers "github.com/google/flatbuffers/go"
+
+	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
-	WorkingSetName      = "WorkingSet"
-	WorkingSetMetaField = "meta"
-	WorkingRootRefField = "workingRootRef"
-	StagedRootRefField  = "stagedRootRef"
-	MergeStateField     = "mergeState"
+	workingSetName      = "WorkingSet"
+	workingSetMetaField = "meta"
+	workingRootRefField = "workingRootRef"
+	stagedRootRefField  = "stagedRootRef"
+	mergeStateField     = "mergeState"
 )
 
 const (
-	MergeStateName                 = "MergeState"
-	MergeStateCommitField          = "commit"
-	MergeStateWorkingPreMergeField = "workingPreMerge"
+	mergeStateName                 = "MergeState"
+	mergeStateCommitSpecField      = "commitSpec"
+	mergeStateCommitField          = "commit"
+	mergeStateWorkingPreMergeField = "workingPreMerge"
 )
 
 const (
-	WorkingSetMetaName             = "WorkingSetMeta"
-	WorkingSetMetaNameField        = "name"
-	WorkingSetMetaEmailField       = "email"
-	WorkingSetMetaTimestampField   = "timestamp"
-	WorkingSetMetaDescriptionField = "description"
-	WorkingSetMetaVersionField     = "version"
+	workingSetMetaName             = "WorkingSetMeta"
+	workingSetMetaNameField        = "name"
+	workingSetMetaEmailField       = "email"
+	workingSetMetaTimestampField   = "timestamp"
+	workingSetMetaDescriptionField = "description"
+	workingSetMetaVersionField     = "version"
 )
 
 const workingSetMetaVersion = "1.0"
 
 type WorkingSetMeta struct {
-	Meta types.Struct
+	Name        string
+	Email       string
+	Description string
+	Timestamp   uint64
 }
 
-var valueWorkingSetType = nomdl.MustParseType(`Struct WorkingSet {
-		mergeState?: Ref<Value>,
-		meta: Struct {},
-		stagedRootRef?:  Ref<Value>,
-        workingRootRef:  Ref<Value>,
-}`)
+func (m *WorkingSetMeta) toNomsStruct(format *types.NomsBinFormat) (types.Struct, error) {
+	fields := make(types.StructData)
+	fields[workingSetMetaNameField] = types.String(m.Name)
+	fields[workingSetMetaEmailField] = types.String(m.Email)
+	fields[workingSetMetaTimestampField] = types.Uint(m.Timestamp)
+	fields[workingSetMetaDescriptionField] = types.String(m.Description)
+	fields[workingSetMetaVersionField] = types.String(workingSetMetaVersion)
+	return types.NewStruct(format, workingSetMetaName, fields)
+}
 
-var mergeStateTemplate = types.MakeStructTemplate(MergeStateName, []string{MergeStateCommitField, MergeStateWorkingPreMergeField})
+func workingSetMetaFromWorkingSetSt(workingSetSt types.Struct) (*WorkingSetMeta, error) {
+	metaV, ok, err := workingSetSt.MaybeGet(workingSetMetaNameField)
+	if err != nil || !ok {
+		return nil, err
+	}
+	return workingSetMetaFromNomsSt(metaV.(types.Struct))
+}
+
+var mergeStateTemplate = types.MakeStructTemplate(mergeStateName, []string{mergeStateCommitField, mergeStateCommitSpecField, mergeStateWorkingPreMergeField})
 
 type WorkingSetSpec struct {
-	Meta        WorkingSetMeta
+	Meta        *WorkingSetMeta
 	WorkingRoot types.Ref
 	StagedRoot  types.Ref
-	MergeState  *types.Ref
+	MergeState  *MergeState
 }
 
 // NewWorkingSet creates a new working set object.
@@ -73,49 +91,186 @@ type WorkingSetSpec struct {
 // A working set struct has the following type:
 //
 // ```
-// struct WorkingSet {
-//   meta: M,
-//   workingRootRef: R,
-//   stagedRootRef: R,
-//   mergeState: R,
-// }
+//
+//	struct WorkingSet {
+//	  meta: M,
+//	  workingRootRef: R,
+//	  stagedRootRef: R,
+//	  mergeState: R,
+//	}
+//
 // ```
 // where M is a struct type and R is a ref type.
-func NewWorkingSet(_ context.Context, meta WorkingSetMeta, workingRef, stagedRef types.Ref, mergeStateRef *types.Ref) (types.Struct, error) {
-	fields := make(types.StructData)
-	fields[WorkingSetMetaField] = meta.Meta
-	fields[WorkingRootRefField] = workingRef
-	fields[StagedRootRefField] = stagedRef
+func newWorkingSet(ctx context.Context, db *database, meta *WorkingSetMeta, workingRef, stagedRef types.Ref, mergeState *MergeState) (hash.Hash, types.Ref, error) {
+	if db.Format().UsesFlatbuffers() {
+		stagedAddr := stagedRef.TargetHash()
+		data := workingset_flatbuffer(workingRef.TargetHash(), &stagedAddr, mergeState, meta)
 
-	if mergeStateRef != nil {
-		fields[MergeStateField] = mergeStateRef
+		r, err := db.WriteValue(ctx, types.SerialMessage(data))
+		if err != nil {
+			return hash.Hash{}, types.Ref{}, err
+		}
+
+		ref, err := types.ToRefOfValue(r, db.Format())
+		if err != nil {
+			return hash.Hash{}, types.Ref{}, err
+		}
+
+		return ref.TargetHash(), ref, nil
 	}
 
-	return types.NewStruct(workingRef.Format(), WorkingSetName, fields)
-}
+	metaSt, err := meta.toNomsStruct(workingRef.Format())
+	if err != nil {
+		return hash.Hash{}, types.Ref{}, err
+	}
 
-func NewMergeState(_ context.Context, preMergeWorking types.Ref, commit types.Struct) (types.Struct, error) {
-	return mergeStateTemplate.NewStruct(preMergeWorking.Format(), []types.Value{commit, preMergeWorking})
-}
-
-func NewWorkingSetMeta(format *types.NomsBinFormat, name, email string, timestamp uint64, description string) (types.Struct, error) {
 	fields := make(types.StructData)
-	fields[WorkingSetMetaNameField] = types.String(name)
-	fields[WorkingSetMetaEmailField] = types.String(email)
-	fields[WorkingSetMetaTimestampField] = types.Uint(timestamp)
-	fields[WorkingSetMetaDescriptionField] = types.String(description)
-	fields[WorkingSetMetaVersionField] = types.String(workingSetMetaVersion)
+	fields[workingSetMetaField] = metaSt
+	fields[workingRootRefField] = workingRef
+	fields[stagedRootRefField] = stagedRef
 
-	return types.NewStruct(format, WorkingSetMetaName, fields)
+	if mergeState != nil {
+		fields[mergeStateField] = *mergeState.nomsMergeStateRef
+	}
+
+	st, err := types.NewStruct(workingRef.Format(), workingSetName, fields)
+	if err != nil {
+		return hash.Hash{}, types.Ref{}, err
+	}
+
+	wsRef, err := db.WriteValue(ctx, st)
+	if err != nil {
+		return hash.Hash{}, types.Ref{}, err
+	}
+
+	ref, err := types.ToRefOfValue(wsRef, db.Format())
+	if err != nil {
+		return hash.Hash{}, types.Ref{}, err
+	}
+
+	return ref.TargetHash(), ref, nil
+}
+
+func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *MergeState, meta *WorkingSetMeta) serial.Message {
+	builder := flatbuffers.NewBuilder(1024)
+	workingoff := builder.CreateByteVector(working[:])
+	var stagedOff, mergeStateOff flatbuffers.UOffsetT
+	if staged != nil {
+		stagedOff = builder.CreateByteVector((*staged)[:])
+	}
+	if mergeState != nil {
+		prerootaddroff := builder.CreateByteVector((*mergeState.preMergeWorkingAddr)[:])
+		fromaddroff := builder.CreateByteVector((*mergeState.fromCommitAddr)[:])
+		fromspecoff := builder.CreateString(mergeState.fromCommitSpec)
+		serial.MergeStateStart(builder)
+		serial.MergeStateAddPreWorkingRootAddr(builder, prerootaddroff)
+		serial.MergeStateAddFromCommitAddr(builder, fromaddroff)
+		serial.MergeStateAddFromCommitSpecStr(builder, fromspecoff)
+		mergeStateOff = serial.MergeStateEnd(builder)
+	}
+
+	var nameOff, emailOff, descOff flatbuffers.UOffsetT
+	if meta != nil {
+		nameOff = builder.CreateString(meta.Name)
+		emailOff = builder.CreateString(meta.Email)
+		descOff = builder.CreateString(meta.Description)
+	}
+
+	serial.WorkingSetStart(builder)
+	serial.WorkingSetAddWorkingRootAddr(builder, workingoff)
+	if stagedOff != 0 {
+		serial.WorkingSetAddStagedRootAddr(builder, stagedOff)
+	}
+	if mergeStateOff != 0 {
+		serial.WorkingSetAddMergeState(builder, mergeStateOff)
+	}
+	if meta != nil {
+		serial.WorkingSetAddName(builder, nameOff)
+		serial.WorkingSetAddEmail(builder, emailOff)
+		serial.WorkingSetAddDesc(builder, descOff)
+		serial.WorkingSetAddTimestampMillis(builder, meta.Timestamp)
+	}
+	return serial.FinishMessage(builder, serial.WorkingSetEnd(builder), []byte(serial.WorkingSetFileID))
+}
+
+func NewMergeState(ctx context.Context, vrw types.ValueReadWriter, preMergeWorking types.Ref, commit *Commit, commitSpecStr string) (*MergeState, error) {
+	if vrw.Format().UsesFlatbuffers() {
+		ms := &MergeState{
+			preMergeWorkingAddr: new(hash.Hash),
+			fromCommitAddr:      new(hash.Hash),
+			fromCommitSpec:      commitSpecStr,
+		}
+		*ms.preMergeWorkingAddr = preMergeWorking.TargetHash()
+		*ms.fromCommitAddr = commit.Addr()
+		return ms, nil
+	} else {
+		v, err := mergeStateTemplate.NewStruct(preMergeWorking.Format(), []types.Value{commit.NomsValue(), types.String(commitSpecStr), preMergeWorking})
+		if err != nil {
+			return nil, err
+		}
+		ref, err := vrw.WriteValue(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		return &MergeState{
+			nomsMergeStateRef: &ref,
+			nomsMergeState:    &v,
+		}, nil
+	}
 }
 
 func IsWorkingSet(v types.Value) (bool, error) {
-	if s, ok := v.(types.Struct); !ok {
-		return false, nil
-	} else {
+	if s, ok := v.(types.Struct); ok {
 		// We're being more lenient here than in other checks, to make it more likely we can release changes to the
 		// working set data description in a backwards compatible way.
 		// types.IsValueSubtypeOf is very strict about the type description.
-		return s.Name() == WorkingSetName, nil
+		return s.Name() == workingSetName, nil
+	} else if sm, ok := v.(types.SerialMessage); ok {
+		return serial.GetFileID(sm) == serial.WorkingSetFileID, nil
+	} else {
+		return false, nil
 	}
+}
+
+func workingSetMetaFromNomsSt(st types.Struct) (*WorkingSetMeta, error) {
+	// Like other places that deal with working set meta, we err on the side of leniency w.r.t. this data structure's
+	// contents
+	name, ok, err := st.MaybeGet(workingSetMetaNameField)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		name = types.String("not present")
+	}
+
+	email, ok, err := st.MaybeGet(workingSetMetaEmailField)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		email = types.String("not present")
+	}
+
+	timestamp, ok, err := st.MaybeGet(workingSetMetaTimestampField)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		timestamp = types.Uint(0)
+	}
+
+	description, ok, err := st.MaybeGet(workingSetMetaDescriptionField)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		description = types.String("not present")
+	}
+
+	return &WorkingSetMeta{
+		Name:        string(name.(types.String)),
+		Email:       string(email.(types.String)),
+		Timestamp:   uint64(timestamp.(types.Uint)),
+		Description: string(description.(types.String)),
+	}, nil
 }

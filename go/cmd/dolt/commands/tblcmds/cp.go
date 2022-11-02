@@ -17,14 +17,13 @@ package tblcmds
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var tblCpDocs = cli.CommandDocumentationContent{
@@ -52,13 +51,12 @@ func (cmd CpCmd) Description() string {
 	return "Copies a table"
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CpCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, tblCpDocs, ap))
+func (cmd CpCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(tblCpDocs, ap)
 }
 
-func (cmd CpCmd) createArgParser() *argparser.ArgParser {
+func (cmd CpCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"oldtable", "The table being copied."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"newtable", "The destination where the table is being copied to."})
@@ -73,8 +71,8 @@ func (cmd CpCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblCpDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tblCpDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() != 2 {
@@ -91,7 +89,7 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	queryStr = fmt.Sprintf("%sCREATE TABLE `%s` LIKE `%s`;", queryStr, newTbl, oldTbl)
 	queryStr = fmt.Sprintf("%sINSERT INTO `%s` SELECT * FROM `%s`;", queryStr, newTbl, oldTbl)
 
-	cli.CliOut = ioutil.Discard // display nothing on success
+	cli.CliOut = io.Discard // display nothing on success
 	return commands.SqlCmd{}.Exec(ctx, "", []string{
 		fmt.Sprintf("--%s", commands.BatchFlag),
 		fmt.Sprintf(`--%s`, commands.QueryFlag),

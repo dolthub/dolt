@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
@@ -60,13 +59,12 @@ func (cmd LsCmd) Description() string {
 	return "List tables in the working set."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd LsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+func (cmd LsCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(lsDocs, ap)
 }
 
-func (cmd LsCmd) createArgParser() *argparser.ArgParser {
+func (cmd LsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(verboseFlag, "v", "show the hash of the table")
 	ap.SupportsFlag(systemFlag, "s", "show system tables")
@@ -81,8 +79,8 @@ func (cmd LsCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, lsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.Contains(systemFlag) && apr.Contains(allFlag) {
@@ -129,7 +127,7 @@ func getRootForCommitSpecStr(ctx context.Context, csStr string, dEnv *env.DoltEn
 		return "", nil, errhand.BuildDError(`Unable to resolve "%s"`, csStr).AddCause(err).Build()
 	}
 
-	r, err := cm.GetRootValue()
+	r, err := cm.GetRootValue(ctx)
 
 	if err != nil {
 		return "", nil, errhand.BuildDError("error: failed to get root").AddCause(err).Build()
@@ -174,24 +172,25 @@ func printUserTables(ctx context.Context, root *doltdb.RootValue, label string, 
 
 func listTableVerbose(ctx context.Context, tbl string, root *doltdb.RootValue) (string, errhand.VerboseError) {
 	h, _, err := root.GetTableHash(ctx, tbl)
-
 	if err != nil {
 		return "", errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
 	}
 
 	tblVal, _, err := root.GetTable(ctx, tbl)
-
 	if err != nil {
 		return "", errhand.BuildDError("error: failed to get table").AddCause(err).Build()
 	}
 
 	rows, err := tblVal.GetRowData(ctx)
-
 	if err != nil {
 		return "", errhand.BuildDError("error: failed to get row data").AddCause(err).Build()
 	}
+	cnt, err := rows.Count()
+	if err != nil {
+		return "", errhand.VerboseErrorFromError(err)
+	}
 
-	return fmt.Sprintf("\t%-32s %s    %d rows\n", tbl, h.String(), rows.Len()), nil
+	return fmt.Sprintf("\t%-32s %s    %d rows\n", tbl, h.String(), cnt), nil
 }
 
 func printSystemTables(ctx context.Context, root *doltdb.RootValue, ddb *doltdb.DoltDB, verbose bool) errhand.VerboseError {
@@ -250,7 +249,7 @@ func printSysTablesNotInWorkingSet(ctx context.Context, ddb *doltdb.DoltDB, root
 			return errhand.BuildDError("error: failed to iterate through history").AddCause(err).Build()
 		}
 
-		currRoot, err := cm.GetRootValue()
+		currRoot, err := cm.GetRootValue(ctx)
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to read root from db.").AddCause(err).Build()

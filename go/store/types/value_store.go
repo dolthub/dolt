@@ -24,6 +24,7 @@ package types
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"sync"
 
@@ -80,6 +81,7 @@ type ValueStore struct {
 	withBufferedChildren map[hash.Hash]uint64 // chunk Hash -> ref height
 	unresolvedRefs       hash.HashSet
 	enforceCompleteness  bool
+	validateContentAddr  bool
 	decodedChunks        *sizecache.SizeCache
 	nbf                  *NomsBinFormat
 
@@ -93,7 +95,8 @@ func PanicIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.Chu
 	d.PanicIfError(err)
 
 	if len(absent) != 0 {
-		d.Panic("Found dangling references to %v", absent)
+		s := absent.String()
+		d.Panic("Found dangling references to %s", s)
 	}
 }
 
@@ -107,6 +110,11 @@ const (
 // newTestValueStore creates a simple struct that satisfies ValueReadWriter
 // and is backed by a chunks.TestStore. Used for testing noms.
 func newTestValueStore() *ValueStore {
+	ts := &chunks.TestStorage{}
+	return NewValueStore(ts.NewViewWithDefaultFormat())
+}
+
+func newTestValueStore_7_18() *ValueStore {
 	ts := &chunks.TestStorage{}
 	return NewValueStore(ts.NewView())
 }
@@ -153,6 +161,10 @@ func (lvs *ValueStore) SetEnforceCompleteness(enforce bool) {
 	lvs.enforceCompleteness = enforce
 }
 
+func (lvs *ValueStore) SetValidateContentAddresses(validate bool) {
+	lvs.validateContentAddr = validate
+}
+
 func (lvs *ValueStore) ChunkStore() chunks.ChunkStore {
 	return lvs.cs
 }
@@ -172,7 +184,13 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error
 			return nil, errors.New("value present but empty")
 		}
 
-		return v.(Value), nil
+		nv := v.(Value)
+		if lvs.validateContentAddr {
+			if err := validateContentAddress(lvs.nbf, h, nv); err != nil {
+				return nil, err
+			}
+		}
+		return nv, nil
 	}
 
 	chunk := func() chunks.Chunk {
@@ -206,6 +224,12 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error
 		return nil, errors.New("decoded value is empty")
 	}
 
+	if lvs.validateContentAddr {
+		if err = validateContentAddress(lvs.nbf, h, v); err != nil {
+			return nil, err
+		}
+	}
+
 	lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
 	return v, nil
 }
@@ -225,6 +249,11 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 		if v == nil {
 			return nil, errors.New("decoded value is empty")
 		}
+		if lvs.validateContentAddr {
+			if err := validateContentAddress(lvs.nbf, h, v); err != nil {
+				return nil, err
+			}
+		}
 
 		lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
 		return v, nil
@@ -238,7 +267,14 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 	for _, h := range hashes {
 		if v, ok := lvs.decodedChunks.Get(h); ok {
 			d.PanicIfTrue(v == nil)
-			foundValues[h] = v.(Value)
+
+			nv := v.(Value)
+			if lvs.validateContentAddr {
+				if err := validateContentAddress(lvs.nbf, h, nv); err != nil {
+					return nil, err
+				}
+			}
+			foundValues[h] = nv
 			continue
 		}
 
@@ -267,7 +303,7 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 	if len(remaining) != 0 {
 		mu := new(sync.Mutex)
 		var decodeErr error
-		err := lvs.cs.GetMany(ctx, remaining, func(c *chunks.Chunk) {
+		err := lvs.cs.GetMany(ctx, remaining, func(ctx context.Context, c *chunks.Chunk) {
 			mu.Lock()
 			defer mu.Unlock()
 			if decodeErr != nil {
@@ -323,12 +359,15 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 	}
 
 	r, err := constructRef(lvs.nbf, h, t, height)
-
 	if err != nil {
 		return Ref{}, err
 	}
 
-	lvs.bufferChunk(ctx, v, c, height)
+	err = lvs.bufferChunk(ctx, v, c, height)
+	if err != nil {
+		return Ref{}, err
+	}
+
 	return r, nil
 }
 
@@ -337,14 +376,36 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 // ChunkStore in a way which attempts to locate children and grandchildren
 // sequentially together. The following invariants are retained:
 //
-// 1. For any given chunk currently in the buffer, only direct children of the
-//    chunk may also be presently buffered (any grandchildren will have been
-//    flushed).
-// 2. The total data occupied by buffered chunks does not exceed
-//    lvs.bufferedChunksMax
-func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk, height uint64) {
+//  1. For any given chunk currently in the buffer, only direct children of the
+//     chunk may also be presently buffered (any grandchildren will have been
+//     flushed).
+//  2. The total data occupied by buffered chunks does not exceed
+//     lvs.bufferedChunksMax
+func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk, height uint64) error {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
+
+	if lvs.Format().UsesFlatbuffers() {
+		// We do not do write buffering in the new format.
+		// Ref heights are not universally known, and the
+		// invariants mentioned above cannot be maintained
+		// in the general case.
+		//
+		// Buffering with full dependency tracking would be
+		// possible, and in __DOLT__, WalkAddrs may be
+		// cheap enough that it would be possible to get back
+		// cache-locality in our flushes without ref heights.
+		if lvs.enforceCompleteness {
+			err := v.walkRefs(lvs.nbf, func(r Ref) error {
+				lvs.unresolvedRefs.Insert(r.TargetHash())
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return lvs.cs.Put(ctx, c)
+	}
 
 	d.PanicIfTrue(height == 0)
 	h := c.Hash()
@@ -373,7 +434,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 			return nil
 		}
 
-		err := WalkRefs(pending, lvs.nbf, func(grandchildRef Ref) error {
+		err := walkRefs(pending.Data(), lvs.nbf, func(grandchildRef Ref) error {
 			gch := grandchildRef.TargetHash()
 			if pending, present := lvs.bufferedChunks[gch]; present {
 				return put(gch, pending)
@@ -393,7 +454,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 
 	// Enforce invariant (1)
 	if height > 1 {
-		err := v.WalkRefs(lvs.nbf, func(childRef Ref) error {
+		err := v.walkRefs(lvs.nbf, func(childRef Ref) error {
 			childHash := childRef.TargetHash()
 			if _, isBuffered := lvs.bufferedChunks[childHash]; isBuffered {
 				lvs.withBufferedChildren[h] = height
@@ -410,8 +471,9 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 			return nil
 		})
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Enforce invariant (2)
@@ -433,8 +495,9 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 
 			err := put(tallest, chunk)
 
-			// TODO: fix panics
-			d.PanicIfError(err)
+			if err != nil {
+				return err
+			}
 
 			continue
 		}
@@ -442,8 +505,12 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 		err := putChildren(tallest)
 
 		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 func (lvs *ValueStore) Root(ctx context.Context) (hash.Hash, error) {
@@ -460,16 +527,13 @@ func (lvs *ValueStore) Rebase(ctx context.Context) error {
 	return lvs.cs.Rebase(ctx)
 }
 
-// Commit flushes all bufferedChunks into the ChunkStore, with best-effort
-// locality, and attempts to Commit, updating the root to |current| (or keeping
-// it the same as Root()). If the root has moved since this ValueStore was
-// opened, or last Rebased(), it will return false and will have internally
-// rebased. Until Commit() succeeds, no work of the ValueStore will be visible
-// to other readers of the underlying ChunkStore.
-func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
+func (lvs *ValueStore) Flush(ctx context.Context) error {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
+	return lvs.flush(ctx, hash.Hash{})
+}
 
+func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
 	put := func(h hash.Hash, chunk chunks.Chunk) error {
 		err := lvs.cs.Put(ctx, chunk)
 
@@ -485,7 +549,7 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 
 	for parent := range lvs.withBufferedChildren {
 		if pending, present := lvs.bufferedChunks[parent]; present {
-			err := WalkRefs(pending, lvs.nbf, func(reachable Ref) error {
+			err := walkRefs(pending.Data(), lvs.nbf, func(reachable Ref) error {
 				if pending, present := lvs.bufferedChunks[reachable.TargetHash()]; present {
 					return put(reachable.TargetHash(), pending)
 				}
@@ -494,13 +558,13 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 			})
 
 			if err != nil {
-				return false, err
+				return err
 			}
 
 			err = put(parent, pending)
 
 			if err != nil {
-				return false, err
+				return err
 			}
 		}
 	}
@@ -509,7 +573,7 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 		err := lvs.cs.Put(ctx, c)
 
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		lvs.bufferedChunkSize -= uint64(len(c.Data()))
@@ -523,7 +587,7 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 		root, err := lvs.Root(ctx)
 
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		if (current != hash.Hash{} && current != root) {
@@ -538,12 +602,28 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 		PanicIfDangling(ctx, lvs.unresolvedRefs, lvs.cs)
 	}
 
-	success, err := lvs.cs.Commit(ctx, current, last)
+	return nil
+}
 
+// Commit flushes all bufferedChunks into the ChunkStore, with best-effort
+// locality, and attempts to Commit, updating the root to |current| (or keeping
+// it the same as Root()). If the root has moved since this ValueStore was
+// opened, or last Rebased(), it will return false and will have internally
+// rebased. Until Commit() succeeds, no work of the ValueStore will be visible
+// to other readers of the underlying ChunkStore.
+func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
+	lvs.bufferMu.Lock()
+	defer lvs.bufferMu.Unlock()
+
+	err := lvs.flush(ctx, current)
 	if err != nil {
 		return false, err
 	}
 
+	success, err := lvs.cs.Commit(ctx, current, last)
+	if err != nil {
+		return false, err
+	}
 	if !success {
 		return false, nil
 	}
@@ -755,4 +835,16 @@ func (lvs *ValueStore) gcProcessRefs(ctx context.Context, visited hash.HashSet, 
 // Close closes the underlying ChunkStore
 func (lvs *ValueStore) Close() error {
 	return lvs.cs.Close()
+}
+
+func validateContentAddress(nbf *NomsBinFormat, h hash.Hash, v Value) (err error) {
+	var actual hash.Hash
+	actual, err = v.Hash(nbf)
+	if err != nil {
+		return
+	} else if actual != h {
+		err = fmt.Errorf("incorrect hash for value %s (%s != %s)",
+			v.HumanReadableString(), actual.String(), h.String())
+	}
+	return
 }

@@ -32,14 +32,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var importDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Import a dolt credential from an existing .jwk file.",
 	LongDesc: `Imports a dolt credential from an existing .jwk file.
 
-Dolt credentials are stored in the creds subdirectory of the global dolt conifg
+Dolt credentials are stored in the creds subdirectory of the global dolt config
 directory as files with one key per file in JWK format. This command can import
 a JWK from a file or stdin and places the imported key in the correct place for
 dolt to find it as a valid credential.
@@ -64,10 +63,9 @@ func (cmd ImportCmd) Description() string {
 	return importDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ImportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, importDocs, ap))
+func (cmd ImportCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(importDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -83,7 +81,7 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 
 const noProfileFlag = "no-profile"
 
-func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
+func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"jwk_filename", "The JWK file. If omitted, import operates on stdin."})
 	ap.SupportsFlag(noProfileFlag, "", "If provided, no attempt will be made to contact doltremoteapi and update user.name and user.email.")
@@ -92,8 +90,8 @@ func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, importDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, importDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	credsDir, verr := actions.EnsureCredsDir(dEnv)
@@ -163,14 +161,14 @@ func updateProfileWithCredentials(ctx context.Context, dEnv *env.DoltEnv, c cred
 	host := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
 	port := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
 	hostAndPort := fmt.Sprintf("%s:%s", host, port)
-	endpoint, opts, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
+	cfg, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: hostAndPort,
 		Creds:    c,
 	})
 	if err != nil {
 		return fmt.Errorf("error: unable to build dial options server with credentials: %w", err)
 	}
-	conn, err := grpc.Dial(endpoint, opts...)
+	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
 	if err != nil {
 		return fmt.Errorf("error: unable to connect to server with credentials: %w", err)
 	}

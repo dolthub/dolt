@@ -17,10 +17,9 @@ package tblcmds
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -55,13 +54,12 @@ func (cmd RmCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_TABLE_RM
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd RmCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, tblRmDocs, ap))
+func (cmd RmCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(tblRmDocs, ap)
 }
 
-func (cmd RmCmd) createArgParser() *argparser.ArgParser {
+func (cmd RmCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table to remove"})
 	return ap
@@ -69,8 +67,8 @@ func (cmd RmCmd) createArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblRmDocs, ap))
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tblRmDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() == 0 {
@@ -90,7 +88,7 @@ func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		queryStr = fmt.Sprintf("%sDROP TABLE `%s`;", queryStr, tableName)
 	}
 
-	cli.CliOut = ioutil.Discard // display nothing on success
+	cli.CliOut = io.Discard // display nothing on success
 	return commands.SqlCmd{}.Exec(ctx, "", []string{
 		fmt.Sprintf("--%s", commands.BatchFlag),
 		fmt.Sprintf(`--%s`, commands.QueryFlag),

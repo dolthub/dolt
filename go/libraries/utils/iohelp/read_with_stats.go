@@ -29,10 +29,10 @@ type ReadStats struct {
 }
 
 type ReaderWithStats struct {
-	rd      io.Reader
-	size    int64
-	start   time.Time
 	read    uint64
+	size    int64
+	rd      io.Reader
+	start   time.Time
 	closeCh chan struct{}
 }
 
@@ -55,7 +55,10 @@ func (rws *ReaderWithStats) Start(updateFunc func(ReadStats)) {
 			case <-timer.C:
 				read := atomic.LoadUint64(&rws.read)
 				elapsed := time.Since(rws.start)
-				percent := float64(read) / float64(rws.size)
+				var percent float64
+				if rws.size != 0 {
+					percent = float64(read) / float64(rws.size)
+				}
 				updateFunc(ReadStats{Read: read, Elapsed: elapsed, Percent: percent})
 				timer.Reset(updateFrequency)
 			}
@@ -63,12 +66,14 @@ func (rws *ReaderWithStats) Start(updateFunc func(ReadStats)) {
 	}()
 }
 
-func (rws *ReaderWithStats) Stop() {
+func (rws *ReaderWithStats) Close() error {
 	close(rws.closeCh)
 
 	if closer, ok := rws.rd.(io.Closer); ok {
-		_ = closer.Close()
+		return closer.Close()
 	}
+
+	return nil
 }
 
 func (rws *ReaderWithStats) Read(p []byte) (int, error) {

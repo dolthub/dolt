@@ -30,8 +30,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
-	"github.com/dolthub/dolt/go/store/d"
-	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/util/verbose"
 )
 
@@ -56,13 +55,11 @@ func setupDsFlags() *flag.FlagSet {
 func runDs(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
 	if toDelete != "" {
-		db, set, err := cfg.GetDataset(ctx, toDelete)
+		db, _, set, err := cfg.GetDataset(ctx, toDelete)
 		util.CheckError(err)
 		defer db.Close()
 
-		oldCommitRef, errBool, err := set.MaybeHeadRef()
-		d.PanicIfError(err)
-
+		oldCommitAddr, errBool := set.MaybeHeadAddr()
 		if !errBool {
 			util.CheckError(fmt.Errorf("Dataset %v not found", set.ID()))
 		}
@@ -70,13 +67,13 @@ func runDs(ctx context.Context, args []string) int {
 		_, err = set.Database().Delete(ctx, set)
 		util.CheckError(err)
 
-		fmt.Printf("Deleted %v (was #%v)\n", toDelete, oldCommitRef.TargetHash().String())
+		fmt.Printf("Deleted %v (was #%v)\n", toDelete, oldCommitAddr.String())
 	} else {
 		dbSpec := ""
 		if len(args) >= 1 {
 			dbSpec = args[0]
 		}
-		store, err := cfg.GetDatabase(ctx, dbSpec)
+		store, _, _, err := cfg.GetDatabase(ctx, dbSpec)
 		util.CheckError(err)
 		defer store.Close()
 
@@ -87,7 +84,7 @@ func runDs(ctx context.Context, args []string) int {
 			return 1
 		}
 
-		_ = dss.IterAll(ctx, func(k, v types.Value) error {
+		_ = dss.IterAll(ctx, func(k string, _ hash.Hash) error {
 			fmt.Println(k)
 			return nil
 		})

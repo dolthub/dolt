@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/profile"
 )
@@ -72,12 +73,15 @@ func main() {
 
 			// Build One-Time
 			storage := &chunks.MemoryStorage{}
-			db := datas.NewDatabase(storage.NewView())
+			cs := storage.NewViewWithDefaultFormat()
+			ns := tree.NewNodeStore(cs)
+			vrw := types.NewValueStore(cs)
+			db := datas.NewTypesDatabase(vrw, ns)
 			ds, err := db.GetDataset(context.Background(), "test")
 			d.Chk.NoError(err)
 			t1 := time.Now()
-			col := buildFns[i](db, buildCount, valueFn)
-			ds, err = db.CommitValue(context.Background(), ds, col)
+			col := buildFns[i](vrw, buildCount, valueFn)
+			ds, err = datas.CommitValue(context.Background(), db, ds, col)
 			d.Chk.NoError(err)
 			buildDuration := time.Since(t1)
 
@@ -92,12 +96,15 @@ func main() {
 
 			// Build Incrementally
 			storage = &chunks.MemoryStorage{}
-			db = datas.NewDatabase(storage.NewView())
+			cs = storage.NewViewWithDefaultFormat()
+			ns = tree.NewNodeStore(cs)
+			vrw = types.NewValueStore(cs)
+			db = datas.NewTypesDatabase(vrw, ns)
 			ds, err = db.GetDataset(context.Background(), "test")
 			d.Chk.NoError(err)
 			t1 = time.Now()
-			col = buildIncrFns[i](db, insertCount, valueFn)
-			ds, err = db.CommitValue(context.Background(), ds, col)
+			col = buildIncrFns[i](vrw, insertCount, valueFn)
+			ds, err = datas.CommitValue(context.Background(), db, ds, col)
 			d.Chk.NoError(err)
 			incrDuration := time.Since(t1)
 
@@ -113,19 +120,22 @@ func main() {
 	fmt.Printf("Testing Blob: \t\tbuild %d MB\t\t\tscan %d MB\n", *blobSize/1000000, *blobSize/1000000)
 
 	storage := &chunks.MemoryStorage{}
-	db := datas.NewDatabase(storage.NewView())
+	cs := storage.NewViewWithDefaultFormat()
+	ns := tree.NewNodeStore(cs)
+	vrw := types.NewValueStore(cs)
+	db := datas.NewTypesDatabase(vrw, ns)
 	ds, err := db.GetDataset(context.Background(), "test")
 	d.Chk.NoError(err)
 
 	blobBytes := makeBlobBytes(*blobSize)
 	t1 := time.Now()
-	blob, err := types.NewBlob(context.Background(), db, bytes.NewReader(blobBytes))
+	blob, err := types.NewBlob(context.Background(), vrw, bytes.NewReader(blobBytes))
 	d.Chk.NoError(err)
-	_, err = db.CommitValue(context.Background(), ds, blob)
+	_, err = datas.CommitValue(context.Background(), db, ds, blob)
 	d.Chk.NoError(err)
 	buildDuration := time.Since(t1)
 
-	db = datas.NewDatabase(storage.NewView())
+	db = datas.NewDatabase(storage.NewViewWithDefaultFormat())
 	ds, err = db.GetDataset(context.Background(), "test")
 	d.Chk.NoError(err)
 	t1 = time.Now()
@@ -171,7 +181,7 @@ func createNumber(i uint64) types.Value {
 var structTemplate = types.MakeStructTemplate("S1", []string{"bool", "num", "str"})
 
 func createStruct(i uint64) types.Value {
-	st, err := structTemplate.NewStruct(types.Format_7_18, []types.Value{
+	st, err := structTemplate.NewStruct(types.Format_Default, []types.Value{
 		types.Bool(i%2 == 0), // "bool"
 		types.Float(i),       // "num"
 		types.String(fmt.Sprintf("i am a 55 bytes............................%12d", i)), // "str"

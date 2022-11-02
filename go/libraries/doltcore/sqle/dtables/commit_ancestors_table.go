@@ -15,13 +15,10 @@
 package dtables
 
 import (
-	"context"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
 var _ sql.Table = (*CommitAncestorsTable)(nil)
@@ -56,10 +53,15 @@ func (dt *CommitAncestorsTable) Schema() sql.Schema {
 	}
 }
 
+// Collation implements the sql.Table interface.
+func (dt *CommitAncestorsTable) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
 // Partitions is a sql.Table interface function that returns a partition
 // of the data. Currently the data is unpartitioned.
 func (dt *CommitAncestorsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(types.Map{}), nil
+	return index.SinglePartitionIterFromNomsMap(nil), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition.
@@ -70,7 +72,6 @@ func (dt *CommitAncestorsTable) PartitionRows(sqlCtx *sql.Context, _ sql.Partiti
 // CommitAncestorsRowItr is a sql.RowItr which iterates over each
 // (commit, parent_commit) pair as if it's a row in the table.
 type CommitAncestorsRowItr struct {
-	ctx   context.Context
 	itr   doltdb.CommitItr
 	ddb   *doltdb.DoltDB
 	cache []sql.Row
@@ -84,7 +85,6 @@ func NewCommitAncestorsRowItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (*CommitA
 	}
 
 	return &CommitAncestorsRowItr{
-		ctx: sqlCtx,
 		itr: itr,
 		ddb: ddb,
 	}, nil
@@ -92,15 +92,15 @@ func NewCommitAncestorsRowItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (*CommitA
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (itr *CommitAncestorsRowItr) Next() (sql.Row, error) {
+func (itr *CommitAncestorsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 	if len(itr.cache) == 0 {
-		ch, cm, err := itr.itr.Next(itr.ctx)
+		ch, cm, err := itr.itr.Next(ctx)
 		if err != nil {
 			// When complete itr.Next will return io.EOF
 			return nil, err
 		}
 
-		parents, err := itr.ddb.ResolveAllParents(itr.ctx, cm)
+		parents, err := itr.ddb.ResolveAllParents(ctx, cm)
 		if err != nil {
 			return nil, err
 		}

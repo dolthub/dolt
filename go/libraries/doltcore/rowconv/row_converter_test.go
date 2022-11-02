@@ -17,16 +17,8 @@ package rowconv
 import (
 	"context"
 	"testing"
-	"time"
 
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -42,52 +34,6 @@ var srcCols = schema.NewColCollection(
 
 var srcSch = schema.MustSchemaFromCols(srcCols)
 
-func TestRowConverter(t *testing.T) {
-	mapping, err := TypedToUntypedMapping(srcSch)
-
-	require.NoError(t, err)
-
-	vrw := types.NewMemoryValueStore()
-	rConv, err := NewRowConverter(context.Background(), vrw, mapping)
-
-	if err != nil {
-		t.Fatal("Error creating row converter")
-	}
-
-	id, _ := uuid.NewRandom()
-	tt := types.Timestamp(time.Now())
-	inRow, err := row.New(vrw.Format(), srcSch, row.TaggedValues{
-		0: types.UUID(id),
-		1: types.Float(1.25),
-		2: types.Uint(12345678),
-		3: types.Bool(true),
-		4: types.Int(-1234),
-		5: types.String("string string string"),
-		6: tt,
-	})
-
-	require.NoError(t, err)
-	outData, err := rConv.Convert(inRow)
-	require.NoError(t, err)
-
-	destSch := mapping.DestSch
-	expected, err := row.New(vrw.Format(), destSch, row.TaggedValues{
-		0: types.String(id.String()),
-		1: types.String("1.25"),
-		2: types.String("12345678"),
-		3: types.String("1"),
-		4: types.String("-1234"),
-		5: types.String("string string string"),
-		6: types.String(tt.String()),
-	})
-
-	require.NoError(t, err)
-
-	if !row.AreEqual(outData, expected, destSch) {
-		t.Error("\n", row.Fmt(context.Background(), expected, destSch), "!=\n", row.Fmt(context.Background(), outData, destSch))
-	}
-}
-
 func TestUnneccessaryConversion(t *testing.T) {
 	mapping, err := TagMapping(srcSch, srcSch)
 	if err != nil {
@@ -102,43 +48,4 @@ func TestUnneccessaryConversion(t *testing.T) {
 	if !rconv.IdentityConverter {
 		t.Fatal("expected identity converter")
 	}
-}
-
-func TestSpecialBoolHandling(t *testing.T) {
-	col1, err := schema.NewColumnWithTypeInfo("pk", 0, typeinfo.Int64Type, true, "", false, "")
-	require.NoError(t, err)
-	col2, err := schema.NewColumnWithTypeInfo("v", 1, typeinfo.PseudoBoolType, false, "", false, "")
-	require.NoError(t, err)
-	colColl := schema.NewColCollection(col1, col2)
-	sch, err := schema.SchemaFromCols(colColl)
-	require.NoError(t, err)
-	untypedSch, err := untyped.UntypeSchema(sch)
-	require.NoError(t, err)
-
-	mapping, err := TagMapping(untypedSch, sch)
-	require.NoError(t, err)
-	vrw := types.NewMemoryValueStore()
-	rconv, err := NewImportRowConverter(context.Background(), vrw, mapping)
-	require.NoError(t, err)
-	inRow, err := row.New(vrw.Format(), untypedSch, row.TaggedValues{
-		0: types.String("76"),
-		1: types.String("true"),
-	})
-	require.NoError(t, err)
-	outData, err := rconv.Convert(inRow)
-	require.NoError(t, err)
-	require.NotNil(t, outData)
-
-	expected, err := row.New(vrw.Format(), mapping.DestSch, row.TaggedValues{
-		0: types.Int(76),
-		1: types.Uint(1),
-	})
-	require.NoError(t, err)
-	assert.True(t, row.AreEqual(outData, expected, mapping.DestSch))
-
-	rconvNoHandle, err := NewRowConverter(context.Background(), vrw, mapping)
-	require.NoError(t, err)
-	results, errStr := rconvNoHandle.Convert(inRow)
-	assert.Nil(t, results)
-	assert.NotEmpty(t, errStr)
 }

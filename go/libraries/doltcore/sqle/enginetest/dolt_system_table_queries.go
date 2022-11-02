@@ -15,11 +15,11 @@
 package enginetest
 
 import (
-	"github.com/dolthub/go-mysql-server/enginetest"
+	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-var BrokenSystemTableQueries = []enginetest.QueryTest{
+var BrokenSystemTableQueries = []queries.QueryTest{
 	{
 		Query: `SELECT 
 					myTable.i, 

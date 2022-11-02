@@ -17,7 +17,7 @@ package tblcmds
 import (
 	"context"
 	"os"
-	"strings"
+	"path/filepath"
 
 	"github.com/fatih/color"
 
@@ -28,13 +28,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
@@ -50,15 +48,10 @@ See the help for {{.EmphasisLeft}}dolt table import{{.EmphasisRight}} as the opt
 }
 
 type exportOptions struct {
-	tableName   string
-	contOnErr   bool
-	force       bool
-	schFile     string
-	mappingFile string
-	primaryKeys []string
-	src         mvdata.TableDataLocation
-	dest        mvdata.DataLocation
-	srcOptions  interface{}
+	tableName  string
+	force      bool
+	dest       mvdata.DataLocation
+	srcOptions interface{}
 }
 
 func (m exportOptions) checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
@@ -71,18 +64,23 @@ func (m exportOptions) checkOverwrite(ctx context.Context, root *doltdb.RootValu
 	return false, nil
 }
 
+func (m exportOptions) IsBatched() bool {
+	return false
+}
+
+func (m exportOptions) IsAutocommitOff() bool {
+	return false
+}
+
 func (m exportOptions) WritesToTable() bool {
 	return false
 }
 
 func (m exportOptions) SrcName() string {
-	return m.src.Name
+	return m.tableName
 }
 
 func (m exportOptions) DestName() string {
-	if t, tblDest := m.dest.(mvdata.TableDataLocation); tblDest {
-		return t.Name
-	}
 	if f, fileDest := m.dest.(mvdata.FileDataLocation); fileDest {
 		return f.Path
 	}
@@ -122,7 +120,7 @@ func getExportDestination(apr *argparser.ArgParseResults) mvdata.DataLocation {
 }
 
 func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) (*exportOptions, errhand.VerboseError) {
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, exportDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() == 0 {
@@ -142,29 +140,16 @@ func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) 
 		return nil, errhand.BuildDError("invalid table name").Build()
 	}
 
-	tableLoc := mvdata.TableDataLocation{Name: tableName}
 	fileLoc := getExportDestination(apr)
 
 	if fileLoc == nil {
 		return nil, errhand.BuildDError("could not validate table export args").Build()
 	}
 
-	schemaFile, _ := apr.GetValue(schemaParam)
-	mappingFile, _ := apr.GetValue(mappingFileParam)
-
-	val, _ := apr.GetValue(primaryKeyParam)
-	pks := funcitr.MapStrings(strings.Split(val, ","), strings.TrimSpace)
-	pks = funcitr.FilterStrings(pks, func(s string) bool { return s != "" })
-
 	return &exportOptions{
-		tableName:   tableName,
-		contOnErr:   apr.Contains(contOnErrParam),
-		force:       apr.Contains(forceParam),
-		schFile:     schemaFile,
-		mappingFile: mappingFile,
-		primaryKeys: pks,
-		src:         tableLoc,
-		dest:        fileLoc,
+		tableName: tableName,
+		force:     apr.Contains(forceParam),
+		dest:      fileLoc,
 	}, nil
 }
 
@@ -180,21 +165,16 @@ func (cmd ExportCmd) Description() string {
 	return "Export a table to a file."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ExportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, exportDocs, ap))
+func (cmd ExportCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(exportDocs, ap)
 }
 
-func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
+func (cmd ExportCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table being exported."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being output to."})
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
-	ap.SupportsFlag(contOnErrParam, "", "Continue exporting when row export errors are encountered.")
-	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
-	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
-	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
 	ap.SupportsString(fileTypeParam, "", "file_type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
 	return ap
 }
@@ -206,8 +186,8 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	_, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
+	ap := cmd.ArgParser()
+	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, exportDocs, ap))
 
 	exOpts, verr := parseExportArgs(ap, commandStr, args)
 	if verr != nil {
@@ -219,31 +199,28 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	mover, verr := NewExportDataMover(ctx, root, dEnv, exOpts, importStatsCB)
+	rd, err := mvdata.NewSqlEngineReader(ctx, dEnv, exOpts.tableName)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Error creating reader for %s.", exOpts.SrcName()).AddCause(err).Build(), usage)
+	}
 
+	wr, verr := getTableWriter(ctx, root, dEnv, rd.GetSchema(), exOpts)
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, exOpts)
+	pipeline := mvdata.NewDataMoverPipeline(ctx, rd, wr)
 
-	cli.PrintErrln()
-
-	if skipped > 0 {
-		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
-	}
-	if verr != nil {
-		return commands.HandleVErrAndExitCode(verr, usage)
+	err = pipeline.Execute()
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build(), usage)
 	}
 
-	cli.PrintErrln(color.CyanString("Successfully exported data."))
+	cli.Println(color.CyanString("Successfully exported data."))
 	return 0
 }
 
-func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, exOpts *exportOptions, statsCB noms.StatsCB) (*mvdata.DataMover, errhand.VerboseError) {
-	var rd table.TableReadCloser
-	var err error
-
+func getTableWriter(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, rdSchema schema.Schema, exOpts *exportOptions) (table.SqlRowWriter, errhand.VerboseError) {
 	ow, err := exOpts.checkOverwrite(ctx, root, dEnv.FS)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
@@ -252,33 +229,25 @@ func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 		return nil, errhand.BuildDError("%s already exists. Use -f to overwrite.", exOpts.DestName()).Build()
 	}
 
-	rd, srcIsSorted, err := exOpts.src.NewReader(ctx, root, dEnv.FS, exOpts.srcOptions)
-
+	err = dEnv.FS.MkDirs(filepath.Dir(exOpts.DestName()))
 	if err != nil {
-		return nil, errhand.BuildDError("Error creating reader for %s.", exOpts.SrcName()).AddCause(err).Build()
+		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	// close on err exit
-	defer func() {
-		if rd != nil {
-			rd.Close(ctx)
-		}
-	}()
-
-	inSch := rd.GetSchema()
-	outSch := inSch
-
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, dEnv, root, srcIsSorted, outSch, statsCB, opts)
-
+	filePath, err := dEnv.FS.Abs(exOpts.DestName())
 	if err != nil {
-		return nil, errhand.BuildDError("Could not create table writer for %s", exOpts.tableName).AddCause(err).Build()
+		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	emptyTransColl := pipeline.NewTransformCollection()
+	writer, err := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
+	if err != nil {
+		return nil, errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build()
+	}
 
-	imp := &mvdata.DataMover{Rd: rd, Transforms: emptyTransColl, Wr: wr, ContOnErr: exOpts.contOnErr}
-	rd = nil
+	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, root, rdSchema, editor.Options{Deaf: dEnv.DbEaFactory()}, writer)
+	if err != nil {
+		return nil, errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build()
+	}
 
-	return imp, nil
+	return wr, nil
 }

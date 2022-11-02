@@ -20,9 +20,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
-
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -121,6 +122,7 @@ var writeableSystemTables = []string{
 	DoltQueryCatalogTableName,
 	SchemasTableName,
 	ProceduresTableName,
+	DocTableName,
 }
 
 var persistedSystemTables = []string{
@@ -141,6 +143,10 @@ var generatedSystemTables = []string{
 	RemotesTableName,
 }
 
+var generatedSystemViewPrefixes = []string{
+	DoltBlameViewPrefix,
+}
+
 var generatedSystemTablePrefixes = []string{
 	DoltDiffTablePrefix,
 	DoltCommitDiffTablePrefix,
@@ -148,6 +154,26 @@ var generatedSystemTablePrefixes = []string{
 	DoltConfTablePrefix,
 	DoltConstViolTablePrefix,
 }
+
+const (
+	// LicenseDoc is the key for accessing the license within the docs table
+	LicenseDoc = "LICENSE.md"
+	// ReadmeDoc is the key for accessing the readme within the docs table
+	ReadmeDoc = "README.md"
+)
+
+var doltDocsColumns = schema.NewColCollection(
+	schema.NewColumn(DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn(DocTextColumnName, schema.DocTextTag, types.StringKind, false),
+)
+var DocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
+
+var DocsMaybeCreateTableStmt = `
+CREATE TABLE IF NOT EXISTS dolt_docs (
+  doc_name varchar(16383) NOT NULL,
+  doc_text varchar(16383),
+  PRIMARY KEY (doc_name)
+);`
 
 const (
 	// DocTableName is the name of the dolt table containing documents such as the license and readme
@@ -190,11 +216,15 @@ const (
 	// The schema fragment associated with the database entity.
 	// For example, the SELECT statement for a CREATE VIEW.
 	SchemasTablesFragmentCol = "fragment"
+	// The extra information for schema; currently contains creation time for triggers and views
+	SchemasTablesExtraCol = "extra"
 	// The name of the index that is on the table.
 	SchemasTablesIndexName = "fragment_name"
 )
 
 const (
+	// DoltBlameViewPrefix is the prefix assigned to all the generated blame tables
+	DoltBlameViewPrefix = "dolt_blame_"
 	// DoltHistoryTablePrefix is the prefix assigned to all the generated history tables
 	DoltHistoryTablePrefix = "dolt_history_"
 	// DoltDiffTablePrefix is the prefix assigned to all the generated diff tables
@@ -210,6 +240,9 @@ const (
 const (
 	// LogTableName is the log system table name
 	LogTableName = "dolt_log"
+
+	// DiffTableName is the name of the table with a map of commits to tables changed
+	DiffTableName = "dolt_diff"
 
 	// TableOfTablesInConflictName is the conflicts system table name
 	TableOfTablesInConflictName = "dolt_conflicts"
@@ -231,6 +264,12 @@ const (
 
 	// StatusTableName is the status system table name.
 	StatusTableName = "dolt_status"
+
+	// MergeStatusTableName is the merge status system table name.
+	MergeStatusTableName = "dolt_merge_status"
+
+	// TagsTableName is the tags table name
+	TagsTableName = "dolt_tags"
 )
 
 const (

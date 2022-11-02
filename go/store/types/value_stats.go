@@ -90,7 +90,7 @@ func writePtreeStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) 
 		for _, n := range nodes {
 			chunkCount++
 			if level > 0 {
-				err := n.WalkRefs(vr.Format(), func(r Ref) error {
+				err := n.walkRefs(vr.Format(), func(r Ref) error {
 					children = append(children, r)
 					return nil
 				})

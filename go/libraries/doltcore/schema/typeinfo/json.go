@@ -135,14 +135,6 @@ func (ti *jsonType) NomsKind() types.NomsKind {
 	return types.JSONKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *jsonType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil {
-		return types.NullValue, nil
-	}
-	return ti.ConvertValueToNomsValue(ctx, vrw, *str)
-}
-
 // Promote implements TypeInfo interface.
 func (ti *jsonType) Promote() TypeInfo {
 	return &jsonType{ti.jsonType.Promote().(sql.JsonType)}
@@ -175,12 +167,28 @@ func jsonTypeConverter(ctx context.Context, src *jsonType, destTi TypeInfo) (tc 
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geomcollType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geometryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *jsonType:
 		return wrapIsValid(dest.IsValid, src, dest)
+	case *linestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multilinestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipolygonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *pointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *polygonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *timeType:

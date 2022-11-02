@@ -23,32 +23,27 @@ func (csa chunkSourceAdapter) hash() (addr, error) {
 	return csa.h, nil
 }
 
-func newReaderFromIndexData(indexCache *indexCache, idxData []byte, name addr, tra tableReaderAt, blockSize uint64) (cs chunkSource, err error) {
-	index, err := parseTableIndex(idxData)
-
+func newReaderFromIndexData(q MemoryQuotaProvider, idxData []byte, name addr, tra tableReaderAt, blockSize uint64) (cs chunkSource, err error) {
+	index, err := parseTableIndexByCopy(idxData, q)
 	if err != nil {
 		return nil, err
 	}
 
-	if indexCache != nil {
-		indexCache.lockEntry(name)
-		defer func() {
-			unlockErr := indexCache.unlockEntry(name)
-
-			if err == nil {
-				err = unlockErr
-			}
-		}()
-		indexCache.put(name, index)
+	tr, err := newTableReader(index, tra, blockSize)
+	if err != nil {
+		return nil, err
 	}
-
-	return &chunkSourceAdapter{newTableReader(index, tra, blockSize), name}, nil
+	return &chunkSourceAdapter{tr, name}, nil
 }
 
-func (csa chunkSourceAdapter) Close() error {
-	return csa.tableReader.Close()
+func (csa chunkSourceAdapter) close() error {
+	return csa.tableReader.close()
 }
 
-func (csa chunkSourceAdapter) Clone() chunkSource {
-	return &chunkSourceAdapter{csa.tableReader.Clone(), csa.h}
+func (csa chunkSourceAdapter) clone() (chunkSource, error) {
+	tr, err := csa.tableReader.clone()
+	if err != nil {
+		return &chunkSourceAdapter{}, err
+	}
+	return &chunkSourceAdapter{tr, csa.h}, nil
 }

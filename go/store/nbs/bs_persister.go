@@ -16,18 +16,16 @@ package nbs
 
 import (
 	"context"
-	"errors"
 	"io"
-	"time"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 )
 
 type blobstorePersister struct {
-	bs         blobstore.Blobstore
-	blockSize  uint64
-	indexCache *indexCache
+	bs        blobstore.Blobstore
+	blockSize uint64
+	q         MemoryQuotaProvider
 }
 
 // Persist makes the contents of mt durable. Chunks already present in
@@ -50,7 +48,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 	}
 
 	bsTRA := &bsTableReaderAt{name.String(), bsp.bs}
-	return newReaderFromIndexData(bsp.indexCache, data, name, bsTRA, bsp.blockSize)
+	return newReaderFromIndexData(bsp.q, data, name, bsTRA, bsp.blockSize)
 }
 
 // ConjoinAll (Not currently implemented) conjoins all chunks in |sources| into a single,
@@ -61,7 +59,7 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 
 // Open a table named |name|, containing |chunkCount| chunks.
 func (bsp *blobstorePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newBSChunkSource(ctx, bsp.bs, name, chunkCount, bsp.blockSize, bsp.indexCache, stats)
+	return newBSChunkSource(ctx, bsp.bs, name, chunkCount, bsp.blockSize, bsp.q, stats)
 }
 
 type bsTableReaderAt struct {
@@ -97,58 +95,32 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 	return totalRead, nil
 }
 
-func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, blockSize uint64, indexCache *indexCache, stats *Stats) (cs chunkSource, err error) {
-	if indexCache != nil {
-		indexCache.lockEntry(name)
-		defer func() {
-			unlockErr := indexCache.unlockEntry(name)
+func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, blockSize uint64, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 
-			if err != nil {
-				err = unlockErr
-			}
-		}()
-
-		if index, found := indexCache.get(name); found {
-			bsTRA := &bsTableReaderAt{name.String(), bs}
-			return &chunkSourceAdapter{newTableReader(index, bsTRA, blockSize), name}, nil
-		}
-	}
-
-	t1 := time.Now()
-	indexBytes, tra, err := func() ([]byte, tableReaderAt, error) {
-		size := int64(indexSize(chunkCount) + footerSize)
-		key := name.String()
-		buff, _, err := blobstore.GetBytes(ctx, bs, key, blobstore.NewBlobRange(-size, 0))
-
+	index, err := loadTableIndex(stats, chunkCount, q, func(p []byte) error {
+		rc, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
 		if err != nil {
-			return nil, nil, err
+			return err
+		}
+		defer rc.Close()
+
+		_, err = io.ReadFull(rc, p)
+		if err != nil {
+			return err
 		}
 
-		if size != int64(len(buff)) {
-			return nil, nil, errors.New("failed to read all data")
-		}
-
-		return buff, &bsTableReaderAt{key, bs}, nil
-	}()
-
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	stats.IndexBytesPerRead.Sample(uint64(len(indexBytes)))
-	stats.IndexReadLatency.SampleTimeSince(t1)
-
-	index, err := parseTableIndex(indexBytes)
-
+	tr, err := newTableReader(index, &bsTableReaderAt{name.String(), bs}, s3BlockSize)
 	if err != nil {
+		_ = index.Close()
 		return nil, err
 	}
-
-	if indexCache != nil {
-		indexCache.put(name, index)
-	}
-
-	return &chunkSourceAdapter{newTableReader(index, tra, s3BlockSize), name}, nil
+	return &chunkSourceAdapter{tr, name}, nil
 }
 
 func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {

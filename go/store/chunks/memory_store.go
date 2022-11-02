@@ -54,6 +54,11 @@ func (ms *MemoryStorage) NewView() ChunkStore {
 	return &MemoryStoreView{storage: ms, rootHash: ms.rootHash, version: version}
 }
 
+// NewViewWithFormat makes a MemoryStoreView with a specific NomsBinFormat.
+func (ms *MemoryStorage) NewViewWithFormat(nbf string) ChunkStore {
+	return &MemoryStoreView{storage: ms, rootHash: ms.rootHash, version: nbf}
+}
+
 // NewViewWithVersion vends a MemoryStoreView backed by this MemoryStorage. It's
 // initialized with the currently "persisted" root. Uses the default format.
 func (ms *MemoryStorage) NewViewWithDefaultFormat() ChunkStore {
@@ -139,7 +144,7 @@ func (ms *MemoryStoreView) Get(ctx context.Context, h hash.Hash) (Chunk, error) 
 	return ms.storage.Get(ctx, h)
 }
 
-func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, found func(*Chunk)) error {
+func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *Chunk)) error {
 	for h := range hashes {
 		c, err := ms.Get(ctx, h)
 
@@ -148,7 +153,7 @@ func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		}
 
 		if !c.IsEmpty() {
-			found(&c)
+			found(ctx, &c)
 		}
 	}
 

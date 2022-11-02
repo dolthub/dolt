@@ -17,20 +17,22 @@ package remotestorage
 import (
 	"context"
 
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff/v4"
 	"google.golang.org/grpc"
 )
 
 const (
-	csClientRetries = 5
+	grpcRetries = 5
 )
 
-var csRetryParams = backoff.NewExponentialBackOff()
+func grpcBackOff(ctx context.Context) backoff.BackOff {
+	ret := backoff.NewExponentialBackOff()
+	return backoff.WithContext(backoff.WithMaxRetries(ret, grpcRetries), ctx)
+}
 
 func RetryingUnaryClientInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	doit := func() error {
-		err := invoker(ctx, method, req, reply, cc, opts...)
-		return processGrpcErr(err)
+		return processGrpcErr(invoker(ctx, method, req, reply, cc, opts...))
 	}
-	return backoff.Retry(doit, backoff.WithMaxRetries(csRetryParams, csClientRetries))
+	return backoff.Retry(doit, grpcBackOff(ctx))
 }

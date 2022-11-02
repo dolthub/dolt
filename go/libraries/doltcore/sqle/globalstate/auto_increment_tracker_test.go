@@ -15,42 +15,58 @@
 package globalstate
 
 import (
-	"sync"
+	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestNextHasNoRepeats(t *testing.T) {
-	var allVals sync.Map
-	aiTracker := NewAutoIncrementTracker()
-
-	for i := 0; i < 100; i++ {
-		go func() {
-			for j := 0; j < 10; j++ {
-				nxt, err := aiTracker.Next("test", nil, 1)
-				require.NoError(t, err)
-
-				val, err := convertIntTypeToUint(nxt)
-				require.NoError(t, err)
-
-				current, ok := allVals.Load(val)
-				if !ok {
-					allVals.Store(val, 1)
-				} else {
-					asUint, _ := convertIntTypeToUint(current)
-					allVals.Store(val, asUint+1)
-				}
-			}
-		}()
+func TestCoerceAutoIncrementValue(t *testing.T) {
+	tests := []struct {
+		val interface{}
+		exp uint64
+		err bool
+	}{
+		{
+			val: nil,
+			exp: uint64(0),
+		},
+		{
+			val: int32(0),
+			exp: uint64(0),
+		},
+		{
+			val: int32(1),
+			exp: uint64(1),
+		},
+		{
+			val: uint32(1),
+			exp: uint64(1),
+		},
+		{
+			val: float32(1),
+			exp: uint64(1),
+		},
+		{
+			val: float32(1.1),
+			exp: uint64(1),
+		},
+		{
+			val: float32(1.9),
+			exp: uint64(2),
+		},
 	}
 
-	// Make sure each key was called once
-	allVals.Range(func(key, value interface{}) bool {
-		asUint, _ := convertIntTypeToUint(value)
-
-		require.Equal(t, uint64(1), asUint)
-
-		return true
-	})
+	for _, test := range tests {
+		name := fmt.Sprintf("Coerce %v to %v", test.val, test.exp)
+		t.Run(name, func(t *testing.T) {
+			act, err := CoerceAutoIncrementValue(test.val)
+			if test.err {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, test.exp, act)
+		})
+	}
 }

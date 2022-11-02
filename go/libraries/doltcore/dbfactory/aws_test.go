@@ -60,8 +60,8 @@ func TestAWSPathValidation(t *testing.T) {
 		{
 			"slash in the middle",
 			"/data/base/",
-			"",
-			true,
+			"data/base",
+			false,
 		},
 	}
 

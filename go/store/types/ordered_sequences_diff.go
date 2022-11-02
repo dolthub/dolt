@@ -52,8 +52,8 @@ func sendChange(ctx context.Context, changes chan<- ValueChanged, change ValueCh
 // Streams the diff from |last| to |current| into |changes|, using a left-right approach.
 // Left-right immediately descends to the first change and starts streaming changes, but compared to top-down it's serial and much slower to calculate the full diff.
 func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged) error {
-	trueFunc := func(Value) (bool, error) {
-		return true, nil
+	trueFunc := func(context.Context, Value) (bool, bool, error) {
+		return true, false, nil
 	}
 	return orderedSequenceDiffLeftRightInRange(ctx, last, current, emptyKey, trueFunc, changes)
 }
@@ -99,20 +99,26 @@ VALIDRANGES:
 			if isLess, err := currentKey.Less(last.format(), lastKey); err != nil {
 				return err
 			} else if isLess {
-				isInRange, err := inRange(currentKey.v)
+				valid, skip, err := inRange(ctx, currentKey.v)
 				if err != nil {
 					return err
-				} else if !isInRange {
+				}
+
+				// Out of range
+				if !valid {
 					break VALIDRANGES
 				}
 
-				mv, err := getMapValue(currentCur)
-				if err != nil {
-					return err
-				}
+				// Not skipping this value (want to skip for non-inclusive lower bound range)
+				if !skip {
+					mv, err := getMapValue(currentCur)
+					if err != nil {
+						return err
+					}
 
-				if err := sendChange(ctx, changes, ValueChanged{DiffChangeAdded, currentKey.v, nil, mv}); err != nil {
-					return err
+					if err := sendChange(ctx, changes, ValueChanged{DiffChangeAdded, currentKey.v, nil, mv}); err != nil {
+						return err
+					}
 				}
 
 				_, err = currentCur.advance(ctx)
@@ -120,11 +126,23 @@ VALIDRANGES:
 					return err
 				}
 			} else {
-				isInRange, err := inRange(lastKey.v)
-				if !isInRange {
+				valid, skip, err := inRange(ctx, lastKey.v)
+				if err != nil {
 					return err
-				} else if !isInRange {
+				}
+
+				// Out of range
+				if !valid {
 					break VALIDRANGES
+				}
+
+				// Skip this last key
+				if skip {
+					_, err = lastCur.advance(ctx)
+					if err != nil {
+						return err
+					}
+					continue
 				}
 
 				if isLess, err := lastKey.Less(last.format(), currentKey); err != nil {
@@ -178,20 +196,24 @@ VALIDRANGES:
 			return err
 		}
 
-		isInRange, err := inRange(lastKey.v)
+		valid, skip, err := inRange(ctx, lastKey.v)
 		if err != nil {
 			return err
-		} else if !isInRange {
+		}
+
+		if !valid {
 			break
 		}
 
-		mv, err := getMapValue(lastCur)
-		if err != nil {
-			return err
-		}
+		if !skip {
+			mv, err := getMapValue(lastCur)
+			if err != nil {
+				return err
+			}
 
-		if err := sendChange(ctx, changes, ValueChanged{DiffChangeRemoved, lastKey.v, mv, nil}); err != nil {
-			return err
+			if err := sendChange(ctx, changes, ValueChanged{DiffChangeRemoved, lastKey.v, mv, nil}); err != nil {
+				return err
+			}
 		}
 
 		_, err = lastCur.advance(ctx)
@@ -206,20 +228,24 @@ VALIDRANGES:
 			return err
 		}
 
-		isInRange, err := inRange(currKey.v)
+		valid, skip, err := inRange(ctx, currKey.v)
 		if err != nil {
 			return err
-		} else if !isInRange {
+		}
+
+		if !valid {
 			break
 		}
 
-		mv, err := getMapValue(currentCur)
-		if err != nil {
-			return err
-		}
+		if !skip {
+			mv, err := getMapValue(currentCur)
+			if err != nil {
+				return err
+			}
 
-		if err := sendChange(ctx, changes, ValueChanged{DiffChangeAdded, currKey.v, nil, mv}); err != nil {
-			return err
+			if err := sendChange(ctx, changes, ValueChanged{DiffChangeAdded, currKey.v, nil, mv}); err != nil {
+				return err
+			}
 		}
 
 		_, err = currentCur.advance(ctx)

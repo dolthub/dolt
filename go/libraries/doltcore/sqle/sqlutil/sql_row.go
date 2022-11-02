@@ -18,54 +18,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type mapSqlIter struct {
-	ctx context.Context
-	nmr *noms.NomsMapReader
-	sch schema.Schema
-}
-
-var _ sql.RowIter = (*mapSqlIter)(nil)
-
-// Next implements the interface sql.RowIter.
-func (m *mapSqlIter) Next() (sql.Row, error) {
-	dRow, err := m.nmr.ReadRow(m.ctx)
-	if err != nil {
-		return nil, err
-	}
-	return DoltRowToSqlRow(dRow, m.sch)
-}
-
-// Close implements the interface sql.RowIter.
-func (m *mapSqlIter) Close(ctx *sql.Context) error {
-	return m.nmr.Close(ctx)
-}
-
-// MapToSqlIter returns a map reader that converts all rows to sql rows, creating a sql row iterator.
-func MapToSqlIter(ctx context.Context, sch schema.Schema, data types.Map) (sql.RowIter, error) {
-	mapReader, err := noms.NewNomsMapReader(ctx, data, sch)
-	if err != nil {
-		return nil, err
-	}
-	return &mapSqlIter{
-		ctx: ctx,
-		nmr: mapReader,
-		sch: sch,
-	}, nil
-}
-
 // DoltRowToSqlRow constructs a go-mysql-server sql.Row from a Dolt row.Row.
 func DoltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
+	if doltRow == nil {
+		return nil, nil
+	}
+
 	colVals := make(sql.Row, sch.GetAllCols().Size())
 	i := 0
 
@@ -95,61 +61,46 @@ func SqlRowToDoltRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, 
 // DoltKeyValueAndMappingFromSqlRow converts a sql.Row to key and value tuples and keeps a mapping from tag to value that
 // can be used to speed up index key generation for foreign key checks.
 func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (types.Tuple, types.Tuple, map[uint64]types.Value, error) {
-	allCols := doltSchema.GetAllCols()
-	nonPKCols := doltSchema.GetNonPKCols()
-
-	numCols := allCols.Size()
+	numCols := doltSchema.GetAllCols().Size()
 	vals := make([]types.Value, numCols*2)
 	tagToVal := make(map[uint64]types.Value, numCols)
 
+	nonPKCols := doltSchema.GetNonPKCols()
 	numNonPKVals := nonPKCols.Size() * 2
 	nonPKVals := vals[:numNonPKVals]
 	pkVals := vals[numNonPKVals:]
 
-	// values for the pk tuple are in schema order
-	pkIdx := 0
-	for i := 0; i < numCols; i++ {
-		schCol := allCols.GetAtIndex(i)
+	for i, c := range doltSchema.GetAllCols().GetColumns() {
 		val := r[i]
 		if val == nil {
-			if !schCol.IsNullable() {
-				return types.Tuple{}, types.Tuple{}, nil, fmt.Errorf("column <%v> received nil but is non-nullable", schCol.Name)
-			}
 			continue
 		}
 
-		tag := schCol.Tag
-		nomsVal, err := schCol.TypeInfo.ConvertValueToNomsValue(ctx, vrw, val)
-
+		nomsVal, err := c.TypeInfo.ConvertValueToNomsValue(ctx, vrw, val)
 		if err != nil {
 			return types.Tuple{}, types.Tuple{}, nil, err
 		}
 
-		tagToVal[tag] = nomsVal
-
-		if schCol.IsPartOfPK {
-			pkVals[pkIdx] = types.Uint(tag)
-			pkVals[pkIdx+1] = nomsVal
-			pkIdx += 2
-		}
+		tagToVal[c.Tag] = nomsVal
 	}
 
-	// no nulls in keys
-	if pkIdx != len(pkVals) {
-		return types.Tuple{}, types.Tuple{}, nil, errors.New("not all pk columns have a value")
-	}
-
-	// non pk values in tag sorted order
 	nonPKIdx := 0
-	nonPKTags := len(tagToVal) - (pkIdx / 2)
-	for i := 0; i < len(nonPKCols.SortedTags) && nonPKIdx < (nonPKTags*2); i++ {
-		tag := nonPKCols.SortedTags[i]
-		val, ok := tagToVal[tag]
-
-		if ok {
+	for _, tag := range nonPKCols.SortedTags {
+		// nonPkCols sorted by ascending tag order
+		if val, ok := tagToVal[tag]; ok {
 			nonPKVals[nonPKIdx] = types.Uint(tag)
 			nonPKVals[nonPKIdx+1] = val
 			nonPKIdx += 2
+		}
+	}
+
+	pkIdx := 0
+	for _, tag := range doltSchema.GetPKCols().Tags {
+		// pkCols are in the primary key defined order
+		if val, ok := tagToVal[tag]; ok {
+			pkVals[pkIdx] = types.Uint(tag)
+			pkVals[pkIdx+1] = val
+			pkIdx += 2
 		}
 	}
 
@@ -171,9 +122,13 @@ func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWr
 	return keyTuple, valTuple, tagToVal, nil
 }
 
-// DoltKeyValueAndMappingFromSqlRow converts a sql.Row to key tuple and keeps a mapping from tag to value that
+// DoltKeyAndMappingFromSqlRow converts a sql.Row to key tuple and keeps a mapping from tag to value that
 // can be used to speed up index key generation for foreign key checks.
 func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (types.Tuple, map[uint64]types.Value, error) {
+	if r == nil {
+		return types.EmptyTuple(vrw.Format()), nil, sql.ErrUnexpectedNilRow.New()
+	}
+
 	allCols := doltSchema.GetAllCols()
 	pkCols := doltSchema.GetPKCols()
 
@@ -186,15 +141,10 @@ func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter,
 		numCols = len(r)
 	}
 
-	// values for the pk tuple are in schema order
-	pkIdx := 0
 	for i := 0; i < numCols; i++ {
-		schCol := allCols.GetAtIndex(i)
+		schCol := allCols.GetByIndex(i)
 		val := r[i]
 		if val == nil {
-			if !schCol.IsNullable() {
-				return types.Tuple{}, nil, fmt.Errorf("column <%v> received nil but is non-nullable", schCol.Name)
-			}
 			continue
 		}
 
@@ -206,17 +156,17 @@ func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter,
 		}
 
 		tagToVal[tag] = nomsVal
-
-		if schCol.IsPartOfPK {
-			pkVals[pkIdx] = types.Uint(tag)
-			pkVals[pkIdx+1] = nomsVal
-			pkIdx += 2
-		}
 	}
 
-	// no nulls in keys
-	if pkIdx != len(pkVals) {
-		return types.Tuple{}, nil, errors.New("not all pk columns have a value")
+	pkOrds := doltSchema.GetPkOrdinals()
+	for i, pkCol := range pkCols.GetColumns() {
+		ord := pkOrds[i]
+		val := r[ord]
+		if val == nil {
+			return types.Tuple{}, nil, errors.New("not all pk columns have a value")
+		}
+		pkVals[i*2] = types.Uint(pkCol.Tag)
+		pkVals[i*2+1] = tagToVal[pkCol.Tag]
 	}
 
 	nbf := vrw.Format()
@@ -241,9 +191,6 @@ func pkDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.R
 			if err != nil {
 				return nil, err
 			}
-		} else if !schCol.IsNullable() {
-			// TODO: this isn't an error in the case of result set construction (where non-null columns can indeed be null)
-			return nil, fmt.Errorf("column <%v> received nil but is non-nullable", schCol.Name)
 		}
 	}
 	return row.New(vrw.Format(), doltSchema, taggedVals)
@@ -270,54 +217,39 @@ func keylessDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, sq
 	return row.KeylessRow(vrw.Format(), vals[:j]...)
 }
 
-// SqlColToStr is a utility function for converting a sql column of type interface{} to a string
-func SqlColToStr(ctx context.Context, col interface{}) string {
+// The Type.SQL() call takes in a SQL context to determine the output character set for types that use a collation.
+// As the SqlColToStr utility function is primarily used in places where no SQL context is available (such as commands
+// on the CLI), we force the `utf8mb4` character set to be used, as it is the most likely to be supported by the
+// destination. `utf8mb4` is the default character set for empty contexts, so we don't need to explicitly set it.
+var sqlColToStrContext = sql.NewEmptyContext()
+
+// SqlColToStr is a utility function for converting a sql column of type interface{} to a string.
+// NULL values are treated as empty strings. Handle nil separately if you require other behavior.
+func SqlColToStr(sqlType sql.Type, col interface{}) (string, error) {
 	if col != nil {
 		switch typedCol := col.(type) {
-		case int:
-			return strconv.FormatInt(int64(typedCol), 10)
-		case int32:
-			return strconv.FormatInt(int64(typedCol), 10)
-		case int64:
-			return strconv.FormatInt(int64(typedCol), 10)
-		case int16:
-			return strconv.FormatInt(int64(typedCol), 10)
-		case int8:
-			return strconv.FormatInt(int64(typedCol), 10)
-		case uint:
-			return strconv.FormatUint(uint64(typedCol), 10)
-		case uint32:
-			return strconv.FormatUint(uint64(typedCol), 10)
-		case uint64:
-			return strconv.FormatUint(uint64(typedCol), 10)
-		case uint16:
-			return strconv.FormatUint(uint64(typedCol), 10)
-		case uint8:
-			return strconv.FormatUint(uint64(typedCol), 10)
-		case float64:
-			return strconv.FormatFloat(float64(typedCol), 'g', -1, 64)
-		case float32:
-			return strconv.FormatFloat(float64(typedCol), 'g', -1, 32)
-		case string:
-			return typedCol
 		case bool:
 			if typedCol {
-				return "true"
+				return "true", nil
 			} else {
-				return "false"
+				return "false", nil
 			}
-		case time.Time:
-			return typedCol.Format("2006-01-02 15:04:05.999999 -0700 MST")
-		case sql.JSONValue:
-			s, err := typedCol.ToString(sql.NewContext(ctx))
+		case sql.SpatialColumnType:
+			res, err := sqlType.SQL(sqlColToStrContext, nil, col)
+			hexRes := fmt.Sprintf("0x%X", res.Raw())
 			if err != nil {
-				s = err.Error()
+				return "", err
 			}
-			return s
+			return hexRes, nil
 		default:
-			return fmt.Sprintf("%v", typedCol)
+			res, err := sqlType.SQL(sqlColToStrContext, nil, col)
+			if err != nil {
+				return "", err
+			}
+			return res.ToString(), nil
+
 		}
 	}
 
-	return ""
+	return "", nil
 }

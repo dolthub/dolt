@@ -6,15 +6,19 @@ inputs:
     required: true
     default: ''
   version:
-    description: 'dolt version being benchmarked'
+    description: 'dolt version being benchmarked or ref of bats windows job'
     required: true
     default: ''
+  format:
+    description: 'dolt noms bin format'
+    required: true
+    default: '__LD_1__'
   template:
     description: 'email template'
     required: false
     default: 'PerformanceBenchmarkingReleaseTemplate'
   dataFile:
-    required: true
+    required: false
     description: 'path to email data file'
     default: ''
   toAddresses:
@@ -29,6 +33,10 @@ inputs:
     description: 'json string list of reply to addresses'
     required: false
     default: "[]"
+  workflowURL:
+    description: 'url of the workflow run'
+    default: ''
+    required: false
 runs:
-  using: 'node12'
+  using: 'node16'
   main: 'dist/index.js'

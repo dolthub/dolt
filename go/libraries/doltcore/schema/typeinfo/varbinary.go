@@ -37,11 +37,20 @@ const (
 // as a string that is interpreted as raw bytes, rather than as a bespoke data structure,
 // and thus this is mirrored here in its implementation. This will minimize any differences
 // that could arise.
+//
+// This type handles the BLOB types. BINARY and VARBINARY are handled by inlineBlobType.
 type varBinaryType struct {
 	sqlBinaryType sql.StringType
 }
 
 var _ TypeInfo = (*varBinaryType)(nil)
+
+var (
+	TinyBlobType   TypeInfo = &varBinaryType{sqlBinaryType: sql.TinyBlob}
+	BlobType       TypeInfo = &varBinaryType{sqlBinaryType: sql.Blob}
+	MediumBlobType TypeInfo = &varBinaryType{sqlBinaryType: sql.MediumBlob}
+	LongBlobType   TypeInfo = &varBinaryType{sqlBinaryType: sql.LongBlob}
+)
 
 func CreateVarBinaryTypeFromParams(params map[string]string) (TypeInfo, error) {
 	var length int64
@@ -99,9 +108,9 @@ func (ti *varBinaryType) ConvertValueToNomsValue(ctx context.Context, vrw types.
 	if err != nil {
 		return nil, err
 	}
-	val, ok := strVal.(string)
+	val, ok := strVal.([]byte)
 	if ok {
-		return types.NewBlob(ctx, vrw, strings.NewReader(val))
+		return types.NewBlob(ctx, vrw, strings.NewReader(string(val)))
 	}
 	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 }
@@ -124,7 +133,7 @@ func (ti *varBinaryType) FormatValue(v types.Value) (*string, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &resStr, nil
+		return (*string)(unsafe.Pointer(&resStr)), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -162,21 +171,6 @@ func (ti *varBinaryType) NomsKind() types.NomsKind {
 	return types.BlobKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *varBinaryType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil {
-		return types.NullValue, nil
-	}
-	strVal, err := ti.sqlBinaryType.Convert(*str)
-	if err != nil {
-		return nil, err
-	}
-	if val, ok := strVal.(string); ok {
-		return types.NewBlob(ctx, vrw, strings.NewReader(val))
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
-}
-
 // Promote implements TypeInfo interface.
 func (ti *varBinaryType) Promote() TypeInfo {
 	return &varBinaryType{ti.sqlBinaryType.Promote().(sql.StringType)}
@@ -193,18 +187,18 @@ func (ti *varBinaryType) ToSqlType() sql.Type {
 }
 
 // fromBlob returns a string from a types.Blob.
-func fromBlob(b types.Blob) (string, error) {
+func fromBlob(b types.Blob) ([]byte, error) {
 	strLength := b.Len()
 	if strLength == 0 {
-		return "", nil
+		return []byte{}, nil
 	}
 	str := make([]byte, strLength)
 	n, err := b.ReadAt(context.Background(), str, 0)
 	if err != nil && err != io.EOF {
-		return "", err
+		return []byte{}, err
 	}
 	if uint64(n) != strLength {
-		return "", fmt.Errorf("wanted %d bytes from blob for data, got %d", strLength, n)
+		return []byte{}, fmt.Errorf("wanted %d bytes from blob for data, got %d", strLength, n)
 	}
 
 	// For very large byte slices, the standard method of converting a byte slice to a string using "string(str)" will
@@ -213,7 +207,7 @@ func fromBlob(b types.Blob) (string, error) {
 	// testing, performance improved by 40%.
 	// This is inspired by Go's own source code in strings.Builder.String(): https://golang.org/src/strings/builder.go#L48
 	// This is also marked as a valid strategy in unsafe.Pointer's own method documentation.
-	return *(*string)(unsafe.Pointer(&str)), nil
+	return str, nil
 }
 
 // hasPrefix finds out if a Blob has a prefixed integer. Initially blobs for varBinary prepended an integer indicating
@@ -243,7 +237,24 @@ func hasPrefix(b types.Blob, ctx context.Context) (bool, error) {
 func varBinaryTypeConverter(ctx context.Context, src *varBinaryType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			blob, ok := v.(types.Blob)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting blob to %s: %T", strings.ToLower(dest.String()), v)
+			}
+			val, err := fromBlob(blob)
+			if err != nil {
+				return nil, err
+			}
+			newVal, err := strconv.ParseUint(string(val), 10, int(dest.sqlBitType.NumberOfBits()))
+			if err != nil {
+				return nil, err
+			}
+			return types.Uint(newVal), nil
+		}, true, nil
 	case *blobStringType:
 		return wrapIsValid(dest.IsValid, src, dest)
 	case *boolType:
@@ -256,11 +267,27 @@ func varBinaryTypeConverter(ctx context.Context, src *varBinaryType, destTi Type
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geomcollType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geometryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *linestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multilinestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipolygonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *pointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *polygonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)

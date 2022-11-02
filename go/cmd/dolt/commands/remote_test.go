@@ -32,7 +32,7 @@ func TestGetAbsRemoteUrl(t *testing.T) {
 	testRepoDir := filepath.Join(cwd, "test-repo")
 	fs := filesys.NewInMemFS([]string{cwd, testRepoDir}, nil, cwd)
 	if osutil.IsWindows {
-		cwd = "/" + filepath.ToSlash(cwd)
+		cwd = filepath.ToSlash(cwd)
 	}
 
 	tests := []struct {
@@ -110,14 +110,6 @@ func TestGetAbsRemoteUrl(t *testing.T) {
 			fmt.Sprintf("file://%s/test-repo", cwd),
 			"file",
 			false,
-		},
-		{
-			// directory doesnt exist
-			"file://./doesnt_exist",
-			config.NewMapConfig(map[string]string{}),
-			"",
-			"",
-			true,
 		},
 		{
 			":/:/:/", // intended to fail earl.Parse
