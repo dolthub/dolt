@@ -1,0 +1,182 @@
+name: Benchmark Import Performance
+
+on:
+  workflow-dispatch:
+    inputs:
+      email_recipient:
+        description: 'email to send results report to'
+        rquired: false
+        default: ''
+      version:
+        description: 'dolt version to checkout'
+        rquired: false
+        default: ''
+      test_file:
+        description: 'import perf .yaml spec, relative to \'import_benchmarks/tesdata\''
+        rquired: false
+        default: 'ci.yaml'
+      report:
+        description: 'reporting query, relative to \'import_benchmarks/reporting\''
+        rquired: false
+        default: 'three_way_compare.sql'
+env:
+  BENCH_DIR: 'go/performance/import_benchmarker'
+  MYSQL_PORT: 3309
+jobs:
+  bench:
+    name: Benchmark
+    defaults:
+      run:
+        shell: bash
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+    steps:
+    - name: Set up Go 1.x
+      id: go
+      uses: actions/setup-go@v3
+      with:
+        go-version: ^1.19
+
+    - name: Dolt version
+      id: version
+      run: |
+        in=${{ github.event.inputs.version }}
+        default=${{ github.sha }}
+        version=${ $in : $default }
+        echo "::set-output name=ref::$version"
+
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ steps.version.outputs.ref }}
+
+    - name: Install dolt
+      working-directory: ./go
+      run: go install ./cmd/dolt
+
+    - uses: shogo82148/actions-setup-mysql@v1
+      with:
+        mysql-version: '8.0.28'
+        my-cnf: |
+          local_infile=1
+          socket=/tmp/mysqld2.sock
+          port=${{ env.MYSQL_PORT }}
+
+    - name: Run bench
+      id: bench
+      run: |
+        out="$GITHUB_WORKSPACE/results.sql"
+        testspec="${{ env.BENCH_DIR }}/testdata/${{ github.event.inputs.test_file }}"
+        go build \
+          "github.com/dolthub/dolt/${{ env.BENCH_DIR }}/cmd" \
+          -test "$testspec" \
+          -output "$out"
+        echo "::set-output name=result_path::$out"
+
+    - name: Report
+      id: report
+      run: |
+        gw=$GITHUB_WORKSPACE
+        in="${{ steps.bench.outputs.result_path }}"
+        query="${{ env.BENCH_DIR }}/reporting/${{ github.events.inputs.report }}"
+        out="$gw/results.csv"
+
+        mkdir "$gw/res"
+        cd "$gw/res"
+        dolt init
+        dolt sql < "$query"
+        dolt sql -r csv < "$in" > "$out"
+
+        echo "::set-output name=report_path::$out"
+
+    - name: Format HTML
+      id: html
+      run: |
+        gw="$GITHUB_WORKSPACE"
+        in="${{ steps.report.outputs.report_path }}"
+        out="$gw/results.html"
+
+        echo "<table>" > "$out"
+        print_header=true
+        while read "$line"; do
+          if "$print_header"; then
+            echo "<tr><th>$line" | sed -e 's/:[^,]*\(,\|$\)/<\/th><th>/g' >> "$out"
+            print_header=false
+            continue
+          fi
+          echo "<tr><td>${line//,/</td><td>}</td></tr>" ;
+        done < "$in"
+        echo "</table>" >> "$out"
+
+        echo "::set-output name=html::$(echo $out)"
+
+    - name: Format template
+      id: template
+      uses: mikefarah/yq@master
+      env:
+        VERSION: ${{ steps.version.outputs.ref }}
+        FORMAT=__DOLT__
+        RESULTS= ${{ steps.html.outputs.html }}
+      with:
+        cmd: |
+          yq -j <EOF
+            Template:
+              TemplateName: ImportBenchmarkingReleaseTemplate
+              SubjectPart: Import Benchmarks for "$FORMAT" "$VERSION"
+              HtmlPart: |
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                 <meta charset="UTF-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <title>Dolt "$FORMAT" "$VERSION" Import Results</title>
+                  <style>
+                    table {
+                      border: 1px solid black;
+                      letter-spacing: 1px;
+                      font-family: sans-serif;
+                      font-size: .8rem;
+                      padding: 5px;
+                      margin: 5px;
+                    }
+                    th {
+                      border: 1px solid rgb(190, 190, 190);
+                      padding: 10px;
+                    }
+                    td {
+                      padding: 5px;
+                    }
+                    tr:nth-child(even) {
+                      background-color: #f2f2f2;
+                    }
+                 </style>
+                </head>
+                  <body>"$( echo $RESULTS )"</body>
+                </html>
+              EOF
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v1-node16
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-west-2
+
+    - name: Get Addresses
+      id: email_addr
+      env:
+        RECIPIENT: ${{ github.event.inputs.email_recipient }}
+        TEAM: '["${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}"]'
+      run: |
+        addresses="$TEAM"
+        if [ ! -z "$RECIPIENT" ]; then
+          addresses="[\"$RECIPIENT\"]"
+        fi
+        echo "::set-output name=addresses::$addresses"
+
+    - name: Send Email
+      uses: ./.github/actions/ses-email-action
+      with:
+        region: us-west-2
+        toAddresses: ${{ steps.email_addr.outputs.addresses }}
+        template: ${{ steps.template.outputs.result }}

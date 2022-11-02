@@ -28,6 +28,7 @@ const (
 )
 
 var path = flag.String("test", "", "the path to a test file")
+var out = flag.String("out", "", "result output path")
 
 func main() {
 	flag.Parse()
@@ -36,14 +37,15 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	tmpdir, err := os.MkdirTemp("", "repo-store-")
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	results := new(ib.ImportResults)
 	u, err := driver.NewDoltUser()
 	for _, test := range def.Tests {
 		test.Results = results
-		tmpdir, err := os.MkdirTemp("", "repo-store-")
-		if err != nil {
-			log.Fatalln(err)
-		}
 		test.WithTmpDir(tmpdir)
 
 		for _, r := range test.Repos {
@@ -61,6 +63,14 @@ func main() {
 			}
 		}
 	}
-	fmt.Println(results.SqlDump())
+	if *out != "" {
+		of, err := os.Create(*out)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		fmt.Fprintf(of, results.SqlDump())
+	} else {
+		fmt.Println(results.SqlDump())
+	}
 	os.Exit(0)
 }

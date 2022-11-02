@@ -167,8 +167,7 @@ func (r *ImportResults) String() string {
 
 func (r *ImportResults) SqlDump() string {
 	b := strings.Builder{}
-	b.WriteString(`
-CREATE TABLE IF NOT EXISTS import_perf_results (
+	b.WriteString(`CREATE TABLE IF NOT EXISTS import_perf_results (
   test_name varchar(64),
   server varchar(64),
   detail varchar(64),
@@ -178,11 +177,14 @@ CREATE TABLE IF NOT EXISTS import_perf_results (
   sorted bool,
   batch bool,
   primary key (test_name, detail, server)
-	);
+);
 `)
 
-	b.WriteString("insert into import_perf_results values")
-	for _, r := range r.res {
+	b.WriteString("insert into import_perf_results values\n")
+	for i, r := range r.res {
+		if i > 0 {
+			b.WriteString(",\n  ")
+		}
 		var sorted int
 		if r.sorted {
 			sorted = 1
@@ -192,7 +194,7 @@ CREATE TABLE IF NOT EXISTS import_perf_results (
 			batch = 1
 		}
 		b.WriteString(fmt.Sprintf(
-			",\n  ('%s', '%s', '%s', %d, %.2f, '%s', %b, %b)",
+			"('%s', '%s', '%s', %d, %.2f, '%s', %b, %b)",
 			r.test, r.server, r.detail, r.rows, r.time, r.fmt, sorted, batch))
 	}
 	b.WriteString(";\n")
