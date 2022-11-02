@@ -153,7 +153,7 @@ func parseLogArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return nil, err
 	}
 
-	excludingRef, ok := apr.GetValue(cli.NotFlag)
+	excludingRefs, ok := apr.GetValueList(cli.NotFlag)
 	if ok {
 		if len(opts.excludingCommitSpecs) > 0 {
 			return nil, fmt.Errorf("cannot use --not argument with two dots or ref with ^")
@@ -161,11 +161,14 @@ func parseLogArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		if len(opts.tableName) > 0 {
 			return nil, fmt.Errorf("cannot use --not argument with table")
 		}
-		notCs, err := doltdb.NewCommitSpec(excludingRef)
-		if err != nil {
-			return nil, fmt.Errorf("invalid commit %s\n", excludingRef)
+		for _, excludingRef := range excludingRefs {
+			notCs, err := doltdb.NewCommitSpec(excludingRef)
+			if err != nil {
+				return nil, fmt.Errorf("invalid commit %s\n", excludingRef)
+			}
+
+			opts.excludingCommitSpecs = append(opts.excludingCommitSpecs, notCs)
 		}
-		opts.excludingCommitSpecs = append(opts.excludingCommitSpecs, notCs)
 	}
 
 	return opts, nil

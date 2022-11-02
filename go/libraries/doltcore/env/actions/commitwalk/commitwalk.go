@@ -149,10 +149,10 @@ func newQueue() *q {
 	return &q{loaded: make(map[hash.Hash]*c)}
 }
 
-// GetDotDotRevisions returns the commits reachable from commit at hash
-// `includedHead` that are not reachable from hash `excludedHead`.
-// `includedHead` and `excludedHead` must be commits in `ddb`. Returns up
-// to `num` commits, in reverse topological order starting at `includedHead`,
+// GetDotDotRevisions returns the commits reachable from commit at hashes
+// `includedHeads` that are not reachable from hashes `excludedHeads`.
+// `includedHeads` and `excludedHeads` must be commits in `ddb`. Returns up
+// to `num` commits, in reverse topological order starting at `includedHeads`,
 // with tie breaking based on the height of commit graph between
 // concurrent commits --- higher commits appear first. Remaining
 // ties are broken by timestamp; newer commits appear first.

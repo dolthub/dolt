@@ -302,7 +302,7 @@ func CreateLogArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(ParentsFlag, "", "Shows all parents of each commit in the log.")
 	ap.SupportsString(DecorateFlag, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
 	ap.SupportsFlag(OneLineFlag, "", "Shows logs in a compact format.")
-	ap.SupportsString(NotFlag, "", "revision", "Excludes commits from revision.")
+	ap.SupportsStringList(NotFlag, "", "revision", "Excludes commits from revision.")
 	return ap
 }
 
