@@ -582,7 +582,7 @@ func makeTestStructTypeFromFieldNames(s string) (*Type, error) {
 	return MakeStructType("", fields...)
 }
 
-func makeTestStructFromFieldNames(nbf *NomsBinFormat, s string) (Struct, error) {
+func makeTestStructFromFieldNames(tt *testing.T, nbf *NomsBinFormat, s string) (Struct, error) {
 	t, err := makeTestStructTypeFromFieldNames(s)
 
 	if err != nil {
@@ -590,7 +590,7 @@ func makeTestStructFromFieldNames(nbf *NomsBinFormat, s string) (Struct, error) 
 	}
 
 	fields := t.Desc.(StructDesc).fields
-	d.Chk.NotEmpty(fields)
+	require.NotEmpty(tt, fields)
 
 	fieldNames := make([]string, len(fields))
 	for i, field := range fields {
@@ -967,7 +967,7 @@ func TestIsValueSubtypeOfDetails(tt *testing.T) {
 	a := assert.New(tt)
 
 	test := func(vString, tString string, exp1, exp2 bool) {
-		v, err := makeTestStructFromFieldNames(vs.Format(), vString)
+		v, err := makeTestStructFromFieldNames(tt, vs.Format(), vString)
 		require.NoError(tt, err)
 		t, err := makeTestStructTypeFromFieldNames(tString)
 		require.NoError(tt, err)
