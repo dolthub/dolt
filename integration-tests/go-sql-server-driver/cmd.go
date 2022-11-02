@@ -19,6 +19,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -258,11 +259,27 @@ func (s *SqlServer) Restart(newargs *[]string) error {
 	return s.Cmd.Start()
 }
 
-func (s *SqlServer) DB() (*sql.DB, error) {
+func (s *SqlServer) DB(c Connection) (*sql.DB, error) {
 	authority := "root"
+	if c.User != "" {
+		authority = c.User
+	}
+	pass, err := c.Password()
+	if err != nil {
+		return nil, err
+	}
+	if pass != "" {
+		authority += ":" + pass
+	}
 	location := fmt.Sprintf("tcp(127.0.0.1:%d)", s.Port)
 	dbname := s.DBName
-	dsn := fmt.Sprintf("%s@%s/%s?allowAllFiles=true&tls=preferred", authority, location, dbname)
+	params := make(url.Values)
+	params.Set("allowAllFiles", "true")
+	params.Set("tls", "preferred")
+	for k, v := range c.DriverParams {
+		params.Set(k, v)
+	}
+	dsn := fmt.Sprintf("%s@%s/%s?%s", authority, location, dbname, params.Encode())
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, err
