@@ -121,6 +121,8 @@ func TestRenameTable(t *testing.T) {
 const tableName = "people"
 
 func TestAddColumnToTable(t *testing.T) {
+	origRows, sch, err := dtestutils.RowsAndSchema()
+	require.NoError(t, err)
 
 	tests := []struct {
 		name           string
@@ -140,9 +142,9 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName: "newCol",
 			colKind:    types.IntKind,
 			nullable:   Null,
-			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
+			expectedSchema: dtestutils.AddColumnToSchema(sch,
 				schema.NewColumn("newCol", dtestutils.NextTag, types.IntKind, false)),
-			expectedRows: dtestutils.TypedRows,
+			expectedRows: origRows,
 		},
 		{
 			name:       "nullable with nil default",
@@ -150,9 +152,9 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName: "newCol",
 			colKind:    types.IntKind,
 			nullable:   Null,
-			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
+			expectedSchema: dtestutils.AddColumnToSchema(sch,
 				schemaNewColumnWithDefault("newCol", dtestutils.NextTag, types.IntKind, false, "")),
-			expectedRows: dtestutils.TypedRows,
+			expectedRows: origRows,
 		},
 		{
 			name:       "nullable with non-nil default",
@@ -161,9 +163,9 @@ func TestAddColumnToTable(t *testing.T) {
 			colKind:    types.IntKind,
 			nullable:   Null,
 			defaultVal: mustStringToColumnDefault("42"),
-			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
+			expectedSchema: dtestutils.AddColumnToSchema(sch,
 				schemaNewColumnWithDefault("newCol", dtestutils.NextTag, types.IntKind, false, "42")),
-			expectedRows: addColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
+			expectedRows: addColToRows(t, origRows, dtestutils.NextTag, types.NullValue),
 		},
 		{
 			name:       "first order",
@@ -181,7 +183,7 @@ func TestAddColumnToTable(t *testing.T) {
 				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 			),
-			expectedRows: addColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
+			expectedRows: addColToRows(t, origRows, dtestutils.NextTag, types.NullValue),
 		},
 		{
 			name:       "middle order",
@@ -199,7 +201,7 @@ func TestAddColumnToTable(t *testing.T) {
 				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 			),
-			expectedRows: addColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
+			expectedRows: addColToRows(t, origRows, dtestutils.NextTag, types.NullValue),
 		},
 		{
 			name:        "tag collision",
@@ -255,19 +257,24 @@ func TestAddColumnToTable(t *testing.T) {
 }
 
 func makePeopleTable(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, error) {
+	_, sch, err := dtestutils.RowsAndSchema()
+	if err != nil {
+		return nil, err
+	}
+
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := durable.NewEmptyIndex(ctx, root.VRW(), root.NodeStore(), dtestutils.TypedSchema)
+	rows, err := durable.NewEmptyIndex(ctx, root.VRW(), root.NodeStore(), sch)
 	if err != nil {
 		return nil, err
 	}
-	indexes, err := durable.NewIndexSetWithEmptyIndexes(ctx, root.VRW(), root.NodeStore(), dtestutils.TypedSchema)
+	indexes, err := durable.NewIndexSetWithEmptyIndexes(ctx, root.VRW(), root.NodeStore(), sch)
 	if err != nil {
 		return nil, err
 	}
-	tbl, err := doltdb.NewTable(ctx, root.VRW(), root.NodeStore(), dtestutils.TypedSchema, rows, indexes, nil)
+	tbl, err := doltdb.NewTable(ctx, root.VRW(), root.NodeStore(), sch, rows, indexes, nil)
 	if err != nil {
 		return nil, err
 	}

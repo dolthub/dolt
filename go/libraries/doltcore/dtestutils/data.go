@@ -17,8 +17,6 @@ package dtestutils
 import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/google/uuid"
 )
@@ -42,7 +40,6 @@ const (
 )
 
 const (
-	TableName = "people"
 	IndexName = "idx_name"
 )
 
@@ -54,17 +51,30 @@ var typedColColl = schema.NewColCollection(
 	schema.NewColumn("title", TitleTag, types.StringKind, false),
 )
 
-// modified by init()
-var TypedSchema = schema.MustSchemaFromCols(typedColColl)
+func Schema() (schema.Schema, error) {
+	sch := schema.MustSchemaFromCols(typedColColl)
 
-// modified by init()
-var UntypedSchema, _ = untyped.UntypeSchema(TypedSchema)
-var TypedRows []row.Row
-var UntypedRows []row.Row
+	_, err := sch.Indexes().AddIndexByColTags(IndexName, []uint64{NameTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	if err != nil {
+		return nil, err
+	}
 
-func init() {
+	_, err = sch.Checks().AddCheck("test-check", "age < 123", true)
+	if err != nil {
+		return nil, err
+	}
+
+	return sch, err
+}
+
+func RowsAndSchema() ([]row.Row, schema.Schema, error) {
+	rows := make([]row.Row, len(UUIDS))
+	sch, err := Schema()
+	if err != nil {
+		return nil, nil, err
+	}
+
 	for i := 0; i < len(UUIDS); i++ {
-
 		married := types.Int(0)
 		if MaritalStatus[i] {
 			married = types.Int(1)
@@ -77,96 +87,26 @@ func init() {
 			IsMarriedTag: married,
 		}
 
-		r, err := row.New(types.Format_Default, TypedSchema, taggedVals)
+		r, err := row.New(types.Format_Default, sch, taggedVals)
 
 		if err != nil {
 			panic(err)
 		}
 
-		TypedRows = append(TypedRows, r)
-
-		taggedVals = row.TaggedValues{
-			IdTag:        types.String(UUIDS[i].String()),
-			NameTag:      types.String(Names[i]),
-			AgeTag:       types.Uint(Ages[i]),
-			TitleTag:     types.String(Titles[i]),
-			IsMarriedTag: married,
-		}
-
-		r, err = row.New(types.Format_Default, TypedSchema, taggedVals)
-
-		if err != nil {
-			panic(err)
-		}
-
-		UntypedRows = append(UntypedRows, r)
+		rows = append(rows, r)
 	}
 
-	_, err := TypedSchema.Indexes().AddIndexByColTags(IndexName, []uint64{NameTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	_, err = sch.Indexes().AddIndexByColTags(IndexName, []uint64{NameTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	if err != nil {
-		panic(err)
+		return nil, nil, err
 	}
-	_, err = UntypedSchema.Indexes().AddIndexByColTags(IndexName, []uint64{NameTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
+
+	_, err = sch.Checks().AddCheck("test-check", "age < 123", true)
 	if err != nil {
-		panic(err)
+		return nil, nil, err
 	}
 
-	_, err = TypedSchema.Checks().AddCheck("test-check", "age < 123", true)
-	if err != nil {
-		panic(err)
-	}
-	_, err = UntypedSchema.Checks().AddCheck("test-check", "age < 123", true)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func NewTypedRow(id uuid.UUID, name string, age uint, isMarried bool, title *string) row.Row {
-	var titleVal types.Value
-	if title != nil {
-		titleVal = types.String(*title)
-	}
-
-	married := types.Int(0)
-	if isMarried {
-		married = types.Int(1)
-	}
-
-	taggedVals := row.TaggedValues{
-		IdTag:        types.String(id.String()),
-		NameTag:      types.String(name),
-		AgeTag:       types.Uint(age),
-		IsMarriedTag: married,
-		TitleTag:     titleVal,
-	}
-
-	r, err := row.New(types.Format_Default, TypedSchema, taggedVals)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return r
-}
-
-func CreateTestDataTable(typed bool) (*table.InMemTable, schema.Schema) {
-	sch := TypedSchema
-	rows := TypedRows
-	if !typed {
-		sch = UntypedSchema
-		rows = UntypedRows
-	}
-
-	imt := table.NewInMemTable(sch)
-
-	for _, r := range rows {
-		err := imt.AppendRow(r)
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	return imt, sch
+	return rows, sch, err
 }
 
 // MustMap contructs a types.Tuple for a slice of types.Values.
