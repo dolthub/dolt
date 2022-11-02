@@ -7703,8 +7703,23 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-ALL', '-m', 'update table t');",
+				Query:            "CALL DOLT_COMMIT('-ALL', '-m', 'update table terminator');",
 				SkipResultsCheck: true,
+			},
+			// check last commit
+			{
+				Query:    "select message from dolt_log limit 1",
+				Expected: []sql.Row{{"update table terminator"}},
+			},
+			// amend last commit
+			{
+				Query:            "CALL DOLT_COMMIT('-amend', '-m', 'update table t');",
+				SkipResultsCheck: true,
+			},
+			// check amended commit
+			{
+				Query:    "select message from dolt_log limit 1",
+				Expected: []sql.Row{{"update table t"}},
 			},
 			{
 				Query:    "CALL DOLT_RESET('--hard');",
@@ -7737,8 +7752,18 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{sql.NewOkResult(0)}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-Am', 'add table 2');",
+				Query:            "CALL DOLT_COMMIT('-Am', 'add table 21');",
 				SkipResultsCheck: true,
+			},
+			// amend last commit
+			{
+				Query:            "CALL DOLT_COMMIT('-amend', '-m', 'add table 2');",
+				SkipResultsCheck: true,
+			},
+			// check amended commit
+			{
+				Query:    "select message from dolt_log limit 1",
+				Expected: []sql.Row{{"add table 2"}},
 			},
 			{
 				Query:    "CALL DOLT_RESET('--hard');",
@@ -7764,6 +7789,298 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"author: somebody"},
 				},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_COMMIT('-amend') works to update commit message",
+		SetUpScript: []string{
+			"SET @@AUTOCOMMIT=0;",
+			"CREATE TABLE test (id INT PRIMARY KEY );",
+			"INSERT INTO test (id) VALUES (2)",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'original commit message');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT  message FROM dolt_log;",
+				Expected: []sql.Row{
+					{"original commit message"},
+					{"author: somebody"},
+					{"add table 2"},
+					{"drop table t"},
+					{"update table t"},
+					{"add table t"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+			{
+				Query:    "SELECT to_id, from_id, diff_type FROM dolt_diff_test;",
+				Expected: []sql.Row{{2, nil, "added"}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('--amend', '-m', 'amended commit message');",
+				SkipResultsCheck: true, // commit hash is being returned, skip check
+			},
+			{
+				Query: "SELECT  message FROM dolt_log;",
+				Expected: []sql.Row{
+					{"amended commit message"},
+					{"author: somebody"},
+					{"add table 2"},
+					{"drop table t"},
+					{"update table t"},
+					{"add table t"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+			{
+				Query:    "SELECT to_id, from_id, diff_type FROM dolt_diff_test;",
+				Expected: []sql.Row{{2, nil, "added"}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_COMMIT('-amend') works to add changes to a commit",
+		SetUpScript: []string{
+			"SET @@AUTOCOMMIT=0;",
+			"INSERT INTO test (id) VALUES (3)",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'original commit message for adding changes to a commit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT to_id, from_id, diff_type FROM dolt_diff_test;",
+				Expected: []sql.Row{
+					{3, nil, "added"},
+					{2, nil, "added"},
+				},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_status;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "SELECT  message FROM dolt_log;",
+				Expected: []sql.Row{
+					{"original commit message for adding changes to a commit"},
+					{"amended commit message"},
+					{"author: somebody"},
+					{"add table 2"},
+					{"drop table t"},
+					{"update table t"},
+					{"add table t"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+			{
+				Query:    "INSERT INTO test (id) VALUES (4)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_status;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "CALL DOLT_ADD('.');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('--amend');",
+				SkipResultsCheck: true, // commit hash is being returned, skip check
+			},
+			{
+				Query: "SELECT message FROM dolt_log;",
+				Expected: []sql.Row{
+					{"original commit message for adding changes to a commit"},
+					{"amended commit message"},
+					{"author: somebody"},
+					{"add table 2"},
+					{"drop table t"},
+					{"update table t"},
+					{"add table t"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+			{
+				Query: "SELECT to_id, from_id, diff_type FROM dolt_diff_test;",
+				Expected: []sql.Row{
+					{4, nil, "added"},
+					{3, nil, "added"},
+					{2, nil, "added"},
+				},
+			},
+			{
+				Query:    "INSERT INTO test (id) VALUES (5)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_status;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "CALL DOLT_ADD('.');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('--amend', '-m', 'amended commit with added changes');",
+				SkipResultsCheck: true, // commit hash is being returned, skip check
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_status;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "SELECT message FROM dolt_log;",
+				Expected: []sql.Row{
+					{"amended commit with added changes"},
+					{"amended commit message"},
+					{"author: somebody"},
+					{"add table 2"},
+					{"drop table t"},
+					{"update table t"},
+					{"add table t"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+			{
+				Query: "SELECT to_id, from_id, diff_type FROM dolt_diff_test;",
+				Expected: []sql.Row{
+					{5, nil, "added"},
+					{4, nil, "added"},
+					{3, nil, "added"},
+					{2, nil, "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_COMMIT('-amend') works to remove changes from a commit",
+		SetUpScript: []string{
+			"SET @@AUTOCOMMIT=0;",
+			"INSERT INTO test (id) VALUES (6)",
+			"INSERT INTO test (id) VALUES (7)",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'original commit message');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM test;",
+				Expected: []sql.Row{{2}, {3}, {4}, {5}, {6}, {7}},
+			},
+			{
+				Query: "SELECT to_id, from_id, diff_type FROM dolt_diff_test;",
+				Expected: []sql.Row{
+					{7, nil, "added"},
+					{6, nil, "added"},
+					{5, nil, "added"},
+					{4, nil, "added"},
+					{3, nil, "added"},
+					{2, nil, "added"},
+				},
+			},
+			{
+				Query:    "DELETE FROM test WHERE id = 6",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "CALL DOLT_ADD('.');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('--amend', '-m', 'amended commit with removed changes');",
+				SkipResultsCheck: true, // commit hash is being returned, skip check
+			},
+			{
+				Query:    "SELECT * FROM test;",
+				Expected: []sql.Row{{2}, {3}, {4}, {5}, {7}},
+			},
+			{
+				Query: "SELECT message FROM dolt_log;",
+				Expected: []sql.Row{
+					{"amended commit with removed changes"},
+					{"amended commit with added changes"},
+					{"amended commit message"},
+					{"author: somebody"},
+					{"add table 2"},
+					{"drop table t"},
+					{"update table t"},
+					{"add table t"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+			{
+				Query: "SELECT to_id, from_id, diff_type FROM dolt_diff_test;",
+				Expected: []sql.Row{
+					{7, nil, "added"},
+					{5, nil, "added"},
+					{4, nil, "added"},
+					{3, nil, "added"},
+					{2, nil, "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_COMMIT('-amend') works to update a merge commit",
+		SetUpScript: []string{
+			"SET @@AUTOCOMMIT=0;",
+
+			"CREATE TABLE test2 (id INT PRIMARY KEY, id2 INT);",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'original table');",
+
+			"CALL DOLT_CHECKOUT('-b','test-branch');",
+			"INSERT INTO test2 (id, id2) VALUES (0, 2)",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'conflicting commit message');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO test2 (id, id2) VALUES (0, 1)",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'original commit message');",
+
+			"CALL DOLT_MERGE('test-branch');",
+			"CALL DOLT_CONFLICTS_RESOLVE('--theirs', '.');",
+			"CALL DOLT_COMMIT('-m', 'final merge');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "CALL DOLT_COMMIT('--amend', '-m', 'new merge');",
+				SkipResultsCheck: true, // commit hash is being returned, skip check
+			},
+			{
+				Query: "SELECT message FROM dolt_log;",
+				Expected: []sql.Row{
+					{"new merge"},
+					{"original commit message"},
+					{"conflicting commit message"},
+					{"original table"},
+					{"amended commit with removed changes"},
+					{"amended commit with added changes"},
+					{"amended commit message"},
+					{"author: somebody"},
+					{"add table 2"},
+					{"drop table t"},
+					{"update table t"},
+					{"add table t"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+			{
+				Query:    "SET @hash=(SELECT commit_hash FROM dolt_log LIMIT 1);",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "SELECT COUNT(parent_hash) FROM dolt_commit_ancestors WHERE commit_hash= @hash;",
+				Expected: []sql.Row{{2}},
 			},
 		},
 	},

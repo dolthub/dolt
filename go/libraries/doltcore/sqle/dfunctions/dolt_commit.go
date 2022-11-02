@@ -92,9 +92,23 @@ func DoDoltCommit(ctx *sql.Context, args []string) (string, error) {
 		email = dSess.Email()
 	}
 
+	amend := apr.Contains(cli.AmendFlag)
+
 	msg, msgOk := apr.GetValue(cli.MessageArg)
 	if !msgOk {
-		return "", fmt.Errorf("Must provide commit message.")
+		if amend {
+			commit, err := dSess.GetHeadCommit(ctx, dbName)
+			if err != nil {
+				return "", err
+			}
+			commitMeta, err := commit.GetCommitMeta(ctx)
+			if err != nil {
+				return "", err
+			}
+			msg = commitMeta.Description
+		} else {
+			return "", fmt.Errorf("Must provide commit message.")
+		}
 	}
 
 	t := ctx.QueryTime()
@@ -111,6 +125,7 @@ func DoDoltCommit(ctx *sql.Context, args []string) (string, error) {
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
+		Amend:      amend,
 		Force:      apr.Contains(cli.ForceFlag),
 		Name:       name,
 		Email:      email,
