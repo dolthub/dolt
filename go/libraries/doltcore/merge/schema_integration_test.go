@@ -46,6 +46,7 @@ func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv)
 
 type args []string
 
+// TODO: these pass locally???????
 func TestMergeSchemas(t *testing.T) {
 	for _, test := range mergeSchemaTests {
 		t.Run(test.name, func(t *testing.T) {
