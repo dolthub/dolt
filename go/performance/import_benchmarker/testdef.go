@@ -15,6 +15,7 @@
 package import_benchmarker
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -35,6 +36,8 @@ import (
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
 )
+
+const defaultBatchSize = 500
 
 // TestDef is the top-level definition of tests to run.
 type TestDef struct {
@@ -68,6 +71,8 @@ type Table struct {
 	Rows        int    `default:"400000" yaml:"rows"`
 	Fmt         string `default:"csv" yaml:"fmt"`
 	Shuffle     bool   `default:"false" yaml:"shuffle"'`
+	Batch       bool   `default:"false" yaml:"batch"'`
+	Autocommit  bool   `default:"false" yaml:"autocommit"'`
 	TargetTable string
 }
 
@@ -130,13 +135,15 @@ func MakeServer(dc driver.DoltCmdable, s *driver.Server) (*driver.SqlServer, err
 }
 
 type ImportResult struct {
-	detail string
-	server string
-	test   string
-	time   float64
-	rows   int
-	fmt    string
-	sorted bool
+	detail     string
+	server     string
+	test       string
+	time       float64
+	rows       int
+	fmt        string
+	sorted     bool
+	batch      bool
+	autocommit bool
 }
 
 func (r ImportResult) String() string {
@@ -163,27 +170,39 @@ func (r *ImportResults) String() string {
 func (r *ImportResults) SqlDump() string {
 	b := strings.Builder{}
 	b.WriteString(`
-	CREATE TABLE IF NOT EXISTS import_perf_results (
-	  test_name varchar(64),
-	  server varchar(64),
-	  detail varchar(64),
-	  row_cnt int,
-	  time double,
-	  file_format varchar(8),
-	  sorted bool,
-	  primary key (test_name, detail, server)
+CREATE TABLE IF NOT EXISTS import_perf_results (
+  test_name varchar(64),
+  server varchar(64),
+  detail varchar(64),
+  row_cnt int,
+  time double,
+  file_format varchar(8),
+  sorted bool,
+  batch bool,
+  autocommit bool,
+  primary key (test_name, detail, server)
 	);
 `)
 
+	b.WriteString("insert into import_perf_results values")
 	for _, r := range r.res {
 		var sorted int
 		if r.sorted {
 			sorted = 1
 		}
+		var batch int
+		if r.batch {
+			sorted = 1
+		}
+		var ac int
+		if r.autocommit {
+			ac = 1
+		}
 		b.WriteString(fmt.Sprintf(
-			"insert into import_perf_results values\n  ('%s', '%s', '%s', %d, %.2f, '%s', %b);\n",
-			r.test, r.server, r.detail, r.rows, r.time, r.fmt, sorted))
+			",\n  ('%s', '%s', '%s', %d, %.2f, '%s', %b, %b, %b)",
+			r.test, r.server, r.detail, r.rows, r.time, r.fmt, sorted, batch, ac))
 	}
+	b.WriteString(";\n")
 
 	return b.String()
 }
@@ -193,6 +212,8 @@ func (test *ImportTest) WithTmpDir(s string) {
 	test.files = make(map[uint64]*os.File)
 }
 
+// Run executes an import configuration. Test parallelism makes
+// runtimes resulting from this method unsuitable for reporting.
 func (test *ImportTest) Run(t *testing.T) {
 	if test.Skip != "" {
 		t.Skip(test.Skip)
@@ -230,7 +251,14 @@ func (test *ImportTest) RunExternalServerTests(repoName string, s *driver.Extern
 			return err
 		}
 		defer db.Close()
-		return test.benchmarkTest(repoName, db, tab, f)
+		switch tab.Fmt {
+		case "csv":
+			return test.benchLoadData(repoName, db, tab, f)
+		case "sql":
+			return test.benchSql(repoName, db, tab, f)
+		default:
+			return fmt.Errorf("unexpected table import format: %s", tab.Fmt)
+		}
 	})
 }
 
@@ -252,7 +280,15 @@ func (test *ImportTest) RunSqlServerTests(repo driver.TestRepo, user driver.Dolt
 		if err != nil {
 			return err
 		}
-		return test.benchmarkTest(repo.Name, db, tab, f)
+
+		switch tab.Fmt {
+		case "csv":
+			return test.benchLoadData(repo.Name, db, tab, f)
+		case "sql":
+			return test.benchSql(repo.Name, db, tab, f)
+		default:
+			return fmt.Errorf("unexpected table import format: %s", tab.Fmt)
+		}
 	})
 }
 
@@ -285,7 +321,7 @@ func modifyServerForImport(db *sql.DB) error {
 	return nil
 }
 
-func (test *ImportTest) benchmarkTest(repoName string, db *sql.DB, tab Table, f *os.File) error {
+func (test *ImportTest) benchLoadData(repoName string, db *sql.DB, tab Table, f *os.File) error {
 	ctx := context.Background()
 	conn, err := db.Conn(ctx)
 	if err != nil {
@@ -318,13 +354,15 @@ IGNORE 1 LINES;`, f.Name())
 	runtime := time.Since(start)
 
 	test.Results.append(ImportResult{
-		test:   test.Name,
-		server: repoName,
-		detail: tab.Name,
-		time:   runtime.Seconds(),
-		rows:   tab.Rows,
-		fmt:    tab.Fmt,
-		sorted: !tab.Shuffle,
+		test:       test.Name,
+		server:     repoName,
+		detail:     tab.Name,
+		time:       runtime.Seconds(),
+		rows:       tab.Rows,
+		fmt:        tab.Fmt,
+		sorted:     !tab.Shuffle,
+		autocommit: tab.Autocommit,
+		batch:      tab.Batch,
 	})
 
 	rows, err = conn.QueryContext(
@@ -338,6 +376,102 @@ IGNORE 1 LINES;`, f.Name())
 	}
 
 	return nil
+}
+
+func (test *ImportTest) benchSql(repoName string, db *sql.DB, tab Table, f *os.File) error {
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	rows, err := conn.QueryContext(ctx, tab.Schema)
+	if err == nil {
+		rows.Close()
+	} else {
+		return err
+	}
+
+	defer conn.ExecContext(
+		ctx,
+		fmt.Sprintf("drop table %s;", tab.TargetTable),
+	)
+
+	f.Seek(0, 0)
+	s := bufio.NewScanner(f)
+	s.Split(ScanQueries)
+	start := time.Now()
+
+	for lineno := 1; s.Scan(); lineno++ {
+		line := s.Text()
+		var br bool
+		switch {
+		case line == "":
+			return fmt.Errorf("unexpected blank line, line number: %d", lineno)
+		case line == "\n":
+			br = true
+		default:
+		}
+		if br {
+			break
+		}
+
+		if err := s.Err(); err != nil {
+			return fmt.Errorf("%s:%d: %v", f.Name(), lineno, err)
+		}
+
+		_, err := conn.ExecContext(ctx, line)
+		if err != nil {
+			return err
+		}
+
+	}
+
+	runtime := time.Since(start)
+
+	test.Results.append(ImportResult{
+		test:       test.Name,
+		server:     repoName,
+		detail:     tab.Name,
+		time:       runtime.Seconds(),
+		rows:       tab.Rows,
+		fmt:        tab.Fmt,
+		sorted:     !tab.Shuffle,
+		autocommit: tab.Autocommit,
+		batch:      tab.Batch,
+	})
+
+	if err == nil {
+		rows.Close()
+	} else {
+		return err
+	}
+
+	return nil
+}
+
+func ScanQueries(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	if i := bytes.IndexByte(data, ';'); i >= 0 {
+		// We have a full newline-terminated line.
+		return i + 1, dropCR(data[0:i]), nil
+	}
+	// If we're at EOF, we have a final, non-terminated line. Return it.
+	if atEOF {
+		return len(data), dropCR(data), nil
+	}
+	// Request more data.
+	return 0, nil, nil
+}
+
+func dropCR(data []byte) []byte {
+	if len(data) > 0 && data[len(data)-1] == '\r' {
+		return data[0 : len(data)-1]
+	}
+	return data
 }
 
 // RunCliTests runs each import test on a new dolt repo to avoid accumulated
@@ -379,13 +513,15 @@ func (test *ImportTest) RunCliTests(r driver.TestRepo, user driver.DoltUser) err
 		runtime := time.Since(start)
 
 		test.Results.append(ImportResult{
-			test:   test.Name,
-			server: r.Name,
-			detail: tab.Name,
-			time:   runtime.Seconds(),
-			rows:   tab.Rows,
-			fmt:    tab.Fmt,
-			sorted: !tab.Shuffle,
+			test:       test.Name,
+			server:     r.Name,
+			detail:     tab.Name,
+			time:       runtime.Seconds(),
+			rows:       tab.Rows,
+			fmt:        tab.Fmt,
+			sorted:     !tab.Shuffle,
+			autocommit: tab.Autocommit,
+			batch:      tab.Batch,
 		})
 
 		// reset repo at end
@@ -408,11 +544,12 @@ func (test *ImportTest) IterImportTables(tables []Table, cb func(t Table, f *os.
 		}
 
 		rows := make([]string, 0, t.Rows)
-		genRows(types, t.Rows, func(r []string) {
+		genRows(types, t.Rows, t.Fmt, func(r []string) {
 			switch t.Fmt {
 			case "csv":
 				rows = append(rows, strings.Join(r, ","))
-			case "dump":
+			case "sql":
+				rows = append(rows, fmt.Sprintf("(%s)", strings.Join(r, ", ")))
 			default:
 				panic(fmt.Sprintf("unknown format: %s", t.Fmt))
 			}
@@ -433,6 +570,24 @@ func (test *ImportTest) IterImportTables(tables []Table, cb func(t Table, f *os.
 			for _, r := range rows {
 				fmt.Fprintf(f, "%s\n", r)
 			}
+		case "sql":
+			if t.Batch {
+				batchSize := defaultBatchSize
+				var i int
+				for i+batchSize < len(rows) {
+					fmt.Fprintf(f, newBatch(t.TargetTable, rows[i:i+batchSize]))
+					i += batchSize
+				}
+				if i < len(rows) {
+					fmt.Fprintf(f, newBatch(t.TargetTable, rows[i:]))
+				}
+			} else {
+				for _, r := range rows {
+					fmt.Fprintf(f, fmt.Sprintf("INSERT INTO %s VALUES %s;\n", t.TargetTable, r))
+				}
+			}
+		default:
+			panic(fmt.Sprintf("unknown format: %s", t.Fmt))
 		}
 
 		// cache file for schema and row count
@@ -446,6 +601,21 @@ func (test *ImportTest) IterImportTables(tables []Table, cb func(t Table, f *os.
 	return nil
 }
 
+func newBatch(name string, rows []string) string {
+	b := strings.Builder{}
+	b.WriteString(fmt.Sprintf("INSERT INTO %s VALUES\n", name))
+	for _, r := range rows[:len(rows)-1] {
+		b.WriteString("  ")
+		b.WriteString(r)
+		b.WriteString(",\n")
+	}
+	b.WriteString("  ")
+	b.WriteString(rows[len(rows)-1])
+	b.WriteString(";\n")
+
+	return b.String()
+}
+
 func tableKey(t Table) (uint64, error) {
 	hash := xxhash.New()
 	_, err := hash.Write([]byte(t.Schema))
@@ -455,6 +625,10 @@ func tableKey(t Table) (uint64, error) {
 	if _, err := hash.Write([]byte(fmt.Sprintf("%#v,", t.Rows))); err != nil {
 		return 0, err
 	}
+	if err != nil {
+		return 0, err
+	}
+	_, err = hash.Write([]byte(t.Fmt))
 	if err != nil {
 		return 0, err
 	}
@@ -486,12 +660,22 @@ func parseTableAndSchema(q string) (string, []string, []sql2.Type) {
 	return table, names, types
 }
 
-func genRows(types []sql2.Type, n int, cb func(r []string)) {
+func genRows(types []sql2.Type, n int, fmt string, cb func(r []string)) {
 	// generate |n| rows with column types
 	for i := 0; i < n; i++ {
 		row := make([]string, len(types))
 		for j, t := range types {
-			row[j] = genValue(i, t)
+			switch fmt {
+			case "sql":
+				switch t.Type() {
+				case sqltypes.Blob, sqltypes.VarChar, sqltypes.Timestamp, sqltypes.Date:
+					row[j] = "'" + genValue(i, t) + "'"
+				default:
+					row[j] = genValue(i, t)
+				}
+			default:
+				row[j] = genValue(i, t)
+			}
 		}
 		cb(row)
 	}

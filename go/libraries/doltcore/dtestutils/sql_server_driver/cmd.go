@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -175,6 +176,7 @@ func WithArgs(args ...string) SqlServerOpt {
 func WithPort(port int) SqlServerOpt {
 	return func(s *SqlServer) {
 		s.Port = port
+		s.Cmd.Args = append(s.Cmd.Args, "--port", strconv.Itoa(port))
 	}
 }
 

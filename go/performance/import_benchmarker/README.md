@@ -12,8 +12,31 @@ go build \
 The `dolt` binary used for performance comparisons will be on the users
 `PATH`.
 
-Tests with an `external-server` configuration are expected to be avaible
+Tests with an `external-server` configuration are expected to be available
 from the host machine when the command is started.
+
+An example mysql server `docker-compose.yml` config:
+```yaml
+mysql:
+  image: mysql/mysql-server:8.0
+  container_name: mysql-import-perf
+  ports:
+      - "4306:3306"
+  command: --local-infile=1
+  volumes:
+      - ./mysql:/var/lib/mysql
+  restart: always # always restart unless stopped manually
+  environment:
+      MYSQL_USER: root
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: test
+```
+
+Alternatively with `mysqld`:
+```bash
+mysqld --port 3308 --local-infile=1
+```
 
 ## Inputs 
 
@@ -28,11 +51,11 @@ dimensions:
 - table spec
   - fmt (string): file format for importing
     - csv: comma separated lines
-    - sql: individual insert statements
-    - dump: batched insert statements
+    - sql: dump file of insert statements
   - rows (int): number of rows to import
   - schema (string): CREATE_TABLE statement for table to import
   - shuffle (bool): by default generated rows are sorted; indicate `true` to shuffle
+  - batch (bool): whether to batch insert statements (only applies to fmt=sql)
   - autocommit (bool): default import uses a single transaction;
     spread each insert into individual transaction.
 
