@@ -24,8 +24,6 @@ import (
 
 	jose "gopkg.in/square/go-jose.v2"
 	"gopkg.in/square/go-jose.v2/json"
-
-	"github.com/pquerna/cachecontrol"
 )
 
 type cachedJWKS struct {
@@ -40,11 +38,31 @@ func newCachedJWKS() *cachedJWKS {
 
 type fetchedJWKS struct {
 	URL   string
+	HTTPTransport *http.Transport
 	cache *cachedJWKS
 }
 
-func newJWKS(provider JWTProvider) *fetchedJWKS {
-	return &fetchedJWKS{URL: provider.URL, cache: newCachedJWKS()}
+func newJWKS(provider JWTProvider) (*fetchedJWKS, error) {
+	return newFetchedJWKS(provider.URL)
+}
+
+func newFetchedJWKS(url string) (*fetchedJWKS, error) {
+	ret := &fetchedJWKS{
+		URL: url,
+		cache: newCachedJWKS(),
+	}
+
+	pwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
+	// Allows use of file:// for jwks location  url for tests
+	tr := &http.Transport{}
+	tr.RegisterProtocol("file", http.NewFileTransport(http.Dir(pwd)))
+	ret.HTTPTransport = tr
+
+	return ret, nil
 }
 
 func (f *fetchedJWKS) needsRefresh() bool {
@@ -55,14 +73,7 @@ func (f *fetchedJWKS) GetJWKS() (*jose.JSONWebKeySet, error) {
 	f.cache.mutex.Lock()
 	defer f.cache.mutex.Unlock()
 	if f.needsRefresh() {
-		tr := &http.Transport{}
-		pwd, err := os.Getwd()
-		if err != nil {
-			return nil, err
-		}
-		// Allows use of file:// for jwks location  url for tests
-		tr.RegisterProtocol("file", http.NewFileTransport(http.Dir(pwd)))
-		client := &http.Client{Transport: tr}
+		client := &http.Client{Transport: f.HTTPTransport}
 
 		request, err := http.NewRequest("GET", f.URL, nil)
 		if err != nil {
@@ -87,7 +98,6 @@ func (f *fetchedJWKS) GetJWKS() (*jose.JSONWebKeySet, error) {
 				return nil, err
 			}
 			f.cache.value = &jwks
-			_, _, err = cachecontrol.CachableResponse(request, response, cachecontrol.Options{})
 		}
 	}
 	return f.cache.value, nil

@@ -21,12 +21,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
 	"gopkg.in/square/go-jose.v2"
 	"gopkg.in/square/go-jose.v2/jwt"
 )
+
+const RelPath = "../testdata"
 
 var sub = "test_user"
 var iss = "dolthub.com"
@@ -55,7 +58,7 @@ func main() {
 		fmt.Println(err)
 	}
 
-	err = ioutil.WriteFile("token.jwt", []byte(jwt), 0644)
+	err = ioutil.WriteFile(filepath.Join(RelPath, "token.jwt"), []byte(jwt), 0644)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -75,7 +78,7 @@ func writeJWKSToFile(pubKey crypto.PublicKey, kid string) error {
 		return err
 	}
 
-	err = ioutil.WriteFile("test_jwks.json", jwksjson, 0644)
+	err = ioutil.WriteFile(filepath.Join(RelPath, "test_jwks.json"), jwksjson, 0644)
 	if err != nil {
 		return err
 	}
@@ -96,7 +99,7 @@ func generateJWT(privKey *rsa.PrivateKey, kid string) (string, error) {
 		Issuer:   iss,
 		Subject:  sub,
 		IssuedAt: jwt.NewNumericDate(now),
-		Expiry:   jwt.NewNumericDate(now.Add(30 * time.Second)),
+		Expiry:   jwt.NewNumericDate(now.Add(364 * 24 * time.Hour)),
 	}
 	privClaims := struct {
 		OnBehalfOf string `json:"on_behalf_of"`

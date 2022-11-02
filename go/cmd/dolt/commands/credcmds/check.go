@@ -124,7 +124,7 @@ func loadCred(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (creds.DoltCred
 		}
 		return dc, nil
 	} else {
-		dc, valid, err := dEnv.UserRPCCreds()
+		dc, valid, err := dEnv.UserDoltCreds()
 		if !valid {
 			return creds.EmptyCreds, errhand.BuildDError("error: no user credentials found").Build()
 		}
@@ -138,7 +138,7 @@ func loadCred(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (creds.DoltCred
 func checkCredAndPrintSuccess(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, endpoint string) errhand.VerboseError {
 	cfg, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: endpoint,
-		Creds:    dc,
+		Creds:    dc.RPCCreds(),
 	})
 	if err != nil {
 		return errhand.BuildDError("error: unable to build server endpoint options.").AddCause(err).Build()
