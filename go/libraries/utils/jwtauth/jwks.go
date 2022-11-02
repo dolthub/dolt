@@ -37,9 +37,9 @@ func newCachedJWKS() *cachedJWKS {
 }
 
 type fetchedJWKS struct {
-	URL   string
+	URL           string
 	HTTPTransport *http.Transport
-	cache *cachedJWKS
+	cache         *cachedJWKS
 }
 
 func newJWKS(provider JWTProvider) (*fetchedJWKS, error) {
@@ -48,7 +48,7 @@ func newJWKS(provider JWTProvider) (*fetchedJWKS, error) {
 
 func newFetchedJWKS(url string) (*fetchedJWKS, error) {
 	ret := &fetchedJWKS{
-		URL: url,
+		URL:   url,
 		cache: newCachedJWKS(),
 	}
 
