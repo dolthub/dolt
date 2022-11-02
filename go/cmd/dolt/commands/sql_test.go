@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -44,7 +45,9 @@ var tableName = "people"
 // Smoke test: Console opens and exits
 func TestSqlConsole(t *testing.T) {
 	t.Run("SQL console opens and exits", func(t *testing.T) {
-		dEnv := sqle.CreateEnvWithSeedData(t)
+		dEnv, err := sqle.CreateEnvWithSeedData()
+		require.NoError(t, err)
+
 		args := []string{}
 		commandStr := "dolt sql"
 
@@ -69,7 +72,8 @@ func TestSqlBatchMode(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			dEnv := sqle.CreateEnvWithSeedData(t)
+			dEnv, err := sqle.CreateEnvWithSeedData()
+			require.NoError(t, err)
 
 			args := []string{"-b", "-q", test.query}
 
@@ -106,7 +110,8 @@ func TestSqlSelect(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			dEnv := sqle.CreateEnvWithSeedData(t)
+			dEnv, err := sqle.CreateEnvWithSeedData()
+			require.NoError(t, err)
 
 			args := []string{"-q", test.query}
 
@@ -130,7 +135,8 @@ func TestSqlShow(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			dEnv := sqle.CreateEnvWithSeedData(t)
+			dEnv, err := sqle.CreateEnvWithSeedData()
+			require.NoError(t, err)
 
 			args := []string{"-q", test.query}
 
@@ -201,7 +207,8 @@ func TestShowTables(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			dEnv := sqle.CreateEnvWithSeedData(t)
+			dEnv, err := sqle.CreateEnvWithSeedData()
+			assert.NoError(t, err)
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
@@ -230,7 +237,8 @@ func TestAlterTable(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			dEnv := sqle.CreateEnvWithSeedData(t)
+			dEnv, err := sqle.CreateEnvWithSeedData()
+			require.NoError(t, err)
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
@@ -255,7 +263,8 @@ func TestDropTable(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			dEnv := sqle.CreateEnvWithSeedData(t)
+			dEnv, err := sqle.CreateEnvWithSeedData()
+			require.NoError(t, err)
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
@@ -371,7 +380,8 @@ func TestInsert(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			dEnv := sqle.CreateEnvWithSeedData(t)
+			dEnv, err := sqle.CreateEnvWithSeedData()
+			require.NoError(t, err)
 
 			args := []string{"-q", test.query}
 
@@ -450,7 +460,8 @@ func TestUpdate(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			ctx := context.Background()
-			dEnv := sqle.CreateEnvWithSeedData(t)
+			dEnv, err := sqle.CreateEnvWithSeedData()
+			require.NoError(t, err)
 
 			args := []string{"-q", test.query}
 
@@ -522,11 +533,12 @@ func TestDelete(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			dEnv := sqle.CreateEnvWithSeedData(t)
-			ctx := context.Background()
+			dEnv, err := sqle.CreateEnvWithSeedData()
+			require.NoError(t, err)
 
 			args := []string{"-q", test.query}
 
+			ctx := context.Background()
 			commandStr := "dolt sql"
 			result := SqlCmd{}.Exec(ctx, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
@@ -548,7 +560,9 @@ func TestDelete(t *testing.T) {
 }
 
 func TestCommitHooksNoErrors(t *testing.T) {
-	dEnv := sqle.CreateEnvWithSeedData(t)
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+
 	sqle.AddDoltSystemVariables()
 	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
 	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemote, "unknown")

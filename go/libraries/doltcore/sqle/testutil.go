@@ -20,13 +20,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"testing"
-
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	sqle "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
-	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -39,8 +32,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	config2 "github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
+	sqle "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 )
 
 // ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
@@ -369,7 +366,7 @@ func drainIter(ctx *sql.Context, iter sql.RowIter) error {
 	return iter.Close(ctx)
 }
 
-func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
+func CreateEnvWithSeedData() (*env.DoltEnv, error) {
 	const seedData = `
 	CREATE TABLE people (
 	    id varchar(36) primary key,
@@ -387,12 +384,21 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	ctx := context.Background()
 	dEnv := CreateTestEnv()
 	root, err := dEnv.WorkingRoot(ctx)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
+
 	root, err = ExecuteSql(dEnv, root, seedData)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
+
 	err = dEnv.UpdateWorkingRoot(ctx, root)
-	require.NoError(t, err)
-	return dEnv
+	if err != nil {
+		return nil, err
+	}
+
+	return dEnv, nil
 }
 
 // CreateEmptyTestDatabase creates a test database without any data in it.
