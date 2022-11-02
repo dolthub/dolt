@@ -28,6 +28,7 @@ type CommitStagedProps struct {
 	Message    string
 	Date       time.Time
 	AllowEmpty bool
+	Amend      bool
 	Force      bool
 	Name       string
 	Email      string
@@ -157,7 +158,9 @@ func GetCommitStaged(
 		stagedTblNames = append(stagedTblNames, n)
 	}
 
-	if len(staged) == 0 && !mergeActive && !props.AllowEmpty {
+	isEmpty := len(staged) == 0
+	allowEmpty := mergeActive || props.AllowEmpty || props.Amend
+	if isEmpty && !allowEmpty {
 		return nil, NothingStaged{notStaged}
 	}
 

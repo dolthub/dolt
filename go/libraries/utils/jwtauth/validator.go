@@ -29,9 +29,13 @@ type fetchingJWTValidator struct {
 	expected jwt.Expected
 }
 
-func NewJWTValidator(provider JWTProvider) JWTValidator {
+func NewJWTValidator(provider JWTProvider) (JWTValidator, error) {
 	expected := jwt.Expected{Issuer: provider.Issuer, Audience: jwt.Audience{provider.Audience}}
-	return &fetchingJWTValidator{jwks: newJWKS(provider), expected: expected}
+	jwks, err := newJWKS(provider)
+	if err != nil {
+		return nil, err
+	}
+	return &fetchingJWTValidator{jwks: jwks, expected: expected}, nil
 }
 
 func (v *fetchingJWTValidator) ValidateJWT(unparsed string, reqTime time.Time) (*Claims, error) {

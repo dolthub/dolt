@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -63,6 +64,25 @@ type Connection struct {
 	// connection based on things that are happening, such as cluster role
 	// transitions.
 	RetryAttempts int `yaml:"retry_attempts"`
+
+	// The user to connect as.
+	User string `yaml:"user"`
+	// The password to connect with.
+	Pass string `yaml:"password"`
+	PassFile string `yaml:"password_file"`
+	// Any driver params to pass in the DSN.
+	DriverParams map[string]string `yaml:"driver_params"`
+}
+
+func (c Connection) Password() (string, error) {
+	if c.PassFile != "" {
+		bs, err := os.ReadFile(c.PassFile)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(string(bs)), nil
+	}
+	return c.Pass, nil
 }
 
 // |RestartArgs| are possible arguments, to change the arguments which are
@@ -329,7 +349,7 @@ func (test Test) Run(t *testing.T) {
 		require.NotNilf(t, server, "error in test spec: could not find server %s for connection %d", c.On, i)
 		if c.RetryAttempts > 1 {
 			RetryTestRun(t, c.RetryAttempts, func(t require.TestingT) {
-				db, err := server.DB()
+				db, err := server.DB(c)
 				require.NoError(t, err)
 				defer db.Close()
 
@@ -343,7 +363,7 @@ func (test Test) Run(t *testing.T) {
 			})
 		} else {
 			func() {
-				db, err := server.DB()
+				db, err := server.DB(c)
 				require.NoError(t, err)
 				defer db.Close()
 
