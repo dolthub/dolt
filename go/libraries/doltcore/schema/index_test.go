@@ -35,29 +35,33 @@ func TestIndexCollectionAddIndex(t *testing.T) {
 
 	testIndexes := []*indexImpl{
 		{
-			name:      "idx_v1",
-			tags:      []uint64{3},
-			allTags:   []uint64{3, 1, 2},
-			indexColl: indexColl,
+			name:          "idx_v1",
+			tags:          []uint64{3},
+			allTags:       []uint64{3, 1, 2},
+			indexColl:     indexColl,
+			prefixLengths: []uint16{},
 		},
 		{
-			name:      "idx_v1v3v2",
-			tags:      []uint64{3, 5, 4},
-			allTags:   []uint64{3, 5, 4, 1, 2},
-			indexColl: indexColl,
-			comment:   "hello there",
+			name:          "idx_v1v3v2",
+			tags:          []uint64{3, 5, 4},
+			allTags:       []uint64{3, 5, 4, 1, 2},
+			indexColl:     indexColl,
+			comment:       "hello there",
+			prefixLengths: []uint16{},
 		},
 		{
-			name:      "idx_pk1v1",
-			tags:      []uint64{1, 3},
-			allTags:   []uint64{1, 3, 2},
-			indexColl: indexColl,
+			name:          "idx_pk1v1",
+			tags:          []uint64{1, 3},
+			allTags:       []uint64{1, 3, 2},
+			indexColl:     indexColl,
+			prefixLengths: []uint16{},
 		},
 		{
-			name:      "idx_pk2pk1v2",
-			tags:      []uint64{2, 1, 4},
-			allTags:   []uint64{2, 1, 4},
-			indexColl: indexColl,
+			name:          "idx_pk2pk1v2",
+			tags:          []uint64{2, 1, 4},
+			allTags:       []uint64{2, 1, 4},
+			indexColl:     indexColl,
+			prefixLengths: []uint16{},
 		},
 	}
 
@@ -114,10 +118,11 @@ func TestIndexCollectionAddIndex(t *testing.T) {
 	t.Run("Name Overwrites", func(t *testing.T) {
 		// should be able to reduce collection to one index
 		lastStanding := &indexImpl{
-			name:      "none",
-			tags:      []uint64{4},
-			allTags:   []uint64{4, 1, 2},
-			indexColl: indexColl,
+			name:          "none",
+			tags:          []uint64{4},
+			allTags:       []uint64{4, 1, 2},
+			indexColl:     indexColl,
+			prefixLengths: []uint16{},
 		}
 
 		for _, testIndex := range testIndexes {
