@@ -109,14 +109,14 @@ func (p GRPCDialProvider) getRPCCreds() (credentials.PerRPCCredentials, error) {
 		return nil, nil
 	}
 
-	dCreds, valid, err := p.dEnv.UserRPCCreds()
+	dCreds, valid, err := p.dEnv.UserDoltCreds()
 	if err != nil {
 		return nil, ErrInvalidCredsFile
 	}
 	if !valid {
 		return nil, nil
 	}
-	return dCreds, nil
+	return dCreds.RPCCreds(), nil
 }
 
 // getUserAgentString returns a user agent string to use in GRPC requests.
