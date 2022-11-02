@@ -41,7 +41,7 @@ const (
 	fileBlockSize = 1 << 12
 )
 
-func newFileTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProvider, fc *fdCache) (cs chunkSource, err error) {
+func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint32, q MemoryQuotaProvider, fc *fdCache) (cs chunkSource, err error) {
 	path := filepath.Join(dir, h.String())
 
 	index, err := func() (ti onHeapTableIndex, err error) {
@@ -70,10 +70,15 @@ func newFileTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProv
 			return
 		}
 
-		indexSize := int64(indexSize(chunkCount) + footerSize)
-		indexOffset := fi.Size() - indexSize
-		r := io.NewSectionReader(f, indexOffset, indexSize)
-		b := make([]byte, indexSize)
+		idxSz := int64(indexSize(chunkCount) + footerSize)
+		indexOffset := fi.Size() - idxSz
+		r := io.NewSectionReader(f, indexOffset, idxSz)
+
+		var b []byte
+		b, err = q.AcquireQuota(ctx, uint64(idxSz))
+		if err != nil {
+			return
+		}
 
 		_, err = io.ReadFull(r, b)
 		if err != nil {
@@ -88,7 +93,7 @@ func newFileTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProv
 			}
 		}()
 
-		ti, err = parseTableIndex(b, q)
+		ti, err = parseTableIndex(ctx, b, q)
 		if err != nil {
 			return
 		}

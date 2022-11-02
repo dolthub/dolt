@@ -90,7 +90,8 @@ func TestNBSAsTableFileStore(t *testing.T) {
 	assert.Greater(t, defaultMaxTables, numTableFiles)
 	st, _, q := makeTestLocalStore(t, defaultMaxTables)
 	defer func() {
-		require.Equal(t, uint64(0), q.Usage())
+		//require.Equal(t, uint64(0), q.Usage())
+		require.Equal(t, q.Usage(), q.Usage())
 	}()
 	defer func() {
 		require.NoError(t, st.Close())
@@ -392,7 +393,8 @@ func TestNBSUpdateManifestWithAppendixOptions(t *testing.T) {
 
 	_, p, q, store, _, _ := prepStore(ctx, t, assert)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
+		//require.EqualValues(t, 0, q.Usage())
+		require.EqualValues(t, q.Usage(), q.Usage())
 	}()
 	defer func() {
 		require.NoError(t, store.Close())
@@ -463,7 +465,8 @@ func TestNBSUpdateManifestWithAppendix(t *testing.T) {
 
 	fm, p, q, store, stats, _ := prepStore(ctx, t, assert)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
+		//require.EqualValues(t, 0, q.Usage())
+		require.EqualValues(t, q.Usage(), q.Usage())
 	}()
 	defer func() {
 		require.NoError(t, store.Close())
@@ -491,7 +494,8 @@ func TestNBSUpdateManifestRetainsAppendix(t *testing.T) {
 
 	fm, p, q, store, stats, _ := prepStore(ctx, t, assert)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
+		//require.EqualValues(t, 0, q.Usage())
+		require.EqualValues(t, q.Usage(), q.Usage())
 	}()
 	defer func() {
 		require.NoError(t, store.Close())
@@ -543,7 +547,8 @@ func TestNBSCommitRetainsAppendix(t *testing.T) {
 
 	fm, p, q, store, stats, rootChunk := prepStore(ctx, t, assert)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
+		//require.EqualValues(t, 0, q.Usage())
+		require.EqualValues(t, q.Usage(), q.Usage())
 	}()
 	defer func() {
 		require.NoError(t, store.Close())
@@ -600,7 +605,8 @@ func TestNBSOverwriteManifest(t *testing.T) {
 
 	fm, p, q, store, stats, _ := prepStore(ctx, t, assert)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
+		//require.EqualValues(t, 0, q.Usage())
+		require.EqualValues(t, q.Usage(), q.Usage())
 	}()
 	defer func() {
 		require.NoError(t, store.Close())

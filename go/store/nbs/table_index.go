@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -122,7 +123,7 @@ func indexMemSize(chunkCount uint32) uint64 {
 // parses a valid nbs tableIndex from a byte stream. |buff| must end with an NBS index
 // and footer and its length must match the expected indexSize for the chunkCount specified in the footer.
 // Retains the buffer and does not allocate new memory except for offsets, computes on buff in place.
-func parseTableIndex(buff []byte, q MemoryQuotaProvider) (onHeapTableIndex, error) {
+func parseTableIndex(ctx context.Context, buff []byte, q MemoryQuotaProvider) (onHeapTableIndex, error) {
 	chunkCount, totalUncompressedData, err := ReadTableFooter(bytes.NewReader(buff))
 	if err != nil {
 		return onHeapTableIndex{}, err
@@ -135,8 +136,10 @@ func parseTableIndex(buff []byte, q MemoryQuotaProvider) (onHeapTableIndex, erro
 
 	chunks2 := chunkCount / 2
 	chunks1 := chunkCount - chunks2
-	offsetsBuff1 := make([]byte, chunks1*offsetSize)
-
+	offsetsBuff1, err := q.AcquireQuota(ctx, uint64(chunks1*offsetSize))
+	if err != nil {
+		return onHeapTableIndex{}, err
+	}
 	return newOnHeapTableIndex(buff, offsetsBuff1, chunkCount, totalUncompressedData, q)
 }
 
@@ -167,32 +170,38 @@ func removeFooter(p []byte, chunkCount uint32) (out []byte, err error) {
 
 // parseTableIndexByCopy reads the footer, copies indexSize(chunkCount) bytes, and parses an on heap table index.
 // Useful to create an onHeapTableIndex without retaining the entire underlying array of data.
-func parseTableIndexByCopy(buff []byte, q MemoryQuotaProvider) (onHeapTableIndex, error) {
-	r := bytes.NewReader(buff)
-	return readTableIndexByCopy(r, q)
+func parseTableIndexByCopy(ctx context.Context, buff []byte, q MemoryQuotaProvider) (onHeapTableIndex, error) {
+	return readTableIndexByCopy(ctx, bytes.NewReader(buff), q)
 }
 
 // readTableIndexByCopy loads an index into memory from an io.ReadSeeker
 // Caution: Allocates new memory for entire index
-func readTableIndexByCopy(rd io.ReadSeeker, q MemoryQuotaProvider) (onHeapTableIndex, error) {
+func readTableIndexByCopy(ctx context.Context, rd io.ReadSeeker, q MemoryQuotaProvider) (onHeapTableIndex, error) {
 	chunkCount, totalUncompressedData, err := ReadTableFooter(rd)
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
-	iS := int64(indexSize(chunkCount))
-	_, err = rd.Seek(-(iS + footerSize), io.SeekEnd)
+	idxSz := int64(indexSize(chunkCount))
+	_, err = rd.Seek(-(idxSz + footerSize), io.SeekEnd)
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
-	buff := make([]byte, iS)
+
+	buff, err := q.AcquireQuota(ctx, uint64(idxSz))
+	if err != nil {
+		return onHeapTableIndex{}, err
+	}
+
 	_, err = io.ReadFull(rd, buff)
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
 
-	chunks2 := chunkCount / 2
-	chunks1 := chunkCount - chunks2
-	offsets1Buff := make([]byte, chunks1*offsetSize)
+	chunks1 := chunkCount - (chunkCount / 2)
+	offsets1Buff, err := q.AcquireQuota(ctx, uint64(chunks1*offsetSize))
+	if err != nil {
+		return onHeapTableIndex{}, err
+	}
 
 	return newOnHeapTableIndex(buff, offsets1Buff, chunkCount, totalUncompressedData, q)
 }
@@ -235,8 +244,7 @@ func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, to
 
 	chunks2 := count / 2
 
-	lR := bytes.NewReader(lengths)
-	r := NewOffsetsReader(lR)
+	r := NewOffsetsReader(bytes.NewReader(lengths))
 	_, err := io.ReadFull(r, offsetsBuff1)
 	if err != nil {
 		return onHeapTableIndex{}, err
@@ -487,11 +495,16 @@ func (ti onHeapTableIndex) totalUncompressedData() uint64 {
 func (ti onHeapTableIndex) Close() error {
 	cnt := atomic.AddInt32(ti.refCnt, -1)
 	if cnt == 0 {
-		ti.prefixes = nil
-		ti.offsets1 = nil
-		ti.offsets2 = nil
-		ti.suffixes = nil
-		return ti.q.ReleaseQuota(indexMemSize(ti.count))
+		if err := ti.q.ReleaseQuota(ti.prefixes); err != nil {
+			return err
+		}
+		if err := ti.q.ReleaseQuota(ti.offsets1); err != nil {
+			return err
+		}
+		if err := ti.q.ReleaseQuota(ti.offsets2); err != nil {
+			return err
+		}
+		return ti.q.ReleaseQuota(ti.suffixes)
 	}
 	if cnt < 0 {
 		panic("Close() called and reduced ref count to < 0.")

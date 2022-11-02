@@ -24,7 +24,7 @@ func (csa chunkSourceAdapter) hash() (addr, error) {
 }
 
 func newReaderFromIndexData(q MemoryQuotaProvider, idxData []byte, name addr, tra tableReaderAt, blockSize uint64) (cs chunkSource, err error) {
-	index, err := parseTableIndexByCopy(idxData, q)
+	index, err := parseTableIndexByCopy(nil, idxData, q)
 	if err != nil {
 		return nil, err
 	}

@@ -30,7 +30,7 @@ func TestParseTableIndex(t *testing.T) {
 	defer f.Close()
 	bs, err := io.ReadAll(f)
 	require.NoError(t, err)
-	idx, err := parseTableIndexByCopy(bs, &UnlimitedQuotaProvider{})
+	idx, err := parseTableIndexByCopy(nil, bs, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	defer idx.Close()
 	assert.Equal(t, uint32(596), idx.chunkCount())
@@ -56,7 +56,7 @@ func BenchmarkFindPrefix(b *testing.B) {
 	defer f.Close()
 	bs, err := io.ReadAll(f)
 	require.NoError(b, err)
-	idx, err := parseTableIndexByCopy(bs, &UnlimitedQuotaProvider{})
+	idx, err := parseTableIndexByCopy(nil, bs, &UnlimitedQuotaProvider{})
 	require.NoError(b, err)
 	defer idx.Close()
 	assert.Equal(b, uint32(596), idx.chunkCount())
@@ -107,7 +107,7 @@ func TestOnHeapTableIndex_ResolveShortHash(t *testing.T) {
 	defer f.Close()
 	bs, err := io.ReadAll(f)
 	require.NoError(t, err)
-	idx, err := parseTableIndexByCopy(bs, &UnlimitedQuotaProvider{})
+	idx, err := parseTableIndexByCopy(nil, bs, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	defer idx.Close()
 	res, err := idx.ResolveShortHash([]byte("0"))
@@ -126,7 +126,7 @@ func TestResolveOneHash(t *testing.T) {
 
 	// build table index
 	td, _, err := buildTable(chunks)
-	tIdx, err := parseTableIndexByCopy(td, &UnlimitedQuotaProvider{})
+	tIdx, err := parseTableIndexByCopy(nil, td, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 
 	// get hashes out
@@ -157,7 +157,7 @@ func TestResolveFewHash(t *testing.T) {
 
 	// build table index
 	td, _, err := buildTable(chunks)
-	tIdx, err := parseTableIndexByCopy(td, &UnlimitedQuotaProvider{})
+	tIdx, err := parseTableIndexByCopy(nil, td, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 
 	// get hashes out
@@ -189,7 +189,7 @@ func TestAmbiguousShortHash(t *testing.T) {
 
 	// build table index
 	td, _, err := buildFakeChunkTable(chunks)
-	idx, err := parseTableIndexByCopy(td, &UnlimitedQuotaProvider{})
+	idx, err := parseTableIndexByCopy(nil, td, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 
 	tests := []struct {

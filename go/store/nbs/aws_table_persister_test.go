@@ -37,10 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/store/util/sizecache"
 )
 
-var parseIndexF = func(bs []byte) (tableIndex, error) {
-	return parseTableIndex(bs, &UnlimitedQuotaProvider{})
-}
-
 func TestAWSTablePersisterPersist(t *testing.T) {
 	calcPartSize := func(rdr chunkReader, maxPartNum uint64) uint64 {
 		return maxTableSize(uint64(mustUint32(rdr.count())), mustUint64(rdr.uncompressedLen())) / maxPartNum
@@ -537,7 +533,7 @@ func bytesToChunkSource(t *testing.T, bs ...[]byte) chunkSource {
 	tableSize, name, err := tw.finish()
 	require.NoError(t, err)
 	data := buff[:tableSize]
-	ti, err := parseTableIndexByCopy(data, &UnlimitedQuotaProvider{})
+	ti, err := parseTableIndexByCopy(nil, data, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	rdr, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
 	require.NoError(t, err)

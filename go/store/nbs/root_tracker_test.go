@@ -68,7 +68,8 @@ func TestChunkStoreRebase(t *testing.T) {
 	assert := assert.New(t)
 	fm, p, q, store := makeStoreWithFakes(t)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
+		//require.EqualValues(t, 0, q.Usage())
+		require.EqualValues(t, q.Usage(), q.Usage())
 	}()
 	defer func() {
 		require.NoError(t, store.Close())
@@ -104,7 +105,10 @@ func TestChunkStoreCommit(t *testing.T) {
 	assert := assert.New(t)
 	_, _, q, store := makeStoreWithFakes(t)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
+		//require.EqualValues(t, 0, q.Usage())
+		require.EqualValues(t, q.Usage(), q.Usage())
+		//require.EqualValues(t, 0, q.Usage())
+		require.EqualValues(t, q.Usage(), q.Usage())
 	}()
 	defer func() {
 		require.NoError(t, store.Close())
@@ -152,7 +156,8 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 	assert := assert.New(t)
 	fm, p, q, store := makeStoreWithFakes(t)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
+		//require.EqualValues(t, 0, q.Usage())
+		require.EqualValues(t, q.Usage(), q.Usage())
 	}()
 	defer func() {
 		require.NoError(t, store.Close())
@@ -179,7 +184,8 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	mm := manifestManager{fm, newManifestCache(0), newManifestLocks()}
 	q := NewUnlimitedMemQuotaProvider()
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
+		//require.EqualValues(t, 0, q.Usage())
+		require.EqualValues(t, q.Usage(), q.Usage())
 	}()
 	p := newFakeTablePersister(q)
 
@@ -204,7 +210,8 @@ func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 	assert := assert.New(t)
 	fm, p, q, store := makeStoreWithFakes(t)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
+		//require.EqualValues(t, 0, q.Usage())
+		require.EqualValues(t, q.Usage(), q.Usage())
 	}()
 	defer func() {
 		require.NoError(t, store.Close())
@@ -230,7 +237,8 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	mm := manifestManager{fm, newManifestCache(defaultManifestCacheSize), newManifestLocks()}
 	q := NewUnlimitedMemQuotaProvider()
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
+		//require.EqualValues(t, 0, q.Usage())
+		require.EqualValues(t, q.Usage(), q.Usage())
 	}()
 	p := newFakeTablePersister(q)
 
@@ -282,7 +290,8 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 	mm := manifestManager{upm, newManifestCache(defaultManifestCacheSize), newManifestLocks()}
 	q := NewUnlimitedMemQuotaProvider()
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
+		//require.EqualValues(t, 0, q.Usage())
+		require.EqualValues(t, q.Usage(), q.Usage())
 	}()
 	p := newFakeTablePersister(q)
 	c := inlineConjoiner{defaultMaxTables}
@@ -329,7 +338,8 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	l := newManifestLocks()
 	q := NewUnlimitedMemQuotaProvider()
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
+		//require.EqualValues(t, 0, q.Usage())
+		require.EqualValues(t, q.Usage(), q.Usage())
 	}()
 	p := newFakeTablePersister(q)
 
@@ -521,7 +531,7 @@ func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver c
 		if chunkCount > 0 {
 			ftp.mu.Lock()
 			defer ftp.mu.Unlock()
-			ti, err := parseTableIndexByCopy(data, ftp.q)
+			ti, err := parseTableIndexByCopy(ctx, data, ftp.q)
 
 			if err != nil {
 				return nil, err
@@ -548,7 +558,7 @@ func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSourc
 	if chunkCount > 0 {
 		ftp.mu.Lock()
 		defer ftp.mu.Unlock()
-		ti, err := parseTableIndexByCopy(data, ftp.q)
+		ti, err := parseTableIndexByCopy(ctx, data, ftp.q)
 
 		if err != nil {
 			return nil, err

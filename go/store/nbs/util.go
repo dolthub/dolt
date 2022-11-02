@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"context"
 	"io"
 	"math"
 
@@ -24,8 +25,8 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func IterChunks(rd io.ReadSeeker, cb func(chunk chunks.Chunk) (stop bool, err error)) error {
-	idx, err := readTableIndexByCopy(rd, &UnlimitedQuotaProvider{})
+func IterChunks(ctx context.Context, rd io.ReadSeeker, cb func(chunk chunks.Chunk) (stop bool, err error)) error {
+	idx, err := readTableIndexByCopy(ctx, rd, &UnlimitedQuotaProvider{})
 	if err != nil {
 		return err
 	}
@@ -68,8 +69,8 @@ func IterChunks(rd io.ReadSeeker, cb func(chunk chunks.Chunk) (stop bool, err er
 	return nil
 }
 
-func GetTableIndexPrefixes(rd io.ReadSeeker) (prefixes []uint64, err error) {
-	idx, err := readTableIndexByCopy(rd, &UnlimitedQuotaProvider{})
+func GetTableIndexPrefixes(ctx context.Context, rd io.ReadSeeker) (prefixes []uint64, err error) {
+	idx, err := readTableIndexByCopy(ctx, rd, &UnlimitedQuotaProvider{})
 	if err != nil {
 		return nil, err
 	}

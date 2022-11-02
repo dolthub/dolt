@@ -385,11 +385,6 @@ OUTER:
 		memoryNeeded += indexMemSize(spec.chunkCount)
 	}
 
-	err := ts.q.AcquireQuota(ctx, memoryNeeded)
-	if err != nil {
-		return tableSet{}, err
-	}
-
 	var rp atomic.Value
 	group, ctx := errgroup.WithContext(ctx)
 
@@ -419,7 +414,7 @@ OUTER:
 		)
 	}
 
-	err = group.Wait()
+	err := group.Wait()
 	if err != nil {
 		// Close any opened chunkSources
 		for _, cs := range opened {
