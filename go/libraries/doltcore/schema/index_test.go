@@ -153,38 +153,42 @@ func TestIndexCollectionAddIndexByColNames(t *testing.T) {
 		{
 			[]string{"v1"},
 			&indexImpl{
-				name:      "idx_v1",
-				tags:      []uint64{3},
-				allTags:   []uint64{3, 1, 2},
-				indexColl: indexColl,
+				name:          "idx_v1",
+				tags:          []uint64{3},
+				allTags:       []uint64{3, 1, 2},
+				indexColl:     indexColl,
+				prefixLengths: []uint16{},
 			},
 		},
 		{
 			[]string{"v1", "v3", "v2"},
 			&indexImpl{
-				name:      "idx_v1v3v2",
-				tags:      []uint64{3, 5, 4},
-				allTags:   []uint64{3, 5, 4, 1, 2},
-				indexColl: indexColl,
+				name:          "idx_v1v3v2",
+				tags:          []uint64{3, 5, 4},
+				allTags:       []uint64{3, 5, 4, 1, 2},
+				indexColl:     indexColl,
+				prefixLengths: []uint16{},
 			},
 		},
 		{
 			[]string{"pk1", "v1"},
 			&indexImpl{
-				name:      "idx_pk1v1",
-				tags:      []uint64{1, 3},
-				allTags:   []uint64{1, 3, 2},
-				indexColl: indexColl,
-				comment:   "hello there",
+				name:          "idx_pk1v1",
+				tags:          []uint64{1, 3},
+				allTags:       []uint64{1, 3, 2},
+				indexColl:     indexColl,
+				comment:       "hello there",
+				prefixLengths: []uint16{},
 			},
 		},
 		{
 			[]string{"pk2", "pk1", "v2"},
 			&indexImpl{
-				name:      "idx_pk2pk1v2",
-				tags:      []uint64{2, 1, 4},
-				allTags:   []uint64{2, 1, 4},
-				indexColl: indexColl,
+				name:          "idx_pk2pk1v2",
+				tags:          []uint64{2, 1, 4},
+				allTags:       []uint64{2, 1, 4},
+				indexColl:     indexColl,
+				prefixLengths: []uint16{},
 			},
 		},
 	}
@@ -246,29 +250,33 @@ func TestIndexCollectionAddIndexByColTags(t *testing.T) {
 
 	testIndexes := []*indexImpl{
 		{
-			name:      "idx_v1",
-			tags:      []uint64{3},
-			allTags:   []uint64{3, 1, 2},
-			indexColl: indexColl,
-			comment:   "hello there",
+			name:          "idx_v1",
+			tags:          []uint64{3},
+			allTags:       []uint64{3, 1, 2},
+			indexColl:     indexColl,
+			comment:       "hello there",
+			prefixLengths: []uint16{},
 		},
 		{
-			name:      "idx_v1v3v2",
-			tags:      []uint64{3, 5, 4},
-			allTags:   []uint64{3, 5, 4, 1, 2},
-			indexColl: indexColl,
+			name:          "idx_v1v3v2",
+			tags:          []uint64{3, 5, 4},
+			allTags:       []uint64{3, 5, 4, 1, 2},
+			indexColl:     indexColl,
+			prefixLengths: []uint16{},
 		},
 		{
-			name:      "idx_pk1v1",
-			tags:      []uint64{1, 3},
-			allTags:   []uint64{1, 3, 2},
-			indexColl: indexColl,
+			name:          "idx_pk1v1",
+			tags:          []uint64{1, 3},
+			allTags:       []uint64{1, 3, 2},
+			indexColl:     indexColl,
+			prefixLengths: []uint16{},
 		},
 		{
-			name:      "idx_pk2pk1v2",
-			tags:      []uint64{2, 1, 4},
-			allTags:   []uint64{2, 1, 4},
-			indexColl: indexColl,
+			name:          "idx_pk2pk1v2",
+			tags:          []uint64{2, 1, 4},
+			allTags:       []uint64{2, 1, 4},
+			indexColl:     indexColl,
+			prefixLengths: []uint16{},
 		},
 	}
 
@@ -328,8 +336,9 @@ func TestIndexCollectionAllIndexes(t *testing.T) {
 	indexColl := NewIndexCollection(colColl, nil).(*indexCollectionImpl)
 
 	indexColl.AddIndex(&indexImpl{
-		name: "idx_z",
-		tags: []uint64{3},
+		name:          "idx_z",
+		tags:          []uint64{3},
+		prefixLengths: []uint16{},
 	})
 	_, err := indexColl.AddIndexByColNames("idx_a", []string{"v2"}, IndexProperties{IsUnique: false, Comment: ""})
 	require.NoError(t, err)
@@ -338,28 +347,31 @@ func TestIndexCollectionAllIndexes(t *testing.T) {
 
 	assert.Equal(t, []Index{
 		&indexImpl{
-			name:      "idx_a",
-			tags:      []uint64{4},
-			allTags:   []uint64{4, 1, 2},
-			indexColl: indexColl,
-			isUnique:  false,
-			comment:   "",
+			name:          "idx_a",
+			tags:          []uint64{4},
+			allTags:       []uint64{4, 1, 2},
+			indexColl:     indexColl,
+			isUnique:      false,
+			comment:       "",
+			prefixLengths: []uint16{},
 		},
 		&indexImpl{
-			name:      "idx_n",
-			tags:      []uint64{5},
-			allTags:   []uint64{5, 1, 2},
-			indexColl: indexColl,
-			isUnique:  false,
-			comment:   "hello there",
+			name:          "idx_n",
+			tags:          []uint64{5},
+			allTags:       []uint64{5, 1, 2},
+			indexColl:     indexColl,
+			isUnique:      false,
+			comment:       "hello there",
+			prefixLengths: []uint16{},
 		},
 		&indexImpl{
-			name:      "idx_z",
-			tags:      []uint64{3},
-			allTags:   []uint64{3, 1, 2},
-			indexColl: indexColl,
-			isUnique:  false,
-			comment:   "",
+			name:          "idx_z",
+			tags:          []uint64{3},
+			allTags:       []uint64{3, 1, 2},
+			indexColl:     indexColl,
+			isUnique:      false,
+			comment:       "",
+			prefixLengths: []uint16{},
 		},
 	}, indexColl.AllIndexes())
 }
@@ -376,29 +388,33 @@ func TestIndexCollectionRemoveIndex(t *testing.T) {
 
 	testIndexes := []Index{
 		&indexImpl{
-			name:      "idx_v1",
-			tags:      []uint64{3},
-			allTags:   []uint64{3, 1, 2},
-			indexColl: indexColl,
+			name:          "idx_v1",
+			tags:          []uint64{3},
+			allTags:       []uint64{3, 1, 2},
+			indexColl:     indexColl,
+			prefixLengths: []uint16{},
 		},
 		&indexImpl{
-			name:      "idx_v1v3v2",
-			tags:      []uint64{3, 5, 4},
-			allTags:   []uint64{3, 5, 4, 1, 2},
-			indexColl: indexColl,
-			comment:   "hello there",
+			name:          "idx_v1v3v2",
+			tags:          []uint64{3, 5, 4},
+			allTags:       []uint64{3, 5, 4, 1, 2},
+			indexColl:     indexColl,
+			comment:       "hello there",
+			prefixLengths: []uint16{},
 		},
 		&indexImpl{
-			name:      "idx_pk1v1",
-			tags:      []uint64{1, 3},
-			allTags:   []uint64{1, 3, 2},
-			indexColl: indexColl,
+			name:          "idx_pk1v1",
+			tags:          []uint64{1, 3},
+			allTags:       []uint64{1, 3, 2},
+			indexColl:     indexColl,
+			prefixLengths: []uint16{},
 		},
 		&indexImpl{
-			name:      "idx_pk2pk1v2",
-			tags:      []uint64{2, 1, 4},
-			allTags:   []uint64{2, 1, 4},
-			indexColl: indexColl,
+			name:          "idx_pk2pk1v2",
+			tags:          []uint64{2, 1, 4},
+			allTags:       []uint64{2, 1, 4},
+			indexColl:     indexColl,
+			prefixLengths: []uint16{},
 		},
 	}
 	indexColl.AddIndex(testIndexes...)
@@ -427,10 +443,11 @@ func TestIndexCollectionRenameIndex(t *testing.T) {
 	)
 	indexColl := NewIndexCollection(colColl, nil).(*indexCollectionImpl)
 	index := &indexImpl{
-		name:      "idx_a",
-		tags:      []uint64{3},
-		allTags:   []uint64{3, 1, 2},
-		indexColl: indexColl,
+		name:          "idx_a",
+		tags:          []uint64{3},
+		allTags:       []uint64{3, 1, 2},
+		indexColl:     indexColl,
+		prefixLengths: []uint16{},
 	}
 	indexColl.AddIndex(index)
 
@@ -473,10 +490,11 @@ func TestIndexCollectionDuplicateIndexes(t *testing.T) {
 	}{
 		[]string{"v1"},
 		&indexImpl{
-			name:      "v1_orig",
-			tags:      []uint64{3},
-			allTags:   []uint64{3, 1, 2},
-			indexColl: indexColl,
+			name:          "v1_orig",
+			tags:          []uint64{3},
+			allTags:       []uint64{3, 1, 2},
+			indexColl:     indexColl,
+			prefixLengths: []uint16{},
 		},
 	}
 
@@ -487,10 +505,11 @@ func TestIndexCollectionDuplicateIndexes(t *testing.T) {
 	}{
 		[]string{"v1"},
 		&indexImpl{
-			name:      "v1_copy",
-			tags:      []uint64{3},
-			allTags:   []uint64{3, 1, 2},
-			indexColl: indexColl,
+			name:          "v1_copy",
+			tags:          []uint64{3},
+			allTags:       []uint64{3, 1, 2},
+			indexColl:     indexColl,
+			prefixLengths: []uint16{},
 		},
 	}
 
