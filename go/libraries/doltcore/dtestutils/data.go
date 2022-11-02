@@ -51,6 +51,7 @@ var typedColColl = schema.NewColCollection(
 	schema.NewColumn("title", TitleTag, types.StringKind, false),
 )
 
+// Schema returns the schema for the `people` test table.
 func Schema() (schema.Schema, error) {
 	sch := schema.MustSchemaFromCols(typedColColl)
 
@@ -67,13 +68,14 @@ func Schema() (schema.Schema, error) {
 	return sch, err
 }
 
+// RowsAndSchema returns the schema and rows for the `people` test table.
 func RowsAndSchema() ([]row.Row, schema.Schema, error) {
-	rows := make([]row.Row, len(UUIDS))
 	sch, err := Schema()
 	if err != nil {
 		return nil, nil, err
 	}
 
+	rows := make([]row.Row, len(UUIDS))
 	for i := 0; i < len(UUIDS); i++ {
 		married := types.Int(0)
 		if MaritalStatus[i] {
@@ -94,16 +96,6 @@ func RowsAndSchema() ([]row.Row, schema.Schema, error) {
 		}
 
 		rows = append(rows, r)
-	}
-
-	_, err = sch.Indexes().AddIndexByColTags(IndexName, []uint64{NameTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	_, err = sch.Checks().AddCheck("test-check", "age < 123", true)
-	if err != nil {
-		return nil, nil, err
 	}
 
 	return rows, sch, err
