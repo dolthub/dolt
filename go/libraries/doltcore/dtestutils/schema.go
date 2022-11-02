@@ -15,19 +15,12 @@
 package dtestutils
 
 import (
-	"context"
 	"math"
-	"testing"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/require"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/google/go-cmp/cmp"
 )
 
 // CreateSchema returns a schema from the columns given, panicking on any errors.
@@ -94,28 +87,6 @@ var FloatComparer = cmp.Comparer(func(x, y types.Float) bool {
 var TimestampComparer = cmp.Comparer(func(x, y types.Timestamp) bool {
 	return x.Equals(y)
 })
-
-// CreateEmptyTestTable creates a new test table with the name, schema, and rows given.
-func CreateEmptyTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch schema.Schema) {
-	ctx := context.Background()
-	root, err := dEnv.WorkingRoot(ctx)
-	require.NoError(t, err)
-
-	vrw := dEnv.DoltDB.ValueReadWriter()
-	ns := dEnv.DoltDB.NodeStore()
-
-	rows, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
-	require.NoError(t, err)
-	indexSet, err := durable.NewIndexSetWithEmptyIndexes(ctx, vrw, ns, sch)
-	require.NoError(t, err)
-
-	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, rows, indexSet, nil)
-	require.NoError(t, err)
-	newRoot, err := root.PutTable(ctx, tableName, tbl)
-	require.NoError(t, err)
-	err = dEnv.UpdateWorkingRoot(ctx, newRoot)
-	require.NoError(t, err)
-}
 
 // MustSchema takes a variable number of columns and returns a schema.
 func MustSchema(cols ...schema.Column) schema.Schema {

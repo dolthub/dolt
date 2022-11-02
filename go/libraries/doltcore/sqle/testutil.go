@@ -387,10 +387,32 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 // CreateEmptyTestDatabase creates a test database without any data in it.
 func CreateEmptyTestDatabase(t *testing.T) *env.DoltEnv {
 	dEnv := dtestutils.CreateTestEnv()
-	dtestutils.CreateEmptyTestTable(t, dEnv, PeopleTableName, PeopleTestSchema)
-	dtestutils.CreateEmptyTestTable(t, dEnv, EpisodesTableName, EpisodesTestSchema)
-	dtestutils.CreateEmptyTestTable(t, dEnv, AppearancesTableName, AppearancesTestSchema)
+	CreateEmptyTestTable(t, dEnv, PeopleTableName, PeopleTestSchema)
+	CreateEmptyTestTable(t, dEnv, EpisodesTableName, EpisodesTestSchema)
+	CreateEmptyTestTable(t, dEnv, AppearancesTableName, AppearancesTestSchema)
 	return dEnv
+}
+
+// CreateEmptyTestTable creates a new test table with the name, schema, and rows given.
+func CreateEmptyTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch schema.Schema) {
+	ctx := context.Background()
+	root, err := dEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
+
+	vrw := dEnv.DoltDB.ValueReadWriter()
+	ns := dEnv.DoltDB.NodeStore()
+
+	rows, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
+	require.NoError(t, err)
+	indexSet, err := durable.NewIndexSetWithEmptyIndexes(ctx, vrw, ns, sch)
+	require.NoError(t, err)
+
+	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, rows, indexSet, nil)
+	require.NoError(t, err)
+	newRoot, err := root.PutTable(ctx, tableName, tbl)
+	require.NoError(t, err)
+	err = dEnv.UpdateWorkingRoot(ctx, newRoot)
+	require.NoError(t, err)
 }
 
 // CreateTestDatabase creates a test database with the test data set in it.

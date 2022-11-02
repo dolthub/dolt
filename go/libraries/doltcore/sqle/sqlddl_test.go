@@ -788,8 +788,8 @@ func TestAlterSystemTables(t *testing.T) {
 	var dEnv *env.DoltEnv
 	setup := func() {
 		dEnv = CreateTestDatabase(t)
-		dtestutils.CreateEmptyTestTable(t, dEnv, "dolt_docs", doltdb.DocsSchema)
-		dtestutils.CreateEmptyTestTable(t, dEnv, doltdb.SchemasTableName, SchemasTableSchema())
+		CreateEmptyTestTable(t, dEnv, "dolt_docs", doltdb.DocsSchema)
+		CreateEmptyTestTable(t, dEnv, doltdb.SchemasTableName, SchemasTableSchema())
 
 		CreateTestTable(t, dEnv, "dolt_docs", doltdb.DocsSchema,
 			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')")
