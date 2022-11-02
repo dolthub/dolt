@@ -69,7 +69,7 @@ func TestSqlBatchInserts(t *testing.T) {
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db, root)
 	require.NoError(t, err)
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
@@ -165,7 +165,7 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db, root)
 	require.NoError(t, err)
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
@@ -208,7 +208,7 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db, root)
 	require.NoError(t, err)
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 

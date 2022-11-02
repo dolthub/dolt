@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
@@ -31,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -48,12 +48,17 @@ import (
 // the updated root, or an error. Statements in the input string are split by `;\n`
 func ExecuteSql(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
-	require.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
+
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
 
-	engine, ctx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
+	engine, ctx, err := NewTestEngine(dEnv, context.Background(), db, root)
 	dsess.DSessFromSess(ctx.Session).EnableBatchedMode()
 	err = ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, false)
 	if err != nil {
@@ -132,14 +137,22 @@ func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvid
 }
 
 // NewTestEngine creates a new default engine, and a *sql.Context and initializes indexes and schema fragments.
-func NewTestEngine(t *testing.T, dEnv *env.DoltEnv, ctx context.Context, db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
+func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
 	b := env.GetDefaultInitBranch(dEnv.Config)
 	pro, err := NewDoltDatabaseProviderWithDatabase(b, dEnv.FS, db, dEnv.FS)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	engine := sqle.NewDefault(pro)
 	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro)
 
-	err = dsess.DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(t, db, dEnv))
+	dbState, err := getDbState(db, dEnv)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = dsess.DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, dbState)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -162,15 +175,19 @@ func SkipByDefaultInCI(t *testing.T) {
 	}
 }
 
-func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
+func getDbState(db sql.Database, dEnv *env.DoltEnv) (dsess.InitialDbState, error) {
 	ctx := context.Background()
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
 	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
-	require.NoError(t, err)
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
 
 	ws, err := dEnv.WorkingSet(ctx)
-	require.NoError(t, err)
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
 
 	return dsess.InitialDbState{
 		Db:         db,
@@ -178,7 +195,7 @@ func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) dsess.InitialD
 		WorkingSet: ws,
 		DbData:     dEnv.DbData(),
 		Remotes:    dEnv.RepoState.Remotes,
-	}
+	}, nil
 }
 
 // ExecuteSelect executes the select statement given and returns the resulting rows, or an error if one is encountered.
@@ -196,7 +213,7 @@ func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, quer
 	db, err := NewDatabase(context.Background(), "dolt", dbData, opts)
 	require.NoError(t, err)
 
-	engine, ctx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
+	engine, ctx, err := NewTestEngine(dEnv, context.Background(), db, root)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +391,7 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 		('00000000-0000-0000-0000-000000000002', 'Rob Robertson', 21, 0, '');`
 
 	ctx := context.Background()
-	dEnv := dtestutils.CreateTestEnv()
+	dEnv := CreateTestEnv()
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 	root, err = ExecuteSql(t, dEnv, root, seedData)
@@ -386,10 +403,49 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 
 // CreateEmptyTestDatabase creates a test database without any data in it.
 func CreateEmptyTestDatabase(t *testing.T) *env.DoltEnv {
-	dEnv := dtestutils.CreateTestEnv()
+	dEnv := CreateTestEnv()
 	CreateEmptyTestTable(t, dEnv, PeopleTableName, PeopleTestSchema)
 	CreateEmptyTestTable(t, dEnv, EpisodesTableName, EpisodesTestSchema)
 	CreateEmptyTestTable(t, dEnv, AppearancesTableName, AppearancesTestSchema)
+	return dEnv
+}
+
+
+const (
+	TestHomeDirPrefix = "/user/dolt/"
+	WorkingDirPrefix  = "/user/dolt/datasets/"
+)
+
+// CreateTestEnv creates a new DoltEnv suitable for testing. The CreateTestEnvWithName
+// function should generally be preferred over this method, especially when working
+// with tests using multiple databases within a MultiRepoEnv.
+func CreateTestEnv() *env.DoltEnv {
+	return CreateTestEnvWithName("test")
+}
+
+// CreateTestEnvWithName creates a new DoltEnv suitable for testing and uses
+// the specified name to distinguish it from other test envs. This function
+// should generally be preferred over CreateTestEnv, especially when working with
+// tests using multiple databases within a MultiRepoEnv.
+func CreateTestEnvWithName(envName string) *env.DoltEnv {
+	const name = "billy bob"
+	const email = "bigbillieb@fake.horse"
+	initialDirs := []string{TestHomeDirPrefix + envName, WorkingDirPrefix + envName}
+	homeDirFunc := func() (string, error) { return TestHomeDirPrefix + envName, nil }
+	fs := filesys.NewInMemFS(initialDirs, nil, WorkingDirPrefix+envName)
+	dEnv := env.Load(context.Background(), homeDirFunc, fs, doltdb.InMemDoltDB+envName, "test")
+	cfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
+	cfg.SetStrings(map[string]string{
+		env.UserNameKey:  name,
+		env.UserEmailKey: email,
+	})
+
+	err := dEnv.InitRepo(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch)
+
+	if err != nil {
+		panic("Failed to initialize environment:" + err.Error())
+	}
+
 	return dEnv
 }
 
