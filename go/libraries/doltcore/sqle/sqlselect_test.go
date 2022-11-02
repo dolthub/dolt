@@ -1357,7 +1357,9 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 	cleanup := installTestCommitClock()
 	defer cleanup()
 
-	dEnv := CreateTestDatabase(t)
+	dEnv, err := CreateTestDatabase()
+	require.NoError(t, err)
+
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}

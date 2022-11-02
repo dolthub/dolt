@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"testing"
 
@@ -46,7 +45,7 @@ import (
 
 // ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
 // the updated root, or an error. Statements in the input string are split by `;\n`
-func ExecuteSql(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
+func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
 		return nil, err
@@ -166,15 +165,6 @@ func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db Database, root *do
 	return engine, sqlCtx, nil
 }
 
-// SkipByDefaultInCI skips the currently executing test as long as the CI env var is set
-// (GitHub Actions sets this automatically) and the DOLT_TEST_RUN_NON_RACE_TESTS env var
-// is not set. This is useful for filtering out tests that cause race detection to fail.
-func SkipByDefaultInCI(t *testing.T) {
-	if os.Getenv("CI") != "" && os.Getenv("DOLT_TEST_RUN_NON_RACE_TESTS") == "" {
-		t.Skip()
-	}
-}
-
 func getDbState(db sql.Database, dEnv *env.DoltEnv) (dsess.InitialDbState, error) {
 	ctx := context.Background()
 
@@ -199,8 +189,7 @@ func getDbState(db sql.Database, dEnv *env.DoltEnv) (dsess.InitialDbState, error
 }
 
 // ExecuteSelect executes the select statement given and returns the resulting rows, or an error if one is encountered.
-func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) ([]sql.Row, error) {
-
+func ExecuteSelect(dEnv *env.DoltEnv, root *doltdb.RootValue, query string) ([]sql.Row, error) {
 	dbData := env.DbData{
 		Ddb: dEnv.DoltDB,
 		Rsw: dEnv.RepoStateWriter(),
@@ -208,10 +197,15 @@ func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, quer
 	}
 
 	tmpDir, err := dEnv.TempTableFilesDir()
-	require.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
+
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 	db, err := NewDatabase(context.Background(), "dolt", dbData, opts)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
 
 	engine, ctx, err := NewTestEngine(dEnv, context.Background(), db, root)
 	if err != nil {
@@ -394,7 +388,7 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	dEnv := CreateTestEnv()
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
-	root, err = ExecuteSql(t, dEnv, root, seedData)
+	root, err = ExecuteSql(dEnv, root, seedData)
 	require.NoError(t, err)
 	err = dEnv.UpdateWorkingRoot(ctx, root)
 	require.NoError(t, err)
@@ -402,12 +396,24 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 }
 
 // CreateEmptyTestDatabase creates a test database without any data in it.
-func CreateEmptyTestDatabase(t *testing.T) *env.DoltEnv {
+func CreateEmptyTestDatabase() (*env.DoltEnv, error) {
 	dEnv := CreateTestEnv()
-	CreateEmptyTestTable(t, dEnv, PeopleTableName, PeopleTestSchema)
-	CreateEmptyTestTable(t, dEnv, EpisodesTableName, EpisodesTestSchema)
-	CreateEmptyTestTable(t, dEnv, AppearancesTableName, AppearancesTestSchema)
-	return dEnv
+	err := CreateEmptyTestTable(dEnv, PeopleTableName, PeopleTestSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	err = CreateEmptyTestTable(dEnv, EpisodesTableName, EpisodesTestSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	err = CreateEmptyTestTable(dEnv, AppearancesTableName, AppearancesTestSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	return dEnv, nil
 }
 
 
@@ -450,31 +456,46 @@ func CreateTestEnvWithName(envName string) *env.DoltEnv {
 }
 
 // CreateEmptyTestTable creates a new test table with the name, schema, and rows given.
-func CreateEmptyTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch schema.Schema) {
+func CreateEmptyTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema) error {
 	ctx := context.Background()
 	root, err := dEnv.WorkingRoot(ctx)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
 	ns := dEnv.DoltDB.NodeStore()
 
 	rows, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
+
 	indexSet, err := durable.NewIndexSetWithEmptyIndexes(ctx, vrw, ns, sch)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 
 	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, rows, indexSet, nil)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
+
 	newRoot, err := root.PutTable(ctx, tableName, tbl)
-	require.NoError(t, err)
-	err = dEnv.UpdateWorkingRoot(ctx, newRoot)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
+
+	return dEnv.UpdateWorkingRoot(ctx, newRoot)
 }
 
 // CreateTestDatabase creates a test database with the test data set in it.
-func CreateTestDatabase(t *testing.T) *env.DoltEnv {
+func CreateTestDatabase() (*env.DoltEnv, error) {
 	ctx := context.Background()
-	dEnv := CreateEmptyTestDatabase(t)
+	dEnv, err := CreateEmptyTestDatabase()
+	if err != nil {
+		return nil, err
+	}
 
 	const simpsonsRowData = `
 	INSERT INTO people VALUES
@@ -502,12 +523,21 @@ func CreateTestDatabase(t *testing.T) *env.DoltEnv {
 		(5, 3, "I'm making this all up");`
 
 	root, err := dEnv.WorkingRoot(ctx)
-	require.NoError(t, err)
-	root, err = ExecuteSql(t, dEnv, root, simpsonsRowData)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
+
+	root, err = ExecuteSql(dEnv, root, simpsonsRowData)
+	if err != nil {
+		return nil, err
+	}
+
 	err = dEnv.UpdateWorkingRoot(ctx, root)
-	require.NoError(t, err)
-	return dEnv
+	if err != nil {
+		return nil, err
+	}
+
+	return dEnv, nil
 }
 
 func SqlRowsFromDurableIndex(idx durable.Index, sch schema.Schema) ([]sql.Row, error) {

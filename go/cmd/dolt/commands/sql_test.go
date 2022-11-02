@@ -386,7 +386,7 @@ func TestInsert(t *testing.T) {
 				// Assert that all expected IDs exist after the insert
 				for _, expectedid := range test.expectedIds {
 					q := fmt.Sprintf("SELECT * FROM %s WHERE id = '%s'", tableName, expectedid.String())
-					rows, err := sqle.ExecuteSelect(t, dEnv, root, q)
+					rows, err := sqle.ExecuteSelect(dEnv, root, q)
 					assert.NoError(t, err)
 					assert.True(t, len(rows) > 0)
 				}
@@ -465,7 +465,7 @@ func TestUpdate(t *testing.T) {
 				// Assert that all rows have been updated
 				for i, expectedid := range test.expectedIds {
 					q := fmt.Sprintf("SELECT * FROM %s WHERE id = '%s'", tableName, expectedid.String())
-					rows, err := sqle.ExecuteSelect(t, dEnv, root, q)
+					rows, err := sqle.ExecuteSelect(dEnv, root, q)
 					assert.NoError(t, err)
 					assert.True(t, len(rows) > 0)
 					assert.Equal(t, uint32(test.expectedAges[i]), rows[0][2])
@@ -538,7 +538,7 @@ func TestDelete(t *testing.T) {
 				// Assert that all rows have been deleted
 				for _, expectedid := range test.deletedIds {
 					q := fmt.Sprintf("SELECT * FROM %s WHERE id = '%s'", tableName, expectedid.String())
-					rows, err := sqle.ExecuteSelect(t, dEnv, root, q)
+					rows, err := sqle.ExecuteSelect(dEnv, root, q)
 					assert.NoError(t, err)
 					assert.True(t, len(rows) == 0)
 				}

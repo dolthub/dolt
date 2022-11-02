@@ -119,7 +119,7 @@ func TestMigration(t *testing.T) {
 			root, err := postEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 			for _, a := range test.asserts {
-				actual, err := sqle.ExecuteSelect(t, postEnv, root, a.query)
+				actual, err := sqle.ExecuteSelect(postEnv, root, a.query)
 				assert.NoError(t, err)
 				assert.Equal(t, a.expected, actual)
 			}

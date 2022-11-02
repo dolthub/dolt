@@ -256,11 +256,13 @@ func TestCreateTable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			dEnv := CreateEmptyTestDatabase(t)
+			dEnv, err := CreateEmptyTestDatabase()
+			require.NoError(t, err)
+
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 
-			updatedRoot, err := ExecuteSql(t, dEnv, root, tt.query)
+			updatedRoot, err := ExecuteSql(dEnv, root, tt.query)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
 			} else {
@@ -329,11 +331,13 @@ func TestDropTable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			dEnv := CreateTestDatabase(t)
+			dEnv, err := CreateTestDatabase()
+			require.NoError(t, err)
+
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 
-			updatedRoot, err := ExecuteSql(t, dEnv, root, tt.query)
+			updatedRoot, err := ExecuteSql(dEnv, root, tt.query)
 
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
@@ -501,11 +505,14 @@ func TestAddColumn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := CreateTestDatabase(t)
-			ctx := context.Background()
-			root, _ := dEnv.WorkingRoot(ctx)
+			dEnv, err := CreateTestDatabase()
+			require.NoError(t, err)
 
-			updatedRoot, err := ExecuteSql(t, dEnv, root, tt.query)
+			ctx := context.Background()
+			root, err := dEnv.WorkingRoot(ctx)
+			require.NoError(t, err)
+
+			updatedRoot, err := ExecuteSql(dEnv, root, tt.query)
 
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
@@ -619,11 +626,13 @@ func TestRenameColumn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := CreateTestDatabase(t)
+			dEnv, err := CreateTestDatabase()
+			require.NoError(t, err)
+
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
-			updatedRoot, err := ExecuteSql(t, dEnv, root, tt.query)
+			updatedRoot, err := ExecuteSql(dEnv, root, tt.query)
 
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
@@ -732,11 +741,14 @@ func TestRenameTableStatements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := CreateTestDatabase(t)
-			ctx := context.Background()
-			root, _ := dEnv.WorkingRoot(ctx)
+			dEnv, err := CreateTestDatabase()
+			require.NoError(t, err)
 
-			updatedRoot, err := ExecuteSql(t, dEnv, root, tt.query)
+			ctx := context.Background()
+			root, err := dEnv.WorkingRoot(ctx)
+			require.NoError(t, err)
+
+			updatedRoot, err := ExecuteSql(dEnv, root, tt.query)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)
@@ -786,10 +798,16 @@ func TestAlterSystemTables(t *testing.T) {
 	reservedTableNames := []string{"dolt_schemas", "dolt_query_catalog"}
 
 	var dEnv *env.DoltEnv
+	var err error
 	setup := func() {
-		dEnv = CreateTestDatabase(t)
-		CreateEmptyTestTable(t, dEnv, "dolt_docs", doltdb.DocsSchema)
-		CreateEmptyTestTable(t, dEnv, doltdb.SchemasTableName, SchemasTableSchema())
+		dEnv, err = CreateTestDatabase()
+		require.NoError(t, err)
+
+		err := CreateEmptyTestTable(dEnv, "dolt_docs", doltdb.DocsSchema)
+		require.NoError(t, err)
+
+		err = CreateEmptyTestTable(dEnv, doltdb.SchemasTableName, SchemasTableSchema())
+		require.NoError(t, err)
 
 		CreateTestTable(t, dEnv, "dolt_docs", doltdb.DocsSchema,
 			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')")
@@ -1071,7 +1089,7 @@ func TestIndexOverwrite(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	root, err = ExecuteSql(t, dEnv, root, `
+	root, err = ExecuteSql(dEnv, root, `
 CREATE TABLE parent (
   pk bigint PRIMARY KEY,
   v1 bigint,
@@ -1110,13 +1128,13 @@ INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5'
 `)
 	// test index creation
 	require.NoError(t, err)
-	root, err = ExecuteSql(t, dEnv, root, "CREATE INDEX abc ON child (parent_value);")
+	root, err = ExecuteSql(dEnv, root, "CREATE INDEX abc ON child (parent_value);")
 	require.NoError(t, err)
-	_, err = ExecuteSql(t, dEnv, root, "CREATE INDEX abc_idx ON child_idx (parent_value);")
+	_, err = ExecuteSql(dEnv, root, "CREATE INDEX abc_idx ON child_idx (parent_value);")
 	require.NoError(t, err)
-	root, err = ExecuteSql(t, dEnv, root, "CREATE UNIQUE INDEX abc_unq ON child_unq (parent_value);")
+	root, err = ExecuteSql(dEnv, root, "CREATE UNIQUE INDEX abc_unq ON child_unq (parent_value);")
 	require.NoError(t, err)
-	_, err = ExecuteSql(t, dEnv, root, "CREATE UNIQUE INDEX abc_non_unq ON child_non_unq (parent_value);")
+	_, err = ExecuteSql(dEnv, root, "CREATE UNIQUE INDEX abc_non_unq ON child_non_unq (parent_value);")
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "duplicate unique key given")
 	}
@@ -1138,31 +1156,31 @@ INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5'
 	require.Equal(t, "parent_value", fkChildNonUnq.TableIndex)
 
 	// insert tests against index
-	root, err = ExecuteSql(t, dEnv, root, "INSERT INTO child VALUES ('6', 5)")
+	root, err = ExecuteSql(dEnv, root, "INSERT INTO child VALUES ('6', 5)")
 	require.NoError(t, err)
-	root, err = ExecuteSql(t, dEnv, root, "INSERT INTO child_idx VALUES ('6', 5)")
+	root, err = ExecuteSql(dEnv, root, "INSERT INTO child_idx VALUES ('6', 5)")
 	require.NoError(t, err)
-	_, err = ExecuteSql(t, dEnv, root, "INSERT INTO child_unq VALUES ('6', 5)")
+	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_unq VALUES ('6', 5)")
 	if assert.Error(t, err) {
 		assert.True(t, sql.ErrUniqueKeyViolation.Is(err.(sql.WrappedInsertError).Cause))
 	}
-	root, err = ExecuteSql(t, dEnv, root, "INSERT INTO child_non_unq VALUES ('6', 5)")
+	root, err = ExecuteSql(dEnv, root, "INSERT INTO child_non_unq VALUES ('6', 5)")
 	require.NoError(t, err)
 
 	// insert tests against foreign key
-	_, err = ExecuteSql(t, dEnv, root, "INSERT INTO child VALUES ('9', 9)")
+	_, err = ExecuteSql(dEnv, root, "INSERT INTO child VALUES ('9', 9)")
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "Foreign key violation")
 	}
-	_, err = ExecuteSql(t, dEnv, root, "INSERT INTO child_idx VALUES ('9', 9)")
+	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_idx VALUES ('9', 9)")
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "Foreign key violation")
 	}
-	_, err = ExecuteSql(t, dEnv, root, "INSERT INTO child_unq VALUES ('9', 9)")
+	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_unq VALUES ('9', 9)")
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "Foreign key violation")
 	}
-	_, err = ExecuteSql(t, dEnv, root, "INSERT INTO child_non_unq VALUES ('9', 9)")
+	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_non_unq VALUES ('9', 9)")
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "Foreign key violation")
 	}
@@ -1174,7 +1192,7 @@ func TestCreateIndexUnique(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	root, err = ExecuteSql(t, dEnv, root, `
+	root, err = ExecuteSql(dEnv, root, `
 CREATE TABLE pass_unique (
   pk1 BIGINT PRIMARY KEY,
   v1 BIGINT,
@@ -1189,9 +1207,9 @@ INSERT INTO pass_unique VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 INSERT INTO fail_unique VALUES (1, 1, 1), (2, 2, 2), (3, 2, 3);
 `)
 	require.NoError(t, err)
-	root, err = ExecuteSql(t, dEnv, root, "CREATE UNIQUE INDEX idx_v1 ON pass_unique(v1)")
+	root, err = ExecuteSql(dEnv, root, "CREATE UNIQUE INDEX idx_v1 ON pass_unique(v1)")
 	assert.NoError(t, err)
-	root, err = ExecuteSql(t, dEnv, root, "CREATE UNIQUE INDEX idx_v1 ON fail_unique(v1)")
+	root, err = ExecuteSql(dEnv, root, "CREATE UNIQUE INDEX idx_v1 ON fail_unique(v1)")
 	if assert.Error(t, err) {
 		assert.Contains(t, strings.ToLower(err.Error()), "unique")
 	}
@@ -1200,7 +1218,7 @@ INSERT INTO fail_unique VALUES (1, 1, 1), (2, 2, 2), (3, 2, 3);
 func assertFails(t *testing.T, dEnv *env.DoltEnv, query, expectedErr string) {
 	ctx := context.Background()
 	root, _ := dEnv.WorkingRoot(ctx)
-	_, err := ExecuteSql(t, dEnv, root, query)
+	_, err := ExecuteSql(dEnv, root, query)
 	require.Error(t, err, query)
 	assert.Contains(t, err.Error(), expectedErr)
 }
@@ -1208,6 +1226,6 @@ func assertFails(t *testing.T, dEnv *env.DoltEnv, query, expectedErr string) {
 func assertSucceeds(t *testing.T, dEnv *env.DoltEnv, query string) {
 	ctx := context.Background()
 	root, _ := dEnv.WorkingRoot(ctx)
-	_, err := ExecuteSql(t, dEnv, root, query)
+	_, err := ExecuteSql(dEnv, root, query)
 	assert.NoError(t, err, query)
 }
