@@ -10,6 +10,34 @@ teardown() {
     teardown_common
 }
 
+
+@test "json: insert value with ampersand" {
+    dolt sql <<SQL
+    CREATE TABLE js (
+        pk int PRIMARY KEY,
+        js json
+    );
+    INSERT INTO js VALUES (1, '{"a":"A&B"}');
+SQL
+    run dolt sql -q "SELECT * FROM js;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = '1,"{""a"": ""A&B""}"' ]
+}
+
+
+@test "json: insert array with ampersand" {
+    dolt sql <<SQL
+    CREATE TABLE js (
+        pk int PRIMARY KEY,
+        js json
+    );
+    INSERT INTO js VALUES (1, '[{"a":"A&B"}]');
+SQL
+    run dolt sql -q "SELECT * FROM js;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = '1,"[{""a"": ""A&B""}]"' ]
+}
+
 @test "json: Create table with JSON column" {
     run dolt sql <<SQL
     CREATE TABLE js (
@@ -219,3 +247,5 @@ SQL
     [ "${lines[1]}" = '1,"{""a"": 1}"' ]
     [ "${lines[2]}" = '2,"{""b"": 99}"' ]
 }
+
+
