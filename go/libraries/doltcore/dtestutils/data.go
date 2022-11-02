@@ -95,7 +95,7 @@ func RowsAndSchema() ([]row.Row, schema.Schema, error) {
 			panic(err)
 		}
 
-		rows = append(rows, r)
+		rows[i] = r
 	}
 
 	return rows, sch, err
