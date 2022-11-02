@@ -417,6 +417,9 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 		sd, err = toSchemaData(sch)
 	} else {
 		err = marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
+		if sd.PkPrefixLengths == nil {
+			sd.PkPrefixLengths = []uint16{}
+		}
 		for i, enc := range sd.IndexCollection {
 			if enc.PrefixLengths == nil {
 				sd.IndexCollection[i].PrefixLengths = []uint16{}
