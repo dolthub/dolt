@@ -257,5 +257,7 @@ func (ix *indexImpl) copy() *indexImpl {
 	_ = copy(newIx.tags, ix.tags)
 	newIx.allTags = make([]uint64, len(ix.allTags))
 	_ = copy(newIx.allTags, ix.allTags)
+	newIx.prefixLengths = make([]uint16, len(ix.prefixLengths))
+	_ = copy(newIx.prefixLengths, ix.prefixLengths)
 	return &newIx
 }
