@@ -35,8 +35,6 @@ import (
 )
 
 const (
-	repoPrefix   = "repo_*"
-	remotePrefix = "remote_*"
 	homePrefix   = "home"
 )
 

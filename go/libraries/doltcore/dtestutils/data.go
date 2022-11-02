@@ -21,14 +21,14 @@ import (
 	"github.com/google/uuid"
 )
 
-var UUIDS = []uuid.UUID{
+var uuids = []uuid.UUID{
 	uuid.Must(uuid.Parse("00000000-0000-0000-0000-000000000000")),
 	uuid.Must(uuid.Parse("00000000-0000-0000-0000-000000000001")),
 	uuid.Must(uuid.Parse("00000000-0000-0000-0000-000000000002"))}
-var Names = []string{"Bill Billerson", "John Johnson", "Rob Robertson"}
-var Ages = []uint64{32, 25, 21}
-var Titles = []string{"Senior Dufus", "Dufus", ""}
-var MaritalStatus = []bool{true, false, false}
+var names = []string{"Bill Billerson", "John Johnson", "Rob Robertson"}
+var ages = []uint64{32, 25, 21}
+var titles = []string{"Senior Dufus", "Dufus", ""}
+var maritalStatus = []bool{true, false, false}
 
 const (
 	IdTag uint64 = iota
@@ -43,16 +43,15 @@ const (
 	IndexName = "idx_name"
 )
 
-var typedColColl = schema.NewColCollection(
-	schema.NewColumn("id", IdTag, types.StringKind, true, schema.NotNullConstraint{}),
-	schema.NewColumn("name", NameTag, types.StringKind, false, schema.NotNullConstraint{}),
-	schema.NewColumn("age", AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-	schema.NewColumn("is_married", IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
-	schema.NewColumn("title", TitleTag, types.StringKind, false),
-)
-
 // Schema returns the schema for the `people` test table.
 func Schema() (schema.Schema, error) {
+	var typedColColl = schema.NewColCollection(
+		schema.NewColumn("id", IdTag, types.StringKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("name", NameTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("age", AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("is_married", IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("title", TitleTag, types.StringKind, false),
+	)
 	sch := schema.MustSchemaFromCols(typedColColl)
 
 	_, err := sch.Indexes().AddIndexByColTags(IndexName, []uint64{NameTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
@@ -75,17 +74,17 @@ func RowsAndSchema() ([]row.Row, schema.Schema, error) {
 		return nil, nil, err
 	}
 
-	rows := make([]row.Row, len(UUIDS))
-	for i := 0; i < len(UUIDS); i++ {
+	rows := make([]row.Row, len(uuids))
+	for i := 0; i < len(uuids); i++ {
 		married := types.Int(0)
-		if MaritalStatus[i] {
+		if maritalStatus[i] {
 			married = types.Int(1)
 		}
 		taggedVals := row.TaggedValues{
-			IdTag:        types.String(UUIDS[i].String()),
-			NameTag:      types.String(Names[i]),
-			AgeTag:       types.Uint(Ages[i]),
-			TitleTag:     types.String(Titles[i]),
+			IdTag:        types.String(uuids[i].String()),
+			NameTag:      types.String(names[i]),
+			AgeTag:       types.Uint(ages[i]),
+			TitleTag:     types.String(titles[i]),
 			IsMarriedTag: married,
 		}
 
