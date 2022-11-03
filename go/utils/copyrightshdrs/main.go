@@ -91,8 +91,6 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/cmd/noms/util/help.go", NomsPath: "cmd/util/help.go", HadCopyrightNotice: true},
 	{Path: "store/cmd/noms/util/kingpin_command.go", NomsPath: "cmd/util/kingpin_command.go", HadCopyrightNotice: true},
 	{Path: "store/chunks/chunk.go", NomsPath: "go/chunks/chunk.go", HadCopyrightNotice: true},
-	{Path: "store/chunks/chunk_serializer.go", NomsPath: "go/chunks/chunk_serializer.go", HadCopyrightNotice: true},
-	{Path: "store/chunks/chunk_serializer_test.go", NomsPath: "go/chunks/chunk_serializer_test.go", HadCopyrightNotice: true},
 	{Path: "store/chunks/chunk_store.go", NomsPath: "go/chunks/chunk_store.go", HadCopyrightNotice: true},
 	{Path: "store/chunks/chunk_store_common_test.go", NomsPath: "go/chunks/chunk_store_common_test.go", HadCopyrightNotice: true},
 	{Path: "store/chunks/chunk_test.go", NomsPath: "go/chunks/chunk_test.go", HadCopyrightNotice: true},
