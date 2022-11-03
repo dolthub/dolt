@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -202,12 +203,13 @@ func Serve(
 		)
 	}
 
-	if startError != nil {
+	if errors.Is(startError, server.UnixSocketInUseError) {
+		lgr.Warn("unix socket set up failed: address already in use: listen unix at ", serverConf.Socket)
+	} else if startError != nil {
 		cli.PrintErr(startError)
 		return
-	} else {
-		sqlserver.SetRunningServer(mySQLServer)
 	}
+	sqlserver.SetRunningServer(mySQLServer)
 
 	var metSrv *http.Server
 	if serverConfig.MetricsHost() != "" && serverConfig.MetricsPort() > 0 {

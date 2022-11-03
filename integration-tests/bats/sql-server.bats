@@ -1492,7 +1492,7 @@ databases:
     rm /tmp/mysql.sock
 }
 
-@test "sql-server: server fails to start up if there is already a file in the socket file path" {
+@test "sql-server: the second server starts without unix socket set up if there is already a file in the socket file path" {
     skiponwindows "unix socket is not available on Windows"
     cd repo2
     touch mysql.sock
@@ -1504,9 +1504,9 @@ databases:
     dolt sql-server --port=$PORT --socket="$REPO_NAME/mysql.sock" --user dolt > log.txt 2>&1 &
     SERVER_PID=$!
     run wait_for_connection $PORT 5000
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 0 ]
 
-    run grep 'address already in use' log.txt
+    run grep 'unix socket set up failed: address already in use: listen unix at' log.txt
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
 }
