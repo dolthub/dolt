@@ -863,6 +863,27 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 	return db.createSqlTable(ctx, tableName, sch, collation)
 }
 
+// CreateIndexedTable creates a table with the name and schema given.
+func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, idxCols []sql.IndexColumn, collation sql.CollationID) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
+	if strings.ToLower(tableName) == doltdb.DocTableName {
+		// validate correct schema
+		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) {
+			return fmt.Errorf("incorrect schema for dolt_docs table")
+		}
+	} else if doltdb.HasDoltPrefix(tableName) {
+		return ErrReservedTableName.New(tableName)
+	}
+
+	if !doltdb.IsValidTableName(tableName) {
+		return ErrInvalidTableName.New(tableName)
+	}
+
+	return db.createIndexedSqlTable(ctx, tableName, sch, idxCols, collation)
+}
+
 // Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.
 func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, collation sql.CollationID) error {
 	ws, err := db.GetWorkingSet(ctx)
@@ -890,6 +911,56 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 	// Prevent any tables that use Spatial Types as Primary Key from being created
 	if schema.IsUsingSpatialColAsKey(doltSch) {
 		return schema.ErrUsingSpatialKey.New(tableName)
+	}
+
+	// Prevent any tables that use BINARY, CHAR, VARBINARY, VARCHAR prefixes
+
+	if schema.HasAutoIncrement(doltSch) {
+		ait, err := db.gs.GetAutoIncrementTracker(ctx)
+		if err != nil {
+			return err
+		}
+		ait.AddNewTable(tableName)
+	}
+
+	return db.createDoltTable(ctx, tableName, root, doltSch)
+}
+
+// Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.
+func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, idxCols []sql.IndexColumn, collation sql.CollationID) error {
+	ws, err := db.GetWorkingSet(ctx)
+	if err != nil {
+		return err
+	}
+	root := ws.WorkingRoot()
+
+	if exists, err := root.HasTable(ctx, tableName); err != nil {
+		return err
+	} else if exists {
+		return sql.ErrTableAlreadyExists.New(tableName)
+	}
+
+	headRoot, err := db.GetHeadRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	doltSch, err := sqlutil.ToDoltSchema(ctx, root, tableName, sch, headRoot, collation)
+	if err != nil {
+		return err
+	}
+
+	// Prevent any tables that use Spatial Types as Primary Key from being created
+	if schema.IsUsingSpatialColAsKey(doltSch) {
+		return schema.ErrUsingSpatialKey.New(tableName)
+	}
+
+	// Prevent any tables that use BINARY, CHAR, VARBINARY, VARCHAR prefixes in Primary Key
+	for _, idxCol := range idxCols {
+		col := sch.Schema[sch.Schema.IndexOfColName(idxCol.Name)]
+		if col.PrimaryKey && sql.IsText(col.Type) && idxCol.Length > 0 {
+			return sql.ErrUnsupportedIndexPrefix.New(col.Name)
+		}
 	}
 
 	if schema.HasAutoIncrement(doltSch) {
@@ -927,6 +998,8 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, root *dol
 	if len(conflictingTbls) > 0 {
 		return fmt.Errorf(strings.Join(conflictingTbls, "\n"))
 	}
+
+	// TODO: maybe do it here
 
 	newRoot, err := root.CreateEmptyTable(ctx, tableName, doltSch)
 	if err != nil {
