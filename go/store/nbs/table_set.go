@@ -234,7 +234,7 @@ func (ts tableSet) physicalLen() (uint64, error) {
 			if err != nil {
 				return 0, err
 			}
-			data += index.TableFileSize()
+			data += index.tableFileSize()
 		}
 		return
 	}
@@ -279,6 +279,11 @@ func (ts tableSet) Size() int {
 // prepend adds a memTable to an existing tableSet, compacting |mt| and
 // returning a new tableSet with newly compacted table added.
 func (ts tableSet) prepend(ctx context.Context, mt *memTable, stats *Stats) tableSet {
+	cs, err := ts.p.Persist(ctx, mt, ts, stats)
+	if err != nil {
+		panic(err) // todo(andy)
+	}
+
 	newTs := tableSet{
 		novel:    make(chunkSources, len(ts.novel)+1),
 		upstream: make(chunkSources, len(ts.upstream)),
@@ -286,7 +291,7 @@ func (ts tableSet) prepend(ctx context.Context, mt *memTable, stats *Stats) tabl
 		q:        ts.q,
 		rl:       ts.rl,
 	}
-	newTs.novel[0] = newPersistingChunkSource(ctx, mt, ts, ts.p, ts.rl, stats)
+	newTs.novel[0] = cs
 	copy(newTs.novel[1:], ts.novel)
 	copy(newTs.upstream, ts.upstream)
 	return newTs
@@ -304,11 +309,9 @@ func (ts tableSet) flatten(ctx context.Context) (tableSet, error) {
 
 	for _, src := range ts.novel {
 		cnt, err := src.count()
-
 		if err != nil {
 			return tableSet{}, err
 		}
-
 		if cnt > 0 {
 			flattened.upstream = append(flattened.upstream, src)
 		}
@@ -385,11 +388,6 @@ OUTER:
 		memoryNeeded += indexMemSize(spec.chunkCount)
 	}
 
-	err := ts.q.AcquireQuota(ctx, memoryNeeded)
-	if err != nil {
-		return tableSet{}, err
-	}
-
 	var rp atomic.Value
 	group, ctx := errgroup.WithContext(ctx)
 
@@ -419,7 +417,7 @@ OUTER:
 		)
 	}
 
-	err = group.Wait()
+	err := group.Wait()
 	if err != nil {
 		// Close any opened chunkSources
 		for _, cs := range opened {

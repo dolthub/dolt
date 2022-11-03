@@ -90,10 +90,8 @@ func TestNBSAsTableFileStore(t *testing.T) {
 	assert.Greater(t, defaultMaxTables, numTableFiles)
 	st, _, q := makeTestLocalStore(t, defaultMaxTables)
 	defer func() {
-		require.Equal(t, uint64(0), q.Usage())
-	}()
-	defer func() {
 		require.NoError(t, st.Close())
+		require.Equal(t, uint64(0), q.Usage())
 	}()
 	fileToData := populateLocalStore(t, st, numTableFiles)
 
@@ -392,10 +390,8 @@ func TestNBSUpdateManifestWithAppendixOptions(t *testing.T) {
 
 	_, p, q, store, _, _ := prepStore(ctx, t, assert)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
-	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	// persist tablefiles to tablePersister
@@ -463,10 +459,8 @@ func TestNBSUpdateManifestWithAppendix(t *testing.T) {
 
 	fm, p, q, store, stats, _ := prepStore(ctx, t, assert)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
-	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	_, upstream, err := fm.ParseIfExists(ctx, stats, nil)
@@ -491,10 +485,8 @@ func TestNBSUpdateManifestRetainsAppendix(t *testing.T) {
 
 	fm, p, q, store, stats, _ := prepStore(ctx, t, assert)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
-	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	_, upstream, err := fm.ParseIfExists(ctx, stats, nil)
@@ -543,10 +535,8 @@ func TestNBSCommitRetainsAppendix(t *testing.T) {
 
 	fm, p, q, store, stats, rootChunk := prepStore(ctx, t, assert)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
-	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	_, upstream, err := fm.ParseIfExists(ctx, stats, nil)
@@ -600,10 +590,8 @@ func TestNBSOverwriteManifest(t *testing.T) {
 
 	fm, p, q, store, stats, _ := prepStore(ctx, t, assert)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
-	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	// Generate a random root hash

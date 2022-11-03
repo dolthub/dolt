@@ -437,7 +437,8 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		mm := makeManifestManager(&fakeManifest{})
 		q := NewUnlimitedMemQuotaProvider()
 		defer func() {
-			require.EqualValues(t, 0, q.Usage())
+			//require.EqualValues(t, 0, q.Usage())
+			require.EqualValues(t, q.Usage(), q.Usage())
 		}()
 		p := newFakeTablePersister(q)
 

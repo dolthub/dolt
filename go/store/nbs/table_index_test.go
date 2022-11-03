@@ -30,18 +30,18 @@ func TestParseTableIndex(t *testing.T) {
 	defer f.Close()
 	bs, err := io.ReadAll(f)
 	require.NoError(t, err)
-	idx, err := parseTableIndexByCopy(bs, &noopQuotaProvider{})
+	idx, err := parseTableIndexByCopy(nil, bs, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	defer idx.Close()
-	assert.Equal(t, uint32(596), idx.ChunkCount())
+	assert.Equal(t, uint32(596), idx.chunkCount())
 	seen := make(map[addr]bool)
-	for i := uint32(0); i < idx.ChunkCount(); i++ {
+	for i := uint32(0); i < idx.chunkCount(); i++ {
 		var onheapaddr addr
-		e, err := idx.IndexEntry(i, &onheapaddr)
+		e, err := idx.indexEntry(i, &onheapaddr)
 		require.NoError(t, err)
 		if _, ok := seen[onheapaddr]; !ok {
 			seen[onheapaddr] = true
-			lookupe, ok, err := idx.Lookup(&onheapaddr)
+			lookupe, ok, err := idx.lookup(&onheapaddr)
 			require.NoError(t, err)
 			assert.True(t, ok)
 			assert.Equal(t, e.Offset(), lookupe.Offset(), "%v does not match %v for address %v", e, lookupe, onheapaddr)
@@ -56,12 +56,12 @@ func BenchmarkFindPrefix(b *testing.B) {
 	defer f.Close()
 	bs, err := io.ReadAll(f)
 	require.NoError(b, err)
-	idx, err := parseTableIndexByCopy(bs, &noopQuotaProvider{})
+	idx, err := parseTableIndexByCopy(nil, bs, &UnlimitedQuotaProvider{})
 	require.NoError(b, err)
 	defer idx.Close()
-	assert.Equal(b, uint32(596), idx.ChunkCount())
+	assert.Equal(b, uint32(596), idx.chunkCount())
 
-	prefixes, err := idx.Prefixes()
+	prefixes, err := idx.prefixes()
 	require.NoError(b, err)
 
 	b.Run("benchmark prefixIdx()", func(b *testing.B) {
@@ -84,7 +84,7 @@ func BenchmarkFindPrefix(b *testing.B) {
 func prefixIdx(ti onHeapTableIndex, prefix uint64) (idx uint32) {
 	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
 	// an extremely tight loop and inlining the code was a significant perf improvement.
-	idx, j := 0, ti.chunkCount
+	idx, j := 0, ti.chunkCount()
 	for idx < j {
 		h := idx + (j-idx)/2 // avoid overflow when computing h
 		// i ≤ h < j
@@ -103,7 +103,7 @@ func TestOnHeapTableIndex_ResolveShortHash(t *testing.T) {
 	defer f.Close()
 	bs, err := io.ReadAll(f)
 	require.NoError(t, err)
-	idx, err := parseTableIndexByCopy(bs, &noopQuotaProvider{})
+	idx, err := parseTableIndexByCopy(nil, bs, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	defer idx.Close()
 	res, err := idx.ResolveShortHash([]byte("0"))
@@ -122,7 +122,7 @@ func TestResolveOneHash(t *testing.T) {
 
 	// build table index
 	td, _, err := buildTable(chunks)
-	tIdx, err := parseTableIndexByCopy(td, &noopQuotaProvider{})
+	tIdx, err := parseTableIndexByCopy(nil, td, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 
 	// get hashes out
@@ -153,7 +153,7 @@ func TestResolveFewHash(t *testing.T) {
 
 	// build table index
 	td, _, err := buildTable(chunks)
-	tIdx, err := parseTableIndexByCopy(td, &noopQuotaProvider{})
+	tIdx, err := parseTableIndexByCopy(nil, td, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 
 	// get hashes out
@@ -185,7 +185,7 @@ func TestAmbiguousShortHash(t *testing.T) {
 
 	// build table index
 	td, _, err := buildFakeChunkTable(chunks)
-	idx, err := parseTableIndexByCopy(td, &noopQuotaProvider{})
+	idx, err := parseTableIndexByCopy(nil, td, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 
 	tests := []struct {
