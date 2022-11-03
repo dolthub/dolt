@@ -506,7 +506,11 @@ func TestBlobs(t *testing.T) {
 }
 
 func TestIndexPrefix(t *testing.T) {
-	enginetest.TestIndexPrefix(t, newDoltHarness(t))
+	harness := newDoltHarness(t)
+	enginetest.TestIndexPrefix(t, harness)
+	for _, script := range DoltIndexPrefixScripts {
+		enginetest.TestScript(t, harness, script)
+	}
 }
 
 func TestBigBlobs(t *testing.T) {

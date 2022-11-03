@@ -999,8 +999,6 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, root *dol
 		return fmt.Errorf(strings.Join(conflictingTbls, "\n"))
 	}
 
-	// TODO: maybe do it here
-
 	newRoot, err := root.CreateEmptyTable(ctx, tableName, doltSch)
 	if err != nil {
 		return err
