@@ -536,7 +536,8 @@ func expressionToString(ctx *sql.Context, expr sql.Expression) (string, error) {
 	return valStr, nil
 }
 
-// Gets revisionName and/or secondRevisionName from sql expression
+// getRevisionsFromExpr returns the revisionName and/or secondRevisionName, as
+// well as a threeDot boolean from sql expression
 func getRevisionsFromExpr(ctx *sql.Context, expr sql.Expression, canDot bool) (string, string, bool, error) {
 	revisionValStr, err := expressionToString(ctx, expr)
 	if err != nil {
