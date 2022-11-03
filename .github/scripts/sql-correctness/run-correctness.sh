@@ -73,6 +73,7 @@ source \
   "$timeprefix" \
   "$actorprefix" \
   "$format" \
+  "$RELEASE_RUN" \
   "$NOMS_BIN_FORMAT" > job.json
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
