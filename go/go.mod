@@ -23,7 +23,7 @@ require (
 	github.com/gocraft/dbr/v2 v2.7.2
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.1
-	github.com/google/go-cmp v0.5.8
+	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/google/uuid v1.2.0
 	github.com/jpillora/backoff v1.0.0
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d

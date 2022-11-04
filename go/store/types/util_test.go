@@ -66,8 +66,8 @@ func generateNumbersAsValueSlice(nbf *NomsBinFormat, n int) ValueSlice {
 }
 
 func generateNumbersAsValuesFromToBy(nbf *NomsBinFormat, from, to, by int) ValueSlice {
-	d.Chk.True(to >= from, "to must be greater than or equal to from")
-	d.Chk.True(by > 0, "must be an integer greater than zero")
+	d.Chk.True(to >= from)
+	d.Chk.True(by > 0)
 	nums := []Value{}
 	for i := from; i < to; i += by {
 		nums = append(nums, Float(i))
@@ -76,8 +76,8 @@ func generateNumbersAsValuesFromToBy(nbf *NomsBinFormat, from, to, by int) Value
 }
 
 func generateNumbersAsStructsFromToBy(nbf *NomsBinFormat, from, to, by int) ValueSlice {
-	d.Chk.True(to >= from, "to must be greater than or equal to from")
-	d.Chk.True(by > 0, "must be an integer greater than zero")
+	d.Chk.True(to >= from)
+	d.Chk.True(by > 0)
 	nums := []Value{}
 	for i := from; i < to; i += by {
 		nums = append(nums, mustValue(NewStruct(nbf, "num", StructData{"n": Float(i)})))

@@ -24,6 +24,7 @@ package chunks
 import (
 	"context"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/store/constants"
@@ -135,4 +136,17 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreCommitUnchangedRoot() {
 
 	// Now, reading c from store2 via the API should work...
 	assertInputInStore(input, h, store2, suite.Assert())
+}
+
+func assertInputInStore(input string, h hash.Hash, s ChunkStore, assert *assert.Assertions) {
+	chunk, err := s.Get(context.Background(), h)
+	assert.NoError(err)
+	assert.False(chunk.IsEmpty(), "Shouldn't get empty chunk for %s", h.String())
+	assert.Equal(input, string(chunk.Data()))
+}
+
+func assertInputNotInStore(input string, h hash.Hash, s ChunkStore, assert *assert.Assertions) {
+	chunk, err := s.Get(context.Background(), h)
+	assert.NoError(err)
+	assert.True(chunk.IsEmpty(), "Shouldn't get non-empty chunk for %s: %v", h.String(), chunk)
 }
