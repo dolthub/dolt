@@ -48,7 +48,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 	}
 
 	bsTRA := &bsTableReaderAt{name.String(), bsp.bs}
-	return newReaderFromIndexData(bsp.q, data, name, bsTRA, bsp.blockSize)
+	return newReaderFromIndexData(ctx, bsp.q, data, name, bsTRA, bsp.blockSize)
 }
 
 // ConjoinAll (Not currently implemented) conjoins all chunks in |sources| into a single,

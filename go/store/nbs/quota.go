@@ -35,10 +35,11 @@ func NewUnlimitedMemQuotaProvider() *UnlimitedQuotaProvider {
 }
 
 func (q *UnlimitedQuotaProvider) AcquireQuotaBytes(ctx context.Context, sz uint64) ([]byte, error) {
+	buf := make([]byte, sz)
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.used += sz
-	return make([]byte, sz), nil
+	return buf, nil
 }
 
 func (q *UnlimitedQuotaProvider) ReleaseQuotaBytes(buf []byte) error {

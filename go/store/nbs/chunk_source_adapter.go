@@ -14,6 +14,8 @@
 
 package nbs
 
+import "context"
+
 type chunkSourceAdapter struct {
 	tableReader
 	h addr
@@ -23,8 +25,8 @@ func (csa chunkSourceAdapter) hash() (addr, error) {
 	return csa.h, nil
 }
 
-func newReaderFromIndexData(q MemoryQuotaProvider, idxData []byte, name addr, tra tableReaderAt, blockSize uint64) (cs chunkSource, err error) {
-	index, err := parseTableIndexByCopy(nil, idxData, q)
+func newReaderFromIndexData(ctx context.Context, q MemoryQuotaProvider, idxData []byte, name addr, tra tableReaderAt, blockSize uint64) (cs chunkSource, err error) {
+	index, err := parseTableIndexByCopy(ctx, idxData, q)
 	if err != nil {
 		return nil, err
 	}

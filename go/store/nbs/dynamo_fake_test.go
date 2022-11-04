@@ -53,8 +53,7 @@ func makeFakeDDB(t *testing.T) *fakeDDB {
 	}
 }
 
-func (m *fakeDDB) readerForTable(name addr) (chunkReader, error) {
-	ctx := context.Background()
+func (m *fakeDDB) readerForTable(ctx context.Context, name addr) (chunkReader, error) {
 	if i, present := m.data[fmtTableName(name)]; present {
 		buff, ok := i.([]byte)
 		assert.True(m.t, ok)

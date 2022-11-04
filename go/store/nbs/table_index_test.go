@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -25,12 +26,13 @@ import (
 )
 
 func TestParseTableIndex(t *testing.T) {
+	ctx := context.Background()
 	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
 	require.NoError(t, err)
 	defer f.Close()
 	bs, err := io.ReadAll(f)
 	require.NoError(t, err)
-	idx, err := parseTableIndexByCopy(nil, bs, &UnlimitedQuotaProvider{})
+	idx, err := parseTableIndexByCopy(ctx, bs, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	defer idx.Close()
 	assert.Equal(t, uint32(596), idx.chunkCount())
@@ -51,12 +53,13 @@ func TestParseTableIndex(t *testing.T) {
 }
 
 func BenchmarkFindPrefix(b *testing.B) {
+	ctx := context.Background()
 	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
 	require.NoError(b, err)
 	defer f.Close()
 	bs, err := io.ReadAll(f)
 	require.NoError(b, err)
-	idx, err := parseTableIndexByCopy(nil, bs, &UnlimitedQuotaProvider{})
+	idx, err := parseTableIndexByCopy(ctx, bs, &UnlimitedQuotaProvider{})
 	require.NoError(b, err)
 	defer idx.Close()
 	assert.Equal(b, uint32(596), idx.chunkCount())
@@ -98,12 +101,13 @@ func prefixIdx(ti onHeapTableIndex, prefix uint64) (idx uint32) {
 }
 
 func TestOnHeapTableIndex_ResolveShortHash(t *testing.T) {
+	ctx := context.Background()
 	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
 	require.NoError(t, err)
 	defer f.Close()
 	bs, err := io.ReadAll(f)
 	require.NoError(t, err)
-	idx, err := parseTableIndexByCopy(nil, bs, &UnlimitedQuotaProvider{})
+	idx, err := parseTableIndexByCopy(ctx, bs, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	defer idx.Close()
 	res, err := idx.ResolveShortHash([]byte("0"))
@@ -115,6 +119,7 @@ func TestOnHeapTableIndex_ResolveShortHash(t *testing.T) {
 }
 
 func TestResolveOneHash(t *testing.T) {
+	ctx := context.Background()
 	// create chunks
 	chunks := [][]byte{
 		[]byte("chunk1"),
@@ -122,7 +127,7 @@ func TestResolveOneHash(t *testing.T) {
 
 	// build table index
 	td, _, err := buildTable(chunks)
-	tIdx, err := parseTableIndexByCopy(nil, td, &UnlimitedQuotaProvider{})
+	tIdx, err := parseTableIndexByCopy(ctx, td, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 
 	// get hashes out
@@ -144,6 +149,7 @@ func TestResolveOneHash(t *testing.T) {
 }
 
 func TestResolveFewHash(t *testing.T) {
+	ctx := context.Background()
 	// create chunks
 	chunks := [][]byte{
 		[]byte("chunk1"),
@@ -153,7 +159,7 @@ func TestResolveFewHash(t *testing.T) {
 
 	// build table index
 	td, _, err := buildTable(chunks)
-	tIdx, err := parseTableIndexByCopy(nil, td, &UnlimitedQuotaProvider{})
+	tIdx, err := parseTableIndexByCopy(ctx, td, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 
 	// get hashes out
@@ -176,6 +182,7 @@ func TestResolveFewHash(t *testing.T) {
 }
 
 func TestAmbiguousShortHash(t *testing.T) {
+	ctx := context.Background()
 	// create chunks
 	chunks := []fakeChunk{
 		{address: addrFromPrefix("abcdef"), data: fakeData},
@@ -185,7 +192,7 @@ func TestAmbiguousShortHash(t *testing.T) {
 
 	// build table index
 	td, _, err := buildFakeChunkTable(chunks)
-	idx, err := parseTableIndexByCopy(nil, td, &UnlimitedQuotaProvider{})
+	idx, err := parseTableIndexByCopy(ctx, td, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 
 	tests := []struct {

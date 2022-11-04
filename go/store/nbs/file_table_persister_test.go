@@ -115,6 +115,7 @@ func removeTables(dir string, names ...addr) error {
 }
 
 func TestFSTablePersisterPersist(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
@@ -127,7 +128,7 @@ func TestFSTablePersisterPersist(t *testing.T) {
 	if assert.True(mustUint32(src.count()) > 0) {
 		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		require.NoError(t, err)
-		ti, err := parseTableIndexByCopy(nil, buff, &UnlimitedQuotaProvider{})
+		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
 		require.NoError(t, err)
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		require.NoError(t, err)
@@ -202,6 +203,7 @@ func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 }
 
 func TestFSTablePersisterConjoinAll(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 	assert.True(len(testChunks) > 1, "Whoops, this test isn't meaningful")
 	sources := make(chunkSources, len(testChunks))
@@ -218,17 +220,17 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 		require.NoError(t, err)
 		name, err := writeTableData(dir, c, randChunk)
 		require.NoError(t, err)
-		sources[i], err = fts.Open(context.Background(), name, 2, nil)
+		sources[i], err = fts.Open(ctx, name, 2, nil)
 		require.NoError(t, err)
 	}
 
-	src, err := fts.ConjoinAll(context.Background(), sources, &Stats{})
+	src, err := fts.ConjoinAll(ctx, sources, &Stats{})
 	require.NoError(t, err)
 
 	if assert.True(mustUint32(src.count()) > 0) {
 		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		require.NoError(t, err)
-		ti, err := parseTableIndexByCopy(nil, buff, &UnlimitedQuotaProvider{})
+		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
 		require.NoError(t, err)
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		require.NoError(t, err)
@@ -241,6 +243,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 }
 
 func TestFSTablePersisterConjoinAllDups(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
@@ -257,17 +260,17 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 		}
 
 		var err error
-		sources[i], err = fts.Persist(context.Background(), mt, nil, &Stats{})
+		sources[i], err = fts.Persist(ctx, mt, nil, &Stats{})
 		require.NoError(t, err)
 	}
 
-	src, err := fts.ConjoinAll(context.Background(), sources, &Stats{})
+	src, err := fts.ConjoinAll(ctx, sources, &Stats{})
 	require.NoError(t, err)
 
 	if assert.True(mustUint32(src.count()) > 0) {
 		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		require.NoError(t, err)
-		ti, err := parseTableIndexByCopy(nil, buff, &UnlimitedQuotaProvider{})
+		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
 		require.NoError(t, err)
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		require.NoError(t, err)

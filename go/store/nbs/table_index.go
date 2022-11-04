@@ -127,15 +127,6 @@ func parseTableIndexWithOffsetBuff(buff []byte, offsetsBuff1 []byte, q MemoryQuo
 	return newOnHeapTableIndex(buff, offsetsBuff1, chunkCount, totalUncompressedData, q)
 }
 
-func removeFooter(p []byte, chunkCount uint32) (out []byte, err error) {
-	iS := indexSize(chunkCount) + footerSize
-	if uint64(len(p)) != iS {
-		return nil, ErrWrongBufferSize
-	}
-	out = p[:len(p)-footerSize]
-	return
-}
-
 // parseTableIndexByCopy reads the footer, copies indexSize(chunkCount) bytes, and parses an on heap table index.
 // Useful to create an onHeapTableIndex without retaining the entire underlying array of data.
 func parseTableIndexByCopy(ctx context.Context, buff []byte, q MemoryQuotaProvider) (onHeapTableIndex, error) {

@@ -68,6 +68,7 @@ func mustGetString(assert *assert.Assertions, ctx context.Context, tr tableReade
 }
 
 func TestSimple(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 
 	chunks := [][]byte{
@@ -78,7 +79,7 @@ func TestSimple(t *testing.T) {
 
 	tableData, _, err := buildTable(chunks)
 	require.NoError(t, err)
-	ti, err := parseTableIndexByCopy(nil, tableData, &UnlimitedQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
@@ -115,6 +116,7 @@ func assertChunksNotInReader(chunks [][]byte, r chunkReader, assert *assert.Asse
 }
 
 func TestHasMany(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 
 	chunks := [][]byte{
@@ -125,7 +127,7 @@ func TestHasMany(t *testing.T) {
 
 	tableData, _, err := buildTable(chunks)
 	require.NoError(t, err)
-	ti, err := parseTableIndexByCopy(nil, tableData, &UnlimitedQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
@@ -146,6 +148,7 @@ func TestHasMany(t *testing.T) {
 }
 
 func TestHasManySequentialPrefix(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 
 	// Use bogus addrs so we can generate the case of sequentially non-unique prefixes in the index
@@ -176,7 +179,7 @@ func TestHasManySequentialPrefix(t *testing.T) {
 	require.NoError(t, err)
 	buff = buff[:length]
 
-	ti, err := parseTableIndexByCopy(nil, buff, &UnlimitedQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 	require.NoError(t, err)
@@ -259,6 +262,7 @@ func prefixOf(a addr) uint64 {
 }
 
 func TestGetMany(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 
 	data := [][]byte{
@@ -269,7 +273,7 @@ func TestGetMany(t *testing.T) {
 
 	tableData, _, err := buildTable(data)
 	require.NoError(t, err)
-	ti, err := parseTableIndexByCopy(nil, tableData, &UnlimitedQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
@@ -293,6 +297,7 @@ func TestGetMany(t *testing.T) {
 }
 
 func TestCalcReads(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 
 	chunks := [][]byte{
@@ -303,7 +308,7 @@ func TestCalcReads(t *testing.T) {
 
 	tableData, _, err := buildTable(chunks)
 	require.NoError(t, err)
-	ti, err := parseTableIndexByCopy(nil, tableData, &UnlimitedQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), 0)
 	require.NoError(t, err)
@@ -330,6 +335,7 @@ func TestCalcReads(t *testing.T) {
 }
 
 func TestExtract(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 
 	chunks := [][]byte{
@@ -340,7 +346,7 @@ func TestExtract(t *testing.T) {
 
 	tableData, _, err := buildTable(chunks)
 	require.NoError(t, err)
-	ti, err := parseTableIndexByCopy(nil, tableData, &UnlimitedQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
@@ -364,6 +370,7 @@ func TestExtract(t *testing.T) {
 }
 
 func Test65k(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 
 	count := 1 << 16
@@ -379,7 +386,7 @@ func Test65k(t *testing.T) {
 
 	tableData, _, err := buildTable(chunks)
 	require.NoError(t, err)
-	ti, err := parseTableIndexByCopy(nil, tableData, &UnlimitedQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
@@ -418,6 +425,7 @@ func computeAddrCommonPrefix(data []byte) addr {
 }
 
 func doTestNGetMany(t *testing.T, count int) {
+	ctx := context.Background()
 	assert := assert.New(t)
 
 	data := make([][]byte, count)
@@ -432,7 +440,7 @@ func doTestNGetMany(t *testing.T, count int) {
 
 	tableData, _, err := buildTable(data)
 	require.NoError(t, err)
-	ti, err := parseTableIndexByCopy(nil, tableData, &UnlimitedQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
