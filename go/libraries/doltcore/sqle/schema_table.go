@@ -109,16 +109,16 @@ func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 		return nil, sql.ErrTableNotFound.New("dolt_schemas")
 	}
 	// Create a unique index on the old primary key columns (type, name)
-	err = (&AlterableDoltTable{*tbl.(*WritableDoltTable)}).CreateIndex(ctx,
-		doltdb.SchemasTablesIndexName,
-		sql.IndexUsing_Default,
-		sql.IndexConstraint_Unique,
-		[]sql.IndexColumn{
+	t := (&AlterableDoltTable{*tbl.(*WritableDoltTable)})
+	err = t.CreateIndex(ctx, sql.IndexDef{
+		Name: doltdb.SchemasTablesIndexName,
+		Columns: []sql.IndexColumn{
 			{Name: doltdb.SchemasTablesTypeCol, Length: 0},
 			{Name: doltdb.SchemasTablesNameCol, Length: 0},
 		},
-		"",
-	)
+		Constraint: sql.IndexConstraint_Unique,
+		Storage:    sql.IndexUsing_Default,
+	})
 	if err != nil {
 		return nil, err
 	}
