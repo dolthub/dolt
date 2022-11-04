@@ -23,7 +23,6 @@ package nbs
 
 import (
 	"context"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -114,8 +113,9 @@ func persist(t *testing.T, p tablePersister, chunks ...[]byte) {
 	for _, c := range chunks {
 		mt := newMemTable(testMemTableSize)
 		mt.addChunk(computeAddr(c), c)
-		_, err := p.Persist(context.Background(), mt, nil, &Stats{})
+		cs, err := p.Persist(context.Background(), mt, nil, &Stats{})
 		require.NoError(t, err)
+		require.NoError(t, cs.close())
 	}
 }
 
@@ -136,7 +136,6 @@ func TestTableSetRebase(t *testing.T) {
 	fullTS := newTableSet(persister, q)
 	defer func() {
 		require.NoError(t, fullTS.close())
-
 	}()
 	specs, err := fullTS.toSpecs()
 	require.NoError(t, err)
@@ -187,29 +186,22 @@ func TestTableSetClosesOpenedChunkSourcesOnErr(t *testing.T) {
 	p := newFakeTablePersister(q)
 	persist(t, p, testChunks...)
 
-	var mem uint64 = 0
-	var sources []addr
-	for addr := range p.sources {
-		sources = append(sources, addr)
-		mem += indexMemSize(1)
-	}
-
-	idx := rand.Intn(len(testChunks))
-	addrToFail := sources[idx]
-	p.sourcesToFail[addrToFail] = true
-
+	once := true
 	var specs []tableSpec
-	for _, addr := range sources {
-		specs = append(specs, tableSpec{addr, 1})
+	for a := range p.sources {
+		if once {
+			// map iteration is randomized
+			p.sourcesToFail[a] = true
+		}
+		once = false
+		specs = append(specs, tableSpec{a, 1})
 	}
 
-	ts := tableSet{p: p, q: q, rl: make(chan struct{}, 1)}
-	_, err := ts.rebase(context.Background(), specs, &Stats{})
+	ts := newTableSet(p, q)
+	ts2, err := ts.rebase(context.Background(), specs, &Stats{})
 	require.Error(t, err)
 
-	for _ = range p.opened {
-		mem -= indexMemSize(1)
-	}
-	assert.EqualValues(t, 44, int(q.Usage()))
 	assert.NoError(t, ts.close())
+	assert.NoError(t, ts2.close())
+	assert.Equal(t, 0, int(q.Usage()))
 }

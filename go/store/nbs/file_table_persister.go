@@ -30,6 +30,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/d"
@@ -54,6 +55,9 @@ func (ftp *fsTablePersister) Open(ctx context.Context, name addr, chunkCount uin
 }
 
 func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
+	t1 := time.Now()
+	defer stats.PersistLatency.SampleTimeSince(t1)
+
 	name, data, chunkCount, err := mt.write(haver, stats)
 
 	if err != nil {

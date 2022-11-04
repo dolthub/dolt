@@ -98,24 +98,11 @@ func ReadTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData
 	return
 }
 
-func indexMemSize(chunkCount uint32) uint64 {
-	is := indexSize(chunkCount) + footerSize
-	// Extra required space for offsets that don't fit into the region where lengths were previously stored, see
-	// newOnHeapTableIndex
-	is += uint64(offsetSize * (chunkCount - chunkCount/2))
-	return is
-}
-
 // parses a valid nbs tableIndex from a byte stream. |buff| must end with an NBS index
 // and footer and its length must match the expected indexSize for the chunkCount specified in the footer.
 // Retains the buffer and does not allocate new memory except for offsets, computes on buff in place.
 func parseTableIndex(ctx context.Context, buff []byte, q MemoryQuotaProvider) (onHeapTableIndex, error) {
 	chunkCount, totalUncompressedData, err := ReadTableFooter(bytes.NewReader(buff))
-	if err != nil {
-		return onHeapTableIndex{}, err
-	}
-
-	buff, err = removeFooter(buff, chunkCount)
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
@@ -133,11 +120,6 @@ func parseTableIndex(ctx context.Context, buff []byte, q MemoryQuotaProvider) (o
 // instead of allocating the additional space.
 func parseTableIndexWithOffsetBuff(buff []byte, offsetsBuff1 []byte, q MemoryQuotaProvider) (onHeapTableIndex, error) {
 	chunkCount, totalUncompressedData, err := ReadTableFooter(bytes.NewReader(buff))
-	if err != nil {
-		return onHeapTableIndex{}, err
-	}
-
-	buff, err = removeFooter(buff, chunkCount)
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
@@ -167,8 +149,8 @@ func readTableIndexByCopy(ctx context.Context, rd io.ReadSeeker, q MemoryQuotaPr
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
-	idxSz := int64(indexSize(chunkCount))
-	_, err = rd.Seek(-(idxSz + footerSize), io.SeekEnd)
+	idxSz := int64(indexSize(chunkCount) + footerSize)
+	_, err = rd.Seek(-idxSz, io.SeekEnd)
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
@@ -206,6 +188,9 @@ type onHeapTableIndex struct {
 	// suffixes is a array of 12 byte addr suffixes
 	suffixes []byte
 
+	// footer contains in the table file footer
+	footer []byte
+
 	q      MemoryQuotaProvider
 	refCnt *int32
 
@@ -224,9 +209,14 @@ var _ tableIndex = &onHeapTableIndex{}
 // occupied by lengths. |onHeapTableIndex| computes directly on the given
 // |indexBuff| and |offsetsBuff1| buffers.
 func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, totalUncompressedData uint64, q MemoryQuotaProvider) (onHeapTableIndex, error) {
+	if len(indexBuff) != int(indexSize(count)+footerSize) {
+		return onHeapTableIndex{}, ErrWrongBufferSize
+	}
+
 	tuples := indexBuff[:prefixTupleSize*count]
 	lengths := indexBuff[prefixTupleSize*count : prefixTupleSize*count+lengthSize*count]
-	suffixes := indexBuff[prefixTupleSize*count+lengthSize*count:]
+	suffixes := indexBuff[prefixTupleSize*count+lengthSize*count : indexSize(count)]
+	footer := indexBuff[indexSize(count):]
 
 	chunks2 := count / 2
 
@@ -236,11 +226,11 @@ func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, to
 		return onHeapTableIndex{}, err
 	}
 
-	var offsetsBuff2 []byte
+	// reuse |lengths| for offsets
+	offsetsBuff2 := lengths
 	if chunks2 > 0 {
-		offsetsBuff2 = lengths[:chunks2*offsetSize]
-		_, err = io.ReadFull(r, offsetsBuff2)
-		if err != nil {
+		b := offsetsBuff2[:chunks2*offsetSize]
+		if _, err = io.ReadFull(r, b); err != nil {
 			return onHeapTableIndex{}, err
 		}
 	}
@@ -255,6 +245,7 @@ func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, to
 		offsets1:       offsetsBuff1,
 		offsets2:       offsetsBuff2,
 		suffixes:       suffixes,
+		footer:         footer,
 		count:          count,
 		uncompressedSz: totalUncompressedData,
 	}, nil
@@ -496,22 +487,25 @@ func (ti onHeapTableIndex) totalUncompressedData() uint64 {
 
 func (ti onHeapTableIndex) Close() error {
 	cnt := atomic.AddInt32(ti.refCnt, -1)
-	if cnt == 0 {
-		if err := ti.q.ReleaseQuotaBytes(ti.prefixTuples); err != nil {
-			return err
-		}
-		if err := ti.q.ReleaseQuotaBytes(ti.offsets1); err != nil {
-			return err
-		}
-		if err := ti.q.ReleaseQuotaBytes(ti.offsets2); err != nil {
-			return err
-		}
-		return ti.q.ReleaseQuotaBytes(ti.suffixes)
-	}
 	if cnt < 0 {
 		panic("Close() called and reduced ref count to < 0.")
+	} else if cnt > 0 {
+		return nil
 	}
-	return nil
+
+	if err := ti.q.ReleaseQuotaBytes(ti.prefixTuples); err != nil {
+		return err
+	}
+	if err := ti.q.ReleaseQuotaBytes(ti.offsets1); err != nil {
+		return err
+	}
+	if err := ti.q.ReleaseQuotaBytes(ti.offsets2); err != nil {
+		return err
+	}
+	if err := ti.q.ReleaseQuotaBytes(ti.suffixes); err != nil {
+		return err
+	}
+	return ti.q.ReleaseQuotaBytes(ti.footer)
 }
 
 func (ti onHeapTableIndex) clone() (tableIndex, error) {

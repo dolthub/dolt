@@ -394,12 +394,15 @@ func interloperWrite(fm *fakeManifest, p tablePersister, rootChunk []byte, chunk
 
 	var src chunkSource
 	src, err = p.Persist(context.Background(), createMemTable(persisted), nil, &Stats{})
-
 	if err != nil {
 		return hash.Hash{}, nil, err
 	}
 
 	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{mustAddr(src.hash()), uint32(len(chunks) + 1)}}, nil)
+
+	if err = src.close(); err != nil {
+		return [20]byte{}, nil, err
+	}
 	return
 }
 
@@ -483,12 +486,12 @@ func newFakeTableSet(q MemoryQuotaProvider) tableSet {
 }
 
 func newFakeTablePersister(q MemoryQuotaProvider) fakeTablePersister {
-	return fakeTablePersister{q, map[addr]tableReader{}, map[addr]bool{}, map[addr]bool{}, &sync.RWMutex{}}
+	return fakeTablePersister{q, map[addr][]byte{}, map[addr]bool{}, map[addr]bool{}, &sync.RWMutex{}}
 }
 
 type fakeTablePersister struct {
 	q             MemoryQuotaProvider
-	sources       map[addr]tableReader
+	sources       map[addr][]byte
 	sourcesToFail map[addr]bool
 	opened        map[addr]bool
 	mu            *sync.RWMutex
@@ -497,57 +500,55 @@ type fakeTablePersister struct {
 var _ tablePersister = fakeTablePersister{}
 
 func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
-	if mustUint32(mt.count()) > 0 {
-		name, data, chunkCount, err := mt.write(haver, stats)
-
-		if err != nil {
-			return emptyChunkSource{}, err
-		}
-
-		if chunkCount > 0 {
-			ftp.mu.Lock()
-			defer ftp.mu.Unlock()
-			ti, err := parseTableIndexByCopy(ctx, data, ftp.q)
-
-			if err != nil {
-				return nil, err
-			}
-
-			s, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
-			if err != nil {
-				return emptyChunkSource{}, err
-			}
-			ftp.sources[name] = s
-			return chunkSourceAdapter{ftp.sources[name], name}, nil
-		}
+	if mustUint32(mt.count()) == 0 {
+		return emptyChunkSource{}, nil
 	}
-	return emptyChunkSource{}, nil
-}
 
-func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
-	name, data, chunkCount, err := compactSourcesToBuffer(sources)
+	name, data, chunkCount, err := mt.write(haver, stats)
+	if err != nil {
+		return emptyChunkSource{}, err
+	} else if chunkCount == 0 {
+		return emptyChunkSource{}, nil
+	}
 
+	ftp.mu.Lock()
+	ftp.sources[name] = data
+	ftp.mu.Unlock()
+
+	ti, err := parseTableIndexByCopy(ctx, data, ftp.q)
 	if err != nil {
 		return nil, err
 	}
 
-	if chunkCount > 0 {
-		ftp.mu.Lock()
-		defer ftp.mu.Unlock()
-		ti, err := parseTableIndexByCopy(ctx, data, ftp.q)
-
-		if err != nil {
-			return nil, err
-		}
-
-		s, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
-		if err != nil {
-			return nil, err
-		}
-		ftp.sources[name] = s
-		return chunkSourceAdapter{ftp.sources[name], name}, nil
+	cs, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	if err != nil {
+		return emptyChunkSource{}, err
 	}
-	return emptyChunkSource{}, nil
+	return chunkSourceAdapter{cs, name}, nil
+}
+
+func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
+	name, data, chunkCount, err := compactSourcesToBuffer(sources)
+	if err != nil {
+		return nil, err
+	} else if chunkCount == 0 {
+		return emptyChunkSource{}, nil
+	}
+
+	ftp.mu.Lock()
+	defer ftp.mu.Unlock()
+	ftp.sources[name] = data
+
+	ti, err := parseTableIndexByCopy(ctx, data, ftp.q)
+	if err != nil {
+		return nil, err
+	}
+
+	cs, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	if err != nil {
+		return nil, err
+	}
+	return chunkSourceAdapter{cs, name}, nil
 }
 
 func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunkCount uint32, err error) {
@@ -603,11 +604,23 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	ftp.mu.Lock()
 	defer ftp.mu.Unlock()
+
 	if _, ok := ftp.sourcesToFail[name]; ok {
 		return nil, errors.New("intentional failure")
 	}
+	data := ftp.sources[name]
 	ftp.opened[name] = true
-	return chunkSourceAdapter{ftp.sources[name], name}, nil
+
+	ti, err := parseTableIndexByCopy(ctx, data, ftp.q)
+	if err != nil {
+		return nil, err
+	}
+
+	cs, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	if err != nil {
+		return emptyChunkSource{}, err
+	}
+	return chunkSourceAdapter{cs, name}, nil
 }
 
 func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ manifestContents) error {
