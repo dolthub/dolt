@@ -39,11 +39,17 @@ jobs:
     needs: set-version-actor
     name: Trigger Benchmark Latency and Benchmark Import K8s Workflows
     steps:
+      - name: Is Release Run
+        id: release_run
+        run: |
+          if [ ${{ github.event_name }} == 'repository_dispatch' ]; then
+            echo "release_run=true" >> $GITHUB_OUTPUT
+          fi
       - uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-latency
-          client-payload: '{"from_server": "mysql", "from_version": "8.0.28", "to_server": "dolt", "to_version": "${{ needs.set-version-actor.outputs.version }}", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"}'
+          client-payload: '{"release_run": "${{ steps.release_run.outputs.release_run }}", "from_server": "mysql", "from_version": "8.0.28", "to_server": "dolt", "to_version": "${{ needs.set-version-actor.outputs.version }}", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"}'
       - uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
