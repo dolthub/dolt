@@ -29,7 +29,7 @@ import (
 
 func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 	var tra tableReaderAt
-	index, err := loadTableIndex(stats, chunkCount, q, func(p []byte) error {
+	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
 		if al.tableMayBeInDynamo(chunkCount) {
 			data, err := ddb.ReadTable(ctx, name, stats)
 			if data == nil && err == nil { // There MUST be either data or an error
@@ -71,10 +71,13 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 	return &chunkSourceAdapter{tr, name}, nil
 }
 
-func loadTableIndex(stats *Stats, cnt uint32, q MemoryQuotaProvider, loadIndexBytes func(p []byte) error) (tableIndex, error) {
+func loadTableIndex(ctx context.Context, stats *Stats, cnt uint32, q MemoryQuotaProvider, loadIndexBytes func(p []byte) error) (tableIndex, error) {
 	idxSz := int(indexSize(cnt) + footerSize)
 	offsetSz := int((cnt - (cnt / 2)) * offsetSize)
-	buf := make([]byte, idxSz+offsetSz)
+	buf, err := q.AcquireQuotaBytes(ctx, uint64(idxSz+offsetSz))
+	if err != nil {
+		return nil, err
+	}
 
 	t1 := time.Now()
 	if err := loadIndexBytes(buf[:idxSz]); err != nil {

@@ -23,6 +23,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"sync/atomic"
 	"testing"
 
@@ -52,11 +53,11 @@ func makeFakeDDB(t *testing.T) *fakeDDB {
 	}
 }
 
-func (m *fakeDDB) readerForTable(name addr) (chunkReader, error) {
+func (m *fakeDDB) readerForTable(ctx context.Context, name addr) (chunkReader, error) {
 	if i, present := m.data[fmtTableName(name)]; present {
 		buff, ok := i.([]byte)
 		assert.True(m.t, ok)
-		ti, err := parseTableIndex(buff, &noopQuotaProvider{})
+		ti, err := parseTableIndex(ctx, buff, &UnlimitedQuotaProvider{})
 
 		if err != nil {
 			return nil, err
