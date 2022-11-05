@@ -1775,7 +1775,7 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 		return err
 	}
 
-	for _, idxCol := range indexColumns {
+	for _, idxCol := range idx.Columns {
 		col := t.DoltTable.sqlSch.Schema[t.DoltTable.sqlSch.IndexOfColName(idxCol.Name)]
 		if idxCol.Length > 0 && sql.IsText(col.Type) {
 			return sql.ErrUnsupportedIndexPrefix.New(col.Name)
