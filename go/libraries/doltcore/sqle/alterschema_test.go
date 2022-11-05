@@ -87,7 +87,7 @@ func TestRenameTable(t *testing.T) {
 			require.NoError(t, err)
 
 			// setup tests
-			root, err = ExecuteSql(t, dEnv, root, setup)
+			root, err = ExecuteSql(dEnv, root, setup)
 			require.NoError(t, err)
 
 			schemas, err := root.GetAllSchemas(ctx)
@@ -121,6 +121,8 @@ func TestRenameTable(t *testing.T) {
 const tableName = "people"
 
 func TestAddColumnToTable(t *testing.T) {
+	origRows, sch, err := dtestutils.RowsAndSchema()
+	require.NoError(t, err)
 
 	tests := []struct {
 		name           string
@@ -140,9 +142,9 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName: "newCol",
 			colKind:    types.IntKind,
 			nullable:   Null,
-			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
+			expectedSchema: dtestutils.AddColumnToSchema(sch,
 				schema.NewColumn("newCol", dtestutils.NextTag, types.IntKind, false)),
-			expectedRows: dtestutils.TypedRows,
+			expectedRows: origRows,
 		},
 		{
 			name:       "nullable with nil default",
@@ -150,9 +152,9 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName: "newCol",
 			colKind:    types.IntKind,
 			nullable:   Null,
-			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
+			expectedSchema: dtestutils.AddColumnToSchema(sch,
 				schemaNewColumnWithDefault("newCol", dtestutils.NextTag, types.IntKind, false, "")),
-			expectedRows: dtestutils.TypedRows,
+			expectedRows: origRows,
 		},
 		{
 			name:       "nullable with non-nil default",
@@ -161,9 +163,9 @@ func TestAddColumnToTable(t *testing.T) {
 			colKind:    types.IntKind,
 			nullable:   Null,
 			defaultVal: mustStringToColumnDefault("42"),
-			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
+			expectedSchema: dtestutils.AddColumnToSchema(sch,
 				schemaNewColumnWithDefault("newCol", dtestutils.NextTag, types.IntKind, false, "42")),
-			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
+			expectedRows: addColToRows(t, origRows, dtestutils.NextTag, types.NullValue),
 		},
 		{
 			name:       "first order",
@@ -181,7 +183,7 @@ func TestAddColumnToTable(t *testing.T) {
 				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 			),
-			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
+			expectedRows: addColToRows(t, origRows, dtestutils.NextTag, types.NullValue),
 		},
 		{
 			name:       "middle order",
@@ -199,7 +201,7 @@ func TestAddColumnToTable(t *testing.T) {
 				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 			),
-			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
+			expectedRows: addColToRows(t, origRows, dtestutils.NextTag, types.NullValue),
 		},
 		{
 			name:        "tag collision",
@@ -255,19 +257,24 @@ func TestAddColumnToTable(t *testing.T) {
 }
 
 func makePeopleTable(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, error) {
+	_, sch, err := dtestutils.RowsAndSchema()
+	if err != nil {
+		return nil, err
+	}
+
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := durable.NewEmptyIndex(ctx, root.VRW(), root.NodeStore(), dtestutils.TypedSchema)
+	rows, err := durable.NewEmptyIndex(ctx, root.VRW(), root.NodeStore(), sch)
 	if err != nil {
 		return nil, err
 	}
-	indexes, err := durable.NewIndexSetWithEmptyIndexes(ctx, root.VRW(), root.NodeStore(), dtestutils.TypedSchema)
+	indexes, err := durable.NewIndexSetWithEmptyIndexes(ctx, root.VRW(), root.NodeStore(), sch)
 	if err != nil {
 		return nil, err
 	}
-	tbl, err := doltdb.NewTable(ctx, root.VRW(), root.NodeStore(), dtestutils.TypedSchema, rows, indexes, nil)
+	tbl, err := doltdb.NewTable(ctx, root.VRW(), root.NodeStore(), sch, rows, indexes, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -434,7 +441,7 @@ func TestDropPks(t *testing.T) {
 			require.NoError(t, err)
 
 			root, _ := dEnv.WorkingRoot(ctx)
-			engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
+			engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db, root)
 			require.NoError(t, err)
 
 			for _, query := range tt.setup {
@@ -764,4 +771,23 @@ func TestModifyColumn(t *testing.T) {
 			require.Equal(t, tt.expectedSchema, sch)
 		})
 	}
+}
+
+// addColToRows adds a column to all the rows given and returns it. This method relies on the fact that
+// noms_row.SetColVal doesn't need a full schema, just one that includes the column being set.
+func addColToRows(t *testing.T, rs []row.Row, tag uint64, val types.Value) []row.Row {
+	if types.IsNull(val) {
+		return rs
+	}
+
+	colColl := schema.NewColCollection(schema.NewColumn("unused", tag, val.Kind(), false))
+	fakeSch := schema.UnkeyedSchemaFromCols(colColl)
+
+	newRows := make([]row.Row, len(rs))
+	var err error
+	for i, r := range rs {
+		newRows[i], err = r.SetColVal(tag, val, fakeSch)
+		require.NoError(t, err)
+	}
+	return newRows
 }

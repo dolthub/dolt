@@ -300,13 +300,13 @@ func testReplaceQuery(t *testing.T, test ReplaceTest) {
 		t.Skip("Skipping tests until " + singleReplaceQueryTest)
 	}
 
-	dEnv := CreateEmptyTestDatabase(t)
+	dEnv, err := CreateEmptyTestDatabase()
+	require.NoError(t, err)
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	var err error
 	root, _ := dEnv.WorkingRoot(context.Background())
 	root, err = executeModify(t, context.Background(), dEnv, root, test.ReplaceQuery)
 	if len(test.ExpectedErr) > 0 {

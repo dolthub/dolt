@@ -684,10 +684,6 @@ func firstError(l, r error) error {
 	return r
 }
 
-func IsCommitType(nbf *types.NomsBinFormat, t *types.Type) bool {
-	return types.IsSubtype(nbf, valueCommitType, t)
-}
-
 func IsCommit(v types.Value) (bool, error) {
 	if s, ok := v.(types.Struct); ok {
 		return types.IsValueSubtypeOf(s.Format(), v, valueCommitType)
