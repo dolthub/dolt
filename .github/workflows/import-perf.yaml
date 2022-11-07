@@ -86,6 +86,10 @@ jobs:
 
         mkdir "$gw/res"
         cd "$gw/res"
+
+        dolt config --global --add user.email "max@dolthub.com"
+        dolt config --global --add user.name "Max Hoffman"
+
         dolt init
         dolt sql < "$query"
         dolt sql -r csv < "$in" > "$out"
