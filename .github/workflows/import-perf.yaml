@@ -5,7 +5,7 @@ on:
       email_recipient:
         description: 'email to send results report to'
         rquired: false
-        default: ''
+        default: 'max@dolthub.com'
       version:
         description: 'dolt version to checkout'
         rquired: false
@@ -17,7 +17,7 @@ on:
       report:
         description: 'reporting query, relative to `import_benchmarks/reporting`'
         rquired: false
-        default: 'three_way_compare.sql'
+        default: 'select_star.sql'
 env:
   BENCH_DIR: 'go/performance/import_benchmarker'
   MYSQL_PORT: 3309
@@ -29,6 +29,7 @@ jobs:
         shell: bash
     strategy:
       fail-fast: true
+    runs-on: ubuntu-latest
     steps:
     - name: Set up Go 1.x
       id: go
