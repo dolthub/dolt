@@ -8085,3 +8085,54 @@ var DoltCommitTests = []queries.ScriptTest{
 		},
 	},
 }
+
+var DoltIndexPrefixScripts = []queries.ScriptTest{
+	{
+		Name: "varchar prefix",
+		SetUpScript: []string{
+			"create table t (v varchar(100))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "alter table t add primary key (v(10))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+			{
+				Query:       "alter table t add index (v(10))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+			{
+				Query:       "create table v_tbl (v varchar(100), primary key (v(10)))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+			{
+				Query:       "create table v_tbl (i int primary key, v varchar(100), index (v(10)))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+		},
+	},
+	{
+		Name: "char prefix",
+		SetUpScript: []string{
+			"create table t (c char(100))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "alter table t add primary key (c(10))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+			{
+				Query:       "alter table t add index (c(10))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+			{
+				Query:       "create table c_tbl (c char(100), primary key (c(10)))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+			{
+				Query:       "create table c_tbl (i int primary key, c char(100), index (c(10)))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+		},
+	},
+}
