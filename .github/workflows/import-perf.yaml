@@ -40,9 +40,10 @@ jobs:
     - name: Dolt version
       id: version
       run: |
-        in=${{ github.event.inputs.version }}
-        default=${{ github.sha }}
-        version=${$in:-$default}
+        version=${{ github.event.inputs.version }}
+        if [ -z "$version" ]; then
+            version=${{ github.sha }}
+        fi
         echo "::set-output name=ref::$version"
 
     - uses: actions/checkout@v3
