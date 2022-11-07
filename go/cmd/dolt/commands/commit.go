@@ -40,7 +40,7 @@ import (
 )
 
 var commitDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Record changes to the repository",
+	ShortDesc: "Record changes to the database",
 	LongDesc: `
 Stores the current contents of the staged tables in a new commit along with a log message from the user describing the changes.
 
