@@ -120,11 +120,6 @@ teardown() {
     [[ "$output" =~ "BRANCHA" ]] || false
     run dolt log ^main ^branchA
     [ $status -eq 0 ]
-    run dolt log main branchA
-    [ $status -eq 0 ]
-    [[ "$output" =~ "MAIN" ]] || false
-    [[ "$output" =~ "AFTER" ]] || false
-    [[ "$output" =~ "BRANCHA" ]] || false
 
     # Multiple refs
     run dolt log branchB branchA

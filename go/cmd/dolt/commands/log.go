@@ -66,7 +66,7 @@ The command takes options to control what is shown and how.
 {{.EmphasisLeft}}dolt log [<revisions>...]{{.EmphasisRight}}
   Lists commit logs starting from revision. If multiple revisions provided, lists logs reachable by all revisions.
 	
-{{.EmphasisLeft}}dolt log [<revisions...]> <table>{{.EmphasisRight}}
+{{.EmphasisLeft}}dolt log [<revisions>...] <table>{{.EmphasisRight}}
   Lists commit logs starting from revisions, only including commits with changes to table.
 	
 {{.EmphasisLeft}}dolt log <revisionB>..<revisionA>{{.EmphasisRight}}
