@@ -56,7 +56,9 @@ jobs:
 
     - uses: shogo82148/actions-setup-mysql@v1
       with:
-        mysql-version: '8.0.28'
+        mysql-version: '8.0'
+        auto-start: true
+        root-password: 'password'
         my-cnf: |
           local_infile=1
           socket=/tmp/mysqld2.sock
