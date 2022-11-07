@@ -114,7 +114,7 @@ jobs:
       uses: mikefarah/yq@master
       env:
         VERSION: ${{ steps.version.outputs.ref }}
-        FORMAT:__DOLT__
+        FORMAT: '__DOLT__'
         RESULTS: ${{ steps.html.outputs.html }}
       with:
         cmd: |
