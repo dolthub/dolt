@@ -72,7 +72,11 @@ The command takes options to control what is shown and how.
 {{.EmphasisLeft}}dolt log <revisionB>..<revisionA>{{.EmphasisRight}}
 {{.EmphasisLeft}}dolt log <revisionA> --not <revisionB>{{.EmphasisRight}}
 {{.EmphasisLeft}}dolt log ^<revisionB> <revisionA>{{.EmphasisRight}}
-  Different ways to list two dot logs. These will list commit logs for revisionA, while excluding commits from revisionB. The table option is not supported for two dot log.`,
+  Different ways to list two dot logs. These will list commit logs for revisionA, while excluding commits from revisionB. The table option is not supported for two dot log.
+	
+{{.EmphasisLeft}}dolt log <revisionB>...<revisionA>{{.EmphasisRight}}
+{{.EmphasisLeft}}dolt log <revisionA> <revisionB> --not $(dolt merge-base <revisionA> <revisionB>){{.EmphasisRight}}
+  Different ways to list three dot logs. These will list commit logs reachable by revisionA OR revisionB, while excluding commits reachable by BOTH revisionA AND revisionB.`,
 	Synopsis: []string{
 		`[-n {{.LessThan}}num_commits{{.GreaterThan}}] [{{.LessThan}}revision-range{{.GreaterThan}}] [[--] {{.LessThan}}table{{.GreaterThan}}]`,
 	},
@@ -180,14 +184,37 @@ func (opts *logOpts) parseRefsAndTable(ctx context.Context, apr *argparser.ArgPa
 		return nil
 	}
 
-	// `dolt log <ref>..<ref>`
 	if strings.Contains(apr.Arg(0), "..") {
-		if strings.Contains(apr.Arg(0), "...") {
-			return fmt.Errorf("three dot log not yet supported")
-		}
 		if apr.NArg() > 1 {
-			return fmt.Errorf("Cannot use two dot when 2 or more arguments provided")
+			return fmt.Errorf("Cannot use two or three dot syntax when 2 or more arguments provided")
 		}
+
+		// `dolt log <ref>...<ref>`
+		if strings.Contains(apr.Arg(0), "...") {
+			refs := strings.Split(apr.Arg(0), "...")
+
+			for _, ref := range refs {
+				cs, err := getCommitSpec(ref)
+				if err != nil {
+					return err
+				}
+				opts.commitSpecs = append(opts.commitSpecs, cs)
+			}
+
+			mergeBase, verr := getMergeBaseFromStrings(ctx, dEnv, refs[0], refs[1])
+			if verr != nil {
+				return verr
+			}
+			notCs, err := getCommitSpec(mergeBase)
+			if err != nil {
+				return err
+			}
+			opts.excludingCommitSpecs = append(opts.excludingCommitSpecs, notCs)
+
+			return nil
+		}
+
+		// `dolt log <ref>..<ref>`
 		refs := strings.Split(apr.Arg(0), "..")
 		notCs, err := getCommitSpec(refs[0])
 		if err != nil {

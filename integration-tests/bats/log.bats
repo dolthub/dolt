@@ -40,7 +40,7 @@ teardown() {
     [[ ! "$output" =~ "BRANCH1" ]] || false
 }
 
-@test "log: two dot log" {
+@test "log: two and three dot log" {
     dolt sql -q "create table testtable (pk int PRIMARY KEY)"
     dolt add .
     dolt commit -m "commit 1 MAIN"
@@ -121,6 +121,29 @@ teardown() {
     run dolt log ^main ^branchA
     [ $status -eq 0 ]
 
+    # Valid three dot
+    run dolt log main...branchA
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log branchA...main
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log main branchA --not $(dolt merge-base main branchA)
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log branchB...branchA
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+
     # Multiple refs
     run dolt log branchB branchA
     [ $status -eq 0 ]
@@ -134,6 +157,12 @@ teardown() {
     [[ "$output" =~ "AFTER" ]] || false
     [[ "$output" =~ "BRANCHA" ]] || false
     [[ ! "$output" =~ "BRANCHB" ]] || false
+    run dolt log main branchB branchA
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
     run dolt log branchB main ^branchA
     [ $status -eq 0 ]
     [[ ! "$output" =~ "MAIN" ]] || false
@@ -176,6 +205,10 @@ teardown() {
     [ $status -eq 1 ]
     run dolt log testtable main..branchA 
     [ $status -eq 1 ]
+    run dolt log main...branchA testtable
+    [ $status -eq 1 ]
+    run dolt log testtable main...branchA 
+    [ $status -eq 1 ]
     run dolt log ^main branchA testtable
     [ $status -eq 1 ]
     run dolt log branchA testtable --not main
@@ -183,6 +216,10 @@ teardown() {
     run dolt log main..branchA main
     [ $status -eq 1 ]
      run dolt log main main..branchA
+    [ $status -eq 1 ]
+    run dolt log main...branchA main
+    [ $status -eq 1 ]
+     run dolt log main main...branchA
     [ $status -eq 1 ]
     run dolt log ^main testtable
     [ $status -eq 1 ]
@@ -194,8 +231,9 @@ teardown() {
     [ $status -eq 1 ]
     run dolt log main..branchA --not ^main
     [ $status -eq 1 ]
-
-    run dolt log main...branchA
+    run dolt log main...branchA --not main
+    [ $status -eq 1 ]
+    run dolt log main...branchA --not ^main
     [ $status -eq 1 ]
 }
 
