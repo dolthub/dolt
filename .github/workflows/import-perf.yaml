@@ -73,7 +73,7 @@ jobs:
         go run \
           "github.com/dolthub/dolt/${{ env.BENCH_DIR }}/cmd" \
           -test "$testspec" \
-          -output "$out"
+          -out "$out"
         echo "::set-output name=result_path::$out"
 
     - name: Report
