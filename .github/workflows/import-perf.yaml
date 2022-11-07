@@ -66,9 +66,10 @@ jobs:
 
     - name: Run bench
       id: bench
+      working-directory: go/
       run: |
         out="$GITHUB_WORKSPACE/results.sql"
-        testspec="${{ env.BENCH_DIR }}/testdata/${{ github.event.inputs.run_file }}"
+        testspec"../${{ env.BENCH_DIR }}/testdata/${{ github.event.inputs.run_file }}"
         go build \
           "github.com/dolthub/dolt/${{ env.BENCH_DIR }}/cmd" \
           -test "$testspec" \
