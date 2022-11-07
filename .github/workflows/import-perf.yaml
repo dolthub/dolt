@@ -11,11 +11,11 @@ on:
         rquired: false
         default: ''
       run_file:
-        description: 'import perf .yaml spec, relative to \'import_benchmarks/tesdata\''
+        description: 'import perf .yaml spec, relative to `import_benchmarks/testdata`'
         rquired: false
         default: 'ci.yaml'
       report:
-        description: 'reporting query, relative to \'import_benchmarks/reporting\''
+        description: 'reporting query, relative to `import_benchmarks/reporting`'
         rquired: false
         default: 'three_way_compare.sql'
 env:
