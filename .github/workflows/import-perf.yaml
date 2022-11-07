@@ -27,7 +27,6 @@ jobs:
     defaults:
       run:
         shell: bash
-    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
     steps:
