@@ -1,5 +1,4 @@
-name: Benchmark Import Performance
-
+name: Import Benchmarks
 on:
   workflow-dispatch:
     inputs:
