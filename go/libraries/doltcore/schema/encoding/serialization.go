@@ -333,6 +333,14 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		}
 		ko := b.EndVector(len(tags))
 
+		// serialize prefix lengths
+		prefixLengths := idx.GetPrefixLengths()
+		serial.IndexStartPrefixLengthsVector(b, len(prefixLengths))
+		for j := len(prefixLengths) - 1; j >= 0; j-- {
+			b.PrependUint16(prefixLengths[j])
+		}
+		po := b.EndVector(len(prefixLengths))
+
 		serial.IndexStart(b)
 		serial.IndexAddName(b, no)
 		serial.IndexAddComment(b, co)
@@ -341,6 +349,7 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		serial.IndexAddPrimaryKey(b, false)
 		serial.IndexAddUniqueKey(b, idx.IsUnique())
 		serial.IndexAddSystemDefined(b, !idx.IsUserDefined())
+		serial.IndexAddPrefixLengths(b, po)
 		offs[i] = serial.IndexEnd(b)
 	}
 
@@ -376,6 +385,13 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 		if err != nil {
 			return err
 		}
+
+		prefixLengths := make([]uint16, idx.PrefixLengthsLength())
+		for j := range prefixLengths {
+			prefixLengths[j] = idx.PrefixLengths(j)
+		}
+		schIdx := sch.Indexes().GetByName(name)
+		schIdx.SetPrefixLengths(prefixLengths)
 	}
 	return nil
 }

@@ -69,6 +69,13 @@ type Schema interface {
 	// SetPkOrdinals specifies a primary key column ordering. See GetPkOrdinals.
 	SetPkOrdinals([]int) error
 
+	// GetPkPrefixLengths returns a slice of pairs (tag, prefix length) containing the prefix lengths
+	// for any columns that use a text/blob index
+	GetPkPrefixLengths() []uint16
+
+	// SetPkPrefixLengths specifies the tags and prefix lengths for the columns that use text/blob indexes
+	SetPkPrefixLengths([]uint16) error
+
 	// AddColumn adds a column to this schema in the order given and returns the resulting Schema.
 	// The new column cannot be a primary key. To alter primary keys, create a new schema with those keys.
 	AddColumn(column Column, order *ColumnOrder) (Schema, error)

@@ -152,6 +152,7 @@ type encodedIndex struct {
 	Comment         string   `noms:"comment" json:"comment"`
 	Unique          bool     `noms:"unique" json:"unique"`
 	IsSystemDefined bool     `noms:"hidden,omitempty" json:"hidden,omitempty"` // Was previously named Hidden, do not change noms name
+	PrefixLengths   []uint16 `noms:"prefixLength,omitempty" json:"prefixLength,omitempty"`
 }
 
 type encodedCheck struct {
@@ -166,6 +167,7 @@ type schemaData struct {
 	CheckConstraints []encodedCheck   `noms:"checks,omitempty" json:"checks,omitempty"`
 	PkOrdinals       []int            `noms:"pkOrdinals,omitempty" json:"pkOrdinals,omitEmpty"`
 	Collation        schema.Collation `noms:"collation,omitempty" json:"collation,omitempty"`
+	PkPrefixLengths  []uint16         `noms:"pkPrefixLengths,omitempty" json:"pkPrefixLengths,omitempty"`
 }
 
 func (sd *schemaData) Copy() *schemaData {
@@ -185,6 +187,10 @@ func (sd *schemaData) Copy() *schemaData {
 			idxCol[i].Tags = make([]uint64, len(idx.Tags))
 			for j, tag := range idx.Tags {
 				idxCol[i].Tags[j] = tag
+			}
+			idxCol[i].PrefixLengths = make([]uint16, len(idx.PrefixLengths))
+			for j, prefixLength := range idx.PrefixLengths {
+				idxCol[i].PrefixLengths[j] = prefixLength
 			}
 		}
 	}
@@ -238,6 +244,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 			Comment:         index.Comment(),
 			Unique:          index.IsUnique(),
 			IsSystemDefined: !index.IsUserDefined(),
+			PrefixLengths:   index.GetPrefixLengths(),
 		}
 	}
 
@@ -257,6 +264,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 		CheckConstraints: encodedChecks,
 		PkOrdinals:       sch.GetPkOrdinals(),
 		Collation:        sch.GetCollation(),
+		PkPrefixLengths:  sch.GetPkPrefixLengths(),
 	}, nil
 }
 
@@ -280,6 +288,8 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 	}
 	sch.SetCollation(sd.Collation)
 
+	sch.SetPkPrefixLengths(sd.PkPrefixLengths)
+
 	return sch, nil
 }
 
@@ -302,6 +312,10 @@ func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) er
 				Comment:       encodedIndex.Comment,
 			},
 		)
+		if err != nil {
+			return err
+		}
+		err = sch.Indexes().SetIndexPrefixLength(encodedIndex.Name, encodedIndex.PrefixLengths)
 		if err != nil {
 			return err
 		}
@@ -377,20 +391,22 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 		return nil, err
 	}
 
-	schemaCacheMu.Lock()
-	cachedData, ok := unmarshalledSchemaCache[h]
-	schemaCacheMu.Unlock()
-
-	if ok {
-		cachedSch := schema.SchemaFromColCollections(cachedData.all, cachedData.pk, cachedData.nonPK)
-		sd := cachedData.sd.Copy()
-		err := sd.addChecksIndexesAndPkOrderingToSchema(cachedSch)
-		if err != nil {
-			return nil, err
-		}
-
-		return cachedSch, nil
-	}
+	// TODO: cache is messing everything up
+	//schemaCacheMu.Lock()
+	//cachedData, ok := unmarshalledSchemaCache[h]
+	//schemaCacheMu.Unlock()
+	//
+	//
+	//if ok {
+	//	cachedSch := schema.SchemaFromColCollections(cachedData.all, cachedData.pk, cachedData.nonPK)
+	//	sd := cachedData.sd.Copy()
+	//	err := sd.addChecksIndexesAndPkOrderingToSchema(cachedSch)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	return cachedSch, nil
+	//}
 
 	var sd schemaData
 	if nbf.UsesFlatbuffers() {
@@ -401,6 +417,14 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 		sd, err = toSchemaData(sch)
 	} else {
 		err = marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
+		if sd.PkPrefixLengths == nil {
+			sd.PkPrefixLengths = []uint16{}
+		}
+		for i, enc := range sd.IndexCollection {
+			if enc.PrefixLengths == nil {
+				sd.IndexCollection[i].PrefixLengths = []uint16{}
+			}
+		}
 	}
 	if err != nil {
 		return nil, err

@@ -255,6 +255,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
 		doltBinFormat:                 types.IsFormat_DOLT(vrw.Format()),
+		prefixLengths:                 idx.GetPrefixLengths(),
 	}, nil
 }
 
@@ -386,6 +387,8 @@ type doltIndex struct {
 
 	cache         cachedDurableIndexes
 	doltBinFormat bool
+
+	prefixLengths []uint16
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
@@ -670,6 +673,11 @@ func (di *doltIndex) IsPrimaryKey() bool {
 // Comment implements sql.Index
 func (di *doltIndex) Comment() string {
 	return di.comment
+}
+
+// PrefixLengths implements sql.Index
+func (di *doltIndex) PrefixLengths() []uint16 {
+	return di.prefixLengths
 }
 
 // IndexType implements sql.Index

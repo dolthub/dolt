@@ -120,6 +120,8 @@ func ToDoltSchema(
 	}
 	sch.SetCollation(schema.Collation(collation))
 
+	// TODO: secondary index prefix lengths
+
 	return sch, nil
 }
 

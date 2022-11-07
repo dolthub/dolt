@@ -121,3 +121,4 @@ func (v Encoding) String() string {
 	}
 	return "Encoding(" + strconv.FormatInt(int64(v), 10) + ")"
 }
+

@@ -1765,9 +1765,27 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
 		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
+
 	columns := make([]string, len(idx.Columns))
 	for i, indexCol := range idx.Columns {
 		columns[i] = indexCol.Name
+	}
+
+	// TODO: helper method
+	var hasNonZeroPrefixLength bool
+	for _, indexCol := range idx.Columns {
+		if indexCol.Length > 0 {
+			hasNonZeroPrefixLength = true
+			break
+		}
+	}
+
+	var prefixLengths []uint16
+	if hasNonZeroPrefixLength {
+		prefixLengths = make([]uint16, len(idx.Columns))
+		for i, indexCol := range idx.Columns {
+			prefixLengths[i] = uint16(indexCol.Length)
+		}
 	}
 
 	table, err := t.DoltTable.DoltTable(ctx)
@@ -1778,7 +1796,8 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 	for _, idxCol := range idx.Columns {
 		col := t.DoltTable.sqlSch.Schema[t.DoltTable.sqlSch.IndexOfColName(idxCol.Name)]
 		if idxCol.Length > 0 && sql.IsText(col.Type) {
-			return sql.ErrUnsupportedIndexPrefix.New(col.Name)
+			// TODO: delete me
+			//return sql.ErrUnsupportedIndexPrefix.New(col.Name)
 		}
 	}
 
@@ -1787,6 +1806,7 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 		table,
 		idx.Name,
 		columns,
+		prefixLengths,
 		idx.Constraint == sql.IndexConstraint_Unique,
 		true,
 		idx.Comment,
@@ -2161,11 +2181,20 @@ func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, s
 			// schema.Index interface (which is used internally to represent indexes across the codebase). In the
 			// meantime, we must generate a duplicate key over the primary key.
 			//TODO: use the primary key as-is
-			idxReturn, err := creation.CreateIndex(ctx, tbl, "", sqlFk.Columns, false, false, "", editor.Options{
-				ForeignKeyChecksDisabled: true,
-				Deaf:                     t.opts.Deaf,
-				Tempdir:                  t.opts.Tempdir,
-			})
+			idxReturn, err := creation.CreateIndex(
+				ctx,
+				tbl,
+				"",
+				sqlFk.Columns,
+				nil,
+				false,
+				false,
+				"",
+				editor.Options{
+					ForeignKeyChecksDisabled: true,
+					Deaf:                     t.opts.Deaf,
+					Tempdir:                  t.opts.Tempdir,
+				})
 			if err != nil {
 				return err
 			}
@@ -2199,11 +2228,20 @@ func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, s
 
 			// Our duplicate index is only unique if it's the entire primary key (which is by definition unique)
 			unique := len(refPkTags) == len(refColTags)
-			idxReturn, err := creation.CreateIndex(ctx, refTbl, "", colNames, unique, false, "", editor.Options{
-				ForeignKeyChecksDisabled: true,
-				Deaf:                     t.opts.Deaf,
-				Tempdir:                  t.opts.Tempdir,
-			})
+			idxReturn, err := creation.CreateIndex(
+				ctx,
+				refTbl,
+				"",
+				colNames,
+				nil,
+				unique,
+				false,
+				"",
+				editor.Options{
+					ForeignKeyChecksDisabled: true,
+					Deaf:                     t.opts.Deaf,
+					Tempdir:                  t.opts.Tempdir,
+				})
 			if err != nil {
 				return err
 			}
@@ -2246,6 +2284,22 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 		columns[i] = indexCol.Name
 	}
 
+	var hasNonZeroPrefixLength bool
+	for _, indexCol := range idx.Columns {
+		if indexCol.Length > 0 {
+			hasNonZeroPrefixLength = true
+			break
+		}
+	}
+
+	var prefixLengths []uint16
+	if hasNonZeroPrefixLength {
+		prefixLengths = make([]uint16, len(idx.Columns))
+		for i, indexCol := range idx.Columns {
+			prefixLengths[i] = uint16(indexCol.Length)
+		}
+	}
+
 	table, err := t.DoltTable.DoltTable(ctx)
 	if err != nil {
 		return err
@@ -2256,6 +2310,7 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 		table,
 		idx.Name,
 		columns,
+		prefixLengths,
 		idx.Constraint == sql.IndexConstraint_Unique,
 		false,
 		"",

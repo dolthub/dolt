@@ -47,6 +47,7 @@ func CreateIndex(
 	table *doltdb.Table,
 	indexName string,
 	columns []string,
+	prefixLengths []uint16,
 	isUnique bool,
 	isUserDefined bool,
 	comment string,
@@ -96,7 +97,7 @@ func CreateIndex(
 	}
 
 	// create the index metadata, will error if index names are taken or an index with the same columns in the same order exists
-	index, err := sch.Indexes().AddIndexByColNames(
+	_, err = sch.Indexes().AddIndexByColNames(
 		indexName,
 		realColNames,
 		schema.IndexProperties{
@@ -109,6 +110,11 @@ func CreateIndex(
 		return nil, err
 	}
 
+	err = sch.Indexes().SetIndexPrefixLength(indexName, prefixLengths)
+	if err != nil {
+		return nil, err
+	}
+
 	// update the table schema with the new index
 	newTable, err := table.UpdateSchema(ctx, sch)
 	if err != nil {
@@ -117,6 +123,7 @@ func CreateIndex(
 
 	// TODO: in the case that we're replacing an implicit index with one the user specified, we could do this more
 	//  cheaply in some cases by just renaming it, rather than building it from scratch. But that's harder to get right.
+	index := sch.Indexes().GetByName(indexName)
 	indexRows, err := BuildSecondaryIndex(ctx, newTable, index, opts)
 	if err != nil {
 		return nil, err

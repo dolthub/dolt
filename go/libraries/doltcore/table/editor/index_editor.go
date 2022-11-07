@@ -113,6 +113,7 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 // index is unique, then a uniqueKeyErr is passed to |cb|. If |cb| returns a non-nil
 // error then the insert is aborted. Otherwise, the insert proceeds.
 func (ie *IndexEditor) InsertRowWithDupCb(ctx context.Context, key, partialKey types.Tuple, value types.Tuple, cb func(ctx context.Context, uke *uniqueKeyErr) error) error {
+	// TODO: trim key
 	keyHash, err := key.Hash(key.Format())
 	if err != nil {
 		return err
