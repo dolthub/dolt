@@ -13,6 +13,7 @@
 // limitations under the License.
 
 include "prolly.fbs";
+include "collation.fbs";
 
 namespace serial;
 
@@ -22,6 +23,8 @@ table RootValue {
   tables:[ubyte]; // Serialized AddressMap.
 
   foreign_key_addr:[ubyte];
+
+  collation:Collation;
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

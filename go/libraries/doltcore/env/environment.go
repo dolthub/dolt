@@ -25,7 +25,6 @@ import (
 	"time"
 
 	ps "github.com/mitchellh/go-ps"
-	"google.golang.org/grpc"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -812,7 +811,7 @@ func (dEnv *DoltEnv) CredsDir() (string, error) {
 	return getCredsDir(dEnv.hdp)
 }
 
-func (dEnv *DoltEnv) UserRPCCreds() (creds.DoltCreds, bool, error) {
+func (dEnv *DoltEnv) UserDoltCreds() (creds.DoltCreds, bool, error) {
 	kid, err := dEnv.Config.GetString(UserCreds)
 
 	if err == nil && kid != "" {
@@ -827,11 +826,11 @@ func (dEnv *DoltEnv) UserRPCCreds() (creds.DoltCreds, bool, error) {
 		return c, c.IsPrivKeyValid() && c.IsPubKeyValid(), err
 	}
 
-	return creds.EmptyCreds, false, nil
+	return creds.DoltCreds{}, false, nil
 }
 
 // GetGRPCDialParams implements dbfactory.GRPCDialProvider
-func (dEnv *DoltEnv) GetGRPCDialParams(config grpcendpoint.Config) (string, []grpc.DialOption, error) {
+func (dEnv *DoltEnv) GetGRPCDialParams(config grpcendpoint.Config) (dbfactory.GRPCRemoteConfig, error) {
 	return NewGRPCDialProviderFromDoltEnv(dEnv).GetGRPCDialParams(config)
 }
 

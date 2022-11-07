@@ -25,7 +25,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -559,7 +558,7 @@ func (t Tuple) Get(n uint64) (Value, error) {
 	dec, count := t.decoderSkipToFields()
 
 	if n >= count {
-		d.Chk.Fail(fmt.Sprintf(`tuple index "%d" out of range`, n))
+		d.Panic(`tuple index "%d" out of range`, n)
 	}
 
 	for i := uint64(0); i < n; i++ {

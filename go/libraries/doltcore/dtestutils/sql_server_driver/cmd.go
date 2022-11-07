@@ -19,10 +19,10 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
 
@@ -176,7 +176,6 @@ func WithArgs(args ...string) SqlServerOpt {
 func WithPort(port int) SqlServerOpt {
 	return func(s *SqlServer) {
 		s.Port = port
-		s.Cmd.Args = append(s.Cmd.Args, "--port", strconv.Itoa(port))
 	}
 }
 
@@ -260,12 +259,24 @@ func (s *SqlServer) Restart(newargs *[]string) error {
 	return s.Cmd.Start()
 }
 
-func (s *SqlServer) DB() (*sql.DB, error) {
-	return ConnectDB("root", "", s.DBName, "127.0.0.1", s.Port)
+func (s *SqlServer) DB(c Connection) (*sql.DB, error) {
+	var pass string
+	pass, err := c.Password()
+	if err != nil {
+		return nil, err
+	}
+	return ConnectDB(c.User, pass, s.DBName, "127.0.0.1", s.Port, c.DriverParams)
 }
 
-func ConnectDB(user, password, name, host string, port int) (*sql.DB, error) {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?allowAllFiles=true&tls=preferred", user, password, host, port, name)
+func ConnectDB(user, password, name, host string, port int, driverParams map[string]string) (*sql.DB, error) {
+	params := make(url.Values)
+	params.Set("allowAllFiles", "true")
+	params.Set("tls", "preferred")
+	for k, v := range driverParams {
+		params.Set(k, v)
+	}
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s", user, password, host, port, name, params.Encode())
+
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, err

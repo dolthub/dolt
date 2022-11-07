@@ -5,7 +5,7 @@ import (
 )
 
 func TestImportSize(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 	RunTestsFile(t, "testdata/size.yaml")
 }
 

@@ -39,6 +39,7 @@ jobs:
       - name: Create SQL Correctness K8s Job
         run: ./.github/scripts/sql-correctness/run-correctness.sh
         env:
+          RELEASE_RUN: ${{ github.event.client_payload.release_run }}
           TO_VERSION: ${{ github.event.client_payload.to_version }}
           MODE: ${{ github.event.client_payload.mode }}
           ACTOR: ${{ github.event.client_payload.actor }}

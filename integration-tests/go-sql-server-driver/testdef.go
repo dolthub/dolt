@@ -25,8 +25,7 @@ import (
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"gopkg.in/yaml.v3"
+	yaml "gopkg.in/yaml.v3"
 )
 
 type TestDef struct {
@@ -150,7 +149,7 @@ func (test Test) Run(t *testing.T) {
 		require.NotNilf(t, server, "error in test spec: could not find server %s for connection %d", c.On, i)
 		if c.RetryAttempts > 1 {
 			RetryTestRun(t, c.RetryAttempts, func(t require.TestingT) {
-				db, err := server.DB()
+				db, err := server.DB(c)
 				require.NoError(t, err)
 				defer db.Close()
 
@@ -164,7 +163,7 @@ func (test Test) Run(t *testing.T) {
 			})
 		} else {
 			func() {
-				db, err := server.DB()
+				db, err := server.DB(c)
 				require.NoError(t, err)
 				defer db.Close()
 

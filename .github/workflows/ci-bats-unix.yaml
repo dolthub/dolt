@@ -22,10 +22,10 @@ jobs:
       fail-fast: true
       matrix:
         os: [ ubuntu-22.04, macos-latest ]
-        dolt_fmt: [ "__DOLT__", "__DOLT_DEV__", "__LD_1__" ]
+        dolt_fmt: [ "__DOLT__", "__LD_1__" ]
         exclude:
           - os: "macos-latest"
-            dolt_fmt: ["__DOLT_DEV__", "__LD_1__" ]
+            dolt_fmt: "__LD_1__"
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:
@@ -55,7 +55,7 @@ jobs:
       - name: Setup Python 3.x
         uses: actions/setup-python@v4
         with:
-          python-version: ^3.6
+          python-version: "3.10"
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
@@ -104,10 +104,11 @@ jobs:
         id: parquet_cli
         working-directory: ./.ci_bin
         run: |
-          git clone https://github.com/apache/parquet-mr.git
-          cd parquet-mr/parquet-cli
+          curl -OL https://github.com/apache/parquet-mr/archive/refs/tags/apache-parquet-1.12.3.tar.gz
+          tar zxvf apache-parquet-1.12.3.tar.gz
+          cd parquet-mr-apache-parquet-1.12.3/parquet-cli
           mvn clean install -DskipTests
-          runtime_jar="$(pwd)"/target/parquet-cli-1.13.0-SNAPSHOT-runtime.jar
+          runtime_jar="$(pwd)"/target/parquet-cli-1.12.3-runtime.jar
           echo "runtime_jar=$runtime_jar" >> $GITHUB_OUTPUT
       - name: Check expect
         run: expect -v

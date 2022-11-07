@@ -16,6 +16,7 @@ package env
 
 import (
 	"crypto/tls"
+	"net/http"
 	"runtime"
 	"strings"
 	"unicode"
@@ -50,7 +51,7 @@ func NewGRPCDialProviderFromDoltEnv(dEnv *DoltEnv) *GRPCDialProvider {
 }
 
 // GetGRPCDialParms implements dbfactory.GRPCDialProvider
-func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (string, []grpc.DialOption, error) {
+func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfactory.GRPCRemoteConfig, error) {
 	endpoint := config.Endpoint
 	if strings.IndexRune(endpoint, ':') == -1 {
 		if config.Insecure {
@@ -60,8 +61,20 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (string,
 		}
 	}
 
+	var httpfetcher grpcendpoint.HTTPFetcher = http.DefaultClient
+
 	var opts []grpc.DialOption
-	if config.Insecure {
+	if config.TLSConfig != nil {
+		tc := credentials.NewTLS(config.TLSConfig)
+		opts = append(opts, grpc.WithTransportCredentials(tc))
+
+		httpfetcher = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig:   config.TLSConfig,
+				ForceAttemptHTTP2: true,
+			},
+		}
+	} else if config.Insecure {
 		opts = append(opts, grpc.WithInsecure())
 	} else {
 		tc := credentials.NewTLS(&tls.Config{})
@@ -76,14 +89,17 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (string,
 	} else if config.WithEnvCreds {
 		rpcCreds, err := p.getRPCCreds()
 		if err != nil {
-			return "", nil, err
+			return dbfactory.GRPCRemoteConfig{}, err
 		}
 		if rpcCreds != nil {
 			opts = append(opts, grpc.WithPerRPCCredentials(rpcCreds))
 		}
 	}
-
-	return endpoint, opts, nil
+	return dbfactory.GRPCRemoteConfig{
+		Endpoint:    endpoint,
+		DialOptions: opts,
+		HTTPFetcher: httpfetcher,
+	}, nil
 }
 
 // getRPCCreds returns any RPC credentials available to this dial provider. If a DoltEnv has been configured
@@ -93,14 +109,14 @@ func (p GRPCDialProvider) getRPCCreds() (credentials.PerRPCCredentials, error) {
 		return nil, nil
 	}
 
-	dCreds, valid, err := p.dEnv.UserRPCCreds()
+	dCreds, valid, err := p.dEnv.UserDoltCreds()
 	if err != nil {
 		return nil, ErrInvalidCredsFile
 	}
 	if !valid {
 		return nil, nil
 	}
-	return dCreds, nil
+	return dCreds.RPCCreds(), nil
 }
 
 // getUserAgentString returns a user agent string to use in GRPC requests.

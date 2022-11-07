@@ -123,7 +123,7 @@ func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 			return nil, err
 		}
 
-		return newReaderFromIndexData(s3p.q, data, name, &dynamoTableReaderAt{ddb: s3p.ddb, h: name}, s3BlockSize)
+		return newReaderFromIndexData(ctx, s3p.q, data, name, &dynamoTableReaderAt{ddb: s3p.ddb, h: name}, s3BlockSize)
 	}
 
 	err = s3p.multipartUpload(ctx, data, name.String())
@@ -133,7 +133,7 @@ func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 	}
 
 	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}, name}
-	return newReaderFromIndexData(s3p.q, data, name, tra, s3BlockSize)
+	return newReaderFromIndexData(ctx, s3p.q, data, name, tra, s3BlockSize)
 }
 
 func (s3p awsTablePersister) multipartUpload(ctx context.Context, data []byte, key string) error {
@@ -308,7 +308,7 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	verbose.Logger(ctx).Sugar().Debugf("Compacted table of %d Kb in %s", plan.totalCompressedData/1024, time.Since(t1))
 
 	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}, name}
-	return newReaderFromIndexData(s3p.q, plan.mergedIndex, name, tra, s3BlockSize)
+	return newReaderFromIndexData(ctx, s3p.q, plan.mergedIndex, name, tra, s3BlockSize)
 }
 
 func (s3p awsTablePersister) executeCompactionPlan(ctx context.Context, plan compactionPlan, key string) error {

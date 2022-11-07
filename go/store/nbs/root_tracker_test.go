@@ -68,10 +68,8 @@ func TestChunkStoreRebase(t *testing.T) {
 	assert := assert.New(t)
 	fm, p, q, store := makeStoreWithFakes(t)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
-	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	h, err := store.Root(context.Background())
@@ -104,10 +102,8 @@ func TestChunkStoreCommit(t *testing.T) {
 	assert := assert.New(t)
 	_, _, q, store := makeStoreWithFakes(t)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
-	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	h, err := store.Root(context.Background())
@@ -152,10 +148,8 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 	assert := assert.New(t)
 	fm, p, q, store := makeStoreWithFakes(t)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
-	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	h, err := store.Root(context.Background())
@@ -204,10 +198,8 @@ func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 	assert := assert.New(t)
 	fm, p, q, store := makeStoreWithFakes(t)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
-	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	// Simulate another process writing a manifest behind store's back.
@@ -229,9 +221,6 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	fm := &fakeManifest{}
 	mm := manifestManager{fm, newManifestCache(defaultManifestCacheSize), newManifestLocks()}
 	q := NewUnlimitedMemQuotaProvider()
-	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
 	p := newFakeTablePersister(q)
 
 	c := inlineConjoiner{defaultMaxTables}
@@ -240,6 +229,7 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	// Simulate another goroutine writing a manifest behind store's back.
@@ -281,9 +271,6 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 	upm := &updatePreemptManifest{manifest: fm}
 	mm := manifestManager{upm, newManifestCache(defaultManifestCacheSize), newManifestLocks()}
 	q := NewUnlimitedMemQuotaProvider()
-	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
 	p := newFakeTablePersister(q)
 	c := inlineConjoiner{defaultMaxTables}
 
@@ -291,6 +278,7 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	// store.Commit() should lock out calls to mm.Fetch()
@@ -328,9 +316,6 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	mc := newManifestCache(defaultManifestCacheSize)
 	l := newManifestLocks()
 	q := NewUnlimitedMemQuotaProvider()
-	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
 	p := newFakeTablePersister(q)
 
 	c := inlineConjoiner{defaultMaxTables}
@@ -339,6 +324,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	storeChunk := chunks.NewChunk([]byte("store"))
@@ -408,12 +394,15 @@ func interloperWrite(fm *fakeManifest, p tablePersister, rootChunk []byte, chunk
 
 	var src chunkSource
 	src, err = p.Persist(context.Background(), createMemTable(persisted), nil, &Stats{})
-
 	if err != nil {
 		return hash.Hash{}, nil, err
 	}
 
 	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{mustAddr(src.hash()), uint32(len(chunks) + 1)}}, nil)
+
+	if err = src.close(); err != nil {
+		return [20]byte{}, nil, err
+	}
 	return
 }
 
@@ -497,12 +486,12 @@ func newFakeTableSet(q MemoryQuotaProvider) tableSet {
 }
 
 func newFakeTablePersister(q MemoryQuotaProvider) fakeTablePersister {
-	return fakeTablePersister{q, map[addr]tableReader{}, map[addr]bool{}, map[addr]bool{}, &sync.RWMutex{}}
+	return fakeTablePersister{q, map[addr][]byte{}, map[addr]bool{}, map[addr]bool{}, &sync.RWMutex{}}
 }
 
 type fakeTablePersister struct {
 	q             MemoryQuotaProvider
-	sources       map[addr]tableReader
+	sources       map[addr][]byte
 	sourcesToFail map[addr]bool
 	opened        map[addr]bool
 	mu            *sync.RWMutex
@@ -511,57 +500,55 @@ type fakeTablePersister struct {
 var _ tablePersister = fakeTablePersister{}
 
 func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
-	if mustUint32(mt.count()) > 0 {
-		name, data, chunkCount, err := mt.write(haver, stats)
-
-		if err != nil {
-			return emptyChunkSource{}, err
-		}
-
-		if chunkCount > 0 {
-			ftp.mu.Lock()
-			defer ftp.mu.Unlock()
-			ti, err := parseTableIndexByCopy(data, ftp.q)
-
-			if err != nil {
-				return nil, err
-			}
-
-			s, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
-			if err != nil {
-				return emptyChunkSource{}, err
-			}
-			ftp.sources[name] = s
-			return chunkSourceAdapter{ftp.sources[name], name}, nil
-		}
+	if mustUint32(mt.count()) == 0 {
+		return emptyChunkSource{}, nil
 	}
-	return emptyChunkSource{}, nil
-}
 
-func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
-	name, data, chunkCount, err := compactSourcesToBuffer(sources)
+	name, data, chunkCount, err := mt.write(haver, stats)
+	if err != nil {
+		return emptyChunkSource{}, err
+	} else if chunkCount == 0 {
+		return emptyChunkSource{}, nil
+	}
 
+	ftp.mu.Lock()
+	ftp.sources[name] = data
+	ftp.mu.Unlock()
+
+	ti, err := parseTableIndexByCopy(ctx, data, ftp.q)
 	if err != nil {
 		return nil, err
 	}
 
-	if chunkCount > 0 {
-		ftp.mu.Lock()
-		defer ftp.mu.Unlock()
-		ti, err := parseTableIndexByCopy(data, ftp.q)
-
-		if err != nil {
-			return nil, err
-		}
-
-		s, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
-		if err != nil {
-			return nil, err
-		}
-		ftp.sources[name] = s
-		return chunkSourceAdapter{ftp.sources[name], name}, nil
+	cs, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	if err != nil {
+		return emptyChunkSource{}, err
 	}
-	return emptyChunkSource{}, nil
+	return chunkSourceAdapter{cs, name}, nil
+}
+
+func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
+	name, data, chunkCount, err := compactSourcesToBuffer(sources)
+	if err != nil {
+		return nil, err
+	} else if chunkCount == 0 {
+		return emptyChunkSource{}, nil
+	}
+
+	ftp.mu.Lock()
+	defer ftp.mu.Unlock()
+	ftp.sources[name] = data
+
+	ti, err := parseTableIndexByCopy(ctx, data, ftp.q)
+	if err != nil {
+		return nil, err
+	}
+
+	cs, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	if err != nil {
+		return nil, err
+	}
+	return chunkSourceAdapter{cs, name}, nil
 }
 
 func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunkCount uint32, err error) {
@@ -617,11 +604,23 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	ftp.mu.Lock()
 	defer ftp.mu.Unlock()
+
 	if _, ok := ftp.sourcesToFail[name]; ok {
 		return nil, errors.New("intentional failure")
 	}
+	data := ftp.sources[name]
 	ftp.opened[name] = true
-	return chunkSourceAdapter{ftp.sources[name], name}, nil
+
+	ti, err := parseTableIndexByCopy(ctx, data, ftp.q)
+	if err != nil {
+		return nil, err
+	}
+
+	cs, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	if err != nil {
+		return emptyChunkSource{}, err
+	}
+	return chunkSourceAdapter{cs, name}, nil
 }
 
 func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ manifestContents) error {
@@ -635,8 +634,8 @@ func extractAllChunks(ctx context.Context, src chunkSource, cb func(rec extractR
 	}
 
 	var a addr
-	for i := uint32(0); i < index.ChunkCount(); i++ {
-		_, err = index.IndexEntry(i, &a)
+	for i := uint32(0); i < index.chunkCount(); i++ {
+		_, err = index.indexEntry(i, &a)
 		if err != nil {
 			return err
 		}

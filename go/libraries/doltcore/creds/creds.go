@@ -117,43 +117,62 @@ func (dc DoltCreds) Sign(data []byte) []byte {
 	return ed25519.Sign(dc.PrivKey, data)
 }
 
-func (dc DoltCreds) toBearerToken() (string, error) {
-	b32KIDStr := dc.KeyIDBase32Str()
-	key := jose.SigningKey{Algorithm: jose.EdDSA, Key: ed25519.PrivateKey(dc.PrivKey)}
+type RPCCreds struct {
+	PrivKey    ed25519.PrivateKey
+	KeyID      string
+	Audience   string
+	Issuer     string
+	Subject    string
+	RequireTLS bool
+}
+
+func (c *RPCCreds) toBearerToken() (string, error) {
+	key := jose.SigningKey{Algorithm: jose.EdDSA, Key: c.PrivKey}
 	opts := &jose.SignerOptions{ExtraHeaders: map[jose.HeaderKey]interface{}{
-		JWTKIDHeader: b32KIDStr,
+		JWTKIDHeader: c.KeyID,
 	}}
 
 	signer, err := jose.NewSigner(key, opts)
-
 	if err != nil {
 		return "", err
 	}
 
-	// Shouldn't be hard coded
 	jwtBuilder := jwt.Signed(signer)
 	jwtBuilder = jwtBuilder.Claims(jwt.Claims{
-		Audience: []string{"dolthub-remote-api.liquidata.co"},
-		Issuer:   "dolt-client.liquidata.co",
-		Subject:  "doltClientCredentials/" + b32KIDStr,
+		Audience: []string{c.Audience},
+		Issuer:   c.Issuer,
+		Subject:  c.Subject,
 		Expiry:   jwt.NewNumericDate(datetime.Now().Add(30 * time.Second)),
 	})
 
 	return jwtBuilder.CompactSerialize()
 }
 
-func (dc DoltCreds) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	t, err := dc.toBearerToken()
-
+func (c *RPCCreds) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	t, err := c.toBearerToken()
 	if err != nil {
 		return nil, err
 	}
-
 	return map[string]string{
 		"authorization": "Bearer " + t,
 	}, nil
 }
 
-func (dc DoltCreds) RequireTransportSecurity() bool {
-	return false
+func (c *RPCCreds) RequireTransportSecurity() bool {
+	return c.RequireTLS
+}
+
+const RemotesAPIAudience = "dolthub-remote-api.liquidata.co"
+const ClientIssuer = "dolt-client.liquidata.co"
+
+func (dc DoltCreds) RPCCreds() *RPCCreds {
+	b32KIDStr := dc.KeyIDBase32Str()
+	return &RPCCreds{
+		PrivKey:    ed25519.PrivateKey(dc.PrivKey),
+		KeyID:      b32KIDStr,
+		Audience:   RemotesAPIAudience,
+		Issuer:     ClientIssuer,
+		Subject:    "doltClientCredentials/" + b32KIDStr,
+		RequireTLS: false,
+	}
 }

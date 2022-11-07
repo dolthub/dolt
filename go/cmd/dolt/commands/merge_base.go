@@ -80,24 +80,35 @@ func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 
-	left, verr := ResolveCommitWithVErr(dEnv, apr.Arg(0))
+	mergeBaseStr, verr := getMergeBaseFromStrings(ctx, dEnv, apr.Arg(0), apr.Arg(1))
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	right, verr := ResolveCommitWithVErr(dEnv, apr.Arg(1))
+	cli.Println(mergeBaseStr)
+	return 0
+}
+
+// getMergeBaseFromStrings resolves two revisions and returns the merge base
+// commit hash string
+func getMergeBaseFromStrings(ctx context.Context, dEnv *env.DoltEnv, leftStr, rightStr string) (string, errhand.VerboseError) {
+	left, verr := ResolveCommitWithVErr(dEnv, leftStr)
 	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
+		return "", verr
+	}
+
+	right, verr := ResolveCommitWithVErr(dEnv, rightStr)
+	if verr != nil {
+		return "", verr
 	}
 
 	mergeBase, err := merge.MergeBase(ctx, left, right)
 	if err != nil {
-		verr = errhand.BuildDError("could not find merge-base for args %s", apr.Args).AddCause(err).Build()
-		return HandleVErrAndExitCode(verr, usage)
+		verr = errhand.BuildDError("could not find merge-base for args %s %s", leftStr, rightStr).AddCause(err).Build()
+		return "", verr
 	}
 
-	cli.Println(mergeBase.String())
-	return 0
+	return mergeBase.String(), nil
 }
 
 func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr string) (*doltdb.Commit, errhand.VerboseError) {

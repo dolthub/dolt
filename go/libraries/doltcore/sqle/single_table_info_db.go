@@ -106,7 +106,7 @@ func (db *SingleTableInfoDatabase) LookupPartitions(context *sql.Context, lookup
 }
 
 // CreateIndexForForeignKey implements sql.ForeignKeyTable.
-func (db *SingleTableInfoDatabase) CreateIndexForForeignKey(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn) error {
+func (db *SingleTableInfoDatabase) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
 	return fmt.Errorf("cannot create foreign keys on a single table information database")
 }
 

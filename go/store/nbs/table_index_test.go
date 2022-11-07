@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -25,23 +26,24 @@ import (
 )
 
 func TestParseTableIndex(t *testing.T) {
+	ctx := context.Background()
 	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
 	require.NoError(t, err)
 	defer f.Close()
 	bs, err := io.ReadAll(f)
 	require.NoError(t, err)
-	idx, err := parseTableIndexByCopy(bs, &noopQuotaProvider{})
+	idx, err := parseTableIndexByCopy(ctx, bs, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	defer idx.Close()
-	assert.Equal(t, uint32(596), idx.ChunkCount())
+	assert.Equal(t, uint32(596), idx.chunkCount())
 	seen := make(map[addr]bool)
-	for i := uint32(0); i < idx.ChunkCount(); i++ {
+	for i := uint32(0); i < idx.chunkCount(); i++ {
 		var onheapaddr addr
-		e, err := idx.IndexEntry(i, &onheapaddr)
+		e, err := idx.indexEntry(i, &onheapaddr)
 		require.NoError(t, err)
 		if _, ok := seen[onheapaddr]; !ok {
 			seen[onheapaddr] = true
-			lookupe, ok, err := idx.Lookup(&onheapaddr)
+			lookupe, ok, err := idx.lookup(&onheapaddr)
 			require.NoError(t, err)
 			assert.True(t, ok)
 			assert.Equal(t, e.Offset(), lookupe.Offset(), "%v does not match %v for address %v", e, lookupe, onheapaddr)
@@ -51,17 +53,18 @@ func TestParseTableIndex(t *testing.T) {
 }
 
 func BenchmarkFindPrefix(b *testing.B) {
+	ctx := context.Background()
 	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
 	require.NoError(b, err)
 	defer f.Close()
 	bs, err := io.ReadAll(f)
 	require.NoError(b, err)
-	idx, err := parseTableIndexByCopy(bs, &noopQuotaProvider{})
+	idx, err := parseTableIndexByCopy(ctx, bs, &UnlimitedQuotaProvider{})
 	require.NoError(b, err)
 	defer idx.Close()
-	assert.Equal(b, uint32(596), idx.ChunkCount())
+	assert.Equal(b, uint32(596), idx.chunkCount())
 
-	prefixes, err := idx.Prefixes()
+	prefixes, err := idx.prefixes()
 	require.NoError(b, err)
 
 	b.Run("benchmark prefixIdx()", func(b *testing.B) {
@@ -84,7 +87,7 @@ func BenchmarkFindPrefix(b *testing.B) {
 func prefixIdx(ti onHeapTableIndex, prefix uint64) (idx uint32) {
 	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
 	// an extremely tight loop and inlining the code was a significant perf improvement.
-	idx, j := 0, ti.chunkCount
+	idx, j := 0, ti.chunkCount()
 	for idx < j {
 		h := idx + (j-idx)/2 // avoid overflow when computing h
 		// i ≤ h < j
@@ -97,71 +100,14 @@ func prefixIdx(ti onHeapTableIndex, prefix uint64) (idx uint32) {
 	return
 }
 
-func TestMMapIndex(t *testing.T) {
-	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
-	require.NoError(t, err)
-	defer f.Close()
-	bs, err := io.ReadAll(f)
-	require.NoError(t, err)
-	idx, err := parseTableIndexByCopy(bs, &noopQuotaProvider{})
-	require.NoError(t, err)
-	defer idx.Close()
-	mmidx, err := newMmapTableIndex(idx.chunkCount)
-	require.NoError(t, err)
-	copy(mmidx.indexDataBuff, bs)
-	err = mmidx.parseIndexBuffer(&noopQuotaProvider{})
-	require.NoError(t, err)
-	defer mmidx.Close()
-
-	assert.Equal(t, idx.ChunkCount(), mmidx.ChunkCount())
-	seen := make(map[addr]bool)
-	for i := uint32(0); i < idx.ChunkCount(); i++ {
-		var onheapaddr addr
-		onheapentry, err := idx.IndexEntry(i, &onheapaddr)
-		require.NoError(t, err)
-		var mmaddr addr
-		mmentry, err := mmidx.IndexEntry(i, &mmaddr)
-		require.NoError(t, err)
-		assert.Equal(t, onheapaddr, mmaddr)
-		assert.Equal(t, onheapentry.Offset(), mmentry.Offset())
-		assert.Equal(t, onheapentry.Length(), mmentry.Length())
-		if _, ok := seen[onheapaddr]; !ok {
-			seen[onheapaddr] = true
-			mmentry, found, err := mmidx.Lookup(&onheapaddr)
-			require.NoError(t, err)
-			assert.True(t, found)
-			assert.Equal(t, onheapentry.Offset(), mmentry.Offset(), "%v does not match %v for address %v", onheapentry, mmentry, onheapaddr)
-			assert.Equal(t, onheapentry.Length(), mmentry.Length())
-		}
-		wrongaddr := onheapaddr
-		if wrongaddr[19] != 0 {
-			wrongaddr[19] = 0
-			_, found, err := mmidx.Lookup(&wrongaddr)
-			require.NoError(t, err)
-			assert.False(t, found)
-		}
-	}
-	o1, err := idx.Ordinals()
-	require.NoError(t, err)
-	o2, err := mmidx.Ordinals()
-	require.NoError(t, err)
-	assert.Equal(t, o1, o2)
-	p1, err := idx.Prefixes()
-	require.NoError(t, err)
-	p2, err := mmidx.Prefixes()
-	require.NoError(t, err)
-	assert.Equal(t, p1, p2)
-	assert.Equal(t, idx.TableFileSize(), mmidx.TableFileSize())
-	assert.Equal(t, idx.TotalUncompressedData(), mmidx.TotalUncompressedData())
-}
-
 func TestOnHeapTableIndex_ResolveShortHash(t *testing.T) {
+	ctx := context.Background()
 	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
 	require.NoError(t, err)
 	defer f.Close()
 	bs, err := io.ReadAll(f)
 	require.NoError(t, err)
-	idx, err := parseTableIndexByCopy(bs, &noopQuotaProvider{})
+	idx, err := parseTableIndexByCopy(ctx, bs, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	defer idx.Close()
 	res, err := idx.ResolveShortHash([]byte("0"))
@@ -173,6 +119,7 @@ func TestOnHeapTableIndex_ResolveShortHash(t *testing.T) {
 }
 
 func TestResolveOneHash(t *testing.T) {
+	ctx := context.Background()
 	// create chunks
 	chunks := [][]byte{
 		[]byte("chunk1"),
@@ -180,7 +127,7 @@ func TestResolveOneHash(t *testing.T) {
 
 	// build table index
 	td, _, err := buildTable(chunks)
-	tIdx, err := parseTableIndexByCopy(td, &noopQuotaProvider{})
+	tIdx, err := parseTableIndexByCopy(ctx, td, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 
 	// get hashes out
@@ -202,6 +149,7 @@ func TestResolveOneHash(t *testing.T) {
 }
 
 func TestResolveFewHash(t *testing.T) {
+	ctx := context.Background()
 	// create chunks
 	chunks := [][]byte{
 		[]byte("chunk1"),
@@ -211,7 +159,7 @@ func TestResolveFewHash(t *testing.T) {
 
 	// build table index
 	td, _, err := buildTable(chunks)
-	tIdx, err := parseTableIndexByCopy(td, &noopQuotaProvider{})
+	tIdx, err := parseTableIndexByCopy(ctx, td, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 
 	// get hashes out
@@ -234,6 +182,7 @@ func TestResolveFewHash(t *testing.T) {
 }
 
 func TestAmbiguousShortHash(t *testing.T) {
+	ctx := context.Background()
 	// create chunks
 	chunks := []fakeChunk{
 		{address: addrFromPrefix("abcdef"), data: fakeData},
@@ -243,7 +192,7 @@ func TestAmbiguousShortHash(t *testing.T) {
 
 	// build table index
 	td, _, err := buildFakeChunkTable(chunks)
-	idx, err := parseTableIndexByCopy(td, &noopQuotaProvider{})
+	idx, err := parseTableIndexByCopy(ctx, td, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 
 	tests := []struct {

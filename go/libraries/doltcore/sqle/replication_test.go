@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/buffer"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -28,7 +29,9 @@ import (
 )
 
 func TestCommitHooksNoErrors(t *testing.T) {
-	dEnv := CreateEnvWithSeedData(t)
+	dEnv, err := CreateEnvWithSeedData()
+	require.NoError(t, err)
+
 	AddDoltSystemVariables()
 	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
 	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemote, "unknown")

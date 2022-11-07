@@ -6,6 +6,7 @@ tests:
   - name: dolt
     server:
       port: 3308
+      args: [ "--port", "3308" ]
   - name: mysql # mysqld --port 3308 --local-infile=1 --socket=/tmp/mysqld2.sock
     external-server:
       name: test

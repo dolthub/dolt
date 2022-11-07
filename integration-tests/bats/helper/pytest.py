@@ -13,15 +13,6 @@ def _print_err_and_exit(e):
     print(e, file=sys.stderr)
     sys.exit(1)
 
-def csv_to_row_maps(csv_str):
-    csv_str = csv_str.replace('\\n', '\n')
-    rd = csv.DictReader(StringIO(csv_str))
-    rows = []
-    for row in rd:
-        rows.append(row)
-
-    return rows
-
 class DoltConnection(object):
     def __init__(self, user='root', password=None, host='127.0.0.1', port=3306, database='dolt', auto_commit=False):
         self.user        = user
@@ -41,30 +32,6 @@ class DoltConnection(object):
 
     def close(self):
         self.cnx.close()
-
-    def query(self, query_str, exit_on_err=True):
-        try:
-            cursor = self.cnx.cursor()
-            cursor.execute(query_str)
-
-            if cursor.description is None:
-                return [], cursor.rowcount
-
-            raw = cursor.fetchall()
-
-            row_maps = []
-            for curr in raw:
-                r = {}
-                for i, k in enumerate(cursor.column_names):
-                    r[k] = str(curr[i])
-                row_maps.append(r)
-
-            return row_maps, cursor.rowcount
-
-        except BaseException as e:
-            if exit_on_err:
-                _print_err_and_exit(e)
-            raise e
 
 class InfiniteRetryConnection(DoltConnection):
     def connect(self):

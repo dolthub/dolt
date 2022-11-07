@@ -940,7 +940,7 @@ func (t *DoltTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKey
 }
 
 // CreateIndexForForeignKey implements sql.ForeignKeyTable
-func (t DoltTable) CreateIndexForForeignKey(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn) error {
+func (t DoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
 	return fmt.Errorf("no foreign key operations on a read-only table")
 }
 
@@ -1749,22 +1749,15 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 }
 
 // CreateIndex implements sql.IndexAlterableTable
-func (t *AlterableDoltTable) CreateIndex(
-	ctx *sql.Context,
-	indexName string,
-	using sql.IndexUsing,
-	constraint sql.IndexConstraint,
-	indexColumns []sql.IndexColumn,
-	comment string,
-) error {
+func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
+	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
 		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
-	columns := make([]string, len(indexColumns))
-	for i, indexCol := range indexColumns {
+	columns := make([]string, len(idx.Columns))
+	for i, indexCol := range idx.Columns {
 		columns[i] = indexCol.Name
 	}
 
@@ -1776,11 +1769,11 @@ func (t *AlterableDoltTable) CreateIndex(
 	ret, err := creation.CreateIndex(
 		ctx,
 		table,
-		indexName,
+		idx.Name,
 		columns,
-		constraint == sql.IndexConstraint_Unique,
+		idx.Constraint == sql.IndexConstraint_Unique,
 		true,
-		comment,
+		idx.Comment,
 		t.opts,
 	)
 	if err != nil {
@@ -1971,76 +1964,30 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 			refColTags[i] = refCol.Tag
 		}
 
+		var tableIndexName, refTableIndexName string
 		tableIndex, ok, err := findIndexWithPrefix(t.sch, sqlFk.Columns)
 		if err != nil {
 			return err
 		}
-		if !ok {
-			// The engine matched on a primary key, and Dolt does not yet support using the primary key within the
-			// schema.Index interface (which is used internally to represent indexes across the codebase). In the
-			// meantime, we must generate a duplicate key over the primary key.
-			//TODO: use the primary key as-is
-			idxReturn, err := creation.CreateIndex(ctx, tbl, "", sqlFk.Columns, false, false, "", editor.Options{
-				ForeignKeyChecksDisabled: true,
-				Deaf:                     t.opts.Deaf,
-				Tempdir:                  t.opts.Tempdir,
-			})
-			if err != nil {
-				return err
-			}
-			tableIndex = idxReturn.NewIndex
-			tbl = idxReturn.NewTable
-			root, err = root.PutTable(ctx, t.tableName, idxReturn.NewTable)
-			if sqlFk.IsSelfReferential() {
-				refTbl = idxReturn.NewTable
-			}
+		// Use secondary index if found; otherwise it will use  empty string, indicating primary key
+		if ok {
+			tableIndexName = tableIndex.Name()
 		}
-
 		refTableIndex, ok, err := findIndexWithPrefix(refSch, sqlFk.ParentColumns)
 		if err != nil {
 			return err
 		}
-		if !ok {
-			// The engine matched on a primary key, and Dolt does not yet support using the primary key within the
-			// schema.Index interface (which is used internally to represent indexes across the codebase). In the
-			// meantime, we must generate a duplicate key over the primary key.
-			//TODO: use the primary key as-is
-			var refPkTags []uint64
-			for _, i := range refSch.GetPkOrdinals() {
-				refPkTags = append(refPkTags, refSch.GetAllCols().GetByIndex(i).Tag)
-			}
-
-			var colNames []string
-			for _, t := range refColTags {
-				c, _ := refSch.GetAllCols().GetByTag(t)
-				colNames = append(colNames, c.Name)
-			}
-
-			// Our duplicate index is only unique if it's the entire primary key (which is by definition unique)
-			unique := len(refPkTags) == len(refColTags)
-			idxReturn, err := creation.CreateIndex(ctx, refTbl, "", colNames, unique, false, "", editor.Options{
-				ForeignKeyChecksDisabled: true,
-				Deaf:                     t.opts.Deaf,
-				Tempdir:                  t.opts.Tempdir,
-			})
-			if err != nil {
-				return err
-			}
-			refTbl = idxReturn.NewTable
-			refTableIndex = idxReturn.NewIndex
-			root, err = root.PutTable(ctx, sqlFk.ParentTable, idxReturn.NewTable)
-			if err != nil {
-				return err
-			}
+		// Use secondary index if found; otherwise it will use  empty string, indicating primary key
+		if ok {
+			refTableIndexName = refTableIndex.Name()
 		}
-
 		doltFk = doltdb.ForeignKey{
 			Name:                   sqlFk.Name,
 			TableName:              sqlFk.Table,
-			TableIndex:             tableIndex.Name(),
+			TableIndex:             tableIndexName,
 			TableColumns:           colTags,
 			ReferencedTableName:    sqlFk.ParentTable,
-			ReferencedTableIndex:   refTableIndex.Name(),
+			ReferencedTableIndex:   refTableIndexName,
 			ReferencedTableColumns: refColTags,
 			OnUpdate:               onUpdateRefAction,
 			OnDelete:               onDeleteRefAction,
@@ -2274,12 +2221,12 @@ func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, s
 }
 
 // CreateIndexForForeignKey implements sql.ForeignKeyTable
-func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, indexColumns []sql.IndexColumn) error {
-	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
+func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
+	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
 		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
-	columns := make([]string, len(indexColumns))
-	for i, indexCol := range indexColumns {
+	columns := make([]string, len(idx.Columns))
+	for i, indexCol := range idx.Columns {
 		columns[i] = indexCol.Name
 	}
 
@@ -2291,9 +2238,9 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, indexNam
 	ret, err := creation.CreateIndex(
 		ctx,
 		table,
-		indexName,
+		idx.Name,
 		columns,
-		constraint == sql.IndexConstraint_Unique,
+		idx.Constraint == sql.IndexConstraint_Unique,
 		false,
 		"",
 		t.opts,

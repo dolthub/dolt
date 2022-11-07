@@ -202,7 +202,7 @@ func (r *ImportResults) SqlDump() string {
 	return b.String()
 }
 
-func (test *ImportTest) WithTmpDir(s string) {
+func (test *ImportTest) InitWithTmpDir(s string) {
 	test.tmpdir = s
 	test.files = make(map[uint64]*os.File)
 }
@@ -216,10 +216,11 @@ func (test *ImportTest) Run(t *testing.T) {
 	var err error
 	if test.Results == nil {
 		test.Results = new(ImportResults)
-		test.tmpdir, err = os.MkdirTemp("", "repo-store-")
+		tmp, err := os.MkdirTemp("", "repo-store-")
 		if err != nil {
 			require.NoError(t, err)
 		}
+		test.InitWithTmpDir(tmp)
 	}
 
 	u, err := driver.NewDoltUser()
@@ -241,7 +242,7 @@ func (test *ImportTest) Run(t *testing.T) {
 // RunExternalServerTests connects to a single externally provided server to run every test
 func (test *ImportTest) RunExternalServerTests(repoName string, s *driver.ExternalServer) error {
 	return test.IterImportTables(test.Tables, func(tab Table, f *os.File) error {
-		db, err := driver.ConnectDB(s.User, s.Password, s.Name, s.Host, s.Port)
+		db, err := driver.ConnectDB(s.User, s.Password, s.Name, s.Host, s.Port, nil)
 		if err != nil {
 			return err
 		}
@@ -267,7 +268,7 @@ func (test *ImportTest) RunSqlServerTests(repo driver.TestRepo, user driver.Dolt
 		}
 		defer server.GracefulStop()
 
-		db, err := server.DB()
+		db, err := server.DB(driver.Connection{Pass: ""})
 		if err != nil {
 			return err
 		}

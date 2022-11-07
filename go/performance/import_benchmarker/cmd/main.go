@@ -46,7 +46,7 @@ func main() {
 	u, err := driver.NewDoltUser()
 	for _, test := range def.Tests {
 		test.Results = results
-		test.WithTmpDir(tmpdir)
+		test.InitWithTmpDir(tmpdir)
 
 		for _, r := range test.Repos {
 			var err error

@@ -1,10 +1,12 @@
 package sql_server_driver
 
 import (
+	"github.com/creasty/defaults"
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // |Connection| represents a single connection to a sql-server instance defined
@@ -23,6 +25,34 @@ type Connection struct {
 	// connection based on things that are happening, such as cluster role
 	// transitions.
 	RetryAttempts int `yaml:"retry_attempts"`
+
+	// The user to connect as.
+	User string `default:"root" yaml:"user"`
+	// The password to connect with.
+	Pass     string `yaml:"password"`
+	PassFile string `yaml:"password_file"`
+	// Any driver params to pass in the DSN.
+	DriverParams map[string]string `yaml:"driver_params"`
+}
+
+func (c *Connection) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	defaults.Set(c)
+	type plain Connection
+	if err := unmarshal((*plain)(c)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c Connection) Password() (string, error) {
+	if c.PassFile != "" {
+		bs, err := os.ReadFile(c.PassFile)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(string(bs)), nil
+	}
+	return c.Pass, nil
 }
 
 // |RestartArgs| are possible arguments, to change the arguments which are
