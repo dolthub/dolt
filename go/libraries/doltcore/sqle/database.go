@@ -98,6 +98,7 @@ var _ sql.CollatedDatabase = Database{}
 var _ sql.Database = Database{}
 var _ sql.StoredProcedureDatabase = Database{}
 var _ sql.TableCreator = Database{}
+var _ sql.IndexedTableCreator = Database{}
 var _ sql.TableDropper = Database{}
 var _ sql.TableRenamer = Database{}
 var _ sql.TemporaryTableCreator = Database{}
@@ -864,7 +865,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 }
 
 // CreateIndexedTable creates a table with the name and schema given.
-func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, idxCols []sql.IndexColumn, collation sql.CollationID) error {
+func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID) error {
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
@@ -881,7 +882,7 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 		return ErrInvalidTableName.New(tableName)
 	}
 
-	return db.createIndexedSqlTable(ctx, tableName, sch, idxCols, collation)
+	return db.createIndexedSqlTable(ctx, tableName, sch, idxDef, collation)
 }
 
 // Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.
@@ -927,7 +928,7 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 }
 
 // Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.
-func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, idxCols []sql.IndexColumn, collation sql.CollationID) error {
+func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID) error {
 	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
 		return err
@@ -956,7 +957,7 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch
 	}
 
 	// Prevent any tables that use BINARY, CHAR, VARBINARY, VARCHAR prefixes in Primary Key
-	for _, idxCol := range idxCols {
+	for _, idxCol := range idxDef.Columns {
 		col := sch.Schema[sch.Schema.IndexOfColName(idxCol.Name)]
 		if col.PrimaryKey && sql.IsText(col.Type) && idxCol.Length > 0 {
 			return sql.ErrUnsupportedIndexPrefix.New(col.Name)
