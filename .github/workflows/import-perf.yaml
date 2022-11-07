@@ -10,7 +10,7 @@ on:
         description: 'dolt version to checkout'
         rquired: false
         default: ''
-      test-file:
+      run_file:
         description: 'import perf .yaml spec, relative to \'import_benchmarks/tesdata\''
         rquired: false
         default: 'ci.yaml'
@@ -65,7 +65,7 @@ jobs:
       id: bench
       run: |
         out="$GITHUB_WORKSPACE/results.sql"
-        testspec="${{ env.BENCH_DIR }}/testdata/${{ github.event.inputs.test-file }}"
+        testspec="${{ env.BENCH_DIR }}/testdata/${{ github.event.inputs.run_file }}"
         go build \
           "github.com/dolthub/dolt/${{ env.BENCH_DIR }}/cmd" \
           -test "$testspec" \
