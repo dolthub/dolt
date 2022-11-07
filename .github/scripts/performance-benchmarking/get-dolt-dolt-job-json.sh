@@ -33,10 +33,6 @@ if [ -n "$withTpcc" ]; then
   withTpcc="\"--withTpcc=$withTpcc\","
 fi
 
-if [ -n "$RELEASE_RUN" ]; then
-  releaseRun="\"--release-run\","
-fi
-
 readTests="('oltp_read_only', 'oltp_point_select', 'select_random_points', 'select_random_ranges', 'covering_index_scan', 'index_scan', 'table_scan', 'groupby_scan', 'index_join_scan', 'types_table_scan', 'index_join')"
 medianLatencyChangeReadsQuery="select f.test_name as read_tests, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) < -0.1 then 1 when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) > 0.1 then -1 else 0 end as is_faster from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name in $readTests group by f.test_name;"
 
@@ -96,7 +92,6 @@ echo '
               "--issue-number='$issueNumber'",
               "--results-dir='$timePrefix'",
               "--results-prefix='$actorPrefix'",
-              '"$releaseRun"'
               '"$withTpcc"'
               '"$initBigRepo"'
               '"$nomsBinFormat"'
