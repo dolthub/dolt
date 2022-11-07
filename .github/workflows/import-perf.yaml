@@ -1,2 +1,5 @@
 name: Import Benchmarks
 
+on:
+  workflow_dispatch:
+
