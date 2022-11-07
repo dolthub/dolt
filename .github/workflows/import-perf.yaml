@@ -70,7 +70,7 @@ jobs:
       run: |
         out="$GITHUB_WORKSPACE/results.sql"
         testspec="../${{ env.BENCH_DIR }}/testdata/${{ github.event.inputs.run_file }}"
-        go build \
+        go run \
           "github.com/dolthub/dolt/${{ env.BENCH_DIR }}/cmd" \
           -test "$testspec" \
           -output "$out"
