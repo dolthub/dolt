@@ -1,6 +1,6 @@
 name: Import Benchmarks
 on:
-  workflow-dispatch:
+  workflow_dispatch:
     inputs:
       email_recipient:
         description: 'email to send results report to'
