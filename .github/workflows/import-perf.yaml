@@ -161,9 +161,7 @@ jobs:
                   }
                </style>
               </head>
-                <body>
-                  "$(cat $RESULTS)"
-                </body>
+                <body>"$(cat $RESULTS)"</body>
               </html>
           EOF
 
