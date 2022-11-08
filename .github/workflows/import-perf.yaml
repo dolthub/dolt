@@ -213,7 +213,7 @@ jobs:
         push: true
         before: |
           dolt sql -q -b <<EOF
-          call dolt_checkout('-b', '${{ steps.version.outputs.ref' }});
+          call dolt_checkout('-b', '${{ steps.version.outputs.ref }}');
           drop table if exists import_perf_results;
           EOF
 
