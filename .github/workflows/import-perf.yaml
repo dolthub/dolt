@@ -209,6 +209,7 @@ jobs:
         commit_message: 'automated CI commit'
         commit_user_email: 'max@dolthub.com'
         commit_author: 'Max Hoffman'
+        branch: ${{ steps.version.outputs.ref }}
         push: true
         before: |
           dolt sql -q -b <<EOF
