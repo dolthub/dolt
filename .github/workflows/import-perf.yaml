@@ -126,7 +126,7 @@ jobs:
         RESULTS: ${{ steps.html.outputs.html }}
       with:
         cmd: |
-          yq -j <EOF
+          yq -j <<EOF
             Template:
               TemplateName: ImportBenchmarkingReleaseTemplate
               SubjectPart: Import Benchmarks for "$FORMAT" "$VERSION"
