@@ -940,7 +940,7 @@ func (t *DoltTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKey
 }
 
 // CreateIndexForForeignKey implements sql.ForeignKeyTable
-func (t DoltTable) CreateIndexForForeignKey(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn) error {
+func (t DoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
 	return fmt.Errorf("no foreign key operations on a read-only table")
 }
 
@@ -1271,11 +1271,12 @@ func (t *AlterableDoltTable) RewriteInserter(
 	newSchema sql.PrimaryKeySchema,
 	oldColumn *sql.Column,
 	newColumn *sql.Column,
+	idxCols []sql.IndexColumn,
 ) (sql.RowInserter, error) {
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return nil, err
 	}
-	err := validateSchemaChange(t.Name(), oldSchema, newSchema, oldColumn, newColumn)
+	err := validateSchemaChange(t.Name(), oldSchema, newSchema, oldColumn, newColumn, idxCols)
 	if err != nil {
 		return nil, err
 	}
@@ -1496,7 +1497,15 @@ func validateSchemaChange(
 	newSchema sql.PrimaryKeySchema,
 	oldColumn *sql.Column,
 	newColumn *sql.Column,
+	idxCols []sql.IndexColumn,
 ) error {
+	for _, idxCol := range idxCols {
+		col := newSchema.Schema[newSchema.Schema.IndexOfColName(idxCol.Name)]
+		if idxCol.Length > 0 && sql.IsText(col.Type) {
+			return sql.ErrUnsupportedIndexPrefix.New(col.Name)
+		}
+	}
+
 	if newColumn != nil {
 		newCol, err := sqlutil.ToDoltCol(schema.SystemTableReservedMin, newColumn)
 		if err != nil {
@@ -1749,22 +1758,15 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 }
 
 // CreateIndex implements sql.IndexAlterableTable
-func (t *AlterableDoltTable) CreateIndex(
-	ctx *sql.Context,
-	indexName string,
-	using sql.IndexUsing,
-	constraint sql.IndexConstraint,
-	indexColumns []sql.IndexColumn,
-	comment string,
-) error {
+func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
+	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
 		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
-	columns := make([]string, len(indexColumns))
-	for i, indexCol := range indexColumns {
+	columns := make([]string, len(idx.Columns))
+	for i, indexCol := range idx.Columns {
 		columns[i] = indexCol.Name
 	}
 
@@ -1773,14 +1775,21 @@ func (t *AlterableDoltTable) CreateIndex(
 		return err
 	}
 
+	for _, idxCol := range idx.Columns {
+		col := t.DoltTable.sqlSch.Schema[t.DoltTable.sqlSch.IndexOfColName(idxCol.Name)]
+		if idxCol.Length > 0 && sql.IsText(col.Type) {
+			return sql.ErrUnsupportedIndexPrefix.New(col.Name)
+		}
+	}
+
 	ret, err := creation.CreateIndex(
 		ctx,
 		table,
-		indexName,
+		idx.Name,
 		columns,
-		constraint == sql.IndexConstraint_Unique,
+		idx.Constraint == sql.IndexConstraint_Unique,
 		true,
-		comment,
+		idx.Comment,
 		t.opts,
 	)
 	if err != nil {
@@ -2228,12 +2237,12 @@ func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, s
 }
 
 // CreateIndexForForeignKey implements sql.ForeignKeyTable
-func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, indexColumns []sql.IndexColumn) error {
-	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
+func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
+	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
 		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
-	columns := make([]string, len(indexColumns))
-	for i, indexCol := range indexColumns {
+	columns := make([]string, len(idx.Columns))
+	for i, indexCol := range idx.Columns {
 		columns[i] = indexCol.Name
 	}
 
@@ -2245,9 +2254,9 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, indexNam
 	ret, err := creation.CreateIndex(
 		ctx,
 		table,
-		indexName,
+		idx.Name,
 		columns,
-		constraint == sql.IndexConstraint_Unique,
+		idx.Constraint == sql.IndexConstraint_Unique,
 		false,
 		"",
 		t.opts,

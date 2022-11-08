@@ -24,8 +24,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -1355,7 +1357,9 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 	cleanup := installTestCommitClock()
 	defer cleanup()
 
-	dEnv := CreateTestDatabase(t)
+	dEnv, err := CreateTestDatabase()
+	require.NoError(t, err)
+
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
@@ -1397,13 +1401,161 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 	assertSchemasEqual(t, sqlSchema, sch)
 }
 
+const TableWithHistoryName = "test_table"
+
+var InitialHistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
+var AddAddrAt3HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
+var AddAgeAt4HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag4TypeInt)
+var ReaddAgeAt5HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag5TypeUint)
+
+// TableUpdate defines a list of modifications that should be made to a table
+type TableUpdate struct {
+	// NewSch is an updated schema for this table. It overwrites the existing value.  If not provided the existing value
+	// will not change
+	NewSch schema.Schema
+
+	// NewRowData if provided overwrites the entirety of the row data in the table.
+	NewRowData *types.Map
+
+	// RowUpdates are new values for rows that should be set in the map.  They can be updates or inserts.
+	RowUpdates []row.Row
+}
+
+// HistoryNode represents a commit to be made
+type HistoryNode struct {
+	// Branch the branch that the commit should be on
+	Branch string
+
+	// CommitMessag is the commit message that should be applied
+	CommitMsg string
+
+	// Updates are the changes that should be made to the table's states before committing
+	Updates map[string]TableUpdate
+
+	// Children are the child commits of this commit
+	Children []HistoryNode
+}
+
+// mustRowData converts a slice of row.TaggedValues into a noms types.Map containing that data.
+func mustRowData(t *testing.T, ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, colVals []row.TaggedValues) *types.Map {
+	m, err := types.NewMap(ctx, vrw)
+	require.NoError(t, err)
+
+	me := m.Edit()
+	for _, taggedVals := range colVals {
+		r, err := row.New(types.Format_Default, sch, taggedVals)
+		require.NoError(t, err)
+
+		me = me.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
+	}
+
+	m, err = me.Map(ctx)
+	require.NoError(t, err)
+
+	return &m
+}
+
+func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []HistoryNode {
+	vrw := dEnv.DoltDB.ValueReadWriter()
+
+	return []HistoryNode{
+		{
+			Branch:    "seed",
+			CommitMsg: "Seeding with initial user data",
+			Updates: map[string]TableUpdate{
+				TableWithHistoryName: {
+					NewSch: InitialHistSch,
+					NewRowData: mustRowData(t, ctx, vrw, InitialHistSch, []row.TaggedValues{
+						{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son")},
+						{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks")},
+						{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn")},
+					}),
+				},
+			},
+			Children: []HistoryNode{
+				{
+					Branch:    "add-age",
+					CommitMsg: "Adding int age to users with tag 3",
+					Updates: map[string]TableUpdate{
+						TableWithHistoryName: {
+							NewSch: AddAgeAt4HistSch,
+							NewRowData: mustRowData(t, ctx, vrw, AddAgeAt4HistSch, []row.TaggedValues{
+								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 4: types.Int(35)},
+								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 4: types.Int(38)},
+								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 4: types.Int(37)},
+								{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 4: types.Int(37)},
+							}),
+						},
+					},
+					Children: nil,
+				},
+				{
+					Branch:    env.DefaultInitBranch,
+					CommitMsg: "Adding string address to users with tag 3",
+					Updates: map[string]TableUpdate{
+						TableWithHistoryName: {
+							NewSch: AddAddrAt3HistSch,
+							NewRowData: mustRowData(t, ctx, vrw, AddAddrAt3HistSch, []row.TaggedValues{
+								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")},
+								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")},
+								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")},
+								{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave")},
+								{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")},
+							}),
+						},
+					},
+					Children: []HistoryNode{
+						{
+							Branch:    env.DefaultInitBranch,
+							CommitMsg: "Re-add age as a uint with tag 4",
+							Updates: map[string]TableUpdate{
+								TableWithHistoryName: {
+									NewSch: ReaddAgeAt5HistSch,
+									NewRowData: mustRowData(t, ctx, vrw, ReaddAgeAt5HistSch, []row.TaggedValues{
+										{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 5: types.Uint(35)},
+										{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 5: types.Uint(38)},
+										{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 5: types.Uint(37)},
+										{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 3: types.String("-1 Imaginary Wy"), 5: types.Uint(37)},
+										{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")},
+										{0: types.Int(5), 1: types.String("Daylon"), 2: types.String("Wilkins")},
+									}),
+								},
+							},
+							Children: nil,
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+var idColTag0TypeUUID = schema.NewColumn("id", 0, types.IntKind, true)
+var firstColTag1TypeStr = schema.NewColumn("first_name", 1, types.StringKind, false)
+var lastColTag2TypeStr = schema.NewColumn("last_name", 2, types.StringKind, false)
+var addrColTag3TypeStr = schema.NewColumn("addr", 3, types.StringKind, false)
+var ageColTag4TypeInt = schema.NewColumn("age", 4, types.IntKind, false)
+var ageColTag5TypeUint = schema.NewColumn("age", 5, types.UintKind, false)
+
+var DiffSchema = dtestutils.MustSchema(
+	schema.NewColumn("to_id", 0, types.IntKind, false),
+	schema.NewColumn("to_first_name", 1, types.StringKind, false),
+	schema.NewColumn("to_last_name", 2, types.StringKind, false),
+	schema.NewColumn("to_addr", 3, types.StringKind, false),
+	schema.NewColumn("from_id", 7, types.IntKind, false),
+	schema.NewColumn("from_first_name", 8, types.StringKind, false),
+	schema.NewColumn("from_last_name", 9, types.StringKind, false),
+	schema.NewColumn("from_addr", 10, types.StringKind, false),
+	schema.NewColumn("diff_type", 14, types.StringKind, false),
+)
+
 func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	validateTest(t, test)
 	ctx := context.Background()
 	cleanup := installTestCommitClock()
 	defer cleanup()
 	dEnv := dtestutils.CreateTestEnv()
-	InitializeWithHistory(t, ctx, dEnv, CreateHistory(ctx, dEnv, t)...)
+	initializeWithHistory(t, ctx, dEnv, CreateHistory(ctx, dEnv, t)...)
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
@@ -1426,7 +1578,7 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	root, err = dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
 
-	root = UpdateTables(t, ctx, root, CreateWorkingRootUpdate())
+	root = updateTables(t, ctx, root, createWorkingRootUpdate())
 
 	err = dEnv.UpdateWorkingRoot(ctx, root)
 	require.NoError(t, err)
@@ -1449,6 +1601,121 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	}
 
 	assertSchemasEqual(t, sqlSchema, sch)
+}
+
+// TODO: this shouldn't be here
+func createWorkingRootUpdate() map[string]TableUpdate {
+	return map[string]TableUpdate{
+		TableWithHistoryName: {
+			RowUpdates: []row.Row{
+				mustRow(row.New(types.Format_Default, ReaddAgeAt5HistSch, row.TaggedValues{
+					0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"),
+				})),
+			},
+		},
+	}
+}
+
+func updateTables(t *testing.T, ctx context.Context, root *doltdb.RootValue, tblUpdates map[string]TableUpdate) *doltdb.RootValue {
+	for tblName, updates := range tblUpdates {
+		tbl, ok, err := root.GetTable(ctx, tblName)
+		require.NoError(t, err)
+
+		var sch schema.Schema
+		if updates.NewSch != nil {
+			sch = updates.NewSch
+		} else {
+			sch, err = tbl.GetSchema(ctx)
+			require.NoError(t, err)
+		}
+
+		var rowData types.Map
+		if updates.NewRowData == nil {
+			if ok {
+				rowData, err = tbl.GetNomsRowData(ctx)
+				require.NoError(t, err)
+			} else {
+				rowData, err = types.NewMap(ctx, root.VRW())
+				require.NoError(t, err)
+			}
+		} else {
+			rowData = *updates.NewRowData
+		}
+
+		if updates.RowUpdates != nil {
+			me := rowData.Edit()
+
+			for _, r := range updates.RowUpdates {
+				me = me.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
+			}
+
+			rowData, err = me.Map(ctx)
+			require.NoError(t, err)
+		}
+
+		var indexData durable.IndexSet
+		require.NoError(t, err)
+		if tbl != nil {
+			indexData, err = tbl.GetIndexSet(ctx)
+			require.NoError(t, err)
+		}
+
+		tbl, err = doltdb.NewNomsTable(ctx, root.VRW(), root.NodeStore(), sch, rowData, indexData, nil)
+		require.NoError(t, err)
+
+		root, err = root.PutTable(ctx, tblName, tbl)
+		require.NoError(t, err)
+	}
+
+	return root
+}
+
+// initializeWithHistory will go through the provided historyNodes and create the intended commit graph
+func initializeWithHistory(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, historyNodes ...HistoryNode) {
+	for _, node := range historyNodes {
+		cs, err := doltdb.NewCommitSpec(env.DefaultInitBranch)
+		require.NoError(t, err)
+
+		cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+		require.NoError(t, err)
+
+		processNode(t, ctx, dEnv, node, cm)
+	}
+}
+
+func processNode(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, node HistoryNode, parent *doltdb.Commit) {
+	branchRef := ref.NewBranchRef(node.Branch)
+	ok, err := dEnv.DoltDB.HasRef(ctx, branchRef)
+	require.NoError(t, err)
+
+	if !ok {
+		err = dEnv.DoltDB.NewBranchAtCommit(ctx, branchRef, parent)
+		require.NoError(t, err)
+	}
+
+	cs, err := doltdb.NewCommitSpec(branchRef.String())
+	require.NoError(t, err)
+
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	require.NoError(t, err)
+
+	root, err := cm.GetRootValue(ctx)
+	require.NoError(t, err)
+
+	root = updateTables(t, ctx, root, node.Updates)
+	r, h, err := dEnv.DoltDB.WriteRootValue(ctx, root)
+	require.NoError(t, err)
+	root = r
+
+	meta, err := datas.NewCommitMeta("Ash Ketchum", "ash@poke.mon", node.CommitMsg)
+	require.NoError(t, err)
+
+	cm, err = dEnv.DoltDB.Commit(ctx, h, branchRef, meta)
+	require.NoError(t, err)
+
+	for _, child := range node.Children {
+		processNode(t, ctx, dEnv, child, cm)
+	}
 }
 
 func validateTest(t *testing.T, test SelectTest) {

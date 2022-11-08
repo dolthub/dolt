@@ -161,9 +161,13 @@ func TestTableEditor(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			expectedErr = nil
 
-			dEnv := sqle.CreateTestDatabase(t)
+			dEnv, err := sqle.CreateTestDatabase()
+			require.NoError(t, err)
+
 			ctx := sqle.NewTestSQLCtx(context.Background())
-			root, _ := dEnv.WorkingRoot(context.Background())
+			root, err := dEnv.WorkingRoot(context.Background())
+			require.NoError(t, err)
+
 			tmpDir, err := dEnv.TempTableFilesDir()
 			require.NoError(t, err)
 			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
@@ -196,7 +200,7 @@ func TestTableEditor(t *testing.T) {
 
 			require.NoError(t, dEnv.UpdateWorkingRoot(context.Background(), root))
 
-			actualRows, err := sqle.ExecuteSelect(t, dEnv, root, test.selectQuery)
+			actualRows, err := sqle.ExecuteSelect(dEnv, root, test.selectQuery)
 			require.NoError(t, err)
 
 			assert.Equal(t, test.expectedRows, actualRows)

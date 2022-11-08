@@ -430,13 +430,13 @@ func testInsertQuery(t *testing.T, test InsertTest) {
 		t.Skip("Skipping test broken on SQL engine")
 	}
 
-	dEnv := CreateEmptyTestDatabase(t)
+	dEnv, err := CreateEmptyTestDatabase()
+	require.NoError(t, err)
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	var err error
 	root, _ := dEnv.WorkingRoot(context.Background())
 	root, err = executeModify(t, context.Background(), dEnv, root, test.InsertQuery)
 	if len(test.ExpectedErr) > 0 {

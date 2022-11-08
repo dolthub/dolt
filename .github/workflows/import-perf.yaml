@@ -1,0 +1,10 @@
+name: Import Benchmarks
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    name: Import benchmarks
+    steps:
+      - name: Stub
+        run: echo hello
+

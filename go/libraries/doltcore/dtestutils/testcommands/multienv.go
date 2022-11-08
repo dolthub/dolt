@@ -28,15 +28,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
-	repoPrefix   = "repo_*"
-	remotePrefix = "remote_*"
-	homePrefix   = "home"
+	homePrefix = "home"
 )
 
 type MultiRepoTestSetup struct {
@@ -270,10 +269,28 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 	return commit
 }
 
+func createTestDataTable() (*table.InMemTable, schema.Schema) {
+	rows, sch, err := dtestutils.RowsAndSchema()
+	if err != nil {
+		panic(err)
+	}
+
+	imt := table.NewInMemTable(sch)
+
+	for _, r := range rows {
+		err := imt.AppendRow(r)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	return imt, sch
+}
+
 func (mr *MultiRepoTestSetup) CreateTable(dbName, tblName string) {
 	dEnv := mr.MrEnv.GetEnv(dbName)
 
-	imt, sch := dtestutils.CreateTestDataTable(true)
+	imt, sch := createTestDataTable()
 	rows := make([]row.Row, imt.NumRows())
 	for i := 0; i < imt.NumRows(); i++ {
 		r, err := imt.GetRow(i)
