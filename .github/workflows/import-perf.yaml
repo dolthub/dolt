@@ -129,7 +129,7 @@ jobs:
         RESULTS: ${{ steps.html.outputs.html }}
       with:
         cmd: |
-          yq -o=json <<EOF
+          yq -j <<EOF
           Template:
             TemplateName: ImportBenchmarkingReleaseTemplate
             SubjectPart: Import Benchmarks for "$FORMAT" "$VERSION"
@@ -161,7 +161,7 @@ jobs:
                   }
                </style>
               </head>
-                <body>"$(cat $RESULTS)"</body>
+                <body>"$( echo $RESULTS )"</body>
               </html>
           EOF
 
