@@ -17,7 +17,7 @@ on:
       report:
         description: 'reporting query, relative to `import_benchmarks/reporting`'
         rquired: false
-        default: 'select_star.sql'
+        default: 'three_way_compare.sql'
 env:
   BENCH_DIR: 'go/performance/import_benchmarker'
   MYSQL_PORT: 3309
