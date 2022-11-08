@@ -81,7 +81,7 @@ jobs:
       run: |
         gw=$GITHUB_WORKSPACE
         in="${{ steps.bench.outputs.result_path }}"
-        query="${{ env.BENCH_DIR }}/reporting/${{ github.events.inputs.report }}"
+        query="${{ env.BENCH_DIR }}/reporting/${{ github.event.inputs.report }}"
         out="$gw/results.csv"
 
         mkdir "$gw/res"
