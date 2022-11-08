@@ -108,11 +108,11 @@ jobs:
         print_header=true
         while read line; do
           if "$print_header"; then
-            echo "<tr><th>$line" | sed -e 's/:[^,]*\(,\|$\)/<\/th><th>/g' >> "$out"
+            echo "  <tr><th>${line//,/</th><th>}</th></tr>" >> "$out"
             print_header=false
             continue
           fi
-          echo "<tr><td>${line//,/</td><td>}</td></tr>" >> "$out"
+          echo "  <tr><td>${line//,/</td><td>}</td></tr>" >> "$out"
         done < "$in"
         echo "</table>" >> "$out"
 
