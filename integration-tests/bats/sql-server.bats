@@ -1500,15 +1500,20 @@ databases:
     run pwd
     REPO_NAME=$output
 
-    PORT=$( definePORT )
-    dolt sql-server --port=$PORT --socket="$REPO_NAME/mysql.sock" --user dolt > log.txt 2>&1 &
-    SERVER_PID=$!
-    run wait_for_connection $PORT 5000
+    secondPORT=$( definePORT )
+    dolt sql-server --port=$secondPORT --socket="$REPO_NAME/mysql.sock" --user dolt > log.txt 2>&1 &
+    SECOND_SERVER_PID=$!
+    run wait_for_connection $secondPORT 5000
     [ "$status" -eq 0 ]
 
-    run grep 'unix socket set up failed: address already in use: listen unix at' log.txt
+    run grep 'unix socket set up failed: file already in use:' log.txt
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
+
+    # killing the second server should not affect the socket file.
+    kill $SECOND_SERVER_PID
+
+    [ -f mysql.sock ]
 }
 
 @test "sql-server: start server with yaml config with socket file path defined" {
