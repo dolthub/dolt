@@ -856,4 +856,3 @@ func (v Collation) String() string {
 	}
 	return "Collation(" + strconv.FormatInt(int64(v), 10) + ")"
 }
-

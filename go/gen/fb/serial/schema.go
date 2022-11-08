@@ -242,6 +242,7 @@ func TableSchemaAddCollation(builder *flatbuffers.Builder, collation Collation) 
 func TableSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type Column struct {
 	_tab flatbuffers.Table
 }
@@ -473,6 +474,7 @@ func ColumnAddVirtual(builder *flatbuffers.Builder, virtual bool) {
 func ColumnEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type Index struct {
 	_tab flatbuffers.Table
 }
@@ -720,6 +722,7 @@ func IndexStartPrefixLengthsVector(builder *flatbuffers.Builder, numElems int) f
 func IndexEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type CheckConstraint struct {
 	_tab flatbuffers.Table
 }

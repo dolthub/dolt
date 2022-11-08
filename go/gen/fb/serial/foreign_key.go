@@ -148,6 +148,7 @@ func ForeignKeyCollectionStartForeignKeysVector(builder *flatbuffers.Builder, nu
 func ForeignKeyCollectionEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type ForeignKey struct {
 	_tab flatbuffers.Table
 }

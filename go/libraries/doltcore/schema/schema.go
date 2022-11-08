@@ -16,13 +16,14 @@ package schema
 
 import (
 	"fmt"
-	errors "gopkg.in/src-d/go-errors.v1"
 	"strings"
+
+	"github.com/dolthub/vitess/go/vt/proto/query"
+	errors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
-	"github.com/dolthub/vitess/go/vt/proto/query"
 )
 
 // Schema defines the schema of a table and describes both its SQL schema and storage layout.
