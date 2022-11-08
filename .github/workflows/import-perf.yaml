@@ -94,7 +94,7 @@ jobs:
         dolt sql < "$in"
         dolt sql -r csv < "$query" > "$out"
 
-        echo "$out"
+        cat "$out"
         echo "::set-output name=report_path::$out"
 
     - name: Format HTML
@@ -106,15 +106,17 @@ jobs:
 
         echo "<table>" > "$out"
         print_header=true
-        while read "$line"; do
+        while read line; do
           if "$print_header"; then
             echo "<tr><th>$line" | sed -e 's/:[^,]*\(,\|$\)/<\/th><th>/g' >> "$out"
             print_header=false
             continue
           fi
-          echo "<tr><td>${line//,/</td><td>}</td></tr>" ;
+          echo "<tr><td>${line//,/</td><td>}</td></tr>"
         done < "$in"
         echo "</table>" >> "$out"
+
+        cat "$out"
 
         echo "::set-output name=html::$(echo $out)"
 
@@ -169,6 +171,9 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-west-2
+
+    - name: cat template
+      run: cat ${{ steps.template.outputs.result }}
 
     - name: Get Addresses
       id: email_addr
