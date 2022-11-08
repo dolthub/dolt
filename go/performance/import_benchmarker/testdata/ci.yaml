@@ -15,12 +15,12 @@ tests:
       user: root
       password: password
       port: 3309
-    tables:
-      - name: "400k"
-        fmt: "csv"
-        rows: 400000
-        schema: |
-          create table xy (
-            x int primary key,
-            y varchar(30)
-          );
+  tables:
+    - name: "400k"
+      fmt: "csv"
+      rows: 400000
+      schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );

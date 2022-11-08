@@ -118,17 +118,6 @@ func MakeServer(dc driver.DoltCmdable, s *driver.Server) (*driver.SqlServer, err
 	if err != nil {
 		return nil, err
 	}
-	//t.Cleanup(func() {
-	//	// We use assert, not require here, since FailNow() in
-	//	// a Cleanup does not make sense.
-	//	err := server.GracefulStop()
-	//	if assert.NoError(t, err) {
-	//		output := string(server.Output.Bytes())
-	//		for _, a := range s.LogMatches {
-	//			assert.Regexp(t, a, output)
-	//		}
-	//	}
-	//})
 
 	return server, nil
 }
@@ -268,7 +257,7 @@ func (test *ImportTest) RunSqlServerTests(repo driver.TestRepo, user driver.Dolt
 		}
 		defer server.GracefulStop()
 
-		db, err := server.DB(driver.Connection{Pass: ""})
+		db, err := server.DB(driver.Connection{User: "root", Pass: ""})
 		if err != nil {
 			return err
 		}
