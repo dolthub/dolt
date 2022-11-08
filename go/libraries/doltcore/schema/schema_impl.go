@@ -43,7 +43,6 @@ type schemaImpl struct {
 	checkCollection            CheckCollection
 	pkOrdinals                 []int
 	collation                  Collation
-	pkPrefixLengths            []uint16
 }
 
 var _ Schema = (*schemaImpl)(nil)
@@ -91,7 +90,6 @@ func SchemaFromColCollections(allCols, pkColColl, nonPKColColl *ColCollection) S
 		checkCollection: NewCheckCollection(),
 		pkOrdinals:      []int{},
 		collation:       Collation_Default,
-		pkPrefixLengths: []uint16{},
 	}
 }
 
@@ -255,16 +253,6 @@ func (si *schemaImpl) SetPkOrdinals(o []int) error {
 	}
 	si.pkCols = NewColCollection(newPks...)
 	return si.indexCollection.SetPks(newPkTags)
-}
-
-func (si *schemaImpl) GetPkPrefixLengths() []uint16 {
-	return si.pkPrefixLengths
-}
-
-func (si *schemaImpl) SetPkPrefixLengths(pkPrefixLengths []uint16) error {
-	// TODO: error check?
-	si.pkPrefixLengths = pkPrefixLengths
-	return nil
 }
 
 func (si *schemaImpl) String() string {

@@ -152,7 +152,7 @@ type encodedIndex struct {
 	Comment         string   `noms:"comment" json:"comment"`
 	Unique          bool     `noms:"unique" json:"unique"`
 	IsSystemDefined bool     `noms:"hidden,omitempty" json:"hidden,omitempty"` // Was previously named Hidden, do not change noms name
-	PrefixLengths   []uint16 `noms:"prefixLength,omitempty" json:"prefixLength,omitempty"`
+	PrefixLengths   []uint16 `noms:"prefixLengths,omitempty" json:"prefixLengths,omitempty"`
 }
 
 type encodedCheck struct {
@@ -167,7 +167,6 @@ type schemaData struct {
 	CheckConstraints []encodedCheck   `noms:"checks,omitempty" json:"checks,omitempty"`
 	PkOrdinals       []int            `noms:"pkOrdinals,omitempty" json:"pkOrdinals,omitEmpty"`
 	Collation        schema.Collation `noms:"collation,omitempty" json:"collation,omitempty"`
-	PkPrefixLengths  []uint16         `noms:"pkPrefixLengths,omitempty" json:"pkPrefixLengths,omitempty"`
 }
 
 func (sd *schemaData) Copy() *schemaData {
@@ -264,7 +263,6 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 		CheckConstraints: encodedChecks,
 		PkOrdinals:       sch.GetPkOrdinals(),
 		Collation:        sch.GetCollation(),
-		PkPrefixLengths:  sch.GetPkPrefixLengths(),
 	}, nil
 }
 
@@ -287,8 +285,6 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 		return nil, err
 	}
 	sch.SetCollation(sd.Collation)
-
-	sch.SetPkPrefixLengths(sd.PkPrefixLengths)
 
 	return sch, nil
 }
@@ -417,9 +413,6 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 		sd, err = toSchemaData(sch)
 	} else {
 		err = marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
-		if sd.PkPrefixLengths == nil {
-			sd.PkPrefixLengths = []uint16{}
-		}
 		for i, enc := range sd.IndexCollection {
 			if enc.PrefixLengths == nil {
 				sd.IndexCollection[i].PrefixLengths = []uint16{}
