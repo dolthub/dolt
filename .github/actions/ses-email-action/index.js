@@ -36,6 +36,8 @@ const params = {
     ReplyToAddresses,
 };
 
+console.log(Template)
+
 // Create the promise and SES service object
 // const sendPromise = new aws.SES({apiVersion: '2010-12-01'}).sendEmail(params).promise();
 const sendPromise = new aws.SES({apiVersion: '2010-12-01'}).sendTemplatedEmail(params).promise();
