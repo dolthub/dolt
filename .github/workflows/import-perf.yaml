@@ -173,8 +173,11 @@ jobs:
         aws-region: us-west-2
 
     - name: echo template
+      id: template_file
       run: |
-        echo '${{ steps.template.outputs.result }}'
+        out=$GITHUB_WORKSPACE/template.json
+        echo '${{ steps.template.outputs.result }}' >> "$out"
+        echo "::set-output name=result::$out"
 
     - name: Get Addresses
       id: email_addr
@@ -193,4 +196,4 @@ jobs:
       with:
         region: us-west-2
         toAddresses: ${{ steps.email_addr.outputs.addresses }}
-        dataFile: ${{ steps.template.outputs.result }}
+        dataFile: ${{ steps.template_file.outputs.result }}
