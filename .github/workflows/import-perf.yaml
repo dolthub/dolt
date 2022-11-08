@@ -172,10 +172,6 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-west-2
 
-    - name: echo template
-      run: |
-        echo '${{ steps.template.outputs.result }}'
-
     - name: Get Addresses
       id: email_addr
       env:
