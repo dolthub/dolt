@@ -127,40 +127,40 @@ jobs:
       with:
         cmd: |
           yq -j <<EOF
-            Template:
-              TemplateName: ImportBenchmarkingReleaseTemplate
-              SubjectPart: Import Benchmarks for "$FORMAT" "$VERSION"
-              HtmlPart: |
-                <!DOCTYPE html>
-                <html lang="en">
-                <head>
-                 <meta charset="UTF-8">
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                  <title>Dolt "$FORMAT" "$VERSION" Import Results</title>
-                  <style>
-                    table {
-                      border: 1px solid black;
-                      letter-spacing: 1px;
-                      font-family: sans-serif;
-                      font-size: .8rem;
-                      padding: 5px;
-                      margin: 5px;
-                    }
-                    th {
-                      border: 1px solid rgb(190, 190, 190);
-                      padding: 10px;
-                    }
-                    td {
-                      padding: 5px;
-                    }
-                    tr:nth-child(even) {
-                      background-color: #f2f2f2;
-                    }
-                 </style>
-                </head>
-                  <body>"$( echo $RESULTS )"</body>
-                </html>
-              EOF
+          Template:
+            TemplateName: ImportBenchmarkingReleaseTemplate
+            SubjectPart: Import Benchmarks for "$FORMAT" "$VERSION"
+            HtmlPart: |
+              <!DOCTYPE html>
+              <html lang="en">
+              <head>
+               <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Dolt "$FORMAT" "$VERSION" Import Results</title>
+                <style>
+                  table {
+                    border: 1px solid black;
+                    letter-spacing: 1px;
+                    font-family: sans-serif;
+                    font-size: .8rem;
+                    padding: 5px;
+                    margin: 5px;
+                  }
+                  th {
+                    border: 1px solid rgb(190, 190, 190);
+                    padding: 10px;
+                  }
+                  td {
+                    padding: 5px;
+                  }
+                  tr:nth-child(even) {
+                    background-color: #f2f2f2;
+                  }
+               </style>
+              </head>
+                <body>"$( echo $RESULTS )"</body>
+              </html>
+          EOF
 
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v1-node16
