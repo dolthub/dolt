@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -242,9 +241,6 @@ func SqlColToStr(sqlType sql.Type, col interface{}) (string, error) {
 				return "", err
 			}
 			return hexRes, nil
-		case decimal.Decimal:
-			// e.g. (2/4) is decimal type result but gets int as sqlType
-			return typedCol.StringFixed(typedCol.Exponent() * -1), nil
 		default:
 			res, err := sqlType.SQL(sqlColToStrContext, nil, col)
 			if err != nil {
