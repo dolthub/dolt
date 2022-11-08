@@ -181,7 +181,7 @@ tests:
 #- name: "sorting"
 #  repos: *repos
 #  tables:
-#    - name: "shuffled"
+#    - name: "shuffled 1mm"
 #      shuffle: true
 #      rows: 1000000
 #      schema: |
@@ -189,7 +189,7 @@ tests:
 #          x int primary key,
 #          y varchar(30)
 #        );
-#    - name: "sorted"
+#    - name: "sorted 1mm"
 #      shuffle: false
 #      rows: 1000000
 #      schema: |
@@ -197,7 +197,7 @@ tests:
 #          x int primary key,
 #          y varchar(30)
 #        );
-#    - name: "shuffled"
+#    - name: "shuffled 4mm"
 #      shuffle: true
 #      rows: 4000000
 #      schema: |
@@ -205,7 +205,7 @@ tests:
 #          x int primary key,
 #          y varchar(30)
 #        );
-#    - name: "sorted"
+#    - name: "sorted 4mm"
 #      shuffle: false
 #      rows: 4000000
 #      schema: |
