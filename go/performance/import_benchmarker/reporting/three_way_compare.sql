@@ -12,7 +12,7 @@ select
                                   a.test_name = b.test_name and
                                   a.detail = b.detail
         where
-                a.server = 'dolt' and
+                a.server = 'dolt_server' and
                 b.server = 'mysql' and
                 a.test_name = o.test_name and
                 a.detail = o.detail
