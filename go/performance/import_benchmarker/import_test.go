@@ -23,3 +23,9 @@ func TestShuffle(t *testing.T) {
 	t.Skip()
 	RunTestsFile(t, "testdata/shuffle.yaml")
 }
+
+func TestCI(t *testing.T) {
+	// this will be a lot slower than running `cmd/main.go -test testdata/ci.yaml`
+	t.Skip()
+	RunTestsFile(t, "testdata/ci.yaml")
+}
