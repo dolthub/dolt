@@ -173,7 +173,8 @@ jobs:
         aws-region: us-west-2
 
     - name: cat template
-      run: cat ${{ steps.template.outputs.result }}
+      run: |
+        cat ${{ steps.template.outputs.result }}
 
     - name: Get Addresses
       id: email_addr
