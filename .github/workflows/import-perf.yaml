@@ -206,7 +206,6 @@ jobs:
       with:
         remote: max-hoffman/import-perf
         dolthub_credential: ${{ secrets.DOLTHUB_CREDENTIAL }}
-        message: 'Dolt action commit'
         commit_message: 'automated CI commit'
         commit_user_email: 'max@dolthub.com'
         commit_author: 'Max Hoffman'
