@@ -8136,15 +8136,7 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
 			},
 			{
-				Query:       "alter table t add index (v(10))",
-				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
-			},
-			{
 				Query:       "create table v_tbl (v varchar(100), primary key (v(10)))",
-				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
-			},
-			{
-				Query:       "create table v_tbl (i int primary key, v varchar(100), index (v(10)))",
 				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
 			},
 		},
@@ -8160,15 +8152,7 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
 			},
 			{
-				Query:       "alter table t add index (c(10))",
-				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
-			},
-			{
 				Query:       "create table c_tbl (c char(100), primary key (c(10)))",
-				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
-			},
-			{
-				Query:       "create table c_tbl (i int primary key, c char(100), index (c(10)))",
 				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
 			},
 		},
