@@ -200,6 +200,11 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 		return err
 	}
 
+	// TODO: fix this later
+	if len(def.GetPrefixLengths()) > 0 {
+		return nil
+	}
+
 	for {
 		key, value, err := iter.Next(ctx)
 		if err == io.EOF {
@@ -215,6 +220,7 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			if j < pkSize {
 				builder.PutRaw(i, key.GetField(j))
 			} else {
+
 				builder.PutRaw(i, value.GetField(j-pkSize))
 			}
 		}

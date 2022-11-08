@@ -54,6 +54,7 @@ type prollyTableWriter struct {
 
 var _ TableWriter = &prollyTableWriter{}
 
+// TODO: return a prefix index writer if there is a prefix defined on this table
 func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema) (map[string]indexWriter, error) {
 	s, err := t.GetIndexSet(ctx)
 	if err != nil {
@@ -78,15 +79,29 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 		// mapping from secondary index key to primary key
 		pkMap := makeIndexToIndexMapping(def.Schema().GetPKCols(), sch.GetPKCols())
 
-		writers[defName] = prollySecondaryIndexWriter{
-			name:    defName,
-			mut:     idxMap.Mutate(),
-			unique:  def.IsUnique(),
-			idxCols: def.Count(),
-			keyMap:  keyMap,
-			keyBld:  val.NewTupleBuilder(keyDesc),
-			pkMap:   pkMap,
-			pkBld:   val.NewTupleBuilder(pkDesc),
+		if len(def.GetPrefixLengths()) == 0 {
+			writers[defName] = prollySecondaryIndexWriter{
+				name:    defName,
+				mut:     idxMap.Mutate(),
+				unique:  def.IsUnique(),
+				idxCols: def.Count(),
+				keyMap:  keyMap,
+				keyBld:  val.NewTupleBuilder(keyDesc),
+				pkMap:   pkMap,
+				pkBld:   val.NewTupleBuilder(pkDesc),
+			}
+		} else {
+			writers[defName] = prollySecondaryIndexPrefixWriter{
+				name:          defName,
+				mut:           idxMap.Mutate(),
+				unique:        def.IsUnique(),
+				prefixLengths: def.GetPrefixLengths(),
+				idxCols:       def.Count(),
+				keyMap:        keyMap,
+				keyBld:        val.NewTupleBuilder(keyDesc),
+				pkMap:         pkMap,
+				pkBld:         val.NewTupleBuilder(pkDesc),
+			}
 		}
 	}
 
