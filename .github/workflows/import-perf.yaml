@@ -193,4 +193,4 @@ jobs:
       with:
         region: us-west-2
         toAddresses: ${{ steps.email_addr.outputs.addresses }}
-        template: '${{ steps.template.outputs.result }}'
+        template: ${{ steps.template.outputs.result }}
