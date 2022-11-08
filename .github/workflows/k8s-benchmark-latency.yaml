@@ -40,7 +40,6 @@ jobs:
       - name: Create Sysbench Performance Benchmarking K8s Job
         run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
         env:
-          RELEASE_RUN: ${{ github.event.client_payload.release_run }}
           FROM_SERVER: ${{ github.event.client_payload.from_server }}
           FROM_VERSION: ${{ github.event.client_payload.from_version }}
           TO_SERVER: ${{ github.event.client_payload.to_server }}

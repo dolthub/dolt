@@ -23,7 +23,6 @@ package nbs
 
 import (
 	"context"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,7 +32,7 @@ import (
 var testChunks = [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
 
 func TestTableSetPrependEmpty(t *testing.T) {
-	ts := newFakeTableSet(&noopQuotaProvider{}).prepend(context.Background(), newMemTable(testMemTableSize), &Stats{})
+	ts := newFakeTableSet(&UnlimitedQuotaProvider{}).prepend(context.Background(), newMemTable(testMemTableSize), &Stats{})
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(t, specs)
@@ -41,7 +40,7 @@ func TestTableSetPrependEmpty(t *testing.T) {
 
 func TestTableSetPrepend(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet(&noopQuotaProvider{})
+	ts := newFakeTableSet(&UnlimitedQuotaProvider{})
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
@@ -66,7 +65,7 @@ func TestTableSetPrepend(t *testing.T) {
 
 func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet(&noopQuotaProvider{})
+	ts := newFakeTableSet(&UnlimitedQuotaProvider{})
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
@@ -89,7 +88,7 @@ func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 
 func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet(&noopQuotaProvider{})
+	ts := newFakeTableSet(&UnlimitedQuotaProvider{})
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
@@ -114,17 +113,15 @@ func persist(t *testing.T, p tablePersister, chunks ...[]byte) {
 	for _, c := range chunks {
 		mt := newMemTable(testMemTableSize)
 		mt.addChunk(computeAddr(c), c)
-		_, err := p.Persist(context.Background(), mt, nil, &Stats{})
+		cs, err := p.Persist(context.Background(), mt, nil, &Stats{})
 		require.NoError(t, err)
+		require.NoError(t, cs.close())
 	}
 }
 
 func TestTableSetRebase(t *testing.T) {
 	assert := assert.New(t)
 	q := NewUnlimitedMemQuotaProvider()
-	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
 	persister := newFakeTablePersister(q)
 
 	insert := func(ts tableSet, chunks ...[]byte) tableSet {
@@ -168,7 +165,7 @@ func TestTableSetRebase(t *testing.T) {
 
 func TestTableSetPhysicalLen(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet(&noopQuotaProvider{})
+	ts := newFakeTableSet(&UnlimitedQuotaProvider{})
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
@@ -189,28 +186,22 @@ func TestTableSetClosesOpenedChunkSourcesOnErr(t *testing.T) {
 	p := newFakeTablePersister(q)
 	persist(t, p, testChunks...)
 
-	var mem uint64 = 0
-	var sources []addr
-	for addr := range p.sources {
-		sources = append(sources, addr)
-		mem += indexMemSize(1)
-	}
-
-	idx := rand.Intn(len(testChunks))
-	addrToFail := sources[idx]
-	p.sourcesToFail[addrToFail] = true
-
+	once := true
 	var specs []tableSpec
-	for _, addr := range sources {
-		specs = append(specs, tableSpec{addr, 1})
+	for a := range p.sources {
+		if once {
+			// map iteration is randomized
+			p.sourcesToFail[a] = true
+		}
+		once = false
+		specs = append(specs, tableSpec{a, 1})
 	}
 
-	ts := tableSet{p: p, q: q, rl: make(chan struct{}, 1)}
-	_, err := ts.rebase(context.Background(), specs, &Stats{})
+	ts := newTableSet(p, q)
+	ts2, err := ts.rebase(context.Background(), specs, &Stats{})
 	require.Error(t, err)
 
-	for _ = range p.opened {
-		mem -= indexMemSize(1)
-	}
-	require.EqualValues(t, mem, q.Usage())
+	assert.NoError(t, ts.close())
+	assert.NoError(t, ts2.close())
+	assert.Equal(t, 0, int(q.Usage()))
 }

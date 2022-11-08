@@ -5199,11 +5199,23 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
+				Query:       "SELECT * from dolt_log('^main...branch1');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
 				Query:       "SELECT * from dolt_log(@Commit1, 'main..branch1');",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
+				Query:       "SELECT * from dolt_log(@Commit1, 'main...branch1');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
 				Query:       "SELECT * from dolt_log('main..branch1', '--not', @Commit1);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('main...branch1', '--not', @Commit1);",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
@@ -5366,30 +5378,39 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			"insert into t values (5, 'five', 'six');",
 			"set @Commit5 = dolt_commit('-am', 'inserting into t 5');",
 		},
+		/* Commit graph:
+		          3 - 4 (new-branch)
+		         /
+		0 - 1 - 2 - 5 (main)
+		*/
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT count(*) from dolt_log('^main', 'new-branch');",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.Row{{2}}, // 4, 3
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('main..new-branch');",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.Row{{2}}, // 4, 3
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main...new-branch');",
+				Expected: []sql.Row{{3}}, // 5, 4, 3
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('new-branch', '--not', 'main');",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.Row{{2}}, // 4, 3
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('new-branch', '^main');",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.Row{{2}}, // 4, 3
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('^new-branch', 'main');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{{1}}, // 5
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('main', '--not', 'new-branch');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{{1}}, // 5
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('^main', 'main');",
@@ -5397,6 +5418,10 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('main..main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main...main');",
 				Expected: []sql.Row{{0}},
 			},
 			{
@@ -5409,7 +5434,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('^main^', 'main');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{{1}}, // 5
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('^main', 'main^');",
@@ -5421,15 +5446,15 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('^new-branch', @Commit5);",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{{1}}, // 5
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log(@Commit3, '--not', @Commit2);",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{{1}}, // 3
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log(@Commit4, '--not', @Commit2);",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.Row{{2}}, // 4, 3
 			},
 		},
 	},
@@ -5492,6 +5517,11 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			"insert into t values (5, 'five', 'six');",
 			"set @Commit5 = dolt_commit('-am', 'inserting into t 5');",
 		},
+		/* Commit graph:
+		          3 - 4 (new-branch)
+		         /
+		0 - 1 - 2 - 5 (main)
+		*/
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('^main', 'new-branch');",
@@ -5505,6 +5535,14 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
 					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
+				},
+			},
+			{
+				Query: "SELECT commit_hash = @Commit5, commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('main...new-branch');",
+				Expected: []sql.Row{
+					{true, false, false, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"},
+					{false, true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
+					{false, false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
 				},
 			},
 			{
@@ -8081,6 +8119,57 @@ var DoltCommitTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT COUNT(parent_hash) FROM dolt_commit_ancestors WHERE commit_hash= @hash;",
 				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+}
+
+var DoltIndexPrefixScripts = []queries.ScriptTest{
+	{
+		Name: "varchar prefix",
+		SetUpScript: []string{
+			"create table t (v varchar(100))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "alter table t add primary key (v(10))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+			{
+				Query:       "alter table t add index (v(10))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+			{
+				Query:       "create table v_tbl (v varchar(100), primary key (v(10)))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+			{
+				Query:       "create table v_tbl (i int primary key, v varchar(100), index (v(10)))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+		},
+	},
+	{
+		Name: "char prefix",
+		SetUpScript: []string{
+			"create table t (c char(100))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "alter table t add primary key (c(10))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+			{
+				Query:       "alter table t add index (c(10))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+			{
+				Query:       "create table c_tbl (c char(100), primary key (c(10)))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+			{
+				Query:       "create table c_tbl (i int primary key, c char(100), index (c(10)))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
 			},
 		},
 	},

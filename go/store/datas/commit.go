@@ -363,7 +363,7 @@ func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 *Commit, vr1
 // FindCommonAncestor returns the most recent common ancestor of c1 and c2, if
 // one exists, setting ok to true. If there is no common ancestor, ok is set
 // to false. Refs of |c1| are dereferenced through |vr1|, while refs of |c2|
-// are dereference through |vr2|.
+// are dereferenced through |vr2|.
 //
 // This implementation makes use of the parents_closure field on the commit
 // struct.  If the commit does not have a materialized parents_closure, this
@@ -682,10 +682,6 @@ func firstError(l, r error) error {
 		return l
 	}
 	return r
-}
-
-func IsCommitType(nbf *types.NomsBinFormat, t *types.Type) bool {
-	return types.IsSubtype(nbf, valueCommitType, t)
 }
 
 func IsCommit(v types.Value) (bool, error) {

@@ -22,9 +22,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var forceOpt = &Option{"force", "f", "", OptionalFlag, "force desc", nil}
-var messageOpt = &Option{"message", "m", "msg", OptionalValue, "msg desc", nil}
-var fileTypeOpt = &Option{"file-type", "", "", OptionalValue, "file type", nil}
+var forceOpt = &Option{"force", "f", "", OptionalFlag, "force desc", nil, false}
+var messageOpt = &Option{"message", "m", "msg", OptionalValue, "msg desc", nil, false}
+var fileTypeOpt = &Option{"file-type", "", "", OptionalValue, "file type", nil, false}
+var notOpt = &Option{"not", "", "", OptionalValue, "not desc", nil, true}
 
 func TestParsing(t *testing.T) {
 	tests := []struct {
@@ -156,6 +157,13 @@ func TestParsing(t *testing.T) {
 			options:      []*Option{forceOpt, messageOpt},
 			args:         []string{"-mf", "value"},
 			expectedOpts: map[string]string{"message": "f"},
+			expectedArgs: []string{"value"},
+		},
+		{
+			name:         "--not string list value",
+			options:      []*Option{forceOpt, messageOpt, notOpt},
+			args:         []string{"-mf", "value", "--not", "main", "branch"},
+			expectedOpts: map[string]string{"message": "f", "not": "main,branch"},
 			expectedArgs: []string{"value"},
 		},
 		{
