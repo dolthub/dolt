@@ -199,3 +199,26 @@ jobs:
         version: ${{ steps.version.outputs.ref }}
         format: '__DOLT__'
         dataFile: ${{ steps.html.outputs.html }}
+
+    - name: Dolt Import
+      uses: dolthub/dolt-action@v1.0
+      id: 'dolt_import'
+      with:
+        remote: max-hoffman/import-perf
+        dolthub_credential: ${{ secrets.DOLTHUB_CREDENTIAL }}
+        message: 'Dolt action commit'
+        commit_message: 'automated CI commit'
+        commit_user_email: 'max@dolthub.com'
+        commit_author: 'Max Hoffman'
+        push: true
+        before: |
+          report_query="${{ github.event.inputs.report }}"
+          report_name=${report_query%.sql}
+
+          dolt sql -q -b <<EOF
+          call dolt_checkout('-b', '${{ steps.version.outputs.ref' }});
+          drop table if exists "$report_name";
+          EOF
+
+          query="$(pwd)/${{ env.BENCH_DIR }}/reporting/${{ github.event.inputs.report }}"
+          dolt sql < "$query"
