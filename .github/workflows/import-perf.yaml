@@ -212,13 +212,11 @@ jobs:
         commit_author: 'Max Hoffman'
         push: true
         before: |
-          report_query="${{ github.event.inputs.report }}"
-          report_name=${report_query%.sql}
-
           dolt sql -q -b <<EOF
           call dolt_checkout('-b', '${{ steps.version.outputs.ref' }});
-          drop table if exists "$report_name";
+          drop table if exists import_perf_results;
           EOF
 
-          query="$(pwd)/${{ env.BENCH_DIR }}/reporting/${{ github.event.inputs.report }}"
-          dolt sql < "$query"
+          in="${{ steps.bench.outputs.result_path }}"
+          dolt sql < "$in"
+
