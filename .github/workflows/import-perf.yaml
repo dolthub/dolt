@@ -91,8 +91,8 @@ jobs:
         dolt config --global --add user.name "Max Hoffman"
 
         dolt init
-        dolt sql < "$query"
-        dolt sql -r csv < "$in" > "$out"
+        dolt sql < "$in"
+        dolt sql -r csv < "$query" > "$out"
 
         echo "::set-output name=report_path::$out"
 
