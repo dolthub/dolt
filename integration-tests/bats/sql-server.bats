@@ -1492,7 +1492,7 @@ databases:
     rm /tmp/mysql.sock
 }
 
-@test "sql-server: server fails to start up if there is already a file in the socket file path" {
+@test "sql-server: the second server starts without unix socket set up if there is already a file in the socket file path" {
     skiponwindows "unix socket is not available on Windows"
     cd repo2
     touch mysql.sock
@@ -1500,15 +1500,20 @@ databases:
     run pwd
     REPO_NAME=$output
 
-    PORT=$( definePORT )
-    dolt sql-server --port=$PORT --socket="$REPO_NAME/mysql.sock" --user dolt > log.txt 2>&1 &
-    SERVER_PID=$!
-    run wait_for_connection $PORT 5000
-    [ "$status" -eq 1 ]
+    secondPORT=$( definePORT )
+    dolt sql-server --port=$secondPORT --socket="$REPO_NAME/mysql.sock" --user dolt > log.txt 2>&1 &
+    SECOND_SERVER_PID=$!
+    run wait_for_connection $secondPORT 5000
+    [ "$status" -eq 0 ]
 
-    run grep 'address already in use' log.txt
+    run grep 'unix socket set up failed: file already in use:' log.txt
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
+
+    # killing the second server should not affect the socket file.
+    kill $SECOND_SERVER_PID
+
+    [ -f mysql.sock ]
 }
 
 @test "sql-server: start server with yaml config with socket file path defined" {
