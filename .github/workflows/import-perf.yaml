@@ -165,7 +165,7 @@ jobs:
                   "$(cat $RESULTS)"
                 </body>
               </html>
-          EOF
+            EOF
 
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v1-node16
