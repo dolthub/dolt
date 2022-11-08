@@ -112,7 +112,7 @@ jobs:
             print_header=false
             continue
           fi
-          echo "<tr><td>${line//,/</td><td>}</td></tr>"
+          echo "<tr><td>${line//,/</td><td>}</td></tr>" >> "$out"
         done < "$in"
         echo "</table>" >> "$out"
 
