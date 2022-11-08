@@ -124,22 +124,19 @@ jobs:
       id: template
       uses: mikefarah/yq@master
       env:
-        VERSION: ${{ steps.version.outputs.ref }}
-        FORMAT: '__DOLT__'
-        RESULTS: ${{ steps.html.outputs.html }}
       with:
         cmd: |
           yq -o=json <<EOF
           Template:
             TemplateName: ImportBenchmarkingReleaseTemplate
-            SubjectPart: Import Benchmarks for "$FORMAT" "$VERSION"
+            SubjectPart: Import Benchmarks for {{format}} {{version}}
             HtmlPart: |
               <!DOCTYPE html>
               <html lang="en">
               <head>
                <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Dolt "$FORMAT" "$VERSION" Import Results</title>
+                <title>Dolt {{format}} {{version}} Import Results</title>
                 <style>
                   table {
                     border: 1px solid black;
@@ -161,7 +158,7 @@ jobs:
                   }
                </style>
               </head>
-                <body>"$( echo $RESULTS )"</body>
+                <body>{{results}}</body>
               </html>
           EOF
 
@@ -196,4 +193,6 @@ jobs:
       with:
         region: us-west-2
         toAddresses: ${{ steps.email_addr.outputs.addresses }}
-        dataFile: ${{ steps.template_file.outputs.result }}
+        version: ${{ steps.version.outputs.ref }}
+        format: '__DOLT__'
+        dataFile: ${{ steps.html.outputs.html }}
