@@ -123,7 +123,6 @@ jobs:
     - name: Format template
       id: template
       uses: mikefarah/yq@master
-      env:
       with:
         cmd: |
           yq -o=json <<EOF
