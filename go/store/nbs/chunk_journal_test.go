@@ -24,30 +24,75 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"math"
 	"math/rand"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func TestChunkJournalAddr(t *testing.T) {
-	expAddr := addr{
-		255, 255, 255, 255, 255,
-		255, 255, 255, 255, 255,
-		255, 255, 255, 255, 255,
-		255, 255, 255, 255, 255,
+func TestChunkJournalBlockStoreSuite(t *testing.T) {
+	cacheOnce.Do(makeGlobalCaches)
+	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
+		m, err := getFileManifest(ctx, dir)
+		if err != nil {
+			return nil, err
+		}
+		j, err := newChunkJournal(ctx, dir, m)
+		if err != nil {
+			return nil, err
+		}
+		nbf := constants.FormatDefaultString
+		mm := makeManifestManager(m)
+		q := NewUnlimitedMemQuotaProvider()
+		c := inlineConjoiner{defaultMaxTables}
+		return newNomsBlockStore(ctx, nbf, mm, j, q, c, testMemTableSize)
 	}
-	expString := "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"
-	assert.Equal(t, expAddr, chunkJournalAddr)
-	assert.Equal(t, expString, chunkJournalAddr.String())
-	assert.Equal(t, uint64(math.MaxUint64), chunkJournalAddr.Prefix())
-	assert.Equal(t, uint32(math.MaxUint32), chunkJournalAddr.Checksum())
+	suite.Run(t, &BlockStoreSuite{
+		factory:        fn,
+		skipInterloper: true,
+	})
+}
+
+func TestChunkJournalPersist(t *testing.T) {
+	ctx := context.Background()
+	dir, err := os.MkdirTemp("", "")
+	require.NoError(t, err)
+	m, err := getFileManifest(ctx, dir)
+	require.NoError(t, err)
+	j, err := newChunkJournal(ctx, dir, m)
+	require.NoError(t, err)
+
+	const iters = 64
+	stats := &Stats{}
+	haver := emptyChunkSource{}
+	for i := 0; i < iters; i++ {
+		memTbl, chunkMap := randomMemTable(16)
+		source, err := j.Persist(ctx, memTbl, haver, stats)
+		assert.NoError(t, err)
+
+		for h, ch := range chunkMap {
+			ok, err := source.has(h)
+			assert.NoError(t, err)
+			assert.True(t, ok)
+			data, err := source.get(ctx, h, stats)
+			assert.NoError(t, err)
+			assert.Equal(t, ch.Data(), data)
+		}
+
+		name, err := source.hash()
+		assert.NoError(t, err)
+		cs, err := j.Open(ctx, name, 16, stats)
+		assert.NotNil(t, cs)
+		assert.NoError(t, err)
+	}
 }
 
 func TestRoundTripRecords(t *testing.T) {
@@ -108,18 +153,31 @@ func TestProcessRecords(t *testing.T) {
 		return
 	}
 
-	n, c, err := processRecords(ctx, bytes.NewBuffer(journal), check)
-	assert.Equal(t, cnt, int(c))
+	n, err := processRecords(ctx, bytes.NewBuffer(journal), check)
+	assert.Equal(t, cnt, i)
 	assert.Equal(t, int(off), int(n))
 	require.NoError(t, err)
 
 	i, sum = 0, 0
 	// write a bogus record to the end and process again
 	writeCorruptRecord(journal[off:])
-	n, c, err = processRecords(ctx, bytes.NewBuffer(journal), check)
-	assert.Equal(t, cnt, int(c))
+	n, err = processRecords(ctx, bytes.NewBuffer(journal), check)
+	assert.Equal(t, cnt, i)
 	assert.Equal(t, int(off), int(n))
 	require.NoError(t, err)
+}
+
+func randomMemTable(cnt int) (*memTable, map[addr]chunks.Chunk) {
+	chnx := make(map[addr]chunks.Chunk, cnt)
+	for i := 0; i < cnt; i++ {
+		ch := chunks.NewChunk(randBuf(100))
+		chnx[addr(ch.Hash())] = ch
+	}
+	mt := newMemTable(uint64(cnt) * 256)
+	for a, ch := range chnx {
+		mt.addChunk(a, ch.Data())
+	}
+	return mt, chnx
 }
 
 func makeChunkRecord() (jrecord, []byte) {

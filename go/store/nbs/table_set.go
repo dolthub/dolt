@@ -229,11 +229,11 @@ func (ts tableSet) uncompressedLen() (uint64, error) {
 func (ts tableSet) physicalLen() (uint64, error) {
 	f := func(css chunkSources) (data uint64, err error) {
 		for _, haver := range css {
-			index, err := haver.index()
+			sz, err := haver.size()
 			if err != nil {
 				return 0, err
 			}
-			data += index.tableFileSize()
+			data += sz
 		}
 		return
 	}
