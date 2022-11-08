@@ -58,11 +58,13 @@ jobs:
       with:
         mysql-version: '8.0'
         auto-start: true
-        root-password: 'password'
         my-cnf: |
           local_infile=1
           socket=/tmp/mysqld2.sock
           port=${{ env.MYSQL_PORT }}
+
+    - name: Setup MySQL
+      run: mysql -uroot -h127.0.0.1 -e 'create database test;'
 
     - name: Run bench
       id: bench
