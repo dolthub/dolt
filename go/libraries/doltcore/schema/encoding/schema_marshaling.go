@@ -388,21 +388,20 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 	}
 
 	// TODO: cache is messing everything up
-	//schemaCacheMu.Lock()
-	//cachedData, ok := unmarshalledSchemaCache[h]
-	//schemaCacheMu.Unlock()
-	//
-	//
-	//if ok {
-	//	cachedSch := schema.SchemaFromColCollections(cachedData.all, cachedData.pk, cachedData.nonPK)
-	//	sd := cachedData.sd.Copy()
-	//	err := sd.addChecksIndexesAndPkOrderingToSchema(cachedSch)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//
-	//	return cachedSch, nil
-	//}
+	schemaCacheMu.Lock()
+	cachedData, ok := unmarshalledSchemaCache[h]
+	schemaCacheMu.Unlock()
+
+	if ok {
+		cachedSch := schema.SchemaFromColCollections(cachedData.all, cachedData.pk, cachedData.nonPK)
+		sd := cachedData.sd.Copy()
+		err := sd.addChecksIndexesAndPkOrderingToSchema(cachedSch)
+		if err != nil {
+			return nil, err
+		}
+
+		return cachedSch, nil
+	}
 
 	var sd schemaData
 	if nbf.UsesFlatbuffers() {
