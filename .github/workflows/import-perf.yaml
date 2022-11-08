@@ -94,6 +94,7 @@ jobs:
         dolt sql < "$in"
         dolt sql -r csv < "$query" > "$out"
 
+        echo "$out"
         echo "::set-output name=report_path::$out"
 
     - name: Format HTML
