@@ -89,11 +89,11 @@ jobs:
         out="$gw/results.csv"
         dolt_dir="$gw/import-perf"
 
-        dolt config --global --add user.email "max@dolthub.com"
-        dolt config --global --add user.name "Max Hoffman"
+        dolt config --global --add user.email "import-perf@dolthub.com"
+        dolt config --global --add user.name "import-perf"
 
-        #echo "${{ secrets.DOLTHUB_CREDENTIAL }}" | dolt creds import
-        dolt clone max-hoffman/import-perf "$dolt_dir"
+        echo "${{ secrets.DOLTHUB_IMPORT_PERF_CREDS_VALUE }}" | dolt creds import
+        dolt clone import-perf/import-perf "$dolt_dir"
 
         cd "$dolt_dir"
 
