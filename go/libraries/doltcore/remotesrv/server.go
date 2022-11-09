@@ -59,6 +59,8 @@ type ServerArgs struct {
 	ReadOnly bool
 	Options  []grpc.ServerOption
 
+	HttpInterceptor func(http.Handler) http.Handler
+
 	// If supplied, the listener(s) returned from Listeners() will be TLS
 	// listeners. The scheme used in the URLs returned from the gRPC server
 	// will be https.
@@ -94,6 +96,9 @@ func NewServer(args ServerArgs) (*Server, error) {
 	remotesapi.RegisterChunkStoreServiceServer(s.grpcSrv, chnkSt)
 
 	var handler http.Handler = newFileHandler(args.Logger, args.DBCache, args.FS, args.ReadOnly, sealer)
+	if args.HttpInterceptor != nil {
+		handler = args.HttpInterceptor(handler)
+	}
 	if args.HttpPort == args.GrpcPort {
 		handler = grpcMultiplexHandler(s.grpcSrv, handler)
 	} else {

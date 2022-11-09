@@ -397,12 +397,13 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 		t.Skip("Skipping tests until " + singleUpdateQueryTest)
 	}
 
-	dEnv := CreateTestDatabase(t)
+	dEnv, err := CreateTestDatabase()
+	require.NoError(t, err)
+
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	var err error
 	root, _ := dEnv.WorkingRoot(context.Background())
 	root, err = executeModify(t, context.Background(), dEnv, root, test.UpdateQuery)
 	if len(test.ExpectedErr) > 0 {

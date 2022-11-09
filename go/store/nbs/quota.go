@@ -20,8 +20,8 @@ import (
 )
 
 type MemoryQuotaProvider interface {
-	AcquireQuota(ctx context.Context, memory uint64) error
-	ReleaseQuota(memory uint64) error
+	AcquireQuotaBytes(ctx context.Context, sz uint64) ([]byte, error)
+	ReleaseQuotaBytes(buf []byte) error
 	Usage() uint64
 }
 
@@ -34,19 +34,18 @@ func NewUnlimitedMemQuotaProvider() *UnlimitedQuotaProvider {
 	return &UnlimitedQuotaProvider{}
 }
 
-type noopQuotaProvider struct {
-}
-
-func (q *UnlimitedQuotaProvider) AcquireQuota(ctx context.Context, memory uint64) error {
+func (q *UnlimitedQuotaProvider) AcquireQuotaBytes(ctx context.Context, sz uint64) ([]byte, error) {
+	buf := make([]byte, sz)
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	q.used += memory
-	return nil
+	q.used += sz
+	return buf, nil
 }
 
-func (q *UnlimitedQuotaProvider) ReleaseQuota(memory uint64) error {
+func (q *UnlimitedQuotaProvider) ReleaseQuotaBytes(buf []byte) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	memory := uint64(len(buf))
 	if memory > q.used {
 		panic("tried to release too much quota")
 	}
@@ -58,16 +57,4 @@ func (q *UnlimitedQuotaProvider) Usage() uint64 {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	return q.used
-}
-
-func (q *noopQuotaProvider) AcquireQuota(ctx context.Context, memory uint64) error {
-	return nil
-}
-
-func (q *noopQuotaProvider) ReleaseQuota(memory uint64) error {
-	return nil
-}
-
-func (q *noopQuotaProvider) Usage() uint64 {
-	return 0
 }

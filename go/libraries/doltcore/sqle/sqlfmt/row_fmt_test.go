@@ -88,27 +88,58 @@ func TestRenameTableStmt(t *testing.T) {
 	assert.Equal(t, expectedRenameTableSql, stmt)
 }
 
+func newRow(sch schema.Schema, id uuid.UUID, name string, age uint, isMarried bool, title *string) row.Row {
+	var titleVal types.Value
+	if title != nil {
+		titleVal = types.String(*title)
+	}
+
+	married := types.Int(0)
+	if isMarried {
+		married = types.Int(1)
+	}
+
+	taggedVals := row.TaggedValues{
+		dtestutils.IdTag:        types.String(id.String()),
+		dtestutils.NameTag:      types.String(name),
+		dtestutils.AgeTag:       types.Uint(age),
+		dtestutils.IsMarriedTag: married,
+		dtestutils.TitleTag:     titleVal,
+	}
+
+	r, err := row.New(types.Format_Default, sch, taggedVals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
+}
+
 func TestRowAsInsertStmt(t *testing.T) {
 	id := uuid.MustParse("00000000-0000-0000-0000-000000000000")
 	tableName := "people"
 
+	sch, err := dtestutils.Schema()
+	require.NoError(t, err)
+
 	tests := []test{
 		{
 			name:           "simple row",
-			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie")),
-			sch:            dtestutils.TypedSchema,
+			row:            newRow(sch, id, "some guy", 100, false, strPointer("normie")),
+			sch:            sch,
 			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,0,'normie');",
 		},
 		{
 			name:           "embedded quotes",
-			row:            dtestutils.NewTypedRow(id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie")),
-			sch:            dtestutils.TypedSchema,
+			row:            newRow(sch, id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie")),
+			sch:            sch,
 			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','It\\'s \\\"Mister Perfect\\\" to you',100,0,'normie');",
 		},
 		{
 			name:           "null values",
-			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, nil),
-			sch:            dtestutils.TypedSchema,
+			row:            newRow(sch, id, "some guy", 100, false, nil),
+			sch:            sch,
 			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,0,NULL);",
 		},
 	}
@@ -163,32 +194,35 @@ func TestRowAsUpdateStmt(t *testing.T) {
 	id := uuid.MustParse("00000000-0000-0000-0000-000000000000")
 	tableName := "people"
 
+	sch, err := dtestutils.Schema()
+	require.NoError(t, err)
+
 	tests := []updateTest{
 		{
 			name:           "simple row",
-			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie")),
-			sch:            dtestutils.TypedSchema,
+			row:            newRow(sch, id, "some guy", 100, false, strPointer("normie")),
+			sch:            sch,
 			expectedOutput: "UPDATE `people` SET `name`='some guy',`age`=100,`is_married`=0,`title`='normie' WHERE (`id`='00000000-0000-0000-0000-000000000000');",
 			collDiff:       set.NewStrSet([]string{"name", "age", "is_married", "title"}),
 		},
 		{
 			name:           "embedded quotes",
-			row:            dtestutils.NewTypedRow(id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie")),
-			sch:            dtestutils.TypedSchema,
+			row:            newRow(sch, id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie")),
+			sch:            sch,
 			expectedOutput: "UPDATE `people` SET `name`='It\\'s \\\"Mister Perfect\\\" to you',`age`=100,`is_married`=0,`title`='normie' WHERE (`id`='00000000-0000-0000-0000-000000000000');",
 			collDiff:       set.NewStrSet([]string{"name", "age", "is_married", "title"}),
 		},
 		{
 			name:           "null values",
-			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, nil),
-			sch:            dtestutils.TypedSchema,
+			row:            newRow(sch, id, "some guy", 100, false, nil),
+			sch:            sch,
 			expectedOutput: "UPDATE `people` SET `name`='some guy',`age`=100,`is_married`=0,`title`=NULL WHERE (`id`='00000000-0000-0000-0000-000000000000');",
 			collDiff:       set.NewStrSet([]string{"name", "age", "is_married", "title"}),
 		},
 		{
 			name:           "partial update",
-			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, nil),
-			sch:            dtestutils.TypedSchema,
+			row:            newRow(sch, id, "some guy", 100, false, nil),
+			sch:            sch,
 			expectedOutput: "UPDATE `people` SET `name`='some guy' WHERE (`id`='00000000-0000-0000-0000-000000000000');",
 			collDiff:       set.NewStrSet([]string{"name"}),
 		},

@@ -811,7 +811,7 @@ func (dEnv *DoltEnv) CredsDir() (string, error) {
 	return getCredsDir(dEnv.hdp)
 }
 
-func (dEnv *DoltEnv) UserRPCCreds() (creds.DoltCreds, bool, error) {
+func (dEnv *DoltEnv) UserDoltCreds() (creds.DoltCreds, bool, error) {
 	kid, err := dEnv.Config.GetString(UserCreds)
 
 	if err == nil && kid != "" {
@@ -826,7 +826,7 @@ func (dEnv *DoltEnv) UserRPCCreds() (creds.DoltCreds, bool, error) {
 		return c, c.IsPrivKeyValid() && c.IsPubKeyValid(), err
 	}
 
-	return creds.EmptyCreds, false, nil
+	return creds.DoltCreds{}, false, nil
 }
 
 // GetGRPCDialParams implements dbfactory.GRPCDialProvider

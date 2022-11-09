@@ -86,6 +86,7 @@ func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []stri
 	}
 
 	cli.Println(mergeBaseStr)
+
 	return 0
 }
 

@@ -165,7 +165,7 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			return compactionPlan{}, err
 		}
 
-		plan.chunkCount += index.ChunkCount()
+		plan.chunkCount += index.chunkCount()
 
 		// Calculate the amount of chunk data in |src|
 		chunkDataLen := calcChunkDataLen(index)
@@ -192,11 +192,11 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			return compactionPlan{}, err
 		}
 
-		ordinals, err := index.Ordinals()
+		ordinals, err := index.ordinals()
 		if err != nil {
 			return compactionPlan{}, err
 		}
-		prefixes, err := index.Prefixes()
+		prefixes, err := index.prefixes()
 		if err != nil {
 			return compactionPlan{}, err
 		}
@@ -219,16 +219,16 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 		if onHeap, ok := index.(onHeapTableIndex); ok {
 			// TODO: copy the lengths and suffixes as a byte-copy from src BUG #3438
 			// Bring over the lengths block, in order
-			for ord := uint32(0); ord < onHeap.chunkCount; ord++ {
+			for ord := uint32(0); ord < onHeap.chunkCount(); ord++ {
 				e := onHeap.getIndexEntry(ord)
 				binary.BigEndian.PutUint32(plan.mergedIndex[lengthsPos:], e.Length())
 				lengthsPos += lengthSize
 			}
 
 			// Bring over the suffixes block, in order
-			n := copy(plan.mergedIndex[suffixesPos:], onHeap.suffixB)
+			n := copy(plan.mergedIndex[suffixesPos:], onHeap.suffixes)
 
-			if n != len(onHeap.suffixB) {
+			if n != len(onHeap.suffixes) {
 				return compactionPlan{}, errors.New("failed to copy all data")
 			}
 
@@ -237,7 +237,7 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			// Build up the index one entry at a time.
 			var a addr
 			for i := 0; i < len(ordinals); i++ {
-				e, err := index.IndexEntry(uint32(i), &a)
+				e, err := index.indexEntry(uint32(i), &a)
 				if err != nil {
 					return compactionPlan{}, err
 				}
@@ -278,5 +278,5 @@ func nameFromSuffixes(suffixes []byte) (name addr) {
 }
 
 func calcChunkDataLen(index tableIndex) uint64 {
-	return index.TableFileSize() - indexSize(index.ChunkCount()) - footerSize
+	return index.tableFileSize() - indexSize(index.chunkCount()) - footerSize
 }

@@ -22,6 +22,7 @@
 package nbs
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,6 +34,7 @@ import (
 )
 
 func TestMmapTableReader(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
@@ -52,7 +54,7 @@ func TestMmapTableReader(t *testing.T) {
 	err = os.WriteFile(filepath.Join(dir, h.String()), tableData, 0666)
 	require.NoError(t, err)
 
-	trc, err := newFileTableReader(dir, h, uint32(len(chunks)), &noopQuotaProvider{}, fc)
+	trc, err := newFileTableReader(ctx, dir, h, uint32(len(chunks)), &UnlimitedQuotaProvider{}, fc)
 	require.NoError(t, err)
 	assertChunksInReader(chunks, trc, assert)
 }

@@ -227,12 +227,13 @@ func testDeleteQuery(t *testing.T, test DeleteTest) {
 		t.Skip("Skipping tests until " + singleDeleteQueryTest)
 	}
 
-	dEnv := CreateTestDatabase(t)
+	dEnv, err := CreateTestDatabase()
+	require.NoError(t, err)
+
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	var err error
 	root, _ := dEnv.WorkingRoot(context.Background())
 	root, err = executeModify(t, context.Background(), dEnv, root, test.DeleteQuery)
 	if len(test.ExpectedErr) > 0 {

@@ -23,6 +23,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
@@ -34,9 +35,10 @@ import (
 // - client interceptors for transmitting our replication role.
 // - do not use environment credentials. (for now).
 type grpcDialProvider struct {
-	orig dbfactory.GRPCDialProvider
-	ci   *clientinterceptor
-	cfg  Config
+	orig  dbfactory.GRPCDialProvider
+	ci    *clientinterceptor
+	cfg   Config
+	creds credentials.PerRPCCredentials
 }
 
 func (p grpcDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfactory.GRPCRemoteConfig, error) {
@@ -45,6 +47,7 @@ func (p grpcDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 		return dbfactory.GRPCRemoteConfig{}, err
 	}
 	config.TLSConfig = tlsConfig
+	config.Creds = p.creds
 	config.WithEnvCreds = false
 	cfg, err := p.orig.GetGRPCDialParams(config)
 	if err != nil {

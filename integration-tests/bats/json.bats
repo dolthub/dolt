@@ -219,3 +219,30 @@ SQL
     [ "${lines[1]}" = '1,"{""a"": 1}"' ]
     [ "${lines[2]}" = '2,"{""b"": 99}"' ]
 }
+
+@test "json: insert value with special characters" {
+    dolt sql <<SQL
+    CREATE TABLE js (
+        pk int PRIMARY KEY,
+        js json
+    );
+    INSERT INTO js VALUES (1, '{"a":"<>&"}');
+SQL
+    run dolt sql -q "SELECT * FROM js;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = '1,"{""a"": ""<>&""}"' ]
+}
+
+
+@test "json: insert array with special characters" {
+    dolt sql <<SQL
+    CREATE TABLE js (
+        pk int PRIMARY KEY,
+        js json
+    );
+    INSERT INTO js VALUES (1, '[{"a":"<>&"}]');
+SQL
+    run dolt sql -q "SELECT * FROM js;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = '1,"[{""a"": ""<>&""}]"' ]
+}

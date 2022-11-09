@@ -20126,13 +20126,13 @@ INSERT INTO join_result VALUES ('stock','ZYNE','us','2017-11-01',9.7,9.93,9.41,9
 `
 
 func TestCreateTables(t *testing.T) {
-	sqle.SkipByDefaultInCI(t)
+	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqle.ExecuteSql(t, dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
 	table, _, err := root.GetTable(ctx, "daily_summary")
@@ -20148,16 +20148,16 @@ func TestInserts(t *testing.T) {
 	if types.Format_Default != types.Format_LD_1 {
 		t.Skip() // todo: convert to enginetests
 	}
-	sqle.SkipByDefaultInCI(t)
+	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqle.ExecuteSql(t, dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
-	root, err = sqle.ExecuteSql(t, dEnv, root, insertRows)
+	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
 	require.NoError(t, err)
 
 	table, _, err := root.GetTable(ctx, "daily_summary")
@@ -20177,19 +20177,19 @@ func TestInsertsWithIndexes(t *testing.T) {
 	if types.Format_Default != types.Format_LD_1 {
 		t.Skip() // todo: convert to enginetests
 	}
-	sqle.SkipByDefaultInCI(t)
+	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqle.ExecuteSql(t, dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
-	root, err = sqle.ExecuteSql(t, dEnv, root, createIndexes)
+	root, err = sqle.ExecuteSql(dEnv, root, createIndexes)
 	require.NoError(t, err)
 
-	root, err = sqle.ExecuteSql(t, dEnv, root, insertRows)
+	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
 	require.NoError(t, err)
 
 	table, _, err := root.GetTable(ctx, "daily_summary")
@@ -20212,24 +20212,24 @@ func TestInsertsWithIndexes(t *testing.T) {
 }
 
 func TestJoin(t *testing.T) {
-	sqle.SkipByDefaultInCI(t)
+	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqle.ExecuteSql(t, dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
-	root, err = sqle.ExecuteSql(t, dEnv, root, insertRows)
+	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
 	require.NoError(t, err)
 
-	rows, err := sqle.ExecuteSelect(t, dEnv, root, `select Type, d.Symbol, Country, TradingDate, Open, High, Low, Close, Volume, OpenInt, Name, Sector, IPOYear
+	rows, err := sqle.ExecuteSelect(dEnv, root, `select Type, d.Symbol, Country, TradingDate, Open, High, Low, Close, Volume, OpenInt, Name, Sector, IPOYear
 						from daily_summary d join symbols t on d.Symbol = t.Symbol order by d.Symbol, Country, TradingDate`)
 	require.NoError(t, err)
 	assert.Equal(t, 5210, len(rows))
 
-	expectedJoinRows, err := sqle.ExecuteSelect(t, dEnv, root, `select * from join_result order by symbol, country, TradingDate`)
+	expectedJoinRows, err := sqle.ExecuteSelect(dEnv, root, `select * from join_result order by symbol, country, TradingDate`)
 	require.NoError(t, err)
 	assertResultRowsEqual(t, expectedJoinRows, rows)
 }
@@ -20260,16 +20260,16 @@ func assertResultRowsEqual(t *testing.T, expected, actual []sql.Row) {
 }
 
 func TestExplain(t *testing.T) {
-	sqle.SkipByDefaultInCI(t)
+	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqle.ExecuteSql(t, dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
-	rows, err := sqle.ExecuteSelect(t, dEnv, root, "explain select * from daily_summary d join symbols t on d.Symbol = t.Symbol")
+	rows, err := sqle.ExecuteSelect(dEnv, root, "explain select * from daily_summary d join symbols t on d.Symbol = t.Symbol")
 	require.NoError(t, err)
 	rowStrings := make([]string, len(rows))
 	for i, row := range rows {

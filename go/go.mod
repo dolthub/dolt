@@ -14,7 +14,6 @@ require (
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.3
 	github.com/dolthub/ishell v0.0.0-20220112232610-14e753f0f371
-	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
 	github.com/dolthub/vitess v0.0.0-20221031111135-9aad77e7b39f
 	github.com/dustin/go-humanize v1.0.0
@@ -24,7 +23,7 @@ require (
 	github.com/gocraft/dbr/v2 v2.7.2
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.1
-	github.com/google/go-cmp v0.5.8
+	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/google/uuid v1.2.0
 	github.com/jpillora/backoff v1.0.0
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
@@ -57,11 +56,10 @@ require (
 require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.5+incompatible
 	github.com/cenkalti/backoff/v4 v4.1.3
-	github.com/dolthub/go-mysql-server v0.12.1-0.20221031173152-49134f16cad4
+	github.com/dolthub/go-mysql-server v0.14.1-0.20221109172918-53d8157d910d
 	github.com/google/flatbuffers v2.0.6+incompatible
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/mitchellh/go-ps v1.0.0
-	github.com/pquerna/cachecontrol v0.1.0
 	github.com/prometheus/client_golang v1.11.0
 	github.com/shirou/gopsutil/v3 v3.22.1
 	github.com/vbauerster/mpb v3.4.0+incompatible

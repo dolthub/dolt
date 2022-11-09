@@ -16,6 +16,8 @@ package cluster
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"strconv"
@@ -25,7 +27,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -55,6 +59,7 @@ type Controller struct {
 	sinterceptor  serverinterceptor
 	cinterceptor  clientinterceptor
 	lgr           *logrus.Logger
+	grpcCreds     credentials.PerRPCCredentials
 
 	provider       dbProvider
 	iterSessions   IterSessions
@@ -193,7 +198,7 @@ func (c *Controller) applyCommitHooks(ctx context.Context, name string, bt *sql.
 }
 
 func (c *Controller) gRPCDialProvider(denv *env.DoltEnv) dbfactory.GRPCDialProvider {
-	return grpcDialProvider{env.NewGRPCDialProviderFromDoltEnv(denv), &c.cinterceptor, c.cfg}
+	return grpcDialProvider{env.NewGRPCDialProviderFromDoltEnv(denv), &c.cinterceptor, c.cfg, c.grpcCreds}
 }
 
 func (c *Controller) RegisterStoredProcedures(store procedurestore) {
@@ -406,6 +411,25 @@ func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.Server
 	args.Options = c.ServerOptions()
 	args = sqle.RemoteSrvServerArgs(ctx, args)
 	args.DBCache = remotesrvStoreCache{args.DBCache, c}
+
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+
+	keyID := creds.PubKeyToKID(pub)
+	keyIDStr := creds.B32CredsEncoding.EncodeToString(keyID)
+
+	args.HttpInterceptor = JWKSHandlerInterceptor(keyIDStr, pub)
+
+	c.grpcCreds = &creds.RPCCreds{
+		PrivKey:    priv,
+		Audience:   creds.RemotesAPIAudience,
+		Issuer:     creds.ClientIssuer,
+		KeyID:      keyIDStr,
+		RequireTLS: false,
+	}
+
 	return args
 }
 

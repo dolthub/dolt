@@ -511,6 +511,10 @@ func valueAsSqlString(ti typeinfo.TypeInfo, value types.Value) (string, error) {
 }
 
 func interfaceValueAsSqlString(ti typeinfo.TypeInfo, value interface{}) (string, error) {
+	if value == nil {
+		return "NULL", nil
+	}
+
 	str, err := sqlutil.SqlColToStr(ti.ToSqlType(), value)
 	if err != nil {
 		return "", err
