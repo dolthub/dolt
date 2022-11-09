@@ -92,7 +92,8 @@ jobs:
         dolt config --global --add user.email "import-perf@dolthub.com"
         dolt config --global --add user.name "import-perf"
 
-        echo "${{ secrets.DOLTHUB_IMPORT_PERF_CREDS_VALUE }}" | dolt creds import
+        #echo "${{ secrets.DOLTHUB_IMPORT_PERF_CREDS_VALUE }}" | dolt creds import
+        echo "${{secrets.DOLTHUB_IMPORT_PERF_CREDS_VALUE}}" > "${{secrets.DOLTHUB_IMPORT_PERF_CREDS_KEY}}".jwk
         dolt clone import-perf/import-perf "$dolt_dir"
 
         cd "$dolt_dir"
