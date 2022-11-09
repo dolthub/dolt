@@ -29,7 +29,6 @@ on:
         rquired: false
         default: true
 env:
-env:
   BENCH_DIR: 'go/performance/import_benchmarker'
   MYSQL_PORT: 3309
   MYSQL_PASSWORD: password
