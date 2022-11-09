@@ -98,7 +98,6 @@ jobs:
         if [ -z "$wf_dispatch"]; then
             branch="main"
         elif [ -z "$branch" ]; then
-            if ${{ github.event.
             branch="${{ steps.version.outputs.ref }}-$(date +%F)"
         fi
         echo "::set-output name=branch::$branch"
