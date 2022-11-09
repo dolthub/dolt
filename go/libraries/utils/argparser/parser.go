@@ -89,7 +89,7 @@ func (ap *ArgParser) SupportOption(opt *Option) {
 
 // SupportsFlag adds support for a new flag (argument with no value). See SupportOpt for details on params.
 func (ap *ArgParser) SupportsFlag(name, abbrev, desc string) *ArgParser {
-	opt := &Option{name, abbrev, "", OptionalFlag, desc, nil}
+	opt := &Option{name, abbrev, "", OptionalFlag, desc, nil, false}
 	ap.SupportOption(opt)
 
 	return ap
@@ -97,7 +97,15 @@ func (ap *ArgParser) SupportsFlag(name, abbrev, desc string) *ArgParser {
 
 // SupportsString adds support for a new string argument with the description given. See SupportOpt for details on params.
 func (ap *ArgParser) SupportsString(name, abbrev, valDesc, desc string) *ArgParser {
-	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, nil}
+	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, nil, false}
+	ap.SupportOption(opt)
+
+	return ap
+}
+
+// SupportsStringList adds support for a new string list argument with the description given. See SupportOpt for details on params.
+func (ap *ArgParser) SupportsStringList(name, abbrev, valDesc, desc string) *ArgParser {
+	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, nil, true}
 	ap.SupportOption(opt)
 
 	return ap
@@ -105,7 +113,7 @@ func (ap *ArgParser) SupportsString(name, abbrev, valDesc, desc string) *ArgPars
 
 // SupportsOptionalString adds support for a new string argument with the description given and optional empty value.
 func (ap *ArgParser) SupportsOptionalString(name, abbrev, valDesc, desc string) *ArgParser {
-	opt := &Option{name, abbrev, valDesc, OptionalEmptyValue, desc, nil}
+	opt := &Option{name, abbrev, valDesc, OptionalEmptyValue, desc, nil, false}
 	ap.SupportOption(opt)
 
 	return ap
@@ -113,7 +121,7 @@ func (ap *ArgParser) SupportsOptionalString(name, abbrev, valDesc, desc string) 
 
 // SupportsValidatedString adds support for a new string argument with the description given and defined validation function.
 func (ap *ArgParser) SupportsValidatedString(name, abbrev, valDesc, desc string, validator ValidationFunc) *ArgParser {
-	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, validator}
+	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, validator, false}
 	ap.SupportOption(opt)
 
 	return ap
@@ -121,7 +129,7 @@ func (ap *ArgParser) SupportsValidatedString(name, abbrev, valDesc, desc string,
 
 // SupportsUint adds support for a new uint argument with the description given. See SupportOpt for details on params.
 func (ap *ArgParser) SupportsUint(name, abbrev, valDesc, desc string) *ArgParser {
-	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, isUintStr}
+	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, isUintStr, false}
 	ap.SupportOption(opt)
 
 	return ap
@@ -129,7 +137,7 @@ func (ap *ArgParser) SupportsUint(name, abbrev, valDesc, desc string) *ArgParser
 
 // SupportsInt adds support for a new int argument with the description given. See SupportOpt for details on params.
 func (ap *ArgParser) SupportsInt(name, abbrev, valDesc, desc string) *ArgParser {
-	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, isIntStr}
+	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, isIntStr, false}
 	ap.SupportOption(opt)
 
 	return ap
@@ -280,9 +288,14 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 					return nil, errors.New("error: no value for option `" + opt.Name + "'")
 				}
 			} else {
-				valueStr = args[i]
+				if opt.AllowMultipleOptions {
+					list := getListValues(args[i:])
+					valueStr = strings.Join(list, ",")
+					i += len(list) - 1
+				} else {
+					valueStr = args[i]
+				}
 			}
-
 			value = &valueStr
 		}
 
@@ -302,4 +315,18 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 	}
 
 	return &ArgParseResults{results, list, ap}, nil
+}
+
+func getListValues(args []string) []string {
+	var values []string
+
+	for _, arg := range args {
+		// Stop if another option found
+		if arg[0] == '-' || arg == "--" {
+			return values
+		}
+		values = append(values, arg)
+	}
+
+	return values
 }

@@ -17,6 +17,7 @@ package argparser
 import (
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
@@ -94,6 +95,11 @@ func (res *ArgParseResults) ContainsMany(names ...string) []string {
 func (res *ArgParseResults) GetValue(name string) (string, bool) {
 	val, ok := res.options[name]
 	return val, ok
+}
+
+func (res *ArgParseResults) GetValueList(name string) ([]string, bool) {
+	val, ok := res.options[name]
+	return strings.Split(val, ","), ok
 }
 
 func (res *ArgParseResults) GetValues(names ...string) map[string]string {

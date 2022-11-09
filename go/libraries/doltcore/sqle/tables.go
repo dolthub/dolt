@@ -1271,11 +1271,12 @@ func (t *AlterableDoltTable) RewriteInserter(
 	newSchema sql.PrimaryKeySchema,
 	oldColumn *sql.Column,
 	newColumn *sql.Column,
+	idxCols []sql.IndexColumn,
 ) (sql.RowInserter, error) {
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return nil, err
 	}
-	err := validateSchemaChange(t.Name(), oldSchema, newSchema, oldColumn, newColumn)
+	err := validateSchemaChange(t.Name(), oldSchema, newSchema, oldColumn, newColumn, idxCols)
 	if err != nil {
 		return nil, err
 	}
@@ -1496,7 +1497,15 @@ func validateSchemaChange(
 	newSchema sql.PrimaryKeySchema,
 	oldColumn *sql.Column,
 	newColumn *sql.Column,
+	idxCols []sql.IndexColumn,
 ) error {
+	for _, idxCol := range idxCols {
+		col := newSchema.Schema[newSchema.Schema.IndexOfColName(idxCol.Name)]
+		if idxCol.Length > 0 && sql.IsText(col.Type) {
+			return sql.ErrUnsupportedIndexPrefix.New(col.Name)
+		}
+	}
+
 	if newColumn != nil {
 		newCol, err := sqlutil.ToDoltCol(schema.SystemTableReservedMin, newColumn)
 		if err != nil {
@@ -1764,6 +1773,13 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 	table, err := t.DoltTable.DoltTable(ctx)
 	if err != nil {
 		return err
+	}
+
+	for _, idxCol := range idx.Columns {
+		col := t.DoltTable.sqlSch.Schema[t.DoltTable.sqlSch.IndexOfColName(idxCol.Name)]
+		if idxCol.Length > 0 && sql.IsText(col.Type) {
+			return sql.ErrUnsupportedIndexPrefix.New(col.Name)
+		}
 	}
 
 	ret, err := creation.CreateIndex(

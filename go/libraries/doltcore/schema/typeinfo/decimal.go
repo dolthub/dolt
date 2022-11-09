@@ -59,7 +59,7 @@ func CreateDecimalTypeFromParams(params map[string]string) (TypeInfo, error) {
 	} else {
 		return nil, fmt.Errorf(`create decimal type info is missing param "%v"`, decimalTypeParam_Scale)
 	}
-	sqlDecimalType, err := sql.CreateDecimalType(precision, scale)
+	sqlDecimalType, err := sql.CreateColumnDecimalType(precision, scale)
 	if err != nil {
 		return nil, err
 	}
