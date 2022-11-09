@@ -130,8 +130,6 @@ func NewSqlEngine(
 	if bcController, err = branch_control.LoadData(config.BranchCtrlFilePath, config.DoltCfgDirPath); err != nil {
 		return nil, err
 	}
-	// Set the server's super user
-	branch_control.SetSuperUser(config.ServerUser, config.ServerHost)
 
 	// Set up engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{

@@ -39,15 +39,17 @@ const (
 type Access struct {
 	binlog *Binlog
 
-	Branches []MatchExpression
-	Users    []MatchExpression
-	Hosts    []MatchExpression
-	Values   []AccessValue
-	RWMutex  *sync.RWMutex
+	Databases []MatchExpression
+	Branches  []MatchExpression
+	Users     []MatchExpression
+	Hosts     []MatchExpression
+	Values    []AccessValue
+	RWMutex   *sync.RWMutex
 }
 
 // AccessValue contains the user-facing values of a particular row, along with the permissions for a row.
 type AccessValue struct {
+	Database    string
 	Branch      string
 	User        string
 	Host        string
@@ -57,28 +59,30 @@ type AccessValue struct {
 // newAccess returns a new Access.
 func newAccess() *Access {
 	return &Access{
-		binlog:   NewAccessBinlog(nil),
-		Branches: nil,
-		Users:    nil,
-		Hosts:    nil,
-		Values:   nil,
-		RWMutex:  &sync.RWMutex{},
+		binlog:    NewAccessBinlog(nil),
+		Databases: nil,
+		Branches:  nil,
+		Users:     nil,
+		Hosts:     nil,
+		Values:    nil,
+		RWMutex:   &sync.RWMutex{},
 	}
 }
 
-// Match returns whether any entries match the given branch, user, and host, along with their permissions. Requires
-// external synchronization handling, therefore manually manage the RWMutex.
-func (tbl *Access) Match(branch string, user string, host string) (bool, Permissions) {
-	if IsSuperUser(user, host) {
-		return true, Permissions_Admin
-	}
-
+// Match returns whether any entries match the given database, branch, user, and host, along with their permissions.
+// Requires external synchronization handling, therefore manually manage the RWMutex.
+func (tbl *Access) Match(database string, branch string, user string, host string) (bool, Permissions) {
 	filteredIndexes := Match(tbl.Users, user, sql.Collation_utf8mb4_0900_bin)
 
 	filteredHosts := tbl.filterHosts(filteredIndexes)
 	indexPool.Put(filteredIndexes)
 	filteredIndexes = Match(filteredHosts, host, sql.Collation_utf8mb4_0900_ai_ci)
 	matchExprPool.Put(filteredHosts)
+
+	filteredDatabases := tbl.filterDatabases(filteredIndexes)
+	indexPool.Put(filteredIndexes)
+	filteredIndexes = Match(filteredDatabases, database, sql.Collation_utf8mb4_0900_ai_ci)
+	matchExprPool.Put(filteredDatabases)
 
 	filteredBranches := tbl.filterBranches(filteredIndexes)
 	indexPool.Put(filteredIndexes)
@@ -93,9 +97,9 @@ func (tbl *Access) Match(branch string, user string, host string) (bool, Permiss
 // GetIndex returns the index of the given branch, user, and host expressions. If the expressions cannot be found,
 // returns -1. Assumes that the given expressions have already been folded. Requires external synchronization handling,
 // therefore manually manage the RWMutex.
-func (tbl *Access) GetIndex(branchExpr string, userExpr string, hostExpr string) int {
+func (tbl *Access) GetIndex(databaseExpr string, branchExpr string, userExpr string, hostExpr string) int {
 	for i, value := range tbl.Values {
-		if value.Branch == branchExpr && value.User == userExpr && value.Host == hostExpr {
+		if value.Database == databaseExpr && value.Branch == branchExpr && value.User == userExpr && value.Host == hostExpr {
 			return i
 		}
 	}
@@ -107,16 +111,6 @@ func (tbl *Access) GetBinlog() *Binlog {
 	return tbl.binlog
 }
 
-// GetSuperUser returns the server-level super user. Intended for display purposes only.
-func (tbl *Access) GetSuperUser() string {
-	return superUser
-}
-
-// GetSuperHost returns the server-level super user's host. Intended for display purposes only.
-func (tbl *Access) GetSuperHost() string {
-	return superHost
-}
-
 // Serialize returns the offset for the Access table written to the given builder.
 func (tbl *Access) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 	tbl.RWMutex.RLock()
@@ -125,11 +119,15 @@ func (tbl *Access) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 	// Serialize the binlog
 	binlog := tbl.binlog.Serialize(b)
 	// Initialize field offset slices
+	databaseOffsets := make([]flatbuffers.UOffsetT, len(tbl.Databases))
 	branchOffsets := make([]flatbuffers.UOffsetT, len(tbl.Branches))
 	userOffsets := make([]flatbuffers.UOffsetT, len(tbl.Users))
 	hostOffsets := make([]flatbuffers.UOffsetT, len(tbl.Hosts))
 	valueOffsets := make([]flatbuffers.UOffsetT, len(tbl.Values))
 	// Get field offsets
+	for i, matchExpr := range tbl.Databases {
+		databaseOffsets[i] = matchExpr.Serialize(b)
+	}
 	for i, matchExpr := range tbl.Branches {
 		branchOffsets[i] = matchExpr.Serialize(b)
 	}
@@ -143,6 +141,11 @@ func (tbl *Access) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 		valueOffsets[i] = val.Serialize(b)
 	}
 	// Get the field vectors
+	serial.BranchControlAccessStartDatabasesVector(b, len(databaseOffsets))
+	for i := len(databaseOffsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(databaseOffsets[i])
+	}
+	databases := b.EndVector(len(databaseOffsets))
 	serial.BranchControlAccessStartBranchesVector(b, len(branchOffsets))
 	for i := len(branchOffsets) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(branchOffsets[i])
@@ -166,6 +169,7 @@ func (tbl *Access) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 	// Write the table
 	serial.BranchControlAccessStart(b)
 	serial.BranchControlAccessAddBinlog(b, binlog)
+	serial.BranchControlAccessAddDatabases(b, databases)
 	serial.BranchControlAccessAddBranches(b, branches)
 	serial.BranchControlAccessAddUsers(b, users)
 	serial.BranchControlAccessAddHosts(b, hosts)
@@ -183,7 +187,10 @@ func (tbl *Access) Deserialize(fb *serial.BranchControlAccess) error {
 		return fmt.Errorf("cannot deserialize to a non-empty access table")
 	}
 	// Verify that all fields have the same length
-	if fb.BranchesLength() != fb.UsersLength() || fb.UsersLength() != fb.HostsLength() || fb.HostsLength() != fb.ValuesLength() {
+	if fb.DatabasesLength() != fb.BranchesLength() ||
+		fb.BranchesLength() != fb.UsersLength() ||
+		fb.UsersLength() != fb.HostsLength() ||
+		fb.HostsLength() != fb.ValuesLength() {
 		return fmt.Errorf("cannot deserialize an access table with differing field lengths")
 	}
 	// Read the binlog
@@ -195,10 +202,17 @@ func (tbl *Access) Deserialize(fb *serial.BranchControlAccess) error {
 		return err
 	}
 	// Initialize every slice
+	tbl.Databases = make([]MatchExpression, fb.DatabasesLength())
 	tbl.Branches = make([]MatchExpression, fb.BranchesLength())
 	tbl.Users = make([]MatchExpression, fb.UsersLength())
 	tbl.Hosts = make([]MatchExpression, fb.HostsLength())
 	tbl.Values = make([]AccessValue, fb.ValuesLength())
+	// Read the databases
+	for i := 0; i < fb.DatabasesLength(); i++ {
+		serialMatchExpr := &serial.BranchControlMatchExpression{}
+		fb.Databases(serialMatchExpr, i)
+		tbl.Databases[i] = deserializeMatchExpression(serialMatchExpr)
+	}
 	// Read the branches
 	for i := 0; i < fb.BranchesLength(); i++ {
 		serialMatchExpr := &serial.BranchControlMatchExpression{}
@@ -222,6 +236,7 @@ func (tbl *Access) Deserialize(fb *serial.BranchControlAccess) error {
 		serialAccessValue := &serial.BranchControlAccessValue{}
 		fb.Values(serialAccessValue, i)
 		tbl.Values[i] = AccessValue{
+			Database:    string(serialAccessValue.Database()),
 			Branch:      string(serialAccessValue.Branch()),
 			User:        string(serialAccessValue.User()),
 			Host:        string(serialAccessValue.Host()),
@@ -229,6 +244,18 @@ func (tbl *Access) Deserialize(fb *serial.BranchControlAccess) error {
 		}
 	}
 	return nil
+}
+
+// filterDatabases returns all databases that match the given collection indexes.
+func (tbl *Access) filterDatabases(filters []uint32) []MatchExpression {
+	if len(filters) == 0 {
+		return nil
+	}
+	matchExprs := matchExprPool.Get().([]MatchExpression)[:0]
+	for _, filter := range filters {
+		matchExprs = append(matchExprs, tbl.Databases[filter])
+	}
+	return matchExprs
 }
 
 // filterBranches returns all branches that match the given collection indexes.
@@ -281,7 +308,7 @@ func (tbl *Access) gatherPermissions(collectionIndexes []uint32) Permissions {
 func (tbl *Access) insertDefaultRow() {
 	// Check if the appropriate row already exists
 	for _, value := range tbl.Values {
-		if value.Branch == "%" && value.User == "%" && value.Host == "%" {
+		if value.Database == "%" && value.Branch == "%" && value.User == "%" && value.Host == "%" {
 			// Getting to this state will be disallowed in the future, but if the row exists without any perms, then add
 			// the Write perm
 			if uint64(value.Permissions) == 0 {
@@ -290,17 +317,21 @@ func (tbl *Access) insertDefaultRow() {
 			return
 		}
 	}
-	tbl.insert("%", "%", "%", Permissions_Write)
+	tbl.insert("%", "%", "%", "%", Permissions_Write)
 }
 
 // insert adds the given expressions to the table. This does not perform any sort of validation whatsoever, so it is
 // important to ensure that the expressions are valid before insertion.
-func (tbl *Access) insert(branch string, user string, host string, perms Permissions) {
-	// Branch and Host are case-insensitive, while user is case-sensitive
+func (tbl *Access) insert(database string, branch string, user string, host string, perms Permissions) {
+	// Database, Branch, and Host are case-insensitive, while User is case-sensitive
+	database = strings.ToLower(FoldExpression(database))
 	branch = strings.ToLower(FoldExpression(branch))
 	user = FoldExpression(user)
 	host = strings.ToLower(FoldExpression(host))
 	// Each expression is capped at 2¹⁶-1 values, so we truncate to 2¹⁶-2 and add the any-match character at the end if it's over
+	if len(database) > math.MaxUint16 {
+		database = string(append([]byte(database[:math.MaxUint16-1]), byte('%')))
+	}
 	if len(branch) > math.MaxUint16 {
 		branch = string(append([]byte(branch[:math.MaxUint16-1]), byte('%')))
 	}
@@ -311,16 +342,19 @@ func (tbl *Access) insert(branch string, user string, host string, perms Permiss
 		host = string(append([]byte(host[:math.MaxUint16-1]), byte('%')))
 	}
 	// Add the expression strings to the binlog
-	tbl.binlog.Insert(branch, user, host, uint64(perms))
+	tbl.binlog.Insert(database, branch, user, host, uint64(perms))
 	// Parse and insert the expressions
+	databaseExpr := ParseExpression(database, sql.Collation_utf8mb4_0900_ai_ci)
 	branchExpr := ParseExpression(branch, sql.Collation_utf8mb4_0900_ai_ci)
 	userExpr := ParseExpression(user, sql.Collation_utf8mb4_0900_bin)
 	hostExpr := ParseExpression(host, sql.Collation_utf8mb4_0900_ai_ci)
 	nextIdx := uint32(len(tbl.Values))
+	tbl.Databases = append(tbl.Databases, MatchExpression{CollectionIndex: nextIdx, SortOrders: databaseExpr})
 	tbl.Branches = append(tbl.Branches, MatchExpression{CollectionIndex: nextIdx, SortOrders: branchExpr})
 	tbl.Users = append(tbl.Users, MatchExpression{CollectionIndex: nextIdx, SortOrders: userExpr})
 	tbl.Hosts = append(tbl.Hosts, MatchExpression{CollectionIndex: nextIdx, SortOrders: hostExpr})
 	tbl.Values = append(tbl.Values, AccessValue{
+		Database:    database,
 		Branch:      branch,
 		User:        user,
 		Host:        host,
@@ -330,11 +364,13 @@ func (tbl *Access) insert(branch string, user string, host string, perms Permiss
 
 // Serialize returns the offset for the AccessValue written to the given builder.
 func (val *AccessValue) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
+	database := b.CreateString(val.Database)
 	branch := b.CreateString(val.Branch)
 	user := b.CreateString(val.User)
 	host := b.CreateString(val.Host)
 
 	serial.BranchControlAccessValueStart(b)
+	serial.BranchControlAccessValueAddDatabase(b, database)
 	serial.BranchControlAccessValueAddBranch(b, branch)
 	serial.BranchControlAccessValueAddUser(b, user)
 	serial.BranchControlAccessValueAddHost(b, host)
