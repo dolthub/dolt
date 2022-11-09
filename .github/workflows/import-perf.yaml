@@ -25,8 +25,8 @@ on:
         rquired: false
         default: ''
       wf_dispatch:
-        description: 'flag to differentiate nightly vs workflow defaults'
-        rquired: false
+        description: 'flag to indicate this is NOT a nightly run'
+        rquired: true
         default: true
 env:
   BENCH_DIR: 'go/performance/import_benchmarker'
@@ -93,13 +93,13 @@ jobs:
     - name: Results branch
       id: branch
       run: |
-        branch=${{ github.event.inputs.commit_to_branch }}
-        wf_dispatch=${{ github.event.inputs.wf_dispatch }}
+        branch="${{ github.event.inputs.commit_to_branch }}"
+        wf_dispatch="${{ github.event.inputs.wf_dispatch }}"
         if [ -z "$wf_dispatch"]; then
             branch="main"
         elif [ -z "$branch" ]; then
             if ${{ github.event.
-            branch=${{ steps.version.outputs.ref }}-$(date +%F)
+            branch="${{ steps.version.outputs.ref }}-$(date +%F)"
         fi
         echo "::set-output name=branch::$branch"
 
