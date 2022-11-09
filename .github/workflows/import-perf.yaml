@@ -19,7 +19,7 @@ on:
         rquired: false
         default: 'three_way_compare.sql'
       commit_to_branch:
-        description: 'where to commit results in DoltHub database: `import-perf/import-perf`'
+        description: 'results commit target for DoltHub database: `import-perf/import-perf`'
         rquired: false
         default: ''
 env:
@@ -84,8 +84,8 @@ jobs:
           -out "$out"
         echo "::set-output name=result_path::$out"
 
-    - name: Dolt version
-      id: version
+    - name: Results branch
+      id: branch
       run: |
         branch=${{ github.event.inputs.commit_to_branch }}
         if [ -z "$branch" ]; then
@@ -110,6 +110,7 @@ jobs:
 
         cd "$dolt_dir"
 
+        branch="${{ steps.branch.outputs.branch }}"
         # checkout branch
         if [ -z $(dolt sql -q "select 1 from dolt_branches where name = '$branch';") ]; then
           dolt checkout -b $branch
