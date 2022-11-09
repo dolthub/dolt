@@ -164,15 +164,15 @@ tests:
           x int primary key,
           y varchar(30)
         );
-    - name: "1.6mm"
-      rows: 1600000
+    - name: "800k"
+      rows: 800000
       schema: |
         create table xy (
           x int primary key,
           y varchar(30)
         );
-    - name: "6.4mm"
-      rows: 6400000
+    - name: "1.6mm"
+      rows: 1600000
       schema: |
         create table xy (
           x int primary key,
@@ -192,22 +192,6 @@ tests:
     - name: "sorted 1mm"
       shuffle: false
       rows: 1000000
-      schema: |
-        create table xy (
-          x int primary key,
-          y varchar(30)
-        );
-    - name: "shuffled 4mm"
-      shuffle: true
-      rows: 4000000
-      schema: |
-        create table xy (
-          x int primary key,
-          y varchar(30)
-        );
-    - name: "sorted 4mm"
-      shuffle: false
-      rows: 4000000
       schema: |
         create table xy (
           x int primary key,
