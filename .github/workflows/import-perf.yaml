@@ -98,23 +98,30 @@ jobs:
         cd "$dolt_dir"
 
         branch=${{ steps.version.outputs.ref }}
-        dolt sql -b <<EOF
-          call dolt_checkout('-b', '$branch');
-          drop table if exists import_perf_results;
-        EOF
+        dolt checkout -b $branch
+        dolt sql -q "drop table if exists import_perf_results"
+        #dolt sql -b <<EOF
+          #call dolt_checkout('-b', '$branch');
+          #drop table if exists import_perf_results;
+        #EOF
 
-        dolt sql -q "select * from import_perf_results"
+        dolt sql -q "show tables"
+        dolt status
 
         # load results
         dolt sql < "$in"
 
+        dolt sql -q "show tables"
+        dolt status
         dolt sql -q "select * from import_perf_results"
 
         # push results to dolthub
-        dolt sql -b <<EOF
-          call dolt_add('import_perf_results');
-          call dolt_commit('-m', 'CI commit');
-        EOF
+        dolt add import_perf_results
+        dolt commit -m "CI commit"
+        #dolt sql -b <<EOF
+          #call dolt_add('import_perf_results');
+          #call dolt_commit('-m', 'CI commit');
+        #EOF
 
         #call dolt_push('origin', '$branch');
         dolt push origin $branch
