@@ -92,7 +92,7 @@ jobs:
         dolt config --global --add user.email "max@dolthub.com"
         dolt config --global --add user.name "Max Hoffman"
 
-        echo "${{ secrets.DOLTHUB_CREDENTIAL }" | dolt creds import
+        echo "${{ secrets.DOLTHUB_CREDENTIAL }}" | dolt creds import
         dolt clone max-hoffman/import-perf "$dolt_dir"
 
         cd "$dolt_dir"
