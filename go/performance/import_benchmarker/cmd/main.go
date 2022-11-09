@@ -17,10 +17,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
-	ib "github.com/dolthub/dolt/go/performance/import_benchmarker"
 	"log"
 	"os"
+
+	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
+	ib "github.com/dolthub/dolt/go/performance/import_benchmarker"
 )
 
 const (

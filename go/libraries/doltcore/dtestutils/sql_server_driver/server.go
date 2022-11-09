@@ -1,12 +1,13 @@
 package sql_server_driver
 
 import (
-	"github.com/creasty/defaults"
-	"gopkg.in/yaml.v3"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/creasty/defaults"
+	"gopkg.in/yaml.v3"
 )
 
 // |Connection| represents a single connection to a sql-server instance defined
