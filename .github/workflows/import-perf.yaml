@@ -99,7 +99,7 @@ jobs:
             branch="main"
         elif [ -z "$branch" ]; then
             if ${{ github.event.
-            branch="${{ steps.version.outputs.ref }}-$(date +%F)"
+            branch=${{ steps.version.outputs.ref }}-$(date +%F)
         fi
         echo "::set-output name=branch::$branch"
 
