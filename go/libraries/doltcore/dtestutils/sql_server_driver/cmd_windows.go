@@ -15,8 +15,9 @@
 package sql_server_driver
 
 import (
-	"golang.org/x/sys/windows"
 	"syscall"
+
+	"golang.org/x/sys/windows"
 )
 
 func (s *SqlServer) GracefulStop() error {

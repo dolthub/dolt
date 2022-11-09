@@ -16,10 +16,11 @@ package import_benchmarker
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"github.com/pkg/errors"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"

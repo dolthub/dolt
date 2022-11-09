@@ -18,10 +18,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
-	"github.com/cespare/xxhash"
-	"github.com/creasty/defaults"
-	"github.com/dolthub/vitess/go/sqltypes"
 	"math/rand"
 	"os"
 	"strconv"
@@ -29,12 +27,15 @@ import (
 	"testing"
 	"time"
 
-	"database/sql"
-	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
+	"github.com/cespare/xxhash"
+	"github.com/creasty/defaults"
 	sql2 "github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 	ast "github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
+
+	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 )
 
 const defaultBatchSize = 500
