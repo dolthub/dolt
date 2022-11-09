@@ -28,7 +28,7 @@ type Connection struct {
 	RetryAttempts int `yaml:"retry_attempts"`
 
 	// The user to connect as.
-	User string `default:"root"yaml:"user"`
+	User string `default:"root "yaml:"user"`
 	// The password to connect with.
 	Pass     string `yaml:"password"`
 	PassFile string `yaml:"password_file"`
