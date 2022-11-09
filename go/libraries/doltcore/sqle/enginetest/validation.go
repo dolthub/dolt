@@ -141,6 +141,11 @@ func validateIndexConsistency(
 	def schema.Index,
 	primary, secondary prolly.Map,
 ) error {
+	// TODO: fix this later
+	if len(def.GetPrefixLengths()) > 0 {
+		return nil
+	}
+
 	if schema.IsKeyless(sch) {
 		return validateKeylessIndex(ctx, sch, def, primary, secondary)
 	}
@@ -198,11 +203,6 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 	iter, err := primary.IterAll(ctx)
 	if err != nil {
 		return err
-	}
-
-	// TODO: fix this later
-	if len(def.GetPrefixLengths()) > 0 {
-		return nil
 	}
 
 	for {

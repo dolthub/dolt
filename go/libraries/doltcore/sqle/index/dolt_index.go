@@ -395,6 +395,9 @@ var _ DoltIndex = (*doltIndex)(nil)
 
 // CanSupport implements sql.Index
 func (di *doltIndex) CanSupport(...sql.Range) bool {
+	if len(di.prefixLengths) > 0 {
+		return false
+	}
 	return true
 }
 

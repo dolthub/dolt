@@ -500,8 +500,11 @@ func (m prollySecondaryIndexPrefixWriter) checkForUniqueKeyErr(ctx context.Conte
 			return nil
 		}
 
-		prefixLength := m.prefixLengths[to]
 		keyPart := sqlRow[from]
+		var prefixLength uint16
+		if len(m.prefixLengths) > to {
+			prefixLength = m.prefixLengths[to]
+		}
 		if prefixLength != 0 {
 			switch kp := keyPart.(type) {
 			case string:
@@ -509,6 +512,7 @@ func (m prollySecondaryIndexPrefixWriter) checkForUniqueKeyErr(ctx context.Conte
 			case []uint8:
 				keyPart = kp[:prefixLength]
 			default:
+				// TODO: do something else here
 				panic("what in tarnation is going on in here")
 			}
 		}

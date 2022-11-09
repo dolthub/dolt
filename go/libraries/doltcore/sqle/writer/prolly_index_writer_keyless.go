@@ -366,11 +366,27 @@ func (writer prollyKeylessSecondaryPrefixWriter) ValidateKeyViolations(ctx conte
 func (writer prollyKeylessSecondaryPrefixWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 	for to := range writer.keyMap {
 		from := writer.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, sqlRow[from]); err != nil {
+
+		keyPart := sqlRow[from]
+		var prefixLength uint16
+		if len(writer.prefixLengths) > to {
+			prefixLength = writer.prefixLengths[to]
+		}
+		if prefixLength != 0 {
+			switch kp := keyPart.(type) {
+			case string:
+				keyPart = kp[:prefixLength]
+			case []uint8:
+				keyPart = kp[:prefixLength]
+			default:
+				panic("what in tarnation is going on in here")
+			}
+		}
+		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
 			return err
 		}
 		if to < writer.prefixBld.Desc.Count() {
-			if err := index.PutField(ctx, writer.mut.NodeStore(), writer.prefixBld, to, sqlRow[from]); err != nil {
+			if err := index.PutField(ctx, writer.mut.NodeStore(), writer.prefixBld, to, keyPart); err != nil {
 				return err
 			}
 		}

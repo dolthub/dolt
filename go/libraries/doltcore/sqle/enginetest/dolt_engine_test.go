@@ -111,13 +111,15 @@ func TestSingleScript(t *testing.T) {
 	script := queries.ScriptTest{
 		Name: "DELETE ME",
 		SetUpScript: []string{
-			"create table t (v varchar(10), unique index(v(1)))",
-			"insert into t values ('aa')",
+			"create table t (i int primary key auto_increment, v varchar(10), index(v(2)))",
+			"insert into t (v) values ('aa'), ('bb'), ('cc'), ('aaa')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "insert into t values ('ab')",
-				ExpectedErr: sql.ErrUniqueKeyViolation,
+				Query: "select * from t where v = 'aa'",
+				Expected: []sql.Row{
+					{1, "aa"},
+				},
 			},
 		},
 	}

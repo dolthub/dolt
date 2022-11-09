@@ -1501,7 +1501,7 @@ func validateSchemaChange(
 ) error {
 	for _, idxCol := range idxCols {
 		col := newSchema.Schema[newSchema.Schema.IndexOfColName(idxCol.Name)]
-		if idxCol.Length > 0 && sql.IsText(col.Type) {
+		if col.PrimaryKey && idxCol.Length > 0 && sql.IsText(col.Type) {
 			return sql.ErrUnsupportedIndexPrefix.New(col.Name)
 		}
 	}
