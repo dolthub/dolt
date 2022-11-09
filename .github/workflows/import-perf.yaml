@@ -87,15 +87,33 @@ jobs:
         in="${{ steps.bench.outputs.result_path }}"
         query="$(pwd)/${{ env.BENCH_DIR }}/reporting/${{ github.event.inputs.report }}"
         out="$gw/results.csv"
-
-        mkdir "$gw/res"
-        cd "$gw/res"
+        dolt_dir="$gw/import-perf"
 
         dolt config --global --add user.email "max@dolthub.com"
         dolt config --global --add user.name "Max Hoffman"
 
-        dolt init
+        echo "${{ secrets.DOLTHUB_CREDENTIAL }" | dolt creds import
+        dolt clone max-hoffman/import-perf "$dolt_dir"
+
+        cd "$dolt_dir"
+
+        branch=${{ steps.version.outputs.ref }}
+        dolt sql -b <<EOF
+          call dolt_checkout('-b', '$branch');
+          drop table if exists import_perf_results;
+        EOF
+
+        # load results
         dolt sql < "$in"
+
+        # push results to dolthub
+        dolt sql -b <<EOF
+          call dolt_add('import_perf_results');
+          call dolt_commit('-m', 'CI commit');
+          call dolt_push('origin', '$branch');
+        EOF
+
+        # generate report
         dolt sql -r csv < "$query" > "$out"
 
         cat "$out"
@@ -124,60 +142,12 @@ jobs:
 
         echo "::set-output name=html::$(echo $out)"
 
-    - name: Format template
-      id: template
-      uses: mikefarah/yq@master
-      with:
-        cmd: |
-          yq -o=json <<EOF
-          Template:
-            TemplateName: ImportBenchmarkingReleaseTemplate
-            SubjectPart: Import Benchmarks for {{format}} {{version}}
-            HtmlPart: |
-              <!DOCTYPE html>
-              <html lang="en">
-              <head>
-               <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Dolt {{format}} {{version}} Import Results</title>
-                <style>
-                  table {
-                    border: 1px solid black;
-                    letter-spacing: 1px;
-                    font-family: sans-serif;
-                    font-size: .8rem;
-                    padding: 5px;
-                    margin: 5px;
-                  }
-                  th {
-                    border: 1px solid rgb(190, 190, 190);
-                    padding: 10px;
-                  }
-                  td {
-                    padding: 5px;
-                  }
-                  tr:nth-child(even) {
-                    background-color: #f2f2f2;
-                  }
-               </style>
-              </head>
-                <body>{{results}}</body>
-              </html>
-          EOF
-
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v1-node16
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-west-2
-
-    - name: echo template
-      id: template_file
-      run: |
-        out=$GITHUB_WORKSPACE/template.json
-        echo '${{ steps.template.outputs.result }}' >> "$out"
-        echo "::set-output name=result::$out"
 
     - name: Get Addresses
       id: email_addr
@@ -199,24 +169,3 @@ jobs:
         version: ${{ steps.version.outputs.ref }}
         format: '__DOLT__'
         dataFile: ${{ steps.html.outputs.html }}
-
-    - name: Dolt Import
-      uses: dolthub/dolt-action@v0.16
-      id: 'dolt_import'
-      with:
-        remote: max-hoffman/import-perf
-        dolthub_credential: ${{ secrets.DOLTHUB_CREDENTIAL }}
-        commit_message: 'automated CI commit'
-        commit_user_email: 'max@dolthub.com'
-        commit_author: 'Max Hoffman'
-        branch: main
-        push: true
-        before: |
-          dolt sql -b <<EOF
-          call dolt_checkout('-b', '${{ steps.version.outputs.ref }}');
-          drop table if exists import_perf_results;
-          EOF
-
-          in="${{ steps.bench.outputs.result_path }}"
-          dolt sql < "$in"
-
