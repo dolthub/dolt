@@ -167,7 +167,7 @@ INSERT INTO test VALUES (0,0,0);
 CALL dadd('-A');
 CALL dcommit('-am', 'added table test');
 SQL
-    dolt docs read README.md README.md
+    dolt docs upload README.md README.md
     dolt add .
     dolt commit -am "added a README"
 
@@ -178,7 +178,7 @@ SQL
     [[ "$output" =~ "c0,c1" ]] || false
     [[ "$output" =~ "0,0" ]] || false
 
-    run dolt docs write README.md
+    run dolt docs print README.md
     [[ "$output" = $(cat README.md) ]] || false
 }
 
