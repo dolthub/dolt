@@ -93,8 +93,6 @@ jobs:
         dolt config --global --add user.name "import-perf"
 
         echo '${{ secrets.DOLTHUB_IMPORT_PERF_CREDS_VALUE }}' | dolt creds import
-        #echo "${{secrets.DOLTHUB_IMPORT_PERF_CREDS_VALUE}}" > "${{secrets.DOLTHUB_IMPORT_PERF_CREDS_KEY}}".jwk
-        dolt creds use e6nqe5elacdj5f5gmkeb1o33l585f4et9sentrio6cpas3655i5g
         dolt clone import-perf/import-perf "$dolt_dir"
 
         cd "$dolt_dir"
@@ -105,8 +103,12 @@ jobs:
           drop table if exists import_perf_results;
         EOF
 
+        dolt sql -q "select * from import_perf_results"
+
         # load results
         dolt sql < "$in"
+
+        dolt sql -q "select * from import_perf_results"
 
         # push results to dolthub
         dolt sql -b <<EOF
