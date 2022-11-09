@@ -594,6 +594,10 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
 		return s.coversAllColumns(di)
 	}
 
+	if len(di.prefixLengths) > 0 {
+		return false
+	}
+
 	var idxCols *schema.ColCollection
 	if types.IsFormat_DOLT(di.Format()) {
 		// prolly indexes can cover an index lookup using
