@@ -114,8 +114,10 @@ jobs:
         dolt sql -b <<EOF
           call dolt_add('import_perf_results');
           call dolt_commit('-m', 'CI commit');
-          call dolt_push('origin', '$branch');
         EOF
+
+        #call dolt_push('origin', '$branch');
+        dolt push origin $branch
 
         # generate report
         dolt sql -r csv < "$query" > "$out"
