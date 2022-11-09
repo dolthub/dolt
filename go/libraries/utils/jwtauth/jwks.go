@@ -110,3 +110,134 @@ func (f *fetchedJWKS) GetKey(kid string) ([]jose.JSONWebKey, error) {
 	}
 	return jwks.Key(kid), nil
 }
+
+// The multiJWKS will source JWKS from multiple URLs and will make them all
+// available through GetKey(). It's GetKey() cannot error, but it can return no
+// results.
+//
+// The URLs in the refresh list are static. Each URL will be periodically
+// refreshed and the results will be aggregated into the JWKS view. If a key no
+// longer appears at the URL, it may eventually be removed from the set of keys
+// available through GetKey(). Requesting a key which is not currently in the
+// key set will generally hint that the URLs should be more aggressively
+// refreshed, but there is no blocking on refreshing the URLs.
+//
+// gracefulStop() will shutdown any ongoing fetching work and will return when
+// everything is cleanly shutdown.
+type multiJWKS struct {
+	client  *http.Client
+	wg      sync.WaitGroup
+	stop    chan struct{}
+	refresh []chan struct{}
+	urls    []string
+	sets    []jose.JSONWebKeySet
+	agg     jose.JSONWebKeySet
+	mu      sync.RWMutex
+}
+
+func newMultiJWKS(urls []string, client *http.Client) *multiJWKS {
+	res := new(multiJWKS)
+	res.client = client
+	res.urls = urls
+	res.stop = make(chan struct{})
+	res.refresh = make([]chan struct{}, len(urls))
+	for i := range res.refresh {
+		res.refresh[i] = make(chan struct{})
+	}
+	res.sets = make([]jose.JSONWebKeySet, len(urls))
+	return res
+}
+
+func (t *multiJWKS) run() {
+	t.wg.Add(len(t.urls))
+	for i := 0; i < len(t.urls); i++ {
+		go t.thread(i)
+	}
+	t.wg.Wait()
+}
+
+func (t *multiJWKS) gracefulStop() {
+	close(t.stop)
+	t.wg.Wait()
+}
+
+func (t * multiJWKS) needsRefresh() {
+	for _, c := range t.refresh {
+		select {
+		case c <- struct{}{}:
+		default:
+		}
+	}
+}
+
+func (t * multiJWKS) store(i int, jwks jose.JSONWebKeySet) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.sets[i] = jwks
+	sum := 0
+	for _, s := range t.sets {
+		sum += len(s.Keys)
+	}
+	t.agg.Keys = make([]jose.JSONWebKey, 0, sum)
+	for _, s := range t.sets {
+		t.agg.Keys = append(t.agg.Keys, s.Keys...)
+	}
+}
+
+func (t *multiJWKS) GetKey(kid string) ([]jose.JSONWebKey, error) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	res := t.agg.Key(kid)
+	if len(res) == 0 {
+		t.needsRefresh()
+	}
+	return res, nil
+}
+
+func (t * multiJWKS) thread(i int) {
+	defer t.wg.Done()
+	timer := time.NewTimer(30 * time.Second)
+	for {
+		nextRefresh := 30 * time.Second
+		request, err := http.NewRequest("GET", t.urls[i], nil)
+		if err == nil {
+			response, err := t.client.Do(request)
+			if err == nil && response.StatusCode/100 == 2 {
+				contents, err := ioutil.ReadAll(response.Body)
+				if err == nil {
+					var jwks jose.JSONWebKeySet
+					err = json.Unmarshal(contents, &jwks)
+					if err == nil {
+						t.store(i, jwks)
+					} else {
+						// Something bad...
+						nextRefresh = 1 * time.Second
+					}
+				} else {
+					// Something bad...
+					nextRefresh = 1 * time.Second
+				}
+				response.Body.Close()
+			} else {
+				// Something bad...
+				nextRefresh = 1 * time.Second
+			}
+		} else {
+			// Something bad...
+			nextRefresh = 1 * time.Second
+		}
+		timer.Reset(nextRefresh)
+		select {
+		case <-t.stop:
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return
+		case <-t.refresh[i]:
+			if !timer.Stop() {
+				<-timer.C
+			}
+		case <-timer.C:
+		}
+	}
+}
