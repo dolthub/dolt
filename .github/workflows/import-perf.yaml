@@ -94,6 +94,7 @@ jobs:
 
         #echo "${{ secrets.DOLTHUB_IMPORT_PERF_CREDS_VALUE }}" | dolt creds import
         echo "${{secrets.DOLTHUB_IMPORT_PERF_CREDS_VALUE}}" > "${{secrets.DOLTHUB_IMPORT_PERF_CREDS_KEY}}".jwk
+        dolt creds use e6nqe5elacdj5f5gmkeb1o33l585f4et9sentrio6cpas3655i5g
         dolt clone import-perf/import-perf "$dolt_dir"
 
         cd "$dolt_dir"
