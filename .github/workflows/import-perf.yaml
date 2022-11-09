@@ -1,5 +1,7 @@
 name: Import Benchmarks
 on:
+  schedule:
+    - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
       email_recipient:
@@ -22,6 +24,11 @@ on:
         description: 'results commit target for DoltHub database: `import-perf/import-perf`'
         rquired: false
         default: ''
+      wf_dispatch:
+        description: 'flag to differentiate nightly vs workflow defaults'
+        rquired: false
+        default: true
+env:
 env:
   BENCH_DIR: 'go/performance/import_benchmarker'
   MYSQL_PORT: 3309
@@ -88,7 +95,11 @@ jobs:
       id: branch
       run: |
         branch=${{ github.event.inputs.commit_to_branch }}
-        if [ -z "$branch" ]; then
+        wf_dispatch=${{ github.event.inputs.wf_dispatch }}
+        if [ -z "$wf_dispatch"]; then
+            branch="main"
+        elif [ -z "$branch" ]; then
+            if ${{ github.event.
             branch="${{ steps.version.outputs.ref }}-$(date +%F)"
         fi
         echo "::set-output name=branch::$branch"

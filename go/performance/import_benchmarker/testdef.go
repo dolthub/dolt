@@ -68,7 +68,7 @@ type ImportTest struct {
 type Table struct {
 	Name        string `yaml:"name"`
 	Schema      string `yaml:"schema"`
-	Rows        int    `default:"400000" yaml:"rows"`
+	Rows        int    `default:"200000" yaml:"rows"`
 	Fmt         string `default:"csv" yaml:"fmt"`
 	Shuffle     bool   `default:"false" yaml:"shuffle"'`
 	Batch       bool   `default:"false" yaml:"batch"'`
