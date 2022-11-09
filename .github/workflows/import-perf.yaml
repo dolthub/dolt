@@ -18,6 +18,10 @@ on:
         description: 'reporting query, relative to `import_benchmarks/reporting`'
         rquired: false
         default: 'three_way_compare.sql'
+      commit_to_branch:
+        description: 'where to commit results in DoltHub database: `import-perf/import-perf`'
+        rquired: false
+        default: ''
 env:
   BENCH_DIR: 'go/performance/import_benchmarker'
   MYSQL_PORT: 3309
@@ -80,6 +84,15 @@ jobs:
           -out "$out"
         echo "::set-output name=result_path::$out"
 
+    - name: Dolt version
+      id: version
+      run: |
+        branch=${{ github.event.inputs.commit_to_branch }}
+        if [ -z "$branch" ]; then
+            branch="${{ steps.version.outputs.ref }}-$(date +%F)"
+        fi
+        echo "::set-output name=branch::$branch"
+
     - name: Report
       id: report
       run: |
@@ -97,33 +110,21 @@ jobs:
 
         cd "$dolt_dir"
 
-        branch=${{ steps.version.outputs.ref }}
-        dolt checkout -b $branch
-        dolt sql -q "drop table if exists import_perf_results"
-        #dolt sql -b <<EOF
-          #call dolt_checkout('-b', '$branch');
-          #drop table if exists import_perf_results;
-        #EOF
+        # checkout branch
+        if [ -z $(dolt sql -q "select 1 from dolt_branches where name = '$branch';") ]; then
+          dolt checkout -b $branch
+        else
+          dolt checkout $branch
+        fi
 
-        dolt sql -q "show tables"
-        dolt status
+        dolt sql -q "drop table if exists import_perf_results"
 
         # load results
         dolt sql < "$in"
 
-        dolt sql -q "show tables"
-        dolt status
-        dolt sql -q "select * from import_perf_results"
-
         # push results to dolthub
         dolt add import_perf_results
         dolt commit -m "CI commit"
-        #dolt sql -b <<EOF
-          #call dolt_add('import_perf_results');
-          #call dolt_commit('-m', 'CI commit');
-        #EOF
-
-        #call dolt_push('origin', '$branch');
         dolt push origin $branch
 
         # generate report
