@@ -465,7 +465,14 @@ func (m prollySecondaryIndexPrefixWriter) keyFromRow(ctx context.Context, sqlRow
 			prefixLength = m.prefixLengths[to]
 		}
 		if prefixLength != 0 {
-			keyPart = keyPart.(string)[:prefixLength]
+			switch kp := keyPart.(type) {
+			case string:
+				keyPart = kp[:prefixLength]
+			case []uint8:
+				keyPart = kp[:prefixLength]
+			default:
+				panic("what in tarnation is going on in here")
+			}
 		}
 		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
 			return nil, err
@@ -496,7 +503,14 @@ func (m prollySecondaryIndexPrefixWriter) checkForUniqueKeyErr(ctx context.Conte
 		prefixLength := m.prefixLengths[to]
 		keyPart := sqlRow[from]
 		if prefixLength != 0 {
-			keyPart = keyPart.(string)[:prefixLength]
+			switch kp := keyPart.(type) {
+			case string:
+				keyPart = kp[:prefixLength]
+			case []uint8:
+				keyPart = kp[:prefixLength]
+			default:
+				panic("what in tarnation is going on in here")
+			}
 		}
 
 		if err := index.PutField(ctx, ns, m.keyBld, to, keyPart); err != nil {

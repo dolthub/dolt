@@ -331,3 +331,157 @@ func (writer prollyKeylessSecondaryWriter) HasEdits(ctx context.Context) bool {
 func (writer prollyKeylessSecondaryWriter) IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error) {
 	return writer.mut.IterRange(ctx, rng)
 }
+
+type prollyKeylessSecondaryPrefixWriter struct {
+	name          string
+	mut           *prolly.MutableMap
+	primary       prollyKeylessWriter
+	unique        bool
+	prefixLengths []uint16
+
+	keyBld    *val.TupleBuilder
+	prefixBld *val.TupleBuilder
+	hashBld   *val.TupleBuilder
+	keyMap    val.OrdinalMapping
+}
+
+var _ indexWriter = prollyKeylessSecondaryPrefixWriter{}
+
+// Name implements the interface indexWriter.
+func (writer prollyKeylessSecondaryPrefixWriter) Name() string {
+	return writer.name
+}
+
+// Map implements the interface indexWriter.
+func (writer prollyKeylessSecondaryPrefixWriter) Map(ctx context.Context) (prolly.Map, error) {
+	return writer.mut.Map(ctx)
+}
+
+// ValidateKeyViolations implements the interface indexWriter.
+func (writer prollyKeylessSecondaryPrefixWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
+	return nil
+}
+
+// Insert implements the interface indexWriter.
+func (writer prollyKeylessSecondaryPrefixWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
+	for to := range writer.keyMap {
+		from := writer.keyMap.MapOrdinal(to)
+		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, sqlRow[from]); err != nil {
+			return err
+		}
+		if to < writer.prefixBld.Desc.Count() {
+			if err := index.PutField(ctx, writer.mut.NodeStore(), writer.prefixBld, to, sqlRow[from]); err != nil {
+				return err
+			}
+		}
+	}
+
+	hashId, _, err := writer.primary.tuplesFromRow(ctx, sqlRow)
+	if err != nil {
+		return err
+	}
+	writer.keyBld.PutHash128(len(writer.keyBld.Desc.Types)-1, hashId.GetField(0))
+	indexKey := writer.keyBld.Build(sharePool)
+
+	if writer.unique {
+		prefixKey := writer.prefixBld.Build(sharePool)
+		err := writer.checkForUniqueKeyError(ctx, prefixKey)
+		if err != nil {
+			return err
+		}
+	} else {
+		writer.prefixBld.Recycle()
+	}
+
+	return writer.mut.Put(ctx, indexKey, val.EmptyTuple)
+}
+
+func (writer prollyKeylessSecondaryPrefixWriter) checkForUniqueKeyError(ctx context.Context, prefixKey val.Tuple) error {
+	for i := 0; i < writer.prefixBld.Desc.Count(); i++ {
+		if writer.prefixBld.Desc.IsNull(i, prefixKey) {
+			return nil
+		}
+	}
+
+	rng := prolly.PrefixRange(prefixKey, writer.prefixBld.Desc)
+	itr, err := writer.mut.IterRange(ctx, rng)
+	if err != nil {
+		return err
+	}
+	k, _, err := itr.Next(ctx)
+	if err != nil && err != io.EOF {
+		return err
+	}
+	if err == nil {
+		keyStr := FormatKeyForUniqKeyErr(prefixKey, writer.prefixBld.Desc)
+		writer.hashBld.PutRaw(0, k.GetField(k.Count()-1))
+		existingKey := writer.hashBld.Build(sharePool)
+		return secondaryUniqueKeyError{keyStr: keyStr, existingKey: existingKey}
+	}
+	return nil
+}
+
+// Delete implements the interface indexWriter.
+func (writer prollyKeylessSecondaryPrefixWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
+	hashId, cardRow, err := writer.primary.tuplesFromRow(ctx, sqlRow)
+	if err != nil {
+		return err
+	}
+	err = writer.primary.mut.Get(ctx, hashId, func(k, v val.Tuple) (err error) {
+		if k != nil {
+			cardRow = v
+		}
+		return
+	})
+	if err != nil {
+		return err
+	}
+
+	for to := range writer.keyMap {
+		from := writer.keyMap.MapOrdinal(to)
+		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, sqlRow[from]); err != nil {
+			return err
+		}
+	}
+	writer.keyBld.PutHash128(len(writer.keyBld.Desc.Types)-1, hashId.GetField(0))
+	indexKey := writer.keyBld.Build(sharePool)
+
+	// Indexes are always updated before the primary table, so we check if the deletion will cause the row to be removed
+	// from the primary. If not, then we just return.
+	card := val.ReadKeylessCardinality(cardRow)
+	if card > 1 {
+		return nil
+	}
+	return writer.mut.Delete(ctx, indexKey)
+}
+
+// Update implements the interface indexWriter.
+func (writer prollyKeylessSecondaryPrefixWriter) Update(ctx context.Context, oldRow sql.Row, newRow sql.Row) (err error) {
+	if err = writer.Delete(ctx, oldRow); err != nil {
+		return err
+	}
+	if err = writer.Insert(ctx, newRow); err != nil {
+		return err
+	}
+	return
+}
+
+// Commit implements the interface indexWriter.
+func (writer prollyKeylessSecondaryPrefixWriter) Commit(ctx context.Context) error {
+	return writer.mut.Checkpoint(ctx)
+}
+
+// Discard implements the interface indexWriter.
+func (writer prollyKeylessSecondaryPrefixWriter) Discard(ctx context.Context) error {
+	writer.mut.Revert(ctx)
+	return nil
+}
+
+// HasEdits implements the interface indexWriter.
+func (writer prollyKeylessSecondaryPrefixWriter) HasEdits(ctx context.Context) bool {
+	return writer.mut.HasEdits()
+}
+
+func (writer prollyKeylessSecondaryPrefixWriter) IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error) {
+	return writer.mut.IterRange(ctx, rng)
+}

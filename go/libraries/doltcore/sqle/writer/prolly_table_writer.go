@@ -79,7 +79,8 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 		// mapping from secondary index key to primary key
 		pkMap := makeIndexToIndexMapping(def.Schema().GetPKCols(), sch.GetPKCols())
 
-		if len(def.GetPrefixLengths()) == 0 {
+		prefixLengths := def.GetPrefixLengths()
+		if len(prefixLengths) == 0 {
 			writers[defName] = prollySecondaryIndexWriter{
 				name:    defName,
 				mut:     idxMap.Mutate(),
@@ -95,7 +96,7 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 				name:          defName,
 				mut:           idxMap.Mutate(),
 				unique:        def.IsUnique(),
-				prefixLengths: def.GetPrefixLengths(),
+				prefixLengths: prefixLengths,
 				idxCols:       def.Count(),
 				keyMap:        keyMap,
 				keyBld:        val.NewTupleBuilder(keyDesc),
@@ -129,15 +130,30 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 		keyMap, _ := ordinalMappingsFromSchema(sqlSch, def.Schema())
 		keyDesc, _ := m.Descriptors()
 
-		writers[defName] = prollyKeylessSecondaryWriter{
-			name:      defName,
-			mut:       m.Mutate(),
-			primary:   primary,
-			unique:    def.IsUnique(),
-			keyBld:    val.NewTupleBuilder(keyDesc),
-			prefixBld: val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count())),
-			hashBld:   val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc})),
-			keyMap:    keyMap,
+		prefixLengths := def.GetPrefixLengths()
+		if len(prefixLengths) == 0 {
+			writers[defName] = prollyKeylessSecondaryWriter{
+				name:      defName,
+				mut:       m.Mutate(),
+				primary:   primary,
+				unique:    def.IsUnique(),
+				keyBld:    val.NewTupleBuilder(keyDesc),
+				prefixBld: val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count())),
+				hashBld:   val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc})),
+				keyMap:    keyMap,
+			}
+		} else {
+			writers[defName] = prollyKeylessSecondaryPrefixWriter{
+				name:          defName,
+				mut:           m.Mutate(),
+				primary:       primary,
+				prefixLengths: prefixLengths,
+				unique:        def.IsUnique(),
+				keyBld:        val.NewTupleBuilder(keyDesc),
+				prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count())),
+				hashBld:       val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc})),
+				keyMap:        keyMap,
+			}
 		}
 	}
 

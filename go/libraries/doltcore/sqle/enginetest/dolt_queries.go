@@ -8142,20 +8142,6 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name:        "varchar secondary index",
-		SetUpScript: []string{},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:       "alter table t add primary key (v(10))",
-				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
-			},
-			{
-				Query:       "create table v_tbl (v varchar(100), primary key (v(10)))",
-				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
-			},
-		},
-	},
-	{
 		Name: "char prefix",
 		SetUpScript: []string{
 			"create table t (c char(100))",
