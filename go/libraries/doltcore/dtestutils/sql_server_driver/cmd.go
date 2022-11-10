@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io"
 	"net/url"
 	"os"
@@ -26,6 +25,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	_ "github.com/go-sql-driver/mysql"
 )
