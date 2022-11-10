@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"io"
 	"net/url"
 	"os"
@@ -46,7 +47,7 @@ func init() {
 	var err error
 	DoltPath, err = exec.LookPath(path)
 	if err != nil {
-		panic(fmt.Sprintf("did not find dolt binary: %v", err.Error()))
+		logrus.Warn(fmt.Sprintf("did not find dolt binary: %v", err.Error()))
 	}
 }
 
