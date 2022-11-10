@@ -108,6 +108,7 @@ start_multi_db_server() {
 stop_sql_server() {
     # Clean up any mysql.sock file in the default, global location
     rm -f /tmp/mysql.sock
+    rm -f /tmp/dolt.$PORT.sock
 
     wait=$1
     if [ ! -z "$SERVER_PID" ]; then
