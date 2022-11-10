@@ -243,3 +243,50 @@ SQL
   [ "$status" -eq 0 ]
   [[ "$output" =~ "status" ]] || false
 }
+
+@test "tableplus: server with no dbs yet should be able to describe dolt stored procedures" {
+    # make directories outside of the existing init'ed dolt repos
+    tempDir=$(mktemp -d)
+    cd $tempDir
+    mkdir repo1
+    cd repo1
+
+    # check that without a DB we get descriptive errors
+    run dolt sql -q "SHOW CREATE PROCEDURE dolt_clone;"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no database selected" ]] || false
+
+    run dolt sql -q "SHOW CREATE PROCEDURE dolt_branch;"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no database selected" ]] || false
+
+    # initialize dolt
+    dolt init
+
+    # check that the DB "repo1" exists
+    run dolt sql -q "SHOW DATABASES;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "repo1" ]] || false
+
+    # check that the DB "repo1" is selected
+    run dolt sql -q "SELECT DATABASE();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "repo1" ]] || false
+    echo "select database output >>> $output"
+
+    # check that current DB can be used
+    run dolt sql -q "SHOW CREATE PROCEDURE dolt_branch;"
+    [ "$status" -eq 0 ]
+
+    # check that the qualified DB name can be used
+    run dolt sql -q "SHOW CREATE PROCEDURE repo1.dolt_branch;"
+    [ "$status" -eq 0 ]
+
+    # check that procedures can be queried from multiple DBs
+    run dolt sql -q "CREATE DATABASE repo2;"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SHOW CREATE PROCEDURE repo2.dolt_branch;"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "USE repo1; SHOW CREATE PROCEDURE dolt_branch;"
+    [ "$status" -eq 0 ]
+}
