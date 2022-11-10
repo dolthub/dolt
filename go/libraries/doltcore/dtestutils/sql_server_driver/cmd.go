@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	_ "github.com/go-sql-driver/mysql"
 )
 
