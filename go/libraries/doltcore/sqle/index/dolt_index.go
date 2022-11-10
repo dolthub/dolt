@@ -255,7 +255,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
 		doltBinFormat:                 types.IsFormat_DOLT(vrw.Format()),
-		prefixLengths:                 idx.GetPrefixLengths(),
+		prefixLengths:                 idx.PrefixLengths(),
 	}, nil
 }
 

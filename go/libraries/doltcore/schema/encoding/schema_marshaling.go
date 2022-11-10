@@ -243,7 +243,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 			Comment:         index.Comment(),
 			Unique:          index.IsUnique(),
 			IsSystemDefined: !index.IsUserDefined(),
-			PrefixLengths:   index.GetPrefixLengths(),
+			PrefixLengths:   index.PrefixLengths(),
 		}
 	}
 
@@ -302,16 +302,13 @@ func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) er
 		_, err := sch.Indexes().UnsafeAddIndexByColTags(
 			encodedIndex.Name,
 			encodedIndex.Tags,
+			encodedIndex.PrefixLengths,
 			schema.IndexProperties{
 				IsUnique:      encodedIndex.Unique,
 				IsUserDefined: !encodedIndex.IsSystemDefined,
 				Comment:       encodedIndex.Comment,
 			},
 		)
-		if err != nil {
-			return err
-		}
-		err = sch.Indexes().SetIndexPrefixLength(encodedIndex.Name, encodedIndex.PrefixLengths)
 		if err != nil {
 			return err
 		}

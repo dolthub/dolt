@@ -97,20 +97,16 @@ func CreateIndex(
 	}
 
 	// create the index metadata, will error if index names are taken or an index with the same columns in the same order exists
-	_, err = sch.Indexes().AddIndexByColNames(
+	index, err := sch.Indexes().AddIndexByColNames(
 		indexName,
 		realColNames,
+		prefixLengths,
 		schema.IndexProperties{
 			IsUnique:      isUnique,
 			IsUserDefined: isUserDefined,
 			Comment:       comment,
 		},
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	err = sch.Indexes().SetIndexPrefixLength(indexName, prefixLengths)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +119,6 @@ func CreateIndex(
 
 	// TODO: in the case that we're replacing an implicit index with one the user specified, we could do this more
 	//  cheaply in some cases by just renaming it, rather than building it from scratch. But that's harder to get right.
-	index := sch.Indexes().GetByName(indexName)
 	indexRows, err := BuildSecondaryIndex(ctx, newTable, index, opts)
 	if err != nil {
 		return nil, err

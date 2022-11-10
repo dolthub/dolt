@@ -1342,11 +1342,15 @@ func (t *AlterableDoltTable) RewriteInserter(
 					colNames = append(colNames, colName)
 				}
 			}
-			newSch.Indexes().AddIndexByColNames(index.Name(), colNames, schema.IndexProperties{
-				IsUnique:      index.IsUnique(),
-				IsUserDefined: index.IsUserDefined(),
-				Comment:       index.Comment(),
-			})
+			newSch.Indexes().AddIndexByColNames(
+				index.Name(),
+				colNames,
+				index.PrefixLengths(),
+				schema.IndexProperties{
+					IsUnique:      index.IsUnique(),
+					IsUserDefined: index.IsUserDefined(),
+					Comment:       index.Comment(),
+				})
 		}
 	} else {
 		newSch = schema.CopyIndexes(oldSch, newSch)

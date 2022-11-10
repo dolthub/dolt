@@ -79,7 +79,7 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 		// mapping from secondary index key to primary key
 		pkMap := makeIndexToIndexMapping(def.Schema().GetPKCols(), sch.GetPKCols())
 
-		prefixLengths := def.GetPrefixLengths()
+		prefixLengths := def.PrefixLengths()
 		if len(prefixLengths) == 0 {
 			writers[defName] = prollySecondaryIndexWriter{
 				name:    defName,
@@ -130,7 +130,7 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 		keyMap, _ := ordinalMappingsFromSchema(sqlSch, def.Schema())
 		keyDesc, _ := m.Descriptors()
 
-		prefixLengths := def.GetPrefixLengths()
+		prefixLengths := def.PrefixLengths()
 		if len(prefixLengths) == 0 {
 			writers[defName] = prollyKeylessSecondaryWriter{
 				name:      defName,

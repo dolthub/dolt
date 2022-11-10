@@ -54,10 +54,8 @@ type Index interface {
 	// ToTableTuple returns a tuple that may be used to retrieve the original row from the indexed table when given
 	// a full index key (and not a partial index key).
 	ToTableTuple(ctx context.Context, fullKey types.Tuple, format *types.NomsBinFormat) (types.Tuple, error)
-	// GetPrefixLengths returns the prefix lengths for the index
-	GetPrefixLengths() []uint16
-	// SetPrefixLengths applies to prefix lengths
-	SetPrefixLengths(prefixLengths []uint16)
+	// PrefixLengths returns the prefix lengths for the index
+	PrefixLengths() []uint16
 }
 
 var _ Index = (*indexImpl)(nil)
@@ -247,13 +245,8 @@ func (ix *indexImpl) ToTableTuple(ctx context.Context, fullKey types.Tuple, form
 }
 
 // GetPrefixLengths implements Index.
-func (ix *indexImpl) GetPrefixLengths() []uint16 {
+func (ix *indexImpl) PrefixLengths() []uint16 {
 	return ix.prefixLengths
-}
-
-// SetPrefixLengths implements Index.
-func (ix *indexImpl) SetPrefixLengths(prefixLengths []uint16) {
-	ix.prefixLengths = prefixLengths
 }
 
 // copy returns an exact copy of the calling index.

@@ -25,11 +25,11 @@ type IndexCollection interface {
 	// It does not perform any kind of checking, and is intended for schema modifications.
 	AddIndex(indexes ...Index)
 	// AddIndexByColNames adds an index with the given name and columns (in index order).
-	AddIndexByColNames(indexName string, cols []string, props IndexProperties) (Index, error)
+	AddIndexByColNames(indexName string, cols []string, prefixLengths []uint16, props IndexProperties) (Index, error)
 	// AddIndexByColTags adds an index with the given name and column tags (in index order).
-	AddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error)
+	AddIndexByColTags(indexName string, tags []uint64, prefixLengths []uint16, props IndexProperties) (Index, error)
 	// todo: this method is trash, clean up this interface
-	UnsafeAddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error)
+	UnsafeAddIndexByColTags(indexName string, tags []uint64, prefixLengths []uint16, props IndexProperties) (Index, error)
 	// AllIndexes returns a slice containing all of the indexes in this collection.
 	AllIndexes() []Index
 	// Contains returns whether the given index name already exists for this table.
@@ -64,8 +64,6 @@ type IndexCollection interface {
 	RenameIndex(oldName, newName string) (Index, error)
 	//SetPks changes the pks or pk ordinals
 	SetPks([]uint64) error
-	// SetIndexPrefixLength sets the prefix lengths for the specified index
-	SetIndexPrefixLength(indexName string, prefixLengths []uint16) error
 }
 
 type IndexProperties struct {
@@ -127,15 +125,15 @@ func (ixc *indexCollectionImpl) AddIndex(indexes ...Index) {
 	}
 }
 
-func (ixc *indexCollectionImpl) AddIndexByColNames(indexName string, cols []string, props IndexProperties) (Index, error) {
+func (ixc *indexCollectionImpl) AddIndexByColNames(indexName string, cols []string, prefixLengths []uint16, props IndexProperties) (Index, error) {
 	tags, ok := ixc.columnNamesToTags(cols)
 	if !ok {
 		return nil, fmt.Errorf("the table does not contain at least one of the following columns: `%v`", cols)
 	}
-	return ixc.AddIndexByColTags(indexName, tags, props)
+	return ixc.AddIndexByColTags(indexName, tags, prefixLengths, props)
 }
 
-func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error) {
+func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint64, prefixLengths []uint16, props IndexProperties) (Index, error) {
 	if strings.HasPrefix(indexName, "dolt_") {
 		return nil, fmt.Errorf("indexes cannot be prefixed with `dolt_`")
 	}
@@ -163,7 +161,7 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		isUnique:      props.IsUnique,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
-		prefixLengths: []uint16{},
+		prefixLengths: prefixLengths,
 	}
 	ixc.indexes[indexName] = index
 	for _, tag := range tags {
@@ -180,7 +178,7 @@ func validateColumnIndexable(c Column) error {
 	return nil
 }
 
-func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error) {
+func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags []uint64, prefixLengths []uint16, props IndexProperties) (Index, error) {
 	index := &indexImpl{
 		indexColl:     ixc,
 		name:          indexName,
@@ -189,6 +187,7 @@ func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags [
 		isUnique:      props.IsUnique,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
+		prefixLengths: prefixLengths,
 	}
 	ixc.indexes[indexName] = index
 	for _, tag := range tags {
@@ -328,7 +327,7 @@ func (ixc *indexCollectionImpl) Merge(indexes ...Index) {
 				isUnique:      index.IsUnique(),
 				isUserDefined: index.IsUserDefined(),
 				comment:       index.Comment(),
-				prefixLengths: index.GetPrefixLengths(),
+				prefixLengths: index.PrefixLengths(),
 			}
 			ixc.AddIndex(newIndex)
 		}
@@ -429,14 +428,6 @@ func (ixc *indexCollectionImpl) SetPks(tags []uint64) error {
 		return ErrInvalidPkOrdinals
 	}
 	ixc.pks = tags
-	return nil
-}
-
-func (ixc *indexCollectionImpl) SetIndexPrefixLength(indexName string, prefixLengths []uint16) error {
-	if !ixc.Contains(indexName) {
-		return fmt.Errorf("`%s` does not exist as an index for this table", indexName)
-	}
-	ixc.indexes[indexName].prefixLengths = prefixLengths
 	return nil
 }
 

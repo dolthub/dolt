@@ -265,11 +265,15 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 				tags[i] = newCol.Tag
 			}
 		}
-		_, err = newSch.Indexes().AddIndexByColTags(index.Name(), tags, schema.IndexProperties{
-			IsUnique:      index.IsUnique(),
-			IsUserDefined: index.IsUserDefined(),
-			Comment:       index.Comment(),
-		})
+		_, err = newSch.Indexes().AddIndexByColTags(
+			index.Name(),
+			tags,
+			index.PrefixLengths(),
+			schema.IndexProperties{
+				IsUnique:      index.IsUnique(),
+				IsUserDefined: index.IsUserDefined(),
+				Comment:       index.Comment(),
+			})
 		if err != nil {
 			return nil, err
 		}

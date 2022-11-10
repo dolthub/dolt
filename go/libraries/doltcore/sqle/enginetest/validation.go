@@ -142,7 +142,7 @@ func validateIndexConsistency(
 	primary, secondary prolly.Map,
 ) error {
 	// TODO: fix this later
-	if len(def.GetPrefixLengths()) > 0 {
+	if len(def.PrefixLengths()) > 0 {
 		return nil
 	}
 
