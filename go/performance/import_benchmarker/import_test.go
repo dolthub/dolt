@@ -12,19 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build darwin dragonfly freebsd linux netbsd openbsd
+package import_benchmarker
 
-package main
+import (
+	"testing"
+)
 
-import "syscall"
-
-func (s *SqlServer) GracefulStop() error {
-	err := s.Cmd.Process.Signal(syscall.SIGTERM)
-	if err != nil {
-		return err
-	}
-	<-s.Done
-	return s.Cmd.Wait()
+func TestImportSize(t *testing.T) {
+	t.Skip()
+	RunTestsFile(t, "testdata/size.yaml")
 }
 
+func TestExternalImport(t *testing.T) {
+	t.Skip()
+	RunTestsFile(t, "testdata/external.yaml")
+}
 
+func TestDoltImport(t *testing.T) {
+	t.Skip()
+	RunTestsFile(t, "testdata/dolt_server.yaml")
+}
+
+func TestShuffle(t *testing.T) {
+	t.Skip()
+	RunTestsFile(t, "testdata/shuffle.yaml")
+}
+
+func TestCI(t *testing.T) {
+	// this will be a lot slower than running `cmd/main.go -test testdata/ci.yaml`
+	t.Skip()
+	RunTestsFile(t, "testdata/ci.yaml")
+}

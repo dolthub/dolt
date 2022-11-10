@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sql_server_driver
 
 import (
 	"syscall"
+
 	"golang.org/x/sys/windows"
 )
 
@@ -37,7 +38,7 @@ func (s *SqlServer) GracefulStop() error {
 		return err
 	}
 
-	set, err = dll.FindProc("SetConsoleCtrlHandler")
+	set, err := dll.FindProc("SetConsoleCtrlHandler")
 	if err != nil {
 		return err
 	}
@@ -58,7 +59,7 @@ func (s *SqlServer) GracefulStop() error {
 	if err != nil {
 		return err
 	}
-	_, _, err := f.Call()
+	_, _, err = f.Call()
 	if err != nil {
 		return err
 	}

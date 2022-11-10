@@ -16,41 +16,62 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 
-	"github.com/dolthub/dolt/go/performance/import_benchmarker"
+	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
+	ib "github.com/dolthub/dolt/go/performance/import_benchmarker"
 )
 
 const (
 	resultsTableName = "results"
 )
 
-var configPath = flag.String("config", "", "the path to a config file")
+var path = flag.String("test", "", "the path to a test file")
+var out = flag.String("out", "", "result output path")
 
 func main() {
 	flag.Parse()
-
-	// Construct a config
-	config, err := import_benchmarker.NewDefaultImportBenchmarkConfig()
-	if *configPath != "" {
-		config, err = import_benchmarker.FromFileConfig(*configPath)
-	}
-
+	def, err := ib.ParseTestsFile(*path)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatalln(err)
 	}
 
-	// Get the working directory the tests will be executing in
-	wd := import_benchmarker.GetWorkingDir()
-
-	// Generate the tests and the benchmarker.
-	results, err := import_benchmarker.RunBenchmarkTests(config, wd)
+	tmpdir, err := os.MkdirTemp("", "repo-store-")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 
-	import_benchmarker.SerializeResults(results, wd, resultsTableName, "csv")
+	results := new(ib.ImportResults)
+	u, err := driver.NewDoltUser()
+	for _, test := range def.Tests {
+		test.Results = results
+		test.InitWithTmpDir(tmpdir)
 
+		for _, r := range test.Repos {
+			var err error
+			switch {
+			case r.ExternalServer != nil:
+				err = test.RunExternalServerTests(r.Name, r.ExternalServer)
+			case r.Server != nil:
+				err = test.RunSqlServerTests(r, u)
+			default:
+				err = test.RunCliTests(r, u)
+			}
+			if err != nil {
+				log.Fatalln(err)
+			}
+		}
+	}
+	if *out != "" {
+		of, err := os.Create(*out)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		fmt.Fprintf(of, results.SqlDump())
+	} else {
+		fmt.Println(results.SqlDump())
+	}
 	os.Exit(0)
 }

@@ -1,0 +1,31 @@
+opts:
+  seed: 0
+tests:
+  - name: "row count"
+    repos: &repos
+     - name: repo1
+    tables:
+      - name: "400k"
+        fmt: "csv"
+        rows: 400000
+        schema: |
+          create table xy (
+            x int primary key,
+            y varchar(30)
+          );
+      - name: "800k"
+        fmt: "csv"
+        rows: 800000
+        schema: |
+          create table xy (
+            x int primary key,
+            y varchar(30)
+          );
+      - name: "1.6mm"
+        fmt: "csv"
+        rows: 1600000
+        schema: |
+          create table xy (
+            x int primary key,
+            y varchar(30)
+          );

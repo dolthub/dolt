@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sql_server_driver
 
 import (
 	"bytes"
 	"database/sql"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -46,7 +47,7 @@ func init() {
 	var err error
 	DoltPath, err = exec.LookPath(path)
 	if err != nil {
-		panic(fmt.Sprintf("did not find dolt binary: %v", err.Error()))
+		log.Printf("did not find dolt binary: %v\n", err.Error())
 	}
 }
 
@@ -108,11 +109,11 @@ func (u DoltUser) MakeRepoStore() (RepoStore, error) {
 
 type RepoStore struct {
 	user DoltUser
-	dir  string
+	Dir  string
 }
 
 func (rs RepoStore) MakeRepo(name string) (Repo, error) {
-	path := filepath.Join(rs.dir, name)
+	path := filepath.Join(rs.Dir, name)
 	err := os.Mkdir(path, 0750)
 	if err != nil {
 		return Repo{}, err
@@ -127,18 +128,18 @@ func (rs RepoStore) MakeRepo(name string) (Repo, error) {
 
 func (rs RepoStore) DoltCmd(args ...string) *exec.Cmd {
 	cmd := rs.user.DoltCmd(args...)
-	cmd.Dir = rs.dir
+	cmd.Dir = rs.Dir
 	return cmd
 }
 
 type Repo struct {
 	user DoltUser
-	dir  string
+	Dir  string
 }
 
 func (r Repo) DoltCmd(args ...string) *exec.Cmd {
 	cmd := r.user.DoltCmd(args...)
-	cmd.Dir = r.dir
+	cmd.Dir = r.Dir
 	return cmd
 }
 
@@ -260,26 +261,23 @@ func (s *SqlServer) Restart(newargs *[]string) error {
 }
 
 func (s *SqlServer) DB(c Connection) (*sql.DB, error) {
-	authority := "root"
-	if c.User != "" {
-		authority = c.User
-	}
+	var pass string
 	pass, err := c.Password()
 	if err != nil {
 		return nil, err
 	}
-	if pass != "" {
-		authority += ":" + pass
-	}
-	location := fmt.Sprintf("tcp(127.0.0.1:%d)", s.Port)
-	dbname := s.DBName
+	return ConnectDB(c.User, pass, s.DBName, "127.0.0.1", s.Port, c.DriverParams)
+}
+
+func ConnectDB(user, password, name, host string, port int, driverParams map[string]string) (*sql.DB, error) {
 	params := make(url.Values)
 	params.Set("allowAllFiles", "true")
 	params.Set("tls", "preferred")
-	for k, v := range c.DriverParams {
+	for k, v := range driverParams {
 		params.Set(k, v)
 	}
-	dsn := fmt.Sprintf("%s@%s/%s?%s", authority, location, dbname, params.Encode())
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s", user, password, host, port, name, params.Encode())
+
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, err
