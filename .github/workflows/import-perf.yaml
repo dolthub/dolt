@@ -157,7 +157,7 @@ jobs:
       with:
         csvinput: ${{ steps.csv.outputs.content }}
 
-    - uses: mshick/add-pr-comment@v1
+    - uses: mshick/add-pr-comment@v2
       if: ${{ github.event.client_payload.issue_id }} != ""
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
