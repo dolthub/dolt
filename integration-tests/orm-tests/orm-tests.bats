@@ -23,11 +23,14 @@ teardown() {
   rm -f /tmp/mysql.sock
 }
 
+# Peewee is a lightweight ORM library for Python applications. This test checks performs a basic
+# smoke test to make sure Peewee can work with Dolt.
 @test "Peewee ORM smoke test" {
   skip "Not implemented yet"
 }
 
-# Peewee is a lightweight ORM library for Python applications
+# Peewee is a lightweight ORM library for Python applications. This test checks out the Peewee test suite
+# and runs it against Dolt.
 @test "Peewee ORM test suite" {
   skip "Dolt does not pass all tests yet"
 
@@ -43,7 +46,7 @@ teardown() {
 }
 
 # Prisma is an ORM for Node/TypeScript applications. This is a simple smoke test to make sure
-# Dolt can support the most basic Prisma operation.
+# Dolt can support the most basic Prisma operations.
 @test "Prisma ORM smoke test" {
   mysql --protocol TCP -u dolt -e "create database dolt;"
 
@@ -52,6 +55,8 @@ teardown() {
   npx -c "prisma migrate dev --name init"
 }
 
+# Prisma is an ORM for Node/TypeScript applications. This test checks out the Peewee test suite
+# and runs it against Dolt.
 @test "Prisma ORM test suite" {
   skip "Not implemented yet"
 
@@ -62,6 +67,8 @@ teardown() {
   # https://github.com/prisma/prisma/tree/main/packages/integration-tests/src/__tests__/integration/mysql
 }
 
+# TypeORM is an ORM for Node/TypeScript applications. This is a simple smoke test to make sure
+# Dolt can support the most basic TypeORM operations.
 @test "TypeORM smoke test" {
   mysql --protocol TCP -u dolt -e "create database dolt;"
 
