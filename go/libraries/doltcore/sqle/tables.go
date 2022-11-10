@@ -1757,6 +1757,29 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 	return seq, nil
 }
 
+// hasNonZeroPrefixLength will return true if at least one of the sql.IndexColumns has a Length > 0
+func hasNonZeroPrefixLength(idxCols []sql.IndexColumn) bool {
+	for _, idxCol := range idxCols {
+		if idxCol.Length > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// allocatePrefixLengths will return a []uint16 populated with the Length field from sql.IndexColumn
+// if all the lengths have a value of 0, it will return nil
+func allocatePrefixLengths(idxCols []sql.IndexColumn) []uint16 {
+	if !hasNonZeroPrefixLength(idxCols) {
+		return nil
+	}
+	prefixLengths := make([]uint16, len(idxCols))
+	for i, idxCol := range idxCols {
+		prefixLengths[i] = uint16(idxCol.Length)
+	}
+	return prefixLengths
+}
+
 // CreateIndex implements sql.IndexAlterableTable
 func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
@@ -1771,23 +1794,6 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 		columns[i] = indexCol.Name
 	}
 
-	// TODO: helper method
-	var hasNonZeroPrefixLength bool
-	for _, indexCol := range idx.Columns {
-		if indexCol.Length > 0 {
-			hasNonZeroPrefixLength = true
-			break
-		}
-	}
-
-	var prefixLengths []uint16
-	if hasNonZeroPrefixLength {
-		prefixLengths = make([]uint16, len(idx.Columns))
-		for i, indexCol := range idx.Columns {
-			prefixLengths[i] = uint16(indexCol.Length)
-		}
-	}
-
 	table, err := t.DoltTable.DoltTable(ctx)
 	if err != nil {
 		return err
@@ -1798,7 +1804,7 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 		table,
 		idx.Name,
 		columns,
-		prefixLengths,
+		allocatePrefixLengths(idx.Columns),
 		idx.Constraint == sql.IndexConstraint_Unique,
 		true,
 		idx.Comment,
@@ -2276,22 +2282,6 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 		columns[i] = indexCol.Name
 	}
 
-	var hasNonZeroPrefixLength bool
-	for _, indexCol := range idx.Columns {
-		if indexCol.Length > 0 {
-			hasNonZeroPrefixLength = true
-			break
-		}
-	}
-
-	var prefixLengths []uint16
-	if hasNonZeroPrefixLength {
-		prefixLengths = make([]uint16, len(idx.Columns))
-		for i, indexCol := range idx.Columns {
-			prefixLengths[i] = uint16(indexCol.Length)
-		}
-	}
-
 	table, err := t.DoltTable.DoltTable(ctx)
 	if err != nil {
 		return err
@@ -2302,7 +2292,7 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 		table,
 		idx.Name,
 		columns,
-		prefixLengths,
+		allocatePrefixLengths(idx.Columns),
 		idx.Constraint == sql.IndexConstraint_Unique,
 		false,
 		"",
