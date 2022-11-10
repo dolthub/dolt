@@ -439,11 +439,13 @@ func readYear(val []byte) int16 {
 	if v == zeroToken {
 		return int16(0)
 	}
-	return int16(v) + minYear
+	offset := int16(v)
+	return offset + minYear
 }
 
-// 1901 - 2155 encodes to uint8 range 0 - 254 for legacy reasons
-// 0 encodes to uint8 255
+// writeYear encodes the year |val| as an offset from the minimum year 1901.
+// |val| must be within 1901 - 2155. If val == 0, 255 is written as a special
+// token value.
 func writeYear(buf []byte, val int16) {
 	expectSize(buf, yearSize)
 	if val == 0 {
@@ -453,7 +455,8 @@ func writeYear(buf []byte, val int16) {
 	if val < minYear || val > maxYear {
 		panic("year is outside of allowed range [1901, 2155]")
 	}
-	writeUint8(buf, uint8(val-minYear))
+	offset := uint8(val - minYear)
+	writeUint8(buf, offset)
 }
 
 func compareYear(l, r int16) int {
