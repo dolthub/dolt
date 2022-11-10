@@ -267,28 +267,12 @@ func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
 		cols[i] = c.Name
 	}
 
-	var hasNonZeroPrefixLength bool
-	for _, c := range idx.Columns {
-		if c.Length > 0 {
-			hasNonZeroPrefixLength = true
-			break
-		}
-	}
-
-	var prefixLengths []uint16
-	if hasNonZeroPrefixLength {
-		prefixLengths = make([]uint16, len(idx.Columns))
-		for i, c := range idx.Columns {
-			prefixLengths[i] = uint16(c.Length)
-		}
-	}
-
 	ret, err := creation.CreateIndex(
 		ctx,
 		t.table,
 		idx.Name,
 		cols,
-		prefixLengths,
+		allocatePrefixLengths(idx.Columns),
 		idx.Constraint == sql.IndexConstraint_Unique,
 		true,
 		idx.Comment,

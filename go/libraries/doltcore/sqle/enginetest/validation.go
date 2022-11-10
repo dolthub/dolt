@@ -220,7 +220,6 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			if j < pkSize {
 				builder.PutRaw(i, key.GetField(j))
 			} else {
-
 				builder.PutRaw(i, value.GetField(j-pkSize))
 			}
 		}

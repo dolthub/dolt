@@ -78,31 +78,16 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 
 		// mapping from secondary index key to primary key
 		pkMap := makeIndexToIndexMapping(def.Schema().GetPKCols(), sch.GetPKCols())
-
-		prefixLengths := def.PrefixLengths()
-		if len(prefixLengths) == 0 {
-			writers[defName] = prollySecondaryIndexWriter{
-				name:    defName,
-				mut:     idxMap.Mutate(),
-				unique:  def.IsUnique(),
-				idxCols: def.Count(),
-				keyMap:  keyMap,
-				keyBld:  val.NewTupleBuilder(keyDesc),
-				pkMap:   pkMap,
-				pkBld:   val.NewTupleBuilder(pkDesc),
-			}
-		} else {
-			writers[defName] = prollySecondaryIndexPrefixWriter{
-				name:          defName,
-				mut:           idxMap.Mutate(),
-				unique:        def.IsUnique(),
-				prefixLengths: prefixLengths,
-				idxCols:       def.Count(),
-				keyMap:        keyMap,
-				keyBld:        val.NewTupleBuilder(keyDesc),
-				pkMap:         pkMap,
-				pkBld:         val.NewTupleBuilder(pkDesc),
-			}
+		writers[defName] = prollySecondaryIndexWriter{
+			name:          defName,
+			mut:           idxMap.Mutate(),
+			unique:        def.IsUnique(),
+			prefixLengths: def.PrefixLengths(),
+			idxCols:       def.Count(),
+			keyMap:        keyMap,
+			keyBld:        val.NewTupleBuilder(keyDesc),
+			pkMap:         pkMap,
+			pkBld:         val.NewTupleBuilder(pkDesc),
 		}
 	}
 
@@ -130,30 +115,16 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 		keyMap, _ := ordinalMappingsFromSchema(sqlSch, def.Schema())
 		keyDesc, _ := m.Descriptors()
 
-		prefixLengths := def.PrefixLengths()
-		if len(prefixLengths) == 0 {
-			writers[defName] = prollyKeylessSecondaryWriter{
-				name:      defName,
-				mut:       m.Mutate(),
-				primary:   primary,
-				unique:    def.IsUnique(),
-				keyBld:    val.NewTupleBuilder(keyDesc),
-				prefixBld: val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count())),
-				hashBld:   val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc})),
-				keyMap:    keyMap,
-			}
-		} else {
-			writers[defName] = prollyKeylessSecondaryPrefixWriter{
-				name:          defName,
-				mut:           m.Mutate(),
-				primary:       primary,
-				prefixLengths: prefixLengths,
-				unique:        def.IsUnique(),
-				keyBld:        val.NewTupleBuilder(keyDesc),
-				prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count())),
-				hashBld:       val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc})),
-				keyMap:        keyMap,
-			}
+		writers[defName] = prollyKeylessSecondaryWriter{
+			name:          defName,
+			mut:           m.Mutate(),
+			primary:       primary,
+			unique:        def.IsUnique(),
+			prefixLengths: def.PrefixLengths(),
+			keyBld:        val.NewTupleBuilder(keyDesc),
+			prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count())),
+			hashBld:       val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc})),
+			keyMap:        keyMap,
 		}
 	}
 
