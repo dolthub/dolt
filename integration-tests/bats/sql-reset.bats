@@ -127,7 +127,7 @@ teardown() {
 @test "sql-reset: DOLT_RESET --hard does not ignore staged docs" {
     # New docs gets referred as untracked file.
     echo ~license~ > LICENSE.md
-    dolt docs read LICENSE.md LICENSE.md
+    dolt docs upload LICENSE.md LICENSE.md
     dolt add .
 
     run dolt sql -q "SELECT DOLT_RESET('--hard')"
@@ -142,7 +142,7 @@ teardown() {
 @test "sql-reset: CALL DOLT_RESET --hard does not ignore staged docs" {
     # New docs gets referred as untracked file.
     echo ~license~ > LICENSE.md
-    dolt docs read LICENSE.md LICENSE.md
+    dolt docs upload LICENSE.md LICENSE.md
     dolt add .
 
     run dolt sql -q "CALL DOLT_RESET('--hard')"
@@ -153,11 +153,11 @@ teardown() {
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     # Tracked file gets reset
-    dolt docs read LICENSE.md LICENSE.md
+    dolt docs upload LICENSE.md LICENSE.md
     dolt add .
     dolt commit -a -m "Add a the license file"
     echo ~edited-license~ > LICENSE.md
-    dolt docs read LICENSE.md LICENSE.md
+    dolt docs upload LICENSE.md LICENSE.md
     dolt add .
     run dolt sql -q "CALL DOLT_RESET('--hard')"
     [ $status -eq 0 ]
@@ -215,7 +215,7 @@ teardown() {
 
 @test "sql-reset: DOLT_RESET --soft ignores staged docs" {
     echo ~license~ > LICENSE.md
-    dolt docs read LICENSE.md LICENSE.md
+    dolt docs upload LICENSE.md LICENSE.md
     dolt add .
 
     run dolt sql -q "SELECT DOLT_RESET('--soft')"
@@ -228,7 +228,7 @@ teardown() {
 
 @test "sql-reset: CALL DOLT_RESET --soft ignores staged docs" {
     echo ~license~ > LICENSE.md
-    dolt docs read LICENSE.md LICENSE.md
+    dolt docs upload LICENSE.md LICENSE.md
     dolt add .
 
     run dolt sql -q "CALL DOLT_RESET('--soft')"

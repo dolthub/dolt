@@ -247,7 +247,6 @@ func SqlColToStr(sqlType sql.Type, col interface{}) (string, error) {
 				return "", err
 			}
 			return res.ToString(), nil
-
 		}
 	}
 

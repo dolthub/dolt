@@ -1,6 +1,6 @@
 FROM --platform=linux/amd64 ubuntu:18.04
 
-# install peewee
+# install ORM tools and dependencies
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update -y && \
     apt install -y \
@@ -10,6 +10,7 @@ RUN apt update -y && \
     curl -sL https://deb.nodesource.com/setup_14.x | bash - && \
     apt update -y && \
     apt install -y \
+        nodejs \
         python3.8 \
         python3-pip \
         git \
