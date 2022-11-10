@@ -187,9 +187,11 @@ func (sd *schemaData) Copy() *schemaData {
 			for j, tag := range idx.Tags {
 				idxCol[i].Tags[j] = tag
 			}
-			idxCol[i].PrefixLengths = make([]uint16, len(idx.PrefixLengths))
-			for j, prefixLength := range idx.PrefixLengths {
-				idxCol[i].PrefixLengths[j] = prefixLength
+			if len(idx.PrefixLengths) > 0 {
+				idxCol[i].PrefixLengths = make([]uint16, len(idx.PrefixLengths))
+				for j, prefixLength := range idx.PrefixLengths {
+					idxCol[i].PrefixLengths[j] = prefixLength
+				}
 			}
 		}
 	}
@@ -408,11 +410,6 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 		sd, err = toSchemaData(sch)
 	} else {
 		err = marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
-		for i, enc := range sd.IndexCollection {
-			if enc.PrefixLengths == nil {
-				sd.IndexCollection[i].PrefixLengths = []uint16{}
-			}
-		}
 	}
 	if err != nil {
 		return nil, err
