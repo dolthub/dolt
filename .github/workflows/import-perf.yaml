@@ -163,6 +163,9 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
         repo-token-user-login: 'github-actions[bot]'
         issue: ${{ github.event.client_payload.issue_id }}
+        message-failure: import benchmark failed
+        message-cancelled: import benchmark cancelled
+        allow-repeats: true
         message: |
           @${{ github.event.client_payload.actor }} __DOLT__
           ${{ steps.md.outputs.markdown-table }}
