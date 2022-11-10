@@ -1,0 +1,238 @@
+opts:
+  seed: 0
+tests:
+- name: "pk type"
+  repos: &repos
+  - name: dolt_cli
+  - name: dolt_server
+    server:
+      port: 3308
+      args: [ "--port", "3308" ]
+  - name: mysql
+    external-server:
+      name: test
+      host: 127.0.0.1
+      user: root
+      password: password
+      port: 3309
+  tables:
+    - name: "int"
+      schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+    - name: "float"
+      schema: |
+        create table xy (
+          x float primary key,
+          y varchar(30)
+        );
+    - name: "varchar"
+      schema: |
+        create table xy (
+          x varchar(20) primary key,
+          y varchar(30)
+        );
+- name: "config width"
+  repos: *repos
+  tables:
+    - name: "2 cols"
+      schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+    - name: "8 cols"
+      schema: |
+        create table xy (
+          x int primary key,
+          y int,
+          z int,
+          w int,
+          a int,
+          b int,
+          c int,
+          d int
+        );
+    - name: "32 cols"
+      schema: |
+        create table xy (
+          a1 int primary key,
+          a2 int, a3 int, a4 int, a5 int, a6 int, a7 int, a8 int, a9 int, a10 int, a11 int,
+          a12 int, a13 int, a14 int, a15 int, a16 int, a17 int, a18 int, a19 int, a20 int, a21 int,
+          a22 int, a23 int, a24 int, a25 int, a26 int, a27 int, a28 int, a29 int, a30 int, a31 int,
+          a32 int
+        );
+- name: "col type"
+  repos: *repos
+  tables:
+    - name: "varchar"
+      schema: |
+        create table xy (
+          x int,
+          y varchar(30)
+        );
+    #  - name: "geometry"
+    #    schema: |
+    #      create table xy (
+    #        x int primary key,
+    #        y geometry
+    #      );
+    - name: "datetime"
+      schema: |
+        create table xy (
+          x int primary key,
+          y date
+        );
+- name: "secondary index"
+  repos: *repos
+  tables:
+    - name: "no secondary"
+      schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30),
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "one index"
+      schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30),
+          z varchar(30),
+          w varchar(30),
+          index x (x)
+        );
+    - name: "two index"
+      schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30),
+          z varchar(30),
+          w varchar(30),
+          index x (x),
+          index y (y)
+        );
+    - name: "four index"
+      schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30),
+          z varchar(30),
+          w varchar(30),
+          index x (x),
+          index y (y),
+          index z (z),
+          index w (w)
+        );
+- name: "blob"
+  repos: *repos
+  tables:
+    - name: "no blob"
+      schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30),
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "1 blob"
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "2 blobs"
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z blob,
+          w varchar(30)
+        );
+- name: "row count"
+  repos: *repos
+  tables:
+    - name: "400k"
+      rows: 400000
+      schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+    - name: "800k"
+      rows: 800000
+      schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+    - name: "1.6mm"
+      rows: 1600000
+      schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+- name: "sorting"
+  repos: *repos
+  tables:
+    - name: "shuffled 1mm"
+      shuffle: true
+      rows: 1000000
+      schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+    - name: "sorted 1mm"
+      shuffle: false
+      rows: 1000000
+      schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+- name: "batching"
+  repos:
+  - name: dolt_server
+    server:
+      port: 3308
+      args: [ "--port", "3308" ]
+  - name: mysql
+    external-server:
+      name: test
+      host: 127.0.0.1
+      user: root
+      password: password
+      port: 3309
+  tables:
+    - name: "LOAD DATA"
+      fmt: "csv"
+      rows: 10000
+      schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+    - name: "batch sql"
+      fmt: "sql"
+      rows: 10000
+      batch: true
+      schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
+    - name: "by line sql"
+      fmt: "sql"
+      rows: 10000
+      schema: |
+        create table xy (
+          x int primary key,
+          y varchar(30)
+        );
