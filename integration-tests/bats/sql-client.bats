@@ -134,3 +134,13 @@ teardown() {
     [ $status -ne 0 ]
     [[ $output =~ "not found" ]] || false
 }
+
+@test "sql-client: handle dashes for implicit database" {
+    make_repo test-dashes
+    cd test-dashes
+    start_sql_server test-dashes
+
+    run	dolt sql-client -u dolt -P $PORT -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ " test_dashes " ]] || false
+}
