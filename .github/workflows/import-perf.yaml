@@ -93,7 +93,7 @@ jobs:
         # push results to dolthub
         dolt add import_perf_results
         dolt commit -m "CI commit"
-        dolt push origin $branch
+        dolt push -f origin $branch
 
         # generate report
         dolt sql -r csv < "$query" > "$out"
