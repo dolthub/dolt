@@ -387,7 +387,6 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 		return nil, err
 	}
 
-	// TODO: cache is messing everything up
 	schemaCacheMu.Lock()
 	cachedData, ok := unmarshalledSchemaCache[h]
 	schemaCacheMu.Unlock()
