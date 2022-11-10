@@ -1,6 +1,6 @@
 datasource db {
     provider = "mysql"
-    url      = "mysql://dolt@localhost:3306/obsidian"
+    url      = "mysql://dolt@localhost:3306/dolt"
 }
 
 model Sample {
