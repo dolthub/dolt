@@ -161,7 +161,6 @@ jobs:
       if: ${{ github.event.client_payload.issue_id }} != ""
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
-        repo-token-user-login: 'github-actions[bot]'
         issue: ${{ github.event.client_payload.issue_id }}
         message-failure: import benchmark failed
         message-cancelled: import benchmark cancelled
