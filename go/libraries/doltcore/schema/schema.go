@@ -19,7 +19,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/vitess/go/vt/proto/query"
-	errors "gopkg.in/src-d/go-errors.v1"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"

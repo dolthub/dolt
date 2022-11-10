@@ -381,9 +381,13 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 			tags[j] = col.Tag()
 		}
 
-		prefixLengths := make([]uint16, idx.PrefixLengthsLength())
-		for j := range prefixLengths {
-			prefixLengths[j] = idx.PrefixLengths(j)
+		var prefixLengths []uint16
+		prefixLengthsLength := idx.PrefixLengthsLength()
+		if prefixLengthsLength > 0 {
+			prefixLengths = make([]uint16, prefixLengthsLength)
+			for j := range prefixLengths {
+				prefixLengths[j] = idx.PrefixLengths(j)
+			}
 		}
 
 		_, err := sch.Indexes().AddIndexByColTags(name, tags, prefixLengths, props)
