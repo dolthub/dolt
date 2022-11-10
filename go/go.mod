@@ -50,7 +50,7 @@ require (
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/square/go-jose.v2 v2.5.1
 	gopkg.in/src-d/go-errors.v1 v1.0.0
-	gopkg.in/yaml.v3 v3.0.1
+	gopkg.in/yaml.v2 v2.3.0
 )
 
 require (
@@ -77,7 +77,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.7.0
 	golang.org/x/text v0.3.7
 	gonum.org/v1/plot v0.11.0
-	gopkg.in/yaml.v2 v2.3.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
