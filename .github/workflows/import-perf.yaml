@@ -1,33 +1,7 @@
 name: Import Benchmarks
 on:
-  schedule:
-    - cron: '0 2 * * *'
-  workflow_dispatch:
-    inputs:
-      email_recipient:
-        description: 'email to send results report to'
-        rquired: false
-        default: 'max@dolthub.com'
-      version:
-        description: 'dolt version to checkout'
-        rquired: false
-        default: ''
-      run_file:
-        description: 'import perf .yaml spec, relative to `import_benchmarks/testdata`'
-        rquired: false
-        default: 'ci.yaml'
-      report:
-        description: 'reporting query, relative to `import_benchmarks/reporting`'
-        rquired: false
-        default: 'three_way_compare.sql'
-      commit_to_branch:
-        description: 'results commit target for DoltHub database: `import-perf/import-perf`'
-        rquired: false
-        default: ''
-      wf_dispatch:
-        description: 'flag to indicate this is NOT a nightly run'
-        rquired: true
-        default: true
+  repository_dispatch:
+    types: [ benchmark-import ]
 env:
   BENCH_DIR: 'go/performance/import_benchmarker'
   MYSQL_PORT: 3309
@@ -51,15 +25,11 @@ jobs:
     - name: Dolt version
       id: version
       run: |
-        version=${{ github.event.inputs.version }}
-        if [ -z "$version" ]; then
-            version=${{ github.sha }}
-        fi
-        echo "::set-output name=ref::$version"
+        version=${{ github.event.client_payload.version }}
 
     - uses: actions/checkout@v3
       with:
-        ref: ${{ steps.version.outputs.ref }}
+        ref: ${{ github.event.client_payload.version }}
 
     - name: Install dolt
       working-directory: ./go
@@ -83,31 +53,19 @@ jobs:
       working-directory: go/
       run: |
         out="$GITHUB_WORKSPACE/results.sql"
-        testspec="../${{ env.BENCH_DIR }}/testdata/${{ github.event.inputs.run_file }}"
+        testspec="../${{ env.BENCH_DIR }}/testdata/${{ github.event.client_payload.run_file }}"
         go run \
           "github.com/dolthub/dolt/${{ env.BENCH_DIR }}/cmd" \
           -test "$testspec" \
           -out "$out"
         echo "::set-output name=result_path::$out"
 
-    - name: Results branch
-      id: branch
-      run: |
-        branch="${{ github.event.inputs.commit_to_branch }}"
-        wf_dispatch="${{ github.event.inputs.wf_dispatch }}"
-        if [ -z "$wf_dispatch"]; then
-            branch="main"
-        elif [ -z "$branch" ]; then
-            branch="${{ steps.version.outputs.ref }}-$(date +%F)"
-        fi
-        echo "::set-output name=branch::$branch"
-
     - name: Report
       id: report
       run: |
         gw=$GITHUB_WORKSPACE
         in="${{ steps.bench.outputs.result_path }}"
-        query="$(pwd)/${{ env.BENCH_DIR }}/reporting/${{ github.event.inputs.report }}"
+        query="$(pwd)/${{ env.BENCH_DIR }}/reporting/${{ github.event.client_payload.report }}"
         out="$gw/results.csv"
         dolt_dir="$gw/import-perf"
 
@@ -119,7 +77,7 @@ jobs:
 
         cd "$dolt_dir"
 
-        branch="${{ steps.branch.outputs.branch }}"
+        branch="${{ github.event.client_payload.commit_to_branch }}"
         # checkout branch
         if [ -z $(dolt sql -q "select 1 from dolt_branches where name = '$branch';") ]; then
           dolt checkout -b $branch
@@ -145,6 +103,7 @@ jobs:
 
     - name: Format HTML
       id: html
+      if: ${{ github.event.client_payload.email_recipient }} != ""
       run: |
         gw="$GITHUB_WORKSPACE"
         in="${{ steps.report.outputs.report_path }}"
@@ -167,29 +126,43 @@ jobs:
         echo "::set-output name=html::$(echo $out)"
 
     - name: Configure AWS Credentials
+      if: ${{ github.event.client_payload.email_recipient }} != ""
       uses: aws-actions/configure-aws-credentials@v1-node16
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-west-2
 
-    - name: Get Addresses
-      id: email_addr
-      env:
-        RECIPIENT: ${{ github.event.inputs.email_recipient }}
-        TEAM: '["${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}"]'
-      run: |
-        addresses="$TEAM"
-        if [ ! -z "$RECIPIENT" ]; then
-          addresses="[\"$RECIPIENT\"]"
-        fi
-        echo "::set-output name=addresses::$addresses"
-
     - name: Send Email
       uses: ./.github/actions/ses-email-action
+      if: ${{ github.event.client_payload.email_recipient }} != ""
       with:
         region: us-west-2
-        toAddresses: ${{ steps.email_addr.outputs.addresses }}
+        toAddresses: '["${{ github.event.client_payload.email_recipient }}"]'
         version: ${{ steps.version.outputs.ref }}
         format: '__DOLT__'
         dataFile: ${{ steps.html.outputs.html }}
+
+    - name: Read CSV
+      if: ${{ github.event.client_payload.issue_id }} != ""
+      id: csv
+      uses: juliangruber/read-file-action@v1
+      with:
+        path: "${{ steps.report.outputs.report_path }}"
+
+    - name: Create MD
+      if: ${{ github.event.client_payload.issue_id }} != ""
+      uses: petems/csv-to-md-table-action@master
+      id: md
+      with:
+        csvinput: ${{ steps.csv.outputs.content }}
+
+    - uses: mshick/add-pr-comment@v1
+      if: ${{ github.event.client_payload.issue_id }} != ""
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        repo-token-user-login: 'github-actions[bot]'
+        issue: ${{ github.event.client_payload.issue_id }}
+        message: |
+          `@${ACTOR} ${FORMAT}
+          ${{ steps.md.outputs.markdown-table }}
