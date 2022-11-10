@@ -430,14 +430,29 @@ func compareDecimal(l, r decimal.Decimal) int {
 }
 
 const minYear int16 = 1901
+const maxYear int16 = 2155
+const zeroToken uint8 = 255
 
 func readYear(val []byte) int16 {
 	expectSize(val, yearSize)
-	return int16(readUint8(val)) + minYear
+	v := readUint8(val)
+	if v == zeroToken {
+		return int16(0)
+	}
+	return int16(v) + minYear
 }
 
+// 1901 - 2155 encodes to uint8 range 0 - 254 for legacy reasons
+// 0 encodes to uint8 255
 func writeYear(buf []byte, val int16) {
 	expectSize(buf, yearSize)
+	if val == 0 {
+		writeUint8(buf, zeroToken)
+		return
+	}
+	if val < minYear || val > maxYear {
+		panic("year is outside of allowed range [1901, 2155]")
+	}
 	writeUint8(buf, uint8(val-minYear))
 }
 
