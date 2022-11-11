@@ -395,9 +395,6 @@ var _ DoltIndex = (*doltIndex)(nil)
 
 // CanSupport implements sql.Index
 func (di *doltIndex) CanSupport(...sql.Range) bool {
-	if len(di.prefixLengths) > 0 {
-		return false
-	}
 	return true
 }
 
@@ -798,6 +795,10 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				if err != nil {
 					return nil, err
 				}
+				// TODO (james): something with prefixLengths here!!!
+				// TODO (james): how do I know that this column is using this prefixLength? is it in order?
+				// TODO (james): just trim here I guess
+
 				if err = PutField(ctx, ns, tb, j, v); err != nil {
 					return nil, err
 				}
