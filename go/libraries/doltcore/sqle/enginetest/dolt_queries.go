@@ -8625,6 +8625,129 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 					{"     └─ columns: [i v1 v2]"},
 				},
 			},
+			{
+				Query: "select * from t where v1 > 'a' and v1 < 'abcde'",
+				Expected: []sql.Row{
+					{1, "ab", "ab"},
+				},
+			},
+			{
+				Query: "explain select * from t where v1 > 'a' and v1 < 'abcde'",
+				Expected: []sql.Row{
+					{"Filter((t.v1 > 'a') AND (t.v1 < 'abcde'))"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.v1,t.v2]"},
+					{"     ├─ filters: [{(a, abcde), [NULL, ∞)}]"},
+					{"     └─ columns: [i v1 v2]"},
+				},
+			},
+			{
+				Query: "select * from t where v1 > 'a' and v2 < 'abcde'",
+				Expected: []sql.Row{
+					{1, "ab", "ab"},
+					{2, "abc", "abc"},
+				},
+			},
+			{
+				Query: "explain select * from t where v1 > 'a' and v2 < 'abcde'",
+				Expected: []sql.Row{
+					{"Filter((t.v1 > 'a') AND (t.v2 < 'abcde'))"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.v1,t.v2]"},
+					{"     ├─ filters: [{(a, ∞), (NULL, abcde)}]"},
+					{"     └─ columns: [i v1 v2]"},
+				},
+			},
+		},
+	},
+	{
+		Name: "referenced secondary indexes",
+		SetUpScript: []string{
+			"create table t (i int primary key, v1 text, v2 text, unique index (v1(3),v2(5)))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` int NOT NULL,\n  `v1` text,\n  `v2` text,\n  PRIMARY KEY (`i`),\n  UNIQUE KEY `v1v2` (`v1`(3),`v2`(5))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "insert into t values (0, 'a', 'a'), (1, 'ab','ab'), (2, 'abc', 'abc'), (3, 'abcde', 'abcde')",
+				Expected: []sql.Row{{sql.NewOkResult(4)}},
+			},
+			{
+				Query:       "insert into t values (99, 'abc', 'abcde')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:       "insert into t values (99, 'abc123', 'abcde123')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query: "select * from t where v1 = 'a'",
+				Expected: []sql.Row{
+					{0, "a", "a"},
+				},
+			},
+			{
+				Query: "explain select * from t where v1 = 'a'",
+				Expected: []sql.Row{
+					{"Filter(t.v1 = 'a')"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.v1,t.v2]"},
+					{"     ├─ filters: [{[a, a], [NULL, ∞)}]"},
+					{"     └─ columns: [i v1 v2]"},
+				},
+			},
+			{
+				Query: "select * from t where v1 = 'abc'",
+				Expected: []sql.Row{
+					{2, "abc", "abc"},
+				},
+			},
+			{
+				Query: "explain select * from t where v1 = 'abc'",
+				Expected: []sql.Row{
+					{"Filter(t.v1 = 'abc')"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.v1,t.v2]"},
+					{"     ├─ filters: [{[abc, abc], [NULL, ∞)}]"},
+					{"     └─ columns: [i v1 v2]"},
+				},
+			},
+			// TODO: these are broken, figure out why
+			//{
+			//	Query: "select * from t where v1 > 'a' and v1 < 'abcde'",
+			//	Expected: []sql.Row{
+			//		{1, "ab", "ab"},
+			//	},
+			//},
+			//{
+			//	Query: "explain select * from t where v1 > 'a' and v1 < 'abcde'",
+			//	Expected: []sql.Row{
+			//		{"Filter((t.v1 > 'a') AND (t.v1 < 'abcde'))"},
+			//		{" └─ IndexedTableAccess(t)"},
+			//		{"     ├─ index: [t.v1,t.v2]"},
+			//		{"     ├─ filters: [{(a, abcde), [NULL, ∞)}]"},
+			//		{"     └─ columns: [i v1 v2]"},
+			//	},
+			//},
+			//{
+			//	Query: "select * from t where v1 > 'a' and v2 < 'abcde'",
+			//	Expected: []sql.Row{
+			//		{1, "ab", "ab"},
+			//		{2, "abc", "abc"},
+			//	},
+			//},
+			//{
+			//	Query: "explain select * from t where v1 > 'a' and v2 < 'abcde'",
+			//	Expected: []sql.Row{
+			//		{"Filter((t.v1 > 'a') AND (t.v2 < 'abcde'))"},
+			//		{" └─ IndexedTableAccess(t)"},
+			//		{"     ├─ index: [t.v1,t.v2]"},
+			//		{"     ├─ filters: [{(a, ∞), (NULL, abcde)}]"},
+			//		{"     └─ columns: [i v1 v2]"},
+			//	},
+			//},
 		},
 	},
 }
