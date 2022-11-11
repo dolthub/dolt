@@ -795,9 +795,23 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				if err != nil {
 					return nil, err
 				}
-				// TODO (james): something with prefixLengths here!!!
-				// TODO (james): how do I know that this column is using this prefixLength? is it in order?
+				// TODO (james): how do I know which range corresponds to the right one that uses prefix lengths?
 				// TODO (james): just trim here I guess
+				prefixLength := di.prefixLengths[j] // TODO: j? k?
+				if prefixLength != 0 {
+					switch vp := v.(type) {
+					case string:
+						if prefixLength > uint16(len(vp)) {
+							prefixLength = uint16(len(vp))
+						}
+						v = vp[:prefixLength]
+					case []uint8:
+						if prefixLength > uint16(len(vp)) {
+							prefixLength = uint16(len(vp))
+						}
+						v = vp[:prefixLength]
+					}
+				}
 
 				if err = PutField(ctx, ns, tb, j, v); err != nil {
 					return nil, err
