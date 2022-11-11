@@ -846,6 +846,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				if err != nil {
 					return nil, err
 				}
+				v = di.trimRangeCutValue(i, v) // TODO: i? k?
 				if err = PutField(ctx, ns, tb, i, v); err != nil {
 					return nil, err
 				}
