@@ -54,7 +54,6 @@ type prollyTableWriter struct {
 
 var _ TableWriter = &prollyTableWriter{}
 
-// TODO: return a prefix index writer if there is a prefix defined on this table
 func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema) (map[string]indexWriter, error) {
 	s, err := t.GetIndexSet(ctx)
 	if err != nil {
