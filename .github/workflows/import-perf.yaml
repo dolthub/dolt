@@ -93,7 +93,7 @@ jobs:
         # push results to dolthub
         dolt add import_perf_results
         dolt commit -m "CI commit"
-        dolt push origin $branch
+        dolt push -f origin $branch
 
         # generate report
         dolt sql -r csv < "$query" > "$out"
@@ -157,12 +157,14 @@ jobs:
       with:
         csvinput: ${{ steps.csv.outputs.content }}
 
-    - uses: mshick/add-pr-comment@v1
+    - uses: mshick/add-pr-comment@v2
       if: ${{ github.event.client_payload.issue_id }} != ""
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
-        repo-token-user-login: 'github-actions[bot]'
         issue: ${{ github.event.client_payload.issue_id }}
+        message-failure: import benchmark failed
+        message-cancelled: import benchmark cancelled
+        allow-repeats: true
         message: |
-          `@${ACTOR} ${FORMAT}
+          @${{ github.event.client_payload.actor }} __DOLT__
           ${{ steps.md.outputs.markdown-table }}
