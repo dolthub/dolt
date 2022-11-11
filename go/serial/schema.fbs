@@ -90,6 +90,8 @@ table Index {
   primary_key:bool;
   unique_key:bool;
   system_defined:bool;
+
+  prefix_lengths:[uint16];
 }
 
 table CheckConstraint {

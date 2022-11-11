@@ -426,11 +426,11 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	idxv1, err := tableSch.Indexes().AddIndexByColNames("idx_v1", []string{"v1"}, schema.IndexProperties{
+	idxv1, err := tableSch.Indexes().AddIndexByColNames("idx_v1", []string{"v1"}, nil, schema.IndexProperties{
 		IsUnique: false,
 	})
 	require.NoError(t, err)
-	idxv2, err := tableSch.Indexes().AddIndexByColNames("idx_v2", []string{"v2"}, schema.IndexProperties{
+	idxv2, err := tableSch.Indexes().AddIndexByColNames("idx_v2", []string{"v2"}, nil, schema.IndexProperties{
 		IsUnique: false,
 	})
 	require.NoError(t, err)
@@ -583,7 +583,7 @@ func TestKeylessTableEditorIndexCardinality(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	idxv1, err := tableSch.Indexes().AddIndexByColNames("idx_v1", []string{"v1"}, schema.IndexProperties{
+	idxv1, err := tableSch.Indexes().AddIndexByColNames("idx_v1", []string{"v1"}, nil, schema.IndexProperties{
 		IsUnique: false,
 	})
 	require.NoError(t, err)

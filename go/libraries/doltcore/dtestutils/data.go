@@ -55,7 +55,7 @@ func Schema() (schema.Schema, error) {
 	)
 	sch := schema.MustSchemaFromCols(typedColColl)
 
-	_, err := sch.Indexes().AddIndexByColTags(IndexName, []uint64{NameTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	_, err := sch.Indexes().AddIndexByColTags(IndexName, []uint64{NameTag}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
 	if err != nil {
 		return nil, err
 	}

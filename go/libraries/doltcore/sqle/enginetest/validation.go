@@ -141,6 +141,11 @@ func validateIndexConsistency(
 	def schema.Index,
 	primary, secondary prolly.Map,
 ) error {
+	// TODO: fix this later
+	if len(def.PrefixLengths()) > 0 {
+		return nil
+	}
+
 	if schema.IsKeyless(sch) {
 		return validateKeylessIndex(ctx, sch, def, primary, secondary)
 	}

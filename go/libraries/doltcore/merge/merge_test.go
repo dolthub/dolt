@@ -62,8 +62,8 @@ var indexSchema schema.Index
 var compositeIndexSchema schema.Index
 
 func init() {
-	indexSchema, _ = sch.Indexes().AddIndexByColTags("idx_col1", []uint64{col1Tag}, schema.IndexProperties{IsUnique: false, Comment: ""})
-	compositeIndexSchema, _ = sch.Indexes().AddIndexByColTags("idx_col1_col2", []uint64{col1Tag, col2Tag}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	indexSchema, _ = sch.Indexes().AddIndexByColTags("idx_col1", []uint64{col1Tag}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
+	compositeIndexSchema, _ = sch.Indexes().AddIndexByColTags("idx_col1_col2", []uint64{col1Tag, col2Tag}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
 }
 
 type rowV struct {

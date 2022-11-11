@@ -154,7 +154,7 @@ func SetupHookRefKeys(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, err
 	if err != nil {
 		return nil, err
 	}
-	_, err = sch.Indexes().AddIndexByColNames("blob_idx", []string{"c1"}, schema.IndexProperties{IsUserDefined: true})
+	_, err = sch.Indexes().AddIndexByColNames("blob_idx", []string{"c1"}, nil, schema.IndexProperties{IsUserDefined: true})
 	if err != nil {
 		return nil, err
 	}
