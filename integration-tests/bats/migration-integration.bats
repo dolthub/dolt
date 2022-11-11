@@ -55,7 +55,7 @@ teardown() {
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "tdkt7s7805k1ml4hu37pm688g5i0b8ie" ]] || false
+    [[ "$output" =~ "7jrvg1ajcdq6t9sevcejv4e9o0fgrmle" ]] || false
     [[ ! "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
 
     # validate TEXT migration
