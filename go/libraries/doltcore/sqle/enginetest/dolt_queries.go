@@ -8126,7 +8126,7 @@ var DoltCommitTests = []queries.ScriptTest{
 
 var DoltIndexPrefixScripts = []queries.ScriptTest{
 	{
-		Name: "varchar prefix",
+		Name: "varchar primary key prefix",
 		SetUpScript: []string{
 			"create table t (v varchar(100))",
 		},
@@ -8136,21 +8136,83 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
 			},
 			{
-				Query:       "alter table t add index (v(10))",
-				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
-			},
-			{
 				Query:       "create table v_tbl (v varchar(100), primary key (v(10)))",
-				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
-			},
-			{
-				Query:       "create table v_tbl (i int primary key, v varchar(100), index (v(10)))",
 				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
 			},
 		},
 	},
 	{
-		Name: "char prefix",
+		Name: "varchar keyed secondary index prefix",
+		SetUpScript: []string{
+			"create table t (i int primary key, v varchar(10))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t add unique index (v(1))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` int NOT NULL,\n  `v` varchar(10),\n  PRIMARY KEY (`i`),\n  UNIQUE KEY `v` (`v`(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:       "insert into t values (0, 'aa'), (1, 'ab')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "insert into t values (0, 'aa'), (1, 'bb'), (2, 'cc')",
+				Expected: []sql.Row{{sql.NewOkResult(3)}},
+			},
+			{
+				Query:    "select * from t where v = 'a'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from t where v = 'aa'",
+				Expected: []sql.Row{
+					{0, "aa"},
+				},
+			},
+			{
+				Query:    "create table v_tbl (i int primary key, v varchar(100), index (v(10)))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table v_tbl",
+				Expected: []sql.Row{{"v_tbl", "CREATE TABLE `v_tbl` (\n  `i` int NOT NULL,\n  `v` varchar(100),\n  PRIMARY KEY (`i`),\n  KEY `v` (`v`(10))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "varchar keyless secondary index prefix",
+		SetUpScript: []string{
+			"create table t (v varchar(10))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t add unique index (v(1))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `v` varchar(10),\n  UNIQUE KEY `v` (`v`(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:       "insert into t values ('aa'), ('ab')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "create table v_tbl (v varchar(100), index (v(10)))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table v_tbl",
+				Expected: []sql.Row{{"v_tbl", "CREATE TABLE `v_tbl` (\n  `v` varchar(100),\n  KEY `v` (`v`(10))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "char primary key prefix",
 		SetUpScript: []string{
 			"create table t (c char(100))",
 		},
@@ -8160,16 +8222,352 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
 			},
 			{
-				Query:       "alter table t add index (c(10))",
-				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
-			},
-			{
 				Query:       "create table c_tbl (c char(100), primary key (c(10)))",
 				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
 			},
+		},
+	},
+	{
+		Name: "char keyed secondary index prefix",
+		SetUpScript: []string{
+			"create table t (i int primary key, c char(10))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "create table c_tbl (i int primary key, c char(100), index (c(10)))",
+				Query:    "alter table t add unique index (c(1))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` int NOT NULL,\n  `c` char(10),\n  PRIMARY KEY (`i`),\n  UNIQUE KEY `c` (`c`(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:       "insert into t values (0, 'aa'), (1, 'ab')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "create table c_tbl (i int primary key, c varchar(100), index (c(10)))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table c_tbl",
+				Expected: []sql.Row{{"c_tbl", "CREATE TABLE `c_tbl` (\n  `i` int NOT NULL,\n  `c` varchar(100),\n  PRIMARY KEY (`i`),\n  KEY `c` (`c`(10))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "char keyless secondary index prefix",
+		SetUpScript: []string{
+			"create table t (c char(10))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t add unique index (c(1))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `c` char(10),\n  UNIQUE KEY `c` (`c`(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:       "insert into t values ('aa'), ('ab')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "create table c_tbl (c char(100), index (c(10)))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table c_tbl",
+				Expected: []sql.Row{{"c_tbl", "CREATE TABLE `c_tbl` (\n  `c` char(100),\n  KEY `c` (`c`(10))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "varbinary primary key prefix",
+		SetUpScript: []string{
+			"create table t (v varbinary(100))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "alter table t add primary key (v(10))",
 				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+			{
+				Query:       "create table v_tbl (v varbinary(100), primary key (v(10)))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+		},
+	},
+	{
+		Name: "varbinary keyed secondary index prefix",
+		SetUpScript: []string{
+			"create table t (i int primary key, v varbinary(10))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t add unique index (v(1))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` int NOT NULL,\n  `v` varbinary(10),\n  PRIMARY KEY (`i`),\n  UNIQUE KEY `v` (`v`(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:       "insert into t values (0, 'aa'), (1, 'ab')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "create table v_tbl (i int primary key, v varbinary(100), index (v(10)))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table v_tbl",
+				Expected: []sql.Row{{"v_tbl", "CREATE TABLE `v_tbl` (\n  `i` int NOT NULL,\n  `v` varbinary(100),\n  PRIMARY KEY (`i`),\n  KEY `v` (`v`(10))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "varbinary keyless secondary index prefix",
+		SetUpScript: []string{
+			"create table t (v varbinary(10))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t add unique index (v(1))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `v` varbinary(10),\n  UNIQUE KEY `v` (`v`(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:       "insert into t values ('aa'), ('ab')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "create table v_tbl (v varbinary(100), index (v(10)))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table v_tbl",
+				Expected: []sql.Row{{"v_tbl", "CREATE TABLE `v_tbl` (\n  `v` varbinary(100),\n  KEY `v` (`v`(10))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "binary primary key prefix",
+		SetUpScript: []string{
+			"create table t (b binary(100))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "alter table t add primary key (b(10))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+			{
+				Query:       "create table b_tbl (b binary(100), primary key (b(10)))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+		},
+	},
+	{
+		Name: "binary keyed secondary index prefix",
+		SetUpScript: []string{
+			"create table t (i int primary key, b binary(10))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t add unique index (b(1))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` int NOT NULL,\n  `b` binary(10),\n  PRIMARY KEY (`i`),\n  UNIQUE KEY `b` (`b`(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:       "insert into t values (0, 'aa'), (1, 'ab')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "create table b_tbl (i int primary key, b binary(100), index (b(10)))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table b_tbl",
+				Expected: []sql.Row{{"b_tbl", "CREATE TABLE `b_tbl` (\n  `i` int NOT NULL,\n  `b` binary(100),\n  PRIMARY KEY (`i`),\n  KEY `b` (`b`(10))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "binary keyless secondary index prefix",
+		SetUpScript: []string{
+			"create table t (b binary(10))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t add unique index (b(1))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `b` binary(10),\n  UNIQUE KEY `b` (`b`(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:       "insert into t values ('aa'), ('ab')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "create table b_tbl (b binary(100), index (b(10)))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table b_tbl",
+				Expected: []sql.Row{{"b_tbl", "CREATE TABLE `b_tbl` (\n  `b` binary(100),\n  KEY `b` (`b`(10))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "blob primary key prefix",
+		SetUpScript: []string{
+			"create table t (b blob)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "alter table t add primary key (b(10))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+			{
+				Query:       "create table b_tbl (b blob, primary key (b(10)))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+		},
+	},
+	{
+		Name: "blob keyed secondary index prefix",
+		SetUpScript: []string{
+			"create table t (i int primary key, b blob)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t add unique index (b(1))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` int NOT NULL,\n  `b` blob,\n  PRIMARY KEY (`i`),\n  UNIQUE KEY `b` (`b`(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:       "insert into t values (0, 'aa'), (1, 'ab')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "create table b_tbl (i int primary key, b blob, index (b(10)))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table b_tbl",
+				Expected: []sql.Row{{"b_tbl", "CREATE TABLE `b_tbl` (\n  `i` int NOT NULL,\n  `b` blob,\n  PRIMARY KEY (`i`),\n  KEY `b` (`b`(10))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "blob keyless secondary index prefix",
+		SetUpScript: []string{
+			"create table t (b blob)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t add unique index (b(1))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `b` blob,\n  UNIQUE KEY `b` (`b`(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:       "insert into t values ('aa'), ('ab')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "create table b_tbl (b blob, index (b(10)))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table b_tbl",
+				Expected: []sql.Row{{"b_tbl", "CREATE TABLE `b_tbl` (\n  `b` blob,\n  KEY `b` (`b`(10))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "text primary key prefix",
+		SetUpScript: []string{
+			"create table t (t text)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "alter table t add primary key (t(10))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+			{
+				Query:       "create table b_tbl (t text, primary key (t(10)))",
+				ExpectedErr: sql.ErrUnsupportedIndexPrefix,
+			},
+		},
+	},
+	{
+		Name: "text keyed secondary index prefix",
+		SetUpScript: []string{
+			"create table t (i int primary key, t text)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t add unique index (t(1))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` int NOT NULL,\n  `t` text,\n  PRIMARY KEY (`i`),\n  UNIQUE KEY `t` (`t`(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:       "insert into t values (0, 'aa'), (1, 'ab')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "create table t_tbl (i int primary key, t text, index (t(10)))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table t_tbl",
+				Expected: []sql.Row{{"t_tbl", "CREATE TABLE `t_tbl` (\n  `i` int NOT NULL,\n  `t` text,\n  PRIMARY KEY (`i`),\n  KEY `t` (`t`(10))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "text keyless secondary index prefix",
+		SetUpScript: []string{
+			"create table t (t text)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t add unique index (t(1))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `t` text,\n  UNIQUE KEY `t` (`t`(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:       "insert into t values ('aa'), ('ab')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "create table t_tbl (t text, index (t(10)))",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "show create table t_tbl",
+				Expected: []sql.Row{{"t_tbl", "CREATE TABLE `t_tbl` (\n  `t` text,\n  KEY `t` (`t`(10))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},

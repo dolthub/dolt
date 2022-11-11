@@ -152,6 +152,7 @@ type encodedIndex struct {
 	Comment         string   `noms:"comment" json:"comment"`
 	Unique          bool     `noms:"unique" json:"unique"`
 	IsSystemDefined bool     `noms:"hidden,omitempty" json:"hidden,omitempty"` // Was previously named Hidden, do not change noms name
+	PrefixLengths   []uint16 `noms:"prefixLengths,omitempty" json:"prefixLengths,omitempty"`
 }
 
 type encodedCheck struct {
@@ -185,6 +186,12 @@ func (sd *schemaData) Copy() *schemaData {
 			idxCol[i].Tags = make([]uint64, len(idx.Tags))
 			for j, tag := range idx.Tags {
 				idxCol[i].Tags[j] = tag
+			}
+			if len(idx.PrefixLengths) > 0 {
+				idxCol[i].PrefixLengths = make([]uint16, len(idx.PrefixLengths))
+				for j, prefixLength := range idx.PrefixLengths {
+					idxCol[i].PrefixLengths[j] = prefixLength
+				}
 			}
 		}
 	}
@@ -238,6 +245,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 			Comment:         index.Comment(),
 			Unique:          index.IsUnique(),
 			IsSystemDefined: !index.IsUserDefined(),
+			PrefixLengths:   index.PrefixLengths(),
 		}
 	}
 
@@ -296,6 +304,7 @@ func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) er
 		_, err := sch.Indexes().UnsafeAddIndexByColTags(
 			encodedIndex.Name,
 			encodedIndex.Tags,
+			encodedIndex.PrefixLengths,
 			schema.IndexProperties{
 				IsUnique:      encodedIndex.Unique,
 				IsUserDefined: !encodedIndex.IsSystemDefined,

@@ -180,10 +180,11 @@ func (e secondaryUniqueKeyError) Error() string {
 }
 
 type prollyKeylessSecondaryWriter struct {
-	name    string
-	mut     *prolly.MutableMap
-	primary prollyKeylessWriter
-	unique  bool
+	name          string
+	mut           *prolly.MutableMap
+	primary       prollyKeylessWriter
+	unique        bool
+	prefixLengths []uint16
 
 	keyBld    *val.TupleBuilder
 	prefixBld *val.TupleBuilder
@@ -208,15 +209,33 @@ func (writer prollyKeylessSecondaryWriter) ValidateKeyViolations(ctx context.Con
 	return nil
 }
 
+// trimKeyPart will trim entry into the sql.Row depending on the prefixLengths
+func (writer prollyKeylessSecondaryWriter) trimKeyPart(to int, keyPart interface{}) interface{} {
+	var prefixLength uint16
+	if len(writer.prefixLengths) > to {
+		prefixLength = writer.prefixLengths[to]
+	}
+	if prefixLength != 0 {
+		switch kp := keyPart.(type) {
+		case string:
+			keyPart = kp[:prefixLength]
+		case []uint8:
+			keyPart = kp[:prefixLength]
+		}
+	}
+	return keyPart
+}
+
 // Insert implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 	for to := range writer.keyMap {
 		from := writer.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, sqlRow[from]); err != nil {
+		keyPart := writer.trimKeyPart(to, sqlRow[from])
+		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
 			return err
 		}
 		if to < writer.prefixBld.Desc.Count() {
-			if err := index.PutField(ctx, writer.mut.NodeStore(), writer.prefixBld, to, sqlRow[from]); err != nil {
+			if err := index.PutField(ctx, writer.mut.NodeStore(), writer.prefixBld, to, keyPart); err != nil {
 				return err
 			}
 		}
