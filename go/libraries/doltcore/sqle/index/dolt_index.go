@@ -773,6 +773,30 @@ func pruneEmptyRanges(sqlRanges []sql.Range) (pruned []sql.Range, err error) {
 	return pruned, nil
 }
 
+// trimRangeCutValue will trim the key value retrieved, depending on its type and prefix length
+// TODO: this is just the trimKeyPart in the SecondaryIndexWriters, maybe find a different place
+func (di *doltIndex) trimRangeCutValue(to int, keyPart interface{}) interface{} {
+	var prefixLength uint16
+	if len(di.prefixLengths) > to {
+		prefixLength = di.prefixLengths[to]
+	}
+	if prefixLength != 0 {
+		switch kp := keyPart.(type) {
+		case string:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
+			keyPart = kp[:prefixLength]
+		case []uint8:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
+			keyPart = kp[:prefixLength]
+		}
+	}
+	return keyPart
+}
+
 func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.NodeStore, ranges []sql.Range, tb *val.TupleBuilder) ([]prolly.Range, error) {
 	ranges, err := pruneEmptyRanges(ranges)
 	if err != nil {
@@ -795,24 +819,8 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				if err != nil {
 					return nil, err
 				}
-				// TODO (james): how do I know which range corresponds to the right one that uses prefix lengths?
-				// TODO (james): just trim here I guess
-				prefixLength := di.prefixLengths[j] // TODO: j? k?
-				if prefixLength != 0 {
-					switch vp := v.(type) {
-					case string:
-						if prefixLength > uint16(len(vp)) {
-							prefixLength = uint16(len(vp))
-						}
-						v = vp[:prefixLength]
-					case []uint8:
-						if prefixLength > uint16(len(vp)) {
-							prefixLength = uint16(len(vp))
-						}
-						v = vp[:prefixLength]
-					}
-				}
-
+				// TODO (james): how do I know which range corresponds to the right one that uses prefix lengths? just guess for now
+				v = di.trimRangeCutValue(j, v) // TODO: j? k?
 				if err = PutField(ctx, ns, tb, j, v); err != nil {
 					return nil, err
 				}
