@@ -8715,39 +8715,39 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 				},
 			},
 			// TODO: these are broken, figure out why
-			//{
-			//	Query: "select * from t where v1 > 'a' and v1 < 'abcde'",
-			//	Expected: []sql.Row{
-			//		{1, "ab", "ab"},
-			//	},
-			//},
-			//{
-			//	Query: "explain select * from t where v1 > 'a' and v1 < 'abcde'",
-			//	Expected: []sql.Row{
-			//		{"Filter((t.v1 > 'a') AND (t.v1 < 'abcde'))"},
-			//		{" └─ IndexedTableAccess(t)"},
-			//		{"     ├─ index: [t.v1,t.v2]"},
-			//		{"     ├─ filters: [{(a, abcde), [NULL, ∞)}]"},
-			//		{"     └─ columns: [i v1 v2]"},
-			//	},
-			//},
-			//{
-			//	Query: "select * from t where v1 > 'a' and v2 < 'abcde'",
-			//	Expected: []sql.Row{
-			//		{1, "ab", "ab"},
-			//		{2, "abc", "abc"},
-			//	},
-			//},
-			//{
-			//	Query: "explain select * from t where v1 > 'a' and v2 < 'abcde'",
-			//	Expected: []sql.Row{
-			//		{"Filter((t.v1 > 'a') AND (t.v2 < 'abcde'))"},
-			//		{" └─ IndexedTableAccess(t)"},
-			//		{"     ├─ index: [t.v1,t.v2]"},
-			//		{"     ├─ filters: [{(a, ∞), (NULL, abcde)}]"},
-			//		{"     └─ columns: [i v1 v2]"},
-			//	},
-			//},
+			{
+				Query: "select * from t where v1 > 'a' and v1 < 'abcde'",
+				Expected: []sql.Row{
+					{1, "ab", "ab"},
+				},
+			},
+			{
+				Query: "explain select * from t where v1 > 'a' and v1 < 'abcde'",
+				Expected: []sql.Row{
+					{"Filter((t.v1 > 'a') AND (t.v1 < 'abcde'))"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.v1,t.v2]"},
+					{"     ├─ filters: [{(a, abcde), [NULL, ∞)}]"},
+					{"     └─ columns: [i v1 v2]"},
+				},
+			},
+			{
+				Query: "select * from t where v1 > 'a' and v2 < 'abcde'",
+				Expected: []sql.Row{
+					{1, "ab", "ab"},
+					{2, "abc", "abc"},
+				},
+			},
+			{
+				Query: "explain select * from t where v1 > 'a' and v2 < 'abcde'",
+				Expected: []sql.Row{
+					{"Filter((t.v1 > 'a') AND (t.v2 < 'abcde'))"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.v1,t.v2]"},
+					{"     ├─ filters: [{(a, ∞), (NULL, abcde)}]"},
+					{"     └─ columns: [i v1 v2]"},
+				},
+			},
 		},
 	},
 }

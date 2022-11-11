@@ -866,6 +866,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				fields[i].Exact = false
 				continue
 			}
+			// TODO: text and blob just compare hashes, need to dereference and compare prefixes?
 			typ := di.keyBld.Desc.Types[i]
 			cmp := order.CompareValues(i, field.Hi.Value, field.Lo.Value, typ)
 			fields[i].Exact = cmp == 0
