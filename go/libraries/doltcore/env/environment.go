@@ -922,7 +922,7 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 	ddb := dEnv.DoltDB
 	refs, err := ddb.GetRemoteRefs(ctx)
 	if err != nil {
-		return ErrFailedToReadFromDb
+		return fmt.Errorf("%w: %s", ErrFailedToReadFromDb, err.Error())
 	}
 
 	for _, r := range refs {
