@@ -17,6 +17,7 @@ package doltdb
 import (
 	"context"
 	"errors"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"sort"
 	"strings"
 
@@ -32,6 +33,20 @@ const (
 )
 
 var ErrSystemTableCannotBeModified = errors.New("system tables cannot be dropped or altered")
+
+var DocsSchema schema.Schema
+
+func init() {
+	docTextCol, err := schema.NewColumnWithTypeInfo(DocTextColumnName, schema.DocTextTag, typeinfo.LongTextType, false, "", false, "")
+	if err != nil {
+		panic(err)
+	}
+	doltDocsColumns := schema.NewColCollection(
+		schema.NewColumn(DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
+		docTextCol,
+	)
+	DocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
+}
 
 // HasDoltPrefix returns a boolean whether or not the provided string is prefixed with the DoltNamespace. Users should
 // not be able to create tables in this reserved namespace.
@@ -162,16 +177,10 @@ const (
 	ReadmeDoc = "README.md"
 )
 
-var doltDocsColumns = schema.NewColCollection(
-	schema.NewColumn(DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
-	schema.NewColumn(DocTextColumnName, schema.DocTextTag, types.StringKind, false),
-)
-var DocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
-
 var DocsMaybeCreateTableStmt = `
 CREATE TABLE IF NOT EXISTS dolt_docs (
   doc_name varchar(16383) NOT NULL,
-  doc_text text,
+  doc_text longtext,
   PRIMARY KEY (doc_name)
 );`
 
