@@ -222,6 +222,7 @@ func validateMergeSpec(ctx context.Context, spec *merge.MergeSpec) errhand.Verbo
 		return nil
 
 	}
+	cli.Println("Updating", spec.HeadH.String()+".."+spec.MergeH.String())
 
 	if spec.Squash {
 		cli.Println("Squash commit -- not updating HEAD")
@@ -470,8 +471,6 @@ func performMerge(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec,
 		if spec.Noff {
 			return executeNoFFMergeAndCommit(ctx, dEnv, spec, suggestedMsg)
 		}
-
-		cli.Println("Updating", spec.HeadH.String()+".."+spec.MergeH.String())
 		return nil, merge.ExecuteFFMerge(ctx, dEnv, spec)
 	}
 	return executeMergeAndCommit(ctx, dEnv, spec, suggestedMsg)
