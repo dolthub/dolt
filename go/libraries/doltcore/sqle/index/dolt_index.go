@@ -644,6 +644,11 @@ func (di *doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
 		return nil
 	}
 
+	// filters on indexes with prefix lengths are not handled
+	if len(di.prefixLengths) > 0 {
+		return nil
+	}
+
 	var handled []sql.Expression
 	for _, f := range filters {
 		if expression.ContainsImpreciseComparison(f) {
