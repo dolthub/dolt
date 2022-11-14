@@ -142,6 +142,7 @@ func compare(typ Type, left, right []byte) int {
 	case JSONAddrEnc:
 		return compareAddr(readAddr(left), readAddr(right))
 	case StringAddrEnc:
+		// TODO (james): dereference here?
 		return compareAddr(readAddr(left), readAddr(right))
 	default:
 		panic("unknown encoding")
