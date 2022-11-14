@@ -600,7 +600,11 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (d
 						if err == io.EOF {
 							return nil
 						}
-						return NewRpcError(err, "StreamDownloadLocations", dcs.host, reqs[completedReqs])
+						var r *remotesapi.GetDownloadLocsRequest
+						if completedReqs < len(reqs) {
+							r = reqs[completedReqs]
+						}
+						return NewRpcError(err, "StreamDownloadLocations", dcs.host, r)
 					}
 					if resp.RepoToken != "" {
 						dcs.repoToken.Store(resp.RepoToken)
