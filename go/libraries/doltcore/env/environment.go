@@ -59,7 +59,6 @@ const (
 
 var zeroHashStr = (hash.Hash{}).String()
 
-var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
 var ErrStateUpdate = errors.New("error updating local data repo state")
 var ErrMarshallingSchema = errors.New("error marshalling schema")
 var ErrInvalidCredsFile = errors.New("invalid creds file")
@@ -389,7 +388,7 @@ func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
 	}
 
 	if dEnv.hasDoltDir(dir) {
-		return "", ErrPreexistingDoltDir
+		return "", fmt.Errorf(".dolt directory already exists at '%s'", dir)
 	}
 
 	absDataDir := filepath.Join(absPath, dbfactory.DoltDataDir)
@@ -923,7 +922,7 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 	ddb := dEnv.DoltDB
 	refs, err := ddb.GetRemoteRefs(ctx)
 	if err != nil {
-		return ErrFailedToReadFromDb
+		return fmt.Errorf("%w: %s", ErrFailedToReadFromDb, err.Error())
 	}
 
 	for _, r := range refs {
