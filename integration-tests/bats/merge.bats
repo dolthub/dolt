@@ -931,6 +931,27 @@ SQL
     [[ ! "$output" =~ "add (2,3) to t1" ]] || false
 }
 
+@test "merge: dolt merge does not ff and not commit with --no-ff and --no-commit" {
+    dolt branch other
+    dolt sql -q "INSERT INTO test1 VALUES (1,2,3)"
+    dolt commit -am "add (1,2,3) to test1";
+
+    dolt checkout other
+    run dolt sql -q "select * from test1;" -r csv
+    [[ ! "$output" =~ "1,2,3" ]] || false
+
+    run dolt merge other --no-ff --no-commit
+    log_status_eq 0
+    [[ "$output" =~ "Automatic merge went well; stopped before committing as requested" ]] || false
+
+    run dolt log --oneline -n 1
+    [[ "$output" =~ "added tables" ]] || false
+    [[ ! "$output" =~ "add (1,2,3) to test1" ]] || false
+
+    run dolt commit -m "merge main"
+    log_status_eq 0
+}
+
 @test "merge: specify ---author for merge that's used for creating commit" {
     dolt branch other
     dolt sql -q "INSERT INTO test1 VALUES (1,2,3)"
