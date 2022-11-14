@@ -97,14 +97,14 @@ In create, update, and replace scenarios the file's extension is used to infer t
 var bitTypeRegex = regexp.MustCompile(`(?m)b\'(\d+)\'`)
 
 type importOptions struct {
-	operation         mvdata.TableImportOp
-	destTableName     string
-	contOnErr         bool
-	force             bool
-	schFile           string
-	primaryKeys       []string
-	nameMapper        rowconv.NameMapper
-	src               mvdata.DataLocation
+	operation       mvdata.TableImportOp
+	destTableName   string
+	contOnErr       bool
+	force           bool
+	schFile         string
+	primaryKeys     []string
+	nameMapper      rowconv.NameMapper
+	src             mvdata.DataLocation
 	srcOptions      interface{}
 	quiet           bool
 	disableFkChecks bool
