@@ -14,8 +14,7 @@ teardown() {
 
 @test "validation: no test symbols in binary" {
     run grep_for_testify
-
-    [ "$output" -eq "" ]
+    [ "$output" = "" ]
 }
 
 grep_for_testify() {
