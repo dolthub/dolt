@@ -108,57 +108,39 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	script := queries.ScriptTest{
-		Name: "DELETE ME",
-		SetUpScript: []string{
-			"create table t (i int primary key, v1 text, v2 text, unique index (v1(3),v2(5)))",
-			"insert into t values (0, 'a', 'a'), (1, 'ab','ab'), (2, 'abc', 'abc'), (3, 'abcde', 'abcde')",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "select * from t where v1 = 'ab'",
-				Expected: []sql.Row{
-					{1, "ab", "ab"},
+	t.Skip()
+	var scripts = []queries.ScriptTest{
+		{
+			Name: "trigger before update, with indexed update",
+			SetUpScript: []string{
+				"create table a (x int primary key, y int, unique key (y))",
+				"create table b (z int primary key)",
+				"insert into a values (1,3), (10,20)",
+				"create trigger insert_b before update on a for each row insert into b values (old.x * 10)",
+				"update a set x = x + 1 where y = 20",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query: "select x, y from a order by 1",
+					Expected: []sql.Row{
+						{1, 3},
+						{11, 20},
+					},
+				},
+				{
+					Query: "select z from b",
+					Expected: []sql.Row{
+						{100},
+					},
 				},
 			},
 		},
 	}
-	harness := newDoltHarness(t)
-	enginetest.TestScript(t, harness, script)
 
-	//t.Skip()
-	//var scripts = []queries.ScriptTest{
-	//	{
-	//		Name: "trigger before update, with indexed update",
-	//		SetUpScript: []string{
-	//			"create table a (x int primary key, y int, unique key (y))",
-	//			"create table b (z int primary key)",
-	//			"insert into a values (1,3), (10,20)",
-	//			"create trigger insert_b before update on a for each row insert into b values (old.x * 10)",
-	//			"update a set x = x + 1 where y = 20",
-	//		},
-	//		Assertions: []queries.ScriptTestAssertion{
-	//			{
-	//				Query: "select x, y from a order by 1",
-	//				Expected: []sql.Row{
-	//					{1, 3},
-	//					{11, 20},
-	//				},
-	//			},
-	//			{
-	//				Query: "select z from b",
-	//				Expected: []sql.Row{
-	//					{100},
-	//				},
-	//			},
-	//		},
-	//	},
-	//}
-	//
-	//harness := newDoltHarness(t)
-	//for _, test := range scripts {
-	//	enginetest.TestScript(t, harness, test)
-	//}
+	harness := newDoltHarness(t)
+	for _, test := range scripts {
+		enginetest.TestScript(t, harness, test)
+	}
 }
 
 func TestSingleQueryPrepared(t *testing.T) {
