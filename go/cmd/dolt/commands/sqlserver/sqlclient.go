@@ -182,7 +182,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			cli.PrintErrln(color.RedString(err.Error()))
 			return 1
 		}
-		dbToUse = filepath.Base(directory)
+		dbToUse = strings.Replace(filepath.Base(directory), "-", "_", -1)
 	}
 	format := engine.FormatTabular
 	if hasResultFormat {
