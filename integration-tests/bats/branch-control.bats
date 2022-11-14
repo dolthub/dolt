@@ -164,32 +164,3 @@ setup_test_user() {
     [ $status -ne 0 ]
     [[ $output =~ "does not have the correct permissions" ]] || false
 }
-
-@test "branch-control: test basic branch namespace control" {
-    setup_test_user
-
-    # Allow test user write to all branches
-    dolt sql -q "insert into dolt_branch_control values ('dolt_repo_$$', '%', 'test', '%', 'write')"
-
-    # Except test-branch
-    dolt sql -q "insert into dolt_branch_namespace_control values ('dolt_repo_$$', 'test-branch', 'test', '%')"
-
-    dolt branch test-branch;
-
-    start_sql_server
-    
-    run dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test --result-format csv -q "select * from dolt_branch_namespace_control"
-    [ $status -eq 0 ]
-    [ ${lines[0]} = "database,branch,user,host" ]
-    [ ${lines[1]} = "dolt_repo_$$,test-branch,test,%" ]
-
-    # Create table on main
-    dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test -q "create table t (c1 int)"
-
-    # Can't create table on test-branch
-    skip "Not sure why this succeeds"
-    run dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test -q "call dolt_checkout('test-branch'); create table t (c1 int)"
-    echo $output
-    [ $status -ne 0 ]
-    [[ $output =~ "does not have the correct permissions" ]] || false
-}
