@@ -13,4 +13,4 @@
 // limitations under the License.
 
 // dolt is the command line tool for working with Dolt databases.
-package main 
+package main
