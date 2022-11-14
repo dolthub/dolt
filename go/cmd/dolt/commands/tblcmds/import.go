@@ -50,20 +50,21 @@ import (
 )
 
 const (
-	createParam      = "create-table"
-	updateParam      = "update-table"
-	replaceParam     = "replace-table"
-	tableParam       = "table"
-	fileParam        = "file"
-	schemaParam      = "schema"
-	mappingFileParam = "map"
-	forceParam       = "force"
-	contOnErrParam   = "continue"
-	primaryKeyParam  = "pk"
-	fileTypeParam    = "file-type"
-	delimParam       = "delim"
-	quiet            = "quiet"
-	disableFkChecks  = "disable-fk-checks"
+	createParam       = "create-table"
+	updateParam       = "update-table"
+	replaceParam      = "replace-table"
+	tableParam        = "table"
+	fileParam         = "file"
+	schemaParam       = "schema"
+	mappingFileParam  = "map"
+	forceParam        = "force"
+	contOnErrParam    = "continue"
+	primaryKeyParam   = "pk"
+	fileTypeParam     = "file-type"
+	delimParam        = "delim"
+	quiet             = "quiet"
+	ignoreSkippedRows = "ignore-skipped-rows" // alias for quiet
+	disableFkChecks   = "disable-fk-checks"
 )
 
 var importDocs = cli.CommandDocumentationContent{
@@ -338,6 +339,7 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
 	ap.SupportsFlag(quiet, "", "Suppress any warning messages about invalid rows when using the --continue flag.")
+	ap.SupportsAlias(ignoreSkippedRows, quiet)
 	ap.SupportsFlag(disableFkChecks, "", "Disables foreign key checks.")
 	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
 	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
