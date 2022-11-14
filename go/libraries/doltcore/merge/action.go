@@ -124,44 +124,6 @@ func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map
 	tblToStats := make(map[string]*MergeStats)
 	err = mergedRootToWorking(ctx, false, dEnv, mergedRoot, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr, tblToStats)
 
-	if err != nil {
-		return tblToStats, err
-	}
-
-	// Reload roots since the above method writes new values to the working set
-	roots, err := dEnv.Roots(ctx)
-	if err != nil {
-		return tblToStats, err
-	}
-
-	ws, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		return tblToStats, err
-	}
-
-	var mergeParentCommits []*doltdb.Commit
-	if ws.MergeActive() {
-		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
-	}
-
-	_, err = actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
-		Message:    spec.Msg,
-		Date:       spec.Date,
-		AllowEmpty: spec.AllowEmpty,
-		Force:      spec.Force,
-		Name:       spec.Name,
-		Email:      spec.Email,
-	})
-
-	if err != nil {
-		return tblToStats, fmt.Errorf("%w; failed to commit", err)
-	}
-
-	err = dEnv.ClearMerge(ctx)
-	if err != nil {
-		return tblToStats, err
-	}
-
 	return tblToStats, err
 }
 
