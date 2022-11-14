@@ -67,8 +67,6 @@ setup_test_user() {
     [ $status -eq 0 ]
     [ ${lines[0]} = "database,branch,user,host,permissions" ]
     [ ${lines[1]} = "test-db,test-branch,test,%,write" ]
-
-
 }
 
 @test "branch-control: default user root works as expected" {
@@ -163,4 +161,69 @@ setup_test_user() {
     run dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test2 -q "call dolt_checkout('test-branch'); insert into t values(1)"
     [ $status -ne 0 ]
     [[ $output =~ "does not have the correct permissions" ]] || false
+}
+
+@test "branch-control: creating a branch grants admin permissions" {
+    setup_test_user
+
+    dolt sql -q "insert into dolt_branch_control values ('dolt_repo_$$', 'main', 'test', '%', 'write')"
+
+    start_sql_server
+
+    dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test -q "call dolt_branch('test-branch')"
+
+    run dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test --result-format csv -q "select * from dolt_branch_control"
+    [ $status -eq 0 ]
+    [ ${lines[0]} = "database,branch,user,host,permissions" ]
+    [ ${lines[1]} = "dolt_repo_$$,main,test,%,write" ]
+    [ ${lines[2]} = "dolt_repo_$$,test-branch,test,%,admin" ]
+}
+
+@test "branch-control: test branch namespace control" {
+    setup_test_user
+
+    dolt sql -q "create user test2"
+    dolt sql -q "grant all on *.* to test2"
+
+    dolt sql -q "insert into dolt_branch_control values ('dolt_repo_$$', 'test-
+branch', 'test', '%', 'admin')"
+    dolt sql -q "insert into dolt_branch_namespace_control values ('dolt_repo_$$', 'test-%', 'test2', '%')"
+
+    start_sql_server
+
+    run dolt sql-client -u test -P $PORT --use-db "dolt_repo_$$" --result-format csv -q "select * from dolt_branch_namespace_control"
+    [ $status -eq 0 ]
+    [ ${lines[0]} = "database,branch,user,host" ]
+    [ ${lines[1]} = "dolt_repo_$$,test-%,test2,%" ]
+
+    # test cannot create test-branch
+    run dolt sql-client -u test -P $PORT --use-db "dolt_repo_$$" -q "call dolt_branch('test-branch')"
+    [ $status -ne 0 ]
+    [[ $output =~ "cannot create a branch" ]] || false
+
+    # test2 can create test-branch
+    dolt sql-client -u test2 -P $PORT --use-db "dolt_repo_$$" -q "call dolt_branch('test-branch')"
+}
+
+@test "branch-control: test longest match in branch namespace control" {
+    setup_test_user
+
+    dolt sql -q "create user test2"
+    dolt sql -q "grant all on *.* to test2"
+
+    dolt sql -q "insert into dolt_branch_namespace_control values ('dolt_repo_$$', 'test/%', 'test', '%')"
+    dolt sql -q "insert into dolt_branch_namespace_control values ('dolt_repo_$$', 'test2/%', 'test2', '%')"
+
+    start_sql_server
+
+    # test can create a branch in its namesapce but not in test2
+    dolt sql-client -u test -P $PORT --use-db "dolt_repo_$$" -q "call dolt_branch('test/branch1')"
+    run dolt sql-client -u test -P $PORT --use-db "dolt_repo_$$" -q "call dolt_branch('test2/branch1')"
+    [ $status -ne 0 ]
+    [[ $output =~ "cannot create a branch" ]] || false
+
+    dolt sql-client -u test2 -P $PORT --use-db "dolt_repo_$$" -q "call dolt_branch('test2/branch1')"
+    run dolt sql-client -u test2 -P $PORT --use-db "dolt_repo_$$" -q "call dolt_branch('test/branch1')"
+    [ $status -ne 0 ]
+    [[ $output =~ "cannot create a branch" ]] || false   
 }
