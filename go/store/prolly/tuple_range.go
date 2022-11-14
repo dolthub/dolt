@@ -111,6 +111,7 @@ func (r Range) belowStop(t val.Tuple) bool {
 			return true
 		}
 
+		// TODO: this should know about prefix lengths
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
