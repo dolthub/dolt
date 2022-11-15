@@ -186,7 +186,7 @@ func (ltf *LogTableFunction) Expressions() []sql.Expression {
 
 // getDoltArgs builds an argument string from sql expressions so that we can
 // later parse the arguments with the same util as the CLI
-func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, Name string) ([]string, error) {
+func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, name string) ([]string, error) {
 	var args []string
 
 	for _, expr := range expressions {
