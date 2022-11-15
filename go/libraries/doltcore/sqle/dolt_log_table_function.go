@@ -196,7 +196,7 @@ func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, name string) ([
 		}
 
 		if !sql.IsText(expr.Type()) {
-			return args, sql.ErrInvalidArgumentDetails.New(Name, expr.String())
+			return args, sql.ErrInvalidArgumentDetails.New(name, expr.String())
 		}
 
 		text, err := sql.Text.Convert(childVal)
