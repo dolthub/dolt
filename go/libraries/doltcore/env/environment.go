@@ -1129,7 +1129,7 @@ func (dEnv *DoltEnv) TempTableFilesDir() (string, error) {
 	return absPath, nil
 }
 
-// GetGCKeepers returns the hashes of all the objects in the environment provided that should be perserved during GC.
+// GetGCKeepers returns the hashes of all the objects in the environment provided that should be preserved during GC.
 // TODO: this should be unnecessary since we now store the working set in a noms dataset, remove it
 func GetGCKeepers(ctx context.Context, env *DoltEnv) ([]hash.Hash, error) {
 	workingRoot, err := env.WorkingRoot(ctx)
