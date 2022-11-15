@@ -118,7 +118,7 @@ func MutateMapWithTupleIter(ctx context.Context, m Map, iter TupleIter) (Map, er
 }
 
 func DiffMaps(ctx context.Context, from, to Map, cb tree.DiffFn) error {
-	return tree.DiffOrderedTrees(ctx, from.tuples, to.tuples, cb)
+	return tree.DiffOrderedTrees(ctx, from.tuples, to.tuples, makeDiffCallBack(from, to, cb))
 }
 
 // RangeDiffMaps returns diffs within a Range. See Range for which diffs are
@@ -153,13 +153,15 @@ func RangeDiffMaps(ctx context.Context, from, to Map, rng Range, cb tree.DiffFn)
 		return err
 	}
 
+	dcb := makeDiffCallBack(from, to, cb)
+
 	for {
 		var diff tree.Diff
 		if diff, err = differ.Next(ctx); err != nil {
 			break
 		}
 
-		if err = cb(ctx, diff); err != nil {
+		if err = dcb(ctx, diff); err != nil {
 			break
 		}
 	}
@@ -170,7 +172,23 @@ func RangeDiffMaps(ctx context.Context, from, to Map, rng Range, cb tree.DiffFn)
 // specified by |start| and |stop|. If |start| and/or |stop| is null, then the
 // range is unbounded towards that end.
 func DiffMapsKeyRange(ctx context.Context, from, to Map, start, stop val.Tuple, cb tree.DiffFn) error {
-	return tree.DiffKeyRangeOrderedTrees(ctx, from.tuples, to.tuples, start, stop, cb)
+	return tree.DiffKeyRangeOrderedTrees(ctx, from.tuples, to.tuples, start, stop, makeDiffCallBack(from, to, cb))
+}
+
+func makeDiffCallBack(from, to Map, innerCb tree.DiffFn) tree.DiffFn {
+	if !from.valDesc.Equals(to.valDesc) {
+		return innerCb
+	}
+
+	return func(ctx context.Context, diff tree.Diff) error {
+		// Skip diffs produced by non-canonical tuples. A canonical-tuple is a
+		// tuple where any null suffixes have been trimmed.
+		if diff.Type == tree.ModifiedDiff &&
+			from.valDesc.Compare(val.Tuple(diff.From), val.Tuple(diff.To)) == 0 {
+			return nil
+		}
+		return innerCb(ctx, diff)
+	}
 }
 
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, tree.MergeStats, error) {
