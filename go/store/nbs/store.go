@@ -522,14 +522,15 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 	if err != nil {
 		return nil, err
 	}
-
 	p := newFSTablePersister(dir, globalFDCache, q)
 
 	if chunkJournalFeatureFlag {
-		j := newChunkJournal(dir, m)
+		j, err := newChunkJournal(ctx, dir, m)
+		if err != nil {
+			return nil, err
+		}
 		m, p = j, j
 	}
-
 	mm := makeManifestManager(m)
 
 	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{maxTables}, memTableSize)
@@ -1282,11 +1283,11 @@ func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
 		if !ok {
 			return uint64(0), errors.New("manifest referenced table file for which there is no chunkSource.")
 		}
-		ti, err := cs.index()
+		sz, err := cs.size()
 		if err != nil {
 			return uint64(0), fmt.Errorf("error getting table file index for chunkSource. %w", err)
 		}
-		size += ti.tableFileSize()
+		size += sz
 	}
 	return size, nil
 }

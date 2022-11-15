@@ -25,17 +25,21 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
+
+var chunkJournalFeatureFlag = false
 
 func init() {
 	if os.Getenv("DOLT_ENABLE_CHUNK_JOURNAL") != "" {
@@ -44,10 +48,16 @@ func init() {
 	os.Getpagesize()
 }
 
-var chunkJournalFeatureFlag = true
-
 const (
 	chunkJournalName = "nbs_chunk_journal"
+	chunkJournalAddr = "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"
+	chunkJournalSize = 256 * 1024 * 1024
+)
+
+var (
+	journal     *chunkJournal // singleton
+	journalLock = new(sync.Mutex)
+	journalAddr = addr(hash.Parse(chunkJournalAddr))
 )
 
 type chunkJournal struct {
@@ -83,48 +93,85 @@ type jrecordLookup struct {
 }
 
 func newChunkJournal(ctx context.Context, dir string, m manifest) (*chunkJournal, error) {
-	path := filepath.Join(dir, chunkJournalName)
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
+	journalLock.Lock()
+	defer journalLock.Unlock()
+	if journal != nil {
+		return journal, nil
+	}
+
+	file, err := openJournal(ctx, filepath.Join(dir, chunkJournalName))
 	if err != nil {
 		return nil, err
 	}
 
-	info, err := file.Stat()
-	if err != nil {
-		return nil, err
-	} else if info.IsDir() {
-		return nil, fmt.Errorf("expected file %s found directory", chunkJournalName)
-	}
-
-	j := &chunkJournal{
+	journal = &chunkJournal{
 		journal: file,
 		dir:     dir,
 		backing: m,
 	}
 
-	// todo: maybe do this lazily
-	if err = j.loadChunkJournal(ctx, file); err != nil {
+	if err = readJournal(ctx, journal); err != nil {
 		return nil, err
 	}
 
-	return j, nil
+	return journal, nil
 }
 
-func (j *chunkJournal) loadChunkJournal(ctx context.Context, f *os.File) error {
+func openJournal(ctx context.Context, path string) (*os.File, error) {
+	var create bool
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		create = true
+	} else if err != nil {
+		return nil, err
+	} else if info.IsDir() {
+		return nil, fmt.Errorf("expected file %s found directory", chunkJournalName)
+	}
+
+	if !create {
+		return os.OpenFile(path, os.O_RDWR, 0666)
+	}
+
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		return nil, err
+	}
+
+	// zero file the file
+	k := 1024 * 1024
+	b := make([]byte, k)
+	for i := 0; i < chunkJournalSize; i += k {
+		if _, err = f.Write(b); err != nil {
+			return nil, err
+		}
+	}
+
+	if o, err := f.Seek(0, 0); err != nil {
+		return nil, err
+	} else if o != 0 {
+		return nil, fmt.Errorf("expected file offset 0, got %d", o)
+	}
+
+	return f, nil
+}
+
+func readJournal(ctx context.Context, j *chunkJournal) error {
 	src := journalChunkSource{
-		journal: f,
+		journal: j.journal,
 		lookups: make(map[addr]jrecordLookup),
 	}
 
 	var last hash.Hash
-	off, err := processRecords(ctx, f, func(off int64, rec jrecord) error {
+	off, err := processRecords(ctx, j.journal, func(off int64, rec jrecord) error {
 		switch rec.kind {
 		case chunkKind:
-			// todo(andy): uncompressed size
 			src.lookups[rec.address] = jrecordLookup{offset: off, length: rec.length}
 			src.compressedSz += uint64(rec.length)
+			// todo(andy): uncompressed size
+
 		case rootHashKind:
 			last = hash.Hash(rec.address)
+
 		default:
 			return fmt.Errorf("unknown journal record kind (%d)", rec.kind)
 		}
@@ -134,18 +181,10 @@ func (j *chunkJournal) loadChunkJournal(ctx context.Context, f *os.File) error {
 		return nil
 	}
 
-	// need an arbitrary addr for |src|
-	src.address = addr(hash.Of(last[:]))
-
-	// reset the file pointer to end of the last
-	// successfully processed journal record
-	if _, err = f.Seek(off, 0); err != nil {
-		return nil
-	}
-
+	src.address = journalAddr
+	j.sources = map[addr]chunkSource{src.address: src}
 	j.offset = off
 	j.rootHash = last
-	j.sources = map[addr]chunkSource{src.address: src}
 
 	return nil
 }
@@ -180,13 +219,11 @@ func (j *chunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkRea
 		src.lookups[*record.a] = rec
 		src.compressedSz += uint64(cc.CompressedSize())
 	}
-
 	src.address = addr(hash.Of(buf[:off]))
 
 	if err := j.flushBuffer(buf[:off]); err != nil {
 		return nil, err
 	}
-	// todo(andy): less arbitrary naming scheme?
 	j.sources[src.address] = src
 	j.offset += off
 
@@ -226,7 +263,8 @@ func (j *chunkJournal) ConjoinAll(ctx context.Context, sources chunkSources, sta
 		}
 		src.compressedSz += jcs.compressedSz
 	}
-	// todo(andy): less arbitrary naming scheme?
+
+	// make an arbitrary name for |src|
 	src.address = addr(hash.Of(buf))
 	j.sources[src.address] = src
 
@@ -254,12 +292,29 @@ func (j *chunkJournal) Name() string {
 
 // Update implements manifest.
 func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
-	// if out manifest is empty, pass the update to the underlying manifest
+	// check if we've seen the manifest,
+	// if not persist |next| to |j.backing|
 	if emptyAddr(j.manifest.lock) {
+		// we expect |next.specs| to contain one entry for the chunkJournal
+		// and additional entries for in-memory journalChunkSources
+		for _, s := range next.specs {
+			if _, ok := j.sources[s.name]; !ok {
+				panic("unknown table spec " + s.name.String())
+			}
+		}
+		// when persisting |next| to |j.backing|, only provide a
+		// single tableSpec for the chunkJournal
+		cnt, _ := j.sources[journalAddr].count()
+		next.specs = []tableSpec{{name: journalAddr, chunkCount: cnt}}
+
 		mc, err := j.backing.Update(ctx, lastLock, next, stats, writeHook)
 		j.manifest = mc
 		j.rootHash = mc.root
 		return mc, err
+	}
+
+	if j.manifest.gcGen != next.gcGen {
+		panic("chunkJournal cannot update GC generation")
 	}
 
 	if writeHook != nil {
@@ -268,19 +323,15 @@ func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 		}
 	}
 
-	curr := j.manifest
-	if curr.lock != lastLock {
-		return curr, nil // stale
-	} else if curr.gcGen != next.gcGen {
-		panic("chunkJournal cannot update GC generation")
+	if j.manifest.lock != lastLock {
+		return j.manifest, nil // |next| is stale
 	}
 
 	buf := make([]byte, rootHashRecordSize)
 	writeRootHashRecord(buf, addr(next.root))
 	if err := j.flushBuffer(buf); err != nil {
-		return curr, err
+		return manifestContents{}, err
 	}
-
 	j.manifest = next
 	j.rootHash = next.root
 
@@ -294,8 +345,9 @@ func (j *chunkJournal) ParseIfExists(ctx context.Context, stats *Stats, readHook
 
 	if !ok {
 		ok, mc, err = j.backing.ParseIfExists(ctx, stats, readHook)
-		// the journal file is the source of truth for the latest root hash,
-		// update the manifest contents to reflect this
+		// the journal file is the source of truth for the latest root hash.
+		// manifest |j.backing| may be stale if the latest contents were not
+		// flushed while closing/shutting-down the chunkJournal.
 		mc.root = j.rootHash
 		j.manifest = mc
 		return
@@ -534,12 +586,16 @@ func safeReadJournalRecord(buf []byte) (jrecord, bool) {
 	}
 }
 
-func processRecords(ctx context.Context, r io.Reader, cb func(o int64, r jrecord) error) (off int64, err error) {
-	// todo(andy): a bit arbitrary for now
-	const maxRead = 1024 * 1024
+func processRecords(ctx context.Context, r io.ReadSeeker, cb func(o int64, r jrecord) error) (int64, error) {
+	var (
+		buf []byte
+		off int64
+		err error
+	)
 
-	var buf []byte
-	rdr := bufio.NewReaderSize(r, maxRead)
+	// todo(andy): reader buffer must be able to hold an entire record,
+	//   but we don't have a hard limit on record size right now
+	rdr := bufio.NewReaderSize(r, 1024*1024)
 	for {
 		// peek to read next record size
 		if buf, err = rdr.Peek(uint32Size); err != nil {
@@ -568,10 +624,15 @@ func processRecords(ctx context.Context, r io.Reader, cb func(o int64, r jrecord
 		}
 		off += int64(len(buf))
 	}
-	if err == io.EOF {
-		err = nil
+	if err != nil && err != io.EOF {
+		return 0, err
 	}
-	return
+	// reset the file pointer to end of the last
+	// successfully processed journal record
+	if _, err = r.Seek(off, 0); err != nil {
+		return 0, err
+	}
+	return off, nil
 }
 
 func readUint(buf []byte) uint32 {
