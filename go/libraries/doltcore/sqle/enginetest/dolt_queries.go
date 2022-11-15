@@ -4672,10 +4672,6 @@ from dolt_diff(@Commit1, @Commit2, 't')
 inner join t on to_pk = t.pk;`,
 				Expected: []sql.Row{{1, "one", "two", nil, nil, nil, "added"}},
 			},
-			{
-				Query:    "SELECT COUNT(*) from dolt_diff(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{0}},
-			},
 		},
 	},
 	{
@@ -5368,7 +5364,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{3}},
 			},
 			{
-				Query:    "SELECT count(*) from dolt_log('main') join dolt_diff(@Commit1, @Commit2, 't') where commit_hash = to_commit;",
+				Query:    "SELECT count(*)	 from dolt_log('main') join dolt_diff(@Commit1, @Commit2, 't') where commit_hash = to_commit;",
 				Expected: []sql.Row{{2}},
 			},
 		},
