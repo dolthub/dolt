@@ -8870,6 +8870,155 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "inline secondary indexes with collation",
+		SetUpScript: []string{
+			"create table t (i int primary key, v1 varchar(10), v2 varchar(10), unique index (v1(3),v2(5))) collate utf8mb4_0900_ai_ci",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` int NOT NULL,\n  `v1` varchar(10) COLLATE utf8mb4_0900_ai_ci,\n  `v2` varchar(10) COLLATE utf8mb4_0900_ai_ci,\n  PRIMARY KEY (`i`),\n  UNIQUE KEY `v1v2` (`v1`(3),`v2`(5))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"}},
+			},
+			{
+				Query:    "insert into t values (0, 'a', 'a'), (1, 'ab','ab'), (2, 'abc', 'abc'), (3, 'abcde', 'abcde')",
+				Expected: []sql.Row{{sql.NewOkResult(4)}},
+			},
+			{
+				Query:       "insert into t values (99, 'ABC', 'ABCDE')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:       "insert into t values (99, 'ABC123', 'ABCDE123')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query: "select * from t where v1 = 'A'",
+				Expected: []sql.Row{
+					{0, "a", "a"},
+				},
+			},
+			{
+				Query: "explain select * from t where v1 = 'A'",
+				Expected: []sql.Row{
+					{"Filter(t.v1 = 'A')"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.v1,t.v2]"},
+					{"     ├─ filters: [{[A, A], [NULL, ∞)}]"},
+					{"     └─ columns: [i v1 v2]"},
+				},
+			},
+			{
+				Query: "select * from t where v1 = 'ABC'",
+				Expected: []sql.Row{
+					{2, "abc", "abc"},
+				},
+			},
+			{
+				Query: "explain select * from t where v1 = 'ABC'",
+				Expected: []sql.Row{
+					{"Filter(t.v1 = 'ABC')"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.v1,t.v2]"},
+					{"     ├─ filters: [{[ABC, ABC], [NULL, ∞)}]"},
+					{"     └─ columns: [i v1 v2]"},
+				},
+			},
+			{
+				Query:    "select * from t where v1 = 'ABCD'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "explain select * from t where v1 = 'ABCD'",
+				Expected: []sql.Row{
+					{"Filter(t.v1 = 'ABCD')"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.v1,t.v2]"},
+					{"     ├─ filters: [{[ABCD, ABCD], [NULL, ∞)}]"},
+					{"     └─ columns: [i v1 v2]"},
+				},
+			},
+			{
+				Query: "select * from t where v1 > 'A' and v1 < 'ABCDE'",
+				Expected: []sql.Row{
+					{1, "ab", "ab"},
+				},
+			},
+			{
+				Query: "explain select * from t where v1 > 'A' and v1 < 'ABCDE'",
+				Expected: []sql.Row{
+					{"Filter((t.v1 > 'A') AND (t.v1 < 'ABCDE'))"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.v1,t.v2]"},
+					{"     ├─ filters: [{(A, ABCDE), [NULL, ∞)}]"},
+					{"     └─ columns: [i v1 v2]"},
+				},
+			},
+			{
+				Query: "select * from t where v1 > 'A' and v2 < 'ABCDE'",
+				Expected: []sql.Row{
+					{1, "ab", "ab"},
+					{2, "abc", "abc"},
+				},
+			},
+			{
+				Query: "explain select * from t where v1 > 'A' and v2 < 'ABCDE'",
+				Expected: []sql.Row{
+					{"Filter((t.v1 > 'A') AND (t.v2 < 'ABCDE'))"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.v1,t.v2]"},
+					{"     ├─ filters: [{(A, ∞), (NULL, ABCDE)}]"},
+					{"     └─ columns: [i v1 v2]"},
+				},
+			},
+			{
+				Query: "update t set v1 = concat(v1, 'Z') where v1 >= 'A'",
+				Expected: []sql.Row{
+					{sql.OkResult{RowsAffected: 4, InsertID: 0, Info: plan.UpdateInfo{Matched: 4, Updated: 4}}},
+				},
+			},
+			{
+				Query: "explain update t set v1 = concat(v1, 'Z') where v1 >= 'A'",
+				Expected: []sql.Row{
+					{"Update"},
+					{" └─ UpdateSource(SET t.v1 = concat(t.v1, 'Z'))"},
+					{"     └─ Filter(t.v1 >= 'A')"},
+					{"         └─ IndexedTableAccess(t)"},
+					{"             ├─ index: [t.v1,t.v2]"},
+					{"             └─ filters: [{[A, ∞), [NULL, ∞)}]"},
+				},
+			},
+			{
+				Query: "select * from t",
+				Expected: []sql.Row{
+					{0, "aZ", "a"},
+					{1, "abZ", "ab"},
+					{2, "abcZ", "abc"},
+					{3, "abcdeZ", "abcde"},
+				},
+			},
+			{
+				Query: "delete from t where v1 >= 'A'",
+				Expected: []sql.Row{
+					{sql.OkResult{RowsAffected: 4}},
+				},
+			},
+			{
+				Query: "explain delete from t where v1 >= 'A'",
+				Expected: []sql.Row{
+					{"Delete"},
+					{" └─ Filter(t.v1 >= 'A')"},
+					{"     └─ IndexedTableAccess(t)"},
+					{"         ├─ index: [t.v1,t.v2]"},
+					{"         └─ filters: [{[A, ∞), [NULL, ∞)}]"},
+				},
+			},
+			{
+				Query:    "select * from t",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
 		Name: "referenced secondary indexes",
 		SetUpScript: []string{
 			"create table t (i int primary key, v1 text, v2 text, unique index (v1(3),v2(5)))",
