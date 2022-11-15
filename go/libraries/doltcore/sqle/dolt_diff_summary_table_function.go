@@ -81,8 +81,8 @@ func (ds *DiffSummaryTableFunction) WithDatabase(database sql.Database) (sql.Nod
 	return ds, nil
 }
 
-// FunctionName implements the sql.TableFunction interface
-func (ds *DiffSummaryTableFunction) FunctionName() string {
+// Name implements the sql.TableFunction interface
+func (ds *DiffSummaryTableFunction) Name() string {
 	return "dolt_diff_summary"
 }
 
@@ -184,18 +184,18 @@ func (ds *DiffSummaryTableFunction) Expressions() []sql.Expression {
 // WithExpressions implements the sql.Expressioner interface.
 func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
 	if len(expression) < 1 {
-		return nil, sql.ErrInvalidArgumentNumber.New(ds.FunctionName(), "1 to 3", len(expression))
+		return nil, sql.ErrInvalidArgumentNumber.New(ds.Name(), "1 to 3", len(expression))
 	}
 
 	for _, expr := range expression {
 		if !expr.Resolved() {
-			return nil, ErrInvalidNonLiteralArgument.New(ds.FunctionName(), expr.String())
+			return nil, ErrInvalidNonLiteralArgument.New(ds.Name(), expr.String())
 		}
 	}
 
 	if strings.Contains(expression[0].String(), "..") {
 		if len(expression) < 1 || len(expression) > 2 {
-			return nil, sql.ErrInvalidArgumentNumber.New(ds.FunctionName(), "1 or 2", len(expression))
+			return nil, sql.ErrInvalidArgumentNumber.New(ds.Name(), "1 or 2", len(expression))
 		}
 		ds.dotCommitExpr = expression[0]
 		if len(expression) == 2 {
@@ -203,7 +203,7 @@ func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression
 		}
 	} else {
 		if len(expression) < 2 || len(expression) > 3 {
-			return nil, sql.ErrInvalidArgumentNumber.New(ds.FunctionName(), "2 or 3", len(expression))
+			return nil, sql.ErrInvalidArgumentNumber.New(ds.Name(), "2 or 3", len(expression))
 		}
 		ds.fromCommitExpr = expression[0]
 		ds.toCommitExpr = expression[1]
@@ -215,20 +215,20 @@ func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression
 	// validate the expressions
 	if ds.dotCommitExpr != nil {
 		if !sql.IsText(ds.dotCommitExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.dotCommitExpr.String())
+			return nil, sql.ErrInvalidArgumentDetails.New(ds.Name(), ds.dotCommitExpr.String())
 		}
 	} else {
 		if !sql.IsText(ds.fromCommitExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.fromCommitExpr.String())
+			return nil, sql.ErrInvalidArgumentDetails.New(ds.Name(), ds.fromCommitExpr.String())
 		}
 		if !sql.IsText(ds.toCommitExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.toCommitExpr.String())
+			return nil, sql.ErrInvalidArgumentDetails.New(ds.Name(), ds.toCommitExpr.String())
 		}
 	}
 
 	if ds.tableNameExpr != nil {
 		if !sql.IsText(ds.tableNameExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.tableNameExpr.String())
+			return nil, sql.ErrInvalidArgumentDetails.New(ds.Name(), ds.tableNameExpr.String())
 		}
 	}
 
