@@ -644,7 +644,7 @@ func (di *doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
 		return nil
 	}
 
-	// filters on indexes with prefix lengths are not handled
+	// filters on indexes with prefix lengths are not completely handled
 	if len(di.prefixLengths) > 0 {
 		return nil
 	}

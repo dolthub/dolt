@@ -310,7 +310,8 @@ func (writer prollyKeylessSecondaryWriter) Delete(ctx context.Context, sqlRow sq
 
 	for to := range writer.keyMap {
 		from := writer.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, sqlRow[from]); err != nil {
+		keyPart := writer.trimKeyPart(to, sqlRow[from])
+		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
 			return err
 		}
 	}
