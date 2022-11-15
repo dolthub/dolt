@@ -1465,6 +1465,28 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_history table index lookup",
+		SetUpScript: []string{
+			"create table yx (y int, x int primary key);",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'creating table');",
+			"insert into yx values (0, 1);",
+			"call dolt_commit('-am', 'add data');",
+			"insert into yx values (2, 3);",
+			"call dolt_commit('-am', 'add data');",
+			"insert into yx values (4, 5);",
+			"call dolt_commit('-am', 'add data');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select count(x) from dolt_history_yx where x = 1;",
+				Expected: []sql.Row{
+					{3},
+				},
+			},
+		},
+	},
 }
 
 // BrokenHistorySystemTableScriptTests contains tests that work for non-prepared, but don't work
