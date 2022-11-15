@@ -79,8 +79,8 @@ func (ltf *LogTableFunction) WithDatabase(database sql.Database) (sql.Node, erro
 	return ltf, nil
 }
 
-// FunctionName implements the sql.TableFunction interface
-func (ltf *LogTableFunction) FunctionName() string {
+// Name implements the sql.TableFunction interface
+func (ltf *LogTableFunction) Name() string {
 	return "dolt_log"
 }
 
@@ -186,7 +186,7 @@ func (ltf *LogTableFunction) Expressions() []sql.Expression {
 
 // getDoltArgs builds an argument string from sql expressions so that we can
 // later parse the arguments with the same util as the CLI
-func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, functionName string) ([]string, error) {
+func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, name string) ([]string, error) {
 	var args []string
 
 	for _, expr := range expressions {
@@ -196,7 +196,7 @@ func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, functionName st
 		}
 
 		if !sql.IsText(expr.Type()) {
-			return args, sql.ErrInvalidArgumentDetails.New(functionName, expr.String())
+			return args, sql.ErrInvalidArgumentDetails.New(name, expr.String())
 		}
 
 		text, err := sql.Text.Convert(childVal)
@@ -213,14 +213,14 @@ func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, functionName st
 }
 
 func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
-	args, err := getDoltArgs(ltf.ctx, expression, ltf.FunctionName())
+	args, err := getDoltArgs(ltf.ctx, expression, ltf.Name())
 	if err != nil {
 		return err
 	}
 
 	apr, err := cli.CreateLogArgParser().Parse(args)
 	if err != nil {
-		return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), err.Error())
+		return sql.ErrInvalidArgumentDetails.New(ltf.Name(), err.Error())
 	}
 
 	if notRevisionStr, ok := apr.GetValue(cli.NotFlag); ok {
@@ -239,7 +239,7 @@ func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
 	switch decorateOption {
 	case "short", "full", "auto", "no":
 	default:
-		return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), fmt.Sprintf("invalid --decorate option: %s", decorateOption))
+		return sql.ErrInvalidArgumentDetails.New(ltf.Name(), fmt.Sprintf("invalid --decorate option: %s", decorateOption))
 	}
 	ltf.decoration = decorateOption
 
@@ -250,7 +250,7 @@ func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
 func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
 	for _, expr := range expression {
 		if !expr.Resolved() {
-			return nil, ErrInvalidNonLiteralArgument.New(ltf.FunctionName(), expr.String())
+			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
 		}
 	}
 
@@ -267,7 +267,7 @@ func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.
 	}
 
 	if len(filteredExpressions) > 2 {
-		return nil, sql.ErrInvalidArgumentNumber.New(ltf.FunctionName(), "0 to 2", len(filteredExpressions))
+		return nil, sql.ErrInvalidArgumentNumber.New(ltf.Name(), "0 to 2", len(filteredExpressions))
 	}
 
 	exLen := len(filteredExpressions)
@@ -286,7 +286,7 @@ func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.
 }
 
 func (ltf *LogTableFunction) invalidArgDetailsErr(expr sql.Expression, reason string) *errors.Error {
-	return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), fmt.Sprintf("%s - %s", expr.String(), reason))
+	return sql.ErrInvalidArgumentDetails.New(ltf.Name(), fmt.Sprintf("%s - %s", expr.String(), reason))
 }
 
 func (ltf *LogTableFunction) validateRevisionExpressions() error {
@@ -298,7 +298,7 @@ func (ltf *LogTableFunction) validateRevisionExpressions() error {
 	if ltf.revisionExpr != nil {
 		revisionStr = mustExpressionToString(ltf.ctx, ltf.revisionExpr)
 		if !sql.IsText(ltf.revisionExpr.Type()) {
-			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr.String())
+			return sql.ErrInvalidArgumentDetails.New(ltf.Name(), ltf.revisionExpr.String())
 		}
 		if ltf.secondRevisionExpr == nil && strings.HasPrefix(revisionStr, "^") {
 			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "second revision must exist if first revision contains '^'")
@@ -311,7 +311,7 @@ func (ltf *LogTableFunction) validateRevisionExpressions() error {
 	if ltf.secondRevisionExpr != nil {
 		secondRevisionStr = mustExpressionToString(ltf.ctx, ltf.secondRevisionExpr)
 		if !sql.IsText(ltf.secondRevisionExpr.Type()) {
-			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.secondRevisionExpr.String())
+			return sql.ErrInvalidArgumentDetails.New(ltf.Name(), ltf.secondRevisionExpr.String())
 		}
 		if strings.Contains(secondRevisionStr, "..") {
 			return ltf.invalidArgDetailsErr(ltf.secondRevisionExpr, "second revision cannot contain '..' or '...'")
@@ -341,10 +341,10 @@ func (ltf *LogTableFunction) validateRevisionExpressions() error {
 			return ltf.invalidArgDetailsErr(ltf.secondRevisionExpr, "cannot use --not if '^' present in second revision")
 		}
 		if strings.Contains(ltf.notRevision, "..") {
-			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), fmt.Sprintf("%s - %s", ltf.notRevision, "--not revision cannot contain '..'"))
+			return sql.ErrInvalidArgumentDetails.New(ltf.Name(), fmt.Sprintf("%s - %s", ltf.notRevision, "--not revision cannot contain '..'"))
 		}
 		if strings.HasPrefix(ltf.notRevision, "^") {
-			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), fmt.Sprintf("%s - %s", ltf.notRevision, "--not revision cannot contain '^'"))
+			return sql.ErrInvalidArgumentDetails.New(ltf.Name(), fmt.Sprintf("%s - %s", ltf.notRevision, "--not revision cannot contain '^'"))
 		}
 	}
 

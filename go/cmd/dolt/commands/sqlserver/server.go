@@ -285,11 +285,10 @@ func Serve(
 				lgr.Errorf("error starting remotesapi server listeners for cluster config on port %d: %v", clusterController.RemoteSrvPort(), err)
 				startError = err
 				return
-			} else {
-				go func() {
-					clusterRemoteSrv.Serve(listeners)
-				}()
 			}
+
+			go clusterRemoteSrv.Serve(listeners)
+			go clusterController.Run()
 
 			clusterController.ManageQueryConnections(
 				mySQLServer.SessionManager().Iter,
@@ -322,6 +321,9 @@ func Serve(
 		}
 		if clusterRemoteSrv != nil {
 			clusterRemoteSrv.GracefulStop()
+		}
+		if clusterController != nil {
+			clusterController.GracefulStop()
 		}
 
 		return mySQLServer.Close()
