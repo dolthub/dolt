@@ -95,7 +95,7 @@ func (dtf *DiffTableFunction) Expressions() []sql.Expression {
 // WithExpressions implements the sql.Expressioner interface
 func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
 	if len(expression) < 2 {
-		return nil, sql.ErrInvalidArgumentNumber.New(dtf.FunctionName(), "2 to 3", len(expression))
+		return nil, sql.ErrInvalidArgumentNumber.New(dtf.Name(), "2 to 3", len(expression))
 	}
 
 	// TODO: For now, we will only support literal / fully-resolved arguments to the
@@ -103,19 +103,19 @@ func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql
 	//       before the arguments could be resolved.
 	for _, expr := range expression {
 		if !expr.Resolved() {
-			return nil, ErrInvalidNonLiteralArgument.New(dtf.FunctionName(), expr.String())
+			return nil, ErrInvalidNonLiteralArgument.New(dtf.Name(), expr.String())
 		}
 	}
 
 	if strings.Contains(expression[0].String(), "..") {
 		if len(expression) != 2 {
-			return nil, sql.ErrInvalidArgumentNumber.New(fmt.Sprintf("%v with .. or ...", dtf.FunctionName()), 2, len(expression))
+			return nil, sql.ErrInvalidArgumentNumber.New(fmt.Sprintf("%v with .. or ...", dtf.Name()), 2, len(expression))
 		}
 		dtf.dotCommitExpr = expression[0]
 		dtf.tableNameExpr = expression[1]
 	} else {
 		if len(expression) != 3 {
-			return nil, sql.ErrInvalidArgumentNumber.New(dtf.FunctionName(), 3, len(expression))
+			return nil, sql.ErrInvalidArgumentNumber.New(dtf.Name(), 3, len(expression))
 		}
 		dtf.fromCommitExpr = expression[0]
 		dtf.toCommitExpr = expression[1]
@@ -343,7 +343,7 @@ func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, int
 	}
 
 	if !sql.IsText(dtf.tableNameExpr.Type()) {
-		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.tableNameExpr.String())
+		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.tableNameExpr.String())
 	}
 
 	tableNameVal, err := dtf.tableNameExpr.Eval(dtf.ctx, nil)
@@ -358,7 +358,7 @@ func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, int
 
 	if dtf.dotCommitExpr != nil {
 		if !sql.IsText(dtf.dotCommitExpr.Type()) {
-			return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.dotCommitExpr.String())
+			return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.dotCommitExpr.String())
 		}
 
 		dotCommitVal, err := dtf.dotCommitExpr.Eval(dtf.ctx, nil)
@@ -370,10 +370,10 @@ func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, int
 	}
 
 	if !sql.IsText(dtf.fromCommitExpr.Type()) {
-		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.fromCommitExpr.String())
+		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.fromCommitExpr.String())
 	}
 	if !sql.IsText(dtf.toCommitExpr.Type()) {
-		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.toCommitExpr.String())
+		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.toCommitExpr.String())
 	}
 
 	fromCommitVal, err := dtf.fromCommitExpr.Eval(dtf.ctx, nil)
@@ -542,8 +542,8 @@ func (dtf *DiffTableFunction) String() string {
 		dtf.tableNameExpr.String())
 }
 
-// FunctionName implements the sql.TableFunction interface
-func (dtf *DiffTableFunction) FunctionName() string {
+// Name implements the sql.TableFunction interface
+func (dtf *DiffTableFunction) Name() string {
 	return "dolt_diff"
 }
 

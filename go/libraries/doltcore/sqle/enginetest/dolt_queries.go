@@ -4665,6 +4665,17 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 					{nil, nil, nil, 3, "three", "four", "removed"},
 				},
 			},
+			{
+				Query: `
+SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type
+from dolt_diff(@Commit1, @Commit2, 't')
+inner join t on to_pk = t.pk;`,
+				Expected: []sql.Row{{1, "one", "two", nil, nil, nil, "added"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) from dolt_diff(@Commit2, @Commit3, 't');",
+				Expected: []sql.Row{{0}},
+			},
 		},
 	},
 	{
@@ -5356,6 +5367,10 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Query:    "SELECT count(*) from dolt_log('main^');",
 				Expected: []sql.Row{{3}},
 			},
+			{
+				Query:    "SELECT count(*) from dolt_log('main') join dolt_diff(@Commit1, @Commit2, 't') where commit_hash = to_commit;",
+				Expected: []sql.Row{{2}},
+			},
 		},
 	},
 	{
@@ -5816,6 +5831,13 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query:       "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
 				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query: `
+SELECT *
+from dolt_diff_summary(@Commit3, @Commit4, 't') 
+inner join t as of @Commit3 on rows_unmodified = t.pk;`,
+				Expected: []sql.Row{},
 			},
 		},
 	},
