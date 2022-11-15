@@ -18,9 +18,14 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
+	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,7 +41,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/jwtauth"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -59,12 +66,17 @@ type Controller struct {
 	sinterceptor  serverinterceptor
 	cinterceptor  clientinterceptor
 	lgr           *logrus.Logger
-	grpcCreds     credentials.PerRPCCredentials
 
 	provider       dbProvider
 	iterSessions   IterSessions
 	killQuery      func(uint32)
 	killConnection func(uint32) error
+
+	jwks      *jwtauth.MultiJWKS
+	tlsCfg    *tls.Config
+	grpcCreds credentials.PerRPCCredentials
+	pub       ed25519.PublicKey
+	priv      ed25519.PrivateKey
 }
 
 type sqlvars interface {
@@ -112,7 +124,47 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 	ret.cinterceptor.lgr = lgr.WithFields(logrus.Fields{})
 	ret.cinterceptor.setRole(role, epoch)
 	ret.cinterceptor.roleSetter = roleSetter
+
+	ret.tlsCfg, err = ret.outboundTlsConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	ret.pub, ret.priv, err = ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+
+	keyID := creds.PubKeyToKID(ret.pub)
+	keyIDStr := creds.B32CredsEncoding.EncodeToString(keyID)
+	ret.grpcCreds = &creds.RPCCreds{
+		PrivKey:    ret.priv,
+		Audience:   creds.RemotesAPIAudience,
+		Issuer:     creds.ClientIssuer,
+		KeyID:      keyIDStr,
+		RequireTLS: false,
+	}
+
+	ret.jwks = ret.standbyRemotesJWKS()
+	ret.sinterceptor.keyProvider = ret.jwks
+	ret.sinterceptor.jwtExpected = JWTExpectations()
+
 	return ret, nil
+}
+
+func (c *Controller) Run() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.jwks.Run()
+	}()
+	wg.Wait()
+}
+
+func (c *Controller) GracefulStop() error {
+	c.jwks.GracefulStop()
+	return nil
 }
 
 func (c *Controller) ManageSystemVariables(variables sqlvars) {
@@ -198,7 +250,7 @@ func (c *Controller) applyCommitHooks(ctx context.Context, name string, bt *sql.
 }
 
 func (c *Controller) gRPCDialProvider(denv *env.DoltEnv) dbfactory.GRPCDialProvider {
-	return grpcDialProvider{env.NewGRPCDialProviderFromDoltEnv(denv), &c.cinterceptor, c.cfg, c.grpcCreds}
+	return grpcDialProvider{env.NewGRPCDialProviderFromDoltEnv(denv), &c.cinterceptor, c.tlsCfg, c.grpcCreds}
 }
 
 func (c *Controller) RegisterStoredProcedures(store procedurestore) {
@@ -412,23 +464,9 @@ func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.Server
 	args = sqle.RemoteSrvServerArgs(ctx, args)
 	args.DBCache = remotesrvStoreCache{args.DBCache, c}
 
-	pub, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		panic(err)
-	}
-
-	keyID := creds.PubKeyToKID(pub)
+	keyID := creds.PubKeyToKID(c.pub)
 	keyIDStr := creds.B32CredsEncoding.EncodeToString(keyID)
-
-	args.HttpInterceptor = JWKSHandlerInterceptor(keyIDStr, pub)
-
-	c.grpcCreds = &creds.RPCCreds{
-		PrivKey:    priv,
-		Audience:   creds.RemotesAPIAudience,
-		Issuer:     creds.ClientIssuer,
-		KeyID:      keyIDStr,
-		RequireTLS: false,
-	}
+	args.HttpInterceptor = JWKSHandlerInterceptor(keyIDStr, c.pub)
 
 	return args
 }
@@ -564,4 +602,130 @@ func (c *Controller) waitForHooksToReplicate() error {
 		c.lgr.Warnf("cluster/controller: failed to replicate all databases to all standbys; not transitioning to standby.")
 		return errors.New("cluster/controller: failed to transition from primary to standby gracefully; could not replicate databases to standby in a timely manner.")
 	}
+}
+
+// Within a cluster, if remotesapi is configured with a tls_ca, we take the
+// following semantics:
+// * The configured tls_ca file holds a set of PEM encoded x509 certificates,
+// all of which are trusted roots for the outbound connections the
+// remotestorage client establishes.
+// * The certificate chain presented by the server must validate to a root
+// which was present in tls_ca. In particular, every certificate in the chain
+// must be within its validity window, the signatures must be valid, key usage
+// and isCa must be correctly set for the roots and the intermediates, and the
+// leaf must have extended key usage server auth.
+// * On the other hand, no verification is done against the SAN or the Subject
+// of the certificate.
+//
+// We use these TLS semantics for both connections to the gRPC endpoint which
+// is the actual remotesapi, and for connections to any HTTPS endpoints to
+// which the gRPC service returns URLs. For now, this works perfectly for our
+// use case, but it's tightly coupled to `cluster:` deployment topologies and
+// the likes.
+//
+// If tls_ca is not set then default TLS handling is performed. In particular,
+// if the remotesapi endpoints is HTTPS, then the system roots are used and
+// ServerName is verified against the presented URL SANs of the certificates.
+//
+// This tls Config is used for fetching JWKS, for outbound GRPC connections and
+// for outbound https connections on the URLs that the GRPC services return.
+func (c *Controller) outboundTlsConfig() (*tls.Config, error) {
+	tlsCA := c.cfg.RemotesAPIConfig().TLSCA()
+	if tlsCA == "" {
+		return nil, nil
+	}
+	urlmatches := c.cfg.RemotesAPIConfig().ServerNameURLMatches()
+	dnsmatches := c.cfg.RemotesAPIConfig().ServerNameDNSMatches()
+	pem, err := os.ReadFile(tlsCA)
+	if err != nil {
+		return nil, err
+	}
+	roots := x509.NewCertPool()
+	if ok := roots.AppendCertsFromPEM(pem); !ok {
+		return nil, errors.New("error loading ca roots from " + tlsCA)
+	}
+	verifyFunc := func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+		certs := make([]*x509.Certificate, len(rawCerts))
+		var err error
+		for i, asn1Data := range rawCerts {
+			certs[i], err = x509.ParseCertificate(asn1Data)
+			if err != nil {
+				return err
+			}
+		}
+		keyUsages := []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+		opts := x509.VerifyOptions{
+			Roots:         roots,
+			CurrentTime:   time.Now(),
+			Intermediates: x509.NewCertPool(),
+			KeyUsages:     keyUsages,
+		}
+		for _, cert := range certs[1:] {
+			opts.Intermediates.AddCert(cert)
+		}
+		_, err = certs[0].Verify(opts)
+		if err != nil {
+			return err
+		}
+		if len(urlmatches) > 0 {
+			found := false
+			for _, n := range urlmatches {
+				for _, cn := range certs[0].URIs {
+					if n == cn.String() {
+						found = true
+					}
+					break
+				}
+				if found {
+					break
+				}
+			}
+			if !found {
+				return errors.New("expected certificate to match something in server_name_urls, but it did not")
+			}
+		}
+		if len(dnsmatches) > 0 {
+			found := false
+			for _, n := range dnsmatches {
+				for _, cn := range certs[0].DNSNames {
+					if n == cn {
+						found = true
+					}
+					break
+				}
+				if found {
+					break
+				}
+			}
+			if !found {
+				return errors.New("expected certificate to match something in server_name_dns, but it did not")
+			}
+		}
+		return nil
+	}
+	return &tls.Config{
+		// We have to InsecureSkipVerify because ServerName is always
+		// set by the grpc dial provider and golang tls.Config does not
+		// have good support for performing certificate validation
+		// without server name validation.
+		InsecureSkipVerify: true,
+
+		VerifyPeerCertificate: verifyFunc,
+
+		NextProtos: []string{"h2"},
+	}, nil
+}
+
+func (c *Controller) standbyRemotesJWKS() *jwtauth.MultiJWKS {
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig:   c.tlsCfg,
+			ForceAttemptHTTP2: true,
+		},
+	}
+	urls := make([]string, len(c.cfg.StandbyRemotes()))
+	for i, r := range c.cfg.StandbyRemotes() {
+		urls[i] = strings.Replace(r.RemoteURLTemplate(), dsess.URLTemplateDatabasePlaceholder, ".well-known/jwks.json", -1)
+	}
+	return jwtauth.NewMultiJWKS(c.lgr.WithFields(logrus.Fields{"component": "jwks-key-provider"}), urls, client)
 }
