@@ -104,7 +104,6 @@ var _ sql.TableDropper = Database{}
 var _ sql.TableRenamer = Database{}
 var _ sql.TemporaryTableCreator = Database{}
 var _ sql.TemporaryTableDatabase = Database{}
-var _ sql.TransactionDatabase = Database{}
 var _ sql.TriggerDatabase = Database{}
 var _ sql.VersionedDatabase = Database{}
 var _ sql.ViewDatabase = Database{}
