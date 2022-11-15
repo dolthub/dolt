@@ -125,7 +125,7 @@ func TestCompareToNull(t *testing.T) {
 			gte:  false,
 			lt:   false,
 			lte:  false,
-			eq:   false,
+			eq:   true,
 		},
 		{
 			name: "not nil",
