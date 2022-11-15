@@ -827,19 +827,19 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		fields := make([]prolly.RangeField, len(rng))
 		for j, expr := range rng {
 			if rangeCutIsBinding(expr.LowerBound) {
-				bound := expr.LowerBound.TypeAsLowerBound()
-				fields[j].Lo = prolly.Bound{
-					Binding:   true,
-					Inclusive: bound == sql.Closed,
-				}
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(expr.LowerBound, rng[j].Typ)
 				if err != nil {
 					return nil, err
 				}
-				v = di.trimRangeCutValue(j, v)
-				if err = PutField(ctx, ns, tb, j, v); err != nil {
+				nv := di.trimRangeCutValue(j, v)
+				if err = PutField(ctx, ns, tb, j, nv); err != nil {
 					return nil, err
+				}
+				bound := expr.LowerBound.TypeAsLowerBound()
+				fields[j].Lo = prolly.Bound{
+					Binding:   true,
+					Inclusive: bound == sql.Closed,
 				}
 			} else {
 				fields[j].Lo = prolly.Bound{}
@@ -854,18 +854,18 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		for i, expr := range rng {
 			if rangeCutIsBinding(expr.UpperBound) {
 				bound := expr.UpperBound.TypeAsUpperBound()
-				fields[i].Hi = prolly.Bound{
-					Binding:   true,
-					Inclusive: bound == sql.Closed,
-				}
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(expr.UpperBound, rng[i].Typ)
 				if err != nil {
 					return nil, err
 				}
-				v = di.trimRangeCutValue(i, v)
-				if err = PutField(ctx, ns, tb, i, v); err != nil {
+				nv := di.trimRangeCutValue(i, v)
+				if err = PutField(ctx, ns, tb, i, nv); err != nil {
 					return nil, err
+				}
+				fields[i].Hi = prolly.Bound{
+					Binding:   true,
+					Inclusive: bound == sql.Closed || nv != v, // TODO (james): this might panic for []byte
 				}
 			} else {
 				fields[i].Hi = prolly.Bound{}
