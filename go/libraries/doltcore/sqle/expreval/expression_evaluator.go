@@ -109,7 +109,7 @@ func getExpFunc(nbf *types.NomsBinFormat, sch schema.Schema, exp sql.Expression)
 		}
 		return newNotFunc(expFunc), nil
 	case *expression.IsNull:
-		return newComparisonFunc(EqualsOp{}, expression.BinaryExpression{typedExpr.Child, expression.NewLiteral(nil, sql.Null)}, sch)
+		return newComparisonFunc(EqualsOp{}, expression.BinaryExpression{Left: typedExpr.Child, Right: expression.NewLiteral(nil, sql.Null)}, sch)
 	}
 
 	return nil, errNotImplemented.New(exp.Type().String())
