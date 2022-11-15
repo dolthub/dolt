@@ -50,7 +50,6 @@ type SqlDatabase interface {
 	DbData() env.DbData
 	Name() string
 
-	StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error)
 	Flush(*sql.Context) error
 	EditOptions() editor.Options
 }
@@ -116,49 +115,6 @@ var _ sql.ReadOnlyDatabase = ReadOnlyDatabase{}
 
 func (r ReadOnlyDatabase) IsReadOnly() bool {
 	return true
-}
-
-func (db Database) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
-	dsession := dsess.DSessFromSess(ctx.Session)
-
-	if !dsession.HasDB(ctx, db.Name()) {
-		init, err := GetInitialDBState(ctx, db)
-		if err != nil {
-			return nil, err
-		}
-
-		err = dsession.AddDB(ctx, init)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return dsession.StartTransaction(ctx, db.Name(), tCharacteristic)
-}
-
-func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
-	dsession := dsess.DSessFromSess(ctx.Session)
-	return dsession.CommitTransaction(ctx, db.name, tx)
-}
-
-func (db Database) Rollback(ctx *sql.Context, tx sql.Transaction) error {
-	dsession := dsess.DSessFromSess(ctx.Session)
-	return dsession.RollbackTransaction(ctx, db.name, tx)
-}
-
-func (db Database) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
-	dsession := dsess.DSessFromSess(ctx.Session)
-	return dsession.CreateSavepoint(ctx, name, db.name, tx)
-}
-
-func (db Database) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
-	dsession := dsess.DSessFromSess(ctx.Session)
-	return dsession.RollbackToSavepoint(ctx, name, db.name, tx)
-}
-
-func (db Database) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
-	dsession := dsess.DSessFromSess(ctx.Session)
-	return dsession.ReleaseSavepoint(ctx, name, db.name, tx)
 }
 
 // Revision implements dsess.RevisionDatabase

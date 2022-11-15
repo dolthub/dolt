@@ -102,7 +102,7 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 		}
 	}
 
-	err = db.CommitTransaction(ctx, ctx.GetTransaction())
+	err = dsess.DSessFromSess(ctx.Session).CommitTransaction(ctx, ctx.GetTransaction())
 	if err != nil {
 		return nil, err
 	}

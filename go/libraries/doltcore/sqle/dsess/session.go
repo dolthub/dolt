@@ -246,6 +246,18 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 
 	dbName := ctx.GetTransactionDatabase()
 
+	if !d.HasDB(ctx, dbName) {
+		// init, err := GetInitialDBState(ctx, db)
+		// if err != nil {
+		// 	return nil, err
+		// }
+		//
+		// err = d.AddDB(ctx, init)
+		// if err != nil {
+		// 	return nil, err
+		// }
+	}
+
 	sessionState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
@@ -283,6 +295,65 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	sessionState.dirty = false
 
 	return NewDoltTransaction(dbName, ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic), nil
+}
+
+// GetInitialDBState returns the InitialDbState for |dbName|.
+func GetInitialDBState(ctx context.Context, dbName string) (InitialDbState, error) {
+	// switch db := db.(type) {
+	// case *UserSpaceDatabase, *SingleTableInfoDatabase:
+	// 	return getInitialDBStateForUserSpaceDb(ctx, db)
+	// }
+
+	// TODO: where to get this data
+	var dbData env.DbData
+
+	rsr := dbData.Rsr
+	ddb := dbData.Ddb
+
+	var retainedErr error
+
+	headCommit, err := ddb.Resolve(ctx, rsr.CWBHeadSpec(), rsr.CWBHeadRef())
+	if err == doltdb.ErrBranchNotFound {
+		retainedErr = err
+		err = nil
+	}
+	if err != nil {
+		return InitialDbState{}, err
+	}
+
+	var ws *doltdb.WorkingSet
+	if retainedErr == nil {
+		ws, err = env.WorkingSet(ctx, ddb, rsr)
+		if err != nil {
+			return InitialDbState{}, err
+		}
+	}
+
+	remotes, err := rsr.GetRemotes()
+	if err != nil {
+		return InitialDbState{}, err
+	}
+
+	backups, err := rsr.GetBackups()
+	if err != nil {
+		return InitialDbState{}, err
+	}
+
+	branches, err := rsr.GetBranches()
+	if err != nil {
+		return InitialDbState{}, err
+	}
+
+	return InitialDbState{
+		// Db:         db,
+		HeadCommit: headCommit,
+		WorkingSet: ws,
+		DbData:     dbData,
+		Remotes:    remotes,
+		Branches:   branches,
+		Backups:    backups,
+		Err:        retainedErr,
+	}, nil
 }
 
 func (d *DoltSession) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
