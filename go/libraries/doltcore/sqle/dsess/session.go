@@ -238,16 +238,13 @@ func (d *DoltSession) ValidateSession(ctx *sql.Context, dbName string) error {
 }
 
 
-func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
 // StartTransaction refreshes the state of this session and starts a new transaction.
-func (d *DoltSession) StartTransaction(ctx *sql.Context, dbName string, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
+func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
 	if TransactionsDisabled(ctx) {
 		return DisabledTransaction{}, nil
 	}
+
+	dbName := ctx.GetTransactionDatabase()
 
 	sessionState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
@@ -310,14 +307,11 @@ func (d *DoltSession) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSe
 	return doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(headRoot).WithStagedRoot(headRoot), nil
 }
 
-func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
-	// TODO implement me
-	panic("implement me")
-}
-
 // CommitTransaction commits the in-progress transaction for the database named. Depending on session settings, this
 // may write only a new working set, or may additionally create a new dolt commit for the current HEAD.
-func (d *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
+func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
+	dbName := ctx.GetTransactionDatabase()
+
 	if d.BatchMode() == Batched {
 		err := d.Flush(ctx, dbName)
 		if err != nil {
@@ -556,14 +550,11 @@ func (d *DoltSession) RollbackTransaction(ctx *sql.Context, dbName string, tx sq
 }
 
 
-func (d *DoltSession) CreateSavepoint(ctx *sql.Context, transaction sql.Transaction, name string) error {
-	// TODO implement me
-	panic("implement me")
-}
-
 // CreateSavepoint creates a new savepoint for this transaction with the name given. A previously created savepoint
 // with the same name will be overwritten.
-func (d *DoltSession) CreateSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
+func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, savepointName string) error {
+	dbName := ctx.GetTransactionDatabase()
+
 	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
@@ -582,14 +573,11 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, savepointName, dbName st
 	return nil
 }
 
-func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, transaction sql.Transaction, name string) error {
-	// TODO implement me
-	panic("implement me")
-}
-
 // RollbackToSavepoint sets this session's root to the one saved in the savepoint name. It's an error if no savepoint
 // with that name exists.
-func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
+func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, savepointName string) error {
+	dbName := ctx.GetTransactionDatabase()
+
 	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
@@ -612,14 +600,11 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, dbNam
 	return nil
 }
 
-func (d *DoltSession) ReleaseSavepoint(ctx *sql.Context, transaction sql.Transaction, name string) error {
-	// TODO implement me
-	panic("implement me")
-}
-
 // ReleaseSavepoint removes the savepoint name from the transaction. It's an error if no savepoint with that name
 // exists.
-func (d *DoltSession) ReleaseSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
+func (d *DoltSession) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, savepointName string) error {
+	dbName := ctx.GetTransactionDatabase()
+
 	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
