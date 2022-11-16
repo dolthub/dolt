@@ -55,7 +55,7 @@ teardown() {
   npx -c "prisma migrate dev --name init"
 }
 
-# Prisma is an ORM for Node/TypeScript applications. This test checks out the Peewee test suite
+# Prisma is an ORM for Node/TypeScript applications. This test checks out the Prisma test suite
 # and runs it against Dolt.
 @test "Prisma ORM test suite" {
   skip "Not implemented yet"
@@ -73,6 +73,16 @@ teardown() {
   mysql --protocol TCP -u dolt -e "create database dolt;"
 
   cd typeorm
+  npm install
+  npm start
+}
+
+# MikroORM is an ORM for Node/TypeScript applications. This is a simple smoke test to make sure
+# Dolt can support the most basic MikroORM operations.
+@test "MikroORM smoke test" {
+  mysql --protocol TCP -u dolt -e "create database dolt;"
+
+  cd mikro-orm
   npm install
   npm start
 }
