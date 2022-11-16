@@ -395,19 +395,6 @@ var _ DoltIndex = (*doltIndex)(nil)
 
 // CanSupport implements sql.Index
 func (di *doltIndex) CanSupport(...sql.Range) bool {
-	// TODO (james): don't use and prefix indexes if there's a prefix on a text/blob column
-	if len(di.prefixLengths) > 0 {
-		hasTextBlob := false
-		colColl := di.indexSch.GetAllCols()
-		colColl.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			if sql.IsTextBlob(col.TypeInfo.ToSqlType()) {
-				hasTextBlob = true
-				return true, nil
-			}
-			return false, nil
-		})
-		return !hasTextBlob
-	}
 	return true
 }
 
@@ -823,6 +810,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 
 	pranges := make([]prolly.Range, len(ranges))
 
+	// TODO (james): convert ranges to String instead of string encoding?
 	for k, rng := range ranges {
 		fields := make([]prolly.RangeField, len(rng))
 		for j, expr := range rng {

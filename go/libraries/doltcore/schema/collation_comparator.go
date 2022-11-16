@@ -24,7 +24,8 @@ import (
 )
 
 type CollationTupleComparator struct {
-	Collations []sql.CollationID // CollationIDs are implemented as uint16
+	Collations    []sql.CollationID // CollationIDs are implemented as uint16
+	PrefixLengths []uint16
 }
 
 var _ val.TupleComparator = CollationTupleComparator{}
@@ -60,14 +61,14 @@ func (c CollationTupleComparator) CompareValues(index int, left, right []byte, t
 func (c CollationTupleComparator) Prefix(n int) val.TupleComparator {
 	newCollations := make([]sql.CollationID, n)
 	copy(newCollations, c.Collations)
-	return CollationTupleComparator{newCollations}
+	return CollationTupleComparator{newCollations, nil}
 }
 
 // Suffix implements TupleComparator
 func (c CollationTupleComparator) Suffix(n int) val.TupleComparator {
 	newCollations := make([]sql.CollationID, n)
 	copy(newCollations, c.Collations[len(c.Collations)-n:])
-	return CollationTupleComparator{newCollations}
+	return CollationTupleComparator{newCollations, nil}
 }
 
 // Validated implements TupleComparator

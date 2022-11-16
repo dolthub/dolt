@@ -79,9 +79,12 @@ func (r Range) aboveStart(t val.Tuple) bool {
 			return true
 		}
 
+		// TODO: this should know about prefix lengths
+		// TODO: make a new kind of range that has prefix lengths?
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
+		// TODO (james): attempt to deference field and bound, and just compare as strings
 		cmp := order.CompareValues(i, field, bound.Value, typ)
 		if cmp < 0 {
 			// |field| is outside Range
@@ -111,6 +114,7 @@ func (r Range) belowStop(t val.Tuple) bool {
 			return true
 		}
 
+		// TODO: this should know about prefix lengths
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 

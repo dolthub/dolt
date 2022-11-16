@@ -360,6 +360,8 @@ func (si *schemaImpl) GetKeyDescriptor() val.TupleDesc {
 	if IsKeyless(si) {
 		return val.KeylessTupleDesc
 	}
+	// TODO: create new kind of comparator, and figure out how to return it if there are prefix lengths
+	// TODO: maybe just pass prefix lengths into existing default comparator?
 
 	var tt []val.Type
 	useCollations := false // We only use collations if a string exists
