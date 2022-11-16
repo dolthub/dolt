@@ -218,8 +218,14 @@ func (writer prollyKeylessSecondaryWriter) trimKeyPart(to int, keyPart interface
 	if prefixLength != 0 {
 		switch kp := keyPart.(type) {
 		case string:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
 			keyPart = kp[:prefixLength]
 		case []uint8:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
 			keyPart = kp[:prefixLength]
 		}
 	}
@@ -304,7 +310,8 @@ func (writer prollyKeylessSecondaryWriter) Delete(ctx context.Context, sqlRow sq
 
 	for to := range writer.keyMap {
 		from := writer.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, sqlRow[from]); err != nil {
+		keyPart := writer.trimKeyPart(to, sqlRow[from])
+		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
 			return err
 		}
 	}
