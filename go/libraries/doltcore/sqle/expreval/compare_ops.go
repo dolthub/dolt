@@ -54,7 +54,11 @@ func (op EqualsOp) CompareNomsValues(v1, v2 types.Value) (bool, error) {
 }
 
 // CompareToNil always returns false as values are neither greater than, less than, or equal to nil
-func (op EqualsOp) CompareToNil(types.Value) (bool, error) {
+// except for equality op, the compared value is null.
+func (op EqualsOp) CompareToNil(v types.Value) (bool, error) {
+	if v == types.NullValue {
+		return true, nil
+	}
 	return false, nil
 }
 

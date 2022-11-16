@@ -126,7 +126,7 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 	// Fetch all references
 	branchRefs, err := srcDB.GetHeadRefs(ctx)
 	if err != nil {
-		return noConflictsOrViolations, threeWayMerge, env.ErrFailedToReadDb
+		return noConflictsOrViolations, threeWayMerge, fmt.Errorf("%w: %s", env.ErrFailedToReadDb, err.Error())
 	}
 
 	hasBranch, err := srcDB.HasBranch(ctx, pullSpec.Branch.GetPath())

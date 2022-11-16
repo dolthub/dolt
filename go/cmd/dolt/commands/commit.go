@@ -321,9 +321,8 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggeste
 		finalMsg = parseCommitMessage(commitMsg)
 	})
 
-	// if editor could not be opened or the message received is empty, use auto-generated/suggested msg.
-	if err != nil || finalMsg == "" {
-		return suggestedMsg, nil
+	if err != nil {
+		return "", err
 	}
 
 	return finalMsg, nil
