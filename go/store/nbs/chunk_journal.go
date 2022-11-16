@@ -33,7 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-var chunkJournalFeatureFlag = false
+var chunkJournalFeatureFlag = true
 
 func init() {
 	if os.Getenv("DOLT_ENABLE_CHUNK_JOURNAL") != "" {
@@ -319,7 +319,7 @@ func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 	}
 	writeRootHashRecord(buf, addr(next.root))
 
-	if err := j.journal.Flush(); err != nil {
+	if err := j.journal.Sync(); err != nil {
 		return manifestContents{}, err
 	}
 	j.manifest = next
