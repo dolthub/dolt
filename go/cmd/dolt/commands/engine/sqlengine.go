@@ -42,12 +42,16 @@ import (
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
 type SqlEngine struct {
+	provider       sql.DatabaseProvider
 	dbs            map[string]dsqle.SqlDatabase
-	contextFactory func(ctx context.Context) (*sql.Context, error)
-	dsessFactory   func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error)
+	contextFactory contextFactory
+	dsessFactory   sessionFactory
 	engine         *gms.Engine
 	resultFormat   PrintResultFormat
 }
+
+type sessionFactory func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error)
+type contextFactory func(ctx context.Context) (*sql.Context, error)
 
 type SqlEngineConfig struct {
 	InitialDb          string
@@ -184,6 +188,7 @@ func NewSqlEngine(
 	}
 
 	return &SqlEngine{
+		provider:       pro,
 		dbs:            nameToDB,
 		contextFactory: newSqlContext(sess, config.InitialDb),
 		dsessFactory:   newDoltSession(pro, mrEnv.Config(), config.Autocommit, bcController),
@@ -193,6 +198,7 @@ func NewSqlEngine(
 }
 
 // NewRebasedSqlEngine returns a smalled rebased engine primarily used in filterbranch.
+// TODO: migrate to provider
 func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsqle.SqlDatabase) *SqlEngine {
 	return &SqlEngine{
 		dbs:    dbs,
@@ -218,6 +224,7 @@ func (se *SqlEngine) IterDBs(cb func(name string, db dsqle.SqlDatabase) (stop bo
 }
 
 // GetRoots returns the underlying roots values the engine read/writes to.
+// TODO: very suspect, get rid of this
 func (se *SqlEngine) GetRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue, error) {
 	newRoots := make(map[string]*doltdb.RootValue)
 	for name, db := range se.dbs {
@@ -326,8 +333,15 @@ func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.C
 	}
 }
 
-func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig,
-	autocommit bool, bc *branch_control.Controller) func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
+// TODO: this should not require autocommit, that should be handled by the session default
+// TODO: this is getting its list of DBs from the catalog, it should just have a provider handle and get them from there
+// TODO: goal here is for session.StartTransaction to have all the information it needs when
+func newDoltSession(
+		pro dsqle.DoltDatabaseProvider,
+		config config.ReadWriteConfig,
+		autocommit bool,
+		bc *branch_control.Controller,
+) sessionFactory {
 	return func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
 		ddbs := dsqle.DbsAsDSQLDBs(dbs)
 		states, err := getDbStates(ctx, ddbs)

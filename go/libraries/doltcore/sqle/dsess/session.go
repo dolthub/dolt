@@ -96,7 +96,8 @@ func NewDoltSession(
 	pro DoltDatabaseProvider,
 	conf config.ReadWriteConfig,
 	branchController *branch_control.Controller,
-	dbs ...InitialDbState) (*DoltSession, error) {
+	dbs ...InitialDbState,
+) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")
 	globals := config.NewPrefixConfig(conf, env.SqlServerGlobalsPrefix)
@@ -246,6 +247,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 
 	dbName := ctx.GetTransactionDatabase()
 
+	// TODO: why is this necessary? What's it for? We should have all the dbs at session creation time.
 	if !d.HasDB(ctx, dbName) {
 		// init, err := GetInitialDBState(ctx, db)
 		// if err != nil {
