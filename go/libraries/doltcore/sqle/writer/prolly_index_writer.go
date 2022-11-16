@@ -293,8 +293,14 @@ func (m prollySecondaryIndexWriter) trimKeyPart(to int, keyPart interface{}) int
 	if prefixLength != 0 {
 		switch kp := keyPart.(type) {
 		case string:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
 			keyPart = kp[:prefixLength]
 		case []uint8:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
 			keyPart = kp[:prefixLength]
 		}
 	}
