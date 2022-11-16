@@ -134,3 +134,16 @@ teardown() {
     [ $status -ne 0 ]
     [[ $output =~ "not found" ]] || false
 }
+
+@test "sql-client: handle dashes for implicit database" {
+    make_repo test-dashes
+    cd test-dashes
+    PORT=$( definePORT )
+    dolt sql-server --user=root --port=$PORT &
+    SERVER_PID=$! # will get killed by teardown_common
+    sleep 5 # not using python wait so this works on windows
+
+    run	dolt sql-client -u root -P $PORT -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ " test_dashes " ]] || false
+}

@@ -16,6 +16,7 @@ package argparser
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 )
@@ -49,14 +50,17 @@ func ValidatorFromStrList(paramName string, validStrList []string) ValidationFun
 
 type ArgParser struct {
 	Supported         []*Option
-	NameOrAbbrevToOpt map[string]*Option
+	nameOrAbbrevToOpt map[string]*Option
 	ArgListHelp       [][2]string
 }
 
 func NewArgParser() *ArgParser {
 	var supported []*Option
 	nameOrAbbrevToOpt := make(map[string]*Option)
-	return &ArgParser{supported, nameOrAbbrevToOpt, nil}
+	return &ArgParser{
+		Supported:         supported,
+		nameOrAbbrevToOpt: nameOrAbbrevToOpt,
+	}
 }
 
 // SupportOption adds support for a new argument with the option given. Options must have a unique name and abbreviated name.
@@ -64,8 +68,8 @@ func (ap *ArgParser) SupportOption(opt *Option) {
 	name := opt.Name
 	abbrev := opt.Abbrev
 
-	_, nameExist := ap.NameOrAbbrevToOpt[name]
-	_, abbrevExist := ap.NameOrAbbrevToOpt[abbrev]
+	_, nameExist := ap.nameOrAbbrevToOpt[name]
+	_, abbrevExist := ap.nameOrAbbrevToOpt[abbrev]
 
 	if name == "" {
 		panic("Name is required")
@@ -80,10 +84,10 @@ func (ap *ArgParser) SupportOption(opt *Option) {
 	}
 
 	ap.Supported = append(ap.Supported, opt)
-	ap.NameOrAbbrevToOpt[name] = opt
+	ap.nameOrAbbrevToOpt[name] = opt
 
 	if abbrev != "" {
-		ap.NameOrAbbrevToOpt[abbrev] = opt
+		ap.nameOrAbbrevToOpt[abbrev] = opt
 	}
 }
 
@@ -92,6 +96,18 @@ func (ap *ArgParser) SupportsFlag(name, abbrev, desc string) *ArgParser {
 	opt := &Option{name, abbrev, "", OptionalFlag, desc, nil, false}
 	ap.SupportOption(opt)
 
+	return ap
+}
+
+// SupportsAlias adds support for an alias for an existing option. The alias can be used in place of the original option.
+func (ap *ArgParser) SupportsAlias(alias, original string) *ArgParser {
+	opt, ok := ap.nameOrAbbrevToOpt[original]
+
+	if !ok {
+		panic(fmt.Sprintf("No option found for %s, this is a bug", original))
+	}
+
+	ap.nameOrAbbrevToOpt[alias] = opt
 	return ap
 }
 
@@ -146,7 +162,7 @@ func (ap *ArgParser) SupportsInt(name, abbrev, valDesc, desc string) *ArgParser 
 // modal options in order of descending string length
 func (ap *ArgParser) sortedModalOptions() []string {
 	smo := make([]string, 0, len(ap.Supported))
-	for s, opt := range ap.NameOrAbbrevToOpt {
+	for s, opt := range ap.nameOrAbbrevToOpt {
 		if opt.OptType == OptionalFlag && s != "" {
 			smo = append(smo, s)
 		}
@@ -179,7 +195,7 @@ func (ap *ArgParser) matchModalOptions(arg string) (matches []*Option, rest stri
 			isMatch := len(rest) >= lo && rest[:lo] == on
 			if isMatch {
 				rest = rest[lo:]
-				m := ap.NameOrAbbrevToOpt[on]
+				m := ap.nameOrAbbrevToOpt[on]
 				matches = append(matches, m)
 
 				// only match options once
@@ -200,7 +216,7 @@ func (ap *ArgParser) matchModalOptions(arg string) (matches []*Option, rest stri
 
 func (ap *ArgParser) sortedValueOptions() []string {
 	vos := make([]string, 0, len(ap.Supported))
-	for s, opt := range ap.NameOrAbbrevToOpt {
+	for s, opt := range ap.nameOrAbbrevToOpt {
 		if (opt.OptType == OptionalValue || opt.OptType == OptionalEmptyValue) && s != "" {
 			vos = append(vos, s)
 		}
@@ -219,14 +235,14 @@ func (ap *ArgParser) matchValueOption(arg string) (match *Option, value *string)
 			if len(v) > 0 {
 				value = &v
 			}
-			match = ap.NameOrAbbrevToOpt[on]
+			match = ap.nameOrAbbrevToOpt[on]
 			return match, value
 		}
 	}
 	return nil, nil
 }
 
-// Parses the string args given using the configuration previously specified with calls to the various Supports*
+// Parse parses the string args given using the configuration previously specified with calls to the various Supports*
 // methods. Any unrecognized arguments or incorrect types will result in an appropriate error being returned. If the
 // universal --help or -h flag is found, an ErrHelp error is returned.
 func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {

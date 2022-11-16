@@ -81,7 +81,6 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro,
 		localConfig, branchControl)
 	require.NoError(t, err)
-	branch_control.SetSuperUser("root", "localhost")
 	dh := &DoltHarness{
 		t:              t,
 		session:        session,

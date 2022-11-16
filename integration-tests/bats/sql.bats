@@ -2434,6 +2434,44 @@ SQL
     [[ "$output" =~ "| 3        |" ]] || false
 }
 
+@test "sql: dolt diff table correctly works with NOT and/or IS NULL" {
+    dolt sql -q "CREATE TABLE t(pk int primary key);"
+    dolt add .
+    dolt commit -m "new table t"
+    dolt sql -q "INSERT INTO t VALUES (1), (2)"
+    dolt commit -am "add 1, 2"
+
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_t where from_pk is null"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    dolt sql -q "UPDATE t SET pk = 3 WHERE pk = 2"
+    dolt commit -am "add 3"
+
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_t where from_pk is not null"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+}
+
+@test "sql: dolt diff table correctly works with datetime comparisons" {
+    dolt sql -q "CREATE TABLE t(pk int primary key);"
+    dolt add .
+    dolt commit -m "new table t"
+    dolt sql -q "INSERT INTO t VALUES (1), (2), (3)"
+    dolt commit -am "add 1, 2, 3"
+
+    # adds a row and removes a row
+    dolt sql -q "UPDATE t SET pk = 4 WHERE pk = 2"
+
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_t where to_commit_date is not null"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_t where to_commit_date < now()"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+}
+
 @test "sql: sql print on order by returns the correct result" {
     dolt sql -q "CREATE TABLE mytable(pk int primary key);"
     dolt sql -q "INSERT INTO mytable VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12),(13),(14),(15),(16),(17),(18),(19),(20)"

@@ -126,7 +126,7 @@ func removeRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResul
 	ddb := dbd.Ddb
 	refs, err := ddb.GetRemoteRefs(ctx)
 	if err != nil {
-		return fmt.Errorf("error: failed to read from db, cause: %s", env.ErrFailedToReadFromDb.Error())
+		return fmt.Errorf("error: %w, cause: %s", env.ErrFailedToReadFromDb, err.Error())
 	}
 
 	for _, r := range refs {

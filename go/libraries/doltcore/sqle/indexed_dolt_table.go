@@ -81,7 +81,7 @@ func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition)
 		return nil, err
 	}
 	if idt.lb == nil || !canCache || idt.lb.Key() != key {
-		idt.lb, err = index.NewLookupBuilder(ctx, idt.table, idt.idx, key, nil, idt.table.sqlSch, idt.isDoltFormat)
+		idt.lb, err = index.NewLookupBuilder(ctx, idt.table, idt.idx, key, idt.table.projectedCols, idt.table.sqlSch, idt.isDoltFormat)
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +98,7 @@ func (idt *IndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition
 		return nil, err
 	}
 	if idt.lb == nil || !canCache || idt.lb.Key() != key {
-		idt.lb, err = index.NewLookupBuilder(ctx, idt.table, idt.idx, key, nil, idt.table.sqlSch, idt.isDoltFormat)
+		idt.lb, err = index.NewLookupBuilder(ctx, idt.table, idt.idx, key, idt.table.projectedCols, idt.table.sqlSch, idt.isDoltFormat)
 		if err != nil {
 			return nil, err
 		}
