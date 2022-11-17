@@ -34,8 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-var maxIntPlusTwo uint64 = 1<<63 + 1
-
 func TestLeastPermissiveType(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -307,17 +305,6 @@ df017641-5e4b-4ef5-9f7a-9e9f2ce044b3,0,9223372036854775810,0.0,true,in these
 b97b7e95-c811-4327-8f75-8358595e9614,2,9223372036854775810,2.6,TRUE,columns.
 68d7b8bb-9065-47a8-9302-d4d44e5a149d,3,9223372036854775810,3.7,FALSE,Even emojis
 5b6b7354-f89e-44b2-9058-8aea7f17d5fb,4,9223372036854775810,4.8,true,🐈🐈🐈🐈`
-
-var oneOfEachKindWithSomeNilsCSVStr = `uuid,int,uint,float,bool,string
-6a52205c-2a46-4b04-9567-9e8707054774,-4,9223372036854775810,-4.1,true,this is
-3975299d-71cf-4faa-afea-155d64bd1a9b,-3,9223372036854775810,-3.2,false,a test
-8b682886-0ad7-4b96-a300-48fc1e10032e,,9223372036854775810,-2.3,TRUE,anything could
-5da4b68c-58b1-41f9-8fed-4fbe15740b79,-1,9223372036854775810,-1.4,FALSE,be written
-c659a238-3516-4380-a443-e528e55eb1bd,0,9223372036854775810,0.0,true,in these
-86f3bb91-7476-48a1-8d14-6249cc696b02,1,9223372036854775810,1.5,false,string
-42f2b05d-c279-4058-a13a-58f81a867401,,9223372036854775810,2.6,TRUE,columns.
-935afaea-af2a-4cc9-b008-505a5edbeb3e,3,9223372036854775810,3.7,FALSE,Even emojis
-aab7b641-124e-4193-8837-97cdfb13e8c4,4,9223372036854775810,4.8,true,🐈🐈🐈🐈`
 
 var mixUintsAndPositiveInts = `uuid,mix
 95e8ccf4-78a7-479e-a974-cf8605e6b01d,9223372036854775810

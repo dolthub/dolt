@@ -60,7 +60,6 @@ const (
 var zeroHashStr = (hash.Hash{}).String()
 
 var ErrStateUpdate = errors.New("error updating local data repo state")
-var ErrMarshallingSchema = errors.New("error marshalling schema")
 var ErrInvalidCredsFile = errors.New("invalid creds file")
 var ErrRemoteAlreadyExists = errors.New("remote already exists")
 var ErrInvalidRemoteURL = errors.New("remote URL invalid")

@@ -60,10 +60,6 @@ func getTblErrType(err error) tblErrorType {
 	return tblErrInvalid
 }
 
-func IsTblError(err error) bool {
-	return getTblErrType(err) != tblErrInvalid
-}
-
 func IsTblNotExist(err error) bool {
 	return getTblErrType(err) == tblErrTypeNotExist
 }

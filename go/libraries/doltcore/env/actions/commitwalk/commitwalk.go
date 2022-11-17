@@ -180,15 +180,7 @@ func GetDotDotRevisions(ctx context.Context, includedDB *doltdb.DoltDB, included
 	return commitList, nil
 }
 
-// GetTopologicalOrderCommits returns the commits reachable from the commits in `startCommitHashes`
-// in reverse topological order, with tiebreaking done by the height of the commit graph -- higher commits
-// appear first. Remaining ties are broken by timestamp; newer commits appear first.
-func GetTopologicalOrderCommits(ctx context.Context, ddb *doltdb.DoltDB, startCommitHashes []hash.Hash) ([]*doltdb.Commit, error) {
-	return GetTopNTopoOrderedCommitsMatching(ctx, ddb, startCommitHashes, -1, nil)
-}
-
-// GetTopologicalOrderCommitIterator returns an iterator for commits generated with the same semantics as
-// GetTopologicalOrderCommits
+// GetTopologicalOrderCommitIterator returns an iterator for commits generated with the same semantics as GetTopologicalOrderCommits
 func GetTopologicalOrderIterator(ctx context.Context, ddb *doltdb.DoltDB, startCommitHashes []hash.Hash, matchFn func(*doltdb.Commit) (bool, error)) (doltdb.CommitItr, error) {
 	return newCommiterator(ctx, ddb, startCommitHashes, matchFn)
 }

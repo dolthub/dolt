@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -51,9 +50,6 @@ const (
 	MetricsPort     = "metrics.port"
 	MetricsInsecure = "metrics.insecure"
 )
-
-var LocalConfigWhitelist = set.NewStrSet([]string{UserNameKey, UserEmailKey})
-var GlobalConfigWhitelist = set.NewStrSet([]string{UserNameKey, UserEmailKey})
 
 // ConfigScope is an enum representing the elements that make up the ConfigHierarchy
 type ConfigScope int

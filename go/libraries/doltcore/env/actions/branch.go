@@ -128,10 +128,6 @@ func DeleteBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliCon
 		}
 	}
 
-	return DeleteBranchOnDB(ctx, dbData, config, dref, opts)
-}
-
-func DeleteBranchOnDB(ctx context.Context, dbData env.DbData, config *env.DoltCliConfig, dref ref.DoltRef, opts DeleteOptions) error {
 	ddb := dbData.Ddb
 	hasRef, err := ddb.HasRef(ctx, dref)
 
@@ -245,9 +241,9 @@ func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoi
 	return CreateBranchOnDB(ctx, dbData.Ddb, newBranch, startingPoint, force, dbData.Rsr.CWBHeadRef())
 }
 
-// UpdateRootsForBranch writes the roots needed for a branch checkout and returns the updated roots. |roots.Head|
+// updateRootsForBranch writes the roots needed for a branch checkout and returns the updated roots. |roots.Head|
 // should be the pre-checkout head. The returned roots struct has |Head| set to |branchRoot|.
-func UpdateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, force bool) (doltdb.Roots, error) {
+func updateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, force bool) (doltdb.Roots, error) {
 	conflicts := set.NewStrSet([]string{})
 	if roots.Head == nil {
 		roots.Working = branchRoot
@@ -285,7 +281,7 @@ func UpdateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *d
 }
 
 func checkoutBranchNoDocs(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, rsw env.RepoStateWriter, branchRef ref.BranchRef, force bool) error {
-	roots, err := UpdateRootsForBranch(ctx, roots, branchRoot, force)
+	roots, err := updateRootsForBranch(ctx, roots, branchRoot, force)
 	if err != nil {
 		return err
 	}
@@ -320,7 +316,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		return doltdb.ErrAlreadyOnBranch
 	}
 
-	branchRoot, err := BranchRoot(ctx, db, brName)
+	branchRoot, err := branchRoot(ctx, db, brName)
 	if err != nil {
 		return err
 	}
@@ -336,9 +332,8 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	return checkoutBranchNoDocs(ctx, roots, branchRoot, dEnv.RepoStateWriter(), branchRef, force)
 }
 
-// BranchRoot returns the root value at the branch with the name given
-// TODO: this belongs in DoltDB, maybe
-func BranchRoot(ctx context.Context, db *doltdb.DoltDB, brName string) (*doltdb.RootValue, error) {
+// branchRoot returns the root value at the branch with the name given
+func branchRoot(ctx context.Context, db *doltdb.DoltDB, brName string) (*doltdb.RootValue, error) {
 	cs, err := doltdb.NewCommitSpec(brName)
 	if err != nil {
 		return nil, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
@@ -463,10 +458,10 @@ func overwriteRoot(ctx context.Context, head *doltdb.RootValue, tblHashes map[st
 }
 
 func IsBranch(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {
-	return IsBranchOnDB(ctx, ddb, str)
+	return isBranchOnDB(ctx, ddb, str)
 }
 
-func IsBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {
+func isBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {
 	dref := ref.NewBranchRef(str)
 	return ddb.HasRef(ctx, dref)
 }

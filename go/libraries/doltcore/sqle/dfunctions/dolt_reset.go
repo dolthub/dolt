@@ -121,7 +121,7 @@ func DoDoltReset(ctx *sql.Context, args []string) (int, error) {
 			return 1, err
 		}
 	} else {
-		roots, err = actions.ResetSoftTables(ctx, dbData, apr, roots)
+		roots, err = actions.ResetSoftTables(ctx, apr, roots)
 		if err != nil {
 			return 1, err
 		}

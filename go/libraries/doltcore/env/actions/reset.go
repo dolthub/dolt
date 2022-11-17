@@ -164,13 +164,13 @@ func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, roots do
 	return nil
 }
 
-func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, roots doltdb.Roots) (doltdb.Roots, error) {
+func ResetSoftTables(ctx context.Context, apr *argparser.ArgParseResults, roots doltdb.Roots) (doltdb.Roots, error) {
 	tables, err := getUnionedTables(ctx, apr.Args, roots.Staged, roots.Head)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
-	err = ValidateTables(context.TODO(), tables, roots.Staged, roots.Head)
+	err = ValidateTables(ctx, tables, roots.Staged, roots.Head)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -184,13 +184,13 @@ func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 }
 
 // ResetSoft resets the staged value from HEAD for the tables given and returns the updated roots.
-func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, roots doltdb.Roots) (doltdb.Roots, error) {
+func ResetSoft(ctx context.Context, tables []string, roots doltdb.Roots) (doltdb.Roots, error) {
 	tables, err := getUnionedTables(ctx, tables, roots.Staged, roots.Head)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
-	err = ValidateTables(context.TODO(), tables, roots.Staged, roots.Head)
+	err = ValidateTables(ctx, tables, roots.Staged, roots.Head)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
