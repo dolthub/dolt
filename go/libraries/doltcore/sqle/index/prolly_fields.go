@@ -220,6 +220,25 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 	return nil
 }
 
+// GetStringAddrAsStr writes an interface{} to the ith field of the Tuple being built.
+func GetStringAddrAsStr(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tree.NodeStore) (v interface{}, err error) {
+	v, ok := td.GetString(i, tup)
+	if !ok {
+		return nil, nil
+	}
+	return v, nil
+}
+
+// PutStringAddrAsStr writes an interface{} to the ith field of the Tuple being built.
+func PutStringAddrAsStr(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i int, v interface{}) error {
+	if v == nil {
+		return nil // NULL
+	}
+
+	tb.PutString(i, v.(string))
+	return nil
+}
+
 func convInt(v interface{}) int {
 	switch i := v.(type) {
 	case int:

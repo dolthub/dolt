@@ -284,7 +284,7 @@ func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Co
 		return err
 	}
 	if err == nil {
-		keyStr := FormatKeyForUniqKeyErr(prefixKey, writer.prefixBld.Desc)
+		keyStr := FormatKeyForUniqKeyErr(ctx, writer.prefixBld.Desc, prefixKey, writer.mut.NodeStore())
 		writer.hashBld.PutRaw(0, k.GetField(k.Count()-1))
 		existingKey := writer.hashBld.Build(sharePool)
 		return secondaryUniqueKeyError{keyStr: keyStr, existingKey: existingKey}

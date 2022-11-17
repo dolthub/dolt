@@ -169,7 +169,7 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 	if idx.IsUnique() {
 		kd := idx.Schema().GetKeyDescriptor()
 		return BuildUniqueProllyIndex(ctx, vrw, ns, sch, idx, primary, func(ctx context.Context, existingKey, newKey val.Tuple) error {
-			msg := writer.FormatKeyForUniqKeyErr(newKey, kd)
+			msg := writer.FormatKeyForUniqKeyErr(ctx, kd, newKey, ns)
 			return sql.NewUniqueKeyErr(msg, false, nil)
 		})
 	}

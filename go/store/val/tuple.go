@@ -15,9 +15,8 @@
 package val
 
 import (
-	"math"
-
 	"github.com/dolthub/dolt/go/store/pool"
+	"math"
 )
 
 const (

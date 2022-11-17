@@ -16,6 +16,7 @@ package writer
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"io"
 	"strings"
 
@@ -127,7 +128,7 @@ func (m prollyIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql
 	if err != nil {
 		return err
 	} else if ok {
-		keyStr := FormatKeyForUniqKeyErr(k, m.keyBld.Desc)
+		keyStr := FormatKeyForUniqKeyErr(ctx, m.keyBld.Desc, k, m.mut.NodeStore())
 		return m.uniqueKeyError(ctx, keyStr, k, true)
 	}
 	return nil
@@ -180,7 +181,7 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 	if err != nil {
 		return err
 	} else if ok {
-		keyStr := FormatKeyForUniqKeyErr(newKey, m.keyBld.Desc)
+		keyStr := FormatKeyForUniqKeyErr(ctx, m.keyBld.Desc, newKey, m.mut.NodeStore())
 		return m.uniqueKeyError(ctx, keyStr, newKey, true)
 	}
 
@@ -311,6 +312,8 @@ func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.R
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
 		keyPart := m.trimKeyPart(to, sqlRow[from])
+		// TODO: for prefix on stringaddrenc put raw string instead?
+		// TODO: how do i know to not read an address???
 		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
 			return nil, err
 		}
@@ -367,7 +370,7 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 	existingPK := m.pkBld.Build(sharePool)
 
 	return secondaryUniqueKeyError{
-		keyStr:      FormatKeyForUniqKeyErr(key, desc),
+		keyStr:      FormatKeyForUniqKeyErr(ctx, desc, key, ns),
 		existingKey: existingPK,
 	}
 }
@@ -425,17 +428,29 @@ func (m prollySecondaryIndexWriter) IterRange(ctx context.Context, rng prolly.Ra
 
 // FormatKeyForUniqKeyErr formats the given tuple |key| using |d|. The resulting
 // string is suitable for use in a sql.UniqueKeyError
-func FormatKeyForUniqKeyErr(key val.Tuple, d val.TupleDesc) string {
+func FormatKeyForUniqKeyErr(ctx context.Context, td val.TupleDesc, key val.Tuple, ns tree.NodeStore) string {
 	var sb strings.Builder
 	sb.WriteString("[")
 	seenOne := false
-	for i := range d.Types {
+	for i, typ := range td.Types {
 		if seenOne {
 			sb.WriteString(",")
 		}
 		seenOne = true
-		sb.WriteString(d.FormatValue(i, key.GetField(i)))
+		var keyStrPart string
+		if typ.Enc == val.StringAddrEnc {
+			str, err := index.GetField(ctx, td, i, key, ns)
+			if err != nil {
+				return ""
+			}
+			sb.WriteString(str.(string))
+		} else {
+			keyStrPart = td.FormatValue(i, key.GetField(i))
+		}
+
+		sb.WriteString(keyStrPart)
 	}
 	sb.WriteString("]")
 	return sb.String()
+
 }

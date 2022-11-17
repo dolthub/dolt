@@ -111,14 +111,17 @@ func TestSingleScript(t *testing.T) {
 	script := queries.ScriptTest{
 		Name: "DELETE ME",
 		SetUpScript: []string{
-			"create table t (i int primary key, v1 text, v2 text, unique index (v1(3),v2(5)))",
-			"insert into t values (0, 'a', 'a'), (1, 'ab','ab'), (2, 'abc', 'abc'), (3, 'abcde', 'abcde')",
+			"create table t (i int primary key, v1 text, unique index (v1(3)))",
+			"insert into t values (0, 'a'), (1, 'ab'), (2, 'abc')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query: "insert into t values (99, 'a')",
+			},
+			{
 				Query: "select * from t where v1 = 'ab'",
 				Expected: []sql.Row{
-					{1, "ab", "ab"},
+					{1, "ab"},
 				},
 			},
 		},
