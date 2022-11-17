@@ -51,10 +51,11 @@ type SqlDatabase interface {
 	Name() string
 
 	Flush(*sql.Context) error
-	EditOptions() editor.Options
 }
 
-func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
+// AllDbs returns all the databases in the given provider.
+func AllDbs(ctx *sql.Context, pro sql.DatabaseProvider) []SqlDatabase {
+	dbs := pro.AllDatabases(ctx)
 	dsqlDBs := make([]SqlDatabase, 0, len(dbs))
 	for _, db := range dbs {
 		var sqlDb SqlDatabase

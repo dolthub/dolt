@@ -50,7 +50,7 @@ type SqlEngine struct {
 	resultFormat   PrintResultFormat
 }
 
-type sessionFactory func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error)
+type sessionFactory func(ctx *sql.Context, mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (*dsess.DoltSession, error)
 type contextFactory func(ctx context.Context) (*sql.Context, error)
 
 type SqlEngineConfig struct {
@@ -240,13 +240,18 @@ func (se *SqlEngine) GetRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue
 }
 
 // NewContext converts a context.Context to a sql.Context.
+// TODO: investigate uses of this
 func (se *SqlEngine) NewContext(ctx context.Context) (*sql.Context, error) {
 	return se.contextFactory(ctx)
 }
 
 func (se *SqlEngine) NewDoltSession(ctx context.Context, mysqlSess *sql.BaseSession) (*dsess.DoltSession, error) {
-	tempCtx := sql.NewContext(ctx, sql.WithSession(mysqlSess))
-	return se.dsessFactory(ctx, mysqlSess, se.engine.Analyzer.Catalog.AllDatabases(tempCtx))
+	// TODO: this seems wasteful, we are creating a context for very little work here
+	sqlCtx, err := se.NewContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return se.dsessFactory(sqlCtx, mysqlSess, se.provider)
 }
 
 // GetResultFormat returns the printing format of the engine. The format isn't used by the engine internally, only
@@ -342,8 +347,9 @@ func newDoltSession(
 		autocommit bool,
 		bc *branch_control.Controller,
 ) sessionFactory {
-	return func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
-		ddbs := dsqle.DbsAsDSQLDBs(dbs)
+	return func(ctx *sql.Context, mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
+
+		ddbs := dsqle.AllDbs(ctx, provider)
 		states, err := getDbStates(ctx, ddbs)
 		if err != nil {
 			return nil, err
