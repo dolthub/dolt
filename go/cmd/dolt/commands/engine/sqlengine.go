@@ -342,10 +342,10 @@ func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.C
 // TODO: this is getting its list of DBs from the catalog, it should just have a provider handle and get them from there
 // TODO: goal here is for session.StartTransaction to have all the information it needs when
 func newDoltSession(
-		pro dsqle.DoltDatabaseProvider,
-		config config.ReadWriteConfig,
-		autocommit bool,
-		bc *branch_control.Controller,
+	pro dsqle.DoltDatabaseProvider,
+	config config.ReadWriteConfig,
+	autocommit bool,
+	bc *branch_control.Controller,
 ) sessionFactory {
 	return func(ctx *sql.Context, mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
 

@@ -238,7 +238,6 @@ func (d *DoltSession) ValidateSession(ctx *sql.Context, dbName string) error {
 	return nil
 }
 
-
 // StartTransaction refreshes the state of this session and starts a new transaction.
 func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
 	if TransactionsDisabled(ctx) {
@@ -632,7 +631,6 @@ func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 	dbState.dirty = false
 	return nil
 }
-
 
 // CreateSavepoint creates a new savepoint for this transaction with the name given. A previously created savepoint
 // with the same name will be overwritten.
