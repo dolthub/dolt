@@ -63,7 +63,7 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 		return nil, err
 	}
 
-	headCM, err := ddb.Resolve(context.TODO(), headCS, rsr.CWBHeadRef())
+	headCM, err := ddb.Resolve(ctx, headCS, rsr.CWBHeadRef())
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 		return nil, err
 	}
 
-	mergeCM, err := ddb.Resolve(context.TODO(), mergeCS, rsr.CWBHeadRef())
+	mergeCM, err := ddb.Resolve(ctx, mergeCS, rsr.CWBHeadRef())
 	if err != nil {
 		return nil, err
 	}

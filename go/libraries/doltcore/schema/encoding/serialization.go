@@ -29,8 +29,6 @@ import (
 )
 
 const (
-	builderBufferSize = 1500
-
 	keylessIdCol   = "keyless_hash_id"
 	keylessCardCol = "keyless_cardinality"
 )

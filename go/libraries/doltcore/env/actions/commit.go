@@ -80,9 +80,6 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mer
 	}
 
 	stagedRoot := roots.Staged
-	if err != nil {
-		return nil, err
-	}
 
 	if !props.Force {
 		stagedRoot, err = stagedRoot.ValidateForeignKeysOnSchemas(ctx)
@@ -98,9 +95,6 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mer
 	}
 
 	workingRoot := roots.Working
-	if err != nil {
-		return nil, err
-	}
 
 	err = rsw.UpdateWorkingRoot(ctx, workingRoot)
 	if err != nil {

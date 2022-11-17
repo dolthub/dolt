@@ -17,7 +17,6 @@ package index
 import (
 	"context"
 	"io"
-	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
@@ -330,15 +329,6 @@ func primaryIndexMapping(idx DoltIndex, sqlSch sql.PrimaryKeySchema, projections
 	keyProj = allMap[:i]
 	valProj = allMap[i:len(projections)]
 	ordProj = allMap[len(projections):]
-	return
-}
-
-func contains(slice []string, str string) (ok bool) {
-	for _, x := range slice {
-		if strings.ToLower(x) == strings.ToLower(str) {
-			ok = true
-		}
-	}
 	return
 }
 

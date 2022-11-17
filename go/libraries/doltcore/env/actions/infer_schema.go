@@ -36,11 +36,6 @@ import (
 
 type typeInfoSet map[typeinfo.TypeInfo]struct{}
 
-const (
-	maxUint24 = 1<<24 - 1
-	minInt24  = -1 << 23
-)
-
 // InferenceArgs are arguments that can be passed to the schema inferrer to modify it's inference behavior.
 type InferenceArgs interface {
 	// ColNameMapper allows columns named X in the schema to be named Y in the inferred schema.

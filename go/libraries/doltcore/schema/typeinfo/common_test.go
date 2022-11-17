@@ -116,29 +116,6 @@ func generateSetType(t *testing.T, numOfElements int) *setType {
 	return &setType{sql.MustCreateSetType(vals, sql.Collation_Default)}
 }
 
-func generateInlineBlobTypes(t *testing.T, numOfTypes uint16) []TypeInfo {
-	var res []TypeInfo
-	loop(t, 1, 500, numOfTypes, func(i int64) {
-		pad := false
-		if i%2 == 0 {
-			pad = true
-		}
-		res = append(res, generateInlineBlobType(t, i, pad))
-	})
-	return res
-}
-
-func generateInlineBlobType(t *testing.T, length int64, pad bool) *inlineBlobType {
-	require.True(t, length > 0)
-	if pad {
-		t, err := sql.CreateBinary(sqltypes.Binary, length)
-		if err == nil {
-			return &inlineBlobType{t}
-		}
-	}
-	return &inlineBlobType{sql.MustCreateBinary(sqltypes.VarBinary, length)}
-}
-
 func generateVarStringTypes(t *testing.T, numOfTypes uint16) []TypeInfo {
 	var res []TypeInfo
 	loop(t, 1, 500, numOfTypes, func(i int64) {

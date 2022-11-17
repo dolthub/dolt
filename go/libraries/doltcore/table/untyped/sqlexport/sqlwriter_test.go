@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 )
@@ -121,12 +120,4 @@ func TestEndToEnd(t *testing.T) {
 			assert.Equal(t, tt.expectedOutput, stringWr.String())
 		})
 	}
-}
-
-func rs(rs ...row.Row) []row.Row {
-	return rs
-}
-
-func strPointer(s string) *string {
-	return &s
 }
