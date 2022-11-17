@@ -88,6 +88,11 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, initDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	if len(apr.Args) > 0 {
+		cli.PrintErrln(color.RedString("error: invalid arguments."))
+		return 1
+	}
+
 	if dEnv.HasDoltDir() {
 		cli.PrintErrln(color.RedString("This directory has already been initialized."))
 		return 1
