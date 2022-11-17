@@ -116,13 +116,9 @@ func TestSingleScript(t *testing.T) {
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "insert into t values (99, 'a')",
-				ExpectedErrStr: "duplicate unique key given: [a]",
-			},
-			{
-				Query: "select * from t where v1 = 'ab'",
+				Query: "select * from t where v1 > 'ab'",
 				Expected: []sql.Row{
-					{1, "ab"},
+					{2, "abc"},
 				},
 			},
 		},

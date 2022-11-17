@@ -84,7 +84,7 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 			prefixLengths: def.PrefixLengths(),
 			idxCols:       def.Count(),
 			keyMap:        keyMap,
-			keyBld:        val.NewTupleBuilder(keyDesc),
+			keyBld:        val.NewTupleBuilder(keyDesc), // TODO: create NewPrefixTupleBuilder
 			pkMap:         pkMap,
 			pkBld:         val.NewTupleBuilder(pkDesc),
 		}

@@ -207,6 +207,7 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 		tb.PutBytesAddr(i, h)
 	case val.StringAddrEnc:
 		//todo: v will be []byte after daylon's changes
+		// TODO (james): change this?
 		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader([]byte(v.(string))))
 		if err != nil {
 			return err
@@ -230,7 +231,7 @@ func GetStringAddrAsStr(ctx context.Context, td val.TupleDesc, i int, tup val.Tu
 }
 
 // PutStringAddrAsStr writes an interface{} to the ith field of the Tuple being built.
-func PutStringAddrAsStr(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i int, v interface{}) error {
+func PutPrefixField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i int, v interface{}) error {
 	if v == nil {
 		return nil // NULL
 	}

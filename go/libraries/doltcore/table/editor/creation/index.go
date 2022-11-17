@@ -247,6 +247,7 @@ func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, ns t
 		secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
 	}
 
+	// TODO: presence of prefixlengths should indicate that we should use a modified schema?
 	iter, err := primary.IterAll(ctx)
 	if err != nil {
 		return nil, err

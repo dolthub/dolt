@@ -312,8 +312,8 @@ func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.R
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
 		keyPart := m.trimKeyPart(to, sqlRow[from])
-		// TODO: for prefix on stringaddrenc put raw string instead?
-		// TODO: how do i know to not read an address???
+		// todo: if prefixing use PutPrefixField
+
 		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
 			return nil, err
 		}
