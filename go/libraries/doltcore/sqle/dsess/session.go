@@ -246,6 +246,9 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	}
 
 	dbName := ctx.GetTransactionDatabase()
+	if len(dbName) == 0 {
+		return DisabledTransaction{}, nil
+	}
 
 	// TODO: why is this necessary? What's it for? We should have all the dbs at session creation time.
 	if !d.HasDB(ctx, dbName) {
@@ -596,13 +599,10 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 	return pendingCommit, nil
 }
 
-func (d *DoltSession) Rollback(ctx *sql.Context, transaction sql.Transaction) error {
-	// TODO implement me
-	panic("implement me")
-}
+// Rollback rolls the given transaction back
+func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
+	dbName := ctx.GetTransactionDatabase()
 
-// RollbackTransaction rolls the given transaction back
-func (d *DoltSession) RollbackTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
 	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
