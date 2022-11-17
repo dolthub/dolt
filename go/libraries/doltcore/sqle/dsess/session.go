@@ -249,15 +249,26 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 
 	// TODO: why is this necessary? What's it for? We should have all the dbs at session creation time.
 	if !d.HasDB(ctx, dbName) {
-		// init, err := GetInitialDBState(ctx, db)
-		// if err != nil {
-		// 	return nil, err
-		// }
-		//
-		// err = d.AddDB(ctx, init)
-		// if err != nil {
-		// 	return nil, err
-		// }
+		db, err := d.provider.Database(ctx, dbName)
+		if err != nil {
+			return nil, err
+		}
+
+		sdb, ok := db.(SessionDatabase)
+		if !ok {
+			return nil, fmt.Errorf("database %s does not support sessions", dbName)
+		}
+
+		init, err := sdb.InitialDBState(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO: make this take a DB, not a DBState
+		err = d.AddDB(ctx, init)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	sessionState, _, err := d.LookupDbState(ctx, dbName)

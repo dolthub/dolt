@@ -46,10 +46,11 @@ var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables c
 
 type SqlDatabase interface {
 	sql.Database
+	dsess.SessionDatabase
+
+	// TODO: get rid of this, it's managed by the session, not the DB
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
 	DbData() env.DbData
-	Name() string
-
 	Flush(*sql.Context) error
 }
 
@@ -198,6 +199,10 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 		Backups:    backups,
 		Err:        retainedErr,
 	}, nil
+}
+
+func (db Database) InitialDBState(ctx context.Context) (dsess.InitialDbState, error) {
+	return GetInitialDBState(ctx, db)
 }
 
 // Name returns the name of this database, set at creation time.

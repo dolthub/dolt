@@ -15,6 +15,9 @@
 package sqle
 
 import (
+	"context"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -76,6 +79,10 @@ func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
 	return resultingTblNames, nil
 }
 
+func (db *UserSpaceDatabase) InitialDBState(ctx context.Context) (dsess.InitialDbState, error) {
+	return getInitialDBStateForUserSpaceDb(ctx, db)
+}
+
 func (db *UserSpaceDatabase) GetRoot(*sql.Context) (*doltdb.RootValue, error) {
 	return db.RootValue, nil
 }
@@ -88,14 +95,6 @@ func (db *UserSpaceDatabase) DbData() env.DbData {
 	panic("UserSpaceDatabase does not have dbdata")
 }
 
-func (db *UserSpaceDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
-	panic("UserSpaceDatabase does not support transactions")
-}
-
 func (db *UserSpaceDatabase) Flush(ctx *sql.Context) error {
 	panic("UserSpaceDatabase cannot flush")
-}
-
-func (db *UserSpaceDatabase) EditOptions() editor.Options {
-	return editor.Options{}
 }
