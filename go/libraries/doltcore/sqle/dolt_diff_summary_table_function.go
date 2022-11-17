@@ -15,17 +15,19 @@
 package sqle
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/go-mysql-server/sql"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/atomicerr"
 )
 
 var _ sql.TableFunction = (*DiffSummaryTableFunction)(nil)
@@ -289,6 +291,12 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		}
 		diffSum, hasDiff, err := getDiffSummaryNodeFromDelta(ctx, delta, fromRoot, toRoot, tblName)
 		if err != nil {
+			if errors.Is(err, diff.ErrPrimaryKeySetChanged) {
+				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, fmt.Sprintf("summary for table %s cannot be determined. Primary key set changed.", tblName))
+				// Report an empty diff for tables that have primary key set changes
+				diffSummaries = append(diffSummaries, diffSummaryNode{tblName: tblName})
+				continue
+			}
 			return nil, err
 		}
 		if hasDiff {
@@ -389,36 +397,41 @@ func getDiffSummaryNodeFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRo
 // getDiffSummary returns diff.DiffSummaryProgress object and whether there is a data diff or not.
 func getDiffSummary(ctx *sql.Context, td diff.TableDelta) (diff.DiffSummaryProgress, bool, bool, error) {
 	// got this method from diff_output.go
-	// todo: use errgroup.Group
-	ae := atomicerr.New()
-	ch := make(chan diff.DiffSummaryProgress)
-	go func() {
-		defer close(ch)
-		err := diff.SummaryForTableDelta(ctx, ch, td)
 
-		ae.SetIfError(err)
-	}()
+	ch := make(chan diff.DiffSummaryProgress)
+
+	grp, ctx2 := errgroup.WithContext(ctx)
+	grp.Go(func() error {
+		defer close(ch)
+		err := diff.SummaryForTableDelta(ctx2, ch, td)
+		return err
+	})
 
 	acc := diff.DiffSummaryProgress{}
 	var count int64
-	for p := range ch {
-		if ae.IsSet() {
-			break
+	grp.Go(func() error {
+		for {
+			select {
+			case p, ok := <-ch:
+				if !ok {
+					return nil
+				}
+				acc.Adds += p.Adds
+				acc.Removes += p.Removes
+				acc.Changes += p.Changes
+				acc.CellChanges += p.CellChanges
+				acc.NewRowSize += p.NewRowSize
+				acc.OldRowSize += p.OldRowSize
+				acc.NewCellSize += p.NewCellSize
+				acc.OldCellSize += p.OldCellSize
+				count++
+			case <-ctx2.Done():
+				return ctx2.Err()
+			}
 		}
+	})
 
-		acc.Adds += p.Adds
-		acc.Removes += p.Removes
-		acc.Changes += p.Changes
-		acc.CellChanges += p.CellChanges
-		acc.NewRowSize += p.NewRowSize
-		acc.OldRowSize += p.OldRowSize
-		acc.NewCellSize += p.NewCellSize
-		acc.OldCellSize += p.OldCellSize
-
-		count++
-	}
-
-	if err := ae.Get(); err != nil {
+	if err := grp.Wait(); err != nil {
 		return diff.DiffSummaryProgress{}, false, false, err
 	}
 
