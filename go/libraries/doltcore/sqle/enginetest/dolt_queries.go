@@ -8168,8 +8168,16 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 				ExpectedErr: sql.ErrUniqueKeyViolation,
 			},
 			{
+				Query:          "insert into t values (99, 'ABC', 'ABCDE')",
+				ExpectedErrStr: "duplicate unique key given: [ABC,ABCDE]",
+			},
+			{
 				Query:       "insert into t values (99, 'ABC123', 'ABCDE123')",
 				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:          "insert into t values (99, 'ABC123', 'ABCDE123')",
+				ExpectedErrStr: "duplicate unique key given: [ABC,ABCDE]",
 			},
 			{
 				Query: "select * from t where v1 = 'A'",
