@@ -266,3 +266,33 @@ SQL
     [[ ! "$output" =~ "alpha" ]] || false
     [[ ! "$output" =~ "beta" ]] || false
 }
+
+@test "migrate: --drop-conflicts drops conflicts on migrate" {
+    dolt sql <<SQL
+CREATE TABLE test (pk int primary key, c0 int, c1 int);
+INSERT INTO test VALUES (0,0,0);
+CALL dcommit('-Am', 'added table test');
+CALL dcheckout('-b', 'other');
+INSERT INTO test VALUES (1, 2, 3);
+CALL dcommit('-am', 'added row on branch other');
+CALL dcheckout('main');
+INSERT INTO test VALUES (1, -2, -3);
+CALL dcommit('-am', 'added row on branch main');
+SET @@dolt_allow_commit_conflicts = 1;
+CALL dmerge('other');
+SQL
+    # dolt migrate --drop-conflicts
+}
+
+@test "migrate: no panic for migration on migrated database" {
+    dolt sql <<SQL
+CREATE TABLE test (pk int primary key, c0 int, c1 int);
+INSERT INTO test VALUES (0,0,0);
+CALL dadd('-A');
+CALL dcommit('-am', 'added table test');
+SQL
+    dolt migrate
+    run dolt migrate
+    [ $status -eq 0 ]
+    [[ "$output" =~ "already migrated" ]] || false
+}
