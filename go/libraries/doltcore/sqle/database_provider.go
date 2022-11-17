@@ -666,13 +666,12 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		return nil, dsess.InitialDbState{}, false, nil
 	}
 
-	var err error
-	revSpec, err = p.resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
+	resolvedRevSpec, err := p.resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
 	if err != nil {
 		return nil, dsess.InitialDbState{}, false, err
 	}
 
-	isBranch, err := isBranch(ctx, srcDb, revSpec, p.remoteDialer)
+	isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec, p.remoteDialer)
 	if err != nil {
 		return nil, dsess.InitialDbState{}, false, err
 	}
@@ -681,13 +680,13 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		// fetch the upstream head if this is a replicated db
 		if replicaDb, ok := srcDb.(ReadReplicaDatabase); ok {
 			// TODO move this out of analysis phase, should only happen at read time
-			err := switchAndFetchReplicaHead(ctx, revSpec, replicaDb)
+			err := switchAndFetchReplicaHead(ctx, resolvedRevSpec, replicaDb)
 			if err != nil {
 				return nil, dsess.InitialDbState{}, false, err
 			}
 		}
 
-		db, init, err := dbRevisionForBranch(ctx, srcDb, revSpec)
+		db, init, err := dbRevisionForBranch(ctx, srcDb, resolvedRevSpec)
 		if err != nil {
 			return nil, dsess.InitialDbState{}, false, err
 		}
@@ -695,7 +694,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		return db, init, true, nil
 	}
 
-	isTag, err := isTag(ctx, srcDb, revSpec, p.remoteDialer)
+	isTag, err := isTag(ctx, srcDb, resolvedRevSpec, p.remoteDialer)
 	if err != nil {
 		return nil, dsess.InitialDbState{}, false, err
 	}
@@ -712,14 +711,14 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 			return nil, dsess.InitialDbState{}, false, nil
 		}
 
-		db, init, err := dbRevisionForTag(ctx, srcDb.(Database), revSpec)
+		db, init, err := dbRevisionForTag(ctx, srcDb.(Database), resolvedRevSpec)
 		if err != nil {
 			return nil, dsess.InitialDbState{}, false, err
 		}
 		return db, init, true, nil
 	}
 
-	if doltdb.IsValidCommitHash(revSpec) {
+	if doltdb.IsValidCommitHash(resolvedRevSpec) {
 		// TODO: this should be an interface, not a struct
 		replicaDb, ok := srcDb.(ReadReplicaDatabase)
 		if ok {
