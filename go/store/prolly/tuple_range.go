@@ -110,7 +110,7 @@ func (r Range) belowStop(t val.Tuple) bool {
 		if !bound.Binding {
 			return true
 		}
-		
+
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
