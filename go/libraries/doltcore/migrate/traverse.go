@@ -26,7 +26,7 @@ import (
 )
 
 // TraverseDAG traverses |old|, migrating values to |new|.
-func TraverseDAG(ctx context.Context, old, new *doltdb.DoltDB) (err error) {
+func TraverseDAG(ctx context.Context, menv Environment, old, new *doltdb.DoltDB) (err error) {
 	var heads []ref.DoltRef
 	var prog Progress
 
@@ -50,7 +50,7 @@ func TraverseDAG(ctx context.Context, old, new *doltdb.DoltDB) (err error) {
 	}()
 
 	for i := range heads {
-		if err = traverseRefHistory(ctx, heads[i], old, new, prog); err != nil {
+		if err = traverseRefHistory(ctx, menv, heads[i], old, new, prog); err != nil {
 			return err
 		}
 	}
@@ -61,23 +61,23 @@ func TraverseDAG(ctx context.Context, old, new *doltdb.DoltDB) (err error) {
 	return nil
 }
 
-func traverseRefHistory(ctx context.Context, r ref.DoltRef, old, new *doltdb.DoltDB, prog Progress) error {
+func traverseRefHistory(ctx context.Context, menv Environment, r ref.DoltRef, old, new *doltdb.DoltDB, prog Progress) error {
 	switch r.GetType() {
 	case ref.BranchRefType:
-		if err := traverseBranchHistory(ctx, r, old, new, prog); err != nil {
+		if err := traverseBranchHistory(ctx, menv, r, old, new, prog); err != nil {
 			return err
 		}
 		wsRef, err := ref.WorkingSetRefForHead(r)
 		if err != nil {
 			return err
 		}
-		return migrateWorkingSet(ctx, r.(ref.BranchRef), wsRef, old, new)
+		return migrateWorkingSet(ctx, menv, r.(ref.BranchRef), wsRef, old, new)
 
 	case ref.TagRefType:
-		return traverseTagHistory(ctx, r.(ref.TagRef), old, new, prog)
+		return traverseTagHistory(ctx, menv, r.(ref.TagRef), old, new, prog)
 
 	case ref.RemoteRefType:
-		return traverseBranchHistory(ctx, r, old, new, prog)
+		return traverseBranchHistory(ctx, menv, r, old, new, prog)
 
 	case ref.WorkspaceRefType, ref.InternalRefType:
 		return nil
@@ -87,12 +87,12 @@ func traverseRefHistory(ctx context.Context, r ref.DoltRef, old, new *doltdb.Dol
 	}
 }
 
-func traverseBranchHistory(ctx context.Context, r ref.DoltRef, old, new *doltdb.DoltDB, prog Progress) error {
+func traverseBranchHistory(ctx context.Context, menv Environment, r ref.DoltRef, old, new *doltdb.DoltDB, prog Progress) error {
 	cm, err := old.ResolveCommitRef(ctx, r)
 	if err != nil {
 		return err
 	}
-	if err = traverseCommitHistory(ctx, cm, new, prog); err != nil {
+	if err = traverseCommitHistory(ctx, menv, cm, new, prog); err != nil {
 		return err
 	}
 
@@ -108,13 +108,13 @@ func traverseBranchHistory(ctx context.Context, r ref.DoltRef, old, new *doltdb.
 	return new.SetHead(ctx, r, newHash)
 }
 
-func traverseTagHistory(ctx context.Context, r ref.TagRef, old, new *doltdb.DoltDB, prog Progress) error {
+func traverseTagHistory(ctx context.Context, menv Environment, r ref.TagRef, old, new *doltdb.DoltDB, prog Progress) error {
 	t, err := old.ResolveTag(ctx, r)
 	if err != nil {
 		return err
 	}
 
-	if err = traverseCommitHistory(ctx, t.Commit, new, prog); err != nil {
+	if err = traverseCommitHistory(ctx, menv, t.Commit, new, prog); err != nil {
 		return err
 	}
 
@@ -133,7 +133,7 @@ func traverseTagHistory(ctx context.Context, r ref.TagRef, old, new *doltdb.Dolt
 	return new.NewTagAtCommit(ctx, r, cm, t.Meta)
 }
 
-func traverseCommitHistory(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
+func traverseCommitHistory(ctx context.Context, menv Environment, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
 	ch, err := cm.HashOf()
 	if err != nil {
 		return err
@@ -155,7 +155,7 @@ func traverseCommitHistory(ctx context.Context, cm *doltdb.Commit, new *doltdb.D
 		}
 		if idx < 0 {
 			// parents for |cm| are done, migrate |cm|
-			if err = migrateCommit(ctx, cm, new, prog); err != nil {
+			if err = migrateCommit(ctx, menv, cm, new, prog); err != nil {
 				return err
 			}
 			// pop the stack, traverse upwards

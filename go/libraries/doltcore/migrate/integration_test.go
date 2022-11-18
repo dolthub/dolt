@@ -184,7 +184,7 @@ func runMigration(t *testing.T, ctx context.Context, preEnv *env.DoltEnv) (postE
 		DoltDB:    ddb,
 	}
 
-	err = migrate.TraverseDAG(ctx, preEnv.DoltDB, postEnv.DoltDB)
+	err = migrate.TraverseDAG(ctx, migrate.Environment{}, preEnv.DoltDB, postEnv.DoltDB)
 	assert.NoError(t, err)
 	return
 }
