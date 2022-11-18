@@ -207,7 +207,6 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 		tb.PutBytesAddr(i, h)
 	case val.StringAddrEnc:
 		//todo: v will be []byte after daylon's changes
-		// TODO (james): change this?
 		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader([]byte(v.(string))))
 		if err != nil {
 			return err

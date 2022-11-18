@@ -311,8 +311,6 @@ func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.R
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
 		keyPart := m.trimKeyPart(to, sqlRow[from])
-		// todo: if prefixing use PutPrefixField
-
 		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
 			return nil, err
 		}
