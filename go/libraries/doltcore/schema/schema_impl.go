@@ -360,6 +360,7 @@ func (si *schemaImpl) GetKeyDescriptor() val.TupleDesc {
 	if IsKeyless(si) {
 		return val.KeylessTupleDesc
 	}
+
 	var tt []val.Type
 	useCollations := false // We only use collations if a string exists
 	var collations []sql.CollationID
