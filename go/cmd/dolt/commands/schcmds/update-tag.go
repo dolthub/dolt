@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 var updateTagDocs = cli.CommandDocumentationContent{
@@ -68,6 +69,11 @@ func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []stri
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, updateTagDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
+
+	if !types.IsFormat_DOLT(dEnv.DoltDB.Format()) {
+		verr := errhand.BuildDError("update-tag is only available in storage format __DOLT__").Build()
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
 
 	if len(apr.Args) != 3 {
 		verr := errhand.BuildDError("must provide <table> <column> <tag>").Build()

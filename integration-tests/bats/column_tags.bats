@@ -291,6 +291,24 @@ DELIM
     [[ $output =~ "col1   | 10186" ]] || false
 }
 
+@test "column_tags: update-tag only available on __DOLT__" {
+    mkdir ld
+    mkdir dev
+
+    cd ld
+    DOLT_DEFAULT_BIN_FORMAT=__LD_1__ dolt init
+    run dolt schema update-tag t col 5
+    [ $status -ne 0 ]
+    echo $output
+    [[ $output =~ "update-tag is only available in storage format __DOLT__" ]] || false
+
+    cd ../dev
+    DOLT_DEFAULT_BIN_FORMAT=__DOLT_DEV__ dolt init
+    run dolt schema update-tag t col 5
+    [ $status -ne 0 ]
+    [[ $output =~ "update-tag is only available in storage format __DOLT__" ]] || false
+}
+
 @test "column_tags: update-tag updates a columns tag" {
     skip_nbf_not_dolt
 
