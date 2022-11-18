@@ -240,9 +240,10 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type, ns NodeStore) {
 		testRand.Read(buf)
 		tb.PutCommitAddr(idx, hash.New(buf))
 	case val.BytesAddrEnc, val.StringAddrEnc, val.JSONAddrEnc:
-		buf := make([]byte, (testRand.Int63()%40)+10)
+		len := (testRand.Int63() % 40) + 10
+		buf := make([]byte, len)
 		testRand.Read(buf)
-		tree, err := NewImmutableTreeFromReader(context.Background(), bytes.NewReader(buf), ns, DefaultFixedChunkLength)
+		tree, err := NewImmutableTreeFromReader(context.Background(), bytes.NewReader(buf), ns, int(len), DefaultFixedChunkLength)
 		if err != nil {
 			panic("failed to write bytes tree")
 		}
