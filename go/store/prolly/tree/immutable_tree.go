@@ -123,7 +123,7 @@ func (b *BlobBuilder) Init(ctx context.Context, dataSize int, r io.Reader) {
 	b.prevLevelEnd = b.chunkCnt
 	b.remainder = 1
 	b.levelSubtreeCnt = 1
-	
+
 	b.chunks = *chunkBufPool.Get().(*[][]byte)
 	for len(b.chunks) < b.chunkCnt {
 		b.chunks = append(b.chunks, []byte(nil))
