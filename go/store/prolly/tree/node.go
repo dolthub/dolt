@@ -17,12 +17,13 @@ package tree
 import (
 	"context"
 	"encoding/hex"
+	"io"
+
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
-	"io"
 )
 
 type Item []byte
