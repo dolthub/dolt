@@ -41,7 +41,7 @@ var (
 	flushRef = ref.NewInternalRef("migration-flush")
 )
 
-func migrateWorkingSet(ctx context.Context, brRef ref.BranchRef, wsRef ref.WorkingSetRef, old, new *doltdb.DoltDB) error {
+func migrateWorkingSet(ctx context.Context, menv Environment, brRef ref.BranchRef, wsRef ref.WorkingSetRef, old, new *doltdb.DoltDB) error {
 	oldWs, err := old.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
 		return err
@@ -65,12 +65,12 @@ func migrateWorkingSet(ctx context.Context, brRef ref.BranchRef, wsRef ref.Worki
 		return err
 	}
 
-	wr, err := migrateRoot(ctx, oldHeadRoot, oldWs.WorkingRoot(), newHeadRoot)
+	wr, err := migrateRoot(ctx, menv, oldHeadRoot, oldWs.WorkingRoot(), newHeadRoot)
 	if err != nil {
 		return err
 	}
 
-	sr, err := migrateRoot(ctx, oldHeadRoot, oldWs.StagedRoot(), newHeadRoot)
+	sr, err := migrateRoot(ctx, menv, oldHeadRoot, oldWs.StagedRoot(), newHeadRoot)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func migrateWorkingSet(ctx context.Context, brRef ref.BranchRef, wsRef ref.Worki
 	return new.UpdateWorkingSet(ctx, wsRef, newWs, hash.Hash{}, oldWs.Meta())
 }
 
-func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
+func migrateCommit(ctx context.Context, menv Environment, oldCm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
 	oldHash, err := oldCm.HashOf()
 	if err != nil {
 		return err
@@ -147,7 +147,7 @@ func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB
 		return err
 	}
 
-	mRoot, err := migrateRoot(ctx, oldParentRoot, oldRoot, newParentRoot)
+	mRoot, err := migrateRoot(ctx, menv, oldParentRoot, oldRoot, newParentRoot)
 	if err != nil {
 		return err
 	}
@@ -265,7 +265,7 @@ func migrateCommitOptions(ctx context.Context, oldCm *doltdb.Commit, prog Progre
 	}, nil
 }
 
-func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.RootValue) (*doltdb.RootValue, error) {
+func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newParent *doltdb.RootValue) (*doltdb.RootValue, error) {
 	migrated := newParent
 
 	fkc, err := oldRoot.GetForeignKeyCollection(ctx)
@@ -292,7 +292,7 @@ func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.Root
 		ok, err := oldTbl.HasConflicts(ctx)
 		if err != nil {
 			return true, err
-		} else if ok {
+		} else if ok && !menv.DropConflicts {
 			return true, fmt.Errorf("cannot migrate table with conflicts (%s)", name)
 		}
 
