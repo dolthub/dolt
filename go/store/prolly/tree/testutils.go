@@ -258,11 +258,13 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type, ns NodeStore) {
 func NewTestNodeStore() NodeStore {
 	ts := &chunks.TestStorage{}
 	ns := NewNodeStore(ts.NewViewWithFormat(types.Format_DOLT.VersionString()))
-	return nodeStoreValidator{ns: ns}
+	bb := mustNewBlobBuilder(ns, DefaultFixedChunkLength)
+	return nodeStoreValidator{ns: ns, bb: bb}
 }
 
 type nodeStoreValidator struct {
 	ns NodeStore
+	bb *BlobBuilder
 }
 
 func (v nodeStoreValidator) Read(ctx context.Context, ref hash.Hash) (Node, error) {
@@ -313,7 +315,7 @@ func (v nodeStoreValidator) Pool() pool.BuffPool {
 }
 
 func (v nodeStoreValidator) BlobBuilder() *BlobBuilder {
-	panic("not implemented")
+	return v.bb
 }
 
 func (v nodeStoreValidator) Format() *types.NomsBinFormat {

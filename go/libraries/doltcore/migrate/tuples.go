@@ -246,7 +246,6 @@ func translateStringField(ctx context.Context, ns tree.NodeStore, value types.St
 		bb := ns.BlobBuilder()
 		bb.Init(ctx, len(value), rd)
 		_, addr, err := bb.Chunk()
-		//t, err := tree.NewImmutableTreeFromReader(ctx, rd, ns, len(value), tree.DefaultFixedChunkLength)
 		if err != nil {
 			return err
 		}

@@ -112,7 +112,6 @@ func TestWriteImmutableTree(t *testing.T) {
 		{
 			inputSize: 0,
 			chunkSize: 40,
-			execErr:   ErrEmptyBlob,
 		},
 		{
 			inputSize: 100,
@@ -157,6 +156,9 @@ func TestWriteImmutableTree(t *testing.T) {
 			sum := 0
 			byteCnt := 0
 			WalkNodes(ctx, root, ns, func(ctx context.Context, n Node) error {
+				if n.empty() {
+					return nil
+				}
 				var keyCnt int
 				leaf := n.IsLeaf()
 				if leaf {
@@ -241,7 +243,7 @@ func expectedSum(size int) int {
 }
 
 func expectedUnfilled(size, chunk int) int {
-	if size == chunk {
+	if size == chunk || size == 0 {
 		return 0
 	} else if size < chunk {
 		return 1

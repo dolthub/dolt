@@ -32,7 +32,6 @@ import (
 const DefaultFixedChunkLength = 4000
 
 var ErrInvalidChunkSize = errors.New("invalid chunkSize; value must be a multiple of 20")
-var ErrEmptyBlob = errors.New("invalid chunkSize; value must be a multiple of 20")
 
 var chunkBufPool = sync.Pool{
 	New: func() any {
@@ -128,7 +127,7 @@ func (b *BlobBuilder) Init(ctx context.Context, dataSize int, r io.Reader) {
 
 func (b *BlobBuilder) Chunk() (Node, hash.Hash, error) {
 	if b.dataSize == 0 {
-		return Node{}, hash.Hash{}, ErrEmptyBlob
+		return Node{}, hash.Hash{}, nil
 	} else if b.chunkCnt == 1 {
 		err := b.writeNextLeaf(0)
 		if err != nil {
