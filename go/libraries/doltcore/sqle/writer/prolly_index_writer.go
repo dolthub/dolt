@@ -427,18 +427,17 @@ func (m prollySecondaryIndexWriter) IterRange(ctx context.Context, rng prolly.Ra
 
 // FormatKeyForUniqKeyErr formats the given tuple |key| using |d|. The resulting
 // string is suitable for use in a sql.UniqueKeyError
-func FormatKeyForUniqKeyErr(key val.Tuple, td val.TupleDesc) string {
+func FormatKeyForUniqKeyErr(key val.Tuple, d val.TupleDesc) string {
 	var sb strings.Builder
 	sb.WriteString("[")
 	seenOne := false
-	for i := range td.Types {
+	for i := range d.Types {
 		if seenOne {
 			sb.WriteString(",")
 		}
 		seenOne = true
-		sb.WriteString(td.FormatValue(i, key.GetField(i)))
+		sb.WriteString(d.FormatValue(i, key.GetField(i)))
 	}
 	sb.WriteString("]")
 	return sb.String()
-
 }

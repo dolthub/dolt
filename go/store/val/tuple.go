@@ -165,7 +165,6 @@ func (tup Tuple) GetOffset(i int) (int, bool) {
 
 // GetField returns the value for field |i|.
 func (tup Tuple) GetField(i int) []byte {
-	// TODO (james): change this?
 	cnt := tup.Count()
 	if i >= cnt {
 		return nil
