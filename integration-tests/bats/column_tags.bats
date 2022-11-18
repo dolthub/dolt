@@ -290,3 +290,89 @@ DELIM
     [ $status -eq 0 ]
     [[ $output =~ "col1   | 10186" ]] || false
 }
+
+@test "column_tags: update-tag only available on __DOLT__" {
+    mkdir ld
+    mkdir dev
+
+    cd ld
+    DOLT_DEFAULT_BIN_FORMAT=__LD_1__ dolt init
+    run dolt schema update-tag t col 5
+    [ $status -ne 0 ]
+    echo $output
+    [[ $output =~ "update-tag is only available in storage format __DOLT__" ]] || false
+
+    cd ../dev
+    DOLT_DEFAULT_BIN_FORMAT=__DOLT_DEV__ dolt init
+    run dolt schema update-tag t col 5
+    [ $status -ne 0 ]
+    [[ $output =~ "update-tag is only available in storage format __DOLT__" ]] || false
+}
+
+@test "column_tags: update-tag updates a columns tag" {
+    skip_nbf_not_dolt
+
+    dolt sql -q "CREATE TABLE t (pk INT PRIMARY KEY, col1 int);"
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "pk     | 15476" ]] || false
+    [[ $output =~ "col1   | 10878" ]] || false
+
+    dolt schema update-tag t pk 5
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "pk     | 5" ]] || false
+    [[ $output =~ "col1   | 10878" ]] || false
+
+    dolt schema update-tag t col1 6
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "pk     | 5" ]] || false
+    [[ $output =~ "col1   | 6" ]] || false
+}
+
+@test "column_tags: create table on two separate branches, merge them together by updating tags" {
+    skip_nbf_not_dolt
+
+    dolt branch other
+    dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, col1 int);"
+    dolt sql -q "INSERT INTO t VALUES (1, 1);"
+    dolt commit -Am "unrelated table"
+
+    dolt sql -q "CREATE table target (pk int PRIMARY KEY, col1 int);"
+    dolt sql -q "INSERT into target VALUES (1, 1);"
+    dolt commit -Am "table target on main branch"
+
+    dolt checkout other
+    dolt sql -q "CREATE table target (pk int PRIMARY KEY, badCol int, col1 int);"
+    dolt sql -q "INSERT INTO target VALUES (2, 2, 2);"
+    dolt commit -Am "table target on other branch"
+    dolt sql -q "ALTER TABLE target DROP COLUMN badCol;"
+    dolt commit -Am "fixup"
+
+    run dolt schema tags
+    [[ $output =~ "| target | col1   | 14690 |" ]] || false
+
+    dolt checkout main
+
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "| target | col1   | 14649 |" ]] || false
+
+    run dolt merge other
+    [ $status -ne 0 ]
+    [[ $output =~ "table with same name added in 2 commits can't be merged" ]] || false
+    dolt reset --hard
+
+    dolt schema update-tag target col1 14690
+    dolt commit -am "update tag of col1 of target"
+
+    run dolt merge other -m "merge other into main"
+    [ $status -eq 0 ]
+    [[ $output =~ "1 tables changed, 1 rows added(+)" ]] || false
+
+    run dolt sql -r csv -q "select * from target;"
+    [ $status -eq 0 ]
+    [[ $output =~ "1,1" ]] || false
+    [[ $output =~ "2,2" ]] || false
+}
