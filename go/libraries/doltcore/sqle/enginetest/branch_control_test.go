@@ -941,10 +941,6 @@ func TestBranchControl(t *testing.T) {
 	for _, test := range BranchControlTests {
 		harness := newDoltHarness(t)
 		t.Run(test.Name, func(t *testing.T) {
-			//TODO: fix whatever is broken with test db handling
-			if test.Name == "Proper database scoping" {
-				return
-			}
 			engine, err := harness.NewEngine(t)
 			require.NoError(t, err)
 			defer engine.Close()
@@ -961,7 +957,6 @@ func TestBranchControl(t *testing.T) {
 				enginetest.RunQueryWithContext(t, engine, harness, ctx, statement)
 			}
 
-			ctxMap := make(map[string]*sql.Context)
 			for _, assertion := range test.Assertions {
 				user := assertion.User
 				host := assertion.Host
@@ -971,15 +966,10 @@ func TestBranchControl(t *testing.T) {
 				if host == "" {
 					host = "localhost"
 				}
-				var ctx *sql.Context
-				var ok bool
-				if ctx, ok = ctxMap[user+"@"+host]; !ok {
-					ctx = enginetest.NewContextWithClient(harness, sql.Client{
-						User:    user,
-						Address: host,
-					})
-					ctxMap[user+"@"+host] = ctx
-				}
+				ctx = ctx.NewCtxWithClient(sql.Client{
+					User:    user,
+					Address: host,
+				})
 
 				if assertion.ExpectedErr != nil {
 					t.Run(assertion.Query, func(t *testing.T) {
