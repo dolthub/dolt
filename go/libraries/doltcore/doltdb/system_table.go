@@ -35,6 +35,11 @@ const (
 
 var ErrSystemTableCannotBeModified = errors.New("system tables cannot be dropped or altered")
 
+var OldDocsSchema = schema.MustSchemaFromCols(schema.NewColCollection(
+	schema.NewColumn(DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn(DocTextColumnName, schema.DocTextTag, types.StringKind, false),
+))
+
 var DocsSchema schema.Schema
 
 func init() {
