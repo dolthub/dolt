@@ -342,7 +342,7 @@ teardown() {
 
     run dolt diff --summary
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "diff summary will not compute due to primary key set change with table t" ]] || false
+    [[ "$output" =~ "failed to compute diff summary for table t: primary key set changed" ]] || false
 
     dolt add .
 

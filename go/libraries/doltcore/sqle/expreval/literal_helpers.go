@@ -260,6 +260,8 @@ func parseDate(s string) (time.Time, error) {
 func literalAsTimestamp(literal *expression.Literal) (time.Time, error) {
 	v := literal.Value()
 	switch typedVal := v.(type) {
+	case time.Time:
+		return typedVal, nil
 	case string:
 		ts, err := parseDate(typedVal)
 
@@ -275,6 +277,10 @@ func literalAsTimestamp(literal *expression.Literal) (time.Time, error) {
 
 // LiteralToNomsValue converts a go-mysql-servel Literal into a noms value.
 func LiteralToNomsValue(kind types.NomsKind, literal *expression.Literal) (types.Value, error) {
+	if literal.Value() == nil {
+		return types.NullValue, nil
+	}
+
 	switch kind {
 	case types.IntKind:
 		i64, err := literalAsInt64(literal)

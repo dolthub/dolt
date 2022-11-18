@@ -562,6 +562,7 @@ tests:
     - exec: "create table more_vals (i int primary key)"
       error_match: "repo1 is read-only"
   - on: server2
+    retry_attempts: 100
     queries:
     - query: "SELECT @@GLOBAL.dolt_cluster_role,@@GLOBAL.dolt_cluster_role_epoch"
       result:
