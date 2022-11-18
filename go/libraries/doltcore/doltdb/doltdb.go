@@ -1200,6 +1200,10 @@ func (ddb *DoltDB) ShallowGC(ctx context.Context) error {
 	return datas.PruneTableFiles(ctx, ddb.db)
 }
 
+func (ddb *DoltDB) OnlineShallowGC(ctx context.Context) error {
+	return datas.OnlinePruneTableFiles(ctx, ddb.db)
+}
+
 func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
 	dd, err := ddb.db.Datasets(ctx)
 	if err != nil {

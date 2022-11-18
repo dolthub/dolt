@@ -342,6 +342,47 @@ func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool,
 	return
 }
 
+func (mm manifestManager) FetchWithTime(ctx context.Context, stats *Stats) (exists bool, contents manifestContents, t time.Time, err error) {
+	entryTime := time.Now()
+
+	mm.lockOutFetch()
+	defer func() {
+		afErr := mm.allowFetch()
+
+		if err == nil {
+			err = afErr
+		}
+	}()
+
+	f := func() (bool, manifestContents, time.Time, error) {
+		cached, t, hit := mm.cache.Get(mm.Name())
+
+		if hit && t.After(entryTime) {
+			// Cache contains a manifest which is newer than entry time.
+			return true, cached, t, nil
+		}
+
+		t = time.Now()
+
+		exists, contents, err := mm.m.ParseIfExists(ctx, stats, nil)
+
+		if err != nil {
+			return false, manifestContents{}, t, err
+		}
+
+		err = mm.cache.Put(mm.Name(), contents, t)
+
+		if err != nil {
+			return false, manifestContents{}, t, err
+		}
+
+		return exists, contents, t, nil
+	}
+
+	exists, contents, t, err = f()
+	return
+}
+
 // Update attempts to write a new manifest.
 // Callers MUST protect uses of Update with Lock/UnlockForUpdate.
 // Update does not call Lock/UnlockForUpdate() on its own because it is

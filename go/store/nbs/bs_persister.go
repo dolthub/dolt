@@ -17,6 +17,7 @@ package nbs
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -124,5 +125,9 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 }
 
 func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {
+	return chunks.ErrUnsupportedOperation
+}
+
+func (bsp *blobstorePersister) OnlinePruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error {
 	return chunks.ErrUnsupportedOperation
 }

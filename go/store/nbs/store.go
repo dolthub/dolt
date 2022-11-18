@@ -1089,7 +1089,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		return err
 	}
 
-	// ensure we dont drop appendices on commit
+	// ensure we don't drop appendices on commit
 	var appendixSpecs []tableSpec
 	if nbs.upstream.appendix != nil && len(nbs.upstream.appendix) > 0 {
 		appendixSet := nbs.upstream.getAppendixSet()
@@ -1437,6 +1437,49 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 	}
 
 	return nbs.p.PruneTableFiles(ctx, contents)
+}
+
+// OnlinePruneTableFiles deletes old table files that are no longer referenced in the manifest.
+func (nbs *NomsBlockStore) OnlinePruneTableFiles(ctx context.Context) (err error) {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
+	nbs.mm.LockForUpdate()
+	defer func() {
+		unlockErr := nbs.mm.UnlockForUpdate()
+
+		if err == nil {
+			err = unlockErr
+		}
+	}()
+
+	for {
+		// flush all tables and update manifest
+		err = nbs.updateManifest(ctx, nbs.upstream.root, nbs.upstream.root)
+
+		if err == nil {
+			break
+		} else if err == errOptimisticLockFailedTables {
+			continue
+		} else {
+			return err
+		}
+
+		// Same behavior as Commit
+		// infinitely retries without backoff in the case off errOptimisticLockFailedTables
+	}
+
+	// nbs.mm.cache.Get(nbs.mm.Name())
+
+	ok, contents, t, err := nbs.mm.FetchWithTime(ctx, &Stats{})
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil // no manifest exists
+	}
+
+	return nbs.p.OnlinePruneTableFiles(ctx, contents, t)
 }
 
 func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest chunks.ChunkStore) error {

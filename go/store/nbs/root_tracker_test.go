@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -624,6 +625,10 @@ func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount ui
 }
 
 func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ manifestContents) error {
+	return chunks.ErrUnsupportedOperation
+}
+
+func (ftp fakeTablePersister) OnlinePruneTableFiles(_ context.Context, _ manifestContents, _ time.Time) error {
 	return chunks.ErrUnsupportedOperation
 }
 

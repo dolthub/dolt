@@ -973,6 +973,12 @@ func TestDoltReset(t *testing.T) {
 	}
 }
 
+func TestDoltGC(t *testing.T) {
+	for _, script := range DoltGC {
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+}
+
 func TestDoltBranch(t *testing.T) {
 	for _, script := range DoltBranchScripts {
 		enginetest.TestScript(t, newDoltHarness(t), script)

@@ -241,3 +241,72 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manif
 
 	return nil
 }
+
+func (ftp *fsTablePersister) OnlinePruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error {
+	ss := contents.getSpecSet()
+
+	fileInfos, err := os.ReadDir(ftp.dir)
+
+	if err != nil {
+		return err
+	}
+
+	err = ftp.fc.ShrinkCache()
+
+	if err != nil {
+		return err
+	}
+
+	ea := make(gcErrAccum)
+	for _, info := range fileInfos {
+		if info.IsDir() {
+			continue
+		}
+
+		filePath := path.Join(ftp.dir, info.Name())
+
+		if strings.HasPrefix(info.Name(), tempTablePrefix) {
+			err = file.Remove(filePath)
+			if err != nil {
+				ea.add(filePath, err)
+			}
+			continue
+		}
+
+		if len(info.Name()) != 32 {
+			continue // not a table file
+		}
+
+		addy, err := parseAddr(info.Name())
+		if err != nil {
+			continue // not a table file
+		}
+
+		if _, ok := ss[addy]; ok {
+			continue // file is referenced in the manifest
+		}
+
+		i, err := info.Info()
+
+		if err != nil {
+			ea.add(filePath, err)
+		}
+
+		ctime := i.ModTime()
+
+		if ctime.After(mtime) {
+			continue // file has been updated more recently than manifest
+		}
+
+		err = file.Remove(filePath)
+		if err != nil {
+			ea.add(filePath, err)
+		}
+	}
+
+	if !ea.isEmpty() {
+		return ea
+	}
+
+	return nil
+}

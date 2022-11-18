@@ -28,6 +28,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"sort"
+	"time"
 )
 
 var errCacheMiss = errors.New("index cache miss")
@@ -51,6 +52,9 @@ type tablePersister interface {
 
 	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 	PruneTableFiles(ctx context.Context, contents manifestContents) error
+
+	// OnlinePruneTableFiles deletes old table files that are no longer referenced in the manifest.
+	OnlinePruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error
 }
 
 type chunkSourcesByAscendingCount struct {

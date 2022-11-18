@@ -27,7 +27,7 @@ const (
 	cmdSuccess = 1
 )
 
-// doltGC is the stored procedure version of the functions `gc` and `dolt_gc`.
+// doltGC is the stored procedure to run online garbage collection on a database.
 func doltGC(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltGC(ctx, args)
 	if err != nil {
@@ -52,7 +52,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 		return cmdFailure, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	err := ddb.ShallowGC(ctx)
+	err := ddb.OnlineShallowGC(ctx)
 	if err != nil {
 		return cmdFailure, err
 	}
