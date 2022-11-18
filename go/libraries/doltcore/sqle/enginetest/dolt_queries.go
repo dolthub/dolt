@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
 var ViewsWithAsOfScriptTest = queries.ScriptTest{
@@ -6316,6 +6317,50 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 			{
 				Query:    "SELECT * from dolt_diff_summary('HEAD~', 'HEAD');",
 				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "pk set change should throw an error for 3 argument dolt_diff_summary",
+		SetUpScript: []string{
+			"CREATE table t (pk int primary key);",
+			"INSERT INTO t values (1);",
+			"CALL DOLT_COMMIT('-Am', 'table with row');",
+			"ALTER TABLE t ADD col1 int not null default 0;",
+			"ALTER TABLE t drop primary key;",
+			"ALTER TABLE t add primary key (pk, col1);",
+			"CALL DOLT_COMMIT('-am', 'add secondary column with primary key');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "SELECT * from dolt_diff_summary('HEAD~', 'HEAD', 't');",
+				ExpectedErrStr: "failed to compute diff summary for table t: primary key set changed",
+			},
+		},
+	},
+	{
+		Name: "pk set change should report warning for 2 argument dolt_diff_summary",
+		SetUpScript: []string{
+			"CREATE table t (pk int primary key);",
+			"INSERT INTO t values (1);",
+			"CREATE table t2 (pk int primary key);",
+			"INSERT INTO t2 values (2);",
+			"CALL DOLT_COMMIT('-Am', 'multiple tables');",
+			"ALTER TABLE t ADD col1 int not null default 0;",
+			"ALTER TABLE t drop primary key;",
+			"ALTER TABLE t add primary key (pk, col1);",
+			"INSERT INTO t2 values (3), (4), (5);",
+			"CALL DOLT_COMMIT('-am', 'add secondary column with primary key to t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * from dolt_diff_summary('HEAD~', 'HEAD')",
+				Expected: []sql.Row{
+					{"t", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+					{"t2", 1, 3, 0, 0, 3, 0, 0, 1, 4, 1, 4},
+				},
+				ExpectedWarning:       dtables.PrimaryKeyChangeWarningCode,
+				ExpectedWarningsCount: 1,
 			},
 		},
 	},
