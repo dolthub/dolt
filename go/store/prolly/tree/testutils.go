@@ -243,11 +243,13 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type, ns NodeStore) {
 		len := (testRand.Int63() % 40) + 10
 		buf := make([]byte, len)
 		testRand.Read(buf)
-		tree, err := NewImmutableTreeFromReader(context.Background(), bytes.NewReader(buf), ns, int(len), DefaultFixedChunkLength)
+		bb := ns.BlobBuilder()
+		bb.Init(context.Background(), int(len), bytes.NewReader(buf))
+		_, addr, err := bb.Chunk()
 		if err != nil {
 			panic("failed to write bytes tree")
 		}
-		tb.PutBytesAddr(idx, tree.Addr)
+		tb.PutBytesAddr(idx, addr)
 	default:
 		panic("unknown encoding")
 	}
@@ -308,6 +310,10 @@ func (v nodeStoreValidator) Write(ctx context.Context, nd Node) (hash.Hash, erro
 
 func (v nodeStoreValidator) Pool() pool.BuffPool {
 	return v.ns.Pool()
+}
+
+func (v nodeStoreValidator) BlobBuilder() *BlobBuilder {
+	panic("not implemented")
 }
 
 func (v nodeStoreValidator) Format() *types.NomsBinFormat {

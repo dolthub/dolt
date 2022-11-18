@@ -32,169 +32,6 @@ const DefaultFixedChunkLength = 4000
 var ErrInvalidChunkSize = errors.New("invalid chunkSize; value must be a multiple of 20")
 var ErrEmptyBlob = errors.New("invalid chunkSize; value must be a multiple of 20")
 
-// buildImmutableTree writes the contents of |reader| as an append-only
-// tree, returning the root node or an error if applicable. |chunkSize|
-// fixes the split size of leaf and intermediate node chunks.
-func buildImmutableTree(ctx context.Context, r io.Reader, ns NodeStore, S message.Serializer, dataSize, chunkSize int) (Node, error) {
-	if chunkSize < hash.ByteLen*2 || chunkSize > int(message.MaxVectorOffset)/2 {
-		// internal nodes must fit at least two 20-byte hashes
-		return Node{}, ErrInvalidChunkSize
-	}
-
-	height := blobHeight(dataSize, chunkSize)
-	chunkCnt := chunkCount(chunkSize, height)
-	if chunkCnt == 1 {
-		buf := make([]byte, dataSize)
-		_, err := r.Read(buf)
-		if err != nil {
-			return Node{}, err
-		}
-		msg := S.Serialize([][]byte{{0}}, [][]byte{buf}, []uint64{1}, 0)
-		node, err := NodeFromBytes(msg)
-		_, err = ns.Write(ctx, node)
-		if err != nil {
-			return Node{}, err
-		}
-		return node, nil
-	}
-
-	var levels [][]novelNode
-	var levelCnts []int
-	var finalize bool
-
-	// We use lookahead to check whether the reader has
-	// more bytes. The reader will only EOF when reading
-	// zero bytes into the lookahead buffer, but we want
-	// to know at the beginning of a loop whether we are
-	// finished.
-	lookahead := make([]byte, chunkSize)
-	lookaheadN, err := r.Read(lookahead)
-	if err != nil {
-		return Node{}, err
-	}
-
-	buf := make([]byte, chunkSize)
-	for {
-		copy(buf, lookahead)
-		curN := lookaheadN
-		lookaheadN, err = r.Read(lookahead)
-		if err == io.EOF {
-			finalize = true
-		} else if err != nil {
-			return Node{}, err
-		}
-
-		novel, err := _newLeaf(ctx, ns, S, buf[:curN])
-		if err != nil {
-			return Node{}, err
-		}
-
-		i := 0
-		for {
-			// Three cases for building tree
-			// 1) reached new level => create new level
-			// 2) add novel node to current level
-			// 3) we didn't fill the current level => break
-			// 4) we filled current level, chunk and recurse into parent
-			//
-			// Two cases for finalizing tree
-			// 1) we haven't hit root, so we add the final chunk, finalize level, and continue upwards
-			// 2) we overshot root finalizing chunks, and we return the single root in the lower level
-			if i > len(levels)-1 {
-				levels = append(levels, make([]novelNode, chunkSize))
-				levelCnts = append(levelCnts, 0)
-			}
-
-			levels[i][levelCnts[i]] = novel
-			levelCnts[i]++
-			// note: the size of an internal node will be the key count times key length (hash)
-			if levelCnts[i]*hash.ByteLen < chunkSize {
-				// current level is not full
-				if !finalize {
-					// only continue and chunk this level if finalizing all in-progress nodes
-					break
-				}
-			}
-
-			nodes := levels[i][:levelCnts[i]]
-			if len(nodes) == 1 && i == len(levels)-1 {
-				// this is necessary and only possible if we're finalizing
-				// note: this is the only non-error return
-				return nodes[0].node, nil
-			}
-
-			// chunk the current level
-			novel, err = _newInternal(ctx, ns, S, nodes, i+1, chunkSize)
-			if err != nil {
-				return Node{}, err
-			}
-			levelCnts[i] = 0
-			i++
-		}
-	}
-}
-
-/*
-func buildImmutableTree2(ctx context.Context, r io.Reader, dataSize int, ns NodeStore, S message.Serializer, chunkSize int) (Node, error) {
-	if chunkSize < hash.ByteLen*2 || chunkSize > int(message.MaxVectorOffset)/2 {
-		// internal nodes must fit at least two 20-byte hashes
-		return Node{}, ErrInvalidChunkSize
-	}
-
-	height := blobHeight(dataSize, chunkSize)
-	chunkCnt := chunkCount(chunkSize, height)
-	if chunkCnt == 1 {
-		buf := make([]byte, dataSize)
-		_, err := r.Read(buf)
-		if err != nil {
-			return Node{}, err
-		}
-		msg := S.Serialize([][]byte{{0}}, [][]byte{buf}, []uint64{1}, 0)
-		return NodeFromBytes(msg)
-	}
-
-	chunks := make([]hash.Hash, chunkCnt)
-
-	buf := make([]byte, chunkSize)
-	i := chunkCnt - 1
-	levelSize := int(math.Ceil(float64(dataSize / chunkSize)))
-	nextLevel := chunkCnt - levelSize
-	for i >= nextLevel {
-		_, err := r.Read(buf)
-		if err != nil {
-			return Node{}, err
-		}
-		msg := S.Serialize([][]byte{{0}}, [][]byte{buf}, []uint64{1}, 0)
-		node, err := NodeFromBytes(msg)
-		if err != nil {
-			return Node{}, err
-		}
-		addr, err := ns.Write(ctx, node)
-		if err != nil {
-			return Node{}, err
-		}
-		chunks[i] = addr
-		i--
-	}
-
-	// filled level 0
-	level := 1
-	subtrees := make([]uint64, chunkSize)
-	fill := 0
-	for i > 0 {
-		if fill >= chunkSize {
-
-		}
-	}
-	//todo: get children from index
-
-	//todo: get height from index
-
-	//todo: get subtrees from index
-
-}
-*/
-
 var chunkBufPool = sync.Pool{
 	New: func() any {
 		// The Pool's New function should generally only return pointer
@@ -204,7 +41,15 @@ var chunkBufPool = sync.Pool{
 	},
 }
 
-func newBlobBuilder(ns NodeStore, chunkSize int) (*blobBuilder, error) {
+func mustNewBlobBuilder(ns NodeStore, chunkSize int) *BlobBuilder {
+	b, _ := NewBlobBuilder(ns, chunkSize)
+	return b
+}
+
+// NewBlobBuilder writes the contents of |reader| as an append-only
+// tree, returning the root node or an error if applicable. |chunkSize|
+// fixes the split size of leaf and intermediate node chunks.
+func NewBlobBuilder(ns NodeStore, chunkSize int) (*BlobBuilder, error) {
 	if chunkSize%hash.ByteLen != 0 {
 		return nil, ErrInvalidChunkSize
 	}
@@ -213,7 +58,7 @@ func newBlobBuilder(ns NodeStore, chunkSize int) (*blobBuilder, error) {
 	for i := range keys {
 		keys[i] = []byte{0}
 	}
-	return &blobBuilder{
+	return &BlobBuilder{
 		ns:        ns,
 		S:         message.NewBlobSerializer(ns.Pool()),
 		chunkSize: chunkSize,
@@ -223,7 +68,7 @@ func newBlobBuilder(ns NodeStore, chunkSize int) (*blobBuilder, error) {
 	}, nil
 }
 
-type blobBuilder struct {
+type BlobBuilder struct {
 	ns        NodeStore
 	S         message.Serializer
 	chunkSize int
@@ -235,11 +80,11 @@ type blobBuilder struct {
 	height   int
 	chunkCnt int
 
-	// bytes.Buffer or sync.Pool?
-	lastN           Node
-	buf             []byte
-	subtrees        []uint64
-	chunks          [][]byte
+	lastN    Node
+	buf      []byte
+	subtrees []uint64
+	chunks   [][]byte
+
 	level           int
 	levelSize       int
 	levelStart      int
@@ -249,7 +94,7 @@ type blobBuilder struct {
 	remainder       uint64
 }
 
-func (b *blobBuilder) Reset() {
+func (b *BlobBuilder) Reset() {
 	b.r = nil
 	b.dataSize = 0
 	b.height = 0
@@ -260,7 +105,7 @@ func (b *blobBuilder) Reset() {
 	}
 }
 
-func (b *blobBuilder) init(ctx context.Context, dataSize int, r io.Reader) {
+func (b *BlobBuilder) Init(ctx context.Context, dataSize int, r io.Reader) {
 	b.Reset()
 	b.ctx = ctx
 	b.dataSize = dataSize
@@ -279,7 +124,7 @@ func (b *blobBuilder) init(ctx context.Context, dataSize int, r io.Reader) {
 	}
 }
 
-func (b *blobBuilder) chunk() (Node, hash.Hash, error) {
+func (b *BlobBuilder) Chunk() (Node, hash.Hash, error) {
 	if b.dataSize == 0 {
 		return Node{}, hash.Hash{}, ErrEmptyBlob
 	} else if b.chunkCnt == 1 {
@@ -305,26 +150,26 @@ func (b *blobBuilder) chunk() (Node, hash.Hash, error) {
 	return b.lastN, hash.New(b.chunks[0]), nil
 }
 
-func (b *blobBuilder) done() bool {
+func (b *BlobBuilder) done() bool {
 	return b.levelStart <= 0
 }
 
-func (b *blobBuilder) incLevel() {
+func (b *BlobBuilder) incLevel() {
 	b.level++
 	b.prevLevelEnd = b.levelEnd
 	b.levelEnd = b.levelStart
 	b.levelSize = int(math.Ceil(float64(b.levelSize*hash.ByteLen) / float64(b.chunkSize)))
 	b.levelStart = b.levelEnd - b.levelSize
 	if b.level > 1 {
-		b.levelSubtreeCnt = b.levelSubtreeCnt * uint64(float64(b.chunkSize)/float64(hash.ByteLen))
 		// all full chunks will have the same subtree counts
+		b.levelSubtreeCnt = b.levelSubtreeCnt * uint64(float64(b.chunkSize)/float64(hash.ByteLen))
 		for i := range b.subtrees {
 			b.subtrees[i] = b.levelSubtreeCnt
 		}
 	}
 }
 
-func (b *blobBuilder) fillLevel() error {
+func (b *BlobBuilder) fillLevel() error {
 	var start, end int
 	for i := 0; i < b.levelSize; i++ {
 		// |start| - |end| is a chunk-sized byte range from the previous level
@@ -350,7 +195,7 @@ func (b *blobBuilder) fillLevel() error {
 	return nil
 }
 
-func (b *blobBuilder) fillLeaves() error {
+func (b *BlobBuilder) fillLeaves() error {
 	start := b.chunkCnt - int(math.Ceil(float64(b.dataSize)/float64(b.chunkSize)))
 	end := b.chunkCnt
 	for i := start; i < end; i++ {
@@ -362,7 +207,7 @@ func (b *blobBuilder) fillLeaves() error {
 	return nil
 }
 
-func (b *blobBuilder) writeNextLeaf(i int) error {
+func (b *BlobBuilder) writeNextLeaf(i int) error {
 	n, err := b.r.Read(b.buf)
 	if err != nil {
 		return err
@@ -371,7 +216,7 @@ func (b *blobBuilder) writeNextLeaf(i int) error {
 	return b.writeChunkAtPos(i, [][]byte{{0}}, [][]byte{b.buf[:n]}, []uint64{1}, 0)
 }
 
-func (b *blobBuilder) writeChunkAtPos(i int, keys, vals [][]byte, subtrees []uint64, level int) error {
+func (b *BlobBuilder) writeChunkAtPos(i int, keys, vals [][]byte, subtrees []uint64, level int) error {
 	msg := b.S.Serialize(keys, vals, subtrees, level)
 
 	node, err := NodeFromBytes(msg)
@@ -384,7 +229,7 @@ func (b *blobBuilder) writeChunkAtPos(i int, keys, vals [][]byte, subtrees []uin
 	return nil
 }
 
-func (b *blobBuilder) blobHeight(dataSize, chunkSize int) int {
+func (b *BlobBuilder) blobHeight(dataSize, chunkSize int) int {
 	if dataSize == 0 {
 		return 0
 	}
@@ -392,7 +237,7 @@ func (b *blobBuilder) blobHeight(dataSize, chunkSize int) int {
 	return int(math.Ceil(math.Log2(float64(leaves)) / math.Log2(float64(chunkSize/hash.ByteLen))))
 }
 
-func (b *blobBuilder) chunkCount(dataSize, chunkSize int) int {
+func (b *BlobBuilder) chunkCount(dataSize, chunkSize int) int {
 	if dataSize == 0 {
 		return 0
 	}
@@ -409,104 +254,6 @@ func (b *blobBuilder) chunkCount(dataSize, chunkSize int) int {
 		l += 1
 	}
 	return sum + 1
-}
-
-func blobHeight(dataSize, chunkSize int) int {
-	if dataSize == 0 {
-		return 0
-	}
-	return int(math.Ceil(math.Log2(float64(dataSize))/math.Log2(float64(chunkSize)))) - 1
-}
-
-func chunkCount(chunkSize, height int) int {
-	switch height {
-	case 0:
-		return 1
-	case 1:
-		return chunkSize + 1
-	case 2:
-		return chunkSize*chunkSize + 1
-	case 3:
-		return chunkSize*chunkSize*chunkSize + 1
-	default:
-		chunkCnt := 1
-		for i := 1; i < height; i++ {
-			// precalculate chunk count
-			chunkCnt += int(math.Pow(float64(chunkSize), float64(i)))
-		}
-		return chunkCnt
-	}
-}
-
-func iterChunkChildren(chunks []hash.Hash, r, chunkSize int, cb func(h hash.Hash)) {
-	for i := 0; i < chunkSize; i++ {
-		cb(chunks[r+i*chunkSize])
-	}
-}
-
-func heightForIndex(i, height, chunkSize float64) int {
-	l := 0.0
-	h := height
-	var m float64
-	var mi float64
-	for {
-		m = l + (h-l)/2
-		mi = math.Pow(chunkSize, m)
-		switch {
-		case mi == i || h == l:
-			return int(m)
-		case mi < i:
-			l = m + 1
-		case mi > i:
-			h = m
-		}
-	}
-}
-
-func _newInternal(ctx context.Context, ns NodeStore, s message.Serializer, nodes []novelNode, level int, chunkSize int) (novelNode, error) {
-	keys := make([][]byte, len(nodes))
-	vals := make([][]byte, len(nodes))
-	subtrees := make([]uint64, len(nodes))
-	treeCnt := uint64(0)
-	for i := range nodes {
-		keys[i] = []byte{0}
-		vals[i] = nodes[i].addr[:]
-		subtrees[i] = nodes[i].treeCount
-		treeCnt += nodes[i].treeCount
-	}
-	msg := s.Serialize(keys, vals, subtrees, level)
-	node, err := NodeFromBytes(msg)
-	if err != nil {
-		return novelNode{}, err
-	}
-	addr, err := ns.Write(ctx, node)
-	if err != nil {
-		return novelNode{}, err
-	}
-	return novelNode{
-		addr:      addr,
-		node:      node,
-		lastKey:   []byte{0},
-		treeCount: treeCnt,
-	}, nil
-}
-
-func _newLeaf(ctx context.Context, ns NodeStore, s message.Serializer, buf []byte) (novelNode, error) {
-	msg := s.Serialize([][]byte{{0}}, [][]byte{buf}, []uint64{1}, 0)
-	node, err := NodeFromBytes(msg)
-	if err != nil {
-		return novelNode{}, err
-	}
-	addr, err := ns.Write(ctx, node)
-	if err != nil {
-		return novelNode{}, err
-	}
-	return novelNode{
-		addr:      addr,
-		node:      node,
-		lastKey:   []byte{0},
-		treeCount: 1,
-	}, nil
 }
 
 const bytePeekLength = 128
@@ -592,17 +339,6 @@ type ImmutableTree struct {
 	Addr hash.Hash
 	buf  []byte
 	ns   NodeStore
-}
-
-func NewImmutableTreeFromReader(ctx context.Context, r io.Reader, ns NodeStore, dataSize, chunkSize int) (*ImmutableTree, error) {
-	s := message.NewBlobSerializer(ns.Pool())
-	root, err := buildImmutableTree(ctx, r, ns, s, dataSize, chunkSize)
-	if errors.Is(err, io.EOF) {
-		return &ImmutableTree{Addr: hash.Hash{}}, nil
-	} else if err != nil {
-		return nil, err
-	}
-	return &ImmutableTree{Addr: root.HashOf()}, nil
 }
 
 func (t *ImmutableTree) load(ctx context.Context) error {
