@@ -94,6 +94,7 @@ type BlobBuilder struct {
 	remainder       uint64
 }
 
+// Reset clears the BlobBuilder for re-use.
 func (b *BlobBuilder) Reset() {
 	b.r = nil
 	b.dataSize = 0
@@ -105,6 +106,7 @@ func (b *BlobBuilder) Reset() {
 	}
 }
 
+// Init calculates tree dimensions for a given blob.
 func (b *BlobBuilder) Init(ctx context.Context, dataSize int, r io.Reader) {
 	b.Reset()
 	b.ctx = ctx
@@ -124,6 +126,23 @@ func (b *BlobBuilder) Init(ctx context.Context, dataSize int, r io.Reader) {
 	}
 }
 
+// Chunk builds the blob tree in reverse level-order. Level 0, consisting
+// of leaf nodes containing the blob bytes, are built first but inserted
+// at the end of the tree. The root node will be built last, and occupy
+// |chunks[0]|.
+//
+// Tree building is divided into two phases so that we can use different data
+// structures for 1) reading the blob bytes, and 2) building intermediate nodes
+// of hash references.
+//
+// Every hash has a pre-calculated position in the tree. Chunk key tuple are
+// nil for both leaf and intermediate chunks. Intermediate chunk value tuples
+// include a range of lower level hashes of length `chunkSize/hashSize`.
+//
+// Subtree counts are calculated iteratively; the final node for any level
+// will reference (from the lower level) zero or many full node references plus
+// 2) one partial or full |remainder| node. The |remainder| accumulates iteratively
+// for the final node of each level moving up the tree.
 func (b *BlobBuilder) Chunk() (Node, hash.Hash, error) {
 	if b.dataSize == 0 {
 		return Node{}, hash.Hash{}, nil
@@ -150,10 +169,12 @@ func (b *BlobBuilder) Chunk() (Node, hash.Hash, error) {
 	return b.lastN, hash.New(b.chunks[0]), nil
 }
 
+// done indicates the tree is complete.
 func (b *BlobBuilder) done() bool {
 	return b.levelStart <= 0
 }
 
+// incLevel updates the current/previous level tracking info.
 func (b *BlobBuilder) incLevel() {
 	b.level++
 	b.prevLevelEnd = b.levelEnd
@@ -169,6 +190,10 @@ func (b *BlobBuilder) incLevel() {
 	}
 }
 
+// fillLevel writes chunks for an intermediate level, inserting the result
+// addresses into the |chunks| tree. Intermediate level chunk values are
+// |chunkSize/hashSize| slices of addresses from the child level of the tree.
+// The final chunk for every level may be unfilled.
 func (b *BlobBuilder) fillLevel() error {
 	var start, end int
 	for i := 0; i < b.levelSize; i++ {
@@ -177,12 +202,15 @@ func (b *BlobBuilder) fillLevel() error {
 		end = start + b.chunkSize/hash.ByteLen
 
 		if i == b.levelSize-1 {
+			// the final node in a level is special
 			if end > b.prevLevelEnd {
+				// final node might not fill a whole chunk
 				for i := end - 1; i >= b.prevLevelEnd; i-- {
 					b.subtrees[i-start] = 0
 				}
 				end = b.prevLevelEnd
 			}
+			// and the final node in the lower level may not be full
 			b.subtrees[end-start-1] = b.remainder
 			b.remainder += b.levelSubtreeCnt * uint64(end-start-1)
 		}
@@ -195,6 +223,8 @@ func (b *BlobBuilder) fillLevel() error {
 	return nil
 }
 
+// fillLeaves writes level 0 of the tree containing a slice of the blob
+// byte array of length |chunkSize|.
 func (b *BlobBuilder) fillLeaves() error {
 	start := b.chunkCnt - int(math.Ceil(float64(b.dataSize)/float64(b.chunkSize)))
 	end := b.chunkCnt
@@ -229,12 +259,16 @@ func (b *BlobBuilder) writeChunkAtPos(i int, keys, vals [][]byte, subtrees []uin
 	return nil
 }
 
+// blobHeight calculates the number of tree levelse for a blob. We
+// differentiate between the first level, which chunks |chunkSize| bytes
+// from the blob, and intermediate levels that chunk |chunkSize/hashSize|
+// addresses.
 func (b *BlobBuilder) blobHeight(dataSize, chunkSize int) int {
 	if dataSize == 0 {
 		return 0
 	}
 	leaves := float64(dataSize) / float64(chunkSize)
-	return int(math.Ceil(math.Log2(float64(leaves)) / math.Log2(float64(chunkSize/hash.ByteLen))))
+	return int(math.Ceil(math.Log2(leaves) / math.Log2(float64(chunkSize)/float64(hash.ByteLen))))
 }
 
 func (b *BlobBuilder) chunkCount(dataSize, chunkSize int) int {
