@@ -96,7 +96,6 @@ func NewDoltSession(
 	pro DoltDatabaseProvider,
 	conf config.ReadWriteConfig,
 	branchController *branch_control.Controller,
-	dbs ...InitialDbState,
 ) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")
@@ -112,13 +111,6 @@ func NewDoltSession(
 		globalsConf:      globals,
 		branchController: branchController,
 		mu:               &sync.Mutex{},
-	}
-
-	for _, db := range dbs {
-		err := sess.AddDB(ctx, db)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return sess, nil
@@ -164,6 +156,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 	if !ok {
 		return nil, false, sql.ErrDatabaseNotFound.New(dbName)
 	}
+
 	return dbState, true, nil
 }
 
@@ -244,12 +237,16 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		return DisabledTransaction{}, nil
 	}
 
+	// TODO: rather than a single database, we need to take a snapshot of all available databases that we use for the
+	//  duration of the transaction
+
 	dbName := ctx.GetTransactionDatabase()
 	if len(dbName) == 0 {
 		return DisabledTransaction{}, nil
 	}
 
-	// TODO: why is this necessary? What's it for? We should have all the dbs at session creation time.
+	// Since StartTransaction occurs before even any analysis, it's possible that this session has no state for the
+	// database with the transaction being performed, so we load it here.
 	if !d.HasDB(ctx, dbName) {
 		db, err := d.provider.Database(ctx, dbName)
 		if err != nil {

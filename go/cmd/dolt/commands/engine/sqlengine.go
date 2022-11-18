@@ -43,7 +43,6 @@ import (
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
 type SqlEngine struct {
 	provider       sql.DatabaseProvider
-	dbs            map[string]dsqle.SqlDatabase
 	contextFactory contextFactory
 	dsessFactory   sessionFactory
 	engine         *gms.Engine
@@ -158,20 +157,7 @@ func NewSqlEngine(
 		}
 	}
 
-	nameToDB := make(map[string]dsqle.SqlDatabase)
-	var dbStates []dsess.InitialDbState
-	for _, db := range dbs {
-		nameToDB[db.Name()] = db
-
-		dbState, err := dsqle.GetInitialDBState(ctx, db)
-		if err != nil {
-			return nil, err
-		}
-
-		dbStates = append(dbStates, dbState)
-	}
-
-	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, mrEnv.Config(), bcController, dbStates...)
+	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, mrEnv.Config(), bcController)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +175,6 @@ func NewSqlEngine(
 
 	return &SqlEngine{
 		provider:       pro,
-		dbs:            nameToDB,
 		contextFactory: newSqlContext(sess, config.InitialDb),
 		dsessFactory:   newDoltSession(pro, mrEnv.Config(), config.Autocommit, bcController),
 		engine:         engine,
@@ -201,23 +186,16 @@ func NewSqlEngine(
 // TODO: migrate to provider
 func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsqle.SqlDatabase) *SqlEngine {
 	return &SqlEngine{
-		dbs:    dbs,
 		engine: engine,
 	}
 }
 
-// IterDBs iterates over the set of databases the engine wraps.
-func (se *SqlEngine) IterDBs(cb func(name string, db dsqle.SqlDatabase) (stop bool, err error)) error {
-	for name, db := range se.dbs {
-		stop, err := cb(name, db)
-
-		if err != nil {
-			return err
-		}
-
-		if stop {
-			break
-		}
+// Databases() returns a list of all databases in the engine
+func (se *SqlEngine) Databases(ctx *sql.Context) []dsqle.SqlDatabase {
+	databases := se.provider.AllDatabases(ctx)
+	dbs := make([]dsqle.SqlDatabase, len(databases))
+	for i := range databases {
+		dbs[i] = databases[i].(dsqle.SqlDatabase)
 	}
 
 	return nil
@@ -226,17 +204,7 @@ func (se *SqlEngine) IterDBs(cb func(name string, db dsqle.SqlDatabase) (stop bo
 // GetRoots returns the underlying roots values the engine read/writes to.
 // TODO: very suspect, get rid of this
 func (se *SqlEngine) GetRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue, error) {
-	newRoots := make(map[string]*doltdb.RootValue)
-	for name, db := range se.dbs {
-		var err error
-		newRoots[name], err = db.GetRoot(sqlCtx)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return newRoots, nil
+	return nil, fmt.Errorf("not implemented")
 }
 
 // NewContext converts a context.Context to a sql.Context.
@@ -349,13 +317,7 @@ func newDoltSession(
 ) sessionFactory {
 	return func(ctx *sql.Context, mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
 
-		ddbs := dsqle.AllDbs(ctx, provider)
-		states, err := getDbStates(ctx, ddbs)
-		if err != nil {
-			return nil, err
-		}
-
-		dsess, err := dsess.NewDoltSession(sql.NewEmptyContext(), mysqlSess, pro, config, bc, states...)
+		dsess, err := dsess.NewDoltSession(sql.NewEmptyContext(), mysqlSess, pro, config, bc)
 		if err != nil {
 			return nil, err
 		}
