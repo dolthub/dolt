@@ -57,22 +57,24 @@ func NewBlobBuilder(ns NodeStore, chunkSize int) (*BlobBuilder, error) {
 		keys[i] = []byte{0}
 	}
 	return &BlobBuilder{
-		ns:        ns,
-		S:         message.NewBlobSerializer(ns.Pool()),
-		chunkSize: chunkSize,
-		buf:       make([]byte, chunkSize),
-		keys:      keys,
-		na:        &nodeArena{},
-		subtrees:  make([]uint64, chunkSize/hash.ByteLen),
+		ns:         ns,
+		S:          message.NewBlobSerializer(ns.Pool()),
+		lChunkSize: chunkSize,
+		iChunkSize: chunkSize / hash.ByteLen,
+		buf:        make([]byte, chunkSize),
+		keys:       keys,
+		na:         &nodeArena{},
+		subtrees:   make([]uint64, chunkSize/hash.ByteLen),
 	}, nil
 }
 
 type BlobBuilder struct {
-	ns        NodeStore
-	S         message.Serializer
-	chunkSize int
-	keys      [][]byte
-	na        *nodeArena
+	ns         NodeStore
+	S          message.Serializer
+	lChunkSize int
+	iChunkSize int
+	keys       [][]byte
+	na         *nodeArena
 
 	ctx      context.Context
 	r        io.Reader
@@ -112,15 +114,17 @@ func (b *BlobBuilder) Init(ctx context.Context, dataSize int, r io.Reader) {
 	b.ctx = ctx
 	b.dataSize = dataSize
 	b.r = r
-	b.height = b.blobHeight(b.dataSize, b.chunkSize)
-	b.chunkCnt = b.chunkCount(b.dataSize, b.chunkSize)
-	b.levelSize = int(math.Ceil(float64(b.dataSize) / float64(b.chunkSize)))
+
+	b.height = b.blobHeight(b.dataSize, b.lChunkSize, b.iChunkSize)
+	b.chunkCnt = b.chunkCount(b.dataSize, b.lChunkSize, b.iChunkSize)
+	b.levelSize = int(math.Ceil(float64(b.dataSize) / float64(b.lChunkSize)))
 	b.levelStart = b.chunkCnt - b.levelSize
 	b.levelEnd = b.chunkCnt
 	b.prevLevelEnd = b.chunkCnt
 	b.remainder = 1
-	b.chunks = *chunkBufPool.Get().(*[][]byte)
 	b.levelSubtreeCnt = 1
+	
+	b.chunks = *chunkBufPool.Get().(*[][]byte)
 	for len(b.chunks) < b.chunkCnt {
 		b.chunks = append(b.chunks, []byte(nil))
 	}
@@ -179,11 +183,11 @@ func (b *BlobBuilder) incLevel() {
 	b.level++
 	b.prevLevelEnd = b.levelEnd
 	b.levelEnd = b.levelStart
-	b.levelSize = int(math.Ceil(float64(b.levelSize*hash.ByteLen) / float64(b.chunkSize)))
+	b.levelSize = int(math.Ceil(float64(b.levelSize) / float64(b.iChunkSize)))
 	b.levelStart = b.levelEnd - b.levelSize
 	if b.level > 1 {
 		// all full chunks will have the same subtree counts
-		b.levelSubtreeCnt = b.levelSubtreeCnt * uint64(float64(b.chunkSize)/float64(hash.ByteLen))
+		b.levelSubtreeCnt = b.levelSubtreeCnt * uint64(b.iChunkSize)
 		for i := range b.subtrees {
 			b.subtrees[i] = b.levelSubtreeCnt
 		}
@@ -198,8 +202,8 @@ func (b *BlobBuilder) fillLevel() error {
 	var start, end int
 	for i := 0; i < b.levelSize; i++ {
 		// |start| - |end| is a chunk-sized byte range from the previous level
-		start = b.levelEnd + i*int(float64(b.chunkSize)/float64(hash.ByteLen))
-		end = start + b.chunkSize/hash.ByteLen
+		start = b.levelEnd + i*b.iChunkSize
+		end = start + b.lChunkSize/hash.ByteLen
 
 		if i == b.levelSize-1 {
 			// the final node in a level is special
@@ -215,7 +219,13 @@ func (b *BlobBuilder) fillLevel() error {
 			b.remainder += b.levelSubtreeCnt * uint64(end-start-1)
 		}
 
-		err := b.writeChunkAtPos(b.levelStart+i, b.keys, b.chunks[start:end], b.subtrees[:end-start], b.level)
+		err := b.writeChunkAtIdx(
+			b.levelStart+i,
+			b.keys,
+			b.chunks[start:end],
+			b.subtrees[:end-start],
+			b.level,
+		)
 		if err != nil {
 			return err
 		}
@@ -226,7 +236,7 @@ func (b *BlobBuilder) fillLevel() error {
 // fillLeaves writes level 0 of the tree containing a slice of the blob
 // byte array of length |chunkSize|.
 func (b *BlobBuilder) fillLeaves() error {
-	start := b.chunkCnt - int(math.Ceil(float64(b.dataSize)/float64(b.chunkSize)))
+	start := b.chunkCnt - int(math.Ceil(float64(b.dataSize)/float64(b.lChunkSize)))
 	end := b.chunkCnt
 	for i := start; i < end; i++ {
 		err := b.writeNextLeaf(i)
@@ -243,10 +253,14 @@ func (b *BlobBuilder) writeNextLeaf(i int) error {
 		return err
 	}
 
-	return b.writeChunkAtPos(i, [][]byte{{0}}, [][]byte{b.buf[:n]}, []uint64{1}, 0)
+	return b.writeChunkAtIdx(i, [][]byte{{0}}, [][]byte{b.buf[:n]}, []uint64{1}, 0)
 }
 
-func (b *BlobBuilder) writeChunkAtPos(i int, keys, vals [][]byte, subtrees []uint64, level int) error {
+func (b *BlobBuilder) writeChunkAtIdx(
+	i int, keys, vals [][]byte,
+	subtrees []uint64,
+	level int,
+) error {
 	msg := b.S.Serialize(keys, vals, subtrees, level)
 
 	node, err := b.na.NodeFromBytes(msg)
@@ -263,27 +277,26 @@ func (b *BlobBuilder) writeChunkAtPos(i int, keys, vals [][]byte, subtrees []uin
 // differentiate between the first level, which chunks |chunkSize| bytes
 // from the blob, and intermediate levels that chunk |chunkSize/hashSize|
 // addresses.
-func (b *BlobBuilder) blobHeight(dataSize, chunkSize int) int {
+func (b *BlobBuilder) blobHeight(dataSize, lChunkSize, iChunkSize int) int {
 	if dataSize == 0 {
 		return 0
 	}
-	leaves := float64(dataSize) / float64(chunkSize)
-	return int(math.Ceil(math.Log2(leaves) / math.Log2(float64(chunkSize)/float64(hash.ByteLen))))
+	leaves := float64(dataSize) / float64(lChunkSize)
+	return int(math.Ceil(math.Log2(leaves) / math.Log2(float64(iChunkSize))))
 }
 
-func (b *BlobBuilder) chunkCount(dataSize, chunkSize int) int {
+func (b *BlobBuilder) chunkCount(dataSize, lChunkSize, iChunkSize int) int {
 	if dataSize == 0 {
 		return 0
 	}
-	if dataSize <= chunkSize {
+	if dataSize <= lChunkSize {
 		return 1
 	}
-	dataSize = int(math.Ceil(float64(dataSize) / float64(chunkSize)))
+	dataSize = int(math.Ceil(float64(dataSize) / float64(lChunkSize)))
 	l := 1
 	sum := dataSize
-	intChunk := int(math.Ceil(float64(chunkSize) / float64(hash.ByteLen)))
-	for dataSize > intChunk {
-		dataSize = int(math.Ceil(float64(dataSize) / float64(intChunk)))
+	for dataSize > iChunkSize {
+		dataSize = int(math.Ceil(float64(dataSize) / float64(iChunkSize)))
 		sum += dataSize
 		l += 1
 	}
