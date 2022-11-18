@@ -273,6 +273,7 @@ CREATE TABLE test (pk int primary key, c0 int, c1 int);
 INSERT INTO test VALUES (0,0,0);
 CALL dcommit('-Am', 'added table test');
 CALL dcheckout('-b', 'other');
+CALL dbranch('third');
 INSERT INTO test VALUES (1, 2, 3);
 CALL dcommit('-am', 'added row on branch other');
 CALL dcheckout('main');
@@ -280,6 +281,11 @@ INSERT INTO test VALUES (1, -2, -3);
 CALL dcommit('-am', 'added row on branch main');
 SET @@dolt_allow_commit_conflicts = 1;
 CALL dmerge('other');
+INSERT INTO test VALUES (9,9,9);
+SET @@dolt_allow_commit_conflicts = 1;
+SET @@dolt_force_transaction_commit = 1;
+CALL dcommit( '--force', '-am', 'commit conflicts');
+CALL dcheckout('third');
 SQL
     dolt migrate --drop-conflicts
 }
