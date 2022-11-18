@@ -281,7 +281,7 @@ CALL dcommit('-am', 'added row on branch main');
 SET @@dolt_allow_commit_conflicts = 1;
 CALL dmerge('other');
 SQL
-    # dolt migrate --drop-conflicts
+    dolt migrate --drop-conflicts
 }
 
 @test "migrate: no panic for migration on migrated database" {
