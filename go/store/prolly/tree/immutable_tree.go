@@ -19,12 +19,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly/message"
-	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"math"
 	"sync"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 const DefaultFixedChunkLength = 4000
