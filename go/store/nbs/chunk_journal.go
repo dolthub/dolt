@@ -50,8 +50,7 @@ const (
 )
 
 var (
-	journal     *chunkJournal // singleton
-	journalLock = new(sync.Mutex)
+	journalMap  = new(sync.Map)
 	journalAddr = addr(hash.Parse(chunkJournalAddr))
 )
 
@@ -86,13 +85,20 @@ type jrecordLookup struct {
 }
 
 func newChunkJournal(ctx context.Context, dir string, m manifest) (*chunkJournal, error) {
-	journalLock.Lock()
-	defer journalLock.Unlock()
-	if journal != nil {
-		return journal, nil
+	path, err := filepath.Abs(filepath.Join(dir, chunkJournalName))
+	if err != nil {
+		return nil, err
 	}
 
-	file, err := openJournalFile(ctx, filepath.Join(dir, chunkJournalName))
+	// check if journal at |path| has already been opened
+	if j, ok := journalMap.LoadOrStore(path, nil); ok {
+		if j == nil {
+			return nil, fmt.Errorf("concurrent chunkJournal ")
+		}
+		return j.(*chunkJournal), nil
+	} // else we reserved |path|, init the journal
+
+	file, err := openJournalFile(ctx, path)
 	if err != nil {
 		return nil, err
 	}
@@ -126,12 +132,15 @@ func newChunkJournal(ctx context.Context, dir string, m manifest) (*chunkJournal
 	src.journal = wr
 	sources := map[addr]chunkSource{src.address: src}
 
-	journal = &chunkJournal{
+	journal := &chunkJournal{
 		journal:  wr,
 		backing:  m,
 		rootHash: last,
 		sources:  sources,
 	}
+	// store initialized journal in shared map
+	journalMap.Store(path, journal)
+
 	return journal, nil
 }
 
@@ -279,25 +288,34 @@ func (j *chunkJournal) Name() string {
 
 // Update implements manifest.
 func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
-	// check if we've seen the manifest,
-	// if not persist |next| to |j.backing|
+	// check if we've seen the manifest, if not persist |next| to |j.backing|
 	if emptyAddr(j.manifest.lock) {
-		// we expect |next.specs| to contain one entry for the chunkJournal
-		// and additional entries for in-memory journalChunkSources
+		var specs []tableSpec
 		for _, s := range next.specs {
-			if _, ok := j.sources[s.name]; !ok {
-				panic("unknown table spec " + s.name.String())
+			if _, ok := j.sources[s.name]; ok {
+				// for in-memory journalChunkSources
+				// don't write spec addresses to |backing|
+				continue
 			}
+			specs = append(specs, s)
 		}
-		// when persisting |next| to |j.backing|, only provide a
-		// single tableSpec for the chunkJournal
+		// add a tableSpec with the special chunkJournal addr
 		cnt, _ := j.sources[journalAddr].count()
-		next.specs = []tableSpec{{name: journalAddr, chunkCount: cnt}}
+		specs = append(specs, tableSpec{name: journalAddr, chunkCount: cnt})
+		backing := next
+		backing.specs = specs
 
-		mc, err := j.backing.Update(ctx, lastLock, next, stats, writeHook)
-		j.manifest = mc
-		j.rootHash = mc.root
-		return mc, err
+		mc, err := j.backing.Update(ctx, lastLock, backing, stats, writeHook)
+		if err != nil {
+			return manifestContents{}, err
+		}
+
+		// if update succeeded, save full contents of |next|
+		if mc.root == next.root {
+			j.manifest = next
+			j.rootHash = next.root
+		}
+		return j.manifest, err
 	}
 
 	if j.manifest.gcGen != next.gcGen {
@@ -334,10 +352,21 @@ func (j *chunkJournal) ParseIfExists(ctx context.Context, stats *Stats, readHook
 
 	if !ok {
 		ok, mc, err = j.backing.ParseIfExists(ctx, stats, readHook)
+		if err != nil {
+			return false, manifestContents{}, err
+		}
+
 		// the journal file is the source of truth for the latest root hash.
 		// manifest |j.backing| may be stale if the latest contents were not
 		// flushed while closing/shutting-down the chunkJournal.
 		mc.root = j.rootHash
+		for a, s := range j.sources {
+			c, _ := s.count()
+			mc.specs = append(mc.specs, tableSpec{
+				name:       a,
+				chunkCount: c,
+			})
+		}
 		j.manifest = mc
 		return
 	}
