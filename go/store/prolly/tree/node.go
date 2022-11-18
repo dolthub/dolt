@@ -17,14 +17,12 @@ package tree
 import (
 	"context"
 	"encoding/hex"
-	"io"
-	"sync"
-
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
+	"io"
 )
 
 type Item []byte
@@ -114,33 +112,13 @@ func walkOpaqueNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) erro
 	})
 }
 
-var nodeBufPool = sync.Pool{
-	New: func() any {
-		// The Pool's New function should generally only return pointer
-		// types, since a pointer can be put into the return interface
-		// value without an allocation:
-		return new(Node)
-	},
-}
-
-func FillNodeFromBytes(n *Node, msg []byte) error {
-	keys, values, level, count, err := message.UnpackFields(msg)
-	if err != nil {
-		return err
-	}
-	n.keys = keys
-	n.values = values
-	n.count = count
-	n.level = level
-	n.msg = msg
-	return nil
-}
-
 type nodeArena []Node
+
+const nodeArenaSize = 10000
 
 func (a *nodeArena) Get() Node {
 	if len(*a) == 0 {
-		*a = make([]Node, 10000)
+		*a = make([]Node, nodeArenaSize)
 	}
 	n := (*a)[len(*a)-1]
 	*a = (*a)[:len(*a)-1]
