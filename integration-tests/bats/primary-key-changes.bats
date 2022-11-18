@@ -342,7 +342,7 @@ teardown() {
 
     run dolt diff --summary
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "diff summary will not compute due to primary key set change with table t" ]] || false
+    [[ "$output" =~ "failed to compute diff summary for table t: primary key set changed" ]] || false
 
     dolt add .
 
@@ -671,7 +671,7 @@ SQL
 
 @test "primary-key-changes: can add and drop primary keys on keyless db.table named tables" {
     dolt sql -q "CREATE DATABASE mydb"
-    dolt sql -q "CREATE TABLE mydb.test(pk INT, c1 LONGTEXT, c2 BIGINT, c3 INT)"
+    dolt sql -q "CREATE TABLE mydb.test(pk INT, c1 VARCHAR(10), c2 BIGINT, c3 INT)"
     dolt sql -q "ALTER TABLE mydb.test ADD PRIMARY KEY(pk, c1)"
     run dolt sql -q "SHOW CREATE TABLE mydb.test"
     [ $status -eq 0 ]

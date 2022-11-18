@@ -16,51 +16,15 @@ package sqlutil
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
-	"math"
+	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-type mapSqlIter struct {
-	ctx context.Context
-	nmr *noms.NomsMapReader
-	sch schema.Schema
-}
-
-var _ sql.RowIter = (*mapSqlIter)(nil)
-
-// Next implements the interface sql.RowIter.
-func (m *mapSqlIter) Next(ctx *sql.Context) (sql.Row, error) {
-	dRow, err := m.nmr.ReadRow(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return DoltRowToSqlRow(dRow, m.sch)
-}
-
-// Close implements the interface sql.RowIter.
-func (m *mapSqlIter) Close(ctx *sql.Context) error {
-	return m.nmr.Close(ctx)
-}
-
-// MapToSqlIter returns a map reader that converts all rows to sql rows, creating a sql row iterator.
-func MapToSqlIter(ctx context.Context, sch schema.Schema, data types.Map) (sql.RowIter, error) {
-	mapReader, err := noms.NewNomsMapReader(ctx, data, sch)
-	if err != nil {
-		return nil, err
-	}
-	return &mapSqlIter{
-		nmr: mapReader,
-		sch: sch,
-	}, nil
-}
 
 // DoltRowToSqlRow constructs a go-mysql-server sql.Row from a Dolt row.Row.
 func DoltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
@@ -178,7 +142,7 @@ func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter,
 	}
 
 	for i := 0; i < numCols; i++ {
-		schCol := allCols.GetAtIndex(i)
+		schCol := allCols.GetByIndex(i)
 		val := r[i]
 		if val == nil {
 			continue
@@ -253,56 +217,6 @@ func keylessDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, sq
 	return row.KeylessRow(vrw.Format(), vals[:j]...)
 }
 
-// WriteEWKBHeader writes the SRID, endianness, and type to the byte buffer
-// This function assumes v is a valid spatial type
-func WriteEWKBHeader(v interface{}, buf []byte) {
-	// Write endianness byte (always little endian)
-	buf[4] = 1
-
-	// Parse data
-	switch v := v.(type) {
-	case sql.Point:
-		// Write SRID and type
-		binary.LittleEndian.PutUint32(buf[0:4], v.SRID)
-		binary.LittleEndian.PutUint32(buf[5:9], 1)
-	case sql.LineString:
-		binary.LittleEndian.PutUint32(buf[0:4], v.SRID)
-		binary.LittleEndian.PutUint32(buf[5:9], 2)
-	case sql.Polygon:
-		binary.LittleEndian.PutUint32(buf[0:4], v.SRID)
-		binary.LittleEndian.PutUint32(buf[5:9], 3)
-	}
-}
-
-// WriteEWKBPointData converts a Point into a byte array in EWKB format
-// Very similar to function in GMS
-func WriteEWKBPointData(p sql.Point, buf []byte) {
-	binary.LittleEndian.PutUint64(buf[0:8], math.Float64bits(p.X))
-	binary.LittleEndian.PutUint64(buf[8:16], math.Float64bits(p.Y))
-}
-
-// WriteEWKBLineData converts a Line into a byte array in EWKB format
-func WriteEWKBLineData(l sql.LineString, buf []byte) {
-	// Write length of linestring
-	binary.LittleEndian.PutUint32(buf[:4], uint32(len(l.Points)))
-	// Append each point
-	for i, p := range l.Points {
-		WriteEWKBPointData(p, buf[4+16*i:4+16*(i+1)])
-	}
-}
-
-// WriteEWKBPolyData converts a Polygon into a byte array in EWKB format
-func WriteEWKBPolyData(p sql.Polygon, buf []byte) {
-	// Write length of polygon
-	binary.LittleEndian.PutUint32(buf[:4], uint32(len(p.Lines)))
-	// Write each line
-	start, stop := 0, 4
-	for _, l := range p.Lines {
-		start, stop = stop, stop+4+16*len(l.Points)
-		WriteEWKBLineData(l, buf[start:stop])
-	}
-}
-
 // The Type.SQL() call takes in a SQL context to determine the output character set for types that use a collation.
 // As the SqlColToStr utility function is primarily used in places where no SQL context is available (such as commands
 // on the CLI), we force the `utf8mb4` character set to be used, as it is the most likely to be supported by the
@@ -320,13 +234,19 @@ func SqlColToStr(sqlType sql.Type, col interface{}) (string, error) {
 			} else {
 				return "false", nil
 			}
+		case sql.SpatialColumnType:
+			res, err := sqlType.SQL(sqlColToStrContext, nil, col)
+			hexRes := fmt.Sprintf("0x%X", res.Raw())
+			if err != nil {
+				return "", err
+			}
+			return hexRes, nil
 		default:
 			res, err := sqlType.SQL(sqlColToStrContext, nil, col)
 			if err != nil {
 				return "", err
 			}
 			return res.ToString(), nil
-
 		}
 	}
 

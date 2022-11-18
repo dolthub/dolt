@@ -162,28 +162,3 @@ func (rd *InMemTableReader) GetSchema() schema.Schema {
 func (rd *InMemTableReader) VerifySchema(outSch schema.Schema) (bool, error) {
 	return schema.VerifyInSchema(rd.tt.sch, outSch)
 }
-
-// InMemTableWriter is an implementation of a RowWriter for an InMemTable
-type InMemTableWriter struct {
-	tt *InMemTable
-}
-
-// NewInMemTableWriter creates an instance of a RowWriter from an InMemTable
-func NewInMemTableWriter(imt *InMemTable) *InMemTableWriter {
-	return &InMemTableWriter{imt}
-}
-
-// WriteRow will write a row to a table
-func (w *InMemTableWriter) WriteRow(ctx context.Context, r row.Row) error {
-	return w.tt.AppendRow(r)
-}
-
-// Close should flush all writes, release resources being held
-func (w *InMemTableWriter) Close(ctx context.Context) error {
-	return nil
-}
-
-// GetSchema gets the schema of the rows that this writer writes
-func (w *InMemTableWriter) GetSchema() schema.Schema {
-	return w.tt.sch
-}

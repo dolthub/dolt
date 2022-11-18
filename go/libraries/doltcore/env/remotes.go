@@ -205,10 +205,9 @@ func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoSt
 	hasRef, err := ddb.HasRef(ctx, currentBranch)
 
 	if err != nil {
-		return nil, ErrFailedToReadDb
+		return nil, fmt.Errorf("%w: %s", ErrFailedToReadDb, err.Error())
 	} else if !hasRef {
 		return nil, fmt.Errorf("%w: '%s'", ErrUnknownBranch, currentBranch.GetPath())
-
 	}
 
 	src := refSpec.SrcRef(currentBranch)

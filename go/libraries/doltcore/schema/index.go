@@ -54,6 +54,8 @@ type Index interface {
 	// ToTableTuple returns a tuple that may be used to retrieve the original row from the indexed table when given
 	// a full index key (and not a partial index key).
 	ToTableTuple(ctx context.Context, fullKey types.Tuple, format *types.NomsBinFormat) (types.Tuple, error)
+	// PrefixLengths returns the prefix lengths for the index
+	PrefixLengths() []uint16
 }
 
 var _ Index = (*indexImpl)(nil)
@@ -66,14 +68,20 @@ type indexImpl struct {
 	isUnique      bool
 	isUserDefined bool
 	comment       string
+	prefixLengths []uint16
 }
 
-func NewIndex(name string, tags, allTags []uint64, indexColl *indexCollectionImpl, props IndexProperties) Index {
+func NewIndex(name string, tags, allTags []uint64, indexColl IndexCollection, props IndexProperties) Index {
+	var indexCollImpl *indexCollectionImpl
+	if indexColl != nil {
+		indexCollImpl = indexColl.(*indexCollectionImpl)
+	}
+
 	return &indexImpl{
 		name:          name,
 		tags:          tags,
 		allTags:       allTags,
-		indexColl:     indexColl,
+		indexColl:     indexCollImpl,
 		isUnique:      props.IsUnique,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
@@ -236,6 +244,11 @@ func (ix *indexImpl) ToTableTuple(ctx context.Context, fullKey types.Tuple, form
 	return types.NewTuple(format, resVals...)
 }
 
+// GetPrefixLengths implements Index.
+func (ix *indexImpl) PrefixLengths() []uint16 {
+	return ix.prefixLengths
+}
+
 // copy returns an exact copy of the calling index.
 func (ix *indexImpl) copy() *indexImpl {
 	newIx := *ix
@@ -243,5 +256,9 @@ func (ix *indexImpl) copy() *indexImpl {
 	_ = copy(newIx.tags, ix.tags)
 	newIx.allTags = make([]uint64, len(ix.allTags))
 	_ = copy(newIx.allTags, ix.allTags)
+	if len(ix.prefixLengths) > 0 {
+		newIx.prefixLengths = make([]uint16, len(ix.prefixLengths))
+		_ = copy(newIx.prefixLengths, ix.prefixLengths)
+	}
 	return &newIx
 }

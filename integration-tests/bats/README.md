@@ -26,7 +26,31 @@ npm install -g bats
 cd go/cmd/dolt && go install . && cd -
 cd go/store/cmd/noms && go install . && cd -
 ````
-3. Go to the directory with the bats tests and run: 
+
+3. Make sure you have `python3` installed.
+
+This came with my Mac Developer Tools and was on my PATH.
+
+4. `pip install mysql-connector-python` and `pip install pyarrow`
+
+I also needed this specific version on the python mysql.connector. `pip install mysql.connector` mostly worked but caused some SSL errors.
+
+```
+pip3 install mysql-connector-python
+pip install pyarrow
+```
+
+5. Install `parquet` and its dependencies
+
+I used Homebrew on Mac to install `parquet`. You also need to install `hadoop` and set `PARQUET_RUNTIME_JAR` to get bats to work. Here's what I ended up running.
+
+```
+brew install parquet-cli
+brew install hadoop
+export PARQUET_RUNTIME_JAR=/opt/homebrew/opt/parquet-cli/libexec/parquet-cli-1.12.3-runtime.jar
+```
+
+6. Go to the directory with the bats tests and run: 
 ```
 bats . 
 ```

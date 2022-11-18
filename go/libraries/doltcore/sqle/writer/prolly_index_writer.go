@@ -71,6 +71,7 @@ func getPrimaryKeylessProllyWriter(ctx context.Context, t *doltdb.Table, sqlSch 
 type indexWriter interface {
 	Name() string
 	Map(ctx context.Context) (prolly.Map, error)
+	ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error
 	Insert(ctx context.Context, sqlRow sql.Row) error
 	Delete(ctx context.Context, sqlRow sql.Row) error
 	Update(ctx context.Context, oldRow sql.Row, newRow sql.Row) error
@@ -106,14 +107,21 @@ func (m prollyIndexWriter) Map(ctx context.Context) (prolly.Map, error) {
 	return m.mut.Map(ctx)
 }
 
-func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
+func (m prollyIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
 		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	k := m.keyBld.Build(sharePool)
+	return m.keyBld.Build(sharePool), nil
+}
+
+func (m prollyIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
+	k, err := m.keyFromRow(ctx, sqlRow)
+	if err != nil {
+		return err
+	}
 
 	ok, err := m.mut.Has(ctx, k)
 	if err != nil {
@@ -122,10 +130,18 @@ func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 		keyStr := FormatKeyForUniqKeyErr(k, m.keyBld.Desc)
 		return m.uniqueKeyError(ctx, keyStr, k, true)
 	}
+	return nil
+}
+
+func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
+	k, err := m.keyFromRow(ctx, sqlRow)
+	if err != nil {
+		return err
+	}
 
 	for to := range m.valMap {
 		from := m.valMap.MapOrdinal(to)
-		if err = index.PutField(ctx, m.mut.NodeStore(), m.valBld, to, sqlRow[from]); err != nil {
+		if err := index.PutField(ctx, m.mut.NodeStore(), m.valBld, to, sqlRow[from]); err != nil {
 			return err
 		}
 	}
@@ -135,25 +151,19 @@ func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 }
 
 func (m prollyIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
-	for to := range m.keyMap {
-		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
-			return err
-		}
+	k, err := m.keyFromRow(ctx, sqlRow)
+	if err != nil {
+		return err
 	}
-	k := m.keyBld.Build(sharePool)
 
 	return m.mut.Delete(ctx, k)
 }
 
 func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sql.Row) error {
-	for to := range m.keyMap {
-		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, oldRow[from]); err != nil {
-			return err
-		}
+	oldKey, err := m.keyFromRow(ctx, oldRow)
+	if err != nil {
+		return err
 	}
-	oldKey := m.keyBld.Build(sharePool)
 
 	// todo(andy): we can skip building, deleting |oldKey|
 	//  if we know the key fields are unchanged
@@ -161,13 +171,10 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 		return err
 	}
 
-	for to := range m.keyMap {
-		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, newRow[from]); err != nil {
-			return err
-		}
+	newKey, err := m.keyFromRow(ctx, newRow)
+	if err != nil {
+		return err
 	}
-	newKey := m.keyBld.Build(sharePool)
 
 	ok, err := m.mut.Has(ctx, newKey)
 	if err != nil {
@@ -237,9 +244,10 @@ func (m prollyIndexWriter) uniqueKeyError(ctx context.Context, keyStr string, ke
 }
 
 type prollySecondaryIndexWriter struct {
-	name   string
-	mut    *prolly.MutableMap
-	unique bool
+	name          string
+	mut           *prolly.MutableMap
+	unique        bool
+	prefixLengths []uint16
 
 	// number of indexed cols
 	idxCols int
@@ -267,20 +275,54 @@ func (m prollySecondaryIndexWriter) Map(ctx context.Context) (prolly.Map, error)
 	return m.mut.Map(ctx)
 }
 
-func (m prollySecondaryIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
+func (m prollySecondaryIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
 	if m.unique {
 		if err := m.checkForUniqueKeyErr(ctx, sqlRow); err != nil {
 			return err
 		}
 	}
+	return nil
+}
 
-	for to := range m.keyMap {
-		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
-			return err
+// trimKeyPart will trim entry into the sql.Row depending on the prefixLengths
+func (m prollySecondaryIndexWriter) trimKeyPart(to int, keyPart interface{}) interface{} {
+	var prefixLength uint16
+	if len(m.prefixLengths) > to {
+		prefixLength = m.prefixLengths[to]
+	}
+	if prefixLength != 0 {
+		switch kp := keyPart.(type) {
+		case string:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
+			keyPart = kp[:prefixLength]
+		case []uint8:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
+			keyPart = kp[:prefixLength]
 		}
 	}
-	k := m.keyBld.Build(sharePool)
+	return keyPart
+}
+
+func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
+	for to := range m.keyMap {
+		from := m.keyMap.MapOrdinal(to)
+		keyPart := m.trimKeyPart(to, sqlRow[from])
+		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
+			return nil, err
+		}
+	}
+	return m.keyBld.Build(sharePool), nil
+}
+
+func (m prollySecondaryIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
+	k, err := m.keyFromRow(ctx, sqlRow)
+	if err != nil {
+		return err
+	}
 	return m.mut.Put(ctx, k, val.EmptyTuple)
 }
 
@@ -294,7 +336,8 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 			m.keyBld.Recycle()
 			return nil
 		}
-		if err := index.PutField(ctx, ns, m.keyBld, to, sqlRow[from]); err != nil {
+		keyPart := m.trimKeyPart(to, sqlRow[from])
+		if err := index.PutField(ctx, ns, m.keyBld, to, keyPart); err != nil {
 			return err
 		}
 	}
@@ -330,24 +373,19 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 }
 
 func (m prollySecondaryIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
-	for to := range m.keyMap {
-		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
-			return err
-		}
-	}
 	k := m.keyBld.Build(sharePool)
+	k, err := m.keyFromRow(ctx, sqlRow)
+	if err != nil {
+		return err
+	}
 	return m.mut.Delete(ctx, k)
 }
 
 func (m prollySecondaryIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sql.Row) error {
-	for to := range m.keyMap {
-		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, oldRow[from]); err != nil {
-			return err
-		}
+	oldKey, err := m.keyFromRow(ctx, oldRow)
+	if err != nil {
+		return err
 	}
-	oldKey := m.keyBld.Build(sharePool)
 
 	// todo(andy): we can skip building, deleting |oldKey|
 	//  if we know the key fields are unchanged
@@ -361,13 +399,10 @@ func (m prollySecondaryIndexWriter) Update(ctx context.Context, oldRow sql.Row, 
 		}
 	}
 
-	for to := range m.keyMap {
-		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, newRow[from]); err != nil {
-			return err
-		}
+	newKey, err := m.keyFromRow(ctx, newRow)
+	if err != nil {
+		return err
 	}
-	newKey := m.keyBld.Build(sharePool)
 	return m.mut.Put(ctx, newKey, val.EmptyTuple)
 }
 

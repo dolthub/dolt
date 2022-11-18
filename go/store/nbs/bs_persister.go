@@ -48,7 +48,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 	}
 
 	bsTRA := &bsTableReaderAt{name.String(), bsp.bs}
-	return newReaderFromIndexData(bsp.q, data, name, bsTRA, bsp.blockSize)
+	return newReaderFromIndexData(ctx, bsp.q, data, name, bsTRA, bsp.blockSize)
 }
 
 // ConjoinAll (Not currently implemented) conjoins all chunks in |sources| into a single,
@@ -97,7 +97,7 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 
 func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, blockSize uint64, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 
-	index, err := loadTableIndex(stats, chunkCount, q, func(p []byte) error {
+	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
 		rc, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
 		if err != nil {
 			return err

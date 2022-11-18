@@ -24,13 +24,12 @@ package nbs
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 )
 
 func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 	var tra tableReaderAt
-	index, err := loadTableIndex(stats, chunkCount, q, func(p []byte) error {
+	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
 		if al.tableMayBeInDynamo(chunkCount) {
 			data, err := ddb.ReadTable(ctx, name, stats)
 			if data == nil && err == nil { // There MUST be either data or an error
@@ -72,71 +71,20 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 	return &chunkSourceAdapter{tr, name}, nil
 }
 
-func loadTableIndex(stats *Stats, chunkCount uint32, q MemoryQuotaProvider, loadIndexBytes func(p []byte) error) (tableIndex, error) {
-	ti, err := newMmapTableIndex(chunkCount)
+func loadTableIndex(ctx context.Context, stats *Stats, cnt uint32, q MemoryQuotaProvider, loadIndexBytes func(p []byte) error) (tableIndex, error) {
+	idxSz := int(indexSize(cnt) + footerSize)
+	offsetSz := int((cnt - (cnt / 2)) * offsetSize)
+	buf, err := q.AcquireQuotaBytes(ctx, uint64(idxSz+offsetSz))
 	if err != nil {
 		return nil, err
 	}
 
 	t1 := time.Now()
-	err = loadIndexBytes(ti.indexDataBuff)
-	if err != nil {
-		_ = ti.mmapped.Unmap()
-		return onHeapTableIndex{}, err
-	}
-	stats.IndexReadLatency.SampleTimeSince(t1)
-	stats.IndexBytesPerRead.Sample(uint64(len(ti.indexDataBuff)))
-
-	err = ti.parseIndexBuffer(q)
-	if err != nil {
-		_ = ti.mmapped.Unmap()
+	if err := loadIndexBytes(buf[:idxSz]); err != nil {
 		return nil, err
 	}
+	stats.IndexReadLatency.SampleTimeSince(t1)
+	stats.IndexBytesPerRead.Sample(uint64(len(buf)))
 
-	return ti, nil
-}
-
-type awsTableReaderAt struct {
-	once     sync.Once
-	getTRErr error
-	tra      tableReaderAt
-
-	al  awsLimits
-	ddb *ddbTableStore
-	s3  *s3ObjectReader
-
-	name       addr
-	chunkCount uint32
-}
-
-func (atra *awsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (int, error) {
-	atra.once.Do(func() {
-		atra.tra, atra.getTRErr = atra.getTableReaderAt(ctx, stats)
-	})
-
-	if atra.getTRErr != nil {
-		return 0, atra.getTRErr
-	}
-
-	return atra.tra.ReadAtWithStats(ctx, p, off, stats)
-}
-
-func (atra *awsTableReaderAt) getTableReaderAt(ctx context.Context, stats *Stats) (tableReaderAt, error) {
-	if atra.al.tableMayBeInDynamo(atra.chunkCount) {
-		data, err := atra.ddb.ReadTable(ctx, atra.name, stats)
-
-		if data == nil && err == nil { // There MUST be either data or an error
-			return &dynamoTableReaderAt{}, errors.New("no data available")
-		}
-
-		if data != nil {
-			return &dynamoTableReaderAt{ddb: atra.ddb, h: atra.name}, nil
-		}
-
-		if _, ok := err.(tableNotInDynamoErr); !ok {
-			return &dynamoTableReaderAt{}, err
-		}
-	}
-
-	return &s3TableReaderAt{s3: atra.s3, h: atra.name}, nil
+	return parseTableIndexWithOffsetBuff(buf[:idxSz], buf[idxSz:], q)
 }

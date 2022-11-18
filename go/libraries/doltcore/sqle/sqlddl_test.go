@@ -255,13 +255,14 @@ func TestCreateTable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			dtestutils.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema, AllPeopleRows...)
 			ctx := context.Background()
-			root, _ := dEnv.WorkingRoot(ctx)
+			dEnv, err := CreateEmptyTestDatabase()
+			require.NoError(t, err)
 
-			updatedRoot, err := ExecuteSql(t, dEnv, root, tt.query)
+			root, err := dEnv.WorkingRoot(ctx)
+			require.NoError(t, err)
 
+			updatedRoot, err := ExecuteSql(dEnv, root, tt.query)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
 			} else {
@@ -329,12 +330,14 @@ func TestDropTable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
 			ctx := context.Background()
-			root, _ := dEnv.WorkingRoot(ctx)
+			dEnv, err := CreateTestDatabase()
+			require.NoError(t, err)
 
-			updatedRoot, err := ExecuteSql(t, dEnv, root, tt.query)
+			root, err := dEnv.WorkingRoot(ctx)
+			require.NoError(t, err)
+
+			updatedRoot, err := ExecuteSql(dEnv, root, tt.query)
 
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
@@ -367,42 +370,42 @@ func TestAddColumn(t *testing.T) {
 			query: "alter table people add (newColumn varchar(80))",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
 				schemaNewColumn(t, "newColumn", 4208, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false)),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, nil),
+			expectedRows: addColToRows(t, AllPeopleRows, 4208, nil),
 		},
 		{
 			name:  "alter add float column without default",
 			query: "alter table people add (newColumn float)",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
 				schemaNewColumn(t, "newColumn", 4208, sql.Float32, false)),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, nil),
+			expectedRows: addColToRows(t, AllPeopleRows, 4208, nil),
 		},
 		{
 			name:  "alter add uint column without default",
 			query: "alter table people add (newColumn bigint unsigned)",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
 				schemaNewColumn(t, "newColumn", 4208, sql.Uint64, false)),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, nil),
+			expectedRows: addColToRows(t, AllPeopleRows, 4208, nil),
 		},
 		{
 			name:  "alter add int column default",
 			query: "alter table people add (newColumn int default 2)",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
 				schemaNewColumnWDefVal(t, "newColumn", 2803, sql.Int32, false, "2")),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 2803, types.Int(int32(2))),
+			expectedRows: addColToRows(t, AllPeopleRows, 2803, types.Int(int32(2))),
 		},
 		{
 			name:  "alter add uint column default",
 			query: "alter table people add (newColumn bigint unsigned default 20)",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
 				schemaNewColumnWDefVal(t, "newColumn", 517, sql.Uint64, false, "20")),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 517, types.Uint(uint64(20))),
+			expectedRows: addColToRows(t, AllPeopleRows, 517, types.Uint(uint64(20))),
 		},
 		{
 			name:  "alter add string column with default",
 			query: "alter table people add (newColumn varchar(80) default 'hi')",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
 				schemaNewColumnWDefVal(t, "newColumn", 13690, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, `'hi'`)),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 13690, types.String("hi")),
+			expectedRows: addColToRows(t, AllPeopleRows, 13690, types.String("hi")),
 		},
 		{
 			name:  "alter add column first",
@@ -418,7 +421,7 @@ func TestAddColumn(t *testing.T) {
 				schema.NewColumn("uuid", UuidTag, types.StringKind, false),
 				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
 			),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, nil),
+			expectedRows: addColToRows(t, AllPeopleRows, 4208, nil),
 		},
 		{
 			name:  "alter add column middle",
@@ -434,28 +437,28 @@ func TestAddColumn(t *testing.T) {
 				schema.NewColumn("uuid", UuidTag, types.StringKind, false),
 				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
 			),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, nil),
+			expectedRows: addColToRows(t, AllPeopleRows, 4208, nil),
 		},
 		{
 			name:  "alter add column not null",
 			query: "alter table people add (newColumn varchar(80) not null default 'default')",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
 				schemaNewColumnWDefVal(t, "newColumn", 13690, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, `'default'`, schema.NotNullConstraint{})),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 13690, types.String("default")),
+			expectedRows: addColToRows(t, AllPeopleRows, 13690, types.String("default")),
 		},
 		{
 			name:  "alter add column not null with expression default",
 			query: "alter table people add (newColumn int not null default (2+2/2))",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
 				schemaNewColumnWDefVal(t, "newColumn", 2803, sql.Int32, false, "((2 + (2 / 2)))", schema.NotNullConstraint{})),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 2803, types.Int(3)),
+			expectedRows: addColToRows(t, AllPeopleRows, 2803, types.Int(3)),
 		},
 		{
 			name:  "alter add column not null with negative expression",
 			query: "alter table people add (newColumn float not null default -1.1)",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
 				schemaNewColumnWDefVal(t, "newColumn", 12469, sql.Float32, false, "-1.1", schema.NotNullConstraint{})),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 12469, types.Float(float32(-1.1))),
+			expectedRows: addColToRows(t, AllPeopleRows, 12469, types.Float(float32(-1.1))),
 		},
 		{
 			name:        "alter add column not null with type mismatch in default",
@@ -477,7 +480,7 @@ func TestAddColumn(t *testing.T) {
 			query: "alter table people add (newColumn varchar(80) not null)",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
 				schemaNewColumnWDefVal(t, "newColumn", 13690, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, "", schema.NotNullConstraint{})),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 13690, types.String("")),
+			expectedRows: addColToRows(t, AllPeopleRows, 13690, types.String("")),
 		},
 		{
 			name:  "alter add column nullable",
@@ -502,12 +505,14 @@ func TestAddColumn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
-			ctx := context.Background()
-			root, _ := dEnv.WorkingRoot(ctx)
+			dEnv, err := CreateTestDatabase()
+			require.NoError(t, err)
 
-			updatedRoot, err := ExecuteSql(t, dEnv, root, tt.query)
+			ctx := context.Background()
+			root, err := dEnv.WorkingRoot(ctx)
+			require.NoError(t, err)
+
+			updatedRoot, err := ExecuteSql(dEnv, root, tt.query)
 
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
@@ -524,6 +529,10 @@ func TestAddColumn(t *testing.T) {
 			sch, err := table.GetSchema(ctx)
 			assert.NoError(t, err)
 			equalSchemas(t, tt.expectedSchema, sch)
+
+			if types.Format_Default != types.Format_LD_1 {
+				return // todo: convert these to enginetests
+			}
 
 			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")
 			assert.NoError(t, err)
@@ -617,12 +626,13 @@ func TestRenameColumn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
+			dEnv, err := CreateTestDatabase()
+			require.NoError(t, err)
+
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
-			updatedRoot, err := ExecuteSql(t, dEnv, root, tt.query)
+			updatedRoot, err := ExecuteSql(dEnv, root, tt.query)
 
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
@@ -638,6 +648,10 @@ func TestRenameColumn(t *testing.T) {
 			sch, err := table.GetSchema(ctx)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedSchema, sch)
+
+			if types.Format_Default != types.Format_LD_1 {
+				return // todo: convert these to enginetests
+			}
 
 			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")
 			assert.NoError(t, err)
@@ -727,12 +741,14 @@ func TestRenameTableStatements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
-			ctx := context.Background()
-			root, _ := dEnv.WorkingRoot(ctx)
+			dEnv, err := CreateTestDatabase()
+			require.NoError(t, err)
 
-			updatedRoot, err := ExecuteSql(t, dEnv, root, tt.query)
+			ctx := context.Background()
+			root, err := dEnv.WorkingRoot(ctx)
+			require.NoError(t, err)
+
+			updatedRoot, err := ExecuteSql(dEnv, root, tt.query)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)
@@ -745,6 +761,7 @@ func TestRenameTableStatements(t *testing.T) {
 			has, err := updatedRoot.HasTable(ctx, tt.oldTableName)
 			require.NoError(t, err)
 			assert.False(t, has)
+
 			newTable, ok, err := updatedRoot.GetTable(ctx, tt.newTableName)
 			require.NoError(t, err)
 			require.True(t, ok)
@@ -752,6 +769,10 @@ func TestRenameTableStatements(t *testing.T) {
 			sch, err := newTable.GetSchema(ctx)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedSchema, sch)
+
+			if types.Format_Default != types.Format_LD_1 {
+				return // todo: convert these to enginetests
+			}
 
 			rowData, err := newTable.GetNomsRowData(ctx)
 			require.NoError(t, err)
@@ -777,19 +798,23 @@ func TestAlterSystemTables(t *testing.T) {
 	reservedTableNames := []string{"dolt_schemas", "dolt_query_catalog"}
 
 	var dEnv *env.DoltEnv
+	var err error
 	setup := func() {
-		dEnv = dtestutils.CreateTestEnv()
-		CreateTestDatabase(dEnv, t)
+		dEnv, err = CreateTestDatabase()
+		require.NoError(t, err)
 
-		dtestutils.CreateTestTable(t, dEnv, "dolt_docs",
-			doltdb.DocsSchema,
-			NewRow(types.String("LICENSE.md"), types.String("A license")))
-		dtestutils.CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName,
-			dtables.DoltQueryCatalogSchema,
-			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description")))
-		dtestutils.CreateTestTable(t, dEnv, doltdb.SchemasTableName,
-			SchemasTableSchema(),
-			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual")))
+		err := CreateEmptyTestTable(dEnv, "dolt_docs", doltdb.DocsSchema)
+		require.NoError(t, err)
+
+		err = CreateEmptyTestTable(dEnv, doltdb.SchemasTableName, SchemasTableSchema())
+		require.NoError(t, err)
+
+		CreateTestTable(t, dEnv, "dolt_docs", doltdb.DocsSchema,
+			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')")
+		CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
+			"INSERT INTO dolt_query_catalog VALUES ('abc123', 1, 'example', 'select 2+2 from dual', 'description')")
+		CreateTestTable(t, dEnv, doltdb.SchemasTableName, SchemasTableSchema(),
+			"INSERT INTO dolt_schemas (type, name, fragment, id) VALUES ('view', 'name', 'select 2+2 from dual', 1)")
 	}
 
 	t.Run("Create", func(t *testing.T) {
@@ -1064,7 +1089,7 @@ func TestIndexOverwrite(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	root, err = ExecuteSql(t, dEnv, root, `
+	root, err = ExecuteSql(dEnv, root, `
 CREATE TABLE parent (
   pk bigint PRIMARY KEY,
   v1 bigint,
@@ -1103,13 +1128,13 @@ INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5'
 `)
 	// test index creation
 	require.NoError(t, err)
-	root, err = ExecuteSql(t, dEnv, root, "CREATE INDEX abc ON child (parent_value);")
+	root, err = ExecuteSql(dEnv, root, "CREATE INDEX abc ON child (parent_value);")
 	require.NoError(t, err)
-	_, err = ExecuteSql(t, dEnv, root, "CREATE INDEX abc_idx ON child_idx (parent_value);")
+	_, err = ExecuteSql(dEnv, root, "CREATE INDEX abc_idx ON child_idx (parent_value);")
 	require.NoError(t, err)
-	root, err = ExecuteSql(t, dEnv, root, "CREATE UNIQUE INDEX abc_unq ON child_unq (parent_value);")
+	root, err = ExecuteSql(dEnv, root, "CREATE UNIQUE INDEX abc_unq ON child_unq (parent_value);")
 	require.NoError(t, err)
-	_, err = ExecuteSql(t, dEnv, root, "CREATE UNIQUE INDEX abc_non_unq ON child_non_unq (parent_value);")
+	_, err = ExecuteSql(dEnv, root, "CREATE UNIQUE INDEX abc_non_unq ON child_non_unq (parent_value);")
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "duplicate unique key given")
 	}
@@ -1131,31 +1156,31 @@ INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5'
 	require.Equal(t, "parent_value", fkChildNonUnq.TableIndex)
 
 	// insert tests against index
-	root, err = ExecuteSql(t, dEnv, root, "INSERT INTO child VALUES ('6', 5)")
+	root, err = ExecuteSql(dEnv, root, "INSERT INTO child VALUES ('6', 5)")
 	require.NoError(t, err)
-	root, err = ExecuteSql(t, dEnv, root, "INSERT INTO child_idx VALUES ('6', 5)")
+	root, err = ExecuteSql(dEnv, root, "INSERT INTO child_idx VALUES ('6', 5)")
 	require.NoError(t, err)
-	_, err = ExecuteSql(t, dEnv, root, "INSERT INTO child_unq VALUES ('6', 5)")
+	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_unq VALUES ('6', 5)")
 	if assert.Error(t, err) {
 		assert.True(t, sql.ErrUniqueKeyViolation.Is(err.(sql.WrappedInsertError).Cause))
 	}
-	root, err = ExecuteSql(t, dEnv, root, "INSERT INTO child_non_unq VALUES ('6', 5)")
+	root, err = ExecuteSql(dEnv, root, "INSERT INTO child_non_unq VALUES ('6', 5)")
 	require.NoError(t, err)
 
 	// insert tests against foreign key
-	_, err = ExecuteSql(t, dEnv, root, "INSERT INTO child VALUES ('9', 9)")
+	_, err = ExecuteSql(dEnv, root, "INSERT INTO child VALUES ('9', 9)")
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "Foreign key violation")
 	}
-	_, err = ExecuteSql(t, dEnv, root, "INSERT INTO child_idx VALUES ('9', 9)")
+	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_idx VALUES ('9', 9)")
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "Foreign key violation")
 	}
-	_, err = ExecuteSql(t, dEnv, root, "INSERT INTO child_unq VALUES ('9', 9)")
+	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_unq VALUES ('9', 9)")
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "Foreign key violation")
 	}
-	_, err = ExecuteSql(t, dEnv, root, "INSERT INTO child_non_unq VALUES ('9', 9)")
+	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_non_unq VALUES ('9', 9)")
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "Foreign key violation")
 	}
@@ -1167,7 +1192,7 @@ func TestCreateIndexUnique(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	root, err = ExecuteSql(t, dEnv, root, `
+	root, err = ExecuteSql(dEnv, root, `
 CREATE TABLE pass_unique (
   pk1 BIGINT PRIMARY KEY,
   v1 BIGINT,
@@ -1182,9 +1207,9 @@ INSERT INTO pass_unique VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 INSERT INTO fail_unique VALUES (1, 1, 1), (2, 2, 2), (3, 2, 3);
 `)
 	require.NoError(t, err)
-	root, err = ExecuteSql(t, dEnv, root, "CREATE UNIQUE INDEX idx_v1 ON pass_unique(v1)")
+	root, err = ExecuteSql(dEnv, root, "CREATE UNIQUE INDEX idx_v1 ON pass_unique(v1)")
 	assert.NoError(t, err)
-	root, err = ExecuteSql(t, dEnv, root, "CREATE UNIQUE INDEX idx_v1 ON fail_unique(v1)")
+	root, err = ExecuteSql(dEnv, root, "CREATE UNIQUE INDEX idx_v1 ON fail_unique(v1)")
 	if assert.Error(t, err) {
 		assert.Contains(t, strings.ToLower(err.Error()), "unique")
 	}
@@ -1193,7 +1218,7 @@ INSERT INTO fail_unique VALUES (1, 1, 1), (2, 2, 2), (3, 2, 3);
 func assertFails(t *testing.T, dEnv *env.DoltEnv, query, expectedErr string) {
 	ctx := context.Background()
 	root, _ := dEnv.WorkingRoot(ctx)
-	_, err := ExecuteSql(t, dEnv, root, query)
+	_, err := ExecuteSql(dEnv, root, query)
 	require.Error(t, err, query)
 	assert.Contains(t, err.Error(), expectedErr)
 }
@@ -1201,6 +1226,6 @@ func assertFails(t *testing.T, dEnv *env.DoltEnv, query, expectedErr string) {
 func assertSucceeds(t *testing.T, dEnv *env.DoltEnv, query string) {
 	ctx := context.Background()
 	root, _ := dEnv.WorkingRoot(ctx)
-	_, err := ExecuteSql(t, dEnv, root, query)
+	_, err := ExecuteSql(dEnv, root, query)
 	assert.NoError(t, err, query)
 }

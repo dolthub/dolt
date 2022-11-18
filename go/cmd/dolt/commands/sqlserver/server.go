@@ -16,6 +16,8 @@ package sqlserver
 
 import (
 	"context"
+	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -35,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
@@ -123,6 +126,11 @@ func Serve(
 		}
 	}
 
+	clusterController, err := cluster.NewController(lgr, serverConfig.ClusterConfig(), mrEnv.Config())
+	if err != nil {
+		return err, nil
+	}
+
 	serverConf, sErr, cErr := getConfigFromServerConfig(serverConfig)
 	if cErr != nil {
 		return nil, cErr
@@ -132,15 +140,17 @@ func Serve(
 
 	// Create SQL Engine with users
 	config := &engine.SqlEngineConfig{
-		InitialDb:      "",
-		IsReadOnly:     serverConfig.ReadOnly(),
-		PrivFilePath:   serverConfig.PrivilegeFilePath(),
-		DoltCfgDirPath: serverConfig.CfgDir(),
-		ServerUser:     serverConfig.User(),
-		ServerPass:     serverConfig.Password(),
-		ServerHost:     serverConfig.Host(),
-		Autocommit:     serverConfig.AutoCommit(),
-		JwksConfig:     serverConfig.JwksConfig(),
+		InitialDb:          "",
+		IsReadOnly:         serverConfig.ReadOnly(),
+		PrivFilePath:       serverConfig.PrivilegeFilePath(),
+		BranchCtrlFilePath: serverConfig.BranchControlFilePath(),
+		DoltCfgDirPath:     serverConfig.CfgDir(),
+		ServerUser:         serverConfig.User(),
+		ServerPass:         serverConfig.Password(),
+		ServerHost:         serverConfig.Host(),
+		Autocommit:         serverConfig.AutoCommit(),
+		JwksConfig:         serverConfig.JwksConfig(),
+		ClusterController:  clusterController,
 	}
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,
@@ -175,19 +185,31 @@ func Serve(
 	}
 	defer listener.Close()
 
-	mySQLServer, startError = server.NewServer(
-		serverConf,
-		sqlEngine.GetUnderlyingEngine(),
-		newSessionBuilder(sqlEngine, serverConfig),
-		listener,
-	)
+	v, ok := serverConfig.(validatingServerConfig)
+	if ok && v.goldenMysqlConnectionString() != "" {
+		mySQLServer, startError = server.NewValidatingServer(
+			serverConf,
+			sqlEngine.GetUnderlyingEngine(),
+			newSessionBuilder(sqlEngine, serverConfig),
+			listener,
+			v.goldenMysqlConnectionString(),
+		)
+	} else {
+		mySQLServer, startError = server.NewServer(
+			serverConf,
+			sqlEngine.GetUnderlyingEngine(),
+			newSessionBuilder(sqlEngine, serverConfig),
+			listener,
+		)
+	}
 
-	if startError != nil {
+	if errors.Is(startError, server.UnixSocketInUseError) {
+		lgr.Warn("unix socket set up failed: file already in use: ", serverConf.Socket)
+	} else if startError != nil {
 		cli.PrintErr(startError)
 		return
-	} else {
-		sqlserver.SetRunningServer(mySQLServer)
 	}
+	sqlserver.SetRunningServer(mySQLServer)
 
 	var metSrv *http.Server
 	if serverConfig.MetricsHost() != "" && serverConfig.MetricsPort() > 0 {
@@ -207,7 +229,18 @@ func Serve(
 	var remoteSrv *remotesrv.Server
 	if serverConfig.RemotesapiPort() != nil {
 		if remoteSrvSqlCtx, err := sqlEngine.NewContext(context.Background()); err == nil {
-			remoteSrv = sqle.NewRemoteSrvServer(logrus.NewEntry(lgr), remoteSrvSqlCtx, *serverConfig.RemotesapiPort())
+			args := sqle.RemoteSrvServerArgs(remoteSrvSqlCtx, remotesrv.ServerArgs{
+				Logger:   logrus.NewEntry(lgr),
+				ReadOnly: true,
+				HttpPort: *serverConfig.RemotesapiPort(),
+				GrpcPort: *serverConfig.RemotesapiPort(),
+			})
+			remoteSrv, err = remotesrv.NewServer(args)
+			if err != nil {
+				lgr.Errorf("error creating remotesapi server on port %d: %v", *serverConfig.RemotesapiPort(), err)
+				startError = err
+				return
+			}
 			listeners, err := remoteSrv.Listeners()
 			if err != nil {
 				lgr.Errorf("error starting remotesapi server listeners on port %d: %v", *serverConfig.RemotesapiPort(), err)
@@ -223,6 +256,51 @@ func Serve(
 			startError = err
 			return
 		}
+	}
+
+	var clusterRemoteSrv *remotesrv.Server
+	if clusterController != nil {
+		if remoteSrvSqlCtx, err := sqlEngine.NewContext(context.Background()); err == nil {
+			args := clusterController.RemoteSrvServerArgs(remoteSrvSqlCtx, remotesrv.ServerArgs{
+				Logger: logrus.NewEntry(lgr),
+			})
+
+			clusterRemoteSrvTLSConfig, err := LoadClusterTLSConfig(serverConfig.ClusterConfig())
+			if err != nil {
+				lgr.Errorf("error starting remotesapi server for cluster config, could not load tls config: %v", err)
+				startError = err
+				return
+			}
+			args.TLSConfig = clusterRemoteSrvTLSConfig
+
+			clusterRemoteSrv, err = remotesrv.NewServer(args)
+			if err != nil {
+				lgr.Errorf("error creating remotesapi server on port %d: %v", *serverConfig.RemotesapiPort(), err)
+				startError = err
+				return
+			}
+
+			listeners, err := clusterRemoteSrv.Listeners()
+			if err != nil {
+				lgr.Errorf("error starting remotesapi server listeners for cluster config on port %d: %v", clusterController.RemoteSrvPort(), err)
+				startError = err
+				return
+			}
+
+			go clusterRemoteSrv.Serve(listeners)
+			go clusterController.Run()
+
+			clusterController.ManageQueryConnections(
+				mySQLServer.SessionManager().Iter,
+				sqlEngine.GetUnderlyingEngine().ProcessList.Kill,
+				mySQLServer.SessionManager().KillConnection,
+			)
+		} else {
+			lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
+			startError = err
+			return
+		}
+
 	}
 
 	if ok, f := mrEnv.IsLocked(); ok {
@@ -241,6 +319,12 @@ func Serve(
 		if remoteSrv != nil {
 			remoteSrv.GracefulStop()
 		}
+		if clusterRemoteSrv != nil {
+			clusterRemoteSrv.GracefulStop()
+		}
+		if clusterController != nil {
+			clusterController.GracefulStop()
+		}
 
 		return mySQLServer.Close()
 	})
@@ -254,6 +338,22 @@ func Serve(
 	}
 
 	return
+}
+
+func LoadClusterTLSConfig(cfg cluster.Config) (*tls.Config, error) {
+	rcfg := cfg.RemotesAPIConfig()
+	if rcfg.TLSKey() == "" && rcfg.TLSCert() == "" {
+		return nil, nil
+	}
+	c, err := tls.LoadX509KeyPair(rcfg.TLSCert(), rcfg.TLSKey())
+	if err != nil {
+		return nil, err
+	}
+	return &tls.Config{
+		Certificates: []tls.Certificate{
+			c,
+		},
+	}, nil
 }
 
 func portInUse(hostPort string) bool {
@@ -366,21 +466,32 @@ func handleProtocolAndAddress(serverConfig ServerConfig) (server.Config, error) 
 	}
 	serverConf.Address = hostPort
 
-	// if socket is defined with or without value -> unix
-	if serverConfig.Socket() != "" {
-		if runtime.GOOS == "windows" {
-			return server.Config{}, fmt.Errorf("cannot define unix socket file on Windows")
-		}
-		serverConf.Socket = serverConfig.Socket()
+	sock, useSock, err := checkForUnixSocket(serverConfig)
+	if err != nil {
+		return server.Config{}, err
 	}
-	// TODO : making it an "opt in" feature (just to start) and requiring users to pass in the `--socket` flag
-	//  to turn them on instead of defaulting them on when host and port aren't set or host is set to `localhost`.
-	//} else {
-	//	// if host is undefined or defined as "localhost" -> unix
-	//	if shouldUseUnixSocket(serverConfig) {
-	//		serverConf.Socket = defaultUnixSocketFilePath
-	//	}
-	//}
+	if useSock {
+		serverConf.Socket = sock
+	}
 
 	return serverConf, nil
+}
+
+// checkForUnixSocket evaluates ServerConfig for whether the unix socket is to be used or not.
+// If user defined socket flag or host is 'localhost', it returns the unix socket file location
+// either user-defined or the default if it was not defined.
+func checkForUnixSocket(config ServerConfig) (string, bool, error) {
+	if config.Socket() != "" {
+		if runtime.GOOS == "windows" {
+			return "", false, fmt.Errorf("cannot define unix socket file on Windows")
+		}
+		return config.Socket(), true, nil
+	} else {
+		// if host is undefined or defined as "localhost" -> unix
+		if runtime.GOOS != "windows" && config.Host() == "localhost" {
+			return defaultUnixSocketFilePath, true, nil
+		}
+	}
+
+	return "", false, nil
 }

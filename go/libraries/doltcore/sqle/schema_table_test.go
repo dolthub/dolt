@@ -32,6 +32,9 @@ import (
 )
 
 func TestSchemaTableRecreationOlder(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // schema table migrations predate NBF __DOLT__
+	}
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
@@ -40,7 +43,9 @@ func TestSchemaTableRecreationOlder(t *testing.T) {
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	dbState := getDbState(t, db, dEnv)
+	dbState, err := getDbState(db, dEnv)
+	require.NoError(t, err)
+
 	err = dsess.DSessFromSess(ctx.Session).AddDB(ctx, dbState)
 	require.NoError(t, err)
 	ctx.SetCurrentDatabase(db.Name())
@@ -112,6 +117,9 @@ func TestSchemaTableRecreationOlder(t *testing.T) {
 }
 
 func TestSchemaTableRecreation(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // schema table migrations predate NBF __DOLT__
+	}
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
@@ -120,7 +128,9 @@ func TestSchemaTableRecreation(t *testing.T) {
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	dbState := getDbState(t, db, dEnv)
+	dbState, err := getDbState(db, dEnv)
+	require.NoError(t, err)
+
 	err = dsess.DSessFromSess(ctx.Session).AddDB(ctx, dbState)
 	require.NoError(t, err)
 	ctx.SetCurrentDatabase(db.Name())

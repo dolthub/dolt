@@ -30,9 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 func setupEditorFkTest(t *testing.T) (*env.DoltEnv, *doltdb.RootValue) {
@@ -41,7 +38,7 @@ func setupEditorFkTest(t *testing.T) (*env.DoltEnv, *doltdb.RootValue) {
 	if err != nil {
 		panic(err)
 	}
-	initialRoot, err := ExecuteSql(t, dEnv, root, `
+	initialRoot, err := ExecuteSql(dEnv, root, `
 CREATE TABLE one (
   pk BIGINT PRIMARY KEY,
   v1 BIGINT,
@@ -157,7 +154,7 @@ func TestTableEditorForeignKeyCascade(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			dEnv, initialRoot := setupEditorFkTest(t)
 
-			testRoot, err := ExecuteSql(t, dEnv, initialRoot, `
+			testRoot, err := ExecuteSql(dEnv, initialRoot, `
 ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASCADE ON UPDATE CASCADE;
 `)
@@ -206,7 +203,7 @@ func TestTableEditorForeignKeySetNull(t *testing.T) {
 		t.Run(test.sqlStatement, func(t *testing.T) {
 			dEnv, initialRoot := setupEditorFkTest(t)
 
-			testRoot, err := ExecuteSql(t, dEnv, initialRoot, `
+			testRoot, err := ExecuteSql(dEnv, initialRoot, `
 ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE SET NULL ON UPDATE SET NULL;`)
 			require.NoError(t, err)
 
@@ -288,7 +285,7 @@ func TestTableEditorForeignKeyRestrict(t *testing.T) {
 				t.Run(test.setup+test.trigger, func(t *testing.T) {
 					dEnv, initialRoot := setupEditorFkTest(t)
 
-					testRoot, err := ExecuteSql(t, dEnv, initialRoot, fmt.Sprintf(`
+					testRoot, err := ExecuteSql(dEnv, initialRoot, fmt.Sprintf(`
 			ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) %s;
 			INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 			INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);`, referenceOption))
@@ -359,7 +356,7 @@ func TestTableEditorForeignKeyViolations(t *testing.T) {
 		t.Run(test.setup+test.trigger, func(t *testing.T) {
 			dEnv, initialRoot := setupEditorFkTest(t)
 
-			testRoot, err := ExecuteSql(t, dEnv, initialRoot, `
+			testRoot, err := ExecuteSql(dEnv, initialRoot, `
 ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASCADE ON UPDATE CASCADE;
 `)
@@ -655,25 +652,23 @@ func assertTableEditorRows(t *testing.T, root *doltdb.RootValue, expected []sql.
 	sch, err := tbl.GetSchema(context.Background())
 	require.NoError(t, err)
 
-	rowData, err := tbl.GetNomsRowData(context.Background())
+	rows, err := tbl.GetRowData(context.Background())
 	require.NoError(t, err)
 
 	var sqlRows []sql.Row
 	if len(expected) > 0 {
-		_ = rowData.IterAll(context.Background(), func(key, value types.Value) error {
-			r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
-			assert.NoError(t, err)
-			sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
-			assert.NoError(t, err)
-			sqlRows = append(sqlRows, sqlRow)
-			return nil
-		})
-		assert.Equal(t, convertSqlRowToInt64(expected), sqlRows)
+		sqlRows, err = SqlRowsFromDurableIndex(rows, sch)
+		require.NoError(t, err)
+		expected = sortInt64Rows(convertSqlRowToInt64(expected))
+		sqlRows = sortInt64Rows(convertSqlRowToInt64(sqlRows))
+		if !assert.Equal(t, expected, sqlRows) {
+			t.Fail()
+		}
 	}
 
 	// we can verify that each index also has the proper contents
 	for _, index := range sch.Indexes().AllIndexes() {
-		indexRowData, err := tbl.GetNomsIndexRowData(context.Background(), index.Name())
+		indexRowData, err := tbl.GetIndexRowData(context.Background(), index.Name())
 		require.NoError(t, err)
 		indexSch := index.Schema()
 
@@ -702,59 +697,41 @@ func assertTableEditorRows(t *testing.T, root *doltdb.RootValue, expected []sql.
 			expectedIndexRows[rowIndex] = expectedIndex
 		}
 		expectedIndexRows = convertSqlRowToInt64(expectedIndexRows)
-		sort.Slice(expectedIndexRows, func(leftIndex, rightIndex int) bool {
-			a := expectedIndexRows[leftIndex]
-			b := expectedIndexRows[rightIndex]
-			for i := range a {
-				aVal, aNotNil := a[i].(int64)
-				bVal, bNotNil := b[i].(int64)
-				if !aNotNil {
-					aVal = math.MaxInt64
-				}
-				if !bNotNil {
-					bVal = math.MaxInt64
-				}
-				if aVal < bVal {
-					return true
-				}
-			}
-			return false
-		})
+
+		expectedIndexRows = sortInt64Rows(expectedIndexRows)
 
 		if len(expectedIndexRows) > 0 {
-			var sqlRows []sql.Row
-			_ = indexRowData.IterAll(context.Background(), func(key, value types.Value) error {
-				r, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
-				assert.NoError(t, err)
-				sqlRow, err := sqlutil.DoltRowToSqlRow(r, indexSch)
-				assert.NoError(t, err)
-				sqlRows = append(sqlRows, sqlRow)
-				return nil
-			})
-
+			sqlRows, err = SqlRowsFromDurableIndex(indexRowData, indexSch)
+			require.NoError(t, err)
+			expected = sortInt64Rows(convertSqlRowToInt64(expected))
+			sqlRows = sortInt64Rows(convertSqlRowToInt64(sqlRows))
 			if !reflect.DeepEqual(expectedIndexRows, sqlRows) {
-				sort.Slice(sqlRows, func(leftIndex, rightIndex int) bool {
-					a := sqlRows[leftIndex]
-					b := sqlRows[rightIndex]
-					for i := range a {
-						aVal, aNotNil := a[i].(int64)
-						bVal, bNotNil := b[i].(int64)
-						if !aNotNil {
-							aVal = math.MaxInt64
-						}
-						if !bNotNil {
-							bVal = math.MaxInt64
-						}
-						if aVal < bVal {
-							return true
-						}
-					}
-					return false
-				})
+				sqlRows = sortInt64Rows(sqlRows)
 			}
 			assert.Equal(t, expectedIndexRows, sqlRows)
 		}
 	}
+}
+
+func sortInt64Rows(rows []sql.Row) []sql.Row {
+	sort.Slice(rows, func(l, r int) bool {
+		a, b := rows[l], rows[r]
+		for i := range a {
+			aa, ok := a[i].(int64)
+			if !ok {
+				aa = math.MaxInt64
+			}
+			bb, ok := b[i].(int64)
+			if !ok {
+				bb = math.MaxInt64
+			}
+			if aa < bb {
+				return true
+			}
+		}
+		return false
+	})
+	return rows
 }
 
 func setupEditorKeylessFkTest(t *testing.T) (*env.DoltEnv, *doltdb.RootValue) {
@@ -763,7 +740,7 @@ func setupEditorKeylessFkTest(t *testing.T) (*env.DoltEnv, *doltdb.RootValue) {
 	if err != nil {
 		panic(err)
 	}
-	initialRoot, err := ExecuteSql(t, dEnv, root, `
+	initialRoot, err := ExecuteSql(dEnv, root, `
 CREATE TABLE one (
   pk BIGINT,
   v1 BIGINT,
@@ -881,7 +858,7 @@ func TestTableEditorKeylessFKCascade(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			dEnv, initialRoot := setupEditorKeylessFkTest(t)
 
-			testRoot, err := ExecuteSql(t, dEnv, initialRoot, `
+			testRoot, err := ExecuteSql(dEnv, initialRoot, `
 ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASCADE ON UPDATE CASCADE;
 `)

@@ -685,8 +685,24 @@ var BrokenDDLScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT to_pk, to_commit, from_pk, from_commit, diff_type from dolt_diff('t', @Commit1, @Commit2);",
+				Query:    "SELECT to_pk, to_commit, from_pk, from_commit, diff_type from dolt_diff(@Commit1, @Commit2, 't');",
 				Expected: []sql.Row{{1, "hi", nil, nil, "added"}},
+			},
+		},
+	},
+}
+
+var AddIndexScripts = []queries.ScriptTest{
+	{
+		Name: "add unique constraint on keyless table",
+		SetUpScript: []string{
+			"CREATE TABLE test (uk int);",
+			"insert into test values (0), (0)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "create unique index m on test (uk);",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
 			},
 		},
 	},

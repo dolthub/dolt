@@ -65,11 +65,14 @@ make_it() {
 
     start_sql_server "dolt_repo_$$"
 
-    server_query "dolt_repo_$$" 1 dolt "" "SET @@GLOBAL.dolt_repo_$$_default_branch = 'to_keep'" ""
+    dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "SET @@GLOBAL.dolt_repo_$$_default_branch = 'to_keep'"
 
-    server_query "dolt_repo_$$"  1 dolt "" 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");' ""
+    dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "call dolt_checkout('to_keep')"
+    dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "call dolt_branch('-D', 'main');"
 
-    server_query "dolt_repo_$$" 1 dolt "" "SELECT * FROM test" "id\n" ""
+    run dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "describe test"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "id" ]] || false
 }
 
 @test "deleted-branches: can SQL connect with existing branch revision specifier when checked out branch is deleted" {
@@ -77,14 +80,14 @@ make_it() {
 
     start_sql_server "dolt_repo_$$"
 
-    server_query "dolt_repo_$$" 1 dolt "" 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");' ""
-
+    dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");'
+    
     # Against the default branch it fails
-    run server_query "dolt_repo_$$" 1 "" dolt "" "SELECT * FROM test" "id\n" ""
-    [ "$status" -eq 1 ] || fail "expected query against the default branch, which was deleted, to fail"
+    run dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "SELECT * FROM test"
+    [ $status -ne 0 ] 
 
     # Against to_keep it succeeds
-    server_query "dolt_repo_$$/to_keep" 1 dolt "" "SELECT * FROM test" "id\n" ""
+    dolt sql-client --use-db "dolt_repo_$$/to_keep" -u dolt -P $PORT -q "SELECT * FROM test"
 }
 
 @test "deleted-branches: can SQL connect with existing branch revision specifier when dolt_default_branch is invalid" {
@@ -92,13 +95,14 @@ make_it() {
 
     start_sql_server "dolt_repo_$$"
 
-    server_query "dolt_repo_$$" 1 dolt "" "SET @@GLOBAL.dolt_repo_$$_default_branch = 'this_branch_does_not_exist'" ""
+    dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "SET @@GLOBAL.dolt_repo_$$_default_branch = 'this_branch_does_not_exist'"
 
     # Against the default branch it fails
-    server_query "dolt_repo_$$" 1 dolt "" "SELECT * FROM test" "" 1
+    run dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "SELECT * FROM test" ""
+    [ $status -ne 0 ]
 
     # Against main, which exists it succeeds
-    server_query "dolt_repo_$$/main" 1 dolt "" "SELECT * FROM test" "id\n" ""
+    dolt sql-client --use-db "dolt_repo_$$/main" -u dolt -P $PORT -q "SELECT * FROM test"
 }
 
 @test "deleted-branches: calling DOLT_CHECKOUT on SQL connection with existing branch revision specifier when dolt_default_branch is invalid does not panic" {
@@ -106,13 +110,15 @@ make_it() {
 
     start_sql_server "dolt_repo_$$"
 
-    server_query "dolt_repo_$$" 1 dolt "" "SET @@GLOBAL.dolt_repo_$$_default_branch = 'this_branch_does_not_exist'" ""
+    dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "SET @@GLOBAL.dolt_repo_$$_default_branch = 'this_branch_does_not_exist'" ""
 
     # We are able to use a database branch revision in the connection string
-    server_query "dolt_repo_$$/main" 1 dolt "" "SELECT * FROM test;"
+    dolt sql-client --use-db "dolt_repo_$$/main" -u dolt -P $PORT -q "SELECT * FROM test;"
 
     # Trying to checkout a new branch throws an error, but doesn't panic
-    server_query "dolt_repo_$$/main" 1 dolt "" "SELECT DOLT_CHECKOUT('to_keep');" "" "Could not load database dolt_repo_$$"
+    run dolt sql-client --use-db "dolt_repo_$$/main" -u dolt -P $PORT -q"CALL DOLT_CHECKOUT('to_keep');"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "branch not found" ]] || false
 }
 
 @test "deleted-branches: calling DOLT_CHECKOUT on SQL connection with existing branch revision specifier set to existing branch when default branch is deleted does not panic" {
@@ -122,13 +128,15 @@ make_it() {
 
     start_sql_server "dolt_repo_$$"
 
-    server_query "dolt_repo_$$"  1 dolt "" 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");' ""
+    dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "call dolt_checkout('to_keep'); call dolt_branch('-D', 'main');"
 
     # We are able to use a database branch revision in the connection string
-    server_query "dolt_repo_$$/to_keep" 1 dolt "" "SELECT * FROM test;"
+    dolt sql-client --use-db "dolt_repo_$$/to_keep" -u dolt -P $PORT -q "SELECT * FROM test;"
 
     # Trying to checkout a new branch throws an error, but doesn't panic
-    server_query "dolt_repo_$$/to_keep" 1 dolt "" "SELECT DOLT_CHECKOUT('to_checkout');" "" "Could not load database dolt_repo_$$"
+    run dolt sql-client --use-db "dolt_repo_$$/to_keep" -u dolt -P $PORT -q "CALL DOLT_CHECKOUT('to_checkout');"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "branch not found" ]] || false
 }
 
 @test "deleted-branches: can DOLT_CHECKOUT on SQL connection with dolt_default_branch set to existing branch when checked out branch is deleted" {
@@ -138,11 +146,11 @@ make_it() {
 
     start_sql_server "dolt_repo_$$"
 
-    server_query "dolt_repo_$$" 1 dolt "" "SET @@GLOBAL.dolt_repo_$$_default_branch = 'to_keep'" ""
+    dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "SET @@GLOBAL.dolt_repo_$$_default_branch = 'to_keep'" ""
 
-    server_query "dolt_repo_$$"  1 dolt "" 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");' ""
+    dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "call dolt_checkout('to_keep'); call dolt_branch('-D', 'main');"
 
-    server_query "dolt_repo_$$" 1 dolt "" "SELECT * FROM test" ""
+    dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "SELECT * FROM test"
     
-    server_query "dolt_repo_$$" 1 dolt "" "DOLT_CHECKOUT('to_checkout');" ""
+    dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "CALL DOLT_CHECKOUT('to_checkout')"
 }

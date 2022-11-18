@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+	"errors"
 	"io"
 	"math"
 	"strconv"
@@ -55,19 +56,34 @@ type InferenceArgs interface {
 
 // InferColumnTypesFromTableReader will infer a data types from a table reader.
 func InferColumnTypesFromTableReader(ctx context.Context, rd table.ReadCloser, args InferenceArgs) (*schema.ColCollection, error) {
-	i := newInferrer(rd.GetSchema(), args)
+	// for large imports, we want to sample a subset of the rows.
+	// skip through the file in an exponential manner
+	const exp = 1.02
 
-	for {
-		r, err := rd.ReadRow(ctx)
-		if err == io.EOF {
-			break
+	var curr, prev row.Row
+	i := newInferrer(rd.GetSchema(), args)
+OUTER:
+	for j := 0; true; j++ {
+		var err error
+
+		next := int(math.Pow(exp, float64(j)))
+		for n := 0; n < next; n++ {
+			curr, err = rd.ReadRow(ctx)
+			if err == io.EOF {
+				break OUTER
+			} else if err != nil {
+				return nil, err
+			}
+			prev = curr
 		}
-		if err != nil {
+		if err = i.processRow(curr); err != nil {
 			return nil, err
 		}
+	}
 
-		err = i.processRow(r)
-		if err != nil {
+	// always process last row
+	if prev != nil {
+		if err := i.processRow(prev); err != nil {
 			return nil, err
 		}
 	}
@@ -114,10 +130,8 @@ func (inf *inferrer) inferColumnTypes() (*schema.ColCollection, error) {
 		col.TypeInfo = inferredTypes[tag]
 		col.Tag = schema.ReservedTagMin + tag
 
-		col.Constraints = []schema.ColConstraint{schema.NotNullConstraint{}}
-		if inf.nullable.Contains(tag) {
-			col.Constraints = []schema.ColConstraint(nil)
-		}
+		// for large imports, it is possible to miss all the null values, so we cannot accurately add not null constraint
+		col.Constraints = []schema.ColConstraint(nil)
 
 		cols = append(cols, col)
 		return false, nil
@@ -202,32 +216,27 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 		return ti
 	}
 
-	if strings.Contains(strVal, "-") {
-		i, err := strconv.ParseInt(strVal, 10, 64)
-		if err != nil {
-			return typeinfo.UnknownType
-		}
-		if i >= math.MinInt32 && i <= math.MaxInt32 {
-			return typeinfo.Int32Type
-		} else {
-			return typeinfo.Int64Type
-		}
+	// always parse as signed int
+	i, err := strconv.ParseInt(strVal, 10, 64)
+
+	// use string for out of range
+	if errors.Is(err, strconv.ErrRange) {
+		return typeinfo.StringDefaultType
+	}
+
+	if err != nil {
+		return typeinfo.UnknownType
+	}
+
+	// handle leading zero case
+	if len(strVal) > 1 && strVal[0] == '0' {
+		return typeinfo.StringDefaultType
+	}
+
+	if i >= math.MinInt32 && i <= math.MaxInt32 {
+		return typeinfo.Int32Type
 	} else {
-		ui, err := strconv.ParseUint(strVal, 10, 64)
-		if err != nil {
-			return typeinfo.UnknownType
-		}
-
-		// handle leading zero case
-		if len(strVal) > 1 && strVal[0] == '0' {
-			return typeinfo.StringDefaultType
-		}
-
-		if ui <= math.MaxUint32 {
-			return typeinfo.Uint32Type
-		} else {
-			return typeinfo.Uint64Type
-		}
+		return typeinfo.Int64Type
 	}
 }
 
@@ -270,14 +279,13 @@ func chronoTypes() []typeinfo.TypeInfo {
 func numericTypes() []typeinfo.TypeInfo {
 	// prefer:
 	//   ints over floats
-	//   unsigned over signed
 	//   smaller over larger
 	return []typeinfo.TypeInfo{
 		//typeinfo.Uint8Type,
 		//typeinfo.Uint16Type,
 		//typeinfo.Uint24Type,
-		typeinfo.Uint32Type,
-		typeinfo.Uint64Type,
+		//typeinfo.Uint32Type,
+		//typeinfo.Uint64Type,
 
 		//typeinfo.Int8Type,
 		//typeinfo.Int16Type,
@@ -382,12 +390,6 @@ func findCommonNumericType(nums typeInfoSet) typeinfo.TypeInfo {
 		typeinfo.Int24Type,
 		typeinfo.Int16Type,
 		typeinfo.Int8Type,
-
-		typeinfo.Uint64Type,
-		typeinfo.Uint32Type,
-		typeinfo.Uint24Type,
-		typeinfo.Uint16Type,
-		typeinfo.Uint8Type,
 	}
 	for _, numType := range mostToLeast {
 		if setHasType(nums, numType) {

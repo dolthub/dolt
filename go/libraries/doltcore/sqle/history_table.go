@@ -56,7 +56,6 @@ var (
 var _ sql.Table = (*HistoryTable)(nil)
 var _ sql.FilteredTable = (*HistoryTable)(nil)
 var _ sql.IndexAddressableTable = (*HistoryTable)(nil)
-var _ sql.ParallelizedIndexAddressableTable = (*HistoryTable)(nil)
 var _ sql.IndexedTable = (*HistoryTable)(nil)
 
 // HistoryTable is a system table that shows the history of rows over time
@@ -66,10 +65,6 @@ type HistoryTable struct {
 	cmItr         doltdb.CommitItr
 	indexLookup   sql.IndexLookup
 	projectedCols []uint64
-}
-
-func (ht *HistoryTable) ShouldParallelizeAccess() bool {
-	return true
 }
 
 func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {

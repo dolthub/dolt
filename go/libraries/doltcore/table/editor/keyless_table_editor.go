@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -437,14 +436,14 @@ func (kte *keylessTableEditor) flush(ctx context.Context) error {
 	}
 
 	kte.eg.Go(func() (err error) {
-		kte.tbl, err = applyEdits(ctx, tbl, acc, kte.indexEds, nil)
+		kte.tbl, err = applyEdits(ctx, tbl, acc, kte.indexEds)
 		return err
 	})
 
 	return nil
 }
 
-func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, indexEds []*IndexEditor, errFunc PKDuplicateCb) (_ *doltdb.Table, retErr error) {
+func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, indexEds []*IndexEditor) (_ *doltdb.Table, retErr error) {
 	rowData, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -463,7 +462,7 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 	}
 
 	ed := rowData.Edit()
-	iter := table.NewMapPointReader(rowData, keys...)
+	iter := newMapPointReader(rowData, keys)
 
 	var ok bool
 	for {
@@ -566,6 +565,44 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 	}
 
 	return tbl.UpdateNomsRows(ctx, rowData)
+}
+
+type pointReader struct {
+	m          types.Map
+	keys       []types.Tuple
+	emptyTuple types.Tuple
+	idx        int
+}
+
+func newMapPointReader(m types.Map, keys []types.Tuple) *pointReader {
+	return &pointReader{
+		m:          m,
+		keys:       keys,
+		emptyTuple: types.EmptyTuple(m.Format()),
+	}
+}
+
+// NextTuple implements types.MapIterator.
+func (pr *pointReader) NextTuple(ctx context.Context) (k, v types.Tuple, err error) {
+	if pr.idx >= len(pr.keys) {
+		return types.Tuple{}, types.Tuple{}, io.EOF
+	}
+
+	k = pr.keys[pr.idx]
+	v = pr.emptyTuple
+
+	var ok bool
+	// todo: optimize by implementing MapIterator.Seek()
+	v, ok, err = pr.m.MaybeGetTuple(ctx, k)
+	pr.idx++
+
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, err
+	} else if !ok {
+		return k, pr.emptyTuple, nil
+	}
+
+	return k, v, nil
 }
 
 // for deletes (cardinality < 1): |ok| is set false

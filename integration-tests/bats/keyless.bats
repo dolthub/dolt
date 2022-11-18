@@ -425,6 +425,31 @@ SQL
     [[ "${lines[1]}" = "6,6" ]] || false
 }
 
+@test "keyless: merge duplicate deletes with stored procedure" {
+    make_dupe_table
+
+    dolt branch left
+    dolt checkout -b right
+
+    dolt sql -q "DELETE FROM dupe LIMIT 2;"
+    dolt commit -am "deleted two rows on right"
+
+    dolt checkout left
+    dolt sql -q "DELETE FROM dupe LIMIT 4;"
+    dolt commit -am "deleted four rows on left"
+
+    run dolt merge right -m "merge"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+
+    run dolt sql -q "call dolt_conflicts_resolve('--ours', 'dupe')"
+    [ $status -eq 0 ]
+    dolt commit -am "resolved"
+    run dolt sql -q "select sum(c0), sum(c1) from dupe" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "6,6" ]] || false
+}
+
 @test "keyless: diff duplicate updates" {
     make_dupe_table
 
@@ -466,6 +491,31 @@ SQL
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt conflicts resolve --theirs dupe
+    [ $status -eq 0 ]
+    dolt commit -am "resolved"
+    run dolt sql -q "select sum(c0), sum(c1) from dupe" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "10,12" ]] || false
+}
+
+@test "keyless: merge duplicate updates with stored procedure" {
+    make_dupe_table
+
+    dolt branch left
+    dolt checkout -b right
+
+    dolt sql -q "UPDATE dupe SET c1 = 2 LIMIT 2;"
+    dolt commit -am "updated two rows on right"
+
+    dolt checkout left
+    dolt sql -q "UPDATE dupe SET c1 = 2 LIMIT 4;"
+    dolt commit -am "updated four rows on left"
+
+    run dolt merge right -m "merge"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+
+    run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'dupe')"
     [ $status -eq 0 ]
     dolt commit -am "resolved"
     run dolt sql -q "select sum(c0), sum(c1) from dupe" -r csv
@@ -629,7 +679,6 @@ CSV
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
-    dolt conflicts resolve --ours keyless
     run dolt conflicts resolve --ours keyless
     [ $status -eq 0 ]
     dolt commit -am "resolved"
@@ -734,6 +783,34 @@ SQL
     [[ "${lines[3]}" = "9,9" ]] || false
 }
 
+@test "keyless: merge branches with convergent mutation history with stored procedure" {
+    dolt branch other
+
+    dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
+    dolt commit -am "inserted on main"
+
+    dolt checkout other
+    dolt sql <<SQL
+INSERT INTO keyless VALUES (9,19),(8,8),(7,17);
+UPDATE keyless SET c0 = 7, c1 = 7 WHERE c1 = 19;
+UPDATE keyless SET c0 = 9, c1 = 9 WHERE c1 = 17;
+SQL
+    dolt commit -am "inserted on other"
+
+    run dolt merge main -m "merge"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+
+    run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'keyless')"
+    [ $status -eq 0 ]
+    dolt commit -am "resolved"
+    run dolt sql -q "select * from keyless where c0 > 6 order by c0" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "7,7" ]] || false
+    [[ "${lines[2]}" = "8,8" ]] || false
+    [[ "${lines[3]}" = "9,9" ]] || false
+}
+
 @test "keyless: diff branches with offset mutation history" {
     dolt branch other
 
@@ -765,6 +842,31 @@ SQL
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt conflicts resolve --ours keyless
+    [ $status -eq 0 ]
+    dolt commit -am "resolved"
+    run dolt sql -q "select * from keyless where c0 > 6 order by c0" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "7,7" ]] || false
+    [[ "${lines[2]}" = "7,7" ]] || false
+    [[ "${lines[3]}" = "8,8" ]] || false
+    [[ "${lines[4]}" = "9,9" ]] || false
+}
+
+@test "keyless: merge branches with offset mutation history with stored procedure" {
+    dolt branch other
+
+    dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
+    dolt commit -am "inserted on main"
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO keyless VALUES (7,7),(7,7),(8,8),(9,9);"
+    dolt commit -am "inserted on other"
+
+    run dolt merge main -m "merge"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+
+    run dolt sql -q "call dolt_conflicts_resolve('--ours', 'keyless')"
     [ $status -eq 0 ]
     dolt commit -am "resolved"
     run dolt sql -q "select * from keyless where c0 > 6 order by c0" -r csv
@@ -823,6 +925,32 @@ SQL
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt conflicts resolve --theirs keyless
+    [ $status -eq 0 ]
+    dolt commit -am "resolved"
+    run dolt sql -q "select * from keyless order by c0" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "0,0" ]] || false
+    [[ "${lines[2]}" = "1,1" ]] || false
+    [[ "${lines[3]}" = "1,1" ]] || false
+    [ "${#lines[@]}" -eq 4 ]
+}
+
+@test "keyless: merge delete+add on two branches with stored procedure" {
+    dolt branch left
+    dolt checkout -b right
+
+    dolt sql -q "DELETE FROM keyless WHERE c0 = 2;"
+    dolt commit -am "deleted twos on right"
+
+    dolt checkout left
+    dolt sql -q "INSERT INTO keyless VALUES (2,2);"
+    dolt commit -am "inserted twos on left"
+
+    run dolt merge right -m "merge"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+
+    run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'keyless')"
     [ $status -eq 0 ]
     dolt commit -am "resolved"
     run dolt sql -q "select * from keyless order by c0" -r csv

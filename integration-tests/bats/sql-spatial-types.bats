@@ -241,7 +241,7 @@ SQL
 
     run dolt sql -q "ALTER TABLE table1 MODIFY COLUMN p LINESTRING SRID 4326"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Cannot get geometry object from data you send to the GEOMETRY field" ]] || false
+    [[ "$output" =~ "Cannot get geometry object from data you sent to the GEOMETRY field" ]] || false
 
     dolt sql -q "DELETE FROM table1 WHERE i = 1"
     run dolt sql -q "SELECT ST_ASWKT(p) FROM pt"
@@ -255,13 +255,18 @@ SQL
     [[ "$output" =~ "The SRID of the geometry does not match the SRID of the column 'p'. The SRID of the geometry is 4326, but the SRID of the column is 0. Consider changing the SRID of the geometry or the SRID property of the column." ]] || false
 }
 
-@test "sql-spatial-types: multistatement exec with unsupported spatial types" {
-    dolt sql -q "CREATE TABLE t1 (i int primary key, g GEOMETRY NOT NULL);"
-
+@test "sql-spatial-types: round trip dolt dump with spatial type data" {
     run dolt sql << SQL
-INSERT INTO t1 values (0, point(1,2));
-INSERT INTO t1 VALUES (1,0x000000000104000000030000000101000000000000000000F03F000000000000F03F010100000000000000000000400000000000000040010100000000000000000008400000000000000840);
+CREATE TABLE t1 (i int primary key, g GEOMETRY, p POINT, l LINESTRING, po POLYGON, mp MULTIPOINT);
+INSERT INTO t1 values (0, point(1,2), point(2,1), LINESTRING(POINT(0,0),POINT(1,2)), polygon(linestring(point(1,2),point(3,4),point(5,6),point(1,2))), MULTIPOINT(POINT(0,0),POINT(1,2)));
 SQL
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "error executing query on line 2: unsupported geospatial type: MultiPoint from value: 0x0" ]] || false
+    [ "$status" -eq 0 ]
+
+    dolt dump
+
+    run dolt sql < doltdump.sql
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT ST_AsText(g), ST_AsText(p), ST_AsText(l), ST_AsText(po), ST_AsText(mp) from t1;"
+    [[ "$output" =~ "POINT(1 2)   | POINT(2 1)   | LINESTRING(0 0,1 2) | POLYGON((1 2,3 4,5 6,1 2)) | MULTIPOINT(0 0,1 2)" ]] || false
 }

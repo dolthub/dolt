@@ -18,14 +18,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-22.04 ]
-        dolt_fmt: [ "", "__DOLT_DEV__" ]
+        dolt_fmt: [ "__DOLT__", "__LD_1__", "__DOLT_DEV__" ]
     steps:
     - name: Set up Go 1.x
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
         go-version: ^1.19
       id: go
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Test All
       working-directory: ./go
       run: |

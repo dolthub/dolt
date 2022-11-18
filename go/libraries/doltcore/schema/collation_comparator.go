@@ -77,8 +77,8 @@ func (c CollationTupleComparator) Validated(types []val.Type) val.TupleComparato
 	}
 	i := 0
 	for ; i < len(c.Collations); i++ {
-		if types[i].Enc == val.StringEnc && c.Collations[i] == sql.Collation_Invalid {
-			panic("string type encoding is missing its collation")
+		if types[i].Enc == val.StringEnc && c.Collations[i] == sql.Collation_Unspecified {
+			c.Collations[i] = sql.Collation_Default
 		}
 	}
 	if len(c.Collations) == len(types) {
@@ -90,7 +90,7 @@ func (c CollationTupleComparator) Validated(types []val.Type) val.TupleComparato
 		if types[i].Enc == val.StringEnc {
 			panic("string type encoding is missing its collation")
 		}
-		newCollations[i] = sql.Collation_Invalid
+		newCollations[i] = sql.Collation_Unspecified
 	}
 	return CollationTupleComparator{Collations: newCollations}
 }

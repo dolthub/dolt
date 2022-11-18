@@ -135,6 +135,7 @@ func TestMemTableAddOverflowChunk(t *testing.T) {
 }
 
 func TestMemTableWrite(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 	mt := newMemTable(1024)
 
@@ -150,7 +151,7 @@ func TestMemTableWrite(t *testing.T) {
 
 	td1, _, err := buildTable(chunks[1:2])
 	require.NoError(t, err)
-	ti1, err := parseTableIndexByCopy(td1, &noopQuotaProvider{})
+	ti1, err := parseTableIndexByCopy(ctx, td1, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr1, err := newTableReader(ti1, tableReaderAtFromBytes(td1), fileBlockSize)
 	require.NoError(t, err)
@@ -158,7 +159,7 @@ func TestMemTableWrite(t *testing.T) {
 
 	td2, _, err := buildTable(chunks[2:])
 	require.NoError(t, err)
-	ti2, err := parseTableIndexByCopy(td2, &noopQuotaProvider{})
+	ti2, err := parseTableIndexByCopy(ctx, td2, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr2, err := newTableReader(ti2, tableReaderAtFromBytes(td2), fileBlockSize)
 	require.NoError(t, err)
@@ -168,7 +169,7 @@ func TestMemTableWrite(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(uint32(1), count)
 
-	ti, err := parseTableIndexByCopy(data, &noopQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, data, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	outReader, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
 	require.NoError(t, err)
@@ -307,22 +308,10 @@ func (crg chunkReaderGroup) uncompressedLen() (data uint64, err error) {
 	return
 }
 
-func (crg chunkReaderGroup) extract(ctx context.Context, chunks chan<- extractRecord) error {
-	for _, haver := range crg {
-		err := haver.extract(ctx, chunks)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (crg chunkReaderGroup) Close() error {
+func (crg chunkReaderGroup) close() error {
 	var firstErr error
 	for _, c := range crg {
-		err := c.Close()
+		err := c.close()
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}

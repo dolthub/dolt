@@ -30,7 +30,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff/v4"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -58,7 +58,6 @@ func init() {
 }
 
 var ErrUploadFailed = errors.New("upload failed")
-var ErrInvalidDoltSpecPath = errors.New("invalid dolt spec path")
 
 var globalHttpFetcher HTTPFetcher = &http.Client{}
 
@@ -81,13 +80,16 @@ const (
 
 var tracer = otel.Tracer("github.com/dolthub/dolt/go/libraries/doltcore/remotestorage")
 
-var uploadRetryParams = backoff.NewExponentialBackOff()
-var downRetryParams = backoff.NewExponentialBackOff()
+func downloadBackOff(ctx context.Context) backoff.BackOff {
+	ret := backoff.NewExponentialBackOff()
+	ret.MaxInterval = 5 * time.Second
+	return backoff.WithContext(backoff.WithMaxRetries(ret, downRetryCount), ctx)
+}
 
-func init() {
-	uploadRetryParams.MaxInterval = 5 * time.Second
-
-	downRetryParams.MaxInterval = 5 * time.Second
+func uploadBackOff(ctx context.Context) backoff.BackOff {
+	ret := backoff.NewExponentialBackOff()
+	ret.MaxInterval = 5 * time.Second
+	return backoff.WithContext(backoff.WithMaxRetries(ret, uploadRetryCount), ctx)
 }
 
 // Only hedge downloads of ranges < 4MB in length for now.
@@ -104,8 +106,7 @@ type ConcurrencyParams struct {
 }
 
 type DoltChunkStore struct {
-	org         string
-	repoName    string
+	repoId      *remotesapi.RepoId
 	repoPath    string
 	repoToken   *atomic.Value // string
 	host        string
@@ -120,34 +121,33 @@ type DoltChunkStore struct {
 }
 
 func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, path, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
-	tokens := strings.Split(strings.Trim(path, "/"), "/")
-	if len(tokens) != 2 {
-		return nil, ErrInvalidDoltSpecPath
-	}
+	var repoId *remotesapi.RepoId
 
-	// todo:
-	// this may just be a dolthub thing.  Need to revisit how we do this.
-	org := tokens[0]
-	repoName := tokens[1]
-
-	metadata, err := csClient.GetRepoMetadata(ctx, &remotesapi.GetRepoMetadataRequest{
-		RepoId: &remotesapi.RepoId{
+	path = strings.Trim(path, "/")
+	tokens := strings.Split(path, "/")
+	if len(tokens) == 2 {
+		org := tokens[0]
+		repoName := tokens[1]
+		repoId = &remotesapi.RepoId{
 			Org:      org,
 			RepoName: repoName,
-		},
+		}
+	}
+
+	metadata, err := csClient.GetRepoMetadata(ctx, &remotesapi.GetRepoMetadataRequest{
+		RepoId:   repoId,
+		RepoPath: path,
 		ClientRepoFormat: &remotesapi.ClientRepoFormat{
 			NbfVersion: nbf.VersionString(),
 			NbsVersion: nbs.StorageVersion,
 		},
 	})
-
 	if err != nil {
 		return nil, err
 	}
 
 	cs := &DoltChunkStore{
-		org:         org,
-		repoName:    repoName,
+		repoId:      repoId,
 		repoPath:    path,
 		repoToken:   new(atomic.Value),
 		host:        host,
@@ -163,8 +163,7 @@ func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, pa
 
 func (dcs *DoltChunkStore) WithHTTPFetcher(fetcher HTTPFetcher) *DoltChunkStore {
 	return &DoltChunkStore{
-		org:         dcs.org,
-		repoName:    dcs.repoName,
+		repoId:      dcs.repoId,
 		repoPath:    dcs.repoPath,
 		repoToken:   new(atomic.Value),
 		host:        dcs.host,
@@ -180,8 +179,7 @@ func (dcs *DoltChunkStore) WithHTTPFetcher(fetcher HTTPFetcher) *DoltChunkStore 
 
 func (dcs *DoltChunkStore) WithNoopChunkCache() *DoltChunkStore {
 	return &DoltChunkStore{
-		org:         dcs.org,
-		repoName:    dcs.repoName,
+		repoId:      dcs.repoId,
 		repoPath:    dcs.repoPath,
 		repoToken:   new(atomic.Value),
 		host:        dcs.host,
@@ -198,8 +196,7 @@ func (dcs *DoltChunkStore) WithNoopChunkCache() *DoltChunkStore {
 
 func (dcs *DoltChunkStore) WithChunkCache(cache ChunkCache) *DoltChunkStore {
 	return &DoltChunkStore{
-		org:         dcs.org,
-		repoName:    dcs.repoName,
+		repoId:      dcs.repoId,
 		repoPath:    dcs.repoPath,
 		repoToken:   new(atomic.Value),
 		host:        dcs.host,
@@ -216,8 +213,7 @@ func (dcs *DoltChunkStore) WithChunkCache(cache ChunkCache) *DoltChunkStore {
 
 func (dcs *DoltChunkStore) WithDownloadConcurrency(concurrency ConcurrencyParams) *DoltChunkStore {
 	return &DoltChunkStore{
-		org:         dcs.org,
-		repoName:    dcs.repoName,
+		repoId:      dcs.repoId,
 		repoPath:    dcs.repoPath,
 		repoToken:   new(atomic.Value),
 		host:        dcs.host,
@@ -248,10 +244,7 @@ func (dcs *DoltChunkStore) getRepoId() (*remotesapi.RepoId, string) {
 	if curToken != nil {
 		token = curToken.(string)
 	}
-	return &remotesapi.RepoId{
-		Org:      dcs.org,
-		RepoName: dcs.repoName,
-	}, token
+	return dcs.repoId, token
 }
 
 type cacheStats struct {
@@ -538,6 +531,12 @@ func (l *dlLocations) Add(resp *remotesapi.DownloadLoc) {
 	}
 }
 
+type RepoRequest interface {
+	SetRepoId(*remotesapi.RepoId)
+	SetRepoToken(string)
+	SetRepoPath(string)
+}
+
 func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (dlLocations, error) {
 	ctx, span := tracer.Start(ctx, "remotestorage.getDLLocs", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
 	defer span.End()
@@ -573,7 +572,7 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (d
 		batchItr(len(hashesBytes), getLocsBatchSize, func(st, end int) (stop bool) {
 			batch := hashesBytes[st:end]
 			id, token := dcs.getRepoId()
-			req := &remotesapi.GetDownloadLocsRequest{RepoId: id, ChunkHashes: batch, RepoToken: token, RepoPath: dcs.repoPath}
+			req := &remotesapi.GetDownloadLocsRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ChunkHashes: batch}
 			reqs = append(reqs, req)
 			return false
 		})
@@ -621,7 +620,7 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (d
 			}
 			return processGrpcErr(err)
 		}
-		return backoff.Retry(op, backoff.WithMaxRetries(csRetryParams, csClientRetries))
+		return backoff.Retry(op, grpcBackOff(ctx))
 	})
 
 	if err := eg.Wait(); err != nil {
@@ -809,10 +808,8 @@ func (dcs *DoltChunkStore) Rebase(ctx context.Context) error {
 
 func (dcs *DoltChunkStore) refreshRepoMetadata(ctx context.Context) error {
 	mdReq := &remotesapi.GetRepoMetadataRequest{
-		RepoId: &remotesapi.RepoId{
-			Org:      dcs.org,
-			RepoName: dcs.repoName,
-		},
+		RepoId:   dcs.repoId,
+		RepoPath: dcs.repoPath,
 		ClientRepoFormat: &remotesapi.ClientRepoFormat{
 			NbfVersion: dcs.nbf.VersionString(),
 			NbsVersion: nbs.StorageVersion,
@@ -1015,7 +1012,7 @@ func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, table
 		return nil
 	}
 
-	return backoff.Retry(op, backoff.WithMaxRetries(uploadRetryParams, uploadRetryCount))
+	return backoff.Retry(op, uploadBackOff(ctx))
 }
 
 type Sizer interface {
@@ -1219,7 +1216,7 @@ func rangeDownloadWithRetries(ctx context.Context, stats StatsRecorder, fetcher 
 	}
 
 	dstart := time.Now()
-	err := backoff.Retry(op, backoff.WithMaxRetries(downRetryParams, downRetryCount))
+	err := backoff.Retry(op, downloadBackOff(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -1270,7 +1267,7 @@ func (dcs *DoltChunkStore) AddTableFilesToManifest(ctx context.Context, fileIdTo
 	}
 
 	id, token := dcs.getRepoId()
-	dcs.logf("Adding Table files to repo: %s/%s -\n%s", id.Org, id.RepoName, debugStr)
+	dcs.logf("Adding Table files to repo: %s -\n%s", dcs.repoPath, debugStr)
 	atReq := &remotesapi.AddTableFilesRequest{
 		RepoId:         id,
 		RepoToken:      token,

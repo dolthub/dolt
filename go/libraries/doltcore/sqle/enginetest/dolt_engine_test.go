@@ -46,7 +46,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 80
+const SkipPreparedsCount = 84
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -108,6 +108,7 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
+	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
 			Name: "trigger before update, with indexed update",
@@ -256,6 +257,11 @@ func TestQueryPlans(t *testing.T) {
 	// TODO: exchange nodes should really only be part of the explain plan under certain debug settings
 	harness := newDoltHarness(t).WithParallelism(1).WithSkippedQueries(skipped)
 	enginetest.TestQueryPlans(t, harness, queries.PlanTests)
+}
+
+func TestIntegrationQueryPlans(t *testing.T) {
+	harness := newDoltHarness(t).WithParallelism(1)
+	enginetest.TestIntegrationPlans(t, harness)
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
@@ -442,12 +448,11 @@ func TestJSONTableScripts(t *testing.T) {
 }
 
 func TestUserPrivileges(t *testing.T) {
-	t.Skip("Need to add more collations")
 	enginetest.TestUserPrivileges(t, newDoltHarness(t))
 }
 
 func TestUserAuthentication(t *testing.T) {
-	t.Skip("Need to add more collations")
+	t.Skip("Unexpected panic, need to fix")
 	enginetest.TestUserAuthentication(t, newDoltHarness(t))
 }
 
@@ -498,6 +503,20 @@ func TestCreateDatabase(t *testing.T) {
 func TestBlobs(t *testing.T) {
 	skipOldFormat(t)
 	enginetest.TestBlobs(t, newDoltHarness(t))
+}
+
+func TestIndexes(t *testing.T) {
+	harness := newDoltHarness(t)
+	enginetest.TestIndexes(t, harness)
+}
+
+func TestIndexPrefix(t *testing.T) {
+	skipOldFormat(t)
+	harness := newDoltHarness(t)
+	enginetest.TestIndexPrefix(t, harness)
+	for _, script := range DoltIndexPrefixScripts {
+		enginetest.TestScript(t, harness, script)
+	}
 }
 
 func TestBigBlobs(t *testing.T) {
@@ -678,10 +697,16 @@ func TestStoredProcedures(t *testing.T) {
 }
 
 func TestLargeJsonObjects(t *testing.T) {
-	sqle.SkipByDefaultInCI(t)
+	SkipByDefaultInCI(t)
 	harness := newDoltHarness(t)
 	for _, script := range LargeJsonObjectScriptTests {
 		enginetest.TestScript(t, harness, script)
+	}
+}
+
+func SkipByDefaultInCI(t *testing.T) {
+	if os.Getenv("CI") != "" && os.Getenv("DOLT_TEST_RUN_NON_RACE_TESTS") == "" {
+		t.Skip()
 	}
 }
 
@@ -826,6 +851,14 @@ func TestDoltDdlScripts(t *testing.T) {
 	}
 
 	for _, script := range DropColumnScripts {
+		e, err := harness.NewEngine(t)
+		require.NoError(t, err)
+		enginetest.TestScriptWithEngine(t, e, harness, script)
+	}
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("not fixing unique index on keyless tables for old format")
+	}
+	for _, script := range AddIndexScripts {
 		e, err := harness.NewEngine(t)
 		require.NoError(t, err)
 		enginetest.TestScriptWithEngine(t, e, harness, script)
@@ -1063,7 +1096,7 @@ func TestBrokenSystemTableQueries(t *testing.T) {
 }
 
 func TestHistorySystemTable(t *testing.T) {
-	harness := newDoltHarness(t)
+	harness := newDoltHarness(t).WithParallelism(2)
 	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
 		harness.engine = nil
@@ -1074,7 +1107,7 @@ func TestHistorySystemTable(t *testing.T) {
 }
 
 func TestHistorySystemTablePrepared(t *testing.T) {
-	harness := newDoltHarness(t)
+	harness := newDoltHarness(t).WithParallelism(2)
 	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
 		harness.engine = nil
@@ -1127,6 +1160,50 @@ func TestDiffTableFunctionPrepared(t *testing.T) {
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffTableFunctionScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
+func TestDiffSummaryTableFunction(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range DiffSummaryTableFunctionScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func TestDiffSummaryTableFunctionPrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range DiffSummaryTableFunctionScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
+func TestLogTableFunction(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range LogTableFunctionScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func TestLogTableFunctionPrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range LogTableFunctionScriptTests {
 		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, harness, test)
@@ -1198,6 +1275,10 @@ func TestAddDropPks(t *testing.T) {
 	enginetest.TestAddDropPks(t, newDoltHarness(t))
 }
 
+func TestAddAutoIncrementColumn(t *testing.T) {
+	enginetest.TestAddAutoIncrementColumn(t, newDoltHarness(t))
+}
+
 func TestNullRanges(t *testing.T) {
 	enginetest.TestNullRanges(t, newDoltHarness(t))
 }
@@ -1227,6 +1308,13 @@ func TestDoltCommit(t *testing.T) {
 	harness := newDoltHarness(t)
 	for _, script := range DoltCommitTests {
 		enginetest.TestScript(t, harness, script)
+	}
+}
+
+func TestDoltCommitPrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, script := range DoltCommitTests {
+		enginetest.TestScriptPrepared(t, harness, script)
 	}
 }
 
@@ -1356,6 +1444,12 @@ func TestCharsetCollationWire(t *testing.T) {
 	skipOldFormat(t)
 	harness := newDoltHarness(t)
 	enginetest.TestCharsetCollationWire(t, harness, newSessionBuilder(harness))
+}
+
+func TestDatabaseCollationWire(t *testing.T) {
+	skipOldFormat(t)
+	harness := newDoltHarness(t)
+	enginetest.TestDatabaseCollationWire(t, harness, newSessionBuilder(harness))
 }
 
 func TestAddDropPrimaryKeys(t *testing.T) {

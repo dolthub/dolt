@@ -20,10 +20,6 @@ import (
 	"strings"
 )
 
-func csvSplitLineRuneDelim(str string, delim rune, escapedQuotes bool) ([]*string, error) {
-	return csvSplitLine(str, string(delim), escapedQuotes)
-}
-
 func csvSplitLine(str string, delim string, escapedQuotes bool) ([]*string, error) {
 	if strings.IndexRune(delim, '"') != -1 {
 		panic("delims cannot contain quotes")

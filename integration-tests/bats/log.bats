@@ -40,6 +40,230 @@ teardown() {
     [[ ! "$output" =~ "BRANCH1" ]] || false
 }
 
+@test "log: two and three dot log" {
+    dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "commit 1 MAIN"
+    dolt commit	--allow-empty -m "commit 2 MAIN"
+    dolt checkout -b branchA
+    dolt commit	--allow-empty -m "commit 1 BRANCHA"
+    dolt commit --allow-empty -m "commit 2 BRANCHA"
+    dolt checkout -b branchB
+    dolt commit --allow-empty -m "commit 1 BRANCHB"
+    dolt checkout branchA
+    dolt commit --allow-empty -m "commit 3 BRANCHA"
+
+    run dolt log branchA
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log main 
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "BRANCHA" ]] || false
+    dolt checkout main
+    dolt commit	--allow-empty -m "commit 3 AFTER"
+    
+    # # # # # # # # # # # # # # # # # # # # # # #
+    #                                           #
+    #                         1B (branchB)      #
+    #                        /                  #
+    #                  1A - 2A - 3A (branchA)   #
+    #                 /                         #
+    # (init) - 1M - 2M - 3M (main)              #
+    #                                           #
+    # # # # # # # # # # # # # # # # # # # # # # # 
+    
+    # Valid two dot
+    run dolt log main..branchA
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log ^main branchA
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log branchA ^main
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log branchA --not main
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log branchA..main
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ ! "$output" =~ "BRANCHA" ]] || false
+    run dolt log main..main
+    [ $status -eq 0 ]
+    
+    run dolt log main^..branchA
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log ^main^ branchA
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log branchA --not main^
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log ^main ^branchA
+    [ $status -eq 0 ]
+
+    # Valid three dot
+    run dolt log main...branchA
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log branchA...main
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log main branchA --not $(dolt merge-base main branchA)
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log branchB...branchA
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+
+    # Multiple refs
+    run dolt log branchB branchA
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+    run dolt log main branchA
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    [[ ! "$output" =~ "BRANCHB" ]] || false
+    run dolt log main branchB branchA
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+    run dolt log branchB main ^branchA
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ ! "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+    run dolt log branchB main --not branchA
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ ! "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+    run dolt log branchB main --not branchA --oneline
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ ! "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+    run dolt log branchB main ^branchA ^main
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ ! "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+    run dolt log branchB main --not branchA main
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ ! "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+    run dolt log branchB main --not branchA main --oneline
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ ! "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+
+    # Invalid
+    run dolt log main..branchA testtable
+    [ $status -eq 1 ]
+    run dolt log testtable main..branchA 
+    [ $status -eq 1 ]
+    run dolt log main...branchA testtable
+    [ $status -eq 1 ]
+    run dolt log testtable main...branchA 
+    [ $status -eq 1 ]
+    run dolt log ^main branchA testtable
+    [ $status -eq 1 ]
+    run dolt log branchA testtable --not main
+    [ $status -eq 1 ]
+    run dolt log main..branchA main
+    [ $status -eq 1 ]
+     run dolt log main main..branchA
+    [ $status -eq 1 ]
+    run dolt log main...branchA main
+    [ $status -eq 1 ]
+     run dolt log main main...branchA
+    [ $status -eq 1 ]
+    run dolt log ^main testtable
+    [ $status -eq 1 ]
+    run dolt log testtable ^main
+    [ $status -eq 1 ]
+    run dolt log ^branchA --not main
+    [ $status -eq 1 ]
+    run dolt log main..branchA --not main
+    [ $status -eq 1 ]
+    run dolt log main..branchA --not ^main
+    [ $status -eq 1 ]
+    run dolt log main...branchA --not main
+    [ $status -eq 1 ]
+    run dolt log main...branchA --not ^main
+    [ $status -eq 1 ]
+}
+
+@test "log: branch name and table name are the same" {
+    dolt commit --allow-empty -m "commit 1 MAIN"
+    dolt commit	--allow-empty -m "commit 2 MAIN"
+    dolt checkout -b myname
+    dolt sql -q "create table myname (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "commit 1 BRANCH1"
+    dolt commit --allow-empty -m "commit 2 BRANCH1"
+    dolt commit --allow-empty -m "commit 3 BRANCH1"
+
+    # Should default to branch name if one argument provided
+    run dolt log myname
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+
+    # Should default to first argument as branch name, second argument as table name (if table exists) if two arguments provided
+    run dolt log myname myname 
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
+
+    # Table main does not exist
+    run dolt log main main
+    [ $status -eq 1 ]
+}
+
 @test "log: with -n specified" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test

@@ -21,7 +21,7 @@ jobs:
           then
             version="${version:1}"
           fi
-          echo "::set-output name=version::$version"
+          echo "version=$version" >> $GITHUB_OUTPUT
 
   create-release:
     needs: format-version
@@ -31,26 +31,27 @@ jobs:
       release_id: ${{ steps.create_release.outputs.id }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Update dolt version command
         run: sed -i -e 's/	Version = ".*"/	Version = "'"$NEW_VERSION"'"/' "$FILE"
         env:
           FILE: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
           NEW_VERSION: ${{ needs.format-version.outputs.version }}
-      - uses: EndBug/add-and-commit@v7
+      - uses: EndBug/add-and-commit@v9.1.1
         with:
           message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', needs.format-version.outputs.version) }}
           add: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
           cwd: "."
+          pull: "--ff"
       - name: Build Binaries
         id: build_binaries
         run: |
           latest=$(git rev-parse HEAD)
-          echo "::set-output name=commitish::$latest"
+          echo "commitish=$latest" >> $GITHUB_OUTPUT
           GO_BUILD_VERSION=1.19 go/utils/publishrelease/buildbinaries.sh
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
+        uses: dolthub/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -61,7 +62,7 @@ jobs:
           commitish: ${{ steps.build_binaries.outputs.commitish }}
       - name: Upload Linux AMD64 Distro
         id: upload-linux-amd64-distro
-        uses: actions/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -71,7 +72,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Linux ARM64 Distro
         id: upload-linux-arm64-distro
-        uses: actions/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -81,7 +82,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload OSX AMD64 Distro
         id: upload-osx-amd64-distro
-        uses: actions/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -91,7 +92,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload OSX ARM64 Distro
         id: upload-osx-arm64-distro
-        uses: actions/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -101,7 +102,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Windows Distro
         id: upload-windows-distro
-        uses: actions/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -111,7 +112,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Install Script
         id: upload-install-script
-        uses: actions/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -125,7 +126,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Upload MSI
-        uses: peter-evans/repository-dispatch@v1
+        uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: upload-msi
@@ -137,7 +138,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Release Notes
-        uses: peter-evans/repository-dispatch@v1
+        uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: release-notes
@@ -148,7 +149,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Bump Homebrew
-        uses: peter-evans/repository-dispatch@v1
+        uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: bump-homebrew
@@ -159,8 +160,19 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Performance Benchmarks
-        uses: peter-evans/repository-dispatch@v1
+        uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: release-dolt
           client-payload: '{"version": "${{ needs.format-version.outputs.version }}", "actor": "${{ github.actor }}"}'
+
+  docker-image-push:
+    needs: [ format-version, create-release ]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Trigger Push Docker Image
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: push-docker-image
+          client-payload: '{"version": "${{ needs.format-version.outputs.version }}"}'

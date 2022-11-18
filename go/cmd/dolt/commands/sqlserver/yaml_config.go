@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 )
 
 func strPtr(s string) *string {
@@ -114,7 +115,11 @@ type MetricsYAMLConfig struct {
 }
 
 type RemotesapiYAMLConfig struct {
-	Port *int `yaml:"port"`
+	Port_field *int `yaml:"port"`
+}
+
+func (r RemotesapiYAMLConfig) Port() int {
+	return *r.Port_field
 }
 
 type UserSessionVars struct {
@@ -134,12 +139,16 @@ type YAMLConfig struct {
 	CfgDirStr         *string               `yaml:"cfg_dir"`
 	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
 	RemotesapiConfig  RemotesapiYAMLConfig  `yaml:"remotesapi"`
+	ClusterCfg        *ClusterYAMLConfig    `yaml:"cluster"`
 	PrivilegeFile     *string               `yaml:"privilege_file"`
+	BranchControlFile *string               `yaml:"branch_control_file"`
 	Vars              []UserSessionVars     `yaml:"user_session_vars"`
 	Jwks              []engine.JwksConfig   `yaml:"jwks"`
+	GoldenMysqlConn   *string               `yaml:"golden_mysql_conn"`
 }
 
 var _ ServerConfig = YAMLConfig{}
+var _ validatingServerConfig = YAMLConfig{}
 
 func NewYamlConfig(configFileData []byte) (YAMLConfig, error) {
 	var cfg YAMLConfig
@@ -340,7 +349,7 @@ func (cfg YAMLConfig) MetricsPort() int {
 }
 
 func (cfg YAMLConfig) RemotesapiPort() *int {
-	return cfg.RemotesapiConfig.Port
+	return cfg.RemotesapiConfig.Port_field
 }
 
 // PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
@@ -350,6 +359,14 @@ func (cfg YAMLConfig) PrivilegeFilePath() string {
 		return *cfg.PrivilegeFile
 	}
 	return filepath.Join(cfg.CfgDir(), defaultPrivilegeFilePath)
+}
+
+// BranchControlFilePath returns the path to the file which contains the branch control permissions.
+func (cfg YAMLConfig) BranchControlFilePath() string {
+	if cfg.BranchControlFile != nil {
+		return *cfg.BranchControlFile
+	}
+	return filepath.Join(cfg.CfgDir(), defaultBranchControlFilePath)
 }
 
 // UserVars is an array containing user specific session variables
@@ -443,4 +460,91 @@ func (cfg YAMLConfig) Socket() string {
 		return defaultUnixSocketFilePath
 	}
 	return *cfg.ListenerConfig.Socket
+}
+
+func (cfg YAMLConfig) goldenMysqlConnectionString() (s string) {
+	if cfg.GoldenMysqlConn != nil {
+		s = *cfg.GoldenMysqlConn
+	}
+	return
+}
+
+func (cfg YAMLConfig) ClusterConfig() cluster.Config {
+	if cfg.ClusterCfg == nil {
+		return nil
+	}
+	return cfg.ClusterCfg
+}
+
+type ClusterYAMLConfig struct {
+	StandbyRemotes_field []standbyRemoteYAMLConfig   `yaml:"standby_remotes"`
+	BootstrapRole_field  string                      `yaml:"bootstrap_role"`
+	BootstrapEpoch_field int                         `yaml:"bootstrap_epoch"`
+	Remotesapi           clusterRemotesAPIYAMLConfig `yaml:"remotesapi"`
+}
+
+type standbyRemoteYAMLConfig struct {
+	Name_field              string `yaml:"name"`
+	RemoteURLTemplate_field string `yaml:"remote_url_template"`
+}
+
+func (c standbyRemoteYAMLConfig) Name() string {
+	return c.Name_field
+}
+
+func (c standbyRemoteYAMLConfig) RemoteURLTemplate() string {
+	return c.RemoteURLTemplate_field
+}
+
+func (c *ClusterYAMLConfig) StandbyRemotes() []cluster.StandbyRemoteConfig {
+	ret := make([]cluster.StandbyRemoteConfig, len(c.StandbyRemotes_field))
+	for i := range c.StandbyRemotes_field {
+		ret[i] = c.StandbyRemotes_field[i]
+	}
+	return ret
+}
+
+func (c *ClusterYAMLConfig) BootstrapRole() string {
+	return c.BootstrapRole_field
+}
+
+func (c *ClusterYAMLConfig) BootstrapEpoch() int {
+	return c.BootstrapEpoch_field
+}
+
+func (c *ClusterYAMLConfig) RemotesAPIConfig() cluster.RemotesAPIConfig {
+	return c.Remotesapi
+}
+
+type clusterRemotesAPIYAMLConfig struct {
+	Port_      int      `yaml:"port"`
+	TLSKey_    string   `yaml:"tls_key"`
+	TLSCert_   string   `yaml:"tls_cert"`
+	TLSCA_     string   `yaml:"tls_ca"`
+	URLMatches []string `yaml:"server_name_urls"`
+	DNSMatches []string `yaml:"server_name_dns"`
+}
+
+func (c clusterRemotesAPIYAMLConfig) Port() int {
+	return c.Port_
+}
+
+func (c clusterRemotesAPIYAMLConfig) TLSKey() string {
+	return c.TLSKey_
+}
+
+func (c clusterRemotesAPIYAMLConfig) TLSCert() string {
+	return c.TLSCert_
+}
+
+func (c clusterRemotesAPIYAMLConfig) TLSCA() string {
+	return c.TLSCA_
+}
+
+func (c clusterRemotesAPIYAMLConfig) ServerNameURLMatches() []string {
+	return c.URLMatches
+}
+
+func (c clusterRemotesAPIYAMLConfig) ServerNameDNSMatches() []string {
+	return c.DNSMatches
 }

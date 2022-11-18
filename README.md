@@ -219,7 +219,7 @@ MySQL comes with a MySQL server called `mysqld` and a MySQL client called `mysql
 mysql  Ver 8.0.29 for macos12.2 on x86_64 (Homebrew)
 ```
 
-Now, to connect the `mysql` client to Dolt, you have to force the MySQL client through the TCP interface by passing in a host and port. The default is the socket interface which Dolt supports, but is not on by default. The MySQL client also requires you specify a user, in this case `root`.
+Now, to connect the `mysql` client to Dolt, you are going to force the MySQL client through the TCP interface by passing in a host and port. The default is the socket interface which Dolt supports, but is only available on `localhost`. So, it's better to show off the TCP interface. The MySQL client also requires you specify a user, in this case `root`.
 
 ```bash
 % mysql --host 127.0.0.1 --port 3306 -uroot
@@ -584,10 +584,10 @@ mysql> select * from employees as of 'modifications';
 5 rows in set (0.01 sec)
 ```
 
-If I'd like to see the diff between the two branches, I can use the `dolt_diff()` table function. It takes the table name and two branches as arguments.
+If I'd like to see the diff between the two branches, I can use the `dolt_diff()` table function. It takes two branches and the table name as arguments.
 
 ```
-mysql> select * from dolt_diff('employees', 'main','modifications');
+mysql> select * from dolt_diff('main', 'modifications', 'employees');
 +--------------+---------------+-------+---------------+-------------------------+----------------+-----------------+---------+-------------+-------------------------+-----------+
 | to_last_name | to_first_name | to_id | to_commit     | to_commit_date          | from_last_name | from_first_name | from_id | from_commit | from_commit_date        | diff_type |
 +--------------+---------------+-------+---------------+-------------------------+----------------+-----------------+---------+-------------+-------------------------+-----------+

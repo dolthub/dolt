@@ -14,14 +14,14 @@ teardown() {
 }
 
 @test "migration-integration: first-hour-db" {
-    dolt clone dolthub/first-hour-db
-    cd first-hour-db
+    dolt clone https://doltremoteapi.dolthub.com/dolthub/first-hour-db-migration-int
+    cd first-hour-db-migration-int
 
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
-    [[ ! "$output" =~ "8e1og3l23515k2ag57rcurqt6btusl6h" ]] || false
+    [[ ! "$output" =~ "tdkt7s7805k1ml4hu37pm688g5i0b8ie" ]] || false
 
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
@@ -29,7 +29,7 @@ teardown() {
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "8e1og3l23515k2ag57rcurqt6btusl6h" ]] || false
+    [[ "$output" =~ "7jrvg1ajcdq6t9sevcejv4e9o0fgrmle" ]] || false
     [[ ! "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
 
     # validate TEXT migration
@@ -39,15 +39,15 @@ teardown() {
 }
 
 @test "migration-integration: first-hour-db after garbage collection" {
-    dolt clone dolthub/first-hour-db
-    cd first-hour-db
+    dolt clone https://doltremoteapi.dolthub.com/dolthub/first-hour-db-migration-int
+    cd first-hour-db-migration-int
     dolt gc
 
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
-    [[ ! "$output" =~ "8e1og3l23515k2ag57rcurqt6btusl6h" ]] || false
+    [[ ! "$output" =~ "tdkt7s7805k1ml4hu37pm688g5i0b8ie" ]] || false
 
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
@@ -55,7 +55,7 @@ teardown() {
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "8e1og3l23515k2ag57rcurqt6btusl6h" ]] || false
+    [[ "$output" =~ "7jrvg1ajcdq6t9sevcejv4e9o0fgrmle" ]] || false
     [[ ! "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
 
     # validate TEXT migration
@@ -65,14 +65,14 @@ teardown() {
 }
 
 @test "migration-integration: us-jails" {
-    dolt clone dolthub/us-jails
-    cd us-jails
+    dolt clone https://doltremoteapi.dolthub.com/dolthub/us-jails-migration-integration
+    cd us-jails-migration-integration
 
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "u8s83gapv7ghnbmrtpm8q5es0dbl7lpd" ]] || false
-    [[ ! "$output" =~ "mebtqve3n7hgn565lp0gru3k82qoei67" ]] || false
+    [[ ! "$output" =~ "apdp3stea20mmm80oiu2ipo07a7v1hvb" ]] || false
 
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
@@ -80,6 +80,6 @@ teardown() {
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "mebtqve3n7hgn565lp0gru3k82qoei67" ]] || false
+    [[ "$output" =~ "apdp3stea20mmm80oiu2ipo07a7v1hvb" ]] || false
     [[ ! "$output" =~ "u8s83gapv7ghnbmrtpm8q5es0dbl7lpd" ]] || false
 }

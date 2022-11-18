@@ -16,12 +16,15 @@ package sqlserver
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"path/filepath"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 )
 
 // LogLevel defines the available levels of logging for the server.
@@ -51,6 +54,7 @@ const (
 	defaultDataDir                 = "."
 	defaultCfgDir                  = ".doltcfg"
 	defaultPrivilegeFilePath       = "privileges.db"
+	defaultBranchControlFilePath   = "branch_control.db"
 	defaultMetricsHost             = ""
 	defaultMetricsPort             = -1
 	defaultAllowCleartextPasswords = false
@@ -133,6 +137,8 @@ type ServerConfig interface {
 	// PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
 	// JSON string.
 	PrivilegeFilePath() string
+	// BranchControlFilePath returns the path to the file which contains the branch control permissions.
+	BranchControlFilePath() string
 	// UserVars is an array containing user specific session variables
 	UserVars() []UserSessionVars
 	// JwksConfig is an array containing jwks config
@@ -146,6 +152,15 @@ type ServerConfig interface {
 	// as a dolt remote for things like `clone`, `fetch` and read
 	// replication.
 	RemotesapiPort() *int
+	// ClusterConfig is the configuration for clustering in this sql-server.
+	ClusterConfig() cluster.Config
+}
+
+type validatingServerConfig interface {
+	ServerConfig
+	// goldenMysqlConnectionString returns a connection string for a mysql
+	// instance that can be used to validate query results
+	goldenMysqlConnectionString() string
 }
 
 type commandLineServerConfig struct {
@@ -167,9 +182,11 @@ type commandLineServerConfig struct {
 	requireSecureTransport  bool
 	persistenceBehavior     string
 	privilegeFilePath       string
+	branchControlFilePath   string
 	allowCleartextPasswords bool
 	socket                  string
 	remotesapiPort          *int
+	goldenMysqlConn         string
 }
 
 var _ ServerConfig = (*commandLineServerConfig)(nil)
@@ -273,10 +290,19 @@ func (cfg *commandLineServerConfig) RemotesapiPort() *int {
 	return cfg.remotesapiPort
 }
 
+func (cfg *commandLineServerConfig) ClusterConfig() cluster.Config {
+	return nil
+}
+
 // PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
 // JSON string.
 func (cfg *commandLineServerConfig) PrivilegeFilePath() string {
 	return cfg.privilegeFilePath
+}
+
+// BranchControlFilePath returns the path to the file which contains the branch control permissions.
+func (cfg *commandLineServerConfig) BranchControlFilePath() string {
+	return cfg.branchControlFilePath
 }
 
 // UserVars is an array containing user specific session variables.
@@ -399,6 +425,12 @@ func (cfg *commandLineServerConfig) withPrivilegeFilePath(privFilePath string) *
 	return cfg
 }
 
+// withBranchControlFilePath updates the path to the file which contains the branch control permissions
+func (cfg *commandLineServerConfig) withBranchControlFilePath(branchControlFilePath string) *commandLineServerConfig {
+	cfg.branchControlFilePath = branchControlFilePath
+	return cfg
+}
+
 func (cfg *commandLineServerConfig) withAllowCleartextPasswords(allow bool) *commandLineServerConfig {
 	cfg.allowCleartextPasswords = allow
 	return cfg
@@ -413,6 +445,15 @@ func (cfg *commandLineServerConfig) WithSocket(sockFilePath string) *commandLine
 // WithRemotesapiPort sets the remotesapi port to use.
 func (cfg *commandLineServerConfig) WithRemotesapiPort(port *int) *commandLineServerConfig {
 	cfg.remotesapiPort = port
+	return cfg
+}
+
+func (cfg *commandLineServerConfig) goldenMysqlConnectionString() string {
+	return cfg.goldenMysqlConn
+}
+
+func (cfg *commandLineServerConfig) withGoldenMysqlConnectionString(cs string) *commandLineServerConfig {
+	cfg.goldenMysqlConn = cs
 	return cfg
 }
 
@@ -432,6 +473,7 @@ func DefaultServerConfig() *commandLineServerConfig {
 		dataDir:                 defaultDataDir,
 		cfgDir:                  filepath.Join(defaultDataDir, defaultCfgDir),
 		privilegeFilePath:       filepath.Join(defaultDataDir, defaultCfgDir, defaultPrivilegeFilePath),
+		branchControlFilePath:   filepath.Join(defaultDataDir, defaultCfgDir, defaultBranchControlFilePath),
 		allowCleartextPasswords: defaultAllowCleartextPasswords,
 	}
 }
@@ -452,6 +494,40 @@ func ValidateConfig(config ServerConfig) error {
 	}
 	if config.RequireSecureTransport() && config.TLSCert() == "" && config.TLSKey() == "" {
 		return fmt.Errorf("require_secure_transport can only be `true` when a tls_key and tls_cert are provided.")
+	}
+	return ValidateClusterConfig(config.ClusterConfig())
+}
+
+func ValidateClusterConfig(config cluster.Config) error {
+	if config == nil {
+		return nil
+	}
+	remotes := config.StandbyRemotes()
+	if len(remotes) == 0 {
+		return errors.New("cluster config: must supply standby_remotes when supplying cluster configuration.")
+	}
+	for i := range remotes {
+		if remotes[i].Name() == "" {
+			return fmt.Errorf("cluster: standby_remotes[%d]: name: Cannot be empty", i)
+		}
+		if strings.Index(remotes[i].RemoteURLTemplate(), "{database}") == -1 {
+			return fmt.Errorf("cluster: standby_remotes[%d]: remote_url_template: is \"%s\" but must include the {database} template parameter", i, remotes[i].RemoteURLTemplate())
+		}
+	}
+	if config.BootstrapRole() != "" && config.BootstrapRole() != "primary" && config.BootstrapRole() != "standby" {
+		return fmt.Errorf("cluster: boostrap_role: is \"%s\" but must be \"primary\" or \"standby\"", config.BootstrapRole())
+	}
+	if config.BootstrapEpoch() < 0 {
+		return fmt.Errorf("cluster: boostrap_epoch: is %d but must be >= 0", config.BootstrapEpoch())
+	}
+	if config.RemotesAPIConfig().Port() < 0 || config.RemotesAPIConfig().Port() > 65535 {
+		return fmt.Errorf("cluster: remotesapi: port: is not in range 0-65535: %d", config.RemotesAPIConfig().Port())
+	}
+	if config.RemotesAPIConfig().TLSKey() == "" && config.RemotesAPIConfig().TLSCert() != "" {
+		return fmt.Errorf("cluster: remotesapi: tls_key: must supply a tls_key if you supply a tls_cert")
+	}
+	if config.RemotesAPIConfig().TLSKey() != "" && config.RemotesAPIConfig().TLSCert() == "" {
+		return fmt.Errorf("cluster: remotesapi: tls_cert: must supply a tls_cert if you supply a tls_key")
 	}
 	return nil
 }
@@ -478,12 +554,12 @@ func ConnectionString(config ServerConfig, database string) string {
 // ConfigInfo returns a summary of some of the config which contains some of the more important information
 func ConfigInfo(config ServerConfig) string {
 	socket := ""
-	if config.Socket() != "" {
-		s := config.Socket()
-		if s == "" {
-			s = defaultUnixSocketFilePath
-		}
-		socket = fmt.Sprintf(`|S="%v"`, s)
+	sock, useSock, err := checkForUnixSocket(config)
+	if err != nil {
+		panic(err)
+	}
+	if useSock {
+		socket = fmt.Sprintf(`|S="%v"`, sock)
 	}
 	return fmt.Sprintf(`HP="%v:%v"|T="%v"|R="%v"|L="%v"%s`, config.Host(), config.Port(),
 		config.ReadTimeout(), config.ReadOnly(), config.LogLevel(), socket)

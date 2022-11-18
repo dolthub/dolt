@@ -1,0 +1,15 @@
+datasource db {
+    provider = "mysql"
+    url      = "mysql://dolt@localhost:3306/dolt"
+}
+
+model Sample {
+    id           Int      @id @default(autoincrement())
+    cleanBath    String
+    cleanKitchen String
+    date         DateTime
+}
+
+generator client {
+    provider = "prisma-client-js"
+}

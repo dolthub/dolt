@@ -49,6 +49,27 @@ teardown() {
     run dolt diff head head^
     [ "$status" -eq 0 ]
     [[ "$output" =~ "- | 0" ]] || false
+
+    # Two dot
+    run dolt diff head..
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+
+    run dolt diff head^..
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 0" ]] || false
+
+    run dolt diff head^..head
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 0" ]] || false
+
+    run dolt diff head..head^
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- | 0" ]] || false
+
+    run dolt diff ..head^
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- | 0" ]] || false
 }
 
 @test "diff: dirty working set" {
@@ -68,6 +89,132 @@ teardown() {
     run dolt diff head
     [ "$status" -eq 0 ]
     [[ "$output" =~ "+ | 0" ]] || false
+}
+
+@test "diff: two and three dot diff" {
+    dolt checkout main
+    dolt sql -q 'insert into test values (0,0,0,0,0,0)'
+    dolt add .
+    dolt commit -m table
+    dolt checkout -b branch1
+    dolt sql -q 'insert into test values (1,1,1,1,1,1)'
+    dolt add .
+    dolt commit -m row
+    dolt checkout main
+    dolt sql -q 'insert into test values (2,2,2,2,2,2)'
+    dolt add .
+    dolt commit -m newrow
+
+    # Two dot shows all changes between branches
+    run dolt diff branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff branch1..
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff branch1..main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff branch1 main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff ..branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ "$output" =~ "- | 2" ]] || false
+
+    run dolt diff main..branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ "$output" =~ "- | 2" ]] || false
+
+    run dolt diff main branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ "$output" =~ "- | 2" ]] || false
+
+    # Three dot shows changes between common ancestor and branch
+    run dolt diff branch1...
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff $(dolt merge-base branch1 HEAD)
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff --merge-base branch1 
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff branch1...main
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff --merge-base branch1 main
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff main...branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ ! "$output" =~ "- | 2" ]] || false
+
+    run dolt diff --merge-base main branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ ! "$output" =~ "- | 2" ]] || false
+
+    run dolt diff --merge-base main branch1 test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ ! "$output" =~ "- | 2" ]] || false
+
+    run dolt diff $(dolt merge-base branch1 main) main
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "- | 1" ]] || false
+    [[ "$output" =~ "+ | 2" ]] || false
+
+    run dolt diff $(dolt merge-base main branch1) branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ ! "$output" =~ "- | 2" ]] || false
+
+    # Dots work with --summary
+    run dolt diff main..branch1 --summary
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1 Row Unmodified (50.00%)" ]] || false
+    [[ "$output" =~ "1 Row Added (50.00%)" ]] || false
+    [[ "$output" =~ "1 Row Deleted (50.00%)" ]] || false
+    [[ "$output" =~ "0 Rows Modified (0.00%)" ]] || false
+    [[ "$output" =~ "6 Cells Added (50.00%)" ]] || false
+    [[ "$output" =~ "6 Cells Deleted (50.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
+    [[ "$output" =~ "(2 Row Entries vs 2 Row Entries)" ]] || false
+
+    run dolt diff main...branch1 --summary
+    echo $output
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1 Row Unmodified (100.00%)" ]] || false
+    [[ "$output" =~ "1 Row Added (100.00%)" ]] || false
+    [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
+    [[ "$output" =~ "0 Rows Modified (0.00%)" ]] || false
+    [[ "$output" =~ "6 Cells Added (100.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
+    [[ "$output" =~ "(1 Row Entry vs 2 Row Entries)" ]] || false
 }
 
 @test "diff: data and schema changes" {
@@ -242,7 +389,27 @@ EOF
     run dolt diff head^ head fake
     [ "$status" -ne 0 ]
     [[ "$output" =~ "table fake does not exist in either revision" ]] || false
+
+    # Two dot
+    run dolt diff head^..head test other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 0" ]] || false
+    [[ "$output" =~ "+ | 9" ]] || false
+
+    run dolt diff head^..head fake
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "table fake does not exist in either revision" ]] || false
+
+    run dolt diff head^.. test other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 0" ]] || false
+    [[ "$output" =~ "+ | 9" ]] || false
+
+    run dolt diff head^.. fake
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "table fake does not exist in either revision" ]] || false
 }
+
 
 @test "diff: with table and branch of the same name" {
     dolt sql -q 'create table dolomite (pk int not null primary key)'
@@ -267,6 +434,10 @@ EOF
     [[ "$output" =~ "+ | 9" ]] || false
     [[ ! "$output" =~ "+ | 0" ]] || false
     run dolt diff head^ head dolomite
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 9" ]] || false
+    [[ ! "$output" =~ "+ | 0" ]] || false
+    run dolt diff head^..head dolomite
     [ "$status" -eq 0 ]
     [[ "$output" =~ "+ | 9" ]] || false
     [[ ! "$output" =~ "+ | 0" ]] || false
@@ -326,8 +497,10 @@ SQL
     [[ "$output" =~ "2 Rows Added (100.00%)" ]] || false
     [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
     [[ "$output" =~ "0 Rows Modified (0.00%)" ]] || false
+    [[ "$output" =~ "12 Cells Added (100.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
     [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
-    [[ "$output" =~ "(2 Entries vs 4 Entries)" ]] || false
+    [[ "$output" =~ "(2 Row Entries vs 4 Row Entries)" ]] || false
 
     dolt add test
     dolt commit -m "added two rows"
@@ -338,8 +511,10 @@ SQL
     [[ "$output" =~ "0 Rows Added (0.00%)" ]] || false
     [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
     [[ "$output" =~ "1 Row Modified (25.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Added (0.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
     [[ "$output" =~ "2 Cells Modified (8.33%)" ]] || false
-    [[ "$output" =~ "(4 Entries vs 4 Entries)" ]] || false
+    [[ "$output" =~ "(4 Row Entries vs 4 Row Entries)" ]] || false
 
     dolt add test
     dolt commit -m "modified first row"
@@ -350,8 +525,10 @@ SQL
     [[ "$output" =~ "0 Rows Added (0.00%)" ]] || false
     [[ "$output" =~ "1 Row Deleted (25.00%)" ]] || false
     [[ "$output" =~ "0 Rows Modified (0.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Added (0.00%)" ]] || false
+    [[ "$output" =~ "6 Cells Deleted (25.00%)" ]] || false
     [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
-    [[ "$output" =~ "(4 Entries vs 3 Entries)" ]] || false
+    [[ "$output" =~ "(4 Row Entries vs 3 Row Entries)" ]] || false
 }
 
 @test "diff: summary comparing row with a deleted cell and an added cell" {
@@ -367,8 +544,10 @@ SQL
     [[ "$output" =~ "0 Rows Added (0.00%)" ]] || false
     [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
     [[ "$output" =~ "1 Row Modified (100.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Added (0.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
     [[ "$output" =~ "1 Cell Modified (16.67%)" ]] || false
-    [[ "$output" =~ "(1 Entry vs 1 Entry)" ]] || false
+    [[ "$output" =~ "(1 Row Entry vs 1 Row Entry)" ]] || false
     dolt add test
     dolt commit -m "row modified"
     dolt sql -q "replace into test values (0, 1, 2, 3, 4, 5)"
@@ -378,8 +557,10 @@ SQL
     [[ "$output" =~ "0 Rows Added (0.00%)" ]] || false
     [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
     [[ "$output" =~ "1 Row Modified (100.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Added (0.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
     [[ "$output" =~ "1 Cell Modified (16.67%)" ]] || false
-    [[ "$output" =~ "(1 Entry vs 1 Entry)" ]] || false
+    [[ "$output" =~ "(1 Row Entry vs 1 Row Entry)" ]] || false
 }
 
 @test "diff: summary comparing two branches" {
@@ -397,8 +578,20 @@ SQL
     [[ "$output" =~ "1 Row Added (100.00%)" ]] || false
     [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
     [[ "$output" =~ "0 Rows Modified (0.00%)" ]] || false
+    [[ "$output" =~ "6 Cells Added (100.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
     [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
-    [[ "$output" =~ "(1 Entry vs 2 Entries)" ]] || false
+    [[ "$output" =~ "(1 Row Entry vs 2 Row Entries)" ]] || false
+    run dolt diff --summary firstbranch..newbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1 Row Unmodified (100.00%)" ]] || false
+    [[ "$output" =~ "1 Row Added (100.00%)" ]] || false
+    [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
+    [[ "$output" =~ "0 Rows Modified (0.00%)" ]] || false
+    [[ "$output" =~ "6 Cells Added (100.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
+    [[ "$output" =~ "(1 Row Entry vs 2 Row Entries)" ]] || false
 }
 
 @test "diff: summary shows correct changes after schema change" {
@@ -423,8 +616,10 @@ DELIM
     [[ "$output" =~ "1 Row Added (33.33%)" ]] || false
     [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
     [[ "$output" =~ "0 Rows Modified (0.00%)" ]] || false
+    [[ "$output" =~ "10 Cells Added (55.56%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
     [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
-    [[ "$output" =~ "(3 Entries vs 4 Entries)" ]] || false
+    [[ "$output" =~ "(3 Row Entries vs 4 Row Entries)" ]] || false
 
     dolt sql -q "replace into employees values (0, 'tim', 'sehn', 'ceo', '2 years ago', '', 'Santa Monica')"
     
@@ -435,8 +630,10 @@ DELIM
     [[ "$output" =~ "1 Row Added (33.33%)" ]] || false
     [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
     [[ "$output" =~ "1 Row Modified (33.33%)" ]] || false
+    [[ "$output" =~ "10 Cells Added (55.56%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
     [[ "$output" =~ "2 Cells Modified (11.11%)" ]] || false
-    [[ "$output" =~ "(3 Entries vs 4 Entries)" ]] || false
+    [[ "$output" =~ "(3 Row Entries vs 4 Row Entries)" ]] || false
 }
 
 @test "diff: summary gets summaries for all tables with changes" {
@@ -540,6 +737,22 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error running diff query" ]] || false
     [[ "$output" =~ "where pk=4" ]] || false
+
+    # Two dot
+    run dolt diff test1..test2
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "44" ]] || false
+    [[ "$output" =~ "55" ]] || false
+
+    run dolt diff test1..test2 --where "from_pk=4 OR to_pk=5"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "44" ]] || false
+    [[ "$output" =~ "55" ]] || false
+    
+    run dolt diff test1..test2 --where "pk=4"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error running diff query" ]] || false
+    [[ "$output" =~ "where pk=4" ]] || false
 }
 
 @test "diff: diff summary incorrect primary key set change regression test" {
@@ -627,6 +840,36 @@ SQL
     run dolt diff ref.with.period test-branch
     [ $status -eq 1 ]
     [[ ! $output =~ "panic" ]]
+
+    run dolt diff $FIRST_COMMIT..test-branch
+    [ $status -eq 0 ]
+    [[ ! $output =~ "panic" ]]
+    run dolt diff main@$FIRST_COMMIT..test-branch
+    [ $status -eq 1 ]
+    [[ ! $output =~ "panic" ]]
+    run dolt diff ref.with.period..test-branch
+    [ $status -eq 1 ]
+    [[ ! $output =~ "panic" ]]
+
+    run dolt diff $FIRST_COMMIT...test-branch
+    [ $status -eq 0 ]
+    [[ ! $output =~ "panic" ]]
+    run dolt diff main@$FIRST_COMMIT...test-branch
+    [ $status -eq 1 ]
+    [[ ! $output =~ "panic" ]]
+    run dolt diff ref.with.period...test-branch
+    [ $status -eq 1 ]
+    [[ ! $output =~ "panic" ]]
+
+    run dolt diff --merge-base $FIRST_COMMIT test-branch
+    [ $status -eq 0 ]
+    [[ ! $output =~ "panic" ]]
+    run dolt diff --merge-base main@$FIRST_COMMIT test-branch
+    [ $status -eq 1 ]
+    [[ ! $output =~ "panic" ]]
+    run dolt diff --merge-base ref.with.period test-branch
+    [ $status -eq 1 ]
+    [[ ! $output =~ "panic" ]]
 }
 
 @test "diff: with foreign key and sql output" {
@@ -677,6 +920,13 @@ SQL
     dolt add -A
     dolt commit -m "hello"
     run dolt diff main another-branch
+    echo $output
+    ! [[ "$output" =~ "panic" ]] || false
+    [[ "$output" =~ "pv1" ]] || false
+    [[ "$output" =~ "cv1" ]] || false
+    [ $status -eq 0 ]
+
+    run dolt diff main..another-branch
     echo $output
     ! [[ "$output" =~ "panic" ]] || false
     [[ "$output" =~ "pv1" ]] || false

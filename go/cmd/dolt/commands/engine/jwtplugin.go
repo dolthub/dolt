@@ -65,7 +65,10 @@ func validateJWT(config []JwksConfig, username, identity, token string, reqTime 
 	if err != nil {
 		return false, err
 	}
-	vd := jwtauth.NewJWTValidator(pr)
+	vd, err := jwtauth.NewJWTValidator(pr)
+	if err != nil {
+		return false, err
+	}
 	claims, err := vd.ValidateJWT(token, reqTime)
 	if err != nil {
 		return false, err

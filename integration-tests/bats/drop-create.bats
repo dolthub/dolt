@@ -397,3 +397,36 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "table not found: test" ]] || false
 }
+
+@test "drop-create: regression test for 0 value tags" {
+    dolt sql -q "CREATE TABLE clan_home_level (level INTEGER NOT NULL, price_teleport JSON NOT NULL);"
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "clan_home_level | price_teleport | 0" ]] || false
+
+    dolt commit -Am "add table"
+
+    dolt sql -q "DROP TABLE clan_home_level;"
+    dolt sql -q "CREATE TABLE clan_home_level (level INTEGER NOT NULL, price_teleport JSON NOT NULL);"
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "clan_home_level | price_teleport | 0" ]] || false
+}
+
+@test "drop-create: ensure no tag collisions" {
+    dolt sql -q "CREATE TABLE my_table (pk int primary key)"
+    dolt commit -Am "added my_table"
+
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "my_table | pk     | 2803" ]] || false
+
+    dolt sql -q "DROP TABLE my_table"
+    dolt sql -q "CREATE TABLE mytable (pk int primary key)"
+    dolt sql -q "CREATE TABLE my_table (pk int primary key)"
+
+    run dolt schema tags
+    [ $status -eq 0 ]
+    [[ $output =~ "my_table | pk     | 2803" ]] || false
+    [[ $output =~ "mytable  | pk     | 11671" ]] || false
+}

@@ -16,6 +16,7 @@ package remotesrv
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -39,6 +40,8 @@ type Server struct {
 	grpcSrv  *grpc.Server
 	httpPort int
 	httpSrv  http.Server
+
+	tlsConfig *tls.Config
 }
 
 func (s *Server) GracefulStop() {
@@ -54,9 +57,17 @@ type ServerArgs struct {
 	FS       filesys.Filesys
 	DBCache  DBCache
 	ReadOnly bool
+	Options  []grpc.ServerOption
+
+	HttpInterceptor func(http.Handler) http.Handler
+
+	// If supplied, the listener(s) returned from Listeners() will be TLS
+	// listeners. The scheme used in the URLs returned from the gRPC server
+	// will be https.
+	TLSConfig *tls.Config
 }
 
-func NewServer(args ServerArgs) *Server {
+func NewServer(args ServerArgs) (*Server, error) {
 	if args.Logger == nil {
 		args.Logger = logrus.NewEntry(logrus.StandardLogger())
 	}
@@ -64,16 +75,30 @@ func NewServer(args ServerArgs) *Server {
 	s := new(Server)
 	s.stopChan = make(chan struct{})
 
+	sealer, err := NewSingleSymmetricKeySealer()
+	if err != nil {
+		return nil, err
+	}
+
+	scheme := "http"
+	if args.TLSConfig != nil {
+		scheme = "https"
+	}
+	s.tlsConfig = args.TLSConfig
+
 	s.wg.Add(2)
 	s.grpcPort = args.GrpcPort
-	s.grpcSrv = grpc.NewServer(grpc.MaxRecvMsgSize(128 * 1024 * 1024))
-	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(args.Logger, args.HttpHost, args.DBCache, args.FS)
+	s.grpcSrv = grpc.NewServer(append([]grpc.ServerOption{grpc.MaxRecvMsgSize(128 * 1024 * 1024)}, args.Options...)...)
+	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(args.Logger, args.HttpHost, args.DBCache, args.FS, scheme, sealer)
 	if args.ReadOnly {
 		chnkSt = ReadOnlyChunkStore{chnkSt}
 	}
 	remotesapi.RegisterChunkStoreServiceServer(s.grpcSrv, chnkSt)
 
-	var handler http.Handler = newFileHandler(args.Logger, args.DBCache, args.FS, args.ReadOnly)
+	var handler http.Handler = newFileHandler(args.Logger, args.DBCache, args.FS, args.ReadOnly, sealer)
+	if args.HttpInterceptor != nil {
+		handler = args.HttpInterceptor(handler)
+	}
 	if args.HttpPort == args.GrpcPort {
 		handler = grpcMultiplexHandler(s.grpcSrv, handler)
 	} else {
@@ -86,7 +111,7 @@ func NewServer(args ServerArgs) *Server {
 		Handler: handler,
 	}
 
-	return s
+	return s, nil
 }
 
 func grpcMultiplexHandler(grpcSrv *grpc.Server, handler http.Handler) http.Handler {
@@ -107,14 +132,25 @@ type Listeners struct {
 }
 
 func (s *Server) Listeners() (Listeners, error) {
-	httpListener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.httpPort))
+	var httpListener net.Listener
+	var grpcListener net.Listener
+	var err error
+	if s.tlsConfig != nil {
+		httpListener, err = tls.Listen("tcp", fmt.Sprintf(":%d", s.httpPort), s.tlsConfig)
+	} else {
+		httpListener, err = net.Listen("tcp", fmt.Sprintf(":%d", s.httpPort))
+	}
 	if err != nil {
 		return Listeners{}, err
 	}
 	if s.httpPort == s.grpcPort {
 		return Listeners{http: httpListener}, nil
 	}
-	grpcListener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.grpcPort))
+	if s.tlsConfig != nil {
+		grpcListener, err = tls.Listen("tcp", fmt.Sprintf(":%d", s.grpcPort), s.tlsConfig)
+	} else {
+		grpcListener, err = net.Listen("tcp", fmt.Sprintf(":%d", s.grpcPort))
+	}
 	if err != nil {
 		httpListener.Close()
 		return Listeners{}, err

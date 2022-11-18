@@ -230,49 +230,34 @@ type chunkReader interface {
 	get(ctx context.Context, h addr, stats *Stats) ([]byte, error)
 	getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error)
 	getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error)
-	extract(ctx context.Context, chunks chan<- extractRecord) error
 	count() (uint32, error)
 	uncompressedLen() (uint64, error)
 
-	// Close releases resources retained by the |chunkReader|.
-	Close() error
-}
-
-type chunkReadPlanner interface {
-	findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool, err error)
-	getManyAtOffsets(
-		ctx context.Context,
-		eg *errgroup.Group,
-		offsetRecords offsetRecSlice,
-		found func(context.Context, *chunks.Chunk),
-		stats *Stats,
-	) error
-	getManyCompressedAtOffsets(
-		ctx context.Context,
-		eg *errgroup.Group,
-		offsetRecords offsetRecSlice,
-		found func(context.Context, CompressedChunk),
-		stats *Stats,
-	) error
+	// close releases resources retained by the |chunkReader|.
+	close() error
 }
 
 type chunkSource interface {
 	chunkReader
+
+	// hash returns the hash address of this chunkSource.
 	hash() (addr, error)
-	calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error)
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
 	reader(context.Context) (io.Reader, error)
+
 	// size returns the total size of the chunkSource: chunks, index, and footer
 	size() (uint64, error)
+
+	// index returns the tableIndex of this chunkSource.
 	index() (tableIndex, error)
 
-	// Clone returns a |chunkSource| with the same contents as the
+	// clone returns a |chunkSource| with the same contents as the
 	// original, but with independent |Close| behavior. A |chunkSource|
 	// cannot be |Close|d more than once, so if a |chunkSource| is being
 	// retained in two objects with independent life-cycle, it should be
 	// |Clone|d first.
-	Clone() (chunkSource, error)
+	clone() (chunkSource, error)
 }
 
 type chunkSources []chunkSource

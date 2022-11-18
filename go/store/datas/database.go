@@ -26,10 +26,9 @@ import (
 	"context"
 	"io"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
-
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -135,6 +134,8 @@ type Database interface {
 	// the ChunkStore that backs this Database. It must return "Unsupported"
 	// if this operation is not supported.
 	StatsSummary() string
+
+	Format() *types.NomsBinFormat
 
 	// chunkStore returns the ChunkStore used to read and write
 	// groups of values to the database efficiently. This interface is a low-

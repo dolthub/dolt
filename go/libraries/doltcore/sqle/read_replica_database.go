@@ -113,6 +113,11 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		return sql.ErrUnknownSystemVariable.New(dsess.ReplicateAllHeads)
 	}
 
+	behavior := pullBehavior_fastForward
+	if ReadReplicaForcePull() {
+		behavior = pullBehavior_forcePull
+	}
+
 	dSess := dsess.DSessFromSess(ctx.Session)
 	currentBranchRef, err := dSess.CWBHeadRef(ctx, rrd.name)
 	if err != nil {
@@ -131,7 +136,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		if err != nil {
 			return err
 		}
-		err = pullBranches(ctx, rrd, branches, currentBranchRef)
+		err = pullBranches(ctx, rrd, branches, currentBranchRef, behavior)
 		if err != nil {
 			return err
 		}
@@ -141,7 +146,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 			return err
 		}
 		toPull, toDelete, err := getReplicationBranches(ctx, rrd)
-		err = pullBranches(ctx, rrd, toPull, currentBranchRef)
+		err = pullBranches(ctx, rrd, toPull, currentBranchRef, behavior)
 		if err != nil {
 			return err
 		}
@@ -155,7 +160,12 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 	return nil
 }
 
-func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string, currentBranchRef ref.DoltRef) error {
+type pullBehavior bool
+
+const pullBehavior_fastForward pullBehavior = false
+const pullBehavior_forcePull pullBehavior = true
+
+func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string, currentBranchRef ref.DoltRef, behavior pullBehavior) error {
 	refSpecs, err := env.ParseRSFromArgs(rrd.remote.Name, branches)
 	if err != nil {
 		return err
@@ -176,7 +186,15 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string, 
 					return nil, err
 				}
 
-				err = rrd.ddb.FastForward(fetchCtx, rtRef, srcDBCommit)
+				if behavior == pullBehavior_forcePull {
+					commitHash, herr := srcDBCommit.HashOf()
+					if herr != nil {
+						return nil, err
+					}
+					err = rrd.ddb.SetHead(fetchCtx, rtRef, commitHash)
+				} else {
+					err = rrd.ddb.FastForward(fetchCtx, rtRef, srcDBCommit)
+				}
 				if err != nil {
 					return nil, err
 				}
@@ -188,7 +206,15 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string, 
 				switch {
 				case err != nil:
 				case branchExists:
-					err = rrd.ddb.FastForward(fetchCtx, branch, srcDBCommit)
+					if behavior == pullBehavior_forcePull {
+						commitHash, herr := srcDBCommit.HashOf()
+						if herr != nil {
+							return nil, err
+						}
+						err = rrd.ddb.SetHead(fetchCtx, branch, commitHash)
+					} else {
+						err = rrd.ddb.FastForward(fetchCtx, branch, srcDBCommit)
+					}
 				default:
 					err = rrd.ddb.NewBranchAtCommit(fetchCtx, branch, srcDBCommit)
 				}

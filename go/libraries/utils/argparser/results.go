@@ -17,6 +17,7 @@ package argparser
 import (
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
@@ -94,6 +95,11 @@ func (res *ArgParseResults) ContainsMany(names ...string) []string {
 func (res *ArgParseResults) GetValue(name string) (string, bool) {
 	val, ok := res.options[name]
 	return val, ok
+}
+
+func (res *ArgParseResults) GetValueList(name string) ([]string, bool) {
+	val, ok := res.options[name]
+	return strings.Split(val, ","), ok
 }
 
 func (res *ArgParseResults) GetValues(names ...string) map[string]string {
@@ -195,7 +201,7 @@ func (res *ArgParseResults) AnyFlagsEqualTo(val bool) *set.StrSet {
 func (res *ArgParseResults) FlagsEqualTo(names []string, val bool) *set.StrSet {
 	results := make([]string, 0, len(res.parser.Supported))
 	for _, name := range names {
-		opt, ok := res.parser.NameOrAbbrevToOpt[name]
+		opt, ok := res.parser.nameOrAbbrevToOpt[name]
 		if ok && opt.OptType == OptionalFlag {
 			_, ok := res.options[name]
 

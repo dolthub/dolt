@@ -230,6 +230,26 @@ teardown() {
     [[ "$output" =~ 0 ]] || false
 }
 
+@test "system-tables: revision databases can query dolt_remotes table" {
+    mkdir remote
+    dolt remote add origin file://remote/
+    dolt branch b1
+
+    run dolt sql <<SQL
+SELECT name FROM dolt_remotes;
+SQL
+    [ $status -eq 0 ]
+    [[ "$output" =~ "origin" ]] || false
+
+    DATABASE=$(echo $(basename $(pwd)) | tr '-' '_')
+    run dolt sql <<SQL
+USE $DATABASE/b1;
+SELECT name FROM dolt_remotes;
+SQL
+    [ $status -eq 0 ]
+    [[ "$output" =~ "origin" ]] || false
+}
+
 @test "system-tables: query dolt_diff system table" {
     dolt sql -q "CREATE TABLE testStaged (pk INT, c1 INT, PRIMARY KEY(pk))"
     dolt add testStaged

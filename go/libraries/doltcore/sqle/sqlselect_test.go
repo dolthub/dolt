@@ -24,8 +24,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -85,10 +87,16 @@ func LoadedLocalLocation() *time.Location {
 
 // BasicSelectTests cover basic select statement features and error handling
 func BasicSelectTests() []SelectTest {
-	headCommitHash := "73hc2robs4v0kt9taoe3m5hd49dmrgun"
-	if types.Format_Default == types.Format_DOLT_DEV {
-		headCommitHash = "4ej7hfduufg4o2837g3gc4p5uolrlmv9"
+	var headCommitHash string
+	switch types.Format_Default {
+	case types.Format_DOLT:
+		headCommitHash = "a0gt4vif0b0bf19g89k87gs55qqlqpod"
+	case types.Format_DOLT_DEV:
+		headCommitHash = "a0gt4vif0b0bf19g89k87gs55qqlqpod"
+	case types.Format_LD_1:
+		headCommitHash = "73hc2robs4v0kt9taoe3m5hd49dmrgun"
 	}
+
 	return []SelectTest{
 		{
 			Name:           "select * on primary key",
@@ -538,29 +546,34 @@ func BasicSelectTests() []SelectTest {
 			ExpectedSchema: CompressSchema(PeopleTestSchema),
 		},
 		{
-			Name:        "select *, binary + in where type mismatch",
-			Query:       "select * from people where first_name + 1 = 41",
-			ExpectedErr: "Type mismatch evaluating expression 'first_name + 1'",
+			Name:           "select *, binary + in where type mismatch",
+			Query:          "select * from people where first_name + 1 = 41",
+			ExpectedRows:   ToSqlRows(PeopleTestSchema),
+			ExpectedSchema: CompressSchema(PeopleTestSchema),
 		},
 		{
-			Name:        "select *, binary - in where type mismatch",
-			Query:       "select * from people where first_name - 1 = 39",
-			ExpectedErr: "Type mismatch evaluating expression 'first_name - 1'",
+			Name:           "select *, binary - in where type mismatch",
+			Query:          "select * from people where first_name - 1 = 39",
+			ExpectedRows:   ToSqlRows(PeopleTestSchema),
+			ExpectedSchema: CompressSchema(PeopleTestSchema),
 		},
 		{
-			Name:        "select *, binary / in where type mismatch",
-			Query:       "select * from people where first_name / 2 = 20",
-			ExpectedErr: "Type mismatch evaluating expression 'first_name / 2'",
+			Name:           "select *, binary / in where type mismatch",
+			Query:          "select * from people where first_name / 2 = 20",
+			ExpectedRows:   ToSqlRows(PeopleTestSchema),
+			ExpectedSchema: CompressSchema(PeopleTestSchema),
 		},
 		{
-			Name:        "select *, binary * in where type mismatch",
-			Query:       "select * from people where first_name * 2 = 80",
-			ExpectedErr: "Type mismatch evaluating expression 'first_name * 2'",
+			Name:           "select *, binary * in where type mismatch",
+			Query:          "select * from people where first_name * 2 = 80",
+			ExpectedRows:   ToSqlRows(PeopleTestSchema),
+			ExpectedSchema: CompressSchema(PeopleTestSchema),
 		},
 		{
-			Name:        "select *, binary % in where type mismatch",
-			Query:       "select * from people where first_name % 4 = 0",
-			ExpectedErr: "Type mismatch evaluating expression 'first_name % 4'",
+			Name:           "select *, binary % in where type mismatch",
+			Query:          "select * from people where first_name % 4 = 0",
+			ExpectedRows:   ToSqlRows(PeopleTestSchema, AllPeopleRows...), // invalid value is considered as 0
+			ExpectedSchema: CompressSchema(PeopleTestSchema),
 		},
 		{
 			Name:           "select * with where, order by",
@@ -969,216 +982,6 @@ var AsOfTests = []SelectTest{
 	},
 }
 
-// SQL is supposed to be case insensitive. These are tests of that promise.
-// Many of these are currently broken in go-myqsl-server. The queries return the correct results in all cases, but the
-// column names in the result schemas often have the wrong case. They sometimes use the case from the table, rather
-// than the case of the expression in the query (the correct behavior). This is a minor issue, but we should fix it
-// eventually.
-var CaseSensitivityTests = []SelectTest{
-	{
-		Name: "table name has mixed case, select lower case",
-		AdditionalSetup: CreateTableWithRowsFn("MiXeDcAsE",
-			NewSchema("test", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:          "select test from mixedcase",
-		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
-		ExpectedRows:   []sql.Row{{"1"}},
-	},
-	{
-		Name: "table name has mixed case, select upper case",
-		AdditionalSetup: CreateTableWithRowsFn("MiXeDcAsE",
-			NewSchema("test", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:          "select test from MIXEDCASE",
-		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
-		ExpectedRows:   []sql.Row{{"1"}},
-	},
-	{
-		Name: "qualified select *",
-		AdditionalSetup: CreateTableWithRowsFn("MiXeDcAsE",
-			NewSchema("test", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:          "select mixedcAse.* from MIXEDCASE",
-		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
-		ExpectedRows:   []sql.Row{{"1"}},
-	},
-	{
-		Name: "qualified select column",
-		AdditionalSetup: CreateTableWithRowsFn("MiXeDcAsE",
-			NewSchema("test", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:           "select mixedcAse.TeSt from MIXEDCASE",
-		ExpectedSchema:  NewResultSetSchema("TeSt", types.StringKind),
-		ExpectedRows:    []sql.Row{{"1"}},
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "table alias select *",
-		AdditionalSetup: CreateTableWithRowsFn("MiXeDcAsE",
-			NewSchema("test", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:          "select Mc.* from MIXEDCASE as mc",
-		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
-		ExpectedRows:   []sql.Row{{"1"}},
-	},
-	{
-		Name: "table alias select column",
-		AdditionalSetup: CreateTableWithRowsFn("MiXeDcAsE",
-			NewSchema("test", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:           "select mC.TeSt from MIXEDCASE as MC",
-		ExpectedSchema:  NewResultSetSchema("TeSt", types.StringKind),
-		ExpectedRows:    []sql.Row{{"1"}},
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "multiple tables with the same case-insensitive name, exact match",
-		AdditionalSetup: Compose(
-			// the table name passed to NewSchemaForTable isn't important, except to get unique tags
-			CreateTableWithRowsFn("tableName", NewSchemaForTable("tableName1", "test", types.StringKind), []types.Value{types.String("1")}),
-			CreateTableWithRowsFn("TABLENAME", NewSchemaForTable("TABLENAME2", "test", types.StringKind)),
-			CreateTableWithRowsFn("tablename", NewSchemaForTable("tablename3", "test", types.StringKind)),
-		),
-		Query:          "select test from tableName",
-		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
-		ExpectedRows:   []sql.Row{{"1"}},
-	},
-	{
-		Name: "alias with same name as table",
-		AdditionalSetup: Compose(
-			CreateTableWithRowsFn("tableName", NewSchema("test", types.StringKind)),
-			CreateTableWithRowsFn("other", NewSchema("othercol", types.StringKind)),
-		),
-		Query:       "select other.test from tablename as other, other",
-		ExpectedErr: "Non-unique table name / alias: 'other'",
-	},
-	{
-		Name: "two table aliases with same name",
-		AdditionalSetup: Compose(
-			CreateTableWithRowsFn("tableName", NewSchema("test", types.StringKind)),
-			CreateTableWithRowsFn("other", NewSchema("othercol", types.StringKind)),
-		),
-		Query:       "select bad.test from tablename as bad, other as bad",
-		ExpectedErr: "Non-unique table name / alias: 'bad'",
-	},
-	{
-		Name: "column name has mixed case, select lower case",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema("MiXeDcAsE", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:           "select mixedcase from test",
-		ExpectedSchema:  NewResultSetSchema("mixedcase", types.StringKind),
-		ExpectedRows:    []sql.Row{{"1"}},
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "column name has mixed case, select upper case",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema("MiXeDcAsE", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:           "select MIXEDCASE from test",
-		ExpectedSchema:  NewResultSetSchema("MIXEDCASE", types.StringKind),
-		ExpectedRows:    []sql.Row{{"1"}},
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "select with multiple matching columns, exact match",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
-			[]types.Value{types.String("1"), types.String("2")}),
-		Query:           "select mixedcase from test",
-		ExpectedSchema:  NewResultSetSchema("mixedcase", types.StringKind),
-		ExpectedRows:    []sql.Row{{"1"}},
-		SkipOnSqlEngine: true, // TODO: table should be illegal. field names cannot be the same case-insensitive
-	},
-	{
-		Name: "column is reserved word, select not backticked",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema(
-				"Timestamp", types.StringKind,
-				"and", types.StringKind,
-				"or", types.StringKind,
-				"select", types.StringKind),
-			[]types.Value{types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")}),
-		Query:          "select Timestamp from test",
-		ExpectedRows:   []sql.Row{{"1"}},
-		ExpectedSchema: NewResultSetSchema("Timestamp", types.StringKind),
-	},
-	{
-		Name: "column is reserved word, qualified with table alias",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema(
-				"Timestamp", types.StringKind,
-				"and", types.StringKind,
-				"or", types.StringKind,
-				"select", types.StringKind),
-			[]types.Value{types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")}),
-		Query:          "select t.Timestamp from test as t",
-		ExpectedRows:   []sql.Row{{"1"}},
-		ExpectedSchema: NewResultSetSchema("Timestamp", types.StringKind),
-	},
-	{
-		Name: "column is reserved word, select not backticked #2",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema("YeAr", types.StringKind),
-			[]types.Value{types.String("1")}),
-		Query:           "select Year from test",
-		ExpectedSchema:  NewResultSetSchema("Year", types.StringKind),
-		ExpectedRows:    []sql.Row{{"1"}},
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "column is reserved word, select backticked",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema(
-				"Timestamp", types.StringKind,
-				"and", types.StringKind,
-				"or", types.StringKind,
-				"select", types.StringKind),
-			[]types.Value{types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")}),
-		Query:           "select `Timestamp` from test",
-		ExpectedRows:    []sql.Row{{"1"}},
-		ExpectedSchema:  NewResultSetSchema("Timestamp", types.StringKind),
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "column is reserved word, select backticked #2",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema(
-				"Year", types.StringKind,
-				"and", types.StringKind,
-				"or", types.StringKind,
-				"select", types.StringKind),
-			[]types.Value{types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")}),
-		Query: "select `Year`, `OR`, `SELect`, `anD` from test",
-		ExpectedSchema: NewResultSetSchema(
-			"Year", types.StringKind,
-			"OR", types.StringKind,
-			"SELect", types.StringKind,
-			"anD", types.StringKind),
-		ExpectedRows:    []sql.Row{{"1", "aaa", "create", "1.1"}},
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "column is reserved word, table qualified",
-		AdditionalSetup: CreateTableWithRowsFn("test",
-			NewSchema(
-				"Year", types.StringKind,
-				"and", types.StringKind,
-				"or", types.StringKind,
-				"select", types.StringKind),
-			[]types.Value{types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")}),
-		Query: "select Year, t.OR, t.SELect, t.anD from test t",
-		ExpectedSchema: NewResultSetSchema(
-			"Year", types.StringKind,
-			"OR", types.StringKind,
-			"SELect", types.StringKind,
-			"anD", types.StringKind),
-		ExpectedRows:    []sql.Row{{"1", "aaa", "create", "1.1"}},
-		SkipOnSqlEngine: true,
-	},
-}
-
 // Tests of join functionality, basically any query involving more than one table should go here for now.
 var JoinTests = []SelectTest{
 	{
@@ -1452,6 +1255,9 @@ func TestSelect(t *testing.T) {
 }
 
 func TestDiffQueries(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip("") // todo: convert to enginetests
+	}
 	for _, test := range SelectDiffTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testSelectDiffQuery(t, test)
@@ -1460,6 +1266,9 @@ func TestDiffQueries(t *testing.T) {
 }
 
 func TestAsOfQueries(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip("") // todo: convert to enginetests
+	}
 	for _, test := range AsOfTests {
 		t.Run(test.Name, func(t *testing.T) {
 			// AS OF queries use the same history as the diff tests, so exercise the same test setup
@@ -1478,24 +1287,11 @@ func TestJoins(t *testing.T) {
 	}
 }
 
-// Tests of case sensitivity handling
-func TestCaseSensitivity(t *testing.T) {
-	for _, tt := range CaseSensitivityTests {
-		t.Run(tt.Name, func(t *testing.T) {
-			testSelectQuery(t, tt)
-		})
-	}
-}
-
 var systemTableSelectTests = []SelectTest{
 	{
 		Name: "select from dolt_docs",
-		AdditionalSetup: CreateTableFn("dolt_docs",
-			doltdb.DocsSchema,
-			NewRowWithSchema(doltdb.DocsSchema,
-				types.String("LICENSE.md"),
-				types.String("A license")),
-		),
+		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema,
+			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')"),
 		Query: "select * from dolt_docs",
 		ExpectedRows: ToSqlRows(CompressSchema(doltdb.DocsSchema),
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
@@ -1503,15 +1299,8 @@ var systemTableSelectTests = []SelectTest{
 	},
 	{
 		Name: "select from dolt_query_catalog",
-		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
-			dtables.DoltQueryCatalogSchema,
-			NewRowWithSchema(dtables.DoltQueryCatalogSchema,
-				types.String("existingEntry"),
-				types.Uint(2),
-				types.String("example"),
-				types.String("select 2+2 from dual"),
-				types.String("description")),
-		),
+		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
+			"INSERT INTO dolt_query_catalog VALUES ('existingEntry', 2, 'example', 'select 2+2 from dual', 'description')"),
 		Query: "select * from dolt_query_catalog",
 		ExpectedRows: ToSqlRows(CompressSchema(dtables.DoltQueryCatalogSchema),
 			NewRow(types.String("existingEntry"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description")),
@@ -1520,19 +1309,10 @@ var systemTableSelectTests = []SelectTest{
 	},
 	{
 		Name: "select from dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			SchemasTableSchema(),
-			NewRowWithSchema(SchemasTableSchema(),
-				types.String("view"),
-				types.String("name"),
-				types.String("select 2+2 from dual"),
-				types.Int(1),
-				CreateTestJSON(),
-			)),
-		Query: "select * from dolt_schemas",
-		ExpectedRows: ToSqlRows(CompressSchema(SchemasTableSchema()),
-			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual"), types.Int(1), CreateTestJSON()),
-		),
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemasTableSchema(),
+			`INSERT INTO dolt_schemas VALUES ('view', 'name', 'select 2+2 from dual', 1, NULL)`),
+		Query:          "select * from dolt_schemas",
+		ExpectedRows:   []sql.Row{{"view", "name", "select 2+2 from dual", int64(1), nil}},
 		ExpectedSchema: CompressSchema(SchemasTableSchema()),
 	},
 }
@@ -1582,8 +1362,8 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 	cleanup := installTestCommitClock()
 	defer cleanup()
 
-	dEnv := dtestutils.CreateTestEnv()
-	CreateTestDatabase(dEnv, t)
+	dEnv, err := CreateTestDatabase()
+	require.NoError(t, err)
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
@@ -1626,16 +1406,161 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 	assertSchemasEqual(t, sqlSchema, sch)
 }
 
+const TableWithHistoryName = "test_table"
+
+var InitialHistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
+var AddAddrAt3HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
+var AddAgeAt4HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag4TypeInt)
+var ReaddAgeAt5HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag5TypeUint)
+
+// TableUpdate defines a list of modifications that should be made to a table
+type TableUpdate struct {
+	// NewSch is an updated schema for this table. It overwrites the existing value.  If not provided the existing value
+	// will not change
+	NewSch schema.Schema
+
+	// NewRowData if provided overwrites the entirety of the row data in the table.
+	NewRowData *types.Map
+
+	// RowUpdates are new values for rows that should be set in the map.  They can be updates or inserts.
+	RowUpdates []row.Row
+}
+
+// HistoryNode represents a commit to be made
+type HistoryNode struct {
+	// Branch the branch that the commit should be on
+	Branch string
+
+	// CommitMessag is the commit message that should be applied
+	CommitMsg string
+
+	// Updates are the changes that should be made to the table's states before committing
+	Updates map[string]TableUpdate
+
+	// Children are the child commits of this commit
+	Children []HistoryNode
+}
+
+// mustRowData converts a slice of row.TaggedValues into a noms types.Map containing that data.
+func mustRowData(t *testing.T, ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, colVals []row.TaggedValues) *types.Map {
+	m, err := types.NewMap(ctx, vrw)
+	require.NoError(t, err)
+
+	me := m.Edit()
+	for _, taggedVals := range colVals {
+		r, err := row.New(types.Format_Default, sch, taggedVals)
+		require.NoError(t, err)
+
+		me = me.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
+	}
+
+	m, err = me.Map(ctx)
+	require.NoError(t, err)
+
+	return &m
+}
+
+func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []HistoryNode {
+	vrw := dEnv.DoltDB.ValueReadWriter()
+
+	return []HistoryNode{
+		{
+			Branch:    "seed",
+			CommitMsg: "Seeding with initial user data",
+			Updates: map[string]TableUpdate{
+				TableWithHistoryName: {
+					NewSch: InitialHistSch,
+					NewRowData: mustRowData(t, ctx, vrw, InitialHistSch, []row.TaggedValues{
+						{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son")},
+						{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks")},
+						{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn")},
+					}),
+				},
+			},
+			Children: []HistoryNode{
+				{
+					Branch:    "add-age",
+					CommitMsg: "Adding int age to users with tag 3",
+					Updates: map[string]TableUpdate{
+						TableWithHistoryName: {
+							NewSch: AddAgeAt4HistSch,
+							NewRowData: mustRowData(t, ctx, vrw, AddAgeAt4HistSch, []row.TaggedValues{
+								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 4: types.Int(35)},
+								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 4: types.Int(38)},
+								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 4: types.Int(37)},
+								{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 4: types.Int(37)},
+							}),
+						},
+					},
+					Children: nil,
+				},
+				{
+					Branch:    env.DefaultInitBranch,
+					CommitMsg: "Adding string address to users with tag 3",
+					Updates: map[string]TableUpdate{
+						TableWithHistoryName: {
+							NewSch: AddAddrAt3HistSch,
+							NewRowData: mustRowData(t, ctx, vrw, AddAddrAt3HistSch, []row.TaggedValues{
+								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")},
+								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")},
+								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")},
+								{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave")},
+								{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")},
+							}),
+						},
+					},
+					Children: []HistoryNode{
+						{
+							Branch:    env.DefaultInitBranch,
+							CommitMsg: "Re-add age as a uint with tag 4",
+							Updates: map[string]TableUpdate{
+								TableWithHistoryName: {
+									NewSch: ReaddAgeAt5HistSch,
+									NewRowData: mustRowData(t, ctx, vrw, ReaddAgeAt5HistSch, []row.TaggedValues{
+										{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 5: types.Uint(35)},
+										{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 5: types.Uint(38)},
+										{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 5: types.Uint(37)},
+										{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 3: types.String("-1 Imaginary Wy"), 5: types.Uint(37)},
+										{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")},
+										{0: types.Int(5), 1: types.String("Daylon"), 2: types.String("Wilkins")},
+									}),
+								},
+							},
+							Children: nil,
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+var idColTag0TypeUUID = schema.NewColumn("id", 0, types.IntKind, true)
+var firstColTag1TypeStr = schema.NewColumn("first_name", 1, types.StringKind, false)
+var lastColTag2TypeStr = schema.NewColumn("last_name", 2, types.StringKind, false)
+var addrColTag3TypeStr = schema.NewColumn("addr", 3, types.StringKind, false)
+var ageColTag4TypeInt = schema.NewColumn("age", 4, types.IntKind, false)
+var ageColTag5TypeUint = schema.NewColumn("age", 5, types.UintKind, false)
+
+var DiffSchema = dtestutils.MustSchema(
+	schema.NewColumn("to_id", 0, types.IntKind, false),
+	schema.NewColumn("to_first_name", 1, types.StringKind, false),
+	schema.NewColumn("to_last_name", 2, types.StringKind, false),
+	schema.NewColumn("to_addr", 3, types.StringKind, false),
+	schema.NewColumn("from_id", 7, types.IntKind, false),
+	schema.NewColumn("from_first_name", 8, types.StringKind, false),
+	schema.NewColumn("from_last_name", 9, types.StringKind, false),
+	schema.NewColumn("from_addr", 10, types.StringKind, false),
+	schema.NewColumn("diff_type", 14, types.StringKind, false),
+)
+
 func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	validateTest(t, test)
-
 	ctx := context.Background()
-
 	cleanup := installTestCommitClock()
 	defer cleanup()
-
 	dEnv := dtestutils.CreateTestEnv()
-	InitializeWithHistory(t, ctx, dEnv, CreateHistory(ctx, dEnv, t)...)
+	initializeWithHistory(t, ctx, dEnv, CreateHistory(ctx, dEnv, t)...)
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
@@ -1658,7 +1583,7 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	root, err = dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
 
-	root = UpdateTables(t, ctx, root, CreateWorkingRootUpdate())
+	root = updateTables(t, ctx, root, createWorkingRootUpdate())
 
 	err = dEnv.UpdateWorkingRoot(ctx, root)
 	require.NoError(t, err)
@@ -1681,6 +1606,121 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	}
 
 	assertSchemasEqual(t, sqlSchema, sch)
+}
+
+// TODO: this shouldn't be here
+func createWorkingRootUpdate() map[string]TableUpdate {
+	return map[string]TableUpdate{
+		TableWithHistoryName: {
+			RowUpdates: []row.Row{
+				mustRow(row.New(types.Format_Default, ReaddAgeAt5HistSch, row.TaggedValues{
+					0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"),
+				})),
+			},
+		},
+	}
+}
+
+func updateTables(t *testing.T, ctx context.Context, root *doltdb.RootValue, tblUpdates map[string]TableUpdate) *doltdb.RootValue {
+	for tblName, updates := range tblUpdates {
+		tbl, ok, err := root.GetTable(ctx, tblName)
+		require.NoError(t, err)
+
+		var sch schema.Schema
+		if updates.NewSch != nil {
+			sch = updates.NewSch
+		} else {
+			sch, err = tbl.GetSchema(ctx)
+			require.NoError(t, err)
+		}
+
+		var rowData types.Map
+		if updates.NewRowData == nil {
+			if ok {
+				rowData, err = tbl.GetNomsRowData(ctx)
+				require.NoError(t, err)
+			} else {
+				rowData, err = types.NewMap(ctx, root.VRW())
+				require.NoError(t, err)
+			}
+		} else {
+			rowData = *updates.NewRowData
+		}
+
+		if updates.RowUpdates != nil {
+			me := rowData.Edit()
+
+			for _, r := range updates.RowUpdates {
+				me = me.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
+			}
+
+			rowData, err = me.Map(ctx)
+			require.NoError(t, err)
+		}
+
+		var indexData durable.IndexSet
+		require.NoError(t, err)
+		if tbl != nil {
+			indexData, err = tbl.GetIndexSet(ctx)
+			require.NoError(t, err)
+		}
+
+		tbl, err = doltdb.NewNomsTable(ctx, root.VRW(), root.NodeStore(), sch, rowData, indexData, nil)
+		require.NoError(t, err)
+
+		root, err = root.PutTable(ctx, tblName, tbl)
+		require.NoError(t, err)
+	}
+
+	return root
+}
+
+// initializeWithHistory will go through the provided historyNodes and create the intended commit graph
+func initializeWithHistory(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, historyNodes ...HistoryNode) {
+	for _, node := range historyNodes {
+		cs, err := doltdb.NewCommitSpec(env.DefaultInitBranch)
+		require.NoError(t, err)
+
+		cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+		require.NoError(t, err)
+
+		processNode(t, ctx, dEnv, node, cm)
+	}
+}
+
+func processNode(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, node HistoryNode, parent *doltdb.Commit) {
+	branchRef := ref.NewBranchRef(node.Branch)
+	ok, err := dEnv.DoltDB.HasRef(ctx, branchRef)
+	require.NoError(t, err)
+
+	if !ok {
+		err = dEnv.DoltDB.NewBranchAtCommit(ctx, branchRef, parent)
+		require.NoError(t, err)
+	}
+
+	cs, err := doltdb.NewCommitSpec(branchRef.String())
+	require.NoError(t, err)
+
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	require.NoError(t, err)
+
+	root, err := cm.GetRootValue(ctx)
+	require.NoError(t, err)
+
+	root = updateTables(t, ctx, root, node.Updates)
+	r, h, err := dEnv.DoltDB.WriteRootValue(ctx, root)
+	require.NoError(t, err)
+	root = r
+
+	meta, err := datas.NewCommitMeta("Ash Ketchum", "ash@poke.mon", node.CommitMsg)
+	require.NoError(t, err)
+
+	cm, err = dEnv.DoltDB.Commit(ctx, h, branchRef, meta)
+	require.NoError(t, err)
+
+	for _, child := range node.Children {
+		processNode(t, ctx, dEnv, child, cm)
+	}
 }
 
 func validateTest(t *testing.T, test SelectTest) {

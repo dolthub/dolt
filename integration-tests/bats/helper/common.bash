@@ -64,7 +64,9 @@ assert_feature_version() {
 }
 
 skip_nbf_dolt() {
-  if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT__" ]; then
+  if [ ! "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ] &&
+    [ ! "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT_DEV__" ];
+  then
     skip "skipping test for nomsBinFormat __DOLT__"
   fi
 }
@@ -72,6 +74,14 @@ skip_nbf_dolt() {
 skip_nbf_dolt_dev() {
   if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT_DEV__" ]; then
     skip "skipping test for nomsBinFormat __DOLT_DEV__"
+  fi
+}
+
+skip_nbf_not_dolt() {
+  if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ] ||
+    [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT_DEV__" ];
+  then
+    skip "skipping test since nomsBinFormat != __DOLT__"
   fi
 }
 

@@ -15,10 +15,7 @@
 package sqle
 
 import (
-	"errors"
-
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
@@ -27,38 +24,45 @@ import (
 )
 
 type remotesrvStore struct {
-	ctx *sql.Context
+	ctx      *sql.Context
+	readonly bool
 }
 
 var _ remotesrv.DBCache = remotesrvStore{}
 
-func (s remotesrvStore) Get(org, repo, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
+func (s remotesrvStore) Get(path, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
 	sess := dsess.DSessFromSess(s.ctx.Session)
-	db, err := sess.Provider().Database(s.ctx, repo)
+	db, err := sess.Provider().Database(s.ctx, path)
 	if err != nil {
-		return nil, err
+		if !s.readonly && sql.ErrDatabaseNotFound.Is(err) {
+			err = sess.Provider().CreateDatabase(s.ctx, path)
+			if err != nil {
+				return nil, err
+			}
+			db, err = sess.Provider().Database(s.ctx, path)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
 	}
-	ddb, ok := db.(Database)
+	sdb, ok := db.(SqlDatabase)
 	if !ok {
-		return nil, errors.New("unimplemented")
+		return nil, remotesrv.ErrUnimplemented
 	}
-	datasdb := doltdb.HackDatasDatabaseFromDoltDB(ddb.DbData().Ddb)
+	datasdb := doltdb.HackDatasDatabaseFromDoltDB(sdb.DbData().Ddb)
 	cs := datas.ChunkStoreFromDatabase(datasdb)
 	rss, ok := cs.(remotesrv.RemoteSrvStore)
 	if !ok {
-		return nil, errors.New("unimplemented")
+		return nil, remotesrv.ErrUnimplemented
 	}
 	return rss, nil
 }
 
-func NewRemoteSrvServer(lgr *logrus.Entry, ctx *sql.Context, port int) *remotesrv.Server {
+func RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.ServerArgs) remotesrv.ServerArgs {
 	sess := dsess.DSessFromSess(ctx.Session)
-	return remotesrv.NewServer(remotesrv.ServerArgs{
-		Logger:   lgr,
-		HttpPort: port,
-		GrpcPort: port,
-		FS:       sess.Provider().FileSystem(),
-		DBCache:  remotesrvStore{ctx},
-		ReadOnly: true,
-	})
+	args.FS = sess.Provider().FileSystem()
+	args.DBCache = remotesrvStore{ctx, args.ReadOnly}
+	return args
 }

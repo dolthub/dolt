@@ -37,9 +37,10 @@ import (
 const (
 	ddbRootStructName = "dolt_db_root"
 
-	tablesKey      = "tables"
-	foreignKeyKey  = "foreign_key"
-	featureVersKey = "feature_ver"
+	tablesKey        = "tables"
+	foreignKeyKey    = "foreign_key"
+	featureVersKey   = "feature_ver"
+	rootCollationKey = "root_collation_key"
 
 	// deprecated
 	superSchemasKey = "super_schemas"
@@ -85,9 +86,11 @@ type rvStorage interface {
 
 	GetTablesMap(ctx context.Context, vr types.ValueReadWriter, ns tree.NodeStore) (tableMap, error)
 	GetForeignKeys(ctx context.Context, vr types.ValueReader) (types.Value, bool, error)
+	GetCollation(ctx context.Context) (schema.Collation, error)
 
 	SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, m types.Value) (rvStorage, error)
 	SetFeatureVersion(v FeatureVersion) (rvStorage, error)
+	SetCollation(ctx context.Context, collation schema.Collation) (rvStorage, error)
 
 	EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error)
 
@@ -145,17 +148,6 @@ func (ntm nomsTableMap) Iter(ctx context.Context, cb func(name string, addr hash
 	})
 }
 
-func (r nomsRvStorage) GetSuperSchemaMap(context.Context, types.ValueReader) (types.Map, bool, error) {
-	v, found, err := r.valueSt.MaybeGet(superSchemasKey)
-	if err != nil {
-		return types.Map{}, false, err
-	}
-	if !found {
-		return types.Map{}, false, nil
-	}
-	return v.(types.Map), true, nil
-}
-
 func (r nomsRvStorage) GetForeignKeys(context.Context, types.ValueReader) (types.Value, bool, error) {
 	v, found, err := r.valueSt.MaybeGet(foreignKeyKey)
 	if err != nil {
@@ -167,12 +159,15 @@ func (r nomsRvStorage) GetForeignKeys(context.Context, types.ValueReader) (types
 	return v.(types.Map), true, nil
 }
 
-func (r nomsRvStorage) SetSuperSchemaMap(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (rvStorage, error) {
-	st, err := r.valueSt.Set(superSchemasKey, m)
+func (r nomsRvStorage) GetCollation(ctx context.Context) (schema.Collation, error) {
+	v, found, err := r.valueSt.MaybeGet(rootCollationKey)
 	if err != nil {
-		return nomsRvStorage{}, err
+		return schema.Collation_Unspecified, err
 	}
-	return nomsRvStorage{st}, nil
+	if !found {
+		return schema.Collation_Default, nil
+	}
+	return schema.Collation(v.(types.Uint)), nil
 }
 
 func (r nomsRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error) {
@@ -231,6 +226,14 @@ func (r nomsRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueRead
 
 func (r nomsRvStorage) SetFeatureVersion(v FeatureVersion) (rvStorage, error) {
 	st, err := r.valueSt.Set(featureVersKey, types.Int(v))
+	if err != nil {
+		return nomsRvStorage{}, err
+	}
+	return nomsRvStorage{st}, nil
+}
+
+func (r nomsRvStorage) SetCollation(ctx context.Context, collation schema.Collation) (rvStorage, error) {
+	st, err := r.valueSt.Set(rootCollationKey, types.Uint(collation))
 	if err != nil {
 		return nomsRvStorage{}, err
 	}
@@ -333,6 +336,7 @@ func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter, ns tree.Node
 		fkoff := builder.CreateByteVector(empty[:])
 		serial.RootValueStart(builder)
 		serial.RootValueAddFeatureVersion(builder, int64(DoltFeatureVersion))
+		serial.RootValueAddCollation(builder, serial.Collationutf8mb4_0900_bin)
 		serial.RootValueAddTables(builder, tablesoff)
 		serial.RootValueAddForeignKeyAddr(builder, fkoff)
 		bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
@@ -374,6 +378,18 @@ func (root *RootValue) GetFeatureVersion(ctx context.Context) (ver FeatureVersio
 
 func (root *RootValue) setFeatureVersion(v FeatureVersion) (*RootValue, error) {
 	newStorage, err := root.st.SetFeatureVersion(v)
+	if err != nil {
+		return nil, err
+	}
+	return root.withStorage(newStorage), nil
+}
+
+func (root *RootValue) GetCollation(ctx context.Context) (schema.Collation, error) {
+	return root.st.GetCollation(ctx)
+}
+
+func (root *RootValue) SetCollation(ctx context.Context, collation schema.Collation) (*RootValue, error) {
+	newStorage, err := root.st.SetCollation(ctx, collation)
 	if err != nil {
 		return nil, err
 	}
@@ -427,7 +443,7 @@ func (root *RootValue) GenerateTagsForNewColumns(
 		return nil, fmt.Errorf("error generating tags, newColNames and newColKinds must be of equal length")
 	}
 
-	newTags := make([]uint64, len(newColNames))
+	newTags := make([]*uint64, len(newColNames))
 
 	// Get existing columns from the current root, or the head root if the table doesn't exist in the current root. The
 	// latter case is to support reusing table tags in the case of drop / create in the same session, which is common
@@ -439,12 +455,13 @@ func (root *RootValue) GenerateTagsForNewColumns(
 
 	// If we found any existing columns set them in the newTags list.
 	for _, col := range existingCols {
+		col := col
 		for i := range newColNames {
 			// Only re-use tags if the noms kind didn't change
 			// TODO: revisit this when new storage format is further along
 			if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) &&
 				newColKinds[i] == col.TypeInfo.NomsKind() {
-				newTags[i] = col.Tag
+				newTags[i] = &col.Tag
 				break
 			}
 		}
@@ -455,22 +472,24 @@ func (root *RootValue) GenerateTagsForNewColumns(
 		existingColKinds = append(existingColKinds, col.Kind)
 	}
 
-	existingTags, err := GetAllTagsForRoot(ctx, root)
+	existingTags, err := GetAllTagsForRoots(ctx, headRoot, root)
 	if err != nil {
 		return nil, err
 	}
 
+	outputTags := make([]uint64, len(newTags))
 	for i := range newTags {
-		if newTags[i] > 0 {
+		if newTags[i] != nil {
+			outputTags[i] = *newTags[i]
 			continue
 		}
 
-		newTags[i] = schema.AutoGenerateTag(existingTags, tableName, existingColKinds, newColNames[i], newColKinds[i])
+		outputTags[i] = schema.AutoGenerateTag(existingTags, tableName, existingColKinds, newColNames[i], newColKinds[i])
 		existingColKinds = append(existingColKinds, newColKinds[i])
-		existingTags.Add(newTags[i], tableName)
+		existingTags.Add(outputTags[i], tableName)
 	}
 
-	return newTags, nil
+	return outputTags, nil
 }
 
 func getExistingColumns(
@@ -478,7 +497,8 @@ func getExistingColumns(
 	root, headRoot *RootValue,
 	tableName string,
 	newColNames []string,
-	newColKinds []types.NomsKind) ([]schema.Column, error) {
+	newColKinds []types.NomsKind,
+) ([]schema.Column, error) {
 
 	var existingCols []schema.Column
 	tbl, found, err := root.GetTable(ctx, tableName)
@@ -988,15 +1008,23 @@ func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootV
 	return root.PutForeignKeyCollection(ctx, fkCollection)
 }
 
-// GetAllTagsForRoot gets all tags for root
-func GetAllTagsForRoot(ctx context.Context, root *RootValue) (tags schema.TagMapping, err error) {
+// GetAllTagsForRoots gets all tags for |roots|.
+func GetAllTagsForRoots(ctx context.Context, roots ...*RootValue) (tags schema.TagMapping, err error) {
 	tags = make(schema.TagMapping)
-	err = root.IterTables(ctx, func(tblName string, _ *Table, sch schema.Schema) (stop bool, err error) {
-		for _, t := range sch.GetAllCols().Tags {
-			tags.Add(t, tblName)
+	for _, root := range roots {
+		if root == nil {
+			continue
 		}
-		return
-	})
+		err = root.IterTables(ctx, func(tblName string, _ *Table, sch schema.Schema) (stop bool, err error) {
+			for _, t := range sch.GetAllCols().Tags {
+				tags.Add(t, tblName)
+			}
+			return
+		})
+		if err != nil {
+			break
+		}
+	}
 	return
 }
 
@@ -1049,7 +1077,7 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 		return err
 	}
 
-	existing, err := GetAllTagsForRoot(ctx, root)
+	existing, err := GetAllTagsForRoots(ctx, root)
 	if err != nil {
 		return err
 	}
@@ -1172,6 +1200,15 @@ func (r fbRvStorage) GetForeignKeys(ctx context.Context, vr types.ValueReader) (
 	return v.(types.SerialMessage), true, nil
 }
 
+func (r fbRvStorage) GetCollation(ctx context.Context) (schema.Collation, error) {
+	collation := r.srv.Collation()
+	// Pre-existing repositories will return invalid here
+	if collation == serial.Collationinvalid {
+		return schema.Collation_Default, nil
+	}
+	return schema.Collation(collation), nil
+}
+
 func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error) {
 	builder := flatbuffers.NewBuilder(80)
 
@@ -1229,6 +1266,7 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 	fkoff := builder.CreateByteVector(r.srv.ForeignKeyAddrBytes())
 	serial.RootValueStart(builder)
 	serial.RootValueAddFeatureVersion(builder, r.srv.FeatureVersion())
+	serial.RootValueAddCollation(builder, r.srv.Collation())
 	serial.RootValueAddTables(builder, tablesoff)
 	serial.RootValueAddForeignKeyAddr(builder, fkoff)
 
@@ -1261,6 +1299,12 @@ func (r fbRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWr
 func (r fbRvStorage) SetFeatureVersion(v FeatureVersion) (rvStorage, error) {
 	ret := r.clone()
 	ret.srv.MutateFeatureVersion(int64(v))
+	return ret, nil
+}
+
+func (r fbRvStorage) SetCollation(ctx context.Context, collation schema.Collation) (rvStorage, error) {
+	ret := r.clone()
+	ret.srv.MutateCollation(serial.Collation(collation))
 	return ret, nil
 }
 

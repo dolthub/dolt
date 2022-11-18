@@ -100,10 +100,18 @@ const (
 	BranchParam      = "branch"
 	TrackFlag        = "track"
 	AmendFlag        = "amend"
-	NewFormatFlag    = "new-format"
 	CommitFlag       = "commit"
 	NoCommitFlag     = "no-commit"
 	NoEditFlag       = "no-edit"
+	OursFlag         = "ours"
+	TheirsFlag       = "theirs"
+	NumberFlag       = "number"
+	NotFlag          = "not"
+	MergesFlag       = "merges"
+	ParentsFlag      = "parents"
+	MinParentsFlag   = "min-parents"
+	DecorateFlag     = "decorate"
+	OneLineFlag      = "oneline"
 )
 
 const (
@@ -131,6 +139,13 @@ func CreateCommitArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(AllFlag, "a", "Adds all existing, changed tables (but not new tables) in the working set to the staged set.")
 	ap.SupportsFlag(UpperCaseAllFlag, "A", "Adds all tables (including new tables) in the working set to the staged set.")
 	ap.SupportsFlag(AmendFlag, "", "Amend previous commit")
+	return ap
+}
+
+func CreateConflictsResolveArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(OursFlag, "", "For all conflicts, take the version from our branch and resolve the conflict")
+	ap.SupportsFlag(TheirsFlag, "", "For all conflicts, take the version from their branch and resolve the conflict")
 	return ap
 }
 
@@ -170,6 +185,8 @@ func CreateCloneArgParser() *argparser.ArgParser {
 	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file.")
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use.")
+	ap.SupportsString(dbfactory.OSSCredsFileParam, "", "file", "OSS credentials file.")
+	ap.SupportsString(dbfactory.OSSCredsProfile, "", "profile", "OSS profile to use.")
 	return ap
 }
 
@@ -277,18 +294,33 @@ func CreateVerifyConstraintsArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateLogArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsInt(NumberFlag, "n", "num_commits", "Limit the number of commits to output.")
+	ap.SupportsInt(MinParentsFlag, "", "parent_count", "The minimum number of parents a commit must have to be included in the log.")
+	ap.SupportsFlag(MergesFlag, "", "Equivalent to min-parents == 2, this will limit the log to commits with 2 or more parents.")
+	ap.SupportsFlag(ParentsFlag, "", "Shows all parents of each commit in the log.")
+	ap.SupportsString(DecorateFlag, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
+	ap.SupportsFlag(OneLineFlag, "", "Shows logs in a compact format.")
+	ap.SupportsStringList(NotFlag, "", "revision", "Excludes commits from revision.")
+	return ap
+}
+
 var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
+var ossParams = []string{dbfactory.OSSCredsFileParam, dbfactory.OSSCredsProfile}
 
 func ProcessBackupArgs(apr *argparser.ArgParseResults, scheme, backupUrl string) (map[string]string, error) {
 	params := map[string]string{}
 
 	var err error
-	if scheme == dbfactory.AWSScheme {
+	switch scheme {
+	case dbfactory.AWSScheme:
 		err = AddAWSParams(backupUrl, apr, params)
-	} else {
+	case dbfactory.OSSScheme:
+		err = AddOSSParams(backupUrl, apr, params)
+	default:
 		err = VerifyNoAwsParams(apr)
 	}
-
 	return params, err
 }
 
@@ -304,6 +336,26 @@ func AddAWSParams(remoteUrl string, apr *argparser.ArgParseResults, params map[s
 	}
 
 	for _, p := range awsParams {
+		if val, ok := apr.GetValue(p); ok {
+			params[p] = val
+		}
+	}
+
+	return nil
+}
+
+func AddOSSParams(remoteUrl string, apr *argparser.ArgParseResults, params map[string]string) error {
+	isOSS := strings.HasPrefix(remoteUrl, "oss")
+
+	if !isOSS {
+		for _, p := range ossParams {
+			if _, ok := apr.GetValue(p); ok {
+				return fmt.Errorf("%s param is only valid for oss cloud remotes in the format oss://oss-bucket/database", p)
+			}
+		}
+	}
+
+	for _, p := range ossParams {
 		if val, ok := apr.GetValue(p); ok {
 			params[p] = val
 		}

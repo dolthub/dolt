@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -80,6 +81,9 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 	if len(dbName) == 0 {
 		return noConflictsOrViolations, threeWayMerge, fmt.Errorf("empty database name.")
 	}
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return noConflictsOrViolations, threeWayMerge, err
+	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := sess.GetDbData(ctx, dbName)
@@ -122,7 +126,7 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 	// Fetch all references
 	branchRefs, err := srcDB.GetHeadRefs(ctx)
 	if err != nil {
-		return noConflictsOrViolations, threeWayMerge, env.ErrFailedToReadDb
+		return noConflictsOrViolations, threeWayMerge, fmt.Errorf("%w: %s", env.ErrFailedToReadDb, err.Error())
 	}
 
 	hasBranch, err := srcDB.HasBranch(ctx, pullSpec.Branch.GetPath())

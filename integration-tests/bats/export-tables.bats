@@ -59,7 +59,7 @@ SQL
 0,1,2,3,4,5
 9,8,7,6,5,4
 '|dolt table import -u test_int
-    dolt table export --file-type=csv test_int|python -c '
+    dolt table export --file-type=csv test_int | python3 -c '
 import sys
 rows = []
 for line in sys.stdin:
@@ -327,14 +327,16 @@ SQL
     [[ "$output" =~ "Successfully exported data." ]] || false
     [ -f result.parquet ]
 
-    run parquet cat result.parquet > output.json
+    run parquet cat result.parquet
     [ "$status" -eq 0 ]
+    
     row1='{"pk": 1, "col1": "row1", "col2": 22}'
     row2='{"pk": 2, "col1": "row2", "col2": 33}'
     row3='{"pk": 3, "col1": "row3", "col2": 22}'
-    [[ "$output" =~ "$row1" ]] || false
-    [[ "$output" =~ "$row2" ]] || false
-    [[ "$output" =~ "$row3" ]] || false
+    
+    [ "${lines[0]}" = "$row1" ]
+    [ "${lines[1]}" = "$row2" ]
+    [ "${lines[2]}" = "$row3" ]
 }
 
 @test "export-tables: parquet file export compare pandas and pyarrow reads" {
@@ -444,15 +446,16 @@ SQL
     [[ "$output" =~ "Successfully exported data." ]] || false
     [ -f test.parquet ]
 
-    run parquet cat test.parquet > output.json
+    run parquet cat test.parquet
     [ "$status" -eq 0 ]
     row1='{"pk": 0, "int": 0, "string": "asdf", "boolean": 1, "float": 0.0, "uint": 0, "uuid": "00000000-0000-0000-0000-000000000000"}'
     row2='{"pk": 1, "int": -1, "string": "qwerty", "boolean": 0, "float": -1.0, "uint": 1, "uuid": "00000000-0000-0000-0000-000000000001"}'
     row3='{"pk": 2, "int": 1, "string": "", "boolean": 1, "float": 0.0, "uint": 0, "uuid": "123e4567-e89b-12d3-a456-426655440000"}'
-    [[ "$output" =~ "$row1" ]] || false
-    [[ "$output" =~ "$row2" ]] || false
-    [[ "$output" =~ "$row3" ]] || false
 }
+
+    [ "${lines[0]}" = "$row1" ]
+    [ "${lines[1]}" = "$row2" ]
+    [ "${lines[2]}" = "$row3" ]
 
 @test "export-tables: table export decimal and bit types to parquet" {
     skiponwindows "Missing dependencies"
@@ -465,7 +468,7 @@ SQL
     [[ "$output" =~ "Successfully exported data." ]] || false
     [ -f more.parquet ]
 
-    run parquet cat more.parquet > output.json
+    run parquet cat more.parquet
     [ "$status" -eq 0 ]
     [[ "$output" =~ '{"pk": 1, "v": "1234.56789", "b": 511}' ]] || false
     [[ "$output" =~ '{"pk": 2, "v": "5235.66789", "b": 514}' ]] || false

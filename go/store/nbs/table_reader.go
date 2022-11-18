@@ -131,29 +131,25 @@ type tableReaderAt interface {
 // to tolerate up to |blockSize| overhead each time we read a chunk, if it helps us group
 // more chunks together into a single read request to backing storage.
 type tableReader struct {
-	tableIndex
-	prefixes              []uint64
-	chunkCount            uint32
-	totalUncompressedData uint64
-	r                     tableReaderAt
-	blockSize             uint64
+	prefixes  []uint64
+	idx       tableIndex
+	r         tableReaderAt
+	blockSize uint64
 }
 
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index
 // and footer, though it may contain an unspecified number of bytes before that data. r should allow
 // retrieving any desired range of bytes from the table.
 func newTableReader(index tableIndex, r tableReaderAt, blockSize uint64) (tableReader, error) {
-	p, err := index.Prefixes()
+	p, err := index.prefixes()
 	if err != nil {
 		return tableReader{}, err
 	}
 	return tableReader{
-		index,
-		p,
-		index.ChunkCount(),
-		index.TotalUncompressedData(),
-		r,
-		blockSize,
+		prefixes:  p,
+		idx:       index,
+		r:         r,
+		blockSize: blockSize,
 	}, nil
 }
 
@@ -162,7 +158,7 @@ func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 	// TODO: Use findInIndex if (tr.chunkCount - len(addrs)*Log2(tr.chunkCount)) > (tr.chunkCount - len(addrs))
 
 	filterIdx := uint32(0)
-	filterLen := uint32(tr.chunkCount)
+	filterLen := uint32(tr.idx.chunkCount())
 
 	var remaining bool
 	for i, addr := range addrs {
@@ -185,7 +181,7 @@ func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 
 		// prefixes are equal, so locate and compare against the corresponding suffix
 		for j := filterIdx; j < filterLen && addr.prefix == tr.prefixes[j]; j++ {
-			m, err := tr.EntrySuffixMatches(j, addr.a)
+			m, err := tr.idx.entrySuffixMatches(j, addr.a)
 			if err != nil {
 				return false, err
 			}
@@ -204,27 +200,27 @@ func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 }
 
 func (tr tableReader) count() (uint32, error) {
-	return tr.chunkCount, nil
+	return tr.idx.chunkCount(), nil
 }
 
 func (tr tableReader) uncompressedLen() (uint64, error) {
-	return tr.totalUncompressedData, nil
+	return tr.idx.totalUncompressedData(), nil
 }
 
 func (tr tableReader) index() (tableIndex, error) {
-	return tr.tableIndex, nil
+	return tr.idx, nil
 }
 
 // returns true iff |h| can be found in this table.
 func (tr tableReader) has(h addr) (bool, error) {
-	_, ok, err := tr.Lookup(&h)
+	_, ok, err := tr.idx.lookup(&h)
 	return ok, err
 }
 
 // returns the storage associated with |h|, iff present. Returns nil if absent. On success,
 // the returned byte slice directly references the underlying storage.
 func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
-	e, found, err := tr.Lookup(&h)
+	e, found, err := tr.idx.lookup(&h)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +273,6 @@ func (hs offsetRecSlice) Len() int           { return len(hs) }
 func (hs offsetRecSlice) Less(i, j int) bool { return hs[i].offset < hs[j].offset }
 func (hs offsetRecSlice) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 
-var _ chunkReadPlanner = tableReader{}
 var _ chunkReader = tableReader{}
 
 func (tr tableReader) readCompressedAtOffsets(
@@ -475,7 +470,7 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 	return nil
 }
 
-// findOffsets iterates over |reqs| and |tr.prefixes| (both sorted by
+// findOffsets iterates over |reqs| and |prefixes| (both sorted by
 // address) to build the set of table locations which must be read in order to
 // find each chunk specified by |reqs|. If this table contains all requested
 // chunks remaining will be set to false upon return. If some are not here,
@@ -510,13 +505,13 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 
 		// record all offsets within the table which contain the data required.
 		for j := filterIdx; j < filterLen && req.prefix == tr.prefixes[j]; j++ {
-			m, err := tr.EntrySuffixMatches(j, req.a)
+			m, err := tr.idx.entrySuffixMatches(j, req.a)
 			if err != nil {
 				return nil, false, err
 			}
 			if m {
 				reqs[i].found = true
-				entry, err := tr.IndexEntry(j, nil)
+				entry, err := tr.idx.indexEntry(j, nil)
 				if err != nil {
 					return nil, false, err
 				}
@@ -623,9 +618,9 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 	}
 
 	var ors offsetRecSlice
-	for i := uint32(0); i < tr.chunkCount; i++ {
+	for i := uint32(0); i < tr.idx.chunkCount(); i++ {
 		a := new(addr)
-		e, err := tr.IndexEntry(i, a)
+		e, err := tr.idx.indexEntry(i, a)
 		if err != nil {
 			return err
 		}
@@ -644,7 +639,7 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 
 func (tr tableReader) reader(ctx context.Context) (io.Reader, error) {
 	i, _ := tr.index()
-	return io.LimitReader(&readerAdapter{tr.r, 0, ctx}, int64(i.TableFileSize())), nil
+	return io.LimitReader(&readerAdapter{tr.r, 0, ctx}, int64(i.tableFileSize())), nil
 }
 
 func (tr tableReader) size() (uint64, error) {
@@ -652,19 +647,24 @@ func (tr tableReader) size() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return i.TableFileSize(), nil
+	return i.tableFileSize(), nil
 }
 
-func (tr tableReader) Close() error {
-	return tr.tableIndex.Close()
+func (tr tableReader) close() error {
+	return tr.idx.Close()
 }
 
-func (tr tableReader) Clone() (tableReader, error) {
-	ti, err := tr.tableIndex.Clone()
+func (tr tableReader) clone() (tableReader, error) {
+	idx, err := tr.idx.clone()
 	if err != nil {
 		return tableReader{}, err
 	}
-	return tableReader{ti, tr.prefixes, tr.chunkCount, tr.totalUncompressedData, tr.r, tr.blockSize}, nil
+	return tableReader{
+		prefixes:  tr.prefixes,
+		idx:       idx,
+		r:         tr.r,
+		blockSize: tr.blockSize,
+	}, nil
 }
 
 type readerAdapter struct {

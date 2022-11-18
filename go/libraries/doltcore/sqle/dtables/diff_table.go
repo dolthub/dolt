@@ -51,7 +51,6 @@ const (
 var _ sql.Table = (*DiffTable)(nil)
 var _ sql.FilteredTable = (*DiffTable)(nil)
 var _ sql.IndexedTable = (*DiffTable)(nil)
-var _ sql.ParallelizedIndexAddressableTable = (*DiffTable)(nil)
 
 type DiffTable struct {
 	name        string
@@ -218,10 +217,6 @@ func (dt *DiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 func (dt *DiffTable) IndexedAccess(index sql.Index) sql.IndexedTable {
 	nt := *dt
 	return &nt
-}
-
-func (dt *DiffTable) ShouldParallelizeAccess() bool {
-	return true
 }
 
 // tableData returns the map of primary key to values for the specified table (or an empty map if the tbl is null)

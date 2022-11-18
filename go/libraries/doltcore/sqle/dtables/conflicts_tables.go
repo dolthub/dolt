@@ -43,7 +43,7 @@ func NewConflictsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue,
 }
 
 func newNomsConflictsTable(ctx *sql.Context, tbl *doltdb.Table, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
-	rd, err := merge.NewConflictReader(ctx, tbl)
+	rd, err := merge.NewConflictReader(ctx, tbl, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func (ct ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error)
 // PartitionRows returns a RowIter for the given partition
 func (ct ConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	// conflict reader must be reset each time partitionRows is called.
-	rd, err := merge.NewConflictReader(ctx, ct.tbl)
+	rd, err := merge.NewConflictReader(ctx, ct.tbl, ct.tblName)
 	if err != nil {
 		return nil, err
 	}

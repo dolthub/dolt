@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/store/geometry"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -35,15 +34,6 @@ var _ TypeInfo = (*polygonType)(nil)
 
 var PolygonType = &polygonType{sql.PolygonType{}}
 
-// ConvertTypesPolygonToSQLPolygon basically makes a deep copy of sql.LineString
-func ConvertTypesPolygonToSQLPolygon(p types.Polygon) sql.Polygon {
-	lines := make([]sql.LineString, len(p.Lines))
-	for i, l := range p.Lines {
-		lines[i] = ConvertTypesLineStringToSQLLineString(l)
-	}
-	return sql.Polygon{SRID: p.SRID, Lines: lines}
-}
-
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *polygonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	// Check for null
@@ -52,7 +42,7 @@ func (ti *polygonType) ConvertNomsValueToValue(v types.Value) (interface{}, erro
 	}
 	// Expect a types.Polygon, return a sql.Polygon
 	if val, ok := v.(types.Polygon); ok {
-		return ConvertTypesPolygonToSQLPolygon(val), nil
+		return types.ConvertTypesPolygonToSQLPolygon(val), nil
 	}
 
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
@@ -75,14 +65,6 @@ func (ti *polygonType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecRead
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 }
 
-func ConvertSQLPolygonToTypesPolygon(p sql.Polygon) types.Polygon {
-	lines := make([]types.LineString, len(p.Lines))
-	for i, l := range p.Lines {
-		lines[i] = ConvertSQLLineStringToTypesLineString(l)
-	}
-	return types.Polygon{SRID: p.SRID, Lines: lines}
-}
-
 // ConvertValueToNomsValue implements TypeInfo interface.
 func (ti *polygonType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	// Check for null
@@ -96,7 +78,7 @@ func (ti *polygonType) ConvertValueToNomsValue(ctx context.Context, vrw types.Va
 		return nil, err
 	}
 
-	return ConvertSQLPolygonToTypesPolygon(poly.(sql.Polygon)), nil
+	return types.ConvertSQLPolygonToTypesPolygon(poly.(sql.Polygon)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -114,14 +96,7 @@ func (ti *polygonType) Equals(other TypeInfo) bool {
 // FormatValue implements TypeInfo interface.
 func (ti *polygonType) FormatValue(v types.Value) (*string, error) {
 	if val, ok := v.(types.Polygon); ok {
-		size := geometry.EWKBHeaderSize + types.LengthSize
-		for _, l := range val.Lines {
-			size += types.LengthSize + geometry.PointSize*len(l.Points)
-		}
-		buf := make([]byte, size)
-		types.WriteEWKBHeader(val, buf[:geometry.EWKBHeaderSize])
-		types.WriteEWKBPolyData(val, buf[geometry.EWKBHeaderSize:])
-		resStr := string(buf)
+		resStr := string(types.SerializePolygon(val))
 		return &resStr, nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -192,6 +167,8 @@ func polygonTypeConverter(ctx context.Context, src *polygonType, destTi TypeInfo
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geomcollType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *geometryType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
@@ -201,6 +178,12 @@ func polygonTypeConverter(ctx context.Context, src *polygonType, destTi TypeInfo
 	case *jsonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *linestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multilinestringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipointType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *multipolygonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *pointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)

@@ -37,6 +37,14 @@ func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, quer
 
 	ts := ddl.(*sqlparser.DDL).TableSpec
 	s, collation, err := parse.TableSpecToSchema(sql.NewContext(ctx), ts, false)
+	for _, col := range s.Schema {
+		if collatedType, ok := col.Type.(sql.TypeWithCollation); ok {
+			col.Type, err = collatedType.WithNewCollation(sql.Collation_Default)
+			if err != nil {
+				return "", nil, err
+			}
+		}
+	}
 
 	if err != nil {
 		return "", nil, err

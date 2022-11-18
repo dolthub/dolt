@@ -40,7 +40,7 @@ import (
 )
 
 var commitDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Record changes to the repository",
+	ShortDesc: "Record changes to the database",
 	LongDesc: `
 Stores the current contents of the staged tables in a new commit along with a log message from the user describing the changes.
 
@@ -193,7 +193,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		mergeParentCommits = parentsHeadForAmend
 	}
 
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
+	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag) || apr.Contains(cli.AmendFlag),
@@ -306,15 +306,25 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggeste
 	}
 
 	backupEd := "vim"
+	// try getting default editor on the user system
 	if ed, edSet := os.LookupEnv("EDITOR"); edSet {
 		backupEd = ed
 	}
+	// try getting Dolt config core.editor
 	editorStr := dEnv.Config.GetStringOrDefault(env.DoltEditor, backupEd)
 
 	cli.ExecuteWithStdioRestored(func() {
-		commitMsg, _ := editor.OpenCommitEditor(editorStr, initialMsg)
+		commitMsg, cErr := editor.OpenCommitEditor(editorStr, initialMsg)
+		if cErr != nil {
+			err = cErr
+		}
 		finalMsg = parseCommitMessage(commitMsg)
 	})
+
+	if err != nil {
+		return "", err
+	}
+
 	return finalMsg, nil
 }
 

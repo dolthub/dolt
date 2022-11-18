@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -270,12 +271,9 @@ func MultiEnvForDirectory(
 		//dEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
 	}
 
-	var binFormat *types.NomsBinFormat
+	envSet := map[string]*DoltEnv{}
 	if dEnv.Valid() {
-		binFormat = dEnv.DoltDB.Format()
-		mrEnv.AddEnv(dbName, dEnv)
-	} else {
-		binFormat = types.Format_Default
+		envSet[dbName] = dEnv
 	}
 
 	// If there are other directories in the directory, try to load them as additional databases
@@ -291,19 +289,25 @@ func MultiEnvForDirectory(
 			return false
 		}
 
-		newEnv := loadWithFormat(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, dEnv.Version, binFormat)
+		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, dEnv.Version)
 		if newEnv.Valid() {
-			mrEnv.AddEnv(dirToDBName(dir), newEnv)
-			if binFormat == nil {
-				binFormat = newEnv.DoltDB.Format()
-			}
+			envSet[dirToDBName(dir)] = newEnv
 		}
-		if newEnv.DbFormatError != nil {
-			logrus.Infof("incompatible format for database '%s'; expected '%s', found '%s'", dir, binFormat.VersionString(), newEnv.DoltDB.Format().VersionString())
-		}
-
 		return false
 	})
+
+	enforceSingleFormat(envSet)
+
+	// if the current directory database is in out set,
+	// add it first so it will be the current database
+	var ok bool
+	if dEnv, ok = envSet[dbName]; ok {
+		mrEnv.AddEnv(dbName, dEnv)
+		delete(envSet, dbName)
+	}
+	for dbName, dEnv = range envSet {
+		mrEnv.AddEnv(dbName, dEnv)
+	}
 
 	return mrEnv, nil
 }
@@ -341,6 +345,7 @@ func MultiEnvForPaths(
 		ignoreLockFile: ignoreLockFile,
 	}
 
+	envSet := map[string]*DoltEnv{}
 	for name, path := range nameToPath {
 		absPath, err := fs.Abs(path)
 
@@ -364,11 +369,45 @@ func MultiEnvForPaths(
 		} else if dEnv.CfgLoadErr != nil {
 			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.CfgLoadErr.Error())
 		}
+		envSet[name] = dEnv
+	}
 
-		mrEnv.AddEnv(name, dEnv)
+	enforceSingleFormat(envSet)
+	for dbName, dEnv := range envSet {
+		mrEnv.AddEnv(dbName, dEnv)
 	}
 
 	return mrEnv, nil
+}
+
+// enforceSingleFormat enforces that constraint that all databases in
+// a multi-database environment have the same NomsBinFormat.
+// Databases are removed from the MultiRepoEnv to ensure this is true.
+func enforceSingleFormat(envSet map[string]*DoltEnv) {
+	formats := set.NewEmptyStrSet()
+	for _, dEnv := range envSet {
+		formats.Add(dEnv.DoltDB.Format().VersionString())
+	}
+
+	var nbf string
+	// if present, prefer types.Format_Default
+	if ok := formats.Contains(types.Format_Default.VersionString()); ok {
+		nbf = types.Format_Default.VersionString()
+	} else {
+		// otherwise, pick an arbitrary format
+		for _, dEnv := range envSet {
+			nbf = dEnv.DoltDB.Format().VersionString()
+		}
+	}
+
+	template := "incompatible format for database '%s'; expected '%s', found '%s'"
+	for name, dEnv := range envSet {
+		found := dEnv.DoltDB.Format().VersionString()
+		if found != nbf {
+			logrus.Infof(template, name, nbf, found)
+			delete(envSet, name)
+		}
+	}
 }
 
 func DBNamesAndPathsFromDir(fs filesys.Filesys, path string) ([]EnvNameAndPath, error) {

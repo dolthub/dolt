@@ -16,18 +16,19 @@ package sqle
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
+	"sort"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -58,11 +59,11 @@ func TestSqlBatchInserts(t *testing.T) {
 			insertStatements[i], insertStatements[j] = insertStatements[j], insertStatements[i]
 		})
 
-	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
+	dEnv, err := CreateTestDatabase()
+	require.NoError(t, err)
 
-	CreateTestDatabase(dEnv, t)
-	root, _ := dEnv.WorkingRoot(ctx)
+	root, err := dEnv.WorkingRoot(ctx)
 
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
@@ -70,7 +71,7 @@ func TestSqlBatchInserts(t *testing.T) {
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db, root)
 	require.NoError(t, err)
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
@@ -88,36 +89,39 @@ func TestSqlBatchInserts(t *testing.T) {
 	allAppearanceRows, err := GetAllRows(root, AppearancesTableName)
 	require.NoError(t, err)
 
-	assert.ElementsMatch(t, AllPeopleRows, allPeopleRows)
-	assert.ElementsMatch(t, AllEpsRows, allEpsRows)
-	assert.ElementsMatch(t, AllAppsRows, allAppearanceRows)
+	AllPeopleSqlRows := ToSqlRows(PeopleTestSchema, AllPeopleRows...)
+	AllEpsSqlRows := ToSqlRows(EpisodesTestSchema, AllEpsRows...)
+	AllAppsSqlRows := ToSqlRows(AppearancesTestSchema, AllAppsRows...)
+	assert.ElementsMatch(t, AllPeopleSqlRows, allPeopleRows)
+	assert.ElementsMatch(t, AllEpsSqlRows, allEpsRows)
+	assert.ElementsMatch(t, AllAppsSqlRows, allAppearanceRows)
 
 	// Now commit the batch and check for new rows
 	err = db.Flush(sqlCtx)
 	require.NoError(t, err)
 
-	var expectedPeople, expectedEpisodes, expectedAppearances []row.Row
+	var expectedPeople, expectedEpisodes, expectedAppearances []sql.Row
 
-	expectedPeople = append(expectedPeople, AllPeopleRows...)
-	expectedPeople = append(expectedPeople,
+	expectedPeople = append(expectedPeople, AllPeopleSqlRows...)
+	expectedPeople = append(expectedPeople, ToSqlRows(PeopleTestSchema,
 		NewPeopleRowWithOptionalFields(7, "Maggie", "Simpson", false, 1, 5.1, uuid.MustParse("00000000-0000-0000-0000-000000000007"), 677),
 		NewPeopleRowWithOptionalFields(8, "Milhouse", "VanHouten", false, 1, 5.1, uuid.MustParse("00000000-0000-0000-0000-000000000008"), 677),
 		newPeopleRow(9, "Clancey", "Wiggum"),
 		newPeopleRow(10, "Montgomery", "Burns"),
 		newPeopleRow(11, "Ned", "Flanders"),
-	)
+	)...)
 
-	expectedEpisodes = append(expectedEpisodes, AllEpsRows...)
-	expectedEpisodes = append(expectedEpisodes,
+	expectedEpisodes = append(expectedEpisodes, AllEpsSqlRows...)
+	expectedEpisodes = append(expectedEpisodes, ToSqlRows(EpisodesTestSchema,
 		newEpsRow(5, "Bart the General"),
 		newEpsRow(6, "Moaning Lisa"),
 		newEpsRow(7, "The Call of the Simpsons"),
 		newEpsRow(8, "The Telltale Head"),
 		newEpsRow(9, "Life on the Fast Lane"),
-	)
+	)...)
 
-	expectedAppearances = append(expectedAppearances, AllAppsRows...)
-	expectedAppearances = append(expectedAppearances,
+	expectedAppearances = append(expectedAppearances, AllAppsSqlRows...)
+	expectedAppearances = append(expectedAppearances, ToSqlRows(AppearancesTestSchema,
 		newAppsRow(7, 5),
 		newAppsRow(7, 6),
 		newAppsRow(8, 7),
@@ -126,7 +130,7 @@ func TestSqlBatchInserts(t *testing.T) {
 		newAppsRow(10, 5),
 		newAppsRow(10, 6),
 		newAppsRow(11, 9),
-	)
+	)...)
 
 	root, err = db.GetRoot(sqlCtx)
 	require.NoError(t, err)
@@ -137,9 +141,9 @@ func TestSqlBatchInserts(t *testing.T) {
 	allAppearanceRows, err = GetAllRows(root, AppearancesTableName)
 	require.NoError(t, err)
 
-	assertRowSetsEqual(t, expectedPeople, allPeopleRows)
-	assertRowSetsEqual(t, expectedEpisodes, allEpsRows)
-	assertRowSetsEqual(t, expectedAppearances, allAppearanceRows)
+	assertRowSetsEqual(t, PeopleTestSchema, expectedPeople, allPeopleRows)
+	assertRowSetsEqual(t, EpisodesTestSchema, expectedEpisodes, allEpsRows)
+	assertRowSetsEqual(t, AppearancesTestSchema, expectedAppearances, allAppearanceRows)
 }
 
 func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
@@ -152,11 +156,12 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 					(2, "Milhouse", "VanHouten", false, 1, 5.1, '00000000-0000-0000-0000-000000000008', 677)`,
 	}
 
-	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
+	dEnv, err := CreateTestDatabase()
+	require.NoError(t, err)
 
-	CreateTestDatabase(dEnv, t)
-	root, _ := dEnv.WorkingRoot(ctx)
+	root, err := dEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
 
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
@@ -164,7 +169,7 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db, root)
 	require.NoError(t, err)
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
@@ -192,15 +197,16 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 
 	allPeopleRows, err = GetAllRows(root, PeopleTableName)
 	assert.NoError(t, err)
-	assertRowSetsEqual(t, expectedPeople, allPeopleRows)
+	assertRowSetsEqual(t, PeopleTestSchema, ToSqlRows(PeopleTestSchema, expectedPeople...), allPeopleRows)
 }
 
 func TestSqlBatchInsertErrors(t *testing.T) {
-	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
+	dEnv, err := CreateTestDatabase()
+	require.NoError(t, err)
 
-	CreateTestDatabase(dEnv, t)
-	root, _ := dEnv.WorkingRoot(ctx)
+	root, err := dEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
 
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
@@ -208,7 +214,7 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db, root)
 	require.NoError(t, err)
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
@@ -226,64 +232,31 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	assert.NoError(t, db.Flush(sqlCtx))
 }
 
-func assertRowSetsEqual(t *testing.T, expected, actual []row.Row) {
-	equal, diff := rowSetsEqual(expected, actual)
-	assert.True(t, equal, diff)
+func assertRowSetsEqual(t *testing.T, sch schema.Schema, expected, actual []sql.Row) {
+	require.Equal(t, len(expected), len(actual),
+		"Sets have different sizes: expected %d, was %d", len(expected), len(actual))
+	sqlSch, err := sqlutil.FromDoltSchema("", sch)
+	require.NoError(t, err)
+	sortSqlRows(t, sqlSch.Schema, expected)
+	sortSqlRows(t, sqlSch.Schema, actual)
+	if !assert.Equal(t, expected, actual) {
+		t.Skip("")
+	}
 }
 
-// Returns whether the two slices of rows contain the same elements using set semantics (no duplicates), and an error
-// string if they aren't.
-func rowSetsEqual(expected, actual []row.Row) (bool, string) {
-	if len(expected) != len(actual) {
-		return false, fmt.Sprintf("Sets have different sizes: expected %d, was %d", len(expected), len(actual))
-	}
-
-	for _, ex := range expected {
-		if !containsRow(actual, ex) {
-			return false, fmt.Sprintf("Missing row: %v", ex)
+func sortSqlRows(t *testing.T, sch sql.Schema, rows []sql.Row) {
+	sort.Slice(rows, func(i, j int) bool {
+		l, r := rows[i], rows[j]
+		for idx, col := range sch {
+			c, err := col.Type.Compare(l[idx], r[idx])
+			require.NoError(t, err)
+			if c == 0 {
+				continue
+			}
+			return c < 0
 		}
-	}
-
-	return true, ""
-}
-
-func containsRow(rs []row.Row, r row.Row) bool {
-	for _, r2 := range rs {
-		equal, _ := rowsEqual(r, r2)
-		if equal {
-			return true
-		}
-	}
-	return false
-}
-
-func rowsEqual(expected, actual row.Row) (bool, string) {
-	er, ar := make(map[uint64]types.Value), make(map[uint64]types.Value)
-	_, err := expected.IterCols(func(t uint64, v types.Value) (bool, error) {
-		er[t] = v
-		return false, nil
+		return false
 	})
-
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = actual.IterCols(func(t uint64, v types.Value) (bool, error) {
-		ar[t] = v
-		return false, nil
-	})
-
-	if err != nil {
-		panic(err)
-	}
-
-	opts := cmp.Options{cmp.AllowUnexported(), dtestutils.FloatComparer, dtestutils.TimestampComparer}
-	eq := cmp.Equal(er, ar, opts)
-	var diff string
-	if !eq {
-		diff = cmp.Diff(er, ar, opts)
-	}
-	return eq, diff
 }
 
 func newPeopleRow(id int, firstName, lastName string) row.Row {

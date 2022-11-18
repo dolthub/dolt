@@ -379,8 +379,27 @@ SQL
     run dolt merge other --no-commit
     log_status_eq 0
     [[ "$output" =~ "CONFLICT" ]] || false
-    dolt conflicts resolve --theirs dolt_schemas
     run dolt conflicts resolve --theirs dolt_schemas
+    log_status_eq 0
+    run dolt sql -q "select name from dolt_schemas" -r csv
+    log_status_eq 0
+    [[ "$output" =~ "c1c1" ]] || false
+}
+
+@test "merge: Add views on two branches, merge with stored procedure" {
+    dolt branch other
+    dolt sql -q "CREATE VIEW pkpk AS SELECT pk*pk FROM test1;"
+    dolt add . && dolt commit -m "added view on table test1"
+
+    dolt checkout other
+    dolt sql -q "CREATE VIEW c1c1 AS SELECT c1*c1 FROM test2;"
+    dolt add . && dolt commit -m "added view on table test2"
+
+    dolt checkout main
+    run dolt merge other --no-commit
+    log_status_eq 0
+    [[ "$output" =~ "CONFLICT" ]] || false
+    run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'dolt_schemas')"
     log_status_eq 0
     run dolt sql -q "select name from dolt_schemas" -r csv
     log_status_eq 0
@@ -912,6 +931,27 @@ SQL
     [[ ! "$output" =~ "add (2,3) to t1" ]] || false
 }
 
+@test "merge: dolt merge does not ff and not commit with --no-ff and --no-commit" {
+    dolt branch other
+    dolt sql -q "INSERT INTO test1 VALUES (1,2,3)"
+    dolt commit -am "add (1,2,3) to test1";
+
+    dolt checkout other
+    run dolt sql -q "select * from test1;" -r csv
+    [[ ! "$output" =~ "1,2,3" ]] || false
+
+    run dolt merge other --no-ff --no-commit
+    log_status_eq 0
+    [[ "$output" =~ "Automatic merge went well; stopped before committing as requested" ]] || false
+
+    run dolt log --oneline -n 1
+    [[ "$output" =~ "added tables" ]] || false
+    [[ ! "$output" =~ "add (1,2,3) to test1" ]] || false
+
+    run dolt commit -m "merge main"
+    log_status_eq 0
+}
+
 @test "merge: specify ---author for merge that's used for creating commit" {
     dolt branch other
     dolt sql -q "INSERT INTO test1 VALUES (1,2,3)"
@@ -934,4 +974,26 @@ SQL
     [ "$status" -eq 0 ]
     regex='John Doe <john@doe.com>'
     [[ "$output" =~ "$regex" ]] || false
+}
+
+@test "merge: prints merge stats" {
+    dolt sql -q "CREATE table t (pk int primary key, col1 int);"
+    dolt sql -q "CREATE table t2 (pk int primary key);"
+    dolt sql -q "INSERT INTO t VALUES (1, 1), (2, 2);"
+    dolt commit -Am "add table t"
+
+    dolt checkout -b right
+    dolt sql -q "insert into t values (3, 3), (4, 4);"
+    dolt sql -q "delete from t where pk = 1;"
+    dolt sql -q "update t set col1 = 200 where pk = 2;"
+    dolt sql -q "insert into t2 values (1);"
+    dolt commit -Am "right"
+
+    dolt checkout main
+    dolt sql -q "insert into t values (5, 5);"
+    dolt commit -Am "left"
+
+    run dolt merge right -m "merge right into main"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "2 tables changed, 3 rows added(+), 1 rows modified(*), 1 rows deleted(-)" ]] || false
 }
