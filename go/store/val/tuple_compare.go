@@ -35,9 +35,7 @@ type TupleComparator interface {
 	Validated(types []Type) TupleComparator
 }
 
-type DefaultTupleComparator struct {
-	PrefixLengths []uint16
-}
+type DefaultTupleComparator struct{}
 
 var _ TupleComparator = DefaultTupleComparator{}
 
@@ -45,7 +43,7 @@ var _ TupleComparator = DefaultTupleComparator{}
 func (d DefaultTupleComparator) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
 	for i := range desc.fast {
 		start, stop := desc.fast[i][0], desc.fast[i][1]
-		cmp = d.compare(desc.Types[i], left[start:stop], right[start:stop])
+		cmp = compare(desc.Types[i], left[start:stop], right[start:stop])
 		if cmp != 0 {
 			return cmp
 		}
@@ -54,7 +52,7 @@ func (d DefaultTupleComparator) Compare(left, right Tuple, desc TupleDesc) (cmp 
 	off := len(desc.fast)
 	for i, typ := range desc.Types[off:] {
 		j := i + off
-		cmp = d.compare(typ, left.GetField(j), right.GetField(j))
+		cmp = compare(typ, left.GetField(j), right.GetField(j))
 		if cmp != 0 {
 			return cmp
 		}
@@ -64,7 +62,7 @@ func (d DefaultTupleComparator) Compare(left, right Tuple, desc TupleDesc) (cmp 
 
 // CompareValues implements TupleComparator
 func (d DefaultTupleComparator) CompareValues(_ int, left, right []byte, typ Type) (cmp int) {
-	return d.compare(typ, left, right)
+	return compare(typ, left, right)
 }
 
 // Prefix implements TupleComparator
@@ -80,77 +78,6 @@ func (d DefaultTupleComparator) Suffix(n int) TupleComparator {
 // Validated implements TupleComparator
 func (d DefaultTupleComparator) Validated(types []Type) TupleComparator {
 	return d
-}
-
-func (d DefaultTupleComparator) compare(typ Type, left, right []byte) int {
-	// order NULLs first
-	if left == nil || right == nil {
-		if bytes.Equal(left, right) {
-			return 0
-		} else if left == nil {
-			return -1
-		} else {
-			return 1
-		}
-	}
-
-	switch typ.Enc {
-	case Int8Enc:
-		return compareInt8(readInt8(left), readInt8(right))
-	case Uint8Enc:
-		return compareUint8(readUint8(left), readUint8(right))
-	case Int16Enc:
-		return compareInt16(readInt16(left), readInt16(right))
-	case Uint16Enc:
-		return compareUint16(ReadUint16(left), ReadUint16(right))
-	case Int32Enc:
-		return compareInt32(readInt32(left), readInt32(right))
-	case Uint32Enc:
-		return compareUint32(readUint32(left), readUint32(right))
-	case Int64Enc:
-		return compareInt64(readInt64(left), readInt64(right))
-	case Uint64Enc:
-		return compareUint64(readUint64(left), readUint64(right))
-	case Float32Enc:
-		return compareFloat32(readFloat32(left), readFloat32(right))
-	case Float64Enc:
-		return compareFloat64(readFloat64(left), readFloat64(right))
-	case Bit64Enc:
-		return compareBit64(readBit64(left), readBit64(right))
-	case DecimalEnc:
-		return compareDecimal(readDecimal(left), readDecimal(right))
-	case YearEnc:
-		return compareYear(readYear(left), readYear(right))
-	case DateEnc:
-		return compareDate(readDate(left), readDate(right))
-	case TimeEnc:
-		return compareTime(readTime(left), readTime(right))
-	case DatetimeEnc:
-		return compareDatetime(readDatetime(left), readDatetime(right))
-	case EnumEnc:
-		return compareEnum(readEnum(left), readEnum(right))
-	case SetEnc:
-		return compareSet(readSet(left), readSet(right))
-	case StringEnc:
-		return compareString(readString(left), readString(right))
-	case ByteStringEnc:
-		return compareByteString(readByteString(left), readByteString(right))
-	case Hash128Enc:
-		return compareHash128(readHash128(left), readHash128(right))
-	case BytesAddrEnc:
-		return compareAddr(readAddr(left), readAddr(right))
-	case CommitAddrEnc:
-		return compareAddr(readAddr(left), readAddr(right))
-	case JSONAddrEnc:
-		return compareAddr(readAddr(left), readAddr(right))
-	case StringAddrEnc:
-		if len(d.PrefixLengths) > 0 {
-			compareString(readString(left), readString(right))
-		}
-		return compareAddr(readAddr(left), readAddr(right))
-	default:
-		panic("unknown encoding")
-	}
 }
 
 func compare(typ Type, left, right []byte) int {

@@ -16,7 +16,6 @@ package writer
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"io"
 	"strings"
 
@@ -128,7 +127,7 @@ func (m prollyIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql
 	if err != nil {
 		return err
 	} else if ok {
-		keyStr := FormatKeyForUniqKeyErr(ctx, m.keyBld.Desc, k, m.mut.NodeStore())
+		keyStr := FormatKeyForUniqKeyErr(k, m.keyBld.Desc)
 		return m.uniqueKeyError(ctx, keyStr, k, true)
 	}
 	return nil
@@ -181,7 +180,7 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 	if err != nil {
 		return err
 	} else if ok {
-		keyStr := FormatKeyForUniqKeyErr(ctx, m.keyBld.Desc, newKey, m.mut.NodeStore())
+		keyStr := FormatKeyForUniqKeyErr(newKey, m.keyBld.Desc)
 		return m.uniqueKeyError(ctx, keyStr, newKey, true)
 	}
 
@@ -370,7 +369,7 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 	existingPK := m.pkBld.Build(sharePool)
 
 	return secondaryUniqueKeyError{
-		keyStr:      FormatKeyForUniqKeyErr(ctx, desc, key, ns),
+		keyStr:      FormatKeyForUniqKeyErr(key, desc),
 		existingKey: existingPK,
 	}
 }
@@ -428,27 +427,16 @@ func (m prollySecondaryIndexWriter) IterRange(ctx context.Context, rng prolly.Ra
 
 // FormatKeyForUniqKeyErr formats the given tuple |key| using |d|. The resulting
 // string is suitable for use in a sql.UniqueKeyError
-func FormatKeyForUniqKeyErr(ctx context.Context, td val.TupleDesc, key val.Tuple, ns tree.NodeStore) string {
+func FormatKeyForUniqKeyErr(key val.Tuple, td val.TupleDesc) string {
 	var sb strings.Builder
 	sb.WriteString("[")
 	seenOne := false
-	for i, typ := range td.Types {
+	for i := range td.Types {
 		if seenOne {
 			sb.WriteString(",")
 		}
 		seenOne = true
-		var keyStrPart string
-		if typ.Enc == val.StringAddrEnc {
-			str, err := index.GetField(ctx, td, i, key, ns)
-			if err != nil {
-				return ""
-			}
-			sb.WriteString(str.(string))
-		} else {
-			keyStrPart = td.FormatValue(i, key.GetField(i))
-		}
-
-		sb.WriteString(keyStrPart)
+		sb.WriteString(td.FormatValue(i, key.GetField(i)))
 	}
 	sb.WriteString("]")
 	return sb.String()

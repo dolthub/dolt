@@ -64,14 +64,12 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		return nil, nil
 	}
 
-	// TODO: do this for other indexes?
 	tableRows, err := t.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 	keyBld := maybeGetKeyBuilder(tableRows)
 
-	// TODO: two primary keys???
 	cols := sch.GetPKCols().GetColumns()
 
 	// add to_ prefix
@@ -97,8 +95,6 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: false,
 	}
-
-	// TODO: need to add from_ columns
 
 	return append(indexes, &toIndex), nil
 }
@@ -810,7 +806,6 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 
 	pranges := make([]prolly.Range, len(ranges))
 
-	// TODO (james): convert ranges to String instead of string encoding?
 	for k, rng := range ranges {
 		fields := make([]prolly.RangeField, len(rng))
 		for j, expr := range rng {
