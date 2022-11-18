@@ -1,0 +1,152 @@
+opts:
+  seed: 0
+tests:
+- name: "sql"
+  repos:
+  - name: dolt
+    server:
+      port: 3308
+      args: [ "--port", "3308" ]
+#  - name: mysql # mysqld --port 3308 --local-infile=1 --socket=/tmp/mysqld2.sock
+#    external-server:
+#      name: test
+#      host: 127.0.0.1
+#      user: root
+#      password:
+#      port: 3309
+  tables:
+    - name: "1 blob"
+      rows: 1
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "1 blob"
+      rows: 10
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "1 blob"
+      rows: 20
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "1 blob"
+      rows: 40
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "1 blob"
+      rows: 50
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "1 blob"
+      rows: 60
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "1 blob"
+      rows: 80
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "1 blob"
+      rows: 100
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "1 blob"
+      rows: 200
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "1 blob"
+      rows: 400
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "1 blob"
+      rows: 600
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "1 blob"
+      rows: 800
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "1 blob"
+      rows: 1000
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "1 blob"
+      rows: 10000
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30)
+        );
+    - name: "1 blob"
+      rows: 100000
+      schema: |
+        create table xy (
+          x int primary key,
+          y blob,
+          z varchar(30),
+          w varchar(30)
+        );
