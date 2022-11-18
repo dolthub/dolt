@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/hex"
 	"io"
+	"sync"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -111,6 +112,53 @@ func walkOpaqueNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) erro
 		}
 		return WalkNodes(ctx, child, ns, cb)
 	})
+}
+
+var nodeBufPool = sync.Pool{
+	New: func() any {
+		// The Pool's New function should generally only return pointer
+		// types, since a pointer can be put into the return interface
+		// value without an allocation:
+		return new(Node)
+	},
+}
+
+func FillNodeFromBytes(n *Node, msg []byte) error {
+	keys, values, level, count, err := message.UnpackFields(msg)
+	if err != nil {
+		return err
+	}
+	n.keys = keys
+	n.values = values
+	n.count = count
+	n.level = level
+	n.msg = msg
+	return nil
+}
+
+type nodeArena []Node
+
+func (a *nodeArena) Get() Node {
+	if len(*a) == 0 {
+		*a = make([]Node, 10000)
+	}
+	n := (*a)[len(*a)-1]
+	*a = (*a)[:len(*a)-1]
+	return n
+}
+
+func (a *nodeArena) NodeFromBytes(msg []byte) (Node, error) {
+	keys, values, level, count, err := message.UnpackFields(msg)
+	if err != nil {
+		return Node{}, err
+	}
+	n := a.Get()
+	n.keys = keys
+	n.values = values
+	n.count = count
+	n.level = level
+	n.msg = msg
+	return n, nil
 }
 
 func NodeFromBytes(msg []byte) (Node, error) {

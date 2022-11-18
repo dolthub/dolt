@@ -65,6 +65,7 @@ func NewBlobBuilder(ns NodeStore, chunkSize int) (*BlobBuilder, error) {
 		chunkSize: chunkSize,
 		buf:       make([]byte, chunkSize),
 		keys:      keys,
+		na:        &nodeArena{},
 		subtrees:  make([]uint64, chunkSize/hash.ByteLen),
 	}, nil
 }
@@ -74,6 +75,7 @@ type BlobBuilder struct {
 	S         message.Serializer
 	chunkSize int
 	keys      [][]byte
+	na        *nodeArena
 
 	ctx      context.Context
 	r        io.Reader
@@ -220,7 +222,7 @@ func (b *BlobBuilder) writeNextLeaf(i int) error {
 func (b *BlobBuilder) writeChunkAtPos(i int, keys, vals [][]byte, subtrees []uint64, level int) error {
 	msg := b.S.Serialize(keys, vals, subtrees, level)
 
-	node, err := NodeFromBytes(msg)
+	node, err := b.na.NodeFromBytes(msg)
 	b.lastN = node
 	h, err := b.ns.Write(b.ctx, node)
 	if err != nil {
