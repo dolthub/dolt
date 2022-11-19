@@ -15,108 +15,392 @@
 package nbs
 
 import (
+	"bufio"
+	"context"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"sync"
+
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
+
+	"github.com/dolthub/fslock"
 )
 
-func newJournalWriter(file *os.File, offset int64, size int) *journalWriter {
-	return &journalWriter{
-		buf:  make([]byte, 0, size),
-		file: file,
-		off:  offset,
+const (
+	chunkJournalFileSize = 256 * 1024 * 1024
+
+	// todo(andy): buffer must be able to hold an entire record,
+	//   but we don't have a hard limit on record size right now
+	journalWriterBuffSize = 1024 * 1024
+
+	chunkJournalAddr = "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"
+)
+
+var (
+	openJournals = new(sync.Map)
+	journalAddr  = addr(hash.Parse(chunkJournalAddr))
+)
+
+func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, err error) {
+	var (
+		f    *os.File
+		lock *fslock.Lock
+	)
+
+	if path, err = filepath.Abs(path); err != nil {
+		return nil, err
 	}
+
+	lock = fslock.New(path)
+	if _, ok := openJournals.Load(path); ok {
+		return nil, fmt.Errorf("journal (%s) already opened in-process", path)
+	} else if err = lock.TryLock(); err != nil {
+		return nil, fmt.Errorf("journal (%s) already opened out-of-process: %s", path, err)
+	}
+	openJournals.Store(path, true)
+
+	var create bool
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		create = true
+	} else if err != nil {
+		return nil, err
+	} else if info.IsDir() {
+		return nil, fmt.Errorf("expected file %s found directory", chunkJournalName)
+	}
+
+	if create {
+		if f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666); err != nil {
+			return nil, err
+		}
+		const batch = 1024 * 1024
+		b := make([]byte, batch)
+		for i := 0; i < chunkJournalFileSize; i += batch {
+			if _, err = f.Write(b); err != nil { // zero fill |f|
+				return nil, err
+			}
+		}
+		if err = f.Sync(); err != nil {
+			return nil, err
+		}
+		if o, err := f.Seek(0, io.SeekStart); err != nil {
+			return nil, err
+		} else if o != 0 {
+			return nil, fmt.Errorf("expected file offset 0, got %d", o)
+		}
+	} else {
+		if f, err = os.OpenFile(path, os.O_RDWR, 0666); err != nil {
+			return nil, err
+		}
+	}
+
+	return &journalWriter{
+		buf:  make([]byte, 0, journalWriterBuffSize),
+		file: f,
+		lock: lock,
+		path: path,
+	}, nil
 }
 
 type journalWriter struct {
 	buf  []byte
 	file *os.File
 	off  int64
+
+	lock *fslock.Lock
+	path string
 }
 
 var _ io.ReaderAt = &journalWriter{}
 var _ io.WriteCloser = &journalWriter{}
 
-func (j *journalWriter) Offset() int64 {
-	return j.off + int64(len(j.buf))
-}
-
-func (j *journalWriter) ReadAt(p []byte, off int64) (n int, err error) {
+func (wr *journalWriter) ReadAt(p []byte, off int64) (n int, err error) {
 	var bp []byte
-	if off < j.off {
-		// fill some or all of |p| from |j.file|
-		fread := int(j.off - off)
+	if off < wr.off {
+		// fill some or all of |p| from |wr.file|
+		fread := int(wr.off - off)
 		if len(p) > fread {
 			// straddled read
 			bp = p[fread:]
 			p = p[:fread]
 		}
-		if n, err = j.file.ReadAt(p, off); err != nil {
+		if n, err = wr.file.ReadAt(p, off); err != nil {
 			return 0, err
 		}
 		off = 0
 	} else {
-		// fill all of |p| from |j.buf|
+		// fill all of |p| from |wr.buf|
 		bp = p
-		off -= j.off
+		off -= wr.off
 	}
-	n += copy(bp, j.buf[off:])
+	n += copy(bp, wr.buf[off:])
 	return
 }
 
-func (j *journalWriter) GetBytes(n int) (buf []byte, err error) {
-	c, l := cap(j.buf), len(j.buf)
-	if n > c {
-		err = fmt.Errorf("requested bytes (%d) exceeds capacity (%d)", n, c)
-		return
-	} else if n > c-l {
-		if err = j.Flush(); err != nil {
-			return
-		}
-	}
-	l = len(j.buf)
-	j.buf = j.buf[:l+n]
-	buf = j.buf[l : l+n]
-	return
-}
-
-func (j *journalWriter) Write(p []byte) (n int, err error) {
-	if len(p) > len(j.buf) {
-		// write directly to |j.file|
-		if err = j.Flush(); err != nil {
+func (wr *journalWriter) Write(p []byte) (n int, err error) {
+	if len(p) > len(wr.buf) {
+		// write directly to |wr.file|
+		if err = wr.flush(); err != nil {
 			return 0, err
 		}
-		n, err = j.file.WriteAt(p, j.off)
-		j.off += int64(n)
+		n, err = wr.file.WriteAt(p, wr.off)
+		wr.off += int64(n)
 		return
 	}
 	var buf []byte
-	if buf, err = j.GetBytes(len(p)); err != nil {
+	if buf, err = wr.getBytes(len(p)); err != nil {
 		return 0, err
 	}
 	n = copy(buf, p)
 	return
 }
 
-func (j *journalWriter) Flush() (err error) {
-	if _, err = j.file.WriteAt(j.buf, j.off); err != nil {
-		return err
+func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, cs chunkSource, err error) {
+	// bootstrap chunk journal from |wr.file|
+	src := journalChunkSource{
+		journal: wr,
+		address: journalAddr,
+		lookups: make(map[addr]jrecordLookup),
 	}
-	j.off += int64(len(j.buf))
-	j.buf = j.buf[:0]
+	wr.off, err = processRecords(ctx, wr.file, func(o int64, r jrecord) error {
+		switch r.kind {
+		case chunkKind:
+			src.lookups[r.address] = jrecordLookup{offset: o, length: r.length}
+			src.compressedSz += uint64(r.length)
+			// todo(andy): uncompressed size
+		case rootHashKind:
+			last = hash.Hash(r.address)
+		default:
+			return fmt.Errorf("unknown journal record kind (%d)", r.kind)
+		}
+		return nil
+	})
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
+	cs = src
 	return
 }
 
-func (j *journalWriter) Sync() (err error) {
-	if err = j.Flush(); err != nil {
-		return err
+func (wr *journalWriter) writeChunk(cc CompressedChunk) (jrecordLookup, error) {
+	rec := jrecordLookup{
+		offset: wr.offset(),
+		length: chunkRecordSize(cc),
 	}
-	return j.file.Sync()
+	buf, err := wr.getBytes(int(rec.length))
+	if err != nil {
+		return jrecordLookup{}, err
+	}
+	_ = writeChunkRecord(buf, cc)
+	return rec, nil
 }
 
-func (j *journalWriter) Close() (err error) {
-	if err = j.Flush(); err != nil {
+func (wr *journalWriter) writeRootHash(root hash.Hash) error {
+	buf, err := wr.getBytes(rootHashRecordSize)
+	if err != nil {
 		return err
 	}
-	return j.file.Close()
+	_ = writeRootHashRecord(buf, addr(root))
+
+	if err = wr.flush(); err != nil {
+		return err
+	}
+	return wr.file.Sync()
+}
+
+func (wr *journalWriter) offset() int64 {
+	return wr.off + int64(len(wr.buf))
+}
+
+func (wr *journalWriter) getBytes(n int) (buf []byte, err error) {
+	c, l := cap(wr.buf), len(wr.buf)
+	if n > c {
+		err = fmt.Errorf("requested bytes (%d) exceeds capacity (%d)", n, c)
+		return
+	} else if n > c-l {
+		if err = wr.flush(); err != nil {
+			return
+		}
+	}
+	l = len(wr.buf)
+	wr.buf = wr.buf[:l+n]
+	buf = wr.buf[l : l+n]
+	return
+}
+
+func (wr *journalWriter) flush() (err error) {
+	if _, err = wr.file.WriteAt(wr.buf, wr.off); err != nil {
+		return err
+	}
+	wr.off += int64(len(wr.buf))
+	wr.buf = wr.buf[:0]
+	return
+}
+
+func (wr *journalWriter) Close() (err error) {
+	if err = wr.flush(); err != nil {
+		return err
+	}
+	if cerr := wr.file.Sync(); cerr != nil {
+		err = cerr
+	}
+	if cerr := wr.file.Close(); cerr != nil {
+		err = cerr
+	}
+	if cerr := wr.lock.Unlock(); cerr != nil {
+		err = cerr
+	}
+	openJournals.Delete(wr.path)
+	return
+}
+
+// todo(andy): extensible record format
+type jrecord struct {
+	length   uint32
+	kind     jrecordKind
+	address  addr
+	payload  []byte
+	checksum uint32
+}
+
+type jrecordKind uint8
+
+const (
+	unknownKind  jrecordKind = 0
+	rootHashKind jrecordKind = 1
+	chunkKind    jrecordKind = 2
+
+	recKindSz = 1
+	recLenSz  = uint32Size
+	recMinSz  = recLenSz + recKindSz + addrSize + checksumSize
+	recMaxSz  = 128 * 1024 // todo(andy): less arbitrary
+
+	rootHashRecordSize = recMinSz
+)
+
+func chunkRecordSize(c CompressedChunk) uint32 {
+	return uint32(len(c.FullCompressedChunk)) + recMinSz
+}
+
+func writeChunkRecord(buf []byte, c CompressedChunk) (n uint32) {
+	l := chunkRecordSize(c)
+	writeUint(buf[:recLenSz], l)
+	n += recLenSz
+	buf[n] = byte(chunkKind)
+	n += recKindSz
+	copy(buf[n:], c.H[:])
+	n += addrSize
+	copy(buf[n:], c.FullCompressedChunk)
+	n += uint32(len(c.FullCompressedChunk))
+	writeUint(buf[n:], crc(buf[:n]))
+	n += checksumSize
+	d.PanicIfFalse(l == n)
+	return
+}
+
+func writeRootHashRecord(buf []byte, root addr) (n uint32) {
+	writeUint(buf[:recLenSz], rootHashRecordSize)
+	n += recLenSz
+	buf[n] = byte(rootHashKind)
+	n += recKindSz
+	copy(buf[n:], root[:])
+	n += addrSize
+	writeUint(buf[n:], crc(buf[:n]))
+	n += checksumSize
+	return
+}
+
+func readJournalRecord(buf []byte) (rec jrecord) {
+	rec.length = readUint(buf)
+	buf = buf[recLenSz:]
+	rec.kind = jrecordKind(buf[0])
+	buf = buf[recKindSz:]
+	copy(rec.address[:], buf)
+	buf = buf[addrSize:]
+	rec.payload = buf[:len(buf)-checksumSize]
+	rec.checksum = readUint(buf[len(buf)-checksumSize:])
+	return
+}
+
+func safeReadJournalRecord(buf []byte) (jrecord, bool) {
+	o := len(buf) - checksumSize
+	if crc(buf[:o]) != readUint(buf[o:]) {
+		return jrecord{}, false
+	}
+
+	rec := readJournalRecord(buf)
+	switch rec.kind {
+	case rootHashKind:
+		return rec, true
+
+	case chunkKind:
+		_, err := NewCompressedChunk(hash.Hash(rec.address), rec.payload)
+		if err != nil {
+			return jrecord{}, false
+		}
+		return rec, true
+
+	default:
+		return jrecord{}, false
+	}
+}
+
+func processRecords(ctx context.Context, r io.ReadSeeker, cb func(o int64, r jrecord) error) (int64, error) {
+	var (
+		buf []byte
+		off int64
+		err error
+	)
+
+	rdr := bufio.NewReaderSize(r, journalWriterBuffSize)
+	for {
+		// peek to read next record size
+		if buf, err = rdr.Peek(uint32Size); err != nil {
+			break
+		}
+
+		l := readUint(buf)
+		if l < recMinSz || l > recMaxSz {
+			break
+		} else if buf, err = rdr.Peek(int(l)); err != nil {
+			break
+		}
+
+		rec, ok := safeReadJournalRecord(buf)
+		if !ok {
+			break // stop if we can't validate |rec|
+		}
+
+		if err = cb(off, rec); err != nil {
+			break
+		}
+
+		// advance |rdr| state by |l| bytes
+		if _, err = io.ReadFull(rdr, buf); err != nil {
+			break
+		}
+		off += int64(len(buf))
+	}
+	if err != nil && err != io.EOF {
+		return 0, err
+	}
+	// reset the file pointer to end of the last
+	// successfully processed journal record
+	if _, err = r.Seek(off, 0); err != nil {
+		return 0, err
+	}
+	return off, nil
+}
+
+func readUint(buf []byte) uint32 {
+	return binary.BigEndian.Uint32(buf)
+}
+
+func writeUint(buf []byte, u uint32) {
+	binary.BigEndian.PutUint32(buf, u)
 }

@@ -1146,8 +1146,14 @@ func (nbs *NomsBlockStore) Version() string {
 	return nbs.upstream.nbfVers
 }
 
-func (nbs *NomsBlockStore) Close() error {
-	return nbs.tables.close()
+func (nbs *NomsBlockStore) Close() (err error) {
+	if cerr := nbs.p.Close(); cerr != nil {
+		err = cerr
+	}
+	if cerr := nbs.tables.close(); cerr != nil {
+		err = cerr
+	}
+	return
 }
 
 func (nbs *NomsBlockStore) Stats() interface{} {

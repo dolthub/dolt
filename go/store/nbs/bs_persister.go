@@ -126,3 +126,7 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {
 	return chunks.ErrUnsupportedOperation
 }
+
+func (bsp *blobstorePersister) Close() error {
+	return nil
+}
