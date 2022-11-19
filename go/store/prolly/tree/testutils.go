@@ -244,8 +244,8 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type, ns NodeStore) {
 		buf := make([]byte, len)
 		testRand.Read(buf)
 		bb := ns.BlobBuilder()
-		bb.Init(context.Background(), int(len), bytes.NewReader(buf))
-		_, addr, err := bb.Chunk()
+		bb.Init(int(len))
+		_, addr, err := bb.Chunk(context.Background(), bytes.NewReader(buf))
 		if err != nil {
 			panic("failed to write bytes tree")
 		}

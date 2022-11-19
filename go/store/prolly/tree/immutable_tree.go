@@ -20,8 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"math"
-	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -32,12 +30,6 @@ import (
 const DefaultFixedChunkLength = 4000
 
 var ErrInvalidChunkSize = errors.New("invalid chunkSize; value must be a multiple of 20")
-
-var chunkBufPool = sync.Pool{
-	New: func() any {
-		return new([][]byte)
-	},
-}
 
 func mustNewBlobBuilder(ns NodeStore, chunkSize int) *BlobBuilder {
 	b, _ := NewBlobBuilder(ns, chunkSize)
@@ -54,253 +46,177 @@ func NewBlobBuilder(ns NodeStore, chunkSize int) (*BlobBuilder, error) {
 
 	keys := make([][]byte, chunkSize/hash.ByteLen)
 	for i := range keys {
-		keys[i] = []byte{0}
+		keys[i] = zeroKey
 	}
 	return &BlobBuilder{
-		ns:         ns,
-		S:          message.NewBlobSerializer(ns.Pool()),
-		lChunkSize: chunkSize,
-		iChunkSize: chunkSize / hash.ByteLen,
-		buf:        make([]byte, chunkSize),
-		keys:       keys,
-		na:         &nodeArena{},
-		subtrees:   make([]uint64, chunkSize/hash.ByteLen),
+		ns:        ns,
+		S:         message.NewBlobSerializer(ns.Pool()),
+		chunkSize: chunkSize,
+		keys:      keys,
 	}, nil
 }
 
+type blobNodeWriter interface {
+	Write(ctx context.Context, r io.Reader) (hash.Hash, uint64, error)
+}
+
 type BlobBuilder struct {
-	ns         NodeStore
-	S          message.Serializer
-	lChunkSize int
-	iChunkSize int
-	keys       [][]byte
-	na         *nodeArena
-
-	ctx      context.Context
-	r        io.Reader
-	dataSize int
-	height   int
-	chunkCnt int
-
-	lastN    Node
-	buf      []byte
-	subtrees []uint64
-	chunks   [][]byte
-
-	level           int
-	levelSize       int
-	levelStart      int
-	levelEnd        int
-	levelSubtreeCnt uint64
-	prevLevelEnd    int
-	remainder       uint64
+	ns        NodeStore
+	S         message.Serializer
+	chunkSize int
+	keys      [][]byte
+	wr        blobNodeWriter
+	lastN     Node
+	topLevel  int
 }
 
 // Reset clears the BlobBuilder for re-use.
 func (b *BlobBuilder) Reset() {
-	b.r = nil
-	b.dataSize = 0
-	b.height = 0
-	b.chunkCnt = 0
-	b.ctx = nil
-	for i := range b.subtrees {
-		b.subtrees[i] = 1
-	}
+	b.wr = nil
+	b.topLevel = 0
 }
 
 // Init calculates tree dimensions for a given blob.
-func (b *BlobBuilder) Init(ctx context.Context, dataSize int, r io.Reader) {
+func (b *BlobBuilder) Init(dataSize int) {
 	b.Reset()
-	b.ctx = ctx
-	b.dataSize = dataSize
-	b.r = r
 
-	b.height = b.blobHeight(b.dataSize, b.lChunkSize, b.iChunkSize)
-	b.chunkCnt = b.chunkCount(b.dataSize, b.lChunkSize, b.iChunkSize)
-	b.levelSize = int(math.Ceil(float64(b.dataSize) / float64(b.lChunkSize)))
-	b.levelStart = b.chunkCnt - b.levelSize
-	b.levelEnd = b.chunkCnt
-	b.prevLevelEnd = b.chunkCnt
-	b.remainder = 1
-	b.levelSubtreeCnt = 1
+	if dataSize == 0 {
+		return
+	}
 
-	b.chunks = *chunkBufPool.Get().(*[][]byte)
-	for len(b.chunks) < b.chunkCnt {
-		b.chunks = append(b.chunks, []byte(nil))
+	b.wr = &blobLeafWriter{
+		bb:  b,
+		buf: make([]byte, b.chunkSize),
+	}
+
+	if dataSize <= b.chunkSize {
+		return
+	}
+
+	numAddrs := b.chunkSize / hash.ByteLen
+	dataSize = dataSize / b.chunkSize
+	for dataSize > 0 {
+		dataSize = dataSize / numAddrs
+		b.topLevel += 1
+	}
+
+	// Allocate everything we need in batch, slice them up down below.
+	buf := make([]byte, b.topLevel*numAddrs*hash.ByteLen)
+	vals := make([][]byte, numAddrs*b.topLevel)
+	subtrees := make([]uint64, numAddrs*b.topLevel)
+	writers := make([]blobLevelWriter, b.topLevel)
+
+	for i, addrs := 0, 0; i < b.topLevel; i, addrs = i+1, addrs+numAddrs {
+		wr := &writers[i]
+		wr.bb = b
+		wr.child = b.wr
+		wr.buf = buf[addrs*hash.ByteLen : (addrs+numAddrs)*hash.ByteLen]
+		wr.vals = vals[addrs : addrs+numAddrs]
+		wr.subtrees = subtrees[addrs : addrs+numAddrs]
+		wr.level = i + 1
+		wr.sz = numAddrs
+		b.wr = wr
 	}
 }
 
-// Chunk builds the blob tree in reverse level-order. Level 0, consisting
-// of leaf nodes containing the blob bytes, are built first but inserted
-// at the end of the tree. The root node will be built last, and occupy
-// |chunks[0]|.
-//
-// Tree building is divided into two phases so that we can use different data
-// structures for 1) reading the blob bytes, and 2) building intermediate nodes
-// of hash references.
-//
-// Every hash has a pre-calculated position in the tree. Chunk key tuple are
-// nil for both leaf and intermediate chunks. Intermediate chunk value tuples
-// include a range of lower level hashes of length `chunkSize/hashSize`.
-//
-// Subtree counts are calculated iteratively; the final node for any level
-// will reference (from the lower level) zero or many full node references plus
-// 2) one partial or full |remainder| node. The |remainder| accumulates iteratively
-// for the final node of each level moving up the tree.
-func (b *BlobBuilder) Chunk() (Node, hash.Hash, error) {
-	if b.dataSize == 0 {
+// Chunk builds the blob tree by passing the Reader to the chain of level
+// writers, terminated in a leaf writer. The leaf writer reads chunks from the
+// Reader and writes them, returning their hashes to its parent level writer.
+// When the parent level writer fills up with addresses, it writes a chunk and
+// returns that address to its parent. This continues until the Reader returns
+// io.EOF, when every writer in the chain completes its chunk and we return the
+// root node.
+func (b *BlobBuilder) Chunk(ctx context.Context, r io.Reader) (Node, hash.Hash, error) {
+	if b.wr == nil {
 		return Node{}, hash.Hash{}, nil
-	} else if b.chunkCnt == 1 {
-		err := b.writeNextLeaf(0)
-		if err != nil {
-			return Node{}, hash.Hash{}, err
-		}
-		return b.lastN, hash.New(b.chunks[0]), nil
 	}
-
-	err := b.fillLeaves()
-	if err != nil {
+	h, _, err := b.wr.Write(ctx, r)
+	if err != nil && err != io.EOF {
 		return Node{}, hash.Hash{}, err
 	}
+	return b.lastN, h, nil
+}
 
-	for !b.done() {
-		b.incLevel()
-		err = b.fillLevel()
-		if err != nil {
-			return Node{}, hash.Hash{}, err
-		}
+// blobLeafWriter writes leaf chunks of the blob, with max capacity len(buf),
+// for every call to Write().
+type blobLeafWriter struct {
+	bb  *BlobBuilder
+	buf []byte
+}
+
+var zeroKey = []byte{0}
+var zeroKeys = [][]byte{zeroKey}
+var leafSubtrees = []uint64{1}
+
+func (lw *blobLeafWriter) Write(ctx context.Context, r io.Reader) (hash.Hash, uint64, error) {
+	n, err := r.Read(lw.buf)
+	if err != nil {
+		return hash.Hash{}, 0, err
 	}
-	return b.lastN, hash.New(b.chunks[0]), nil
+	h, err := lw.bb.write(ctx, zeroKeys, [][]byte{lw.buf[:n]}, leafSubtrees, 0)
+	return h, 1, err
 }
 
-// done indicates the tree is complete.
-func (b *BlobBuilder) done() bool {
-	return b.levelStart <= 0
+// blobLevelWriters writes internal chunks of a blob, using its |child| to
+// write the level below it. On a call to |Write|, it repeatedly calls
+// |child.Write|, accumulating addresses to its children, until it fills up or
+// the Reader is exhausted. In either case, it then writes its node and
+// returns.
+type blobLevelWriter struct {
+	bb       *BlobBuilder
+	child    blobNodeWriter
+	buf      []byte
+	vals     [][]byte
+	subtrees []uint64
+	sz       int
+	level    int
 }
 
-// incLevel updates the current/previous level tracking info.
-func (b *BlobBuilder) incLevel() {
-	b.level++
-	b.prevLevelEnd = b.levelEnd
-	b.levelEnd = b.levelStart
-	b.levelSize = int(math.Ceil(float64(b.levelSize) / float64(b.iChunkSize)))
-	b.levelStart = b.levelEnd - b.levelSize
-	if b.level > 1 {
-		// all full chunks will have the same subtree counts
-		b.levelSubtreeCnt = b.levelSubtreeCnt * uint64(b.iChunkSize)
-		for i := range b.subtrees {
-			b.subtrees[i] = b.levelSubtreeCnt
+func (lw *blobLevelWriter) Write(ctx context.Context, r io.Reader) (hash.Hash, uint64, error) {
+	i, off, totalCount := 0, 0, uint64(0)
+	for {
+		// Sketchy hack to elide a copy here...
+		// h := (*hash.Hash)(unsafe.Pointer(&lw.buf[off]))
+		// var n uint64
+		// var err error
+		h, n, err := lw.child.Write(ctx, r)
+		if err != nil && err != io.EOF {
+			return hash.Hash{}, 0, err
 		}
-	}
-}
-
-// fillLevel writes chunks for an intermediate level, inserting the result
-// addresses into the |chunks| tree. Intermediate level chunk values are
-// |chunkSize/hashSize| slices of addresses from the child level of the tree.
-// The final chunk for every level may be unfilled.
-func (b *BlobBuilder) fillLevel() error {
-	var start, end int
-	for i := 0; i < b.levelSize; i++ {
-		// |start| - |end| is a chunk-sized byte range from the previous level
-		start = b.levelEnd + i*b.iChunkSize
-		end = start + b.lChunkSize/hash.ByteLen
-
-		if i == b.levelSize-1 {
-			// the final node in a level is special
-			if end > b.prevLevelEnd {
-				// final node might not fill a whole chunk
-				for i := end - 1; i >= b.prevLevelEnd; i-- {
-					b.subtrees[i-start] = 0
-				}
-				end = b.prevLevelEnd
+		if n != 0 {
+			totalCount += n
+			copy(lw.buf[off:], h[:])
+			lw.subtrees[i] = n
+			lw.vals[i] = lw.buf[off : off+hash.ByteLen]
+			i += 1
+			off += hash.ByteLen
+		}
+		if i >= lw.sz || err == io.EOF {
+			h, nerr := lw.bb.write(ctx, lw.bb.keys[:i], lw.vals[:i], lw.subtrees[:i], lw.level)
+			if nerr != nil {
+				return hash.Hash{}, 0, nerr
 			}
-			// and the final node in the lower level may not be full
-			b.subtrees[end-start-1] = b.remainder
-			b.remainder += b.levelSubtreeCnt * uint64(end-start-1)
-		}
-
-		err := b.writeChunkAtIdx(
-			b.levelStart+i,
-			b.keys,
-			b.chunks[start:end],
-			b.subtrees[:end-start],
-			b.level,
-		)
-		if err != nil {
-			return err
+			return h, totalCount, err
 		}
 	}
-	return nil
 }
 
-// fillLeaves writes level 0 of the tree containing a slice of the blob
-// byte array of length |chunkSize|.
-func (b *BlobBuilder) fillLeaves() error {
-	start := b.chunkCnt - int(math.Ceil(float64(b.dataSize)/float64(b.lChunkSize)))
-	end := b.chunkCnt
-	for i := start; i < end; i++ {
-		err := b.writeNextLeaf(i)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (b *BlobBuilder) writeNextLeaf(i int) error {
-	n, err := b.r.Read(b.buf)
+// Write the blob node. Called by level and leaf writers. Will store lastN if
+// the level corresponds to our root level.
+func (bb *BlobBuilder) write(ctx context.Context, keys, vals [][]byte, subtrees []uint64, level int) (hash.Hash, error) {
+	msg := bb.S.Serialize(keys, vals, subtrees, level)
+	node, err := NodeFromBytes(msg)
 	if err != nil {
-		return err
+		return hash.Hash{}, err
 	}
-
-	return b.writeChunkAtIdx(i, [][]byte{{0}}, [][]byte{b.buf[:n]}, []uint64{1}, 0)
-}
-
-func (b *BlobBuilder) writeChunkAtIdx(
-	i int, keys, vals [][]byte,
-	subtrees []uint64,
-	level int,
-) error {
-	msg := b.S.Serialize(keys, vals, subtrees, level)
-
-	node, err := b.na.NodeFromBytes(msg)
-	b.lastN = node
-	h, err := b.ns.Write(b.ctx, node)
+	h, err := bb.ns.Write(ctx, node)
 	if err != nil {
-		return err
+		return hash.Hash{}, err
 	}
-	b.chunks[i] = h[:]
-	return nil
-}
-
-// blobHeight calculates the number of tree levelse for a blob. We
-// differentiate between the first level, which chunks |chunkSize| bytes
-// from the blob, and intermediate levels that chunk |chunkSize/hashSize|
-// addresses.
-func (b *BlobBuilder) blobHeight(dataSize, lChunkSize, iChunkSize int) int {
-	if dataSize == 0 {
-		return 0
+	if level == bb.topLevel {
+		bb.lastN = node
 	}
-	leaves := float64(dataSize) / float64(lChunkSize)
-	return int(math.Ceil(math.Log2(leaves) / math.Log2(float64(iChunkSize))))
-}
-
-func (b *BlobBuilder) chunkCount(dataSize, lChunkSize, iChunkSize int) int {
-	if dataSize == 0 {
-		return 0
-	}
-	if dataSize <= lChunkSize {
-		return 1
-	}
-	dataSize = int(math.Ceil(float64(dataSize) / float64(lChunkSize)))
-	l := 1
-	sum := dataSize
-	for dataSize > iChunkSize {
-		dataSize = int(math.Ceil(float64(dataSize) / float64(iChunkSize)))
-		sum += dataSize
-		l += 1
-	}
-	return sum + 1
+	return h, nil
 }
 
 const bytePeekLength = 128
