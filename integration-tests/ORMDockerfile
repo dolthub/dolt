@@ -16,6 +16,7 @@ RUN apt update -y && \
         git \
         mysql-client \
         libmysqlclient-dev \
+        openjdk-11-jdk \
         bats && \
     update-ca-certificates -f
 
@@ -34,6 +35,18 @@ RUN curl -O "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" && \
 
 # install mysql connector and pymsql
 RUN pip3 install mysql-connector-python PyMySQL sqlalchemy
+
+# Setup JAVA_HOME -- useful for docker commandline
+ENV JAVA_HOME /usr/lib/jvm/java-11-openjdk-amd64/
+
+# install maven
+ADD https://apache.osuosl.org/maven/maven-3/3.8.6/binaries/apache-maven-3.8.6-bin.tar.gz apache-maven-3.8.6-bin.tar.gz
+RUN tar zxvf apache-maven-3.8.6-bin.tar.gz && \
+    cp -r apache-maven-3.8.6 /opt && \
+    rm -rf apache-maven-3.8.6 apache-maven-3.8.6-bin.tar.gz
+
+# add maven binary
+ENV PATH /opt/apache-maven-3.8.6/bin:$PATH
 
 # install dolt from source
 WORKDIR /root/building
