@@ -16,6 +16,10 @@ RUN apt update -y && \
         git \
         mysql-client \
         libmysqlclient-dev \
+        # weird issue: installing openjdk-17-jdk errors if `maven` or possibly any other package is not installed after it
+        openjdk-17-jdk \
+        # currently, `apt install maven` installs v3.6.0 which does not work with openjdk-17-jdk
+        maven \
         bats && \
     update-ca-certificates -f
 
@@ -34,6 +38,18 @@ RUN curl -O "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" && \
 
 # install mysql connector and pymsql
 RUN pip3 install mysql-connector-python PyMySQL sqlalchemy
+
+# Setup JAVA_HOME -- useful for docker commandline
+ENV JAVA_HOME /usr/lib/jvm/java-17-openjdk-amd64/
+
+# install the current latest maven version, `v3.6.3`, because apt installed one does not work with jdk 17
+ADD https://apache.osuosl.org/maven/maven-3/3.8.6/binaries/apache-maven-3.8.6-bin.tar.gz apache-maven-3.8.6-bin.tar.gz
+RUN tar zxvf apache-maven-3.8.6-bin.tar.gz && \
+    cp -r apache-maven-3.8.6 /opt && \
+    rm -rf apache-maven-3.8.6 apache-maven-3.8.6-bin.tar.gz
+
+# add maven binary
+ENV PATH /opt/apache-maven-3.8.6/bin:$PATH
 
 # install dolt from source
 WORKDIR /root/building
