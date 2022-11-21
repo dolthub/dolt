@@ -204,6 +204,7 @@ func TestJournalWriterWriteChunk(t *testing.T) {
 	for a, l := range lookups {
 		validateLookup(t, j, l, data[a])
 	}
+	require.NoError(t, j.Close())
 }
 
 func TestJournalWriterBootstrap(t *testing.T) {
@@ -236,6 +237,7 @@ func TestJournalWriterBootstrap(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, ch.Data(), buf)
 	}
+	require.NoError(t, j.Close())
 }
 
 func validateLookup(t *testing.T, j *journalWriter, l jrecordLookup, cc CompressedChunk) {
