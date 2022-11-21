@@ -19,8 +19,12 @@ mysql_error() {
 	mysql_log ERROR "$@" >&2
 	exit 1
 }
+docker_process_sql() {
+  dolt sql
+}
 
 CONTAINER_DATA_DIR="/var/lib/dolt"
+INIT_COMPLETED="$CONTAINER_DATA_DIR/.init_completed"
 DOLT_CONFIG_DIR="/etc/dolt/doltcfg.d"
 SERVER_CONFIG_DIR="/etc/dolt/servercfg.d"
 DOLT_ROOT_PATH="/.dolt"
@@ -80,7 +84,7 @@ get_config_file_path_if_exists() {
 #    ie: docker_process_init_files /always-initdb.d/*
 # process initializer files, based on file extensions
 docker_process_init_files() {
-	echo
+	mysql_note "Running init scripts"
 	local f
 	for f; do
 		case "$f" in
@@ -106,12 +110,6 @@ docker_process_init_files() {
 	done
 }
 
-start_server() {
-    # start the server in fixed data directory at /var/lib/dolt
-    cd $CONTAINER_DATA_DIR
-    "$@"
-}
-
 # if there is config file provided through /etc/dolt/doltcfg.d,
 # we overwrite $HOME/.dolt/config_global.json file with this file.
 set_dolt_config_if_defined() {
@@ -132,6 +130,10 @@ _main() {
         set -- dolt sql-server --host=0.0.0.0 --port=3306 "$@"
     fi
 
+    _create_dir $CONTAINER_DATA_DIR
+
+    cd $CONTAINER_DATA_DIR
+
     if [ "$1" = 'dolt' ] && [ "$2" = 'sql-server' ] && ! _mysql_want_help "$@"; then
         local dolt_version=$(dolt version | grep 'dolt version' | cut -f3 -d " ")
         mysql_note "Entrypoint script for Dolt Server $dolt_version starting."
@@ -148,13 +150,14 @@ _main() {
         if [ ! -z $CONFIG_PROVIDED ]; then
             set -- "$@" --config=$CONFIG_PROVIDED
         fi
-        start_server
 
-        # run any file provided in /docker-entrypoint-initdb.d directory after the server starts
-        docker_process_init_files /docker-entrypoint-initdb.d/*
-
-        mysql_note "Dolt Server $dolt_version is started."
+        if [[ ! -f $INIT_COMPLETED ]]; then
+            # run any file provided in /docker-entrypoint-initdb.d directory after the server starts
+            docker_process_init_files /docker-entrypoint-initdb.d/*
+            touch $INIT_COMPLETED
+        fi
     fi
+
     exec "$@"
 }
 
