@@ -21,6 +21,7 @@ import (
 	"math"
 	"math/rand"
 	"sort"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -258,13 +259,13 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type, ns NodeStore) {
 func NewTestNodeStore() NodeStore {
 	ts := &chunks.TestStorage{}
 	ns := NewNodeStore(ts.NewViewWithFormat(types.Format_DOLT.VersionString()))
-	bb := mustNewBlobBuilder(DefaultFixedChunkLength)
+	bb := &blobBuilderPool
 	return nodeStoreValidator{ns: ns, bb: bb}
 }
 
 type nodeStoreValidator struct {
 	ns NodeStore
-	bb *BlobBuilder
+	bb *sync.Pool
 }
 
 func (v nodeStoreValidator) Read(ctx context.Context, ref hash.Hash) (Node, error) {
@@ -315,7 +316,11 @@ func (v nodeStoreValidator) Pool() pool.BuffPool {
 }
 
 func (v nodeStoreValidator) BlobBuilder() *BlobBuilder {
-	return v.bb
+	bb := v.bb.Get().(*BlobBuilder)
+	if bb.ns == nil {
+		bb.SetNodeStore(v)
+	}
+	return bb
 }
 
 func (v nodeStoreValidator) Format() *types.NomsBinFormat {
