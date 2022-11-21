@@ -307,8 +307,8 @@ func serializeGeometry(v interface{}) []byte {
 
 func serializeBytesToAddr(ctx context.Context, ns tree.NodeStore, r io.Reader, dataSize int) (hash.Hash, error) {
 	bb := ns.BlobBuilder()
-	bb.Init(ctx, dataSize, r)
-	_, addr, err := bb.Chunk()
+	bb.Init(dataSize)
+	_, addr, err := bb.Chunk(ctx, r)
 	if err != nil {
 		return hash.Hash{}, err
 	}

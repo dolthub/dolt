@@ -136,8 +136,8 @@ func TestWriteImmutableTree(t *testing.T) {
 				require.True(t, errors.Is(err, tt.initErr))
 				return
 			}
-			b.Init(ctx, tt.inputSize, r)
-			root, _, err := b.Chunk()
+			b.Init(tt.inputSize)
+			root, _, err := b.Chunk(ctx, r)
 
 			if tt.execErr != nil {
 				require.True(t, errors.Is(err, tt.execErr))
@@ -385,8 +385,8 @@ func mustNewBlob(ctx context.Context, ns NodeStore, len, chunkSize int) hash.Has
 	if err != nil {
 		panic(err)
 	}
-	b.Init(ctx, len, r)
-	_, addr, err := b.Chunk()
+	b.Init(len)
+	_, addr, err := b.Chunk(ctx, r)
 	if err != nil {
 		panic(err)
 	}
