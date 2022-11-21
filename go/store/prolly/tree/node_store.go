@@ -52,7 +52,7 @@ type nodeStore struct {
 	store chunks.ChunkStore
 	cache nodeCache
 	bp    pool.BuffPool
-	bbp   sync.Pool
+	bbp   *sync.Pool
 }
 
 var _ NodeStore = nodeStore{}
@@ -73,7 +73,7 @@ func NewNodeStore(cs chunks.ChunkStore) NodeStore {
 		store: cs,
 		cache: sharedCache,
 		bp:    sharedPool,
-		bbp:   blobBuilderPool,
+		bbp:   &blobBuilderPool,
 	}
 }
 
