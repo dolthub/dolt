@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -31,12 +30,6 @@ import (
 const DefaultFixedChunkLength = 4000
 
 var ErrInvalidChunkSize = errors.New("invalid chunkSize; value must be a multiple of 20")
-
-var chunkBufPool = sync.Pool{
-	New: func() any {
-		return new([][]byte)
-	},
-}
 
 func mustNewBlobBuilder(chunkSize int) *BlobBuilder {
 	b, _ := NewBlobBuilder(chunkSize)
@@ -121,7 +114,7 @@ func (b *BlobBuilder) Init(dataSize int) {
 
 	// Allocate everything we need in batch, slice them up down below.
 	if b.levelCap < b.topLevel {
-		b.expand(b.topLevel, numAddrs)
+		b.expand(numAddrs)
 		b.levelCap = b.topLevel
 	}
 
@@ -139,7 +132,7 @@ func (b *BlobBuilder) Init(dataSize int) {
 	}
 }
 
-func (b *BlobBuilder) expand(level, numAddrs int) {
+func (b *BlobBuilder) expand(numAddrs int) {
 	b.buf = make([]byte, b.topLevel*numAddrs*hash.ByteLen)
 	b.vals = make([][]byte, numAddrs*b.topLevel)
 	b.subtrees = make([]uint64, numAddrs*b.topLevel)
@@ -229,18 +222,18 @@ func (lw *blobLevelWriter) Write(ctx context.Context, r io.Reader) (hash.Hash, u
 
 // Write the blob node. Called by level and leaf writers. Will store lastN if
 // the level corresponds to our root level.
-func (bb *BlobBuilder) write(ctx context.Context, keys, vals [][]byte, subtrees []uint64, level int) (hash.Hash, error) {
-	msg := bb.S.Serialize(keys, vals, subtrees, level)
+func (b *BlobBuilder) write(ctx context.Context, keys, vals [][]byte, subtrees []uint64, level int) (hash.Hash, error) {
+	msg := b.S.Serialize(keys, vals, subtrees, level)
 	node, err := NodeFromBytes(msg)
 	if err != nil {
 		return hash.Hash{}, err
 	}
-	h, err := bb.ns.Write(ctx, node)
+	h, err := b.ns.Write(ctx, node)
 	if err != nil {
 		return hash.Hash{}, err
 	}
-	if level == bb.topLevel {
-		bb.lastN = node
+	if level == b.topLevel {
+		b.lastN = node
 	}
 	return h, nil
 }
@@ -366,6 +359,6 @@ func (t *ImmutableTree) close() error {
 	panic("not implemented")
 }
 
-func (t *ImmutableTree) Read(buf bytes.Buffer) (int, error) {
+func (t *ImmutableTree) Read(_ bytes.Buffer) (int, error) {
 	panic("not implemented")
 }
