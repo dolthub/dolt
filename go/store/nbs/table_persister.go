@@ -51,10 +51,7 @@ type tablePersister interface {
 	Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error)
 
 	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
-	PruneTableFiles(ctx context.Context, contents manifestContents) error
-
-	// OnlinePruneTableFiles deletes old table files that are no longer referenced in the manifest.
-	OnlinePruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error
+	PruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error
 }
 
 type chunkSourcesByAscendingCount struct {

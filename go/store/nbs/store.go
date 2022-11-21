@@ -235,7 +235,7 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 
 	var updatedContents manifestContents
 	for {
-		ok, contents, ferr := nbs.mm.Fetch(ctx, nbs.stats)
+		ok, contents, _, ferr := nbs.mm.Fetch(ctx, nbs.stats)
 		if ferr != nil {
 			return manifestContents{}, ferr
 		} else if !ok {
@@ -311,7 +311,7 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 
 	var updatedContents manifestContents
 	for {
-		ok, contents, ferr := nbs.mm.Fetch(ctx, nbs.stats)
+		ok, contents, _, ferr := nbs.mm.Fetch(ctx, nbs.stats)
 
 		if ferr != nil {
 			return manifestContents{}, ferr
@@ -566,7 +566,7 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 	t1 := time.Now()
 	defer nbs.stats.OpenLatency.SampleTimeSince(t1)
 
-	exists, contents, err := nbs.mm.Fetch(ctx, nbs.stats)
+	exists, contents, _, err := nbs.mm.Fetch(ctx, nbs.stats)
 
 	if err != nil {
 		return nil, err
@@ -897,7 +897,7 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-	exists, contents, err := nbs.mm.Fetch(ctx, nbs.stats)
+	exists, contents, _, err := nbs.mm.Fetch(ctx, nbs.stats)
 	if err != nil {
 		return err
 	}
@@ -1428,7 +1428,7 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 		// infinitely retries without backoff in the case off errOptimisticLockFailedTables
 	}
 
-	ok, contents, err := nbs.mm.Fetch(ctx, &Stats{})
+	ok, contents, t, err := nbs.mm.Fetch(ctx, &Stats{})
 	if err != nil {
 		return err
 	}
@@ -1436,50 +1436,7 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 		return nil // no manifest exists
 	}
 
-	return nbs.p.PruneTableFiles(ctx, contents)
-}
-
-// OnlinePruneTableFiles deletes old table files that are no longer referenced in the manifest.
-func (nbs *NomsBlockStore) OnlinePruneTableFiles(ctx context.Context) (err error) {
-	nbs.mu.Lock()
-	defer nbs.mu.Unlock()
-
-	nbs.mm.LockForUpdate()
-	defer func() {
-		unlockErr := nbs.mm.UnlockForUpdate()
-
-		if err == nil {
-			err = unlockErr
-		}
-	}()
-
-	for {
-		// flush all tables and update manifest
-		err = nbs.updateManifest(ctx, nbs.upstream.root, nbs.upstream.root)
-
-		if err == nil {
-			break
-		} else if err == errOptimisticLockFailedTables {
-			continue
-		} else {
-			return err
-		}
-
-		// Same behavior as Commit
-		// infinitely retries without backoff in the case off errOptimisticLockFailedTables
-	}
-
-	// nbs.mm.cache.Get(nbs.mm.Name())
-
-	ok, contents, t, err := nbs.mm.FetchWithTime(ctx, &Stats{})
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return nil // no manifest exists
-	}
-
-	return nbs.p.OnlinePruneTableFiles(ctx, contents, t)
+	return nbs.p.PruneTableFiles(ctx, contents, t)
 }
 
 func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest chunks.ChunkStore) error {
@@ -1543,7 +1500,7 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 			return nbs.upstream
 		}()
 
-		return nbs.p.PruneTableFiles(ctx, currentContents)
+		return nbs.p.PruneTableFiles(ctx, currentContents, time.Now())
 	} else {
 		fileIdToNumChunks := tableSpecsToMap(specs)
 		err = destNBS.AddTableFilesToManifest(ctx, fileIdToNumChunks)

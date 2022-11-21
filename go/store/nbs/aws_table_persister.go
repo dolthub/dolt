@@ -572,10 +572,6 @@ func (s3p awsTablePersister) uploadPart(ctx context.Context, data []byte, key, u
 	return
 }
 
-func (s3p awsTablePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {
-	return chunks.ErrUnsupportedOperation
-}
-
-func (s3p awsTablePersister) OnlinePruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error {
+func (s3p awsTablePersister) PruneTableFiles(ctx context.Context, contents manifestContents, t time.Time) error {
 	return chunks.ErrUnsupportedOperation
 }

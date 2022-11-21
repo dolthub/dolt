@@ -52,7 +52,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 		return cmdFailure, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	err := ddb.OnlineShallowGC(ctx)
+	err := ddb.ShallowGC(ctx)
 	if err != nil {
 		return cmdFailure, err
 	}

@@ -1304,11 +1304,6 @@ func (dcs *DoltChunkStore) PruneTableFiles(ctx context.Context) error {
 	return chunks.ErrUnsupportedOperation
 }
 
-// OnlinePruneTableFiles deletes old table files that are no longer referenced in the manifest.
-func (dcs *DoltChunkStore) OnlinePruneTableFiles(ctx context.Context) error {
-	return chunks.ErrUnsupportedOperation
-}
-
 // Sources retrieves the current root hash, a list of all the table files (which may include appendix table files)
 // and a list of only appendix table files
 func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, []nbs.TableFile, error) {

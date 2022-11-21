@@ -315,17 +315,6 @@ func (gcs *GenerationalNBS) PruneTableFiles(ctx context.Context) error {
 	return gcs.newGen.PruneTableFiles(ctx)
 }
 
-// OnlinePruneTableFiles deletes old table files that are no longer referenced in the manifest of the new or old gen chunkstores
-func (gcs *GenerationalNBS) OnlinePruneTableFiles(ctx context.Context) error {
-	err := gcs.oldGen.OnlinePruneTableFiles(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	return gcs.newGen.OnlinePruneTableFiles(ctx)
-}
-
 // SetRootChunk changes the root chunk hash from the previous value to the new root for the newgen cs
 func (gcs *GenerationalNBS) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
 	return gcs.newGen.SetRootChunk(ctx, root, previous)

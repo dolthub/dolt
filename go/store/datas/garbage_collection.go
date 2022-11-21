@@ -30,13 +30,3 @@ func PruneTableFiles(ctx context.Context, db Database) error {
 
 	return tfs.PruneTableFiles(ctx)
 }
-
-func OnlinePruneTableFiles(ctx context.Context, db Database) error {
-	tfs, ok := db.chunkStore().(nbs.TableFileStore)
-
-	if !ok {
-		return chunks.ErrUnsupportedOperation
-	}
-
-	return tfs.OnlinePruneTableFiles(ctx)
-}

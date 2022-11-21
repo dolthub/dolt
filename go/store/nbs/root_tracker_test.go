@@ -290,7 +290,7 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			var err error
-			_, fetched, err = mm.Fetch(context.Background(), nil)
+			_, fetched, _, err = mm.Fetch(context.Background(), nil)
 			require.NoError(t, err)
 		}()
 	}
@@ -624,11 +624,7 @@ func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount ui
 	return chunkSourceAdapter{cs, name}, nil
 }
 
-func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ manifestContents) error {
-	return chunks.ErrUnsupportedOperation
-}
-
-func (ftp fakeTablePersister) OnlinePruneTableFiles(_ context.Context, _ manifestContents, _ time.Time) error {
+func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ manifestContents, _ time.Time) error {
 	return chunks.ErrUnsupportedOperation
 }
 

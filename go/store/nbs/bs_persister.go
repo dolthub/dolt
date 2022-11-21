@@ -124,10 +124,6 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 	return &chunkSourceAdapter{tr, name}, nil
 }
 
-func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {
-	return chunks.ErrUnsupportedOperation
-}
-
-func (bsp *blobstorePersister) OnlinePruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error {
+func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents manifestContents, t time.Time) error {
 	return chunks.ErrUnsupportedOperation
 }
