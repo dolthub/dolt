@@ -19,9 +19,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"sync"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"

@@ -18,9 +18,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/hash"
 	"math"
 	"testing"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var result hash.Hash
