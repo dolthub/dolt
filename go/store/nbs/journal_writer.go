@@ -27,8 +27,6 @@ import (
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
-
-	"github.com/dolthub/fslock"
 )
 
 const (
@@ -47,20 +45,14 @@ var (
 )
 
 func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, err error) {
-	var (
-		f    *os.File
-		lock *fslock.Lock
-	)
+	var f *os.File
 
 	if path, err = filepath.Abs(path); err != nil {
 		return nil, err
 	}
 
-	lock = fslock.New(path)
 	if _, ok := openJournals.Load(path); ok {
 		return nil, fmt.Errorf("journal (%s) already opened in-process", path)
-	} else if err = lock.TryLock(); err != nil {
-		return nil, fmt.Errorf("journal (%s) already opened out-of-process: %s", path, err)
 	}
 	openJournals.Store(path, true)
 
@@ -102,7 +94,6 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, err
 	return &journalWriter{
 		buf:  make([]byte, 0, journalWriterBuffSize),
 		file: f,
-		lock: lock,
 		path: path,
 	}, nil
 }
@@ -111,8 +102,6 @@ type journalWriter struct {
 	buf  []byte
 	file *os.File
 	off  int64
-
-	lock *fslock.Lock
 	path string
 }
 
@@ -250,9 +239,6 @@ func (wr *journalWriter) Close() (err error) {
 		err = cerr
 	}
 	if cerr := wr.file.Close(); cerr != nil {
-		err = cerr
-	}
-	if cerr := wr.lock.Unlock(); cerr != nil {
 		err = cerr
 	}
 	openJournals.Delete(wr.path)
