@@ -32,10 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
-const (
-	gcShallowFlag = "shallow"
-)
-
 var gcDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Cleans up unreferenced data from the repository.",
 	LongDesc: `Searches the repository for data that is no longer referenced and no longer needed.
@@ -75,9 +71,7 @@ func (cmd GarbageCollectionCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd GarbageCollectionCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(gcShallowFlag, "s", "perform a fast, but incomplete garbage collection pass")
-	return ap
+	return cli.CreateGCArgParser()
 }
 
 // EventType returns the type of the event to log
@@ -99,7 +93,7 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 	}
 
 	var err error
-	if apr.Contains(gcShallowFlag) {
+	if apr.Contains(cli.ShallowFlag) {
 		err = dEnv.DoltDB.ShallowGC(ctx)
 		if err != nil {
 			if err == chunks.ErrUnsupportedOperation {
