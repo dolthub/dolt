@@ -29,12 +29,6 @@ DOLT_CONFIG_DIR="/etc/dolt/doltcfg.d"
 SERVER_CONFIG_DIR="/etc/dolt/servercfg.d"
 DOLT_ROOT_PATH="/.dolt"
 
-# create all dirs in path
-_create_dir() {
-    local path="$1"
-    mkdir -p "$path"
-}
-
 check_for_dolt() {
     local dolt_bin=$(which dolt)
     if [ ! -x "$dolt_bin" ]; then
@@ -129,10 +123,6 @@ _main() {
         # why we use fixed host=0.0.0.0 and port=3306 in README
         set -- dolt sql-server --host=0.0.0.0 --port=3306 "$@"
     fi
-
-    _create_dir $CONTAINER_DATA_DIR
-
-    cd $CONTAINER_DATA_DIR
 
     if [ "$1" = 'dolt' ] && [ "$2" = 'sql-server' ] && ! _mysql_want_help "$@"; then
         local dolt_version=$(dolt version | grep 'dolt version' | cut -f3 -d " ")
