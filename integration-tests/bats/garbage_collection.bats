@@ -313,6 +313,32 @@ SQL
     [ "$BEFORE" -gt "$AFTER" ]
 }
 
+@test "garbage_collection: online gc" {
+    dolt sql <<SQL
+CREATE TABLE test (pk int PRIMARY KEY);
+INSERT INTO test VALUES (1),(2),(3),(4),(5);
+CALL DOLT_COMMIT('-Am', 'added values 1-5');
+INSERT INTO test VALUES (6),(7),(8);
+CALL DOLT_RESET('--hard');
+INSERT INTO test VALUES (11),(12),(13),(14),(15);
+SQL
+
+    BEFORE=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
+    run dolt sql -q "call dolt_gc();"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT sum(pk) FROM test;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "80" ]] || false
+
+    AFTER=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
+
+    # assert space was reclaimed
+    echo "$BEFORE"
+    echo "$AFTER"
+    [ "$BEFORE" -gt "$AFTER" ]
+}
+
 @test "garbage_collection: online shallow gc" {
     create_many_commits
 
@@ -320,7 +346,7 @@ SQL
     dolt sql -q "INSERT INTO test VALUES ($(($NUM_COMMITS+1))),($(($NUM_COMMITS+2))),($(($NUM_COMMITS+3)));"
 
     BEFORE=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
-    run dolt sql -q "call dolt_gc();"
+    run dolt sql -q "call dolt_gc('--shallow');"
     [ "$status" -eq 0 ]
 
     run dolt sql -q "select count(*) from test"
