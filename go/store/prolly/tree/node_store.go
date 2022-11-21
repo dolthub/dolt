@@ -52,7 +52,7 @@ type nodeStore struct {
 	store chunks.ChunkStore
 	cache nodeCache
 	bp    pool.BuffPool
-	bb    *BlobBuilder
+	bbp   sync.Pool
 }
 
 var _ NodeStore = nodeStore{}
@@ -61,15 +61,20 @@ var sharedCache = newChunkCache(cacheSize)
 
 var sharedPool = pool.NewBuffPool()
 
+var blobBuilderPool = sync.Pool{
+	New: func() any {
+		return mustNewBlobBuilder(DefaultFixedChunkLength)
+	},
+}
+
 // NewNodeStore makes a new NodeStore.
 func NewNodeStore(cs chunks.ChunkStore) NodeStore {
-	ns := nodeStore{
+	return nodeStore{
 		store: cs,
 		cache: sharedCache,
 		bp:    sharedPool,
+		bbp:   blobBuilderPool,
 	}
-	ns.bb = mustNewBlobBuilder(ns, DefaultFixedChunkLength)
-	return ns
 }
 
 // Read implements NodeStore.
@@ -156,7 +161,11 @@ func (ns nodeStore) Pool() pool.BuffPool {
 
 // BlobBuilder implements NodeStore.
 func (ns nodeStore) BlobBuilder() *BlobBuilder {
-	return ns.bb
+	bb := ns.bbp.Get().(*BlobBuilder)
+	if bb.ns == nil {
+		bb.SetNodeStore(ns)
+	}
+	return bb
 }
 
 func (ns nodeStore) Format() *types.NomsBinFormat {

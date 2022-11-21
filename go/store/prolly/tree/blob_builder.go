@@ -37,15 +37,15 @@ var chunkBufPool = sync.Pool{
 	},
 }
 
-func mustNewBlobBuilder(ns NodeStore, chunkSize int) *BlobBuilder {
-	b, _ := NewBlobBuilder(ns, chunkSize)
+func mustNewBlobBuilder(chunkSize int) *BlobBuilder {
+	b, _ := NewBlobBuilder(chunkSize)
 	return b
 }
 
 // NewBlobBuilder writes the contents of |reader| as an append-only
 // tree, returning the root node or an error if applicable. |chunkSize|
 // fixes the split size of leaf and intermediate node chunks.
-func NewBlobBuilder(ns NodeStore, chunkSize int) (*BlobBuilder, error) {
+func NewBlobBuilder(chunkSize int) (*BlobBuilder, error) {
 	if chunkSize%hash.ByteLen != 0 {
 		return nil, ErrInvalidChunkSize
 	}
@@ -55,8 +55,6 @@ func NewBlobBuilder(ns NodeStore, chunkSize int) (*BlobBuilder, error) {
 		keys[i] = zeroKey
 	}
 	return &BlobBuilder{
-		ns:        ns,
-		S:         message.NewBlobSerializer(ns.Pool()),
 		chunkSize: chunkSize,
 		keys:      keys,
 	}, nil
@@ -79,6 +77,11 @@ type BlobBuilder struct {
 	buf      []byte
 	vals     [][]byte
 	subtrees []uint64
+}
+
+func (b *BlobBuilder) SetNodeStore(ns NodeStore) {
+	b.ns = ns
+	b.S = message.NewBlobSerializer(ns.Pool())
 }
 
 // Reset clears the BlobBuilder for re-use.

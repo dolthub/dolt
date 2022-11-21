@@ -258,7 +258,7 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type, ns NodeStore) {
 func NewTestNodeStore() NodeStore {
 	ts := &chunks.TestStorage{}
 	ns := NewNodeStore(ts.NewViewWithFormat(types.Format_DOLT.VersionString()))
-	bb := mustNewBlobBuilder(ns, DefaultFixedChunkLength)
+	bb := mustNewBlobBuilder(DefaultFixedChunkLength)
 	return nodeStoreValidator{ns: ns, bb: bb}
 }
 

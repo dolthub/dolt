@@ -131,11 +131,12 @@ func TestWriteImmutableTree(t *testing.T) {
 			ns := NewTestNodeStore()
 			//serializer := message.NewBlobSerializer(ns.Pool())
 
-			b, err := NewBlobBuilder(ns, tt.chunkSize)
+			b, err := NewBlobBuilder(tt.chunkSize)
 			if tt.initErr != nil {
 				require.True(t, errors.Is(err, tt.initErr))
 				return
 			}
+			b.SetNodeStore(ns)
 			b.Init(tt.inputSize)
 			root, _, err := b.Chunk(ctx, r)
 
@@ -381,10 +382,11 @@ func mustNewBlob(ctx context.Context, ns NodeStore, len, chunkSize int) hash.Has
 		buf[i] = byte(i)
 	}
 	r := bytes.NewReader(buf)
-	b, err := NewBlobBuilder(ns, chunkSize)
+	b, err := NewBlobBuilder(chunkSize)
 	if err != nil {
 		panic(err)
 	}
+	b.SetNodeStore(ns)
 	b.Init(len)
 	_, addr, err := b.Chunk(ctx, r)
 	if err != nil {
