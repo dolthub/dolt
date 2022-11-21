@@ -973,13 +973,14 @@ func TestDoltReset(t *testing.T) {
 	}
 }
 
-// TODO: This does not work because `db.chunkStore().(nbs.TableFileStore)`
-// returns not ok in PruneTableFiles
-//  func TestDoltGC(t *testing.T) {
-//  for _, script := range DoltGC {
-//    enginetest.TestScript(t, newDoltHarness(t), script)
-//  }
-// }
+func TestDoltGC(t *testing.T) {
+	// TODO: This does not work because `db.chunkStore().(nbs.TableFileStore)`
+	// returns not ok in PruneTableFiles
+	t.Skip()
+	for _, script := range DoltGC {
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+}
 
 func TestDoltBranch(t *testing.T) {
 	for _, script := range DoltBranchScripts {
