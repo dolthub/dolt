@@ -194,20 +194,20 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 		if err != nil {
 			return err
 		}
-		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(buf))
+		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(buf), len(buf))
 		if err != nil {
 			return err
 		}
 		tb.PutJSONAddr(i, h)
 	case val.BytesAddrEnc:
-		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(v.([]byte)))
+		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(v.([]byte)), len(v.([]byte)))
 		if err != nil {
 			return err
 		}
 		tb.PutBytesAddr(i, h)
 	case val.StringAddrEnc:
 		//todo: v will be []byte after daylon's changes
-		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader([]byte(v.(string))))
+		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader([]byte(v.(string))), len(v.(string)))
 		if err != nil {
 			return err
 		}
@@ -305,12 +305,14 @@ func serializeGeometry(v interface{}) []byte {
 	}
 }
 
-func serializeBytesToAddr(ctx context.Context, ns tree.NodeStore, r io.Reader) (hash.Hash, error) {
-	tree, err := tree.NewImmutableTreeFromReader(ctx, r, ns, tree.DefaultFixedChunkLength)
+func serializeBytesToAddr(ctx context.Context, ns tree.NodeStore, r io.Reader, dataSize int) (hash.Hash, error) {
+	bb := ns.BlobBuilder()
+	bb.Init(dataSize)
+	_, addr, err := bb.Chunk(ctx, r)
 	if err != nil {
 		return hash.Hash{}, err
 	}
-	return tree.Addr, nil
+	return addr, nil
 }
 
 func convJson(v interface{}) (buf []byte, err error) {
