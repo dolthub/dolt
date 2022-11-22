@@ -302,3 +302,25 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "already migrated" ]] || false
 }
+
+@test "migrate: changing primary key ordinals should migrate" {
+    dolt sql -q "create table t (col1 int, col2 int, col3 enum('a', 'b'), primary key (col1, col2, col3))"
+    dolt sql -q "insert into t values (1, 2, 'a'), (2, 3, 'b'), (3, 4, 'a');"
+    dolt commit -Am "initial"
+
+    dolt sql -q "alter table t drop primary key;"
+    dolt sql -q "alter table t add primary key (col3, col2, col1);"
+    dolt commit -am "change primary key order"
+
+    dolt sql -q "insert into t values (5, 6, 'b');"
+    dolt commit -am "add new row"
+
+    dolt migrate
+    run dolt sql -r csv -q "select * from t order by col1 asc;"
+    [ $status -eq 0 ]
+    [[ $output =~ "col1,col2,col3" ]]
+    [[ $output =~ "1,2,a" ]]
+    [[ $output =~ "2,3,b" ]]
+    [[ $output =~ "3,4,a" ]]
+    [[ $output =~ "5,6,b" ]]
+}
