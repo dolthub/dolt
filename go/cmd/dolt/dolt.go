@@ -50,7 +50,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
@@ -356,38 +355,6 @@ func runMain() int {
 	}
 
 	defer tempfiles.MovableTempFileProvider.Clean()
-
-	// Find all database names and add global variables for them. This needs to
-	// occur before a call to dsess.InitPersistedSystemVars. Otherwise, database
-	// specific persisted system vars will fail to load.
-	//
-	// In general, there is a lot of work TODO in this area. System global
-	// variables are persisted to the Dolt local config if found and if not
-	// found the Dolt global config (typically ~/.dolt/config_global.json).
-
-	// Depending on what directory a dolt sql-server is started in, users may
-	// see different variables values. For example, start a dolt sql-server in
-	// the dolt database folder and persist some system variable.
-
-	// If dolt sql-server is started outside that folder, those system variables
-	// will be lost. This is particularly confusing for database specific system
-	// variables like `${db_name}_default_branch` (maybe these should not be
-	// part of Dolt config in the first place!).
-
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
-	if err != nil {
-		cli.PrintErrln("failed to load database names")
-		return 1
-	}
-	_ = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
-		dsess.DefineSystemVariablesForDB(dbName)
-		return false, nil
-	})
-
-	err = dsess.InitPersistedSystemVars(dEnv)
-	if err != nil {
-		cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
-	}
 
 	start := time.Now()
 	var wg sync.WaitGroup
