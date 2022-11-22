@@ -1290,3 +1290,11 @@ func FsIsLocked(fs filesys.Filesys) bool {
 
 	return p != nil
 }
+
+// Close closes the underlying DoltDB.
+func (dEnv *DoltEnv) Close() (err error) {
+	if dEnv.DoltDB != nil {
+		err = dEnv.DoltDB.Close()
+	}
+	return
+}

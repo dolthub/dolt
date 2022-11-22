@@ -24,7 +24,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -357,16 +356,19 @@ func runMain() int {
 	defer tempfiles.MovableTempFileProvider.Clean()
 
 	start := time.Now()
-	var wg sync.WaitGroup
 	ctx, stop := context.WithCancel(ctx)
 	res := doltCommand.Exec(ctx, "dolt", args, dEnv)
 	stop()
-	wg.Wait()
 
 	if csMetrics && dEnv.DoltDB != nil {
 		metricsSummary := dEnv.DoltDB.CSMetricsSummary()
 		cli.Println("Command took", time.Since(start).Seconds())
 		cli.PrintErrln(metricsSummary)
+	}
+
+	if err = dEnv.Close(); err != nil {
+		cli.PrintErrln(err.Error())
+		res = 1
 	}
 
 	return res

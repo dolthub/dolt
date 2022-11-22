@@ -1321,3 +1321,7 @@ func (ddb *DoltDB) GetBranchesByRootHash(ctx context.Context, rootHash hash.Hash
 
 	return refs, nil
 }
+
+func (ddb *DoltDB) Close() error {
+	return ddb.db.Close()
+}

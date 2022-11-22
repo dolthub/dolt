@@ -200,6 +200,16 @@ func (mrEnv *MultiRepoEnv) Unlock() error {
 	return retErr
 }
 
+// Close closes all environments.
+func (mrEnv *MultiRepoEnv) Close() (err error) {
+	for _, e := range mrEnv.envs {
+		if cerr := e.env.Close(); cerr != nil {
+			err = cerr
+		}
+	}
+	return
+}
+
 func getRepoRootDir(path, pathSeparator string) string {
 	if pathSeparator != "/" {
 		path = strings.ReplaceAll(path, pathSeparator, "/")
