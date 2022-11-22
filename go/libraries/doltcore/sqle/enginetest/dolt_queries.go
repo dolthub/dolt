@@ -8417,4 +8417,16 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "prefix length too long",
+		SetUpScript: []string{
+			"create table t (i blob, index(i(3072)))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t modify column j text",
+				Expected: []sql.Row{{sql.OkResult{}}},
+			},
+		},
+	},
 }
