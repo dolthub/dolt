@@ -262,7 +262,7 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 
 		contents.lock = generateLockHash(contents.root, contents.specs, contents.appendix)
 
-		// ensure we dont drop existing appendices
+		// ensure we don't drop existing appendices
 		if contents.appendix != nil && len(contents.appendix) > 0 {
 			contents, err = fromManifestAppendixOptionNewContents(contents, contents.appendix, ManifestAppendixOption_Set)
 			if err != nil {
@@ -1500,7 +1500,8 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 			return nbs.upstream
 		}()
 
-		return nbs.p.PruneTableFiles(ctx, currentContents, time.Now())
+		t := time.Now()
+		return nbs.p.PruneTableFiles(ctx, currentContents, t)
 	} else {
 		fileIdToNumChunks := tableSpecsToMap(specs)
 		err = destNBS.AddTableFilesToManifest(ctx, fileIdToNumChunks)
