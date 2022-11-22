@@ -1821,7 +1821,8 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 	if err != nil {
 		return err
 	}
-	if ret.OldIndex != nil && ret.OldIndex != ret.NewIndex { // old index was replaced, so we update foreign keys
+	// TODO: why do we need to do this?
+	if false && ret.OldIndex != nil && ret.OldIndex != ret.NewIndex { // old index was replaced, so we update foreign keys
 		fkc, err := root.GetForeignKeyCollection(ctx)
 		if err != nil {
 			return err
