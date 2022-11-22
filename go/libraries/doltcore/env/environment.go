@@ -1295,6 +1295,7 @@ func FsIsLocked(fs filesys.Filesys) bool {
 func (dEnv *DoltEnv) Close() (err error) {
 	if dEnv.DoltDB != nil {
 		err = dEnv.DoltDB.Close()
+		dEnv.DoltDB = nil
 	}
 	return
 }

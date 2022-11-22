@@ -246,6 +246,34 @@ func getRepoRootDir(path, pathSeparator string) string {
 	return name
 }
 
+func IterEnvDirectories(ctx context.Context, fs filesys.Filesys) ([]string, error) {
+	var names []string
+	path, err := fs.Abs("")
+	if err != nil {
+		return nil, err
+	}
+	root := getRepoRootDir(path, string(os.PathSeparator))
+	names = append(names, dirToDBName(root))
+
+	// If there are other directories in the directory, try to load them as additional databases
+	err = fs.Iter(".", false, func(path string, size int64, isDir bool) (stop bool) {
+		if !isDir {
+			return false
+		}
+
+		ok, isDir := fs.Exists(filepath.Join(path, dbfactory.DoltDataDir))
+		if !ok || !isDir {
+			return false
+		}
+		names = append(names, dirToDBName(filepath.Base(path)))
+		return false
+	})
+	if err != nil {
+		return nil, err
+	}
+	return names, nil
+}
+
 // MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given
 func MultiEnvForDirectory(
 	ctx context.Context,
