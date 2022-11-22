@@ -1867,12 +1867,11 @@ func (t *AlterableDoltTable) DropIndex(ctx *sql.Context, indexName string) error
 	if strings.HasPrefix(indexName, "dolt_") {
 		return fmt.Errorf("dolt internal indexes may not be dropped")
 	}
-	root, err := t.getRoot(ctx)
+	newTable, _, err := t.dropIndex(ctx, indexName)
 	if err != nil {
 		return err
 	}
-
-	newTable, _, err := t.dropIndex(ctx, indexName)
+	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
 	}
@@ -2408,7 +2407,43 @@ func parseFkReferentialAction(refOp sql.ForeignKeyReferentialAction) (doltdb.For
 // dropIndex drops the given index on the given table with the given schema. Returns the updated table and updated schema.
 func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*doltdb.Table, schema.Schema, error) {
 	// RemoveIndex returns an error if the index does not exist, no need to do twice
-	_, err := t.sch.Indexes().RemoveIndex(indexName)
+	oldIdx, err := t.sch.Indexes().RemoveIndex(indexName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// any foreign keys that used this underlying index need to find another one
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, fk := range fkc.AllKeys() {
+		newIdx, ok, err := findIndexWithPrefix(t.sch, oldIdx.ColumnNames())
+		if err != nil {
+			return nil, nil, err
+		}
+		newFk := fk
+		if ok {
+			newFk.ReferencedTableIndex = newIdx.Name()
+		} else {
+			// if a replacement index wasn't found; it matched on primary key, so use empty string
+			newFk.ReferencedTableIndex = ""
+		}
+		fkc.RemoveKeys(fk)
+		err = fkc.AddKeys(newFk)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	root, err = root.PutForeignKeyCollection(ctx, fkc)
+	if err != nil {
+		return nil, nil, err
+	}
+	err = t.setRoot(ctx, root)
 	if err != nil {
 		return nil, nil, err
 	}
