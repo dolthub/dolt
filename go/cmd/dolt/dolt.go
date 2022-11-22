@@ -24,7 +24,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -390,11 +389,16 @@ func runMain() int {
 	}
 
 	start := time.Now()
-	var wg sync.WaitGroup
 	ctx, stop := context.WithCancel(ctx)
 	res := doltCommand.Exec(ctx, "dolt", args, dEnv)
 	stop()
-	wg.Wait()
+
+	if err = dbfactory.CloseAllLocalDatabases(); err != nil {
+		cli.PrintErrln(err)
+		if res == 0 {
+			res = 1
+		}
+	}
 
 	if csMetrics && dEnv.DoltDB != nil {
 		metricsSummary := dEnv.DoltDB.CSMetricsSummary()
