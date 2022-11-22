@@ -186,12 +186,6 @@ func (fk ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
 		}
 	}
 
-	//pkStr := ""
-	//for _, col := range sch.GetPKCols().GetColumns() {
-	//	pkStr += col.Name
-	//}
-	// !strings.HasPrefix(strings.ToLower(pkStr), strings.ToLower(fk.ReferencedTableIndex)) &&
-
 	if (fk.ReferencedTableIndex != "" && !sch.Indexes().Contains(fk.ReferencedTableIndex)) || (fk.ReferencedTableIndex == "" && sch.GetPKCols().Size() < len(fk.ReferencedTableColumns)) {
 		return fmt.Errorf("foreign key `%s` has entered an invalid state, referenced table `%s` is missing the index `%s`",
 			fk.Name, fk.ReferencedTableName, fk.ReferencedTableIndex)
