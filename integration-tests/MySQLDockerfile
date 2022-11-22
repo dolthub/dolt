@@ -25,7 +25,7 @@ RUN apt update -y && \
         pkg-config \
         mysql-client \
         libmysqlclient-dev \
-        openjdk-8-jdk \
+        openjdk-17-jdk \
         ant \
         ca-certificates-java \
         bats \
@@ -86,7 +86,7 @@ RUN curl -LO https://bootstrap.pypa.io/get-pip.py && \
 RUN pip install mysql-connector-python PyMySQL sqlalchemy
 
 # Setup JAVA_HOME -- useful for docker commandline
-ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64/
+ENV JAVA_HOME /usr/lib/jvm/java-17-openjdk-amd64/
  
 # install mysql connector java
 RUN mkdir -p /mysql-client-tests/java
