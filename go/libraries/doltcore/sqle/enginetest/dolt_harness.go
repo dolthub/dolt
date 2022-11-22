@@ -42,18 +42,16 @@ import (
 
 type DoltHarness struct {
 	t              *testing.T
+	provider 		   dsess.DoltDatabaseProvider
 	multiRepoEnv   *env.MultiRepoEnv
 	createdEnvs    map[string]*env.DoltEnv
 	session        *dsess.DoltSession
 	branchControl  *branch_control.Controller
 	databases      []sqle.Database
-	hashes         []string
 	parallelism    int
 	skippedQueries []string
 	setupData      []setup.SetupScript
 	resetData      []setup.SetupScript
-	initDbs        map[string]struct{}
-	autoInc        bool
 	engine         *gms.Engine
 }
 
@@ -70,6 +68,7 @@ var _ enginetest.ValidatingHarness = (*DoltHarness)(nil)
 func newDoltHarness(t *testing.T) *DoltHarness {
 	dEnv := dtestutils.CreateTestEnv()
 	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+
 	require.NoError(t, err)
 	b := env.GetDefaultInitBranch(dEnv.Config)
 	pro, err := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem())
@@ -78,11 +77,19 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 
 	localConfig := dEnv.Config.WriteableConfig()
 	branchControl := branch_control.CreateDefaultController()
-	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro,
-		localConfig, branchControl)
+
+	session, err := dsess.NewDoltSession(
+		sql.NewEmptyContext(),
+		enginetest.NewBaseSession(),
+		pro,
+		localConfig,
+		branchControl,
+	)
 	require.NoError(t, err)
+
 	dh := &DoltHarness{
 		t:              t,
+		provider:       pro,
 		session:        session,
 		skippedQueries: defaultSkippedQueries,
 		multiRepoEnv:   mrEnv,
@@ -179,7 +186,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 	if d.engine == nil {
 		d.branchControl = branch_control.CreateDefaultController()
 
-		pro := d.NewDatabaseProvider(information_schema.NewInformationSchemaDatabase())
+		pro := d.NewDatabaseProvider()
 		doltProvider, ok := pro.(sqle.DoltDatabaseProvider)
 		require.True(t, ok)
 
@@ -188,7 +195,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 			d.multiRepoEnv.Config(), d.branchControl)
 		require.NoError(t, err)
 
-		e, err := enginetest.NewEngineWithProviderSetup(t, d, pro, d.setupData)
+		e, err := enginetest.NewEngineWithProviderSetup(t, d, d.setupData)
 		if err != nil {
 			return nil, err
 		}
@@ -404,6 +411,10 @@ func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.PrimaryK
 	return table, nil
 }
 
+func (d *DoltHarness) Provider() sql.MutableDatabaseProvider {
+	return d.provider.(sql.MutableDatabaseProvider)
+}
+
 // Dolt doesn't version tables per se, just the entire database. So ignore the name and schema and just create a new
 // branch with the given name.
 func (d *DoltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema sql.PrimaryKeySchema, asOf interface{}) sql.Table {
@@ -432,11 +443,11 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 		panic("not a Dolt SQL Database")
 	}
 
-	e := enginetest.NewEngineWithDbs(d.t, d, []sql.Database{db})
+	e := enginetest.NewEngineWithDbs(d.t, d)
 
 	asOfString, ok := asOf.(string)
 	require.True(d.t, ok)
-
+ q
 	ctx := enginetest.NewContext(d)
 	_, iter, err := e.Query(ctx,
 		"CALL DOLT_ADD('.')")

@@ -100,8 +100,7 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	infoDB := information_schema.NewInformationSchemaDatabase()
-	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
+	all := append(dsqleDBsAsSqlDBs(dbs))
 	locations = append(locations, nil)
 
 	clusterDB := config.ClusterController.ClusterDatabase()
