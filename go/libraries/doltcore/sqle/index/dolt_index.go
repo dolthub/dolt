@@ -64,14 +64,12 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		return nil, nil
 	}
 
-	// TODO: do this for other indexes?
 	tableRows, err := t.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 	keyBld := maybeGetKeyBuilder(tableRows)
 
-	// TODO: two primary keys???
 	cols := sch.GetPKCols().GetColumns()
 
 	// add to_ prefix
@@ -97,8 +95,6 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: false,
 	}
-
-	// TODO: need to add from_ columns
 
 	return append(indexes, &toIndex), nil
 }
@@ -395,19 +391,6 @@ var _ DoltIndex = (*doltIndex)(nil)
 
 // CanSupport implements sql.Index
 func (di *doltIndex) CanSupport(...sql.Range) bool {
-	// TODO (james): don't use and prefix indexes if there's a prefix on a text/blob column
-	if len(di.prefixLengths) > 0 {
-		hasTextBlob := false
-		colColl := di.indexSch.GetAllCols()
-		colColl.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			if sql.IsTextBlob(col.TypeInfo.ToSqlType()) {
-				hasTextBlob = true
-				return true, nil
-			}
-			return false, nil
-		})
-		return !hasTextBlob
-	}
 	return true
 }
 
