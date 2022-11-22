@@ -8424,8 +8424,8 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "alter table t modify column j text",
-				Expected: []sql.Row{{sql.OkResult{}}},
+				Query:       "alter table t modify column i text",
+				ExpectedErr: sql.ErrKeyTooLong,
 			},
 		},
 	},
