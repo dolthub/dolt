@@ -624,6 +624,13 @@ func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount ui
 	return chunkSourceAdapter{cs, name}, nil
 }
 
+func (ftp fakeTablePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
+	if _, ok := ftp.sourcesToFail[name]; ok {
+		return false, errors.New("intentional failure")
+	}
+	return true, nil
+}
+
 func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ manifestContents, _ time.Time) error {
 	return chunks.ErrUnsupportedOperation
 }

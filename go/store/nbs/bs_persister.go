@@ -60,7 +60,11 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 
 // Open a table named |name|, containing |chunkCount| chunks.
 func (bsp *blobstorePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newBSChunkSource(ctx, bsp.bs, name, chunkCount, bsp.blockSize, bsp.q, stats)
+	return newBSChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
+}
+
+func (bsp *blobstorePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
+	return bsp.bs.Exists(ctx, name.String())
 }
 
 type bsTableReaderAt struct {
@@ -96,7 +100,7 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 	return totalRead, nil
 }
 
-func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, blockSize uint64, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 
 	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
 		rc, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))

@@ -234,6 +234,7 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	defer nbs.mu.Unlock()
 
 	var updatedContents manifestContents
+	var newTables tableSet
 	for {
 		ok, contents, _, ferr := nbs.mm.Fetch(ctx, nbs.stats)
 		if ferr != nil {
@@ -270,6 +271,11 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 			}
 		}
 
+		err = nbs.tables.checkAllFilesExist(ctx, contents.specs, nbs.stats)
+		if err != nil {
+			return manifestContents{}, err
+		}
+
 		updatedContents, err = nbs.mm.Update(ctx, originalLock, contents, nbs.stats, nil)
 		if err != nil {
 			return manifestContents{}, err
@@ -280,7 +286,7 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 		}
 	}
 
-	newTables, err := nbs.tables.rebase(ctx, updatedContents.specs, nbs.stats)
+	newTables, err = nbs.tables.rebase(ctx, updatedContents.specs, nbs.stats)
 	if err != nil {
 		return manifestContents{}, err
 	}
@@ -343,6 +349,11 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 		}
 
 		contents, err = fromManifestAppendixOptionNewContents(contents, appendixSpecs, option)
+		if err != nil {
+			return manifestContents{}, err
+		}
+
+		err = nbs.tables.checkAllFilesExist(ctx, contents.specs, nbs.stats)
 		if err != nil {
 			return manifestContents{}, err
 		}

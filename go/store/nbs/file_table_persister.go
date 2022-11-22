@@ -54,6 +54,10 @@ func (ftp *fsTablePersister) Open(ctx context.Context, name addr, chunkCount uin
 	return newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, ftp.fc)
 }
 
+func (ftp *fsTablePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
+	return tableFileExists(ctx, ftp.dir, name)
+}
+
 func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
 	t1 := time.Now()
 	defer stats.PersistLatency.SampleTimeSince(t1)
