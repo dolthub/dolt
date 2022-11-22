@@ -1292,9 +1292,8 @@ var systemTableSelectTests = []SelectTest{
 		Name: "select from dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema,
 			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')"),
-		Query: "select * from dolt_docs",
-		ExpectedRows: ToSqlRows(CompressSchema(doltdb.DocsSchema),
-			NewRow(types.String("LICENSE.md"), types.String("A license"))),
+		Query:          "select * from dolt_docs",
+		ExpectedRows:   []sql.Row{{"LICENSE.md", "A license"}},
 		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
 	},
 	{

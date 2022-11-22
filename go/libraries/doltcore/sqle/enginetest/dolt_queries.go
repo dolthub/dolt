@@ -8241,8 +8241,16 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 				ExpectedErr: sql.ErrUniqueKeyViolation,
 			},
 			{
+				Query:          "insert into t values (99, 'ABC', 'ABCDE')",
+				ExpectedErrStr: "duplicate unique key given: [ABC,ABCDE]",
+			},
+			{
 				Query:       "insert into t values (99, 'ABC123', 'ABCDE123')",
 				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:          "insert into t values (99, 'ABC123', 'ABCDE123')",
+				ExpectedErrStr: "duplicate unique key given: [ABC,ABCDE]",
 			},
 			{
 				Query: "select * from t where v1 = 'A'",
@@ -8369,6 +8377,83 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 			{
 				Query:    "select * from t",
 				Expected: []sql.Row{},
+			},
+		},
+	},
+	// TODO: these should eventually go in GMS, but it doesn't currently support index rewrite on column modify
+	{
+		Name: "drop prefix lengths when modifying column to non string type",
+		SetUpScript: []string{
+			"create table t (j varchar(100), index (j(10)))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t modify column j int",
+				Expected: []sql.Row{{sql.OkResult{}}},
+			},
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `j` int,\n  KEY `j` (`j`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "drop prefix length when modifying columns to invalid string type",
+		SetUpScript: []string{
+			"create table t (j varchar(100), index (j(10)))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t modify column j varchar(2)",
+				Expected: []sql.Row{{sql.OkResult{}}},
+			},
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `j` varchar(2),\n  KEY `j` (`j`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "preserve prefix length when modifying column to valid string type",
+		SetUpScript: []string{
+			"create table t (j varchar(100), index (j(10)))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t modify column j varchar(200)",
+				Expected: []sql.Row{{sql.OkResult{}}},
+			},
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `j` varchar(200),\n  KEY `j` (`j`(10))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "preserve prefix lengths when there are other unchanged prefix lengths",
+		SetUpScript: []string{
+			"create table t (i varchar(100), j varchar(100), index (i(10), j(10)))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t modify column j int",
+				Expected: []sql.Row{{sql.OkResult{}}},
+			},
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` varchar(100),\n  `j` int,\n  KEY `ij` (`i`(10),`j`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "prefix length too long",
+		SetUpScript: []string{
+			"create table t (i blob, index(i(3072)))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "alter table t modify column i text",
+				ExpectedErr: sql.ErrKeyTooLong,
 			},
 		},
 	},

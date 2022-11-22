@@ -111,7 +111,7 @@ teardown() {
     dolt sql <<SQL
 CREATE TABLE dolt_docs (
   doc_name varchar(16383) NOT NULL,
-  doc_text varchar(16383),
+  doc_text longtext,
   PRIMARY KEY (doc_name)
 );
 SQL
