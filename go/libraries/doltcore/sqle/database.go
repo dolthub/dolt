@@ -851,7 +851,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 	}
 	if strings.ToLower(tableName) == doltdb.DocTableName {
 		// validate correct schema
-		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) {
+		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) && !dtables.OldDoltDocsSqlSchema.Equals(sch.Schema) {
 			return fmt.Errorf("incorrect schema for dolt_docs table")
 		}
 	} else if doltdb.HasDoltPrefix(tableName) {
@@ -872,7 +872,7 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 	}
 	if strings.ToLower(tableName) == doltdb.DocTableName {
 		// validate correct schema
-		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) {
+		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) && !dtables.OldDoltDocsSqlSchema.Equals(sch.Schema) {
 			return fmt.Errorf("incorrect schema for dolt_docs table")
 		}
 	} else if doltdb.HasDoltPrefix(tableName) {
