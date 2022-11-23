@@ -93,6 +93,19 @@ func (s3p awsTablePersister) Open(ctx context.Context, name addr, chunkCount uin
 	)
 }
 
+func (s3p awsTablePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
+	return tableExistsInChunkSource(
+		ctx,
+		s3p.ddb,
+		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
+		s3p.limits,
+		name,
+		chunkCount,
+		s3p.q,
+		stats,
+	)
+}
+
 type s3UploadedPart struct {
 	idx  int64
 	etag string
@@ -572,6 +585,6 @@ func (s3p awsTablePersister) uploadPart(ctx context.Context, data []byte, key, u
 	return
 }
 
-func (s3p awsTablePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {
+func (s3p awsTablePersister) PruneTableFiles(ctx context.Context, contents manifestContents, t time.Time) error {
 	return chunks.ErrUnsupportedOperation
 }

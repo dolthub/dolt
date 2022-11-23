@@ -547,27 +547,27 @@ func TestClone(t *testing.T) {
 	src := &TestTableFileStore{
 		root: hash.Of(hashBytes[:]),
 		tableFiles: map[string]*TestTableFile{
-			"file1": &TestTableFile{
+			"file1": {
 				fileID:    "file1",
 				numChunks: 1,
 				data:      []byte("Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, "),
 			},
-			"file2": &TestTableFile{
+			"file2": {
 				fileID:    "file2",
 				numChunks: 2,
 				data:      []byte("and nothing particular to interest me on shore, I thought I would sail about a little and see the watery "),
 			},
-			"file3": &TestTableFile{
+			"file3": {
 				fileID:    "file3",
 				numChunks: 3,
 				data:      []byte("part of the world. It is a way I have of driving off the spleen and regulating the "),
 			},
-			"file4": &TestTableFile{
+			"file4": {
 				fileID:    "file4",
 				numChunks: 4,
 				data:      []byte("circulation. Whenever I find myself growing grim about the mouth; whenever it is a damp, drizzly "),
 			},
-			"file5": &TestTableFile{
+			"file5": {
 				fileID:    "file5",
 				numChunks: 5,
 				data:      []byte("November in my soul; whenever I find myself involuntarily pausing before coffin warehouses, and bringing "),

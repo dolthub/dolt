@@ -3914,6 +3914,34 @@ var DoltReset = []queries.ScriptTest{
 	},
 }
 
+func gcSetup() []string {
+	queries := []string{
+		"create table t (pk int primary key);",
+		"call dolt_commit('-Am', 'create table');",
+	}
+	for i := 0; i < 250; i++ {
+		queries = append(
+			queries,
+			fmt.Sprintf("INSERT INTO t VALUES (%d);", i),
+			fmt.Sprintf("CALL DOLT_COMMIT('-am', 'added pk %d')", i),
+		)
+	}
+	return queries
+}
+
+var DoltGC = []queries.ScriptTest{
+	{
+		Name:        "base case: shallow gc",
+		SetUpScript: gcSetup(),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_GC();",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+}
+
 var DiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "base case: added rows",

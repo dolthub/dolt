@@ -28,6 +28,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"sort"
+	"time"
 )
 
 var errCacheMiss = errors.New("index cache miss")
@@ -49,8 +50,11 @@ type tablePersister interface {
 	// Open a table named |name|, containing |chunkCount| chunks.
 	Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error)
 
+	// Exists checks if a table named |name| exists.
+	Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error)
+
 	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
-	PruneTableFiles(ctx context.Context, contents manifestContents) error
+	PruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error
 }
 
 type chunkSourcesByAscendingCount struct {

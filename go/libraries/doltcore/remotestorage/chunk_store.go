@@ -1136,7 +1136,7 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, dlLocs dlLocation
 		return concurrentExec(work[0:largeCutoff+1], dcs.concurrency.ConcurrentLargeFetches)
 	})
 	eg.Go(func() error {
-		return concurrentExec(work[largeCutoff+1:len(work)], dcs.concurrency.ConcurrentSmallFetches)
+		return concurrentExec(work[largeCutoff+1:], dcs.concurrency.ConcurrentSmallFetches)
 	})
 
 	defer func() {
