@@ -21,8 +21,8 @@ type chunkSourceAdapter struct {
 	h addr
 }
 
-func (csa chunkSourceAdapter) hash() (addr, error) {
-	return csa.h, nil
+func (csa chunkSourceAdapter) hash() addr {
+	return csa.h
 }
 
 func newReaderFromIndexData(ctx context.Context, q MemoryQuotaProvider, idxData []byte, name addr, tra tableReaderAt, blockSize uint64) (cs chunkSource, err error) {
