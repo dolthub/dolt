@@ -1,14 +1,9 @@
 name: Test ORM integrations
 
 on:
-  pull_request:
-    paths:
-      - 'go/**'
-      - 'integration-tests/**'
-
-concurrency:
-  group: ci-orm-tests-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  workflow_dispatch:
+  repository_dispatch:
+    types: [ test-orm-integrations ]
 
 jobs:
   orm_integrations_job:
