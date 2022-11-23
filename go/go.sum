@@ -162,8 +162,6 @@ github.com/dolthub/flatbuffers v1.13.0-dh.1 h1:OWJdaPep22N52O/0xsUevxJ6Qfw1M2txC
 github.com/dolthub/flatbuffers v1.13.0-dh.1/go.mod h1:CorYGaDmXjHz1Z7i50PYXG1Ricn31GcA2wNOTFIQAKE=
 github.com/dolthub/fslock v0.0.3 h1:iLMpUIvJKMKm92+N1fmHVdxJP5NdyDK5bK7z7Ba2s2U=
 github.com/dolthub/fslock v0.0.3/go.mod h1:QWql+P17oAAMLnL4HGB5tiovtDuAjdDTPbuqx7bYfa0=
-github.com/dolthub/go-mysql-server v0.14.1-0.20221123030146-5f1008d63c1a h1:JBngpMUczXHoHtrPqYU9bCpRJ/yw2nTwze5fh3YJY6M=
-github.com/dolthub/go-mysql-server v0.14.1-0.20221123030146-5f1008d63c1a/go.mod h1:drVceZC7lt+ZRzd0LnS7o3CURk7xGDDfjbsDfTKR7O0=
 github.com/dolthub/go-mysql-server v0.14.1-0.20221123211248-70a292d7cd3d h1:Wn9jPrZs90yeAqNlWiCxHYwP9cQ4Y0DelgtmdItRfkc=
 github.com/dolthub/go-mysql-server v0.14.1-0.20221123211248-70a292d7cd3d/go.mod h1:KtpU4Sf7J+SIat/nxoA733QTn3tdL34NtoGxEBFcTsA=
 github.com/dolthub/ishell v0.0.0-20220112232610-14e753f0f371 h1:oyPHJlzumKta1vnOQqUnfdz+pk3EmnHS3Nd0cCT0I2g=
