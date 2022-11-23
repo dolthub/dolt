@@ -975,6 +975,13 @@ func (t *DoltTable) Projections() []string {
 	return names
 }
 
+func (t *DoltTable) ProjectedTags() []uint64 {
+	if len(t.projectedCols) > 0 {
+		return t.projectedCols
+	}
+	return t.sch.GetAllCols().Tags
+}
+
 // WithProjections implements sql.ProjectedTable
 func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 	nt := *t

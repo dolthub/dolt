@@ -1472,6 +1472,28 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_history table filter correctness",
+		SetUpScript: []string{
+			"create table xy (x int primary key, y int);",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'creating table');",
+			"insert into xy values (0, 1);",
+			"call dolt_commit('-am', 'add data');",
+			"insert into xy values (2, 3);",
+			"call dolt_commit('-am', 'add data');",
+			"insert into xy values (4, 5);",
+			"call dolt_commit('-am', 'add data');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select count(*) from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1)",
+				Expected: []sql.Row{
+					{2},
+				},
+			},
+		},
+	},
 }
 
 // BrokenHistorySystemTableScriptTests contains tests that work for non-prepared, but don't work

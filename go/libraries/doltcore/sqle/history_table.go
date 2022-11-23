@@ -90,6 +90,7 @@ func (ht *HistoryTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLooku
 // NewHistoryTable creates a history table
 func NewHistoryTable(table *DoltTable, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	cmItr := doltdb.CommitItrForRoots(ddb, head)
+
 	h := &HistoryTable{
 		doltTable: table,
 		cmItr:     cmItr,
@@ -259,6 +260,13 @@ func (ht *HistoryTable) Projections() []string {
 	return names
 }
 
+func (ht *HistoryTable) ProjectedTags() []uint64 {
+	if len(ht.projectedCols) > 0 {
+		return ht.projectedCols
+	}
+	return append(ht.doltTable.ProjectedTags(), schema.HistoryCommitHashTag, schema.HistoryCommitterTag, schema.HistoryCommitDateTag)
+}
+
 // Name returns the name of the history table
 func (ht *HistoryTable) Name() string {
 	return doltdb.DoltHistoryTablePrefix + ht.doltTable.Name()
@@ -320,8 +328,7 @@ func (ht *HistoryTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) 
 // PartitionRows takes a partition and returns a row iterator for that partition
 func (ht *HistoryTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	cp := part.(*commitPartition)
-
-	return newRowItrForTableAtCommit(ctx, ht.Name(), ht.doltTable, cp.h, cp.cm, ht.indexLookup, ht.projectedCols)
+	return newRowItrForTableAtCommit(ctx, ht.Name(), ht.doltTable, cp.h, cp.cm, ht.indexLookup, ht.ProjectedTags())
 }
 
 // commitPartition is a single commit
