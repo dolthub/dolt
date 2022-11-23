@@ -6,7 +6,7 @@ async function connectAndGetOrm() {
     const orm = await MikroORM.init<MySqlDriver>({
         entities: [User],
         type: "mysql",
-        clientUrl: "mysql://localhost:3306",
+        clientUrl: "mysql://localhost:3307",
         dbName: "dolt",
         user: "dolt",
         password: "",
