@@ -1,9 +1,19 @@
 name: Test ORM integrations
 
 on:
-  workflow_dispatch:
-  repository_dispatch:
-    types: [ test-orm-integrations ]
+  pull_request:
+    paths:
+      - 'go/**'
+      - 'integration-tests/**'
+
+concurrency:
+  group: ci-data-dump-loading-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+#on:
+#  workflow_dispatch:
+#  repository_dispatch:
+#    types: [ test-orm-integrations ]
 
 jobs:
   data_dump_laoding_integrations_job:
