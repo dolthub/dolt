@@ -623,12 +623,12 @@ func (nbs *NomsBlockStore) WithoutConjoiner() *NomsBlockStore {
 func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
 	t1 := time.Now()
 	a := addr(c.Hash())
-	success := nbs.addChunk(ctx, a, c.Data())
-
-	if !success {
+	success, err := nbs.addChunk(ctx, a, c.Data())
+	if err != nil {
+		return err
+	} else if !success {
 		return errors.New("failed to add chunk")
 	}
-
 	atomic.AddUint64(&nbs.putCount, 1)
 
 	nbs.stats.PutLatency.SampleTimeSince(t1)
@@ -636,18 +636,22 @@ func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
 	return nil
 }
 
-func (nbs *NomsBlockStore) addChunk(ctx context.Context, h addr, data []byte) bool {
+func (nbs *NomsBlockStore) addChunk(ctx context.Context, h addr, data []byte) (bool, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	if nbs.mt == nil {
 		nbs.mt = newMemTable(nbs.mtSize)
 	}
 	if !nbs.mt.addChunk(h, data) {
-		nbs.tables = nbs.tables.prepend(ctx, nbs.mt, nbs.stats)
+		ts, err := nbs.tables.prepend(ctx, nbs.mt, nbs.stats)
+		if err != nil {
+			return false, err
+		}
+		nbs.tables = ts
 		nbs.mt = newMemTable(nbs.mtSize)
-		return nbs.mt.addChunk(h, data)
+		return nbs.mt.addChunk(h, data), nil
 	}
-	return true
+	return true, nil
 }
 
 func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
@@ -980,8 +984,11 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 			}
 
 			if cnt > preflushChunkCount {
-				nbs.tables = nbs.tables.prepend(ctx, nbs.mt, nbs.stats)
-				nbs.mt = nil
+				ts, err := nbs.tables.prepend(ctx, nbs.mt, nbs.stats)
+				if err != nil {
+					return err
+				}
+				nbs.tables, nbs.mt = ts, nil
 			}
 		}
 
@@ -1063,8 +1070,11 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		}
 
 		if cnt > 0 {
-			nbs.tables = nbs.tables.prepend(ctx, nbs.mt, nbs.stats)
-			nbs.mt = nil
+			ts, err := nbs.tables.prepend(ctx, nbs.mt, nbs.stats)
+			if err != nil {
+				return err
+			}
+			nbs.tables, nbs.mt = ts, nil
 		}
 	}
 

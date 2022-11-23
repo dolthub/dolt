@@ -277,10 +277,10 @@ func (ts tableSet) Size() int {
 
 // prepend adds a memTable to an existing tableSet, compacting |mt| and
 // returning a new tableSet with newly compacted table added.
-func (ts tableSet) prepend(ctx context.Context, mt *memTable, stats *Stats) tableSet {
+func (ts tableSet) prepend(ctx context.Context, mt *memTable, stats *Stats) (tableSet, error) {
 	cs, err := ts.p.Persist(ctx, mt, ts, stats)
 	if err != nil {
-		panic(err) // todo(andy)
+		return tableSet{}, err
 	}
 
 	newTs := tableSet{
@@ -293,7 +293,7 @@ func (ts tableSet) prepend(ctx context.Context, mt *memTable, stats *Stats) tabl
 	newTs.novel[0] = cs
 	copy(newTs.novel[1:], ts.novel)
 	copy(newTs.upstream, ts.upstream)
-	return newTs
+	return newTs, nil
 }
 
 // flatten returns a new tableSet with |upstream| set to the union of ts.novel
