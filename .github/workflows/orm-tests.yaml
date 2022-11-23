@@ -1,0 +1,19 @@
+name: Test ORM integrations
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [ test-orm-integrations ]
+
+jobs:
+  data_dump_laoding_integrations_job:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    name: Run tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Copy go package
+        run: cp -r ./go ./integration-tests/go
+      - name: Test ORM integrations
+        uses: ./.github/actions/orm-tests
