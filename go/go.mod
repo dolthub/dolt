@@ -3,7 +3,7 @@ module github.com/dolthub/dolt/go
 require (
 	cloud.google.com/go/storage v1.12.0
 	github.com/BurntSushi/toml v0.3.1
-	github.com/HdrHistogram/hdrhistogram-go v1.0.0
+	github.com/HdrHistogram/hdrhistogram-go v1.1.2
 	github.com/abiosoft/readline v0.0.0-20180607040430-155bce2042db
 	github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883
 	github.com/attic-labs/kingpin v2.2.7-0.20180312050558-442efcfac769+incompatible
@@ -58,7 +58,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.1.3
 	github.com/cespare/xxhash v1.1.0
 	github.com/creasty/defaults v1.6.0
-	github.com/dolthub/go-mysql-server v0.14.1-0.20221122083400-0ba736613080
+	github.com/dolthub/go-mysql-server v0.14.1-0.20221123030146-5f1008d63c1a
 	github.com/google/flatbuffers v2.0.6+incompatible
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/mitchellh/go-ps v1.0.0
