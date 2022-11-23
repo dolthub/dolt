@@ -378,7 +378,9 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 			if err != nil {
 				return tableSet{}, err
 			}
+			mu.Lock()
 			upstream[cl.hash()] = cl
+			mu.Unlock()
 			continue
 		}
 		// open missing tables in parallel
@@ -389,9 +391,9 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 				return err
 			}
 			mu.Lock()
-			defer mu.Unlock()
 			upstream[cs.hash()] = cs
 			opened[cs.hash()] = cs
+			mu.Unlock()
 			return nil
 		})
 	}
