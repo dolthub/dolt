@@ -2453,7 +2453,16 @@ func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*dol
 		return nil, nil, err
 	}
 	for _, fk := range fkc.AllKeys() {
-		newIdx, ok, err := findIndexWithPrefix(t.sch, oldIdx.ColumnNames())
+		if fk.ReferencedTableIndex != oldIdx.Name() {
+			continue
+		}
+		// get column names from tags in foreign key
+		fkParentCols := make([]string, len(fk.ReferencedTableColumns))
+		for i, colName := range fk.ReferencedTableColumns {
+			col, _ := oldIdx.GetColumn(colName)
+			fkParentCols[i] = col.Name
+		}
+		newIdx, ok, err := findIndexWithPrefix(t.sch, fkParentCols)
 		if err != nil {
 			return nil, nil, err
 		}
