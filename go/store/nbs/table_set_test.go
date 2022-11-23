@@ -63,7 +63,7 @@ func TestTableSetPrepend(t *testing.T) {
 	secondSpecs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Len(secondSpecs, 2)
-	assert.Equal(firstSpecs, secondSpecs[1:])
+	assert.Equal(firstSpecs[0], secondSpecs[0])
 }
 
 func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {

@@ -22,9 +22,11 @@
 package nbs
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -447,6 +449,9 @@ func (ts tableSet) toSpecs() ([]tableSpec, error) {
 		h := src.hash()
 		tableSpecs = append(tableSpecs, tableSpec{h, cnt})
 	}
+	sort.Slice(tableSpecs, func(i, j int) bool {
+		return bytes.Compare(tableSpecs[i].name[:], tableSpecs[j].name[:]) < 0
+	})
 	return tableSpecs, nil
 }
 
