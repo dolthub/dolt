@@ -241,7 +241,7 @@ type chunkSource interface {
 	chunkReader
 
 	// hash returns the hash address of this chunkSource.
-	hash() (addr, error)
+	hash() addr
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
 	reader(context.Context) (io.Reader, error)

@@ -399,7 +399,7 @@ func interloperWrite(fm *fakeManifest, p tablePersister, rootChunk []byte, chunk
 		return hash.Hash{}, nil, err
 	}
 
-	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{mustAddr(src.hash()), uint32(len(chunks) + 1)}}, nil)
+	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{src.hash(), uint32(len(chunks) + 1)}}, nil)
 
 	if err = src.close(); err != nil {
 		return [20]byte{}, nil, err
@@ -576,7 +576,7 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 				ch <- rec
 			})
 			if err != nil {
-				ch <- extractRecord{a: mustAddr(src.hash()), err: err}
+				ch <- extractRecord{a: src.hash(), err: err}
 			}
 		}()
 

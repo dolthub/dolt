@@ -1302,18 +1302,10 @@ func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
 func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[addr]chunkSource, error) {
 	css := make(map[addr]chunkSource, len(nbs.tables.upstream)+len(nbs.tables.novel))
 	for _, cs := range nbs.tables.upstream {
-		a, err := cs.hash()
-		if err != nil {
-			return nil, err
-		}
-		css[a] = cs
+		css[cs.hash()] = cs
 	}
 	for _, cs := range nbs.tables.novel {
-		a, err := cs.hash()
-		if err != nil {
-			return nil, err
-		}
-		css[a] = cs
+		css[cs.hash()] = cs
 	}
 	return css, nil
 

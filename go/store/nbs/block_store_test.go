@@ -469,7 +469,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		}
 		conjoined, err := p.ConjoinAll(context.Background(), srcs, stats)
 		require.NoError(t, err)
-		cannedSpecs := []tableSpec{{mustAddr(conjoined.hash()), mustUint32(conjoined.count())}}
+		cannedSpecs := []tableSpec{{conjoined.hash(), mustUint32(conjoined.count())}}
 		return cannedConjoin{true, append(cannedSpecs, keepers...)}
 	}
 

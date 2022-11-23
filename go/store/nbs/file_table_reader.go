@@ -130,8 +130,8 @@ func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint
 	}, nil
 }
 
-func (mmtr *fileTableReader) hash() (addr, error) {
-	return mmtr.h, nil
+func (mmtr *fileTableReader) hash() addr {
+	return mmtr.h
 }
 
 func (mmtr *fileTableReader) close() error {

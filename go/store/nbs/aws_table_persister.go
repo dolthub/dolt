@@ -494,12 +494,7 @@ func dividePlan(ctx context.Context, plan compactionPlan, minPartSize, maxPartSi
 			break
 		}
 		if sws.dataLen <= maxPartSize {
-			h, err := sws.source.hash()
-
-			if err != nil {
-				return nil, nil, nil, err
-			}
-
+			h := sws.source.hash()
 			copies = append(copies, copyPart{h.String(), 0, int64(sws.dataLen)})
 			continue
 		}
@@ -509,12 +504,7 @@ func dividePlan(ctx context.Context, plan compactionPlan, minPartSize, maxPartSi
 
 		var srcStart int64
 		for _, length := range lens {
-			h, err := sws.source.hash()
-
-			if err != nil {
-				return nil, nil, nil, err
-			}
-
+			h := sws.source.hash()
 			copies = append(copies, copyPart{h.String(), srcStart, length})
 			srcStart += length
 		}

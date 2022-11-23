@@ -80,20 +80,8 @@ func (csbc chunkSourcesByAscendingCount) Less(i, j int) bool {
 	}
 
 	if cntI == cntJ {
-		hi, err := srcI.hash()
-
-		if err != nil {
-			csbc.err = err
-			return false
-		}
-
-		hj, err := srcJ.hash()
-
-		if err != nil {
-			csbc.err = err
-			return false
-		}
-
+		hi := srcI.hash()
+		hj := srcJ.hash()
 		return bytes.Compare(hi[:], hj[:]) < 0
 	}
 
@@ -113,20 +101,8 @@ func (csbds chunkSourcesByDescendingDataSize) Len() int { return len(csbds.sws) 
 func (csbds chunkSourcesByDescendingDataSize) Less(i, j int) bool {
 	swsI, swsJ := csbds.sws[i], csbds.sws[j]
 	if swsI.dataLen == swsJ.dataLen {
-		hi, err := swsI.source.hash()
-
-		if err != nil {
-			csbds.err = err
-			return false
-		}
-
-		hj, err := swsJ.source.hash()
-
-		if err != nil {
-			csbds.err = err
-			return false
-		}
-
+		hi := swsI.source.hash()
+		hj := swsJ.source.hash()
 		return bytes.Compare(hi[:], hj[:]) < 0
 	}
 	return swsI.dataLen > swsJ.dataLen
