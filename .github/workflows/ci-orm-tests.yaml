@@ -10,11 +10,6 @@ concurrency:
   group: ci-orm-tests-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-#on:
-#  workflow_dispatch:
-#  repository_dispatch:
-#    types: [ test-orm-integrations ]
-
 jobs:
   orm_integrations_job:
     runs-on: ubuntu-22.04
