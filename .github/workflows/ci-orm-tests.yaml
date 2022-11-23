@@ -16,7 +16,7 @@ concurrency:
 #    types: [ test-orm-integrations ]
 
 jobs:
-  data_dump_laoding_integrations_job:
+  orm_integrations_job:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     name: Run tests
