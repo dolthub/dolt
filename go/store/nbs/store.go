@@ -152,7 +152,7 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 	}
 
 	ranges := make(map[hash.Hash]map[hash.Hash]Range)
-	f := func(css chunkSources) error {
+	f := func(css chunkSourceSet) error {
 		for _, cs := range css {
 			switch tr := cs.(type) {
 			case *fileTableReader:
@@ -386,7 +386,7 @@ func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSp
 	contents, upstreamAppendixSpecs := upstream.removeAppendixSpecs()
 	switch option {
 	case ManifestAppendixOption_Append:
-		// prepend all appendix specs to contents.specs
+		// append all appendix specs to contents.specs
 		specs := append([]tableSpec{}, appendixSpecs...)
 		specs = append(specs, upstreamAppendixSpecs...)
 		contents.specs = append(specs, contents.specs...)
@@ -402,7 +402,7 @@ func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSp
 			return contents, nil
 		}
 
-		// prepend new appendix specs to contents.specs
+		// append new appendix specs to contents.specs
 		// dropping all upstream appendix specs
 		specs := append([]tableSpec{}, appendixSpecs...)
 		contents.specs = append(specs, contents.specs...)
@@ -643,7 +643,7 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, h addr, data []byte) (b
 		nbs.mt = newMemTable(nbs.mtSize)
 	}
 	if !nbs.mt.addChunk(h, data) {
-		ts, err := nbs.tables.prepend(ctx, nbs.mt, nbs.stats)
+		ts, err := nbs.tables.append(ctx, nbs.mt, nbs.stats)
 		if err != nil {
 			return false, err
 		}
@@ -984,7 +984,7 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 			}
 
 			if cnt > preflushChunkCount {
-				ts, err := nbs.tables.prepend(ctx, nbs.mt, nbs.stats)
+				ts, err := nbs.tables.append(ctx, nbs.mt, nbs.stats)
 				if err != nil {
 					return err
 				}
@@ -1070,7 +1070,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		}
 
 		if cnt > 0 {
-			ts, err := nbs.tables.prepend(ctx, nbs.mt, nbs.stats)
+			ts, err := nbs.tables.append(ctx, nbs.mt, nbs.stats)
 			if err != nil {
 				return err
 			}
