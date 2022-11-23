@@ -320,7 +320,7 @@ func (ts tableSet) flatten(ctx context.Context) (tableSet, error) {
 	return flattened, nil
 }
 
-func (ts tableSet) checkAllFilesExist(ctx context.Context, specs []tableSpec, stats *Stats) error {
+func (ts tableSet) checkAllTablesExist(ctx context.Context, specs []tableSpec, stats *Stats) error {
 	for _, spec := range specs {
 		exists, err := ts.p.Exists(ctx, spec.name, spec.chunkCount, stats)
 		if err != nil {
