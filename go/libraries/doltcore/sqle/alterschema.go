@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -335,28 +334,30 @@ var ErrKeylessAltTbl = errors.New("schema alterations not supported for keyless 
 // key drop. If multiple indexes are valid, we sort by unique and select the first.
 // This will not work with a non-pk index drop without an additional index filter argument.
 func backupFkcIndexesForPkDrop(ctx *sql.Context, sch schema.Schema, fkc *doltdb.ForeignKeyCollection) ([]doltdb.FkIndexUpdate, error) {
-	indexes := sch.Indexes().AllIndexes()
-
-	// prefer unique key backups
-	sort.Slice(indexes[:], func(i, j int) bool {
-		return indexes[i].IsUnique() && !indexes[j].IsUnique()
-	})
-
-	// find suitable secondary index
-	newIdx, ok, err := findIndexWithPrefix(sch, sch.GetPKCols().GetColumnNames())
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, sql.ErrCantDropIndex.New("PRIMARY")
-	}
-
 	fkUpdates := make([]doltdb.FkIndexUpdate, 0)
 	for _, fk := range fkc.AllKeys() {
-		// if an index references primary key, it should now reference index
-		if fk.ReferencedTableIndex == "" {
-			fkUpdates = append(fkUpdates, doltdb.FkIndexUpdate{FkName: fk.Name, FromIdx: fk.ReferencedTableIndex, ToIdx: newIdx.Name()})
+		// if an index doesn't reference primary key, it is unaffected
+		if fk.ReferencedTableIndex != "" {
+			continue
 		}
+
+		// get column names from tags in foreign key
+		fkParentCols := make([]string, len(fk.ReferencedTableColumns))
+		for i, colTag := range fk.ReferencedTableColumns {
+			col, _ := sch.GetPKCols().GetByTag(colTag)
+			fkParentCols[i] = col.Name
+		}
+
+		// find suitable secondary index
+		newIdx, ok, err := findIndexWithPrefix(sch, sch.GetPKCols().GetColumnNames())
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, sql.ErrCantDropIndex.New("PRIMARY")
+		}
+
+		fkUpdates = append(fkUpdates, doltdb.FkIndexUpdate{FkName: fk.Name, FromIdx: fk.ReferencedTableIndex, ToIdx: newIdx.Name()})
 	}
 	return fkUpdates, nil
 }
