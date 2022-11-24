@@ -113,6 +113,16 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		}
 	}
 
+	// TODO: delete this
+	fks, _ := working.GetForeignKeyCollection(ctx)
+	for _, fk := range fks.AllKeys() {
+		output = append(output, fmt.Sprintf("name: %s", fk.Name))
+		output = append(output, fmt.Sprintf("\t tbl_name: %s", fk.TableName))
+		output = append(output, fmt.Sprintf("\t tbl_idx: %s", fk.TableIndex))
+		output = append(output, fmt.Sprintf("\t ref_tbl_name: %s", fk.ReferencedTableName))
+		output = append(output, fmt.Sprintf("\t ref_tbl_idx: %s", fk.ReferencedTableIndex))
+	}
+
 	if len(output) > 0 {
 		cli.Println(strings.Join(output, "\n"))
 	} else {

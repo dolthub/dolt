@@ -1194,34 +1194,50 @@ func TestDropIndex(t *testing.T) {
 		panic(err)
 	}
 	// setup
-	root, err = ExecuteSql(dEnv, root, "create table parent (i int, j int, index (i, j));")
+	root, err = ExecuteSql(dEnv, root, "create table parent (i int, j int, k int, index i (i), index ij (i, j), index ijk (i, j, k), index j (j), index kji (k, j, i));")
 	require.NoError(t, err)
-	root, err = ExecuteSql(dEnv, root, "create table child (k int, constraint fk_child foreign key (k) references parent (i));")
+	root, err = ExecuteSql(dEnv, root, "create table child (x int, y int, constraint fk_child foreign key (x, y) references parent (i, j));")
 	require.NoError(t, err)
 
-	// check foreign keys for updated index (or verify they weren't updated)
+	// check foreign keys for updated index
 	fkc, err := root.GetForeignKeyCollection(ctx)
 	require.NoError(t, err)
 	fkChild, ok := fkc.GetByNameCaseInsensitive("fk_child")
 	require.True(t, ok)
-	require.Equal(t, "k", fkChild.TableIndex)
+	require.Equal(t, "xy", fkChild.TableIndex)
 	require.Equal(t, "ij", fkChild.ReferencedTableIndex)
 
 	// add primary key
-	root, err = ExecuteSql(dEnv, root, "alter table parent add primary key (i);")
+	root, err = ExecuteSql(dEnv, root, "alter table parent add primary key (i, j);")
 	require.NoError(t, err)
 
-	// dropping secondary index, should switch to primary key
+	// dropping secondary index ij, should choose ijk
 	root, err = ExecuteSql(dEnv, root, "alter table parent drop index ij;")
 	require.NoError(t, err)
 
-	// check foreign keys for updated index (or verify they weren't updated)
+	// check foreign keys for updated index
 	fkc, err = root.GetForeignKeyCollection(ctx)
 	require.NoError(t, err)
 	fkChild, ok = fkc.GetByNameCaseInsensitive("fk_child")
 	require.True(t, ok)
-	require.Equal(t, "k", fkChild.TableIndex)
+	require.Equal(t, "xy", fkChild.TableIndex)
+	require.Equal(t, "ijk", fkChild.ReferencedTableIndex)
+
+	// dropping secondary index ijk, should switch to primary key
+	root, err = ExecuteSql(dEnv, root, "alter table parent drop index ijk;")
+	require.NoError(t, err)
+
+	// check foreign keys for updated index
+	fkc, err = root.GetForeignKeyCollection(ctx)
+	require.NoError(t, err)
+	fkChild, ok = fkc.GetByNameCaseInsensitive("fk_child")
+	require.True(t, ok)
+	require.Equal(t, "xy", fkChild.TableIndex)
 	require.Equal(t, "", fkChild.ReferencedTableIndex)
+
+	// no viable secondary indexes left, should be unable to drop primary key
+	_, err = ExecuteSql(dEnv, root, "alter table parent drop primary key;")
+	require.Error(t, err)
 
 	// drop tables
 	root, err = ExecuteSql(dEnv, root, "drop table child;")
@@ -1232,11 +1248,11 @@ func TestDropIndex(t *testing.T) {
 	// setup
 	root, err = ExecuteSql(dEnv, root, "create table parent (i int);")
 	require.NoError(t, err)
-	root, err = ExecuteSql(dEnv, root, "alter table parent add index (i);")
+	root, err = ExecuteSql(dEnv, root, "alter table parent add index idx1 (i);")
 	require.NoError(t, err)
-	root, err = ExecuteSql(dEnv, root, "alter table parent add index (i);")
+	root, err = ExecuteSql(dEnv, root, "alter table parent add index idx2 (i);")
 	require.NoError(t, err)
-	root, err = ExecuteSql(dEnv, root, "alter table parent add index (i);")
+	root, err = ExecuteSql(dEnv, root, "alter table parent add index idx3 (i);")
 	require.NoError(t, err)
 	root, err = ExecuteSql(dEnv, root, "create table child (j int, constraint fk_child foreign key (j) references parent (i));")
 	require.NoError(t, err)
@@ -1247,30 +1263,30 @@ func TestDropIndex(t *testing.T) {
 	fkChild, ok = fkc.GetByNameCaseInsensitive("fk_child")
 	require.True(t, ok)
 	require.Equal(t, "j", fkChild.TableIndex)
-	require.Equal(t, "i", fkChild.ReferencedTableIndex)
+	require.Equal(t, "idx1", fkChild.ReferencedTableIndex)
 
 	// dropping secondary index, should switch to existing index
-	root, err = ExecuteSql(dEnv, root, "alter table parent drop index i;")
+	root, err = ExecuteSql(dEnv, root, "alter table parent drop index idx1;")
 	require.NoError(t, err)
 	fkc, err = root.GetForeignKeyCollection(ctx)
 	require.NoError(t, err)
 	fkChild, ok = fkc.GetByNameCaseInsensitive("fk_child")
 	require.True(t, ok)
 	require.Equal(t, "j", fkChild.TableIndex)
-	require.Equal(t, "i_0", fkChild.ReferencedTableIndex)
+	require.Equal(t, "idx2", fkChild.ReferencedTableIndex)
 
 	// dropping secondary index, should switch to existing index
-	root, err = ExecuteSql(dEnv, root, "alter table parent drop index i_0;")
+	root, err = ExecuteSql(dEnv, root, "alter table parent drop index idx2;")
 	require.NoError(t, err)
 	fkc, err = root.GetForeignKeyCollection(ctx)
 	require.NoError(t, err)
 	fkChild, ok = fkc.GetByNameCaseInsensitive("fk_child")
 	require.True(t, ok)
 	require.Equal(t, "j", fkChild.TableIndex)
-	require.Equal(t, "i_1", fkChild.ReferencedTableIndex)
+	require.Equal(t, "idx3", fkChild.ReferencedTableIndex)
 
 	// dropping secondary index, should fail since there are no indexes to replace it
-	root, err = ExecuteSql(dEnv, root, "alter table parent drop index i_1;")
+	_, err = ExecuteSql(dEnv, root, "alter table parent drop index idx3;")
 	require.Error(t, err)
 }
 

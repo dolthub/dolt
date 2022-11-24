@@ -337,56 +337,25 @@ var ErrKeylessAltTbl = errors.New("schema alterations not supported for keyless 
 func backupFkcIndexesForPkDrop(ctx *sql.Context, sch schema.Schema, fkc *doltdb.ForeignKeyCollection) ([]doltdb.FkIndexUpdate, error) {
 	indexes := sch.Indexes().AllIndexes()
 
-	// pkBackups is a mapping from the table's PK tags to potentially compensating indexes
-	pkBackups := make(map[uint64][]schema.Index, len(sch.GetPKCols().TagToIdx))
-	for tag, _ := range sch.GetPKCols().TagToIdx {
-		pkBackups[tag] = nil
-	}
-
 	// prefer unique key backups
 	sort.Slice(indexes[:], func(i, j int) bool {
 		return indexes[i].IsUnique() && !indexes[j].IsUnique()
 	})
 
-	for _, idx := range indexes {
-		if !idx.IsUserDefined() {
-			continue
-		}
-
-		for _, tag := range idx.AllTags() {
-			if _, ok := pkBackups[tag]; ok {
-				pkBackups[tag] = append(pkBackups[tag], idx)
-			}
-		}
+	// find suitable secondary index
+	newIdx, ok, err := findIndexWithPrefix(sch, sch.GetPKCols().GetColumnNames())
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, sql.ErrCantDropIndex.New("PRIMARY")
 	}
 
 	fkUpdates := make([]doltdb.FkIndexUpdate, 0)
 	for _, fk := range fkc.AllKeys() {
-		// check if this FK references a parent PK tag we are trying to change
-		if backups, ok := pkBackups[fk.ReferencedTableColumns[0]]; ok {
-			covered := false
-			for _, idx := range backups {
-				idxTags := idx.AllTags()
-				if len(fk.TableColumns) > len(idxTags) {
-					continue
-				}
-				failed := false
-				for i := 0; i < len(fk.ReferencedTableColumns); i++ {
-					if idxTags[i] != fk.ReferencedTableColumns[i] {
-						failed = true
-						break
-					}
-				}
-				if failed {
-					continue
-				}
-				fkUpdates = append(fkUpdates, doltdb.FkIndexUpdate{FkName: fk.Name, FromIdx: fk.ReferencedTableIndex, ToIdx: idx.Name()})
-				covered = true
-				break
-			}
-			if !covered {
-				return nil, sql.ErrCantDropIndex.New("PRIMARY")
-			}
+		// if an index references primary key, it should now reference index
+		if fk.ReferencedTableIndex == "" {
+			fkUpdates = append(fkUpdates, doltdb.FkIndexUpdate{FkName: fk.Name, FromIdx: fk.ReferencedTableIndex, ToIdx: newIdx.Name()})
 		}
 	}
 	return fkUpdates, nil
