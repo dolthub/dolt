@@ -262,6 +262,16 @@ type chunkSource interface {
 
 type chunkSources []chunkSource
 
+type chunkSourceSet map[addr]chunkSource
+
+func copyChunkSourceSet(s chunkSourceSet) (cp chunkSourceSet) {
+	cp = make(chunkSourceSet, len(s))
+	for k, v := range s {
+		cp[k] = v
+	}
+	return
+}
+
 // TableFile is an interface for working with an existing table file
 type TableFile interface {
 	// FileID gets the id of the file

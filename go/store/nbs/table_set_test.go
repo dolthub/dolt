@@ -32,7 +32,8 @@ import (
 var testChunks = [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
 
 func TestTableSetPrependEmpty(t *testing.T) {
-	ts := newFakeTableSet(&UnlimitedQuotaProvider{}).prepend(context.Background(), newMemTable(testMemTableSize), &Stats{})
+	ts, err := newFakeTableSet(&UnlimitedQuotaProvider{}).append(context.Background(), newMemTable(testMemTableSize), &Stats{})
+	require.NoError(t, err)
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(t, specs)
@@ -46,7 +47,8 @@ func TestTableSetPrepend(t *testing.T) {
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, &Stats{})
+	require.NoError(t, err)
 
 	firstSpecs, err := ts.toSpecs()
 	require.NoError(t, err)
@@ -55,12 +57,13 @@ func TestTableSetPrepend(t *testing.T) {
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, &Stats{})
+	require.NoError(t, err)
 
 	secondSpecs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Len(secondSpecs, 2)
-	assert.Equal(firstSpecs, secondSpecs[1:])
+	assert.Equal(firstSpecs[0], secondSpecs[0])
 }
 
 func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
@@ -71,15 +74,18 @@ func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, &Stats{})
+	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, &Stats{})
+	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, &Stats{})
+	require.NoError(t, err)
 
 	specs, err = ts.toSpecs()
 	require.NoError(t, err)
@@ -94,15 +100,18 @@ func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, &Stats{})
+	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, &Stats{})
+	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, &Stats{})
+	require.NoError(t, err)
 
 	ts, err = ts.flatten(context.Background())
 	require.NoError(t, err)
@@ -125,10 +134,12 @@ func TestTableSetRebase(t *testing.T) {
 	persister := newFakeTablePersister(q)
 
 	insert := func(ts tableSet, chunks ...[]byte) tableSet {
+		var err error
 		for _, c := range chunks {
 			mt := newMemTable(testMemTableSize)
 			mt.addChunk(computeAddr(c), c)
-			ts = ts.prepend(context.Background(), mt, &Stats{})
+			ts, err = ts.append(context.Background(), mt, &Stats{})
+			require.NoError(t, err)
 		}
 		return ts
 	}
@@ -171,12 +182,14 @@ func TestTableSetPhysicalLen(t *testing.T) {
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, &Stats{})
+	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, &Stats{})
+	require.NoError(t, err)
 
 	assert.True(mustUint64(ts.physicalLen()) > indexSize(mustUint32(ts.count())))
 }
