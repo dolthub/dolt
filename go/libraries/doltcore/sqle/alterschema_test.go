@@ -375,7 +375,7 @@ func TestDropPks(t *testing.T) {
 		{
 			name: "prefer unique key",
 			setup: []string{
-				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `bad_backup` (age, id), key `backup1` (id, age, name), unique key `backup2` (id, age))",
+				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `bad_backup` (age, id), key `backup1` (id, age, name), unique key `backup2` (id, age, name))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id) references parent (id))",
 			},
 			fkIdxName: "backup2",

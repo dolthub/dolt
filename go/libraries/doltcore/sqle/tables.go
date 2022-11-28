@@ -1851,7 +1851,6 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 	if err != nil {
 		return err
 	}
-	// TODO: why do we need to do this?
 	if ret.OldIndex != nil && ret.OldIndex != ret.NewIndex { // old index was replaced, so we update foreign keys
 		fkc, err := root.GetForeignKeyCollection(ctx)
 		if err != nil {
@@ -2732,6 +2731,9 @@ func findIndexWithPrefix(sch schema.Schema, prefixCols []string) (schema.Index, 
 			return false
 		} else if idxI.colLen != idxJ.colLen {
 			return idxI.colLen > idxJ.colLen
+		} else if idxI.IsUnique() != idxJ.IsUnique() {
+			// prefer unique indexes
+			return idxI.IsUnique() && !idxJ.IsUnique()
 		} else {
 			return idxI.Index.Name() < idxJ.Index.Name()
 		}
