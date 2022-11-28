@@ -20269,6 +20269,10 @@ func TestExplain(t *testing.T) {
 	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
+	// insert test data to generate a realistic plan
+	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
+	require.NoError(t, err)
+
 	rows, err := sqle.ExecuteSelect(dEnv, root, "explain select * from daily_summary d join symbols t on d.Symbol = t.Symbol")
 	require.NoError(t, err)
 	rowStrings := make([]string, len(rows))
@@ -20276,14 +20280,16 @@ func TestExplain(t *testing.T) {
 		rowStrings[i] = row[0].(string)
 	}
 
-	expectedExplain := "HashJoin(d.Symbol = t.Symbol)\n" +
-		" ├─ TableAlias(d)\n" +
-		" │   └─ Table(daily_summary)\n" +
-		" │       └─ columns: [type symbol country tradingdate open high low close volume openint]\n" +
-		" └─ HashLookup(child: (t.Symbol), lookup: (d.Symbol))\n" +
-		"     └─ CachedResults\n" +
-		"         └─ TableAlias(t)\n" +
-		"             └─ Table(symbols)\n" +
-		"                 └─ columns: [symbol name sector ipoyear]"
+	expectedExplain := "Project\n" +
+		" ├─ columns: [d.Type, d.Symbol, d.Country, d.TradingDate, d.Open, d.High, d.Low, d.Close, d.Volume, d.OpenInt, t.Symbol, t.Name, t.Sector, t.IPOYear]\n" +
+		" └─ LookupJoin(d.Symbol = t.Symbol)\n" +
+		"     ├─ TableAlias(t)\n" +
+		"     │   └─ Table(symbols)\n" +
+		"     │       └─ columns: [symbol name sector ipoyear]\n" +
+		"     └─ TableAlias(d)\n" +
+		"         └─ IndexedTableAccess(daily_summary)\n" +
+		"             ├─ index: [daily_summary.Symbol,daily_summary.Country,daily_summary.TradingDate]\n" +
+		"             └─ columns: [type symbol country tradingdate open high low close volume openint]"
+
 	assert.Equal(t, expectedExplain, strings.Join(rowStrings, "\n"))
 }
