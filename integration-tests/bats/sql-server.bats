@@ -54,6 +54,17 @@ teardown() {
     dolt sql-client -P $PORT -u dolt --use-db 'test01' -q"call dolt_clone('file:///$tempDir/remote')" 
 }
 
+@test "sql-server: loglevels are case insensitive" {
+    cd repo1
+    PORT=$( definePORT )
+    dolt sql-server --loglevel TrAcE --port=$PORT --user dolt --socket "dolt.$PORT.sock" > log.txt 2>&1 &
+    SERVER_PID=$!
+    sleep 5
+
+    # Run a simple query to make sure the sql-server is up
+    dolt sql-client --host=0.0.0.0 -P $PORT -u dolt --use-db '' -q "show databases;"
+}
+
 @test "sql-server: server assumes existing user" {
     cd repo1
     dolt sql -q "create user dolt@'%' identified by '123'"
