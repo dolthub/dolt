@@ -75,7 +75,7 @@ func TestConjoin(t *testing.T) {
 	// Makes a tableSet with len(tableSizes) upstream tables containing tableSizes[N] unique chunks
 	makeTestTableSpecs := func(tableSizes []uint32, p tablePersister) (specs []tableSpec) {
 		for _, src := range makeTestSrcs(t, tableSizes, p) {
-			specs = append(specs, tableSpec{mustAddr(src.hash()), mustUint32(src.count())})
+			specs = append(specs, tableSpec{src.hash(), mustUint32(src.count())})
 			err := src.close()
 			require.NoError(t, err)
 		}
@@ -143,7 +143,7 @@ func TestConjoin(t *testing.T) {
 		mt.addChunk(computeAddr(data), data)
 		src, err := p.Persist(context.Background(), mt, nil, &Stats{})
 		require.NoError(t, err)
-		return tableSpec{mustAddr(src.hash()), mustUint32(src.count())}
+		return tableSpec{src.hash(), mustUint32(src.count())}
 	}
 
 	tc := []struct {

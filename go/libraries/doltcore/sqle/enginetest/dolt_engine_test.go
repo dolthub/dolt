@@ -46,7 +46,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 84
+const SkipPreparedsCount = 85
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -969,6 +969,15 @@ func TestOldFormatMergeConflictsAndCVs(t *testing.T) {
 func TestDoltReset(t *testing.T) {
 	for _, script := range DoltReset {
 		// dolt versioning conflicts with reset harness -- use new harness every time
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+}
+
+func TestDoltGC(t *testing.T) {
+	// TODO: This does not work because `db.chunkStore().(nbs.TableFileStore)`
+	// returns not ok in PruneTableFiles
+	t.Skip()
+	for _, script := range DoltGC {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
 }

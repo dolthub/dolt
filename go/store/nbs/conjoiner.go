@@ -221,14 +221,8 @@ func conjoinTables(ctx context.Context, p tablePersister, upstream []tableSpec, 
 		return tableSpec{}, nil, nil, err
 	}
 
-	h, err := conjoinedSrc.hash()
-
-	if err != nil {
-		return tableSpec{}, nil, nil, err
-	}
-
+	h := conjoinedSrc.hash()
 	cnt, err = conjoinedSrc.count()
-
 	if err != nil {
 		return tableSpec{}, nil, nil, err
 	}
@@ -284,27 +278,17 @@ func toSpecs(srcs chunkSources) ([]tableSpec, error) {
 	specs := make([]tableSpec, len(srcs))
 	for i, src := range srcs {
 		cnt, err := src.count()
-
 		if err != nil {
 			return nil, err
-		}
-
-		if cnt <= 0 {
+		} else if cnt <= 0 {
 			return nil, errors.New("invalid table spec has no sources")
 		}
 
-		h, err := src.hash()
-
-		if err != nil {
-			return nil, err
-		}
-
+		h := src.hash()
 		cnt, err = src.count()
-
 		if err != nil {
 			return nil, err
 		}
-
 		specs[i] = tableSpec{h, cnt}
 	}
 

@@ -27,6 +27,39 @@ import (
 	"time"
 )
 
+func tableExistsInChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (bool, error) {
+	idxSz := int(indexSize(chunkCount) + footerSize)
+	offsetSz := int((chunkCount - (chunkCount / 2)) * offsetSize)
+	buf, err := q.AcquireQuotaBytes(ctx, uint64(idxSz+offsetSz))
+	if err != nil {
+		return false, err
+	}
+	p := buf[:idxSz]
+
+	if al.tableMayBeInDynamo(chunkCount) {
+		data, err := ddb.ReadTable(ctx, name, nil)
+		if err != nil {
+			return false, err
+		}
+		if data == nil {
+			return false, nil
+		}
+		if len(p) > len(data) {
+			return false, errors.New("not enough data for chunk count")
+		}
+		return true, nil
+	}
+
+	n, _, err := s3.ReadFromEnd(ctx, name, p, stats)
+	if err != nil {
+		return false, err
+	}
+	if len(p) != n {
+		return false, errors.New("failed to read all data")
+	}
+	return true, nil
+}
+
 func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 	var tra tableReaderAt
 	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {

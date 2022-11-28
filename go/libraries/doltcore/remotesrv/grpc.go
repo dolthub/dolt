@@ -388,7 +388,7 @@ func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRe
 	err = cs.Rebase(ctx)
 
 	if err != nil {
-		logger.Printf("error occurred during processing of Rebace rpc of %s details: %v", repoPath, err)
+		logger.Printf("error occurred during processing of Rebase rpc of %s details: %v", repoPath, err)
 		return nil, status.Errorf(codes.Internal, "failed to rebase: %v", err)
 	}
 
