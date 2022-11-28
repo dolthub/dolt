@@ -19,9 +19,10 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
 )
 
 var firstNameCol = Column{"first", 0, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil}
