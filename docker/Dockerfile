@@ -13,4 +13,5 @@ RUN tar zxvf dolt-linux-${BUILDARCH}.tar.gz && \
     cp dolt-linux-${BUILDARCH}/bin/dolt /usr/local/bin && \
     rm -rf dolt-linux-${BUILDARCH} dolt-linux-${BUILDARCH}.tar.gz
 
+WORKDIR /var/lib/dolt
 ENTRYPOINT ["tini", "--", "/usr/local/bin/dolt"]

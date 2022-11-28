@@ -54,6 +54,34 @@ teardown() {
     dolt sql-client -P $PORT -u dolt --use-db 'test01' -q"call dolt_clone('file:///$tempDir/remote')" 
 }
 
+@test "sql-server: loglevels are case insensitive" {
+    # assert that loglevel on command line is not case sensitive
+    cd repo1
+    PORT=$( definePORT )
+    dolt sql-server --loglevel TrAcE --port=$PORT --user dolt --socket "dolt.$PORT.sock" > log.txt 2>&1 &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+    dolt sql-client --host=0.0.0.0 -P $PORT -u dolt --use-db '' -q "show databases;"
+    stop_sql_server
+
+    # assert that loglevel in yaml config is not case sensitive
+    cat >config.yml <<EOF
+log_level: dEBuG
+behavior:
+  disable_client_multi_statements: true
+user:
+  name: dolt
+listener:
+  host: "0.0.0.0"
+  port: $PORT
+EOF
+    dolt sql-server --config ./config.yml --socket "dolt.$PORT.sock" &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+    dolt sql-client --host=0.0.0.0 -P $PORT -u dolt --use-db '' -q "show databases;"
+    stop_sql_server
+}
+
 @test "sql-server: server assumes existing user" {
     cd repo1
     dolt sql -q "create user dolt@'%' identified by '123'"

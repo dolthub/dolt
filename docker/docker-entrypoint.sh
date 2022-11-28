@@ -58,7 +58,7 @@ get_config_file_path_if_exists() {
     FILE_TYPE=$2
     if [ -d "$CONFIG_DIR" ]; then
         mysql_note "Checking for config provided in $CONFIG_DIR"
-        number_of_files_found=( `find .$CONFIG_DIR -type f -name "*.$FILE_TYPE" | wc -l` )
+        number_of_files_found=( `find $CONFIG_DIR -type f -name "*.$FILE_TYPE" | wc -l` )
         if [ $number_of_files_found -gt 1 ]; then
             CONFIG_PROVIDED=
             mysql_warn "multiple config file found in $CONFIG_DIR, using default config"
