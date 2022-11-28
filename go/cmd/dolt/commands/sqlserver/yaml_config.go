@@ -153,6 +153,8 @@ var _ validatingServerConfig = YAMLConfig{}
 func NewYamlConfig(configFileData []byte) (YAMLConfig, error) {
 	var cfg YAMLConfig
 	err := yaml.UnmarshalStrict(configFileData, &cfg)
+	loglevel := strings.ToLower(*cfg.LogLevelStr)
+	cfg.LogLevelStr = &loglevel
 	return cfg, err
 }
 
