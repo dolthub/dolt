@@ -524,26 +524,29 @@ func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 
 func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, maxTables int, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
-	err := checkDir(dir)
-
-	if err != nil {
+	if err := checkDir(dir); err != nil {
 		return nil, err
 	}
 
 	m, err := getFileManifest(ctx, dir)
-
 	if err != nil {
 		return nil, err
 	}
-
-	mm := makeManifestManager(m)
 	p := newFSTablePersister(dir, globalFDCache, q)
-	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{maxTables}, memTableSize)
 
+	if chunkJournalFeatureFlag {
+		j, err := newChunkJournal(ctx, dir, m)
+		if err != nil {
+			return nil, err
+		}
+		m, p = j, j
+	}
+	mm := makeManifestManager(m)
+
+	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{maxTables}, memTableSize)
 	if err != nil {
 		return nil, err
 	}
-
 	return nbs, nil
 }
 
@@ -1163,8 +1166,14 @@ func (nbs *NomsBlockStore) Version() string {
 	return nbs.upstream.nbfVers
 }
 
-func (nbs *NomsBlockStore) Close() error {
-	return nbs.tables.close()
+func (nbs *NomsBlockStore) Close() (err error) {
+	if cerr := nbs.p.Close(); cerr != nil {
+		err = cerr
+	}
+	if cerr := nbs.tables.close(); cerr != nil {
+		err = cerr
+	}
+	return
 }
 
 func (nbs *NomsBlockStore) Stats() interface{} {
@@ -1300,11 +1309,11 @@ func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
 		if !ok {
 			return uint64(0), errors.New("manifest referenced table file for which there is no chunkSource.")
 		}
-		ti, err := cs.index()
+		sz, err := cs.size()
 		if err != nil {
 			return uint64(0), fmt.Errorf("error getting table file index for chunkSource. %w", err)
 		}
-		size += ti.tableFileSize()
+		size += sz
 	}
 	return size, nil
 }

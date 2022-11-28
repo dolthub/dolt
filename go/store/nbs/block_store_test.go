@@ -46,21 +46,32 @@ import (
 const testMemTableSize = 1 << 8
 
 func TestBlockStoreSuite(t *testing.T) {
-	suite.Run(t, &BlockStoreSuite{})
+	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
+		nbf := constants.FormatDefaultString
+		qp := NewUnlimitedMemQuotaProvider()
+		return NewLocalStore(ctx, nbf, dir, testMemTableSize, qp)
+	}
+	suite.Run(t, &BlockStoreSuite{factory: fn})
 }
 
 type BlockStoreSuite struct {
 	suite.Suite
 	dir        string
 	store      *NomsBlockStore
+	factory    nbsFactory
 	putCountFn func() int
+
+	// if true, skip interloper tests
+	skipInterloper bool
 }
+
+type nbsFactory func(ctx context.Context, dir string) (*NomsBlockStore, error)
 
 func (suite *BlockStoreSuite) SetupTest() {
 	var err error
-	suite.dir, err = os.MkdirTemp("", "")
-	suite.NoError(err)
-	suite.store, err = NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
+	suite.dir = suite.T().TempDir()
+	ctx := context.Background()
+	suite.store, err = suite.factory(ctx, suite.dir)
 	suite.NoError(err)
 	suite.putCountFn = func() int {
 		return int(suite.store.putCount)
@@ -194,9 +205,9 @@ func (suite *BlockStoreSuite) TestChunkStorePutMoreThanMemTable() {
 	if suite.putCountFn != nil {
 		suite.Equal(2, suite.putCountFn())
 	}
-	specs, err := suite.store.tables.toSpecs()
+	sz, err := suite.store.tables.physicalLen()
 	suite.NoError(err)
-	suite.Len(specs, 2)
+	suite.True(sz > testMemTableSize)
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
@@ -271,6 +282,9 @@ func (suite *BlockStoreSuite) TestChunkStoreHasMany() {
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
+	if suite.skipInterloper {
+		suite.T().Skip()
+	}
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
 	root, err := suite.store.Root(context.Background())
@@ -319,6 +333,9 @@ func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
+	if suite.skipInterloper {
+		suite.T().Skip()
+	}
 	input1 := []byte("abc")
 	c1 := chunks.NewChunk(input1)
 
@@ -353,6 +370,9 @@ func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
 }
 
 func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
+	if suite.skipInterloper {
+		suite.T().Skip()
+	}
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
 	root, err := suite.store.Root(context.Background())
