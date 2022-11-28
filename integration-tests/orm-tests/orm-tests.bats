@@ -50,7 +50,7 @@ teardown() {
 @test "Prisma ORM smoke test" {
   mysql --protocol TCP -u dolt -e "create database dolt;"
 
-  cd prisma
+  cd $BATS_TEST_DIRNAME/prisma
   npm install
   npx -c "prisma migrate dev --name init"
 }
@@ -72,7 +72,7 @@ teardown() {
 @test "TypeORM smoke test" {
   mysql --protocol TCP -u dolt -e "create database dolt;"
 
-  cd typeorm
+  cd $BATS_TEST_DIRNAME/typeorm
   npm install
   npm start
 }
@@ -82,7 +82,7 @@ teardown() {
 @test "MikroORM smoke test" {
   mysql --protocol TCP -u dolt -e "create database dolt;"
 
-  cd mikro-orm
+  cd $BATS_TEST_DIRNAME/mikro-orm
   npm install
   npm start
 }
@@ -93,7 +93,7 @@ teardown() {
   # need to create tables for it before running the test
   mysql --protocol TCP -u dolt -e "create database dolt; use dolt; create table STUDENT (id INT NOT NULL auto_increment PRIMARY KEY, first_name VARCHAR(30) NOT NULL, last_name VARCHAR(30) NOT NULL, section VARCHAR(30) NOT NULL);"
 
-  cd hibernate/DoltHibernateSmokeTest
+  cd $BATS_TEST_DIRNAME/hibernate/DoltHibernateSmokeTest
   mvn clean install
   mvn clean package
   mvn exec:java
