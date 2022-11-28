@@ -975,6 +975,13 @@ func (t *DoltTable) Projections() []string {
 	return names
 }
 
+func (t *DoltTable) ProjectedTags() []uint64 {
+	if len(t.projectedCols) > 0 {
+		return t.projectedCols
+	}
+	return t.sch.GetAllCols().Tags
+}
+
 // WithProjections implements sql.ProjectedTable
 func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 	nt := *t
@@ -1890,12 +1897,11 @@ func (t *AlterableDoltTable) DropIndex(ctx *sql.Context, indexName string) error
 	if strings.HasPrefix(indexName, "dolt_") {
 		return fmt.Errorf("dolt internal indexes may not be dropped")
 	}
-	root, err := t.getRoot(ctx)
+	newTable, _, err := t.dropIndex(ctx, indexName)
 	if err != nil {
 		return err
 	}
-
-	newTable, _, err := t.dropIndex(ctx, indexName)
+	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
 	}
@@ -2431,7 +2437,52 @@ func parseFkReferentialAction(refOp sql.ForeignKeyReferentialAction) (doltdb.For
 // dropIndex drops the given index on the given table with the given schema. Returns the updated table and updated schema.
 func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*doltdb.Table, schema.Schema, error) {
 	// RemoveIndex returns an error if the index does not exist, no need to do twice
-	_, err := t.sch.Indexes().RemoveIndex(indexName)
+	oldIdx, err := t.sch.Indexes().RemoveIndex(indexName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// any foreign keys that used this underlying index need to find another one
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, fk := range fkc.AllKeys() {
+		if fk.ReferencedTableIndex != oldIdx.Name() {
+			continue
+		}
+		// get column names from tags in foreign key
+		fkParentCols := make([]string, len(fk.ReferencedTableColumns))
+		for i, colTag := range fk.ReferencedTableColumns {
+			col, _ := oldIdx.GetColumn(colTag)
+			fkParentCols[i] = col.Name
+		}
+		newIdx, ok, err := findIndexWithPrefix(t.sch, fkParentCols)
+		if err != nil {
+			return nil, nil, err
+		}
+		newFk := fk
+		if ok {
+			newFk.ReferencedTableIndex = newIdx.Name()
+		} else {
+			// if a replacement index wasn't found; it matched on primary key, so use empty string
+			newFk.ReferencedTableIndex = ""
+		}
+		fkc.RemoveKeys(fk)
+		err = fkc.AddKeys(newFk)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	root, err = root.PutForeignKeyCollection(ctx, fkc)
+	if err != nil {
+		return nil, nil, err
+	}
+	err = t.setRoot(ctx, root)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2680,6 +2731,9 @@ func findIndexWithPrefix(sch schema.Schema, prefixCols []string) (schema.Index, 
 			return false
 		} else if idxI.colLen != idxJ.colLen {
 			return idxI.colLen > idxJ.colLen
+		} else if idxI.IsUnique() != idxJ.IsUnique() {
+			// prefer unique indexes
+			return idxI.IsUnique() && !idxJ.IsUnique()
 		} else {
 			return idxI.Index.Name() < idxJ.Index.Name()
 		}

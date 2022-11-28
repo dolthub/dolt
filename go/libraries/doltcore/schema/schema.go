@@ -148,6 +148,16 @@ func SchemasAreEqual(sch1, sch2 Schema) bool {
 	if !colCollIsEqual {
 		return false
 	}
+
+	// Pks and Non-pks are in the same order as the key tuple and value tuple fields
+	if !ColCollsAreEqual(sch1.GetPKCols(), sch2.GetPKCols()) {
+		return false
+	}
+
+	if !ColCollsAreEqual(sch1.GetNonPKCols(), sch2.GetNonPKCols()) {
+		return false
+	}
+
 	return sch1.Indexes().Equals(sch2.Indexes())
 }
 

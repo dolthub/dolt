@@ -320,6 +320,19 @@ func (ts tableSet) flatten(ctx context.Context) (tableSet, error) {
 	return flattened, nil
 }
 
+func (ts tableSet) checkAllTablesExist(ctx context.Context, specs []tableSpec, stats *Stats) error {
+	for _, spec := range specs {
+		exists, err := ts.p.Exists(ctx, spec.name, spec.chunkCount, stats)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return fmt.Errorf("table spec does not exist")
+		}
+	}
+	return nil
+}
+
 // rebase returns a new tableSet holding the novel tables managed by |ts| and
 // those specified by |specs|.
 func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) (tableSet, error) {
@@ -356,11 +369,7 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 
 	existing := make(map[addr]chunkSource, len(ts.upstream))
 	for _, cs := range ts.upstream {
-		a, err := cs.hash()
-		if err != nil {
-			return tableSet{}, err
-		}
-		existing[a] = cs
+		existing[cs.hash()] = cs
 	}
 
 	// newly opened tables are unowned, we must
@@ -420,12 +429,7 @@ func (ts tableSet) toSpecs() ([]tableSpec, error) {
 		}
 
 		if cnt > 0 {
-			h, err := src.hash()
-
-			if err != nil {
-				return nil, err
-			}
-
+			h := src.hash()
 			tableSpecs = append(tableSpecs, tableSpec{h, cnt})
 		}
 	}
@@ -440,12 +444,7 @@ func (ts tableSet) toSpecs() ([]tableSpec, error) {
 			return nil, errors.New("no upstream chunks")
 		}
 
-		h, err := src.hash()
-
-		if err != nil {
-			return nil, err
-		}
-
+		h := src.hash()
 		tableSpecs = append(tableSpecs, tableSpec{h, cnt})
 	}
 	return tableSpecs, nil
@@ -456,8 +455,7 @@ func tableSetCalcReads(ts tableSet, reqs []getRecord, blockSize uint64) (reads i
 	for _, tbl := range all {
 		rdr, ok := tbl.(*fileTableReader)
 		if !ok {
-			h, _ := tbl.hash()
-			err = fmt.Errorf("chunkSource %s is not a fileTableReader", h.String())
+			err = fmt.Errorf("chunkSource %s is not a fileTableReader", tbl.hash().String())
 			return
 		}
 

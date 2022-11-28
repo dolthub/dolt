@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -289,7 +290,7 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			var err error
-			_, fetched, err = mm.Fetch(context.Background(), nil)
+			_, fetched, _, err = mm.Fetch(context.Background(), nil)
 			require.NoError(t, err)
 		}()
 	}
@@ -398,7 +399,7 @@ func interloperWrite(fm *fakeManifest, p tablePersister, rootChunk []byte, chunk
 		return hash.Hash{}, nil, err
 	}
 
-	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{mustAddr(src.hash()), uint32(len(chunks) + 1)}}, nil)
+	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{src.hash(), uint32(len(chunks) + 1)}}, nil)
 
 	if err = src.close(); err != nil {
 		return [20]byte{}, nil, err
@@ -575,7 +576,7 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 				ch <- rec
 			})
 			if err != nil {
-				ch <- extractRecord{a: mustAddr(src.hash()), err: err}
+				ch <- extractRecord{a: src.hash(), err: err}
 			}
 		}()
 
@@ -623,7 +624,14 @@ func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount ui
 	return chunkSourceAdapter{cs, name}, nil
 }
 
-func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ manifestContents) error {
+func (ftp fakeTablePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
+	if _, ok := ftp.sourcesToFail[name]; ok {
+		return false, errors.New("intentional failure")
+	}
+	return true, nil
+}
+
+func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ manifestContents, _ time.Time) error {
 	return chunks.ErrUnsupportedOperation
 }
 

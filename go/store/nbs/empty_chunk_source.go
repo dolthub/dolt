@@ -61,8 +61,8 @@ func (ecs emptyChunkSource) uncompressedLen() (uint64, error) {
 	return 0, nil
 }
 
-func (ecs emptyChunkSource) hash() (addr, error) {
-	return addr{}, nil
+func (ecs emptyChunkSource) hash() addr {
+	return addr{}
 }
 
 func (ecs emptyChunkSource) index() (tableIndex, error) {

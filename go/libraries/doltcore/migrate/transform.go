@@ -107,7 +107,8 @@ func migrateCommit(ctx context.Context, menv Environment, oldCm *doltdb.Commit, 
 		return migrateInitCommit(ctx, oldCm, new, prog)
 	}
 
-	prog.Log(ctx, "migrating commit %s", oldHash.String())
+	hs := oldHash.String()
+	prog.Log(ctx, "migrating commit %s", hs)
 
 	oldRoot, err := oldCm.GetRootValue(ctx)
 	if err != nil {
