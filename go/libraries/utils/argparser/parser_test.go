@@ -78,6 +78,20 @@ func TestArgParser(t *testing.T) {
 			map[string]string{"param": "value"},
 			[]string{"arg1"},
 		},
+		{
+			NewArgParser().SupportsString("param", "p", "", ""),
+			[]string{"-pvalue"},
+			UnknownArgumentParam{"pvalue"},
+			map[string]string{},
+			[]string{},
+		},
+		{
+			NewArgParser().SupportsString("param", "p", "", ""),
+			[]string{"--paramvalue"},
+			nil,
+			map[string]string{"param": "value"},
+			[]string{},
+		},
 	}
 
 	for _, test := range tests {

@@ -225,12 +225,20 @@ func (ap *ArgParser) sortedValueOptions() []string {
 	return vos
 }
 
-func (ap *ArgParser) matchValueOption(arg string) (match *Option, value *string) {
+func (ap *ArgParser) matchValueOption(arg string, isLongFormFlag bool) (match *Option, value *string) {
+
 	for _, on := range ap.sortedValueOptions() {
 		lo := len(on)
 		isMatch := len(arg) >= lo && arg[:lo] == on
 		if isMatch {
 			v := arg[lo:]
+			if len(v) > 0 && !strings.Contains(optNameValDelimChars, v[:1]) { // checks if the value and the param is in the same string
+				// we only allow joint param and value for long form flags (ie "--" flags), similar to Git's behavior
+				if !isLongFormFlag {
+					return nil, nil
+				}
+			}
+
 			v = strings.TrimLeft(v, optNameValDelimChars)
 			if len(v) > 0 {
 				value = &v
@@ -252,6 +260,7 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 	i := 0
 	for ; i < len(args); i++ {
 		arg := args[i]
+		isLongFormFlag := len(arg) >= 2 && arg[:2] == "--"
 
 		if len(arg) == 0 || arg[0] != '-' || arg == "--" { // empty strings should get passed through like other naked words
 			list = append(list, arg)
@@ -274,7 +283,7 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 			results[opt.Name] = ""
 		}
 
-		opt, value := ap.matchValueOption(rest)
+		opt, value := ap.matchValueOption(rest, isLongFormFlag)
 
 		if opt == nil {
 			if rest == "" {
