@@ -451,7 +451,15 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 			}
 		}
 		if patched {
-			return schema.SchemaFromCols(schema.NewColCollection(cols...))
+			allCols := schema.NewColCollection(cols...)
+			schema.NewIndexCollection(allCols, existing.GetPKCols())
+			return schema.NewSchema(
+				allCols,
+				existing.GetPkOrdinals(),
+				existing.GetCollation(),
+				existing.Indexes(),
+				existing.Checks(),
+			)
 		}
 		return existing, nil
 	}
@@ -522,14 +530,17 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 		return existing, nil
 	}
 
-	sch, err := schema.SchemaFromCols(schema.NewColCollection(cols...))
+	sch, err := schema.NewSchema(
+		schema.NewColCollection(cols...),
+		existing.GetPkOrdinals(),
+		existing.GetCollation(),
+		existing.Indexes(),
+		existing.Checks(),
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = sch.SetPkOrdinals(existing.GetPkOrdinals()); err != nil {
-		return nil, err
-	}
 	return sch, nil
 }
 

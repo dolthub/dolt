@@ -324,3 +324,21 @@ SQL
     [[ $output =~ "3,4,a" ]]
     [[ $output =~ "5,6,b" ]]
 }
+
+@test "migrate: indexes, collation, and checks should be preserved" {
+   dolt sql -q "create table t (i int primary key, j int, v varchar(100), index (j), constraint j_chk check (j = 0)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;"
+   run dolt sql -q "show create table t"
+   [ $status -eq 0 ]
+   [[ $output =~ "KEY \`j\` (\`j\`)" ]] || false
+   [[ $output =~ "CONSTRAINT \`j_chk\` CHECK ((\`j\` = 0))" ]] || false
+   [[ $output =~ ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci" ]] || false
+
+   dolt commit -Am "create table"
+
+   dolt migrate
+   run dolt sql -q "show create table t"
+   [ $status -eq 0 ]
+   [[ $output =~ "KEY \`j\` (\`j\`)" ]] || false
+   [[ $output =~ "CONSTRAINT \`j_chk\` CHECK ((\`j\` = 0))" ]] || false
+   [[ $output =~ ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci" ]] || false
+}

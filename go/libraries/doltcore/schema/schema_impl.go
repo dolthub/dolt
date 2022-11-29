@@ -50,7 +50,53 @@ var _ Schema = (*schemaImpl)(nil)
 var ErrInvalidPkOrdinals = errors.New("incorrect number of primary key ordinals")
 var ErrMultipleNotNullConstraints = errors.New("multiple not null constraints on same column")
 
+// NewSchema creates a fully defined schema from its parameters.
+// This function should be updated when new components are added to Schema.
+// If |len(pkOrdinals)| == 0, then the default ordinals are kept. |indexes| and |checks| may be nil.
+func NewSchema(allCols *ColCollection, pkOrdinals []int, collation Collation, indexes IndexCollection, checks CheckCollection) (Schema, error) {
+	sch, err := SchemaFromCols(allCols)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(pkOrdinals) != 0 {
+		err = sch.SetPkOrdinals(pkOrdinals)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	sch.SetCollation(collation)
+
+	if indexes != nil {
+		indexColImpl := indexes.(*indexCollectionImpl)
+
+		sch.(*schemaImpl).indexCollection = indexColImpl
+
+		// Index collection contains information about the total list of columns and their definitions.
+		// Do a simple sanity check here to make sure those columns match |allCols|.
+		// TODO: Add an equality check between |allCols| and the cols that |indexes| refer to.
+
+		if len(indexColImpl.pks) != sch.GetPKCols().Size() {
+			return nil, fmt.Errorf("IndexCollection referring to %d pks while Schema refers to %d pks", len(indexColImpl.pks), sch.GetPKCols().Size())
+		}
+		for i, tag := range sch.GetPKCols().Tags {
+			if indexColImpl.pks[i] != tag {
+				return nil, fmt.Errorf("IndexCollection pk tags does not match Schema's pk tags")
+			}
+		}
+	}
+
+	if checks != nil {
+		sch.(*schemaImpl).checkCollection = checks
+	}
+
+	return sch, nil
+}
+
 // SchemaFromCols creates a Schema from a collection of columns
+//
+// Deprecated: Use NewSchema instead.
 func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	var pkCols []Column
 	var nonPKCols []Column
@@ -81,6 +127,9 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	return sch, nil
 }
 
+// SchemaFromColCollections creates a schema from the three collections.
+//
+// Deprecated: Use NewSchema instead.
 func SchemaFromColCollections(allCols, pkColColl, nonPKColColl *ColCollection) Schema {
 	return &schemaImpl{
 		pkCols:          pkColColl,
@@ -185,6 +234,8 @@ func UnkeyedSchemaFromCols(allCols *ColCollection) Schema {
 }
 
 // SchemaFromPKAndNonPKCols creates a Schema from a collection of the key columns, and the non-key columns.
+//
+// Deprecated: Use NewSchema instead.
 func SchemaFromPKAndNonPKCols(pkCols, nonPKCols *ColCollection) (Schema, error) {
 	allCols := make([]Column, pkCols.Size()+nonPKCols.Size())
 
