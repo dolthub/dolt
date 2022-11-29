@@ -35,6 +35,9 @@ do
         --row2) export ENABLE_ROW_ITER_2=true
             ;;
 
+        --journal) export DOLT_ENABLE_CHUNK_JOURNAL=true
+            ;;
+
         # specify sysbench benchmark
         *) SYSBENCH_TEST="$1"
             ;;
@@ -123,6 +126,7 @@ sysbench \
   --db-ps-mode=disable \
   "$SYSBENCH_TEST" run
 
+unset DOLT_ENABLE_CHUNK_JOURNAL
 unset DOLT_DEFAULT_BIN_FORMAT
 unset ENABLE_ROW_ITER_2
 unset SINGLE_THREAD_FEATURE_FLAG

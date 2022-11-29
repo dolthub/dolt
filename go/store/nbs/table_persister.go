@@ -27,6 +27,7 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"errors"
+	"io"
 	"sort"
 	"time"
 )
@@ -55,6 +56,8 @@ type tablePersister interface {
 
 	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 	PruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error
+
+	io.Closer
 }
 
 type chunkSourcesByAscendingCount struct {

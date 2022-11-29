@@ -257,3 +257,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manif
 
 	return nil
 }
+
+func (ftp *fsTablePersister) Close() error {
+	return nil
+}
