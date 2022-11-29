@@ -93,7 +93,7 @@ teardown() {
   # need to create tables for it before running the test
   mysql --protocol TCP -u dolt -e "create database dolt; use dolt; create table STUDENT (id INT NOT NULL auto_increment PRIMARY KEY, first_name VARCHAR(30) NOT NULL, last_name VARCHAR(30) NOT NULL, section VARCHAR(30) NOT NULL);"
 
-  cd hibernate/DoltHibernateSmokeTest
+  cd DoltHibernateSmokeTest
   mvn clean install
   mvn clean package
   mvn exec:java
