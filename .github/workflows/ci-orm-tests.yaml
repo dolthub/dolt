@@ -1,13 +1,9 @@
 name: Test ORM integrations
 
 on:
-#  workflow_dispatch:
-#  repository_dispatch:
-#    types: [ test-orm-integrations ]
-  pull_request:
-    paths:
-      - 'go/**'
-      - 'integration-tests/**'
+  workflow_dispatch:
+  repository_dispatch:
+    types: [ test-orm-integrations ]
 
 jobs:
   orm_integrations_job:
