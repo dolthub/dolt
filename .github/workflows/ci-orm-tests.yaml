@@ -32,6 +32,7 @@ jobs:
         if: ${{ failure() }}
         uses: ./.github/actions/ses-email-action
         with:
+          template: ORMIntegrationTestNightlyTemplate
           region: us-west-2
-          version: ${{ github.repository }}
-          toAddresses: "[\"jennifer@dolthub.com\"]"
+          version: ${{ github.sha }}
+          toAddresses: ["jennifer@dolthub.com"]

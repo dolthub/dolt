@@ -1,0 +1,6 @@
+{
+  "Template": {
+    "TemplateName": "ORMIntegrationTestNightlyTemplate",
+    "SubjectPart": "ORM Integrations Test Failed for {{version}}",
+  }
+}
