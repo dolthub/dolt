@@ -27,15 +27,11 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
-      - name: Send email
-        if: ${{ failure() }}
-        uses: dawidd6/action-send-mail@v3.6.0
+      - name: Send Email
+        uses: ./.github/actions/ses-email-action
         with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: github-actions-bot@corp.ld-corp.com
-          subject: ORM integrations test failed.
-          to: jennifer@dolthub.com
-          from: GitHub Actions
-          secure: true
-          body: workflow for ${{github.repository}} completed unsuccessfully!
+          template: ${{ github.event.client_payload.template }}
+          region: us-west-2
+          version: ${{ github.repository }}
+          format: ${{ github.event.client_payload.noms_bin_format }}
+          toAddresses: "[\"jennifer@dolthub.com\"]"
