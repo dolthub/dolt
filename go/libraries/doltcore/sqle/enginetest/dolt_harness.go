@@ -447,7 +447,7 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 
 	asOfString, ok := asOf.(string)
 	require.True(d.t, ok)
- q
+
 	ctx := enginetest.NewContext(d)
 	_, iter, err := e.Query(ctx,
 		"CALL DOLT_ADD('.')")
