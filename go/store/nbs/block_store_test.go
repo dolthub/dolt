@@ -69,7 +69,8 @@ type nbsFactory func(ctx context.Context, dir string) (*NomsBlockStore, error)
 
 func (suite *BlockStoreSuite) SetupTest() {
 	var err error
-	suite.dir = suite.T().TempDir()
+	suite.dir, err = os.MkdirTemp("", "")
+	suite.NoError(err)
 	ctx := context.Background()
 	suite.store, err = suite.factory(ctx, suite.dir)
 	suite.NoError(err)
