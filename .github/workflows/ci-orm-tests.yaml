@@ -1,9 +1,13 @@
 name: Test ORM integrations
 
 on:
-  workflow_dispatch:
-  repository_dispatch:
-    types: [ test-orm-integrations ]
+#  workflow_dispatch:
+#  repository_dispatch:
+#    types: [ test-orm-integrations ]
+  pull_request:
+    paths:
+      - 'go/**'
+      - 'integration-tests/**'
 
 jobs:
   orm_integrations_job:
@@ -16,4 +20,21 @@ jobs:
       - name: Copy go package
         run: cp -r ./go ./integration-tests/go
       - name: Test ORM integrations
-        uses: ./.github/actions/orm-tests
+        uses: ./.github/actions/orm-tests'
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Send email
+        if: ${{ failure() }}
+        uses: dawidd6/action-send-mail@v3.6.0
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: github-actions-bot@corp.ld-corp.com
+          subject: ORM integrations test failed.
+          to: jennifer@dolthub.com
+          secure: true
+          body: workflow for ${{github.repository}} completed unsuccessfully!
