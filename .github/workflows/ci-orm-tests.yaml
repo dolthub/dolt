@@ -31,5 +31,5 @@ jobs:
           template: 'OrmIntegrationFailureTemplate'
           region: us-west-2
           version: ${{ github.ref }}
-          toAddresses: '["jennifer@dolthub.com"]'
+          toAddresses: '["jennifer@dolthub.com", "tim@dolthub.com"]'
           workflowURL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
