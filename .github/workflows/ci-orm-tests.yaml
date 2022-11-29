@@ -35,4 +35,4 @@ jobs:
           template: ORMIntegrationTestNightlyTemplate
           region: us-west-2
           version: ${{ github.sha }}
-          toAddresses: ["jennifer@dolthub.com"]
+          toAddresses: "[\"jennifer@dolthub.com\"]"
