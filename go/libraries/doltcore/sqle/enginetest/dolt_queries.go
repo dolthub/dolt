@@ -2872,6 +2872,212 @@ var DoltConflictTableNameTableTests = []queries.ScriptTest{
 	},
 }
 
+var createConflictsSetupScript = []string{
+	"create table t (pk int primary key, col1 int);",
+	"call dolt_commit('-Am', 'create table');",
+	"call dolt_checkout('-b', 'other');",
+
+	"insert into t values (1, 100);",
+	"insert into t values (2, 200);",
+	"call dolt_commit('-Am', 'other commit');",
+
+	"call dolt_checkout('main');",
+	"insert into t values (1, -100);",
+	"insert into t values (2, -200);",
+	"call dolt_commit('-Am', 'main commit');",
+
+	"set dolt_allow_commit_conflicts = on;",
+	"call dolt_merge('other');",
+}
+
+var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
+	{
+		Name:        "Updates on our columns get applied to the source table - smoke",
+		SetUpScript: createConflictsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, 1, -100, 1, 100},
+					{nil, nil, 2, -200, 2, 200},
+				},
+			},
+			{
+				Query:    "update dolt_conflicts_t set our_col1 = 1000 where our_pk = 1;",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, 1, 1000, 1, 100},
+					{nil, nil, 2, -200, 2, 200},
+				},
+			},
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, 1000},
+					{2, -200},
+				},
+			},
+			{
+				Query:    "update dolt_conflicts_t set our_col1 = their_col1;",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+			},
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, 1, 100, 1, 100},
+					{nil, nil, 2, 200, 2, 200},
+				},
+			},
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, 100},
+					{2, 200},
+				},
+			},
+		},
+	},
+	{
+		Name: "Updates on our columns get applied to the source table - compound / inverted pks",
+		SetUpScript: []string{
+			"create table t (pk2 int, pk1 int, col1 int, primary key (pk1, pk2));",
+			"call dolt_commit('-Am', 'create table');",
+
+			"call dolt_checkout('-b', 'other');",
+			"insert into t values (1, 1, 100), (2, 1, 200);",
+			"call dolt_commit('-Am', 'other commit');",
+
+			"call dolt_checkout('main');",
+			"insert into t values (1, 1, -100), (2, 1, -200);",
+			"call dolt_commit('-Am', 'main commit');",
+
+			"set dolt_allow_commit_conflicts = on;",
+			"call dolt_merge('other');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select base_pk1, base_pk2, base_col1, our_pk1, our_pk2, our_col1, their_pk1, their_pk2, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 1, 1, -100, 1, 1, 100},
+					{nil, nil, nil, 1, 2, -200, 1, 2, 200},
+				},
+			},
+			{
+				Query:    "Update dolt_conflicts_t set our_col1 = 1000;",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+			},
+			{
+				Query: "select base_pk1, base_pk2, base_col1, our_pk1, our_pk2, our_col1, their_pk1, their_pk2, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 1, 1, 1000, 1, 1, 100},
+					{nil, nil, nil, 1, 2, 1000, 1, 2, 200},
+				},
+			},
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, 1, 1000},
+					{2, 1, 1000},
+				},
+			},
+		},
+	},
+	{
+		Name: "Updates on our columns get applied to the source table - keyless",
+		SetUpScript: []string{
+			"create table t (name varchar(100), price int);",
+			"call dolt_commit('-Am', 'create table');",
+
+			"call dolt_checkout('-b', 'other');",
+			"insert into t values ('apple', 1);",
+			"call dolt_commit('-Am', 'other commit');",
+
+			"call dolt_checkout('main');",
+			"insert into t values ('apple', 1), ('apple', 1);",
+			"call dolt_commit('-Am', 'main commit');",
+
+			"set dolt_allow_commit_conflicts = on;",
+			"call dolt_merge('other');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select base_name, base_price, base_cardinality, our_name, our_price, our_cardinality, their_name, their_price, their_cardinality from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, uint64(0), "apple", 1, uint64(2), "apple", 1, uint64(1)},
+				},
+			},
+			// Arguably this behavior is weird. If you ran this same query
+			// against the original table, it would update two rows. Since this
+			// was run against the conflicts table, only one row is updated.
+			{
+				Query: "update dolt_conflicts_t set our_name = 'orange' where our_name = 'apple'",
+				Expected: []sql.Row{
+					{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Updated: 1, Matched: 1}}},
+				},
+			},
+			{
+				Query: "select base_name, base_price, base_cardinality, our_name, our_price, our_cardinality, their_name, their_price, their_cardinality from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, uint64(0), "apple", 1, uint64(1), "apple", 1, uint64(1)},
+				},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{"apple", 1}, {"orange", 1}},
+			},
+			// Updating cardinality should be no-op.
+			{
+				Query: "update dolt_conflicts_t set our_cardinality = 10, their_cardinality = 10, base_cardinality = 10;",
+			},
+			{
+				Query: "select base_name, base_price, base_cardinality, our_name, our_price, our_cardinality, their_name, their_price, their_cardinality from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, uint64(0), "apple", 1, uint64(1), "apple", 1, uint64(1)},
+				},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{"apple", 1}, {"orange", 1}},
+			},
+		},
+	},
+	{
+		Name:        "Updates on their or base columns do nothing",
+		SetUpScript: createConflictsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, 1, -100, 1, 100},
+					{nil, nil, 2, -200, 2, 200},
+				},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, -100}, {2, -200}},
+			},
+			{
+				Query:    "update dolt_conflicts_t set base_col1 = 9999, their_col1 = 9999;",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+			},
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, 1, -100, 1, 100},
+					{nil, nil, 2, -200, 2, 200},
+				},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, -100}, {2, -200}},
+			},
+		},
+	},
+}
+
 // MergeArtifactsScripts tests new format merge behavior where
 // existing violations and conflicts are merged together.
 var MergeArtifactsScripts = []queries.ScriptTest{

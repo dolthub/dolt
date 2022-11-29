@@ -933,6 +933,12 @@ func TestDoltConflictsTableNameTable(t *testing.T) {
 	for _, script := range DoltConflictTableNameTableTests {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
+
+	if types.IsFormat_DOLT(types.Format_Default) {
+		for _, script := range Dolt1ConflictTableNameTableTests {
+			enginetest.TestScript(t, newDoltHarness(t), script)
+		}
+	}
 }
 
 // tests new format behavior for keyless merges that create CVs and conflicts
