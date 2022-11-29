@@ -247,21 +247,21 @@ func (s journalChunkSource) hasMany(addrs []hasRecord) (missing bool, err error)
 	return
 }
 
-func (s journalChunkSource) getCompressed(_ context.Context, h addr, _ *Stats) (cc CompressedChunk, err error) {
+func (s journalChunkSource) getCompressed(_ context.Context, h addr, _ *Stats) (CompressedChunk, error) {
 	l, ok := s.lookups[h]
 	if !ok {
 		return CompressedChunk{}, nil
 	}
 
 	buf := make([]byte, l.length)
-	if _, err = s.journal.ReadAt(buf, l.offset); err != nil {
+	if _, err := s.journal.ReadAt(buf, l.offset); err != nil {
 		return CompressedChunk{}, nil
 	}
 
 	rec := readJournalRecord(buf)
 	if h != rec.address {
-		err = fmt.Errorf("bad chunk get (%s != %s)", h.String(), rec.address.String())
-		return
+		return CompressedChunk{}, fmt.Errorf("chunk record hash does not match lookup hash (%s != %s)",
+			h.String(), rec.address.String())
 	}
 
 	return NewCompressedChunk(hash.Hash(h), rec.payload)
