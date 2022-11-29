@@ -20,7 +20,7 @@ jobs:
       - name: Copy go package
         run: cp -r ./go ./integration-tests/go
       - name: Test ORM integrations
-        uses: ./.github/actions/orm-tests'
+        uses: ./.github/actions/orm-tests
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1-node16
         with:
