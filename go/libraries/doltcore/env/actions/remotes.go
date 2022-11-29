@@ -365,7 +365,7 @@ func FetchRemoteBranch(
 func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB, refSpecs []ref.RemoteRefSpec, remote env.Remote, mode ref.UpdateMode, progStarter ProgStarter, progStopper ProgStopper) error {
 	branchRefs, err := srcDB.GetHeadRefs(ctx)
 	if err != nil {
-		return env.ErrFailedToReadDb
+		return fmt.Errorf("%w: %s", env.ErrFailedToReadDb, err.Error())
 	}
 
 	for _, rs := range refSpecs {

@@ -20,6 +20,9 @@ import (
 	"net/http"
 
 	"gopkg.in/square/go-jose.v2"
+	"gopkg.in/square/go-jose.v2/jwt"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 )
 
 type JWKSHandler struct {
@@ -54,4 +57,8 @@ func JWKSHandlerInterceptor(keyID string, pub ed25519.PublicKey) func(http.Handl
 			h.ServeHTTP(w, r)
 		})
 	}
+}
+
+func JWTExpectations() jwt.Expected {
+	return jwt.Expected{Issuer: creds.ClientIssuer, Audience: jwt.Audience{creds.RemotesAPIAudience}}
 }

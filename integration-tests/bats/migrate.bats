@@ -266,3 +266,61 @@ SQL
     [[ ! "$output" =~ "alpha" ]] || false
     [[ ! "$output" =~ "beta" ]] || false
 }
+
+@test "migrate: --drop-conflicts drops conflicts on migrate" {
+    dolt sql <<SQL
+CREATE TABLE test (pk int primary key, c0 int, c1 int);
+INSERT INTO test VALUES (0,0,0);
+CALL dcommit('-Am', 'added table test');
+CALL dcheckout('-b', 'other');
+CALL dbranch('third');
+INSERT INTO test VALUES (1, 2, 3);
+CALL dcommit('-am', 'added row on branch other');
+CALL dcheckout('main');
+INSERT INTO test VALUES (1, -2, -3);
+CALL dcommit('-am', 'added row on branch main');
+SET @@dolt_allow_commit_conflicts = 1;
+CALL dmerge('other');
+INSERT INTO test VALUES (9,9,9);
+SET @@dolt_allow_commit_conflicts = 1;
+SET @@dolt_force_transaction_commit = 1;
+CALL dcommit( '--force', '-am', 'commit conflicts');
+CALL dcheckout('third');
+SQL
+    dolt migrate --drop-conflicts
+}
+
+@test "migrate: no panic for migration on migrated database" {
+    dolt sql <<SQL
+CREATE TABLE test (pk int primary key, c0 int, c1 int);
+INSERT INTO test VALUES (0,0,0);
+CALL dadd('-A');
+CALL dcommit('-am', 'added table test');
+SQL
+    dolt migrate
+    run dolt migrate
+    [ $status -eq 0 ]
+    [[ "$output" =~ "already migrated" ]] || false
+}
+
+@test "migrate: changing primary key ordinals should migrate" {
+    dolt sql -q "create table t (col1 int, col2 int, col3 enum('a', 'b'), primary key (col1, col2, col3))"
+    dolt sql -q "insert into t values (1, 2, 'a'), (2, 3, 'b'), (3, 4, 'a');"
+    dolt commit -Am "initial"
+
+    dolt sql -q "alter table t drop primary key;"
+    dolt sql -q "alter table t add primary key (col3, col2, col1);"
+    dolt commit -am "change primary key order"
+
+    dolt sql -q "insert into t values (5, 6, 'b');"
+    dolt commit -am "add new row"
+
+    dolt migrate
+    run dolt sql -r csv -q "select * from t order by col1 asc;"
+    [ $status -eq 0 ]
+    [[ $output =~ "col1,col2,col3" ]]
+    [[ $output =~ "1,2,a" ]]
+    [[ $output =~ "2,3,b" ]]
+    [[ $output =~ "3,4,a" ]]
+    [[ $output =~ "5,6,b" ]]
+}

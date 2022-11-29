@@ -47,8 +47,9 @@ var (
 
 // Environment is a migration environment.
 type Environment struct {
-	Migration *env.DoltEnv
-	Existing  *env.DoltEnv
+	Migration     *env.DoltEnv
+	Existing      *env.DoltEnv
+	DropConflicts bool
 }
 
 // NewEnvironment creates a migration Environment for |existing|.

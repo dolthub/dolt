@@ -201,7 +201,7 @@ func (res *ArgParseResults) AnyFlagsEqualTo(val bool) *set.StrSet {
 func (res *ArgParseResults) FlagsEqualTo(names []string, val bool) *set.StrSet {
 	results := make([]string, 0, len(res.parser.Supported))
 	for _, name := range names {
-		opt, ok := res.parser.NameOrAbbrevToOpt[name]
+		opt, ok := res.parser.nameOrAbbrevToOpt[name]
 		if ok && opt.OptType == OptionalFlag {
 			_, ok := res.options[name]
 

@@ -241,7 +241,7 @@ type chunkSource interface {
 	chunkReader
 
 	// hash returns the hash address of this chunkSource.
-	hash() (addr, error)
+	hash() addr
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
 	reader(context.Context) (io.Reader, error)
@@ -261,6 +261,16 @@ type chunkSource interface {
 }
 
 type chunkSources []chunkSource
+
+type chunkSourceSet map[addr]chunkSource
+
+func copyChunkSourceSet(s chunkSourceSet) (cp chunkSourceSet) {
+	cp = make(chunkSourceSet, len(s))
+	for k, v := range s {
+		cp[k] = v
+	}
+	return
+}
 
 // TableFile is an interface for working with an existing table file
 type TableFile interface {

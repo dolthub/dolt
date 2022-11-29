@@ -41,6 +41,17 @@ const (
 	fileBlockSize = 1 << 12
 )
 
+func tableFileExists(ctx context.Context, dir string, h addr) (bool, error) {
+	path := filepath.Join(dir, h.String())
+	_, err := os.Stat(path)
+
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+
+	return err == nil, err
+}
+
 func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint32, q MemoryQuotaProvider, fc *fdCache) (cs chunkSource, err error) {
 	path := filepath.Join(dir, h.String())
 
@@ -119,8 +130,8 @@ func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint
 	}, nil
 }
 
-func (mmtr *fileTableReader) hash() (addr, error) {
-	return mmtr.h, nil
+func (mmtr *fileTableReader) hash() addr {
+	return mmtr.h
 }
 
 func (mmtr *fileTableReader) close() error {

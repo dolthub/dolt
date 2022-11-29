@@ -126,7 +126,7 @@ func TestFSTablePersisterPersist(t *testing.T) {
 	src, err := persistTableData(fts, testChunks...)
 	require.NoError(t, err)
 	if assert.True(mustUint32(src.count()) > 0) {
-		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
+		buff, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
 		require.NoError(t, err)
 		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
 		require.NoError(t, err)
@@ -166,7 +166,7 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(mustUint32(src.count()) == 0)
 
-	_, err = os.Stat(filepath.Join(dir, mustAddr(src.hash()).String()))
+	_, err = os.Stat(filepath.Join(dir, src.hash().String()))
 	assert.True(os.IsNotExist(err), "%v", err)
 }
 
@@ -182,7 +182,7 @@ func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 	func() {
 		src, err := persistTableData(fts, testChunks...)
 		require.NoError(t, err)
-		name = mustAddr(src.hash())
+		name = src.hash()
 	}()
 
 	// Table should still be cached
@@ -228,7 +228,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 	require.NoError(t, err)
 
 	if assert.True(mustUint32(src.count()) > 0) {
-		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
+		buff, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
 		require.NoError(t, err)
 		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
 		require.NoError(t, err)
@@ -268,7 +268,7 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 	require.NoError(t, err)
 
 	if assert.True(mustUint32(src.count()) > 0) {
-		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
+		buff, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
 		require.NoError(t, err)
 		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
 		require.NoError(t, err)

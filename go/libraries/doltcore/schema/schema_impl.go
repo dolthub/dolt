@@ -367,11 +367,25 @@ func (si *schemaImpl) GetKeyDescriptor() val.TupleDesc {
 	_ = si.GetPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
 		sqlType := col.TypeInfo.ToSqlType()
 		queryType := sqlType.Type()
-		tt = append(tt, val.Type{
-			Enc:      val.Encoding(EncodingFromSqlType(queryType)),
-			Nullable: columnMissingNotNullConstraint(col),
-		})
-		if queryType == query.Type_CHAR || queryType == query.Type_VARCHAR {
+		var t val.Type
+		if queryType == query.Type_BLOB {
+			t = val.Type{
+				Enc:      val.Encoding(EncodingFromSqlType(query.Type_VARBINARY)),
+				Nullable: columnMissingNotNullConstraint(col),
+			}
+		} else if queryType == query.Type_TEXT {
+			t = val.Type{
+				Enc:      val.Encoding(EncodingFromSqlType(query.Type_VARCHAR)),
+				Nullable: columnMissingNotNullConstraint(col),
+			}
+		} else {
+			t = val.Type{
+				Enc:      val.Encoding(EncodingFromSqlType(queryType)),
+				Nullable: columnMissingNotNullConstraint(col),
+			}
+		}
+		tt = append(tt, t)
+		if queryType == query.Type_CHAR || queryType == query.Type_VARCHAR || queryType == query.Type_TEXT {
 			useCollations = true
 			collations = append(collations, sqlType.(sql.StringType).Collation())
 		} else {

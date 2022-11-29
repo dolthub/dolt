@@ -35,7 +35,8 @@ func TestWriteImmutableTree(t *testing.T) {
 	tests := []struct {
 		inputSize int
 		chunkSize int
-		err       error
+		execErr   error
+		initErr   error
 		checkSum  bool
 	}{
 		{
@@ -48,7 +49,7 @@ func TestWriteImmutableTree(t *testing.T) {
 		},
 		{
 			inputSize: 100,
-			chunkSize: 101,
+			chunkSize: 100,
 		},
 		{
 			inputSize: 255,
@@ -80,22 +81,22 @@ func TestWriteImmutableTree(t *testing.T) {
 		},
 		{
 			inputSize: 1_000,
-			chunkSize: 47,
+			chunkSize: 40,
 			checkSum:  false,
 		},
 		{
 			inputSize: 1_000,
-			chunkSize: 53,
+			chunkSize: 60,
 			checkSum:  false,
 		},
 		{
 			inputSize: 1_000,
-			chunkSize: 67,
+			chunkSize: 80,
 			checkSum:  false,
 		},
 		{
 			inputSize: 10_000,
-			chunkSize: 89,
+			chunkSize: 100,
 			checkSum:  false,
 		},
 		{
@@ -109,24 +110,13 @@ func TestWriteImmutableTree(t *testing.T) {
 			checkSum:  false,
 		},
 		{
-			inputSize: 50_000_000,
-			chunkSize: 33_000,
-			err:       ErrInvalidChunkSize,
+			inputSize: 0,
+			chunkSize: 40,
 		},
 		{
-			inputSize: 10,
-			chunkSize: 1,
-			err:       ErrInvalidChunkSize,
-		},
-		{
-			inputSize: 10,
-			chunkSize: -1,
-			err:       ErrInvalidChunkSize,
-		},
-		{
-			inputSize: 10,
-			chunkSize: 39,
-			err:       ErrInvalidChunkSize,
+			inputSize: 100,
+			chunkSize: 41,
+			initErr:   ErrInvalidChunkSize,
 		},
 	}
 
@@ -139,10 +129,19 @@ func TestWriteImmutableTree(t *testing.T) {
 			ctx := context.Background()
 			r := bytes.NewReader(buf)
 			ns := NewTestNodeStore()
-			serializer := message.NewBlobSerializer(ns.Pool())
-			root, err := buildImmutableTree(ctx, r, ns, serializer, tt.chunkSize)
-			if tt.err != nil {
-				require.True(t, errors.Is(err, tt.err))
+			//serializer := message.NewBlobSerializer(ns.Pool())
+
+			b, err := NewBlobBuilder(tt.chunkSize)
+			if tt.initErr != nil {
+				require.True(t, errors.Is(err, tt.initErr))
+				return
+			}
+			b.SetNodeStore(ns)
+			b.Init(tt.inputSize)
+			root, _, err := b.Chunk(ctx, r)
+
+			if tt.execErr != nil {
+				require.True(t, errors.Is(err, tt.execErr))
 				return
 			}
 			require.NoError(t, err)
@@ -158,6 +157,9 @@ func TestWriteImmutableTree(t *testing.T) {
 			sum := 0
 			byteCnt := 0
 			WalkNodes(ctx, root, ns, func(ctx context.Context, n Node) error {
+				if n.empty() {
+					return nil
+				}
 				var keyCnt int
 				leaf := n.IsLeaf()
 				if leaf {
@@ -242,7 +244,7 @@ func expectedSum(size int) int {
 }
 
 func expectedUnfilled(size, chunk int) int {
-	if size == chunk {
+	if size == chunk || size == 0 {
 		return 0
 	} else if size < chunk {
 		return 1
@@ -276,7 +278,7 @@ func TestImmutableTreeWalk(t *testing.T) {
 	}{
 		{
 			blobLen:   250,
-			chunkSize: 41,
+			chunkSize: 60,
 			keyCnt:    4,
 		},
 		{
@@ -286,7 +288,7 @@ func TestImmutableTreeWalk(t *testing.T) {
 		},
 		{
 			blobLen:   378,
-			chunkSize: 43,
+			chunkSize: 60,
 			keyCnt:    12,
 		},
 		{
@@ -300,18 +302,13 @@ func TestImmutableTreeWalk(t *testing.T) {
 			keyCnt:    6,
 		},
 		{
-			blobLen:   0,
-			chunkSize: 40,
-			keyCnt:    6,
-		},
-		{
 			blobLen:   50_000_000,
 			chunkSize: 4000,
 			keyCnt:    1,
 		},
 		{
 			blobLen:   10_000,
-			chunkSize: 83,
+			chunkSize: 80,
 			keyCnt:    6,
 		},
 	}
@@ -362,8 +359,8 @@ func newTree(t *testing.T, ns NodeStore, keyCnt, blobLen, chunkSize int) Node {
 		keyBld.PutUint32(0, uint32(i))
 		tuples[i][0] = keyBld.Build(sharedPool)
 
-		b := mustNewBlob(ctx, ns, blobLen, chunkSize)
-		valBld.PutBytesAddr(0, b.Addr)
+		addr := mustNewBlob(ctx, ns, blobLen, chunkSize)
+		valBld.PutBytesAddr(0, addr)
 		tuples[i][1] = valBld.Build(sharedPool)
 	}
 
@@ -379,17 +376,23 @@ func newTree(t *testing.T, ns NodeStore, keyCnt, blobLen, chunkSize int) Node {
 	return root
 }
 
-func mustNewBlob(ctx context.Context, ns NodeStore, len, chunkSize int) *ImmutableTree {
+func mustNewBlob(ctx context.Context, ns NodeStore, len, chunkSize int) hash.Hash {
 	buf := make([]byte, len)
 	for i := range buf {
 		buf[i] = byte(i)
 	}
 	r := bytes.NewReader(buf)
-	root, err := NewImmutableTreeFromReader(ctx, r, ns, chunkSize)
+	b, err := NewBlobBuilder(chunkSize)
 	if err != nil {
 		panic(err)
 	}
-	return root
+	b.SetNodeStore(ns)
+	b.Init(len)
+	_, addr, err := b.Chunk(ctx, r)
+	if err != nil {
+		panic(err)
+	}
+	return addr
 }
 
 func getBlobValues(msg serial.Message) []byte {

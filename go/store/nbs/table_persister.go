@@ -28,6 +28,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"sort"
+	"time"
 )
 
 var errCacheMiss = errors.New("index cache miss")
@@ -49,8 +50,11 @@ type tablePersister interface {
 	// Open a table named |name|, containing |chunkCount| chunks.
 	Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error)
 
+	// Exists checks if a table named |name| exists.
+	Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error)
+
 	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
-	PruneTableFiles(ctx context.Context, contents manifestContents) error
+	PruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error
 }
 
 type chunkSourcesByAscendingCount struct {
@@ -76,20 +80,8 @@ func (csbc chunkSourcesByAscendingCount) Less(i, j int) bool {
 	}
 
 	if cntI == cntJ {
-		hi, err := srcI.hash()
-
-		if err != nil {
-			csbc.err = err
-			return false
-		}
-
-		hj, err := srcJ.hash()
-
-		if err != nil {
-			csbc.err = err
-			return false
-		}
-
+		hi := srcI.hash()
+		hj := srcJ.hash()
 		return bytes.Compare(hi[:], hj[:]) < 0
 	}
 
@@ -109,20 +101,8 @@ func (csbds chunkSourcesByDescendingDataSize) Len() int { return len(csbds.sws) 
 func (csbds chunkSourcesByDescendingDataSize) Less(i, j int) bool {
 	swsI, swsJ := csbds.sws[i], csbds.sws[j]
 	if swsI.dataLen == swsJ.dataLen {
-		hi, err := swsI.source.hash()
-
-		if err != nil {
-			csbds.err = err
-			return false
-		}
-
-		hj, err := swsJ.source.hash()
-
-		if err != nil {
-			csbds.err = err
-			return false
-		}
-
+		hi := swsI.source.hash()
+		hj := swsJ.source.hash()
 		return bytes.Compare(hi[:], hj[:]) < 0
 	}
 	return swsI.dataLen > swsJ.dataLen

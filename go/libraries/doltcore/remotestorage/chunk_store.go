@@ -600,7 +600,11 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (d
 						if err == io.EOF {
 							return nil
 						}
-						return NewRpcError(err, "StreamDownloadLocations", dcs.host, reqs[completedReqs])
+						var r *remotesapi.GetDownloadLocsRequest
+						if completedReqs < len(reqs) {
+							r = reqs[completedReqs]
+						}
+						return NewRpcError(err, "StreamDownloadLocations", dcs.host, r)
 					}
 					if resp.RepoToken != "" {
 						dcs.repoToken.Store(resp.RepoToken)
@@ -1132,7 +1136,7 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, dlLocs dlLocation
 		return concurrentExec(work[0:largeCutoff+1], dcs.concurrency.ConcurrentLargeFetches)
 	})
 	eg.Go(func() error {
-		return concurrentExec(work[largeCutoff+1:len(work)], dcs.concurrency.ConcurrentSmallFetches)
+		return concurrentExec(work[largeCutoff+1:], dcs.concurrency.ConcurrentSmallFetches)
 	})
 
 	defer func() {

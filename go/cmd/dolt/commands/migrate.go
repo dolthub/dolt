@@ -17,7 +17,7 @@ package commands
 import (
 	"context"
 
-	"github.com/fatih/color"
+	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -31,8 +31,7 @@ const (
 	migrationPrompt = `Run "dolt migrate" to update this database to the latest data format`
 	migrationMsg    = "Migrating database to the latest data format"
 
-	migratePushFlag = "push"
-	migratePullFlag = "pull"
+	migrateDropConflictsFlag = "drop-conflicts"
 )
 
 var migrateDocs = cli.CommandDocumentationContent{
@@ -65,8 +64,7 @@ func (cmd MigrateCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd MigrateCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(migratePushFlag, "", "Push all migrated branches to the remote")
-	ap.SupportsFlag(migratePullFlag, "", "Update all local tracking refs for a migrated remote")
+	ap.SupportsFlag(migrateDropConflictsFlag, "", "Drop any conflicts visited during the migration")
 	return ap
 }
 
@@ -81,12 +79,8 @@ func (cmd MigrateCmd) Exec(ctx context.Context, commandStr string, args []string
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, migrateDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.Contains(migratePushFlag) && apr.Contains(migratePullFlag) {
-		cli.PrintErrf(color.RedString("options --%s and --%s are mutually exclusive", migratePushFlag, migratePullFlag))
-		return 1
-	}
-
-	if err := MigrateDatabase(ctx, dEnv); err != nil {
+	dropConflicts := apr.Contains(migrateDropConflictsFlag)
+	if err := MigrateDatabase(ctx, dEnv, dropConflicts); err != nil {
 		verr := errhand.BuildDError("migration failed").AddCause(err).Build()
 		return HandleVErrAndExitCode(verr, usage)
 	}
@@ -94,18 +88,25 @@ func (cmd MigrateCmd) Exec(ctx context.Context, commandStr string, args []string
 }
 
 // MigrateDatabase migrates the NomsBinFormat of |dEnv.DoltDB|.
-func MigrateDatabase(ctx context.Context, dEnv *env.DoltEnv) error {
+func MigrateDatabase(ctx context.Context, dEnv *env.DoltEnv, dropConflicts bool) error {
 	menv, err := migrate.NewEnvironment(ctx, dEnv)
 	if err != nil {
 		return err
 	}
+	menv.DropConflicts = dropConflicts
+
+	if curr := menv.Existing.DoltDB.Format(); types.IsFormat_DOLT(curr) {
+		cli.Println("database is already migrated")
+		return nil
+	}
+
 	p, err := menv.Migration.FS.Abs(".")
 	if err != nil {
 		return err
 	}
 	cli.Println("migrating database at tmp dir: ", p)
 
-	err = migrate.TraverseDAG(ctx, menv.Existing.DoltDB, menv.Migration.DoltDB)
+	err = migrate.TraverseDAG(ctx, menv, menv.Existing.DoltDB, menv.Migration.DoltDB)
 	if err != nil {
 		return err
 	}

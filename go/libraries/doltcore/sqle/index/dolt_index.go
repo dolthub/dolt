@@ -64,14 +64,12 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		return nil, nil
 	}
 
-	// TODO: do this for other indexes?
 	tableRows, err := t.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 	keyBld := maybeGetKeyBuilder(tableRows)
 
-	// TODO: two primary keys???
 	cols := sch.GetPKCols().GetColumns()
 
 	// add to_ prefix
@@ -97,8 +95,6 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: false,
 	}
-
-	// TODO: need to add from_ columns
 
 	return append(indexes, &toIndex), nil
 }
@@ -395,9 +391,6 @@ var _ DoltIndex = (*doltIndex)(nil)
 
 // CanSupport implements sql.Index
 func (di *doltIndex) CanSupport(...sql.Range) bool {
-	if len(di.prefixLengths) > 0 {
-		return false
-	}
 	return true
 }
 
@@ -634,6 +627,11 @@ func (di *doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
 		return nil
 	}
 
+	// filters on indexes with prefix lengths are not completely handled
+	if len(di.prefixLengths) > 0 {
+		return nil
+	}
+
 	var handled []sql.Expression
 	for _, f := range filters {
 		if expression.ContainsImpreciseComparison(f) {
@@ -776,6 +774,30 @@ func pruneEmptyRanges(sqlRanges []sql.Range) (pruned []sql.Range, err error) {
 	return pruned, nil
 }
 
+// trimRangeCutValue will trim the key value retrieved, depending on its type and prefix length
+// TODO: this is just the trimKeyPart in the SecondaryIndexWriters, maybe find a different place
+func (di *doltIndex) trimRangeCutValue(to int, keyPart interface{}) interface{} {
+	var prefixLength uint16
+	if len(di.prefixLengths) > to {
+		prefixLength = di.prefixLengths[to]
+	}
+	if prefixLength != 0 {
+		switch kp := keyPart.(type) {
+		case string:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
+			keyPart = kp[:prefixLength]
+		case []uint8:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
+			keyPart = kp[:prefixLength]
+		}
+	}
+	return keyPart
+}
+
 func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.NodeStore, ranges []sql.Range, tb *val.TupleBuilder) ([]prolly.Range, error) {
 	ranges, err := pruneEmptyRanges(ranges)
 	if err != nil {
@@ -788,18 +810,19 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		fields := make([]prolly.RangeField, len(rng))
 		for j, expr := range rng {
 			if rangeCutIsBinding(expr.LowerBound) {
-				bound := expr.LowerBound.TypeAsLowerBound()
-				fields[j].Lo = prolly.Bound{
-					Binding:   true,
-					Inclusive: bound == sql.Closed,
-				}
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(expr.LowerBound, rng[j].Typ)
 				if err != nil {
 					return nil, err
 				}
-				if err = PutField(ctx, ns, tb, j, v); err != nil {
+				nv := di.trimRangeCutValue(j, v)
+				if err = PutField(ctx, ns, tb, j, nv); err != nil {
 					return nil, err
+				}
+				bound := expr.LowerBound.TypeAsLowerBound()
+				fields[j].Lo = prolly.Bound{
+					Binding:   true,
+					Inclusive: bound == sql.Closed,
 				}
 			} else {
 				fields[j].Lo = prolly.Bound{}
@@ -814,17 +837,18 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		for i, expr := range rng {
 			if rangeCutIsBinding(expr.UpperBound) {
 				bound := expr.UpperBound.TypeAsUpperBound()
-				fields[i].Hi = prolly.Bound{
-					Binding:   true,
-					Inclusive: bound == sql.Closed,
-				}
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(expr.UpperBound, rng[i].Typ)
 				if err != nil {
 					return nil, err
 				}
-				if err = PutField(ctx, ns, tb, i, v); err != nil {
+				nv := di.trimRangeCutValue(i, v)
+				if err = PutField(ctx, ns, tb, i, nv); err != nil {
 					return nil, err
+				}
+				fields[i].Hi = prolly.Bound{
+					Binding:   true,
+					Inclusive: bound == sql.Closed || nv != v, // TODO (james): this might panic for []byte
 				}
 			} else {
 				fields[i].Hi = prolly.Bound{}

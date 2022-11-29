@@ -93,6 +93,19 @@ func (s3p awsTablePersister) Open(ctx context.Context, name addr, chunkCount uin
 	)
 }
 
+func (s3p awsTablePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
+	return tableExistsInChunkSource(
+		ctx,
+		s3p.ddb,
+		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
+		s3p.limits,
+		name,
+		chunkCount,
+		s3p.q,
+		stats,
+	)
+}
+
 type s3UploadedPart struct {
 	idx  int64
 	etag string
@@ -481,12 +494,7 @@ func dividePlan(ctx context.Context, plan compactionPlan, minPartSize, maxPartSi
 			break
 		}
 		if sws.dataLen <= maxPartSize {
-			h, err := sws.source.hash()
-
-			if err != nil {
-				return nil, nil, nil, err
-			}
-
+			h := sws.source.hash()
 			copies = append(copies, copyPart{h.String(), 0, int64(sws.dataLen)})
 			continue
 		}
@@ -496,12 +504,7 @@ func dividePlan(ctx context.Context, plan compactionPlan, minPartSize, maxPartSi
 
 		var srcStart int64
 		for _, length := range lens {
-			h, err := sws.source.hash()
-
-			if err != nil {
-				return nil, nil, nil, err
-			}
-
+			h := sws.source.hash()
 			copies = append(copies, copyPart{h.String(), srcStart, length})
 			srcStart += length
 		}
@@ -572,6 +575,6 @@ func (s3p awsTablePersister) uploadPart(ctx context.Context, data []byte, key, u
 	return
 }
 
-func (s3p awsTablePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {
+func (s3p awsTablePersister) PruneTableFiles(ctx context.Context, contents manifestContents, t time.Time) error {
 	return chunks.ErrUnsupportedOperation
 }

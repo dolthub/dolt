@@ -15,17 +15,19 @@
 package sqle
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
 var _ sql.TableFunction = (*DiffSummaryTableFunction)(nil)
@@ -81,8 +83,8 @@ func (ds *DiffSummaryTableFunction) WithDatabase(database sql.Database) (sql.Nod
 	return ds, nil
 }
 
-// FunctionName implements the sql.TableFunction interface
-func (ds *DiffSummaryTableFunction) FunctionName() string {
+// Name implements the sql.TableFunction interface
+func (ds *DiffSummaryTableFunction) Name() string {
 	return "dolt_diff_summary"
 }
 
@@ -184,18 +186,18 @@ func (ds *DiffSummaryTableFunction) Expressions() []sql.Expression {
 // WithExpressions implements the sql.Expressioner interface.
 func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
 	if len(expression) < 1 {
-		return nil, sql.ErrInvalidArgumentNumber.New(ds.FunctionName(), "1 to 3", len(expression))
+		return nil, sql.ErrInvalidArgumentNumber.New(ds.Name(), "1 to 3", len(expression))
 	}
 
 	for _, expr := range expression {
 		if !expr.Resolved() {
-			return nil, ErrInvalidNonLiteralArgument.New(ds.FunctionName(), expr.String())
+			return nil, ErrInvalidNonLiteralArgument.New(ds.Name(), expr.String())
 		}
 	}
 
 	if strings.Contains(expression[0].String(), "..") {
 		if len(expression) < 1 || len(expression) > 2 {
-			return nil, sql.ErrInvalidArgumentNumber.New(ds.FunctionName(), "1 or 2", len(expression))
+			return nil, sql.ErrInvalidArgumentNumber.New(ds.Name(), "1 or 2", len(expression))
 		}
 		ds.dotCommitExpr = expression[0]
 		if len(expression) == 2 {
@@ -203,7 +205,7 @@ func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression
 		}
 	} else {
 		if len(expression) < 2 || len(expression) > 3 {
-			return nil, sql.ErrInvalidArgumentNumber.New(ds.FunctionName(), "2 or 3", len(expression))
+			return nil, sql.ErrInvalidArgumentNumber.New(ds.Name(), "2 or 3", len(expression))
 		}
 		ds.fromCommitExpr = expression[0]
 		ds.toCommitExpr = expression[1]
@@ -215,20 +217,20 @@ func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression
 	// validate the expressions
 	if ds.dotCommitExpr != nil {
 		if !sql.IsText(ds.dotCommitExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.dotCommitExpr.String())
+			return nil, sql.ErrInvalidArgumentDetails.New(ds.Name(), ds.dotCommitExpr.String())
 		}
 	} else {
 		if !sql.IsText(ds.fromCommitExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.fromCommitExpr.String())
+			return nil, sql.ErrInvalidArgumentDetails.New(ds.Name(), ds.fromCommitExpr.String())
 		}
 		if !sql.IsText(ds.toCommitExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.toCommitExpr.String())
+			return nil, sql.ErrInvalidArgumentDetails.New(ds.Name(), ds.toCommitExpr.String())
 		}
 	}
 
 	if ds.tableNameExpr != nil {
 		if !sql.IsText(ds.tableNameExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.tableNameExpr.String())
+			return nil, sql.ErrInvalidArgumentDetails.New(ds.Name(), ds.tableNameExpr.String())
 		}
 	}
 
@@ -289,6 +291,12 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		}
 		diffSum, hasDiff, err := getDiffSummaryNodeFromDelta(ctx, delta, fromRoot, toRoot, tblName)
 		if err != nil {
+			if errors.Is(err, diff.ErrPrimaryKeySetChanged) {
+				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, fmt.Sprintf("summary for table %s cannot be determined. Primary key set changed.", tblName))
+				// Report an empty diff for tables that have primary key set changes
+				diffSummaries = append(diffSummaries, diffSummaryNode{tblName: tblName})
+				continue
+			}
 			return nil, err
 		}
 		if hasDiff {
@@ -389,36 +397,41 @@ func getDiffSummaryNodeFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRo
 // getDiffSummary returns diff.DiffSummaryProgress object and whether there is a data diff or not.
 func getDiffSummary(ctx *sql.Context, td diff.TableDelta) (diff.DiffSummaryProgress, bool, bool, error) {
 	// got this method from diff_output.go
-	// todo: use errgroup.Group
-	ae := atomicerr.New()
-	ch := make(chan diff.DiffSummaryProgress)
-	go func() {
-		defer close(ch)
-		err := diff.SummaryForTableDelta(ctx, ch, td)
 
-		ae.SetIfError(err)
-	}()
+	ch := make(chan diff.DiffSummaryProgress)
+
+	grp, ctx2 := errgroup.WithContext(ctx)
+	grp.Go(func() error {
+		defer close(ch)
+		err := diff.SummaryForTableDelta(ctx2, ch, td)
+		return err
+	})
 
 	acc := diff.DiffSummaryProgress{}
 	var count int64
-	for p := range ch {
-		if ae.IsSet() {
-			break
+	grp.Go(func() error {
+		for {
+			select {
+			case p, ok := <-ch:
+				if !ok {
+					return nil
+				}
+				acc.Adds += p.Adds
+				acc.Removes += p.Removes
+				acc.Changes += p.Changes
+				acc.CellChanges += p.CellChanges
+				acc.NewRowSize += p.NewRowSize
+				acc.OldRowSize += p.OldRowSize
+				acc.NewCellSize += p.NewCellSize
+				acc.OldCellSize += p.OldCellSize
+				count++
+			case <-ctx2.Done():
+				return ctx2.Err()
+			}
 		}
+	})
 
-		acc.Adds += p.Adds
-		acc.Removes += p.Removes
-		acc.Changes += p.Changes
-		acc.CellChanges += p.CellChanges
-		acc.NewRowSize += p.NewRowSize
-		acc.OldRowSize += p.OldRowSize
-		acc.NewCellSize += p.NewCellSize
-		acc.OldCellSize += p.OldCellSize
-
-		count++
-	}
-
-	if err := ae.Get(); err != nil {
+	if err := grp.Wait(); err != nil {
 		return diff.DiffSummaryProgress{}, false, false, err
 	}
 

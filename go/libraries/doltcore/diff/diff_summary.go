@@ -32,6 +32,8 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+var ErrPrimaryKeySetChanged = errors.New("primary key set changed")
+
 type DiffSummaryProgress struct {
 	Adds, Removes, Changes, CellChanges, NewRowSize, OldRowSize, NewCellSize, OldCellSize uint64
 }
@@ -75,7 +77,7 @@ func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td T
 	}
 
 	if !schema.ArePrimaryKeySetsDiffable(td.Format(), fromSch, toSch) {
-		return errhand.BuildDError("diff summary will not compute due to primary key set change with table %s", td.CurName()).Build()
+		return fmt.Errorf("failed to compute diff summary for table %s: %w", td.CurName(), ErrPrimaryKeySetChanged)
 	}
 
 	keyless, err := td.IsKeyless(ctx)

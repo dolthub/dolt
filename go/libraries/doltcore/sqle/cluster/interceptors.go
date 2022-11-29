@@ -17,14 +17,18 @@ package cluster
 import (
 	"context"
 	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"gopkg.in/square/go-jose.v2/jwt"
+
+	"github.com/dolthub/dolt/go/libraries/utils/jwtauth"
 )
 
 const clusterRoleHeader = "x-dolt-cluster-role"
@@ -158,12 +162,20 @@ func (ci *clientinterceptor) Options() []grpc.DialOption {
 // * for incoming requests which are not standby, it will currently fail the
 // requests with codes.Unauthenticated. Eventually, it will allow read-only
 // traffic through which is authenticated and authorized.
+//
+// The serverinterceptor is responsible for authenticating incoming requests
+// from standby replicas. It is instantiated with a jwtauth.KeyProvider and
+// some jwt.Expected. Incoming requests must have a valid, unexpired, signed
+// JWT, signed by a key accessible in the KeyProvider.
 type serverinterceptor struct {
 	lgr        *logrus.Entry
 	role       Role
 	epoch      int
 	mu         sync.Mutex
 	roleSetter func(role string, epoch int)
+
+	keyProvider jwtauth.KeyProvider
+	jwtExpected jwt.Expected
 }
 
 func (si *serverinterceptor) Stream() grpc.StreamServerInterceptor {
@@ -174,6 +186,9 @@ func (si *serverinterceptor) Stream() grpc.StreamServerInterceptor {
 			fromStandby = si.handleRequestHeaders(md, role, epoch)
 		}
 		if fromStandby {
+			if err := si.authenticate(ss.Context()); err != nil {
+				return err
+			}
 			// After handleRequestHeaders, our role may have changed, so we fetch it again here.
 			role, epoch := si.getRole()
 			if err := grpc.SetHeader(ss.Context(), metadata.Pairs(clusterRoleHeader, string(role), clusterRoleEpochHeader, strconv.Itoa(epoch))); err != nil {
@@ -204,6 +219,9 @@ func (si *serverinterceptor) Unary() grpc.UnaryServerInterceptor {
 			fromStandby = si.handleRequestHeaders(md, role, epoch)
 		}
 		if fromStandby {
+			if err := si.authenticate(ctx); err != nil {
+				return nil, err
+			}
 			// After handleRequestHeaders, our role may have changed, so we fetch it again here.
 			role, epoch := si.getRole()
 			if err := grpc.SetHeader(ctx, metadata.Pairs(clusterRoleHeader, string(role), clusterRoleEpochHeader, strconv.Itoa(epoch))); err != nil {
@@ -271,4 +289,27 @@ func (si *serverinterceptor) getRole() (Role, int) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 	return si.role, si.epoch
+}
+
+func (si *serverinterceptor) authenticate(ctx context.Context) error {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		auths := md.Get("authorization")
+		if len(auths) != 1 {
+			si.lgr.Info("incoming standby request had no authorization")
+			return status.Error(codes.Unauthenticated, "unauthenticated")
+		}
+		auth := auths[0]
+		if !strings.HasPrefix(auth, "Bearer ") {
+			si.lgr.Info("incoming standby request had malformed authentication header")
+			return status.Error(codes.Unauthenticated, "unauthenticated")
+		}
+		auth = strings.TrimPrefix(auth, "Bearer ")
+		_, err := jwtauth.ValidateJWT(auth, time.Now(), si.keyProvider, si.jwtExpected)
+		if err != nil {
+			si.lgr.Infof("incoming standby request authorization header failed to verify: %v", err)
+			return status.Error(codes.Unauthenticated, "unauthenticated")
+		}
+		return nil
+	}
+	return status.Error(codes.Unauthenticated, "unauthenticated")
 }

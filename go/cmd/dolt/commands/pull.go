@@ -112,7 +112,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 	// Fetch all references
 	branchRefs, err := srcDB.GetHeadRefs(ctx)
 	if err != nil {
-		return env.ErrFailedToReadDb
+		return fmt.Errorf("%w: %s", env.ErrFailedToReadDb, err.Error())
 	}
 
 	hasBranch, err := srcDB.HasBranch(ctx, pullSpec.Branch.GetPath())

@@ -1240,3 +1240,59 @@ DELIM
     [[ "$output" =~ "row values:" ]] || false
     [[ "$output" =~ "with the following values left over: '[\"\"]'" ]] || false
 }
+
+@test "import-update-tables: incorrect values default to zero value when --continue is passed" {
+    dolt sql <<SQL
+CREATE TABLE t (
+    pk int primary key,
+    col1 boolean,
+    col2 integer,
+    col3 tinyint,
+    col4 smallint,
+    col5 mediumint,
+    col6 int,
+    col7 bigint,
+    col8 decimal,
+    col9 float,
+    col10 double,
+    col11 date,
+    col12 time,
+    col13 datetime,
+    col14 timestamp,
+    col15 year,
+    col16 ENUM('first', 'second'),
+    col17 SET('a', 'b'),
+    col18 JSON
+);
+SQL
+    dolt commit -Am "add table"
+
+    cat <<DELIM > bad-updates.csv
+pk,col1,col2,col3,col4,col5,col6,col7,col8,col9,col10,col11,col12,col13,col14,col15,col16,col17,col18
+1,val1,val2,val3,val4,val5,val6,val7,val8,val9,val10,val11,val12,val13,val14,val15,val16,val17,val18
+DELIM
+    # if a bad json value is encountered with insert ignore, MySQL throws an error
+    # so, in dolt table import we skip the row.
+    run dolt table import -u t --continue bad-updates.csv
+    [ $status -eq 0 ]
+    [[ $output =~ "The following rows were skipped:" ]] || false
+    [[ $output =~ "[1,val1,val2,val3,val4,val5,val6,val7,val8,val9,val10,val11,val12,val13,val14,val15,val16,val17,val18]" ]] || false
+
+    run dolt sql -r csv -q "select count(*) from t;"
+    [[ $output =~ "0" ]] || false
+
+    dolt sql -q "alter table t drop column col18;"
+    dolt commit -Am "drop json column"
+
+    cat <<DELIM > bad-updates.csv
+pk,col1,col2,col3,col4,col5,col6,col7,col8,col9,col10,col11,col12,col13,col14,col15,col16,col17
+1,val1,val2,val3,val4,val5,val6,val7,val8,val9,val10,val11,val12,val13,val14,val15,val16,val17
+DELIM
+    run dolt table import -u t --continue bad-updates.csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+
+    run dolt sql -r csv -q "select * from t;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ '1,0,0,0,0,0,0,0,0,0,0,0000-00-00,00:00:00,0000-00-00 00:00:00,0000-00-00 00:00:00,0,first,""' ]] || false
+}
