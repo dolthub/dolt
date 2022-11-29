@@ -36,5 +36,6 @@ jobs:
           username: github-actions-bot@corp.ld-corp.com
           subject: ORM integrations test failed.
           to: jennifer@dolthub.com
+          from: GitHub Actions
           secure: true
           body: workflow for ${{github.repository}} completed unsuccessfully!
