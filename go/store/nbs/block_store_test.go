@@ -80,7 +80,9 @@ func (suite *BlockStoreSuite) SetupTest() {
 
 func (suite *BlockStoreSuite) TearDownTest() {
 	err := suite.store.Close()
-	suite.NoError(err)
+	if !osutil.IsWindowsSharingViolation(err) {
+		suite.NoError(err)
+	}
 	err = file.RemoveAll(suite.dir)
 	if !osutil.IsWindowsSharingViolation(err) {
 		suite.NoError(err)
