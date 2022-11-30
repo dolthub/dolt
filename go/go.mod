@@ -42,9 +42,9 @@ require (
 	github.com/tklauser/go-sysconf v0.3.9 // indirect
 	go.uber.org/zap v1.15.0
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
-	golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.1.0
+	golang.org/x/net v0.2.0
+	golang.org/x/sync v0.1.0
+	golang.org/x/sys v0.2.0
 	google.golang.org/api v0.32.0
 	google.golang.org/grpc v1.49.0
 	google.golang.org/protobuf v1.27.1
@@ -75,7 +75,7 @@ require (
 	go.opentelemetry.io/otel/exporters/jaeger v1.7.0
 	go.opentelemetry.io/otel/sdk v1.7.0
 	go.opentelemetry.io/otel/trace v1.7.0
-	golang.org/x/text v0.3.7
+	golang.org/x/text v0.4.0
 	gonum.org/v1/plot v0.11.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -124,12 +124,11 @@ require (
 	go.uber.org/multierr v1.5.0 // indirect
 	golang.org/x/image v0.0.0-20220302094943-723b81ca9867 // indirect
 	golang.org/x/lint v0.0.0-20201208152925-83fdc39ff7b5 // indirect
-	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
+	golang.org/x/mod v0.7.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20200902213428-5d25da1a8d43 // indirect
-	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1 // indirect
+	golang.org/x/term v0.2.0 // indirect
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
-	golang.org/x/tools v0.1.10 // indirect
-	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
+	golang.org/x/tools v0.3.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20210506142907-4a47615972c2 // indirect
 )
