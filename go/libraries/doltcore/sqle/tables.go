@@ -751,7 +751,49 @@ func (t *WritableDoltTable) truncate(
 	}
 
 	// truncate table resets auto-increment value
-	return doltdb.NewTable(ctx, table.ValueReadWriter(), table.NodeStore(), sch, empty, idxSet, nil)
+	newEmptyTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), table.NodeStore(), sch, empty, idxSet, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	newEmptyTable, err = copyConstraintViolationsAndConflicts(ctx, table, newEmptyTable)
+	if err != nil {
+		return nil, err
+	}
+
+	return newEmptyTable, nil
+}
+
+func copyConstraintViolationsAndConflicts(ctx context.Context, from, to *doltdb.Table) (*doltdb.Table, error) {
+	if !types.IsFormat_DOLT(to.Format()) {
+		confSch, conf, err := from.GetConflicts(ctx)
+		if err != nil {
+			return nil, err
+		}
+		to, err = to.SetConflicts(ctx, confSch, conf)
+		if err != nil {
+			return nil, err
+		}
+		viols, err := from.GetConstraintViolations(ctx)
+		if err != nil {
+			return nil, err
+		}
+		to, err = to.SetConstraintViolations(ctx, viols)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		arts, err := from.GetArtifacts(ctx)
+		if err != nil {
+			return nil, err
+		}
+		to, err = to.SetArtifacts(ctx, arts)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return to, nil
 }
 
 // Updater implements sql.UpdatableTable
