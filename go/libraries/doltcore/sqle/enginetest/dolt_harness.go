@@ -21,11 +21,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/stretchr/testify/require"
 
@@ -36,7 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -351,7 +350,35 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 	return
 }
 
-func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDatabaseProvider {
+func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (*gms.Engine, error) {
+	ddp, ok := provider.(sqle.DoltDatabaseProvider)
+	if !ok {
+		return nil, fmt.Errorf("expected a DoltDatabaseProvider")
+	}
+
+	allDatabases := ddp.AllDatabases(d.NewContext())
+	dbs := make([]sql.Database, len(allDatabases))
+	locations := make([]filesys.Filesys, len(allDatabases))
+
+	for _, db := range allDatabases {
+		dbs = append(dbs, sqle.ReadOnlyDatabase{Database: db.(sqle.Database)})
+		loc, err := ddp.FileSystemForDatabase(db.Name())
+		if err != nil {
+			return nil, err
+		}
+
+		locations = append(locations, loc)
+	}
+
+	readOnlyProvider, err := sqle.NewDoltDatabaseProviderWithDatabases("main", ddp.FileSystem(), dbs, locations)
+	if err != nil {
+		return nil, err
+	}
+
+	return enginetest.NewEngineWithProvider(nil, d, readOnlyProvider), nil
+}
+
+func (d *DoltHarness) NewDatabaseProvider() sql.MutableDatabaseProvider {
 	// When NewDatabaseProvider is called, we create a new MultiRepoEnv in order to ensure
 	// that only the specified sql.Databases are available for tests to use. Because
 	// NewDatabases must be called before NewDatabaseProvider, we grab the DoltEnvs
@@ -360,16 +387,9 @@ func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDataba
 	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	require.NoError(d.t, err)
 	d.multiRepoEnv = mrEnv
-	locations := make([]filesys.Filesys, len(dbs))
-	for i, db := range dbs {
-		if db.Name() != information_schema.InformationSchemaDatabaseName {
-			d.multiRepoEnv.AddEnv(db.Name(), d.createdEnvs[db.Name()])
-			locations[i] = d.createdEnvs[db.Name()].FS
-		}
-	}
 
 	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())
-	pro, err := sqle.NewDoltDatabaseProviderWithDatabases(b, d.multiRepoEnv.FileSystem(), dbs, locations)
+	pro, err := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem())
 	require.NoError(d.t, err)
 
 	return pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
