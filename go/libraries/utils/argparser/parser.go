@@ -233,8 +233,8 @@ func (ap *ArgParser) matchValueOption(arg string, isLongFormFlag bool) (match *O
 		if isMatch {
 			v := arg[lo:]
 			if len(v) > 0 && !strings.Contains(optNameValDelimChars, v[:1]) { // checks if the value and the param is in the same string
-				// we only allow joint param and value for long form flags (ie "--" flags), similar to Git's behavior
-				if !isLongFormFlag {
+				// we only allow joint param and value for short form flags (ie "-" flags), similar to Git's behavior
+				if isLongFormFlag {
 					return nil, nil
 				}
 			}

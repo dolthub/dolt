@@ -81,15 +81,15 @@ func TestArgParser(t *testing.T) {
 		{
 			NewArgParser().SupportsString("param", "p", "", ""),
 			[]string{"-pvalue"},
-			UnknownArgumentParam{"pvalue"},
-			map[string]string{},
+			nil,
+			map[string]string{"param": "value"},
 			[]string{},
 		},
 		{
 			NewArgParser().SupportsString("param", "p", "", ""),
 			[]string{"--paramvalue"},
-			nil,
-			map[string]string{"param": "value"},
+			UnknownArgumentParam{"paramvalue"},
+			map[string]string{},
 			[]string{},
 		},
 	}
