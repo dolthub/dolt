@@ -125,7 +125,7 @@ func TestParsing(t *testing.T) {
 			expectedErr: "error: unknown option `messagevalue'",
 		},
 		{
-			name:         "-fmfootball",
+			name:         "-fm football",
 			options:      []*Option{forceOpt, messageOpt},
 			args:         []string{"-fm football"},
 			expectedOpts: map[string]string{"message": "football", "force": ""},
