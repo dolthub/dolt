@@ -226,7 +226,6 @@ func (ap *ArgParser) sortedValueOptions() []string {
 }
 
 func (ap *ArgParser) matchValueOption(arg string, isLongFormFlag bool) (match *Option, value *string) {
-
 	for _, on := range ap.sortedValueOptions() {
 		lo := len(on)
 		isMatch := len(arg) >= lo && arg[:lo] == on
