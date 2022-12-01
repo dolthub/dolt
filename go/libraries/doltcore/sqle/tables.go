@@ -766,14 +766,19 @@ func (t *WritableDoltTable) truncate(
 
 func copyConstraintViolationsAndConflicts(ctx context.Context, from, to *doltdb.Table) (*doltdb.Table, error) {
 	if !types.IsFormat_DOLT(to.Format()) {
-		confSch, conf, err := from.GetConflicts(ctx)
-		if err != nil {
+		if has, err := from.HasConflicts(ctx); err != nil {
 			return nil, err
+		} else if has {
+			confSch, conf, err := from.GetConflicts(ctx)
+			if err != nil {
+				return nil, err
+			}
+			to, err = to.SetConflicts(ctx, confSch, conf)
+			if err != nil {
+				return nil, err
+			}
 		}
-		to, err = to.SetConflicts(ctx, confSch, conf)
-		if err != nil {
-			return nil, err
-		}
+
 		viols, err := from.GetConstraintViolations(ctx)
 		if err != nil {
 			return nil, err
