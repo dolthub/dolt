@@ -115,8 +115,8 @@ func TestTimeConvertValueToNomsValue(t *testing.T) {
 			true,
 		},
 		{
-			time.Unix(137849, 0),
-			22649000000,
+			time.Date(2020, 10, 5, 2, 3, 5, 6, time.UTC),
+			7385000000,
 			false,
 		},
 	}
