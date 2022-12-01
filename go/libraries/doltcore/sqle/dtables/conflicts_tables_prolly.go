@@ -16,9 +16,8 @@ package dtables
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
-
-	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -32,6 +31,8 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/zeebo/xxh3"
 )
 
 func newProllyConflictsTable(ctx *sql.Context, tbl *doltdb.Table, sourceUpdatableTbl sql.UpdatableTable, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
@@ -139,7 +140,7 @@ type prollyConflictRowIter struct {
 	theirRows           prolly.Map
 }
 
-var _ sql.RowIter = &prollyConflictRowIter{}
+var _ sql.RowIter = (*prollyConflictRowIter)(nil)
 
 // base_cols, our_cols, our_diff_type, their_cols, their_diff_type
 func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*prollyConflictRowIter, error) {
@@ -166,11 +167,11 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 	if !keyless {
 		o = b + kd.Count() + baseVD.Count()
 		t = o + kd.Count() + oursVD.Count() + 1
-		n = t + kd.Count() + theirsVD.Count() + 1
+		n = t + kd.Count() + theirsVD.Count() + 2
 	} else {
 		o = b + baseVD.Count() - 1
 		t = o + oursVD.Count()
-		n = t + theirsVD.Count() + 3
+		n = t + theirsVD.Count() + 4
 	}
 
 	return &prollyConflictRowIter{
@@ -217,13 +218,17 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 				r[itr.t+i] = f
 			}
 		}
+		b := xxh3.Hash128(c.k).Bytes()
+		h := base64.RawStdEncoding.EncodeToString(b[:])
 
-		err = itr.putConflictRowVals(ctx, c, r)
+		err = itr.putConflictRowVals(ctx, c, r, h)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		err = itr.putKeylessConflictRowVals(ctx, c, r)
+		h := base64.RawStdEncoding.EncodeToString(val.ReadHashFromTuple(c.k))
+
+		err = itr.putKeylessConflictRowVals(ctx, c, r, h)
 		if err != nil {
 			return nil, err
 		}
@@ -232,7 +237,7 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return r, nil
 }
 
-func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r sql.Row) error {
+func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r sql.Row, id string) error {
 	if c.bV != nil {
 		for i := 0; i < itr.baseVD.Count(); i++ {
 			f, err := index.GetField(ctx, itr.baseVD, i, c.bV, itr.baseRows.NodeStore())
@@ -264,6 +269,7 @@ func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r
 		}
 	}
 	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()] = getDiffType(c.bV, c.tV)
+	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()+1] = id
 
 	return nil
 }
@@ -279,7 +285,7 @@ func getDiffType(base val.Tuple, other val.Tuple) string {
 	return merge.ConflictDiffTypeModified
 }
 
-func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c conf, r sql.Row) (err error) {
+func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c conf, r sql.Row, id string) (err error) {
 	ns := itr.baseRows.NodeStore()
 
 	if c.bV != nil {
@@ -338,6 +344,7 @@ func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c 
 
 	o := itr.t + itr.theirsVD.Count() - 1
 	r[o] = getDiffType(c.bV, c.tV)
+	r[itr.n-4] = id
 
 	return nil
 }
@@ -686,7 +693,7 @@ type versionMappings struct {
 // returns the schema of the rows returned by the conflicts table and a mappings between each version and the source table.
 func calculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, *versionMappings, error) {
 	keyless := schema.IsKeyless(ours)
-	n := 3 + ours.GetAllCols().Size() + theirs.GetAllCols().Size() + base.GetAllCols().Size()
+	n := 4 + ours.GetAllCols().Size() + theirs.GetAllCols().Size() + base.GetAllCols().Size()
 	if keyless {
 		n += 3
 	}
@@ -749,6 +756,9 @@ func calculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, *
 		return nil, nil, err
 	}
 	cols[i] = schema.NewColumn("their_diff_type", uint64(i), types.StringKind, false)
+	i++
+
+	cols[i] = schema.NewColumn("dolt_conflict_id", uint64(i), types.StringKind, false)
 	i++
 
 	if keyless {

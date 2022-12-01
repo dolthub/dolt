@@ -3008,6 +3008,68 @@ var createViolationsSetupScript = []string{
 
 var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 	{
+		Name:        "Provides a dolt_conflicts_id",
+		SetUpScript: createConflictsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1, dolt_conflict_id from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, 1, -100, 1, 100, "+Z9y2YEvo0d1ZupbzGiyrQ"},
+					{nil, nil, 2, -200, 2, 200, "BKuTcpHc3yg5TpU4ToVOEA"},
+				},
+			},
+			// Make sure that we can update using it
+			{
+				Query:    "update dolt_conflicts_t SET our_col1 = their_col1 where dolt_conflict_id = '+Z9y2YEvo0d1ZupbzGiyrQ';",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1, dolt_conflict_id from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, 1, 100, 1, 100, "+Z9y2YEvo0d1ZupbzGiyrQ"},
+					{nil, nil, 2, -200, 2, 200, "BKuTcpHc3yg5TpU4ToVOEA"},
+				},
+			},
+			// And delete
+			{
+				Query:    "delete from dolt_conflicts_t where dolt_conflict_id = '+Z9y2YEvo0d1ZupbzGiyrQ';",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1, dolt_conflict_id from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, 2, -200, 2, 200, "BKuTcpHc3yg5TpU4ToVOEA"},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_conflicts_id is not guaranteed to be unique across merges",
+		SetUpScript: append(createConflictsSetupScript, []string{
+			"CALL DOLT_COMMIT('-afm', 'commit conflicts');",
+
+			"CALL DOLT_CHECKOUT('-b', 'other2');",
+			"UPDATE t SET col1 = 9999 where pk = 1;",
+			"CALL DOLT_COMMIT('-afm', 'commit on other2');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"UPDATE t SET col1 = 8888 where pk = 1;",
+			"CALL DOLT_COMMIT('-afm', 'commit on main');",
+
+			"CALL DOLT_MERGE('other2');",
+		}...),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1, dolt_conflict_id from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, 1, 8888, 1, 100, "+Z9y2YEvo0d1ZupbzGiyrQ"},
+					{1, -100, 1, 8888, 1, 9999, "+Z9y2YEvo0d1ZupbzGiyrQ"},
+					{nil, nil, 2, -200, 2, 200, "BKuTcpHc3yg5TpU4ToVOEA"},
+				},
+			},
+		},
+	},
+	{
 		Name:        "Updates on our columns get applied to the source table - smoke",
 		SetUpScript: createConflictsSetupScript,
 		Assertions: []queries.ScriptTestAssertion{
