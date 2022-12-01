@@ -650,6 +650,22 @@ func (tr tableReader) reader(ctx context.Context) (io.Reader, error) {
 	return io.LimitReader(&readerAdapter{tr.r, 0, ctx}, int64(i.tableFileSize())), nil
 }
 
+func (tr tableReader) getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error) {
+	// findOffsets sets getRecord.found
+	recs, _, err := tr.findOffsets(requests)
+	if err != nil {
+		return nil, err
+	}
+	ranges := make(map[hash.Hash]Range, len(recs))
+	for _, r := range recs {
+		ranges[hash.Hash(*r.a)] = Range{
+			Offset: r.offset,
+			Length: r.length,
+		}
+	}
+	return ranges, nil
+}
+
 func (tr tableReader) size() (uint64, error) {
 	i, err := tr.index()
 	if err != nil {

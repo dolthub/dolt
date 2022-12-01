@@ -27,7 +27,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -128,74 +127,24 @@ func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(hashes hash.HashSet) (map[
 
 func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
 	gr := toGetRecords(hashes)
-
-	forIndex := func(ti tableIndex, cur map[hash.Hash]Range) (map[hash.Hash]Range, error) {
-		if cur == nil {
-			cur = make(map[hash.Hash]Range)
-		}
-		var foundHashes []hash.Hash
-		for h := range hashes {
-			a := addr(h)
-			e, ok, err := ti.lookup(&a)
-			if err != nil {
-				return nil, err
-			}
-			if ok {
-				foundHashes = append(foundHashes, h)
-				cur[h] = Range{Offset: e.Offset(), Length: e.Length()}
-			}
-		}
-		for _, h := range foundHashes {
-			delete(hashes, h)
-		}
-		return cur, nil
-	}
-
 	ranges := make(map[hash.Hash]map[hash.Hash]Range)
-	f := func(css chunkSourceSet) error {
+
+	fn := func(css chunkSourceSet) error {
 		for _, cs := range css {
-			switch tr := cs.(type) {
-			case *fileTableReader:
-				offsetRecSlice, _, err := tr.findOffsets(gr)
-				if err != nil {
-					return err
-				}
-				if len(offsetRecSlice) > 0 {
-					y, ok := ranges[hash.Hash(tr.h)]
-
-					if !ok {
-						y = make(map[hash.Hash]Range)
-					}
-
-					for _, offsetRec := range offsetRecSlice {
-						h := hash.Hash(*offsetRec.a)
-						y[h] = Range{Offset: offsetRec.offset, Length: offsetRec.length}
-
-						delete(hashes, h)
-					}
-
-					if len(offsetRecSlice) > 0 {
-						gr = toGetRecords(hashes)
-					}
-
-					ranges[hash.Hash(tr.h)] = y
-				}
-			case *chunkSourceAdapter:
-				tableIndex, err := tr.index()
-				if err != nil {
-					return err
-				}
-				found, err := forIndex(tableIndex, ranges[hash.Hash(tr.h)])
-				if err != nil {
-					return err
-				}
-				ranges[hash.Hash(tr.h)] = found
-			default:
-				panic(reflect.TypeOf(cs))
+			rng, err := cs.getRecordRanges(gr)
+			if err != nil {
+				return err
 			}
 
+			h := hash.Hash(cs.hash())
+			if m, ok := ranges[h]; ok {
+				for k, v := range rng {
+					m[k] = v
+				}
+			} else {
+				ranges[h] = rng
+			}
 		}
-
 		return nil
 	}
 
@@ -205,18 +154,12 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 		return nbs.tables
 	}()
 
-	err := f(tables.upstream)
-
-	if err != nil {
+	if err := fn(tables.upstream); err != nil {
 		return nil, err
 	}
-
-	err = f(tables.novel)
-
-	if err != nil {
+	if err := fn(tables.novel); err != nil {
 		return nil, err
 	}
-
 	return ranges, nil
 }
 
