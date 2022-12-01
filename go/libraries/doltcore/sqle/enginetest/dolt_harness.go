@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -289,21 +288,15 @@ func (d *DoltHarness) SupportsKeylessTables() bool {
 
 func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.databases = nil
+	d.engine = nil
+	d.provider = nil
+
+	_, err := d.NewEngine(d.t)
+	require.NoError(d.t, err)
+
 	for _, name := range names {
-		dEnv := dtestutils.CreateTestEnvWithName(name)
-
-		store := dEnv.DoltDB.ValueReadWriter().(*types.ValueStore)
-		store.SetValidateContentAddresses(true)
-
-		tmpDir, err := dEnv.TempTableFilesDir()
+		err := d.provider.CreateDatabase(enginetest.NewContext(d), name)
 		require.NoError(d.t, err)
-		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-		db, err := sqle.NewDatabase(context.Background(), name, dEnv.DbData(), opts)
-		require.NoError(d.t, err)
-
-		d.databases = append(d.databases, db)
-
-		d.multiRepoEnv.AddOrReplaceEnv(name, dEnv)
 	}
 
 	// TODO(zachmu): it should be safe to reuse a session with a new database, but it isn't in all cases. Particularly, if you
@@ -313,13 +306,6 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	_ = d.NewSession()
 
 	return dsqleDBsAsSqlDBs(d.databases)
-}
-
-func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyDatabase) {
-	for _, db := range d.NewDatabases(names...) {
-		dbs = append(dbs, sqle.ReadOnlyDatabase{Database: db.(sqle.Database)})
-	}
-	return
 }
 
 func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (*gms.Engine, error) {
