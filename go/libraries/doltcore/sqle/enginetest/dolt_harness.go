@@ -313,10 +313,6 @@ func (d *DoltHarness) SupportsKeylessTables() bool {
 	return true
 }
 
-func (d *DoltHarness) NewDatabase(name string) sql.Database {
-	return d.NewDatabases(name)[0]
-}
-
 func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.databases = nil
 	for _, name := range names {
@@ -387,6 +383,10 @@ func (d *DoltHarness) NewDatabaseProvider() sql.MutableDatabaseProvider {
 
 func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
 	dEnv := dtestutils.CreateTestEnv()
+
+	store := dEnv.DoltDB.ValueReadWriter().(*types.ValueStore)
+	store.SetValidateContentAddresses(true)
+
 	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	require.NoError(d.t, err)
 	d.multiRepoEnv = mrEnv
