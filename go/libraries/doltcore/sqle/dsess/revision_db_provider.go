@@ -56,7 +56,7 @@ type RevisionDatabase interface {
 }
 
 type DoltDatabaseProvider interface {
-	sql.DatabaseProvider
+	sql.MutableDatabaseProvider
 	RevisionDatabaseProvider
 
 	CreateDatabase(ctx *sql.Context, path string) error
@@ -85,6 +85,10 @@ func EmptyDatabaseProvider() DoltDatabaseProvider {
 
 type emptyRevisionDatabaseProvider struct {
 	sql.DatabaseProvider
+}
+
+func (e emptyRevisionDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
+	return nil
 }
 
 func (e emptyRevisionDatabaseProvider) GetRevisionForRevisionDatabase(_ *sql.Context, _ string) (string, string, error) {

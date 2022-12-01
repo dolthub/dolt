@@ -67,7 +67,7 @@ func TestSingleQuery(t *testing.T) {
 	t.Skip()
 
 	harness := newDoltHarness(t)
-	//harness.Setup(setup.MydbData, setup.MytableData)
+	harness.Setup(setup.MydbData, setup.MytableData)
 	engine, err := harness.NewEngine(t)
 	if err != nil {
 		panic(err)

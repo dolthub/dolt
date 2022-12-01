@@ -88,7 +88,6 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 
 	dh := &DoltHarness{
 		t:              t,
-		provider:       pro,
 		session:        session,
 		skippedQueries: defaultSkippedQueries,
 		multiRepoEnv:   mrEnv,
@@ -109,6 +108,7 @@ var defaultSkippedQueries = []string{
 // Setup sets the setup scripts for this DoltHarness's engine
 func (d *DoltHarness) Setup(setupData ...[]setup.SetupScript) {
 	d.engine = nil
+	d.provider = nil
 	d.setupData = nil
 	for i := range setupData {
 		d.setupData = append(d.setupData, setupData[i]...)
@@ -165,8 +165,7 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 	return resetCmds
 }
 
-// commitScripts returns a set of queries that will commit the workingsets
-// of the given database names
+// commitScripts returns a set of queries that will commit the working sets of the given database names
 func commitScripts(dbs []string) []setup.SetupScript {
 	var commitCmds setup.SetupScript
 	for i := range dbs {
@@ -185,13 +184,19 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 	if d.engine == nil {
 		d.branchControl = branch_control.CreateDefaultController()
 
-		pro := d.NewDatabaseProvider()
+		pro := d.newProvider()
 		doltProvider, ok := pro.(sqle.DoltDatabaseProvider)
 		require.True(t, ok)
+		d.provider = doltProvider
 
 		var err error
-		d.session, err = dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), doltProvider,
-			d.multiRepoEnv.Config(), d.branchControl)
+		d.session, err = dsess.NewDoltSession(
+			sql.NewEmptyContext(),
+			enginetest.NewBaseSession(),
+			doltProvider,
+			d.multiRepoEnv.Config(),
+			d.branchControl,
+		)
 		require.NoError(t, err)
 
 		e, err := enginetest.NewEngineWithProviderSetup(t, d, d.setupData)
@@ -200,12 +205,11 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 		}
 		d.engine = e
 
-		var res []sql.Row
 		ctx := enginetest.NewContext(d)
-		_, res = enginetest.MustQuery(ctx, e, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
+		databases := pro.AllDatabases(ctx)
 		var dbs []string
-		for i := range res {
-			dbs = append(dbs, res[i][0].(string))
+		for _, db := range databases {
+			dbs = append(dbs, db.Name())
 		}
 
 		e, err = enginetest.RunEngineScripts(ctx, e, commitScripts(dbs), d.SupportsNativeIndexCreation())
@@ -216,11 +220,10 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 		return e, nil
 	}
 
-	// grants are files that can only be manually reset
+	// Reset the mysql DB table to a clean state for this new engine
 	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 
-	//todo(max): easier if tests specify their databases ahead of time
 	ctx := enginetest.NewContext(d)
 	e, err := enginetest.RunEngineScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
 
@@ -379,10 +382,10 @@ func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (*gms.Eng
 }
 
 func (d *DoltHarness) NewDatabaseProvider() sql.MutableDatabaseProvider {
-	// When NewDatabaseProvider is called, we create a new MultiRepoEnv in order to ensure
-	// that only the specified sql.Databases are available for tests to use. Because
-	// NewDatabases must be called before NewDatabaseProvider, we grab the DoltEnvs
-	// previously created by NewDatabases and re-add them to the new MultiRepoEnv.
+	return d.provider
+}
+
+func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
 	dEnv := dtestutils.CreateTestEnv()
 	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	require.NoError(d.t, err)
@@ -395,27 +398,9 @@ func (d *DoltHarness) NewDatabaseProvider() sql.MutableDatabaseProvider {
 	return pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 }
 
-func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
-	ctx := context.Background()
-
-	head := dEnv.RepoStateReader().CWBHeadSpec()
-	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
-	require.NoError(t, err)
-
-	ws, err := dEnv.WorkingSet(ctx)
-	require.NoError(t, err)
-
-	return dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     dEnv.DbData(),
-		Remotes:    dEnv.RepoState.Remotes,
-	}
-}
-
-func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.PrimaryKeySchema) (sql.Table, error) {
+func (d *DoltHarness) newTable(db sql.Database, name string, schema sql.PrimaryKeySchema) (sql.Table, error) {
 	var err error
+	// TODO: why is this necessary?
 	if ro, ok := db.(sqle.ReadOnlyDatabase); ok {
 		err = ro.CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema, sql.Collation_Default)
 	} else {
@@ -431,14 +416,11 @@ func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.PrimaryK
 	return table, nil
 }
 
-func (d *DoltHarness) Provider() sql.MutableDatabaseProvider {
-	return d.provider.(sql.MutableDatabaseProvider)
-}
-
+// NewTableAsOf implements enginetest.VersionedHarness
 // Dolt doesn't version tables per se, just the entire database. So ignore the name and schema and just create a new
 // branch with the given name.
 func (d *DoltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema sql.PrimaryKeySchema, asOf interface{}) sql.Table {
-	table, err := d.NewTable(db, name, schema)
+	table, err := d.newTable(db, name, schema)
 	if err != nil {
 		require.True(d.t, sql.ErrTableAlreadyExists.Is(err))
 	}
@@ -450,9 +432,10 @@ func (d *DoltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema
 	return table
 }
 
+// SnapshotTable implements enginetest.VersionedHarness
 // Dolt doesn't version tables per se, just the entire database. So ignore the name and schema and just create a new
 // branch with the given name.
-func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf interface{}) error {
+func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, tableName string, asOf interface{}) error {
 	switch db.(type) {
 	case sqle.ReadOnlyDatabase:
 		// TODO: insert query to dolt_branches table (below)
