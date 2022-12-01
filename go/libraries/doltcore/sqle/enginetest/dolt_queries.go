@@ -2682,6 +2682,106 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name:        "`Delete from table` should keep artifacts - conflicts",
+		SetUpScript: createConflictsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, 1, -100, 1, 100},
+					{nil, nil, 2, -200, 2, 200},
+				},
+			},
+			{
+				Query:    "delete from t;",
+				Expected: []sql.Row{{sql.NewOkResult(2)}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, nil, nil, 1, 100},
+					{nil, nil, nil, nil, 2, 200},
+				},
+			},
+		},
+	},
+	{
+		Name:        "`Truncate table` should keep artifacts - conflicts",
+		SetUpScript: createConflictsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, 1, -100, 1, 100},
+					{nil, nil, 2, -200, 2, 200},
+				},
+			},
+			{
+				Query:    "truncate t;",
+				Expected: []sql.Row{{sql.NewOkResult(2)}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, nil, nil, 1, 100},
+					{nil, nil, nil, nil, 2, 200},
+				},
+			},
+		},
+	},
+	{
+		Name:        "`Delete from table` should keep artifacts - violations",
+		SetUpScript: createViolationsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select pk, col1 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{1, 1}, {2, 1}},
+			},
+			{
+				Query:    "delete from t;",
+				Expected: []sql.Row{{sql.NewOkResult(4)}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select pk, col1 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{1, 1}, {2, 1}},
+			},
+		},
+	},
+	{
+		Name:        "`Truncate table` should keep artifacts - violations",
+		SetUpScript: createViolationsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select pk, col1 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{1, 1}, {2, 1}},
+			},
+			{
+				Query:    "truncate t;",
+				Expected: []sql.Row{{sql.NewOkResult(4)}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select pk, col1 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{1, 1}, {2, 1}},
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
@@ -2887,6 +2987,22 @@ var createConflictsSetupScript = []string{
 	"call dolt_commit('-Am', 'main commit');",
 
 	"set dolt_allow_commit_conflicts = on;",
+	"call dolt_merge('other');",
+}
+
+var createViolationsSetupScript = []string{
+	"CREATE TABLE t (pk int PRIMARY KEY, col1 int UNIQUE);",
+	"CALL DOLT_COMMIT('-Am', 'create table');",
+
+	"CALL DOLT_CHECKOUT('-b', 'other');",
+	"INSERT INTO t VALUES (2, 1), (3, 3);",
+	"CALL DOLT_COMMIT('-am', 'other insert');",
+
+	"CALL DOLT_CHECKOUT('main');",
+	"INSERT INTO t values (1, 1), (4, 4);",
+	"CALL DOLT_COMMIT('-am', 'main insert');",
+
+	"SET dolt_force_transaction_commit = on;",
 	"call dolt_merge('other');",
 }
 
