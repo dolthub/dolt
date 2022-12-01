@@ -3161,6 +3161,85 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "Updating our cols when the row is missing inserts the row",
+		SetUpScript: []string{
+			"create table t (pk int primary key, col1 int);",
+			"insert into t values (1, null);",
+			"insert into t values (2, null);",
+			"insert into t values (3, null);",
+			"call dolt_commit('-Am', 'create table');",
+			"call dolt_checkout('-b', 'other');",
+
+			"update t set col1 = 100 where pk = 1;",
+			"delete from t where pk = 2;",
+			"update t set col1 = 300 where pk = 3;",
+			"insert into t values (4, 400);",
+			"call dolt_commit('-Am', 'other commit');",
+
+			"call dolt_checkout('main');",
+			"update t set col1 = -100 where pk = 1;",
+			"update t set col1 = -200 where pk = 2;",
+			"delete from t where pk = 3;",
+			"insert into t values (4, -400);",
+			"call dolt_commit('-Am', 'main commit');",
+
+			"set dolt_allow_commit_conflicts = on;",
+			"call dolt_merge('other');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{1, nil, 1, -100, 1, 100},
+					{2, nil, 2, -200, nil, nil},
+					{3, nil, nil, nil, 3, 300},
+					{nil, nil, 4, -400, 4, 400},
+				},
+			},
+			{
+				Query:    "delete from t;",
+				Expected: []sql.Row{{sql.NewOkResult(3)}},
+			},
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{1, nil, nil, nil, 1, 100},
+					{2, nil, nil, nil, nil, nil},
+					{3, nil, nil, nil, 3, 300},
+					{nil, nil, nil, nil, 4, 400},
+				},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{},
+			},
+			// The new rows PKs must be fully specified
+			{
+				Query:          "update dolt_conflicts_t set our_col1 = their_col1;",
+				ExpectedErrStr: "column name 'our_pk' is non-nullable but attempted to set a value of null",
+			},
+			// Take theirs
+			{
+				Query:    "update dolt_conflicts_t set our_pk = their_pk, our_col1 = their_col1;",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, Info: plan.UpdateInfo{Matched: 4, Updated: 3}}}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 100}, {3, 300}, {4, 400}},
+			},
+		},
+	},
+	{
+		Name:        "Updating our cols when our, their, and base schemas are not the equal errors",
+		SetUpScript: append(createConflictsSetupScript, "ALTER TABLE t add column col2 int FIRST;"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "update dolt_conflicts_t set base_col1 = 9999, their_col1 = 9999;",
+				ExpectedErrStr: "the source table cannot be automatically updated through the conflict table since the base, our, and their schemas are not equal",
+			},
+		},
+	},
+	{
 		Name:        "Updates on their or base columns do nothing",
 		SetUpScript: createConflictsSetupScript,
 		Assertions: []queries.ScriptTestAssertion{
