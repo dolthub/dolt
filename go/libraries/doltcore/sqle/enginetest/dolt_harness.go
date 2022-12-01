@@ -43,7 +43,6 @@ type DoltHarness struct {
 	t              *testing.T
 	provider 		   dsess.DoltDatabaseProvider
 	multiRepoEnv   *env.MultiRepoEnv
-	createdEnvs    map[string]*env.DoltEnv
 	session        *dsess.DoltSession
 	branchControl  *branch_control.Controller
 	databases      []sqle.Database
@@ -65,34 +64,9 @@ var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
 var _ enginetest.ValidatingHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
-	dEnv := dtestutils.CreateTestEnv()
-	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
-
-	require.NoError(t, err)
-	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro, err := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem())
-	require.NoError(t, err)
-	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
-
-	localConfig := dEnv.Config.WriteableConfig()
-	branchControl := branch_control.CreateDefaultController()
-
-	session, err := dsess.NewDoltSession(
-		sql.NewEmptyContext(),
-		enginetest.NewBaseSession(),
-		pro,
-		localConfig,
-		branchControl,
-	)
-	require.NoError(t, err)
-
 	dh := &DoltHarness{
 		t:              t,
-		session:        session,
 		skippedQueries: defaultSkippedQueries,
-		multiRepoEnv:   mrEnv,
-		createdEnvs:    make(map[string]*env.DoltEnv),
-		branchControl:  branchControl,
 	}
 
 	return dh
@@ -330,7 +304,6 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 		d.databases = append(d.databases, db)
 
 		d.multiRepoEnv.AddOrReplaceEnv(name, dEnv)
-		d.createdEnvs[db.Name()] = dEnv
 	}
 
 	// TODO(zachmu): it should be safe to reuse a session with a new database, but it isn't in all cases. Particularly, if you
