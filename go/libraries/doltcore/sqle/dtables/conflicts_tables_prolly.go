@@ -19,6 +19,9 @@ import (
 	"encoding/base64"
 	"fmt"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/zeebo/xxh3"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
@@ -31,8 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/zeebo/xxh3"
 )
 
 func newProllyConflictsTable(ctx *sql.Context, tbl *doltdb.Table, sourceUpdatableTbl sql.UpdatableTable, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
