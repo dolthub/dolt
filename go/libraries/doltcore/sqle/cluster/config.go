@@ -22,6 +22,7 @@ type Config interface {
 }
 
 type RemotesAPIConfig interface {
+	Address() string
 	Port() int
 	TLSKey() string
 	TLSCert() string
