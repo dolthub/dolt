@@ -15,9 +15,13 @@
 package clusterdb
 
 import (
+	"context"
 	"errors"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
@@ -68,4 +72,20 @@ var _ sql.ReadOnlyDatabase = database{}
 
 func (database) IsReadOnly() bool {
 	return true
+}
+
+func (db database) InitialDBState(ctx context.Context) (dsess.InitialDbState, error) {
+	return dsess.InitialDbState{}, errors.New("unimplemented")
+}
+
+func (db database) GetRoot(context *sql.Context) (*doltdb.RootValue, error) {
+	return nil, errors.New("unimplemented")
+}
+
+func (db database) DbData() env.DbData {
+	panic("unimplemented")
+}
+
+func (db database) Flush(context *sql.Context) error {
+	return errors.New("unimplemented")
 }

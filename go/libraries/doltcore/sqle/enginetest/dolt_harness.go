@@ -341,7 +341,7 @@ func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (*gms.Eng
 	}
 
 	allDatabases := ddp.AllDatabases(d.NewContext())
-	dbs := make([]sql.Database, len(allDatabases))
+	dbs := make([]sqle.SqlDatabase, len(allDatabases))
 	locations := make([]filesys.Filesys, len(allDatabases))
 
 	for _, db := range allDatabases {

@@ -100,12 +100,12 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	all := append(dsqleDBsAsSqlDBs(dbs))
+	all := append(dbs)
 	locations = append(locations, nil)
 
 	clusterDB := config.ClusterController.ClusterDatabase()
 	if clusterDB != nil {
-		all = append(all, clusterDB)
+		all = append(all, clusterDB.(dsqle.SqlDatabase))
 		locations = append(locations, nil)
 	}
 
@@ -279,14 +279,6 @@ func (se *SqlEngine) Close() error {
 		return se.engine.Close()
 	}
 	return nil
-}
-
-func dsqleDBsAsSqlDBs(dbs []dsqle.SqlDatabase) []sql.Database {
-	sqlDbs := make([]sql.Database, 0, len(dbs))
-	for _, db := range dbs {
-		sqlDbs = append(sqlDbs, db)
-	}
-	return sqlDbs
 }
 
 func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.Context) (*sql.Context, error) {
