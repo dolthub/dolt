@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-var chunkJournalFeatureFlag = false
+var chunkJournalFeatureFlag = true
 
 func init() {
 	if os.Getenv("DOLT_ENABLE_CHUNK_JOURNAL") != "" {
@@ -46,8 +46,9 @@ type chunkJournal struct {
 
 	source journalChunkSource
 
-	contents manifestContents
-	backing  manifest
+	contents  manifestContents
+	backing   manifest
+	persister *fsTablePersister
 }
 
 var _ tablePersister = &chunkJournal{}
@@ -55,21 +56,21 @@ var _ manifest = &chunkJournal{}
 var _ io.Closer = &chunkJournal{}
 
 type journalChunkSource struct {
-	address addr
-	journal io.ReaderAt
-	// todo: jrecordLookup -> Range
+	address      addr
+	journal      SnapshotReader
 	lookups      map[addr]jrecordLookup
 	compressedSz uint64
 }
 
 var _ chunkSource = journalChunkSource{}
 
+// todo: replace with nbs.Range
 type jrecordLookup struct {
 	offset int64
 	length uint32
 }
 
-func newChunkJournal(ctx context.Context, dir string, m manifest) (*chunkJournal, error) {
+func newChunkJournal(ctx context.Context, dir string, m manifest, p *fsTablePersister) (*chunkJournal, error) {
 	path, err := filepath.Abs(filepath.Join(dir, chunkJournalName))
 	if err != nil {
 		return nil, err
@@ -102,10 +103,11 @@ func newChunkJournal(ctx context.Context, dir string, m manifest) (*chunkJournal
 	}
 
 	return &chunkJournal{
-		journal:  wr,
-		source:   source,
-		contents: contents,
-		backing:  m,
+		journal:   wr,
+		source:    source,
+		contents:  contents,
+		backing:   m,
+		persister: p,
 	}, nil
 }
 
@@ -137,7 +139,7 @@ func (j *chunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkRea
 
 // ConjoinAll implements tablePersister.
 func (j *chunkJournal) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
-	panic("unimplemented")
+	return j.persister.ConjoinAll(ctx, sources, stats)
 }
 
 // Open implements tablePersister.
@@ -145,17 +147,20 @@ func (j *chunkJournal) Open(ctx context.Context, name addr, chunkCount uint32, s
 	if name == j.source.address {
 		return j.source, nil
 	}
-	return nil, fmt.Errorf("unknown chunk source %s", name.String())
+	return j.persister.Open(ctx, name, chunkCount, stats)
 }
 
 // Exists implements tablePersister.
 func (j *chunkJournal) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
-	panic("unimplemented")
+	if isJournalAddr(name) {
+		return true, nil
+	}
+	return j.persister.Exists(ctx, name, chunkCount, stats)
 }
 
 // PruneTableFiles implements tablePersister.
 func (j *chunkJournal) PruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error {
-	panic("unimplemented")
+	return j.persister.PruneTableFiles(ctx, contents, mtime)
 }
 
 // Name implements manifest.
@@ -175,10 +180,6 @@ func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 		if err := writeHook(); err != nil {
 			return manifestContents{}, err
 		}
-	}
-
-	if emptyAddr(addr(next.root)) {
-		panic(next)
 	}
 
 	if err := j.journal.writeRootHash(next.root); err != nil {
@@ -316,7 +317,8 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, _ *errgroup.G
 }
 
 func (s journalChunkSource) count() (uint32, error) {
-	return uint32(len(s.lookups)), nil
+	cnt := uint32(len(s.lookups))
+	return cnt, nil
 }
 
 func (s journalChunkSource) uncompressedLen() (uint64, error) {
@@ -330,11 +332,7 @@ func (s journalChunkSource) hash() addr {
 
 // reader implements chunkSource.
 func (s journalChunkSource) reader(context.Context) (io.Reader, error) {
-	// todo(andy): |reader()| belongs to the chunkSource interface and exists
-	//  due to the duality between chunkSources & table files. chunkJournal
-	//  seeks to create many chunkSources that depend on a single file.
-	//  |reader()| in particular is relevant to conjoin implementations.
-	panic("unimplemented")
+	return s.journal.Snapshot()
 }
 
 func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error) {
@@ -364,7 +362,7 @@ func (s journalChunkSource) size() (uint64, error) {
 
 // index implements chunkSource.
 func (s journalChunkSource) index() (tableIndex, error) {
-	panic("unimplemented")
+	return nil, fmt.Errorf("journalChunkSource cannot be conjoined")
 }
 
 func (s journalChunkSource) clone() (chunkSource, error) {
@@ -373,6 +371,32 @@ func (s journalChunkSource) clone() (chunkSource, error) {
 
 func (s journalChunkSource) close() error {
 	return nil
+}
+
+type journalConjoiner struct {
+	child conjoinStrategy
+}
+
+func (c journalConjoiner) conjoinRequired(ts tableSet) bool {
+	return c.child.conjoinRequired(ts)
+}
+
+func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, keepers []tableSpec, err error) {
+	var stash tableSpec // don't conjoin journal
+	pruned := make([]tableSpec, 0, len(upstream))
+	for _, ts := range upstream {
+		if isJournalAddr(ts.name) {
+			stash = ts
+		} else {
+			pruned = append(pruned, ts)
+		}
+	}
+	conjoinees, keepers, err = c.child.chooseConjoinees(pruned)
+	if err != nil {
+		return nil, nil, err
+	}
+	keepers = append(keepers, stash)
+	return
 }
 
 func emptyAddr(a addr) bool {

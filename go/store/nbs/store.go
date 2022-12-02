@@ -476,21 +476,18 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 		return nil, err
 	}
 	p := newFSTablePersister(dir, globalFDCache, q)
+	c := conjoinStrategy(inlineConjoiner{maxTables})
 
 	if chunkJournalFeatureFlag {
-		j, err := newChunkJournal(ctx, dir, m)
+		c = journalConjoiner{child: c}
+		j, err := newChunkJournal(ctx, dir, m, p.(*fsTablePersister))
 		if err != nil {
 			return nil, err
 		}
 		m, p = j, j
 	}
-	mm := makeManifestManager(m)
 
-	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{maxTables}, memTableSize)
-	if err != nil {
-		return nil, err
-	}
-	return nbs, nil
+	return newNomsBlockStore(ctx, nbfVerStr, makeManifestManager(m), p, q, c, memTableSize)
 }
 
 func checkDir(dir string) error {
@@ -1269,7 +1266,11 @@ func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[addr]chunkSource, error) {
 }
 
 func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
-	_, ok := nbs.p.(*fsTablePersister)
+	var ok bool
+	switch nbs.p.(type) {
+	case *fsTablePersister, *chunkJournal:
+		ok = true
+	}
 	return TableFileStoreOps{
 		CanRead:  true,
 		CanWrite: ok,
@@ -1288,8 +1289,13 @@ func (nbs *NomsBlockStore) Path() (string, bool) {
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
 func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
-	fsPersister, ok := nbs.p.(*fsTablePersister)
-	if !ok {
+	var fsPersister *fsTablePersister
+	switch t := nbs.p.(type) {
+	case *fsTablePersister:
+		fsPersister = t
+	case *chunkJournal:
+		fsPersister = t.persister
+	default:
 		return errors.New("Not implemented")
 	}
 

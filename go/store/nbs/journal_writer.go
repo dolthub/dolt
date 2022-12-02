@@ -44,6 +44,10 @@ var (
 	journalAddr  = addr(hash.Parse(chunkJournalAddr))
 )
 
+func isJournalAddr(a addr) bool {
+	return a == journalAddr
+}
+
 func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, err error) {
 	var f *os.File
 
@@ -98,6 +102,13 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, err
 	}, nil
 }
 
+type SnapshotReader interface {
+	io.ReaderAt
+	// Snapshot returns an io.Reader that provides a consistent view
+	// of the current state of this SnapshotReader.
+	Snapshot() (io.Reader, error)
+}
+
 type journalWriter struct {
 	buf  []byte
 	file *os.File
@@ -105,8 +116,8 @@ type journalWriter struct {
 	path string
 }
 
-var _ io.ReaderAt = &journalWriter{}
 var _ io.WriteCloser = &journalWriter{}
+var _ SnapshotReader = &journalWriter{}
 
 func (wr *journalWriter) filepath() string {
 	return wr.path
@@ -133,6 +144,19 @@ func (wr *journalWriter) ReadAt(p []byte, off int64) (n int, err error) {
 	}
 	n += copy(bp, wr.buf[off:])
 	return
+}
+
+func (wr *journalWriter) Snapshot() (io.Reader, error) {
+	if err := wr.flush(); err != nil {
+		return nil, err
+	}
+	// open a new file descriptor with an
+	// independent lifecycle from |wr.file|
+	f, err := os.Open(wr.path)
+	if err != nil {
+		return nil, err
+	}
+	return io.LimitReader(f, wr.off), nil
 }
 
 func (wr *journalWriter) Write(p []byte) (n int, err error) {

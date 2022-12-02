@@ -38,13 +38,14 @@ func TestChunkJournalBlockStoreSuite(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		j, err := newChunkJournal(ctx, dir, m)
+		q := NewUnlimitedMemQuotaProvider()
+		p := newFSTablePersister(dir, globalFDCache, q)
+		j, err := newChunkJournal(ctx, dir, m, p.(*fsTablePersister))
 		if err != nil {
 			return nil, err
 		}
 		nbf := constants.FormatDefaultString
 		mm := makeManifestManager(j)
-		q := NewUnlimitedMemQuotaProvider()
 		c := inlineConjoiner{defaultMaxTables}
 		return newNomsBlockStore(ctx, nbf, mm, j, q, c, testMemTableSize)
 	}
@@ -60,7 +61,9 @@ func TestChunkJournalPersist(t *testing.T) {
 	require.NoError(t, err)
 	m, err := getFileManifest(ctx, dir)
 	require.NoError(t, err)
-	j, err := newChunkJournal(ctx, dir, m)
+	q := NewUnlimitedMemQuotaProvider()
+	p := newFSTablePersister(dir, globalFDCache, q)
+	j, err := newChunkJournal(ctx, dir, m, p.(*fsTablePersister))
 	require.NoError(t, err)
 
 	const iters = 64
