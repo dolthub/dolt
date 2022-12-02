@@ -167,7 +167,7 @@ func TestConjoin(t *testing.T) {
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
-				_, err := conjoin(context.Background(), upstream, fm, p, stats)
+				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, fm, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -188,7 +188,7 @@ func TestConjoin(t *testing.T) {
 					specs := append([]tableSpec{}, upstream.specs...)
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), nil)
 				}}
-				_, err := conjoin(context.Background(), upstream, u, p, stats)
+				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -208,7 +208,7 @@ func TestConjoin(t *testing.T) {
 				u := updatePreemptManifest{fm, func() {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:], nil)
 				}}
-				_, err := conjoin(context.Background(), upstream, u, p, stats)
+				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -250,7 +250,7 @@ func TestConjoin(t *testing.T) {
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setupAppendix(startLock, startRoot, c.precompact, c.appendix)
 
-				_, err := conjoin(context.Background(), upstream, fm, p, stats)
+				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, fm, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -274,7 +274,7 @@ func TestConjoin(t *testing.T) {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), upstream.appendix)
 				}}
 
-				_, err := conjoin(context.Background(), upstream, u, p, stats)
+				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -299,7 +299,7 @@ func TestConjoin(t *testing.T) {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(specs, upstream.specs...), append(app, newTable))
 				}}
 
-				_, err := conjoin(context.Background(), upstream, u, p, stats)
+				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -323,7 +323,7 @@ func TestConjoin(t *testing.T) {
 				u := updatePreemptManifest{fm, func() {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, upstream.specs[len(c.appendix)+1:], upstream.appendix[:])
 				}}
-				_, err := conjoin(context.Background(), upstream, u, p, stats)
+				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -347,7 +347,7 @@ func TestConjoin(t *testing.T) {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, specs, append([]tableSpec{}, newTable))
 				}}
 
-				_, err := conjoin(context.Background(), upstream, u, p, stats)
+				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)

@@ -55,8 +55,9 @@ var _ manifest = &chunkJournal{}
 var _ io.Closer = &chunkJournal{}
 
 type journalChunkSource struct {
-	address      addr
-	journal      io.ReaderAt
+	address addr
+	journal io.ReaderAt
+	// todo: jrecordLookup -> Range
 	lookups      map[addr]jrecordLookup
 	compressedSz uint64
 }
@@ -334,6 +335,25 @@ func (s journalChunkSource) reader(context.Context) (io.Reader, error) {
 	//  seeks to create many chunkSources that depend on a single file.
 	//  |reader()| in particular is relevant to conjoin implementations.
 	panic("unimplemented")
+}
+
+func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error) {
+	ranges := make(map[hash.Hash]Range, len(requests))
+	for _, req := range requests {
+		if req.found {
+			continue
+		}
+		l, ok := s.lookups[*req.a]
+		if !ok {
+			continue
+		}
+		req.found = true // update |requests|
+		ranges[hash.Hash(*req.a)] = Range{
+			Offset: uint64(l.offset),
+			Length: l.length,
+		}
+	}
+	return ranges, nil
 }
 
 // size implements chunkSource.
