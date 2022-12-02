@@ -582,7 +582,7 @@ func mergeArtifactsDescriptorsFromSource(srcKd val.TupleDesc) (kd, vd val.TupleD
 	// commit hash, and artifact type.
 	keyTypes := srcKd.Types
 
-	// target branch commit hash
+	// source branch commit hash
 	keyTypes = append(keyTypes, val.Type{Enc: val.CommitAddrEnc, Nullable: false})
 
 	// artifact type

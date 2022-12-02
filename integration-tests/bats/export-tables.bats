@@ -68,7 +68,7 @@ for line in sys.stdin:
     if line != "":
         rows.append(line.strip().split(","))
 
-if len(rows) != 4: # extra line for success
+if len(rows) != 3:
     sys.exit(1)
 
 if rows[0] != "pk,c1,c2,c3,c4,c5".split(","):
@@ -98,6 +98,11 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully exported data." ]] || false
     [ -f export.csv ]
+    # test export works with redirect syntax
+    dolt table export -f test_int > export.csv
+    run wc -l export.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2 export.csv" ]] || false
 }
 
 @test "export-tables: dolt table SQL export" {
