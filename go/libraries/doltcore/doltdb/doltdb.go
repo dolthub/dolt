@@ -1149,8 +1149,8 @@ func (ddb *DoltDB) Rebase(ctx context.Context) error {
 	return datas.ChunkStoreFromDatabase(ddb.db).Rebase(ctx)
 }
 
-// GC performs garbage collection on this ddb. Values passed in |uncommittedVals| will be temporarily saved during gc.
-func (ddb *DoltDB) GC(ctx context.Context, uncommittedVals ...hash.Hash) error {
+// GC performs garbage collection on this ddb. Uncommitted values will be temporarily saved during gc.
+func (ddb *DoltDB) GC(ctx context.Context) error {
 	collector, ok := ddb.db.Database.(datas.GarbageCollector)
 	if !ok {
 		return fmt.Errorf("this database does not support garbage collection")
@@ -1165,6 +1165,12 @@ func (ddb *DoltDB) GC(ctx context.Context, uncommittedVals ...hash.Hash) error {
 	if err != nil {
 		return err
 	}
+
+	uncommittedVals, err := ddb.getGCKeepers(ctx, datasets)
+	if err != nil {
+		return err
+	}
+
 	newGen := hash.NewHashSet(uncommittedVals...)
 	oldGen := make(hash.HashSet)
 	err = datasets.IterAll(ctx, func(keyStr string, h hash.Hash) error {
@@ -1194,6 +1200,54 @@ func (ddb *DoltDB) GC(ctx context.Context, uncommittedVals ...hash.Hash) error {
 	}
 
 	return collector.GC(ctx, oldGen, newGen)
+}
+
+// getGCKeepers returns the hashes of all the objects in the working set that should be preserved during GC.
+func (ddb *DoltDB) getGCKeepers(ctx context.Context, datasets datas.DatasetsMap) ([]hash.Hash, error) {
+	var keepers []hash.Hash
+
+	err := datasets.IterAll(ctx, func(keyStr string, h hash.Hash) error {
+		ds, err := ddb.db.GetDataset(ctx, keyStr)
+		if err != nil {
+			return err
+		}
+
+		if !ds.IsWorkingSet() {
+			return nil
+		}
+
+		hws, err := ds.HeadWorkingSet()
+		if err != nil {
+			return err
+		}
+
+		keepers = append(keepers, hws.WorkingAddr)
+		if hws.StagedAddr != nil {
+			keepers = append(keepers, *hws.StagedAddr)
+		}
+
+		if hws.MergeState != nil {
+			preMergeWorkingHash, err := hws.MergeState.PreMergeWorkingAddr(ctx, ddb.vrw)
+			if err != nil {
+				return err
+			}
+
+			fromCommit, err := hws.MergeState.FromCommit(ctx, ddb.vrw)
+			if err != nil {
+				return err
+			}
+
+			keepers = append(keepers, preMergeWorkingHash, fromCommit.Addr())
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return keepers, nil
 }
 
 func (ddb *DoltDB) ShallowGC(ctx context.Context) error {
