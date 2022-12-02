@@ -140,9 +140,16 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 		return dbState, ok, nil
 	}
 
-	init, err := d.provider.RevisionDbState(ctx, dbName)
-	if err != nil {
+	init, err := d.provider.DbState(ctx, dbName)
+	if err != nil && !sql.ErrDatabaseNotFound.Is(err) {
 		return nil, false, err
+	}
+
+	if err != nil {
+		init, err = d.provider.RevisionDbState(ctx, dbName)
+		if err != nil {
+			return nil, false, err
+		}
 	}
 
 	// TODO: this could potentially add a |sess.dbStates| entry
@@ -152,6 +159,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 	if err = d.AddDB(ctx, init); err != nil {
 		return nil, ok, err
 	}
+
 	dbState, ok = d.dbStates[dbName]
 	if !ok {
 		return nil, false, sql.ErrDatabaseNotFound.New(dbName)
@@ -1076,6 +1084,7 @@ func (d *DoltSession) HasDB(ctx *sql.Context, dbName string) bool {
 
 // AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
+// TODO: the session has a database provider, we shouldn't need to add databases to it explicitly
 func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	db := dbState.Db
 	DefineSystemVariablesForDB(db.Name())

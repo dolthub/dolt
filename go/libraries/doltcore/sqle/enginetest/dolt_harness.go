@@ -44,7 +44,6 @@ type DoltHarness struct {
 	multiRepoEnv   *env.MultiRepoEnv
 	session        *dsess.DoltSession
 	branchControl  *branch_control.Controller
-	databases      []sqle.Database
 	parallelism    int
 	skippedQueries []string
 	setupData      []setup.SetupScript
@@ -287,12 +286,32 @@ func (d *DoltHarness) SupportsKeylessTables() bool {
 }
 
 func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
-	d.databases = nil
 	d.engine = nil
 	d.provider = nil
 
-	_, err := d.NewEngine(d.t)
+	d.branchControl = branch_control.CreateDefaultController()
+
+	pro := d.newProvider()
+	doltProvider, ok := pro.(sqle.DoltDatabaseProvider)
+	require.True(d.t, ok)
+	d.provider = doltProvider
+
+	var err error
+	d.session, err = dsess.NewDoltSession(
+		sql.NewEmptyContext(),
+		enginetest.NewBaseSession(),
+		doltProvider,
+		d.multiRepoEnv.Config(),
+		d.branchControl,
+	)
 	require.NoError(d.t, err)
+
+	// TODO: the engine tests should do this for us
+	d.session.SetCurrentDatabase("mydb")
+
+	e := enginetest.NewEngineWithProvider(d.t, d, d.provider)
+	require.NoError(d.t, err)
+	d.engine = e
 
 	for _, name := range names {
 		err := d.provider.CreateDatabase(enginetest.NewContext(d), name)
@@ -305,7 +324,14 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	//  happening, but it only happens as a result of this test setup.
 	_ = d.NewSession()
 
-	return dsqleDBsAsSqlDBs(d.databases)
+	ctx := enginetest.NewContext(d)
+	databases := pro.AllDatabases(ctx)
+	var dbs []sql.Database
+	for _, db := range databases {
+		dbs = append(dbs, db)
+	}
+
+	return dbs
 }
 
 func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (*gms.Engine, error) {
@@ -413,6 +439,10 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, tableName string, 
 	ctx := enginetest.NewContext(d)
 	_, iter, err := e.Query(ctx,
 		"CALL DOLT_ADD('.')")
+	require.NoError(d.t, err)
+	_, err = sql.RowIterToRows(ctx, nil, iter)
+	require.NoError(d.t, err)
+
 	_, iter, err = e.Query(ctx,
 		"SELECT COMMIT('-am', 'test commit');")
 	require.NoError(d.t, err)
@@ -444,12 +474,4 @@ func (d *DoltHarness) ValidateEngine(ctx *sql.Context, e *gms.Engine) (err error
 		}
 	}
 	return
-}
-
-func dsqleDBsAsSqlDBs(dbs []sqle.Database) []sql.Database {
-	sqlDbs := make([]sql.Database, 0, len(dbs))
-	for _, db := range dbs {
-		sqlDbs = append(sqlDbs, db)
-	}
-	return sqlDbs
 }

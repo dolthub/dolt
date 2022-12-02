@@ -44,7 +44,7 @@ const (
 type DoltDatabaseProvider struct {
 	// dbLocations maps a database name to its file system root
 	dbLocations        map[string]filesys.Filesys
-	databases          map[string]sql.Database
+	databases          map[string]SqlDatabase
 	functions          map[string]sql.Function
 	externalProcedures sql.ExternalStoredProcedureRegistry
 	InitDatabaseHook   InitDatabaseHook
@@ -74,21 +74,21 @@ func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys) (DoltData
 
 // NewDoltDatabaseProviderWithDatabase returns a new provider, initialized with one database at the
 // specified location, and any error that occurred along the way.
-func NewDoltDatabaseProviderWithDatabase(defaultBranch string, fs filesys.Filesys, database sql.Database, dbLocation filesys.Filesys) (DoltDatabaseProvider, error) {
-	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, []sql.Database{database}, []filesys.Filesys{dbLocation})
+func NewDoltDatabaseProviderWithDatabase(defaultBranch string, fs filesys.Filesys, database SqlDatabase, dbLocation filesys.Filesys) (DoltDatabaseProvider, error) {
+	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, []SqlDatabase{database}, []filesys.Filesys{dbLocation})
 }
 
 // NewDoltDatabaseProviderWithDatabases returns a new provider, initialized with the specified databases,
 // at the specified locations. For every database specified, there must be a corresponding filesystem
 // specified that represents where the database is located. If the number of specified databases is not the
 // same as the number of specified locations, an error is returned.
-func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Filesys, databases []sql.Database, locations []filesys.Filesys) (DoltDatabaseProvider, error) {
+func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Filesys, databases []SqlDatabase, locations []filesys.Filesys) (DoltDatabaseProvider, error) {
 	if len(databases) != len(locations) {
 		return DoltDatabaseProvider{}, fmt.Errorf("unable to create DoltDatabaseProvider: "+
 			"incorrect number of databases (%d) and database locations (%d) specified", len(databases), len(locations))
 	}
 
-	dbs := make(map[string]sql.Database, len(databases))
+	dbs := make(map[string]SqlDatabase, len(databases))
 	for _, db := range databases {
 		dbs[strings.ToLower(db.Name())] = db
 	}
@@ -818,6 +818,33 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx *sql.Context, revDB string) (d
 		return dsess.InitialDbState{}, err
 	} else if !ok {
 		return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(revDB)
+	}
+
+	return init, nil
+}
+
+func (p DoltDatabaseProvider) stateForDatabase(ctx *sql.Context, dbName string) (dsess.InitialDbState, bool, error) {
+	p.mu.RLock()
+	db, ok := p.databases[formatDbMapKeyName(dbName)]
+	p.mu.RUnlock()
+	if !ok {
+		return dsess.InitialDbState{}, false, nil
+	}
+
+	dbState, err := GetInitialDBState(ctx, db)
+	if err != nil {
+		return dsess.InitialDbState{}, false, err
+	}
+
+	return dbState, true, nil
+}
+
+func (p DoltDatabaseProvider) DbState(ctx *sql.Context, dbName string) (dsess.InitialDbState, error) {
+	init, ok, err := p.stateForDatabase(ctx, dbName)
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	} else if !ok {
+		return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
 	return init, nil

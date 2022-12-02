@@ -59,8 +59,6 @@ type DoltDatabaseProvider interface {
 	sql.MutableDatabaseProvider
 	RevisionDatabaseProvider
 
-	CreateDatabase(ctx *sql.Context, path string) error
-
 	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases.
 	FileSystem() filesys.Filesys
 	// FileSystemForDatabase returns a filesystem, with the working directory set to the root directory
@@ -77,6 +75,8 @@ type DoltDatabaseProvider interface {
 	// (otherwise all branches are cloned), remoteName is the name for the remote created in the new database, and
 	// remoteUrl is a URL (e.g. "file:///dbs/db1") or an <org>/<database> path indicating a database hosted on DoltHub.
 	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error
+	// DbState returns the InitialDbState for the specified database
+	DbState(ctx *sql.Context, dbName string) (InitialDbState, error)
 }
 
 func EmptyDatabaseProvider() DoltDatabaseProvider {
@@ -85,6 +85,10 @@ func EmptyDatabaseProvider() DoltDatabaseProvider {
 
 type emptyRevisionDatabaseProvider struct {
 	sql.DatabaseProvider
+}
+
+func (e emptyRevisionDatabaseProvider) DbState(ctx *sql.Context, dbName string) (InitialDbState, error) {
+	return InitialDbState{}, sql.ErrDatabaseNotFound.New(dbName)
 }
 
 func (e emptyRevisionDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
