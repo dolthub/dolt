@@ -92,7 +92,7 @@ type NBSCompressedChunkStore interface {
 type NomsBlockStore struct {
 	mm manifestManager
 	p  tablePersister
-	c  conjoiner
+	c  conjoinStrategy
 
 	mu       sync.RWMutex // protects the following state
 	mt       *memTable
@@ -504,7 +504,7 @@ func checkDir(dir string) error {
 	return nil
 }
 
-func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager, p tablePersister, q MemoryQuotaProvider, c conjoiner, memTableSize uint64) (*NomsBlockStore, error) {
+func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager, p tablePersister, q MemoryQuotaProvider, c conjoinStrategy, memTableSize uint64) (*NomsBlockStore, error) {
 	if memTableSize == 0 {
 		memTableSize = defaultMemTableSize
 	}
@@ -1024,17 +1024,13 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		}
 	}
 
-	if nbs.c.ConjoinRequired(nbs.tables) {
-		var err error
-
-		newUpstream, err := nbs.c.Conjoin(ctx, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
-
+	if nbs.c.conjoinRequired(nbs.tables) {
+		newUpstream, err := conjoin(ctx, nbs.c, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
 		if err != nil {
 			return err
 		}
 
 		newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, nbs.stats)
-
 		if err != nil {
 			return err
 		}
@@ -1046,7 +1042,6 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		if err != nil {
 			return err
 		}
-
 		return errOptimisticLockFailedTables
 	}
 

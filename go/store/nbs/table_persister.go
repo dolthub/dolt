@@ -60,41 +60,6 @@ type tablePersister interface {
 	io.Closer
 }
 
-type chunkSourcesByAscendingCount struct {
-	sources chunkSources
-	err     error
-}
-
-func (csbc chunkSourcesByAscendingCount) Len() int { return len(csbc.sources) }
-func (csbc chunkSourcesByAscendingCount) Less(i, j int) bool {
-	srcI, srcJ := csbc.sources[i], csbc.sources[j]
-	cntI, err := srcI.count()
-
-	if err != nil {
-		csbc.err = err
-		return false
-	}
-
-	cntJ, err := srcJ.count()
-
-	if err != nil {
-		csbc.err = err
-		return false
-	}
-
-	if cntI == cntJ {
-		hi := srcI.hash()
-		hj := srcJ.hash()
-		return bytes.Compare(hi[:], hj[:]) < 0
-	}
-
-	return cntI < cntJ
-}
-
-func (csbc chunkSourcesByAscendingCount) Swap(i, j int) {
-	csbc.sources[i], csbc.sources[j] = csbc.sources[j], csbc.sources[i]
-}
-
 type chunkSourcesByDescendingDataSize struct {
 	sws []sourceWithSize
 	err error
