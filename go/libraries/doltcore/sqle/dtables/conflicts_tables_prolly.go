@@ -218,17 +218,14 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 				r[itr.t+i] = f
 			}
 		}
-		b := xxh3.Hash128(c.k).Bytes()
-		h := base64.RawStdEncoding.EncodeToString(b[:])
 
-		err = itr.putConflictRowVals(ctx, c, r, h)
+		err = itr.putConflictRowVals(ctx, c, r)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		h := base64.RawStdEncoding.EncodeToString(val.ReadHashFromTuple(c.k))
 
-		err = itr.putKeylessConflictRowVals(ctx, c, r, h)
+		err = itr.putKeylessConflictRowVals(ctx, c, r)
 		if err != nil {
 			return nil, err
 		}
@@ -237,7 +234,7 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return r, nil
 }
 
-func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r sql.Row, id string) error {
+func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r sql.Row) error {
 	if c.bV != nil {
 		for i := 0; i < itr.baseVD.Count(); i++ {
 			f, err := index.GetField(ctx, itr.baseVD, i, c.bV, itr.baseRows.NodeStore())
@@ -269,7 +266,7 @@ func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r
 		}
 	}
 	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()] = getDiffType(c.bV, c.tV)
-	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()+1] = id
+	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()+1] = c.id
 
 	return nil
 }
@@ -285,7 +282,7 @@ func getDiffType(base val.Tuple, other val.Tuple) string {
 	return merge.ConflictDiffTypeModified
 }
 
-func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c conf, r sql.Row, id string) (err error) {
+func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c conf, r sql.Row) (err error) {
 	ns := itr.baseRows.NodeStore()
 
 	if c.bV != nil {
@@ -344,7 +341,7 @@ func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c 
 
 	o := itr.t + itr.theirsVD.Count() - 1
 	r[o] = getDiffType(c.bV, c.tV)
-	r[itr.n-4] = id
+	r[itr.n-4] = c.id
 
 	return nil
 }
@@ -352,6 +349,7 @@ func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c 
 type conf struct {
 	k, bV, oV, tV val.Tuple
 	h             hash.Hash
+	id            string
 }
 
 func (itr *prollyConflictRowIter) nextConflictVals(ctx *sql.Context) (c conf, err error) {
@@ -361,6 +359,10 @@ func (itr *prollyConflictRowIter) nextConflictVals(ctx *sql.Context) (c conf, er
 	}
 	c.k = ca.Key
 	c.h = ca.TheirRootIsh
+
+	// To ensure that the conflict id is unique, we hash both TheirRootIsh and the key of the table.
+	b := xxh3.Hash128(append(ca.Key, c.h[:]...)).Bytes()
+	c.id = base64.RawStdEncoding.EncodeToString(b[:])
 
 	err = itr.loadTableMaps(ctx, ca.Metadata.BaseRootIsh, ca.TheirRootIsh)
 	if err != nil {

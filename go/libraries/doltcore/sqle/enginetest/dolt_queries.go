@@ -3012,39 +3012,50 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 		SetUpScript: createConflictsSetupScript,
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1, dolt_conflict_id from dolt_conflicts_t;",
+				Query: "set @hash1 = (select dolt_conflict_id from dolt_conflicts_t where our_pk = 1);",
+			},
+			{
+				Query: "set @hash2 = (select dolt_conflict_id from dolt_conflicts_t where our_pk = 2);",
+			},
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t where dolt_conflict_id = @hash1;",
 				Expected: []sql.Row{
-					{nil, nil, 1, -100, 1, 100, "+Z9y2YEvo0d1ZupbzGiyrQ"},
-					{nil, nil, 2, -200, 2, 200, "BKuTcpHc3yg5TpU4ToVOEA"},
+					{nil, nil, 1, -100, 1, 100},
+				},
+			},
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t where dolt_conflict_id = @hash2;",
+				Expected: []sql.Row{
+					{nil, nil, 2, -200, 2, 200},
 				},
 			},
 			// Make sure that we can update using it
 			{
-				Query:    "update dolt_conflicts_t SET our_col1 = their_col1 where dolt_conflict_id = '+Z9y2YEvo0d1ZupbzGiyrQ';",
+				Query:    "update dolt_conflicts_t SET our_col1 = their_col1 where dolt_conflict_id = @hash1;",
 				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
-				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1, dolt_conflict_id from dolt_conflicts_t;",
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
 				Expected: []sql.Row{
-					{nil, nil, 1, 100, 1, 100, "+Z9y2YEvo0d1ZupbzGiyrQ"},
-					{nil, nil, 2, -200, 2, 200, "BKuTcpHc3yg5TpU4ToVOEA"},
+					{nil, nil, 1, 100, 1, 100},
+					{nil, nil, 2, -200, 2, 200},
 				},
 			},
 			// And delete
 			{
-				Query:    "delete from dolt_conflicts_t where dolt_conflict_id = '+Z9y2YEvo0d1ZupbzGiyrQ';",
+				Query:    "delete from dolt_conflicts_t where dolt_conflict_id = @hash1;",
 				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
 			},
 			{
-				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1, dolt_conflict_id from dolt_conflicts_t;",
+				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
 				Expected: []sql.Row{
-					{nil, nil, 2, -200, 2, 200, "BKuTcpHc3yg5TpU4ToVOEA"},
+					{nil, nil, 2, -200, 2, 200},
 				},
 			},
 		},
 	},
 	{
-		Name: "dolt_conflicts_id is not guaranteed to be unique across merges",
+		Name: "dolt_conflicts_id is unique across merges",
 		SetUpScript: append(createConflictsSetupScript, []string{
 			"CALL DOLT_COMMIT('-afm', 'commit conflicts');",
 
@@ -3057,15 +3068,15 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			"CALL DOLT_COMMIT('-afm', 'commit on main');",
 
 			"CALL DOLT_MERGE('other2');",
+
+			"set @hash1 = (select dolt_conflict_id from dolt_conflicts_t where our_pk = 1 and their_col1 = 100);",
+			"set @hash2 = (select dolt_conflict_id from dolt_conflicts_t where our_pk = 1 and their_col1 = 9999);",
+			"set @hash3 = (select dolt_conflict_id from dolt_conflicts_t where our_pk = 2);",
 		}...),
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1, dolt_conflict_id from dolt_conflicts_t;",
-				Expected: []sql.Row{
-					{nil, nil, 1, 8888, 1, 100, "+Z9y2YEvo0d1ZupbzGiyrQ"},
-					{1, -100, 1, 8888, 1, 9999, "+Z9y2YEvo0d1ZupbzGiyrQ"},
-					{nil, nil, 2, -200, 2, 200, "BKuTcpHc3yg5TpU4ToVOEA"},
-				},
+				Query:    "select @hash1 != @hash2 AND @hash2 != @hash3;",
+				Expected: []sql.Row{{true}},
 			},
 		},
 	},
