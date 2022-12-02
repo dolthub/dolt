@@ -27,7 +27,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -93,7 +92,7 @@ type NBSCompressedChunkStore interface {
 type NomsBlockStore struct {
 	mm manifestManager
 	p  tablePersister
-	c  conjoiner
+	c  conjoinStrategy
 
 	mu       sync.RWMutex // protects the following state
 	mt       *memTable
@@ -128,74 +127,24 @@ func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(hashes hash.HashSet) (map[
 
 func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
 	gr := toGetRecords(hashes)
-
-	forIndex := func(ti tableIndex, cur map[hash.Hash]Range) (map[hash.Hash]Range, error) {
-		if cur == nil {
-			cur = make(map[hash.Hash]Range)
-		}
-		var foundHashes []hash.Hash
-		for h := range hashes {
-			a := addr(h)
-			e, ok, err := ti.lookup(&a)
-			if err != nil {
-				return nil, err
-			}
-			if ok {
-				foundHashes = append(foundHashes, h)
-				cur[h] = Range{Offset: e.Offset(), Length: e.Length()}
-			}
-		}
-		for _, h := range foundHashes {
-			delete(hashes, h)
-		}
-		return cur, nil
-	}
-
 	ranges := make(map[hash.Hash]map[hash.Hash]Range)
-	f := func(css chunkSourceSet) error {
+
+	fn := func(css chunkSourceSet) error {
 		for _, cs := range css {
-			switch tr := cs.(type) {
-			case *fileTableReader:
-				offsetRecSlice, _, err := tr.findOffsets(gr)
-				if err != nil {
-					return err
-				}
-				if len(offsetRecSlice) > 0 {
-					y, ok := ranges[hash.Hash(tr.h)]
-
-					if !ok {
-						y = make(map[hash.Hash]Range)
-					}
-
-					for _, offsetRec := range offsetRecSlice {
-						h := hash.Hash(*offsetRec.a)
-						y[h] = Range{Offset: offsetRec.offset, Length: offsetRec.length}
-
-						delete(hashes, h)
-					}
-
-					if len(offsetRecSlice) > 0 {
-						gr = toGetRecords(hashes)
-					}
-
-					ranges[hash.Hash(tr.h)] = y
-				}
-			case *chunkSourceAdapter:
-				tableIndex, err := tr.index()
-				if err != nil {
-					return err
-				}
-				found, err := forIndex(tableIndex, ranges[hash.Hash(tr.h)])
-				if err != nil {
-					return err
-				}
-				ranges[hash.Hash(tr.h)] = found
-			default:
-				panic(reflect.TypeOf(cs))
+			rng, err := cs.getRecordRanges(gr)
+			if err != nil {
+				return err
 			}
 
+			h := hash.Hash(cs.hash())
+			if m, ok := ranges[h]; ok {
+				for k, v := range rng {
+					m[k] = v
+				}
+			} else {
+				ranges[h] = rng
+			}
 		}
-
 		return nil
 	}
 
@@ -205,18 +154,12 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 		return nbs.tables
 	}()
 
-	err := f(tables.upstream)
-
-	if err != nil {
+	if err := fn(tables.upstream); err != nil {
 		return nil, err
 	}
-
-	err = f(tables.novel)
-
-	if err != nil {
+	if err := fn(tables.novel); err != nil {
 		return nil, err
 	}
-
 	return ranges, nil
 }
 
@@ -524,26 +467,29 @@ func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 
 func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, maxTables int, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
-	err := checkDir(dir)
-
-	if err != nil {
+	if err := checkDir(dir); err != nil {
 		return nil, err
 	}
 
 	m, err := getFileManifest(ctx, dir)
-
 	if err != nil {
 		return nil, err
 	}
-
-	mm := makeManifestManager(m)
 	p := newFSTablePersister(dir, globalFDCache, q)
-	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{maxTables}, memTableSize)
 
+	if chunkJournalFeatureFlag {
+		j, err := newChunkJournal(ctx, dir, m)
+		if err != nil {
+			return nil, err
+		}
+		m, p = j, j
+	}
+	mm := makeManifestManager(m)
+
+	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{maxTables}, memTableSize)
 	if err != nil {
 		return nil, err
 	}
-
 	return nbs, nil
 }
 
@@ -558,7 +504,7 @@ func checkDir(dir string) error {
 	return nil
 }
 
-func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager, p tablePersister, q MemoryQuotaProvider, c conjoiner, memTableSize uint64) (*NomsBlockStore, error) {
+func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager, p tablePersister, q MemoryQuotaProvider, c conjoinStrategy, memTableSize uint64) (*NomsBlockStore, error) {
 	if memTableSize == 0 {
 		memTableSize = defaultMemTableSize
 	}
@@ -1078,17 +1024,13 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		}
 	}
 
-	if nbs.c.ConjoinRequired(nbs.tables) {
-		var err error
-
-		newUpstream, err := nbs.c.Conjoin(ctx, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
-
+	if nbs.c.conjoinRequired(nbs.tables) {
+		newUpstream, err := conjoin(ctx, nbs.c, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
 		if err != nil {
 			return err
 		}
 
 		newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, nbs.stats)
-
 		if err != nil {
 			return err
 		}
@@ -1100,7 +1042,6 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		if err != nil {
 			return err
 		}
-
 		return errOptimisticLockFailedTables
 	}
 
@@ -1163,8 +1104,14 @@ func (nbs *NomsBlockStore) Version() string {
 	return nbs.upstream.nbfVers
 }
 
-func (nbs *NomsBlockStore) Close() error {
-	return nbs.tables.close()
+func (nbs *NomsBlockStore) Close() (err error) {
+	if cerr := nbs.p.Close(); cerr != nil {
+		err = cerr
+	}
+	if cerr := nbs.tables.close(); cerr != nil {
+		err = cerr
+	}
+	return
 }
 
 func (nbs *NomsBlockStore) Stats() interface{} {
@@ -1300,11 +1247,11 @@ func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
 		if !ok {
 			return uint64(0), errors.New("manifest referenced table file for which there is no chunkSource.")
 		}
-		ti, err := cs.index()
+		sz, err := cs.size()
 		if err != nil {
 			return uint64(0), fmt.Errorf("error getting table file index for chunkSource. %w", err)
 		}
-		size += ti.tableFileSize()
+		size += sz
 	}
 	return size, nil
 }

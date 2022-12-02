@@ -216,7 +216,7 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build(), usage)
 	}
 
-	cli.Println(color.CyanString("Successfully exported data."))
+	cli.PrintErrln(color.CyanString("Successfully exported data."))
 	return 0
 }
 

@@ -29,6 +29,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type emptyChunkSource struct{}
@@ -71,6 +72,10 @@ func (ecs emptyChunkSource) index() (tableIndex, error) {
 
 func (ecs emptyChunkSource) reader(context.Context) (io.Reader, error) {
 	return &bytes.Buffer{}, nil
+}
+
+func (ecs emptyChunkSource) getRecordRanges(lookups []getRecord) (map[hash.Hash]Range, error) {
+	return map[hash.Hash]Range{}, nil
 }
 
 func (ecs emptyChunkSource) size() (uint64, error) {

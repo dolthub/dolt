@@ -79,6 +79,9 @@ func (cmp CompressedChunk) ToChunk() (chunks.Chunk, error) {
 func ChunkToCompressedChunk(chunk chunks.Chunk) CompressedChunk {
 	compressed := snappy.Encode(nil, chunk.Data())
 	length := len(compressed)
+	// todo: this append allocates a new buffer and copies |compressed|.
+	//  This is costly, but maybe better, as it allows us to reclaim the
+	//  extra space allocated in snappy.Encode (see snappy.MaxEncodedLen).
 	compressed = append(compressed, []byte{0, 0, 0, 0}...)
 	binary.BigEndian.PutUint32(compressed[length:], crc(compressed[:length]))
 	return CompressedChunk{H: chunk.Hash(), FullCompressedChunk: compressed, CompressedData: compressed[:length]}
@@ -92,6 +95,11 @@ func (cmp CompressedChunk) Hash() hash.Hash {
 // IsEmpty returns true if the chunk contains no data.
 func (cmp CompressedChunk) IsEmpty() bool {
 	return len(cmp.CompressedData) == 0 || (len(cmp.CompressedData) == 1 && cmp.CompressedData[0] == 0)
+}
+
+// CompressedSize returns the size of this CompressedChunk.
+func (cmp CompressedChunk) CompressedSize() int {
+	return len(cmp.CompressedData)
 }
 
 var EmptyCompressedChunk CompressedChunk
@@ -640,6 +648,22 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 func (tr tableReader) reader(ctx context.Context) (io.Reader, error) {
 	i, _ := tr.index()
 	return io.LimitReader(&readerAdapter{tr.r, 0, ctx}, int64(i.tableFileSize())), nil
+}
+
+func (tr tableReader) getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error) {
+	// findOffsets sets getRecord.found
+	recs, _, err := tr.findOffsets(requests)
+	if err != nil {
+		return nil, err
+	}
+	ranges := make(map[hash.Hash]Range, len(recs))
+	for _, r := range recs {
+		ranges[hash.Hash(*r.a)] = Range{
+			Offset: r.offset,
+			Length: r.length,
+		}
+	}
+	return ranges, nil
 }
 
 func (tr tableReader) size() (uint64, error) {

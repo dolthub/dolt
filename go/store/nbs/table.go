@@ -225,12 +225,28 @@ type extractRecord struct {
 }
 
 type chunkReader interface {
+	// has returns true if a chunk with addr |h| is present.
 	has(h addr) (bool, error)
+
+	// hasMany sets hasRecord.has to true for each present hasRecord query, it returns
+	// true if any hasRecord query was not found in this chunkReader.
 	hasMany(addrs []hasRecord) (bool, error)
+
+	// get returns the chunk data for a chunk with addr |h| if present, and nil otherwise.
 	get(ctx context.Context, h addr, stats *Stats) ([]byte, error)
+
+	// getMany sets getRecord.found to true, and calls |found| for each present getRecord query.
+	// It returns true if any getRecord query was not found in this chunkReader.
 	getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error)
+
+	// getManyCompressed sets getRecord.found to true, and calls |found| for each present getRecord query.
+	// It returns true if any getRecord query was not found in this chunkReader.
 	getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error)
+
+	// count returns the chunk count for this chunkReader.
 	count() (uint32, error)
+
+	// uncompressedLen returns the total uncompressed length this chunkReader.
 	uncompressedLen() (uint64, error)
 
 	// close releases resources retained by the |chunkReader|.
@@ -245,6 +261,9 @@ type chunkSource interface {
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
 	reader(context.Context) (io.Reader, error)
+
+	// getRecordRanges sets getRecord.found to true, and returns a Range for each present getRecord query.
+	getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error)
 
 	// size returns the total size of the chunkSource: chunks, index, and footer
 	size() (uint64, error)

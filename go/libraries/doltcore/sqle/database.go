@@ -366,7 +366,13 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
 		suffix := tblName[len(doltdb.DoltConfTablePrefix):]
-		dt, err := dtables.NewConflictsTable(ctx, suffix, root, dtables.RootSetter(db))
+		srcTable, ok, err := db.getTableInsensitive(ctx, head, ds, root, suffix)
+		if err != nil {
+			return nil, false, err
+		} else if !ok {
+			return nil, false, nil
+		}
+		dt, err := dtables.NewConflictsTable(ctx, suffix, srcTable, root, dtables.RootSetter(db))
 		if err != nil {
 			return nil, false, err
 		}

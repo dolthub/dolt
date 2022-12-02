@@ -635,6 +635,10 @@ func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ manifestConte
 	return chunks.ErrUnsupportedOperation
 }
 
+func (ftp fakeTablePersister) Close() error {
+	return nil
+}
+
 func extractAllChunks(ctx context.Context, src chunkSource, cb func(rec extractRecord)) (err error) {
 	var index tableIndex
 	if index, err = src.index(); err != nil {

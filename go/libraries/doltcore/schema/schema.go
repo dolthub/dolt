@@ -158,6 +158,19 @@ func SchemasAreEqual(sch1, sch2 Schema) bool {
 		return false
 	}
 
+	if sch1.GetCollation() != sch2.GetCollation() {
+		return false
+	}
+
+	if (sch1.Checks() == nil) != (sch2.Checks() == nil) {
+		return false
+	}
+
+	if sch1.Checks() != nil && sch2.Checks() != nil &&
+		!sch1.Checks().Equals(sch2.Checks()) {
+		return false
+	}
+
 	return sch1.Indexes().Equals(sch2.Indexes())
 }
 

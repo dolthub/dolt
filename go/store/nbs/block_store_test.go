@@ -25,7 +25,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -46,21 +45,33 @@ import (
 const testMemTableSize = 1 << 8
 
 func TestBlockStoreSuite(t *testing.T) {
-	suite.Run(t, &BlockStoreSuite{})
+	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
+		nbf := constants.FormatDefaultString
+		qp := NewUnlimitedMemQuotaProvider()
+		return NewLocalStore(ctx, nbf, dir, testMemTableSize, qp)
+	}
+	suite.Run(t, &BlockStoreSuite{factory: fn})
 }
 
 type BlockStoreSuite struct {
 	suite.Suite
 	dir        string
 	store      *NomsBlockStore
+	factory    nbsFactory
 	putCountFn func() int
+
+	// if true, skip interloper tests
+	skipInterloper bool
 }
+
+type nbsFactory func(ctx context.Context, dir string) (*NomsBlockStore, error)
 
 func (suite *BlockStoreSuite) SetupTest() {
 	var err error
 	suite.dir, err = os.MkdirTemp("", "")
 	suite.NoError(err)
-	suite.store, err = NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
+	ctx := context.Background()
+	suite.store, err = suite.factory(ctx, suite.dir)
 	suite.NoError(err)
 	suite.putCountFn = func() int {
 		return int(suite.store.putCount)
@@ -69,7 +80,9 @@ func (suite *BlockStoreSuite) SetupTest() {
 
 func (suite *BlockStoreSuite) TearDownTest() {
 	err := suite.store.Close()
-	suite.NoError(err)
+	if !osutil.IsWindowsSharingViolation(err) {
+		suite.NoError(err)
+	}
 	err = file.RemoveAll(suite.dir)
 	if !osutil.IsWindowsSharingViolation(err) {
 		suite.NoError(err)
@@ -194,9 +207,9 @@ func (suite *BlockStoreSuite) TestChunkStorePutMoreThanMemTable() {
 	if suite.putCountFn != nil {
 		suite.Equal(2, suite.putCountFn())
 	}
-	specs, err := suite.store.tables.toSpecs()
+	sz, err := suite.store.tables.physicalLen()
 	suite.NoError(err)
-	suite.Len(specs, 2)
+	suite.True(sz > testMemTableSize)
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
@@ -271,6 +284,9 @@ func (suite *BlockStoreSuite) TestChunkStoreHasMany() {
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
+	if suite.skipInterloper {
+		suite.T().Skip()
+	}
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
 	root, err := suite.store.Root(context.Background())
@@ -319,6 +335,9 @@ func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
+	if suite.skipInterloper {
+		suite.T().Skip()
+	}
 	input1 := []byte("abc")
 	c1 := chunks.NewChunk(input1)
 
@@ -353,6 +372,9 @@ func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
 }
 
 func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
+	if suite.skipInterloper {
+		suite.T().Skip()
+	}
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
 	root, err := suite.store.Root(context.Background())
@@ -414,14 +436,14 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 }
 
 func TestBlockStoreConjoinOnCommit(t *testing.T) {
-	stats := &Stats{}
 	assertContainAll := func(t *testing.T, store chunks.ChunkStore, sources ...chunkSource) {
 		ctx := context.Background()
 		for _, src := range sources {
 			err := extractAllChunks(ctx, src, func(rec extractRecord) {
 				ok, err := store.Has(context.Background(), hash.Hash(rec.a))
 				require.NoError(t, err)
-				assert.True(t, ok)
+				assert.True(t, ok, "chunk %s from chunkSource %s not found in store",
+					rec.a.String(), src.hash().String())
 			})
 			require.NoError(t, err)
 		}
@@ -460,19 +482,6 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		assert.True(t, ok)
 	})
 
-	makeCanned := func(conjoinees, keepers []tableSpec, p tablePersister) cannedConjoin {
-		srcs := chunkSources{}
-		for _, sp := range conjoinees {
-			cs, err := p.Open(context.Background(), sp.name, sp.chunkCount, nil)
-			require.NoError(t, err)
-			srcs = append(srcs, cs)
-		}
-		conjoined, err := p.ConjoinAll(context.Background(), srcs, stats)
-		require.NoError(t, err)
-		cannedSpecs := []tableSpec{{conjoined.hash(), mustUint32(conjoined.count())}}
-		return cannedConjoin{true, append(cannedSpecs, keepers...)}
-	}
-
 	t.Run("ConjoinSuccess", func(t *testing.T) {
 		fm := &fakeManifest{}
 		q := NewUnlimitedMemQuotaProvider()
@@ -483,7 +492,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		require.NoError(t, err)
 		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
 		c := &fakeConjoiner{
-			[]cannedConjoin{makeCanned(upstream[:2], upstream[2:], p)},
+			[]cannedConjoin{
+				{conjoinees: upstream[:2], keepers: upstream[2:]},
+			},
 		}
 
 		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, makeManifestManager(fm), p, q, c, testMemTableSize)
@@ -518,8 +529,8 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
 		c := &fakeConjoiner{
 			[]cannedConjoin{
-				makeCanned(upstream[:2], upstream[2:], p),
-				makeCanned(upstream[:4], upstream[4:], p),
+				{conjoinees: upstream[:2], keepers: upstream[2:]},
+				{conjoinees: upstream[:4], keepers: upstream[4:]},
 			},
 		}
 
@@ -546,45 +557,27 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 }
 
 type cannedConjoin struct {
-	should bool
-	specs  []tableSpec // Must name tables that are already persisted
+	// Must name tables that are already persisted
+	conjoinees, keepers []tableSpec
 }
 
 type fakeConjoiner struct {
 	canned []cannedConjoin
 }
 
-func (fc *fakeConjoiner) ConjoinRequired(ts tableSet) bool {
+func (fc *fakeConjoiner) conjoinRequired(ts tableSet) bool {
 	if len(fc.canned) == 0 {
 		return false
 	}
-	return fc.canned[0].should
+	return true
 }
 
-func (fc *fakeConjoiner) Conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, error) {
+func (fc *fakeConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees, keepers []tableSpec, err error) {
 	d.PanicIfTrue(len(fc.canned) == 0)
-	canned := fc.canned[0]
+	cur := fc.canned[0]
 	fc.canned = fc.canned[1:]
-
-	newContents := manifestContents{
-		nbfVers: constants.NomsVersion,
-		root:    upstream.root,
-		specs:   canned.specs,
-		lock:    generateLockHash(upstream.root, canned.specs, []tableSpec{}),
-	}
-
-	var err error
-	upstream, err = mm.Update(context.Background(), upstream.lock, newContents, stats, nil)
-
-	if err != nil {
-		return manifestContents{}, err
-	}
-
-	if upstream.lock != newContents.lock {
-		return manifestContents{}, errors.New("lock failed")
-	}
-
-	return upstream, err
+	conjoinees, keepers = cur.conjoinees, cur.keepers
+	return
 }
 
 func assertInputInStore(input []byte, h hash.Hash, s chunks.ChunkStore, assert *assert.Assertions) {

@@ -104,7 +104,7 @@ func TestMigration(t *testing.T) {
 					expected: []sql.Row{
 						{"pk", "varchar(16383)", "NO", "PRI", "NULL", ""},
 						{"c0", "int", "YES", "", "NULL", ""},
-						{"c1", "varbinary(16383)", "YES", "", "NULL", ""},
+						{"c1", "varbinary(16383)", "YES", "MUL", "NULL", ""},
 					},
 				},
 			},

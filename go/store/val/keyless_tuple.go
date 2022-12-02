@@ -45,6 +45,10 @@ func HashTupleFromValue(pool pool.BuffPool, value Tuple) (key Tuple) {
 	return
 }
 
+func ReadHashFromTuple(keylessKey Tuple) []byte {
+	return keylessKey[keylessHashSz:]
+}
+
 func ReadKeylessCardinality(value Tuple) uint64 {
 	return readUint64(value[:keylessCardSz])
 }
