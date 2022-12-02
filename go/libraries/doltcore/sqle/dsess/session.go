@@ -1078,8 +1078,8 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 
 // HasDB returns true if |sess| is tracking state for this database.
 func (d *DoltSession) HasDB(ctx *sql.Context, dbName string) bool {
-	_, ok, err := d.lookupDbState(ctx, dbName)
-	return ok && err == nil
+	_, ok := d.dbStates[strings.ToLower(dbName)]
+	return ok
 }
 
 // AddDB adds the database given to this session. This establishes a starting root value for this session, as well as

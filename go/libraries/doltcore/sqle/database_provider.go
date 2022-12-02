@@ -331,8 +331,10 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 	// if currentDB is empty, it will create the database with the default format which is the old format
 	newDbStorageFormat := types.Format_Default
 	if curDB := sess.GetCurrentDatabase(); curDB != "" {
-		if ddb, ok := sess.GetDoltDB(ctx, curDB); ok {
-			newDbStorageFormat = ddb.ValueReadWriter().Format()
+		if sess.HasDB(ctx, curDB) {
+			if ddb, ok := sess.GetDoltDB(ctx, curDB); ok {
+				newDbStorageFormat = ddb.ValueReadWriter().Format()
+			}
 		}
 	} else {
 		dbs := sess.GetDbStates()
