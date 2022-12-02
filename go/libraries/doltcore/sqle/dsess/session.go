@@ -135,11 +135,13 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 
 // LookupDbState returns the session state for the database named
 func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
+	dbName = strings.ToLower(dbName)
 	dbState, ok := d.dbStates[dbName]
 	if ok {
 		return dbState, ok, nil
 	}
 
+	// TODO: this needs to include the transaction's snapshot of the DB at tx start time
 	init, err := d.provider.DbState(ctx, dbName)
 	if err != nil && !sql.ErrDatabaseNotFound.Is(err) {
 		return nil, false, err
@@ -1100,7 +1102,7 @@ func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	DefineSystemVariablesForDB(db.Name())
 
 	sessionState := NewEmptyDatabaseSessionState()
-	d.dbStates[db.Name()] = sessionState
+	d.dbStates[strings.ToLower(db.Name())] = sessionState
 	sessionState.dbName = db.Name()
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
