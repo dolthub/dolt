@@ -267,11 +267,11 @@ func (c *Controller) ClusterDatabase() sql.Database {
 	return clusterdb.NewClusterDatabase(c)
 }
 
-func (c *Controller) RemoteSrvPort() int {
+func (c *Controller) RemoteSrvListenAddr() string {
 	if c == nil {
-		return -1
+		return ""
 	}
-	return c.cfg.RemotesAPIConfig().Port()
+	return fmt.Sprintf("%s:%d", c.cfg.RemotesAPIConfig().Address(), c.cfg.RemotesAPIConfig().Port())
 }
 
 func (c *Controller) ServerOptions() []grpc.ServerOption {
@@ -458,8 +458,9 @@ func (c *Controller) recordSuccessfulRemoteSrvCommit(name string) {
 }
 
 func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.ServerArgs) remotesrv.ServerArgs {
-	args.HttpPort = c.RemoteSrvPort()
-	args.GrpcPort = c.RemoteSrvPort()
+	listenaddr := c.RemoteSrvListenAddr()
+	args.HttpListenAddr = listenaddr
+	args.GrpcListenAddr = listenaddr
 	args.Options = c.ServerOptions()
 	args = sqle.RemoteSrvServerArgs(ctx, args)
 	args.DBCache = remotesrvStoreCache{args.DBCache, c}
