@@ -90,6 +90,8 @@ source \
   "$WITH_TPCC" \
   "$WITH_SYSTAB" > job.json
 
+echo job.json
+
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
 
 if [ "$out" != "job.batch/$jobname created" ]; then
