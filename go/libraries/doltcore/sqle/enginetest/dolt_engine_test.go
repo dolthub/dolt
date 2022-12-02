@@ -1286,7 +1286,7 @@ func TestDiffSystemTablePrepared(t *testing.T) {
 	}
 }
 
-func TestTestReadOnlyDatabases(t *testing.T) {
+func TestReadOnlyDatabases(t *testing.T) {
 	enginetest.TestReadOnlyDatabases(t, newDoltHarness(t))
 }
 

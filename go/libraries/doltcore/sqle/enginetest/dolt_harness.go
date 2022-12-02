@@ -344,14 +344,14 @@ func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (*gms.Eng
 	dbs := make([]sqle.SqlDatabase, len(allDatabases))
 	locations := make([]filesys.Filesys, len(allDatabases))
 
-	for _, db := range allDatabases {
-		dbs = append(dbs, sqle.ReadOnlyDatabase{Database: db.(sqle.Database)})
+	for i, db := range allDatabases {
+		dbs[i] = sqle.ReadOnlyDatabase{Database: db.(sqle.Database)}
 		loc, err := ddp.FileSystemForDatabase(db.Name())
 		if err != nil {
 			return nil, err
 		}
 
-		locations = append(locations, loc)
+		locations[i] = loc
 	}
 
 	readOnlyProvider, err := sqle.NewDoltDatabaseProviderWithDatabases("main", ddp.FileSystem(), dbs, locations)
