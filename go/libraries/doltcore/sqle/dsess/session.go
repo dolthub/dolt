@@ -249,7 +249,8 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	//  duration of the transaction
 
 	dbName := ctx.GetTransactionDatabase()
-	if len(dbName) == 0 {
+	// TODO: remove this hack when we have true multi-db transaction support
+	if isNoOpTransactionDatabase(dbName) {
 		return DisabledTransaction{}, nil
 	}
 
@@ -315,6 +316,12 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	sessionState.dirty = false
 
 	return NewDoltTransaction(dbName, ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic), nil
+}
+
+// isNoOpTransactionDatabase returns whether the database name given is a non-Dolt database that shouldn't have
+// transaction logic performed on it
+func isNoOpTransactionDatabase(dbName string) bool {
+	return len(dbName) == 0 || dbName == "information_schema" || dbName == "mysql"
 }
 
 // GetInitialDBState returns the InitialDbState for |dbName|.
@@ -402,6 +409,9 @@ func (d *DoltSession) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSe
 // may write only a new working set, or may additionally create a new dolt commit for the current HEAD.
 func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
 	dbName := ctx.GetTransactionDatabase()
+	if isNoOpTransactionDatabase(dbName) {
+		return nil
+	}
 
 	if d.BatchMode() == Batched {
 		err := d.Flush(ctx, dbName)
