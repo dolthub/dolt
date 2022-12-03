@@ -61,15 +61,4 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-latency
-          client-payload: |
-            {
-              "from_server": "dolt",
-              "from_version": "${{ github.sha }}",
-              "to_server": "dolt",
-              "to_version": "${{ steps.comment-branch.outputs.head_sha }}",
-              "mode": "pullRequest",
-              "issue_number": "${{ steps.get_pull_number.outputs.pull_number }}",
-              "init_big_repo": "true",
-              "actor": "${{ github.actor }}",
-              "template_script": "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"
-            }
+          client-payload: '{"from_server": "dolt", "from_version": "${{ github.sha }}", "to_server": "dolt", "to_version": "${{ steps.comment-branch.outputs.head_sha }}", "mode": "pullRequest", "issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "init_big_repo": "true", "actor": "${{ github.actor }}", "template_script": "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"}'
