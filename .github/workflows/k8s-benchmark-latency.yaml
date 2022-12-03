@@ -10,7 +10,7 @@ jobs:
     name: Benchmark Performance
     strategy:
       matrix:
-        dolt_fmt: [ "__DOLT__" ]
+        dolt_fmt: [ "__LD_1__", "__DOLT__" ]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -37,27 +37,11 @@ jobs:
           KUBECONFIG=kubeconfig kubectl config use-context github-actions-dolt-context
         env:
           CONFIG: ${{ secrets.CORP_KUBECONFIG }}
-      #- name: Create Sysbench Performance Benchmarking K8s Job
-        #run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
-        #env:
-          #FROM_SERVER: ${{ github.event.client_payload.from_server }}
-          #FROM_VERSION: ${{ github.event.client_payload.from_version }}
-          #TO_SERVER: ${{ github.event.client_payload.to_server }}
-          #TO_VERSION: ${{ github.event.client_payload.to_version }}
-          #MODE: ${{ github.event.client_payload.mode }}
-          #ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
-          #ACTOR: ${{ github.event.client_payload.actor }}
-          #ACTOR_EMAIL: ${{ github.event.client_payload.actor_email }}
-          #REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
-          #KUBECONFIG: "./kubeconfig"
-          #INIT_BIG_REPO: ${{ github.event.client_payload.init_big_repo }}
-          #NOMS_BIN_FORMAT: ${{ matrix.dolt_fmt }}
-          #TEMPLATE_SCRIPT: ${{ github.event.client_payload.template_script }}
-      - name: System Tables
+      - name: Create Sysbench Performance Benchmarking K8s Job
         run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
         env:
-          FROM_SERVER: ${{ github.event.client_payload.to_server }}
-          FROM_VERSION: ${{ github.event.client_payload.to_version }}
+          FROM_SERVER: ${{ github.event.client_payload.from_server }}
+          FROM_VERSION: ${{ github.event.client_payload.from_version }}
           TO_SERVER: ${{ github.event.client_payload.to_server }}
           TO_VERSION: ${{ github.event.client_payload.to_version }}
           MODE: ${{ github.event.client_payload.mode }}
@@ -66,24 +50,23 @@ jobs:
           ACTOR_EMAIL: ${{ github.event.client_payload.actor_email }}
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
-          INIT_BIG_REPO: "false"
+          INIT_BIG_REPO: ${{ github.event.client_payload.init_big_repo }}
           NOMS_BIN_FORMAT: ${{ matrix.dolt_fmt }}
-          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"
-          WITH_SYSTAB: "true"
-      #- name: Create TPCC Performance Benchmarking K8s Job
-        #run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
-        #env:
-          #FROM_SERVER: ${{ github.event.client_payload.from_server }}
-          #FROM_VERSION: ${{ github.event.client_payload.from_version }}
-          #TO_SERVER: ${{ github.event.client_payload.to_server }}
-          #TO_VERSION: ${{ github.event.client_payload.to_version }}
-          #MODE: ${{ github.event.client_payload.mode }}
-          #ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
-          #ACTOR: ${{ github.event.client_payload.actor }}
-          #ACTOR_EMAIL: ${{ github.event.client_payload.actor_email }}
-          #REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
-          #KUBECONFIG: "./kubeconfig"
-          #INIT_BIG_REPO: ${{ github.event.client_payload.init_big_repo }}
-          #NOMS_BIN_FORMAT: ${{ matrix.dolt_fmt }}
-          #WITH_TPCC: "true"
-          #TEMPLATE_SCRIPT: ${{ github.event.client_payload.template_script }}
+          TEMPLATE_SCRIPT: ${{ github.event.client_payload.template_script }}
+      - name: Create TPCC Performance Benchmarking K8s Job
+        run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
+        env:
+          FROM_SERVER: ${{ github.event.client_payload.from_server }}
+          FROM_VERSION: ${{ github.event.client_payload.from_version }}
+          TO_SERVER: ${{ github.event.client_payload.to_server }}
+          TO_VERSION: ${{ github.event.client_payload.to_version }}
+          MODE: ${{ github.event.client_payload.mode }}
+          ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
+          ACTOR: ${{ github.event.client_payload.actor }}
+          ACTOR_EMAIL: ${{ github.event.client_payload.actor_email }}
+          REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+          KUBECONFIG: "./kubeconfig"
+          INIT_BIG_REPO: ${{ github.event.client_payload.init_big_repo }}
+          NOMS_BIN_FORMAT: ${{ matrix.dolt_fmt }}
+          WITH_TPCC: "true"
+          TEMPLATE_SCRIPT: ${{ github.event.client_payload.template_script }}
