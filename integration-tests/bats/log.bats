@@ -627,3 +627,8 @@ teardown() {
     run expect $BATS_TEST_DIRNAME/log.expect
     [ "$status" -eq 0 ]
 }
+
+@test "log: string formatting characters are escaped" {
+    run dolt commit --allow-empty -m "% should be escaped"
+    [[ "$output" =~ "% should be escaped" ]] || false
+}
