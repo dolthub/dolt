@@ -407,7 +407,6 @@ func DoDoltConflictsResolve(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 	dbName := ctx.GetCurrentDatabase()
-	fmt.Printf("database name: %s", dbName)
 
 	apr, err := cli.CreateConflictsResolveArgParser().Parse(args)
 	if err != nil {
