@@ -1149,8 +1149,8 @@ func (ddb *DoltDB) Rebase(ctx context.Context) error {
 	return datas.ChunkStoreFromDatabase(ddb.db).Rebase(ctx)
 }
 
-// GC performs garbage collection on this ddb. Values passed in |uncommittedVals| will be temporarily saved during gc.
-func (ddb *DoltDB) GC(ctx context.Context, uncommittedVals ...hash.Hash) error {
+// GC performs garbage collection on this ddb.
+func (ddb *DoltDB) GC(ctx context.Context) error {
 	collector, ok := ddb.db.Database.(datas.GarbageCollector)
 	if !ok {
 		return fmt.Errorf("this database does not support garbage collection")
@@ -1165,7 +1165,8 @@ func (ddb *DoltDB) GC(ctx context.Context, uncommittedVals ...hash.Hash) error {
 	if err != nil {
 		return err
 	}
-	newGen := hash.NewHashSet(uncommittedVals...)
+
+	newGen := make(hash.HashSet)
 	oldGen := make(hash.HashSet)
 	err = datasets.IterAll(ctx, func(keyStr string, h hash.Hash) error {
 		var isOldGen bool
