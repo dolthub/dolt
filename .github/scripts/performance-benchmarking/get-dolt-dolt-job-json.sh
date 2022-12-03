@@ -51,7 +51,8 @@ if [ -n "$withSysbench" ]; then
     #query2Tests="('dolt_diff_table_commit_filter_dummy', 'dolt_diffs_commit_filter_dummy', 'dolt_history_commit_filter_dummy', 'dolt_log_commit_filter_dummy', 'dolt_commits_commit_filter_dummy', 'dolt_commit_ancestors_commit_filter_dummy', 'dolt_diff_log_join_on_commit_dummy')"
     query1Tests="('gen/dolt_diff_table_commit_filter.gen.lua')"
     query2Tests="('gen/dolt_diff_table_commit_filter_dummy.gen.lua')"
-    latencyQuery1=$(echo "Select name, dolt_multiple from (
+    latencyQuery1="
+Select name, dolt_multiple from (
   Select
     trim(TRAILING '.gen.lua' FROM trim(LEADING 'gen/' FROM test_name)) as name,
     round(latency_percentile / lead(latency_percentile) over w, 2) as dolt_multiple,
@@ -59,7 +60,7 @@ if [ -n "$withSysbench" ]; then
   From from_results
   Having mod(rn,2) = 1
   Window w as (order by test_name ROWS between 1 preceding and 1 following)
-  )a;" | tr '\n' ' ')
+)a;"
     latencyQuery2=
 fi
 
