@@ -56,8 +56,6 @@ timesuffix=`date +%s%N`
 jobname="$actorShort"
 if [ -n "$WITH_TPCC" ]; then
   jobname="$jobname-tpcc"
-elif [ -n "$WITH_SYSTAB" ]; then
-  jobname="$jobname-systab"
 fi
 jobname="$jobname-$timesuffix"
 
@@ -87,8 +85,7 @@ source \
   "$issuenumber"     \
   "$INIT_BIG_REPO"   \
   "$NOMS_BIN_FORMAT" \
-  "$WITH_TPCC" \
-  "$WITH_SYSTAB" > job.json
+  "$WITH_TPCC" > job.json
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
 
