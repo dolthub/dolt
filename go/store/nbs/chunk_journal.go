@@ -84,7 +84,8 @@ func newChunkJournal(ctx context.Context, nbfVers, dir string, m manifest, p *fs
 	if err != nil {
 		return nil, err
 	} else if ok {
-		// only open a journalWriter if the journal file exists
+		// only open a journalWriter if the journal file exists,
+		// otherwise we wait to open in case we're cloning
 		if err = j.openJournal(ctx); err != nil {
 			return nil, err
 		}
@@ -152,9 +153,8 @@ func (j *chunkJournal) openJournal(ctx context.Context) (err error) {
 		if err != nil {
 			return err
 		}
-	} else if !emptyAddr(addr(root)) {
-		// journal file contains root hash, but manifest is missing
-		return fmt.Errorf("missing manifest while initializing chunk journal")
+	} else {
+		return fmt.Errorf("manifest not found when opening chunk journal")
 	}
 	j.contents = contents
 	return
@@ -274,27 +274,21 @@ func (j *chunkJournal) maybeInit(ctx context.Context) (err error) {
 	return
 }
 
-func (j *chunkJournal) flushManifest() error {
-	ctx, s := context.Background(), &Stats{}
-	_, last, err := j.backing.ParseIfExists(ctx, s, nil)
-	if err != nil {
-		return err
-	}
-	if !emptyAddr(j.contents.lock) {
-		_, err = j.backing.Update(ctx, last.lock, j.contents, s, nil)
-	}
-	return err
-}
-
 // Close implements io.Closer
 func (j *chunkJournal) Close() (err error) {
-	if cerr := j.flushManifest(); cerr != nil {
+	ctx := context.Background()
+	_, last, cerr := j.backing.ParseIfExists(ctx, &Stats{}, nil)
+	if cerr != nil {
 		err = cerr
+	} else if !emptyAddr(j.contents.lock) {
+		// best effort update to |backing|, this will
+		// fail if the database has been deleted.
+		// if we spuriously fail, we'll update |backing|
+		// next time we open this chunkJournal
+		_, _ = j.backing.Update(ctx, last.lock, j.contents, &Stats{}, nil)
 	}
 	if j.journal != nil {
-		if cerr := j.journal.Close(); cerr != nil {
-			err = cerr
-		}
+		err = j.journal.Close()
 	}
 	return
 }
