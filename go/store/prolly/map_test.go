@@ -60,7 +60,10 @@ func TestMap(t *testing.T) {
 				testIterRange(t, prollyMap, tuples)
 			})
 			t.Run("iter ordinal range", func(t *testing.T) {
-				testIterOrdinalRange(t, prollyMap.(ordinalMap), tuples)
+				testIterOrdinalRange(t, prollyMap.(Map), tuples)
+			})
+			t.Run("iter key range", func(t *testing.T) {
+				testIterKeyRange(t, prollyMap.(Map), tuples)
 			})
 
 			indexMap, tuples2 := makeProllySecondaryIndex(t, s)
@@ -240,17 +243,13 @@ func TestNewEmptyNode(t *testing.T) {
 	msg := s.Serialize(nil, nil, nil, 0)
 	empty, err := tree.NodeFromBytes(msg)
 	require.NoError(t, err)
-	l, err := empty.Level()
-	require.NoError(t, err)
-	assert.Equal(t, 0, l)
+	assert.Equal(t, 0, empty.Level())
 	assert.Equal(t, 0, empty.Count())
 	tc, err := empty.TreeCount()
 	require.NoError(t, err)
 	assert.Equal(t, 0, tc)
 	assert.Equal(t, 76, empty.Size())
-	leaf, err := empty.IsLeaf()
-	require.NoError(t, err)
-	assert.True(t, leaf)
+	assert.True(t, empty.IsLeaf())
 }
 
 // credit: https://github.com/tailscale/tailscale/commit/88586ec4a43542b758d6f4e15990573970fb4e8a
@@ -302,7 +301,7 @@ func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 
 	// test get
-	for _, kv := range tuples {
+	for i, kv := range tuples {
 		err := om.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
 			assert.NotNil(t, kv[0])
 			expKey, expVal := kv[0], kv[1]
@@ -311,6 +310,39 @@ func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 			return
 		})
 		require.NoError(t, err)
+
+		if m, ok := om.(Map); ok {
+			ord, err := m.GetOrdinalForKey(ctx, kv[0])
+			require.NoError(t, err)
+			assert.Equal(t, uint64(i), ord)
+		}
+	}
+
+	// test get with non-existent keys
+	kd, vd := om.Descriptors()
+	inserts := generateInserts(t, om, kd, vd, len(tuples)/2)
+	for _, kv := range inserts {
+		err := om.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
+			assert.Equal(t, 0, len(key), "Got %s", kd.Format(key))
+			assert.Equal(t, 0, len(val), "Got %s", vd.Format(val))
+			return nil
+		})
+		require.NoError(t, err)
+
+		if m, ok := om.(Map); ok {
+			// find the expected ordinal return value for this non-existent key
+			exp := len(tuples)
+			for i := 0; i < len(tuples); i++ {
+				if kd.Compare(tuples[i][0], kv[0]) >= 0 {
+					exp = i
+					break
+				}
+			}
+
+			ord, err := m.GetOrdinalForKey(ctx, kv[0])
+			require.NoError(t, err)
+			assert.Equal(t, uint64(exp), ord)
+		}
 	}
 
 	desc := keyDescFromMap(om)

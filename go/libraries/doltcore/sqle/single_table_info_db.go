@@ -106,7 +106,7 @@ func (db *SingleTableInfoDatabase) LookupPartitions(context *sql.Context, lookup
 }
 
 // CreateIndexForForeignKey implements sql.ForeignKeyTable.
-func (db *SingleTableInfoDatabase) CreateIndexForForeignKey(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn) error {
+func (db *SingleTableInfoDatabase) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
 	return fmt.Errorf("cannot create foreign keys on a single table information database")
 }
 
@@ -294,6 +294,11 @@ func (idx fmtIndex) Comment() string {
 	return idx.comment
 }
 
+// PrefixLengths implements sql.Index
+func (idx fmtIndex) PrefixLengths() []uint16 {
+	return nil
+}
+
 // IndexType implements sql.Index
 func (idx fmtIndex) IndexType() string {
 	return "BTREE"
@@ -310,6 +315,6 @@ func (idx fmtIndex) IndexedAccess(index sql.IndexLookup) (sql.IndexedTable, erro
 }
 
 // ColumnExpressionTypes implements sql.Index
-func (idx fmtIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
+func (idx fmtIndex) ColumnExpressionTypes() []sql.ColumnExpressionType {
 	panic("unimplemented")
 }

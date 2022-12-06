@@ -163,15 +163,19 @@ func ReduceToIndexKeysFromTagMap(nbf *types.NomsBinFormat, idx schema.Index, tag
 }
 
 // ReduceToIndexPartialKey creates an index record from a primary storage record.
-func ReduceToIndexPartialKey(idx schema.Index, r Row) (types.Tuple, error) {
+func ReduceToIndexPartialKey(tags []uint64, idx schema.Index, r Row) (types.Tuple, error) {
 	var vals []types.Value
-	for _, tag := range idx.IndexedColumnTags() {
+	if idx.Name() != "" {
+		tags = idx.IndexedColumnTags()
+	}
+	for _, tag := range tags {
 		val, ok := r.GetColVal(tag)
 		if !ok {
 			val = types.NullValue
 		}
 		vals = append(vals, types.Uint(tag), val)
 	}
+
 	return types.NewTuple(r.Format(), vals...)
 }
 

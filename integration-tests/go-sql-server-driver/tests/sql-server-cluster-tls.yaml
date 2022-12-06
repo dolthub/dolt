@@ -1,0 +1,489 @@
+tests:
+- name: tls, bad root, failover to standby fails
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: https://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+            tls_key: key.pem
+            tls_cert: cert.pem
+            tls_ca: root.pem
+    - name: key.pem
+      source_path: testdata/rsa_key.pem
+    - name: cert.pem
+      source_path: testdata/rsa_chain.pem
+    - name: root.pem
+      source_path: testdata/ed25519_root.pem
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: https://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+            tls_key: key.pem
+            tls_cert: cert.pem
+            tls_ca: root.pem
+    - name: key.pem
+      source_path: testdata/rsa_key.pem
+    - name: cert.pem
+      source_path: testdata/rsa_chain.pem
+    - name: root.pem
+      source_path: testdata/rsa_root.pem
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
+  connections:
+  - on: server1
+    queries:
+    - exec: 'create database repo1'
+    - exec: "use repo1"
+    - query: "call dolt_assume_cluster_role('standby', '11')"
+      error_match: failed to transition from primary to standby gracefully
+    - exec: "create table vals (i int primary key)"
+    - exec: "insert into vals values (0)"
+- name: tls, expired leaf, failover to standby fails
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: https://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+            tls_key: key.pem
+            tls_cert: cert.pem
+            tls_ca: root.pem
+    - name: key.pem
+      source_path: testdata/rsa_key.pem
+    - name: cert.pem
+      source_path: testdata/rsa_chain.pem
+    - name: root.pem
+      source_path: testdata/rsa_root.pem
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: https://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+            tls_key: key.pem
+            tls_cert: cert.pem
+            tls_ca: root.pem
+    - name: key.pem
+      source_path: testdata/rsa_exp_key.pem
+    - name: cert.pem
+      source_path: testdata/rsa_exp_chain.pem
+    - name: root.pem
+      source_path: testdata/rsa_root.pem
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
+  connections:
+  - on: server1
+    queries:
+    - exec: 'create database repo1'
+    - exec: "use repo1"
+    - query: "call dolt_assume_cluster_role('standby', '11')"
+      error_match: failed to transition from primary to standby gracefully
+    - exec: "create table vals (i int primary key)"
+    - exec: "insert into vals values (0)"
+- name: tls, mismatched dns, failover to standby fails
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: https://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+            tls_key: key.pem
+            tls_cert: cert.pem
+            tls_ca: root.pem
+            server_name_dns: ["does-not-match.dolt-instance.dolt-integration-test.example"]
+    - name: key.pem
+      source_path: testdata/rsa_key.pem
+    - name: cert.pem
+      source_path: testdata/rsa_chain.pem
+    - name: root.pem
+      source_path: testdata/rsa_root.pem
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: https://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+            tls_key: key.pem
+            tls_cert: cert.pem
+            tls_ca: root.pem
+    - name: key.pem
+      source_path: testdata/rsa_key.pem
+    - name: cert.pem
+      source_path: testdata/rsa_chain.pem
+    - name: root.pem
+      source_path: testdata/rsa_root.pem
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
+  connections:
+  - on: server1
+    queries:
+    - exec: 'create database repo1'
+    - exec: "use repo1"
+    - query: "call dolt_assume_cluster_role('standby', '11')"
+      error_match: failed to transition from primary to standby gracefully
+    - exec: "create table vals (i int primary key)"
+    - exec: "insert into vals values (0)"
+- name: tls, mismatched url, failover to standby fails
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: https://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+            tls_key: key.pem
+            tls_cert: cert.pem
+            tls_ca: root.pem
+            server_name_urls: ["spiffe://dolt-integration-tests.dev.trust.dolthub.com.example/dolt-instance/does-not-match"]
+    - name: key.pem
+      source_path: testdata/rsa_key.pem
+    - name: cert.pem
+      source_path: testdata/rsa_chain.pem
+    - name: root.pem
+      source_path: testdata/rsa_root.pem
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: https://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+            tls_key: key.pem
+            tls_cert: cert.pem
+            tls_ca: root.pem
+    - name: key.pem
+      source_path: testdata/rsa_key.pem
+    - name: cert.pem
+      source_path: testdata/rsa_chain.pem
+    - name: root.pem
+      source_path: testdata/rsa_root.pem
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
+  connections:
+  - on: server1
+    queries:
+    - exec: 'create database repo1'
+    - exec: "use repo1"
+    - query: "call dolt_assume_cluster_role('standby', '11')"
+      error_match: failed to transition from primary to standby gracefully
+    - exec: "create table vals (i int primary key)"
+    - exec: "insert into vals values (0)"
+- name: tls, good rsa certs, create new database, primary replicates to standby, fails over, new primary replicates to standby, fails over, new primary has all writes
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: https://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+            tls_key: key.pem
+            tls_cert: cert.pem
+            tls_ca: root.pem
+    - name: key.pem
+      source_path: testdata/rsa_key.pem
+    - name: cert.pem
+      source_path: testdata/rsa_chain.pem
+    - name: root.pem
+      source_path: testdata/rsa_root.pem
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: https://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+            tls_key: key.pem
+            tls_cert: cert.pem
+            tls_ca: root.pem
+    - name: key.pem
+      source_path: testdata/rsa_key.pem
+    - name: cert.pem
+      source_path: testdata/rsa_chain.pem
+    - name: root.pem
+      source_path: testdata/rsa_root.pem
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
+  connections:
+  - on: server1
+    queries:
+    - exec: 'create database repo1'
+    - exec: 'use repo1'
+    - exec: 'create table vals (i int primary key)'
+    - exec: 'insert into vals values (0),(1),(2),(3),(4)'
+    - query: "call dolt_assume_cluster_role('standby', 2)"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+  - on: server2
+    queries:
+    - exec: 'use repo1'
+    - query: "select count(*) from vals"
+      result:
+        columns: ["count(*)"]
+        rows: [["5"]]
+    - query: "call dolt_assume_cluster_role('primary', 2)"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+  - on: server2
+    queries:
+    - exec: 'use repo1'
+    - exec: 'insert into vals values (5),(6),(7),(8),(9)'
+    - query: "call dolt_assume_cluster_role('standby', 3)"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+  - on: server1
+    queries:
+    - exec: 'use repo1'
+    - query: "select count(*) from vals"
+      result:
+        columns: ["count(*)"]
+        rows: [["10"]]
+    - query: "call dolt_assume_cluster_role('primary', 3)"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+  - on: server1
+    queries:
+    - exec: 'use repo1'
+    - exec: 'insert into vals values (10),(11),(12),(13),(14)'
+    - query: "select count(*) from vals"
+      result:
+        columns: ["count(*)"]
+        rows: [["15"]]
+- name: tls, good ed25519 certs, create new database, primary replicates to standby, fails over, new primary replicates to standby, fails over, new primary has all writes
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: https://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+            tls_key: key.pem
+            tls_cert: cert.pem
+            tls_ca: root.pem
+            server_name_urls: ["spiffe://dolt-integration-tests.dev.trust.dolthub.com.example/dolt-instance"]
+            server_name_dns: ["dolt-instance.dolt-integration-test.example"]
+    - name: key.pem
+      source_path: testdata/ed25519_key.pem
+    - name: cert.pem
+      source_path: testdata/ed25519_chain.pem
+    - name: root.pem
+      source_path: testdata/ed25519_root.pem
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: https://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+            tls_key: key.pem
+            tls_cert: cert.pem
+            tls_ca: root.pem
+            server_name_urls: ["spiffe://dolt-integration-tests.dev.trust.dolthub.com.example/dolt-instance"]
+            server_name_dns: ["dolt-instance.dolt-integration-test.example"]
+    - name: key.pem
+      source_path: testdata/ed25519_key.pem
+    - name: cert.pem
+      source_path: testdata/ed25519_chain.pem
+    - name: root.pem
+      source_path: testdata/ed25519_root.pem
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
+  connections:
+  - on: server1
+    queries:
+    - exec: 'create database repo1'
+    - exec: 'use repo1'
+    - exec: 'create table vals (i int primary key)'
+    - exec: 'insert into vals values (0),(1),(2),(3),(4)'
+    - query: "call dolt_assume_cluster_role('standby', 2)"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+  - on: server2
+    queries:
+    - exec: 'use repo1'
+    - query: "select count(*) from vals"
+      result:
+        columns: ["count(*)"]
+        rows: [["5"]]
+    - query: "call dolt_assume_cluster_role('primary', 2)"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+  - on: server2
+    queries:
+    - exec: 'use repo1'
+    - exec: 'insert into vals values (5),(6),(7),(8),(9)'
+    - query: "call dolt_assume_cluster_role('standby', 3)"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+  - on: server1
+    queries:
+    - exec: 'use repo1'
+    - query: "select count(*) from vals"
+      result:
+        columns: ["count(*)"]
+        rows: [["10"]]
+    - query: "call dolt_assume_cluster_role('primary', 3)"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+  - on: server1
+    queries:
+    - exec: 'use repo1'
+    - exec: 'insert into vals values (10),(11),(12),(13),(14)'
+    - query: "select count(*) from vals"
+      result:
+        columns: ["count(*)"]
+        rows: [["15"]]

@@ -47,6 +47,7 @@ func CreateIndex(
 	table *doltdb.Table,
 	indexName string,
 	columns []string,
+	prefixLengths []uint16,
 	isUnique bool,
 	isUserDefined bool,
 	comment string,
@@ -99,6 +100,7 @@ func CreateIndex(
 	index, err := sch.Indexes().AddIndexByColNames(
 		indexName,
 		realColNames,
+		prefixLengths,
 		schema.IndexProperties{
 			IsUnique:      isUnique,
 			IsUserDefined: isUserDefined,

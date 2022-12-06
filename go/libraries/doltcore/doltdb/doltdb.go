@@ -1149,8 +1149,8 @@ func (ddb *DoltDB) Rebase(ctx context.Context) error {
 	return datas.ChunkStoreFromDatabase(ddb.db).Rebase(ctx)
 }
 
-// GC performs garbage collection on this ddb. Values passed in |uncommitedVals| will be temporarily saved during gc.
-func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
+// GC performs garbage collection on this ddb. Values passed in |uncommittedVals| will be temporarily saved during gc.
+func (ddb *DoltDB) GC(ctx context.Context, uncommittedVals ...hash.Hash) error {
 	collector, ok := ddb.db.Database.(datas.GarbageCollector)
 	if !ok {
 		return fmt.Errorf("this database does not support garbage collection")
@@ -1165,7 +1165,7 @@ func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
 	if err != nil {
 		return err
 	}
-	newGen := hash.NewHashSet(uncommitedVals...)
+	newGen := hash.NewHashSet(uncommittedVals...)
 	oldGen := make(hash.HashSet)
 	err = datasets.IterAll(ctx, func(keyStr string, h hash.Hash) error {
 		var isOldGen bool
@@ -1238,11 +1238,15 @@ func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
 // given, pulling all chunks reachable from the given targetHash. Pull progress
 // is communicated over the provided channel.
 func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB, targetHash hash.Hash, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
-	srcCS := datas.ChunkStoreFromDatabase(srcDB.db)
-	destCS := datas.ChunkStoreFromDatabase(ddb.db)
+	return pullHash(ctx, ddb.db, srcDB.db, targetHash, tempDir, progChan, statsCh)
+}
+
+func pullHash(ctx context.Context, destDB, srcDB datas.Database, targetHash hash.Hash, tempDir string, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
+	srcCS := datas.ChunkStoreFromDatabase(srcDB)
+	destCS := datas.ChunkStoreFromDatabase(destDB)
 	waf := types.WalkAddrsForNBF(srcDB.Format())
 
-	if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
+	if datas.CanUsePuller(srcDB) && datas.CanUsePuller(destDB) {
 		puller, err := pull.NewPuller(ctx, tempDir, defaultChunksPerTF, srcCS, destCS, waf, targetHash, statsCh)
 		if err == pull.ErrDBUpToDate {
 			return nil
@@ -1265,6 +1269,11 @@ func (ddb *DoltDB) SetCommitHooks(ctx context.Context, postHooks []CommitHook) *
 	return ddb
 }
 
+func (ddb *DoltDB) PrependCommitHook(ctx context.Context, hook CommitHook) *DoltDB {
+	ddb.db = ddb.db.SetCommitHooks(ctx, append([]CommitHook{hook}, ddb.db.PostCommitHooks()...))
+	return ddb
+}
+
 func (ddb *DoltDB) SetCommitHookLogger(ctx context.Context, wr io.Writer) *DoltDB {
 	if ddb.db.Database != nil {
 		ddb.db = ddb.db.SetCommitHookLogger(ctx, wr)
@@ -1277,7 +1286,7 @@ func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, datasetId string) err
 	if err != nil {
 		return err
 	}
-	ddb.db.ExecuteCommitHooks(ctx, ds)
+	ddb.db.ExecuteCommitHooks(ctx, ds, false)
 	return nil
 }
 

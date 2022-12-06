@@ -16,7 +16,7 @@ package tree
 
 import (
 	"context"
-	"sort"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,6 +32,15 @@ func TestNodeCursor(t *testing.T) {
 		testNewCursorAtItem(t, 100)
 		testNewCursorAtItem(t, 1000)
 		testNewCursorAtItem(t, 10_000)
+	})
+
+	t.Run("get ordinal at item", func(t *testing.T) {
+		counts := []int{10, 100, 1000, 10_000}
+		for _, c := range counts {
+			t.Run(fmt.Sprintf("%d", c), func(t *testing.T) {
+				testGetOrdinalOfCursor(t, c)
+			})
+		}
 	})
 
 	t.Run("retreat past beginning", func(t *testing.T) {
@@ -69,13 +78,62 @@ func testNewCursorAtItem(t *testing.T, count int) {
 	ctx := context.Background()
 	for i := range items {
 		key, value := items[i][0], items[i][1]
-		cur, err := NewCursorAtItem(ctx, ns, root, key, searchTestTree)
+		cur, err := NewCursorAtKey(ctx, ns, root, val.Tuple(key), keyDesc)
 		require.NoError(t, err)
 		assert.Equal(t, key, cur.CurrentKey())
 		assert.Equal(t, value, cur.CurrentValue())
 	}
 
 	validateTreeItems(t, ns, root, items)
+}
+
+func testGetOrdinalOfCursor(t *testing.T, count int) {
+	tuples, desc := AscendingUintTuples(count)
+
+	ctx := context.Background()
+	ns := NewTestNodeStore()
+	serializer := message.NewProllyMapSerializer(desc, ns.Pool())
+	chkr, err := newEmptyChunker(ctx, ns, serializer)
+	require.NoError(t, err)
+
+	for _, item := range tuples {
+		err = chkr.AddPair(ctx, Item(item[0]), Item(item[1]))
+		assert.NoError(t, err)
+	}
+	nd, err := chkr.Done(ctx)
+	assert.NoError(t, err)
+
+	for i := 0; i < len(tuples); i++ {
+		curr, err := NewCursorAtKey(ctx, ns, nd, tuples[i][0], desc)
+		require.NoError(t, err)
+
+		ord, err := GetOrdinalOfCursor(curr)
+		require.NoError(t, err)
+
+		assert.Equal(t, uint64(i), ord)
+	}
+
+	b := val.NewTupleBuilder(desc)
+	b.PutUint32(0, uint32(len(tuples)))
+	aboveItem := b.Build(sharedPool)
+
+	curr, err := NewCursorAtKey(ctx, ns, nd, aboveItem, desc)
+	require.NoError(t, err)
+
+	ord, err := GetOrdinalOfCursor(curr)
+	require.NoError(t, err)
+
+	require.Equal(t, uint64(len(tuples)), ord)
+
+	// A cursor past the end should return an ordinal count equal to number of
+	// nodes.
+	curr, err = NewCursorPastEnd(ctx, ns, nd)
+	require.NoError(t, err)
+
+	ord, err = GetOrdinalOfCursor(curr)
+	require.NoError(t, err)
+
+	require.Equal(t, uint64(len(tuples)), ord)
 }
 
 func randomTree(t *testing.T, count int) (Node, [][2]Item, NodeStore) {
@@ -104,13 +162,6 @@ var valDesc = val.NewTupleDescriptor(
 	val.Type{Enc: val.Int64Enc, Nullable: true},
 	val.Type{Enc: val.Int64Enc, Nullable: true},
 )
-
-func searchTestTree(item Item, nd Node) int {
-	return sort.Search(int(nd.count), func(i int) bool {
-		l, r := val.Tuple(item), val.Tuple(nd.GetKey(i))
-		return keyDesc.Compare(l, r) <= 0
-	})
-}
 
 func randomTupleItemPairs(count int, ns NodeStore) (items [][2]Item) {
 	tups := RandomTuplePairs(count, keyDesc, valDesc, ns)

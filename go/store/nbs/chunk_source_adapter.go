@@ -14,17 +14,19 @@
 
 package nbs
 
+import "context"
+
 type chunkSourceAdapter struct {
 	tableReader
 	h addr
 }
 
-func (csa chunkSourceAdapter) hash() (addr, error) {
-	return csa.h, nil
+func (csa chunkSourceAdapter) hash() addr {
+	return csa.h
 }
 
-func newReaderFromIndexData(q MemoryQuotaProvider, idxData []byte, name addr, tra tableReaderAt, blockSize uint64) (cs chunkSource, err error) {
-	index, err := parseTableIndexByCopy(idxData, q)
+func newReaderFromIndexData(ctx context.Context, q MemoryQuotaProvider, idxData []byte, name addr, tra tableReaderAt, blockSize uint64) (cs chunkSource, err error) {
+	index, err := parseTableIndexByCopy(ctx, idxData, q)
 	if err != nil {
 		return nil, err
 	}
@@ -36,12 +38,12 @@ func newReaderFromIndexData(q MemoryQuotaProvider, idxData []byte, name addr, tr
 	return &chunkSourceAdapter{tr, name}, nil
 }
 
-func (csa chunkSourceAdapter) Close() error {
-	return csa.tableReader.Close()
+func (csa chunkSourceAdapter) close() error {
+	return csa.tableReader.close()
 }
 
-func (csa chunkSourceAdapter) Clone() (chunkSource, error) {
-	tr, err := csa.tableReader.Clone()
+func (csa chunkSourceAdapter) clone() (chunkSource, error) {
+	tr, err := csa.tableReader.clone()
 	if err != nil {
 		return &chunkSourceAdapter{}, err
 	}

@@ -46,7 +46,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 77
+const SkipPreparedsCount = 84
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -109,84 +109,28 @@ func TestSingleQuery(t *testing.T) {
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
 	t.Skip()
-
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "truncate table",
+			Name: "trigger before update, with indexed update",
 			SetUpScript: []string{
-				"create table t (a int primary key auto_increment, b int)",
-				"call dolt_add('.')",
-				"call dolt_commit('-am', 'empty table')",
-				"call dolt_branch('branch1')",
-				"call dolt_branch('branch2')",
-				"insert into t (b) values (1), (2)",
-				"call dolt_commit('-am', 'two values on main')",
-				"call dolt_checkout('branch1')",
-				"insert into t (b) values (3), (4)",
-				"call dolt_commit('-am', 'two values on branch1')",
-				"call dolt_checkout('branch2')",
-				"insert into t (b) values (5), (6)",
-				"call dolt_checkout('branch1')",
+				"create table a (x int primary key, y int, unique key (y))",
+				"create table b (z int primary key)",
+				"insert into a values (1,3), (10,20)",
+				"create trigger insert_b before update on a for each row insert into b values (old.x * 10)",
+				"update a set x = x + 1 where y = 20",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "truncate table t",
-					Expected: []sql.Row{{sql.NewOkResult(2)}},
-				},
-				{
-					Query:            "call dolt_checkout('main')",
-					SkipResultsCheck: true,
-				},
-				{
-					// highest value in any branch is 6
-					Query:    "insert into t (b) values (7), (8)",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
-				},
-				{
-					Query: "select * from t order by a",
+					Query: "select x, y from a order by 1",
 					Expected: []sql.Row{
-						{1, 1},
-						{2, 2},
-						{7, 7},
-						{8, 8},
+						{1, 3},
+						{11, 20},
 					},
 				},
 				{
-					Query:    "truncate table t",
-					Expected: []sql.Row{{sql.NewOkResult(4)}},
-				},
-				{
-					Query:            "call dolt_checkout('branch2')",
-					SkipResultsCheck: true,
-				},
-				{
-					// highest value in any branch is still 6 (truncated table above)
-					Query:    "insert into t (b) values (7), (8)",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
-				},
-				{
-					Query: "select * from t order by a",
+					Query: "select z from b",
 					Expected: []sql.Row{
-						{5, 5},
-						{6, 6},
-						{7, 7},
-						{8, 8},
-					},
-				},
-				{
-					Query:    "truncate table t",
-					Expected: []sql.Row{{sql.NewOkResult(4)}},
-				},
-				{
-					// no value on any branch
-					Query:    "insert into t (b) values (1), (2)",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
-				},
-				{
-					Query: "select * from t order by a",
-					Expected: []sql.Row{
-						{1, 1},
-						{2, 2},
+						{100},
 					},
 				},
 			},
@@ -246,7 +190,6 @@ func TestSingleQueryPrepared(t *testing.T) {
 
 func TestSingleScriptPrepared(t *testing.T) {
 	t.Skip()
-
 	s := []setup.SetupScript{
 		{
 			"create table test (pk int primary key, c1 int)",
@@ -314,6 +257,11 @@ func TestQueryPlans(t *testing.T) {
 	// TODO: exchange nodes should really only be part of the explain plan under certain debug settings
 	harness := newDoltHarness(t).WithParallelism(1).WithSkippedQueries(skipped)
 	enginetest.TestQueryPlans(t, harness, queries.PlanTests)
+}
+
+func TestIntegrationQueryPlans(t *testing.T) {
+	harness := newDoltHarness(t).WithParallelism(1)
+	enginetest.TestIntegrationPlans(t, harness)
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
@@ -489,13 +437,26 @@ func TestJoinQueries(t *testing.T) {
 	enginetest.TestJoinQueries(t, newDoltHarness(t))
 }
 
+func TestJoinQueriesPrepared(t *testing.T) {
+	enginetest.TestJoinQueriesPrepared(t, newDoltHarness(t))
+}
+
+// TestJSONTableQueries runs the canonical test queries against a single threaded index enabled harness.
+func TestJSONTableQueries(t *testing.T) {
+	enginetest.TestJSONTableQueries(t, newDoltHarness(t))
+}
+
+// TestJSONTableScripts runs the canonical test queries against a single threaded index enabled harness.
+func TestJSONTableScripts(t *testing.T) {
+	enginetest.TestJSONTableScripts(t, newDoltHarness(t))
+}
+
 func TestUserPrivileges(t *testing.T) {
-	t.Skip("Need to add more collations")
 	enginetest.TestUserPrivileges(t, newDoltHarness(t))
 }
 
 func TestUserAuthentication(t *testing.T) {
-	t.Skip("Need to add more collations")
+	t.Skip("Unexpected panic, need to fix")
 	enginetest.TestUserAuthentication(t, newDoltHarness(t))
 }
 
@@ -546,6 +507,20 @@ func TestCreateDatabase(t *testing.T) {
 func TestBlobs(t *testing.T) {
 	skipOldFormat(t)
 	enginetest.TestBlobs(t, newDoltHarness(t))
+}
+
+func TestIndexes(t *testing.T) {
+	harness := newDoltHarness(t)
+	enginetest.TestIndexes(t, harness)
+}
+
+func TestIndexPrefix(t *testing.T) {
+	skipOldFormat(t)
+	harness := newDoltHarness(t)
+	enginetest.TestIndexPrefix(t, harness)
+	for _, script := range DoltIndexPrefixScripts {
+		enginetest.TestScript(t, harness, script)
+	}
 }
 
 func TestBigBlobs(t *testing.T) {
@@ -726,10 +701,16 @@ func TestStoredProcedures(t *testing.T) {
 }
 
 func TestLargeJsonObjects(t *testing.T) {
-	sqle.SkipByDefaultInCI(t)
+	SkipByDefaultInCI(t)
 	harness := newDoltHarness(t)
 	for _, script := range LargeJsonObjectScriptTests {
 		enginetest.TestScript(t, harness, script)
+	}
+}
+
+func SkipByDefaultInCI(t *testing.T) {
+	if os.Getenv("CI") != "" && os.Getenv("DOLT_TEST_RUN_NON_RACE_TESTS") == "" {
+		t.Skip()
 	}
 }
 
@@ -878,6 +859,14 @@ func TestDoltDdlScripts(t *testing.T) {
 		require.NoError(t, err)
 		enginetest.TestScriptWithEngine(t, e, harness, script)
 	}
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("not fixing unique index on keyless tables for old format")
+	}
+	for _, script := range AddIndexScripts {
+		e, err := harness.NewEngine(t)
+		require.NoError(t, err)
+		enginetest.TestScriptWithEngine(t, e, harness, script)
+	}
 }
 
 func TestBrokenDdlScripts(t *testing.T) {
@@ -948,6 +937,12 @@ func TestDoltConflictsTableNameTable(t *testing.T) {
 	for _, script := range DoltConflictTableNameTableTests {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
+
+	if types.IsFormat_DOLT(types.Format_Default) {
+		for _, script := range Dolt1ConflictTableNameTableTests {
+			enginetest.TestScript(t, newDoltHarness(t), script)
+		}
+	}
 }
 
 // tests new format behavior for keyless merges that create CVs and conflicts
@@ -984,6 +979,15 @@ func TestOldFormatMergeConflictsAndCVs(t *testing.T) {
 func TestDoltReset(t *testing.T) {
 	for _, script := range DoltReset {
 		// dolt versioning conflicts with reset harness -- use new harness every time
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+}
+
+func TestDoltGC(t *testing.T) {
+	// TODO: This does not work because `db.chunkStore().(nbs.TableFileStore)`
+	// returns not ok in PruneTableFiles
+	t.Skip()
+	for _, script := range DoltGC {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
 }
@@ -1111,7 +1115,7 @@ func TestBrokenSystemTableQueries(t *testing.T) {
 }
 
 func TestHistorySystemTable(t *testing.T) {
-	harness := newDoltHarness(t)
+	harness := newDoltHarness(t).WithParallelism(2)
 	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
 		harness.engine = nil
@@ -1122,7 +1126,7 @@ func TestHistorySystemTable(t *testing.T) {
 }
 
 func TestHistorySystemTablePrepared(t *testing.T) {
-	harness := newDoltHarness(t)
+	harness := newDoltHarness(t).WithParallelism(2)
 	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
 		harness.engine = nil
@@ -1172,10 +1176,53 @@ func TestDiffTableFunction(t *testing.T) {
 }
 
 func TestDiffTableFunctionPrepared(t *testing.T) {
-	t.Skip()
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffTableFunctionScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
+func TestDiffSummaryTableFunction(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range DiffSummaryTableFunctionScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func TestDiffSummaryTableFunctionPrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range DiffSummaryTableFunctionScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
+func TestLogTableFunction(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range LogTableFunctionScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func TestLogTableFunctionPrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range LogTableFunctionScriptTests {
 		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, harness, test)
@@ -1195,7 +1242,6 @@ func TestCommitDiffSystemTable(t *testing.T) {
 }
 
 func TestCommitDiffSystemTablePrepared(t *testing.T) {
-	t.Skip()
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range CommitDiffSystemTableScriptTests {
@@ -1224,7 +1270,6 @@ func TestDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffSystemTablePrepared(t *testing.T) {
-	t.Skip()
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {
@@ -1247,6 +1292,10 @@ func TestTestReadOnlyDatabases(t *testing.T) {
 
 func TestAddDropPks(t *testing.T) {
 	enginetest.TestAddDropPks(t, newDoltHarness(t))
+}
+
+func TestAddAutoIncrementColumn(t *testing.T) {
+	enginetest.TestAddAutoIncrementColumn(t, newDoltHarness(t))
 }
 
 func TestNullRanges(t *testing.T) {
@@ -1272,6 +1321,20 @@ func TestPersist(t *testing.T) {
 func TestTypesOverWire(t *testing.T) {
 	harness := newDoltHarness(t)
 	enginetest.TestTypesOverWire(t, harness, newSessionBuilder(harness))
+}
+
+func TestDoltCommit(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, script := range DoltCommitTests {
+		enginetest.TestScript(t, harness, script)
+	}
+}
+
+func TestDoltCommitPrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, script := range DoltCommitTests {
+		enginetest.TestScriptPrepared(t, harness, script)
+	}
 }
 
 func TestQueriesPrepared(t *testing.T) {
@@ -1400,6 +1463,12 @@ func TestCharsetCollationWire(t *testing.T) {
 	skipOldFormat(t)
 	harness := newDoltHarness(t)
 	enginetest.TestCharsetCollationWire(t, harness, newSessionBuilder(harness))
+}
+
+func TestDatabaseCollationWire(t *testing.T) {
+	skipOldFormat(t)
+	harness := newDoltHarness(t)
+	enginetest.TestDatabaseCollationWire(t, harness, newSessionBuilder(harness))
 }
 
 func TestAddDropPrimaryKeys(t *testing.T) {

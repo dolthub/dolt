@@ -19,7 +19,7 @@ Workflows prefixed with `cd-` are used for releasing Dolt. Some of these workflo
 
 ## Benchmarking Workflows
 
-Benchmarking workflows are used as an interface for deploying benchmarking jobs to one of our Kubernetes Clusters. Workflows that deploy Kubernetes Jobs are prefixed with `k8s-` and can only be triggered with `repository_dispatch` events. Notice that benchmarking workflows, like `workflows/performance-benchmarks-email-report.yaml` for example, trigger these events using the `peter-evans/repository-dispatch@v1` Action.
+Benchmarking workflows are used as an interface for deploying benchmarking jobs to one of our Kubernetes Clusters. Workflows that deploy Kubernetes Jobs are prefixed with `k8s-` and can only be triggered with `repository_dispatch` events. Notice that benchmarking workflows, like `workflows/performance-benchmarks-email-report.yaml` for example, trigger these events using the `peter-evans/repository-dispatch@v2.0.0` Action.
 
 These Kubernetes Jobs do not run on GitHub Actions Hosted Runners, so the workflow logs do not contain any information about the deployed Kubernetes Job or any errors it might have encountered. The workflow logs can only tell you if a Job was created successfully or not. To investigate an error or issue with a Job in our Kubernetes Cluster, see the debugging guide [here](https://github.com/dolthub/ld/blob/main/k8s/README.md#debug-performance-benchmarks-and-sql-correctness-jobs).
 

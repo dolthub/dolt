@@ -334,7 +334,7 @@ func SqlRowAsTupleString(r sql.Row, tableSch schema.Schema) (string, error) {
 		if seenOne {
 			b.WriteRune(',')
 		}
-		col := tableSch.GetAllCols().GetAtIndex(i)
+		col := tableSch.GetAllCols().GetByIndex(i)
 		str := "NULL"
 		if val != nil {
 			str, err = interfaceValueAsSqlString(col.TypeInfo, val)
@@ -349,6 +349,22 @@ func SqlRowAsTupleString(r sql.Row, tableSch schema.Schema) (string, error) {
 	b.WriteString(")")
 
 	return b.String(), nil
+}
+
+// SqlRowAsStrings returns the string representation for each column of |r|
+// which should have schema |sch|.
+func SqlRowAsStrings(r sql.Row, sch sql.Schema) ([]string, error) {
+	out := make([]string, len(r))
+	for i := range out {
+		v := r[i]
+		sqlType := sch[i].Type
+		s, err := sqlutil.SqlColToStr(sqlType, v)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = s
+	}
+	return out, nil
 }
 
 // SqlRowAsDeleteStmt generates a sql statement. Non-zero |limit| adds a limit clause.
@@ -495,6 +511,10 @@ func valueAsSqlString(ti typeinfo.TypeInfo, value types.Value) (string, error) {
 }
 
 func interfaceValueAsSqlString(ti typeinfo.TypeInfo, value interface{}) (string, error) {
+	if value == nil {
+		return "NULL", nil
+	}
+
 	str, err := sqlutil.SqlColToStr(ti.ToSqlType(), value)
 	if err != nil {
 		return "", err
@@ -518,6 +538,15 @@ func interfaceValueAsSqlString(ti typeinfo.TypeInfo, value interface{}) (string,
 			return "", fmt.Errorf("typeinfo.VarStringTypeIdentifier is not types.String")
 		}
 		return quoteAndEscapeString(string(s)), nil
+	case typeinfo.GeometryTypeIdentifier,
+		typeinfo.PointTypeIdentifier,
+		typeinfo.LineStringTypeIdentifier,
+		typeinfo.PolygonTypeIdentifier,
+		typeinfo.MultiPointTypeIdentifier,
+		typeinfo.MultiLineStringTypeIdentifier,
+		typeinfo.MultiPolygonTypeIdentifier,
+		typeinfo.GeometryCollectionTypeIdentifier:
+		return singleQuote + str + singleQuote, nil
 	default:
 		return str, nil
 	}

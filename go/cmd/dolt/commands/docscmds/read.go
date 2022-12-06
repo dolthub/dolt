@@ -31,39 +31,39 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
-var readDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Reads Dolt Docs from the file system into the database",
-	LongDesc:  "Reads Dolt Docs from the file system into the database",
+var uploadDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Uploads Dolt Docs from the file system into the database",
+	LongDesc:  "Uploads Dolt Docs from the file system into the database",
 	Synopsis: []string{
 		"{{.LessThan}}doc{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
 }
 
-type ReadCmd struct{}
+type UploadCmd struct{}
 
 // Name implements cli.Command.
-func (cmd ReadCmd) Name() string {
-	return "read"
+func (cmd UploadCmd) Name() string {
+	return "upload"
 }
 
 // Description implements cli.Command.
-func (cmd ReadCmd) Description() string {
-	return readDocs.ShortDesc
+func (cmd UploadCmd) Description() string {
+	return uploadDocs.ShortDesc
 }
 
 // RequiresRepo implements cli.Command.
-func (cmd ReadCmd) RequiresRepo() bool {
+func (cmd UploadCmd) RequiresRepo() bool {
 	return true
 }
 
 // Docs implements cli.Command.
-func (cmd ReadCmd) Docs() *cli.CommandDocumentation {
+func (cmd UploadCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.NewCommandDocumentation(readDocs, ap)
+	return cli.NewCommandDocumentation(uploadDocs, ap)
 }
 
 // ArgParser implements cli.Command.
-func (cmd ReadCmd) ArgParser() *argparser.ArgParser {
+func (cmd UploadCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"doc", "Dolt doc name to be updated in the database."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "file to read Dolt doc from."})
@@ -71,9 +71,9 @@ func (cmd ReadCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec implements cli.Command.
-func (cmd ReadCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd UploadCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, writeDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, uploadDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() != 2 {

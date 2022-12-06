@@ -60,6 +60,10 @@ merge_with_conflicts() {
 @test "reset: dolt reset --hard should clear an uncommitted merge state" {
     merge_without_conflicts
 
+    run dolt sql -q "SELECT * from dolt_merge_status;"
+    echo $output
+    [[ "$output" =~ "false" ]] || false
+
     run dolt reset --hard
     [ $status -eq 0 ]
 
@@ -68,11 +72,20 @@ merge_with_conflicts() {
 
     run dolt merge --abort
     [[ "$output" =~ "fatal: There is no merge to abort" ]]
+
+    run dolt sql -q "SELECT * from dolt_merge_status;"
+    [[ "$output" =~ "false" ]]
 }
 
 @test "reset: dolt reset --hard should clear a conflicted merge state" {
     merge_with_conflicts
 
+    run dolt sql -q "SELECT * from dolt_merge_status;"
+    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ "merge_branch" ]] || false
+    [[ "$output" =~ "refs/heads/main" ]] || false
+    [[ "$output" =~ "test1" ]] || false
+
     run dolt reset --hard
     [ $status -eq 0 ]
 
@@ -81,4 +94,7 @@ merge_with_conflicts() {
 
     run dolt merge --abort
     [[ "$output" =~ "fatal: There is no merge to abort" ]]
+
+    run dolt sql -q "SELECT * from dolt_merge_status;"
+    [[ "$output" =~ "false" ]]
 }

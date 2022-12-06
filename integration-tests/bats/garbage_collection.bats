@@ -148,29 +148,94 @@ SQL
 }
 
 setup_merge() {
-    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY, c0 int);"
-    dolt sql -q "CREATE TABLE quiz (pk int PRIMARY KEY, c0 int);"
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY, c0 TEXT);"
+    dolt sql -q "CREATE TABLE quiz (pk int PRIMARY KEY, c0 TEXT);"
     dolt add . && dolt commit -m "created tables test & quiz"
     dolt branch other
 
-    dolt sql -q "INSERT INTO test VALUES (0,10),(1,11),(2,12);"
+    dolt sql -q "INSERT INTO test VALUES (0,'10'),(1,'11'),(2,'12');"
     dolt commit -am "added rows on main"
 
     dolt checkout other
-    dolt sql -q "INSERT INTO test VALUES (0,20),(1,21),(2,22);"
+    dolt sql -q "INSERT INTO test VALUES (0,'20'),(1,'21'),(2,'22');"
     dolt commit -am "added rows on other"
 
     dolt checkout main
 }
 
+setup_merge_with_cv() {
+     dolt sql -q "CREATE TABLE parent (pk int PRIMARY KEY);"
+     dolt sql -q "CREATE TABLE child (pk int PRIMARY KEY, fk int, FOREIGN KEY (fk) REFERENCES parent (pk));"
+     dolt sql -q "INSERT into parent VALUES (1);"
+     dolt commit -Am "create tables and add parent"
+
+     dolt checkout -b other
+     dolt sql -q "insert into child values (1, 1);"
+     dolt commit -am "add child"
+
+     dolt checkout main
+     dolt sql -q "delete from parent where pk = 1;"
+     dolt commit -am "remove parent"
+}
+
+@test "garbage_collection: leave conflicts" {
+    setup_merge
+    dolt merge other -m "merge"
+
+    run dolt sql -r csv -q "select base_pk, base_c0, our_pk, our_c0, their_pk, their_c0 from dolt_conflicts_test;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ ",,0,10,0,20" ]]
+    [[ "$output" =~ ",,1,11,1,21" ]]
+    [[ "$output" =~ ",,2,12,2,22" ]]
+
+    dolt gc
+
+    run dolt sql -r csv -q "select base_pk, base_c0, our_pk, our_c0, their_pk, their_c0 from dolt_conflicts_test;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ ",,0,10,0,20" ]]
+    [[ "$output" =~ ",,1,11,1,21" ]]
+    [[ "$output" =~ ",,2,12,2,22" ]]
+}
+
+@test "garbage_collection: leave constraint violations" {
+    setup_merge_with_cv
+    dolt merge other -m "merge"
+
+    run dolt sql -r csv -q "select pk, fk from dolt_constraint_violations_child;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "1,1" ]]
+
+    dolt gc
+
+    run dolt sql -r csv -q "select pk, fk from dolt_constraint_violations_child;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "1,1" ]]
+}
+
 @test "garbage_collection: leave merge commit" {
-    skip_nbf_dolt
     setup_merge
     dolt merge other -m "merge"
 
     dolt gc
 
     dolt conflicts resolve --ours .
+    dolt add .
+    dolt commit -am "resolved conflicts with ours"
+
+    run dolt sql -q "SELECT * FROM test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "0,10" ]] || false
+    [[ "${lines[2]}" =~ "1,11" ]] || false
+    [[ "${lines[3]}" =~ "2,12" ]] || false
+}
+
+@test "garbage_collection: leave merge commit with stored procedure" {
+    setup_merge
+    dolt merge other -m "merge"
+
+    dolt gc
+
+    dolt sql -q "call dolt_conflicts_resolve('--ours', '.')"
     dolt add .
     dolt commit -am "resolved conflicts with ours"
 
@@ -202,4 +267,70 @@ setup_merge() {
     run dolt sql -q "SELECT * FROM quiz;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "9,99" ]] || false
+}
+
+create_many_commits() {
+        dolt sql <<SQL
+CREATE TABLE test (pk int PRIMARY KEY);
+CALL DOLT_COMMIT('-Am', 'Create test table');
+SQL
+    
+    # Create a lot of commits to create some conjoin garbage
+    NUM_COMMITS=250
+
+    for i in $(eval echo "{1..$NUM_COMMITS}")
+    do
+        dolt sql <<SQL
+INSERT INTO test VALUES ($i);
+CALL DOLT_COMMIT('-am', 'Add new val $i');
+SQL
+    done
+
+    run dolt sql -q "select count(*) from test"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$NUM_COMMITS" ]] || false
+}
+
+@test "garbage_collection: shallow gc" {
+    create_many_commits
+
+    # leave data in the working set
+    dolt sql -q "INSERT INTO test VALUES ($(($NUM_COMMITS+1))),($(($NUM_COMMITS+2))),($(($NUM_COMMITS+3)));"
+
+    BEFORE=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
+    run dolt gc --shallow
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select count(*) from test"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$(($NUM_COMMITS+3))" ]] || false
+
+    AFTER=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
+
+    # assert space was reclaimed
+    echo "$BEFORE"
+    echo "$AFTER"
+    [ "$BEFORE" -gt "$AFTER" ]
+}
+
+@test "garbage_collection: online shallow gc" {
+    create_many_commits
+
+    # leave data in the working set
+    dolt sql -q "INSERT INTO test VALUES ($(($NUM_COMMITS+1))),($(($NUM_COMMITS+2))),($(($NUM_COMMITS+3)));"
+
+    BEFORE=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
+    run dolt sql -q "call dolt_gc();"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select count(*) from test"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$(($NUM_COMMITS+3))" ]] || false
+
+    AFTER=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
+
+    # assert space was reclaimed
+    echo "$BEFORE"
+    echo "$AFTER"
+    [ "$BEFORE" -gt "$AFTER" ]
 }

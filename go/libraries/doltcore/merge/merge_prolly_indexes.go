@@ -167,7 +167,7 @@ func mergeProllySecondaryIndexes(
 			}
 
 			var collision = false
-			merged, err := prolly.MergeMaps(ctx, left, right, anc, func(left, right tree.Diff) (tree.Diff, bool) {
+			merged, _, err := prolly.MergeMaps(ctx, left, right, anc, func(left, right tree.Diff) (tree.Diff, bool) {
 				if left.Type == right.Type && bytes.Equal(left.To, right.To) {
 					// convergent edit
 					return left, true
@@ -253,7 +253,7 @@ func updateProllySecondaryIndexes(ctx context.Context, tm TableMerger, cellWiseE
 	if err != nil {
 		return nil, nil, err
 	}
-	lm, err := getMutableSecondaryIdxs(ctx, tm.leftSch, ls)
+	lm, err := GetMutableSecondaryIdxs(ctx, tm.leftSch, ls)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -262,7 +262,7 @@ func updateProllySecondaryIndexes(ctx context.Context, tm TableMerger, cellWiseE
 	if err != nil {
 		return nil, nil, err
 	}
-	rm, err := getMutableSecondaryIdxs(ctx, tm.rightSch, rs)
+	rm, err := GetMutableSecondaryIdxs(ctx, tm.rightSch, rs)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -57,12 +57,15 @@ func getPushOnWriteHook(ctx context.Context, bThreads *sql.BackgroundThreads, dE
 		return nil, err
 	}
 
-	_, val, ok = sql.SystemVariables.GetGlobal(dsess.AsyncReplication)
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil, err
+	}
 	if _, val, ok = sql.SystemVariables.GetGlobal(dsess.AsyncReplication); ok && val == SysVarTrue {
-		return doltdb.NewAsyncPushOnWriteHook(bThreads, ddb, dEnv.TempTableFilesDir(), logger)
+		return doltdb.NewAsyncPushOnWriteHook(bThreads, ddb, tmpDir, logger)
 	}
 
-	return doltdb.NewPushOnWriteHook(ddb, dEnv.TempTableFilesDir()), nil
+	return doltdb.NewPushOnWriteHook(ddb, tmpDir), nil
 }
 
 // GetCommitHooks creates a list of hooks to execute on database commit. If doltdb.SkipReplicationErrorsKey is set,
@@ -71,7 +74,8 @@ func GetCommitHooks(ctx context.Context, bThreads *sql.BackgroundThreads, dEnv *
 	postCommitHooks := make([]doltdb.CommitHook, 0)
 
 	if hook, err := getPushOnWriteHook(ctx, bThreads, dEnv, logger); err != nil {
-		err = fmt.Errorf("failure loading hook; %w", err)
+		path, _ := dEnv.FS.Abs(".")
+		err = fmt.Errorf("failure loading hook for database at %s; %w", path, err)
 		if SkipReplicationWarnings() {
 			postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(err.Error()+"\n")))
 		} else {

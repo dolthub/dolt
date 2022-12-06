@@ -144,7 +144,19 @@ func (rcv *RootValue) MutateForeignKeyAddr(j int, n byte) bool {
 	return false
 }
 
-const RootValueNumFields = 3
+func (rcv *RootValue) Collation() Collation {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		return Collation(rcv._tab.GetUint16(o + rcv._tab.Pos))
+	}
+	return 0
+}
+
+func (rcv *RootValue) MutateCollation(n Collation) bool {
+	return rcv._tab.MutateUint16Slot(10, uint16(n))
+}
+
+const RootValueNumFields = 4
 
 func RootValueStart(builder *flatbuffers.Builder) {
 	builder.StartObject(RootValueNumFields)
@@ -163,6 +175,9 @@ func RootValueAddForeignKeyAddr(builder *flatbuffers.Builder, foreignKeyAddr fla
 }
 func RootValueStartForeignKeyAddrVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
+}
+func RootValueAddCollation(builder *flatbuffers.Builder, collation Collation) {
+	builder.PrependUint16Slot(3, uint16(collation), 0)
 }
 func RootValueEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

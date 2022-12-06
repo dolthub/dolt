@@ -73,7 +73,7 @@ func (s *nomsShowTestSuite) writeTestData(str string, value types.Value) types.R
 }
 
 func (s *nomsShowTestSuite) TestNomsShow() {
-	if types.Format_Default == types.Format_DOLT_DEV {
+	if types.Format_Default != types.Format_LD_1 {
 		s.T().Skip()
 	}
 	datasetName := "dsTest"

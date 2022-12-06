@@ -6,6 +6,7 @@ venv
 
 .DS_Store
 .sqlhistory
+.doltcfg
 test.sh
 
 # ignore cp'd sysbench runner testing files

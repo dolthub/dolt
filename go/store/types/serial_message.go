@@ -141,15 +141,15 @@ func (sm SerialMessage) HumanReadableString() string {
 		fmt.Fprintf(ret, "}")
 		return ret.String()
 	case serial.AddressMapFileID:
-		keys, values, cnt, err := message.GetKeysAndValues(serial.Message(sm))
+		keys, values, _, cnt, err := message.UnpackFields(serial.Message(sm))
 		if err != nil {
 			return fmt.Sprintf("error in HumanReadString(): %s", err)
 		}
 		var b strings.Builder
 		b.Write([]byte("AddressMap{\n"))
 		for i := uint16(0); i < cnt; i++ {
-			name := keys.GetItem(int(i))
-			addr := values.GetItem(int(i))
+			name := keys.GetItem(int(i), serial.Message(sm))
+			addr := values.GetItem(int(i), serial.Message(sm))
 			b.Write([]byte("\t"))
 			b.Write(name)
 			b.Write([]byte(": #"))
@@ -278,17 +278,6 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 			return err
 		}
 
-		addr = hash.New(msg.ViolationsBytes())
-		if !addr.IsEmpty() {
-			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
-			if err != nil {
-				return err
-			}
-			if err = cb(r); err != nil {
-				return err
-			}
-		}
-
 		confs := msg.Conflicts(nil)
 		addr = hash.New(confs.DataBytes())
 		if !addr.IsEmpty() {
@@ -324,6 +313,28 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 		}
 
 		addr = hash.New(confs.AncestorSchemaBytes())
+		if !addr.IsEmpty() {
+			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
+			if err = cb(r); err != nil {
+				return err
+			}
+		}
+
+		addr = hash.New(msg.ViolationsBytes())
+		if !addr.IsEmpty() {
+			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
+			if err = cb(r); err != nil {
+				return err
+			}
+		}
+
+		addr = hash.New(msg.ArtifactsBytes())
 		if !addr.IsEmpty() {
 			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 			if err != nil {

@@ -27,7 +27,10 @@ import (
 )
 
 type MergeState struct {
-	commit          *Commit
+	// the source commit
+	commit *Commit
+	// the spec string that was used to specify |commit|
+	commitSpecStr   string
 	preMergeWorking *RootValue
 }
 
@@ -50,6 +53,10 @@ func MergeStateFromCommitAndWorking(commit *Commit, preMergeWorking *RootValue) 
 
 func (m MergeState) Commit() *Commit {
 	return m.commit
+}
+
+func (m MergeState) CommitSpecStr() string {
+	return m.commitSpecStr
 }
 
 func (m MergeState) PreMergeWorkingRoot() *RootValue {
@@ -89,9 +96,10 @@ func (ws WorkingSet) WithMergeState(mergeState *MergeState) *WorkingSet {
 	return &ws
 }
 
-func (ws WorkingSet) StartMerge(commit *Commit) *WorkingSet {
+func (ws WorkingSet) StartMerge(commit *Commit, commitSpecStr string) *WorkingSet {
 	ws.mergeState = &MergeState{
 		commit:          commit,
+		commitSpecStr:   commitSpecStr,
 		preMergeWorking: ws.workingRoot,
 	}
 
@@ -179,6 +187,10 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		if err != nil {
 			return nil, err
 		}
+		commitSpec, err := dsws.MergeState.FromCommitSpec(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
 
 		commit, err := NewCommit(ctx, vrw, ns, fromDCommit)
 		if err != nil {
@@ -197,6 +209,7 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 
 		mergeState = &MergeState{
 			commit:          commit,
+			commitSpecStr:   commitSpec,
 			preMergeWorking: preMergeWorkingRoot,
 		}
 	}
@@ -273,7 +286,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 			return types.Ref{}, types.Ref{}, nil, err
 		}
 
-		mergeState, err = datas.NewMergeState(ctx, db.vrw, preMergeWorking, dCommit)
+		mergeState, err = datas.NewMergeState(ctx, db.vrw, preMergeWorking, dCommit, ws.mergeState.commitSpecStr)
 		if err != nil {
 			return types.Ref{}, types.Ref{}, nil, err
 		}

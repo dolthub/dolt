@@ -29,10 +29,12 @@ import (
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -48,17 +50,19 @@ type SqlEngine struct {
 }
 
 type SqlEngineConfig struct {
-	InitialDb      string
-	IsReadOnly     bool
-	IsServerLocked bool
-	DoltCfgDirPath string
-	PrivFilePath   string
-	ServerUser     string
-	ServerPass     string
-	ServerHost     string
-	Autocommit     bool
-	Bulk           bool
-	JwksConfig     []JwksConfig
+	InitialDb          string
+	IsReadOnly         bool
+	IsServerLocked     bool
+	DoltCfgDirPath     string
+	PrivFilePath       string
+	BranchCtrlFilePath string
+	ServerUser         string
+	ServerPass         string
+	ServerHost         string
+	Autocommit         bool
+	Bulk               bool
+	JwksConfig         []JwksConfig
+	ClusterController  *cluster.Controller
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -86,9 +90,22 @@ func NewSqlEngine(
 		return nil, err
 	}
 
+	config.ClusterController.ManageSystemVariables(sql.SystemVariables)
+
+	err = config.ClusterController.ApplyStandbyReplicationConfig(ctx, bThreads, mrEnv, dbs...)
+	if err != nil {
+		return nil, err
+	}
+
 	infoDB := information_schema.NewInformationSchemaDatabase()
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 	locations = append(locations, nil)
+
+	clusterDB := config.ClusterController.ClusterDatabase()
+	if clusterDB != nil {
+		all = append(all, clusterDB)
+		locations = append(locations, nil)
+	}
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
 	pro, err := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations)
@@ -97,6 +114,10 @@ func NewSqlEngine(
 	}
 	pro = pro.WithRemoteDialer(mrEnv.RemoteDialProvider())
 
+	config.ClusterController.RegisterStoredProcedures(pro)
+	pro.InitDatabaseHook = cluster.NewInitDatabaseHook(config.ClusterController, bThreads, pro.InitDatabaseHook)
+	config.ClusterController.ManageDatabaseProvider(pro)
+
 	// Load in privileges from file, if it exists
 	persister := mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
 	data, err := persister.LoadData()
@@ -104,8 +125,17 @@ func NewSqlEngine(
 		return nil, err
 	}
 
+	// Load the branch control permissions, if they exist
+	var bcController *branch_control.Controller
+	if bcController, err = branch_control.LoadData(config.BranchCtrlFilePath, config.DoltCfgDirPath); err != nil {
+		return nil, err
+	}
+
 	// Set up engine
-	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: config.IsReadOnly, IsServerLocked: config.IsServerLocked}).WithBackgroundThreads(bThreads)
+	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
+		IsReadOnly:     config.IsReadOnly,
+		IsServerLocked: config.IsServerLocked,
+	}).WithBackgroundThreads(bThreads)
 	engine.Analyzer.Catalog.MySQLDb.SetPersister(persister)
 
 	engine.Analyzer.Catalog.MySQLDb.SetPlugins(map[string]mysql_db.PlaintextAuthPlugin{
@@ -137,7 +167,7 @@ func NewSqlEngine(
 		dbStates = append(dbStates, dbState)
 	}
 
-	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, mrEnv.Config(), dbStates...)
+	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, mrEnv.Config(), bcController, dbStates...)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +186,7 @@ func NewSqlEngine(
 	return &SqlEngine{
 		dbs:            nameToDB,
 		contextFactory: newSqlContext(sess, config.InitialDb),
-		dsessFactory:   newDoltSession(pro, mrEnv.Config(), config.Autocommit),
+		dsessFactory:   newDoltSession(pro, mrEnv.Config(), config.Autocommit, bcController),
 		engine:         engine,
 		resultFormat:   format,
 	}, nil
@@ -212,8 +242,9 @@ func (se *SqlEngine) NewDoltSession(ctx context.Context, mysqlSess *sql.BaseSess
 	return se.dsessFactory(ctx, mysqlSess, se.engine.Analyzer.Catalog.AllDatabases(tempCtx))
 }
 
-// GetReturnFormat() returns the printing format the engine is associated with.
-func (se *SqlEngine) GetReturnFormat() PrintResultFormat {
+// GetResultFormat returns the printing format of the engine. The format isn't used by the engine internally, only
+// stored for reference by clients who wish to use it to print results.
+func (se *SqlEngine) GetResultFormat() PrintResultFormat {
 	return se.resultFormat
 }
 
@@ -288,7 +319,6 @@ func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.C
 		if sessionDB := sess.GetCurrentDatabase(); sessionDB != "" {
 			sqlCtx.SetCurrentDatabase(sessionDB)
 		} else {
-
 			sqlCtx.SetCurrentDatabase(initialDb)
 		}
 
@@ -296,7 +326,8 @@ func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.C
 	}
 }
 
-func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig, autocommit bool) func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
+func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig,
+	autocommit bool, bc *branch_control.Controller) func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
 	return func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
 		ddbs := dsqle.DbsAsDSQLDBs(dbs)
 		states, err := getDbStates(ctx, ddbs)
@@ -304,7 +335,7 @@ func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfi
 			return nil, err
 		}
 
-		dsess, err := dsess.NewDoltSession(sql.NewEmptyContext(), mysqlSess, pro, config, states...)
+		dsess, err := dsess.NewDoltSession(sql.NewEmptyContext(), mysqlSess, pro, config, bc, states...)
 		if err != nil {
 			return nil, err
 		}

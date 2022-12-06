@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -45,6 +46,9 @@ func doDoltRemote(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 	if len(dbName) == 0 {
 		return 1, fmt.Errorf("Empty database name.")
+	}
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return 1, err
 	}
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := dSess.GetDbData(ctx, dbName)
@@ -122,7 +126,7 @@ func removeRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResul
 	ddb := dbd.Ddb
 	refs, err := ddb.GetRemoteRefs(ctx)
 	if err != nil {
-		return fmt.Errorf("error: failed to read from db, cause: %s", env.ErrFailedToReadFromDb.Error())
+		return fmt.Errorf("error: %w, cause: %s", env.ErrFailedToReadFromDb, err.Error())
 	}
 
 	for _, r := range refs {
@@ -144,10 +148,12 @@ func remoteParams(apr *argparser.ArgParseResults, scheme, remoteUrl string) (map
 	params := map[string]string{}
 
 	var err error
-	if scheme == dbfactory.AWSScheme {
-		// TODO: get AWS params from session
+	switch scheme {
+	case dbfactory.AWSScheme:
 		err = cli.AddAWSParams(remoteUrl, apr, params)
-	} else {
+	case dbfactory.OSSScheme:
+		err = cli.AddOSSParams(remoteUrl, apr, params)
+	default:
 		err = cli.VerifyNoAwsParams(apr)
 	}
 

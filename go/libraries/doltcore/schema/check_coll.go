@@ -33,6 +33,8 @@ type CheckCollection interface {
 	DropCheck(name string) error
 	// AllChecks returns all the checks in the collection
 	AllChecks() []Check
+	// Equals returns whether the provided check collection is equal or not.
+	Equals(other CheckCollection) bool
 	// Count returns the size of the collection
 	Count() int
 }
@@ -93,6 +95,26 @@ func (c *checkCollection) AllChecks() []Check {
 		checks[i] = check
 	}
 	return checks
+}
+
+func (c *checkCollection) Equals(other CheckCollection) bool {
+
+	o := other.(*checkCollection)
+	if len(c.checks) != len(o.checks) {
+		return false
+	}
+
+	for i := range c.checks {
+		a := c.checks[i]
+		b := o.checks[i]
+		if a.name != b.name ||
+			a.expression != b.expression ||
+			a.enforced != b.enforced {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (c *checkCollection) Count() int {

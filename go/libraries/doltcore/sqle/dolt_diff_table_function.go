@@ -21,6 +21,8 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -38,9 +40,10 @@ var _ sql.TableFunction = (*DiffTableFunction)(nil)
 
 type DiffTableFunction struct {
 	ctx            *sql.Context
-	tableNameExpr  sql.Expression
 	fromCommitExpr sql.Expression
 	toCommitExpr   sql.Expression
+	dotCommitExpr  sql.Expression
+	tableNameExpr  sql.Expression
 	database       sql.Database
 	sqlSch         sql.Schema
 	joiner         *rowconv.Joiner
@@ -50,7 +53,7 @@ type DiffTableFunction struct {
 	toDate     *types.Timestamp
 }
 
-// NewInstance implements the TableFunction interface
+// NewInstance creates a new instance of TableFunction interface
 func (dtf *DiffTableFunction) NewInstance(ctx *sql.Context, database sql.Database, expressions []sql.Expression) (sql.Node, error) {
 	newInstance := &DiffTableFunction{
 		ctx:      ctx,
@@ -79,15 +82,20 @@ func (dtf *DiffTableFunction) WithDatabase(database sql.Database) (sql.Node, err
 
 // Expressions implements the sql.Expressioner interface
 func (dtf *DiffTableFunction) Expressions() []sql.Expression {
+	if dtf.dotCommitExpr != nil {
+		return []sql.Expression{
+			dtf.dotCommitExpr, dtf.tableNameExpr,
+		}
+	}
 	return []sql.Expression{
-		dtf.tableNameExpr, dtf.fromCommitExpr, dtf.toCommitExpr,
+		dtf.fromCommitExpr, dtf.toCommitExpr, dtf.tableNameExpr,
 	}
 }
 
 // WithExpressions implements the sql.Expressioner interface
 func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
-	if len(expression) != 3 {
-		return nil, sql.ErrInvalidArgumentNumber.New(dtf.FunctionName(), 3, len(expression))
+	if len(expression) < 2 {
+		return nil, sql.ErrInvalidArgumentNumber.New(dtf.Name(), "2 to 3", len(expression))
 	}
 
 	// TODO: For now, we will only support literal / fully-resolved arguments to the
@@ -95,20 +103,31 @@ func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql
 	//       before the arguments could be resolved.
 	for _, expr := range expression {
 		if !expr.Resolved() {
-			return nil, ErrInvalidNonLiteralArgument.New(dtf.FunctionName(), expr.String())
+			return nil, ErrInvalidNonLiteralArgument.New(dtf.Name(), expr.String())
 		}
 	}
 
-	dtf.tableNameExpr = expression[0]
-	dtf.fromCommitExpr = expression[1]
-	dtf.toCommitExpr = expression[2]
+	if strings.Contains(expression[0].String(), "..") {
+		if len(expression) != 2 {
+			return nil, sql.ErrInvalidArgumentNumber.New(fmt.Sprintf("%v with .. or ...", dtf.Name()), 2, len(expression))
+		}
+		dtf.dotCommitExpr = expression[0]
+		dtf.tableNameExpr = expression[1]
+	} else {
+		if len(expression) != 3 {
+			return nil, sql.ErrInvalidArgumentNumber.New(dtf.Name(), 3, len(expression))
+		}
+		dtf.fromCommitExpr = expression[0]
+		dtf.toCommitExpr = expression[1]
+		dtf.tableNameExpr = expression[2]
+	}
 
-	tableName, fromCommitVal, toCommitVal, err := dtf.evaluateArguments()
+	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := dtf.evaluateArguments()
 	if err != nil {
 		return nil, err
 	}
 
-	err = dtf.generateSchema(dtf.ctx, tableName, fromCommitVal, toCommitVal)
+	err = dtf.generateSchema(dtf.ctx, fromCommitVal, toCommitVal, dotCommitVal, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -127,29 +146,29 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 	// TODO: When we add support for joining on table functions, we'll need to evaluate this against the
 	//       specified row. That row is what has the left_table context in a join query.
 	//       This will expand the test cases we need to cover significantly.
-	_, fromCommit, toCommit, err := dtf.evaluateArguments()
+	fromCommitVal, toCommitVal, dotCommitVal, _, err := dtf.evaluateArguments()
 	if err != nil {
 		return nil, err
 	}
 
-	fromHash, fromOk := fromCommit.(string)
-	toHash, toOk := toCommit.(string)
-	if !fromOk || !toOk {
-		return nil, fmt.Errorf("expected strings for from and to revisions, got: %v, %v", fromHash, toHash)
-	}
-
 	sqledb, ok := dtf.database.(Database)
 	if !ok {
-		panic("unable to get dolt database")
+		return nil, fmt.Errorf("unable to get dolt database")
 	}
-	ddb := sqledb.GetDoltDB()
 
-	dp := dtables.NewDiffPartition(dtf.tableDelta.ToTable, dtf.tableDelta.FromTable, toHash, fromHash, dtf.toDate, dtf.fromDate, dtf.tableDelta.ToSch, dtf.tableDelta.FromSch)
+	fromCommitStr, toCommitStr, err := loadCommitStrings(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
+	if err != nil {
+		return nil, err
+	}
+
+	ddb := sqledb.GetDoltDB()
+	dp := dtables.NewDiffPartition(dtf.tableDelta.ToTable, dtf.tableDelta.FromTable, toCommitStr, fromCommitStr, dtf.toDate, dtf.fromDate, dtf.tableDelta.ToSch, dtf.tableDelta.FromSch)
 
 	return NewDiffTableFunctionRowIterForSinglePartition(*dp, ddb, dtf.joiner), nil
 }
 
-// findMatchingDelta returns the best matching table delta for the table name given, taking renames into account
+// findMatchingDelta returns the best matching table delta for the table name
+// given, taking renames into account
 func findMatchingDelta(deltas []diff.TableDelta, tableName string) diff.TableDelta {
 	tableName = strings.ToLower(tableName)
 	for _, d := range deltas {
@@ -168,38 +187,145 @@ func findMatchingDelta(deltas []diff.TableDelta, tableName string) diff.TableDel
 	return diff.TableDelta{}
 }
 
-// loadDetailsForRef loads the root, hash, and timestamp for the specified ref value
-func loadDetailsForRef(
-	ctx *sql.Context,
-	ref interface{},
-	ddb Database,
-) (*doltdb.RootValue, string, *types.Timestamp, error) {
-	hashStr, ok := ref.(string)
-	if !ok {
-		return nil, "", nil, fmt.Errorf("received '%v' when expecting commit hash string", ref)
+type refDetails struct {
+	root       *doltdb.RootValue
+	hashStr    string
+	commitTime *types.Timestamp
+}
+
+// loadDetailsForRef loads the root, hash, and timestamp for the specified from
+// and to ref values
+func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db Database) (*refDetails, *refDetails, error) {
+	fromCommitStr, toCommitStr, err := loadCommitStrings(ctx, fromRef, toRef, dotRef, db)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
 
-	root, commitTime, err := sess.ResolveRootForRef(ctx, ddb.Name(), hashStr)
+	fromDetails, err := resolveRoot(ctx, sess, db.Name(), fromCommitStr)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
-	return root, hashStr, commitTime, nil
+	toDetails, err := resolveRoot(ctx, sess, db.Name(), toCommitStr)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return fromDetails, toDetails, nil
+}
+
+func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db Database) (string, string, error) {
+	if dotRef != nil {
+		dotStr, err := interfaceToString(dotRef)
+		if err != nil {
+			return "", "", err
+		}
+
+		sess := dsess.DSessFromSess(ctx.Session)
+
+		if strings.Contains(dotStr, "...") {
+			refs := strings.Split(dotStr, "...")
+
+			headRef, err := sess.CWBHeadRef(ctx, db.Name())
+			if err != nil {
+				return "", "", err
+			}
+
+			rightCm, err := resolveCommit(ctx, db.ddb, headRef, refs[0])
+			if err != nil {
+				return "", "", err
+			}
+
+			leftCm, err := resolveCommit(ctx, db.ddb, headRef, refs[1])
+			if err != nil {
+				return "", "", err
+			}
+
+			mergeBase, err := merge.MergeBase(ctx, rightCm, leftCm)
+			if err != nil {
+				return "", "", err
+			}
+
+			return mergeBase.String(), refs[1], nil
+		} else {
+			refs := strings.Split(dotStr, "..")
+			return refs[0], refs[1], nil
+		}
+	}
+
+	fromStr, err := interfaceToString(fromRef)
+	if err != nil {
+		return "", "", err
+	}
+
+	toStr, err := interfaceToString(toRef)
+	if err != nil {
+		return "", "", err
+	}
+
+	return fromStr, toStr, nil
+}
+
+// loadCommitStrings gets the to and from commit strings, using the common
+// ancestor as the from commit string for three dot diff
+func loadCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db Database) (string, string, error) {
+	fromStr, toStr, err := resolveCommitStrings(ctx, fromRef, toRef, dotRef, db)
+	if err != nil {
+		return "", "", err
+	}
+
+	if len(fromStr) == 0 || len(toStr) == 0 {
+		return "", "", fmt.Errorf("expected strings for from and to revisions, got: %v, %v", fromStr, toStr)
+	}
+
+	return fromStr, toStr, nil
+}
+
+// interfaceToString converts an interface to a string
+func interfaceToString(r interface{}) (string, error) {
+	str, ok := r.(string)
+	if !ok {
+		return "", fmt.Errorf("received '%v' when expecting commit hash string", str)
+	}
+	return str, nil
+}
+
+func resolveRoot(ctx *sql.Context, sess *dsess.DoltSession, dbName, hashStr string) (*refDetails, error) {
+	root, commitTime, err := sess.ResolveRootForRef(ctx, dbName, hashStr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &refDetails{root, hashStr, commitTime}, nil
+}
+
+func resolveCommit(ctx *sql.Context, ddb *doltdb.DoltDB, headRef ref.DoltRef, cSpecStr string) (*doltdb.Commit, error) {
+	rightCs, err := doltdb.NewCommitSpec(cSpecStr)
+	if err != nil {
+		return nil, err
+	}
+
+	rightCm, err := ddb.Resolve(ctx, rightCs, headRef)
+	if err != nil {
+		return nil, err
+	}
+
+	return rightCm, nil
 }
 
 // WithChildren implements the sql.Node interface
 func (dtf *DiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, error) {
 	if len(node) != 0 {
-		panic("unexpected children")
+		return nil, fmt.Errorf("unexpected children")
 	}
 	return dtf, nil
 }
 
 // CheckPrivileges implements the sql.Node interface
 func (dtf *DiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	tableName, _, _, err := dtf.evaluateArguments()
+	_, _, _, tableName, err := dtf.evaluateArguments()
 	if err != nil {
 		return false
 	}
@@ -211,56 +337,68 @@ func (dtf *DiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.Pr
 
 // evaluateArguments evaluates the argument expressions to turn them into values this DiffTableFunction
 // can use. Note that this method only evals the expressions, and doesn't validate the values.
-func (dtf *DiffTableFunction) evaluateArguments() (string, interface{}, interface{}, error) {
+func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, interface{}, string, error) {
 	if !dtf.Resolved() {
-		return "", nil, nil, nil
+		return nil, nil, nil, "", nil
 	}
 
 	if !sql.IsText(dtf.tableNameExpr.Type()) {
-		return "", nil, nil, sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.tableNameExpr.String())
-	}
-
-	if !sql.IsText(dtf.fromCommitExpr.Type()) {
-		return "", nil, nil, sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.fromCommitExpr.String())
-	}
-
-	if !sql.IsText(dtf.toCommitExpr.Type()) {
-		return "", nil, nil, sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.toCommitExpr.String())
+		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.tableNameExpr.String())
 	}
 
 	tableNameVal, err := dtf.tableNameExpr.Eval(dtf.ctx, nil)
 	if err != nil {
-		return "", nil, nil, err
+		return nil, nil, nil, "", err
 	}
+
 	tableName, ok := tableNameVal.(string)
 	if !ok {
-		return "", nil, nil, ErrInvalidTableName.New(dtf.tableNameExpr.String())
+		return nil, nil, nil, "", ErrInvalidTableName.New(dtf.tableNameExpr.String())
+	}
+
+	if dtf.dotCommitExpr != nil {
+		if !sql.IsText(dtf.dotCommitExpr.Type()) {
+			return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.dotCommitExpr.String())
+		}
+
+		dotCommitVal, err := dtf.dotCommitExpr.Eval(dtf.ctx, nil)
+		if err != nil {
+			return nil, nil, nil, "", err
+		}
+
+		return nil, nil, dotCommitVal, tableName, nil
+	}
+
+	if !sql.IsText(dtf.fromCommitExpr.Type()) {
+		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.fromCommitExpr.String())
+	}
+	if !sql.IsText(dtf.toCommitExpr.Type()) {
+		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.toCommitExpr.String())
 	}
 
 	fromCommitVal, err := dtf.fromCommitExpr.Eval(dtf.ctx, nil)
 	if err != nil {
-		return "", nil, nil, err
+		return nil, nil, nil, "", err
 	}
 
 	toCommitVal, err := dtf.toCommitExpr.Eval(dtf.ctx, nil)
 	if err != nil {
-		return "", nil, nil, err
+		return nil, nil, nil, "", err
 	}
-
-	return tableName, fromCommitVal, toCommitVal, nil
+	return fromCommitVal, toCommitVal, nil, tableName, nil
 }
 
-func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, tableName string, fromCommitVal, toCommitVal interface{}) error {
+func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, toCommitVal, dotCommitVal interface{}, tableName string) error {
 	if !dtf.Resolved() {
 		return nil
 	}
 
 	sqledb, ok := dtf.database.(Database)
 	if !ok {
-		panic(fmt.Sprintf("unexpected database type: %T", dtf.database))
+		return fmt.Errorf("unexpected database type: %T", dtf.database)
 	}
 
-	delta, err := dtf.cacheTableDelta(ctx, tableName, fromCommitVal, toCommitVal, sqledb)
+	delta, err := dtf.cacheTableDelta(ctx, fromCommitVal, toCommitVal, dotCommitVal, tableName, sqledb)
 	if err != nil {
 		return err
 	}
@@ -308,22 +446,18 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, tableName string,
 
 // cacheTableDelta caches and returns an appropriate table delta for the table name given, taking renames into
 // consideration. Returns a sql.ErrTableNotFound if the given table name cannot be found in either revision.
-func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, tableName string, fromCommitVal interface{}, toCommitVal interface{}, db Database) (diff.TableDelta, error) {
-	fromRoot, _, fromDate, err := loadDetailsForRef(ctx, fromCommitVal, db)
+func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, toCommitVal, dotCommitVal interface{}, tableName string, db Database) (diff.TableDelta, error) {
+	fromRefDetails, toRefDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, db)
 	if err != nil {
 		return diff.TableDelta{}, err
 	}
 
-	toRoot, _, toDate, err := loadDetailsForRef(ctx, toCommitVal, db)
+	fromTable, _, fromTableExists, err := fromRefDetails.root.GetTableInsensitive(ctx, tableName)
 	if err != nil {
 		return diff.TableDelta{}, err
 	}
 
-	fromTable, _, fromTableExists, err := fromRoot.GetTableInsensitive(ctx, tableName)
-	if err != nil {
-		return diff.TableDelta{}, err
-	}
-	toTable, _, toTableExists, err := toRoot.GetTableInsensitive(ctx, tableName)
+	toTable, _, toTableExists, err := toRefDetails.root.GetTableInsensitive(ctx, tableName)
 	if err != nil {
 		return diff.TableDelta{}, err
 	}
@@ -333,13 +467,13 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, tableName string
 	}
 
 	// TODO: it would be nice to limit this to just the table under consideration, not all tables with a diff
-	deltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
+	deltas, err := diff.GetTableDeltas(ctx, fromRefDetails.root, toRefDetails.root)
 	if err != nil {
 		return diff.TableDelta{}, err
 	}
 
-	dtf.fromDate = fromDate
-	dtf.toDate = toDate
+	dtf.fromDate = fromRefDetails.commitTime
+	dtf.toDate = toRefDetails.commitTime
 
 	delta := findMatchingDelta(deltas, tableName)
 
@@ -389,19 +523,27 @@ func (dtf *DiffTableFunction) Schema() sql.Schema {
 
 // Resolved implements the sql.Resolvable interface
 func (dtf *DiffTableFunction) Resolved() bool {
+	if dtf.dotCommitExpr != nil {
+		return dtf.tableNameExpr.Resolved() && dtf.dotCommitExpr.Resolved()
+	}
 	return dtf.tableNameExpr.Resolved() && dtf.fromCommitExpr.Resolved() && dtf.toCommitExpr.Resolved()
 }
 
 // String implements the Stringer interface
 func (dtf *DiffTableFunction) String() string {
+	if dtf.dotCommitExpr != nil {
+		return fmt.Sprintf("DOLT_DIFF(%s, %s)",
+			dtf.dotCommitExpr.String(),
+			dtf.tableNameExpr.String())
+	}
 	return fmt.Sprintf("DOLT_DIFF(%s, %s, %s)",
-		dtf.tableNameExpr.String(),
 		dtf.fromCommitExpr.String(),
-		dtf.toCommitExpr.String())
+		dtf.toCommitExpr.String(),
+		dtf.tableNameExpr.String())
 }
 
-// FunctionName implements the sql.TableFunction interface
-func (dtf *DiffTableFunction) FunctionName() string {
+// Name implements the sql.TableFunction interface
+func (dtf *DiffTableFunction) Name() string {
 	return "dolt_diff"
 }
 

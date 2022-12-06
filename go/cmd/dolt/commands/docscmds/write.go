@@ -30,48 +30,48 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
-var writeDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Writes Dolt Docs to stdout",
-	LongDesc:  "Writes Dolt Docs to stdout",
+var printDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Prints Dolt Docs to stdout",
+	LongDesc:  "Prints Dolt Docs to stdout",
 	Synopsis: []string{
 		"{{.LessThan}}doc{{.GreaterThan}}",
 	},
 }
 
-type WriteCmd struct{}
+type PrintCmd struct{}
 
 // Name implements cli.Command.
-func (cmd WriteCmd) Name() string {
-	return "write"
+func (cmd PrintCmd) Name() string {
+	return "print"
 }
 
 // Description implements cli.Command.
-func (cmd WriteCmd) Description() string {
-	return writeDocs.ShortDesc
+func (cmd PrintCmd) Description() string {
+	return printDocs.ShortDesc
 }
 
 // RequiresRepo implements cli.Command.
-func (cmd WriteCmd) RequiresRepo() bool {
+func (cmd PrintCmd) RequiresRepo() bool {
 	return true
 }
 
 // Docs implements cli.Command.
-func (cmd WriteCmd) Docs() *cli.CommandDocumentation {
+func (cmd PrintCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.NewCommandDocumentation(writeDocs, ap)
+	return cli.NewCommandDocumentation(printDocs, ap)
 }
 
 // ArgParser implements cli.Command.
-func (cmd WriteCmd) ArgParser() *argparser.ArgParser {
+func (cmd PrintCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"doc", "Dolt doc to be read."})
 	return ap
 }
 
 // Exec implements cli.Command.
-func (cmd WriteCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd PrintCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, writeDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, printDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() != 1 {

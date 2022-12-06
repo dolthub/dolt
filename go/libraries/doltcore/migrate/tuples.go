@@ -26,9 +26,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
-	geo "github.com/dolthub/dolt/go/store/geometry"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -162,7 +160,13 @@ func translateNomsField(ctx context.Context, ns tree.NodeStore, value types.Valu
 		v := value.(types.Geometry).Inner
 		translateGeometryField(v, idx, b)
 
-	case types.PointKind, types.LineStringKind, types.PolygonKind:
+	case types.PointKind,
+		types.LineStringKind,
+		types.PolygonKind,
+		types.MultiPointKind,
+		types.MultiLineStringKind,
+		types.MultiPolygonKind,
+		types.GeometryCollectionKind:
 		translateGeometryField(value, idx, b)
 
 	case types.JSONKind:
@@ -239,11 +243,13 @@ func translateStringField(ctx context.Context, ns tree.NodeStore, value types.St
 	case val.StringAddrEnc:
 		// note: previously, TEXT fields were serialized as types.String
 		rd := strings.NewReader(string(value))
-		t, err := tree.NewImmutableTreeFromReader(ctx, rd, ns, tree.DefaultFixedChunkLength)
+		bb := ns.BlobBuilder()
+		bb.Init(len(value))
+		_, addr, err := bb.Chunk(ctx, rd)
 		if err != nil {
 			return err
 		}
-		b.PutStringAddr(idx, t.Addr)
+		b.PutStringAddr(idx, addr)
 
 	default:
 		panic(fmt.Sprintf("unexpected encoding for string (%d)", typ.Enc))
@@ -267,16 +273,32 @@ func translateGeometryField(value types.Value, idx int, b *val.TupleBuilder) {
 	nk := value.Kind()
 	switch nk {
 	case types.PointKind:
-		p := typeinfo.ConvertTypesPointToSQLPoint(value.(types.Point))
-		b.PutGeometry(idx, geo.SerializePoint(p))
+		p := types.ConvertTypesPointToSQLPoint(value.(types.Point))
+		b.PutGeometry(idx, p.Serialize())
 
 	case types.LineStringKind:
-		l := typeinfo.ConvertTypesLineStringToSQLLineString(value.(types.LineString))
-		b.PutGeometry(idx, geo.SerializeLineString(l))
+		l := types.ConvertTypesLineStringToSQLLineString(value.(types.LineString))
+		b.PutGeometry(idx, l.Serialize())
 
 	case types.PolygonKind:
-		p := typeinfo.ConvertTypesPolygonToSQLPolygon(value.(types.Polygon))
-		b.PutGeometry(idx, geo.SerializePolygon(p))
+		p := types.ConvertTypesPolygonToSQLPolygon(value.(types.Polygon))
+		b.PutGeometry(idx, p.Serialize())
+
+	case types.MultiPointKind:
+		p := types.ConvertTypesMultiPointToSQLMultiPoint(value.(types.MultiPoint))
+		b.PutGeometry(idx, p.Serialize())
+
+	case types.MultiLineStringKind:
+		l := types.ConvertTypesMultiLineStringToSQLMultiLineString(value.(types.MultiLineString))
+		b.PutGeometry(idx, l.Serialize())
+
+	case types.MultiPolygonKind:
+		p := types.ConvertTypesMultiPolygonToSQLMultiPolygon(value.(types.MultiPolygon))
+		b.PutGeometry(idx, p.Serialize())
+
+	case types.GeometryCollectionKind:
+		p := types.ConvertTypesGeomCollToSQLGeomColl(value.(types.GeomColl))
+		b.PutGeometry(idx, p.Serialize())
 
 	default:
 		panic(fmt.Sprintf("unexpected NomsKind for geometry (%d)", nk))
@@ -290,11 +312,13 @@ func translateJSONField(ctx context.Context, ns tree.NodeStore, value types.JSON
 	}
 	buf := bytes.NewBuffer([]byte(s))
 
-	t, err := tree.NewImmutableTreeFromReader(ctx, buf, ns, tree.DefaultFixedChunkLength)
+	bb := ns.BlobBuilder()
+	bb.Init(len(s))
+	_, addr, err := bb.Chunk(ctx, buf)
 	if err != nil {
 		return err
 	}
-	b.PutJSONAddr(idx, t.Addr)
+	b.PutJSONAddr(idx, addr)
 	return nil
 }
 
@@ -318,7 +342,9 @@ func translateBlobField(ctx context.Context, ns tree.NodeStore, value types.Blob
 		return err
 	}
 
-	t, err := tree.NewImmutableTreeFromReader(ctx, bytes.NewReader(buf), ns, tree.DefaultFixedChunkLength)
+	bb := ns.BlobBuilder()
+	bb.Init(int(value.Len()))
+	_, addr, err := bb.Chunk(ctx, bytes.NewReader(buf))
 	if err != nil {
 		return err
 	}
@@ -326,9 +352,9 @@ func translateBlobField(ctx context.Context, ns tree.NodeStore, value types.Blob
 	typ := b.Desc.Types[idx]
 	switch typ.Enc {
 	case val.BytesAddrEnc:
-		b.PutBytesAddr(idx, t.Addr)
+		b.PutBytesAddr(idx, addr)
 	case val.StringAddrEnc:
-		b.PutStringAddr(idx, t.Addr)
+		b.PutStringAddr(idx, addr)
 	}
 	return nil
 }

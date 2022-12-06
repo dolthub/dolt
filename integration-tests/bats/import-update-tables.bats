@@ -279,8 +279,9 @@ DELIM
     dolt sql < 1pk1col-char-sch.sql
     run dolt table import -u test 1pk1col-rpt-chars.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
-    [[ "$output" =~ "Bad Row: [1,123456]" ]] || false
+    [[ "$output" =~ "An error occurred while moving data" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
+    [[ "$output" =~ "[1,123456]" ]] || false    
     [[ "$output" =~ 'too large for column' ]] || false
 }
 
@@ -314,8 +315,7 @@ DELIM
     run dolt table import -u persons persons.csv
     [ "$status" -eq 1 ]
 
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
-    [[ "$output" =~ "Bad Row:" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "[2,little,doe,10]" ]] || false
 
     run dolt table import -u --continue persons persons.csv
@@ -381,7 +381,7 @@ DELIM
 
     run dolt table import -u test bad-updates.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "CSV reader expected 2 values, but saw 3" ]] || false
     [[ "$output" =~ "with the following values left over: '[\"\"]'" ]] || false
 
@@ -403,7 +403,7 @@ DELIM
 
     run dolt table import -u test bad-updates.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "[100]" ]] || false
 
     run dolt table import -u --continue test bad-updates.csv
@@ -443,6 +443,14 @@ DELIM
     run dolt diff --summary main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
+}
+
+@test "import-update-tables: bad parquet file import errors" {
+    dolt sql -q "CREATE TABLE test_table (pk int primary key, col1 text, col2 int);"
+    echo "This is a bad parquet file" > bad.parquet
+    run dolt table import -u test_table bad.parquet
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "When attempting to move data from parquet file:bad.parquet to test_table, could not open a reader." ]] || false
 }
 
 @test "import-update-tables: Subsequent updates with --continue correctly work" {
@@ -797,8 +805,8 @@ DELIM
 
     run dolt table import -u objects objects-bad.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
-    [[ "$output" =~ "Bad Row: [6,bottle,gray]" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
+    [[ "$output" =~ "[6,bottle,gray]" ]] || false
     [[ "$output" =~ "cannot add or update a child row - Foreign key violation" ]] || false
 
     run dolt table import -u objects objects-bad.csv --continue
@@ -877,8 +885,8 @@ DELIM
 
     run dolt table import -u objects multi-key-bad.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
-    [[ "$output" =~ "Bad Row: [6,bottle,blue,steel]" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
+    [[ "$output" =~ "[6,bottle,blue,steel]" ]] || false
     [[ "$output" =~ "cannot add or update a child row - Foreign key violation" ]] || false
 
     run dolt table import -u objects multi-key-bad.csv --continue
@@ -956,7 +964,7 @@ DELIM
 
     run dolt table import -u colors colors-bad.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "cannot delete or update a parent row" ]] || false
 
     run dolt table import -u colors colors-bad.csv --continue
@@ -999,7 +1007,7 @@ DELIM
 
     run dolt table import -u tbl circular-keys-bad.csv
     [ $status -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "cannot add or update a child row" ]] || false
 }
 
@@ -1184,7 +1192,7 @@ DELIM
 
     run dolt table import -u test bad-updates.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "CSV reader expected 3 values, but saw 2" ]] || false
     [[ "$output" =~ "row values:" ]]
     ! [[ "$output" =~ "with the following values left over: '[\"\"]'" ]] || false
@@ -1198,7 +1206,7 @@ DELIM
 
     run dolt table import -u test bad-updates.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "CSV reader expected 2 values, but saw 3" ]] || false
     [[ "$output" =~ "row values:" ]]
     [[ "$output" =~ '"pk": "5"' ]]
@@ -1214,4 +1222,77 @@ DELIM
     [[ "${lines[5]}" =~ "Rows Processed: 0, Additions: 0, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "${lines[6]}" =~ "Lines skipped: 2" ]] || false
     [[ "${lines[7]}" =~ "Import completed successfully." ]] || false
+}
+
+@test "import-update-tables: test error when import bad csv with nulls" {
+    # Case where there are fewer values in a row than the number of columns in the schema
+    cat <<DELIM > bad-updates.csv
+i,j,k
+,,,
+DELIM
+
+    dolt sql -q "CREATE TABLE test(i int, j int, k int, l int)"
+
+    run dolt table import -u test bad-updates.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "A bad row was encountered" ]] || false
+    [[ "$output" =~ "CSV reader expected 3 values, but saw 4" ]] || false
+    [[ "$output" =~ "row values:" ]] || false
+    [[ "$output" =~ "with the following values left over: '[\"\"]'" ]] || false
+}
+
+@test "import-update-tables: incorrect values default to zero value when --continue is passed" {
+    dolt sql <<SQL
+CREATE TABLE t (
+    pk int primary key,
+    col1 boolean,
+    col2 integer,
+    col3 tinyint,
+    col4 smallint,
+    col5 mediumint,
+    col6 int,
+    col7 bigint,
+    col8 decimal,
+    col9 float,
+    col10 double,
+    col11 date,
+    col12 time,
+    col13 datetime,
+    col14 timestamp,
+    col15 year,
+    col16 ENUM('first', 'second'),
+    col17 SET('a', 'b'),
+    col18 JSON
+);
+SQL
+    dolt commit -Am "add table"
+
+    cat <<DELIM > bad-updates.csv
+pk,col1,col2,col3,col4,col5,col6,col7,col8,col9,col10,col11,col12,col13,col14,col15,col16,col17,col18
+1,val1,val2,val3,val4,val5,val6,val7,val8,val9,val10,val11,val12,val13,val14,val15,val16,val17,val18
+DELIM
+    # if a bad json value is encountered with insert ignore, MySQL throws an error
+    # so, in dolt table import we skip the row.
+    run dolt table import -u t --continue bad-updates.csv
+    [ $status -eq 0 ]
+    [[ $output =~ "The following rows were skipped:" ]] || false
+    [[ $output =~ "[1,val1,val2,val3,val4,val5,val6,val7,val8,val9,val10,val11,val12,val13,val14,val15,val16,val17,val18]" ]] || false
+
+    run dolt sql -r csv -q "select count(*) from t;"
+    [[ $output =~ "0" ]] || false
+
+    dolt sql -q "alter table t drop column col18;"
+    dolt commit -Am "drop json column"
+
+    cat <<DELIM > bad-updates.csv
+pk,col1,col2,col3,col4,col5,col6,col7,col8,col9,col10,col11,col12,col13,col14,col15,col16,col17
+1,val1,val2,val3,val4,val5,val6,val7,val8,val9,val10,val11,val12,val13,val14,val15,val16,val17
+DELIM
+    run dolt table import -u t --continue bad-updates.csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+
+    run dolt sql -r csv -q "select * from t;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ '1,0,0,0,0,0,0,0,0,0,0,0000-00-00,00:00:00,0000-00-00 00:00:00,0000-00-00 00:00:00,0,first,""' ]] || false
 }

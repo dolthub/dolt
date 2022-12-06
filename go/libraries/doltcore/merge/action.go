@@ -39,6 +39,7 @@ type MergeSpec struct {
 	MergeH          hash.Hash
 	HeadC           *doltdb.Commit
 	MergeC          *doltdb.Commit
+	MergeCSpecStr   string
 	StompedTblNames []string
 	WorkingDiffs    map[string]hash.Hash
 	Squash          bool
@@ -97,6 +98,7 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 		HeadH:           headH,
 		MergeH:          mergeH,
 		HeadC:           headCM,
+		MergeCSpecStr:   commitSpecStr,
 		MergeC:          mergeCM,
 		StompedTblNames: stompedTblNames,
 		WorkingDiffs:    workingDiffs,
@@ -120,45 +122,7 @@ func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map
 	}
 
 	tblToStats := make(map[string]*MergeStats)
-	err = mergedRootToWorking(ctx, false, dEnv, mergedRoot, spec.WorkingDiffs, spec.MergeC, tblToStats)
-
-	if err != nil {
-		return tblToStats, err
-	}
-
-	// Reload roots since the above method writes new values to the working set
-	roots, err := dEnv.Roots(ctx)
-	if err != nil {
-		return tblToStats, err
-	}
-
-	ws, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		return tblToStats, err
-	}
-
-	var mergeParentCommits []*doltdb.Commit
-	if ws.MergeActive() {
-		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
-	}
-
-	_, err = actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
-		Message:    spec.Msg,
-		Date:       spec.Date,
-		AllowEmpty: spec.AllowEmpty,
-		Force:      spec.Force,
-		Name:       spec.Name,
-		Email:      spec.Email,
-	})
-
-	if err != nil {
-		return tblToStats, fmt.Errorf("%w; failed to commit", err)
-	}
-
-	err = dEnv.ClearMerge(ctx)
-	if err != nil {
-		return tblToStats, err
-	}
+	err = mergedRootToWorking(ctx, false, dEnv, mergedRoot, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr, tblToStats)
 
 	return tblToStats, err
 }
@@ -213,7 +177,11 @@ func ExecuteFFMerge(
 }
 
 func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
-	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil, err
+	}
+	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: tmpDir}
 	mergedRoot, tblToStats, err := MergeCommits(ctx, spec.HeadC, spec.MergeC, opts)
 	if err != nil {
 		switch err {
@@ -225,7 +193,7 @@ func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[
 		return tblToStats, err
 	}
 
-	return tblToStats, mergedRootToWorking(ctx, spec.Squash, dEnv, mergedRoot, spec.WorkingDiffs, spec.MergeC, tblToStats)
+	return tblToStats, mergedRootToWorking(ctx, spec.Squash, dEnv, mergedRoot, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr, tblToStats)
 }
 
 // TODO: change this to be functional and not write to repo state
@@ -236,6 +204,7 @@ func mergedRootToWorking(
 	mergedRoot *doltdb.RootValue,
 	workingDiffs map[string]hash.Hash,
 	cm2 *doltdb.Commit,
+	cm2SpecStr string,
 	tblToStats map[string]*MergeStats,
 ) error {
 	var err error
@@ -250,7 +219,7 @@ func mergedRootToWorking(
 	}
 
 	if !squash {
-		err = dEnv.StartMerge(ctx, cm2)
+		err = dEnv.StartMerge(ctx, cm2, cm2SpecStr)
 
 		if err != nil {
 			return actions.ErrFailedToSaveRepoState

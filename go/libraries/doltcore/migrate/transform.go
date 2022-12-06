@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"golang.org/x/sync/errgroup"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -39,7 +41,7 @@ var (
 	flushRef = ref.NewInternalRef("migration-flush")
 )
 
-func migrateWorkingSet(ctx context.Context, brRef ref.BranchRef, wsRef ref.WorkingSetRef, old, new *doltdb.DoltDB) error {
+func migrateWorkingSet(ctx context.Context, menv Environment, brRef ref.BranchRef, wsRef ref.WorkingSetRef, old, new *doltdb.DoltDB) error {
 	oldWs, err := old.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
 		return err
@@ -63,12 +65,22 @@ func migrateWorkingSet(ctx context.Context, brRef ref.BranchRef, wsRef ref.Worki
 		return err
 	}
 
-	wr, err := migrateRoot(ctx, oldHeadRoot, oldWs.WorkingRoot(), newHeadRoot)
+	wr, err := migrateRoot(ctx, menv, oldHeadRoot, oldWs.WorkingRoot(), newHeadRoot)
 	if err != nil {
 		return err
 	}
 
-	sr, err := migrateRoot(ctx, oldHeadRoot, oldWs.StagedRoot(), newHeadRoot)
+	sr, err := migrateRoot(ctx, menv, oldHeadRoot, oldWs.StagedRoot(), newHeadRoot)
+	if err != nil {
+		return err
+	}
+
+	err = validateRootValue(ctx, oldHeadRoot, oldWs.WorkingRoot(), wr)
+	if err != nil {
+		return err
+	}
+
+	err = validateRootValue(ctx, oldHeadRoot, oldWs.StagedRoot(), sr)
 	if err != nil {
 		return err
 	}
@@ -78,7 +90,7 @@ func migrateWorkingSet(ctx context.Context, brRef ref.BranchRef, wsRef ref.Worki
 	return new.UpdateWorkingSet(ctx, wsRef, newWs, hash.Hash{}, oldWs.Meta())
 }
 
-func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
+func migrateCommit(ctx context.Context, menv Environment, oldCm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
 	oldHash, err := oldCm.HashOf()
 	if err != nil {
 		return err
@@ -95,7 +107,8 @@ func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB
 		return migrateInitCommit(ctx, oldCm, new, prog)
 	}
 
-	prog.Log(ctx, "migrating commit %s", oldHash.String())
+	hs := oldHash.String()
+	prog.Log(ctx, "migrating commit %s", hs)
 
 	oldRoot, err := oldCm.GetRootValue(ctx)
 	if err != nil {
@@ -135,7 +148,7 @@ func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB
 		return err
 	}
 
-	mRoot, err := migrateRoot(ctx, oldParentRoot, oldRoot, newParentRoot)
+	mRoot, err := migrateRoot(ctx, menv, oldParentRoot, oldRoot, newParentRoot)
 	if err != nil {
 		return err
 	}
@@ -178,7 +191,7 @@ func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB
 
 	// validate root after we flush the ChunkStore to facilitate
 	// investigating failed migrations
-	if err = validateRootValue(ctx, oldRoot, mRoot); err != nil {
+	if err = validateRootValue(ctx, oldParentRoot, oldRoot, mRoot); err != nil {
 		return err
 	}
 
@@ -253,7 +266,7 @@ func migrateCommitOptions(ctx context.Context, oldCm *doltdb.Commit, prog Progre
 	}, nil
 }
 
-func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.RootValue) (*doltdb.RootValue, error) {
+func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newParent *doltdb.RootValue) (*doltdb.RootValue, error) {
 	migrated := newParent
 
 	fkc, err := oldRoot.GetForeignKeyCollection(ctx)
@@ -266,11 +279,21 @@ func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.Root
 		return nil, err
 	}
 
+	removedTables, err := getRemovedTableNames(ctx, oldParent, oldRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	migrated, err = migrated.RemoveTables(ctx, true, false, removedTables...)
+	if err != nil {
+		return nil, err
+	}
+
 	err = oldRoot.IterTables(ctx, func(name string, oldTbl *doltdb.Table, sch schema.Schema) (bool, error) {
 		ok, err := oldTbl.HasConflicts(ctx)
 		if err != nil {
 			return true, err
-		} else if ok {
+		} else if ok && !menv.DropConflicts {
 			return true, fmt.Errorf("cannot migrate table with conflicts (%s)", name)
 		}
 
@@ -332,6 +355,21 @@ func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.Root
 	}
 
 	return migrated, nil
+}
+
+// renames also get returned here
+func getRemovedTableNames(ctx context.Context, prev, curr *doltdb.RootValue) ([]string, error) {
+	prevNames, err := prev.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tblNameSet := set.NewStrSet(prevNames)
+	currNames, err := curr.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tblNameSet.Remove(currNames...)
+	return tblNameSet.AsSlice(), nil
 }
 
 func migrateTable(ctx context.Context, newSch schema.Schema, oldParentTbl, oldTbl, newParentTbl *doltdb.Table) (*doltdb.Table, error) {
@@ -413,7 +451,15 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 			}
 		}
 		if patched {
-			return schema.SchemaFromCols(schema.NewColCollection(cols...))
+			allCols := schema.NewColCollection(cols...)
+			schema.NewIndexCollection(allCols, existing.GetPKCols())
+			return schema.NewSchema(
+				allCols,
+				existing.GetPkOrdinals(),
+				existing.GetCollation(),
+				existing.Indexes(),
+				existing.Checks(),
+			)
 		}
 		return existing, nil
 	}
@@ -446,10 +492,56 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 			}
 		}
 	}
-	if patched {
-		return schema.SchemaFromCols(schema.NewColCollection(cols...))
+
+	// String types are sorted using a binary collation in __LD_1__
+	// force-set collation to utf8mb4_0900_bin to match the order
+	for i, c := range cols {
+		st, ok := c.TypeInfo.ToSqlType().(sql.StringType)
+		if !ok {
+			continue
+		}
+		patched = true
+
+		var err error
+		switch st.Type() {
+		case query.Type_CHAR, query.Type_VARCHAR, query.Type_TEXT:
+			st, err = sql.CreateString(st.Type(), st.Length(), sql.Collation_utf8mb4_0900_bin)
+		case query.Type_BINARY, query.Type_VARBINARY, query.Type_BLOB:
+			st, err = sql.CreateString(st.Type(), st.Length(), sql.Collation_binary)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		info, err := typeinfo.FromSqlType(st)
+		if err != nil {
+			return nil, err
+		}
+
+		cols[i], err = schema.NewColumnWithTypeInfo(
+			c.Name, c.Tag, info, c.IsPartOfPK, c.Default,
+			c.AutoIncrement, c.Comment, c.Constraints...)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return existing, nil
+
+	if !patched {
+		return existing, nil
+	}
+
+	sch, err := schema.NewSchema(
+		schema.NewColCollection(cols...),
+		existing.GetPkOrdinals(),
+		existing.GetCollation(),
+		existing.Indexes(),
+		existing.Checks(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return sch, nil
 }
 
 func migrateIndexSet(

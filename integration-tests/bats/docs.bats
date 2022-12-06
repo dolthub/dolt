@@ -50,8 +50,8 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ ! $output =~ "dolt_docs" ]] || false
 
-    dolt docs read README.md README.md
-    run dolt docs read README.md README.md
+    dolt docs upload README.md README.md
+    run dolt docs upload README.md README.md
     [ "$status" -eq 0 ]
 
     run dolt status
@@ -60,9 +60,9 @@ teardown() {
 }
 
 @test "docs: doc read outputs doc correctly" {
-    dolt docs read LICENSE.md LICENSE.md
+    dolt docs upload LICENSE.md LICENSE.md
 
-    dolt docs write LICENSE.md > other.md
+    dolt docs print LICENSE.md > other.md
     diff LICENSE.md other.md
     run diff LICENSE.md other.md
     [ "$status" -eq 0 ]
@@ -70,7 +70,7 @@ teardown() {
 }
 
 @test "docs: docs can be staged" {
-    dolt docs read LICENSE.md LICENSE.md
+    dolt docs upload LICENSE.md LICENSE.md
     dolt add .
 
     dolt status
@@ -79,7 +79,7 @@ teardown() {
 }
 
 @test "docs: doc can be committed" {
-    dolt docs read LICENSE.md LICENSE.md
+    dolt docs upload LICENSE.md LICENSE.md
     dolt add .
 
     run dolt status
@@ -94,7 +94,7 @@ teardown() {
 }
 
 @test "docs: docs are available from SQL" {
-    dolt docs read LICENSE.md LICENSE.md
+    dolt docs upload LICENSE.md LICENSE.md
     dolt sql -q "SELECT doc_name FROM dolt_docs" -r csv
     run dolt sql -q "SELECT doc_name FROM dolt_docs" -r csv
     [ "$status" -eq 0 ]
@@ -111,7 +111,7 @@ teardown() {
     dolt sql <<SQL
 CREATE TABLE dolt_docs (
   doc_name varchar(16383) NOT NULL,
-  doc_text varchar(16383),
+  doc_text longtext,
   PRIMARY KEY (doc_name)
 );
 SQL
@@ -123,7 +123,7 @@ SQL
 }
 
 @test "docs: docs diff" {
-    dolt docs read LICENSE.md LICENSE.md
+    dolt docs upload LICENSE.md LICENSE.md
     dolt add -A && dolt commit -m "added LICENSE"
 
     cat <<TXT > LICENSE.md
@@ -142,7 +142,7 @@ SQL
   0. You just DO WHAT THE F*CK YOU WANT TO
 TXT
 
-    dolt docs read LICENSE.md LICENSE.md
+    dolt docs upload LICENSE.md LICENSE.md
     run dolt docs diff LICENSE.md
     [ "$status" -eq 0 ]
     [[ "$output" =~ "-        DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE"      ]] || false

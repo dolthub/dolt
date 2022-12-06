@@ -104,7 +104,7 @@ func TestMigration(t *testing.T) {
 					expected: []sql.Row{
 						{"pk", "varchar(16383)", "NO", "PRI", "NULL", ""},
 						{"c0", "int", "YES", "", "NULL", ""},
-						{"c1", "varbinary(16383)", "YES", "", "NULL", ""},
+						{"c1", "varbinary(16383)", "YES", "MUL", "NULL", ""},
 					},
 				},
 			},
@@ -116,12 +116,10 @@ func TestMigration(t *testing.T) {
 			ctx := context.Background()
 			preEnv := setupMigrationTest(t, ctx, test)
 			postEnv := runMigration(t, ctx, preEnv)
-
-			ddb := postEnv.DoltDB
 			root, err := postEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 			for _, a := range test.asserts {
-				actual, err := sqle.ExecuteSelect(t, postEnv, ddb, root, a.query)
+				actual, err := sqle.ExecuteSelect(postEnv, root, a.query)
 				assert.NoError(t, err)
 				assert.Equal(t, a.expected, actual)
 			}
@@ -156,7 +154,7 @@ func SetupHookRefKeys(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, err
 	if err != nil {
 		return nil, err
 	}
-	_, err = sch.Indexes().AddIndexByColNames("blob_idx", []string{"c1"}, schema.IndexProperties{IsUserDefined: true})
+	_, err = sch.Indexes().AddIndexByColNames("blob_idx", []string{"c1"}, nil, schema.IndexProperties{IsUserDefined: true})
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +184,7 @@ func runMigration(t *testing.T, ctx context.Context, preEnv *env.DoltEnv) (postE
 		DoltDB:    ddb,
 	}
 
-	err = migrate.TraverseDAG(ctx, preEnv.DoltDB, postEnv.DoltDB)
+	err = migrate.TraverseDAG(ctx, migrate.Environment{}, preEnv.DoltDB, postEnv.DoltDB)
 	assert.NoError(t, err)
 	return
 }

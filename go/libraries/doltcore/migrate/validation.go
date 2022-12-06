@@ -52,7 +52,7 @@ func validateBranchMapping(ctx context.Context, old, new *doltdb.DoltDB) error {
 	return nil
 }
 
-func validateRootValue(ctx context.Context, old, new *doltdb.RootValue) error {
+func validateRootValue(ctx context.Context, oldParent, old, new *doltdb.RootValue) error {
 	names, err := old.GetTableNames(ctx)
 	if err != nil {
 		return err
@@ -65,6 +65,25 @@ func validateRootValue(ctx context.Context, old, new *doltdb.RootValue) error {
 		if !ok {
 			h, _ := old.HashOf()
 			return fmt.Errorf("expected to find table %s in root value (%s)", name, h.String())
+		}
+
+		// Skip tables that haven't changed
+		op, ok, err := oldParent.GetTable(ctx, name)
+		if err != nil {
+			return err
+		}
+		if ok {
+			oldHash, err := o.HashOf()
+			if err != nil {
+				return err
+			}
+			oldParentHash, err := op.HashOf()
+			if err != nil {
+				return err
+			}
+			if oldHash.Equal(oldParentHash) {
+				continue
+			}
 		}
 
 		n, ok, err := new.GetTable(ctx, name)
@@ -145,7 +164,7 @@ func validateTableDataPartition(ctx context.Context, name string, old, new *dolt
 }
 
 func equalRows(old, new sql.Row, sch sql.Schema) (bool, error) {
-	if len(new) != len(new) || len(new) != len(sch) {
+	if len(new) != len(old) || len(new) != len(sch) {
 		return false, nil
 	}
 
@@ -164,23 +183,25 @@ func equalRows(old, new sql.Row, sch sql.Schema) (bool, error) {
 		// special case time comparison to account
 		// for precision changes between formats
 		if _, ok := old[i].(time.Time); ok {
-			if old[i], err = sql.Int64.Convert(old[i]); err != nil {
+			var o, n interface{}
+			if o, err = sql.Int64.Convert(old[i]); err != nil {
 				return false, err
 			}
-			if new[i], err = sql.Int64.Convert(new[i]); err != nil {
+			if n, err = sql.Int64.Convert(new[i]); err != nil {
 				return false, err
 			}
-			cmp, err = sql.Int64.Compare(old[i], new[i])
+			if cmp, err = sql.Int64.Compare(o, n); err != nil {
+				return false, err
+			}
 		} else {
-			cmp, err = sch[i].Type.Compare(old[i], new[i])
+			if cmp, err = sch[i].Type.Compare(old[i], new[i]); err != nil {
+				return false, err
+			}
 		}
-		if err != nil {
-			return false, err
-		} else if cmp != 0 {
+		if cmp != 0 {
 			return false, nil
 		}
 	}
-
 	return true, nil
 }
 
@@ -197,11 +218,17 @@ func validateSchema(existing schema.Schema) error {
 
 func nomsKindsFromQueryTypes(qt query.Type) []types.NomsKind {
 	switch qt {
-	case query.Type_UINT8, query.Type_UINT16, query.Type_UINT24,
+	case query.Type_UINT8:
+		return []types.NomsKind{types.UintKind, types.BoolKind}
+
+	case query.Type_UINT16, query.Type_UINT24,
 		query.Type_UINT32, query.Type_UINT64:
 		return []types.NomsKind{types.UintKind}
 
-	case query.Type_INT8, query.Type_INT16, query.Type_INT24,
+	case query.Type_INT8:
+		return []types.NomsKind{types.IntKind, types.BoolKind}
+
+	case query.Type_INT16, query.Type_INT24,
 		query.Type_INT32, query.Type_INT64:
 		return []types.NomsKind{types.IntKind}
 
@@ -238,6 +265,10 @@ func nomsKindsFromQueryTypes(qt query.Type) []types.NomsKind {
 			types.PointKind,
 			types.LineStringKind,
 			types.PolygonKind,
+			types.MultiPointKind,
+			types.MultiLineStringKind,
+			types.MultiPolygonKind,
+			types.GeometryCollectionKind,
 		}
 
 	case query.Type_JSON:

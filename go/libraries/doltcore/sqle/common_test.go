@@ -24,14 +24,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // SetupFunc can be run to perform additional setup work before a test case
@@ -40,12 +39,13 @@ type SetupFn func(t *testing.T, dEnv *env.DoltEnv)
 // Runs the query given and returns the result. The schema result of the query's execution is currently ignored, and
 // the targetSchema given is used to prepare all rows.
 func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) ([]sql.Row, sql.Schema, error) {
-	var err error
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+	tmpDir, err := dEnv.TempTableFilesDir()
+	require.NoError(t, err)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db, root)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -70,11 +70,13 @@ func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 
 // Runs the query given and returns the error (if any).
 func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+	tmpDir, err := dEnv.TempTableFilesDir()
+	require.NoError(t, err)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db, root)
 
 	if err != nil {
 		return nil, err
@@ -127,19 +129,6 @@ func equalSchemas(t *testing.T, expectedSch schema.Schema, sch schema.Schema) {
 	}
 }
 
-// TODO: this shouldn't be here
-func CreateWorkingRootUpdate() map[string]TableUpdate {
-	return map[string]TableUpdate{
-		TableWithHistoryName: {
-			RowUpdates: []row.Row{
-				mustRow(row.New(types.Format_Default, ReaddAgeAt5HistSch, row.TaggedValues{
-					0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"),
-				})),
-			},
-		},
-	}
-}
-
 // Returns the dolt schema given as a sql.Schema, or panics.
 func mustSqlSchema(sch schema.Schema) sql.Schema {
 	sqlSchema, err := sqlutil.FromDoltSchema("", sch)
@@ -177,29 +166,42 @@ func assertSchemasEqual(t *testing.T, expected, actual sql.Schema) {
 }
 
 // CreateTableFn returns a SetupFunc that creates a table with the rows given
-func CreateTableFn(tableName string, tableSchema schema.Schema, initialRows ...row.Row) SetupFn {
+// todo(andy): replace with ExecuteSetupSQL
+func CreateTableFn(tableName string, tableSchema schema.Schema, queries string) SetupFn {
 	return func(t *testing.T, dEnv *env.DoltEnv) {
-		dtestutils.CreateTestTable(t, dEnv, tableName, tableSchema, initialRows...)
+		CreateTestTable(t, dEnv, tableName, tableSchema, queries)
 	}
 }
 
-// CreateTableWithRowsFn returns a SetupFunc that creates a table with the rows given, creating the rows on the fly
-// from Value types conforming to the schema given.
-func CreateTableWithRowsFn(tableName string, tableSchema schema.Schema, initialRows ...[]types.Value) SetupFn {
-	return func(t *testing.T, dEnv *env.DoltEnv) {
-		rows := make([]row.Row, len(initialRows))
-		for i, r := range initialRows {
-			rows[i] = NewRowWithSchema(tableSchema, r...)
-		}
-		dtestutils.CreateTestTable(t, dEnv, tableName, tableSchema, rows...)
-	}
+// CreateTestTable creates a new test table with the name, schema, and rows given.
+func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch schema.Schema, queries string) {
+	ctx := context.Background()
+	root, err := dEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
+	vrw := dEnv.DoltDB.ValueReadWriter()
+	ns := dEnv.DoltDB.NodeStore()
+
+	rows, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
+	require.NoError(t, err)
+	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, rows, nil, nil)
+	require.NoError(t, err)
+	root, err = root.PutTable(ctx, tableName, tbl)
+	require.NoError(t, err)
+	err = dEnv.UpdateWorkingRoot(ctx, root)
+	require.NoError(t, err)
+	root, err = ExecuteSql(dEnv, root, queries)
+	require.NoError(t, err)
+	err = dEnv.UpdateWorkingRoot(ctx, root)
+	require.NoError(t, err)
 }
 
-// Compose takes an arbitrary number of SetupFns and composes them into a single func which executes all funcs given.
-func Compose(fns ...SetupFn) SetupFn {
+func ExecuteSetupSQL(ctx context.Context, queries string) SetupFn {
 	return func(t *testing.T, dEnv *env.DoltEnv) {
-		for _, f := range fns {
-			f(t, dEnv)
-		}
+		root, err := dEnv.WorkingRoot(ctx)
+		require.NoError(t, err)
+		root, err = ExecuteSql(dEnv, root, queries)
+		require.NoError(t, err)
+		err = dEnv.UpdateWorkingRoot(ctx, root)
+		require.NoError(t, err)
 	}
 }

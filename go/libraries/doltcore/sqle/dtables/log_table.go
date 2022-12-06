@@ -18,6 +18,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -81,12 +82,12 @@ type LogItr struct {
 
 // NewLogItr creates a LogItr from the current environment.
 func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*LogItr, error) {
-	hash, err := head.HashOf()
+	h, err := head.HashOf()
 	if err != nil {
 		return nil, err
 	}
 
-	child, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash)
+	child, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, []hash.Hash{h}, nil)
 	if err != nil {
 		return nil, err
 	}

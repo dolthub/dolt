@@ -15,6 +15,9 @@
 package grpcendpoint
 
 import (
+	"crypto/tls"
+	"net/http"
+
 	"google.golang.org/grpc/credentials"
 )
 
@@ -23,4 +26,12 @@ type Config struct {
 	Insecure     bool
 	Creds        credentials.PerRPCCredentials
 	WithEnvCreds bool
+
+	// If non-nil, this is used for transport level security in the dial
+	// options, instead of a default option based on `Insecure`.
+	TLSConfig *tls.Config
+}
+
+type HTTPFetcher interface {
+	Do(req *http.Request) (*http.Response, error)
 }

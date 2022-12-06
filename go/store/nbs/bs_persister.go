@@ -17,6 +17,7 @@ package nbs
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -48,7 +49,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 	}
 
 	bsTRA := &bsTableReaderAt{name.String(), bsp.bs}
-	return newReaderFromIndexData(bsp.q, data, name, bsTRA, bsp.blockSize)
+	return newReaderFromIndexData(ctx, bsp.q, data, name, bsTRA, bsp.blockSize)
 }
 
 // ConjoinAll (Not currently implemented) conjoins all chunks in |sources| into a single,
@@ -59,7 +60,11 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 
 // Open a table named |name|, containing |chunkCount| chunks.
 func (bsp *blobstorePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newBSChunkSource(ctx, bsp.bs, name, chunkCount, bsp.blockSize, bsp.q, stats)
+	return newBSChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
+}
+
+func (bsp *blobstorePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
+	return bsp.bs.Exists(ctx, name.String())
 }
 
 type bsTableReaderAt struct {
@@ -95,9 +100,9 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 	return totalRead, nil
 }
 
-func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, blockSize uint64, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 
-	index, err := loadTableIndex(stats, chunkCount, q, func(p []byte) error {
+	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
 		rc, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
 		if err != nil {
 			return err
@@ -123,6 +128,10 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 	return &chunkSourceAdapter{tr, name}, nil
 }
 
-func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {
+func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents manifestContents, t time.Time) error {
 	return chunks.ErrUnsupportedOperation
+}
+
+func (bsp *blobstorePersister) Close() error {
+	return nil
 }

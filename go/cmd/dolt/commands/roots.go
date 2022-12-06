@@ -85,7 +85,13 @@ func (cmd RootsCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	dir := filepath.Join(dEnv.GetDoltDir(), dbfactory.DataDir)
+	doltDir := dEnv.GetDoltDir()
+	if doltDir == "" {
+		cli.Println(color.YellowString("can no longer find a database on disk"))
+		return 1
+	}
+
+	dir := filepath.Join(doltDir, dbfactory.DataDir)
 	oldgen := filepath.Join(dir, "oldgen")
 	itr, err := NewTableFileIter([]string{dir, oldgen}, dEnv.FS)
 
@@ -118,7 +124,7 @@ func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified 
 
 	defer rdCloser.Close()
 
-	return nbs.IterChunks(rdCloser.(io.ReadSeeker), func(chunk chunks.Chunk) (stop bool, err error) {
+	return nbs.IterChunks(ctx, rdCloser.(io.ReadSeeker), func(chunk chunks.Chunk) (stop bool, err error) {
 		//Want a clean db every loop
 		sp, _ := spec.ForDatabase("mem")
 		vrw := sp.GetVRW(ctx)

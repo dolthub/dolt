@@ -49,7 +49,7 @@ func writeItemBytes(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
 	return b.CreateByteVector(b.Bytes[start:stop])
 }
 
-// writeItemOffsets writes (n+1) uint16 offsets for n |items|.
+// writeItemOffsets writes (n+1) uint16 offStart for n |items|.
 // the first offset is 0, the last offset is |sumSz|.
 func writeItemOffsets(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
 	var off = sumSz
@@ -57,7 +57,7 @@ func writeItemOffsets(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
 		b.PrependUint16(uint16(off))
 		off -= len(items[i])
 	}
-	assertTrue(off == 0, "incorrect final value after serializing offsets")
+	assertTrue(off == 0, "incorrect final value after serializing offStart")
 	b.PrependUint16(uint16(off))
 	return b.EndVector(len(items) + 1)
 }
@@ -77,7 +77,7 @@ func countAddresses(items [][]byte, td val.TupleDesc) (cnt int) {
 	return
 }
 
-// writeAddressOffsets serializes an array of uint16 offsets representing address offsets within an array of items.
+// writeAddressOffsets serializes an array of uint16 offStart representing address offStart within an array of items.
 func writeAddressOffsets(b *fb.Builder, items [][]byte, sumSz int, td val.TupleDesc) fb.UOffsetT {
 	var cnt int
 	var off = sumSz

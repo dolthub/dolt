@@ -40,7 +40,7 @@ import (
 )
 
 var commitDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Record changes to the repository",
+	ShortDesc: "Record changes to the database",
 	LongDesc: `
 Stores the current contents of the staged tables in a new commit along with a log message from the user describing the changes.
 
@@ -92,6 +92,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	allFlag := apr.Contains(cli.AllFlag)
+	upperCaseAllFlag := apr.Contains(cli.UpperCaseAllFlag)
 
 	if dEnv.IsLocked() {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
@@ -102,7 +103,12 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working root").AddCause(err).Build(), usage)
 	}
 
-	if allFlag {
+	if upperCaseAllFlag {
+		roots, err = actions.StageAllTables(ctx, roots)
+		if err != nil {
+			return handleCommitErr(ctx, dEnv, err, help)
+		}
+	} else if allFlag {
 		roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
 		if err != nil {
 			return handleCommitErr(ctx, dEnv, err, help)
@@ -187,7 +193,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		mergeParentCommits = parentsHeadForAmend
 	}
 
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
+	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag) || apr.Contains(cli.AmendFlag),
@@ -300,15 +306,25 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggeste
 	}
 
 	backupEd := "vim"
+	// try getting default editor on the user system
 	if ed, edSet := os.LookupEnv("EDITOR"); edSet {
 		backupEd = ed
 	}
+	// try getting Dolt config core.editor
 	editorStr := dEnv.Config.GetStringOrDefault(env.DoltEditor, backupEd)
 
 	cli.ExecuteWithStdioRestored(func() {
-		commitMsg, _ := editor.OpenCommitEditor(editorStr, initialMsg)
+		commitMsg, cErr := editor.OpenCommitEditor(editorStr, initialMsg)
+		if cErr != nil {
+			err = cErr
+		}
 		finalMsg = parseCommitMessage(commitMsg)
 	})
+
+	if err != nil {
+		return "", err
+	}
+
 	return finalMsg, nil
 }
 
@@ -379,7 +395,7 @@ func PrintDiffsNotStaged(
 		if linesPrinted > 0 {
 			cli.Println()
 		}
-		iohelp.WriteLine(wr, mergedTableHeader)
+		iohelp.WriteLine(wr, unmergedPathsHeader)
 		if printHelp {
 			iohelp.WriteLine(wr, mergedTableHelp)
 		}
@@ -498,8 +514,8 @@ const (
 	allMergedHeader = `All conflicts and constraint violations fixed but you are still merging.
   (use "dolt commit" to conclude merge)`
 
-	mergedTableHeader = `Unmerged paths:`
-	mergedTableHelp   = `  (use "dolt add <file>..." to mark resolution)`
+	unmergedPathsHeader = `Unmerged paths:`
+	mergedTableHelp     = `  (use "dolt add <file>..." to mark resolution)`
 
 	workingHeader     = `Changes not staged for commit:`
 	workingHeaderHelp = `  (use "dolt add <table>" to update what will be committed)

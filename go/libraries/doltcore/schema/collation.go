@@ -293,6 +293,6 @@ const (
 	Collation_utf8mb4_zh_0900_as_cs       = Collation(serial.Collationutf8mb4_zh_0900_as_cs)
 	Collation_utf8mb4_0900_bin            = Collation(serial.Collationutf8mb4_0900_bin)
 
-	Collation_Default = Collation_utf8mb4_0900_bin
-	Collation_Invalid = Collation(serial.Collationinvalid)
+	Collation_Default     = Collation_utf8mb4_0900_bin
+	Collation_Unspecified = Collation(serial.Collationinvalid)
 )

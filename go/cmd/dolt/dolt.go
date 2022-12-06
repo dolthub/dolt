@@ -24,7 +24,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -37,6 +36,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/admin"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cnfcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/credcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cvcmds"
@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	Version = "0.40.30"
+	Version = "0.51.9"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -70,8 +70,9 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.CleanCmd{},
 	commands.CommitCmd{},
 	commands.SqlCmd{VersionStr: Version},
+	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
-	sqlserver.SqlClientCmd{},
+	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.LogCmd{},
 	commands.BranchCmd{},
 	commands.CheckoutCmd{},
@@ -388,11 +389,16 @@ func runMain() int {
 	}
 
 	start := time.Now()
-	var wg sync.WaitGroup
 	ctx, stop := context.WithCancel(ctx)
 	res := doltCommand.Exec(ctx, "dolt", args, dEnv)
 	stop()
-	wg.Wait()
+
+	if err = dbfactory.CloseAllLocalDatabases(); err != nil {
+		cli.PrintErrln(err)
+		if res == 0 {
+			res = 1
+		}
+	}
 
 	if csMetrics && dEnv.DoltDB != nil {
 		metricsSummary := dEnv.DoltDB.CSMetricsSummary()

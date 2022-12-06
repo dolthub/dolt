@@ -64,7 +64,7 @@ func makeTestSrcs(t *testing.T, tableSizes []uint32, p tablePersister) (srcs chu
 		}
 		cs, err := p.Persist(context.Background(), mt, nil, &Stats{})
 		require.NoError(t, err)
-		c, err := cs.Clone()
+		c, err := cs.clone()
 		require.NoError(t, err)
 		srcs = append(srcs, c)
 	}
@@ -75,8 +75,8 @@ func TestConjoin(t *testing.T) {
 	// Makes a tableSet with len(tableSizes) upstream tables containing tableSizes[N] unique chunks
 	makeTestTableSpecs := func(tableSizes []uint32, p tablePersister) (specs []tableSpec) {
 		for _, src := range makeTestSrcs(t, tableSizes, p) {
-			specs = append(specs, tableSpec{mustAddr(src.hash()), mustUint32(src.count())})
-			err := src.Close()
+			specs = append(specs, tableSpec{src.hash(), mustUint32(src.count())})
+			err := src.close()
 			require.NoError(t, err)
 		}
 		return
@@ -93,33 +93,39 @@ func TestConjoin(t *testing.T) {
 	}
 
 	assertContainAll := func(t *testing.T, p tablePersister, expect, actual []tableSpec) {
-		open := func(specs []tableSpec) (srcs chunkReaderGroup) {
+		open := func(specs []tableSpec) (sources chunkSources) {
 			for _, sp := range specs {
 				cs, err := p.Open(context.Background(), sp.name, sp.chunkCount, nil)
-
 				if err != nil {
 					require.NoError(t, err)
 				}
-
-				srcs = append(srcs, cs)
+				sources = append(sources, cs)
 			}
 			return
 		}
-		expectSrcs, actualSrcs := open(expect), open(actual)
-		chunkChan := make(chan extractRecord, mustUint32(expectSrcs.count()))
-		err := expectSrcs.extract(context.Background(), chunkChan)
-		require.NoError(t, err)
-		close(chunkChan)
 
-		for rec := range chunkChan {
-			has, err := actualSrcs.has(rec.a)
+		expectSrcs, actualSrcs := open(expect), open(actual)
+
+		ctx := context.Background()
+		for _, src := range expectSrcs {
+			err := extractAllChunks(ctx, src, func(rec extractRecord) {
+				var ok bool
+				for _, src := range actualSrcs {
+					var err error
+					ok, err = src.has(rec.a)
+					require.NoError(t, err)
+					if ok {
+						break
+					}
+				}
+				assert.True(t, ok)
+			})
 			require.NoError(t, err)
-			assert.True(t, has)
 		}
 	}
 
 	setup := func(lock addr, root hash.Hash, sizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
-		p = newFakeTablePersister(&noopQuotaProvider{})
+		p = newFakeTablePersister(&UnlimitedQuotaProvider{})
 		fm = &fakeManifest{}
 		fm.set(constants.NomsVersion, lock, root, makeTestTableSpecs(sizes, p), nil)
 
@@ -137,7 +143,7 @@ func TestConjoin(t *testing.T) {
 		mt.addChunk(computeAddr(data), data)
 		src, err := p.Persist(context.Background(), mt, nil, &Stats{})
 		require.NoError(t, err)
-		return tableSpec{mustAddr(src.hash()), mustUint32(src.count())}
+		return tableSpec{src.hash(), mustUint32(src.count())}
 	}
 
 	tc := []struct {
@@ -161,7 +167,7 @@ func TestConjoin(t *testing.T) {
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
-				_, err := conjoin(context.Background(), upstream, fm, p, stats)
+				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, fm, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -182,7 +188,7 @@ func TestConjoin(t *testing.T) {
 					specs := append([]tableSpec{}, upstream.specs...)
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), nil)
 				}}
-				_, err := conjoin(context.Background(), upstream, u, p, stats)
+				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -202,7 +208,7 @@ func TestConjoin(t *testing.T) {
 				u := updatePreemptManifest{fm, func() {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:], nil)
 				}}
-				_, err := conjoin(context.Background(), upstream, u, p, stats)
+				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -213,7 +219,7 @@ func TestConjoin(t *testing.T) {
 	})
 
 	setupAppendix := func(lock addr, root hash.Hash, specSizes, appendixSizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
-		p = newFakeTablePersister(&noopQuotaProvider{})
+		p = newFakeTablePersister(&UnlimitedQuotaProvider{})
 		fm = &fakeManifest{}
 		fm.set(constants.NomsVersion, lock, root, makeTestTableSpecs(specSizes, p), makeTestTableSpecs(appendixSizes, p))
 
@@ -244,7 +250,7 @@ func TestConjoin(t *testing.T) {
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setupAppendix(startLock, startRoot, c.precompact, c.appendix)
 
-				_, err := conjoin(context.Background(), upstream, fm, p, stats)
+				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, fm, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -268,7 +274,7 @@ func TestConjoin(t *testing.T) {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), upstream.appendix)
 				}}
 
-				_, err := conjoin(context.Background(), upstream, u, p, stats)
+				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -293,7 +299,7 @@ func TestConjoin(t *testing.T) {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(specs, upstream.specs...), append(app, newTable))
 				}}
 
-				_, err := conjoin(context.Background(), upstream, u, p, stats)
+				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -317,7 +323,7 @@ func TestConjoin(t *testing.T) {
 				u := updatePreemptManifest{fm, func() {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, upstream.specs[len(c.appendix)+1:], upstream.appendix[:])
 				}}
-				_, err := conjoin(context.Background(), upstream, u, p, stats)
+				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -341,7 +347,7 @@ func TestConjoin(t *testing.T) {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, specs, append([]tableSpec{}, newTable))
 				}}
 
-				_, err := conjoin(context.Background(), upstream, u, p, stats)
+				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)

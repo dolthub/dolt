@@ -17,6 +17,7 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -31,12 +32,21 @@ import (
 )
 
 func TestHistoryTable(t *testing.T) {
-	sqle.SkipByDefaultInCI(t)
+	SkipByDefaultInCI(t)
 	dEnv := setupHistoryTests(t)
 	for _, test := range historyTableTests() {
 		t.Run(test.name, func(t *testing.T) {
 			testHistoryTable(t, test, dEnv)
 		})
+	}
+}
+
+// SkipByDefaultInCI skips the currently executing test as long as the CI env var is set
+// (GitHub Actions sets this automatically) and the DOLT_TEST_RUN_NON_RACE_TESTS env var
+// is not set. This is useful for filtering out tests that cause race detection to fail.
+func SkipByDefaultInCI(t *testing.T) {
+	if os.Getenv("CI") != "" && os.Getenv("DOLT_TEST_RUN_NON_RACE_TESTS") == "" {
+		t.Skip()
 	}
 }
 
@@ -212,7 +222,7 @@ func setupHistoryTests(t *testing.T) *env.DoltEnv {
 
 	// get commit hashes from the log table
 	q := "select commit_hash, date from dolt_log order by date desc;"
-	rows, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, root, q)
+	rows, err := sqle.ExecuteSelect(dEnv, root, q)
 	require.NoError(t, err)
 	require.Equal(t, 5, len(rows))
 	HEAD = rows[0][0].(string)
@@ -234,7 +244,7 @@ func testHistoryTable(t *testing.T, test historyTableTest, dEnv *env.DoltEnv) {
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 
-	actRows, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, root, test.query)
+	actRows, err := sqle.ExecuteSelect(dEnv, root, test.query)
 	require.NoError(t, err)
 
 	require.Equal(t, len(test.rows), len(actRows))

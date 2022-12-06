@@ -59,6 +59,8 @@ type DoltDatabaseProvider interface {
 	sql.DatabaseProvider
 	RevisionDatabaseProvider
 
+	CreateDatabase(ctx *sql.Context, path string) error
+
 	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases.
 	FileSystem() filesys.Filesys
 	// FileSystemForDatabase returns a filesystem, with the working directory set to the root directory
@@ -106,6 +108,10 @@ func (e emptyRevisionDatabaseProvider) FileSystemForDatabase(dbname string) (fil
 }
 
 func (e emptyRevisionDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error {
+	return nil
+}
+
+func (e emptyRevisionDatabaseProvider) CreateDatabase(ctx *sql.Context, dbName string) error {
 	return nil
 }
 

@@ -41,7 +41,7 @@ const (
 )
 
 func TestTableEditorConcurrency(t *testing.T) {
-	format := types.Format_Default
+	format := types.Format_LD_1
 	_, vrw, ns, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	opts := TestEditorOptions(vrw)
@@ -136,7 +136,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 }
 
 func TestTableEditorConcurrencyPostInsert(t *testing.T) {
-	format := types.Format_Default
+	format := types.Format_LD_1
 	_, vrw, ns, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	opts := TestEditorOptions(vrw)
@@ -229,7 +229,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 }
 
 func TestTableEditorWriteAfterFlush(t *testing.T) {
-	format := types.Format_Default
+	format := types.Format_LD_1
 	_, vrw, ns, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	opts := TestEditorOptions(vrw)
@@ -303,7 +303,7 @@ func handleDuplicateKeyError(newKeyString, indexName string, existingKey, existi
 }
 
 func TestTableEditorDuplicateKeyHandling(t *testing.T) {
-	format := types.Format_Default
+	format := types.Format_LD_1
 	_, vrw, ns, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	opts := TestEditorOptions(vrw)
@@ -382,7 +382,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 
 func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 	ctx := context.Background()
-	format := types.Format_Default
+	format := types.Format_LD_1
 	_, vrw, ns, err := dbfactory.MemFactory{}.CreateDB(ctx, format, nil, nil)
 	require.NoError(t, err)
 	opts := TestEditorOptions(vrw)
@@ -392,11 +392,11 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	idxv1, err := tableSch.Indexes().AddIndexByColNames("idx_v1", []string{"v1"}, schema.IndexProperties{
+	idxv1, err := tableSch.Indexes().AddIndexByColNames("idx_v1", []string{"v1"}, nil, schema.IndexProperties{
 		IsUnique: true,
 	})
 	require.NoError(t, err)
-	idxv2, err := tableSch.Indexes().AddIndexByColNames("idx_v2", []string{"v2"}, schema.IndexProperties{
+	idxv2, err := tableSch.Indexes().AddIndexByColNames("idx_v2", []string{"v2"}, nil, schema.IndexProperties{
 		IsUnique: true,
 	})
 	require.NoError(t, err)

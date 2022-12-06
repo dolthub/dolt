@@ -102,6 +102,14 @@ func getExpFunc(nbf *types.NomsBinFormat, sch schema.Schema, exp sql.Expression)
 		return newAndFunc(leftFunc, rightFunc), nil
 	case *expression.InTuple:
 		return newComparisonFunc(EqualsOp{}, typedExpr.BinaryExpression, sch)
+	case *expression.Not:
+		expFunc, err := getExpFunc(nbf, sch, typedExpr.Child)
+		if err != nil {
+			return nil, err
+		}
+		return newNotFunc(expFunc), nil
+	case *expression.IsNull:
+		return newComparisonFunc(EqualsOp{}, expression.BinaryExpression{Left: typedExpr.Child, Right: expression.NewLiteral(nil, sql.Null)}, sch)
 	}
 
 	return nil, errNotImplemented.New(exp.Type().String())
@@ -136,6 +144,17 @@ func newAndFunc(left ExpressionFunc, right ExpressionFunc) ExpressionFunc {
 		}
 
 		return right(ctx, vals)
+	}
+}
+
+func newNotFunc(exp ExpressionFunc) ExpressionFunc {
+	return func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) {
+		res, err := exp(ctx, vals)
+		if err != nil {
+			return false, err
+		}
+
+		return !res, nil
 	}
 }
 

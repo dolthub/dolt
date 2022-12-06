@@ -32,8 +32,10 @@ import (
 )
 
 const (
-	doltDir      = dbfactory.DoltDir
-	nomsDir      = dbfactory.DataDir
+	doltDir   = dbfactory.DoltDir
+	nomsDir   = dbfactory.DataDir
+	oldGenDir = "oldgen"
+
 	manifestFile = "manifest"
 	migrationRef = "migration"
 )
@@ -45,8 +47,9 @@ var (
 
 // Environment is a migration environment.
 type Environment struct {
-	Migration *env.DoltEnv
-	Existing  *env.DoltEnv
+	Migration     *env.DoltEnv
+	Existing      *env.DoltEnv
+	DropConflicts bool
 }
 
 // NewEnvironment creates a migration Environment for |existing|.
@@ -217,10 +220,27 @@ func swapManifests(ctx context.Context, src, dest filesys.Filesys) (err error) {
 		return err
 	}
 
+	// backup the current oldgen manifest, if one exists
+	gcManifest := filepath.Join(doltDir, nomsDir, oldGenDir, manifestFile)
+	oldGen, _ := dest.Exists(gcManifest)
+	if oldGen {
+		bak = filepath.Join(doltDir, nomsDir, oldGenDir, manifestFile+".bak")
+		if err = filesys.CopyFile(gcManifest, bak, dest, dest); err != nil {
+			return err
+		}
+	}
+
 	// copy manifest to |dest| under temporary name
 	tmp := filepath.Join(doltDir, nomsDir, "temp-manifest")
 	if err = filesys.CopyFile(manifest, tmp, src, dest); err != nil {
 		return err
+	}
+
+	// delete current oldgen manifest
+	if oldGen {
+		if err = dest.Delete(gcManifest, true); err != nil {
+			return err
+		}
 	}
 
 	// atomically swap the manifests

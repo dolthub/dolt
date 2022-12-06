@@ -152,6 +152,18 @@ teardown() {
   [ "$status" -eq 1 ]
 }
 
+@test "init: running init with invalid argument or option fails" {
+  set_dolt_user "baz", "baz@bash.com"
+
+  run dolt init invalid
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "error: invalid arguments" ]] || false
+
+  run dolt init --invalid
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "error: unknown option" ]] || false
+}
+
 @test "init: running init with the new format, creates a new format database" {
     set_dolt_user "baz", "baz@bash.com"
 
@@ -251,13 +263,12 @@ teardown() {
 }
 
 @test "init: create a database when current working directory does not have a database yet" {
-    # it creates old format even though there is new format db exists in the current directory.
     set_dolt_user "baz", "baz@bash.com"
 
-    # Default format is OLD (__LD_1__) when DOLT_DEFAULT_BIN_FORMAT is undefined
+    # Default format is NEW (__DOLT__) when DOLT_DEFAULT_BIN_FORMAT is undefined
     if [ "$DOLT_DEFAULT_BIN_FORMAT" = "" ]
     then
-        orig_bin_format="__LD_1__"
+        orig_bin_format="__DOLT__"
     else
         orig_bin_format=$DOLT_DEFAULT_BIN_FORMAT
     fi
@@ -283,7 +294,7 @@ teardown() {
     cd test
     run dolt version
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "$orig_bin_format" ]] || false
+    [[ "$output" =~ "__DOLT__" ]] || false
 }
 
 assert_valid_repository () {

@@ -69,7 +69,7 @@ func testEqualMapMerge(t *testing.T, sz int) {
 	om, _ := makeProllyMap(t, sz)
 	m := om.(Map)
 	ctx := context.Background()
-	mm, err := MergeMaps(ctx, m, m, m, panicOnConflict)
+	mm, _, err := MergeMaps(ctx, m, m, m, panicOnConflict)
 	require.NoError(t, err)
 	assert.NotNil(t, mm)
 	assert.Equal(t, m.HashOf(), mm.HashOf())
@@ -83,8 +83,10 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.No
 	right := applyMutationSet(t, base, rightEdits)
 
 	ctx := context.Background()
-	final, err := MergeMaps(ctx, left, right, base, panicOnConflict)
+	final, stats, err := MergeMaps(ctx, left, right, base, panicOnConflict)
 	assert.NoError(t, err)
+
+	var adds, modifications, deletes int
 
 	for _, add := range leftEdits.adds {
 		ok, err := final.Has(ctx, add[0])
@@ -97,6 +99,7 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.No
 		assert.NoError(t, err)
 	}
 	for _, add := range rightEdits.adds {
+		adds++
 		ok, err := final.Has(ctx, add[0])
 		assert.NoError(t, err)
 		assert.True(t, ok)
@@ -113,6 +116,7 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.No
 		assert.False(t, ok)
 	}
 	for _, del := range rightEdits.deletes {
+		deletes++
 		ok, err := final.Has(ctx, del)
 		assert.NoError(t, err)
 		assert.False(t, ok)
@@ -123,21 +127,26 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.No
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		err = final.Get(ctx, up[0], func(key, value val.Tuple) error {
-			assert.Equal(t, value, up[1])
+			assert.Equal(t, value, up[2])
 			return nil
 		})
 		assert.NoError(t, err)
 	}
 	for _, up := range rightEdits.updates {
+		modifications++
 		ok, err := final.Has(ctx, up[0])
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		err = final.Get(ctx, up[0], func(key, value val.Tuple) error {
-			assert.Equal(t, value, up[1])
+			assert.Equal(t, value, up[2])
 			return nil
 		})
 		assert.NoError(t, err)
 	}
+
+	require.Equal(t, adds, stats.Adds)
+	require.Equal(t, modifications, stats.Modifications)
+	require.Equal(t, deletes, stats.Removes)
 }
 
 func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeStore) {
@@ -150,7 +159,7 @@ func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeSt
 		tuples[i], tuples[j] = tuples[j], tuples[i]
 	})
 
-	// make overlapping edits
+	// make overlapping Edits
 	left := makeUpdatesToTuples(kd, vd, tuples[:mutSz]...)
 	right := makeUpdatesToTuples(kd, vd, tuples[:mutSz]...)
 
@@ -171,7 +180,7 @@ func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeSt
 	require.NoError(t, err)
 
 	idx := 0
-	final, err := MergeMaps(ctx, leftMap, rightMap, base, func(l, r tree.Diff) (merged tree.Diff, ok bool) {
+	final, _, err := MergeMaps(ctx, leftMap, rightMap, base, func(l, r tree.Diff) (merged tree.Diff, ok bool) {
 		if l.Type == r.Type && bytes.Equal(l.To, r.To) {
 			// convergent edit
 			return l, true
@@ -264,7 +273,7 @@ func applyMutationSet(t *testing.T, base Map, edits mutationSet) (m Map) {
 		require.NoError(t, err)
 	}
 	for _, up := range edits.updates {
-		err = mut.Put(ctx, up[0], up[1])
+		err = mut.Put(ctx, up[0], up[2])
 		require.NoError(t, err)
 	}
 

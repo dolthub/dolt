@@ -181,6 +181,7 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []by
 		return addr{}, nil, 0, fmt.Errorf("mem table cannot write with zero chunks")
 	}
 	maxSize := maxTableSize(uint64(len(mt.order)), mt.totalData)
+	// todo: memory quota
 	buff := make([]byte, maxSize)
 	tw := newTableWriter(buff, mt.snapper)
 
@@ -218,6 +219,6 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []by
 	return name, buff[:tableSize], count, nil
 }
 
-func (mt *memTable) Close() error {
+func (mt *memTable) close() error {
 	return nil
 }

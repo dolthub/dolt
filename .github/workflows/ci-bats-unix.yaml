@@ -22,10 +22,10 @@ jobs:
       fail-fast: true
       matrix:
         os: [ ubuntu-22.04, macos-latest ]
-        dolt_fmt: [ "", "__DOLT_DEV__", "__DOLT__" ]
+        dolt_fmt: [ "__DOLT__", "__LD_1__" ]
         exclude:
           - os: "macos-latest"
-            dolt_fmt: ["__DOLT_DEV__", "__DOLT__" ]
+            dolt_fmt: "__LD_1__"
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:
@@ -40,7 +40,7 @@ jobs:
           fi
       - name: Configure AWS Credentials
         if: ${{ env.use_credentials == 'true' }}
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v1-node16
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -48,18 +48,18 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           role-duration-seconds: 3600
       - name: Setup Go 1.x
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ^1.19
         id: go
       - name: Setup Python 3.x
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
-          python-version: ^3.6
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v1
+          python-version: "3.10"
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
         with:
-          node-version: ^12
+          node-version: ^16
       - name: Create CI Bin
         run: |
           mkdir -p ./.ci_bin
@@ -104,17 +104,19 @@ jobs:
         id: parquet_cli
         working-directory: ./.ci_bin
         run: |
-          git clone https://github.com/apache/parquet-mr.git
-          cd parquet-mr/parquet-cli
+          curl -OL https://github.com/apache/parquet-mr/archive/refs/tags/apache-parquet-1.12.3.tar.gz
+          tar zxvf apache-parquet-1.12.3.tar.gz
+          cd parquet-mr-apache-parquet-1.12.3/parquet-cli
           mvn clean install -DskipTests
-          runtime_jar="$(pwd)"/target/parquet-cli-1.13.0-SNAPSHOT-runtime.jar
-          echo "::set-output name=runtime_jar::$runtime_jar"
+          runtime_jar="$(pwd)"/target/parquet-cli-1.12.3-runtime.jar
+          echo "runtime_jar=$runtime_jar" >> $GITHUB_OUTPUT
       - name: Check expect
         run: expect -v
       - name: Test all Unix
         env:
           DOLT_FMT: ${{ matrix.dolt_fmt }}
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
+          BATS_TEST_RETRIES: "3"
         run: |
           if [ -n "$DOLT_FMT" ]; then export DOLT_DEFAULT_BIN_FORMAT="$DOLT_FMT"; fi
           bats --tap .

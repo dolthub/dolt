@@ -301,7 +301,7 @@ func (mm manifestManager) updateWillFail(lastLock addr) (cached manifestContents
 	return
 }
 
-func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool, contents manifestContents, err error) {
+func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool, contents manifestContents, t time.Time, err error) {
 	entryTime := time.Now()
 
 	mm.lockOutFetch()
@@ -313,12 +313,12 @@ func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool,
 		}
 	}()
 
-	f := func() (bool, manifestContents, error) {
+	f := func() (bool, manifestContents, time.Time, error) {
 		cached, t, hit := mm.cache.Get(mm.Name())
 
 		if hit && t.After(entryTime) {
 			// Cache contains a manifest which is newer than entry time.
-			return true, cached, nil
+			return true, cached, t, nil
 		}
 
 		t = time.Now()
@@ -326,19 +326,19 @@ func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool,
 		exists, contents, err := mm.m.ParseIfExists(ctx, stats, nil)
 
 		if err != nil {
-			return false, manifestContents{}, err
+			return false, manifestContents{}, t, err
 		}
 
 		err = mm.cache.Put(mm.Name(), contents, t)
 
 		if err != nil {
-			return false, manifestContents{}, err
+			return false, manifestContents{}, t, err
 		}
 
-		return exists, contents, nil
+		return exists, contents, t, nil
 	}
 
-	exists, contents, err = f()
+	exists, contents, t, err = f()
 	return
 }
 

@@ -30,6 +30,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/d"
@@ -50,10 +51,17 @@ type fsTablePersister struct {
 }
 
 func (ftp *fsTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newFileTableReader(ftp.dir, name, chunkCount, ftp.q, ftp.fc)
+	return newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, ftp.fc)
+}
+
+func (ftp *fsTablePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
+	return tableFileExists(ctx, ftp.dir, name)
 }
 
 func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
+	t1 := time.Now()
+	defer stats.PersistLatency.SampleTimeSince(t1)
+
 	name, data, chunkCount, err := mt.write(haver, stats)
 
 	if err != nil {
@@ -181,7 +189,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	return ftp.Open(ctx, name, plan.chunkCount, stats)
 }
 
-func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {
+func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error {
 	ss := contents.getSpecSet()
 
 	fileInfos, err := os.ReadDir(ftp.dir)
@@ -225,6 +233,18 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manif
 			continue // file is referenced in the manifest
 		}
 
+		i, err := info.Info()
+
+		if err != nil {
+			ea.add(filePath, err)
+		}
+
+		ctime := i.ModTime()
+
+		if ctime.After(mtime) {
+			continue // file has been updated more recently than manifest
+		}
+
 		err = file.Remove(filePath)
 		if err != nil {
 			ea.add(filePath, err)
@@ -235,5 +255,9 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manif
 		return ea
 	}
 
+	return nil
+}
+
+func (ftp *fsTablePersister) Close() error {
 	return nil
 }

@@ -30,13 +30,29 @@ type Item []byte
 
 type subtreeCounts []uint64
 
+// Node is a generic implementation of a prolly tree node.
+// Elements in a Node are generic Items. Interpreting Item
+// contents is deferred to higher layers (see prolly.Map).
 type Node struct {
-	// keys and values contain sub-slices of |msg|,
-	// allowing faster lookups by avoiding the vtable
-	keys, values message.ItemArray
-	subtrees     subtreeCounts
-	count        uint16
-	msg          serial.Message
+	// keys and values cache offset metadata
+	// to accelerate Item lookups into msg.
+	keys, values message.ItemAccess
+
+	// count is the Item pair count.
+	count uint16
+
+	// level is 0-indexed tree height.
+	level uint16
+
+	// subtrees contains the key cardinality
+	// of each child tree of a non-leaf Node.
+	// this field is lazily decoded from msg
+	// because it requires a malloc.
+	subtrees *subtreeCounts
+
+	// msg is the underlying buffer for the Node
+	// encoded as a Flatbuffers message.
+	msg serial.Message
 }
 
 type AddressCb func(ctx context.Context, addr hash.Hash) error
@@ -47,11 +63,7 @@ func WalkAddresses(ctx context.Context, nd Node, ns NodeStore, cb AddressCb) err
 			return err
 		}
 
-		leaf, err := nd.IsLeaf()
-		if err != nil {
-			return err
-		}
-		if leaf {
+		if nd.IsLeaf() {
 			return nil
 		}
 
@@ -72,12 +84,7 @@ func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 	if err := cb(ctx, nd); err != nil {
 		return err
 	}
-
-	leaf, err := nd.IsLeaf()
-	if err != nil {
-		return err
-	}
-	if leaf {
+	if nd.IsLeaf() {
 		return nil
 	}
 
@@ -106,12 +113,40 @@ func walkOpaqueNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) erro
 	})
 }
 
+type nodeArena []Node
+
+const nodeArenaSize = 10000
+
+func (a *nodeArena) Get() Node {
+	if len(*a) == 0 {
+		*a = make([]Node, nodeArenaSize)
+	}
+	n := (*a)[len(*a)-1]
+	*a = (*a)[:len(*a)-1]
+	return n
+}
+
+func (a *nodeArena) NodeFromBytes(msg []byte) (Node, error) {
+	keys, values, level, count, err := message.UnpackFields(msg)
+	if err != nil {
+		return Node{}, err
+	}
+	n := a.Get()
+	n.keys = keys
+	n.values = values
+	n.count = count
+	n.level = level
+	n.msg = msg
+	return n, nil
+}
+
 func NodeFromBytes(msg []byte) (Node, error) {
-	keys, values, count, err := message.GetKeysAndValues(msg)
+	keys, values, level, count, err := message.UnpackFields(msg)
 	return Node{
 		keys:   keys,
 		values: values,
 		count:  count,
+		level:  level,
 		msg:    msg,
 	}, err
 }
@@ -133,24 +168,23 @@ func (nd Node) Size() int {
 }
 
 // Level returns the tree Level for this node
-func (nd Node) Level() (int, error) {
-	return message.GetTreeLevel(nd.msg)
+func (nd Node) Level() int {
+	return int(nd.level)
 }
 
 // IsLeaf returns whether this node is a leaf
-func (nd Node) IsLeaf() (bool, error) {
-	l, err := nd.Level()
-	return l == 0, err
+func (nd Node) IsLeaf() bool {
+	return nd.level == 0
 }
 
 // GetKey returns the |ith| key of this node
 func (nd Node) GetKey(i int) Item {
-	return nd.keys.GetItem(i)
+	return nd.keys.GetItem(i, nd.msg)
 }
 
-// getValue returns the |ith| value of this node.
-func (nd Node) getValue(i int) Item {
-	return nd.values.GetItem(i)
+// GetValue returns the |ith| value of this node.
+func (nd Node) GetValue(i int) Item {
+	return nd.values.GetItem(i, nd.msg)
 }
 
 func (nd Node) loadSubtrees() (Node, error) {
@@ -158,27 +192,27 @@ func (nd Node) loadSubtrees() (Node, error) {
 	if nd.subtrees == nil {
 		// deserializing subtree counts requires a malloc,
 		// we don't load them unless explicitly requested
-		nd.subtrees, err = message.GetSubtrees(nd.msg)
+		sc, err := message.GetSubtrees(nd.msg)
+		if err != nil {
+			return Node{}, err
+		}
+		nd.subtrees = (*subtreeCounts)(&sc)
 	}
 	return nd, err
 }
 
 func (nd Node) getSubtreeCount(i int) (uint64, error) {
-	leaf, err := nd.IsLeaf()
-	if err != nil {
-		return 0, err
-	}
-	if leaf {
+	if nd.IsLeaf() {
 		return 1, nil
 	}
 	// this will panic unless subtrees were loaded.
-	return nd.subtrees[i], nil
+	return (*nd.subtrees)[i], nil
 }
 
 // getAddress returns the |ith| address of this node.
 // This method assumes values are 20-byte address hashes.
 func (nd Node) getAddress(i int) hash.Hash {
-	return hash.New(nd.getValue(i))
+	return hash.New(nd.GetValue(i))
 }
 
 func (nd Node) empty() bool {
@@ -210,12 +244,8 @@ func OutputProllyNode(w io.Writer, node Node) error {
 			w.Write([]byte(hex.EncodeToString(kt.GetField(j))))
 		}
 
-		leaf, err := node.IsLeaf()
-		if err != nil {
-			return err
-		}
-		if leaf {
-			v := node.getValue(i)
+		if node.IsLeaf() {
+			v := node.GetValue(i)
 			vt := val.Tuple(v)
 
 			w.Write([]byte(" value: "))

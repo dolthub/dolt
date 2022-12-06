@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -77,6 +78,9 @@ func DoDoltBackup(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 	if len(dbName) == 0 {
 		return statusErr, fmt.Errorf("Empty database name.")
+	}
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return statusErr, err
 	}
 
 	apr, err := cli.CreateBackupArgParser().Parse(args)
@@ -175,7 +179,11 @@ func DoDoltBackup(ctx *sql.Context, args []string) (int, error) {
 		return statusErr, fmt.Errorf("error loading backup destination: %w", err)
 	}
 
-	err = actions.SyncRoots(ctx, dbData.Ddb, destDb, dbData.Rsw.TempTableFilesDir(), runProgFuncs, stopProgFuncs)
+	tmpDir, err := dbData.Rsw.TempTableFilesDir()
+	if err != nil {
+		return statusErr, err
+	}
+	err = actions.SyncRoots(ctx, dbData.Ddb, destDb, tmpDir, runProgFuncs, stopProgFuncs)
 	if err != nil && err != pull.ErrDBUpToDate {
 		return 1, fmt.Errorf("error syncing backup: %w", err)
 	}

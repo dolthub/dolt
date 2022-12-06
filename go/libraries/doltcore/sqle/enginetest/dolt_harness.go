@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -39,16 +40,12 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	user  = "test"
-	email = "email@test.com"
-)
-
 type DoltHarness struct {
 	t              *testing.T
 	multiRepoEnv   *env.MultiRepoEnv
 	createdEnvs    map[string]*env.DoltEnv
 	session        *dsess.DoltSession
+	branchControl  *branch_control.Controller
 	databases      []sqle.Database
 	hashes         []string
 	parallelism    int
@@ -80,7 +77,9 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
 	localConfig := dEnv.Config.WriteableConfig()
-	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, localConfig)
+	branchControl := branch_control.CreateDefaultController()
+	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro,
+		localConfig, branchControl)
 	require.NoError(t, err)
 	dh := &DoltHarness{
 		t:              t,
@@ -88,6 +87,7 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 		skippedQueries: defaultSkippedQueries,
 		multiRepoEnv:   mrEnv,
 		createdEnvs:    make(map[string]*env.DoltEnv),
+		branchControl:  branchControl,
 	}
 
 	return dh
@@ -177,12 +177,15 @@ func commitScripts(dbs []string) []setup.SetupScript {
 // engine for reuse.
 func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 	if d.engine == nil {
+		d.branchControl = branch_control.CreateDefaultController()
+
 		pro := d.NewDatabaseProvider(information_schema.NewInformationSchemaDatabase())
 		doltProvider, ok := pro.(sqle.DoltDatabaseProvider)
 		require.True(t, ok)
 
 		var err error
-		d.session, err = dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), doltProvider, d.multiRepoEnv.Config())
+		d.session, err = dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), doltProvider,
+			d.multiRepoEnv.Config(), d.branchControl)
 		require.NoError(t, err)
 
 		e, err := enginetest.NewEngineWithProviderSetup(t, d, pro, d.setupData)
@@ -288,6 +291,7 @@ func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession
 		sql.NewBaseSessionWithClientServer("address", client, 1),
 		pro.(dsess.DoltDatabaseProvider),
 		localConfig,
+		d.branchControl,
 		states...,
 	)
 	require.NoError(d.t, err)
@@ -318,7 +322,9 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 		store := dEnv.DoltDB.ValueReadWriter().(*types.ValueStore)
 		store.SetValidateContentAddresses(true)
 
-		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+		tmpDir, err := dEnv.TempTableFilesDir()
+		require.NoError(d.t, err)
+		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 		db, err := sqle.NewDatabase(context.Background(), name, dEnv.DbData(), opts)
 		require.NoError(d.t, err)
 
@@ -453,7 +459,7 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 	// TODO: there's a bug in test setup with transactions, where the HEAD session var gets overwritten on transaction
 	//  start, so we quote it here instead
 	// query := "insert into dolt_branches (name, hash) values ('" + asOfString + "', @@" + dsess.HeadKey(ddb.Name()) + ")"
-	query := "insert into dolt_branches (name, hash) values ('" + asOfString + "', '" + headHash.(string) + "')"
+	query := "CALL dolt_branch('" + asOfString + "', '" + headHash.(string) + "')"
 
 	_, iter, err = e.Query(ctx,
 		query)

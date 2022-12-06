@@ -19,6 +19,8 @@ import (
 	"path"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/types"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -26,11 +28,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var cloneDocs = cli.CommandDocumentationContent{
@@ -203,15 +203,8 @@ func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[
 
 	r := env.NewRemote(remoteName, remoteUrl, params)
 	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dEnv)
-
 	if err != nil {
 		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
-
-		if err == remotestorage.ErrInvalidDoltSpecPath {
-			urlObj, _ := earl.Parse(remoteUrl)
-			bdr.AddDetails("'%s' should be in the format 'organization/repo'", urlObj.Path)
-		}
-
 		return env.NoRemote, nil, bdr.Build()
 	}
 

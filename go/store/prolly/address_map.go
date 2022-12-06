@@ -26,7 +26,7 @@ import (
 )
 
 type AddressMap struct {
-	addresses orderedTree[stringSlice, address, lexicographic]
+	addresses tree.StaticMap[stringSlice, address, lexicographic]
 }
 
 func NewEmptyAddressMap(ns tree.NodeStore) (AddressMap, error) {
@@ -41,10 +41,10 @@ func NewEmptyAddressMap(ns tree.NodeStore) (AddressMap, error) {
 
 func NewAddressMap(node tree.Node, ns tree.NodeStore) (AddressMap, error) {
 	return AddressMap{
-		addresses: orderedTree[stringSlice, address, lexicographic]{
-			root:  node,
-			ns:    ns,
-			order: lexicographic{},
+		addresses: tree.StaticMap[stringSlice, address, lexicographic]{
+			Root:      node,
+			NodeStore: ns,
+			Order:     lexicographic{},
 		},
 	}, nil
 }
@@ -55,42 +55,42 @@ type address []byte
 
 type lexicographic struct{}
 
-var _ ordering[stringSlice] = lexicographic{}
+var _ tree.Ordering[stringSlice] = lexicographic{}
 
 func (l lexicographic) Compare(left, right stringSlice) int {
 	return bytes.Compare(left, right)
 }
 
 func (c AddressMap) Count() (int, error) {
-	return c.addresses.count()
+	return c.addresses.Count()
 }
 
-func (c AddressMap) Height() (int, error) {
-	return c.addresses.height()
+func (c AddressMap) Height() int {
+	return c.addresses.Height()
 }
 
 func (c AddressMap) Node() tree.Node {
-	return c.addresses.root
+	return c.addresses.Root
 }
 
 func (c AddressMap) HashOf() hash.Hash {
-	return c.addresses.hashOf()
+	return c.addresses.HashOf()
 }
 
 func (c AddressMap) Format() *types.NomsBinFormat {
-	return c.addresses.ns.Format()
+	return c.addresses.NodeStore.Format()
 }
 
 func (c AddressMap) WalkAddresses(ctx context.Context, cb tree.AddressCb) error {
-	return c.addresses.walkAddresses(ctx, cb)
+	return c.addresses.WalkAddresses(ctx, cb)
 }
 
 func (c AddressMap) WalkNodes(ctx context.Context, cb tree.NodeCb) error {
-	return c.addresses.walkNodes(ctx, cb)
+	return c.addresses.WalkNodes(ctx, cb)
 }
 
 func (c AddressMap) Get(ctx context.Context, name string) (addr hash.Hash, err error) {
-	err = c.addresses.get(ctx, stringSlice(name), func(n stringSlice, a address) error {
+	err = c.addresses.Get(ctx, stringSlice(name), func(n stringSlice, a address) error {
 		if n != nil {
 			addr = hash.New(a)
 		}
@@ -100,11 +100,11 @@ func (c AddressMap) Get(ctx context.Context, name string) (addr hash.Hash, err e
 }
 
 func (c AddressMap) Has(ctx context.Context, name string) (ok bool, err error) {
-	return c.addresses.has(ctx, stringSlice(name))
+	return c.addresses.Has(ctx, stringSlice(name))
 }
 
 func (c AddressMap) IterAll(ctx context.Context, cb func(name string, address hash.Hash) error) error {
-	iter, err := c.addresses.iterAll(ctx)
+	iter, err := c.addresses.IterAll(ctx)
 	if err != nil {
 		return err
 	}
@@ -129,40 +129,41 @@ func (c AddressMap) IterAll(ctx context.Context, cb func(name string, address ha
 
 func (c AddressMap) Editor() AddressMapEditor {
 	return AddressMapEditor{
-		addresses: c.addresses.mutate(),
+		addresses: c.addresses.Mutate(),
 	}
 }
 
 type AddressMapEditor struct {
-	addresses orderedMap[stringSlice, address, lexicographic]
+	addresses tree.MutableMap[stringSlice, address, lexicographic]
 }
 
 func (wr AddressMapEditor) Add(ctx context.Context, name string, addr hash.Hash) error {
-	return wr.addresses.put(ctx, stringSlice(name), addr[:])
+	return wr.addresses.Put(ctx, stringSlice(name), addr[:])
 }
 
 func (wr AddressMapEditor) Update(ctx context.Context, name string, addr hash.Hash) error {
-	return wr.addresses.put(ctx, stringSlice(name), addr[:])
+	return wr.addresses.Put(ctx, stringSlice(name), addr[:])
 }
 
 func (wr AddressMapEditor) Delete(ctx context.Context, name string) error {
-	return wr.addresses.delete(ctx, stringSlice(name))
+	return wr.addresses.Delete(ctx, stringSlice(name))
 }
 
 func (wr AddressMapEditor) Flush(ctx context.Context) (AddressMap, error) {
-	tr := wr.addresses.tree
-	serializer := message.NewAddressMapSerializer(tr.ns.Pool())
+	sm := wr.addresses.StaticMap
+	serializer := message.NewAddressMapSerializer(sm.NodeStore.Pool())
+	fn := tree.ApplyMutations[stringSlice, lexicographic, message.AddressMapSerializer]
 
-	root, err := tree.ApplyMutations(ctx, tr.ns, tr.root, serializer, wr.addresses.mutations(), tr.compareItems)
+	root, err := fn(ctx, sm.NodeStore, sm.Root, lexicographic{}, serializer, wr.addresses.Mutations())
 	if err != nil {
 		return AddressMap{}, err
 	}
 
 	return AddressMap{
-		addresses: orderedTree[stringSlice, address, lexicographic]{
-			root:  root,
-			ns:    tr.ns,
-			order: tr.order,
+		addresses: tree.StaticMap[stringSlice, address, lexicographic]{
+			Root:      root,
+			NodeStore: sm.NodeStore,
+			Order:     sm.Order,
 		},
 	}, nil
 }

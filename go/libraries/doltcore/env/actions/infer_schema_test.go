@@ -49,14 +49,14 @@ func TestLeastPermissiveType(t *testing.T) {
 		{"lower bool", "true", 0.0, typeinfo.BoolType},
 		{"upper bool", "FALSE", 0.0, typeinfo.BoolType},
 		{"yes", "yes", 0.0, typeinfo.StringDefaultType},
-		{"one", "1", 0.0, typeinfo.Uint32Type},
+		{"one", "1", 0.0, typeinfo.Int32Type},
 		{"negative one", "-1", 0.0, typeinfo.Int32Type},
 		{"negative one point 0", "-1.0", 0.0, typeinfo.Float32Type},
 		{"negative one point 0 with FT of 0.1", "-1.0", 0.1, typeinfo.Int32Type},
 		{"negative one point one with FT of 0.1", "-1.1", 0.1, typeinfo.Float32Type},
 		{"negative one point 999 with FT of 1.0", "-1.999", 1.0, typeinfo.Int32Type},
 		{"zero point zero zero zero zero", "0.0000", 0.0, typeinfo.Float32Type},
-		{"max int", strconv.FormatUint(math.MaxInt64, 10), 0.0, typeinfo.Uint64Type},
+		{"max int", strconv.FormatUint(math.MaxInt64, 10), 0.0, typeinfo.Int64Type},
 		{"bigger than max int", strconv.FormatUint(math.MaxUint64, 10) + "0", 0.0, typeinfo.StringDefaultType},
 	}
 
@@ -75,7 +75,7 @@ func TestLeastPermissiveNumericType(t *testing.T) {
 		floatThreshold float64
 		expType        typeinfo.TypeInfo
 	}{
-		{"zero", "0", 0.0, typeinfo.Uint32Type},
+		{"zero", "0", 0.0, typeinfo.Int32Type},
 		{"zero float", "0.0", 0.0, typeinfo.Float32Type},
 		{"zero float with floatThreshold of 0.1", "0.0", 0.1, typeinfo.Int32Type},
 		{"negative float", "-1.3451234", 0.0, typeinfo.Float32Type},
@@ -85,8 +85,8 @@ func TestLeastPermissiveNumericType(t *testing.T) {
 		{"all zeroes", "0000", 0.0, typeinfo.StringDefaultType},
 		{"leading zeroes", "01", 0.0, typeinfo.StringDefaultType},
 		{"negative int", "-1234", 0.0, typeinfo.Int32Type},
-		{"fits in uint64 but not int64", strconv.FormatUint(math.MaxUint64, 10), 0.0, typeinfo.Uint64Type},
-		{"negative less than math.MinInt64", "-" + strconv.FormatUint(math.MaxUint64, 10), 0.0, typeinfo.UnknownType},
+		{"fits in uint64 but not int64", strconv.FormatUint(math.MaxUint64, 10), 0.0, typeinfo.StringDefaultType},
+		{"negative less than math.MinInt64", "-" + strconv.FormatUint(math.MaxUint64, 10), 0.0, typeinfo.StringDefaultType},
 		{"math.MinInt64", strconv.FormatInt(math.MinInt64, 10), 0.0, typeinfo.Int64Type},
 	}
 
@@ -143,14 +143,6 @@ func testFindCommonType(t *testing.T) {
 			expType: typeinfo.Int64Type,
 		},
 		{
-			name: "all unsigned ints",
-			inferSet: typeInfoSet{
-				typeinfo.Uint32Type: {},
-				typeinfo.Uint64Type: {},
-			},
-			expType: typeinfo.Uint64Type,
-		},
-		{
 			name: "all floats",
 			inferSet: typeInfoSet{
 				typeinfo.Float32Type: {},
@@ -159,35 +151,31 @@ func testFindCommonType(t *testing.T) {
 			expType: typeinfo.Float64Type,
 		},
 		{
-			name: "32 bit ints and uints",
+			name: "32 bit ints",
 			inferSet: typeInfoSet{
-				typeinfo.Int32Type:  {},
-				typeinfo.Uint32Type: {},
+				typeinfo.Int32Type: {},
 			},
 			expType: typeinfo.Int32Type,
 		},
 		{
-			name: "64 bit ints and uints",
+			name: "64 bit ints",
 			inferSet: typeInfoSet{
-				typeinfo.Int64Type:  {},
-				typeinfo.Uint64Type: {},
+				typeinfo.Int64Type: {},
 			},
 			expType: typeinfo.Int64Type,
 		},
 		{
-			name: "32 bit ints, uints, and floats",
+			name: "32 bit ints and floats",
 			inferSet: typeInfoSet{
 				typeinfo.Int32Type:   {},
-				typeinfo.Uint32Type:  {},
 				typeinfo.Float32Type: {},
 			},
 			expType: typeinfo.Float32Type,
 		},
 		{
-			name: "64 bit ints, uints, and floats",
+			name: "64 bit ints and floats",
 			inferSet: typeInfoSet{
 				typeinfo.Int64Type:   {},
-				typeinfo.Uint64Type:  {},
 				typeinfo.Float64Type: {},
 			},
 			expType: typeinfo.Float64Type,
@@ -228,11 +216,6 @@ func testFindCommonType(t *testing.T) {
 
 func testFindCommonTypeFromSingleType(t *testing.T) {
 	allTypes := []typeinfo.TypeInfo{
-		typeinfo.Uint8Type,
-		typeinfo.Uint16Type,
-		typeinfo.Uint24Type,
-		typeinfo.Uint32Type,
-		typeinfo.Uint64Type,
 		typeinfo.Int8Type,
 		typeinfo.Int16Type,
 		typeinfo.Int24Type,
@@ -388,7 +371,7 @@ func TestInferSchema(t *testing.T) {
 			},
 			map[string]typeinfo.TypeInfo{
 				"int":    typeinfo.Int32Type,
-				"uint":   typeinfo.Uint64Type,
+				"uint":   typeinfo.StringDefaultType,
 				"uuid":   typeinfo.UuidType,
 				"float":  typeinfo.Float32Type,
 				"bool":   typeinfo.BoolType,
@@ -404,7 +387,7 @@ func TestInferSchema(t *testing.T) {
 				floatThreshold: 0,
 			},
 			map[string]typeinfo.TypeInfo{
-				"mix":  typeinfo.Uint64Type,
+				"mix":  typeinfo.StringDefaultType,
 				"uuid": typeinfo.UuidType,
 			},
 			nil,
@@ -467,7 +450,6 @@ func TestInferSchema(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
 
 			wrCl, err := dEnv.FS.OpenForWrite(importFilePath, os.ModePerm)
@@ -483,9 +465,7 @@ func TestInferSchema(t *testing.T) {
 			csvRd, err := csv.NewCSVReader(types.Format_Default, rdCl, csv.NewCSVInfo())
 			require.NoError(t, err)
 
-			root, err := dEnv.WorkingRoot(ctx)
-			require.NoError(t, err)
-			allCols, err := InferColumnTypesFromTableReader(context.Background(), root, csvRd, test.infArgs)
+			allCols, err := InferColumnTypesFromTableReader(context.Background(), csvRd, test.infArgs)
 			require.NoError(t, err)
 
 			assert.Equal(t, len(test.expTypes), allCols.Size())
@@ -503,7 +483,7 @@ func TestInferSchema(t *testing.T) {
 
 			err = allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 				idx := schema.IndexOfConstraint(col.Constraints, schema.NotNullConstraintType)
-				assert.True(t, idx == -1 == test.nullableCols.Contains(col.Name), "%s unexpected nullability", col.Name)
+				assert.True(t, idx == -1, "%s unexpected not null constraint", col.Name)
 				return false, nil
 			})
 			require.NoError(t, err)

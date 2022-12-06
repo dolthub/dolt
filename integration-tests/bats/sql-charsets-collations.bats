@@ -39,10 +39,9 @@ teardown() {
 @test "sql-charsets-collations: define charset and collation on a database" {
     start_sql_server
 
-    server_query "" 1 dolt "" "CREATE DATABASE test CHARACTER SET latin1 COLLATE latin1_swedish_ci;"
-    skip "Defining charsets and collations on a database not supported"
-    server_query "test" 1 dolt "" "use test; SELECT @@character_set_database" ";@@SESSION.character_set_database\nlatin1"
-    server_query "test" 1 dolt "" "use test; SELECT @@character_set_database" ";@@SESSION.collation_database\nlatin1_swedish_ci"
+    dolt sql-client -u dolt --use-db '' -P $PORT -q "CREATE DATABASE test CHARACTER SET latin1 COLLATE latin1_swedish_ci;"
+    dolt sql-client -u dolt --use-db test -P $PORT -q "SELECT @@character_set_database" ";@@SESSION.character_set_database\nlatin1"
+    dolt sql-client -u dolt --use-db test -P $PORT -q "SELECT @@character_set_database" ";@@SESSION.collation_database\nlatin1_swedish_ci"
 }
 
 @test "sql-charsets-collations: define and use a collation and charset" {
@@ -51,15 +50,15 @@ teardown() {
     run dolt sql -q "SELECT * FROM german1 WHERE c = 'Bär'"
     [ $status -eq 0 ]
     [[ $output =~ 'Bar' ]] || false
-    # Hard to match a latin1 character in bash
+    [[ $output =~ 'Bär' ]] || false
     [ ${#lines[@]} -eq 6 ]
 
     dolt sql -q	"create table german2 (c char(10) CHARACTER SET latin1 COLLATE latin1_german2_ci)"
     dolt sql -q	"insert into german2 values ('Bar'), ('Bär')"
     run dolt sql -q "SELECT * FROM german2 WHERE c = 'Bär'"
     [ $status -eq 0 ]
+    [[ $output =~ 'Bär' ]] || false
     [[ ! $output =~ 'Bar' ]] || false
-    # Hard to match a latin1 character in bash
     [ ${#lines[@]} -eq 5 ]
 }
 
@@ -87,7 +86,7 @@ teardown() {
     run dolt sql -q "SELECT * FROM german1 WHERE c = 'Bär'"
     [ $status -eq 0 ]
     [[ ! $output =~ 'Bar' ]] || false
-    # Hard to match a latin1 characeter in bash
+    [[ $output =~ 'Bär' ]] || false
     [ ${#lines[@]} -eq 5 ]
 }
 
@@ -104,7 +103,7 @@ teardown() {
     run	dolt sql -q "select c from t where c like '%A%'"
     [[ ! $output =~ "a" ]] || false
     [[ $output =~ "A" ]] || false
-
+    
     dolt sql -q "drop table t"
     
     # Outside of ascii, no such luck
@@ -113,6 +112,5 @@ teardown() {
     run	dolt sql -q "select c from t where c like '%o%'"
     [ $status -eq 0 ]
     [[ $output =~ "schon" ]] || false
-    skip "Regexes in collations not fully supported"
     [[ $output =~ "schön" ]] || false
 }

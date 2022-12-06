@@ -258,23 +258,24 @@ func (t *TempTable) IndexedAccess(idx sql.Index) sql.IndexedTable {
 	return t
 }
 
-func (t *TempTable) CreateIndex(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn, comment string) error {
-	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
+func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
+	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
 		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
-	cols := make([]string, len(columns))
-	for i, c := range columns {
+	cols := make([]string, len(idx.Columns))
+	for i, c := range idx.Columns {
 		cols[i] = c.Name
 	}
 
 	ret, err := creation.CreateIndex(
 		ctx,
 		t.table,
-		indexName,
+		idx.Name,
 		cols,
-		constraint == sql.IndexConstraint_Unique,
+		allocatePrefixLengths(idx.Columns),
+		idx.Constraint == sql.IndexConstraint_Unique,
 		true,
-		comment,
+		idx.Comment,
 		t.opts,
 	)
 	if err != nil {
@@ -331,7 +332,7 @@ func (t *TempTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKey
 	return nil, nil
 }
 
-func (t *TempTable) CreateIndexForForeignKey(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn) error {
+func (t *TempTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
 	return sql.ErrTemporaryTablesForeignKeySupport.New()
 }
 

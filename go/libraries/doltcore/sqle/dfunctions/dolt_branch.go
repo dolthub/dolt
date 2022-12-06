@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -96,9 +97,9 @@ func DoDoltBranch(ctx *sql.Context, args []string) (int, error) {
 	case apr.Contains(cli.CopyFlag):
 		err = copyBranch(ctx, dbData, apr)
 	case apr.Contains(cli.MoveFlag):
-		err = renameBranch(ctx, dbData, apr)
+		err = renameBranch(ctx, dbData, apr, dSess, dbName)
 	case apr.Contains(cli.DeleteFlag), apr.Contains(cli.DeleteForceFlag):
-		err = deleteBranches(ctx, apr, dbData)
+		err = deleteBranches(ctx, dbData, apr, dSess, dbName)
 	default:
 		err = createNewBranch(ctx, dbData, apr)
 	}
@@ -110,13 +111,21 @@ func DoDoltBranch(ctx *sql.Context, args []string) (int, error) {
 	}
 }
 
-func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults) error {
+// renameBranch takes DoltSession and database name to try accessing file system for dolt database.
+// If the oldBranch being renamed is the current branch on CLI, then RepoState head will be updated with the newBranch ref.
+func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults, sess *dsess.DoltSession, dbName string) error {
 	if apr.NArg() != 2 {
 		return InvalidArgErr
 	}
 	oldBranchName, newBranchName := apr.Arg(0), apr.Arg(1)
 	if oldBranchName == "" || newBranchName == "" {
 		return EmptyBranchNameErr
+	}
+	if err := branch_control.CanDeleteBranch(ctx, oldBranchName); err != nil {
+		return err
+	}
+	if err := branch_control.CanCreateBranch(ctx, newBranchName); err != nil {
+		return err
 	}
 	force := apr.Contains(cli.ForceFlag)
 
@@ -125,16 +134,63 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 		if err != nil {
 			return err
 		}
+	} else if err := branch_control.CanDeleteBranch(ctx, newBranchName); err != nil {
+		// If force is enabled, we can overwrite the destination branch, so we require a permission check here, even if the
+		// destination branch doesn't exist. An unauthorized user could simply rerun the command without the force flag.
+		return err
 	}
 
-	return actions.RenameBranch(ctx, dbData, loadConfig(ctx), oldBranchName, newBranchName, force)
+	err := actions.RenameBranch(ctx, dbData, loadConfig(ctx), oldBranchName, newBranchName, force)
+	if err != nil {
+		return err
+	}
+	err = branch_control.AddAdminForContext(ctx, newBranchName)
+	if err != nil {
+		return err
+	}
+
+	// The current branch on CLI can be deleted as user can be on different branch on SQL and delete it from SQL session.
+	// To update current head info on RepoState, we need DoltEnv to load CLI environment.
+	if fs, err := sess.Provider().FileSystemForDatabase(dbName); err == nil {
+		if repoState, err := env.LoadRepoState(fs); err == nil {
+			if repoState.Head.Ref.GetPath() == oldBranchName {
+				repoState.Head.Ref = ref.NewBranchRef(newBranchName)
+				repoState.Save(fs)
+			}
+		}
+	}
+
+	return nil
 }
 
-func deleteBranches(ctx *sql.Context, apr *argparser.ArgParseResults, dbData env.DbData) error {
+// deleteBranches takes DoltSession and database name to try accessing file system for dolt database.
+// If the database is not session state db and the branch being deleted is the current branch on CLI, it will update
+// the RepoState to set head as empty branchRef.
+func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults, sess *dsess.DoltSession, dbName string) error {
 	if apr.NArg() == 0 {
 		return InvalidArgErr
 	}
 
+	// The current branch on CLI can be deleted as user can be on different branch on SQL and delete it from SQL session.
+	// To update current head info on RepoState, we need DoltEnv to load CLI environment.
+	var rs *env.RepoState
+	var headOnCLI string
+	fs, err := sess.Provider().FileSystemForDatabase(dbName)
+	if err == nil {
+		if repoState, err := env.LoadRepoState(fs); err == nil {
+			rs = repoState
+			headOnCLI = repoState.Head.Ref.GetPath()
+		}
+	}
+
+	// Verify that we can delete all branches before continuing
+	for _, branchName := range apr.Args {
+		if err = branch_control.CanDeleteBranch(ctx, branchName); err != nil {
+			return err
+		}
+	}
+
+	var updateFS = false
 	for _, branchName := range apr.Args {
 		if len(branchName) == 0 {
 			return EmptyBranchNameErr
@@ -142,19 +198,27 @@ func deleteBranches(ctx *sql.Context, apr *argparser.ArgParseResults, dbData env
 		force := apr.Contains(cli.DeleteForceFlag) || apr.Contains(cli.ForceFlag)
 
 		if !force {
-			err := validateBranchNotActiveInAnySession(ctx, branchName)
+			err = validateBranchNotActiveInAnySession(ctx, branchName)
 			if err != nil {
 				return err
 			}
 		}
-		err := actions.DeleteBranch(ctx, dbData, loadConfig(ctx), branchName, actions.DeleteOptions{
+		err = actions.DeleteBranch(ctx, dbData, loadConfig(ctx), branchName, actions.DeleteOptions{
 			Force: force,
 		})
 		if err != nil {
 			return err
 		}
-
+		if headOnCLI == branchName {
+			updateFS = true
+		}
 	}
+
+	if fs != nil && updateFS {
+		rs.Head.Ref = ref.NewBranchRef("")
+		rs.Save(fs)
+	}
+
 	return nil
 }
 
@@ -220,16 +284,26 @@ func loadConfig(ctx *sql.Context) *env.DoltCliConfig {
 }
 
 func createNewBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults) error {
-	if apr.NArg() != 1 {
-		return InvalidArgErr
+	var branchName string
+	var startPt = "HEAD"
+	if apr.NArg() == 1 {
+		branchName = apr.Arg(0)
+	} else if apr.NArg() == 2 {
+		branchName = apr.Arg(0)
+		startPt = apr.Arg(1)
+		if len(startPt) == 0 {
+			return InvalidArgErr
+		}
 	}
 
-	branchName := apr.Arg(0)
 	if len(branchName) == 0 {
 		return EmptyBranchNameErr
 	}
 
-	return actions.CreateBranchWithStartPt(ctx, dbData, branchName, "HEAD", apr.Contains(cli.ForceFlag))
+	if err := branch_control.CanCreateBranch(ctx, branchName); err != nil {
+		return err
+	}
+	return actions.CreateBranchWithStartPt(ctx, dbData, branchName, startPt, apr.Contains(cli.ForceFlag))
 }
 
 func copyBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults) error {
@@ -252,6 +326,16 @@ func copyBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResu
 }
 
 func copyABranch(ctx *sql.Context, dbData env.DbData, srcBr string, destBr string, force bool) error {
+	if err := branch_control.CanCreateBranch(ctx, destBr); err != nil {
+		return err
+	}
+	// If force is enabled, we can overwrite the destination branch, so we require a permission check here, even if the
+	// destination branch doesn't exist. An unauthorized user could simply rerun the command without the force flag.
+	if force {
+		if err := branch_control.CanDeleteBranch(ctx, destBr); err != nil {
+			return err
+		}
+	}
 	err := actions.CopyBranchOnDB(ctx, dbData.Ddb, srcBr, destBr, force)
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {
@@ -263,6 +347,10 @@ func copyABranch(ctx *sql.Context, dbData env.DbData, srcBr string, destBr strin
 		} else {
 			return errors.New(fmt.Sprintf("fatal: Unexpected error copying branch from '%s' to '%s'", srcBr, destBr))
 		}
+	}
+	err = branch_control.AddAdminForContext(ctx, destBr)
+	if err != nil {
+		return err
 	}
 
 	return nil

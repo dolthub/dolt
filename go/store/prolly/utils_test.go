@@ -29,20 +29,15 @@ import (
 // testMap is a utility type that allows us to create a common test
 // harness for Map, memoryMap, and MutableMap.
 type testMap interface {
-	Get(ctx context.Context, key val.Tuple, cb KeyValueFn[val.Tuple, val.Tuple]) (err error)
+	Has(ctx context.Context, key val.Tuple) (bool, error)
+	Get(ctx context.Context, key val.Tuple, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error)
 	IterAll(ctx context.Context) (MapIter, error)
 	IterRange(ctx context.Context, rng Range) (MapIter, error)
+	Descriptors() (val.TupleDesc, val.TupleDesc)
 }
 
 var _ testMap = Map{}
-var _ testMap = MutableMap{}
-
-type ordinalMap interface {
-	testMap
-	IterOrdinalRange(ctx context.Context, start, stop uint64) (MapIter, error)
-}
-
-var _ testMap = Map{}
+var _ testMap = &MutableMap{}
 
 func countOrderedMap(t *testing.T, om testMap) (cnt int) {
 	iter, err := om.IterAll(context.Background())
@@ -62,7 +57,7 @@ func keyDescFromMap(om testMap) val.TupleDesc {
 	switch m := om.(type) {
 	case Map:
 		return m.keyDesc
-	case MutableMap:
+	case *MutableMap:
 		return m.keyDesc
 	default:
 		panic("unknown ordered map")

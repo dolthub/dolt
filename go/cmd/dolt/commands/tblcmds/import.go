@@ -42,7 +42,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
@@ -63,7 +62,8 @@ const (
 	primaryKeyParam   = "pk"
 	fileTypeParam     = "file-type"
 	delimParam        = "delim"
-	ignoreSkippedRows = "ignore-skipped-rows"
+	quiet             = "quiet"
+	ignoreSkippedRows = "ignore-skipped-rows" // alias for quiet
 	disableFkChecks   = "disable-fk-checks"
 )
 
@@ -75,7 +75,7 @@ The schema for the new table can be specified explicitly by providing a SQL sche
 
 If {{.EmphasisLeft}}--update-table | -u{{.EmphasisRight}} is given the operation will update {{.LessThan}}table{{.GreaterThan}} with the contents of file. The table's existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
-During import, if there is an error importing any row, the import will be aborted by default. Use the {{.EmphasisLeft}}--continue{{.EmphasisRight}} flag to continue importing when an error is encountered. You can add the {{.EmphasisLeft}}--ignore-skipped-rows{{.EmphasisRight}} flag to prevent the import utility from printing all the skipped rows. 
+During import, if there is an error importing any row, the import will be aborted by default. Use the {{.EmphasisLeft}}--continue{{.EmphasisRight}} flag to continue importing when an error is encountered. You can add the {{.EmphasisLeft}}--quiet{{.EmphasisRight}} flag to prevent the import utility from printing all the skipped rows. 
 
 If {{.EmphasisLeft}}--replace-table | -r{{.EmphasisRight}} is given the operation will replace {{.LessThan}}table{{.GreaterThan}} with the contents of the file. The table's existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
@@ -88,8 +88,8 @@ A mapping file can be used to map fields between the file being imported and the
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimiter`,
 
 	Synopsis: []string{
-		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue]  [--ignore-skipped-rows] [--disable-fk-checks] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
-		"-u [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--ignore-skipped-rows] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue]  [--quiet] [--disable-fk-checks] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"-u [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--quiet] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 		"-r [--map {{.LessThan}}file{{.GreaterThan}}] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
 }
@@ -97,17 +97,17 @@ In create, update, and replace scenarios the file's extension is used to infer t
 var bitTypeRegex = regexp.MustCompile(`(?m)b\'(\d+)\'`)
 
 type importOptions struct {
-	operation         mvdata.TableImportOp
-	destTableName     string
-	contOnErr         bool
-	force             bool
-	schFile           string
-	primaryKeys       []string
-	nameMapper        rowconv.NameMapper
-	src               mvdata.DataLocation
-	srcOptions        interface{}
-	ignoreSkippedRows bool
-	disableFkChecks   bool
+	operation       mvdata.TableImportOp
+	destTableName   string
+	contOnErr       bool
+	force           bool
+	schFile         string
+	primaryKeys     []string
+	nameMapper      rowconv.NameMapper
+	src             mvdata.DataLocation
+	srcOptions      interface{}
+	quiet           bool
+	disableFkChecks bool
 }
 
 func (m importOptions) IsBatched() bool {
@@ -169,7 +169,7 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 	schemaFile, _ := apr.GetValue(schemaParam)
 	force := apr.Contains(forceParam)
 	contOnErr := apr.Contains(contOnErrParam)
-	ignore := apr.Contains(ignoreSkippedRows)
+	quiet := apr.Contains(quiet)
 	disableFks := apr.Contains(disableFkChecks)
 
 	val, _ := apr.GetValue(primaryKeyParam)
@@ -239,17 +239,17 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 	}
 
 	return &importOptions{
-		operation:         moveOp,
-		destTableName:     tableName,
-		contOnErr:         contOnErr,
-		force:             force,
-		schFile:           schemaFile,
-		nameMapper:        colMapper,
-		primaryKeys:       pks,
-		src:               srcLoc,
-		srcOptions:        srcOpts,
-		ignoreSkippedRows: ignore,
-		disableFkChecks:   disableFks,
+		operation:       moveOp,
+		destTableName:   tableName,
+		contOnErr:       contOnErr,
+		force:           force,
+		schFile:         schemaFile,
+		nameMapper:      colMapper,
+		primaryKeys:     pks,
+		src:             srcLoc,
+		srcOptions:      srcOpts,
+		quiet:           quiet,
+		disableFkChecks: disableFks,
 	}, nil
 
 }
@@ -338,7 +338,8 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
-	ap.SupportsFlag(ignoreSkippedRows, "", "Ignore the skipped rows printed by the --continue flag.")
+	ap.SupportsFlag(quiet, "", "Suppress any warning messages about invalid rows when using the --continue flag.")
+	ap.SupportsAlias(ignoreSkippedRows, quiet)
 	ap.SupportsFlag(disableFkChecks, "", "Disables foreign key checks.")
 	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
 	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
@@ -400,24 +401,12 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	skipped, err := move(ctx, rd, wr, mvOpts)
 	if err != nil {
-		if pipeline.IsTransformFailure(err) {
-			bdr := errhand.BuildDError("\nA bad row was encountered while moving data.")
-			r := pipeline.GetTransFailureSqlRow(err)
+		bdr := errhand.BuildDError("\nAn error occurred while moving data")
+		bdr.AddCause(err)
 
-			if r != nil {
-				bdr.AddDetails("Bad Row: " + sql.FormatRow(r))
-			}
+		bdr.AddDetails("Errors during import can be ignored using '--continue'")
 
-			details := pipeline.GetTransFailureDetails(err)
-
-			bdr.AddDetails(details)
-			bdr.AddDetails("These can be ignored using '--continue'")
-
-			return commands.HandleVErrAndExitCode(bdr.Build(), usage)
-		}
-
-		verr = errhand.BuildDError("An error occurred moving data:\n").AddCause(err).Build()
-		return commands.HandleVErrAndExitCode(verr, usage)
+		return commands.HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 
 	cli.PrintErrln()
@@ -513,39 +502,41 @@ func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema sc
 	return mv, nil
 }
 
-type badRowFn func(trf *pipeline.TransformRowFailure) (quit bool)
+type badRowFn func(row sql.Row, err error) (quit bool)
 
 func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableWriter, options *importOptions) (int64, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
-	// Setup the necessary data points for the import job
+	// Set up the necessary data points for the import job
 	parsedRowChan := make(chan sql.Row)
 	var rowErr error
-	var printStarted bool
+	var printBadRowsStarted bool
 	var badCount int64
-	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
-		if !options.contOnErr {
-			rowErr = trf
-			return true
+
+	badRowCB := func(row sql.Row, err error) (quit bool) {
+		// record the first error encountered unless asked to ignore it
+		if row != nil && rowErr == nil && !options.contOnErr {
+			rowErr = fmt.Errorf("A bad row was encountered: %s: %w", sql.FormatRow(row), err)
 		}
 
 		atomic.AddInt64(&badCount, 1)
 
-		// Don't log the skipped rows when the ignore-skipped-rows param is specified.
-		if options.ignoreSkippedRows {
+		// only log info for the --continue option
+		if !options.contOnErr {
+			return true
+		}
+
+		// Don't log the skipped rows when asked to suppress warning output
+		if options.quiet {
 			return false
 		}
 
-		if !printStarted {
+		if !printBadRowsStarted {
 			cli.PrintErrln("The following rows were skipped:")
-			printStarted = true
+			printBadRowsStarted = true
 		}
 
-		r := pipeline.GetTransFailureSqlRow(trf)
-
-		if r != nil {
-			cli.PrintErr(sql.FormatRow(r), "\n")
-		}
+		cli.PrintErrln(sql.FormatRow(row))
 
 		return false
 	}
@@ -569,8 +560,13 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 
 	err := g.Wait()
 	if err != nil && err != io.EOF {
+		// don't lose the rowErr if there is one
+		if rowErr != nil {
+			return badCount, fmt.Errorf("%w\n%s", err, rowErr.Error())
+		}
 		return badCount, err
 	}
+
 	if rowErr != nil {
 		return badCount, rowErr
 	}
@@ -604,10 +600,9 @@ func moveRows(
 
 		if err != nil {
 			if table.IsBadRow(err) {
-				trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: sqlRow, TransformName: "reader", Details: err.Error()}
-				quit := badRowCb(trf)
+				quit := badRowCb(sqlRow, err)
 				if quit {
-					return trf
+					return err
 				}
 			} else {
 				return err

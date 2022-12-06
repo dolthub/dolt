@@ -19,8 +19,6 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -28,7 +26,9 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
 var backupDocs = cli.CommandDocumentationContent{
@@ -262,8 +262,11 @@ func backup(ctx context.Context, dEnv *env.DoltEnv, b env.Remote) errhand.Verbos
 	if err != nil {
 		return errhand.BuildDError("error: unable to open destination.").AddCause(err).Build()
 	}
-
-	err = actions.SyncRoots(ctx, dEnv.DoltDB, destDb, dEnv.TempTableFilesDir(), buildProgStarter(defaultLanguage), stopProgFuncs)
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return errhand.BuildDError("error: ").AddCause(err).Build()
+	}
+	err = actions.SyncRoots(ctx, dEnv.DoltDB, destDb, tmpDir, buildProgStarter(defaultLanguage), stopProgFuncs)
 
 	switch err {
 	case nil:
@@ -327,8 +330,11 @@ func restoreBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-
-	err = actions.SyncRoots(ctx, srcDb, clonedEnv.DoltDB, clonedEnv.TempTableFilesDir(), buildProgStarter(downloadLanguage), stopProgFuncs)
+	tmpDir, err := clonedEnv.TempTableFilesDir()
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+	err = actions.SyncRoots(ctx, srcDb, clonedEnv.DoltDB, tmpDir, buildProgStarter(downloadLanguage), stopProgFuncs)
 	if err != nil {
 		// If we're cloning into a directory that already exists do not erase it. Otherwise
 		// make best effort to delete the directory we created.

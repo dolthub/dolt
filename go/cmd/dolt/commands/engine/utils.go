@@ -75,11 +75,13 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool
 
 // GetCommitHooks creates a list of hooks to execute on database commit. If doltdb.SkipReplicationErrorsKey is set,
 // replace misconfigured hooks with doltdb.LogHook instances that prints a warning when trying to execute.
+// TODO: this duplicates code in the sqle package
 func GetCommitHooks(ctx context.Context, dEnv *env.DoltEnv) ([]doltdb.CommitHook, error) {
 	postCommitHooks := make([]doltdb.CommitHook, 0)
 
 	if hook, err := getPushOnWriteHook(ctx, dEnv); err != nil {
-		err = fmt.Errorf("failure loading hook; %w", err)
+		path, _ := dEnv.FS.Abs(".")
+		err = fmt.Errorf("failure loading hook for database at %s; %w", path, err)
 		if sqle.SkipReplicationWarnings() {
 			postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(err.Error()+"\n")))
 		} else {
@@ -97,9 +99,13 @@ func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv, useBulkEdi
 	if useBulkEditor {
 		deaf = dEnv.BulkDbEaFactory()
 	}
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return sqle.Database{}, err
+	}
 	opts := editor.Options{
 		Deaf:    deaf,
-		Tempdir: dEnv.TempTableFilesDir(),
+		Tempdir: tmpDir,
 	}
 	return sqle.NewDatabase(ctx, name, dEnv.DbData(), opts)
 }
@@ -108,9 +114,13 @@ func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv, useBulkEdi
 // skip errors related to database construction only and return a partially functional dsqle.ReadReplicaDatabase
 // that will log warnings when attempting to perform replica commands.
 func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEnv *env.DoltEnv) (sqle.ReadReplicaDatabase, error) {
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return sqle.ReadReplicaDatabase{}, err
+	}
 	opts := editor.Options{
 		Deaf:    dEnv.DbEaFactory(),
-		Tempdir: dEnv.TempTableFilesDir(),
+		Tempdir: tmpDir,
 	}
 
 	db, err := sqle.NewDatabase(ctx, name, dEnv.DbData(), opts)
@@ -157,7 +167,10 @@ func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.PushOnW
 	if err != nil {
 		return nil, err
 	}
-
-	pushHook := doltdb.NewPushOnWriteHook(ddb, dEnv.TempTableFilesDir())
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil, err
+	}
+	pushHook := doltdb.NewPushOnWriteHook(ddb, tmpDir)
 	return pushHook, nil
 }

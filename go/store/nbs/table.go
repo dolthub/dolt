@@ -225,57 +225,71 @@ type extractRecord struct {
 }
 
 type chunkReader interface {
+	// has returns true if a chunk with addr |h| is present.
 	has(h addr) (bool, error)
+
+	// hasMany sets hasRecord.has to true for each present hasRecord query, it returns
+	// true if any hasRecord query was not found in this chunkReader.
 	hasMany(addrs []hasRecord) (bool, error)
+
+	// get returns the chunk data for a chunk with addr |h| if present, and nil otherwise.
 	get(ctx context.Context, h addr, stats *Stats) ([]byte, error)
+
+	// getMany sets getRecord.found to true, and calls |found| for each present getRecord query.
+	// It returns true if any getRecord query was not found in this chunkReader.
 	getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error)
+
+	// getManyCompressed sets getRecord.found to true, and calls |found| for each present getRecord query.
+	// It returns true if any getRecord query was not found in this chunkReader.
 	getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error)
-	extract(ctx context.Context, chunks chan<- extractRecord) error
+
+	// count returns the chunk count for this chunkReader.
 	count() (uint32, error)
+
+	// uncompressedLen returns the total uncompressed length this chunkReader.
 	uncompressedLen() (uint64, error)
 
-	// Close releases resources retained by the |chunkReader|.
-	Close() error
-}
-
-type chunkReadPlanner interface {
-	findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool, err error)
-	getManyAtOffsets(
-		ctx context.Context,
-		eg *errgroup.Group,
-		offsetRecords offsetRecSlice,
-		found func(context.Context, *chunks.Chunk),
-		stats *Stats,
-	) error
-	getManyCompressedAtOffsets(
-		ctx context.Context,
-		eg *errgroup.Group,
-		offsetRecords offsetRecSlice,
-		found func(context.Context, CompressedChunk),
-		stats *Stats,
-	) error
+	// close releases resources retained by the |chunkReader|.
+	close() error
 }
 
 type chunkSource interface {
 	chunkReader
-	hash() (addr, error)
-	calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error)
+
+	// hash returns the hash address of this chunkSource.
+	hash() addr
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
 	reader(context.Context) (io.Reader, error)
+
+	// getRecordRanges sets getRecord.found to true, and returns a Range for each present getRecord query.
+	getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error)
+
 	// size returns the total size of the chunkSource: chunks, index, and footer
 	size() (uint64, error)
+
+	// index returns the tableIndex of this chunkSource.
 	index() (tableIndex, error)
 
-	// Clone returns a |chunkSource| with the same contents as the
+	// clone returns a |chunkSource| with the same contents as the
 	// original, but with independent |Close| behavior. A |chunkSource|
 	// cannot be |Close|d more than once, so if a |chunkSource| is being
 	// retained in two objects with independent life-cycle, it should be
 	// |Clone|d first.
-	Clone() (chunkSource, error)
+	clone() (chunkSource, error)
 }
 
 type chunkSources []chunkSource
+
+type chunkSourceSet map[addr]chunkSource
+
+func copyChunkSourceSet(s chunkSourceSet) (cp chunkSourceSet) {
+	cp = make(chunkSourceSet, len(s))
+	for k, v := range s {
+		cp[k] = v
+	}
+	return
+}
 
 // TableFile is an interface for working with an existing table file
 type TableFile interface {

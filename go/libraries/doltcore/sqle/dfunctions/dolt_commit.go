@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
@@ -51,6 +52,9 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 }
 
 func DoDoltCommit(ctx *sql.Context, args []string) (string, error) {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return "", err
+	}
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
 
@@ -65,7 +69,12 @@ func DoDoltCommit(ctx *sql.Context, args []string) (string, error) {
 		return "", fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	if apr.Contains(cli.AllFlag) {
+	if apr.Contains(cli.UpperCaseAllFlag) {
+		roots, err = actions.StageAllTables(ctx, roots)
+		if err != nil {
+			return "", fmt.Errorf(err.Error())
+		}
+	} else if apr.Contains(cli.AllFlag) {
 		roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
 		if err != nil {
 			return "", fmt.Errorf(err.Error())
@@ -83,9 +92,23 @@ func DoDoltCommit(ctx *sql.Context, args []string) (string, error) {
 		email = dSess.Email()
 	}
 
+	amend := apr.Contains(cli.AmendFlag)
+
 	msg, msgOk := apr.GetValue(cli.MessageArg)
 	if !msgOk {
-		return "", fmt.Errorf("Must provide commit message.")
+		if amend {
+			commit, err := dSess.GetHeadCommit(ctx, dbName)
+			if err != nil {
+				return "", err
+			}
+			commitMeta, err := commit.GetCommitMeta(ctx)
+			if err != nil {
+				return "", err
+			}
+			msg = commitMeta.Description
+		} else {
+			return "", fmt.Errorf("Must provide commit message.")
+		}
 	}
 
 	t := ctx.QueryTime()
@@ -102,6 +125,7 @@ func DoDoltCommit(ctx *sql.Context, args []string) (string, error) {
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
+		Amend:      amend,
 		Force:      apr.Contains(cli.ForceFlag),
 		Name:       name,
 		Email:      email,

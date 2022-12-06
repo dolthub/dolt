@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -39,11 +40,13 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+	tmpDir, err := dEnv.TempTableFilesDir()
+	require.NoError(t, err)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 	db, err := dsqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := dsqle.NewTestEngine(t, dEnv, context.Background(), db, root)
+	engine, sqlCtx, err := dsqle.NewTestEngine(dEnv, context.Background(), db, root)
 	require.NoError(t, err)
 
 	_, iter, err := engine.Query(sqlCtx, fmt.Sprintf(`CREATE TABLE %s (
@@ -72,7 +75,7 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 
 	table := dsqle.DoltTableFromAlterableTable(sqlCtx, tbl)
 
-	idxv1RowData, err := table.GetNomsIndexRowData(context.Background(), idxv1.Name())
+	idxv1RowData, err := table.GetIndexRowData(context.Background(), idxv1.Name())
 	require.NoError(t, err)
 	idxv1Cols := make([]schema.Column, idxv1.Count())
 	for i, tag := range idxv1.IndexedColumnTags() {
@@ -109,7 +112,9 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 
 	// Get an updated root to use for the rest of the test
 	ctx := sql.NewEmptyContext()
-	sess, err := dsess.NewDoltSession(ctx, ctx.Session.(*sql.BaseSession), pro, config.NewEmptyMapConfig(), getDbState(t, db, dEnv))
+	controller := branch_control.CreateDefaultController()
+	sess, err := dsess.NewDoltSession(ctx, ctx.Session.(*sql.BaseSession), pro, config.NewEmptyMapConfig(),
+		controller, getDbState(t, db, dEnv))
 	require.NoError(t, err)
 	roots, ok := sess.GetRoots(ctx, db.Name())
 	require.True(t, ok)

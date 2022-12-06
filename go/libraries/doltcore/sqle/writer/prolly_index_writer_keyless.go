@@ -27,7 +27,7 @@ import (
 
 type prollyKeylessWriter struct {
 	name string
-	mut  prolly.MutableMap
+	mut  *prolly.MutableMap
 
 	keyBld *val.TupleBuilder
 	valBld *val.TupleBuilder
@@ -43,6 +43,11 @@ func (k prollyKeylessWriter) Name() string {
 
 func (k prollyKeylessWriter) Map(ctx context.Context) (prolly.Map, error) {
 	return k.mut.Map(ctx)
+}
+
+// ValidateKeyViolations returns nil for keyless writers, because there are no keys, so violations are possible
+func (k prollyKeylessWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
+	return nil
 }
 
 func (k prollyKeylessWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
@@ -108,11 +113,11 @@ func (k prollyKeylessWriter) Update(ctx context.Context, oldRow sql.Row, newRow 
 }
 
 func (k prollyKeylessWriter) Commit(ctx context.Context) error {
-	return k.mut.ApplyPending(ctx)
+	return k.mut.Checkpoint(ctx)
 }
 
 func (k prollyKeylessWriter) Discard(ctx context.Context) error {
-	k.mut.DiscardPending(ctx)
+	k.mut.Revert(ctx)
 	return nil
 }
 
@@ -140,10 +145,6 @@ func (k prollyKeylessWriter) tuplesFromRow(ctx context.Context, sqlRow sql.Row) 
 	value = k.valBld.Build(sharePool)
 	hashId = val.HashTupleFromValue(sharePool, value)
 	return
-}
-
-func (k prollyKeylessWriter) getMut() prolly.MutableMap {
-	return k.mut
 }
 
 func (k prollyKeylessWriter) errForSecondaryUniqueKeyError(ctx context.Context, err secondaryUniqueKeyError) error {
@@ -179,10 +180,11 @@ func (e secondaryUniqueKeyError) Error() string {
 }
 
 type prollyKeylessSecondaryWriter struct {
-	name    string
-	mut     prolly.MutableMap
-	primary prollyKeylessWriter
-	unique  bool
+	name          string
+	mut           *prolly.MutableMap
+	primary       prollyKeylessWriter
+	unique        bool
+	prefixLengths []uint16
 
 	keyBld    *val.TupleBuilder
 	prefixBld *val.TupleBuilder
@@ -202,15 +204,44 @@ func (writer prollyKeylessSecondaryWriter) Map(ctx context.Context) (prolly.Map,
 	return writer.mut.Map(ctx)
 }
 
+// ValidateKeyViolations implements the interface indexWriter.
+func (writer prollyKeylessSecondaryWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
+	return nil
+}
+
+// trimKeyPart will trim entry into the sql.Row depending on the prefixLengths
+func (writer prollyKeylessSecondaryWriter) trimKeyPart(to int, keyPart interface{}) interface{} {
+	var prefixLength uint16
+	if len(writer.prefixLengths) > to {
+		prefixLength = writer.prefixLengths[to]
+	}
+	if prefixLength != 0 {
+		switch kp := keyPart.(type) {
+		case string:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
+			keyPart = kp[:prefixLength]
+		case []uint8:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
+			keyPart = kp[:prefixLength]
+		}
+	}
+	return keyPart
+}
+
 // Insert implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 	for to := range writer.keyMap {
 		from := writer.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, sqlRow[from]); err != nil {
+		keyPart := writer.trimKeyPart(to, sqlRow[from])
+		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
 			return err
 		}
 		if to < writer.prefixBld.Desc.Count() {
-			if err := index.PutField(ctx, writer.mut.NodeStore(), writer.prefixBld, to, sqlRow[from]); err != nil {
+			if err := index.PutField(ctx, writer.mut.NodeStore(), writer.prefixBld, to, keyPart); err != nil {
 				return err
 			}
 		}
@@ -237,8 +268,8 @@ func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sq
 }
 
 func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Context, prefixKey val.Tuple) error {
-	for i := 0; i < prefixKey.Count(); i++ {
-		if prefixKey.FieldIsNull(i) {
+	for i := 0; i < writer.prefixBld.Desc.Count(); i++ {
+		if writer.prefixBld.Desc.IsNull(i, prefixKey) {
 			return nil
 		}
 	}
@@ -279,7 +310,8 @@ func (writer prollyKeylessSecondaryWriter) Delete(ctx context.Context, sqlRow sq
 
 	for to := range writer.keyMap {
 		from := writer.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, sqlRow[from]); err != nil {
+		keyPart := writer.trimKeyPart(to, sqlRow[from])
+		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
 			return err
 		}
 	}
@@ -308,12 +340,12 @@ func (writer prollyKeylessSecondaryWriter) Update(ctx context.Context, oldRow sq
 
 // Commit implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Commit(ctx context.Context) error {
-	return writer.mut.ApplyPending(ctx)
+	return writer.mut.Checkpoint(ctx)
 }
 
 // Discard implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Discard(ctx context.Context) error {
-	writer.mut.DiscardPending(ctx)
+	writer.mut.Revert(ctx)
 	return nil
 }
 

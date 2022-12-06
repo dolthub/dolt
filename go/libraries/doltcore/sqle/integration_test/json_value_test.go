@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type jsonValueTest struct {
@@ -43,7 +44,11 @@ type jsonValueTest struct {
 }
 
 func TestJsonValues(t *testing.T) {
-	sqle.SkipByDefaultInCI(t)
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: convert to enginetests
+	}
+
+	SkipByDefaultInCI(t)
 	setupCommon := []testCommand{
 		{cmd.SqlCmd{}, args{"-q", `create table js (pk int primary key, js json);`}},
 	}
@@ -131,7 +136,7 @@ func testJsonValue(t *testing.T, test jsonValueTest, setupCommon []testCommand) 
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 
-	actRows, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, root, test.query)
+	actRows, err := sqle.ExecuteSelect(dEnv, root, test.query)
 	require.NoError(t, err)
 
 	require.Equal(t, len(test.rows), len(actRows))
@@ -154,7 +159,11 @@ func testJsonValue(t *testing.T, test jsonValueTest, setupCommon []testCommand) 
 
 // round-trips large random JSON objects through the SQL engine
 func TestLargeJsonObjects(t *testing.T) {
-	sqle.SkipByDefaultInCI(t)
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // todo: convert to enginetests
+	}
+
+	SkipByDefaultInCI(t)
 	setupCommon := []testCommand{
 		{cmd.SqlCmd{}, args{"-q", `create table js (pk int primary key, js json);`}},
 	}

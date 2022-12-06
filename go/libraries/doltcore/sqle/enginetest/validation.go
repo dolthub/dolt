@@ -141,6 +141,11 @@ func validateIndexConsistency(
 	def schema.Index,
 	primary, secondary prolly.Map,
 ) error {
+	// TODO: fix this later
+	if len(def.PrefixLengths()) > 0 {
+		return nil
+	}
+
 	if schema.IsKeyless(sch) {
 		return validateKeylessIndex(ctx, sch, def, primary, secondary)
 	}
@@ -240,7 +245,7 @@ func ordinalMappingsForSecondaryIndex(sch schema.Schema, def schema.Index) (ord 
 	ord = make(val.OrdinalMapping, secondary.Size())
 
 	for i := range ord {
-		name := secondary.GetAtIndex(i).Name
+		name := secondary.GetByIndex(i).Name
 		ord[i] = -1
 
 		pks := sch.GetPKCols().GetColumns()

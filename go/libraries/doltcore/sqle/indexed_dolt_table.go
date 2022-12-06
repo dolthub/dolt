@@ -15,6 +15,8 @@
 package sqle
 
 import (
+	"sync"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -29,6 +31,7 @@ type IndexedDoltTable struct {
 	idx          index.DoltIndex
 	lb           index.LookupBuilder
 	isDoltFormat bool
+	mu           *sync.Mutex
 }
 
 func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
@@ -36,6 +39,7 @@ func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
 		table:        t,
 		idx:          idx,
 		isDoltFormat: types.IsFormat_DOLT(t.Format()),
+		mu:           &sync.Mutex{},
 	}
 }
 
@@ -70,16 +74,34 @@ func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, er
 }
 
 func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	if idt.lb == nil {
-		idt.lb = index.NewLookupBuilder(part, idt.idx, nil, idt.table.sqlSch, idt.isDoltFormat)
+	idt.mu.Lock()
+	defer idt.mu.Unlock()
+	key, canCache, err := idt.table.DataCacheKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if idt.lb == nil || !canCache || idt.lb.Key() != key {
+		idt.lb, err = index.NewLookupBuilder(ctx, idt.table, idt.idx, key, idt.table.projectedCols, idt.table.sqlSch, idt.isDoltFormat)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return idt.lb.NewRowIter(ctx, part)
 }
 
 func (idt *IndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	if idt.lb == nil {
-		idt.lb = index.NewLookupBuilder(part, idt.idx, nil, idt.table.sqlSch, idt.isDoltFormat)
+	idt.mu.Lock()
+	defer idt.mu.Unlock()
+	key, canCache, err := idt.table.DataCacheKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if idt.lb == nil || !canCache || idt.lb.Key() != key {
+		idt.lb, err = index.NewLookupBuilder(ctx, idt.table, idt.idx, key, idt.table.projectedCols, idt.table.sqlSch, idt.isDoltFormat)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return idt.lb.NewRowIter(ctx, part)
@@ -101,6 +123,7 @@ func NewWritableIndexedDoltTable(t *WritableDoltTable, idx index.DoltIndex) *Wri
 		WritableDoltTable: t,
 		idx:               idx,
 		isDoltFormat:      types.IsFormat_DOLT(idx.Format()),
+		mu:                &sync.Mutex{},
 	}
 }
 
@@ -109,6 +132,7 @@ type WritableIndexedDoltTable struct {
 	idx          index.DoltIndex
 	isDoltFormat bool
 	lb           index.LookupBuilder
+	mu           *sync.Mutex
 }
 
 var _ sql.Table2 = (*WritableIndexedDoltTable)(nil)
@@ -122,8 +146,17 @@ func (t *WritableIndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIt
 }
 
 func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	if t.lb == nil {
-		t.lb = index.NewLookupBuilder(part, t.idx, t.projectedCols, t.sqlSch, t.isDoltFormat)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	key, canCache, err := t.DataCacheKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if t.lb == nil || !canCache || t.lb.Key() != key {
+		t.lb, err = index.NewLookupBuilder(ctx, t.DoltTable, t.idx, key, t.projectedCols, t.sqlSch, t.isDoltFormat)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return t.lb.NewRowIter(ctx, part)

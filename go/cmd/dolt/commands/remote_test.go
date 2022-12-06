@@ -32,7 +32,7 @@ func TestGetAbsRemoteUrl(t *testing.T) {
 	testRepoDir := filepath.Join(cwd, "test-repo")
 	fs := filesys.NewInMemFS([]string{cwd, testRepoDir}, nil, cwd)
 	if osutil.IsWindows {
-		cwd = "/" + filepath.ToSlash(cwd)
+		cwd = filepath.ToSlash(cwd)
 	}
 
 	tests := []struct {

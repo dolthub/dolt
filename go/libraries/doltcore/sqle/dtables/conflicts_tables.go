@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -27,7 +28,7 @@ import (
 )
 
 // NewConflictsTable returns a new ConflictsTable instance
-func NewConflictsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+func NewConflictsTable(ctx *sql.Context, tblName string, srcTbl sql.Table, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
 	tbl, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
 	if err != nil {
 		return nil, err
@@ -36,14 +37,18 @@ func NewConflictsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue,
 	}
 
 	if types.IsFormat_DOLT(tbl.Format()) {
-		return newProllyConflictsTable(ctx, tbl, tblName, root, rs)
+		upd, ok := srcTbl.(sql.UpdatableTable)
+		if !ok {
+			return nil, fmt.Errorf("%s can not have conflicts because it is not updateable", tblName)
+		}
+		return newProllyConflictsTable(ctx, tbl, upd, tblName, root, rs)
 	}
 
 	return newNomsConflictsTable(ctx, tbl, tblName, root, rs)
 }
 
 func newNomsConflictsTable(ctx *sql.Context, tbl *doltdb.Table, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
-	rd, err := merge.NewConflictReader(ctx, tbl)
+	rd, err := merge.NewConflictReader(ctx, tbl, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +114,7 @@ func (ct ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error)
 // PartitionRows returns a RowIter for the given partition
 func (ct ConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	// conflict reader must be reset each time partitionRows is called.
-	rd, err := merge.NewConflictReader(ctx, ct.tbl)
+	rd, err := merge.NewConflictReader(ctx, ct.tbl, ct.tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +134,7 @@ type conflictRowIter struct {
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
 func (itr conflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	cnf, _, err := itr.rd.NextConflict(ctx)
+	cnf, err := itr.rd.NextConflict(ctx)
 
 	if err != nil {
 		return nil, err

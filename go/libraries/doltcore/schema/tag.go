@@ -125,12 +125,3 @@ func simpleString(s string) string {
 	reg := regexp.MustCompile("[^a-zA-Z0-9]+")
 	return strings.ToLower(reg.ReplaceAllString(s, ""))
 }
-
-func NomsKindsFromSchema(sch Schema) []types.NomsKind {
-	var nks []types.NomsKind
-	_ = sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
-		nks = append(nks, col.Kind)
-		return false, nil
-	})
-	return nks
-}

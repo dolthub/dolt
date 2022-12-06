@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"gopkg.in/src-d/go-errors.v1"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
@@ -36,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names must match the regular expression " + doltdb.TableNameRegexStr)
@@ -90,12 +92,22 @@ type Database struct {
 	revision string
 }
 
+var _ SqlDatabase = Database{}
+var _ dsess.RevisionDatabase = Database{}
+var _ globalstate.StateProvider = Database{}
+var _ sql.CollatedDatabase = Database{}
 var _ sql.Database = Database{}
+var _ sql.StoredProcedureDatabase = Database{}
 var _ sql.TableCreator = Database{}
-var _ sql.ViewDatabase = Database{}
+var _ sql.IndexedTableCreator = Database{}
+var _ sql.TableDropper = Database{}
+var _ sql.TableRenamer = Database{}
 var _ sql.TemporaryTableCreator = Database{}
 var _ sql.TemporaryTableDatabase = Database{}
-var _ dsess.RevisionDatabase = Database{}
+var _ sql.TransactionDatabase = Database{}
+var _ sql.TriggerDatabase = Database{}
+var _ sql.VersionedDatabase = Database{}
+var _ sql.ViewDatabase = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -158,17 +170,6 @@ func (db Database) Revision() string {
 func (db Database) EditOptions() editor.Options {
 	return db.editOpts
 }
-
-var _ SqlDatabase = Database{}
-var _ sql.VersionedDatabase = Database{}
-var _ sql.TableDropper = Database{}
-var _ sql.TableCreator = Database{}
-var _ sql.TemporaryTableCreator = Database{}
-var _ sql.TableRenamer = Database{}
-var _ sql.TriggerDatabase = Database{}
-var _ sql.StoredProcedureDatabase = Database{}
-var _ sql.TransactionDatabase = Database{}
-var _ globalstate.StateProvider = Database{}
 
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts editor.Options) (Database, error) {
@@ -361,6 +362,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if head == nil {
 			var err error
 			head, err = ds.GetHeadCommit(ctx, db.Name())
+
 			if err != nil {
 				return nil, false, err
 			}
@@ -403,7 +405,13 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
 		suffix := tblName[len(doltdb.DoltConfTablePrefix):]
-		dt, err := dtables.NewConflictsTable(ctx, suffix, root, dtables.RootSetter(db))
+		srcTable, ok, err := db.getTableInsensitive(ctx, head, ds, root, suffix)
+		if err != nil {
+			return nil, false, err
+		} else if !ok {
+			return nil, false, nil
+		}
+		dt, err := dtables.NewConflictsTable(ctx, suffix, srcTable, root, dtables.RootSetter(db))
 		if err != nil {
 			return nil, false, err
 		}
@@ -461,8 +469,24 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			map[string]env.BranchConfig{},
 			map[string]env.Remote{})
 		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, adapter), true
+	case doltdb.MergeStatusTableName:
+		dt, found = dtables.NewMergeStatusTable(db.name), true
 	case doltdb.TagsTableName:
 		dt, found = dtables.NewTagsTable(ctx, db.ddb), true
+	case dtables.AccessTableName:
+		basCtx := branch_control.GetBranchAwareSession(ctx)
+		if basCtx != nil {
+			if controller := basCtx.GetController(); controller != nil {
+				dt, found = dtables.NewBranchControlTable(controller.Access), true
+			}
+		}
+	case dtables.NamespaceTableName:
+		basCtx := branch_control.GetBranchAwareSession(ctx)
+		if basCtx != nil {
+			if controller := basCtx.GetController(); controller != nil {
+				dt, found = dtables.NewBranchNamespaceControlTable(controller.Namespace), true
+			}
+		}
 	}
 	if found {
 		return dt, found, nil
@@ -495,12 +519,12 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 		return nil, nil, err
 	}
 
-	hash, err := cm.HashOf()
+	h, err := cm.HashOf()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	cmItr, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash)
+	cmItr, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, []hash.Hash{h}, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -726,6 +750,9 @@ func (db Database) GetHeadRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 // DropTable drops the table with the name given.
 // The planner returns the correct case sensitive name in tableName
 func (db Database) DropTable(ctx *sql.Context, tableName string) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		return ErrSystemTableAlter.New(tableName)
 	}
@@ -825,9 +852,12 @@ func (db Database) removeTableFromAutoIncrementTracker(
 
 // CreateTable creates a table with the name and schema given.
 func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, collation sql.CollationID) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	if strings.ToLower(tableName) == doltdb.DocTableName {
 		// validate correct schema
-		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) {
+		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) && !dtables.OldDoltDocsSqlSchema.Equals(sch.Schema) {
 			return fmt.Errorf("incorrect schema for dolt_docs table")
 		}
 	} else if doltdb.HasDoltPrefix(tableName) {
@@ -839,6 +869,27 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 	}
 
 	return db.createSqlTable(ctx, tableName, sch, collation)
+}
+
+// CreateIndexedTable creates a table with the name and schema given.
+func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
+	if strings.ToLower(tableName) == doltdb.DocTableName {
+		// validate correct schema
+		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) && !dtables.OldDoltDocsSqlSchema.Equals(sch.Schema) {
+			return fmt.Errorf("incorrect schema for dolt_docs table")
+		}
+	} else if doltdb.HasDoltPrefix(tableName) {
+		return ErrReservedTableName.New(tableName)
+	}
+
+	if !doltdb.IsValidTableName(tableName) {
+		return ErrInvalidTableName.New(tableName)
+	}
+
+	return db.createIndexedSqlTable(ctx, tableName, sch, idxDef, collation)
 }
 
 // Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.
@@ -868,6 +919,56 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 	// Prevent any tables that use Spatial Types as Primary Key from being created
 	if schema.IsUsingSpatialColAsKey(doltSch) {
 		return schema.ErrUsingSpatialKey.New(tableName)
+	}
+
+	// Prevent any tables that use BINARY, CHAR, VARBINARY, VARCHAR prefixes
+
+	if schema.HasAutoIncrement(doltSch) {
+		ait, err := db.gs.GetAutoIncrementTracker(ctx)
+		if err != nil {
+			return err
+		}
+		ait.AddNewTable(tableName)
+	}
+
+	return db.createDoltTable(ctx, tableName, root, doltSch)
+}
+
+// Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.
+func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID) error {
+	ws, err := db.GetWorkingSet(ctx)
+	if err != nil {
+		return err
+	}
+	root := ws.WorkingRoot()
+
+	if exists, err := root.HasTable(ctx, tableName); err != nil {
+		return err
+	} else if exists {
+		return sql.ErrTableAlreadyExists.New(tableName)
+	}
+
+	headRoot, err := db.GetHeadRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	doltSch, err := sqlutil.ToDoltSchema(ctx, root, tableName, sch, headRoot, collation)
+	if err != nil {
+		return err
+	}
+
+	// Prevent any tables that use Spatial Types as Primary Key from being created
+	if schema.IsUsingSpatialColAsKey(doltSch) {
+		return schema.ErrUsingSpatialKey.New(tableName)
+	}
+
+	// Prevent any tables that use BINARY, CHAR, VARBINARY, VARCHAR prefixes in Primary Key
+	for _, idxCol := range idxDef.Columns {
+		col := sch.Schema[sch.Schema.IndexOfColName(idxCol.Name)]
+		if col.PrimaryKey && sql.IsText(col.Type) && idxCol.Length > 0 {
+			return sql.ErrUnsupportedIndexPrefix.New(col.Name)
+		}
 	}
 
 	if schema.HasAutoIncrement(doltSch) {
@@ -936,6 +1037,9 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 
 // RenameTable implements sql.TableRenamer
 func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	root, err := db.GetRoot(ctx)
 
 	if err != nil {
@@ -1150,15 +1254,24 @@ func (db Database) GetStoredProcedures(ctx *sql.Context) ([]sql.StoredProcedureD
 
 // SaveStoredProcedure implements sql.StoredProcedureDatabase.
 func (db Database) SaveStoredProcedure(ctx *sql.Context, spd sql.StoredProcedureDetails) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	return DoltProceduresAddProcedure(ctx, db, spd)
 }
 
 // DropStoredProcedure implements sql.StoredProcedureDatabase.
 func (db Database) DropStoredProcedure(ctx *sql.Context, name string) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	return DoltProceduresDropProcedure(ctx, db, name)
 }
 
 func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, definition string, created time.Time, existingErr error) (err error) {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
 	if err != nil {
 		return err
@@ -1210,6 +1323,9 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	stbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
@@ -1239,6 +1355,38 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 	return sess.GetAllTemporaryTables(ctx, db.Name())
+}
+
+// GetCollation implements the interface sql.CollatedDatabase.
+func (db Database) GetCollation(ctx *sql.Context) sql.CollationID {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return sql.Collation_Default
+	}
+	collation, err := root.GetCollation(ctx)
+	if err != nil {
+		return sql.Collation_Default
+	}
+	return sql.CollationID(collation)
+}
+
+// SetCollation implements the interface sql.CollatedDatabase.
+func (db Database) SetCollation(ctx *sql.Context, collation sql.CollationID) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
+	if collation == sql.Collation_Unspecified {
+		collation = sql.Collation_Default
+	}
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+	newRoot, err := root.SetCollation(ctx, schema.Collation(collation))
+	if err != nil {
+		return err
+	}
+	return db.SetRoot(ctx, newRoot)
 }
 
 // TODO: this is a hack to make user space DBs appear to the analyzer as full DBs with state etc., but the state is
@@ -1284,8 +1432,8 @@ func (n noopRepoStateWriter) RemoveBackup(ctx context.Context, name string) erro
 	return nil
 }
 
-func (n noopRepoStateWriter) TempTableFilesDir() string {
-	return ""
+func (n noopRepoStateWriter) TempTableFilesDir() (string, error) {
+	return "", nil
 }
 
 func (n noopRepoStateWriter) UpdateBranch(name string, new env.BranchConfig) error {

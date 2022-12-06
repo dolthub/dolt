@@ -65,7 +65,7 @@ func newDiffWriter(diffOutput diffOutput) (diffWriter, error) {
 	}
 }
 
-func printDiffSummary(ctx context.Context, td diff.TableDelta, colLen int) errhand.VerboseError {
+func printDiffSummary(ctx context.Context, td diff.TableDelta, oldColLen, newColLen int) errhand.VerboseError {
 	// todo: use errgroup.Group
 	ae := atomicerr.New()
 	ch := make(chan diff.DiffSummaryProgress)
@@ -89,11 +89,13 @@ func printDiffSummary(ctx context.Context, td diff.TableDelta, colLen int) errha
 		acc.Removes += p.Removes
 		acc.Changes += p.Changes
 		acc.CellChanges += p.CellChanges
-		acc.NewSize += p.NewSize
-		acc.OldSize += p.OldSize
+		acc.NewRowSize += p.NewRowSize
+		acc.OldRowSize += p.OldRowSize
+		acc.NewCellSize += p.NewCellSize
+		acc.OldCellSize += p.OldCellSize
 
 		if count%10000 == 0 {
-			eP.Printf("prev size: %d, new size: %d, adds: %d, deletes: %d, modifications: %d\n", acc.OldSize, acc.NewSize, acc.Adds, acc.Removes, acc.Changes)
+			eP.Printf("prev size: %d, new size: %d, adds: %d, deletes: %d, modifications: %d\n", acc.OldRowSize, acc.NewRowSize, acc.Adds, acc.Removes, acc.Changes)
 			eP.Display()
 		}
 
@@ -108,10 +110,10 @@ func printDiffSummary(ctx context.Context, td diff.TableDelta, colLen int) errha
 
 	keyless, err := td.IsKeyless(ctx)
 	if err != nil {
-		return nil
+		return errhand.BuildDError("").AddCause(err).Build()
 	}
 
-	if (acc.Adds + acc.Removes + acc.Changes) == 0 {
+	if (acc.Adds+acc.Removes+acc.Changes) == 0 && (acc.OldCellSize-acc.NewCellSize) == 0 {
 		cli.Println("No data changes. See schema changes by using -s or --schema.")
 		return nil
 	}
@@ -119,24 +121,27 @@ func printDiffSummary(ctx context.Context, td diff.TableDelta, colLen int) errha
 	if keyless {
 		printKeylessSummary(acc)
 	} else {
-		printSummary(acc, colLen)
+		printSummary(acc, oldColLen, newColLen)
 	}
 
 	return nil
 }
 
-func printSummary(acc diff.DiffSummaryProgress, colLen int) {
-	rowsUnmodified := uint64(acc.OldSize - acc.Changes - acc.Removes)
+func printSummary(acc diff.DiffSummaryProgress, oldColLen, newColLen int) {
+	numCellInserts, numCellDeletes := sqle.GetCellsAddedAndDeleted(acc, newColLen)
+	rowsUnmodified := uint64(acc.OldRowSize - acc.Changes - acc.Removes)
 	unmodified := pluralize("Row Unmodified", "Rows Unmodified", rowsUnmodified)
 	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
 	deletions := pluralize("Row Deleted", "Rows Deleted", acc.Removes)
 	changes := pluralize("Row Modified", "Rows Modified", acc.Changes)
+	cellInsertions := pluralize("Cell Added", "Cells Added", numCellInserts)
+	cellDeletions := pluralize("Cell Deleted", "Cells Deleted", numCellDeletes)
 	cellChanges := pluralize("Cell Modified", "Cells Modified", acc.CellChanges)
 
-	oldValues := pluralize("Entry", "Entries", acc.OldSize)
-	newValues := pluralize("Entry", "Entries", acc.NewSize)
+	oldValues := pluralize("Row Entry", "Row Entries", acc.OldRowSize)
+	newValues := pluralize("Row Entry", "Row Entries", acc.NewRowSize)
 
-	percentCellsChanged := float64(100*acc.CellChanges) / (float64(acc.OldSize) * float64(colLen))
+	percentCellsChanged := float64(100*acc.CellChanges) / (float64(acc.OldRowSize) * float64(oldColLen))
 
 	safePercent := func(num, dom uint64) float64 {
 		// returns +Inf for x/0 where x > 0
@@ -146,10 +151,12 @@ func printSummary(acc diff.DiffSummaryProgress, colLen int) {
 		return float64(100*num) / (float64(dom))
 	}
 
-	cli.Printf("%s (%.2f%%)\n", unmodified, safePercent(rowsUnmodified, acc.OldSize))
-	cli.Printf("%s (%.2f%%)\n", insertions, safePercent(acc.Adds, acc.OldSize))
-	cli.Printf("%s (%.2f%%)\n", deletions, safePercent(acc.Removes, acc.OldSize))
-	cli.Printf("%s (%.2f%%)\n", changes, safePercent(acc.Changes, acc.OldSize))
+	cli.Printf("%s (%.2f%%)\n", unmodified, safePercent(rowsUnmodified, acc.OldRowSize))
+	cli.Printf("%s (%.2f%%)\n", insertions, safePercent(acc.Adds, acc.OldRowSize))
+	cli.Printf("%s (%.2f%%)\n", deletions, safePercent(acc.Removes, acc.OldRowSize))
+	cli.Printf("%s (%.2f%%)\n", changes, safePercent(acc.Changes, acc.OldRowSize))
+	cli.Printf("%s (%.2f%%)\n", cellInsertions, safePercent(numCellInserts, acc.OldCellSize))
+	cli.Printf("%s (%.2f%%)\n", cellDeletions, safePercent(numCellDeletes, acc.OldCellSize))
 	cli.Printf("%s (%.2f%%)\n", cellChanges, percentCellsChanged)
 	cli.Printf("(%s vs %s)\n\n", oldValues, newValues)
 }

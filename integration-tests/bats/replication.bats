@@ -160,22 +160,6 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
-@test "replication: push on branch table update" {
-    cd repo1
-    dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
-    dolt sql -q "create table t1 (a int primary key)"
-    dolt add -A
-    dolt sql -q "UPDATE dolt_branches SET hash = COMMIT('--author', '{user_name} <{email_address}>','-m', 'cm') WHERE name = 'main' AND hash = @@repo1_head"
-
-    cd ..
-    dolt clone file://./bac1 repo2
-    cd repo2
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "t1" ]] || false
-}
-
 @test "replication: push on call dolt_branch(..." {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
@@ -476,10 +460,11 @@ SQL
 @test "replication: push to unknown remote error" {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote unknown
+
     run dolt sql -q "create table t1 (a int primary key)"
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "failure loading hook; remote not found: 'unknown'" ]] || false
+    [[ "$output" =~ "remote not found: 'unknown'" ]] || false
 }
 
 @test "replication: quiet push to unknown remote warnings" {
@@ -494,7 +479,7 @@ SQL
 
     run dolt sql -q "select dolt_commit('-am', 'cm')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "failure loading hook; remote not found: 'unknown'" ]] || false
+    [[ "$output" =~ "remote not found: 'unknown'" ]] || false
     [[ "$output" =~ "dolt_commit('-am', 'cm')" ]] || false
 }
 
@@ -517,6 +502,69 @@ SQL
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]]
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
+}
+
+@test "replication: non-fast-forward pull fails replication" {
+    dolt clone file://./rem1 clone1
+    cd clone1
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "insert into t1 values (1), (2), (3);"
+    dolt add .
+    dolt commit -am "new commit"
+    dolt push origin main
+
+    cd ../repo1
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+
+    cd ../clone1
+    dolt checkout -b new-main HEAD~
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "insert into t1 values (1), (2), (3);"
+    dolt add .
+    dolt commit -am "new commit"
+    dolt push -f origin new-main:main
+
+    cd ../repo1
+    run dolt sql -q "show tables"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "replication" ]] || false
+}
+
+@test "replication: non-fast-forward pull with force pull setting succeeds replication" {
+    dolt clone file://./rem1 clone1
+    cd clone1
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "insert into t1 values (1), (2), (3);"
+    dolt add .
+    dolt commit -am "new commit"
+    dolt push origin main
+
+    cd ../repo1
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+    dolt config --local --add sqlserver.global.dolt_read_replica_force_pull 1
+
+    run dolt sql -q "select sum(a) from t1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "6" ]] || false
+
+    cd ../clone1
+    dolt checkout -b new-main HEAD~
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "insert into t1 values (4), (5), (6);"
+    dolt add .
+    dolt commit -am "new commit"
+    dolt push -f origin new-main:main
+
+    cd ../repo1
+    run dolt sql -q "select sum(a) from t1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "15" ]] || false
 }
 
 @test "replication: pull bad remote quiet warning" {

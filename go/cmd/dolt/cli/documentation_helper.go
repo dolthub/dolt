@@ -82,12 +82,10 @@ func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 	}
 	templ, templErr := template.New("shortDesc").Parse(cmdMdDocTempl)
 	if templErr != nil {
-
 		return "", templErr
 	}
 	var templBuffer bytes.Buffer
 	if err := templ.Execute(&templBuffer, cmdMdDoc); err != nil {
-
 		return "", err
 	}
 	ret := strings.Replace(templBuffer.String(), "HEAD~", "HEAD\\~", -1)

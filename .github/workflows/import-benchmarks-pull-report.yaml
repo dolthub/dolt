@@ -12,7 +12,7 @@ jobs:
     outputs:
       valid: ${{ steps.set_valid.outputs.valid }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Validate Commentor
         id: set_valid
         run: ./.github/scripts/performance-benchmarking/validate-commentor.sh "$ACTOR"
@@ -39,26 +39,34 @@ jobs:
         if: ${{ steps.check.outputs.triggered == 'true' }}
         id: set_benchmark
         run: |
-          echo "::set-output name=benchmark::true"
+          echo "benchmark=true" >> $GITHUB_OUTPUT
 
   performance:
     runs-on: ubuntu-22.04
     needs: [validate-commentor, check-comments]
     if: ${{ needs.check-comments.outputs.benchmark == 'true' }}
-    name: Trigger Benchmark Import K8s Workflow
+    name: Trigger Benchmark Import Workflow
     steps:
-      - uses: xt0rted/pull-request-comment-branch@v1
+      - uses: dolthub/pull-request-comment-branch@v3
         id: comment-branch
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Get pull number
-        uses: actions/github-script@v3
+        uses: actions/github-script@v6
         id: get_pull_number
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: core.setOutput("pull_number", JSON.stringify(context.issue.number));
-      - uses: peter-evans/repository-dispatch@v1
+      - uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-import
-          client-payload: '{"from_server": "dolt", "from_version": "${{ github.sha }}", "to_server": "dolt", "to_version": "${{ steps.comment-branch.outputs.head_sha }}", "mode": "pullRequest", "issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "actor": "${{ github.actor }}", "template_script": "./.github/scripts/import-benchmarking/get-dolt-dolt-job-json.sh"}'
+          client-payload: |
+            {
+              "version": "${{ steps.comment-branch.outputs.head_sha }}",
+              "run_file": "ci.yaml",
+              "report": "three_way_compare.sql",
+              "commit_to_branch": "${{ steps.comment-branch.outputs.head_sha }}",
+              "actor": "${{ github.actor }}",
+              "issue_id": "${{ steps.get_pull_number.outputs.pull_number }}"
+            }

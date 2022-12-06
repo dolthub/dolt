@@ -30,8 +30,14 @@ teardown() {
 @test "multidb: database default branches" {
     cd dbs1
     start_multi_db_server repo1
-    server_query repo1 1 dolt "" "create database new; use new; call dcheckout('-b', 'feat'); create table t (x int); call dolt_add('.'); call dcommit('-am', 'cm'); set @@global.new_default_branch='feat'"
-    server_query repo1 1 "use repo1"
+    dolt sql-client -u dolt -P $PORT --use-db repo1 -q "create database new;
+    	 use new;
+    	 call dcheckout('-b', 'feat');
+    	 create table t (x int);
+    	 call dolt_add('.');
+    	 call dcommit('-am', 'cm');
+    	 set @@global.new_default_branch='feat'"
+    dolt sql-client -u dolt --use-db '' -P $PORT -q "use repo1"
 }
 
 @test "multidb: incompatible BIN FORMATs" {
@@ -102,7 +108,8 @@ make__DOLT__db() {
     make__DOLT__db new1
     make__LD_1__db old1
 
-    DOLT_DEFAULT_BIN_FORMAT="__DOLT__" dolt init
+    export DOLT_DEFAULT_BIN_FORMAT="__DOLT__"
+    dolt init
     run dolt sql -q "SHOW DATABASES;"
     [ $status -eq 0 ]
     [[ "$output" =~ "incompatible format for database 'old1'; expected '__DOLT__', found '__LD_1__'" ]] || false
@@ -111,7 +118,8 @@ make__DOLT__db() {
     [[ ! "$output" =~ "| old1" ]] || false
 
     rm -r .dolt
-    DOLT_DEFAULT_BIN_FORMAT="__LD_1__" dolt init
+    export DOLT_DEFAULT_BIN_FORMAT="__LD_1__"
+    dolt init
     run dolt sql -q "SHOW DATABASES;"
     [ $status -eq 0 ]
     [[ "$output" =~ "incompatible format for database 'new1'; expected '__LD_1__', found '__DOLT__'" ]] || false

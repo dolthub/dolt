@@ -27,7 +27,9 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"errors"
+	"io"
 	"sort"
+	"time"
 )
 
 var errCacheMiss = errors.New("index cache miss")
@@ -49,55 +51,13 @@ type tablePersister interface {
 	// Open a table named |name|, containing |chunkCount| chunks.
 	Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error)
 
+	// Exists checks if a table named |name| exists.
+	Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error)
+
 	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
-	PruneTableFiles(ctx context.Context, contents manifestContents) error
-}
+	PruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error
 
-type chunkSourcesByAscendingCount struct {
-	sources chunkSources
-	err     error
-}
-
-func (csbc chunkSourcesByAscendingCount) Len() int { return len(csbc.sources) }
-func (csbc chunkSourcesByAscendingCount) Less(i, j int) bool {
-	srcI, srcJ := csbc.sources[i], csbc.sources[j]
-	cntI, err := srcI.count()
-
-	if err != nil {
-		csbc.err = err
-		return false
-	}
-
-	cntJ, err := srcJ.count()
-
-	if err != nil {
-		csbc.err = err
-		return false
-	}
-
-	if cntI == cntJ {
-		hi, err := srcI.hash()
-
-		if err != nil {
-			csbc.err = err
-			return false
-		}
-
-		hj, err := srcJ.hash()
-
-		if err != nil {
-			csbc.err = err
-			return false
-		}
-
-		return bytes.Compare(hi[:], hj[:]) < 0
-	}
-
-	return cntI < cntJ
-}
-
-func (csbc chunkSourcesByAscendingCount) Swap(i, j int) {
-	csbc.sources[i], csbc.sources[j] = csbc.sources[j], csbc.sources[i]
+	io.Closer
 }
 
 type chunkSourcesByDescendingDataSize struct {
@@ -105,28 +65,12 @@ type chunkSourcesByDescendingDataSize struct {
 	err error
 }
 
-func newChunkSourcesByDescendingDataSize(sws []sourceWithSize) chunkSourcesByDescendingDataSize {
-	return chunkSourcesByDescendingDataSize{sws, nil}
-}
-
 func (csbds chunkSourcesByDescendingDataSize) Len() int { return len(csbds.sws) }
 func (csbds chunkSourcesByDescendingDataSize) Less(i, j int) bool {
 	swsI, swsJ := csbds.sws[i], csbds.sws[j]
 	if swsI.dataLen == swsJ.dataLen {
-		hi, err := swsI.source.hash()
-
-		if err != nil {
-			csbds.err = err
-			return false
-		}
-
-		hj, err := swsJ.source.hash()
-
-		if err != nil {
-			csbds.err = err
-			return false
-		}
-
+		hi := swsI.source.hash()
+		hj := swsJ.source.hash()
 		return bytes.Compare(hi[:], hj[:]) < 0
 	}
 	return swsI.dataLen > swsJ.dataLen
@@ -169,7 +113,7 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			return compactionPlan{}, err
 		}
 
-		plan.chunkCount += index.ChunkCount()
+		plan.chunkCount += index.chunkCount()
 
 		// Calculate the amount of chunk data in |src|
 		chunkDataLen := calcChunkDataLen(index)
@@ -196,11 +140,11 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			return compactionPlan{}, err
 		}
 
-		ordinals, err := index.Ordinals()
+		ordinals, err := index.ordinals()
 		if err != nil {
 			return compactionPlan{}, err
 		}
-		prefixes, err := index.Prefixes()
+		prefixes, err := index.prefixes()
 		if err != nil {
 			return compactionPlan{}, err
 		}
@@ -223,16 +167,16 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 		if onHeap, ok := index.(onHeapTableIndex); ok {
 			// TODO: copy the lengths and suffixes as a byte-copy from src BUG #3438
 			// Bring over the lengths block, in order
-			for ord := uint32(0); ord < onHeap.chunkCount; ord++ {
+			for ord := uint32(0); ord < onHeap.chunkCount(); ord++ {
 				e := onHeap.getIndexEntry(ord)
 				binary.BigEndian.PutUint32(plan.mergedIndex[lengthsPos:], e.Length())
 				lengthsPos += lengthSize
 			}
 
 			// Bring over the suffixes block, in order
-			n := copy(plan.mergedIndex[suffixesPos:], onHeap.suffixB)
+			n := copy(plan.mergedIndex[suffixesPos:], onHeap.suffixes)
 
-			if n != len(onHeap.suffixB) {
+			if n != len(onHeap.suffixes) {
 				return compactionPlan{}, errors.New("failed to copy all data")
 			}
 
@@ -241,7 +185,7 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			// Build up the index one entry at a time.
 			var a addr
 			for i := 0; i < len(ordinals); i++ {
-				e, err := index.IndexEntry(uint32(i), &a)
+				e, err := index.indexEntry(uint32(i), &a)
 				if err != nil {
 					return compactionPlan{}, err
 				}
@@ -282,5 +226,5 @@ func nameFromSuffixes(suffixes []byte) (name addr) {
 }
 
 func calcChunkDataLen(index tableIndex) uint64 {
-	return index.TableFileSize() - indexSize(index.ChunkCount()) - footerSize
+	return index.tableFileSize() - indexSize(index.chunkCount()) - footerSize
 }

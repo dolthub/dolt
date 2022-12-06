@@ -230,6 +230,26 @@ teardown() {
     [[ "$output" =~ 0 ]] || false
 }
 
+@test "system-tables: revision databases can query dolt_remotes table" {
+    mkdir remote
+    dolt remote add origin file://remote/
+    dolt branch b1
+
+    run dolt sql <<SQL
+SELECT name FROM dolt_remotes;
+SQL
+    [ $status -eq 0 ]
+    [[ "$output" =~ "origin" ]] || false
+
+    DATABASE=$(echo $(basename $(pwd)) | tr '-' '_')
+    run dolt sql <<SQL
+USE $DATABASE/b1;
+SELECT name FROM dolt_remotes;
+SQL
+    [ $status -eq 0 ]
+    [[ "$output" =~ "origin" ]] || false
+}
+
 @test "system-tables: query dolt_diff system table" {
     dolt sql -q "CREATE TABLE testStaged (pk INT, c1 INT, PRIMARY KEY(pk))"
     dolt add testStaged
@@ -528,9 +548,18 @@ SQL
     [[ "$output" =~ "1" ]] || false
 }
 
-@test "system-tables: cannot delete last branch in dolt_branches" {
+@test "system-tables: dolt_branches is read-only" {
     run dolt sql -q "DELETE FROM dolt_branches"
     [ "$status" -ne 0 ]
+    [[ "$output" =~ "read-only" ]] || false
+
+    run dolt sql -q "INSERT INTO dolt_branches (name,hash) VALUES ('branch1', 'main');"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "read-only" ]] || false
+
+    run dolt sql -q "UPDATE dolt_branches SET name = 'branch1' WHERE name = 'main'"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "read-only" ]] || false
 }
 
 @test "system-tables: dolt diff includes changes from initial commit" {

@@ -370,14 +370,20 @@ func (td TableDelta) IsKeyless(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
+	// nil table is neither keyless nor keyed
 	from, to := schema.IsKeyless(f), schema.IsKeyless(t)
-
-	if from && to {
-		return true, nil
-	} else if !from && !to {
-		return false, nil
+	if td.FromTable == nil {
+		return to, nil
+	} else if td.ToTable == nil {
+		return from, nil
 	} else {
-		return false, fmt.Errorf("mismatched keyless and keyed schemas for table %s", td.CurName())
+		if from && to {
+			return true, nil
+		} else if !from && !to {
+			return false, nil
+		} else {
+			return false, fmt.Errorf("mismatched keyless and keyed schemas for table %s", td.CurName())
+		}
 	}
 }
 

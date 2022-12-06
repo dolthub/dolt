@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -53,8 +52,8 @@ type ConflictReader struct {
 }
 
 // NewConflictReader returns a new conflict reader for a given table
-func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader, error) {
-	base, sch, mergeSch, err := tbl.GetConflictSchemas(ctx, "") // tblName unused by old storage format
+func NewConflictReader(ctx context.Context, tbl *doltdb.Table, tblName string) (*ConflictReader, error) {
+	base, sch, mergeSch, err := tbl.GetConflictSchemas(ctx, tblName) // tblName unused by old storage format
 	if err != nil {
 		return nil, err
 	}
@@ -162,21 +161,21 @@ func (cr *ConflictReader) GetJoiner() *rowconv.Joiner {
 // NextConflict can be called successively to retrieve the conflicts in a table.  Once all conflicts have been returned
 // io.EOF will be returned in the error field.  This can be used in a pipeline, or to iterate through all the conflicts
 // in a table.
-func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.ImmutableProperties, error) {
+func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, error) {
 	key, value, err := cr.confItr.Next(ctx)
 
 	if err != nil {
-		return nil, pipeline.NoProps, err
+		return nil, err
 	}
 
 	if key == nil {
-		return nil, pipeline.NoProps, io.EOF
+		return nil, io.EOF
 	}
 
 	keyTpl := key.(types.Tuple)
 	conflict, err := conflict.ConflictFromTuple(value.(types.Tuple))
 	if err != nil {
-		return nil, pipeline.NoProps, err
+		return nil, err
 	}
 
 	var joinedRow row.Row
@@ -186,21 +185,21 @@ func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.I
 		joinedRow, err = cr.keylessJoinedRow(keyTpl, conflict)
 	}
 	if err != nil {
-		return nil, pipeline.NoProps, err
+		return nil, err
 	}
 
 	ourDiffType := getDiffType(conflict.Base, conflict.Value)
 	theirDiffType := getDiffType(conflict.Base, conflict.MergeValue)
 	joinedRow, err = joinedRow.SetColVal(schema.DoltConflictsOurDiffTypeTag, types.String(ourDiffType), cr.sch)
 	if err != nil {
-		return nil, pipeline.NoProps, err
+		return nil, err
 	}
 	joinedRow, err = joinedRow.SetColVal(schema.DoltConflictsTheirDiffTypeTag, types.String(theirDiffType), cr.sch)
 	if err != nil {
-		return nil, pipeline.NoProps, err
+		return nil, err
 	}
 
-	return joinedRow, pipeline.NoProps, nil
+	return joinedRow, nil
 }
 
 func (cr *ConflictReader) pkJoinedRow(key types.Tuple, conflict conflict.Conflict) (row.Row, error) {

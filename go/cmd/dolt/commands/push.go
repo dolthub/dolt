@@ -111,14 +111,16 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	remoteDB, err := opts.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
 	if err != nil {
-		if err == remotestorage.ErrInvalidDoltSpecPath {
-			err = actions.HandleInvalidDoltSpecPathErr(opts.Remote.Name, opts.Remote.Url, err)
-		}
+		err = actions.HandleInitRemoteStorageClientErr(opts.Remote.Name, opts.Remote.Url, err)
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
 	var verr errhand.VerboseError
-	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, remoteDB, dEnv.TempTableFilesDir(), opts, buildProgStarter(defaultLanguage), stopProgFuncs)
+	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, remoteDB, tmpDir, opts, buildProgStarter(defaultLanguage), stopProgFuncs)
 	if err != nil {
 		verr = printInfoForPushError(err, opts.Remote, opts.DestRef, opts.RemoteRef)
 	}
@@ -183,6 +185,7 @@ func (ts *TextSpinner) next() string {
 
 func pullerProgFunc(ctx context.Context, statsCh chan pull.Stats, language progLanguage) {
 	p := cli.NewEphemeralPrinter()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -204,8 +207,8 @@ func pullerProgFunc(ctx context.Context, statsCh chan pull.Stats, language progL
 					humanize.SIWithDigits(stats.SendBytesPerSec, 2, "B"),
 				)
 			}
+			p.Display()
 		}
-		p.Display()
 	}
 }
 

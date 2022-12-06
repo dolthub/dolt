@@ -16,6 +16,8 @@ package actions
 
 import (
 	"context"
+	"errors"
+	"io"
 	"math"
 	"strconv"
 	"strings"
@@ -23,12 +25,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -54,30 +55,40 @@ type InferenceArgs interface {
 }
 
 // InferColumnTypesFromTableReader will infer a data types from a table reader.
-func InferColumnTypesFromTableReader(ctx context.Context, root *doltdb.RootValue, rd table.ReadCloser, args InferenceArgs) (*schema.ColCollection, error) {
-	inferrer := newInferrer(rd.GetSchema(), args)
+func InferColumnTypesFromTableReader(ctx context.Context, rd table.ReadCloser, args InferenceArgs) (*schema.ColCollection, error) {
+	// for large imports, we want to sample a subset of the rows.
+	// skip through the file in an exponential manner
+	const exp = 1.02
 
-	var rowFailure *pipeline.TransformRowFailure
-	badRow := func(trf *pipeline.TransformRowFailure) (quit bool) {
-		rowFailure = trf
-		return false
+	var curr, prev row.Row
+	i := newInferrer(rd.GetSchema(), args)
+OUTER:
+	for j := 0; true; j++ {
+		var err error
+
+		next := int(math.Pow(exp, float64(j)))
+		for n := 0; n < next; n++ {
+			curr, err = rd.ReadRow(ctx)
+			if err == io.EOF {
+				break OUTER
+			} else if err != nil {
+				return nil, err
+			}
+			prev = curr
+		}
+		if err = i.processRow(curr); err != nil {
+			return nil, err
+		}
 	}
 
-	rdProcFunc := pipeline.ProcFuncForReader(ctx, rd)
-	p := pipeline.NewAsyncPipeline(rdProcFunc, inferrer.sinkRow, nil, badRow)
-	p.Start()
-
-	err := p.Wait()
-
-	if err != nil {
-		return nil, err
+	// always process last row
+	if prev != nil {
+		if err := i.processRow(prev); err != nil {
+			return nil, err
+		}
 	}
 
-	if rowFailure != nil {
-		return nil, rowFailure
-	}
-
-	return inferrer.inferColumnTypes(ctx, root)
+	return i.inferColumnTypes()
 }
 
 type inferrer struct {
@@ -86,8 +97,6 @@ type inferrer struct {
 	nullable       *set.Uint64Set
 	mapper         rowconv.NameMapper
 	floatThreshold float64
-
-	//inferArgs *InferenceArgs
 }
 
 func newInferrer(readerSch schema.Schema, args InferenceArgs) *inferrer {
@@ -107,7 +116,7 @@ func newInferrer(readerSch schema.Schema, args InferenceArgs) *inferrer {
 }
 
 // inferColumnTypes returns TableReader's columns with updated TypeInfo and columns names
-func (inf *inferrer) inferColumnTypes(ctx context.Context, root *doltdb.RootValue) (*schema.ColCollection, error) {
+func (inf *inferrer) inferColumnTypes() (*schema.ColCollection, error) {
 
 	inferredTypes := make(map[uint64]typeinfo.TypeInfo)
 	for tag, ts := range inf.inferSets {
@@ -121,10 +130,8 @@ func (inf *inferrer) inferColumnTypes(ctx context.Context, root *doltdb.RootValu
 		col.TypeInfo = inferredTypes[tag]
 		col.Tag = schema.ReservedTagMin + tag
 
-		col.Constraints = []schema.ColConstraint{schema.NotNullConstraint{}}
-		if inf.nullable.Contains(tag) {
-			col.Constraints = []schema.ColConstraint(nil)
-		}
+		// for large imports, it is possible to miss all the null values, so we cannot accurately add not null constraint
+		col.Constraints = []schema.ColConstraint(nil)
 
 		cols = append(cols, col)
 		return false, nil
@@ -133,19 +140,19 @@ func (inf *inferrer) inferColumnTypes(ctx context.Context, root *doltdb.RootValu
 	return schema.NewColCollection(cols...), nil
 }
 
-func (inf *inferrer) sinkRow(p *pipeline.Pipeline, ch <-chan pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure) {
-	for r := range ch {
-		_, _ = r.Row.IterSchema(inf.readerSch, func(tag uint64, val types.Value) (stop bool, err error) {
-			if val == nil {
-				inf.nullable.Add(tag)
-				return false, nil
-			}
-			strVal := string(val.(types.String))
-			typeInfo := leastPermissiveType(strVal, inf.floatThreshold)
-			inf.inferSets[tag][typeInfo] = struct{}{}
+func (inf *inferrer) processRow(r row.Row) error {
+	_, err := r.IterSchema(inf.readerSch, func(tag uint64, val types.Value) (stop bool, err error) {
+		if val == nil {
+			inf.nullable.Add(tag)
 			return false, nil
-		})
-	}
+		}
+		strVal := string(val.(types.String))
+		typeInfo := leastPermissiveType(strVal, inf.floatThreshold)
+		inf.inferSets[tag][typeInfo] = struct{}{}
+		return false, nil
+	})
+
+	return err
 }
 
 func leastPermissiveType(strVal string, floatThreshold float64) typeinfo.TypeInfo {
@@ -209,32 +216,27 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 		return ti
 	}
 
-	if strings.Contains(strVal, "-") {
-		i, err := strconv.ParseInt(strVal, 10, 64)
-		if err != nil {
-			return typeinfo.UnknownType
-		}
-		if i >= math.MinInt32 && i <= math.MaxInt32 {
-			return typeinfo.Int32Type
-		} else {
-			return typeinfo.Int64Type
-		}
+	// always parse as signed int
+	i, err := strconv.ParseInt(strVal, 10, 64)
+
+	// use string for out of range
+	if errors.Is(err, strconv.ErrRange) {
+		return typeinfo.StringDefaultType
+	}
+
+	if err != nil {
+		return typeinfo.UnknownType
+	}
+
+	// handle leading zero case
+	if len(strVal) > 1 && strVal[0] == '0' {
+		return typeinfo.StringDefaultType
+	}
+
+	if i >= math.MinInt32 && i <= math.MaxInt32 {
+		return typeinfo.Int32Type
 	} else {
-		ui, err := strconv.ParseUint(strVal, 10, 64)
-		if err != nil {
-			return typeinfo.UnknownType
-		}
-
-		// handle leading zero case
-		if len(strVal) > 1 && strVal[0] == '0' {
-			return typeinfo.StringDefaultType
-		}
-
-		if ui <= math.MaxUint32 {
-			return typeinfo.Uint32Type
-		} else {
-			return typeinfo.Uint64Type
-		}
+		return typeinfo.Int64Type
 	}
 }
 
@@ -277,14 +279,13 @@ func chronoTypes() []typeinfo.TypeInfo {
 func numericTypes() []typeinfo.TypeInfo {
 	// prefer:
 	//   ints over floats
-	//   unsigned over signed
 	//   smaller over larger
 	return []typeinfo.TypeInfo{
 		//typeinfo.Uint8Type,
 		//typeinfo.Uint16Type,
 		//typeinfo.Uint24Type,
-		typeinfo.Uint32Type,
-		typeinfo.Uint64Type,
+		//typeinfo.Uint32Type,
+		//typeinfo.Uint64Type,
 
 		//typeinfo.Int8Type,
 		//typeinfo.Int16Type,
@@ -389,12 +390,6 @@ func findCommonNumericType(nums typeInfoSet) typeinfo.TypeInfo {
 		typeinfo.Int24Type,
 		typeinfo.Int16Type,
 		typeinfo.Int8Type,
-
-		typeinfo.Uint64Type,
-		typeinfo.Uint32Type,
-		typeinfo.Uint24Type,
-		typeinfo.Uint16Type,
-		typeinfo.Uint8Type,
 	}
 	for _, numType := range mostToLeast {
 		if setHasType(nums, numType) {

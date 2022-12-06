@@ -365,7 +365,7 @@ func FetchRemoteBranch(
 func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB, refSpecs []ref.RemoteRefSpec, remote env.Remote, mode ref.UpdateMode, progStarter ProgStarter, progStopper ProgStopper) error {
 	branchRefs, err := srcDB.GetHeadRefs(ctx)
 	if err != nil {
-		return env.ErrFailedToReadDb
+		return fmt.Errorf("%w: %s", env.ErrFailedToReadDb, err.Error())
 	}
 
 	for _, rs := range refSpecs {
@@ -376,7 +376,11 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB,
 
 			if remoteTrackRef != nil {
 				rsSeen = true
-				srcDBCommit, err := FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), remote, srcDB, dbData.Ddb, branchRef, progStarter, progStopper)
+				tmpDir, err := dbData.Rsw.TempTableFilesDir()
+				if err != nil {
+					return err
+				}
+				srcDBCommit, err := FetchRemoteBranch(ctx, tmpDir, remote, srcDB, dbData.Ddb, branchRef, progStarter, progStopper)
 				if err != nil {
 					return err
 				}
@@ -416,7 +420,11 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB,
 		}
 	}
 
-	err = FetchFollowTags(ctx, dbData.Rsw.TempTableFilesDir(), srcDB, dbData.Ddb, progStarter, progStopper)
+	tmpDir, err := dbData.Rsw.TempTableFilesDir()
+	if err != nil {
+		return err
+	}
+	err = FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, progStarter, progStopper)
 	if err != nil {
 		return err
 	}
@@ -463,13 +471,7 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 	return nil
 }
 
-func HandleInvalidDoltSpecPathErr(name, url string, err error) error {
-	urlObj, _ := earl.Parse(url)
-	path := urlObj.Path
-	if path[0] == '/' {
-		path = path[1:]
-	}
-
-	var detail = fmt.Sprintf("the remote: %s %s '%s' should be in the format 'organization/repo'", name, url, path)
+func HandleInitRemoteStorageClientErr(name, url string, err error) error {
+	var detail = fmt.Sprintf("the remote: %s '%s' could not be accessed", name, url)
 	return fmt.Errorf("%w; %s; %s", ErrFailedToGetRemoteDb, detail, err.Error())
 }

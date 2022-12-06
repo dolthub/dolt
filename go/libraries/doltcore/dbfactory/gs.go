@@ -32,6 +32,11 @@ import (
 type GSFactory struct {
 }
 
+func (fact GSFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
+	// nothing to prepare
+	return nil
+}
+
 // CreateDB creates an GCS backed database
 func (fact GSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	var db datas.Database
@@ -58,6 +63,11 @@ func (fact GSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, ur
 
 // LocalBSFactory is a DBFactory implementation for creating a local filesystem blobstore backed databases for testing
 type LocalBSFactory struct {
+}
+
+func (fact LocalBSFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
+	// nothing to prepare
+	return nil
 }
 
 // CreateDB creates a local filesystem blobstore backed database

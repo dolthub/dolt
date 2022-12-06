@@ -26,16 +26,34 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// Schema is an interface for retrieving the columns that make up a schema
+// Schema defines the schema of a table and describes both its SQL schema and storage layout.
+//
+// For example, a SQL table defined as:
+//
+//	`CREATE TABLE t (a int, b int, pk2 int, c int, pk1 int, PRIMARY KEY (pk1, pk2));`
+//
+// Has a corresponding Schema of:
+//
+//	Schema {
+//		PkCols:     [pk1, pk2],
+//		NonPkCols:  [a, b, c],
+//		AllCols:    [a, b, pk2, c, pk1],
+//		PkOrdinals: [4, 2],
+//	}
 type Schema interface {
-	// GetPKCols gets the collection of columns which make the primary key. They
-	// are always returned in ordinal order.
+	// GetPKCols gets the collection of columns which make the primary key.
+	// Columns in this collection are ordered by storage order, which is
+	// defined in the 'PRIMARY KEY(...)' clause of a CREATE TABLE statement.
 	GetPKCols() *ColCollection
 
 	// GetNonPKCols gets the collection of columns which are not part of the primary key.
+	// Columns in this collection are ordered by schema order (display order), which is
+	// defined by the order of first occurrence in a CREATE TABLE statement.
 	GetNonPKCols() *ColCollection
 
 	// GetAllCols gets the collection of all columns (pk and non-pk)
+	// Columns in this collection are ordered by schema order (display order), which is
+	// defined by the order of first occurrence in a CREATE TABLE statement.
 	GetAllCols() *ColCollection
 
 	// Indexes returns a collection of all indexes on the table that this schema belongs to.
@@ -44,10 +62,11 @@ type Schema interface {
 	// Checks returns a collection of all check constraints on the table that this schema belongs to.
 	Checks() CheckCollection
 
-	// GetPkOrdinals returns a slice of the primary key ordering indexes relative to the schema column ordering
+	// GetPkOrdinals returns a slice of schema order positions for the primary key columns. These ith
+	// value of this slice contains schema position for the ith column in the PK ColCollection.
 	GetPkOrdinals() []int
 
-	// SetPkOrdinals specifies a primary key column ordering
+	// SetPkOrdinals specifies a primary key column ordering. See GetPkOrdinals.
 	SetPkOrdinals([]int) error
 
 	// AddColumn adds a column to this schema in the order given and returns the resulting Schema.
@@ -129,6 +148,29 @@ func SchemasAreEqual(sch1, sch2 Schema) bool {
 	if !colCollIsEqual {
 		return false
 	}
+
+	// Pks and Non-pks are in the same order as the key tuple and value tuple fields
+	if !ColCollsAreEqual(sch1.GetPKCols(), sch2.GetPKCols()) {
+		return false
+	}
+
+	if !ColCollsAreEqual(sch1.GetNonPKCols(), sch2.GetNonPKCols()) {
+		return false
+	}
+
+	if sch1.GetCollation() != sch2.GetCollation() {
+		return false
+	}
+
+	if (sch1.Checks() == nil) != (sch2.Checks() == nil) {
+		return false
+	}
+
+	if sch1.Checks() != nil && sch2.Checks() != nil &&
+		!sch1.Checks().Equals(sch2.Checks()) {
+		return false
+	}
+
 	return sch1.Indexes().Equals(sch2.Indexes())
 }
 
@@ -209,8 +251,8 @@ func ArePrimaryKeySetsDiffable(format *types.NomsBinFormat, fromSch, toSch Schem
 	}
 
 	for i := 0; i < cc1.Size(); i++ {
-		c1 := cc1.GetAtIndex(i)
-		c2 := cc2.GetAtIndex(i)
+		c1 := cc1.GetByIndex(i)
+		c2 := cc2.GetByIndex(i)
 		if (c1.Tag != c2.Tag) || (c1.IsPartOfPK != c2.IsPartOfPK) {
 			return false
 		}
@@ -232,6 +274,11 @@ func ArePrimaryKeySetsDiffable(format *types.NomsBinFormat, fromSch, toSch Schem
 func MapSchemaBasedOnTagAndName(inSch, outSch Schema) ([]int, []int, error) {
 	keyMapping := make([]int, inSch.GetPKCols().Size())
 	valMapping := make([]int, inSch.GetNonPKCols().Size())
+
+	// if inSch or outSch is empty schema. This can be from added or dropped table.
+	if len(inSch.GetAllCols().cols) == 0 || len(outSch.GetAllCols().cols) == 0 {
+		return keyMapping, valMapping, nil
+	}
 
 	err := inSch.GetPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
 		i := inSch.GetPKCols().TagToIdx[tag]

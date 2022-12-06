@@ -56,20 +56,20 @@ type MutationIter interface {
 //   - Repeat for every edit.
 //
 //   - Finalize the chunker and resolve the tree's new root Node.
-func ApplyMutations[S message.Serializer](
+func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 	ctx context.Context,
 	ns NodeStore,
 	root Node,
+	order O,
 	serializer S,
 	edits MutationIter,
-	compare CompareFn,
 ) (Node, error) {
 	newKey, newValue := edits.NextMutation(ctx)
 	if newKey == nil {
 		return root, nil // no mutations
 	}
 
-	cur, err := NewCursorFromCompareFn(ctx, ns, root, newKey, compare)
+	cur, err := NewCursorAtKey(ctx, ns, root, K(newKey), order)
 	if err != nil {
 		return Node{}, err
 	}
@@ -82,7 +82,7 @@ func ApplyMutations[S message.Serializer](
 	for newKey != nil {
 
 		// move |cur| to the NextMutation mutation point
-		err = cur.seek(ctx, newKey, compare)
+		err = Seek(ctx, cur, K(newKey), order)
 		if err != nil {
 			return Node{}, err
 		}
@@ -91,7 +91,7 @@ func ApplyMutations[S message.Serializer](
 		if cur.Valid() {
 			// Compare mutations |newKey| and |newValue|
 			// to the existing pair from the cursor
-			if compare(newKey, cur.CurrentKey()) == 0 {
+			if order.Compare(K(newKey), K(cur.CurrentKey())) == 0 {
 				oldValue = cur.CurrentValue()
 			}
 		}

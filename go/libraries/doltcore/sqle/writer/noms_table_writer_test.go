@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -31,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type tableEditorTest struct {
@@ -47,6 +47,10 @@ type tableEditorTest struct {
 }
 
 func TestTableEditor(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip()
+	}
+
 	edna := sqle.NewPeopleRow(10, "Edna", "Krabapple", false, 38, 8.0)
 	krusty := sqle.NewPeopleRow(11, "Krusty", "Klown", false, 48, 9.5)
 	smithers := sqle.NewPeopleRow(12, "Waylon", "Smithers", false, 44, 7.1)
@@ -157,12 +161,16 @@ func TestTableEditor(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			expectedErr = nil
 
-			dEnv := dtestutils.CreateTestEnv()
-			sqle.CreateTestDatabase(dEnv, t)
+			dEnv, err := sqle.CreateTestDatabase()
+			require.NoError(t, err)
 
 			ctx := sqle.NewTestSQLCtx(context.Background())
-			root, _ := dEnv.WorkingRoot(context.Background())
-			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
+			root, err := dEnv.WorkingRoot(context.Background())
+			require.NoError(t, err)
+
+			tmpDir, err := dEnv.TempTableFilesDir()
+			require.NoError(t, err)
+			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 			db, err := sqle.NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 			require.NoError(t, err)
 
@@ -192,7 +200,7 @@ func TestTableEditor(t *testing.T) {
 
 			require.NoError(t, dEnv.UpdateWorkingRoot(context.Background(), root))
 
-			actualRows, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, root, test.selectQuery)
+			actualRows, err := sqle.ExecuteSelect(dEnv, root, test.selectQuery)
 			require.NoError(t, err)
 
 			assert.Equal(t, test.expectedRows, actualRows)

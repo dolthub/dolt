@@ -70,6 +70,19 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple) {
 	return
 }
 
+// BuildPrefix materializes a prefix Tuple from the first |k| fields written to the TupleBuilder.
+func (tb *TupleBuilder) BuildPrefix(pool pool.BuffPool, k int) (tup Tuple) {
+	for i, typ := range tb.Desc.Types[:k] {
+		if !typ.Nullable && tb.fields[i] == nil {
+			panic("cannot write NULL to non-NULL field")
+		}
+	}
+	values := tb.fields[:k]
+	tup = NewTuple(pool, values...)
+	tb.Recycle()
+	return
+}
+
 // Recycle resets the TupleBuilder so it can build a new Tuple.
 func (tb *TupleBuilder) Recycle() {
 	for i := 0; i < tb.Desc.Count(); i++ {

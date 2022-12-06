@@ -234,7 +234,7 @@ teardown() {
 
     run dolt sql -q "show create procedure p1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE PROCEDURE `p1` (in x int) select x from dual' ]] || false
+    [[ "$output" =~ 'CREATE PROCEDURE `p1` (in x int) select x' ]] || false
 }
 
 @test "dump: SQL type - with keyless tables" {
@@ -713,6 +713,66 @@ teardown() {
     run grep "COMMIT;" doltdump.sql
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
+}
+
+@test "dump: round trip dolt dump with all data types" {
+    skip "export table in bit, binary and blob types not working"
+    # table with all data types with one all null values row and one all non-null values row
+    run dolt sql << SQL
+CREATE TABLE \`all_types\` (
+  \`pk\` int NOT NULL,
+  \`v1\` binary(1) DEFAULT NULL,
+  \`v2\` bigint DEFAULT NULL,
+  \`v3\` bit(1) DEFAULT NULL,
+  \`v4\` blob,
+  \`v5\` char(1) DEFAULT NULL,
+  \`v6\` date DEFAULT NULL,
+  \`v7\` datetime DEFAULT NULL,
+  \`v8\` decimal(5,2) DEFAULT NULL,
+  \`v9\` double DEFAULT NULL,
+  \`v10\` enum('s','m','l') DEFAULT NULL,
+  \`v11\` float DEFAULT NULL,
+  \`v12\` geometry DEFAULT NULL,
+  \`v13\` int DEFAULT NULL,
+  \`v14\` json DEFAULT NULL,
+  \`v15\` linestring DEFAULT NULL,
+  \`v16\` longblob,
+  \`v17\` longtext,
+  \`v18\` mediumblob,
+  \`v19\` mediumint DEFAULT NULL,
+  \`v20\` mediumtext,
+  \`v21\` point DEFAULT NULL,
+  \`v22\` polygon DEFAULT NULL,
+  \`v23\` set('one','two') DEFAULT NULL,
+  \`v24\` smallint DEFAULT NULL,
+  \`v25\` text,
+  \`v26\` time(6) DEFAULT NULL,
+  \`v27\` timestamp DEFAULT NULL,
+  \`v28\` tinyblob,
+  \`v29\` tinyint DEFAULT NULL,
+  \`v30\` tinytext,
+  \`v31\` varchar(255) DEFAULT NULL,
+  \`v32\` varbinary(255) DEFAULT NULL,
+  \`v33\` year DEFAULT NULL,
+  PRIMARY KEY (\`pk\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+INSERT INTO \`all_types\` (\`pk\`,\`v1\`,\`v2\`,\`v3\`,\`v4\`,\`v5\`,\`v6\`,\`v7\`,\`v8\`,\`v9\`,\`v10\`,\`v11\`,\`v12\`,\`v13\`,\`v14\`,\`v15\`,\`v16\`,\`v17\`,\`v18\`,\`v19\`,\`v20\`,\`v21\`,\`v22\`,\`v23\`,\`v24\`,\`v25\`,\`v26\`,\`v27\`,\`v28\`,\`v29\`,\`v30\`,\`v31\`,\`v32\`,\`v33\`) VALUES
+(1,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'null',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),
+(2, 1, 1, 1 ,('abc'),'a','2022-04-05','2022-10-05 10:14:41',2.34,2.34,'s',2.34,POINT(1,2),1,'{"a":1}',LINESTRING(POINT(0,0),POINT(1,2)),('abcd'),'abcd',('ab'),1,'abc',POINT(2,1),polygon(linestring(point(1,2),point(3,4),point(5,6),point(1,2))),'one',1,'abc','10:14:41','2022-10-05 10:14:41',('a'),1,'a','abcde',1,2022);
+SQL
+    [ "$status" -eq 0 ]
+
+    dolt dump
+
+    cat doltdump.sql
+
+    dolt sql < doltdump.sql
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT ST_AsText(v12), ST_AsText(v21), ST_AsText(v15), ST_AsText(v22) from t1;"
+    [[ "$output" =~ "POINT(1 2)   | POINT(2 1)   | LINESTRING(0 0,1 2) | POLYGON((1 2,3 4,5 6,1 2))" ]] || false
+
+    # need to test binary, bit and blob types
 }
 
 function create_tables() {

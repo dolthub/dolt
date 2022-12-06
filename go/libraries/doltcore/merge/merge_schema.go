@@ -121,7 +121,7 @@ func (c ChkConflict) String() string {
 var ErrMergeWithDifferentPkSets = errors.New("error: cannot merge two tables with different primary key sets")
 
 // SchemaMerge performs a three-way merge of ourSch, theirSch, and ancSch.
-func SchemaMerge(format *types.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, err error) {
+func SchemaMerge(ctx context.Context, format *types.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, err error) {
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
 	sc = SchemaConflict{
 		TableName: tblName,
@@ -166,7 +166,7 @@ func SchemaMerge(format *types.NomsBinFormat, ourSch, theirSch, ancSch schema.Sc
 
 	// Merge checks
 	var mergedChks []schema.Check
-	mergedChks, sc.ChkConflicts, err = mergeChecks(ourSch.Checks(), theirSch.Checks(), ancSch.Checks())
+	mergedChks, sc.ChkConflicts, err = mergeChecks(ctx, ourSch.Checks(), theirSch.Checks(), ancSch.Checks())
 	if err != nil {
 		return nil, EmptySchConflicts, err
 	}
@@ -763,7 +763,7 @@ func chkCollectionModified(anc, child []schema.Check) []schema.Check {
 }
 
 // mergeChecks attempts to combine ourChks, theirChks, and ancChks into a single collection, or gathers the conflicts
-func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.Check, []ChkConflict, error) {
+func mergeChecks(ctx context.Context, ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.Check, []ChkConflict, error) {
 	// Handles modifications
 	common, conflicts := checksInCommon(ourChks.AllChecks(), theirChks.AllChecks(), ancChks.AllChecks())
 
@@ -804,7 +804,7 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 			CheckExpression: chk.Expression(),
 			Enforced:        chk.Enforced(),
 		}
-		colNames, err := sqle.ColumnsFromCheckDefinition(nil, &chkDef)
+		colNames, err := sqle.ColumnsFromCheckDefinition(sql.NewContext(ctx), &chkDef)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -826,7 +826,7 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 			CheckExpression: ourChk.Expression(),
 			Enforced:        ourChk.Enforced(),
 		}
-		colNames, err := sqle.ColumnsFromCheckDefinition(nil, &chkDef)
+		colNames, err := sqle.ColumnsFromCheckDefinition(sql.NewContext(ctx), &chkDef)
 		if err != nil {
 			return nil, nil, err
 		}

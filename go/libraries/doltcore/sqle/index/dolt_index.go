@@ -64,14 +64,12 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		return nil, nil
 	}
 
-	// TODO: do this for other indexes?
 	tableRows, err := t.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 	keyBld := maybeGetKeyBuilder(tableRows)
 
-	// TODO: two primary keys???
 	cols := sch.GetPKCols().GetColumns()
 
 	// add to_ prefix
@@ -97,8 +95,6 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: false,
 	}
-
-	// TODO: need to add from_ columns
 
 	return append(indexes, &toIndex), nil
 }
@@ -255,6 +251,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
 		doltBinFormat:                 types.IsFormat_DOLT(vrw.Format()),
+		prefixLengths:                 idx.PrefixLengths(),
 	}, nil
 }
 
@@ -288,7 +285,7 @@ func (s *durableIndexState) coversAllColumns(i *doltIndex) bool {
 	}
 	covers := true
 	for i := 0; i < cols.Size(); i++ {
-		col := cols.GetAtIndex(i)
+		col := cols.GetByIndex(i)
 		if _, ok := idxCols.GetByNameCaseInsensitive(col.Name); !ok {
 			covers = false
 			break
@@ -386,6 +383,8 @@ type doltIndex struct {
 
 	cache         cachedDurableIndexes
 	doltBinFormat bool
+
+	prefixLengths []uint16
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
@@ -396,7 +395,7 @@ func (di *doltIndex) CanSupport(...sql.Range) bool {
 }
 
 // ColumnExpressionTypes implements the interface sql.Index.
-func (di *doltIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
+func (di *doltIndex) ColumnExpressionTypes() []sql.ColumnExpressionType {
 	cets := make([]sql.ColumnExpressionType, len(di.columns))
 	for i, col := range di.columns {
 		cets[i] = sql.ColumnExpressionType{
@@ -591,6 +590,10 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
 		return s.coversAllColumns(di)
 	}
 
+	if len(di.prefixLengths) > 0 {
+		return false
+	}
+
 	var idxCols *schema.ColCollection
 	if types.IsFormat_DOLT(di.Format()) {
 		// prolly indexes can cover an index lookup using
@@ -621,6 +624,11 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
 
 func (di *doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
 	if !di.constrainedToLookupExpression {
+		return nil
+	}
+
+	// filters on indexes with prefix lengths are not completely handled
+	if len(di.prefixLengths) > 0 {
 		return nil
 	}
 
@@ -670,6 +678,11 @@ func (di *doltIndex) IsPrimaryKey() bool {
 // Comment implements sql.Index
 func (di *doltIndex) Comment() string {
 	return di.comment
+}
+
+// PrefixLengths implements sql.Index
+func (di *doltIndex) PrefixLengths() []uint16 {
+	return di.prefixLengths
 }
 
 // IndexType implements sql.Index
@@ -748,11 +761,41 @@ func pruneEmptyRanges(sqlRanges []sql.Range) (pruned []sql.Range, err error) {
 				break
 			}
 		}
+		for _, ce := range sr {
+			if lb, ok := ce.LowerBound.(sql.Below); ok && lb.Key == nil {
+				empty = true
+				break
+			}
+		}
 		if !empty {
 			pruned = append(pruned, sr)
 		}
 	}
 	return pruned, nil
+}
+
+// trimRangeCutValue will trim the key value retrieved, depending on its type and prefix length
+// TODO: this is just the trimKeyPart in the SecondaryIndexWriters, maybe find a different place
+func (di *doltIndex) trimRangeCutValue(to int, keyPart interface{}) interface{} {
+	var prefixLength uint16
+	if len(di.prefixLengths) > to {
+		prefixLength = di.prefixLengths[to]
+	}
+	if prefixLength != 0 {
+		switch kp := keyPart.(type) {
+		case string:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
+			keyPart = kp[:prefixLength]
+		case []uint8:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
+			keyPart = kp[:prefixLength]
+		}
+	}
+	return keyPart
 }
 
 func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.NodeStore, ranges []sql.Range, tb *val.TupleBuilder) ([]prolly.Range, error) {
@@ -762,75 +805,80 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 	}
 
 	pranges := make([]prolly.Range, len(ranges))
-	for i := range pranges {
-		pranges[i] = prolly.Range{
-			Fields: make([]prolly.RangeField, len(ranges[i])),
-			Desc:   di.keyBld.Desc,
-		}
-	}
 
 	for k, rng := range ranges {
-		prollyRange := pranges[k]
+		fields := make([]prolly.RangeField, len(rng))
 		for j, expr := range rng {
 			if rangeCutIsBinding(expr.LowerBound) {
-				bound := expr.LowerBound.TypeAsLowerBound()
-				prollyRange.Fields[j].Lo = prolly.Bound{
-					Binding:   true,
-					Inclusive: bound == sql.Closed,
-				}
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(expr.LowerBound, rng[j].Typ)
 				if err != nil {
 					return nil, err
 				}
-				if err = PutField(ctx, ns, tb, j, v); err != nil {
+				nv := di.trimRangeCutValue(j, v)
+				if err = PutField(ctx, ns, tb, j, nv); err != nil {
 					return nil, err
 				}
+				bound := expr.LowerBound.TypeAsLowerBound()
+				fields[j].Lo = prolly.Bound{
+					Binding:   true,
+					Inclusive: bound == sql.Closed,
+				}
 			} else {
-				prollyRange.Fields[j].Lo = prolly.Bound{}
+				fields[j].Lo = prolly.Bound{}
 			}
 		}
 		// BuildPermissive() allows nulls in non-null fields
 		tup := tb.BuildPermissive(sharePool)
-		for i := range prollyRange.Fields {
-			prollyRange.Fields[i].Lo.Value = tup.GetField(i)
+		for i := range fields {
+			fields[i].Lo.Value = tup.GetField(i)
 		}
 
 		for i, expr := range rng {
 			if rangeCutIsBinding(expr.UpperBound) {
 				bound := expr.UpperBound.TypeAsUpperBound()
-				prollyRange.Fields[i].Hi = prolly.Bound{
-					Binding:   true,
-					Inclusive: bound == sql.Closed,
-				}
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(expr.UpperBound, rng[i].Typ)
 				if err != nil {
 					return nil, err
 				}
-				if err = PutField(ctx, ns, tb, i, v); err != nil {
+				nv := di.trimRangeCutValue(i, v)
+				if err = PutField(ctx, ns, tb, i, nv); err != nil {
 					return nil, err
 				}
+				fields[i].Hi = prolly.Bound{
+					Binding:   true,
+					Inclusive: bound == sql.Closed || nv != v, // TODO (james): this might panic for []byte
+				}
 			} else {
-				prollyRange.Fields[i].Hi = prolly.Bound{}
+				fields[i].Hi = prolly.Bound{}
 			}
 		}
 
 		tup = tb.BuildPermissive(sharePool)
-		for i := range prollyRange.Fields {
-			prollyRange.Fields[i].Hi.Value = tup.GetField(i)
+		for i := range fields {
+			fields[i].Hi.Value = tup.GetField(i)
 		}
 
-		order := prollyRange.Desc.Comparator()
-		for i, field := range prollyRange.Fields {
-			if !field.Hi.Binding || !field.Lo.Binding {
-				prollyRange.Fields[i].Exact = false
+		order := di.keyBld.Desc.Comparator()
+		for i, field := range fields {
+			// lookups on non-unique indexes can't be point lookups
+			if !di.unique {
+				fields[i].Exact = false
 				continue
 			}
-			// maybe set RangeField.Exact
-			typ := prollyRange.Desc.Types[i]
+			if !field.Hi.Binding || !field.Lo.Binding {
+				fields[i].Exact = false
+				continue
+			}
+			typ := di.keyBld.Desc.Types[i]
 			cmp := order.CompareValues(i, field.Hi.Value, field.Lo.Value, typ)
-			prollyRange.Fields[i].Exact = cmp == 0
+			fields[i].Exact = cmp == 0
+		}
+		pranges[k] = prolly.Range{
+			Fields: fields,
+			Desc:   di.keyBld.Desc,
+			Tup:    tup,
 		}
 	}
 	return pranges, nil

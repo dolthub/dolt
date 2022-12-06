@@ -50,7 +50,53 @@ var _ Schema = (*schemaImpl)(nil)
 var ErrInvalidPkOrdinals = errors.New("incorrect number of primary key ordinals")
 var ErrMultipleNotNullConstraints = errors.New("multiple not null constraints on same column")
 
+// NewSchema creates a fully defined schema from its parameters.
+// This function should be updated when new components are added to Schema.
+// If |len(pkOrdinals)| == 0, then the default ordinals are kept. |indexes| and |checks| may be nil.
+func NewSchema(allCols *ColCollection, pkOrdinals []int, collation Collation, indexes IndexCollection, checks CheckCollection) (Schema, error) {
+	sch, err := SchemaFromCols(allCols)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(pkOrdinals) != 0 {
+		err = sch.SetPkOrdinals(pkOrdinals)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	sch.SetCollation(collation)
+
+	if indexes != nil {
+		indexColImpl := indexes.(*indexCollectionImpl)
+
+		sch.(*schemaImpl).indexCollection = indexColImpl
+
+		// Index collection contains information about the total list of columns and their definitions.
+		// Do a simple sanity check here to make sure those columns match |allCols|.
+		// TODO: Add an equality check between |allCols| and the cols that |indexes| refer to.
+
+		if len(indexColImpl.pks) != sch.GetPKCols().Size() {
+			return nil, fmt.Errorf("IndexCollection referring to %d pks while Schema refers to %d pks", len(indexColImpl.pks), sch.GetPKCols().Size())
+		}
+		for i, tag := range sch.GetPKCols().Tags {
+			if indexColImpl.pks[i] != tag {
+				return nil, fmt.Errorf("IndexCollection pk tags does not match Schema's pk tags")
+			}
+		}
+	}
+
+	if checks != nil {
+		sch.(*schemaImpl).checkCollection = checks
+	}
+
+	return sch, nil
+}
+
 // SchemaFromCols creates a Schema from a collection of columns
+//
+// Deprecated: Use NewSchema instead.
 func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	var pkCols []Column
 	var nonPKCols []Column
@@ -81,6 +127,9 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	return sch, nil
 }
 
+// SchemaFromColCollections creates a schema from the three collections.
+//
+// Deprecated: Use NewSchema instead.
 func SchemaFromColCollections(allCols, pkColColl, nonPKColColl *ColCollection) Schema {
 	return &schemaImpl{
 		pkCols:          pkColColl,
@@ -185,6 +234,8 @@ func UnkeyedSchemaFromCols(allCols *ColCollection) Schema {
 }
 
 // SchemaFromPKAndNonPKCols creates a Schema from a collection of the key columns, and the non-key columns.
+//
+// Deprecated: Use NewSchema instead.
 func SchemaFromPKAndNonPKCols(pkCols, nonPKCols *ColCollection) (Schema, error) {
 	allCols := make([]Column, pkCols.Size()+nonPKCols.Size())
 
@@ -367,15 +418,29 @@ func (si *schemaImpl) GetKeyDescriptor() val.TupleDesc {
 	_ = si.GetPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
 		sqlType := col.TypeInfo.ToSqlType()
 		queryType := sqlType.Type()
-		tt = append(tt, val.Type{
-			Enc:      val.Encoding(EncodingFromSqlType(queryType)),
-			Nullable: columnMissingNotNullConstraint(col),
-		})
-		if queryType == query.Type_CHAR || queryType == query.Type_VARCHAR {
+		var t val.Type
+		if queryType == query.Type_BLOB {
+			t = val.Type{
+				Enc:      val.Encoding(EncodingFromSqlType(query.Type_VARBINARY)),
+				Nullable: columnMissingNotNullConstraint(col),
+			}
+		} else if queryType == query.Type_TEXT {
+			t = val.Type{
+				Enc:      val.Encoding(EncodingFromSqlType(query.Type_VARCHAR)),
+				Nullable: columnMissingNotNullConstraint(col),
+			}
+		} else {
+			t = val.Type{
+				Enc:      val.Encoding(EncodingFromSqlType(queryType)),
+				Nullable: columnMissingNotNullConstraint(col),
+			}
+		}
+		tt = append(tt, t)
+		if queryType == query.Type_CHAR || queryType == query.Type_VARCHAR || queryType == query.Type_TEXT {
 			useCollations = true
 			collations = append(collations, sqlType.(sql.StringType).Collation())
 		} else {
-			collations = append(collations, sql.Collation_Invalid)
+			collations = append(collations, sql.Collation_Unspecified)
 		}
 		return
 	})
@@ -397,7 +462,7 @@ func (si *schemaImpl) GetValueDescriptor() val.TupleDesc {
 	var collations []sql.CollationID
 	if IsKeyless(si) {
 		tt = []val.Type{val.KeylessCardType}
-		collations = []sql.CollationID{sql.Collation_Invalid}
+		collations = []sql.CollationID{sql.Collation_Unspecified}
 	}
 
 	useCollations := false // We only use collations if a string exists
@@ -412,7 +477,7 @@ func (si *schemaImpl) GetValueDescriptor() val.TupleDesc {
 			useCollations = true
 			collations = append(collations, sqlType.(sql.StringType).Collation())
 		} else {
-			collations = append(collations, sql.Collation_Invalid)
+			collations = append(collations, sql.Collation_Unspecified)
 		}
 		return
 	})
@@ -430,19 +495,19 @@ func (si *schemaImpl) GetValueDescriptor() val.TupleDesc {
 
 // GetCollation implements the Schema interface.
 func (si *schemaImpl) GetCollation() Collation {
-	// Schemas made before this change (and invalid schemas) will contain invalid, so we'll the default collation
+	// Schemas made before this change (and invalid schemas) will contain unspecified, so we'll the inherent collation
 	// instead (as that matches their behavior).
-	if si.collation == Collation_Invalid {
-		return Collation_Default
+	if si.collation == Collation_Unspecified {
+		return Collation_utf8mb4_0900_bin
 	}
 	return si.collation
 }
 
 // SetCollation implements the Schema interface.
 func (si *schemaImpl) SetCollation(collation Collation) {
-	// Schemas made before this change may try to set this to invalid, so we'll set it to the default collation.
-	if collation == Collation_Invalid {
-		si.collation = Collation_Default
+	// Schemas made before this change may try to set this to unspecified, so we'll set it to the inherent collation.
+	if collation == Collation_Unspecified {
+		si.collation = Collation_utf8mb4_0900_bin
 	} else {
 		si.collation = collation
 	}

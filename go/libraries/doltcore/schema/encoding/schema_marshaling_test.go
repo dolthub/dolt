@@ -46,7 +46,7 @@ func createTestSchema() schema.Schema {
 
 	colColl := schema.NewColCollection(columns...)
 	sch := schema.MustSchemaFromCols(colColl)
-	_, _ = sch.Indexes().AddIndexByColTags("idx_age", []uint64{3}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	_, _ = sch.Indexes().AddIndexByColTags("idx_age", []uint64{3}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
 	return sch
 }
 
@@ -100,10 +100,10 @@ func getSqlTypes() []sql.Type {
 		//sql.Blob, //BLOB
 		sql.Boolean, //BOOLEAN
 		sql.MustCreateStringWithDefaults(sqltypes.Char, 10), //CHAR(10)
-		sql.Date,                        //DATE
-		sql.Datetime,                    //DATETIME
-		sql.MustCreateDecimalType(9, 5), //DECIMAL(9, 5)
-		sql.Float64,                     //DOUBLE
+		sql.Date,                              //DATE
+		sql.Datetime,                          //DATETIME
+		sql.MustCreateColumnDecimalType(9, 5), //DECIMAL(9, 5)
+		sql.Float64,                           //DOUBLE
 		sql.MustCreateEnumType([]string{"a", "b", "c"}, sql.Collation_Default), //ENUM('a','b','c')
 		sql.Float32, //FLOAT
 		sql.Int32,   //INT
@@ -255,7 +255,7 @@ func (tsd testSchemaData) decodeSchema() (schema.Schema, error) {
 	sch.SetCollation(tsd.Collation)
 
 	for _, encodedIndex := range tsd.IndexCollection {
-		_, err = sch.Indexes().AddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, schema.IndexProperties{IsUnique: encodedIndex.Unique, Comment: encodedIndex.Comment})
+		_, err = sch.Indexes().AddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, nil, schema.IndexProperties{IsUnique: encodedIndex.Unique, Comment: encodedIndex.Comment})
 		if err != nil {
 			return nil, err
 		}

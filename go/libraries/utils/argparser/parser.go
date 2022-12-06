@@ -16,6 +16,7 @@ package argparser
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 )
@@ -49,14 +50,17 @@ func ValidatorFromStrList(paramName string, validStrList []string) ValidationFun
 
 type ArgParser struct {
 	Supported         []*Option
-	NameOrAbbrevToOpt map[string]*Option
+	nameOrAbbrevToOpt map[string]*Option
 	ArgListHelp       [][2]string
 }
 
 func NewArgParser() *ArgParser {
 	var supported []*Option
 	nameOrAbbrevToOpt := make(map[string]*Option)
-	return &ArgParser{supported, nameOrAbbrevToOpt, nil}
+	return &ArgParser{
+		Supported:         supported,
+		nameOrAbbrevToOpt: nameOrAbbrevToOpt,
+	}
 }
 
 // SupportOption adds support for a new argument with the option given. Options must have a unique name and abbreviated name.
@@ -64,8 +68,8 @@ func (ap *ArgParser) SupportOption(opt *Option) {
 	name := opt.Name
 	abbrev := opt.Abbrev
 
-	_, nameExist := ap.NameOrAbbrevToOpt[name]
-	_, abbrevExist := ap.NameOrAbbrevToOpt[abbrev]
+	_, nameExist := ap.nameOrAbbrevToOpt[name]
+	_, abbrevExist := ap.nameOrAbbrevToOpt[abbrev]
 
 	if name == "" {
 		panic("Name is required")
@@ -80,24 +84,44 @@ func (ap *ArgParser) SupportOption(opt *Option) {
 	}
 
 	ap.Supported = append(ap.Supported, opt)
-	ap.NameOrAbbrevToOpt[name] = opt
+	ap.nameOrAbbrevToOpt[name] = opt
 
 	if abbrev != "" {
-		ap.NameOrAbbrevToOpt[abbrev] = opt
+		ap.nameOrAbbrevToOpt[abbrev] = opt
 	}
 }
 
 // SupportsFlag adds support for a new flag (argument with no value). See SupportOpt for details on params.
 func (ap *ArgParser) SupportsFlag(name, abbrev, desc string) *ArgParser {
-	opt := &Option{name, abbrev, "", OptionalFlag, desc, nil}
+	opt := &Option{name, abbrev, "", OptionalFlag, desc, nil, false}
 	ap.SupportOption(opt)
 
 	return ap
 }
 
+// SupportsAlias adds support for an alias for an existing option. The alias can be used in place of the original option.
+func (ap *ArgParser) SupportsAlias(alias, original string) *ArgParser {
+	opt, ok := ap.nameOrAbbrevToOpt[original]
+
+	if !ok {
+		panic(fmt.Sprintf("No option found for %s, this is a bug", original))
+	}
+
+	ap.nameOrAbbrevToOpt[alias] = opt
+	return ap
+}
+
 // SupportsString adds support for a new string argument with the description given. See SupportOpt for details on params.
 func (ap *ArgParser) SupportsString(name, abbrev, valDesc, desc string) *ArgParser {
-	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, nil}
+	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, nil, false}
+	ap.SupportOption(opt)
+
+	return ap
+}
+
+// SupportsStringList adds support for a new string list argument with the description given. See SupportOpt for details on params.
+func (ap *ArgParser) SupportsStringList(name, abbrev, valDesc, desc string) *ArgParser {
+	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, nil, true}
 	ap.SupportOption(opt)
 
 	return ap
@@ -105,7 +129,7 @@ func (ap *ArgParser) SupportsString(name, abbrev, valDesc, desc string) *ArgPars
 
 // SupportsOptionalString adds support for a new string argument with the description given and optional empty value.
 func (ap *ArgParser) SupportsOptionalString(name, abbrev, valDesc, desc string) *ArgParser {
-	opt := &Option{name, abbrev, valDesc, OptionalEmptyValue, desc, nil}
+	opt := &Option{name, abbrev, valDesc, OptionalEmptyValue, desc, nil, false}
 	ap.SupportOption(opt)
 
 	return ap
@@ -113,7 +137,7 @@ func (ap *ArgParser) SupportsOptionalString(name, abbrev, valDesc, desc string) 
 
 // SupportsValidatedString adds support for a new string argument with the description given and defined validation function.
 func (ap *ArgParser) SupportsValidatedString(name, abbrev, valDesc, desc string, validator ValidationFunc) *ArgParser {
-	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, validator}
+	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, validator, false}
 	ap.SupportOption(opt)
 
 	return ap
@@ -121,7 +145,7 @@ func (ap *ArgParser) SupportsValidatedString(name, abbrev, valDesc, desc string,
 
 // SupportsUint adds support for a new uint argument with the description given. See SupportOpt for details on params.
 func (ap *ArgParser) SupportsUint(name, abbrev, valDesc, desc string) *ArgParser {
-	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, isUintStr}
+	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, isUintStr, false}
 	ap.SupportOption(opt)
 
 	return ap
@@ -129,7 +153,7 @@ func (ap *ArgParser) SupportsUint(name, abbrev, valDesc, desc string) *ArgParser
 
 // SupportsInt adds support for a new int argument with the description given. See SupportOpt for details on params.
 func (ap *ArgParser) SupportsInt(name, abbrev, valDesc, desc string) *ArgParser {
-	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, isIntStr}
+	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, isIntStr, false}
 	ap.SupportOption(opt)
 
 	return ap
@@ -138,7 +162,7 @@ func (ap *ArgParser) SupportsInt(name, abbrev, valDesc, desc string) *ArgParser 
 // modal options in order of descending string length
 func (ap *ArgParser) sortedModalOptions() []string {
 	smo := make([]string, 0, len(ap.Supported))
-	for s, opt := range ap.NameOrAbbrevToOpt {
+	for s, opt := range ap.nameOrAbbrevToOpt {
 		if opt.OptType == OptionalFlag && s != "" {
 			smo = append(smo, s)
 		}
@@ -171,7 +195,7 @@ func (ap *ArgParser) matchModalOptions(arg string) (matches []*Option, rest stri
 			isMatch := len(rest) >= lo && rest[:lo] == on
 			if isMatch {
 				rest = rest[lo:]
-				m := ap.NameOrAbbrevToOpt[on]
+				m := ap.nameOrAbbrevToOpt[on]
 				matches = append(matches, m)
 
 				// only match options once
@@ -192,7 +216,7 @@ func (ap *ArgParser) matchModalOptions(arg string) (matches []*Option, rest stri
 
 func (ap *ArgParser) sortedValueOptions() []string {
 	vos := make([]string, 0, len(ap.Supported))
-	for s, opt := range ap.NameOrAbbrevToOpt {
+	for s, opt := range ap.nameOrAbbrevToOpt {
 		if (opt.OptType == OptionalValue || opt.OptType == OptionalEmptyValue) && s != "" {
 			vos = append(vos, s)
 		}
@@ -201,24 +225,31 @@ func (ap *ArgParser) sortedValueOptions() []string {
 	return vos
 }
 
-func (ap *ArgParser) matchValueOption(arg string) (match *Option, value *string) {
+func (ap *ArgParser) matchValueOption(arg string, isLongFormFlag bool) (match *Option, value *string) {
 	for _, on := range ap.sortedValueOptions() {
 		lo := len(on)
 		isMatch := len(arg) >= lo && arg[:lo] == on
 		if isMatch {
 			v := arg[lo:]
+			if len(v) > 0 && !strings.Contains(optNameValDelimChars, v[:1]) { // checks if the value and the param is in the same string
+				// we only allow joint param and value for short form flags (ie "-" flags), similar to Git's behavior
+				if isLongFormFlag {
+					return nil, nil
+				}
+			}
+
 			v = strings.TrimLeft(v, optNameValDelimChars)
 			if len(v) > 0 {
 				value = &v
 			}
-			match = ap.NameOrAbbrevToOpt[on]
+			match = ap.nameOrAbbrevToOpt[on]
 			return match, value
 		}
 	}
 	return nil, nil
 }
 
-// Parses the string args given using the configuration previously specified with calls to the various Supports*
+// Parse parses the string args given using the configuration previously specified with calls to the various Supports*
 // methods. Any unrecognized arguments or incorrect types will result in an appropriate error being returned. If the
 // universal --help or -h flag is found, an ErrHelp error is returned.
 func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
@@ -228,6 +259,7 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 	i := 0
 	for ; i < len(args); i++ {
 		arg := args[i]
+		isLongFormFlag := len(arg) >= 2 && arg[:2] == "--"
 
 		if len(arg) == 0 || arg[0] != '-' || arg == "--" { // empty strings should get passed through like other naked words
 			list = append(list, arg)
@@ -250,7 +282,7 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 			results[opt.Name] = ""
 		}
 
-		opt, value := ap.matchValueOption(rest)
+		opt, value := ap.matchValueOption(rest, isLongFormFlag)
 
 		if opt == nil {
 			if rest == "" {
@@ -280,9 +312,14 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 					return nil, errors.New("error: no value for option `" + opt.Name + "'")
 				}
 			} else {
-				valueStr = args[i]
+				if opt.AllowMultipleOptions {
+					list := getListValues(args[i:])
+					valueStr = strings.Join(list, ",")
+					i += len(list) - 1
+				} else {
+					valueStr = args[i]
+				}
 			}
-
 			value = &valueStr
 		}
 
@@ -302,4 +339,18 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 	}
 
 	return &ArgParseResults{results, list, ap}, nil
+}
+
+func getListValues(args []string) []string {
+	var values []string
+
+	for _, arg := range args {
+		// Stop if another option found
+		if arg[0] == '-' || arg == "--" {
+			return values
+		}
+		values = append(values, arg)
+	}
+
+	return values
 }

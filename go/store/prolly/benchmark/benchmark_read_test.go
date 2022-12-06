@@ -21,6 +21,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -78,12 +80,16 @@ func BenchmarkStepParallelMapGet(b *testing.B) {
 	}
 }
 
-func BenchmarkProllyGetLarge(b *testing.B) {
+func BenchmarkGetLargeProlly(b *testing.B) {
 	benchmarkProllyMapGet(b, 1_000_000)
 }
 
-func BenchmarkNomsGetLarge(b *testing.B) {
+func BenchmarkGetLargeNoms(b *testing.B) {
 	benchmarkTypesMapGet(b, 1_000_000)
+}
+
+func BenchmarkGetLargeBBolt(b *testing.B) {
+	benchmarkBBoltMapGet(b, 1_000_000)
 }
 
 func BenchmarkProllyParallelGetLarge(b *testing.B) {
@@ -96,6 +102,7 @@ func BenchmarkNomsParallelGetLarge(b *testing.B) {
 
 func benchmarkProllyMapGet(b *testing.B, size uint64) {
 	bench := generateProllyBench(b, size)
+	b.ResetTimer()
 	b.Run(fmt.Sprintf("benchmark new format reads"), func(b *testing.B) {
 		ctx := context.Background()
 
@@ -112,11 +119,29 @@ func benchmarkProllyMapGet(b *testing.B, size uint64) {
 
 func benchmarkTypesMapGet(b *testing.B, size uint64) {
 	bench := generateTypesBench(b, size)
+	b.ResetTimer()
 	b.Run(fmt.Sprintf("benchmark old format reads"), func(b *testing.B) {
 		ctx := context.Background()
 		for i := 0; i < b.N; i++ {
 			idx := rand.Uint64() % uint64(len(bench.tups))
 			_, _, _ = bench.m.MaybeGet(ctx, bench.tups[idx][0])
+		}
+		b.ReportAllocs()
+	})
+}
+
+func benchmarkBBoltMapGet(b *testing.B, size uint64) {
+	bench := generateBBoltBench(b, size)
+	b.ResetTimer()
+	b.Run(fmt.Sprintf("benchmark bbolt reads"), func(b *testing.B) {
+		tx, err := bench.db.Begin(false)
+		require.NoError(b, err)
+		bck := tx.Bucket(bucket)
+
+		for i := 0; i < b.N; i++ {
+			idx := rand.Uint64() % uint64(len(bench.tups))
+			key := bench.tups[idx][0]
+			_ = bck.Get(key)
 		}
 		b.ReportAllocs()
 	})

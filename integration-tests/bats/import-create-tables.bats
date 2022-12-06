@@ -60,6 +60,23 @@ teardown() {
     teardown_common
 }
 
+@test "import-create-tables: correctly ignores byte order mark (BOM)" {
+    printf '\xEF\xBB\xBF' > bom.csv
+    cat <<DELIM >> bom.csv
+c1,c2
+1,2
+DELIM
+
+    run dolt table import -c bom bom.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -q "select c1 from bom"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+}
+
 @test "import-create-tables: create a table with json import" {
     run dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl.json`
     [ "$status" -eq 0 ]
@@ -152,7 +169,7 @@ pk,c1,c2,c3,c4,c5
 9,1,2,3,4,5
 DELIM
     dolt table import -c --pk=pk test 1pk5col-ints.csv
-    run dolt sql -q "create table fktest(id int not null, tpk int unsigned, c2 int, primary key(id), foreign key (tpk) references test(pk))"
+    run dolt sql -q "create table fktest(id int not null, tpk int, c2 int, primary key(id), foreign key (tpk) references test(pk))"
     [ "$status" -eq 0 ]
     run dolt sql -q "insert into fktest values (1, 0, 1)"
     [ "$status" -eq 0 ]
@@ -550,7 +567,7 @@ DELIM
     [[ "$output" =~ "CREATE TABLE \`test\`" ]]
     [[ "$output" =~ "\`pk\` int" ]]
     [[ "$output" =~ "\`str\` varchar(16383)" ]]
-    [[ "$output" =~ "\`int\` int unsigned" ]]
+    [[ "$output" =~ "\`int\` int" ]]
     [[ "$output" =~ "\`bool\` tinyint" ]]
     [[ "$output" =~ "\`float\` float" ]]
     [[ "$output" =~ "\`date\` date" ]]
@@ -747,7 +764,7 @@ DELIM
     [ "${lines[1]}" = 5,5 ]
 }
 
-@test "import-create-tables: --ignore-skipped-rows correctly prevents skipped rows from printing" {
+@test "import-create-tables: --quiet correctly prevents skipped rows from printing" {
     cat <<DELIM > 1pk5col-rpt-ints.csv
 pk,c1,c2,c3,c4,c5
 1,1,2,3,4,5
@@ -755,7 +772,7 @@ pk,c1,c2,c3,c4,c5
 1,1,2,3,4,8
 DELIM
 
-    run dolt table import -c --continue  --ignore-skipped-rows --pk=pk test 1pk5col-rpt-ints.csv
+    run dolt table import -c --continue --quiet --pk=pk test 1pk5col-rpt-ints.csv
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "The following rows were skipped:" ]] || false
     ! [[ "$output" =~ "1,1,2,3,4,7" ]] || false
@@ -763,4 +780,17 @@ DELIM
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Lines skipped: 2" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
+
+    dolt sql -q "drop table test"
+    
+    # --ignore-skipped-rows is an alias for --quiet
+    run dolt table import -c --continue --ignore-skipped-rows --pk=pk test 1pk5col-rpt-ints.csv
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "The following rows were skipped:" ]] || false
+    ! [[ "$output" =~ "1,1,2,3,4,7" ]] || false
+    ! [[ "$output" =~ "1,1,2,3,4,8" ]] || false
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Lines skipped: 2" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
 }

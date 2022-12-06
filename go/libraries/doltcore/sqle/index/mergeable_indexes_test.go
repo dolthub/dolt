@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // This tests mergeable indexes by using the SQL engine and intercepting specific calls. This way, we can verify that
@@ -37,6 +38,10 @@ import (
 // they're converted into a format that Noms understands to verify that they were handled correctly. Lastly, we ensure
 // that the final output is as expected.
 func TestMergeableIndexes(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // this test is specific to Noms ranges
+	}
+
 	engine, denv, root, db, indexTuples := setupIndexes(t, "test", `INSERT INTO test VALUES
 		(-3, NULL, NULL),
 		(-2, NULL, NULL),
@@ -1373,6 +1378,10 @@ func TestMergeableIndexes(t *testing.T) {
 // ranges may be incorrect.
 // TODO: disassociate NULL ranges from value ranges and fix the intermediate ranges (finalRanges).
 func TestMergeableIndexesNulls(t *testing.T) {
+	if types.Format_Default != types.Format_LD_1 {
+		t.Skip() // this test is specific to Noms ranges
+	}
+
 	engine, denv, root, db, indexTuples := setupIndexes(t, "test", `INSERT INTO test VALUES
 		(0, 10, 20),
 		(1, 11, 21),

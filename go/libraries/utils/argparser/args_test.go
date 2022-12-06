@@ -22,9 +22,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var forceOpt = &Option{"force", "f", "", OptionalFlag, "force desc", nil}
-var messageOpt = &Option{"message", "m", "msg", OptionalValue, "msg desc", nil}
-var fileTypeOpt = &Option{"file-type", "", "", OptionalValue, "file type", nil}
+var forceOpt = &Option{"force", "f", "", OptionalFlag, "force desc", nil, false}
+var messageOpt = &Option{"message", "m", "msg", OptionalValue, "msg desc", nil, false}
+var fileTypeOpt = &Option{"file-type", "", "", OptionalValue, "file type", nil, false}
+var notOpt = &Option{"not", "", "", OptionalValue, "not desc", nil, true}
 
 func TestParsing(t *testing.T) {
 	tests := []struct {
@@ -118,16 +119,15 @@ func TestParsing(t *testing.T) {
 			expectedArgs: []string{"b", "c"},
 		},
 		{
-			name:         "--messagevalue",
-			options:      []*Option{forceOpt, messageOpt},
-			args:         []string{"b", "-messagevalue", "c"},
-			expectedOpts: map[string]string{"message": "value"},
-			expectedArgs: []string{"b", "c"},
+			name:        "--messagevalue",
+			options:     []*Option{forceOpt, messageOpt},
+			args:        []string{"b", "--messagevalue", "c"},
+			expectedErr: "error: unknown option `messagevalue'",
 		},
 		{
-			name:         "-fmfootball",
+			name:         "-fm football",
 			options:      []*Option{forceOpt, messageOpt},
-			args:         []string{"-fmfootball"},
+			args:         []string{"-fm football"},
 			expectedOpts: map[string]string{"message": "football", "force": ""},
 			expectedArgs: []string{},
 		},
@@ -139,9 +139,9 @@ func TestParsing(t *testing.T) {
 			expectedArgs: []string{"football"},
 		},
 		{
-			name:         "-mf",
+			name:         "-m f",
 			options:      []*Option{forceOpt, messageOpt},
-			args:         []string{"-mf"},
+			args:         []string{"-m f"},
 			expectedOpts: map[string]string{"message": "f"},
 			expectedArgs: []string{},
 		},
@@ -152,10 +152,17 @@ func TestParsing(t *testing.T) {
 			expectedErr: "error: no value for option `m'",
 		},
 		{
-			name:         "-mf value",
+			name:         "-m f value",
 			options:      []*Option{forceOpt, messageOpt},
-			args:         []string{"-mf", "value"},
+			args:         []string{"-m f", "value"},
 			expectedOpts: map[string]string{"message": "f"},
+			expectedArgs: []string{"value"},
+		},
+		{
+			name:         "--not string list value",
+			options:      []*Option{forceOpt, messageOpt, notOpt},
+			args:         []string{"-m f", "value", "--not", "main", "branch"},
+			expectedOpts: map[string]string{"message": "f", "not": "main,branch"},
 			expectedArgs: []string{"value"},
 		},
 		{

@@ -63,4 +63,6 @@ type Option struct {
 	Desc string
 	// Function to validate an Option after parsing, returning any error.
 	Validator ValidationFunc
+	// Allows more than one arg to an Option.
+	AllowMultipleOptions bool
 }

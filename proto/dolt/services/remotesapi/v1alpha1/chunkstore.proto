@@ -71,6 +71,7 @@ message HasChunksRequest {
   repeated bytes hashes = 2;
 
   string repo_token = 3;
+  string repo_path = 4;
 }
 
 message HasChunksResponse {
@@ -120,6 +121,7 @@ message GetDownloadLocsRequest {
   repeated bytes chunk_hashes = 2;
 
   string repo_token = 3;
+  string repo_path = 4;
 }
 
 message GetDownloadLocsResponse {
@@ -132,6 +134,7 @@ message TableFileDetails {
   bytes id = 1;
   uint64 content_length = 2;
   bytes content_hash = 3;
+  uint64 num_chunks = 4;
 }
 
 message GetUploadLocsRequest {
@@ -140,6 +143,7 @@ message GetUploadLocsRequest {
   repeated TableFileDetails table_file_details = 3;
 
   string repo_token = 4;
+  string repo_path = 5;
 }
 
 message GetUploadLocsResponse {
@@ -151,6 +155,7 @@ message GetUploadLocsResponse {
 message RebaseRequest {
   RepoId repo_id = 1;
   string repo_token = 2;
+  string repo_path = 3;
 }
 
 message RebaseResponse {
@@ -161,6 +166,7 @@ message RootRequest {
   RepoId repo_id = 1;
 
   string repo_token = 2;
+  string repo_path = 3;
 }
 
 message RootResponse {
@@ -180,6 +186,7 @@ message CommitRequest {
   bytes last = 3;
   repeated ChunkTableInfo chunk_table_info = 4;
   ClientRepoFormat client_repo_format = 14;
+  string repo_path = 5;
 }
 
 message CommitResponse {
@@ -191,6 +198,7 @@ message GetRepoMetadataRequest {
   ClientRepoFormat client_repo_format = 14;
 
   string repo_token = 2;
+  string repo_path = 3;
 }
 
 message GetRepoMetadataResponse {
@@ -217,6 +225,7 @@ message ListTableFilesRequest  {
   bool appendix_only = 2 [deprecated = true];
 
   string repo_token = 3;
+  string repo_path = 4;
 }
 
 message TableFileInfo {
@@ -232,6 +241,7 @@ message RefreshTableFileUrlRequest {
   string file_id = 2;
 
   string repo_token = 3;
+  string repo_path = 4;
 }
 
 message RefreshTableFileUrlResponse {
@@ -268,6 +278,7 @@ message AddTableFilesRequest {
   ManifestAppendixOption appendix_option = 4;
 
   string repo_token = 5;
+  string repo_path = 6;
 }
 
 message AddTableFilesResponse {

@@ -1156,7 +1156,7 @@ SQL
     [[ ! "$output" =~ " 0 " ]] || false
     run dolt sql -q "select * from one_pk order by pk limit 1,0"
     [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 0 ]
     [[ ! "$output" =~ " 0 " ]] || false
     run dolt sql -q "select * from one_pk order by pk desc limit 1"
     [ $status -eq 0 ]
@@ -1220,7 +1220,7 @@ SQL
     [[ "$output" =~ "2" ]] || false
     run dolt sql -q "select pk from one_pk where c1 in (11,21)"
     [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 0 ]
     run dolt sql -q "select pk from one_pk where c1 not in (10,20)"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
@@ -1915,19 +1915,6 @@ SQL
     [[ "$output" =~ "table not found: poop" ]] || false
 }
 
-@test "sql: explain simple select query" {
-    run dolt sql -q "explain select * from one_pk"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "plan" ]] || false
-    [[ "$output" =~ "one_pk" ]] || false
-}
-
-@test "sql: explain simple join" {
-    run dolt sql -q "explain select op.pk,pk1,pk2 from one_pk,two_pk join one_pk as op on op.pk=pk1"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "IndexedJoin" ]] || false
-}
-
 @test "sql: replace count" {
     skip "right now we always count a replace as a delete and insert when we shouldn't"
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v BIGINT);"
@@ -2194,6 +2181,19 @@ SQL
     [[ "$output" =~ "d,1,1" ]] || false
 }
 
+@test "sql: duplicate key inserts on table with primary and secondary indexes" {
+    dolt sql -q "CREATE TABLE test (pk int primary key, uk int unique key, i int);"
+    dolt sql -q "INSERT INTO test VALUES(0,0,0);"
+    run dolt sql -r csv -q "SELECT * from test"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0,0" ]] || false
+    run dolt sql -q "INSERT INTO test (pk,uk) VALUES(1,0) on duplicate key update i = 99;"
+    [ $status -eq 0 ]
+    run dolt sql -r csv -q "SELECT * from test"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0,99" ]] || false
+}
+
 @test "sql: at commit" {
   skip "zachmu broke this, needs to fix"
     
@@ -2434,6 +2434,44 @@ SQL
     [[ "$output" =~ "| 3        |" ]] || false
 }
 
+@test "sql: dolt diff table correctly works with NOT and/or IS NULL" {
+    dolt sql -q "CREATE TABLE t(pk int primary key);"
+    dolt add .
+    dolt commit -m "new table t"
+    dolt sql -q "INSERT INTO t VALUES (1), (2)"
+    dolt commit -am "add 1, 2"
+
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_t where from_pk is null"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    dolt sql -q "UPDATE t SET pk = 3 WHERE pk = 2"
+    dolt commit -am "add 3"
+
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_t where from_pk is not null"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+}
+
+@test "sql: dolt diff table correctly works with datetime comparisons" {
+    dolt sql -q "CREATE TABLE t(pk int primary key);"
+    dolt add .
+    dolt commit -m "new table t"
+    dolt sql -q "INSERT INTO t VALUES (1), (2), (3)"
+    dolt commit -am "add 1, 2, 3"
+
+    # adds a row and removes a row
+    dolt sql -q "UPDATE t SET pk = 4 WHERE pk = 2"
+
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_t where to_commit_date is not null"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_t where to_commit_date < now()"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+}
+
 @test "sql: sql print on order by returns the correct result" {
     dolt sql -q "CREATE TABLE mytable(pk int primary key);"
     dolt sql -q "INSERT INTO mytable VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12),(13),(14),(15),(16),(17),(18),(19),(20)"
@@ -2556,12 +2594,22 @@ SQL
 
 @test "sql: --file param" {
     cat > script.sql <<SQL
+    drop table if exists test;
     create table test (a int primary key, b int);
     insert into test values (1,1), (2,2);
 SQL
     
     run dolt sql --file script.sql
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "Processed 100.0% of the file" ]] || false
+
+    run dolt sql -q "select * from test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false
+    
+    run dolt sql --batch --file script.sql
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Processed 100.0% of the file" ]] || false
 
     run dolt sql -q "select * from test" -r csv
     [ "$status" -eq 0 ]
@@ -2571,3 +2619,48 @@ SQL
     [ "$status" -eq 1 ]
 }
 
+@test "sql: server with no dbs yet should be able to describe dolt stored procedures" {
+    # make directories outside of the existing init'ed dolt repos
+    tempDir=$(mktemp -d)
+    cd $tempDir
+    mkdir repo1
+    cd repo1
+
+    # check that without a DB we get descriptive errors
+    run dolt sql -q "SHOW CREATE PROCEDURE dolt_clone;"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no database selected" ]] || false
+
+    run dolt sql -q "SHOW CREATE PROCEDURE dolt_branch;"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no database selected" ]] || false
+
+    # initialize dolt
+    dolt init
+
+    # check that the DB "repo1" exists
+    run dolt sql -q "SHOW DATABASES;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "repo1" ]] || false
+
+    # check that the DB "repo1" is selected
+    run dolt sql -q "SELECT DATABASE();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "repo1" ]] || false
+
+    # check that current DB can be used
+    run dolt sql -q "SHOW CREATE PROCEDURE dolt_branch;"
+    [ "$status" -eq 0 ]
+
+    # check that the qualified DB name can be used
+    run dolt sql -q "SHOW CREATE PROCEDURE repo1.dolt_branch;"
+    [ "$status" -eq 0 ]
+
+    # check that procedures can be queried from multiple DBs
+    run dolt sql -q "CREATE DATABASE repo2;"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SHOW CREATE PROCEDURE repo2.dolt_branch;"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "USE repo1; SHOW CREATE PROCEDURE dolt_branch;"
+    [ "$status" -eq 0 ]
+}
