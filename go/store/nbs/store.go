@@ -478,16 +478,31 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 	p := newFSTablePersister(dir, globalFDCache, q)
 	c := conjoinStrategy(inlineConjoiner{maxTables})
 
-	if chunkJournalFeatureFlag {
-		c = journalConjoiner{child: c}
-		j, err := newChunkJournal(ctx, dir, m, p.(*fsTablePersister))
-		if err != nil {
-			return nil, err
-		}
-		m, p = j, j
+	return newNomsBlockStore(ctx, nbfVerStr, makeManifestManager(m), p, q, c, memTableSize)
+}
+
+func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+	cacheOnce.Do(makeGlobalCaches)
+	if err := checkDir(dir); err != nil {
+		return nil, err
 	}
 
-	return newNomsBlockStore(ctx, nbfVerStr, makeManifestManager(m), p, q, c, memTableSize)
+	m, err := getFileManifest(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	p := newFSTablePersister(dir, globalFDCache, q)
+
+	journal, err := newChunkJournal(ctx, nbfVers, dir, m, p.(*fsTablePersister))
+	if err != nil {
+		return nil, err
+	}
+
+	mm := makeManifestManager(journal)
+	c := journalConjoiner{child: inlineConjoiner{defaultMaxTables}}
+
+	// |journal| serves as the manifest and tablePersister
+	return newNomsBlockStore(ctx, nbfVers, mm, journal, q, c, defaultMemTableSize)
 }
 
 func checkDir(dir string) error {

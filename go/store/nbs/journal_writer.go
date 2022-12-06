@@ -23,7 +23,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sync"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -40,59 +39,83 @@ const (
 )
 
 var (
-	openJournals = new(sync.Map)
-	journalAddr  = addr(hash.Parse(chunkJournalAddr))
+	journalAddr = addr(hash.Parse(chunkJournalAddr))
 )
 
 func isJournalAddr(a addr) bool {
 	return a == journalAddr
 }
 
-func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, err error) {
-	var f *os.File
+func journalFileExists(path string) (bool, error) {
+	var err error
+	if path, err = filepath.Abs(path); err != nil {
+		return false, err
+	}
 
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	} else if info.IsDir() {
+		return true, fmt.Errorf("expected file %s found directory", chunkJournalName)
+	}
+	return true, nil
+}
+
+func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exists bool, err error) {
+	var f *os.File
+	if path, err = filepath.Abs(path); err != nil {
+		return nil, false, err
+	}
+
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, false, nil
+	} else if err != nil {
+		return nil, false, err
+	} else if info.IsDir() {
+		return nil, true, fmt.Errorf("expected file %s found directory", chunkJournalName)
+	}
+	if f, err = os.OpenFile(path, os.O_RDWR, 0666); err != nil {
+		return nil, true, err
+	}
+
+	return &journalWriter{
+		buf:  make([]byte, 0, journalWriterBuffSize),
+		file: f,
+		path: path,
+	}, true, nil
+}
+
+func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, err error) {
+	var f *os.File
 	if path, err = filepath.Abs(path); err != nil {
 		return nil, err
 	}
 
-	if _, ok := openJournals.Load(path); ok {
-		return nil, fmt.Errorf("journal (%s) already opened in-process", path)
-	}
-	openJournals.Store(path, true)
-
-	var create bool
-	info, err := os.Stat(path)
-	if errors.Is(err, os.ErrNotExist) {
-		create = true
-	} else if err != nil {
+	_, err = os.Stat(path)
+	if err == nil {
+		return nil, fmt.Errorf("journal file %s already exists", chunkJournalName)
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, err
-	} else if info.IsDir() {
-		return nil, fmt.Errorf("expected file %s found directory", chunkJournalName)
 	}
 
-	if create {
-		if f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666); err != nil {
+	if f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666); err != nil {
+		return nil, err
+	}
+	const batch = 1024 * 1024
+	b := make([]byte, batch)
+	for i := 0; i < chunkJournalFileSize; i += batch {
+		if _, err = f.Write(b); err != nil { // zero fill |f|
 			return nil, err
 		}
-		const batch = 1024 * 1024
-		b := make([]byte, batch)
-		for i := 0; i < chunkJournalFileSize; i += batch {
-			if _, err = f.Write(b); err != nil { // zero fill |f|
-				return nil, err
-			}
-		}
-		if err = f.Sync(); err != nil {
-			return nil, err
-		}
-		if o, err := f.Seek(0, io.SeekStart); err != nil {
-			return nil, err
-		} else if o != 0 {
-			return nil, fmt.Errorf("expected file offset 0, got %d", o)
-		}
-	} else {
-		if f, err = os.OpenFile(path, os.O_RDWR, 0666); err != nil {
-			return nil, err
-		}
+	}
+	if err = f.Sync(); err != nil {
+		return nil, err
+	}
+	if o, err := f.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	} else if o != 0 {
+		return nil, fmt.Errorf("expected file offset 0, got %d", o)
 	}
 
 	return &journalWriter{
@@ -177,8 +200,8 @@ func (wr *journalWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
-func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, cs journalChunkSource, err error) {
-	// bootstrap chunk journal from |wr.file|
+func (wr *journalWriter) processJournal(ctx context.Context) (last hash.Hash, cs journalChunkSource, err error) {
+	// maybeInitJournal chunk journal from |wr.file|
 	src := journalChunkSource{
 		journal: wr,
 		address: journalAddr,
@@ -269,7 +292,6 @@ func (wr *journalWriter) Close() (err error) {
 	if cerr := wr.file.Close(); cerr != nil {
 		err = cerr
 	}
-	openJournals.Delete(wr.path)
 	return
 }
 

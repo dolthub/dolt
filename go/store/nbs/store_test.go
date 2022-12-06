@@ -41,8 +41,8 @@ import (
 )
 
 func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, nomsDir string, q MemoryQuotaProvider) {
-	if chunkJournalFeatureFlag {
-		t.Skip()
+	if ChunkJournalFeatureFlag {
+		t.Skip() // todo
 	}
 
 	ctx := context.Background()

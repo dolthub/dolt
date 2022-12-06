@@ -26,28 +26,17 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestChunkJournalBlockStoreSuite(t *testing.T) {
 	cacheOnce.Do(makeGlobalCaches)
 	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
-		m, err := getFileManifest(ctx, dir)
-		if err != nil {
-			return nil, err
-		}
 		q := NewUnlimitedMemQuotaProvider()
-		p := newFSTablePersister(dir, globalFDCache, q)
-		j, err := newChunkJournal(ctx, dir, m, p.(*fsTablePersister))
-		if err != nil {
-			return nil, err
-		}
-		nbf := constants.FormatDefaultString
-		mm := makeManifestManager(j)
-		c := inlineConjoiner{defaultMaxTables}
-		return newNomsBlockStore(ctx, nbf, mm, j, q, c, testMemTableSize)
+		nbf := types.Format_Default.VersionString()
+		return NewLocalJournalingStore(ctx, nbf, dir, q)
 	}
 	suite.Run(t, &BlockStoreSuite{
 		factory:        fn,
@@ -63,7 +52,8 @@ func TestChunkJournalPersist(t *testing.T) {
 	require.NoError(t, err)
 	q := NewUnlimitedMemQuotaProvider()
 	p := newFSTablePersister(dir, globalFDCache, q)
-	j, err := newChunkJournal(ctx, dir, m, p.(*fsTablePersister))
+	nbf := types.Format_Default.VersionString()
+	j, err := newChunkJournal(ctx, nbf, dir, m, p.(*fsTablePersister))
 	require.NoError(t, err)
 
 	const iters = 64
