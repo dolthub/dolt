@@ -1129,63 +1129,6 @@ func (dEnv *DoltEnv) TempTableFilesDir() (string, error) {
 	return absPath, nil
 }
 
-// GetGCKeepers returns the hashes of all the objects in the environment provided that should be preserved during GC.
-// TODO: this should be unnecessary since we now store the working set in a noms dataset, remove it
-func GetGCKeepers(ctx context.Context, env *DoltEnv) ([]hash.Hash, error) {
-	workingRoot, err := env.WorkingRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	workingHash, err := workingRoot.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	stagedRoot, err := env.StagedRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	stagedHash, err := stagedRoot.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	keepers := []hash.Hash{
-		workingHash,
-		stagedHash,
-	}
-
-	mergeActive, err := env.IsMergeActive(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if mergeActive {
-		ws, err := env.WorkingSet(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		cm := ws.MergeState().Commit()
-		ch, err := cm.HashOf()
-		if err != nil {
-			return nil, err
-		}
-
-		pmw := ws.MergeState().PreMergeWorkingRoot()
-		pmwh, err := pmw.HashOf()
-		if err != nil {
-			return nil, err
-		}
-
-		keepers = append(keepers, ch, pmwh)
-	}
-
-	return keepers, nil
-}
-
 func (dEnv *DoltEnv) DbEaFactory() editor.DbEaFactory {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {

@@ -125,17 +125,11 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 		}
 	}
 
-	working, err := dEnv.WorkingRoot(ctx)
-	require.NoError(t, err)
-	h, err := working.HashOf()
-	require.NoError(t, err)
-	// save working root during GC
-
-	err = dEnv.DoltDB.GC(ctx, h)
+	err := dEnv.DoltDB.GC(ctx)
 	require.NoError(t, err)
 	test.postGCFunc(ctx, t, dEnv.DoltDB, res)
 
-	working, err = dEnv.WorkingRoot(ctx)
+	working, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 	// assert all out rows are present after gc
 	actual, err := sqle.ExecuteSelect(dEnv, working, test.query)
