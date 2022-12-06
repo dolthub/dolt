@@ -829,7 +829,7 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx *sql.Context, revDB string) (d
 	return init, nil
 }
 
-func (p DoltDatabaseProvider) stateForDatabase(ctx *sql.Context, dbName string) (dsess.InitialDbState, bool, error) {
+func (p DoltDatabaseProvider) stateForDatabase(ctx *sql.Context, dbName string, branch string) (dsess.InitialDbState, bool, error) {
 	p.mu.RLock()
 	db, ok := p.databases[formatDbMapKeyName(dbName)]
 	p.mu.RUnlock()
@@ -845,8 +845,8 @@ func (p DoltDatabaseProvider) stateForDatabase(ctx *sql.Context, dbName string) 
 	return dbState, true, nil
 }
 
-func (p DoltDatabaseProvider) DbState(ctx *sql.Context, dbName string) (dsess.InitialDbState, error) {
-	init, ok, err := p.stateForDatabase(ctx, dbName)
+func (p DoltDatabaseProvider) DbState(ctx *sql.Context, dbName string, defaultBranch string) (dsess.InitialDbState, error) {
+	init, ok, err := p.stateForDatabase(ctx, dbName, defaultBranch)
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	} else if !ok {

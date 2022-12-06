@@ -52,6 +52,7 @@ type SqlDatabase interface {
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
 	DbData() env.DbData
 	Flush(*sql.Context) error
+	EditOptions() editor.Options
 }
 
 // AllDbs returns all the databases in the given provider.
@@ -154,6 +155,8 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 
 	rsr := db.DbData().Rsr
 	ddb := db.DbData().Ddb
+
+	r := ref.NewBranchRef(branch)
 
 	var retainedErr error
 
@@ -1359,6 +1362,7 @@ func getInitialDBStateForUserSpaceDb(ctx context.Context, db SqlDatabase) (dsess
 		DbData: env.DbData{
 			Rsw: noopRepoStateWriter{},
 		},
+		ReadOnly: true,
 	}, nil
 }
 

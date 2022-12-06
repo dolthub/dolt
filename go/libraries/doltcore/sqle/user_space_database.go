@@ -97,3 +97,7 @@ func (db *UserSpaceDatabase) DbData() env.DbData {
 func (db *UserSpaceDatabase) Flush(ctx *sql.Context) error {
 	panic("UserSpaceDatabase cannot flush")
 }
+
+func (db *UserSpaceDatabase) EditOptions() editor.Options {
+	return db.editOpts
+}

@@ -142,9 +142,15 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 	}
 
 	// TODO: this needs to include the transaction's snapshot of the DB at tx start time
-	init, err := d.provider.DbState(ctx, dbName)
-	if err != nil && !sql.ErrDatabaseNotFound.Is(err) {
-		return nil, false, err
+	var init InitialDbState
+	var err error
+
+	_, val, ok := sql.SystemVariables.GetGlobal(DefaultBranchKey(dbName))
+	if ok && val != "" {
+		init, err = d.provider.DbState(ctx, dbName, val.(string))
+		if err != nil && !sql.ErrDatabaseNotFound.Is(err) {
+			return nil, false, err
+		}
 	}
 
 	if err != nil {
@@ -324,65 +330,6 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 // transaction logic performed on it
 func isNoOpTransactionDatabase(dbName string) bool {
 	return len(dbName) == 0 || dbName == "information_schema" || dbName == "mysql"
-}
-
-// GetInitialDBState returns the InitialDbState for |dbName|.
-func GetInitialDBState(ctx context.Context, dbName string) (InitialDbState, error) {
-	// switch db := db.(type) {
-	// case *UserSpaceDatabase, *SingleTableInfoDatabase:
-	// 	return getInitialDBStateForUserSpaceDb(ctx, db)
-	// }
-
-	// TODO: where to get this data
-	var dbData env.DbData
-
-	rsr := dbData.Rsr
-	ddb := dbData.Ddb
-
-	var retainedErr error
-
-	headCommit, err := ddb.Resolve(ctx, rsr.CWBHeadSpec(), rsr.CWBHeadRef())
-	if err == doltdb.ErrBranchNotFound {
-		retainedErr = err
-		err = nil
-	}
-	if err != nil {
-		return InitialDbState{}, err
-	}
-
-	var ws *doltdb.WorkingSet
-	if retainedErr == nil {
-		ws, err = env.WorkingSet(ctx, ddb, rsr)
-		if err != nil {
-			return InitialDbState{}, err
-		}
-	}
-
-	remotes, err := rsr.GetRemotes()
-	if err != nil {
-		return InitialDbState{}, err
-	}
-
-	backups, err := rsr.GetBackups()
-	if err != nil {
-		return InitialDbState{}, err
-	}
-
-	branches, err := rsr.GetBranches()
-	if err != nil {
-		return InitialDbState{}, err
-	}
-
-	return InitialDbState{
-		// Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     dbData,
-		Remotes:    remotes,
-		Branches:   branches,
-		Backups:    backups,
-		Err:        retainedErr,
-	}, nil
 }
 
 func (d *DoltSession) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
@@ -1096,7 +1043,8 @@ func (d *DoltSession) HasDB(ctx *sql.Context, dbName string) bool {
 
 // AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
-// TODO: the session has a database provider, we shouldn't need to add databases to it explicitly
+// TODO: the session has a database provider, we shouldn't need to add databases to it explicitly, this should be
+//  internal only
 func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	db := dbState.Db
 	DefineSystemVariablesForDB(db.Name())

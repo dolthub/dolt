@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -306,12 +307,15 @@ func (idx fmtIndex) IsGenerated() bool {
 	return idx.generated
 }
 
-// NewLookup implements sql.Index
 func (idx fmtIndex) IndexedAccess(index sql.IndexLookup) (sql.IndexedTable, error) {
 	panic("unimplemented")
 }
 
 // ColumnExpressionTypes implements sql.Index
 func (idx fmtIndex) ColumnExpressionTypes() []sql.ColumnExpressionType {
+	panic("unimplemented")
+}
+
+func (db *SingleTableInfoDatabase) EditOptions() editor.Options {
 	panic("unimplemented")
 }

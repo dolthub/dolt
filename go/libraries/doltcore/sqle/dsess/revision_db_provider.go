@@ -76,7 +76,7 @@ type DoltDatabaseProvider interface {
 	// remoteUrl is a URL (e.g. "file:///dbs/db1") or an <org>/<database> path indicating a database hosted on DoltHub.
 	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error
 	// DbState returns the InitialDbState for the specified database
-	DbState(ctx *sql.Context, dbName string) (InitialDbState, error)
+	DbState(ctx *sql.Context, dbName string, defaultBranch string) (InitialDbState, error)
 }
 
 func EmptyDatabaseProvider() DoltDatabaseProvider {
@@ -87,7 +87,7 @@ type emptyRevisionDatabaseProvider struct {
 	sql.DatabaseProvider
 }
 
-func (e emptyRevisionDatabaseProvider) DbState(ctx *sql.Context, dbName string) (InitialDbState, error) {
+func (e emptyRevisionDatabaseProvider) DbState(ctx *sql.Context, dbName string, defaultBranch string) (InitialDbState, error) {
 	return InitialDbState{}, sql.ErrDatabaseNotFound.New(dbName)
 }
 
