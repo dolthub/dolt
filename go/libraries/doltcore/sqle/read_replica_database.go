@@ -202,7 +202,7 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string, 
 
 			// either ff or create local tracking branch
 			{
-				branchExists, err := rrd.ddb.HasBranch(fetchCtx, branch.GetPath())
+				_, branchExists, err := rrd.ddb.HasBranch(fetchCtx, branch.GetPath())
 				switch {
 				case err != nil:
 				case branchExists:

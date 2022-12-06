@@ -41,7 +41,7 @@ func validateBranchMapping(ctx context.Context, old, new *doltdb.DoltDB) error {
 
 	var ok bool
 	for _, bref := range branches {
-		ok, err = new.HasBranch(ctx, bref.GetPath())
+		_, ok, err = new.HasBranch(ctx, bref.GetPath())
 		if err != nil {
 			return err
 		}

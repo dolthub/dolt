@@ -190,6 +190,7 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 	if err != nil {
 		return nil, err
 	}
+
 	if !ok {
 		db, err = p.databaseForClone(ctx, name)
 		if err != nil {
@@ -635,9 +636,9 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 
 	// We not only have to delete this database, but any derivative ones that we've stored as a result of USE or
 	// connection strings
-	derivativeNamePrefix := dbKey + dbRevisionDelimiter
+	derivativeNamePrefix := strings.ToLower(dbKey + dbRevisionDelimiter)
 	for dbName := range p.databases {
-		if strings.HasPrefix(dbName, derivativeNamePrefix) {
+		if strings.HasPrefix(strings.ToLower(dbName), derivativeNamePrefix) {
 			delete(p.databases, dbName)
 		}
 	}
@@ -671,7 +672,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		return nil, dsess.InitialDbState{}, false, err
 	}
 
-	isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec, p.remoteDialer)
+	caseSensitiveBranchName, isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec, p.remoteDialer)
 	if err != nil {
 		return nil, dsess.InitialDbState{}, false, err
 	}
@@ -686,8 +687,11 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 			}
 		}
 
-		db, init, err := dbRevisionForBranch(ctx, srcDb, resolvedRevSpec)
-		if err != nil {
+		db, init, err := dbRevisionForBranch(ctx, srcDb, caseSensitiveBranchName)
+		// preserve original user case in the case of not found
+		if sql.ErrDatabaseNotFound.Is(err) {
+			return nil, dsess.InitialDbState{}, false, sql.ErrDatabaseNotFound.New(revDB)
+		} else if err != nil {
 			return nil, dsess.InitialDbState{}, false, err
 		}
 
@@ -973,33 +977,33 @@ func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDa
 }
 
 // isBranch returns whether a branch with the given name is in scope for the database given
-func isBranch(ctx context.Context, db SqlDatabase, branchName string, dialer dbfactory.GRPCDialProvider) (bool, error) {
+func isBranch(ctx context.Context, db SqlDatabase, branchName string, dialer dbfactory.GRPCDialProvider) (string, bool, error) {
 	var ddbs []*doltdb.DoltDB
 
 	if rdb, ok := db.(ReadReplicaDatabase); ok {
 		remoteDB, err := rdb.remote.GetRemoteDB(ctx, rdb.ddb.Format(), dialer)
 		if err != nil {
-			return false, err
+			return "", false, err
 		}
 		ddbs = append(ddbs, rdb.ddb, remoteDB)
 	} else if ddb, ok := db.(Database); ok {
 		ddbs = append(ddbs, ddb.ddb)
 	} else {
-		return false, fmt.Errorf("unrecognized type of database %T", db)
+		return "", false, fmt.Errorf("unrecognized type of database %T", db)
 	}
 
 	for _, ddb := range ddbs {
-		branchExists, err := ddb.HasBranch(ctx, branchName)
+		branchName, branchExists, err := ddb.HasBranch(ctx, branchName)
 		if err != nil {
-			return false, err
+			return "", false, err
 		}
 
 		if branchExists {
-			return true, nil
+			return branchName, true, nil
 		}
 	}
 
-	return false, nil
+	return "", false, nil
 }
 
 // isTag returns whether a tag with the given name is in scope for the database given
