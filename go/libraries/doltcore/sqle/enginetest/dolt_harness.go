@@ -318,12 +318,6 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 		require.NoError(d.t, err)
 	}
 
-	// TODO(zachmu): it should be safe to reuse a session with a new database, but it isn't in all cases. Particularly, if you
-	//  have a database that only ever receives read queries, and then you re-use its session for a new database with
-	//  the same name, the first write query will panic on dangling references in the noms layer. Not sure why this is
-	//  happening, but it only happens as a result of this test setup.
-	_ = d.NewSession()
-
 	ctx := enginetest.NewContext(d)
 	databases := pro.AllDatabases(ctx)
 	var dbs []sql.Database
