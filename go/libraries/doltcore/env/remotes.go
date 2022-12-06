@@ -358,7 +358,7 @@ func getRefSpecFromStr(ctx context.Context, ddb *doltdb.DoltDB, refSpecStr strin
 
 // getCurrentBranchRefSpecFromUpstream validates the number of args defined and returns ref.RefSpec object of
 // current branch corresponding to the given upstream.
-func getCurrentBranchRefSpecFromUpstream(currentBranch ref.DoltRef, upstream BranchConfig, argsLen int) (ref.RefSpec, error){
+func getCurrentBranchRefSpecFromUpstream(currentBranch ref.DoltRef, upstream BranchConfig, argsLen int) (ref.RefSpec, error) {
 	if argsLen > 0 {
 		return nil, fmt.Errorf("%w for '%s'", ErrUpstreamBranchAlreadySet, currentBranch)
 	}
