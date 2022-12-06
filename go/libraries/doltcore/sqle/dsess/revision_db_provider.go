@@ -75,7 +75,9 @@ type DoltDatabaseProvider interface {
 	// (otherwise all branches are cloned), remoteName is the name for the remote created in the new database, and
 	// remoteUrl is a URL (e.g. "file:///dbs/db1") or an <org>/<database> path indicating a database hosted on DoltHub.
 	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error
-	// DbState returns the InitialDbState for the specified database
+	// DbState returns the InitialDbState for the specified database and given branch. An empty branch name should use
+	// the default branch for the repository.
+	// TODO: make this use an ok bool instead of relying on sql.DatabaseNotFound errors
 	DbState(ctx *sql.Context, dbName string, defaultBranch string) (InitialDbState, error)
 }
 

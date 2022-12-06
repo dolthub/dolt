@@ -147,7 +147,7 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts e
 }
 
 // GetInitialDBState returns the InitialDbState for |db|.
-func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
+func GetInitialDBState(ctx context.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
 	switch db := db.(type) {
 	case *UserSpaceDatabase, *SingleTableInfoDatabase:
 		return getInitialDBStateForUserSpaceDb(ctx, db)
@@ -156,11 +156,16 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 	rsr := db.DbData().Rsr
 	ddb := db.DbData().Ddb
 
-	r := ref.NewBranchRef(branch)
+	var r ref.DoltRef
+	if len(branch) > 0 {
+		r = ref.NewBranchRef(branch)
+	} else {
+		r = rsr.CWBHeadRef()
+	}
 
 	var retainedErr error
 
-	headCommit, err := ddb.Resolve(ctx, rsr.CWBHeadSpec(), rsr.CWBHeadRef())
+	headCommit, err := ddb.ResolveCommitRef(ctx, r)
 	if err == doltdb.ErrBranchNotFound {
 		retainedErr = err
 		err = nil
@@ -171,7 +176,12 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 
 	var ws *doltdb.WorkingSet
 	if retainedErr == nil {
-		ws, err = env.WorkingSet(ctx, ddb, rsr)
+		workingSetRef, err := ref.WorkingSetRefForHead(r)
+		if err != nil {
+			return dsess.InitialDbState{}, err
+		}
+
+		ws, err = db.DbData().Ddb.ResolveWorkingSet(ctx, workingSetRef)
 		if err != nil {
 			return dsess.InitialDbState{}, err
 		}
@@ -205,7 +215,7 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 }
 
 func (db Database) InitialDBState(ctx context.Context) (dsess.InitialDbState, error) {
-	return GetInitialDBState(ctx, db)
+	return GetInitialDBState(ctx, db, "")
 }
 
 // Name returns the name of this database, set at creation time.

@@ -332,7 +332,7 @@ func getDbStates(ctx context.Context, dbs []dsqle.SqlDatabase) ([]dsess.InitialD
 		if ok && val != "" {
 			init, err = getInitialDBStateWithDefaultBranch(ctx, db, val.(string))
 		} else {
-			init, err = dsqle.GetInitialDBState(ctx, db)
+			init, err = dsqle.GetInitialDBState(ctx, db, "")
 		}
 		if err != nil {
 			return nil, err
@@ -345,7 +345,7 @@ func getDbStates(ctx context.Context, dbs []dsqle.SqlDatabase) ([]dsess.InitialD
 }
 
 func getInitialDBStateWithDefaultBranch(ctx context.Context, db dsqle.SqlDatabase, branch string) (dsess.InitialDbState, error) {
-	init, err := dsqle.GetInitialDBState(ctx, db)
+	init, err := dsqle.GetInitialDBState(ctx, db, "")
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}

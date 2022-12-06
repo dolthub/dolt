@@ -414,7 +414,7 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 	p.databases[formattedName] = db
 	p.dbLocations[formattedName] = newEnv.FS
 
-	dbstate, err := GetInitialDBState(ctx, db)
+	dbstate, err := GetInitialDBState(ctx, db, "")
 	if err != nil {
 		return err
 	}
@@ -562,7 +562,7 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 
 	p.databases[formatDbMapKeyName(db.Name())] = db
 
-	dbstate, err := GetInitialDBState(ctx, db)
+	dbstate, err := GetInitialDBState(ctx, db, "")
 	if err != nil {
 		return nil, err
 	}
@@ -837,7 +837,7 @@ func (p DoltDatabaseProvider) stateForDatabase(ctx *sql.Context, dbName string, 
 		return dsess.InitialDbState{}, false, nil
 	}
 
-	dbState, err := GetInitialDBState(ctx, db)
+	dbState, err := GetInitialDBState(ctx, db, "")
 	if err != nil {
 		return dsess.InitialDbState{}, false, err
 	}

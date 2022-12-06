@@ -146,13 +146,18 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 	var err error
 
 	_, val, ok := sql.SystemVariables.GetGlobal(DefaultBranchKey(dbName))
-	if ok && val != "" {
-		init, err = d.provider.DbState(ctx, dbName, val.(string))
-		if err != nil && !sql.ErrDatabaseNotFound.Is(err) {
-			return nil, false, err
-		}
+	initialBranch := ""
+	if ok {
+		initialBranch = val.(string)
 	}
 
+	// First attempt to find a bare database (no revision spec)
+	init, err = d.provider.DbState(ctx, dbName, initialBranch)
+	if err != nil && !sql.ErrDatabaseNotFound.Is(err) {
+		return nil, false, err
+	}
+
+	// If that doesn't work, attempt to parse the database name as a revision spec
 	if err != nil {
 		init, err = d.provider.RevisionDbState(ctx, dbName)
 		if err != nil {
@@ -160,10 +165,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 		}
 	}
 
-	// TODO: this could potentially add a |sess.dbStates| entry
-	// 	for every commit in the history, leaking memory.
-	// 	We need a size-limited data structure for read-only
-	// 	revision databases reading from Commits.
+	// If we got this far, we have a valid inital database state, so add it to the session for future reuse
 	if err = d.AddDB(ctx, init); err != nil {
 		return nil, ok, err
 	}
