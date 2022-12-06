@@ -45,16 +45,28 @@ When reading, the values are read from the global and repository local configura
 When writing, the new value is written to the repository local configuration file by default, and options {{.LessThan}}--global{{.GreaterThan}}, can be used to tell the command to write to that location (you can say {{.LessThan}}--local{{.GreaterThan}} but that is the default).
 
 Valid configuration variables:
+
 	- core.editor - lets you edit 'commit' or 'tag' messages by launching the set editor.
+
 	- creds.add_url - sets the endpoint used to authenticate a client for 'dolt login'.
+
 	- doltlab.insecure - boolean flag used to authenticate a client against DoltLab.
+
 	- init.defaultbranch - allows overriding the default branch name e.g. when initializing a new repository.
+
 	- metrics.disabled - boolean flag disables sending metrics when true.
-	- user.creds - sets user keypairs for authenticating with doltremoteapi
-	- user.email - sets name used in the author and committer field of commit objects
-	- user.name - sets email used in the author and committer field of commit objects
-	- remotes.default_host - sets default host for authenticating eith doltremoteapi
-	- remotes.default_port - sets default port for authenticating eith doltremoteapi
+
+	- user.creds - sets user keypairs for authenticating with doltremoteapi.
+
+	- user.email - sets name used in the author and committer field of commit objects.
+
+	- user.name - sets email used in the author and committer field of commit objects.
+
+	- remotes.default_host - sets default host for authenticating eith doltremoteapi.
+
+	- remotes.default_port - sets default port for authenticating eith doltremoteapi.
+
+	- push.autoSetupRemote - if set to "true" assume --set-upstream on default push when no upstream tracking exists for the current branch.
 `,
 
 	Synopsis: []string{

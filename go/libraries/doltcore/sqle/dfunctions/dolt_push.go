@@ -91,7 +91,9 @@ func DoDoltPush(ctx *sql.Context, args []string) (int, error) {
 		return cmdFailure, err
 	}
 
-	opts, err := env.NewPushOpts(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
+	autoSetUpRemote := loadConfig(ctx).GetStringOrDefault(env.PushAutoSetupRemote, "false")
+
+	opts, err := env.NewPushOpts(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag), autoSetUpRemote == "true")
 	if err != nil {
 		return cmdFailure, err
 	}
