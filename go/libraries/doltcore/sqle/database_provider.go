@@ -837,7 +837,7 @@ func (p DoltDatabaseProvider) stateForDatabase(ctx *sql.Context, dbName string, 
 		return dsess.InitialDbState{}, false, nil
 	}
 
-	dbState, err := GetInitialDBState(ctx, db, "")
+	dbState, err := GetInitialDBState(ctx, db, branch)
 	if err != nil {
 		return dsess.InitialDbState{}, false, err
 	}
