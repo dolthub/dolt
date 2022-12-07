@@ -198,12 +198,6 @@ func (se *SqlEngine) Databases(ctx *sql.Context) []dsqle.SqlDatabase {
 	return nil
 }
 
-// GetRoots returns the underlying roots values the engine read/writes to.
-// TODO: very suspect, get rid of this
-func (se *SqlEngine) GetRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
 // NewContext converts a context.Context to a sql.Context.
 // TODO: investigate uses of this
 func (se *SqlEngine) NewContext(ctx context.Context) (*sql.Context, error) {
