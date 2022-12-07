@@ -17,9 +17,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/dolthub/dolt/go/performance/sysbench"
 	"log"
 	"os"
+
+	"github.com/dolthub/dolt/go/performance/sysbench"
 
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 )
