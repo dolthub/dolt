@@ -180,10 +180,14 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 
 func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
 	s, ok, err := d.lookupDbState(ctx, dbName)
+	if err != nil {
+		return nil, false, err
+	}
 	if ok && s.Err != nil {
 		return nil, false, s.Err
 	}
-	return s, ok, err
+
+	return s, ok, nil
 }
 
 // Flush flushes all changes sitting in edit sessions to the session root for the database named. This normally

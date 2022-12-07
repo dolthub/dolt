@@ -24,9 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
-var tableName = "people"
-
-// Smoke test: schema runs successfull
+// Smoke test: dolt schema export runs successfully
 func TestSchemaExport(t *testing.T) {
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
