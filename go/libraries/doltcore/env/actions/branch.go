@@ -327,45 +327,62 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	}
 
 	if !force {
-		currentWs, err := dEnv.WorkingSet(ctx)
-		if err != nil {
-			return err
-		}
-
-		destWsRef, err := ref.WorkingSetRefForHead(branchRef)
-		if err != nil {
-			return err
-		}
-		destWs, err := db.ResolveWorkingSet(ctx, destWsRef)
-		if err != nil {
-			return err
-		}
-
-		detectWorkingSetChanges := func(ws *doltdb.WorkingSet) (hasChanges bool, wrHash hash.Hash, err error) {
-			wrHash, err = ws.WorkingRoot().HashOf()
+		// checkWorkingSetCompatibility checks that the current working set is "compatible" with the dest working set.
+		// This means that if both working sets are present (ie there are changes on both source and dest branches),
+		// we check if the changes are identical before allowing a clobbering checkout.
+		// Working set errors are ignored by this function, because they are properly handled elsewhere.
+		checkWorkingSetCompatibility := func() error {
+			currentWs, err := dEnv.WorkingSet(ctx)
 			if err != nil {
-				return false, hash.Hash{}, err
+				// working set does not exist, skip check
+				return nil
 			}
-			srHash, err := ws.StagedRoot().HashOf()
+
+			destWsRef, err := ref.WorkingSetRefForHead(branchRef)
 			if err != nil {
-				return false, hash.Hash{}, err
+				// dest working set does not exist, skip check
+				return nil
 			}
-			hasChanges = !wrHash.Equal(srHash)
-			return hasChanges, wrHash, nil
+			destWs, err := db.ResolveWorkingSet(ctx, destWsRef)
+			if err != nil {
+				// dest working set does not resolve, skip check
+				return nil
+			}
+
+			detectWorkingSetChanges := func(ws *doltdb.WorkingSet) (hasChanges bool, wrHash hash.Hash, err error) {
+				wrHash, err = ws.WorkingRoot().HashOf()
+				if err != nil {
+					return false, hash.Hash{}, err
+				}
+				srHash, err := ws.StagedRoot().HashOf()
+				if err != nil {
+					return false, hash.Hash{}, err
+				}
+				hasChanges = !wrHash.Equal(srHash)
+				return hasChanges, wrHash, nil
+			}
+
+			sourceHasChanges, sourceHash, err := detectWorkingSetChanges(currentWs)
+			if err != nil {
+				// error detecting source changes, skip check
+				return nil
+			}
+			destHasChanges, destHash, err := detectWorkingSetChanges(destWs)
+			if err != nil {
+				// error detecting dest changes, skip check
+				return nil
+			}
+			areHashesEqual := sourceHash.Equal(destHash)
+
+			if sourceHasChanges && destHasChanges && !areHashesEqual {
+				return ErrWorkingSetsOnBothBranches
+			}
+			return nil
 		}
 
-		sourceHasChanges, sourceHash, err := detectWorkingSetChanges(currentWs)
+		err = checkWorkingSetCompatibility()
 		if err != nil {
 			return err
-		}
-		destHasChanges, destHash, err := detectWorkingSetChanges(destWs)
-		if err != nil {
-			return err
-		}
-		areHashesEqual := sourceHash.Equal(destHash)
-
-		if sourceHasChanges && destHasChanges && !areHashesEqual {
-			return ErrWorkingSetsOnBothBranches
 		}
 	}
 
