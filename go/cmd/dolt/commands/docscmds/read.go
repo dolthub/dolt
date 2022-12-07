@@ -131,10 +131,10 @@ const (
 	writeDocTemplate = `REPLACE INTO dolt_docs VALUES ("%s", "%s")`
 )
 
-func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, content string) (error) {
+func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, content string) error {
 	var (
-		sctx  *sql.Context
-		err   error
+		sctx *sql.Context
+		err  error
 	)
 
 	sctx, err = eng.NewContext(ctx)
