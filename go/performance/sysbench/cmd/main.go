@@ -26,7 +26,7 @@ import (
 )
 
 var run = flag.String("run", "", "the path to a test file")
-var scriptDir = flag.String("scriptDir", "", "the path to the script directory")
+var scriptDir = flag.String("script-dir", "", "the path to the script directory")
 var config = flag.String("config", "", "the path to a config file")
 var out = flag.String("out", "", "result output path")
 

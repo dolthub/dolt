@@ -4,9 +4,8 @@ on:
     types: [ benchmark-systab ]
 env:
   BENCH_DIR: 'go/performance/sysbench'
-  MYSQL_PORT: 3309
-  MYSQL_PASSWORD: password
-  RESULT_TABLE_NAME=sysbench_results
+  RESULT_TABLE_NAME: 'sysbench_results'
+  DOLTHUB_DB: 'import-perf/systab-perf'
 jobs:
   bench:
     name: Benchmark
@@ -39,7 +38,7 @@ jobs:
     - name: Clone sysbench scripts
       run: |
         scripts=$GITHUB_WORKSPACE/scripts
-        git clone git@github.com:dolthub/sysbench-lua-scripts.git "$scripts"
+        git clone git@github.com:max-hoffman/systab-sysbench-scripts.git "$scripts"
 
     - name: Run bench
       id: bench
@@ -47,9 +46,13 @@ jobs:
       run: |
         out="$GITHUB_WORKSPACE/results.sql"
         testspec="../${{ env.BENCH_DIR }}/testdata/${{ github.event.client_payload.run_file }}"
+        config="../${{ env.BENCH_DIR }}/testdata/default-config.yaml"
+        scripts="$GITHUB_WORKSPACE/scripts"
         go run \
           "github.com/dolthub/dolt/${{ env.BENCH_DIR }}/cmd" \
-          -test "$testspec" \
+          -run "$testspec" \
+          -config "$config" \
+          -script-dir "$scripts" \
           -out "$out"
         echo "::set-output name=result_path::$out"
 
@@ -66,7 +69,7 @@ jobs:
         dolt config --global --add user.name "systab-perf"
 
         echo '${{ secrets.DOLTHUB_IMPORT_PERF_CREDS_VALUE }}' | dolt creds import
-        dolt clone import-perf/systab-perf "$dolt_dir"
+        dolt clone ${{ env.DOLTHUB_DB }} "$dolt_dir"
 
         cd "$dolt_dir"
 
