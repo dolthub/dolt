@@ -317,5 +317,5 @@ func (idx fmtIndex) ColumnExpressionTypes() []sql.ColumnExpressionType {
 }
 
 func (db *SingleTableInfoDatabase) EditOptions() editor.Options {
-	panic("unimplemented")
+	return editor.Options{}
 }
