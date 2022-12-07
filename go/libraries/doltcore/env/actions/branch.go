@@ -31,6 +31,7 @@ import (
 var ErrAlreadyExists = errors.New("already exists")
 var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
 var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into its parent; use `-f` to force")
+var ErrWorkingSetsOnBothBranches = errors.New("working sets exist on both branches")
 
 func RenameBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliConfig, oldBranch, newBranch string, force bool) error {
 	oldRef := ref.NewBranchRef(oldBranch)
@@ -323,6 +324,49 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	branchRoot, err := BranchRoot(ctx, db, brName)
 	if err != nil {
 		return err
+	}
+
+	if !force {
+		currentWs, err := dEnv.WorkingSet(ctx)
+		if err != nil {
+			return err
+		}
+
+		destWsRef, err := ref.WorkingSetRefForHead(branchRef)
+		if err != nil {
+			return err
+		}
+		destWs, err := db.ResolveWorkingSet(ctx, destWsRef)
+		if err != nil {
+			return err
+		}
+
+		detectWorkingSetChanges := func(ws *doltdb.WorkingSet) (hasChanges bool, wrHash hash.Hash, err error) {
+			wrHash, err = ws.WorkingRoot().HashOf()
+			if err != nil {
+				return false, hash.Hash{}, err
+			}
+			srHash, err := ws.StagedRoot().HashOf()
+			if err != nil {
+				return false, hash.Hash{}, err
+			}
+			hasChanges = !wrHash.Equal(srHash)
+			return hasChanges, wrHash, nil
+		}
+
+		sourceHasChanges, sourceHash, err := detectWorkingSetChanges(currentWs)
+		if err != nil {
+			return err
+		}
+		destHasChanges, destHash, err := detectWorkingSetChanges(destWs)
+		if err != nil {
+			return err
+		}
+		areHashesEqual := sourceHash.Equal(destHash)
+
+		if sourceHasChanges && destHasChanges && !areHashesEqual {
+			return ErrWorkingSetsOnBothBranches
+		}
 	}
 
 	roots, err := dEnv.Roots(ctx)

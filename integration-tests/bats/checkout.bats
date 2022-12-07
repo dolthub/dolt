@@ -41,9 +41,11 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "modified" ]] || false
 
-    # Making additional changes to main, should carry them to feature without any problem
+    # Making additional changes to main, should error out because the changes are different from the feature branch
     dolt sql -q "insert into test values (3)"
-    dolt checkout feature
+    run dolt checkout feature
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "working sets exist on both branches" ]] || false
 
     run dolt sql -q "select count(*) from test"
     [ "$status" -eq 0 ]
@@ -51,7 +53,7 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "modified" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
 }
 
 @test "checkout: dolt checkout doesn't stomp working set changes on other branch" {
@@ -284,4 +286,69 @@ SQL
   commitmeta=$(dolt log --oneline --parents | head -n 1)
   [[ "$commitmeta" =~ "$shaparent1" ]] || false
   [[ "$commitmeta" =~ "$shaparent2" ]] || false
+}
+
+
+@test "checkout: block checkout when current and target branches have working set changes" {
+  dolt sql -q "create table users (id int primary key, name varchar(32));"
+  dolt add .
+  dolt commit -m "original users table"
+  dolt branch -c main feature
+
+  # make changes on main
+  dolt sql -q 'insert into users (id, name) values (1, "main-change");'
+  # make sure changes are present
+  run dolt sql -q "select count(*) from users"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "1" ]] || false
+
+  # checkout feature
+  dolt checkout feature
+  # make sure changes are pulled in from main
+  run dolt sql -q "select count(*) from users"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "1" ]] || false
+
+  # make changes on feature
+  dolt sql -q 'insert into users (id, name) values (2, "feature-change");'
+  # make sure new changes are present
+  run dolt sql -q "select count(*) from users"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "2" ]] || false
+
+  # try to checkout main, but fail due to working set changes
+  run dolt checkout main
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "working sets exist on both branches" ]] || false
+
+  # try to checkout main, but succeed due to force flag
+  dolt checkout -f main
+
+  # make sure changes on both branches were applied
+  run dolt sql -q "select count(*) from users"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "2" ]] || false
+}
+
+@test "checkout: allow checkout when current and target branches have identical working set changes" {
+  dolt sql -q "create table users (id int primary key, name varchar(32));"
+  dolt add .
+  dolt commit -m "original users table"
+
+  dolt branch -c main feature
+  dolt sql -q 'insert into users (id, name) values (1, "main-change");'
+
+  run dolt sql -q "select count(*) from users"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "1" ]] || false
+
+  dolt checkout feature
+  run dolt sql -q "select count(*) from users"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "1" ]] || false
+
+  dolt checkout main
+  run dolt sql -q "select count(*) from users"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "1" ]] || false
 }
