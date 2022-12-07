@@ -223,10 +223,6 @@ func (j *chunkJournal) Name() string {
 
 // Update implements manifest.
 func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
-	if emptyAddr(addr(next.root)) {
-		next.root = next.root
-	}
-
 	if j.journal == nil {
 		// pass the update to |j.backing| if the journals is not initialized
 		return j.backing.Update(ctx, lastLock, next, stats, writeHook)
