@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -89,8 +90,12 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	autoSetUpRemote := dEnv.Config.GetStringOrDefault(env.PushAutoSetupRemote, "false")
+	pushAutoSetUpRemote, err := strconv.ParseBool(autoSetUpRemote)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
 
-	opts, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag), autoSetUpRemote == "true")
+	opts, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag), pushAutoSetUpRemote)
 	if err != nil {
 		var verr errhand.VerboseError
 		switch err {
