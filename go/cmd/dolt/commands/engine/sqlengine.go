@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -297,8 +296,6 @@ func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.C
 }
 
 // TODO: this should not require autocommit, that should be handled by the session default
-// TODO: this is getting its list of DBs from the catalog, it should just have a provider handle and get them from there
-// TODO: goal here is for session.StartTransaction to have all the information it needs when
 func newDoltSession(
 	pro dsqle.DoltDatabaseProvider,
 	config config.ReadWriteConfig,
@@ -320,61 +317,6 @@ func newDoltSession(
 
 		return dsess, nil
 	}
-}
-
-func getDbStates(ctx context.Context, dbs []dsqle.SqlDatabase) ([]dsess.InitialDbState, error) {
-	dbStates := make([]dsess.InitialDbState, len(dbs))
-	for i, db := range dbs {
-		var init dsess.InitialDbState
-		var err error
-
-		_, val, ok := sql.SystemVariables.GetGlobal(dsess.DefaultBranchKey(db.Name()))
-		if ok && val != "" {
-			init, err = getInitialDBStateWithDefaultBranch(ctx, db, val.(string))
-		} else {
-			init, err = dsqle.GetInitialDBState(ctx, db, "")
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		dbStates[i] = init
-	}
-
-	return dbStates, nil
-}
-
-func getInitialDBStateWithDefaultBranch(ctx context.Context, db dsqle.SqlDatabase, branch string) (dsess.InitialDbState, error) {
-	init, err := dsqle.GetInitialDBState(ctx, db, "")
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	ddb := init.DbData.Ddb
-	r := ref.NewBranchRef(branch)
-
-	head, err := ddb.ResolveCommitRef(ctx, r)
-	if err != nil {
-		init.Err = fmt.Errorf("failed to connect to database default branch: '%s/%s'; %w", db.Name(), branch, err)
-	} else {
-		init.Err = nil
-	}
-	init.HeadCommit = head
-
-	if init.Err == nil {
-		workingSetRef, err := ref.WorkingSetRefForHead(r)
-		if err != nil {
-			return dsess.InitialDbState{}, err
-		}
-
-		ws, err := init.DbData.Ddb.ResolveWorkingSet(ctx, workingSetRef)
-		if err != nil {
-			return dsess.InitialDbState{}, err
-		}
-		init.WorkingSet = ws
-	}
-
-	return init, nil
 }
 
 // NewSqlEngineForEnv returns a SqlEngine configured for the environment provided, with a single root user
