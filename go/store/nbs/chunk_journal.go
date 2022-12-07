@@ -53,6 +53,8 @@ type chunkJournal struct {
 }
 
 var _ tablePersister = &chunkJournal{}
+var _ tableFilePersister = &chunkJournal{}
+
 var _ manifest = &chunkJournal{}
 var _ io.Closer = &chunkJournal{}
 
@@ -214,6 +216,10 @@ func (j *chunkJournal) Exists(ctx context.Context, name addr, chunkCount uint32,
 // PruneTableFiles implements tablePersister.
 func (j *chunkJournal) PruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error {
 	return j.persister.PruneTableFiles(ctx, contents, mtime)
+}
+
+func (j *chunkJournal) Path() string {
+	return filepath.Dir(j.path)
 }
 
 // Name implements manifest.

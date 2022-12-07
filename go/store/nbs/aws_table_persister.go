@@ -63,6 +63,8 @@ type awsTablePersister struct {
 	q      MemoryQuotaProvider
 }
 
+var _ tablePersister = awsTablePersister{}
+
 type awsLimits struct {
 	partTarget, partMin, partMax uint64
 	itemMax                      int
