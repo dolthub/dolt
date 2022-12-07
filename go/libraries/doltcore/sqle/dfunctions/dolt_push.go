@@ -16,6 +16,7 @@ package dfunctions
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -91,7 +92,13 @@ func DoDoltPush(ctx *sql.Context, args []string) (int, error) {
 		return cmdFailure, err
 	}
 
-	opts, err := env.NewPushOpts(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
+	autoSetUpRemote := loadConfig(ctx).GetStringOrDefault(env.PushAutoSetupRemote, "false")
+	pushAutoSetUpRemote, err := strconv.ParseBool(autoSetUpRemote)
+	if err != nil {
+		return cmdFailure, err
+	}
+
+	opts, err := env.NewPushOpts(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag), pushAutoSetUpRemote)
 	if err != nil {
 		return cmdFailure, err
 	}

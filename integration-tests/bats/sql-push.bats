@@ -170,6 +170,39 @@ teardown() {
     # upstream should be set still
     run dolt push
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
+    [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
+}
+
+@test "sql-push: dolt_push without --set-upstream persists outside of session when push.autoSetupRemote is set to true" {
+    cd repo1
+    dolt checkout -b other
+    run dolt push
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "The current branch other has no upstream branch." ]] || false
+
+    dolt config --local --add push.autoSetUpRemote true
+    dolt sql -q "select dolt_push()"
+    # upstream should be set still
+    run dolt push
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
+    [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
+}
+
+@test "sql-push: dolt_push without --set-upstream persists outside of session when push.autoSetupRemote is set to all capital TRUE" {
+    cd repo1
+    dolt checkout -b other
+    run dolt push
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "The current branch other has no upstream branch." ]] || false
+
+    dolt config --local --add push.autoSetUpRemote TRUE
+    dolt sql -q "select dolt_push()"
+    # upstream should be set still
+    run dolt push
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
     [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
 }
 

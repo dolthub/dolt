@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -88,7 +89,13 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, pushDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	opts, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
+	autoSetUpRemote := dEnv.Config.GetStringOrDefault(env.PushAutoSetupRemote, "false")
+	pushAutoSetUpRemote, err := strconv.ParseBool(autoSetUpRemote)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	opts, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag), pushAutoSetUpRemote)
 	if err != nil {
 		var verr errhand.VerboseError
 		switch err {
@@ -100,7 +107,10 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			}
 			verr = errhand.BuildDError("fatal: The current branch " + currentBranch.GetPath() + " has no upstream branch.\n" +
 				"To push the current branch and set the remote as upstream, use\n" +
-				"\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath()).Build()
+				"\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath() + "\n" +
+				"To have this happen automatically for branches without a tracking\n" +
+				"upstream, see 'push.autoSetupRemote' in 'dolt config --help'.").Build()
+
 		case env.ErrInvalidSetUpstreamArgs:
 			verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
 		default:
