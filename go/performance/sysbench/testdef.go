@@ -18,9 +18,6 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
-	"github.com/creasty/defaults"
-	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v3"
 	"math"
 	"os"
 	"os/exec"
@@ -29,6 +26,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/creasty/defaults"
+	"github.com/stretchr/testify/require"
+	yaml "gopkg.in/yaml.v3"
 
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 )
