@@ -294,6 +294,17 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		return nil, err
 	}
 
+	// TODO: this needs to happen for every DB in the database, not just the one named in the transaction
+	if sessionState != nil && sessionState.db != nil {
+		rrd, ok := sessionState.db.(RemoteReadReplicaDatabase)
+		if ok {
+			err := rrd.PullFromRemote(ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	if sessionState.readOnly {
 		return DisabledTransaction{}, nil
 	}
@@ -1055,6 +1066,8 @@ func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	sessionState := NewEmptyDatabaseSessionState()
 	d.dbStates[strings.ToLower(db.Name())] = sessionState
 	sessionState.dbName = db.Name()
+	sessionState.db = db
+
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
 	sessionState.dbData = dbState.DbData

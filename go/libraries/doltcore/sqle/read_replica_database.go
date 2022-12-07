@@ -47,6 +47,7 @@ var _ sql.TemporaryTableCreator = ReadReplicaDatabase{}
 var _ sql.TableRenamer = ReadReplicaDatabase{}
 var _ sql.TriggerDatabase = &ReadReplicaDatabase{}
 var _ sql.StoredProcedureDatabase = ReadReplicaDatabase{}
+var _ dsess.RemoteReadReplicaDatabase = ReadReplicaDatabase{}
 
 var ErrFailedToLoadReplicaDB = errors.New("failed to load replica database")
 var ErrInvalidReplicateHeadsSetting = errors.New("invalid replicate heads setting")
@@ -84,23 +85,6 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		limiter:  newLimiter(),
 	}, nil
 }
-
-// TODO: replace this with logic somewhere else, maybe transaction lifecycle hooks or a different kind of transaction
-// func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
-// 	if rrd.srcDB != nil {
-// 		err := rrd.PullFromRemote(ctx)
-// 		if err != nil {
-// 			err = fmt.Errorf("replication failed: %w", err)
-// 			if !SkipReplicationWarnings() {
-// 				return nil, err
-// 			}
-// 			ctx.GetLogger().Warn(err.Error())
-// 		}
-// 	} else {
-// 		ctx.GetLogger().Warn("replication failed; dolt_replication_remote value is misconfigured")
-// 	}
-// 	return rrd.Database.StartTransaction(ctx, tCharacteristic)
-// }
 
 func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 	_, headsArg, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateHeads)

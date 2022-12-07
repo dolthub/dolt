@@ -55,6 +55,11 @@ type RevisionDatabase interface {
 	Revision() string
 }
 
+// RemoteReadReplicaDatabase is a database that pulls from a connected remote when a transaction begins.
+type RemoteReadReplicaDatabase interface {
+	PullFromRemote(ctx *sql.Context) error
+}
+
 type DoltDatabaseProvider interface {
 	sql.MutableDatabaseProvider
 	RevisionDatabaseProvider
