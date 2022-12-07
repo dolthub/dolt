@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -66,6 +67,7 @@ const (
 	deleteForceFlag = "D"
 	verboseFlag     = cli.VerboseFlag
 	allFlag         = "all"
+	datasetsFlag    = "datasets"
 	remoteFlag      = "remote"
 	showCurrentFlag = "show-current"
 )
@@ -98,6 +100,7 @@ func (cmd BranchCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(deleteForceFlag, "", "Shortcut for {{.EmphasisLeft}}--delete --force{{.EmphasisRight}}.")
 	ap.SupportsFlag(verboseFlag, "v", "When in list mode, show the hash and commit subject line for each head")
 	ap.SupportsFlag(allFlag, "a", "When in list mode, shows remote tracked branches")
+	ap.SupportsFlag(datasetsFlag, "", "List all datasets in the database")
 	ap.SupportsFlag(remoteFlag, "r", "When in list mode, show only remote tracked branches. When with -d, delete a remote tracking branch.")
 	ap.SupportsFlag(showCurrentFlag, "", "Print the name of the current branch")
 	ap.SupportsString(cli.TrackFlag, "t", "", "When creating a new branch, set up 'upstream' configuration.")
@@ -128,6 +131,8 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return printBranches(ctx, dEnv, apr, usage)
 	case apr.Contains(showCurrentFlag):
 		return printCurrentBranch(dEnv)
+	case apr.Contains(datasetsFlag):
+		return printAllDatasets(ctx, dEnv)
 	case apr.NArg() > 0:
 		return createBranch(ctx, dEnv, apr, usage)
 	default:
@@ -207,6 +212,43 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 
 func printCurrentBranch(dEnv *env.DoltEnv) int {
 	cli.Println(dEnv.RepoStateReader().CWBHeadRef().GetPath())
+	return 0
+}
+
+func printAllDatasets(ctx context.Context, dEnv *env.DoltEnv) int {
+	refs, err := dEnv.DoltDB.GetHeadRefs(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
+	}
+	sort.Slice(refs, func(i, j int) bool {
+		return refs[i].String() < refs[j].String()
+	})
+	for _, r := range refs {
+		cli.Println("  " + r.String())
+	}
+
+	branches, err := dEnv.DoltDB.GetBranches(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
+	}
+	sort.Slice(branches, func(i, j int) bool {
+		return branches[i].String() < branches[j].String()
+	})
+	for _, b := range branches {
+		var w ref.WorkingSetRef
+		w, err = ref.WorkingSetRefForHead(b)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
+		}
+
+		_, err = dEnv.DoltDB.ResolveWorkingSet(ctx, w)
+		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
+			continue
+		} else if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
+		}
+		cli.Println("  " + w.String())
+	}
 	return 0
 }
 
