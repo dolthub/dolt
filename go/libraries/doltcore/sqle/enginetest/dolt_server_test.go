@@ -311,7 +311,8 @@ func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
 			sc, serverConfig := startServer(t, true, "", "")
-			sc.WaitForStart()
+			err := sc.WaitForStart()
+			require.NoError(t, err)
 
 			conn1, sess1 := newConnection(t, serverConfig)
 			conn2, sess2 := newConnection(t, serverConfig)
@@ -356,7 +357,7 @@ func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 			require.NoError(t, conn2.Close())
 
 			sc.StopServer()
-			err := sc.WaitForClose()
+			err = sc.WaitForClose()
 			require.NoError(t, err)
 		})
 	}
