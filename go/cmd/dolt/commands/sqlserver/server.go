@@ -229,11 +229,12 @@ func Serve(
 	var remoteSrv *remotesrv.Server
 	if serverConfig.RemotesapiPort() != nil {
 		if remoteSrvSqlCtx, err := sqlEngine.NewContext(context.Background()); err == nil {
+			listenaddr := fmt.Sprintf(":%d", *serverConfig.RemotesapiPort())
 			args := sqle.RemoteSrvServerArgs(remoteSrvSqlCtx, remotesrv.ServerArgs{
-				Logger:   logrus.NewEntry(lgr),
-				ReadOnly: true,
-				HttpPort: *serverConfig.RemotesapiPort(),
-				GrpcPort: *serverConfig.RemotesapiPort(),
+				Logger:         logrus.NewEntry(lgr),
+				ReadOnly:       true,
+				HttpListenAddr: listenaddr,
+				GrpcListenAddr: listenaddr,
 			})
 			remoteSrv, err = remotesrv.NewServer(args)
 			if err != nil {
@@ -282,7 +283,7 @@ func Serve(
 
 			listeners, err := clusterRemoteSrv.Listeners()
 			if err != nil {
-				lgr.Errorf("error starting remotesapi server listeners for cluster config on port %d: %v", clusterController.RemoteSrvPort(), err)
+				lgr.Errorf("error starting remotesapi server listeners for cluster config on %s: %v", clusterController.RemoteSrvListenAddr(), err)
 				startError = err
 				return
 			}

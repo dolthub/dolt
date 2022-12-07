@@ -164,7 +164,7 @@ func validateTableDataPartition(ctx context.Context, name string, old, new *dolt
 }
 
 func equalRows(old, new sql.Row, sch sql.Schema) (bool, error) {
-	if len(new) != len(new) || len(new) != len(sch) {
+	if len(new) != len(old) || len(new) != len(sch) {
 		return false, nil
 	}
 

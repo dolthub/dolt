@@ -179,6 +179,26 @@ teardown() {
     [[ "$output" =~ "remotes/origin/new_branch" ]] || false
 }
 
+@test "replication: push on call dolt_branch(-c..." {
+    cd repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_branch
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "call dolt_add('.')"
+    dolt sql -q "call dolt_commit('-am', 'commit')"
+    dolt sql -q "call dolt_branch('-c', 'main', 'new_branch')"
+
+    cd ..
+    dolt clone file://./bac1 repo2
+    cd repo2
+    run dolt branch -av
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "remotes/origin/main" ]] || false
+    [[ "$output" =~ "remotes/origin/new_branch" ]] || false
+}
+
+
 @test "replication: push on call dolt_checkout(-b..." {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
