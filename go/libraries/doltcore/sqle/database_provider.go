@@ -269,8 +269,9 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 
 	all = make([]sql.Database, 0, len(p.databases))
 	var foundDatabase bool
+	currDb := strings.ToLower(ctx.GetCurrentDatabase())
 	for _, db := range p.databases {
-		if db.Name() == ctx.GetCurrentDatabase() {
+		if strings.ToLower(db.Name()) == currDb {
 			foundDatabase = true
 		}
 		all = append(all, db)
@@ -278,8 +279,8 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 	p.mu.RUnlock()
 
 	// If the current database is not one of the primary databases, it must be a transitory revision database
-	if !foundDatabase && ctx.GetCurrentDatabase() != "" {
-		revDb, _, ok, err := p.databaseForRevision(ctx, ctx.GetCurrentDatabase())
+	if !foundDatabase && currDb != "" {
+		revDb, _, ok, err := p.databaseForRevision(ctx, currDb)
 		if err != nil {
 			// We can't return an error from this interface function, so just log a message
 			ctx.GetLogger().Warnf("unable to load %q as a database revision: %s", ctx.GetCurrentDatabase(), err.Error())
@@ -338,9 +339,8 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 			}
 		}
 	} else {
-		dbs := sess.GetDbStates()
 		var formats = make(map[*types.NomsBinFormat]int)
-		for dbName, _ := range dbs {
+		for dbName, _ := range p.databases {
 			if ddb, ok := sess.GetDoltDB(ctx, dbName); ok {
 				formats[ddb.ValueReadWriter().Format()] += 1
 			}

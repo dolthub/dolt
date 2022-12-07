@@ -186,10 +186,6 @@ func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 	return s, ok, err
 }
 
-func (d *DoltSession) GetDbStates() map[string]*DatabaseSessionState {
-	return d.dbStates
-}
-
 // Flush flushes all changes sitting in edit sessions to the session root for the database named. This normally
 // happens automatically as part of statement execution, and is only necessary when the session is manually batched (as
 // for bulk SQL import)
