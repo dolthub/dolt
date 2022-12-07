@@ -37,3 +37,16 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: test-orm-integrations
+      - uses: peter-evans/repository-dispatch@v2.0.0
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: benchmark-systab
+          client-payload: |
+            {
+              "email_recipient": "${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}",
+              "version": "${{ github.sha }}",
+              "run_file": "ci.yaml",
+              "report": "systab.sql",
+              "commit_to_branch": "nightly",
+              "actor": "${{ github.actor }}"
+            }
