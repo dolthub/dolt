@@ -6,6 +6,6 @@ password:
 seed: 1
 tableSize: 10000
 randType: uniform
-eventCnt: 400
-time: 30
+eventCnt: 1200
+time: 45
 histogram: true

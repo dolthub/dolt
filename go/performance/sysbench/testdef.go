@@ -81,7 +81,7 @@ func (c Config) AsOpts() []string {
 		ret = append(ret, fmt.Sprintf("--rand-type=%s", c.RandType))
 	}
 	if c.EventCnt > 0 {
-		ret = append(ret, fmt.Sprintf("--event-cnt=%s", strconv.Itoa(c.EventCnt)))
+		ret = append(ret, fmt.Sprintf("--events=%s", strconv.Itoa(c.EventCnt)))
 	}
 	if c.Time > 0 {
 		ret = append(ret, fmt.Sprintf("--time=%s", strconv.Itoa(c.Time)))
