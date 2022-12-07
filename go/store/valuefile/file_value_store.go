@@ -168,7 +168,7 @@ func (f *FileValueStore) HasMany(ctx context.Context, hashes hash.HashSet) (abse
 	return absent, nil
 }
 
-// Put puts a chunk inton the store
+// Put puts a chunk into the store
 func (f *FileValueStore) Put(ctx context.Context, c chunks.Chunk) error {
 	f.chunkLock.Lock()
 	defer f.chunkLock.Unlock()

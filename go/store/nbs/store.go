@@ -578,6 +578,7 @@ func (nbs *NomsBlockStore) WithoutConjoiner() *NomsBlockStore {
 	}
 }
 
+// TODO: Add sanity check
 func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
 	t1 := time.Now()
 	a := addr(c.Hash())
@@ -1418,6 +1419,10 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 		return chunks.ErrUnsupportedOperation
 	}
 
+	// Prevent all writes during GC
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
 	precheck := func() error {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
@@ -1426,7 +1431,7 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 			return errLastRootMismatch
 		}
 
-		// check to see if the specs have changed since last gc.  If they haven't bail early.
+		// check to see if the specs have changed since last gc. If they haven't bail early.
 		gcGenCheck := generateLockHash(last, nbs.upstream.specs, nbs.upstream.appendix)
 		if nbs.upstream.gcGen == gcGenCheck {
 			return chunks.ErrNothingToCollect
