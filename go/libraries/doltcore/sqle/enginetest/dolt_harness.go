@@ -21,7 +21,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -35,12 +34,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 type DoltHarness struct {
 	t              *testing.T
-	provider 		   dsess.DoltDatabaseProvider
+	provider       dsess.DoltDatabaseProvider
 	multiRepoEnv   *env.MultiRepoEnv
 	session        *dsess.DoltSession
 	branchControl  *branch_control.Controller
