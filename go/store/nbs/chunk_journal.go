@@ -67,12 +67,6 @@ type journalChunkSource struct {
 
 var _ chunkSource = journalChunkSource{}
 
-// todo: replace with nbs.Range
-type jrecordLookup struct {
-	offset int64
-	length uint32
-}
-
 func newChunkJournal(ctx context.Context, nbfVers, dir string, m manifest, p *fsTablePersister) (*chunkJournal, error) {
 	path, err := filepath.Abs(filepath.Join(dir, chunkJournalName))
 	if err != nil {
@@ -419,8 +413,9 @@ func (s journalChunkSource) hash() addr {
 }
 
 // reader implements chunkSource.
-func (s journalChunkSource) reader(context.Context) (io.Reader, error) {
-	return s.journal.Snapshot()
+func (s journalChunkSource) reader(context.Context) (rdr io.Reader, err error) {
+	rdr, _, err = s.journal.Snapshot()
+	return
 }
 
 func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error) {
@@ -434,10 +429,7 @@ func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash
 			continue
 		}
 		req.found = true // update |requests|
-		ranges[hash.Hash(*req.a)] = Range{
-			Offset: uint64(l.offset),
-			Length: l.length,
-		}
+		ranges[hash.Hash(*req.a)] = rangeFromLookup(l)
 	}
 	return ranges, nil
 }

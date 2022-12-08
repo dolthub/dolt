@@ -266,6 +266,7 @@ type chunkSource interface {
 	getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error)
 
 	// size returns the total size of the chunkSource: chunks, index, and footer
+	// todo: combine with reader()
 	size() (uint64, error)
 
 	// index returns the tableIndex of this chunkSource.

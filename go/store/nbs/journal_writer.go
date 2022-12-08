@@ -129,7 +129,7 @@ type SnapshotReader interface {
 	io.ReaderAt
 	// Snapshot returns an io.Reader that provides a consistent view
 	// of the current state of this SnapshotReader.
-	Snapshot() (io.Reader, error)
+	Snapshot() (io.Reader, int64, error)
 }
 
 type journalWriter struct {
@@ -169,17 +169,17 @@ func (wr *journalWriter) ReadAt(p []byte, off int64) (n int, err error) {
 	return
 }
 
-func (wr *journalWriter) Snapshot() (io.Reader, error) {
+func (wr *journalWriter) Snapshot() (io.Reader, int64, error) {
 	if err := wr.flush(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	// open a new file descriptor with an
 	// independent lifecycle from |wr.file|
 	f, err := os.Open(wr.path)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return io.LimitReader(f, wr.off), nil
+	return io.LimitReader(f, wr.off), wr.off, nil
 }
 
 func (wr *journalWriter) Write(p []byte) (n int, err error) {
@@ -295,17 +295,6 @@ func (wr *journalWriter) Close() (err error) {
 	return
 }
 
-// todo(andy): extensible record format
-type jrecord struct {
-	length   uint32
-	kind     jrecordKind
-	address  addr
-	payload  []byte
-	checksum uint32
-}
-
-type jrecordKind uint8
-
 const (
 	unknownKind  jrecordKind = 0
 	rootHashKind jrecordKind = 1
@@ -316,8 +305,33 @@ const (
 	recMinSz  = recLenSz + recKindSz + addrSize + checksumSize
 	recMaxSz  = 128 * 1024 // todo(andy): less arbitrary
 
-	rootHashRecordSize = recMinSz
+	chunkRecordHeaderSize = recLenSz + recKindSz + addrSize
+	rootHashRecordSize    = recMinSz
 )
+
+type jrecordKind uint8
+
+// todo(andy): extensible record format
+type jrecord struct {
+	length   uint32
+	kind     jrecordKind
+	address  addr
+	payload  []byte
+	checksum uint32
+}
+
+type jrecordLookup struct {
+	offset int64
+	length uint32
+}
+
+func rangeFromLookup(l jrecordLookup) Range {
+	return Range{
+		Offset: uint64(l.offset) + chunkRecordHeaderSize,
+		// jrecords are currently double check-summed
+		Length: uint32(l.length) - (chunkRecordHeaderSize + checksumSize),
+	}
+}
 
 func chunkRecordSize(c CompressedChunk) uint32 {
 	return uint32(len(c.FullCompressedChunk)) + recMinSz
