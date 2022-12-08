@@ -18,6 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/store/datas/pull"
+	"github.com/dolthub/dolt/go/store/hash"
 	"strings"
 	"sync"
 
@@ -132,10 +135,10 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 			return sql.ErrInvalidSystemVariableValue.New(dsess.ReplicateHeads)
 		}
 		branches := parseBranches(heads)
-		err := rrd.srcDB.Rebase(ctx)
-		if err != nil {
-			return err
-		}
+		//err := rrd.srcDB.Rebase(ctx)
+		//if err != nil {
+		//	return err
+		//}
 		err = pullBranches(ctx, rrd, branches, currentBranchRef, behavior)
 		if err != nil {
 			return err
@@ -165,97 +168,119 @@ type pullBehavior bool
 const pullBehavior_fastForward pullBehavior = false
 const pullBehavior_forcePull pullBehavior = true
 
-func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string, currentBranchRef ref.DoltRef, behavior pullBehavior) error {
-	refSpecs, err := env.ParseRSFromArgs(rrd.remote.Name, branches)
-	if err != nil {
-		return err
-	}
-
-	for i, refSpec := range refSpecs {
-		branch := ref.NewBranchRef(branches[i])
-		rtRef := refSpec.DestRef(branch)
-
-		fetchCtx := ctx.Context
-
-		srcDBCommitA, err := rrd.limiter.Run(ctx, branch.String(), func() (any, error) {
-			// fetch remote tracking ref only
-			var srcDBCommit *doltdb.Commit
-			{
-				srcDBCommit, err = actions.FetchRemoteBranch(fetchCtx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, branch, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
-				if err != nil {
-					return nil, err
-				}
-
-				if behavior == pullBehavior_forcePull {
-					commitHash, herr := srcDBCommit.HashOf()
-					if herr != nil {
-						return nil, err
-					}
-					err = rrd.ddb.SetHead(fetchCtx, rtRef, commitHash)
-				} else {
-					err = rrd.ddb.FastForward(fetchCtx, rtRef, srcDBCommit)
-				}
-				if err != nil {
-					return nil, err
-				}
+func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, whitelist []string, currentBranchRef ref.DoltRef, behavior pullBehavior) error {
+	fetchCtx := ctx.Context
+	ret, err := rrd.limiter.Run(ctx, "-all", func() (any, error) {
+		localBranches := make(map[string]struct{})
+		if len(whitelist) > 0 {
+			for _, b := range whitelist {
+				localBranches[b] = struct{}{}
 			}
+		} else {
+			localBr, err := rrd.ddb.GetRefsOfType(ctx, map[ref.RefType]struct{}{ref.BranchRefType: {}})
+			if err != nil {
+				return nil, err
+			}
+			for _, b := range localBr {
+				localBranches[b.GetPath()] = struct{}{}
+			}
+		}
 
-			// either ff or create local tracking branch
+		err := rrd.srcDB.Rebase(fetchCtx)
+		if err != nil {
+			return nil, err
+		}
+
+		srcRoot, err := rrd.srcDB.NomsRoot(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		destRoot, err := rrd.ddb.NomsRoot(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if srcRoot == destRoot {
+			return nil, nil
+		}
+
+		newCtx, cancelFunc := context.WithCancel(ctx)
+		wg, progChan, statsCh := runProgFuncs(newCtx)
+		defer func() {
+			stopProgFuncs(cancelFunc, wg, progChan, statsCh)
+			if err == nil {
+				cli.Println()
+			}
+		}()
+
+		err = rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, srcRoot, progChan, statsCh)
+
+		brs, err := rrd.srcDB.GetBranchesWithHashes(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		branchHashes := make(map[string]hash.Hash)
+
+		for _, br := range brs {
+			branchHashes[br.Ref.GetPath()] = br.Hash
+
+			cm, err := rrd.srcDB.ReadCommit(ctx, br.Hash)
+			if err != nil {
+				return nil, err
+			}
 			{
-				branchExists, err := rrd.ddb.HasBranch(fetchCtx, branch.GetPath())
+				_, branchExists := localBranches[br.Ref.GetPath()]
 				switch {
 				case err != nil:
 				case branchExists:
 					if behavior == pullBehavior_forcePull {
-						commitHash, herr := srcDBCommit.HashOf()
-						if herr != nil {
-							return nil, err
-						}
-						err = rrd.ddb.SetHead(fetchCtx, branch, commitHash)
+						err = rrd.ddb.SetHead(ctx, br.Ref, br.Hash)
 					} else {
-						err = rrd.ddb.FastForward(fetchCtx, branch, srcDBCommit)
+						err = rrd.ddb.FastForward(ctx, br.Ref, cm)
 					}
 				default:
-					err = rrd.ddb.NewBranchAtCommit(fetchCtx, branch, srcDBCommit)
+					err = rrd.ddb.NewBranchAtCommit(ctx, br.Ref, cm)
 				}
 				if err != nil {
 					return nil, err
 				}
 			}
-			return srcDBCommit, nil
-		})
-		if err != nil {
-			return err
 		}
+		return branchHashes, nil
+	})
+	if err != nil {
+		return err
+	}
 
-		srcDBCommit := srcDBCommitA.(*doltdb.Commit)
-
-		// if ref is active head, update the current working set
-		{
-			if branch == currentBranchRef {
-				wsRef, err := ref.WorkingSetRefForHead(branch)
-				if err != nil {
-					return err
-				}
-
-				ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
-				if err != nil {
-					return err
-				}
-
-				commitRoot, err := srcDBCommit.GetRootValue(ctx)
-				if err != nil {
-					return err
-				}
-
-				ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-				h, err := ws.HashOf()
-				if err != nil {
-					return err
-				}
-
-				rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
+	// update the current working set
+	branchHashes := ret.(map[string]hash.Hash)
+	{
+		if h, ok := branchHashes[currentBranchRef.GetPath()]; ok {
+			cm, err := rrd.srcDB.ReadCommit(ctx, h)
+			wsRef, err := ref.WorkingSetRefForHead(currentBranchRef)
+			if err != nil {
+				return err
 			}
+
+			ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
+			if err != nil {
+				return err
+			}
+
+			commitRoot, err := cm.GetRootValue(ctx)
+			if err != nil {
+				return err
+			}
+
+			ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
+			h, err := ws.HashOf()
+			if err != nil {
+				return err
+			}
+
+			return rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
 		}
 	}
 
@@ -272,6 +297,61 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string, 
 	}
 
 	return nil
+}
+
+func pullerProgFunc(ctx context.Context, statsCh <-chan pull.Stats) {
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-statsCh:
+		default:
+		}
+	}
+}
+
+func progFunc(ctx context.Context, progChan <-chan pull.PullProgress) {
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-progChan:
+		default:
+		}
+	}
+}
+
+func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.Stats) {
+	statsCh := make(chan pull.Stats)
+	progChan := make(chan pull.PullProgress)
+	wg := &sync.WaitGroup{}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		progFunc(ctx, progChan)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		pullerProgFunc(ctx, statsCh)
+	}()
+
+	return wg, progChan, statsCh
+}
+
+func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, statsCh chan pull.Stats) {
+	cancel()
+	close(progChan)
+	close(statsCh)
+	wg.Wait()
 }
 
 func getReplicationBranches(ctx *sql.Context, rrd ReadReplicaDatabase) (allBranches []string, deletedBranches []ref.DoltRef, err error) {
