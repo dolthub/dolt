@@ -60,7 +60,7 @@ var _ io.Closer = &chunkJournal{}
 
 type journalChunkSource struct {
 	address      addr
-	journal      SnapshotReader
+	journal      snapshotReader
 	lookups      map[addr]jrecordLookup
 	compressedSz uint64
 }
@@ -413,9 +413,9 @@ func (s journalChunkSource) hash() addr {
 }
 
 // reader implements chunkSource.
-func (s journalChunkSource) reader(context.Context) (rdr io.Reader, err error) {
-	rdr, _, err = s.journal.Snapshot()
-	return
+func (s journalChunkSource) reader(context.Context) (io.Reader, uint64, error) {
+	rdr, sz, err := s.journal.snapshot()
+	return rdr, uint64(sz), err
 }
 
 func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error) {
@@ -436,8 +436,8 @@ func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash
 
 // size implements chunkSource.
 // size returns the total size of the chunkSource: chunks, index, and footer
-func (s journalChunkSource) size() (uint64, error) {
-	return s.compressedSz, nil // todo(andy)
+func (s journalChunkSource) currentSize() uint64 {
+	return uint64(s.journal.currentSize())
 }
 
 // index implements chunkSource.

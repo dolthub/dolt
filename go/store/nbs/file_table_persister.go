@@ -157,7 +157,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 
 		for _, sws := range plan.sources.sws {
 			var r io.Reader
-			r, ferr = sws.source.reader(ctx)
+			r, _, ferr = sws.source.reader(ctx)
 
 			if ferr != nil {
 				return "", ferr

@@ -125,11 +125,14 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 	}, nil
 }
 
-type SnapshotReader interface {
+type snapshotReader interface {
 	io.ReaderAt
 	// Snapshot returns an io.Reader that provides a consistent view
-	// of the current state of this SnapshotReader.
-	Snapshot() (io.Reader, int64, error)
+	// of the current state of the snapshotReader.
+	snapshot() (io.Reader, int64, error)
+
+	// currentSize returns the current size.
+	currentSize() int64
 }
 
 type journalWriter struct {
@@ -140,7 +143,7 @@ type journalWriter struct {
 }
 
 var _ io.WriteCloser = &journalWriter{}
-var _ SnapshotReader = &journalWriter{}
+var _ snapshotReader = &journalWriter{}
 
 func (wr *journalWriter) filepath() string {
 	return wr.path
@@ -169,7 +172,7 @@ func (wr *journalWriter) ReadAt(p []byte, off int64) (n int, err error) {
 	return
 }
 
-func (wr *journalWriter) Snapshot() (io.Reader, int64, error) {
+func (wr *journalWriter) snapshot() (io.Reader, int64, error) {
 	if err := wr.flush(); err != nil {
 		return nil, 0, err
 	}
@@ -180,6 +183,10 @@ func (wr *journalWriter) Snapshot() (io.Reader, int64, error) {
 		return nil, 0, err
 	}
 	return io.LimitReader(f, wr.off), wr.off, nil
+}
+
+func (wr *journalWriter) currentSize() int64 {
+	return wr.off
 }
 
 func (wr *journalWriter) Write(p []byte) (n int, err error) {

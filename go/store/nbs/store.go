@@ -1217,15 +1217,10 @@ func newTableFile(cs chunkSource, info tableSpec) tableFile {
 	return tableFile{
 		info: info,
 		open: func(ctx context.Context) (io.ReadCloser, uint64, error) {
-			s, err := cs.size()
+			r, s, err := cs.reader(ctx)
 			if err != nil {
 				return nil, 0, err
 			}
-			r, err := cs.reader(ctx)
-			if err != nil {
-				return nil, 0, err
-			}
-
 			return io.NopCloser(r), s, nil
 		},
 	}
@@ -1259,11 +1254,7 @@ func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
 		if !ok {
 			return uint64(0), errors.New("manifest referenced table file for which there is no chunkSource.")
 		}
-		sz, err := cs.size()
-		if err != nil {
-			return uint64(0), fmt.Errorf("error getting table file index for chunkSource. %w", err)
-		}
-		size += sz
+		size += cs.currentSize()
 	}
 	return size, nil
 }
@@ -1535,7 +1526,7 @@ LOOP:
 	return gcc.copyTablesToDir(ctx, path)
 }
 
-// todo: what's the optimal table size to copy to?
+// todo: what's the optimal table currentSize to copy to?
 func (nbs *NomsBlockStore) gcTableSize() (uint64, error) {
 	total, err := nbs.tables.physicalLen()
 
