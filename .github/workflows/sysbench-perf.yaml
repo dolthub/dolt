@@ -38,7 +38,7 @@ jobs:
     - name: Clone sysbench scripts
       run: |
         scripts=$GITHUB_WORKSPACE/scripts
-        git clone git@github.com:max-hoffman/systab-sysbench-scripts.git "$scripts"
+        git clone git@github.com:dolthub/systab-sysbench-scripts.git "$scripts"
 
     - name: Run bench
       id: bench
