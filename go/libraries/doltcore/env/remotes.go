@@ -123,7 +123,7 @@ type PushOpts struct {
 	SetUpstream bool
 }
 
-func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoStateReader, ddb *doltdb.DoltDB, force bool, setUpstream bool) (*PushOpts, error) {
+func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoStateReader, ddb *doltdb.DoltDB, force bool, setUpstream bool, pushAutoSetupRemote bool) (*PushOpts, error) {
 	var err error
 	remotes, err := rsr.GetRemotes()
 	if err != nil {
@@ -150,44 +150,39 @@ func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoSt
 
 	var refSpec ref.RefSpec
 	if remoteOK && len(args) == 1 {
-		refSpecStr := args[0]
-
-		refSpecStr, err = disambiguateRefSpecStr(ctx, ddb, refSpecStr)
+		refSpec, err = getRefSpecFromStr(ctx, ddb, args[0])
 		if err != nil {
 			return nil, err
-		}
-
-		refSpec, err = ref.ParseRefSpec(refSpecStr)
-		if err != nil {
-			return nil, fmt.Errorf("%w: '%s'", err, refSpecStr)
 		}
 	} else if len(args) == 2 {
 		remoteName = args[0]
-		refSpecStr := args[1]
-
-		refSpecStr, err = disambiguateRefSpecStr(ctx, ddb, refSpecStr)
+		refSpec, err = getRefSpecFromStr(ctx, ddb, args[1])
 		if err != nil {
 			return nil, err
 		}
-
-		refSpec, err = ref.ParseRefSpec(refSpecStr)
-		if err != nil {
-			return nil, fmt.Errorf("%w: '%s'", err, refSpecStr)
+	} else if pushAutoSetupRemote {
+		if hasUpstream {
+			remoteName = upstream.Remote
+			refSpec, err = getCurrentBranchRefSpecFromUpstream(currentBranch, upstream, len(args))
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// no args - set upstream for current branch of 'origin' remote.
+			setUpstream = true
+			refSpec, err = getRefSpecFromStr(ctx, ddb, currentBranch.GetPath())
+			if err != nil {
+				return nil, err
+			}
 		}
 	} else if setUpstream {
 		return nil, ErrInvalidSetUpstreamArgs
 	} else if hasUpstream {
-		if len(args) > 0 {
-			return nil, fmt.Errorf("%w for '%s'", ErrUpstreamBranchAlreadySet, currentBranch)
-
-		}
-
-		if currentBranch.GetPath() != upstream.Merge.Ref.GetPath() {
-			return nil, ErrBranchDoesNotMatchUpstream
-		}
-
 		remoteName = upstream.Remote
-		refSpec, _ = ref.NewBranchToBranchRefSpec(currentBranch.(ref.BranchRef), upstream.Merge.Ref.(ref.BranchRef))
+		refSpec, err = getCurrentBranchRefSpecFromUpstream(currentBranch, upstream, len(args))
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		if len(args) == 0 {
 			return nil, ErrNoUpstreamForBranch
@@ -344,6 +339,36 @@ func disambiguateRefSpecStr(ctx context.Context, ddb *doltdb.DoltDB, refSpecStr 
 	}
 
 	return refSpecStr, nil
+}
+
+// getRefSpecFromStr returns ref.RefSpec object using given branch/refSpec name
+func getRefSpecFromStr(ctx context.Context, ddb *doltdb.DoltDB, refSpecStr string) (ref.RefSpec, error) {
+	refSpecStr, err := disambiguateRefSpecStr(ctx, ddb, refSpecStr)
+	if err != nil {
+		return nil, err
+	}
+
+	refSpec, err := ref.ParseRefSpec(refSpecStr)
+	if err != nil {
+		return nil, fmt.Errorf("%w: '%s'", err, refSpecStr)
+	}
+
+	return refSpec, nil
+}
+
+// getCurrentBranchRefSpecFromUpstream validates the number of args defined and returns ref.RefSpec object of
+// current branch corresponding to the given upstream.
+func getCurrentBranchRefSpecFromUpstream(currentBranch ref.DoltRef, upstream BranchConfig, argsLen int) (ref.RefSpec, error) {
+	if argsLen > 0 {
+		return nil, fmt.Errorf("%w for '%s'", ErrUpstreamBranchAlreadySet, currentBranch)
+	}
+
+	if currentBranch.GetPath() != upstream.Merge.Ref.GetPath() {
+		return nil, ErrBranchDoesNotMatchUpstream
+	}
+
+	refSpec, _ := ref.NewBranchToBranchRefSpec(currentBranch.(ref.BranchRef), upstream.Merge.Ref.(ref.BranchRef))
+	return refSpec, nil
 }
 
 func GetTrackingRef(branchRef ref.DoltRef, remote Remote) (ref.DoltRef, error) {

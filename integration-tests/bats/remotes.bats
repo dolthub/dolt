@@ -342,6 +342,20 @@ SQL
     [[ "$output" =~ "fatal: The current branch main has no upstream branch." ]] || false
     [[ "$output" =~ "To push the current branch and set the remote as upstream, use" ]] || false
     [[ "$output" =~ "dolt push --set-upstream test-remote main" ]] || false
+    [[ "$output" =~ "To have this happen automatically for branches without a tracking" ]] || false
+    [[ "$output" =~ "upstream, see 'push.autoSetupRemote' in 'dolt config --help'" ]] || false
+}
+
+@test "remotes: push without set-upstream works with autoSetUpRemote set to true" {
+    dolt config --local --add push.autoSetUpRemote true
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    run dolt push test-remote main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Uploaded" ]] || false
+
+    run dolt push test-remote main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
 @test "remotes: push and pull main branch from a remote" {

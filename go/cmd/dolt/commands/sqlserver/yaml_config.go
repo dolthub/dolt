@@ -115,11 +115,11 @@ type MetricsYAMLConfig struct {
 }
 
 type RemotesapiYAMLConfig struct {
-	Port_field *int `yaml:"port"`
+	Port_ *int `yaml:"port"`
 }
 
 func (r RemotesapiYAMLConfig) Port() int {
-	return *r.Port_field
+	return *r.Port_
 }
 
 type UserSessionVars struct {
@@ -353,7 +353,7 @@ func (cfg YAMLConfig) MetricsPort() int {
 }
 
 func (cfg YAMLConfig) RemotesapiPort() *int {
-	return cfg.RemotesapiConfig.Port_field
+	return cfg.RemotesapiConfig.Port_
 }
 
 // PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
@@ -481,46 +481,46 @@ func (cfg YAMLConfig) ClusterConfig() cluster.Config {
 }
 
 type ClusterYAMLConfig struct {
-	StandbyRemotes_field []standbyRemoteYAMLConfig   `yaml:"standby_remotes"`
-	BootstrapRole_field  string                      `yaml:"bootstrap_role"`
-	BootstrapEpoch_field int                         `yaml:"bootstrap_epoch"`
-	Remotesapi           clusterRemotesAPIYAMLConfig `yaml:"remotesapi"`
+	StandbyRemotes_ []StandbyRemoteYAMLConfig   `yaml:"standby_remotes"`
+	BootstrapRole_  string                      `yaml:"bootstrap_role"`
+	BootstrapEpoch_ int                         `yaml:"bootstrap_epoch"`
+	RemotesAPI      ClusterRemotesAPIYAMLConfig `yaml:"remotesapi"`
 }
 
-type standbyRemoteYAMLConfig struct {
-	Name_field              string `yaml:"name"`
-	RemoteURLTemplate_field string `yaml:"remote_url_template"`
+type StandbyRemoteYAMLConfig struct {
+	Name_              string `yaml:"name"`
+	RemoteURLTemplate_ string `yaml:"remote_url_template"`
 }
 
-func (c standbyRemoteYAMLConfig) Name() string {
-	return c.Name_field
+func (c StandbyRemoteYAMLConfig) Name() string {
+	return c.Name_
 }
 
-func (c standbyRemoteYAMLConfig) RemoteURLTemplate() string {
-	return c.RemoteURLTemplate_field
+func (c StandbyRemoteYAMLConfig) RemoteURLTemplate() string {
+	return c.RemoteURLTemplate_
 }
 
 func (c *ClusterYAMLConfig) StandbyRemotes() []cluster.StandbyRemoteConfig {
-	ret := make([]cluster.StandbyRemoteConfig, len(c.StandbyRemotes_field))
-	for i := range c.StandbyRemotes_field {
-		ret[i] = c.StandbyRemotes_field[i]
+	ret := make([]cluster.StandbyRemoteConfig, len(c.StandbyRemotes_))
+	for i := range c.StandbyRemotes_ {
+		ret[i] = c.StandbyRemotes_[i]
 	}
 	return ret
 }
 
 func (c *ClusterYAMLConfig) BootstrapRole() string {
-	return c.BootstrapRole_field
+	return c.BootstrapRole_
 }
 
 func (c *ClusterYAMLConfig) BootstrapEpoch() int {
-	return c.BootstrapEpoch_field
+	return c.BootstrapEpoch_
 }
 
 func (c *ClusterYAMLConfig) RemotesAPIConfig() cluster.RemotesAPIConfig {
-	return c.Remotesapi
+	return c.RemotesAPI
 }
 
-type clusterRemotesAPIYAMLConfig struct {
+type ClusterRemotesAPIYAMLConfig struct {
 	Addr_      string   `yaml:"address"`
 	Port_      int      `yaml:"port"`
 	TLSKey_    string   `yaml:"tls_key"`
@@ -530,30 +530,30 @@ type clusterRemotesAPIYAMLConfig struct {
 	DNSMatches []string `yaml:"server_name_dns"`
 }
 
-func (c clusterRemotesAPIYAMLConfig) Address() string {
+func (c ClusterRemotesAPIYAMLConfig) Address() string {
 	return c.Addr_
 }
 
-func (c clusterRemotesAPIYAMLConfig) Port() int {
+func (c ClusterRemotesAPIYAMLConfig) Port() int {
 	return c.Port_
 }
 
-func (c clusterRemotesAPIYAMLConfig) TLSKey() string {
+func (c ClusterRemotesAPIYAMLConfig) TLSKey() string {
 	return c.TLSKey_
 }
 
-func (c clusterRemotesAPIYAMLConfig) TLSCert() string {
+func (c ClusterRemotesAPIYAMLConfig) TLSCert() string {
 	return c.TLSCert_
 }
 
-func (c clusterRemotesAPIYAMLConfig) TLSCA() string {
+func (c ClusterRemotesAPIYAMLConfig) TLSCA() string {
 	return c.TLSCA_
 }
 
-func (c clusterRemotesAPIYAMLConfig) ServerNameURLMatches() []string {
+func (c ClusterRemotesAPIYAMLConfig) ServerNameURLMatches() []string {
 	return c.URLMatches
 }
 
-func (c clusterRemotesAPIYAMLConfig) ServerNameDNSMatches() []string {
+func (c ClusterRemotesAPIYAMLConfig) ServerNameDNSMatches() []string {
 	return c.DNSMatches
 }
