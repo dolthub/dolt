@@ -259,7 +259,7 @@ func (r *Result) populateHistogram(buf []byte) error {
 	r.hist = newHist()
 	r.hist.populate(buf)
 
-	r.variance = r.hist.variance()
+	r.stddev = math.Sqrt(r.hist.variance())
 	r.median = r.hist.median()
 
 	var err error
@@ -306,22 +306,20 @@ func (r *Result) populateAvg(buf []byte) error {
 
 type Result struct {
 	detail string
-	server string
 	test   string
 
 	time  float64
 	iters int
 
-	hist     *Hist
-	avg      float64
-	median   float64
-	variance float64
+	hist   *Hist
+	avg    float64
+	median float64
+	stddev float64
 }
 
-func newResult(test, server, detail string) *Result {
+func newResult(test, detail string) *Result {
 	return &Result{
 		detail: detail,
-		server: server,
 		test:   test,
 	}
 }
@@ -336,14 +334,11 @@ func (r *Result) String() string {
 	if r.detail != "" {
 		fmt.Fprintf(b, "- detail: '%s'\n", r.detail)
 	}
-	if r.server != "" {
-		fmt.Fprintf(b, "- detail: '%s'\n", r.server)
-	}
 	fmt.Fprintf(b, "- time: %.3f\n", r.time)
 	fmt.Fprintf(b, "- iters: %d\n", r.iters)
 	fmt.Fprintf(b, "- mean: %.3f\n", r.hist.mean())
 	fmt.Fprintf(b, "- median: %.3f\n", r.median)
-	fmt.Fprintf(b, "- variance: %.3f\n", r.variance)
+	fmt.Fprintf(b, "- variance: %.3f\n", r.stddev)
 	return b.String()
 }
 
@@ -369,13 +364,12 @@ func (r *Results) SqlDump() string {
 	b.WriteString(`CREATE TABLE IF NOT EXISTS sysbench_results (
   test_name varchar(64),
   detail varchar(64),
-  server varchar(64),
   time double,
   iters int,
   avg double,
   median double,
-  variance double,
-  primary key (test_name, detail, server)
+  stdd double,
+  primary key (test_name, detail)
 );
 `)
 
@@ -385,8 +379,8 @@ func (r *Results) SqlDump() string {
 			b.WriteString(",\n  ")
 		}
 		b.WriteString(fmt.Sprintf(
-			"('%s', '%s', '%s',%.3f, %d, %.3f, %.3f, %.3f)",
-			r.test, r.detail, r.server, r.time, r.iters, r.avg, r.median, r.variance))
+			"('%s', '%s',%.3f, %d, %.3f, %.3f, %.3f)",
+			r.test, r.detail, r.time, r.iters, r.avg, r.median, r.stddev))
 	}
 	b.WriteString(";\n")
 
@@ -455,7 +449,6 @@ func (test *Script) RunSqlServerTests(repo driver.TestRepo, user driver.DoltUser
 		}
 		err = modifyServerForImport(db)
 
-		fmt.Println(prep.String())
 		if err := prep.Run(); err != nil {
 			return err
 		}
@@ -468,7 +461,7 @@ func (test *Script) RunSqlServerTests(repo driver.TestRepo, user driver.DoltUser
 		}
 
 		// TODO scrape histogram data
-		r := newResult(test.Name, repo.Server.Name, script)
+		r := newResult(script, test.Name)
 		if conf.Histogram {
 			r.populateHistogram(buf.Bytes())
 		} else {
