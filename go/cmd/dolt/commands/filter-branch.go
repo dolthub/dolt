@@ -82,6 +82,7 @@ func (cmd FilterBranchCmd) Docs() *cli.CommandDocumentation {
 func (cmd FilterBranchCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(allFlag, "a", "filter all branches")
+	ap.SupportsFlag(verboseFlag, "v", "logs more information")
 	return ap
 }
 
@@ -107,9 +108,44 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	}
 
 	query := apr.Arg(0)
+	verbose := apr.Contains(verboseFlag)
 	notFound := make(missingTbls)
+
 	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (*doltdb.RootValue, error) {
-		return processFilterQuery(ctx, dEnv, commit, query, notFound)
+		var cmHash, before hash.Hash
+		if verbose {
+			var err error
+			cmHash, err = commit.HashOf()
+			if err != nil {
+				return nil, err
+			}
+			cli.Printf("processing commit %s\n", cmHash.String())
+			root, err := commit.GetRootValue(ctx)
+			if err != nil {
+				return nil, err
+			}
+			before, err = root.HashOf()
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		root, err := processFilterQuery(ctx, dEnv, commit, query, notFound)
+		if err != nil {
+			return nil, err
+		}
+
+		if verbose {
+			after, err := root.HashOf()
+			if err != nil {
+				return nil, err
+			}
+			if before != after {
+				cli.Printf("updated commit %s (root: %s -> %s)\n",
+					cmHash.String(), before.String(), after.String())
+			}
+		}
+		return root, nil
 	}
 
 	nerf, err := getNerf(ctx, dEnv, apr)

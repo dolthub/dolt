@@ -38,6 +38,17 @@ teardown() {
     [[ "$output" =~ "1,1" ]] || false
 }
 
+@test "filter-branch: verbose mode" {
+    dolt sql -q "INSERT INTO test VALUES (7,7),(8,8),(9,9);"
+    dolt commit -Am "added more rows"
+
+    run dolt filter-branch -v "DELETE FROM test WHERE pk = 8;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "processing commit" ]] || false
+    [[ "$output" =~ "updated commit" ]] || false
+}
+
+
 @test "filter-branch: filter multiple branches" {
     dolt branch other
 
