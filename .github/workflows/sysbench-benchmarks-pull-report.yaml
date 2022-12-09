@@ -65,7 +65,7 @@ jobs:
             {
               "version": "${{ steps.comment-branch.outputs.head_sha }}",
               "run_file": "ci.yaml",
-              "report": "three_way_compare.sql",
+              "report": "systab.sql",
               "commit_to_branch": "${{ steps.comment-branch.outputs.head_sha }}",
               "actor": "${{ github.actor }}",
               "issue_id": "${{ steps.get_pull_number.outputs.pull_number }}"
