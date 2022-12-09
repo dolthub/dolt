@@ -1,4 +1,4 @@
-select name, mean, mean_mult, med_mult, stdd
+select name, mean, mean_mult
 from (
   select
     round(first_value(avg) over w, 2) as mean,
