@@ -119,7 +119,7 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 			if err != nil {
 				return nil, err
 			}
-			cli.Println("processing commit %s", cmHash.String())
+			cli.Printf("processing commit %s\n", cmHash.String())
 			root, err := commit.GetRootValue(ctx)
 			if err != nil {
 				return nil, err
@@ -141,7 +141,7 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 				return nil, err
 			}
 			if before != after {
-				cli.Println("updated commit %s (root: %s -> %s)",
+				cli.Printf("updated commit %s (root: %s -> %s)\n",
 					cmHash.String(), before.String(), after.String())
 			}
 		}
