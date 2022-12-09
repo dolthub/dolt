@@ -578,10 +578,32 @@ func (nbs *NomsBlockStore) WithoutConjoiner() *NomsBlockStore {
 	}
 }
 
-// TODO: Add sanity check
-func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
+func (nbs *NomsBlockStore) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
+	absent, err := nbs.HasMany(ctx, addrs)
+	if err != nil {
+		return err
+	}
+	if len(absent) != 0 {
+		s := absent.String()
+		return fmt.Errorf("Found dangling references to %s", s)
+	}
+	return nil
+}
+
+func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
 	t1 := time.Now()
 	a := addr(c.Hash())
+
+	addrs, err := getAddrs(ctx, c)
+	if err != nil {
+		return err
+	}
+
+	err = nbs.errorIfDangling(ctx, addrs)
+	if err != nil {
+		return err
+	}
+
 	success, err := nbs.addChunk(ctx, a, c.Data())
 	if err != nil {
 		return err
@@ -1419,10 +1441,6 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 		return chunks.ErrUnsupportedOperation
 	}
 
-	// Prevent all writes during GC
-	nbs.mu.Lock()
-	defer nbs.mu.Unlock()
-
 	precheck := func() error {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
@@ -1453,6 +1471,10 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 			destNBS = typed.nbs
 		}
 	}
+
+	// Prevent all writes during GC
+	// nbs.mu.Lock()
+	// defer nbs.mu.Unlock()
 
 	specs, err := nbs.copyMarkedChunks(ctx, keepChunks, destNBS)
 	if err != nil {
