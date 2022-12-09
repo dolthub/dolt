@@ -86,13 +86,13 @@ jobs:
           dolt checkout $branch
         fi
 
-        dolt sql -q "drop table if exists {{ env.RESULT_TABLE_NAME }}"
+        dolt sql -q "drop table if exists sysbench_results"
 
         # load results
         dolt sql < "$in"
 
         # push results to dolthub
-        dolt add ${{ env.RESULT_TABLE_NAME }}
+        dolt add sysbench_results
         dolt commit -m "CI commit"
         dolt push -f origin $branch
 
