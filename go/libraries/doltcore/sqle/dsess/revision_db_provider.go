@@ -57,6 +57,9 @@ type RevisionDatabase interface {
 
 // RemoteReadReplicaDatabase is a database that pulls from a connected remote when a transaction begins.
 type RemoteReadReplicaDatabase interface {
+	// ValidReplicaState returns whether this read replica is in a valid state to pull from the remote
+	ValidReplicaState(ctx *sql.Context) bool
+	// PullFromRemote performs a pull from the remote and returns any error encountered
 	PullFromRemote(ctx *sql.Context) error
 }
 

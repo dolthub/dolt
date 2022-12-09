@@ -297,7 +297,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	// TODO: this needs to happen for every DB in the database, not just the one named in the transaction
 	if sessionState != nil && sessionState.db != nil {
 		rrd, ok := sessionState.db.(RemoteReadReplicaDatabase)
-		if ok {
+		if ok && rrd.ValidReplicaState(ctx){
 			err := rrd.PullFromRemote(ctx)
 			if err != nil {
 				return nil, err

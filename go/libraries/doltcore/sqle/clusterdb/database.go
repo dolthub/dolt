@@ -19,6 +19,8 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -31,6 +33,7 @@ type database struct {
 }
 
 var _ sql.Database = database{}
+var _ sqle.SqlDatabase = database{}
 
 const StatusTableName = "dolt_cluster_status"
 
@@ -89,4 +92,8 @@ func (db database) DbData() env.DbData {
 
 func (db database) Flush(context *sql.Context) error {
 	return errors.New("unimplemented")
+}
+
+func (db database) EditOptions() editor.Options {
+	return editor.Options{}
 }

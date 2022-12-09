@@ -86,6 +86,11 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 	}, nil
 }
 
+func (rrd ReadReplicaDatabase) ValidReplicaState(ctx *sql.Context) bool {
+	// srcDB will be nil in the case the remote was specified incorrectly and startup errors are suppressed
+	return rrd.srcDB != nil
+}
+
 func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 	_, headsArg, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateHeads)
 	if !ok {
