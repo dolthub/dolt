@@ -28,6 +28,26 @@ teardown() {
     teardown_common
 }
 
+@test "sql-server: can create savepoint when no database is selected" {
+    skiponwindows "Missing dependencies"
+    skip "currently fails with: Error 1105: plan is not resolved because of node '*plan.CreateSavepoint' in server log"
+
+    mkdir my-db
+    cd my-db
+    dolt init
+    cd ..
+
+    SAVEPOINT_QUERY=$(cat <<'EOF'
+START TRANSACTION;
+SAVEPOINT tx1;
+EOF
+)
+
+    start_sql_server >> server_log.txt 2>&1
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "$SAVEPOINT_QUERY"
+    [ $status -eq 0 ]
+}
+
 @test "sql-server: server with no dbs yet should be able to clone" {
     # make directories outside of the existing init'ed dolt repos to ensure that
     # we are starting a sql-server with no existing dolt databases inside it
