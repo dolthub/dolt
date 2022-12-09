@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
