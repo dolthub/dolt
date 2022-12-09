@@ -48,7 +48,7 @@ type InitialDbState struct {
 // order for the session to manage it.
 type SessionDatabase interface {
 	sql.Database
-	InitialDBState(ctx context.Context) (InitialDbState, error)
+	InitialDBState(ctx context.Context, branch string) (InitialDbState, error)
 }
 
 type DatabaseSessionState struct {

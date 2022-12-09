@@ -214,8 +214,8 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase, branch string) (dses
 	}, nil
 }
 
-func (db Database) InitialDBState(ctx context.Context) (dsess.InitialDbState, error) {
-	return GetInitialDBState(ctx, db, "")
+func (db Database) InitialDBState(ctx context.Context, branch string) (dsess.InitialDbState, error) {
+	return GetInitialDBState(ctx, db, branch)
 }
 
 // Name returns the name of this database, set at creation time.

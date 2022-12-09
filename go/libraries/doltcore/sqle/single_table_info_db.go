@@ -89,7 +89,7 @@ func (db *SingleTableInfoDatabase) Collation() sql.CollationID {
 	return sql.CollationID(db.sch.GetCollation())
 }
 
-func (db *SingleTableInfoDatabase) InitialDBState(ctx context.Context) (dsess.InitialDbState, error) {
+func (db *SingleTableInfoDatabase) InitialDBState(ctx context.Context, branch string) (dsess.InitialDbState, error) {
 	return getInitialDBStateForUserSpaceDb(ctx, db)
 }
 

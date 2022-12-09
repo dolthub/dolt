@@ -78,7 +78,7 @@ func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
 	return resultingTblNames, nil
 }
 
-func (db *UserSpaceDatabase) InitialDBState(ctx context.Context) (dsess.InitialDbState, error) {
+func (db *UserSpaceDatabase) InitialDBState(ctx context.Context, branch string) (dsess.InitialDbState, error) {
 	return getInitialDBStateForUserSpaceDb(ctx, db)
 }
 

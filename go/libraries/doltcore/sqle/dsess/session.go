@@ -277,7 +277,8 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 			return nil, fmt.Errorf("database %s does not support sessions", dbName)
 		}
 
-		init, err := sdb.InitialDBState(ctx)
+		// TODO: this needs a real branch name
+		init, err := sdb.InitialDBState(ctx, "")
 		if err != nil {
 			return nil, err
 		}
