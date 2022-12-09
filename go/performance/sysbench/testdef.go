@@ -338,7 +338,7 @@ func (r *Result) String() string {
 	fmt.Fprintf(b, "- iters: %d\n", r.iters)
 	fmt.Fprintf(b, "- mean: %.3f\n", r.hist.mean())
 	fmt.Fprintf(b, "- median: %.3f\n", r.median)
-	fmt.Fprintf(b, "- variance: %.3f\n", r.stddev)
+	fmt.Fprintf(b, "- stddev: %.3f\n", r.stddev)
 	return b.String()
 }
 
