@@ -31,6 +31,8 @@ import (
 
 var ErrNothingToCollect = errors.New("no changes since last gc")
 
+type GetAddrsCb func(ctx context.Context, c Chunk) (hash.HashSet, error)
+
 // ChunkStore is the core storage abstraction in noms. We can put data
 // anyplace we have a ChunkStore implementation for.
 type ChunkStore interface {
@@ -55,7 +57,7 @@ type ChunkStore interface {
 	// subsequent Get and Has calls, but must not be persistent until a call
 	// to Flush(). Put may be called concurrently with other calls to Put(),
 	// Get(), GetMany(), Has() and HasMany().
-	Put(ctx context.Context, c Chunk) error
+	Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb) error
 
 	// Returns the NomsVersion with which this ChunkSource is compatible.
 	Version() string
