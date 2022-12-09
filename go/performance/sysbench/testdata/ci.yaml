@@ -1,0 +1,17 @@
+tests:
+- name: "system table"
+  repos:
+  - name: dolt
+    server:
+      port: 3309
+      args: [ "--port", "3309" ]
+  scripts:
+  - gen/dolt_commit_ancestors_commit_filter.gen.lua
+- name: "dummy system table"
+  repos:
+    - name: dolt
+      server:
+        port: 3309
+        args: [ "--port", "3309" ]
+  scripts:
+    - gen/dolt_commit_ancestors_commit_filter_dummy.gen.lua
