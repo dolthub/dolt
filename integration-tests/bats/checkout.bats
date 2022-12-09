@@ -43,7 +43,7 @@ SQL
 
     # Making additional changes to main, should carry them to feature without any problem
     dolt sql -q "insert into test values (3)"
-    dolt checkout -f feature
+    dolt checkout feature
 
     run dolt sql -q "select count(*) from test"
     [ "$status" -eq 0 ]
@@ -334,6 +334,50 @@ SQL
   [[ "$output" =~ "0" ]] || false
 }
 
+@test "checkout: dolt_checkout switches from clean main to feature branch that has changes" {
+  # original setup
+  dolt sql -q "create table users (id int primary key, name varchar(32));"
+  dolt add .
+  dolt commit -m "original users table"
+
+  # create feature branch
+  dolt branch -c main feature
+
+  # make changes on feature (through SQL)
+  dolt sql << SQL
+call dolt_checkout('feature');
+insert into users (id, name) values (1, "feature-change");
+SQL
+
+  # verify feature branch changes are present
+  run dolt sql << SQL
+call dolt_checkout('feature');
+select name from users;
+SQL
+  echo "output = $output"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "feature-change" ]] || false
+
+  # checkout feature branch
+  dolt checkout feature
+
+  # verify feature's working set changes are gone
+  run dolt sql << SQL
+call dolt_checkout('feature');
+select count(*) from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "0" ]] || false
+
+  # verify working set changes are not on main
+  run dolt sql << SQL
+call dolt_checkout('main');
+select count(*) from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "0" ]] || false
+}
+
 @test "checkout: dolt_checkout brings in changes from main to feature branch that has identical changes" {
   # original setup
   dolt sql -q "create table users (id int primary key, name varchar(32));"
@@ -410,8 +454,8 @@ SQL
   dolt add .
   dolt commit -m "original users table"
 
-  # create feature branch
-  dolt branch -c main feature
+  # create feature branch from main
+  dolt branch feature
 
   # make changes on main and verify
   dolt sql -q 'insert into users (id, name) values (1, "main-change");'
@@ -477,11 +521,8 @@ SQL
   [[ "$output" =~ "main-change" ]] || false
 
 
-  # create feature1 branch
-  dolt branch -c main feature1
-
-  # bring changes to next feature branch
-  dolt checkout feature1
+  # create feature1 branch and bring changes to the new feature branch
+  dolt checkout -b feature1
 
   # verify the changes are brought to feature1
   run dolt sql << SQL
@@ -502,11 +543,8 @@ SQL
   [[ "$output" =~ "main-change" ]] || false
   [[ "$output" =~ "feature1-change" ]] || false
 
-  # create feature2 branch
-  dolt branch -c main feature2
-
-  # bring changes to next feature branch
-  dolt checkout feature2
+  # create feature2 branch and bring changes to next feature branch
+  dolt checkout -b feature2
 
   # verify the changes are brought to feature1
   run dolt sql << SQL
