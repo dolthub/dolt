@@ -105,8 +105,9 @@ type Script struct {
 	// Skip the entire test with this reason.
 	Skip string `yaml:"skip"`
 
-	Results *Results
-	tmpdir  string
+	Results   *Results
+	tmpdir    string
+	scriptDir string
 }
 
 func (s *Script) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -399,29 +400,43 @@ func (test *Script) Run(t *testing.T) {
 	if test.Skip != "" {
 		t.Skip(test.Skip)
 	}
-	var err error
-	if test.Results == nil {
-		tmp, err := os.MkdirTemp("", "repo-store-")
+
+	conf, err := ParseConfig("testdata/default-config.yaml")
+	if err != nil {
+		require.NoError(t, err)
+	}
+
+	if _, err = os.Stat(test.scriptDir); err != nil {
+		require.NoError(t, err)
+	}
+
+	conf = conf.WithScriptDir(test.scriptDir)
+
+	tmpdir, err := os.MkdirTemp("", "repo-store-")
+	if err != nil {
+		require.NoError(t, err)
+	}
+
+	results := new(Results)
+	u, err := driver.NewDoltUser()
+	test.Results = results
+	test.InitWithTmpDir(tmpdir)
+	for _, r := range test.Repos {
+		var err error
+		switch {
+		case r.ExternalServer != nil:
+			panic("unsupported")
+		case r.Server != nil:
+			err = test.RunSqlServerTests(r, u, conf)
+		default:
+			panic("unsupported")
+		}
 		if err != nil {
 			require.NoError(t, err)
 		}
-		test.InitWithTmpDir(tmp)
+		results.Append(test.Results.Res...)
 	}
 
-	u, err := driver.NewDoltUser()
-	for _, r := range test.Repos {
-		switch {
-		case r.Server != nil:
-			err = test.RunSqlServerTests(r, u, Config{})
-			require.NoError(t, err)
-
-		case r.ExternalServer != nil:
-			panic("unsupported")
-		default:
-			panic("unsupported")
-
-		}
-	}
 	fmt.Println(test.Results)
 }
 
@@ -520,10 +535,11 @@ func (test *Script) IterSysbenchScripts(conf Config, scripts []string, cb func(n
 	return nil
 }
 
-func RunTestsFile(t *testing.T, path string) {
+func RunTestsFile(t *testing.T, path, scriptDir string) {
 	def, err := ParseTestsFile(path)
 	require.NoError(t, err)
 	for _, test := range def.Tests {
+		test.scriptDir = scriptDir
 		t.Run(test.Name, test.Run)
 	}
 }

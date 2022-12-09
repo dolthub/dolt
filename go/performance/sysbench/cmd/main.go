@@ -63,7 +63,6 @@ func main() {
 			var err error
 			switch {
 			case r.ExternalServer != nil:
-				//err = test.RunExternalServerTests(r.Name, r.ExternalServer)
 				panic("unsupported")
 			case r.Server != nil:
 				err = test.RunSqlServerTests(r, u, conf)

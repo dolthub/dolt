@@ -1,6 +1,7 @@
-select name, mean_mult, med_mult, stdd
+select name, mean, mean_mult, med_mult, stdd
 from (
   select
+    round(first_value(avg) over w, 2) as mean,
     trim(TRAILING '.gen.lua' FROM trim(LEADING 'gen/' FROM test_name)) as name,
     round(avg / lead(avg) over w, 2) as mean_mult,
     round(median / lead(median) over w, 2) as med_mult,

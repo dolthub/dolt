@@ -135,3 +135,9 @@ Dropping table 'sbtest1'...`),
 		})
 	}
 }
+
+func TestLogJoin(t *testing.T) {
+	t.Skip()
+	scriptDir := "/Users/max-hoffman/go/src/github.com/dolthub/systab-sysbench-scripts"
+	RunTestsFile(t, "testdata/log-join.yaml", scriptDir)
+}
