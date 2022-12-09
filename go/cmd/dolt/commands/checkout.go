@@ -292,6 +292,15 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string, force b
 			// Being on the same branch shouldn't be an error
 			cli.Printf("Already on branch '%s'\n", name)
 			return nil
+		} else if err == actions.ErrWorkingSetsOnBothBranches {
+			str := fmt.Sprintf("error: There are uncommitted changes already on branch '%s'.", name) +
+				"This can happen when someone modifies that branch in a SQL session." +
+				fmt.Sprintf("You have uncommitted changes on this branch, and they would overwrite the uncommitted changes on branch %s on checkout.", name) +
+				"To solve this problem, you can " +
+				"1) commit or reset your changes on this branch, using `dolt commit` or `dolt reset`, before checking out the other branch, " +
+				"2) use the `-f` flag with `dolt checkout` to force an overwrite, or " +
+				"3) connect to branch '%s' with the SQL server and revert or commit changes there before proceeding."
+			return errhand.BuildDError(str).AddCause(err).Build()
 		} else {
 			bdr := errhand.BuildDError("fatal: Unexpected error checking out branch '%s'", name)
 			bdr.AddCause(err)
