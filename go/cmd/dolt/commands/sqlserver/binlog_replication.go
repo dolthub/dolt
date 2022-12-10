@@ -107,7 +107,7 @@ func replicaBinlogEventHandler(basicCtx context.Context, replicaConfiguration *r
 					time.Sleep(1 * time.Second)
 					continue
 				} else if strings.Contains(sqlError.Message, "can not handle replication events with the checksum") {
-					// For now, just ignore errors about checksums, but panic on everything else
+					// For now, just ignore errors about checksums
 					// TODO: What's the server configuration for disabling this?
 					fmt.Printf("!!! received checksum error message !!!\n")
 					continue
@@ -152,7 +152,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 		fmt.Printf("Received: Query event\n")
 		query, err := event.Query(format)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		fmt.Printf(" - %s \n", query.String())
 		// TODO: This is only needed for our hacky prototype, where we haven't seen the "create database" call yet
@@ -203,7 +203,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 		tableId := event.TableID(format)
 		tableMap, err := event.TableMap(format)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		tableMapsById[tableId] = tableMap
 		fmt.Printf(" - tableMap: %v \n", formatTableMapAsString(tableId, tableMap))
@@ -217,9 +217,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 		tableId := event.TableID(format)
 		tableMap, ok := tableMapsById[tableId]
 		if !ok {
-			fmt.Printf(" - !!! Unable to find tableMap for id: %d\n", tableId)
-			// TODO: return an error
-			return nil
+			return fmt.Errorf("unable to find replication metadata for table ID: %d", tableId)
 		}
 		fmt.Printf("%v", tableMap)
 
@@ -231,28 +229,25 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 
 		tableMap, ok := tableMapsById[tableId]
 		if !ok {
-			fmt.Printf(" - !!! Unable to find tableMap for id: %d\n", tableId)
-			// TODO: return an error
-			return nil
+			return fmt.Errorf("unable to find replication metadata for table ID: %d", tableId)
 		}
-
 		rows, err := event.Rows(format, tableMap)
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		fmt.Printf(" - New Rows (table: %s)\n", tableMap.Name)
 		database, err := engine.GetUnderlyingEngine().Analyzer.Catalog.Database(ctx, tableMap.Database)
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		table, ok, err := database.GetTableInsensitive(ctx, tableMap.Name)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		if !ok {
-			panic(fmt.Sprintf("unable to find table %q", tableMap.Name))
+			return fmt.Errorf("unable to find table %q", tableMap.Name)
 		}
 
 		for _, row := range rows.Rows {
@@ -281,7 +276,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 				case sql.IsEnum(column.Type), sql.IsSet(column.Type):
 					atoi, err := strconv.Atoi(value.ToString())
 					if err != nil {
-						panic(err)
+						return err
 					}
 					convertedValue, err = column.Type.Convert(atoi)
 				default:
@@ -291,7 +286,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 					convertedValue, err = column.Type.Convert(value.ToString())
 				}
 				if err != nil {
-					panic(fmt.Sprintf("unable to convert value %q: %v", value, err.Error()))
+					return fmt.Errorf("unable to convert value %q: %v", value, err.Error())
 				}
 				newRow = append(newRow, convertedValue)
 			}
@@ -301,18 +296,18 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 
 			doltEnv := mrEnv.GetEnv(tableMap.Database)
 			if doltEnv == nil {
-				panic(fmt.Sprintf("couldn't find a dolt environment named %q", tableMap.Database))
+				return fmt.Errorf("couldn't find a dolt environment named %q", tableMap.Database)
 			}
 
 			ws, err := doltEnv.WorkingSet(ctx)
 			if err != nil {
-				panic(err)
+				return err
 			}
 
 			// TODO: Does this work correctly?
 			tracker, err := globalstate.NewAutoIncrementTracker(ctx, ws)
 			if err != nil {
-				panic(err)
+				return err
 			}
 
 			// TODO: plug in correct editor.Options
@@ -320,20 +315,23 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 
 			tableWriter, err := writeSession.GetTableWriter(ctx, tableMap.Name, tableMap.Database, nil, false)
 			if err != nil {
-				panic(err)
+				return err
 			}
 
 			err = tableWriter.Insert(ctx, newRow)
 			if err != nil {
-				panic(err)
+				return err
 			}
 
 			newWorkingSet, err := writeSession.Flush(ctx)
 			if err != nil {
-				panic(err)
+				return err
 			}
 
-			doltEnv.UpdateWorkingSet(ctx, newWorkingSet)
+			err = doltEnv.UpdateWorkingSet(ctx, newWorkingSet)
+			if err != nil {
+				return err
+			}
 		}
 
 	case event.IsUpdateRows():
@@ -343,13 +341,11 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 		tableId := event.TableID(format)
 		tableMap, ok := tableMapsById[tableId]
 		if !ok {
-			fmt.Printf(" - !!! Unable to find tableMap for id: %d\n", tableId)
-			// TODO: return an error
-			return nil
+			return fmt.Errorf("unable to find replication metadata for table ID: %d", tableId)
 		}
 		rows, err := event.Rows(format, tableMap)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		fmt.Printf(" - Updated Rows (table: %d)\n", tableId)
 		for _, row := range rows.Rows {
