@@ -42,17 +42,22 @@ var (
 )
 
 func migrateWorkingSet(ctx context.Context, menv Environment, brRef ref.BranchRef, wsRef ref.WorkingSetRef, old, new *doltdb.DoltDB) error {
-	oldWs, err := old.ResolveWorkingSet(ctx, wsRef)
-	if err != nil {
-		return err
-	}
-
 	oldHead, err := old.ResolveCommitRef(ctx, brRef)
 	if err != nil {
 		return err
 	}
 	oldHeadRoot, err := oldHead.GetRootValue(ctx)
 	if err != nil {
+		return err
+	}
+
+	oldWs, err := old.ResolveWorkingSet(ctx, wsRef)
+	if err == doltdb.ErrWorkingSetNotFound {
+		// If a branch was created prior to dolt version 0.26.10, no working set will exist for it.
+		// In this case, we will pretend it exists with the same root as the head commit.
+		oldWs = doltdb.EmptyWorkingSet(wsRef)
+		oldWs = oldWs.WithWorkingRoot(oldHeadRoot).WithStagedRoot(oldHeadRoot)
+	} else if err != nil {
 		return err
 	}
 
