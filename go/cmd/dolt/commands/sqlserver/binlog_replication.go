@@ -236,7 +236,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 			return fmt.Errorf("unable to find table %q", tableMap.Name)
 		}
 
-		fmt.Printf(" - Deleted Rows (table: %s)\n", tableMap.Name)
+		fmt.Printf(" - Deleted Rows (table: %s)\n", table.Name())
 		for _, row := range rows.Rows {
 			// Using the TableMap type information, decode the row data
 			var sb strings.Builder
@@ -279,7 +279,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 				}
 				deletedRow = append(deletedRow, convertedValue)
 			}
-			fmt.Printf("     - Identify: %v Data: %v \n", row.Identify, ("[" + sb.String() + "]"))
+			fmt.Printf("     - Identify: %v Data: %v \n", row.Identify, "["+sb.String()+"]")
 			//fmt.Printf("        - %s \n", sql.FormatRow(deletedRow))
 
 			doltEnv := mrEnv.GetEnv(tableMap.Database)
@@ -392,7 +392,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 				newRow = append(newRow, convertedValue)
 			}
 
-			fmt.Printf("     - Identify: %v Data: %v \n", row.Identify, ("[" + sb.String() + "]"))
+			fmt.Printf("     - Identify: %v Data: %v \n", row.Identify, "["+sb.String()+"]")
 			//fmt.Printf("        - %s \n", sql.FormatRow(newRow))
 
 			doltEnv := mrEnv.GetEnv(tableMap.Database)
@@ -448,11 +448,123 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 		if err != nil {
 			return err
 		}
-		fmt.Printf(" - Updated Rows (table: %d)\n", tableId)
-		for _, row := range rows.Rows {
-			fmt.Printf("     - Identify: %v Data: %v \n", row.Identify, row.Data)
+		database, err := engine.GetUnderlyingEngine().Analyzer.Catalog.Database(ctx, tableMap.Database)
+		if err != nil {
+			return err
 		}
-		// TODO: Use the tablewriter to update rows!
+		table, ok, err := database.GetTableInsensitive(ctx, tableMap.Name)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("unable to find table %q", tableMap.Name)
+		}
+
+		fmt.Printf(" - Updated Rows (table: %s)\n", table.Name())
+		for _, row := range rows.Rows {
+			fmt.Printf("     - Raw: Identify: %v Data: %v \n", row.Identify, row.Data)
+
+			// Using the TableMap type information, decode the row data
+			var sb strings.Builder
+			pos := 0
+			var updatedRow sql.Row
+			var identifyRow sql.Row
+			schema := table.Schema()
+
+			//rows.Flags // TODO: do we need to process rows.Flags for anything?
+			dataColumnsBitmap := rows.DataColumns
+			identifyColumnsBitmap := rows.IdentifyColumns
+			fmt.Printf("   - identifyColumnsBitmap: %v \n", identifyColumnsBitmap)
+			fmt.Printf("   - dataColumnsBitmap: %v \n", dataColumnsBitmap)
+			fmt.Printf("   - tableMap.Types: %v \n", tableMap.Types)
+
+			identifyRow, err = parseIdentifyRow(row, tableMap, schema, identifyColumnsBitmap)
+			if err != nil {
+				return err
+			}
+
+			// TODO: Extract prase data row function
+			for i, typ := range tableMap.Types {
+				column := schema[i]
+
+				if dataColumnsBitmap.Bit(i) == false {
+					panic("wha?! this hit?!") // bitmap data looks like all bits are set, right?
+					updatedRow = append(updatedRow, nil)
+					continue
+				}
+
+				// TODO: Plug in correct type (just needs to show signed/unsigned; why doesn't typ show that?)
+				// TODO: Handle null data and identity cols
+				value, length, err := mysql.CellValue(row.Data, pos, typ, tableMap.Metadata[i], query.Type_INT8)
+				if err != nil {
+					fmt.Printf(" - !!! ERROR: %v \n", err)
+					continue
+				}
+				pos += length
+				sb.WriteString(value.String() + ", ")
+
+				// TODO: Seems like there should be a better way to convert the sqltypes.Value to the type
+				//       GMS needs. Converting to a string and then converting again seems inefficient.
+				var convertedValue interface{}
+				switch {
+				case sql.IsEnum(column.Type), sql.IsSet(column.Type):
+					atoi, err := strconv.Atoi(value.ToString())
+					if err != nil {
+						return err
+					}
+					convertedValue, err = column.Type.Convert(atoi)
+				default:
+					// TODO: Why does (10, "b") appear in table t1?
+					//       It is inserted, but then the table is dropped, and recreated with new rows inserted,
+					//       but the old (10, "b") row still appears in it.
+					convertedValue, err = column.Type.Convert(value.ToString())
+				}
+				if err != nil {
+					return fmt.Errorf("unable to convert value %q: %v", value, err.Error())
+				}
+				updatedRow = append(updatedRow, convertedValue)
+			}
+			fmt.Printf("     - Parsed: Identify: %v Data: %v \n", sql.FormatRow(identifyRow), sql.FormatRow(updatedRow))
+
+			doltEnv := mrEnv.GetEnv(tableMap.Database)
+			if doltEnv == nil {
+				return fmt.Errorf("couldn't find a dolt environment named %q", tableMap.Database)
+			}
+
+			ws, err := doltEnv.WorkingSet(ctx)
+			if err != nil {
+				return err
+			}
+
+			// TODO: Does this work correctly?
+			tracker, err := globalstate.NewAutoIncrementTracker(ctx, ws)
+			if err != nil {
+				return err
+			}
+
+			// TODO: plug in correct editor.Options
+			writeSession := writer.NewWriteSession(doltEnv.DoltDB.Format(), ws, tracker, editor.Options{})
+
+			tableWriter, err := writeSession.GetTableWriter(ctx, tableMap.Name, tableMap.Database, nil, false)
+			if err != nil {
+				return err
+			}
+
+			err = tableWriter.Update(ctx, identifyRow, updatedRow)
+			if err != nil {
+				return err
+			}
+
+			newWorkingSet, err := writeSession.Flush(ctx)
+			if err != nil {
+				return err
+			}
+
+			err = doltEnv.UpdateWorkingSet(ctx, newWorkingSet)
+			if err != nil {
+				return err
+			}
+		}
 
 	//case event.IsStop():
 	// The primary server writes a STOP event to the binary log when it shuts down or when resuming after a mysqld
@@ -476,6 +588,57 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 	}
 
 	return nil
+}
+
+// TODO: add parseDataRow function!
+//       They could share the same code, but have a function passed in to access the right fields for Data vs Identify
+
+func parseIdentifyRow(row mysql.Row, tableMap *mysql.TableMap, schema sql.Schema, bitmap mysql.Bitmap) (sql.Row, error) {
+	var identifyRow sql.Row
+	var sb strings.Builder
+	pos := 0
+
+	for i, typ := range tableMap.Types {
+		column := schema[i]
+
+		if bitmap.Bit(i) == false {
+			identifyRow = append(identifyRow, nil)
+			continue
+		}
+
+		// TODO: Plug in correct type (just needs to show signed/unsigned; why doesn't typ show that?)
+		// TODO: Handle null data and identity cols
+		value, length, err := mysql.CellValue(row.Identify, pos, typ, tableMap.Metadata[i], query.Type_INT8)
+		if err != nil {
+			fmt.Printf(" - !!! ERROR: %v \n", err)
+			continue
+		}
+		pos += length
+		sb.WriteString(value.String() + ", ")
+
+		// TODO: Seems like there should be a better way to convert the sqltypes.Value to the type
+		//       GMS needs. Converting to a string and then converting again seems inefficient.
+		var convertedValue interface{}
+		switch {
+		case sql.IsEnum(column.Type), sql.IsSet(column.Type):
+			atoi, err := strconv.Atoi(value.ToString())
+			if err != nil {
+				return nil, err
+			}
+			convertedValue, err = column.Type.Convert(atoi)
+		default:
+			// TODO: Why does (10, "b") appear in table t1?
+			//       It is inserted, but then the table is dropped, and recreated with new rows inserted,
+			//       but the old (10, "b") row still appears in it.
+			convertedValue, err = column.Type.Convert(value.ToString())
+		}
+		if err != nil {
+			return nil, fmt.Errorf("unable to convert value %q: %v", value, err.Error())
+		}
+		identifyRow = append(identifyRow, convertedValue)
+	}
+
+	return identifyRow, nil
 }
 
 // startReplicationEventStream sends a request over |conn|, the connection to the MySQL source server, to begin
