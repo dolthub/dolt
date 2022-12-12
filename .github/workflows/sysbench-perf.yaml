@@ -140,7 +140,7 @@ jobs:
       with:
         region: us-west-2
         toAddresses: '["${{ github.event.client_payload.email_recipient }}"]'
-        version: ${{ steps.version.outputs.ref }}
+        version: ${{ github.event.client_payload.version }}
         format: '__DOLT__'
         dataFile: ${{ steps.html.outputs.html }}
 

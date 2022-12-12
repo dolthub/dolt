@@ -306,6 +306,7 @@ func (r *Result) populateAvg(buf []byte) error {
 }
 
 type Result struct {
+	server string
 	detail string
 	test   string
 
@@ -318,8 +319,9 @@ type Result struct {
 	stddev float64
 }
 
-func newResult(test, detail string) *Result {
+func newResult(server, test, detail string) *Result {
 	return &Result{
+		server: server,
 		detail: detail,
 		test:   test,
 	}
@@ -334,6 +336,9 @@ func (r *Result) String() string {
 	}
 	if r.detail != "" {
 		fmt.Fprintf(b, "- detail: '%s'\n", r.detail)
+	}
+	if r.server != "" {
+		fmt.Fprintf(b, "- server: '%s'\n", r.server)
 	}
 	fmt.Fprintf(b, "- time: %.3f\n", r.time)
 	fmt.Fprintf(b, "- iters: %d\n", r.iters)
@@ -365,12 +370,13 @@ func (r *Results) SqlDump() string {
 	b.WriteString(`CREATE TABLE IF NOT EXISTS sysbench_results (
   test_name varchar(64),
   detail varchar(64),
+  servervarchar(64),
   time double,
   iters int,
   avg double,
   median double,
   stdd double,
-  primary key (test_name, detail)
+  primary key (test_name, detail, server)
 );
 `)
 
@@ -380,8 +386,8 @@ func (r *Results) SqlDump() string {
 			b.WriteString(",\n  ")
 		}
 		b.WriteString(fmt.Sprintf(
-			"('%s', '%s',%.3f, %d, %.3f, %.3f, %.3f)",
-			r.test, r.detail, r.time, r.iters, r.avg, r.median, r.stddev))
+			"('%s', '%s', '%s', %.3f, %d, %.3f, %.3f, %.3f)",
+			r.test, r.detail, r.server, r.time, r.iters, r.avg, r.median, r.stddev))
 	}
 	b.WriteString(";\n")
 
@@ -448,6 +454,39 @@ func modifyServerForImport(db *sql.DB) error {
 	return nil
 }
 
+// RunExternalServerTests connects to a single externally provided server to run every test
+func (test *Script) RunExternalServerTests(repoName string, s *driver.ExternalServer, conf Config) error {
+	return test.IterSysbenchScripts(conf, test.Scripts, func(script string, prep, run, clean *exec.Cmd) error {
+		db, err := driver.ConnectDB(s.User, s.Password, s.Name, s.Host, s.Port, nil)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+
+		if err := prep.Run(); err != nil {
+			return err
+		}
+
+		buf := new(bytes.Buffer)
+		run.Stdout = buf
+		err = run.Run()
+		if err != nil {
+			return err
+		}
+
+		// TODO scrape histogram data
+		r := newResult(repoName, script, test.Name)
+		if conf.Histogram {
+			r.populateHistogram(buf.Bytes())
+		} else {
+			r.populateAvg(buf.Bytes())
+		}
+		test.Results.Append(r)
+
+		return clean.Run()
+	})
+}
+
 // RunSqlServerTests creates a new repo and server for every import test.
 func (test *Script) RunSqlServerTests(repo driver.TestRepo, user driver.DoltUser, conf Config) error {
 	return test.IterSysbenchScripts(conf, test.Scripts, func(script string, prep, run, clean *exec.Cmd) error {
@@ -462,7 +501,11 @@ func (test *Script) RunSqlServerTests(repo driver.TestRepo, user driver.DoltUser
 		if err != nil {
 			return err
 		}
+
 		err = modifyServerForImport(db)
+		if err != nil {
+			return err
+		}
 
 		if err := prep.Run(); err != nil {
 			return err
@@ -476,7 +519,7 @@ func (test *Script) RunSqlServerTests(repo driver.TestRepo, user driver.DoltUser
 		}
 
 		// TODO scrape histogram data
-		r := newResult(script, test.Name)
+		r := newResult(repo.Name, script, test.Name)
 		if conf.Histogram {
 			r.populateHistogram(buf.Bytes())
 		} else {
@@ -509,6 +552,8 @@ func newServer(u driver.DoltUser, r driver.TestRepo) (*driver.SqlServer, error) 
 	return server, nil
 }
 
+const luaExt = ".lua"
+
 // IterSysbenchScripts returns 3 executable commands for the given script path: prepare, run, cleanup
 func (test *Script) IterSysbenchScripts(conf Config, scripts []string, cb func(name string, prep, run, clean *exec.Cmd) error) error {
 	newCmd := func(command, script string) *exec.Cmd {
@@ -521,9 +566,12 @@ func (test *Script) IterSysbenchScripts(conf Config, scripts []string, cb func(n
 	}
 
 	for _, script := range scripts {
-		p := path.Join(conf.ScriptDir, script)
-		if _, err := os.Stat(p); err != nil {
-			return fmt.Errorf("failed to run script: '%s'", err)
+		p := script
+		if strings.HasSuffix(script, luaExt) {
+			p = path.Join(conf.ScriptDir, script)
+			if _, err := os.Stat(p); err != nil {
+				return fmt.Errorf("failed to run script: '%s'", err)
+			}
 		}
 		prep := newCmd("prepare", p)
 		run := newCmd("run", p)
