@@ -136,7 +136,17 @@ func ResetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 	return resetHardTables(ctx, dbData, cSpecStr, roots)
 }
 
-func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, roots doltdb.Roots, headRef *ref.DoltRef, ws *doltdb.WorkingSet) error {
+// ResetHard resets the working, staged, and head based on the given parameters.
+// The reset can be performed on a non-current branch and working set.
+// Returns an error if the reset fails.
+func ResetHard(
+	ctx context.Context,
+	dEnv *env.DoltEnv,
+	cSpecStr string,
+	roots doltdb.Roots,
+	headRef *ref.DoltRef,
+	ws *doltdb.WorkingSet,
+) error {
 	dbData := dEnv.DbData()
 
 	newHead, roots, err := resetHardTables(ctx, dbData, cSpecStr, roots)
