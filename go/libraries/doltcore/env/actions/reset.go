@@ -136,7 +136,7 @@ func ResetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 	return resetHardTables(ctx, dbData, cSpecStr, roots)
 }
 
-// ResetHard resets the working, staged, and head based on the given parameters.
+// ResetHard resets the working, staged, and head to the ones in the provided roots and head ref.
 // The reset can be performed on a non-current branch and working set.
 // Returns an error if the reset fails.
 func ResetHard(
