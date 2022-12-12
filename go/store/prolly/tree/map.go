@@ -149,6 +149,44 @@ func MergeOrderedTrees[K, V ~[]byte, O Ordering[K], S message.Serializer](
 	}, stats, nil
 }
 
+// VisitMapLevelOrder visits each internal node of the tree in level order and calls the provided callback `cb` on each hash
+// encountered. This function is used primarily for building appendix table files for databases to help optimize reads.
+func VisitMapLevelOrder[K, V ~[]byte, O Ordering[K]](
+	ctx context.Context,
+	m StaticMap[K, V, O],
+	cb func(h hash.Hash) (int64, error),
+) (int64, int64, error) {
+	// get cursor to leaves
+	cur, err := NewCursorAtStart(ctx, m.NodeStore, m.Root)
+	if err != nil {
+		return 0, 0, err
+	}
+	first := cur.CurrentKey()
+
+	// start by iterating level 1 nodes,
+	// then recurse upwards until we're at the root
+	for cur.parent != nil {
+		fmt.Println("DUSTIN: current level:", cur.nd.level)
+		assertTrue(cur.nd.level > 0, "must not be leaf")
+		cur = cur.parent
+		for cur.Valid() {
+			_, err = cb(cur.CurrentRef())
+			if err != nil {
+				return 0, 0, err
+			}
+			if err = cur.Advance(ctx); err != nil {
+				return 0, 0, err
+			}
+		}
+
+		// return cursor to the start of the map
+		if err = Seek(ctx, cur, K(first), m.Order); err != nil {
+			return 0, 0, err
+		}
+	}
+	return 0, 0, err
+}
+
 func (t StaticMap[K, V, O]) Count() (int, error) {
 	return t.Root.TreeCount()
 }
