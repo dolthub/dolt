@@ -453,16 +453,6 @@ func (s journalChunkSource) close() error {
 	return nil
 }
 
-func fileExists(path string) (ok bool, err error) {
-	_, err = os.Stat(path)
-	if errors.Is(err, os.ErrNotExist) {
-		err = nil
-	} else {
-		ok = true
-	}
-	return
-}
-
 func emptyAddr(a addr) bool {
 	var b addr
 	return a == b
