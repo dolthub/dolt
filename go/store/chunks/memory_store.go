@@ -199,18 +199,20 @@ func (ms *MemoryStoreView) errorIfDangling(ctx context.Context, addrs hash.HashS
 }
 
 func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb) error {
-	addrs, err := getAddrs(ctx, c)
-	if err != nil {
-		return err
-	}
+	// hangs
+	// addrs, err := getAddrs(ctx, c)
+	// if err != nil {
+	// 	return err
+	// }
 
-	err = ms.errorIfDangling(ctx, addrs)
-	if err != nil {
-		return err
-	}
+	// err = ms.errorIfDangling(ctx, addrs)
+	// if err != nil {
+	// 	return err
+	// }
 
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
+
 	if ms.pending == nil {
 		ms.pending = map[hash.Hash]Chunk{}
 	}
