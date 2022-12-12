@@ -37,13 +37,16 @@ var tableMapsById = make(map[uint64]*mysql.TableMap)
 
 // TODO: Look at configuration interfaces for other replication options and naming patterns
 type replicaConfiguration struct {
-	sourceServerId   string
+	sourceServerUuid string
 	connectionParams *mysql.ConnParams
 }
 
-func NewReplicaConfiguration(sourceServerId string, connectionParams *mysql.ConnParams) *replicaConfiguration {
+// NewReplicaConfiguration creates a new replica configuration for the server with a UUID of |sourceServerUuid|
+// (found from the @@server_uuid variable on the source server) and |connectionParams| indicating how to connect
+// to the source server.
+func NewReplicaConfiguration(sourceServerUuid string, connectionParams *mysql.ConnParams) *replicaConfiguration {
 	return &replicaConfiguration{
-		sourceServerId:   sourceServerId,
+		sourceServerUuid: sourceServerUuid,
 		connectionParams: connectionParams,
 	}
 }
@@ -95,8 +98,9 @@ func replicaBinlogEventHandler(basicCtx context.Context, replicaConfiguration *r
 		return err
 	}
 
-	// Step 3: Process binlog events
-	for i := 0; i < 60; i++ {
+	// Process binlog events
+	// TODO: add a channel to signal termination of replication process
+	for {
 		// TODO: How do we configure network timeouts?
 		readBinlogEvent, err := conn.ReadBinlogEvent()
 		if err != nil {
@@ -107,8 +111,7 @@ func replicaBinlogEventHandler(basicCtx context.Context, replicaConfiguration *r
 					time.Sleep(1 * time.Second)
 					continue
 				} else if strings.Contains(sqlError.Message, "can not handle replication events with the checksum") {
-					// For now, just ignore errors about checksums
-					// TODO: What's the server configuration for disabling this?
+					// For now, just ignore any errors about checksums
 					fmt.Printf("!!! received checksum error message !!!\n")
 					continue
 				}
@@ -155,8 +158,6 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 			return err
 		}
 		fmt.Printf(" - %s \n", query.String())
-		// TODO: This is only needed for our hacky prototype, where we haven't seen the "create database" call yet
-		executeQueryWithEngine(ctx, engine, fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s;", query.Database))
 		ctx.SetCurrentDatabase(query.Database)
 		executeQueryWithEngine(ctx, engine, query.SQL)
 
@@ -219,7 +220,107 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 		if !ok {
 			return fmt.Errorf("unable to find replication metadata for table ID: %d", tableId)
 		}
-		fmt.Printf("%v", tableMap)
+		rows, err := event.Rows(format, tableMap)
+		if err != nil {
+			return err
+		}
+		database, err := engine.GetUnderlyingEngine().Analyzer.Catalog.Database(ctx, tableMap.Database)
+		if err != nil {
+			return err
+		}
+		table, ok, err := database.GetTableInsensitive(ctx, tableMap.Name)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("unable to find table %q", tableMap.Name)
+		}
+
+		fmt.Printf(" - Deleted Rows (table: %s)\n", tableMap.Name)
+		for _, row := range rows.Rows {
+			// Using the TableMap type information, decode the row data
+			var sb strings.Builder
+			pos := 0
+			var deletedRow sql.Row
+			schema := table.Schema()
+			for i, typ := range tableMap.Types {
+				column := schema[i]
+				// TODO: how do we process row.Identify ??
+				//       DeleteRow *seems* to send the full row, as the Identify cols
+
+				// TODO: Plug in correct type (just needs to show signed/unsigned; why doesn't typ show that?)
+				// TODO: Handle null data and identity cols
+				value, length, err := mysql.CellValue(row.Identify, pos, typ, tableMap.Metadata[i], query.Type_INT8)
+				if err != nil {
+					fmt.Printf(" - !!! ERROR: %v \n", err)
+					continue
+				}
+				pos += length
+				sb.WriteString(value.String() + ", ")
+
+				// TODO: Seems like there should be a better way to convert the sqltypes.Value to the type
+				//       GMS needs. Converting to a string and then converting again seems inefficient.
+				var convertedValue interface{}
+				switch {
+				case sql.IsEnum(column.Type), sql.IsSet(column.Type):
+					atoi, err := strconv.Atoi(value.ToString())
+					if err != nil {
+						return err
+					}
+					convertedValue, err = column.Type.Convert(atoi)
+				default:
+					// TODO: Why does (10, "b") appear in table t1?
+					//       It is inserted, but then the table is dropped, and recreated with new rows inserted,
+					//       but the old (10, "b") row still appears in it.
+					convertedValue, err = column.Type.Convert(value.ToString())
+				}
+				if err != nil {
+					return fmt.Errorf("unable to convert value %q: %v", value, err.Error())
+				}
+				deletedRow = append(deletedRow, convertedValue)
+			}
+			fmt.Printf("     - Identify: %v Data: %v \n", row.Identify, ("[" + sb.String() + "]"))
+			//fmt.Printf("        - %s \n", sql.FormatRow(deletedRow))
+
+			doltEnv := mrEnv.GetEnv(tableMap.Database)
+			if doltEnv == nil {
+				return fmt.Errorf("couldn't find a dolt environment named %q", tableMap.Database)
+			}
+
+			ws, err := doltEnv.WorkingSet(ctx)
+			if err != nil {
+				return err
+			}
+
+			// TODO: Does this work correctly?
+			tracker, err := globalstate.NewAutoIncrementTracker(ctx, ws)
+			if err != nil {
+				return err
+			}
+
+			// TODO: plug in correct editor.Options
+			writeSession := writer.NewWriteSession(doltEnv.DoltDB.Format(), ws, tracker, editor.Options{})
+
+			tableWriter, err := writeSession.GetTableWriter(ctx, tableMap.Name, tableMap.Database, nil, false)
+			if err != nil {
+				return err
+			}
+
+			err = tableWriter.Delete(ctx, deletedRow)
+			if err != nil {
+				return err
+			}
+
+			newWorkingSet, err := writeSession.Flush(ctx)
+			if err != nil {
+				return err
+			}
+
+			err = doltEnv.UpdateWorkingSet(ctx, newWorkingSet)
+			if err != nil {
+				return err
+			}
+		}
 
 	case event.IsWriteRows():
 		// A ROWS_EVENT is written for row based replication if data is inserted, deleted or updated.
@@ -236,7 +337,6 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 			return err
 		}
 
-		fmt.Printf(" - New Rows (table: %s)\n", tableMap.Name)
 		database, err := engine.GetUnderlyingEngine().Analyzer.Catalog.Database(ctx, tableMap.Database)
 		if err != nil {
 			return err
@@ -250,6 +350,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 			return fmt.Errorf("unable to find table %q", tableMap.Name)
 		}
 
+		fmt.Printf(" - New Rows (table: %s)\n", tableMap.Name)
 		for _, row := range rows.Rows {
 			// Using the TableMap type information, decode the row data
 			var sb strings.Builder
@@ -360,7 +461,18 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 	// NOTE: this event is NEVER sent to replica servers!
 
 	default:
-		return fmt.Errorf("received unknown event: %v", event)
+		// TODO: we can't access the bytes directly because the non-interface types are not exposed
+		//       having a Bytes() or Type() method on the interface would let us clean this up.
+		byteString := fmt.Sprintf("%v", event)
+		if strings.HasPrefix(byteString, "{[0 0 0 0 27 ") {
+			// Type 27 is a Heartbeat event. This event does not appear in the binary log. It's only sent over the
+			// network by a primary to a replica to let it know that the primary is still alive, and is only sent
+			// when the primary has no binlog events to send to replica servers.
+			// For more details, see: https://mariadb.com/kb/en/heartbeat_log_event/
+			fmt.Printf("Received: Heartbeat event\n")
+		} else {
+			return fmt.Errorf("received unknown event: %v", event)
+		}
 	}
 
 	return nil
@@ -369,7 +481,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 // startReplicationEventStream sends a request over |conn|, the connection to the MySQL source server, to begin
 // sending binlog events.
 func startReplicationEventStream(replicaConfiguration *replicaConfiguration, conn *mysql.Conn) error {
-	sid, err := mysql.ParseSID(replicaConfiguration.sourceServerId)
+	sid, err := mysql.ParseSID(replicaConfiguration.sourceServerUuid)
 	if err != nil {
 		return err
 	}
@@ -378,6 +490,7 @@ func startReplicationEventStream(replicaConfiguration *replicaConfiguration, con
 		Sequence: 1,
 	}
 	startPosition := mysql.Position{GTIDSet: gtid.GTIDSet()}
+	// TODO: unhardcode 1 as the replica's server id
 	return conn.SendBinlogDumpCommand(1, startPosition)
 }
 
