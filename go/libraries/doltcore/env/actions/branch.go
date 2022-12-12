@@ -306,6 +306,7 @@ func checkoutBranchNoDocs(ctx context.Context, roots doltdb.Roots, branchRoot *d
 
 func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
 	branchRef := ref.NewBranchRef(brName)
+	branchHeadRef := dEnv.RepoStateReader().CWBHeadRef()
 
 	db := dEnv.DoltDB
 	hasRef, err := db.HasRef(ctx, branchRef)
@@ -325,8 +326,14 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		return err
 	}
 
+	currentWs, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		// working set does not exist, skip check
+		return nil
+	}
+
 	if !force {
-		err = checkWorkingSetCompatibility(ctx, dEnv, branchRef)
+		err = checkWorkingSetCompatibility(ctx, dEnv, branchRef, currentWs)
 		if err != nil {
 			return err
 		}
@@ -342,15 +349,20 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		return err
 	}
 
+	err = checkoutBranchNoDocs(ctx, roots, branchRoot, dEnv.RepoStateWriter(), branchRef, force)
+	if err != nil {
+		return err
+	}
+
 	if shouldResetWorkingSet {
-		// reset the working set to the branch head, leaving the branch unchanged
-		err = ResetHard(ctx, dEnv, "", roots)
+		// reset the source branch's working set to the branch head, leaving the source branch unchanged
+		err = ResetHard(ctx, dEnv, "", roots, &branchHeadRef, currentWs)
 		if err != nil {
 			return err
 		}
 	}
 
-	return checkoutBranchNoDocs(ctx, roots, branchRoot, dEnv.RepoStateWriter(), branchRef, force)
+	return nil
 }
 
 // BranchRoot returns the root value at the branch with the name given
@@ -483,13 +495,7 @@ func overwriteRoot(ctx context.Context, head *doltdb.RootValue, tblHashes map[st
 // This means that if both working sets are present (ie there are changes on both source and dest branches),
 // we check if the changes are identical before allowing a clobbering checkout.
 // Working set errors are ignored by this function, because they are properly handled elsewhere.
-func checkWorkingSetCompatibility(ctx context.Context, dEnv *env.DoltEnv, branchRef ref.BranchRef) error {
-	currentWs, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		// working set does not exist, skip check
-		return nil
-	}
-
+func checkWorkingSetCompatibility(ctx context.Context, dEnv *env.DoltEnv, branchRef ref.BranchRef, currentWs *doltdb.WorkingSet) error {
 	db := dEnv.DoltDB
 	destWsRef, err := ref.WorkingSetRefForHead(branchRef)
 	if err != nil {

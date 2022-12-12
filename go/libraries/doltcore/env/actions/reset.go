@@ -17,6 +17,7 @@ package actions
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 
@@ -136,15 +137,10 @@ func ResetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 	return resetHardTables(ctx, dbData, cSpecStr, roots)
 }
 
-func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, roots doltdb.Roots) error {
+func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, roots doltdb.Roots, headRef *ref.DoltRef, ws *doltdb.WorkingSet) error {
 	dbData := dEnv.DbData()
 
 	newHead, roots, err := resetHardTables(ctx, dbData, cSpecStr, roots)
-	if err != nil {
-		return err
-	}
-
-	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		return err
 	}
@@ -155,7 +151,7 @@ func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, roots do
 	}
 
 	if newHead != nil {
-		err = dEnv.DoltDB.SetHeadToCommit(ctx, dEnv.RepoStateReader().CWBHeadRef(), newHead)
+		err = dEnv.DoltDB.SetHeadToCommit(ctx, *headRef, newHead)
 		if err != nil {
 			return err
 		}
