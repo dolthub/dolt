@@ -433,9 +433,11 @@ func (suite *PullSuite) TestPullUpdates() {
 func (suite *PullSuite) commitToSource(v types.Value, p []hash.Hash) hash.Hash {
 	db := suite.sourceDB
 	ds, err := db.GetDataset(context.Background(), datasetID)
+
 	suite.NoError(err)
 	ds, err = db.Commit(context.Background(), ds, v, datas.CommitOptions{Parents: p})
 	suite.NoError(err)
+
 	return mustHeadAddr(ds)
 }
 

@@ -115,14 +115,14 @@ func (suite *BlockStoreSuite) TestChunkStoreNotDir() {
 	suite.Error(err)
 }
 
-func mockGetAddrs(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+func getAddrsCb(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
 	return nil, nil
 }
 
 func (suite *BlockStoreSuite) TestChunkStorePut() {
 	input := []byte("abc")
 	c := chunks.NewChunk(input)
-	err := suite.store.Put(context.Background(), c, mockGetAddrs)
+	err := suite.store.Put(context.Background(), c, getAddrsCb)
 	suite.NoError(err)
 	h := c.Hash()
 
@@ -143,7 +143,7 @@ func (suite *BlockStoreSuite) TestChunkStorePut() {
 
 	// Re-writing the same data should cause a second put
 	c = chunks.NewChunk(input)
-	err = suite.store.Put(context.Background(), c, mockGetAddrs)
+	err = suite.store.Put(context.Background(), c, getAddrsCb)
 	suite.NoError(err)
 	suite.Equal(h, c.Hash())
 	assertInputInStore(input, h, suite.store, suite.Assert())
@@ -160,9 +160,9 @@ func (suite *BlockStoreSuite) TestChunkStorePut() {
 func (suite *BlockStoreSuite) TestChunkStorePutMany() {
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
-	err := suite.store.Put(context.Background(), c1, mockGetAddrs)
+	err := suite.store.Put(context.Background(), c1, getAddrsCb)
 	suite.NoError(err)
-	err = suite.store.Put(context.Background(), c2, mockGetAddrs)
+	err = suite.store.Put(context.Background(), c2, getAddrsCb)
 	suite.NoError(err)
 
 	rt, err := suite.store.Root(context.Background())
@@ -182,9 +182,9 @@ func (suite *BlockStoreSuite) TestChunkStorePutMany() {
 func (suite *BlockStoreSuite) TestChunkStoreStatsSummary() {
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
-	err := suite.store.Put(context.Background(), c1, mockGetAddrs)
+	err := suite.store.Put(context.Background(), c1, getAddrsCb)
 	suite.NoError(err)
-	err = suite.store.Put(context.Background(), c2, mockGetAddrs)
+	err = suite.store.Put(context.Background(), c2, getAddrsCb)
 	suite.NoError(err)
 
 	rt, err := suite.store.Root(context.Background())
@@ -205,9 +205,9 @@ func (suite *BlockStoreSuite) TestChunkStorePutMoreThanMemTable() {
 	_, err = rand.Read(input2)
 	suite.NoError(err)
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
-	err = suite.store.Put(context.Background(), c1, mockGetAddrs)
+	err = suite.store.Put(context.Background(), c1, getAddrsCb)
 	suite.NoError(err)
-	err = suite.store.Put(context.Background(), c2, mockGetAddrs)
+	err = suite.store.Put(context.Background(), c2, getAddrsCb)
 	suite.NoError(err)
 
 	rt, err := suite.store.Root(context.Background())
@@ -236,7 +236,7 @@ func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
 	chnx := make([]chunks.Chunk, len(inputs))
 	for i, data := range inputs {
 		chnx[i] = chunks.NewChunk(data)
-		err = suite.store.Put(context.Background(), chnx[i], mockGetAddrs)
+		err = suite.store.Put(context.Background(), chnx[i], getAddrsCb)
 		suite.NoError(err)
 	}
 
@@ -276,7 +276,7 @@ func (suite *BlockStoreSuite) TestChunkStoreHasMany() {
 		chunks.NewChunk([]byte("def")),
 	}
 	for _, c := range chnx {
-		err := suite.store.Put(context.Background(), c, mockGetAddrs)
+		err := suite.store.Put(context.Background(), c, getAddrsCb)
 		suite.NoError(err)
 	}
 
@@ -309,7 +309,7 @@ func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 
 	interloper, err := suite.factory(context.Background(), suite.dir)
 	suite.NoError(err)
-	err = interloper.Put(context.Background(), c1, mockGetAddrs)
+	err = interloper.Put(context.Background(), c1, getAddrsCb)
 	suite.NoError(err)
 	h, err := interloper.Root(context.Background())
 	suite.NoError(err)
@@ -317,7 +317,7 @@ func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 	suite.NoError(err)
 	suite.True(success)
 
-	err = suite.store.Put(context.Background(), c2, mockGetAddrs)
+	err = suite.store.Put(context.Background(), c2, getAddrsCb)
 	suite.NoError(err)
 	h, err = suite.store.Root(context.Background())
 	suite.NoError(err)
@@ -358,7 +358,7 @@ func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
 
 	interloper, err := suite.factory(context.Background(), suite.dir)
 	suite.NoError(err)
-	err = interloper.Put(context.Background(), c1, mockGetAddrs)
+	err = interloper.Put(context.Background(), c1, getAddrsCb)
 	suite.NoError(err)
 	root, err := interloper.Root(context.Background())
 	suite.NoError(err)
@@ -397,7 +397,7 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 
 	interloper, err := suite.factory(context.Background(), suite.dir)
 	suite.NoError(err)
-	err = interloper.Put(context.Background(), c1, mockGetAddrs)
+	err = interloper.Put(context.Background(), c1, getAddrsCb)
 	suite.NoError(err)
 	h, err := interloper.Root(context.Background())
 	suite.NoError(err)
@@ -405,7 +405,7 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 	suite.NoError(err)
 	suite.True(success)
 
-	err = suite.store.Put(context.Background(), c2, mockGetAddrs)
+	err = suite.store.Put(context.Background(), c2, getAddrsCb)
 	suite.NoError(err)
 
 	// Reading c2 via the API should work pre-rebase
@@ -504,7 +504,7 @@ func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tabl
 
 		root, err := smallTableStore.Root(context.Background())
 		require.NoError(t, err)
-		err = smallTableStore.Put(context.Background(), newChunk, mockGetAddrs)
+		err = smallTableStore.Put(context.Background(), newChunk, getAddrsCb)
 		require.NoError(t, err)
 		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
 		require.NoError(t, err)
@@ -536,7 +536,7 @@ func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tabl
 
 		root, err := smallTableStore.Root(context.Background())
 		require.NoError(t, err)
-		err = smallTableStore.Put(context.Background(), newChunk, mockGetAddrs)
+		err = smallTableStore.Put(context.Background(), newChunk, getAddrsCb)
 		require.NoError(t, err)
 		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
 		require.NoError(t, err)
@@ -573,7 +573,7 @@ func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tabl
 
 		root, err := smallTableStore.Root(context.Background())
 		require.NoError(t, err)
-		err = smallTableStore.Put(context.Background(), newChunk, mockGetAddrs)
+		err = smallTableStore.Put(context.Background(), newChunk, getAddrsCb)
 		require.NoError(t, err)
 		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
 		require.NoError(t, err)

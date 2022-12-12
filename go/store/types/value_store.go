@@ -101,9 +101,13 @@ func PanicIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.Chu
 }
 
 func (lvs *ValueStore) getAddrs(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-	val, err := lvs.ReadValue(ctx, c.Hash())
+	h := c.Hash()
+	val, err := lvs.ReadValue(ctx, h)
 	if err != nil {
 		return nil, err
+	}
+	if val == nil {
+		return nil, nil
 	}
 	valRefs := make(hash.HashSet)
 	err = val.walkRefs(lvs.nbf, func(r Ref) error {
@@ -387,6 +391,10 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 	return r, nil
 }
 
+func getAddrsCb(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+	return nil, nil
+}
+
 // bufferChunk enqueues c (which is the serialization of v) within this
 // ValueStore. Buffered chunks are flushed progressively to the underlying
 // ChunkStore in a way which attempts to locate children and grandchildren
@@ -421,7 +429,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 			}
 		}
 
-		return lvs.cs.Put(ctx, c, lvs.getAddrs)
+		return lvs.cs.Put(ctx, c, getAddrsCb) // hangs
 	}
 
 	d.PanicIfTrue(height == 0)
@@ -432,7 +440,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 	}
 
 	put := func(h hash.Hash, c chunks.Chunk) error {
-		err := lvs.cs.Put(ctx, c, lvs.getAddrs)
+		err := lvs.cs.Put(ctx, c, getAddrsCb) // hangs
 
 		if err != nil {
 			return err
@@ -551,7 +559,6 @@ func (lvs *ValueStore) Flush(ctx context.Context) error {
 func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
 	put := func(h hash.Hash, chunk chunks.Chunk) error {
 		err := lvs.cs.Put(ctx, chunk, lvs.getAddrs)
-
 		if err != nil {
 			return err
 		}

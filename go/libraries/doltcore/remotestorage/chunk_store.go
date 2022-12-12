@@ -815,6 +815,7 @@ func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 	if err != nil {
 		return err
 	}
+
 	cc := nbs.ChunkToCompressedChunk(c)
 	if dcs.cache.Put([]nbs.CompressedChunk{cc}) {
 		return ErrCacheCapacityExceeded
